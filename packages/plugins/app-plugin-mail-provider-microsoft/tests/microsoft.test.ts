@@ -30,6 +30,7 @@ describe('Microsoft Mail Provider', () => {
           id: 'subject-1',
           displayName: 'Example User',
           mail: 'user@example.com',
+          proxyAddresses: ['SMTP:user@example.com', 'smtp:alias@example.com'],
         }),
       );
     vi.stubGlobal('fetch', fetchMock);
@@ -62,6 +63,16 @@ describe('Microsoft Mail Provider', () => {
       value: {
         address: 'user@example.com',
         authorizationSubject: 'subject-1',
+        identities: [
+          expect.objectContaining({
+            address: 'user@example.com',
+            isPrimary: true,
+          }),
+          expect.objectContaining({
+            address: 'alias@example.com',
+            isPrimary: false,
+          }),
+        ],
       },
     });
     expect(String(fetchMock.mock.calls[0][1]?.body)).toContain(
@@ -140,11 +151,30 @@ describe('Microsoft Mail Provider', () => {
           bcc: [],
           subject: 'Hello',
           text: 'Mail body',
-          attachments: [],
+          attachments: [
+            {
+              fileName: 'report.txt',
+              contentType: 'text/plain',
+              size: 6,
+              inline: false,
+              open: async () => new Blob(['report']).stream(),
+            },
+          ],
           references: [],
         },
       }),
     ).resolves.toEqual({ status: 'accepted' });
+    const sendBody = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as {
+      message: { attachments: readonly Record<string, unknown>[] };
+    };
+    expect(sendBody.message.attachments).toEqual([
+      expect.objectContaining({
+        '@odata.type': '#microsoft.graph.fileAttachment',
+        name: 'report.txt',
+        contentType: 'text/plain',
+        contentBytes: Buffer.from('report').toString('base64'),
+      }),
+    ]);
 
     const baseline = await adapter.listMessages({ limit: 100 });
     const page = await adapter.listMessages({
@@ -555,6 +585,248 @@ describe('Microsoft Mail Provider', () => {
     );
   });
 
+  it('preserves provider-generated content when forwarding a message', async () => {
+    const credentials = memoryVault();
+    await credentials.putAt('credential-1', {
+      provider: 'microsoft',
+      accessToken: 'access-1',
+      refreshToken: 'refresh-1',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+      scopes: [],
+      tokenType: 'Bearer',
+    });
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        Response.json({
+          id: 'forward-draft-1',
+          body: { contentType: 'HTML', content: '<p>Original body</p>' },
+        }),
+      )
+      .mockResolvedValueOnce(Response.json({ id: 'forward-draft-1' }))
+      .mockResolvedValueOnce(new Response(null, { status: 202 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const adapter = new MicrosoftMailProviderAdapter(
+      context(credentials),
+      config(),
+      account(),
+    );
+
+    await expect(
+      adapter.sendMessage({
+        trackingId: 'submission-forward',
+        identity: {
+          id: 'identity-1',
+          accountId: 'account-1',
+          address: 'user@example.com',
+          isPrimary: true,
+          canSend: true,
+        },
+        message: {
+          to: [{ address: 'recipient@example.com' }],
+          cc: [],
+          bcc: [],
+          subject: 'Fwd: Original',
+          text: 'Please review',
+          attachments: [],
+          references: [],
+          forwardOfProviderMessageId: 'source-message-1',
+        },
+      }),
+    ).resolves.toMatchObject({ status: 'accepted' });
+    const patchBody = JSON.parse(String(fetchMock.mock.calls[1][1]?.body)) as {
+      body: { content: string };
+    };
+    expect(patchBody.body.content).toContain('Please review');
+    expect(patchBody.body.content).toContain('Original body');
+  });
+
+  it('uses a Graph upload session for attachments of 3 MB or larger', async () => {
+    const credentials = memoryVault();
+    await credentials.putAt('credential-1', {
+      provider: 'microsoft',
+      accessToken: 'access-1',
+      refreshToken: 'refresh-1',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+      scopes: [],
+      tokenType: 'Bearer',
+    });
+    const bytes = new Uint8Array(3 * 1024 * 1024);
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        Response.json({ id: 'large-draft-1', isDraft: true }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({ uploadUrl: 'https://upload.example.test/session-1' }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 201 }))
+      .mockResolvedValueOnce(
+        Response.json({
+          value: [
+            {
+              id: 'attachment-1',
+              name: 'large.bin',
+              contentType: 'application/octet-stream',
+              size: bytes.byteLength,
+            },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 202 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const adapter = new MicrosoftMailProviderAdapter(
+      context(credentials),
+      config(),
+      account(),
+    );
+
+    await expect(
+      adapter.sendMessage({
+        trackingId: 'submission-large',
+        identity: {
+          id: 'identity-1',
+          accountId: 'account-1',
+          address: 'user@example.com',
+          isPrimary: true,
+          canSend: true,
+        },
+        message: {
+          to: [{ address: 'recipient@example.com' }],
+          cc: [],
+          bcc: [],
+          subject: 'Large attachment',
+          text: 'Mail body',
+          attachments: [
+            {
+              fileName: 'large.bin',
+              contentType: 'application/octet-stream',
+              size: bytes.byteLength,
+              inline: false,
+              open: async () => new Blob([bytes]).stream(),
+            },
+          ],
+          references: [],
+        },
+      }),
+    ).resolves.toMatchObject({
+      status: 'accepted',
+      providerMessageId: 'large-draft-1',
+    });
+    expect(String(fetchMock.mock.calls[1][0])).toContain(
+      '/attachments/createUploadSession',
+    );
+    expect(fetchMock.mock.calls[2][0]).toBe(
+      'https://upload.example.test/session-1',
+    );
+    expect(fetchMock.mock.calls[2][1]?.headers).toMatchObject({
+      'content-range': `bytes 0-${bytes.byteLength - 1}/${bytes.byteLength}`,
+    });
+  });
+
+  it('creates a Microsoft Graph draft', async () => {
+    const credentials = memoryVault();
+    await credentials.putAt('credential-1', {
+      provider: 'microsoft',
+      accessToken: 'access-1',
+      refreshToken: 'refresh-1',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+      scopes: [],
+      tokenType: 'Bearer',
+    });
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      Response.json({
+        id: 'draft-message-1',
+        parentFolderId: 'drafts',
+        subject: 'Draft subject',
+        body: { contentType: 'Text', content: 'Draft body' },
+        isDraft: true,
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const adapter = new MicrosoftMailProviderAdapter(
+      context(credentials),
+      config(),
+      account(),
+    );
+
+    await expect(
+      adapter.saveDraft({
+        trackingId: 'draft-1',
+        identity: {
+          id: 'identity-1',
+          accountId: 'account-1',
+          address: 'user@example.com',
+          isPrimary: true,
+          canSend: true,
+        },
+        message: {
+          to: [{ address: 'recipient@example.com' }],
+          cc: [],
+          bcc: [],
+          subject: 'Draft subject',
+          text: 'Draft body',
+          attachments: [],
+          references: [],
+        },
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: { providerMessageId: 'draft-message-1', draft: true },
+    });
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/me/messages');
+    expect(fetchMock.mock.calls[0][1]?.method).toBe('POST');
+  });
+
+  it('updates an existing Microsoft Graph draft', async () => {
+    const credentials = memoryVault();
+    await credentials.putAt('credential-1', {
+      provider: 'microsoft',
+      accessToken: 'access-1',
+      refreshToken: 'refresh-1',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+      scopes: [],
+      tokenType: 'Bearer',
+    });
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        Response.json({ id: 'draft-message-1', isDraft: true }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    const adapter = new MicrosoftMailProviderAdapter(
+      context(credentials),
+      config(),
+      account(),
+    );
+
+    await expect(
+      adapter.updateDraft('draft-message-1', {
+        trackingId: 'draft-update-1',
+        identity: {
+          id: 'identity-1',
+          accountId: 'account-1',
+          address: 'user@example.com',
+          isPrimary: true,
+          canSend: true,
+        },
+        message: {
+          to: [{ address: 'recipient@example.com' }],
+          cc: [],
+          bcc: [],
+          subject: 'Updated draft',
+          text: 'Updated body',
+          attachments: [],
+          references: [],
+        },
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: { providerMessageId: 'draft-message-1', draft: true },
+    });
+    expect(fetchMock.mock.calls[0][1]?.method).toBe('PATCH');
+  });
+
   it('maps message mutations to Microsoft Graph operations', async () => {
     const credentials = memoryVault();
     await credentials.putAt('credential-1', {
@@ -599,6 +871,184 @@ describe('Microsoft Mail Provider', () => {
       'POST',
       'DELETE',
     ]);
+  });
+
+  it('handles validation and creates then renews Graph subscriptions', async () => {
+    expect(
+      microsoftMailProviderDefinition.push?.parse({
+        query: { validationToken: 'opaque challenge' },
+        body: {},
+      }),
+    ).toEqual({
+      ok: true,
+      value: { challengeResponse: 'opaque challenge', notifications: [] },
+    });
+    expect(
+      microsoftMailProviderDefinition.push?.parse({
+        query: {},
+        body: {
+          value: [
+            { subscriptionId: 'subscription-1', clientState: 'secret-1' },
+          ],
+        },
+      }),
+    ).toEqual({
+      ok: true,
+      value: {
+        notifications: [
+          {
+            providerSubscriptionId: 'subscription-1',
+            clientState: 'secret-1',
+          },
+        ],
+      },
+    });
+
+    const credentials = memoryVault();
+    await credentials.putAt('credential-1', {
+      provider: 'microsoft',
+      accessToken: 'access-1',
+      refreshToken: 'refresh-1',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+      scopes: [],
+      tokenType: 'Bearer',
+    });
+    const expiration = '2026-09-09T00:00:00.000Z';
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        Response.json(
+          { id: 'subscription-1', expirationDateTime: expiration },
+          { status: 201 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          id: 'subscription-1',
+          expirationDateTime: expiration,
+        }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    const adapter = new MicrosoftMailProviderAdapter(
+      context(credentials),
+      config(),
+      account(),
+    );
+
+    await expect(
+      adapter.upsertPushSubscription({
+        notificationUrl: 'https://example.com/main/mail/webhooks/microsoft',
+        clientState: 'secret-1',
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: {
+        providerSubscriptionId: 'subscription-1',
+        expiresAt: expiration,
+      },
+    });
+    const createBody = JSON.parse(
+      String(fetchMock.mock.calls[0][1]?.body),
+    ) as Record<string, unknown>;
+    expect(createBody).toMatchObject({
+      changeType: 'created,updated,deleted',
+      resource: 'me/messages',
+      clientState: 'secret-1',
+      latestSupportedTlsVersion: 'v1_2',
+    });
+    expect(fetchMock.mock.calls[0][1]?.method).toBe('POST');
+
+    await adapter.upsertPushSubscription({
+      notificationUrl: 'https://example.com/main/mail/webhooks/microsoft',
+      clientState: 'secret-1',
+      providerSubscriptionId: 'subscription-1',
+    });
+    expect(String(fetchMock.mock.calls[1][0])).toContain(
+      '/subscriptions/subscription-1',
+    );
+    expect(fetchMock.mock.calls[1][1]?.method).toBe('PATCH');
+  });
+
+  it('recreates an expired Graph subscription when renewal returns 404', async () => {
+    const credentials = memoryVault();
+    await credentials.putAt('credential-1', {
+      provider: 'microsoft',
+      accessToken: 'access-1',
+      refreshToken: 'refresh-1',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+      scopes: [],
+      tokenType: 'Bearer',
+    });
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        Response.json(
+          { error: { message: 'Subscription not found' } },
+          { status: 404 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        Response.json(
+          {
+            id: 'replacement-subscription',
+            expirationDateTime: '2026-09-09T00:00:00.000Z',
+          },
+          { status: 201 },
+        ),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    const adapter = new MicrosoftMailProviderAdapter(
+      context(credentials),
+      config(),
+      account(),
+    );
+
+    await expect(
+      adapter.upsertPushSubscription({
+        notificationUrl: 'https://example.com/main/mail/webhooks/microsoft',
+        clientState: 'secret-1',
+        providerSubscriptionId: 'expired-subscription',
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: { providerSubscriptionId: 'replacement-subscription' },
+    });
+    expect(fetchMock.mock.calls.map(([, init]) => init?.method)).toEqual([
+      'PATCH',
+      'POST',
+    ]);
+  });
+
+  it('treats an already-removed Graph subscription as deleted', async () => {
+    const credentials = memoryVault();
+    await credentials.putAt('credential-1', {
+      provider: 'microsoft',
+      accessToken: 'access-1',
+      refreshToken: 'refresh-1',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+      scopes: [],
+      tokenType: 'Bearer',
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(
+          Response.json(
+            { error: { message: 'Subscription not found' } },
+            { status: 404 },
+          ),
+        ),
+    );
+    const adapter = new MicrosoftMailProviderAdapter(
+      context(credentials),
+      config(),
+      account(),
+    );
+
+    await expect(
+      adapter.deletePushSubscription('expired-subscription'),
+    ).resolves.toEqual({ ok: true, value: undefined });
   });
 });
 

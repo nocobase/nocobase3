@@ -18,6 +18,8 @@ import type {
   MailProviderResult,
   MailProviderSendInput,
   MailProviderSendResult,
+  MailProviderUpsertPushSubscriptionInput,
+  MailProviderUpsertPushSubscriptionResult,
   MailSyncCursor,
   NormalizedMailAttachment,
   NormalizedMailFolder,
@@ -26,6 +28,7 @@ import type {
 
 const DEFAULT_SCOPES = [
   'https://www.googleapis.com/auth/gmail.modify',
+  'https://www.googleapis.com/auth/gmail.settings.basic',
 ] as const;
 
 export interface GmailMailProviderConfig extends MailProviderConfig {
@@ -36,6 +39,8 @@ export interface GmailMailProviderConfig extends MailProviderConfig {
   readonly authorizationEndpoint?: string;
   readonly tokenEndpoint?: string;
   readonly apiBaseUrl?: string;
+  readonly pushTopicName?: string;
+  readonly pushLabelIds?: readonly string[];
 }
 
 interface GmailCredential {
@@ -62,6 +67,21 @@ interface GmailProfile {
   historyId?: string;
 }
 
+interface GmailWatchResponse {
+  historyId?: string;
+  expiration?: string;
+}
+
+interface GmailSendAsList {
+  sendAs?: readonly {
+    sendAsEmail?: string;
+    displayName?: string;
+    signature?: string;
+    isPrimary?: boolean;
+    verificationStatus?: string;
+  }[];
+}
+
 interface GmailHeader {
   name?: string;
   value?: string;
@@ -84,6 +104,16 @@ interface GmailMessageResource {
   internalDate?: string;
   historyId?: string;
   payload?: GmailPart;
+}
+
+interface GmailDraftResource {
+  readonly id?: string;
+  readonly message?: GmailMessageResource;
+}
+
+interface GmailDraftList {
+  readonly drafts?: readonly GmailDraftResource[];
+  readonly nextPageToken?: string;
 }
 
 interface GmailMessageList {
@@ -128,12 +158,12 @@ export const gmailMailProviderDefinition: MailProviderDefinition<GmailMailProvid
       receive: true,
       send: true,
       incrementalSync: true,
-      pushNotifications: false,
+      pushNotifications: true,
       folders: true,
       labels: true,
-      drafts: false,
+      drafts: true,
       moveMessage: true,
-      aliases: false,
+      aliases: true,
     },
     validateConfig(config: GmailMailProviderConfig): void {
       if (!config.clientId || !config.clientSecret) {
@@ -141,6 +171,32 @@ export const gmailMailProviderDefinition: MailProviderDefinition<GmailMailProvid
       }
     },
     authorization: createAuthorization(),
+    push: {
+      parse(input) {
+        const message = record(input.body).message;
+        const data =
+          typeof record(message).data === 'string'
+            ? (record(message).data as string)
+            : undefined;
+        if (!data) return invalidPushNotification();
+        try {
+          const payload = JSON.parse(
+            Buffer.from(data, 'base64url').toString('utf8'),
+          ) as { emailAddress?: unknown };
+          if (typeof payload.emailAddress !== 'string') {
+            return invalidPushNotification();
+          }
+          return {
+            ok: true,
+            value: {
+              notifications: [{ accountAddress: payload.emailAddress }],
+            },
+          };
+        } catch {
+          return invalidPushNotification();
+        }
+      },
+    },
     async createAdapter(
       context: MailProviderContext,
       config: GmailMailProviderConfig,
@@ -239,6 +295,31 @@ function createAuthorization(): MailProviderAuthorization<GmailMailProviderConfi
             false,
           );
         }
+        const aliases = await gmailRequest<GmailSendAsList>(
+          config,
+          required(token.value.access_token, 'Gmail access token'),
+          '/users/me/settings/sendAs',
+          { signal: input.signal },
+        );
+        const identities = aliases.ok
+          ? (aliases.value.sendAs ?? []).flatMap((alias) =>
+              alias.sendAsEmail &&
+              (alias.isPrimary || alias.verificationStatus === 'accepted')
+                ? [
+                    {
+                      address: alias.sendAsEmail,
+                      displayName: alias.displayName,
+                      signatureText: htmlToText(alias.signature),
+                      signatureHtml: alias.signature,
+                      isPrimary:
+                        alias.isPrimary ||
+                        alias.sendAsEmail === profile.value.emailAddress,
+                      canSend: true,
+                    },
+                  ]
+                : [],
+            )
+          : [];
         return {
           ok: true,
           value: {
@@ -246,6 +327,16 @@ function createAuthorization(): MailProviderAuthorization<GmailMailProviderConfi
             credentialReference,
             scopes,
             credentialExpiresAt: expiresAt,
+            identities:
+              identities.length > 0
+                ? identities
+                : [
+                    {
+                      address: profile.value.emailAddress,
+                      isPrimary: true,
+                      canSend: true,
+                    },
+                  ],
           } satisfies MailAuthorizedAccount,
         };
       } catch (error) {
@@ -260,6 +351,7 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
   public readonly identity: MailAccount['provider'];
   public readonly capabilities: MailProviderDefinition['capabilities'] =
     gmailMailProviderDefinition.capabilities;
+  public readonly pushNotificationsConfigured: boolean;
 
   public constructor(
     private readonly context: MailProviderContext,
@@ -267,6 +359,62 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
     private readonly account: MailAccount,
   ) {
     this.identity = account.provider;
+    this.pushNotificationsConfigured = Boolean(config.pushTopicName);
+  }
+
+  public async upsertPushSubscription(
+    input: MailProviderUpsertPushSubscriptionInput,
+  ): Promise<MailProviderResult<MailProviderUpsertPushSubscriptionResult>> {
+    if (!this.config.pushTopicName) {
+      return failure(
+        'GMAIL_PUSH_TOPIC_REQUIRED',
+        'Gmail push notifications require pushTopicName.',
+        'configuration',
+        false,
+      );
+    }
+    const result = await this.request<GmailWatchResponse>('/users/me/watch', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        topicName: this.config.pushTopicName,
+        ...(this.config.pushLabelIds?.length
+          ? {
+              labelIds: this.config.pushLabelIds,
+              labelFilterBehavior: 'include',
+            }
+          : {}),
+      }),
+      signal: input.signal,
+    });
+    if (!result.ok) return result;
+    const expiration = Number(result.value.expiration);
+    if (!Number.isFinite(expiration)) {
+      return failure(
+        'GMAIL_PUSH_EXPIRATION_MISSING',
+        'Gmail did not return a push watch expiration.',
+        'provider',
+        false,
+      );
+    }
+    const expiresAt = new Date(expiration).toISOString();
+    return {
+      ok: true,
+      value: {
+        providerSubscriptionId: this.account.address,
+        renewAfter: new Date(
+          Math.min(Date.now() + 86_400_000, expiration - 3_600_000),
+        ).toISOString(),
+        expiresAt,
+      },
+    };
+  }
+
+  public deletePushSubscription(
+    _providerSubscriptionId: string,
+    signal?: AbortSignal,
+  ): Promise<MailProviderResult<void>> {
+    return this.emptyRequest('/users/me/stop', { method: 'POST', signal });
   }
 
   public async getCurrentSyncCursor(
@@ -565,6 +713,43 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
       };
     }
     try {
+      const prepared = await this.prepareForward(input);
+      if (!prepared.ok) {
+        return { status: 'failed', error: prepared.error };
+      }
+      input = prepared.value;
+      if (input.message.draftProviderMessageId) {
+        const resolvedDraftId = await this.resolveDraftId(
+          input.message.draftProviderMessageId,
+          input.message.draftProviderDraftId,
+          input.signal,
+        );
+        if (!resolvedDraftId.ok) {
+          return { status: 'failed', error: resolvedDraftId.error };
+        }
+        const updated = await this.updateDraft(resolvedDraftId.value, input);
+        if (!updated.ok) return { status: 'failed', error: updated.error };
+        const response = await fetch(
+          `${apiBase(this.config)}/users/me/drafts/send`,
+          {
+            method: 'POST',
+            headers: {
+              authorization: `Bearer ${accessToken}`,
+              'content-type': 'application/json',
+            },
+            body: JSON.stringify({ id: resolvedDraftId.value }),
+            signal: input.signal,
+          },
+        );
+        if (!response.ok) {
+          return {
+            status: 'failed',
+            error: await responseError('GMAIL', response),
+          };
+        }
+        const value = (await response.json()) as GmailMessageResource;
+        return { status: 'accepted', providerMessageId: value.id };
+      }
       const response = await fetch(
         `${apiBase(this.config)}/users/me/messages/send`,
         {
@@ -574,7 +759,7 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
             'content-type': 'application/json',
           },
           body: JSON.stringify({
-            raw: buildMime(input),
+            raw: await buildMime(input),
             ...(input.message.providerConversationId
               ? { threadId: input.message.providerConversationId }
               : {}),
@@ -595,6 +780,244 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
         error: unknownError(error, 'GMAIL_SEND_RESULT_UNKNOWN'),
       };
     }
+  }
+
+  public async saveDraft(
+    input: MailProviderSendInput,
+  ): Promise<MailProviderResult<NormalizedMailMessage>> {
+    let accessToken: string;
+    try {
+      accessToken = await this.accessToken(input.signal);
+    } catch (error) {
+      return {
+        ok: false,
+        error: errorResult(error, 'GMAIL_AUTHORIZATION_FAILED'),
+      };
+    }
+    try {
+      const prepared = await this.prepareForward(input);
+      if (!prepared.ok) return prepared;
+      input = prepared.value;
+      const response = await fetch(`${apiBase(this.config)}/users/me/drafts`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${accessToken}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: {
+            raw: await buildMime(input),
+            ...(input.message.providerConversationId
+              ? { threadId: input.message.providerConversationId }
+              : {}),
+          },
+        }),
+        signal: input.signal,
+      });
+      if (!response.ok) {
+        return { ok: false, error: await responseError('GMAIL', response) };
+      }
+      const value = (await response.json()) as GmailDraftResource;
+      const providerMessageId = required(
+        value.message?.id,
+        'Gmail draft message ID',
+      );
+      const saved = input.message.attachments.length
+        ? await this.getMessage(providerMessageId, input.signal)
+        : undefined;
+      if (saved && !saved.ok) return saved;
+      return {
+        ok: true,
+        value: {
+          ...(saved?.ok
+            ? saved.value
+            : normalizedDraft(input, providerMessageId)),
+          providerDraftId: required(value.id, 'Gmail draft ID'),
+          providerConversationId:
+            value.message?.threadId ?? input.message.providerConversationId,
+          providerFolderIds: ['DRAFT'],
+          read: true,
+          draft: true,
+        },
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        error: unknownError(error, 'GMAIL_DRAFT_SAVE_FAILED'),
+      };
+    }
+  }
+
+  public async updateDraft(
+    providerDraftId: string,
+    input: MailProviderSendInput,
+  ): Promise<MailProviderResult<NormalizedMailMessage>> {
+    const resolvedDraftId = await this.resolveDraftId(
+      input.message.draftProviderMessageId ?? providerDraftId,
+      input.message.draftProviderDraftId,
+      input.signal,
+    );
+    if (!resolvedDraftId.ok) return resolvedDraftId;
+    providerDraftId = resolvedDraftId.value;
+    const existing = input.message.draftProviderMessageId
+      ? await this.getMessage(
+          input.message.draftProviderMessageId,
+          input.signal,
+        )
+      : undefined;
+    if (existing && !existing.ok) return existing;
+    const retained = new Set(input.message.retainedProviderAttachmentIds ?? []);
+    const preservedAttachments = existing?.ok
+      ? existing.value.attachments
+          .filter((attachment) => retained.has(attachment.providerAttachmentId))
+          .map((attachment) => ({
+            fileName: attachment.fileName,
+            contentType: attachment.contentType,
+            size: attachment.size,
+            contentId: attachment.contentId,
+            inline: attachment.inline,
+            open: async () => {
+              const content = await this.getAttachment(
+                existing.value.providerMessageId,
+                attachment.providerAttachmentId,
+                input.signal,
+              );
+              if (!content.ok) throw new ProviderRequestError(content.error);
+              return content.value.stream;
+            },
+          }))
+      : [];
+    const message = {
+      ...input.message,
+      attachments: [...preservedAttachments, ...input.message.attachments],
+    };
+    const result = await this.request<GmailDraftResource>(
+      `/users/me/drafts/${encodeURIComponent(providerDraftId)}`,
+      {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          id: providerDraftId,
+          message: {
+            raw: await buildMime({ ...input, message }),
+            ...(input.message.providerConversationId
+              ? { threadId: input.message.providerConversationId }
+              : {}),
+          },
+        }),
+        signal: input.signal,
+      },
+    );
+    if (!result.ok) return result;
+    const providerMessageId = required(
+      result.value.message?.id,
+      'Gmail draft message ID',
+    );
+    const saved =
+      input.message.attachments.length || input.message.draftProviderMessageId
+        ? await this.getMessage(providerMessageId, input.signal)
+        : undefined;
+    if (saved && !saved.ok) return saved;
+    return {
+      ok: true,
+      value: {
+        ...(saved?.ok
+          ? saved.value
+          : normalizedDraft(input, providerMessageId)),
+        providerDraftId,
+        providerConversationId:
+          result.value.message?.threadId ??
+          input.message.providerConversationId,
+        providerFolderIds: ['DRAFT'],
+        read: true,
+        draft: true,
+      },
+    };
+  }
+
+  private async prepareForward(
+    input: MailProviderSendInput,
+  ): Promise<MailProviderResult<MailProviderSendInput>> {
+    const sourceId = input.message.forwardOfProviderMessageId;
+    if (!sourceId) return { ok: true, value: input };
+    const source = await this.getMessage(sourceId, input.signal);
+    if (!source.ok) return source;
+    const forwardedAttachments = source.value.attachments.map((attachment) => ({
+      fileName: attachment.fileName,
+      contentType: attachment.contentType,
+      size: attachment.size,
+      contentId: attachment.contentId,
+      inline: attachment.inline,
+      open: async () => {
+        const content = await this.getAttachment(
+          source.value.providerMessageId,
+          attachment.providerAttachmentId,
+          input.signal,
+        );
+        if (!content.ok) throw new ProviderRequestError(content.error);
+        return content.value.stream;
+      },
+    }));
+    const attachmentSize = [
+      ...forwardedAttachments,
+      ...input.message.attachments,
+    ].reduce((total, attachment) => total + attachment.size, 0);
+    if (attachmentSize > 25 * 1024 * 1024) {
+      return failure(
+        'GMAIL_FORWARD_ATTACHMENTS_TOO_LARGE',
+        'Forwarded attachments exceed the 25 MB message limit.',
+        'content',
+        false,
+      );
+    }
+    const text = forwardedText(input.message.text, source.value);
+    const html = forwardedHtml(
+      input.message.html,
+      input.message.text,
+      source.value,
+    );
+    return {
+      ok: true,
+      value: {
+        ...input,
+        message: {
+          ...input.message,
+          text,
+          html,
+          attachments: [...input.message.attachments, ...forwardedAttachments],
+          forwardOfProviderMessageId: undefined,
+        },
+      },
+    };
+  }
+
+  private async resolveDraftId(
+    providerMessageId: string,
+    providerDraftId: string | undefined,
+    signal?: AbortSignal,
+  ): Promise<MailProviderResult<string>> {
+    if (providerDraftId) return { ok: true, value: providerDraftId };
+    let pageToken: string | undefined;
+    do {
+      const query = new URLSearchParams({ maxResults: '500' });
+      if (pageToken) query.set('pageToken', pageToken);
+      const page = await this.request<GmailDraftList>(
+        `/users/me/drafts?${query.toString()}`,
+        { signal },
+      );
+      if (!page.ok) return page;
+      const match = page.value.drafts?.find(
+        (draft) => draft.message?.id === providerMessageId,
+      );
+      if (match?.id) return { ok: true, value: match.id };
+      pageToken = page.value.nextPageToken;
+    } while (pageToken);
+    return failure(
+      'GMAIL_DRAFT_NOT_FOUND',
+      'Gmail draft was not found.',
+      'provider',
+      false,
+    );
   }
 
   public setRead(
@@ -899,7 +1322,32 @@ function gmailFolderIds(labelIds: readonly string[]): readonly string[] {
   return archived ? [...labelIds, '__archive__'] : labelIds;
 }
 
-function buildMime(input: MailProviderSendInput): string {
+function normalizedDraft(
+  input: MailProviderSendInput,
+  providerMessageId: string,
+): NormalizedMailMessage {
+  return {
+    providerMessageId,
+    providerConversationId: input.message.providerConversationId,
+    providerFolderIds: ['DRAFT'],
+    from: input.identity,
+    to: input.message.to,
+    cc: input.message.cc,
+    bcc: input.message.bcc,
+    replyTo: [],
+    inReplyTo: input.message.inReplyTo,
+    references: input.message.references,
+    subject: input.message.subject,
+    text: input.message.text,
+    html: input.message.html,
+    read: true,
+    starred: false,
+    draft: true,
+    attachments: [],
+  };
+}
+
+async function buildMime(input: MailProviderSendInput): Promise<string> {
   const headers = [
     `From: ${formatAddress(input.identity)}`,
     `To: ${input.message.to.map(formatAddress).join(', ')}`,
@@ -918,24 +1366,57 @@ function buildMime(input: MailProviderSendInput): string {
       : []),
     'MIME-Version: 1.0',
   ];
+  const token = input.trackingId.replace(/[^a-zA-Z0-9]/g, '') || 'message';
+  const alternativeBoundary = `${token}-alternative`;
+  const alternativeBody = input.message.html
+    ? multipartAlternativeBody(
+        input.message.text,
+        input.message.html,
+        alternativeBoundary,
+      )
+    : undefined;
   let body: string;
-  if (input.message.html) {
-    const boundary = `nocobase-${input.trackingId.replace(/[^a-zA-Z0-9]/g, '')}`;
-    headers.push(`Content-Type: multipart/alternative; boundary="${boundary}"`);
+  if (input.message.attachments.length > 0) {
+    const boundary = `nocobase-${token}-mixed`;
+    headers.push(`Content-Type: multipart/mixed; boundary="${boundary}"`);
+    const parts = [
+      alternativeBody
+        ? [
+            `Content-Type: multipart/alternative; boundary="${alternativeBoundary}"`,
+            '',
+            alternativeBody,
+          ].join('\r\n')
+        : textPart(input.message.text),
+      ...(await Promise.all(
+        input.message.attachments.map(async (attachment) => {
+          const bytes = await readAttachment(
+            attachment.open(),
+            attachment.size,
+          );
+          const fileName = encodeHeader(attachment.fileName);
+          return [
+            `Content-Type: ${cleanHeader(attachment.contentType)}; name="${fileName}"`,
+            `Content-Disposition: ${attachment.inline ? 'inline' : 'attachment'}; filename="${fileName}"`,
+            ...(attachment.contentId
+              ? [`Content-ID: <${cleanHeader(attachment.contentId)}>`]
+              : []),
+            'Content-Transfer-Encoding: base64',
+            '',
+            wrapBase64(bytes.toString('base64')),
+          ].join('\r\n');
+        }),
+      )),
+    ];
     body = [
-      `--${boundary}`,
-      'Content-Type: text/plain; charset=UTF-8',
-      'Content-Transfer-Encoding: 8bit',
-      '',
-      input.message.text,
-      `--${boundary}`,
-      'Content-Type: text/html; charset=UTF-8',
-      'Content-Transfer-Encoding: 8bit',
-      '',
-      input.message.html,
+      ...parts.flatMap((part) => [`--${boundary}`, part]),
       `--${boundary}--`,
       '',
     ].join('\r\n');
+  } else if (alternativeBody) {
+    headers.push(
+      `Content-Type: multipart/alternative; boundary="${alternativeBoundary}"`,
+    );
+    body = alternativeBody;
   } else {
     headers.push(
       'Content-Type: text/plain; charset=UTF-8',
@@ -946,6 +1427,48 @@ function buildMime(input: MailProviderSendInput): string {
   return Buffer.from(`${headers.join('\r\n')}\r\n\r\n${body}`).toString(
     'base64url',
   );
+}
+
+function multipartAlternativeBody(
+  text: string,
+  html: string,
+  boundary: string,
+): string {
+  return [
+    `--${boundary}`,
+    textPart(text),
+    `--${boundary}`,
+    'Content-Type: text/html; charset=UTF-8',
+    'Content-Transfer-Encoding: 8bit',
+    '',
+    html,
+    `--${boundary}--`,
+  ].join('\r\n');
+}
+
+function textPart(text: string): string {
+  return [
+    'Content-Type: text/plain; charset=UTF-8',
+    'Content-Transfer-Encoding: 8bit',
+    '',
+    text,
+  ].join('\r\n');
+}
+
+async function readAttachment(
+  streamPromise: Promise<ReadableStream<Uint8Array>>,
+  expectedSize: number,
+): Promise<Buffer> {
+  const stream = await streamPromise;
+  const bytes = Buffer.from(await new Response(stream).arrayBuffer());
+  if (bytes.byteLength !== expectedSize) {
+    throw new Error('Mail attachment size changed before submission.');
+  }
+  return bytes;
+}
+
+function wrapBase64(value: string): string {
+  return value.match(/.{1,76}/gu)?.join('\r\n') ?? '';
 }
 
 function formatAddress(value: MailAddress): string {
@@ -964,6 +1487,68 @@ function encodeHeader(value: string): string {
 
 function cleanHeader(value: string): string {
   return value.replace(/[\r\n]/g, ' ');
+}
+
+function htmlToText(value: string | undefined): string | undefined {
+  if (!value?.trim()) return undefined;
+  return value
+    .replace(/<br\s*\/?>/giu, '\n')
+    .replace(/<\/p\s*>/giu, '\n')
+    .replace(/<[^>]+>/gu, '')
+    .replace(/&nbsp;/giu, ' ')
+    .replace(/&amp;/giu, '&')
+    .replace(/&lt;/giu, '<')
+    .replace(/&gt;/giu, '>')
+    .trim();
+}
+
+function forwardedText(comment: string, source: NormalizedMailMessage): string {
+  const headers = [
+    '---------- Forwarded message ---------',
+    source.from ? `From: ${formatAddress(source.from)}` : undefined,
+    (source.sentAt ?? source.receivedAt)
+      ? `Date: ${source.sentAt ?? source.receivedAt}`
+      : undefined,
+    `Subject: ${source.subject}`,
+    source.to.length
+      ? `To: ${source.to.map(formatAddress).join(', ')}`
+      : undefined,
+  ].filter((value): value is string => Boolean(value));
+  const body = source.text ?? htmlToText(source.html) ?? source.preview ?? '';
+  return [comment.trimEnd(), '', ...headers, '', body].join('\n');
+}
+
+function forwardedHtml(
+  commentHtml: string | undefined,
+  commentText: string,
+  source: NormalizedMailMessage,
+): string {
+  const comment = commentHtml ?? escapeHtmlBody(commentText);
+  const sourceBody =
+    source.html ?? escapeHtmlBody(source.text ?? source.preview ?? '');
+  const metadata = [
+    source.from
+      ? `<b>From:</b> ${escapeHtmlBody(formatAddress(source.from))}`
+      : undefined,
+    (source.sentAt ?? source.receivedAt)
+      ? `<b>Date:</b> ${escapeHtmlBody(source.sentAt ?? source.receivedAt ?? '')}`
+      : undefined,
+    `<b>Subject:</b> ${escapeHtmlBody(source.subject)}`,
+    source.to.length
+      ? `<b>To:</b> ${escapeHtmlBody(source.to.map(formatAddress).join(', '))}`
+      : undefined,
+  ].filter((value): value is string => Boolean(value));
+  return `${comment}<br><br><div class="gmail_quote"><div>---------- Forwarded message ---------</div>${metadata.join('<br>')}<br><br>${sourceBody}</div>`;
+}
+
+function escapeHtmlBody(value: string): string {
+  return value
+    .replace(/&/gu, '&amp;')
+    .replace(/</gu, '&lt;')
+    .replace(/>/gu, '&gt;')
+    .replace(/"/gu, '&quot;')
+    .replace(/'/gu, '&#39;')
+    .replace(/\n/gu, '<br>');
 }
 
 function parseAddresses(value: string | undefined): readonly MailAddress[] {
@@ -1154,6 +1739,21 @@ function failure<T>(
   retryable: boolean,
 ): MailProviderResult<T> {
   return { ok: false, error: { code, message, category, retryable } };
+}
+
+function invalidPushNotification<T>(): MailProviderResult<T> {
+  return failure(
+    'GMAIL_PUSH_NOTIFICATION_INVALID',
+    'Gmail push notification payload is invalid.',
+    'provider',
+    false,
+  );
+}
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object'
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 async function mapConcurrent<T, R>(

@@ -296,6 +296,39 @@ describe('mail API routes', () => {
     );
   });
 
+  it('allows an empty-recipient draft at the HTTP boundary', async () => {
+    const saveDraft = vi.fn<MailService['saveDraft']>(async () =>
+      messageView(),
+    );
+    const router = await createRouter(true, service({ saveDraft }));
+
+    const response = await router.request('/mail/messages/drafts', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        accountId: 'account-1',
+        identityId: 'identity-1',
+        subject: '',
+        text: '',
+        draftMessageId: 'draft-message-1',
+        retainedAttachmentIds: ['draft-message-1:provider-attachment-1'],
+        idempotencyKey: 'draft-1',
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(saveDraft).toHaveBeenCalledWith(
+      { actorId: 'user-1' },
+      expect.objectContaining({
+        to: [],
+        subject: '',
+        text: '',
+        draftMessageId: 'draft-message-1',
+        retainedAttachmentIds: ['draft-message-1:provider-attachment-1'],
+      }),
+    );
+  });
+
   it('does not expose internal service errors', async () => {
     const listAccounts = vi.fn<MailService['listAccounts']>(async () => {
       throw new Error('database password appeared in an internal error');
@@ -382,6 +415,34 @@ describe('mail API routes', () => {
         messageId: 'message-1',
         permanently: true,
       },
+    );
+  });
+
+  it('streams an owned attachment with download-safe headers', async () => {
+    const getAttachment = vi.fn<MailService['getAttachment']>(async () => ({
+      fileName: '季度 报告.pdf',
+      contentType: 'application/pdf',
+      size: 3,
+      stream: streamOf('pdf'),
+    }));
+    const router = await createRouter(true, service({ getAttachment }));
+
+    const response = await router.request(
+      '/mail/accounts/account-1/messages/message-1/attachments/attachment-1',
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('application/pdf');
+    expect(response.headers.get('content-length')).toBe('3');
+    expect(response.headers.get('content-disposition')).toContain(
+      "filename*=UTF-8''%E5%AD%A3%E5%BA%A6%20%E6%8A%A5%E5%91%8A.pdf",
+    );
+    expect(await response.text()).toBe('pdf');
+    expect(getAttachment).toHaveBeenCalledWith(
+      { actorId: 'user-1' },
+      'account-1',
+      'message-1',
+      'attachment-1',
     );
   });
 
@@ -510,12 +571,18 @@ function service(overrides: Partial<MailService> = {}): MailService {
     listSubmissions: async () => [],
     listMessages: async () => ({ items: [] }),
     getMessage: async () => undefined,
+    getAttachment: async () => ({
+      fileName: 'attachment.bin',
+      contentType: 'application/octet-stream',
+      stream: streamOf(''),
+    }),
     listConversationMessages: async () => ({ items: [] }),
     sendMessage: async (_context, input) => ({
       id: input.idempotencyKey,
       accountId: input.accountId,
       status: 'accepted',
     }),
+    saveDraft: async () => messageView(),
     updateMessage: async () => messageView(),
     moveMessage: async () => messageView(),
     deleteMessage: async () => {},
@@ -541,6 +608,15 @@ function messageView(): import('../server/types.js').MailMessage {
     hasAttachments: false,
     attachments: [],
   };
+}
+
+function streamOf(value: string): ReadableStream<Uint8Array> {
+  return new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode(value));
+      controller.close();
+    },
+  });
 }
 
 function syncRun(accountId: string, _requestedBy: string): MailSyncRunView {

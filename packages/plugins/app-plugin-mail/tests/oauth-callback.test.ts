@@ -34,7 +34,7 @@ describe('Mail OAuth callback route', () => {
     );
     expect(completed.status).toBe(302);
     expect(completed.headers.get('location')).toBe(
-      '/test/dev/mail/accounts?mailAuthorization=success',
+      '/test/settings/mail/my-accounts?mailAuthorization=success',
     );
     expect(completeAuthorization).toHaveBeenCalledWith({
       state: 'state-1',
@@ -56,7 +56,7 @@ describe('Mail OAuth callback route', () => {
 
     expect(response.status).toBe(302);
     expect(response.headers.get('location')).toBe(
-      '/test/dev/mail/accounts?mailAuthorization=failure',
+      '/test/settings/mail/my-accounts?mailAuthorization=failure',
     );
   });
 });
@@ -95,6 +95,10 @@ function service(overrides: Partial<MailService> = {}): MailService {
       throw new Error('Not implemented.');
     },
     listAccounts: async () => [],
+    updateAccount: async () => {
+      throw new Error('Not implemented.');
+    },
+    removeAccount: async () => {},
     listManagedAccounts: async () => [],
     listManagedOperationLogs: async () => ({
       accounts: [],
@@ -111,10 +115,29 @@ function service(overrides: Partial<MailService> = {}): MailService {
     listSubmissions: async () => [],
     listMessages: async () => ({ items: [] }),
     getMessage: async () => undefined,
+    getAttachment: async () => ({
+      fileName: 'attachment.bin',
+      contentType: 'application/octet-stream',
+      stream: new ReadableStream({
+        start(controller) {
+          controller.close();
+        },
+      }),
+    }),
     listConversationMessages: async () => ({ items: [] }),
     sendMessage: async () => {
       throw new Error('Not implemented.');
     },
+    saveDraft: async () => {
+      throw new Error('Not implemented.');
+    },
+    updateMessage: async () => {
+      throw new Error('Not implemented.');
+    },
+    moveMessage: async () => {
+      throw new Error('Not implemented.');
+    },
+    deleteMessage: async () => {},
     ...overrides,
   };
 }

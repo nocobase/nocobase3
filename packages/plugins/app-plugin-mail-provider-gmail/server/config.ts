@@ -19,6 +19,8 @@ export const gmailMailProviderConfig: AppConfigVariantDefinition =
         authorizationEndpoint: Type.Optional(Type.String({ format: 'uri' })),
         tokenEndpoint: Type.Optional(Type.String({ format: 'uri' })),
         apiBaseUrl: Type.Optional(Type.String({ format: 'uri' })),
+        pushTopicName: Type.Optional(Type.String({ minLength: 1 })),
+        pushLabelIds: Type.Optional(Type.Array(Type.String({ minLength: 1 }))),
       },
       { additionalProperties: false },
     ),

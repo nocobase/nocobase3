@@ -14,12 +14,14 @@ import {
   type AppApiRouteContribution,
 } from '@nocobase/app-server/router';
 import { Hono } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import { getRequestTranslator } from '@nocobase/i18n/server';
 
 import { mailServiceToken } from '../tokens.js';
 import { MailIdempotencyConflictError } from '../operations/send-mail.js';
 import type {
   MailAddress,
+  MailBulkComposeInput,
   MailComposeInput,
   MailListMessagesInput,
   MailStartSyncInput,
@@ -30,6 +32,7 @@ type MailRoutesEnv = {
 };
 
 const MAIL_NAMESPACE = '@nocobase/app-plugin-mail';
+const MAX_ATTACHMENT_UPLOAD_BYTES = 27 * 1024 * 1024;
 
 export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
   defineApiRoutes(({ container, config, publicBasePath }) => {
@@ -133,6 +136,41 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
     routes.get('/providers', async (context) =>
       context.json({ data: await mail.listProviders() }),
     );
+    routes.get('/templates', async (context) =>
+      context.json({
+        data: await mail.listTemplates(operationContext(context)),
+      }),
+    );
+    routes.post('/templates', async (context) => {
+      const value = await readObject(context.req.raw);
+      return context.json({
+        data: await mail.saveTemplate(operationContext(context), {
+          name: requiredString(value.name, 'name'),
+          subject: requiredString(value.subject, 'subject'),
+          text: optionalString(value.text, 'text'),
+          html: optionalString(value.html, 'html'),
+        }),
+      });
+    });
+    routes.patch('/templates/:templateId', async (context) => {
+      const value = await readObject(context.req.raw);
+      return context.json({
+        data: await mail.saveTemplate(operationContext(context), {
+          id: context.req.param('templateId'),
+          name: requiredString(value.name, 'name'),
+          subject: requiredString(value.subject, 'subject'),
+          text: optionalString(value.text, 'text'),
+          html: optionalString(value.html, 'html'),
+        }),
+      });
+    });
+    routes.delete('/templates/:templateId', async (context) => {
+      await mail.deleteTemplate(
+        operationContext(context),
+        context.req.param('templateId'),
+      );
+      return context.body(null, 204);
+    });
     routes.post('/authorizations', async (context) => {
       const value = await readObject(context.req.raw);
       const identity = config.get(appConfig);
@@ -159,6 +197,30 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
         ),
       }),
     );
+    routes.patch(
+      '/accounts/:accountId/identities/:identityId',
+      async (context) => {
+        const value = await readObject(context.req.raw);
+        return context.json({
+          data: await mail.updateIdentity(operationContext(context), {
+            accountId: context.req.param('accountId'),
+            identityId: context.req.param('identityId'),
+            displayName: optionalNullableString(
+              value.displayName,
+              'displayName',
+            ),
+            signatureText: optionalNullableString(
+              value.signatureText,
+              'signatureText',
+            ),
+            signatureHtml: optionalNullableString(
+              value.signatureHtml,
+              'signatureHtml',
+            ),
+          }),
+        });
+      },
+    );
     routes.get('/accounts/:accountId/folders', async (context) =>
       context.json({
         data: await mail.listFolders(
@@ -167,12 +229,59 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
         ),
       }),
     );
+    routes.post(
+      '/attachments',
+      bodyLimit({
+        maxSize: MAX_ATTACHMENT_UPLOAD_BYTES,
+        onError: (context) =>
+          context.json(
+            {
+              error: {
+                code: 'INVALID_MAIL_REQUEST',
+                message: getRequestTranslator(
+                  context,
+                  MAIL_NAMESPACE,
+                )('errors.invalidRequest'),
+              },
+            },
+            413,
+          ),
+      }),
+      async (context) => {
+        const form = await context.req.formData();
+        const file = form.get('file');
+        if (!(file instanceof File)) {
+          throw new TypeError('Mail attachment file is required.');
+        }
+        return context.json({
+          data: await mail.uploadAttachment(operationContext(context), {
+            fileName: file.name,
+            contentType: file.type || 'application/octet-stream',
+            size: file.size,
+            stream: file.stream(),
+          }),
+        });
+      },
+    );
     routes.post('/messages/send', async (context) => {
       const input = await readComposeInput(context.req.raw);
       return context.json(
         { data: await mail.sendMessage(operationContext(context), input) },
         200,
       );
+    });
+    routes.post('/messages/bulk', async (context) => {
+      const input = await readBulkComposeInput(context.req.raw);
+      return context.json(
+        { data: await mail.sendBulk(operationContext(context), input) },
+        200,
+      );
+    });
+    routes.post('/messages/drafts', async (context) => {
+      const input = await readDraftInput(context.req.raw);
+      return context.json({
+        data: await mail.saveDraft(operationContext(context), input),
+      });
     });
     routes.post('/accounts/:accountId/sync', async (context) => {
       const input = await readSyncInput(
@@ -263,6 +372,26 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
             404,
           );
     });
+    routes.get(
+      '/accounts/:accountId/messages/:messageId/attachments/:attachmentId',
+      async (context) => {
+        const content = await mail.getAttachment(
+          operationContext(context),
+          context.req.param('accountId'),
+          context.req.param('messageId'),
+          context.req.param('attachmentId'),
+        );
+        const headers = new Headers({
+          'content-type': safeContentType(content.contentType),
+          'content-disposition': attachmentDisposition(content.fileName),
+          'x-content-type-options': 'nosniff',
+        });
+        if (content.size !== undefined) {
+          headers.set('content-length', String(content.size));
+        }
+        return new Response(content.stream, { headers });
+      },
+    );
     routes.patch(
       '/accounts/:accountId/messages/:messageId',
       async (context) => {
@@ -320,6 +449,59 @@ function operationContext(context: {
   return { actorId: context.get('auth').user.id };
 }
 
+async function readDraftInput(request: Request): Promise<MailComposeInput> {
+  const value = await readObject(request);
+  return {
+    accountId: requiredString(value.accountId, 'accountId'),
+    identityId: requiredString(value.identityId, 'identityId'),
+    to: optionalAddresses(value.to, 'to') ?? [],
+    cc: optionalAddresses(value.cc, 'cc'),
+    bcc: optionalAddresses(value.bcc, 'bcc'),
+    subject: optionalString(value.subject, 'subject') ?? '',
+    text: optionalString(value.text, 'text') ?? '',
+    html: optionalString(value.html, 'html'),
+    attachmentIds: optionalStringArray(value.attachmentIds, 'attachmentIds'),
+    retainedAttachmentIds: optionalStringArray(
+      value.retainedAttachmentIds,
+      'retainedAttachmentIds',
+    ),
+    inReplyToMessageId: optionalString(
+      value.inReplyToMessageId,
+      'inReplyToMessageId',
+    ),
+    forwardOfMessageId: optionalString(
+      value.forwardOfMessageId,
+      'forwardOfMessageId',
+    ),
+    draftMessageId: optionalString(value.draftMessageId, 'draftMessageId'),
+    idempotencyKey: requiredString(value.idempotencyKey, 'idempotencyKey'),
+  };
+}
+
+function attachmentDisposition(fileName: string): string {
+  const fallback =
+    Array.from(fileName, (character) => {
+      const code = character.codePointAt(0) ?? 0;
+      return code >= 0x20 &&
+        code <= 0x7e &&
+        character !== '"' &&
+        character !== '\\'
+        ? character
+        : '_';
+    }).join('') || 'attachment';
+  const encoded = encodeURIComponent(fileName).replace(
+    /['()*]/gu,
+    (character) => `%${character.codePointAt(0)?.toString(16).toUpperCase()}`,
+  );
+  return `attachment; filename="${fallback}"; filename*=UTF-8''${encoded}`;
+}
+
+function safeContentType(value: string): string {
+  return /^[\w!#$&^_.+-]+\/[\w!#$&^_.+-]+(?:\s*;[^\r\n]*)?$/u.test(value)
+    ? value
+    : 'application/octet-stream';
+}
+
 async function readComposeInput(request: Request): Promise<MailComposeInput> {
   const value = await readObject(request);
   const accountId = requiredString(value.accountId, 'accountId');
@@ -337,6 +519,10 @@ async function readComposeInput(request: Request): Promise<MailComposeInput> {
     text,
     html: optionalString(value.html, 'html'),
     attachmentIds: optionalStringArray(value.attachmentIds, 'attachmentIds'),
+    retainedAttachmentIds: optionalStringArray(
+      value.retainedAttachmentIds,
+      'retainedAttachmentIds',
+    ),
     inReplyToMessageId: optionalString(
       value.inReplyToMessageId,
       'inReplyToMessageId',
@@ -346,7 +532,29 @@ async function readComposeInput(request: Request): Promise<MailComposeInput> {
       'forwardOfMessageId',
     ),
     scheduledAt: optionalString(value.scheduledAt, 'scheduledAt'),
+    draftMessageId: optionalString(value.draftMessageId, 'draftMessageId'),
     idempotencyKey,
+  };
+}
+
+async function readBulkComposeInput(
+  request: Request,
+): Promise<MailBulkComposeInput> {
+  const value = await readObject(request);
+  return {
+    accountId: requiredString(value.accountId, 'accountId'),
+    identityId: requiredString(value.identityId, 'identityId'),
+    recipients: addresses(value.recipients, 'recipients'),
+    subject: requiredString(value.subject, 'subject'),
+    text: requiredString(value.text, 'text'),
+    html: optionalString(value.html, 'html'),
+    attachmentIds: optionalStringArray(value.attachmentIds, 'attachmentIds'),
+    retainedAttachmentIds: optionalStringArray(
+      value.retainedAttachmentIds,
+      'retainedAttachmentIds',
+    ),
+    scheduledAt: optionalString(value.scheduledAt, 'scheduledAt'),
+    idempotencyKey: requiredString(value.idempotencyKey, 'idempotencyKey'),
   };
 }
 
@@ -428,6 +636,14 @@ function optionalString(value: unknown, field: string): string | undefined {
   if (typeof value !== 'string')
     throw new TypeError(`Mail field "${field}" must be a string.`);
   return value;
+}
+
+function optionalNullableString(
+  value: unknown,
+  field: string,
+): string | null | undefined {
+  if (value === null) return null;
+  return optionalString(value, field);
 }
 
 function optionalStringArray(

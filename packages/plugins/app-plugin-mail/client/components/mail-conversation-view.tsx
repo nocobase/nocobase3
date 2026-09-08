@@ -1,4 +1,15 @@
-import { Archive, MailOpen, Mail, Paperclip, Star, Trash2 } from 'lucide-react';
+import {
+  Archive,
+  Download,
+  MailOpen,
+  Mail,
+  Paperclip,
+  Reply,
+  Forward,
+  Star,
+  Trash2,
+  PenLine,
+} from 'lucide-react';
 import type { ReactElement } from 'react';
 
 import type { MailMessage } from '../mail-client.js';
@@ -23,12 +34,23 @@ export interface MailConversationViewProps {
   readonly actions?: {
     readonly archive?: (message: MailMessage) => void;
     readonly delete: (message: MailMessage) => void;
+    readonly downloadAttachment?: (
+      message: MailMessage,
+      attachment: MailMessage['attachments'][number],
+    ) => void;
+    readonly reply?: (message: MailMessage) => void;
+    readonly forward?: (message: MailMessage) => void;
+    readonly editDraft?: (message: MailMessage) => void;
     readonly toggleRead: (message: MailMessage) => void;
     readonly toggleStarred: (message: MailMessage) => void;
   };
   readonly actionLabels?: {
     readonly archive: string;
     readonly delete: string;
+    readonly download: string;
+    readonly reply: string;
+    readonly forward: string;
+    readonly editDraft?: string;
     readonly markRead: string;
     readonly markUnread: string;
     readonly star: string;
@@ -97,6 +119,36 @@ export function MailConversationView({
                 </time>
                 {actions && actionLabels ? (
                   <div className='flex shrink-0 items-center gap-1'>
+                    {message.draft && actions.editDraft ? (
+                      <Button
+                        aria-label={actionLabels.editDraft}
+                        className='size-8 px-0'
+                        onClick={() => actions.editDraft?.(message)}
+                        variant='ghost'
+                      >
+                        <PenLine />
+                      </Button>
+                    ) : null}
+                    {!message.draft && actions.reply ? (
+                      <Button
+                        aria-label={actionLabels.reply}
+                        className='size-8 px-0'
+                        onClick={() => actions.reply?.(message)}
+                        variant='ghost'
+                      >
+                        <Reply />
+                      </Button>
+                    ) : null}
+                    {!message.draft && actions.forward ? (
+                      <Button
+                        aria-label={actionLabels.forward}
+                        className='size-8 px-0'
+                        onClick={() => actions.forward?.(message)}
+                        variant='ghost'
+                      >
+                        <Forward />
+                      </Button>
+                    ) : null}
                     <Button
                       aria-label={
                         message.read
@@ -146,9 +198,41 @@ export function MailConversationView({
                 {plainMessageBody(message)}
               </div>
               {message.attachments.length > 0 ? (
-                <div className='mt-4 flex items-center gap-2 border-t pt-3 text-xs text-muted-foreground'>
-                  <Paperclip aria-hidden='true' className='size-3.5' />
-                  {labels.attachmentCount(message.attachments.length)}
+                <div className='mt-4 border-t pt-3 text-xs text-muted-foreground'>
+                  <div className='mb-2 flex items-center gap-2'>
+                    <Paperclip aria-hidden='true' className='size-3.5' />
+                    {labels.attachmentCount(message.attachments.length)}
+                  </div>
+                  <div className='flex flex-wrap gap-2'>
+                    {message.attachments.map((attachment) =>
+                      actions?.downloadAttachment && actionLabels ? (
+                        <Button
+                          aria-label={`${actionLabels.download} ${attachment.fileName}`}
+                          className='h-auto max-w-full justify-start gap-2 px-3 py-2'
+                          key={attachment.id}
+                          onClick={() =>
+                            actions.downloadAttachment?.(message, attachment)
+                          }
+                          variant='outline'
+                        >
+                          <Download className='size-3.5 shrink-0' />
+                          <span className='truncate'>
+                            {attachment.fileName}
+                          </span>
+                        </Button>
+                      ) : (
+                        <span
+                          className='inline-flex max-w-full items-center gap-2 rounded-md border px-3 py-2'
+                          key={attachment.id}
+                        >
+                          <Paperclip className='size-3.5 shrink-0' />
+                          <span className='truncate'>
+                            {attachment.fileName}
+                          </span>
+                        </span>
+                      ),
+                    )}
+                  </div>
                 </div>
               ) : null}
             </article>

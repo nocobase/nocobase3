@@ -19,6 +19,8 @@ import type {
   MailProviderResult,
   MailProviderSendInput,
   MailProviderSendResult,
+  MailProviderUpsertPushSubscriptionInput,
+  MailProviderUpsertPushSubscriptionResult,
   MailSyncCursor,
   NormalizedMailAttachment,
   NormalizedMailMessage,
@@ -54,6 +56,9 @@ const MESSAGE_SELECT = [
   'flag',
   'hasAttachments',
 ].join(',');
+
+const SIMPLE_ATTACHMENT_LIMIT = 3 * 1024 * 1024;
+const UPLOAD_CHUNK_SIZE = 10 * 320 * 1024;
 
 export interface MicrosoftMailProviderConfig extends MailProviderConfig {
   readonly type: 'microsoft';
@@ -128,6 +133,7 @@ interface GraphProfile {
   displayName?: string;
   mail?: string;
   userPrincipalName?: string;
+  proxyAddresses?: readonly string[];
 }
 
 interface GraphAttachment {
@@ -138,6 +144,15 @@ interface GraphAttachment {
   isInline?: boolean;
   contentId?: string;
   contentBytes?: string;
+}
+
+interface GraphSubscription {
+  id?: string;
+  expirationDateTime?: string;
+}
+
+interface GraphUploadSession {
+  readonly uploadUrl?: string;
 }
 
 interface FolderCursor {
@@ -169,12 +184,12 @@ export const microsoftMailProviderDefinition: MailProviderDefinition<MicrosoftMa
       receive: true,
       send: true,
       incrementalSync: true,
-      pushNotifications: false,
+      pushNotifications: true,
       folders: true,
       labels: false,
-      drafts: false,
+      drafts: true,
       moveMessage: true,
-      aliases: false,
+      aliases: true,
     },
     validateConfig(config: MicrosoftMailProviderConfig): void {
       if (!config.clientId || !config.clientSecret) {
@@ -184,6 +199,34 @@ export const microsoftMailProviderDefinition: MailProviderDefinition<MicrosoftMa
       }
     },
     authorization: createAuthorization(),
+    push: {
+      parse(input) {
+        const validationToken = input.query.validationToken;
+        if (validationToken !== undefined) {
+          return {
+            ok: true,
+            value: { challengeResponse: validationToken, notifications: [] },
+          };
+        }
+        const value = record(input.body).value;
+        if (!Array.isArray(value)) return invalidPushNotification();
+        const notifications = value.flatMap((item) => {
+          const notification = record(item);
+          return typeof notification.subscriptionId === 'string' &&
+            typeof notification.clientState === 'string'
+            ? [
+                {
+                  providerSubscriptionId: notification.subscriptionId,
+                  clientState: notification.clientState,
+                },
+              ]
+            : [];
+        });
+        return notifications.length === value.length
+          ? { ok: true, value: { notifications } }
+          : invalidPushNotification();
+      },
+    },
     async createAdapter(
       context,
       config,
@@ -255,7 +298,7 @@ function createAuthorization(): MailProviderAuthorization<MicrosoftMailProviderC
       const profile = await graphRequest<GraphProfile>(
         config,
         accessToken,
-        '/me?$select=id,displayName,mail,userPrincipalName',
+        '/me?$select=id,displayName,mail,userPrincipalName,proxyAddresses',
         { signal: input.signal },
       );
       if (!profile.ok) return profile;
@@ -289,6 +332,7 @@ function createAuthorization(): MailProviderAuthorization<MicrosoftMailProviderC
           credentialReference,
           scopes,
           credentialExpiresAt: expiresAt,
+          identities: microsoftIdentities(profile.value, address),
         } satisfies MailAuthorizedAccount,
       };
     },
@@ -306,6 +350,98 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
     private readonly account: MailAccount,
   ) {
     this.identity = account.provider;
+  }
+
+  public async upsertPushSubscription(
+    input: MailProviderUpsertPushSubscriptionInput,
+  ): Promise<MailProviderResult<MailProviderUpsertPushSubscriptionResult>> {
+    const expirationDateTime = new Date(
+      Date.now() + 2 * 24 * 60 * 60 * 1000,
+    ).toISOString();
+    let fallbackSubscriptionId = input.providerSubscriptionId;
+    let result = input.providerSubscriptionId
+      ? await this.request<GraphSubscription>(
+          `/subscriptions/${encodeURIComponent(input.providerSubscriptionId)}`,
+          {
+            method: 'PATCH',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ expirationDateTime }),
+            signal: input.signal,
+          },
+        )
+      : undefined;
+    if (
+      !result ||
+      (!result.ok &&
+        ['MICROSOFT_HTTP_404', 'MICROSOFT_HTTP_410'].includes(
+          result.error.code,
+        ))
+    ) {
+      fallbackSubscriptionId = undefined;
+      result = await this.request<GraphSubscription>('/subscriptions', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          changeType: 'created,updated,deleted',
+          notificationUrl: input.notificationUrl,
+          resource: 'me/messages',
+          expirationDateTime,
+          clientState: input.clientState,
+          latestSupportedTlsVersion: 'v1_2',
+        }),
+        signal: input.signal,
+      });
+    }
+    if (!result.ok) return result;
+    const id = result.value.id ?? fallbackSubscriptionId;
+    const expiresAt = result.value.expirationDateTime ?? expirationDateTime;
+    if (!id || Number.isNaN(Date.parse(expiresAt))) {
+      return failure(
+        'MICROSOFT_PUSH_SUBSCRIPTION_INVALID',
+        'Microsoft Graph did not return a valid push subscription.',
+        'provider',
+        false,
+      );
+    }
+    return {
+      ok: true,
+      value: {
+        providerSubscriptionId: id,
+        renewAfter: new Date(
+          Date.parse(expiresAt) - 12 * 60 * 60 * 1000,
+        ).toISOString(),
+        expiresAt,
+      },
+    };
+  }
+
+  public async deletePushSubscription(
+    providerSubscriptionId: string,
+    signal?: AbortSignal,
+  ): Promise<MailProviderResult<void>> {
+    try {
+      const resolvedUrl = resolveGraphUrl(
+        this.config,
+        `/subscriptions/${encodeURIComponent(providerSubscriptionId)}`,
+      );
+      if (!resolvedUrl.ok) return resolvedUrl;
+      const response = await fetch(resolvedUrl.value, {
+        method: 'DELETE',
+        headers: {
+          authorization: `Bearer ${await this.accessToken(signal)}`,
+          accept: 'application/json',
+        },
+        signal,
+      });
+      return response.ok || [404, 410].includes(response.status)
+        ? { ok: true, value: undefined }
+        : { ok: false, error: await responseError(response) };
+    } catch (error) {
+      return {
+        ok: false,
+        error: errorResult(error, 'MICROSOFT_PUSH_DELETE_FAILED'),
+      };
+    }
   }
 
   public getCurrentSyncCursor(): Promise<MailProviderResult<MailSyncCursor>> {
@@ -703,12 +839,61 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
       };
     }
     try {
+      if (input.message.draftProviderMessageId) {
+        const updated = await this.updateDraft(
+          input.message.draftProviderMessageId,
+          input,
+        );
+        if (!updated.ok) return { status: 'failed', error: updated.error };
+        const sent = await fetch(
+          `${graphBase(this.config)}/me/messages/${encodeURIComponent(input.message.draftProviderMessageId)}/send`,
+          {
+            method: 'POST',
+            headers: {
+              authorization: `Bearer ${token}`,
+              'client-request-id': input.trackingId,
+            },
+            signal: input.signal,
+          },
+        );
+        return sent.ok
+          ? {
+              status: 'accepted',
+              providerMessageId: input.message.draftProviderMessageId,
+            }
+          : { status: 'failed', error: await responseError(sent) };
+      }
       if (
         input.message.replyToProviderMessageId ||
         input.message.forwardOfProviderMessageId
       ) {
         return await this.sendRelatedMessage(token, input);
       }
+      if (
+        input.message.attachments.reduce(
+          (total, attachment) => total + attachment.size,
+          0,
+        ) >= SIMPLE_ATTACHMENT_LIMIT
+      ) {
+        const draft = await this.saveDraft(input);
+        if (!draft.ok) return { status: 'failed', error: draft.error };
+        const draftId = draft.value.providerMessageId;
+        const sent = await fetch(
+          `${graphBase(this.config)}/me/messages/${encodeURIComponent(draftId)}/send`,
+          {
+            method: 'POST',
+            headers: {
+              authorization: `Bearer ${token}`,
+              'client-request-id': input.trackingId,
+            },
+            signal: input.signal,
+          },
+        );
+        return sent.ok
+          ? { status: 'accepted', providerMessageId: draftId }
+          : { status: 'failed', error: await responseError(sent) };
+      }
+      const attachments = await graphAttachments(input);
       const response = await fetch(`${graphBase(this.config)}/me/sendMail`, {
         method: 'POST',
         headers: {
@@ -720,6 +905,7 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
         body: JSON.stringify({
           message: {
             subject: input.message.subject,
+            from: graphRecipient(input.identity),
             body: {
               contentType: input.message.html ? 'HTML' : 'Text',
               content: input.message.html ?? input.message.text,
@@ -727,6 +913,7 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
             toRecipients: input.message.to.map(graphRecipient),
             ccRecipients: input.message.cc.map(graphRecipient),
             bccRecipients: input.message.bcc.map(graphRecipient),
+            attachments,
           },
           saveToSentItems: true,
         }),
@@ -741,6 +928,144 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
         error: unknownError(error, 'MICROSOFT_SEND_RESULT_UNKNOWN'),
       };
     }
+  }
+
+  public async saveDraft(
+    input: MailProviderSendInput,
+  ): Promise<MailProviderResult<NormalizedMailMessage>> {
+    if (
+      input.message.replyToProviderMessageId ||
+      input.message.forwardOfProviderMessageId
+    ) {
+      return this.saveRelatedDraft(input);
+    }
+    const result = await this.request<GraphMessage>('/me/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'client-request-id': input.trackingId,
+      },
+      body: JSON.stringify({
+        subject: input.message.subject,
+        from: graphRecipient(input.identity),
+        body: {
+          contentType: input.message.html ? 'HTML' : 'Text',
+          content: input.message.html ?? input.message.text,
+        },
+        toRecipients: input.message.to.map(graphRecipient),
+        ccRecipients: input.message.cc.map(graphRecipient),
+        bccRecipients: input.message.bcc.map(graphRecipient),
+      }),
+      signal: input.signal,
+    });
+    if (!result.ok) return result;
+    const providerMessageId = required(
+      result.value.id,
+      'Microsoft draft message ID',
+    );
+    for (const attachment of input.message.attachments) {
+      const added = await this.addAttachment(
+        providerMessageId,
+        attachment,
+        input.trackingId,
+        input.signal,
+      );
+      if (!added.ok) return added;
+    }
+    const attachments = input.message.attachments.length
+      ? await this.attachments(providerMessageId, input.signal)
+      : { ok: true as const, value: [] as readonly NormalizedMailAttachment[] };
+    if (!attachments.ok) return attachments;
+    return normalizeGraphMessage(
+      {
+        ...result.value,
+        isDraft: true,
+        parentFolderId: result.value.parentFolderId ?? 'drafts',
+      },
+      attachments.value,
+    );
+  }
+
+  public async updateDraft(
+    providerMessageId: string,
+    input: MailProviderSendInput,
+  ): Promise<MailProviderResult<NormalizedMailMessage>> {
+    const result = await this.request<GraphMessage>(
+      `/me/messages/${encodeURIComponent(providerMessageId)}`,
+      {
+        method: 'PATCH',
+        headers: {
+          'content-type': 'application/json',
+          'client-request-id': input.trackingId,
+        },
+        body: JSON.stringify({
+          subject: input.message.subject,
+          from: graphRecipient(input.identity),
+          body: {
+            contentType: input.message.html ? 'HTML' : 'Text',
+            content: input.message.html ?? input.message.text,
+          },
+          toRecipients: input.message.to.map(graphRecipient),
+          ccRecipients: input.message.cc.map(graphRecipient),
+          bccRecipients: input.message.bcc.map(graphRecipient),
+        }),
+        signal: input.signal,
+      },
+    );
+    if (!result.ok) return result;
+    const shouldUpdateAttachments =
+      input.message.retainedProviderAttachmentIds !== undefined ||
+      input.message.attachments.length > 0;
+    const existingAttachments = shouldUpdateAttachments
+      ? await this.attachments(providerMessageId, input.signal)
+      : { ok: true as const, value: [] as readonly NormalizedMailAttachment[] };
+    if (!existingAttachments.ok) return existingAttachments;
+    const retained = new Set(
+      input.message.retainedProviderAttachmentIds ??
+        existingAttachments.value.map(
+          (attachment) => attachment.providerAttachmentId,
+        ),
+    );
+    for (const attachment of existingAttachments.value) {
+      if (retained.has(attachment.providerAttachmentId)) continue;
+      const removed = await this.deleteDraftAttachment(
+        providerMessageId,
+        attachment.providerAttachmentId,
+        input.signal,
+      );
+      if (!removed.ok) return removed;
+    }
+    for (const attachment of input.message.attachments) {
+      const added = await this.addAttachment(
+        providerMessageId,
+        attachment,
+        input.trackingId,
+        input.signal,
+      );
+      if (!added.ok) return added;
+    }
+    const attachments = shouldUpdateAttachments
+      ? await this.attachments(providerMessageId, input.signal)
+      : { ok: true as const, value: [] as readonly NormalizedMailAttachment[] };
+    if (!attachments.ok) return attachments;
+    return normalizeGraphMessage(
+      {
+        ...result.value,
+        id: result.value.id ?? providerMessageId,
+        isDraft: true,
+        parentFolderId: result.value.parentFolderId ?? 'drafts',
+        from: graphRecipient(input.identity),
+        toRecipients: input.message.to.map(graphRecipient),
+        ccRecipients: input.message.cc.map(graphRecipient),
+        bccRecipients: input.message.bcc.map(graphRecipient),
+        subject: input.message.subject,
+        body: {
+          contentType: input.message.html ? 'HTML' : 'Text',
+          content: input.message.html ?? input.message.text,
+        },
+      },
+      attachments.value,
+    );
   }
 
   public setRead(
@@ -856,57 +1181,9 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
     token: string,
     input: MailProviderSendInput,
   ): Promise<MailProviderSendResult> {
-    const sourceId =
-      input.message.replyToProviderMessageId ??
-      input.message.forwardOfProviderMessageId;
-    const action = input.message.replyToProviderMessageId
-      ? 'createReply'
-      : 'createForward';
-    const created = await fetch(
-      `${graphBase(this.config)}/me/messages/${encodeURIComponent(required(sourceId, 'Microsoft related message ID'))}/${action}`,
-      {
-        method: 'POST',
-        headers: {
-          authorization: `Bearer ${token}`,
-          'content-type': 'application/json',
-          Prefer: 'IdType="ImmutableId"',
-          'client-request-id': input.trackingId,
-        },
-        body: '{}',
-        signal: input.signal,
-      },
-    );
-    if (!created.ok) {
-      return { status: 'failed', error: await responseError(created) };
-    }
-    const draft = (await created.json()) as GraphMessage;
-    const draftId = required(draft.id, 'Microsoft reply or forward draft ID');
-    const updated = await fetch(
-      `${graphBase(this.config)}/me/messages/${encodeURIComponent(draftId)}`,
-      {
-        method: 'PATCH',
-        headers: {
-          authorization: `Bearer ${token}`,
-          'content-type': 'application/json',
-          Prefer: 'IdType="ImmutableId"',
-          'client-request-id': input.trackingId,
-        },
-        body: JSON.stringify({
-          subject: input.message.subject,
-          body: {
-            contentType: input.message.html ? 'HTML' : 'Text',
-            content: input.message.html ?? input.message.text,
-          },
-          toRecipients: input.message.to.map(graphRecipient),
-          ccRecipients: input.message.cc.map(graphRecipient),
-          bccRecipients: input.message.bcc.map(graphRecipient),
-        }),
-        signal: input.signal,
-      },
-    );
-    if (!updated.ok) {
-      return { status: 'failed', error: await responseError(updated) };
-    }
+    const prepared = await this.saveRelatedDraft(input);
+    if (!prepared.ok) return { status: 'failed', error: prepared.error };
+    const draftId = prepared.value.providerMessageId;
     const sent = await fetch(
       `${graphBase(this.config)}/me/messages/${encodeURIComponent(draftId)}/send`,
       {
@@ -921,6 +1198,195 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
     return sent.ok
       ? { status: 'accepted', providerMessageId: draftId }
       : { status: 'failed', error: await responseError(sent) };
+  }
+
+  private async saveRelatedDraft(
+    input: MailProviderSendInput,
+  ): Promise<MailProviderResult<NormalizedMailMessage>> {
+    const sourceId =
+      input.message.replyToProviderMessageId ??
+      input.message.forwardOfProviderMessageId;
+    const action = input.message.replyToProviderMessageId
+      ? 'createReply'
+      : 'createForward';
+    const created = await this.request<GraphMessage>(
+      `/me/messages/${encodeURIComponent(required(sourceId, 'Microsoft related message ID'))}/${action}`,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'client-request-id': input.trackingId,
+        },
+        body: '{}',
+        signal: input.signal,
+      },
+    );
+    if (!created.ok) return created;
+    const draft = created.value;
+    const draftId = required(draft.id, 'Microsoft reply or forward draft ID');
+    const updated = await this.request<GraphMessage>(
+      `/me/messages/${encodeURIComponent(draftId)}`,
+      {
+        method: 'PATCH',
+        headers: {
+          'content-type': 'application/json',
+          'client-request-id': input.trackingId,
+        },
+        body: JSON.stringify({
+          subject: input.message.subject,
+          from: graphRecipient(input.identity),
+          body: relatedBody(input, draft),
+          toRecipients: input.message.to.map(graphRecipient),
+          ccRecipients: input.message.cc.map(graphRecipient),
+          bccRecipients: input.message.bcc.map(graphRecipient),
+        }),
+        signal: input.signal,
+      },
+    );
+    if (!updated.ok) return updated;
+    for (const attachment of input.message.attachments) {
+      const added = await this.addAttachment(
+        draftId,
+        attachment,
+        input.trackingId,
+        input.signal,
+      );
+      if (!added.ok) return added;
+    }
+    const attachments = input.message.attachments.length
+      ? await this.attachments(draftId, input.signal)
+      : { ok: true as const, value: [] as readonly NormalizedMailAttachment[] };
+    if (!attachments.ok) return attachments;
+    return normalizeGraphMessage(
+      {
+        ...draft,
+        ...updated.value,
+        id: draftId,
+        isDraft: true,
+        parentFolderId: updated.value.parentFolderId ?? 'drafts',
+        from: graphRecipient(input.identity),
+        toRecipients: input.message.to.map(graphRecipient),
+        ccRecipients: input.message.cc.map(graphRecipient),
+        bccRecipients: input.message.bcc.map(graphRecipient),
+        subject: input.message.subject,
+        body: relatedBody(input, draft),
+      },
+      attachments.value,
+    );
+  }
+
+  private async deleteDraftAttachment(
+    providerMessageId: string,
+    providerAttachmentId: string,
+    signal?: AbortSignal,
+  ): Promise<MailProviderResult<void>> {
+    try {
+      const response = await fetch(
+        `${graphBase(this.config)}/me/messages/${encodeURIComponent(providerMessageId)}/attachments/${encodeURIComponent(providerAttachmentId)}`,
+        {
+          method: 'DELETE',
+          headers: {
+            authorization: `Bearer ${await this.accessToken(signal)}`,
+            Prefer: 'IdType="ImmutableId"',
+          },
+          signal,
+        },
+      );
+      return response.ok
+        ? { ok: true, value: undefined }
+        : { ok: false, error: await responseError(response) };
+    } catch (error) {
+      return {
+        ok: false,
+        error: errorResult(error, 'MICROSOFT_ATTACHMENT_DELETE_FAILED'),
+      };
+    }
+  }
+
+  private async addAttachment(
+    providerMessageId: string,
+    attachment: MailProviderSendInput['message']['attachments'][number],
+    trackingId: string,
+    signal?: AbortSignal,
+  ): Promise<MailProviderResult<void>> {
+    try {
+      const stream = await attachment.open();
+      const bytes = Buffer.from(await new Response(stream).arrayBuffer());
+      if (bytes.byteLength !== attachment.size) {
+        throw new Error('Mail attachment size changed before submission.');
+      }
+      if (bytes.byteLength < SIMPLE_ATTACHMENT_LIMIT) {
+        const added = await this.request<GraphAttachment>(
+          `/me/messages/${encodeURIComponent(providerMessageId)}/attachments`,
+          {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              'client-request-id': trackingId,
+            },
+            body: JSON.stringify(graphAttachment(attachment, bytes)),
+            signal,
+          },
+        );
+        return added.ok ? { ok: true, value: undefined } : added;
+      }
+      const session = await this.request<GraphUploadSession>(
+        `/me/messages/${encodeURIComponent(providerMessageId)}/attachments/createUploadSession`,
+        {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'client-request-id': trackingId,
+          },
+          body: JSON.stringify({
+            AttachmentItem: {
+              attachmentType: 'file',
+              name: attachment.fileName,
+              size: attachment.size,
+              contentType: attachment.contentType,
+              isInline: attachment.inline,
+              ...(attachment.contentId
+                ? { contentId: attachment.contentId }
+                : {}),
+            },
+          }),
+          signal,
+        },
+      );
+      if (!session.ok) return session;
+      const uploadUrl = required(
+        session.value.uploadUrl,
+        'Microsoft attachment upload URL',
+      );
+      if (new URL(uploadUrl).protocol !== 'https:') {
+        throw new Error('Microsoft attachment upload URL must use HTTPS.');
+      }
+      for (
+        let start = 0;
+        start < bytes.byteLength;
+        start += UPLOAD_CHUNK_SIZE
+      ) {
+        const end = Math.min(start + UPLOAD_CHUNK_SIZE, bytes.byteLength);
+        const response = await fetch(uploadUrl, {
+          method: 'PUT',
+          headers: {
+            'content-length': String(end - start),
+            'content-range': `bytes ${start}-${end - 1}/${bytes.byteLength}`,
+          },
+          body: bytes.subarray(start, end),
+          signal,
+        });
+        if (!response.ok) {
+          return { ok: false, error: await responseError(response) };
+        }
+      }
+      return { ok: true, value: undefined };
+    } catch (error) {
+      return {
+        ok: false,
+        error: errorResult(error, 'MICROSOFT_ATTACHMENT_UPLOAD_FAILED'),
+      };
+    }
   }
 
   private async normalizePage(
@@ -1086,6 +1552,70 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
   }
 }
 
+interface GraphFileAttachment {
+  readonly '@odata.type': '#microsoft.graph.fileAttachment';
+  readonly name: string;
+  readonly contentType: string;
+  readonly contentBytes: string;
+  readonly isInline: boolean;
+  readonly contentId?: string;
+}
+
+function graphAttachment(
+  attachment: MailProviderSendInput['message']['attachments'][number],
+  bytes: Buffer,
+): GraphFileAttachment {
+  return {
+    '@odata.type': '#microsoft.graph.fileAttachment',
+    name: attachment.fileName,
+    contentType: attachment.contentType,
+    contentBytes: bytes.toString('base64'),
+    isInline: attachment.inline,
+    ...(attachment.contentId ? { contentId: attachment.contentId } : {}),
+  };
+}
+
+async function graphAttachments(
+  input: MailProviderSendInput,
+): Promise<readonly GraphFileAttachment[]> {
+  return Promise.all(
+    input.message.attachments.map(async (attachment) => {
+      const stream = await attachment.open();
+      const bytes = Buffer.from(await new Response(stream).arrayBuffer());
+      if (bytes.byteLength !== attachment.size) {
+        throw new Error('Mail attachment size changed before submission.');
+      }
+      return graphAttachment(attachment, bytes);
+    }),
+  );
+}
+
+function relatedBody(
+  input: MailProviderSendInput,
+  draft: GraphMessage,
+): { readonly contentType: 'HTML' | 'Text'; readonly content: string } {
+  const contentType = input.message.html ? 'HTML' : 'Text';
+  const comment = input.message.html ?? input.message.text;
+  const original = draft.body?.content ?? '';
+  if (!original) return { contentType, content: comment };
+  if (contentType === 'HTML') {
+    return { contentType, content: `${comment}<br><br>${original}` };
+  }
+  return { contentType, content: `${comment}\n\n${htmlToText(original)}` };
+}
+
+function htmlToText(value: string): string {
+  return value
+    .replace(/<br\s*\/?>/giu, '\n')
+    .replace(/<\/p\s*>/giu, '\n')
+    .replace(/<[^>]+>/gu, '')
+    .replace(/&nbsp;/giu, ' ')
+    .replace(/&amp;/giu, '&')
+    .replace(/&lt;/giu, '<')
+    .replace(/&gt;/giu, '>')
+    .trim();
+}
+
 async function exchangeToken(
   config: MicrosoftMailProviderConfig,
   body: Record<string, string>,
@@ -1211,6 +1741,29 @@ function normalizeGraphMessage(
 
 function graphRecipient(address: MailAddress): GraphEmailAddress {
   return { emailAddress: { address: address.address, name: address.name } };
+}
+
+function microsoftIdentities(
+  profile: GraphProfile,
+  primaryAddress: string,
+): readonly {
+  address: string;
+  displayName?: string;
+  isPrimary: boolean;
+  canSend: boolean;
+}[] {
+  const addresses = new Map<string, string>();
+  addresses.set(primaryAddress.toLowerCase(), primaryAddress);
+  for (const value of profile.proxyAddresses ?? []) {
+    const match = value.match(/^smtp:(.+)$/iu);
+    if (match?.[1]) addresses.set(match[1].toLowerCase(), match[1]);
+  }
+  return [...addresses.values()].map((address) => ({
+    address,
+    displayName: profile.displayName,
+    isPrimary: address.toLowerCase() === primaryAddress.toLowerCase(),
+    canSend: true,
+  }));
 }
 
 function graphAddress(
@@ -1464,4 +2017,19 @@ function failure<T>(
   retryable: boolean,
 ): MailProviderResult<T> {
   return { ok: false, error: { code, message, category, retryable } };
+}
+
+function invalidPushNotification<T>(): MailProviderResult<T> {
+  return failure(
+    'MICROSOFT_PUSH_NOTIFICATION_INVALID',
+    'Microsoft Graph push notification payload is invalid.',
+    'provider',
+    false,
+  );
+}
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object'
+    ? (value as Record<string, unknown>)
+    : {};
 }

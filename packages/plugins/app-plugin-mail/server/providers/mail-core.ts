@@ -3,6 +3,7 @@ import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { databaseManagerToken } from '@nocobase/db';
 import { loggingToken } from '@nocobase/app-server/logging';
 import { queueManagerToken } from '@nocobase/app-server/queue';
+import { driveConfig, driveManagerToken } from '@nocobase/app-server/drive';
 
 import { createMailProviderAdapterResolver } from '../adapter-resolver.js';
 import { mailConfig } from '../config.js';
@@ -10,6 +11,7 @@ import { createDatabaseMailCredentialVault } from '../credentials.js';
 import { createMailProviderRegistry } from '../registry.js';
 import { createMailRuntime } from '../runtime.js';
 import { DefaultMailService } from '../service.js';
+import { DriveMailOutboundAttachmentStorage } from '../outbound-attachments.js';
 import { createDatabaseMailStore } from '../store.js';
 import {
   mailProviderAdapterResolverToken,
@@ -17,6 +19,7 @@ import {
   mailProviderRegistryToken,
   mailRuntimeToken,
   mailServiceToken,
+  mailOutboundAttachmentStorageToken,
   mailStoreToken,
 } from '../tokens.js';
 
@@ -56,11 +59,27 @@ export class MailCoreProvider extends ServiceProvider<MailCoreProviderApplicatio
         adapters: container.resolve(mailProviderAdapterResolverToken),
         queue: container.resolve(queueManagerToken),
         queueName: `mail:${this.app.appName}`,
+        automaticSyncIntervalMs:
+          this.app.config.get(mailConfig).automaticSyncIntervalMs,
+        pushWebhookUrl: this.app.config.get(mailConfig).pushWebhookUrl,
+        pushWebhookSecret: this.app.config.get(mailConfig).pushWebhookSecret,
+        outboundAttachments: container.resolve(
+          mailOutboundAttachmentStorageToken,
+        ),
         logger: container
           .resolve(loggingToken)
           .getLogger()
           .child({ module: 'mail' }),
       }),
+    );
+    this.app.container.singleton(
+      mailOutboundAttachmentStorageToken,
+      (container) =>
+        new DriveMailOutboundAttachmentStorage(
+          container.resolve(mailStoreToken),
+          container.resolve(driveManagerToken),
+          this.app.config.get(driveConfig).default,
+        ),
     );
     this.app.container.singleton(
       mailServiceToken,
@@ -78,6 +97,9 @@ export class MailCoreProvider extends ServiceProvider<MailCoreProviderApplicatio
           resolveProviderConfig: (provider) =>
             this.resolveProviderConfig(provider),
           listProviderConfigs: () => this.listProviderConfigs(),
+          outboundAttachments: container.resolve(
+            mailOutboundAttachmentStorageToken,
+          ),
         }),
     );
   }

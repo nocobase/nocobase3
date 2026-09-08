@@ -13,10 +13,12 @@ import {
 } from '../components/index.js';
 import { Button } from '../components/ui/button.js';
 import { Card } from '../components/ui/card.js';
+import { Textarea } from '../components/ui/textarea.js';
 import {
   mailErrorMessage,
   type MailAccountView,
   type MailProviderView,
+  type MailIdentity,
   type MailSyncRunView,
 } from '../mail-client.js';
 import { getMailClient } from '../runtime.js';
@@ -40,6 +42,13 @@ export default function MailAccountsDevPage(): ReactElement {
     batchSize: 200,
   }));
   const [error, setError] = useState<string>();
+  const [accountIdentities, setAccountIdentities] = useState<
+    Readonly<Record<string, readonly MailIdentity[]>>
+  >({});
+  const [signatureDrafts, setSignatureDrafts] = useState<
+    Readonly<Record<string, string>>
+  >({});
+  const [savingIdentity, setSavingIdentity] = useState<string>();
   const authorizationNotice = readAuthorizationNotice();
 
   const refresh = useCallback((): void => {
@@ -49,6 +58,36 @@ export default function MailAccountsDevPage(): ReactElement {
       .then(([nextProviders, nextAccounts]) => {
         setProviders(nextProviders);
         setAccounts(nextAccounts);
+        void Promise.all(
+          nextAccounts.map(
+            async (account) =>
+              [account.id, await mail.listIdentities(account.id)] as const,
+          ),
+        ).then(
+          (entries) => {
+            setAccountIdentities(Object.fromEntries(entries));
+            setSignatureDrafts(
+              Object.fromEntries(
+                entries.flatMap(([, identities]) =>
+                  identities.map((identity) => [
+                    identity.id,
+                    identity.signatureText ?? '',
+                  ]),
+                ),
+              ),
+            );
+          },
+          (cause: unknown) => {
+            setError(
+              mailErrorMessage(
+                cause,
+                t('errors.requestFailed', {
+                  defaultValue: 'Mail request failed.',
+                }),
+              ),
+            );
+          },
+        );
       })
       .catch((cause: unknown) => {
         setError(
@@ -203,6 +242,37 @@ export default function MailAccountsDevPage(): ReactElement {
       );
   };
 
+  const saveIdentity = (identity: MailIdentity): void => {
+    setSavingIdentity(identity.id);
+    setError(undefined);
+    void mail
+      .updateIdentity({
+        accountId: identity.accountId,
+        identityId: identity.id,
+        signatureText: signatureDrafts[identity.id] ?? '',
+        signatureHtml: null,
+      })
+      .then((updated) => {
+        setAccountIdentities((current) => ({
+          ...current,
+          [updated.accountId]: (current[updated.accountId] ?? []).map((item) =>
+            item.id === updated.id ? updated : item,
+          ),
+        }));
+      })
+      .catch((cause: unknown) =>
+        setError(
+          mailErrorMessage(
+            cause,
+            t('errors.requestFailed', {
+              defaultValue: 'Mail request failed.',
+            }),
+          ),
+        ),
+      )
+      .finally(() => setSavingIdentity(undefined));
+  };
+
   return (
     <MailDevPageShell
       actions={
@@ -214,7 +284,7 @@ export default function MailAccountsDevPage(): ReactElement {
           {t('actions.refresh', { defaultValue: 'Refresh' })}
         </Button>
       }
-      badge={t('nav.dev', { defaultValue: 'Mail components' })}
+      badge={t('nav.settings', { defaultValue: 'Mail' })}
       category={t('dev.accountsCategory', {
         defaultValue: 'Account access',
       })}
@@ -379,7 +449,7 @@ export default function MailAccountsDevPage(): ReactElement {
                 <p className='mt-1 max-w-xl text-sm leading-6 text-muted-foreground'>
                   {t('dev.connectedAccountsDescription', {
                     defaultValue:
-                      'Accounts connected by the current user are available to the mail component examples.',
+                      'Manage the mail accounts connected by the current user.',
                   })}
                 </p>
               </div>
@@ -463,6 +533,72 @@ export default function MailAccountsDevPage(): ReactElement {
                             ['pending', 'running'].includes(run.status))
                         }
                       />
+                      {(accountIdentities[account.id] ?? []).length > 0 ? (
+                        <div className='mx-6 mb-5 space-y-3 rounded-xl border bg-muted/10 p-4'>
+                          <h4 className='text-sm font-semibold'>
+                            {t('settings.identities.title', {
+                              defaultValue: 'Sending identities and signatures',
+                            })}
+                          </h4>
+                          {(accountIdentities[account.id] ?? []).map(
+                            (identity) => (
+                              <div className='space-y-2' key={identity.id}>
+                                <div className='flex items-center gap-2 text-sm'>
+                                  <span className='font-medium'>
+                                    {identity.address}
+                                  </span>
+                                  {identity.isPrimary ? (
+                                    <MailStatusBadge
+                                      label={t('settings.identities.primary', {
+                                        defaultValue: 'Primary',
+                                      })}
+                                      tone='info'
+                                    />
+                                  ) : null}
+                                </div>
+                                <Textarea
+                                  aria-label={t(
+                                    'settings.identities.signatureFor',
+                                    {
+                                      address: identity.address,
+                                      defaultValue: `Signature for ${identity.address}`,
+                                    },
+                                  )}
+                                  className='min-h-20'
+                                  onChange={(event) =>
+                                    setSignatureDrafts((current) => ({
+                                      ...current,
+                                      [identity.id]: event.target.value,
+                                    }))
+                                  }
+                                  placeholder={t(
+                                    'settings.identities.signaturePlaceholder',
+                                    {
+                                      defaultValue:
+                                        'Signature appended to outgoing messages',
+                                    },
+                                  )}
+                                  value={signatureDrafts[identity.id] ?? ''}
+                                />
+                                <Button
+                                  disabled={savingIdentity === identity.id}
+                                  onClick={() => saveIdentity(identity)}
+                                  type='button'
+                                  variant='outline'
+                                >
+                                  {savingIdentity === identity.id
+                                    ? t('settings.identities.saving', {
+                                        defaultValue: 'Saving…',
+                                      })
+                                    : t('settings.identities.save', {
+                                        defaultValue: 'Save signature',
+                                      })}
+                                </Button>
+                              </div>
+                            ),
+                          )}
+                        </div>
+                      ) : null}
                       {run ? <SyncProgress run={run} /> : null}
                     </div>
                   );

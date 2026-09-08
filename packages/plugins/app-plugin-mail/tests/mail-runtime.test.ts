@@ -13,6 +13,7 @@ import { DefaultMailService } from '../server/service.js';
 import { createDatabaseMailStore } from '../server/store.js';
 import type {
   MailAccount,
+  MailCredentialVault,
   MailProviderAdapter,
   MailProviderAdapterResolver,
   MailStore,
@@ -104,6 +105,37 @@ describe('mail MVP runtime', () => {
     ]);
   });
 
+  it('reuses persisted schedule times when a bulk request is retried', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-08T00:00:00.000Z'));
+    const service = new DefaultMailService({
+      store,
+      adapters: resolver(baseAdapter()),
+      outbox: { kick: vi.fn() },
+    });
+    const input = {
+      accountId: 'account-1',
+      identityId: 'identity-1',
+      recipients: [
+        { address: 'first@example.com' },
+        { address: 'second@example.com' },
+      ],
+      subject: 'Private update',
+      text: 'Mail body',
+      idempotencyKey: 'bulk-request-1',
+    } as const;
+
+    const first = await service.sendBulk({ actorId: 'user-1' }, input);
+    vi.setSystemTime(new Date('2026-09-08T00:01:00.000Z'));
+    const second = await service.sendBulk({ actorId: 'user-1' }, input);
+
+    expect(second).toEqual(first);
+    expect(first).toHaveLength(2);
+    expect(first.every((submission) => submission.status === 'pending')).toBe(
+      true,
+    );
+  });
+
   it('persists a scheduled message and sends it only after its due time', async () => {
     const sendMessage = vi.fn<MailProviderAdapter['sendMessage']>(async () => ({
       status: 'accepted',
@@ -171,6 +203,270 @@ describe('mail MVP runtime', () => {
           id: submission.id,
           status: 'accepted',
           providerMessageId: 'provider-scheduled-1',
+        }),
+      ]),
+    );
+  });
+
+  it('schedules automatic mailbox sync without duplicating an active run', async () => {
+    queue = createQueueManager({
+      default: 'sync',
+      connections: { sync: { driver: 'sync' } },
+      jobs: { autoLoad: false, locations: [] },
+    });
+    runtime = createMailRuntime({
+      store,
+      adapters: resolver(baseAdapter()),
+      queue,
+      queueName: 'mail:automatic-sync-test',
+    });
+
+    await expect(runtime.createAutomaticSyncRuns()).resolves.toBe(1);
+    await expect(runtime.createAutomaticSyncRuns()).resolves.toBe(0);
+
+    await expect(store.findActiveSyncRun('account-1')).resolves.toMatchObject({
+      accountId: 'account-1',
+      requestedBy: 'user-1',
+      mode: 'initial',
+    });
+  });
+
+  it('creates and renews push subscriptions during the automatic sweep', async () => {
+    const upsertPushSubscription = vi
+      .fn<NonNullable<MailProviderAdapter['upsertPushSubscription']>>()
+      .mockResolvedValueOnce({
+        ok: true,
+        value: {
+          providerSubscriptionId: 'provider-subscription-1',
+          renewAfter: '2099-01-01T00:00:00.000Z',
+          expiresAt: '2099-01-02T00:00:00.000Z',
+        },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        value: {
+          providerSubscriptionId: 'provider-subscription-1',
+          renewAfter: '2099-01-03T00:00:00.000Z',
+          expiresAt: '2099-01-04T00:00:00.000Z',
+        },
+      });
+    const close = vi.fn(async () => undefined);
+    const deletePushSubscription = vi.fn<
+      NonNullable<MailProviderAdapter['deletePushSubscription']>
+    >(async () => ({ ok: true, value: undefined }));
+    queue = createQueueManager({
+      default: 'sync',
+      connections: { sync: { driver: 'sync' } },
+      jobs: { autoLoad: false, locations: [] },
+    });
+    runtime = createMailRuntime({
+      store,
+      adapters: resolver({
+        ...baseAdapter(),
+        capabilities: {
+          ...baseAdapter().capabilities,
+          pushNotifications: true,
+        },
+        upsertPushSubscription,
+        deletePushSubscription,
+        close,
+      }),
+      queue,
+      queueName: 'mail:push-subscription-test',
+      pushWebhookUrl: 'https://mail.example.com/main/mail/webhooks',
+      pushWebhookSecret: 'a'.repeat(32),
+    });
+
+    await runtime.createAutomaticSyncRuns();
+    expect(upsertPushSubscription).toHaveBeenCalledWith({
+      notificationUrl: `https://mail.example.com/main/mail/webhooks/test/test/${'a'.repeat(32)}`,
+      clientState: 'a'.repeat(32),
+      providerSubscriptionId: undefined,
+    });
+    await expect(store.getPushSubscription('account-1')).resolves.toMatchObject(
+      {
+        providerSubscriptionId: 'provider-subscription-1',
+        renewAfter: '2099-01-01T00:00:00.000Z',
+      },
+    );
+
+    await store.savePushSubscription({
+      accountId: 'account-1',
+      provider: account().provider,
+      providerSubscriptionId: 'provider-subscription-1',
+      configurationFingerprint: 'stale-fingerprint',
+      renewAfter: '2000-01-01T00:00:00.000Z',
+      expiresAt: '2000-01-02T00:00:00.000Z',
+      updatedAt: '2000-01-01T00:00:00.000Z',
+    });
+    await runtime.createAutomaticSyncRuns();
+
+    expect(upsertPushSubscription).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        providerSubscriptionId: undefined,
+      }),
+    );
+    expect(upsertPushSubscription).toHaveBeenCalledTimes(2);
+    expect(deletePushSubscription).toHaveBeenCalledExactlyOnceWith(
+      'provider-subscription-1',
+    );
+    expect(deletePushSubscription.mock.invocationCallOrder[0]).toBeLessThan(
+      upsertPushSubscription.mock.invocationCallOrder[1],
+    );
+    expect(close.mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('stops a recreated same-ID watch when the account is removed during rotation', async () => {
+    await store.savePushSubscription({
+      accountId: 'account-1',
+      provider: account().provider,
+      providerSubscriptionId: 'user@example.com',
+      configurationFingerprint: 'stale-fingerprint',
+      renewAfter: '2000-01-01T00:00:00.000Z',
+      expiresAt: '2000-01-02T00:00:00.000Z',
+      updatedAt: '2000-01-01T00:00:00.000Z',
+    });
+    const deletePushSubscription = vi.fn<
+      NonNullable<MailProviderAdapter['deletePushSubscription']>
+    >(async () => ({ ok: true, value: undefined }));
+    const upsertPushSubscription = vi.fn<
+      NonNullable<MailProviderAdapter['upsertPushSubscription']>
+    >(async () => {
+      await store.markAccountRemoving('account-1', 'user-1');
+      await store.deleteAccount('account-1');
+      return {
+        ok: true,
+        value: {
+          providerSubscriptionId: 'user@example.com',
+          renewAfter: '2099-01-01T00:00:00.000Z',
+          expiresAt: '2099-01-02T00:00:00.000Z',
+        },
+      };
+    });
+    queue = createQueueManager({
+      default: 'sync',
+      connections: { sync: { driver: 'sync' } },
+      jobs: { autoLoad: false, locations: [] },
+    });
+    runtime = createMailRuntime({
+      store,
+      adapters: resolver({
+        ...baseAdapter(),
+        capabilities: {
+          ...baseAdapter().capabilities,
+          pushNotifications: true,
+        },
+        upsertPushSubscription,
+        deletePushSubscription,
+      }),
+      queue,
+      queueName: 'mail:push-same-id-race-test',
+      pushWebhookUrl: 'https://mail.example.com/main/mail/webhooks',
+      pushWebhookSecret: 'a'.repeat(32),
+    });
+
+    await runtime.createAutomaticSyncRuns();
+
+    expect(deletePushSubscription).toHaveBeenCalledTimes(2);
+    expect(deletePushSubscription).toHaveBeenNthCalledWith(
+      1,
+      'user@example.com',
+    );
+    expect(deletePushSubscription).toHaveBeenNthCalledWith(
+      2,
+      'user@example.com',
+    );
+    await expect(
+      store.getPushSubscription('account-1'),
+    ).resolves.toBeUndefined();
+  });
+
+  it('preserves a complete subscription for remote cleanup while removal starts', async () => {
+    await store.savePushSubscription({
+      accountId: 'account-1',
+      provider: account().provider,
+      providerSubscriptionId: 'subscription-before-removal',
+      configurationFingerprint: 'removal-fingerprint',
+      renewAfter: '2000-01-01T00:00:00.000Z',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+      updatedAt: '2000-01-01T00:00:00.000Z',
+    });
+    await store.markAccountRemoving('account-1', 'user-1');
+
+    await expect(
+      store.claimPushSubscriptionMaintenance(
+        account(),
+        'removal-race-lease',
+        new Date().toISOString(),
+        new Date(Date.now() + 60_000).toISOString(),
+      ),
+    ).resolves.toBeUndefined();
+    await expect(store.getPushSubscription('account-1')).resolves.toMatchObject(
+      {
+        providerSubscriptionId: 'subscription-before-removal',
+      },
+    );
+  });
+
+  it('deduplicates push-triggered synchronization', async () => {
+    queue = createQueueManager({
+      default: 'sync',
+      connections: { sync: { driver: 'sync' } },
+      jobs: { autoLoad: false, locations: [] },
+    });
+    runtime = createMailRuntime({
+      store,
+      adapters: resolver(baseAdapter()),
+      queue,
+      queueName: 'mail:push-sync-test',
+    });
+
+    const active = await store.createSyncRun({
+      id: 'active-push-sync',
+      accountId: 'account-1',
+      requestedBy: 'user-1',
+      mode: 'incremental',
+      policy: { maxMessages: 10_000, batchSize: 200 },
+    });
+    await expect(runtime.schedulePushSync('account-1')).resolves.toBe(false);
+    await store.clearPushSyncPending('account-1', 'stale-request-token');
+
+    const claimed = await store.claimSyncRun(
+      active.id,
+      active.revision,
+      active.phase,
+      'push-race-lease',
+      new Date(Date.now() + 30_000).toISOString(),
+    );
+    if (!claimed) throw new Error('Expected to claim push synchronization.');
+    const committed = await store.commitSyncStep({
+      run: claimed,
+      messages: [],
+      phase: 'completed',
+      status: 'completed',
+      changeCursor: { value: 'after-first-push' },
+      createNextTask: false,
+    });
+
+    expect(committed).toMatchObject({
+      status: 'running',
+      phase: 'incremental',
+      revision: 1,
+    });
+    const next = await store.claimOutbox(
+      new Date().toISOString(),
+      'push-follow-up-outbox',
+      new Date(Date.now() + 30_000).toISOString(),
+      10,
+    );
+    expect(next).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          aggregateId: active.id,
+          payload: expect.objectContaining({
+            expectedRevision: 1,
+            expectedPhase: 'incremental',
+          }),
         }),
       ]),
     );
@@ -278,16 +574,270 @@ describe('mail MVP runtime', () => {
       {
         accountId: 'account-1',
         messageId: stored.items[0].id,
+        permanently: true,
       },
     );
     expect(deleteMessage).toHaveBeenCalledWith(
       'provider-mutable',
-      false,
+      true,
       undefined,
     );
     await expect(store.listMessages('user-1', {})).resolves.toMatchObject({
       items: [],
     });
+  });
+
+  it('moves a soft-deleted message to the local trash folder', async () => {
+    await store.commitSyncBatch({
+      accountId: 'account-1',
+      folders: [
+        {
+          providerFolderId: 'trash',
+          type: 'trash',
+          name: 'Trash',
+          kind: 'folder',
+        },
+      ],
+      messages: [message('provider-soft-delete', 'Soft delete')],
+      deletedProviderMessageIds: [],
+      nextCursor: { value: 'soft-delete-test' },
+    });
+    const stored = await store.listMessages('user-1', {});
+    const moveMessage = vi.fn<NonNullable<MailProviderAdapter['moveMessage']>>(
+      async () => ({
+        ok: true,
+        value: { providerMessageId: 'provider-soft-delete-moved' },
+      }),
+    );
+    const deleteMessage = vi.fn<
+      NonNullable<MailProviderAdapter['deleteMessage']>
+    >(async () => ({ ok: true, value: undefined }));
+    const service = new DefaultMailService({
+      store,
+      adapters: resolver({
+        ...baseAdapter(),
+        capabilities: { ...baseAdapter().capabilities, moveMessage: true },
+        moveMessage,
+        deleteMessage,
+      }),
+      outbox: { kick: vi.fn() },
+    });
+
+    await service.deleteMessage(
+      { actorId: 'user-1' },
+      { accountId: 'account-1', messageId: stored.items[0].id },
+    );
+
+    expect(moveMessage).toHaveBeenCalledWith(
+      'provider-soft-delete',
+      'trash',
+      undefined,
+    );
+    expect(deleteMessage).not.toHaveBeenCalled();
+    await expect(
+      store.listMessages('user-1', { folderIds: ['trash'] }),
+    ).resolves.toMatchObject({
+      items: [
+        expect.objectContaining({
+          providerMessageId: 'provider-soft-delete-moved',
+          folderIds: ['trash'],
+        }),
+      ],
+    });
+  });
+
+  it('downloads only an attachment belonging to the owned message', async () => {
+    await store.commitSyncBatch({
+      accountId: 'account-1',
+      folders: [],
+      messages: [
+        {
+          ...message('provider-with-attachment', 'Attachment'),
+          attachments: [
+            {
+              providerAttachmentId: 'provider-attachment-1',
+              fileName: 'report.pdf',
+              contentType: 'application/pdf',
+              size: 3,
+              inline: false,
+            },
+          ],
+        },
+      ],
+      deletedProviderMessageIds: [],
+      nextCursor: { value: 'attachment-test' },
+    });
+    const stored = await store.listMessages('user-1', {});
+    const messageDetails = await store.getMessage(
+      'user-1',
+      'account-1',
+      stored.items[0].id,
+    );
+    const getAttachment = vi.fn<
+      NonNullable<MailProviderAdapter['getAttachment']>
+    >(async () => ({
+      ok: true,
+      value: {
+        fileName: 'provider-name',
+        contentType: 'application/octet-stream',
+        size: 3,
+        stream: streamOf('pdf'),
+      },
+    }));
+    const close = vi.fn(async () => undefined);
+    const service = new DefaultMailService({
+      store,
+      adapters: resolver({ ...baseAdapter(), getAttachment, close }),
+      outbox: { kick: vi.fn() },
+    });
+
+    const content = await service.getAttachment(
+      { actorId: 'user-1' },
+      'account-1',
+      stored.items[0].id,
+      messageDetails?.attachments[0].id ?? '',
+    );
+
+    expect(content).toMatchObject({
+      fileName: 'report.pdf',
+      contentType: 'application/pdf',
+      size: 3,
+    });
+    expect(close).not.toHaveBeenCalled();
+    expect(await new Response(content.stream).text()).toBe('pdf');
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(getAttachment).toHaveBeenCalledWith(
+      'provider-with-attachment',
+      'provider-attachment-1',
+      undefined,
+    );
+    await expect(
+      service.getAttachment(
+        { actorId: 'user-1' },
+        'account-1',
+        stored.items[0].id,
+        'other-attachment',
+      ),
+    ).rejects.toThrow('not found');
+  });
+
+  it('saves a Provider draft into the synchronized message store', async () => {
+    const saveDraft = vi.fn<NonNullable<MailProviderAdapter['saveDraft']>>(
+      async (input) => ({
+        ok: true,
+        value: {
+          providerMessageId: 'provider-draft-1',
+          providerFolderIds: ['drafts'],
+          from: input.identity,
+          to: input.message.to,
+          cc: input.message.cc,
+          bcc: input.message.bcc,
+          replyTo: [],
+          references: [],
+          subject: input.message.subject,
+          text: input.message.text,
+          read: true,
+          starred: false,
+          draft: true,
+          attachments: [],
+        },
+      }),
+    );
+    const service = new DefaultMailService({
+      store,
+      adapters: resolver({
+        ...baseAdapter(),
+        capabilities: { ...baseAdapter().capabilities, drafts: true },
+        saveDraft,
+      }),
+      outbox: { kick: vi.fn() },
+    });
+
+    const draft = await service.saveDraft(
+      { actorId: 'user-1' },
+      {
+        accountId: 'account-1',
+        identityId: 'identity-1',
+        to: [],
+        subject: 'Draft subject',
+        text: 'Draft body',
+        idempotencyKey: 'draft-request-1',
+      },
+    );
+
+    expect(draft).toMatchObject({
+      providerMessageId: 'provider-draft-1',
+      subject: 'Draft subject',
+      draft: true,
+    });
+    await expect(store.listMessages('user-1', {})).resolves.toMatchObject({
+      items: [
+        expect.objectContaining({ providerMessageId: 'provider-draft-1' }),
+      ],
+    });
+  });
+
+  it('updates account lifecycle and promotes a replacement default', async () => {
+    await store.saveAccount({
+      ...account(),
+      id: 'account-2',
+      address: 'secondary@example.com',
+      credentialReference: 'secret:secondary',
+      isDefault: false,
+    });
+    const deleteCredential = vi.fn(async () => undefined);
+    const deletePushSubscription = vi.fn<
+      NonNullable<MailProviderAdapter['deletePushSubscription']>
+    >(async () => ({ ok: true, value: undefined }));
+    const credentials = {
+      delete: deleteCredential,
+    } as unknown as MailCredentialVault;
+    const service = new DefaultMailService({
+      store,
+      adapters: resolver({ ...baseAdapter(), deletePushSubscription }),
+      outbox: { kick: vi.fn() },
+      credentials,
+    });
+
+    await expect(
+      service.updateAccount(
+        { actorId: 'user-1' },
+        { accountId: 'account-1', status: 'suspended' },
+      ),
+    ).resolves.toMatchObject({ status: 'suspended' });
+    await expect(
+      service.updateAccount(
+        { actorId: 'user-1' },
+        { accountId: 'account-1', status: 'active' },
+      ),
+    ).resolves.toMatchObject({ status: 'active' });
+    await expect(
+      service.updateAccount(
+        { actorId: 'user-1' },
+        { accountId: 'account-2', isDefault: true },
+      ),
+    ).resolves.toMatchObject({ id: 'account-2', isDefault: true });
+
+    await store.savePushSubscription({
+      accountId: 'account-2',
+      provider: account().provider,
+      providerSubscriptionId: 'push-account-2',
+      configurationFingerprint: 'disconnect-fingerprint',
+      renewAfter: '2099-01-01T00:00:00.000Z',
+      expiresAt: '2099-01-02T00:00:00.000Z',
+      updatedAt: '2026-09-07T00:00:00.000Z',
+    });
+
+    await service.removeAccount({ actorId: 'user-1' }, 'account-2');
+
+    expect(deletePushSubscription).toHaveBeenCalledWith(
+      'push-account-2',
+      undefined,
+    );
+    expect(deleteCredential).toHaveBeenCalledWith('secret:secondary');
+    await expect(service.listAccounts({ actorId: 'user-1' })).resolves.toEqual([
+      expect.objectContaining({ id: 'account-1', isDefault: true }),
+    ]);
   });
 
   it('lists every account for management without granting cross-user sync', async () => {
@@ -1164,4 +1714,13 @@ function message(
     draft: false,
     attachments: [],
   };
+}
+
+function streamOf(value: string): ReadableStream<Uint8Array> {
+  return new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode(value));
+      controller.close();
+    },
+  });
 }

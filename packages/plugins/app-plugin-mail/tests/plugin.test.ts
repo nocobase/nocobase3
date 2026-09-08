@@ -9,8 +9,12 @@ describe('@nocobase/app-plugin-mail', () => {
       locales: expect.any(Function),
       serviceProviders: expect.any(Array),
     });
-    expect(plugin.routes).toHaveLength(2);
-    expect(plugin.routes.map((route) => route.scope)).toEqual(['root', 'api']);
+    expect(plugin.routes).toHaveLength(3);
+    expect(plugin.routes.map((route) => route.scope)).toEqual([
+      'root',
+      'root',
+      'api',
+    ]);
     expect(plugin.queue).toBeUndefined();
     expect(plugin.database).toEqual({
       migrations: './database/migrations',

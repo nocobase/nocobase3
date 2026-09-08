@@ -18,6 +18,8 @@ const COLLECTIONS = [
   ['mailCredentials', 'mail_credentials'],
   ['mailAuthorizationStates', 'mail_authorization_states'],
   ['mailAccounts', 'mail_accounts'],
+  ['mailPushSubscriptions', 'mail_push_subscriptions'],
+  ['mailPushPending', 'mail_push_pending'],
   ['mailIdentities', 'mail_identities'],
   ['mailFolders', 'mail_folders'],
   ['mailMessages', 'mail_messages'],
@@ -76,6 +78,18 @@ describe('mail database migration', () => {
     ).resolves.toEqual(
       expect.arrayContaining([
         expect.objectContaining({ name: 'mail_submissions_scheduled_idx' }),
+      ]),
+    );
+    await expect(
+      client.raw('PRAGMA index_list(mail_push_subscriptions)'),
+    ).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'mail_push_subscriptions_provider_unique',
+        }),
+        expect.objectContaining({
+          name: 'mail_push_subscriptions_renew_idx',
+        }),
       ]),
     );
     await expect(

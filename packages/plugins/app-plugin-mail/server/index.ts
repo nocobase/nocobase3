@@ -4,6 +4,7 @@ export * from './adapter-resolver.js';
 export * from './config.js';
 export * from './credentials.js';
 export * from './operations/index.js';
+export * from './outbound-attachments.js';
 export * from './registry.js';
 export * from './runtime.js';
 export * from './service.js';

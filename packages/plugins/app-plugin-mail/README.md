@@ -5,7 +5,7 @@ from notification delivery: `@nocobase/app-plugin-notification-providers`
 sends application notifications, while this package sends mail from
 user-connected accounts and synchronizes their mailboxes.
 
-## MVP scope
+## Current scope
 
 The first runnable vertical slice provides:
 
@@ -16,8 +16,9 @@ The first runnable vertical slice provides:
   for read-only all-user account visibility, plus
   `/settings/mail/send-logs` for all-user synchronization and delivery
   operation logs;
-- development-only Mail center, full message management table, and sending
-  pages under `/dev/mail` for account and folder filtering, refresh, message
+- a production Mail workspace at `/mail` and current-user account management at
+  `/settings/mail/my-accounts`, plus development diagnostics under `/dev/mail`;
+- account and folder filtering, refresh, message
   search, conversation detail, account connection, synchronization controls,
   sending, synchronization logs, and delivery submission logs;
 - AES-256-GCM encrypted OAuth credential storage with token-rotation support;
@@ -35,12 +36,28 @@ The first runnable vertical slice provides:
   additions and removals;
 - idempotent message upserts by `(accountId, providerMessageId)`;
 - indexed message-folder relations and Provider-native conversation lookup;
+- reply and forward behavior using Provider-native conversation APIs;
+- Provider-backed draft creation from the production composer;
+- Provider-backed editing and sending of existing drafts;
+- scheduled delivery persisted through the Outbox and Queue;
+- automatic mailbox synchronization every five minutes by default, configurable
+  with `MAIL_AUTOMATIC_SYNC_INTERVAL_MS`;
+- authenticated Provider push webhooks that coalesce notifications into the
+  existing incremental synchronization pipeline;
+- automatic Gmail watch and Microsoft Graph subscription creation and renewal;
+- read/unread, star, move, archive, soft-delete, and permanent-delete actions;
+- ownership-checked inbound attachment streaming and workspace downloads;
+- ownership-checked outbound attachment uploads with Gmail MIME and Microsoft Graph delivery;
+- Provider-discovered sending aliases and per-identity text signatures;
+- current-user reusable mail templates with composer integration;
+- bounded bulk delivery as separate per-recipient submissions;
+- current-user account default selection, suspend/resume, and disconnect;
 - Provider contracts, registry, adapter resolver, database storage, and an
   explicit migration.
 
-The MVP does not provide message mutations from the workspace, push webhooks,
-scheduled sync, subscription renewal, or outbound attachments. Gmail and Microsoft
-implementations live in separate Provider plugins; Mail Core owns OAuth
+The current implementation does not yet provide generic IMAP/SMTP/JMAP
+Providers. Gmail and Microsoft implementations live in
+separate Provider plugins; Mail Core owns OAuth
 transactions and encrypted credential storage, while Provider plugins own
 protocol calls and token refresh behavior.
 
@@ -48,6 +65,7 @@ protocol calls and token refresh behavior.
 
 ```text
 POST /api/mail/messages/send
+POST /api/mail/messages/drafts
   -> MailService -> SendMailOperation -> Provider Adapter
                  -> mailSubmissions
 
@@ -72,6 +90,26 @@ one unbounded HTTP request or one unbounded Job.
 The default initial policy is 10,000 messages with pages of 200; API callers
 may choose 1–100,000 messages and pages of 1–500. Provider cursors are opaque
 and are never returned by the HTTP API as standalone Queue payloads.
+
+## Push notifications
+
+Push delivery is opt-in. Configure both `MAIL_PUSH_WEBHOOK_URL` (the public URL
+ending in `/mail/webhooks`) and a random 32–128 character
+`MAIL_PUSH_WEBHOOK_SECRET`. The runtime appends the Provider type, configured
+Provider name, and secret to that URL. Notifications schedule the same
+idempotent incremental sync used by polling; the five-minute sweep remains a
+fallback for delayed or dropped notifications.
+
+For Gmail, set `pushTopicName` on the Provider configuration and configure that
+Google Cloud Pub/Sub topic's push subscription endpoint to the generated Gmail
+webhook URL. Mail Core calls `users.watch` daily and stores its expiry. Optional
+`pushLabelIds` restrict the watch. The topic must already exist and allow the
+Gmail push service account to publish.
+
+For Microsoft 365, Mail Core creates the Graph subscription itself, handles the
+plain-text `validationToken` challenge, verifies `clientState`, and renews the
+subscription before expiry. Disconnecting an account attempts to remove its
+Provider subscription; local removal still completes if remote cleanup fails.
 
 ## Provider integration
 
@@ -107,34 +145,54 @@ All MVP routes require an authenticated application session:
 
 ```text
 GET  /api/mail/accounts
+PATCH /api/mail/accounts/:accountId
+DELETE /api/mail/accounts/:accountId
 GET  /api/mail/settings/accounts
 GET  /api/mail/settings/operation-logs
 GET  /api/mail/providers
+GET  /api/mail/templates
+POST /api/mail/templates
+PATCH /api/mail/templates/:templateId
+DELETE /api/mail/templates/:templateId
 POST /api/mail/authorizations
 GET  /api/mail/accounts/:accountId/identities
+PATCH /api/mail/accounts/:accountId/identities/:identityId
 GET  /api/mail/accounts/:accountId/folders
+POST /api/mail/attachments
 POST /api/mail/messages/send
+POST /api/mail/messages/bulk
+POST /api/mail/messages/drafts
 GET  /api/mail/submissions
 POST /api/mail/accounts/:accountId/sync
 GET  /api/mail/sync-runs
 GET  /api/mail/sync-runs/:syncRunId
 GET  /api/mail/messages
 GET  /api/mail/accounts/:accountId/messages/:messageId
+GET  /api/mail/accounts/:accountId/messages/:messageId/attachments/:attachmentId
+PATCH /api/mail/accounts/:accountId/messages/:messageId
+POST /api/mail/accounts/:accountId/messages/:messageId/move
+DELETE /api/mail/accounts/:accountId/messages/:messageId
 GET  /api/mail/accounts/:accountId/conversations/:conversationId/messages
 ```
 
 `GET /mail/oauth/callback` is intentionally public because Google and
 Microsoft redirect the browser to it. It accepts only a short-lived,
 single-use state created by the authenticated start endpoint and redirects the
-browser to `/dev/mail/accounts` after completion; state and PKCE verifiers are
+browser to `/settings/mail/my-accounts` after completion; state and PKCE verifiers are
 never returned by account APIs.
+
+`POST /mail/webhooks/:providerType/:providerName/:secret` is intentionally
+public because Gmail Pub/Sub and Microsoft Graph cannot use an application
+session. The route validates the configured high-entropy URL secret before
+parsing the body, limits request size, validates Microsoft `clientState`, maps
+only known active accounts, and returns no mailbox data.
 
 All Mail APIs require `page:mail.settings/access`. Account ownership is enforced again in
 `MailService`; Route authentication is not treated as ownership authorization.
 Inactive accounts cannot send or synchronize. Public responses omit credential
 references, Provider cursors, leases, and internal error messages.
 
-The `/dev/mail/center` workspace opens a complete conversation only when a Provider
+The `/mail` workspace opens a complete conversation only when a Provider
 supplies its stable identifier (`threadId` for Gmail or `conversationId` for
 Microsoft Graph). Messages without that identifier open independently; the
 core does not infer a conversation from a matching subject.

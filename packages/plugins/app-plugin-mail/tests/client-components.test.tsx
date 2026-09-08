@@ -272,6 +272,86 @@ describe('Mail client components', () => {
     expect(screen.queryByText(/bad\(\)/)).not.toBeInTheDocument();
     expect(document.querySelector('script')).not.toBeInTheDocument();
   });
+
+  it('dispatches conversation reply, forward, draft, and attachment actions', () => {
+    const reply = vi.fn();
+    const forward = vi.fn();
+    const editDraft = vi.fn();
+    const downloadAttachment = vi.fn();
+    const message = {
+      ...conversationMessage('message-1', 'Alice', 'Message body'),
+      attachments: [
+        {
+          id: 'message-1:attachment-1',
+          messageId: 'message-1',
+          providerAttachmentId: 'attachment-1',
+          fileName: 'report.pdf',
+          contentType: 'application/pdf',
+          size: 10,
+          inline: false,
+        },
+      ],
+      hasAttachments: true,
+    };
+    const props = {
+      labels: {
+        attachmentCount: (count: number) => `${count} attachments`,
+        conversation: (count: number) => `${count} messages`,
+        loadMore: 'Load more',
+        noSubject: '(no subject)',
+        selectMessage: 'Select a message',
+        unknownSender: 'Unknown sender',
+      },
+      onLoadMore: vi.fn(),
+      actions: {
+        delete: vi.fn(),
+        downloadAttachment,
+        reply,
+        forward,
+        editDraft,
+        toggleRead: vi.fn(),
+        toggleStarred: vi.fn(),
+      },
+      actionLabels: {
+        archive: 'Archive',
+        delete: 'Delete',
+        download: 'Download',
+        reply: 'Reply',
+        forward: 'Forward',
+        editDraft: 'Edit draft',
+        markRead: 'Mark read',
+        markUnread: 'Mark unread',
+        star: 'Star',
+        unstar: 'Unstar',
+      },
+    } as const;
+    const view = render(
+      <MailConversationView {...props} messages={[message]} />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reply' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Forward' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Download report.pdf' }),
+    );
+    expect(reply).toHaveBeenCalledWith(message);
+    expect(forward).toHaveBeenCalledWith(message);
+    expect(downloadAttachment).toHaveBeenCalledWith(
+      message,
+      message.attachments[0],
+    );
+
+    view.rerender(
+      <MailConversationView
+        {...props}
+        messages={[{ ...message, draft: true }]}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Edit draft' }));
+    expect(editDraft).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'message-1', draft: true }),
+    );
+  });
 });
 
 function conversationMessage(id: string, name: string, text: string) {

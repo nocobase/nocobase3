@@ -90,8 +90,18 @@ export interface MailIdentity {
   readonly accountId: string;
   readonly address: string;
   readonly displayName?: string;
+  readonly signatureText?: string;
+  readonly signatureHtml?: string;
   readonly isPrimary: boolean;
   readonly canSend: boolean;
+}
+
+export interface MailUpdateIdentityInput {
+  readonly accountId: string;
+  readonly identityId: string;
+  readonly displayName?: string | null;
+  readonly signatureText?: string | null;
+  readonly signatureHtml?: string | null;
 }
 
 export type MailFolderType =
@@ -129,6 +139,7 @@ export interface MailMessageSummary {
   readonly id: string;
   readonly accountId: string;
   readonly providerMessageId: string;
+  readonly providerDraftId?: string;
   readonly internetMessageId?: string;
   readonly conversationId?: string;
   readonly folderIds: readonly string[];
@@ -173,6 +184,14 @@ export interface MailTemplate {
   readonly html: string;
   readonly scope: 'private' | 'shared';
   readonly ownerId?: string;
+}
+
+export interface MailSaveTemplateInput {
+  readonly id?: string;
+  readonly name: string;
+  readonly subject: string;
+  readonly text?: string;
+  readonly html?: string;
 }
 
 export type MailJobType = 'sync' | 'scheduledSend' | 'bulkSend';
@@ -357,10 +376,20 @@ export interface MailComposeInput {
   readonly text: string;
   readonly html?: string;
   readonly attachmentIds?: readonly string[];
+  /** Existing draft attachments that should remain after an update. */
+  readonly retainedAttachmentIds?: readonly string[];
   readonly inReplyToMessageId?: string;
   readonly forwardOfMessageId?: string;
   readonly scheduledAt?: string;
+  readonly draftMessageId?: string;
   readonly idempotencyKey: string;
+}
+
+export interface MailBulkComposeInput extends Omit<
+  MailComposeInput,
+  'to' | 'cc' | 'bcc'
+> {
+  readonly recipients: readonly MailAddress[];
 }
 
 export interface MailUpdateMessageInput {
@@ -428,6 +457,45 @@ export interface MailAttachmentContent {
   readonly stream: ReadableStream<Uint8Array>;
 }
 
+export interface MailOutboundAttachment {
+  readonly id: string;
+  readonly userId: string;
+  readonly disk: string;
+  readonly key: string;
+  readonly fileName: string;
+  readonly contentType: string;
+  readonly size: number;
+  readonly createdAt: string;
+  readonly expiresAt: string;
+}
+
+export type MailOutboundAttachmentView = Pick<
+  MailOutboundAttachment,
+  'id' | 'fileName' | 'contentType' | 'size' | 'expiresAt'
+>;
+
+export interface MailUploadAttachmentInput {
+  readonly fileName: string;
+  readonly contentType: string;
+  readonly size: number;
+  readonly stream: ReadableStream<Uint8Array>;
+}
+
+export interface MailOutboundAttachmentStorage {
+  create(
+    userId: string,
+    input: MailUploadAttachmentInput,
+  ): Promise<MailOutboundAttachmentView>;
+  open(
+    userId: string,
+    attachmentId: string,
+  ): Promise<{
+    readonly attachment: MailOutboundAttachment;
+    readonly stream: ReadableStream<Uint8Array>;
+  }>;
+  cleanupExpired?(now: string): Promise<number>;
+}
+
 export interface MailService {
   listProviders(): Promise<readonly MailProviderView[]>;
   startAuthorization(
@@ -462,6 +530,10 @@ export interface MailService {
     context: MailOperationContext,
     accountId: string,
   ): Promise<readonly MailIdentity[]>;
+  updateIdentity(
+    context: MailOperationContext,
+    input: MailUpdateIdentityInput,
+  ): Promise<MailIdentity>;
   startSync(
     context: MailOperationContext,
     input: MailStartSyncInput,
@@ -485,6 +557,12 @@ export interface MailService {
     accountId: string,
     messageId: string,
   ): Promise<MailMessage | undefined>;
+  getAttachment(
+    context: MailOperationContext,
+    accountId: string,
+    messageId: string,
+    attachmentId: string,
+  ): Promise<MailAttachmentContent>;
   listConversationMessages(
     context: MailOperationContext,
     accountId: string,
@@ -495,6 +573,29 @@ export interface MailService {
     context: MailOperationContext,
     input: MailComposeInput,
   ): Promise<MailSubmissionView>;
+  sendBulk(
+    context: MailOperationContext,
+    input: MailBulkComposeInput,
+  ): Promise<readonly MailSubmissionView[]>;
+  saveDraft(
+    context: MailOperationContext,
+    input: MailComposeInput,
+  ): Promise<MailMessage>;
+  uploadAttachment(
+    context: MailOperationContext,
+    input: MailUploadAttachmentInput,
+  ): Promise<MailOutboundAttachmentView>;
+  listTemplates(
+    context: MailOperationContext,
+  ): Promise<readonly MailTemplate[]>;
+  saveTemplate(
+    context: MailOperationContext,
+    input: MailSaveTemplateInput,
+  ): Promise<MailTemplate>;
+  deleteTemplate(
+    context: MailOperationContext,
+    templateId: string,
+  ): Promise<void>;
   updateMessage(
     context: MailOperationContext,
     input: MailUpdateMessageInput,
@@ -553,6 +654,16 @@ export interface MailAuthorizedAccount {
   readonly credentialReference: string;
   readonly scopes: readonly string[];
   readonly credentialExpiresAt?: string;
+  readonly identities?: readonly MailAuthorizedIdentity[];
+}
+
+export interface MailAuthorizedIdentity {
+  readonly address: string;
+  readonly displayName?: string;
+  readonly signatureText?: string;
+  readonly signatureHtml?: string;
+  readonly isPrimary: boolean;
+  readonly canSend: boolean;
 }
 
 export interface MailProviderAuthorizationCallbackInput {
@@ -623,6 +734,56 @@ export interface MailProviderSendInput {
   readonly signal?: AbortSignal;
 }
 
+export interface MailProviderPushSubscription {
+  readonly accountId: string;
+  readonly provider: MailProviderIdentity;
+  readonly providerSubscriptionId: string;
+  readonly configurationFingerprint: string;
+  readonly renewAfter: string;
+  readonly expiresAt: string;
+  readonly updatedAt: string;
+}
+
+export interface MailPushSubscriptionMaintenanceLease {
+  readonly leaseToken: string;
+  readonly subscription?: MailProviderPushSubscription;
+}
+
+export interface MailProviderUpsertPushSubscriptionInput {
+  readonly notificationUrl: string;
+  readonly clientState: string;
+  readonly providerSubscriptionId?: string;
+  readonly signal?: AbortSignal;
+}
+
+export interface MailProviderUpsertPushSubscriptionResult {
+  readonly providerSubscriptionId: string;
+  readonly renewAfter: string;
+  readonly expiresAt: string;
+}
+
+export interface MailProviderPushNotification {
+  readonly providerSubscriptionId?: string;
+  readonly accountAddress?: string;
+  readonly clientState?: string;
+}
+
+export interface MailProviderPushNotificationInput {
+  readonly query: Readonly<Record<string, string>>;
+  readonly body: unknown;
+}
+
+export interface MailProviderPushNotificationResult {
+  readonly challengeResponse?: string;
+  readonly notifications: readonly MailProviderPushNotification[];
+}
+
+export interface MailProviderPushNotifications {
+  parse(
+    input: MailProviderPushNotificationInput,
+  ): MailProviderResult<MailProviderPushNotificationResult>;
+}
+
 export interface NormalizedMailAttachment {
   readonly providerAttachmentId: string;
   readonly fileName: string;
@@ -635,6 +796,7 @@ export interface NormalizedMailAttachment {
 /** Provider-normalized message before mail core assigns local identifiers. */
 export interface NormalizedMailMessage {
   readonly providerMessageId: string;
+  readonly providerDraftId?: string;
   readonly internetMessageId?: string;
   readonly providerConversationId?: string;
   readonly providerFolderIds: readonly string[];
@@ -683,10 +845,15 @@ export interface MailProviderMessageInput {
   readonly text: string;
   readonly html?: string;
   readonly attachments: readonly MailProviderAttachmentInput[];
+  /** Provider attachment IDs retained from an existing draft. */
+  readonly retainedProviderAttachmentIds?: readonly string[];
   readonly internetMessageId?: string;
   readonly inReplyTo?: string;
   readonly references: readonly string[];
   readonly providerConversationId?: string;
+  /** Existing Provider draft message to update or send. */
+  readonly draftProviderMessageId?: string;
+  readonly draftProviderDraftId?: string;
   /** Provider message used as the reply target, resolved by Mail Core. */
   readonly replyToProviderMessageId?: string;
   /** Provider message used as the forward source, resolved by Mail Core. */
@@ -711,6 +878,7 @@ export type MailProviderSendResult =
 export interface MailProviderAdapter {
   readonly identity: MailProviderIdentity;
   readonly capabilities: MailProviderCapabilities;
+  readonly pushNotificationsConfigured?: boolean;
   refreshAuthorization?(
     signal?: AbortSignal,
   ): Promise<MailProviderResult<MailAuthorizedAccount>>;
@@ -743,6 +911,10 @@ export interface MailProviderAdapter {
   saveDraft?(
     input: MailProviderSendInput,
   ): Promise<MailProviderResult<NormalizedMailMessage>>;
+  updateDraft?(
+    providerMessageId: string,
+    input: MailProviderSendInput,
+  ): Promise<MailProviderResult<NormalizedMailMessage>>;
   setRead?(
     providerMessageId: string,
     read: boolean,
@@ -761,6 +933,13 @@ export interface MailProviderAdapter {
   deleteMessage?(
     providerMessageId: string,
     permanently: boolean,
+    signal?: AbortSignal,
+  ): Promise<MailProviderResult<void>>;
+  upsertPushSubscription?(
+    input: MailProviderUpsertPushSubscriptionInput,
+  ): Promise<MailProviderResult<MailProviderUpsertPushSubscriptionResult>>;
+  deletePushSubscription?(
+    providerSubscriptionId: string,
     signal?: AbortSignal,
   ): Promise<MailProviderResult<void>>;
   close?(): Promise<void>;
@@ -806,6 +985,7 @@ export interface MailProviderDefinition<
   readonly capabilities: MailProviderCapabilities;
   validateConfig?(config: TConfig): void;
   readonly authorization?: MailProviderAuthorization<TConfig>;
+  readonly push?: MailProviderPushNotifications;
   createAdapter(
     context: MailProviderContext,
     config: TConfig,
@@ -944,8 +1124,46 @@ export interface MailStore {
   listAccounts(userId: string): Promise<readonly MailAccount[]>;
   listAllAccounts(): Promise<readonly MailAccount[]>;
   saveAccount(account: MailAccount): Promise<MailAccount>;
+  markAccountRemoving(accountId: string, userId: string): Promise<boolean>;
   setDefaultAccount(userId: string, accountId: string): Promise<MailAccount>;
   deleteAccount(accountId: string): Promise<boolean>;
+  getPushSubscription(
+    accountId: string,
+  ): Promise<MailProviderPushSubscription | undefined>;
+  findPushSubscription(
+    provider: MailProviderIdentity,
+    providerSubscriptionId: string,
+  ): Promise<MailProviderPushSubscription | undefined>;
+  findActiveAccountsForPush(
+    provider: MailProviderIdentity,
+    providerSubscriptionIds: readonly string[],
+    accountAddresses: readonly string[],
+  ): Promise<readonly MailAccount[]>;
+  savePushSubscription(
+    subscription: MailProviderPushSubscription,
+    leaseToken?: string,
+  ): Promise<boolean>;
+  deletePushSubscription(accountId: string): Promise<boolean>;
+  claimPushSubscriptionMaintenance(
+    account: MailAccount,
+    leaseToken: string,
+    now: string,
+    leaseExpiresAt: string,
+  ): Promise<MailPushSubscriptionMaintenanceLease | undefined>;
+  releasePushSubscriptionMaintenance(
+    accountId: string,
+    leaseToken: string,
+  ): Promise<void>;
+  renewPushSubscriptionMaintenance(
+    accountId: string,
+    leaseToken: string,
+    leaseExpiresAt: string,
+  ): Promise<boolean>;
+  markPushSubscriptionReplacementNeeded(
+    accountId: string,
+    leaseToken: string,
+    updatedAt: string,
+  ): Promise<boolean>;
   saveAuthorizedAccount(
     account: MailAccount,
     identities: readonly MailIdentity[],
@@ -956,8 +1174,37 @@ export interface MailStore {
     identities: readonly MailIdentity[],
   ): Promise<void>;
   getIdentity(identityId: string): Promise<MailIdentity | undefined>;
+  updateIdentity(
+    identityId: string,
+    patch: Pick<
+      MailIdentity,
+      'displayName' | 'signatureText' | 'signatureHtml'
+    >,
+  ): Promise<MailIdentity | undefined>;
   listFolders(accountId: string): Promise<readonly MailFolder[]>;
   commitSyncBatch(batch: MailSyncBatch): Promise<void>;
+  saveMessage(
+    accountId: string,
+    message: NormalizedMailMessage,
+  ): Promise<MailMessage>;
+  createOutboundAttachment(attachment: MailOutboundAttachment): Promise<void>;
+  getOutboundAttachment(
+    userId: string,
+    attachmentId: string,
+  ): Promise<MailOutboundAttachment | undefined>;
+  extendOutboundAttachments(
+    userId: string,
+    attachmentIds: readonly string[],
+    expiresAt: string,
+  ): Promise<void>;
+  listExpiredOutboundAttachments(
+    now: string,
+    limit: number,
+  ): Promise<readonly MailOutboundAttachment[]>;
+  deleteOutboundAttachment(attachmentId: string): Promise<boolean>;
+  listTemplates(ownerId: string): Promise<readonly MailTemplate[]>;
+  saveTemplate(template: MailTemplate): Promise<MailTemplate>;
+  deleteTemplate(ownerId: string, templateId: string): Promise<boolean>;
   listMessages(
     userId: string,
     input: MailListMessagesInput,
@@ -987,6 +1234,19 @@ export interface MailStore {
   deleteMessage(accountId: string, messageId: string): Promise<boolean>;
   getSyncCursor(accountId: string): Promise<MailSyncCursor | undefined>;
   clearSyncCursor(accountId: string): Promise<void>;
+  markPushSyncPending(
+    accountId: string,
+    requestedBy: string,
+    requestToken: string,
+  ): Promise<void>;
+  markPushSyncPendingBatch(
+    accounts: readonly {
+      readonly accountId: string;
+      readonly requestedBy: string;
+    }[],
+    requestToken: string,
+  ): Promise<void>;
+  clearPushSyncPending(accountId: string, requestToken: string): Promise<void>;
   createSyncRun(input: MailCreateSyncRunInput): Promise<MailSyncRun>;
   findActiveSyncRun(accountId: string): Promise<MailSyncRun | undefined>;
   getSyncRun(syncRunId: string): Promise<MailSyncRun | undefined>;

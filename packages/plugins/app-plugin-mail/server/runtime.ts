@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import type {
   NocoBaseQueueManager,
@@ -19,6 +19,7 @@ import type {
   MailScheduledSendTaskPayload,
   MailStore,
   MailSyncMailboxTaskPayload,
+  MailOutboundAttachmentStorage,
 } from './types.js';
 
 export interface MailRuntimeLogger {
@@ -33,6 +34,10 @@ export interface MailRuntimeOptions {
   readonly queueName: string;
   readonly logger?: MailRuntimeLogger;
   readonly relayIntervalMs?: number;
+  readonly automaticSyncIntervalMs?: number;
+  readonly outboundAttachments?: MailOutboundAttachmentStorage;
+  readonly pushWebhookUrl?: string;
+  readonly pushWebhookSecret?: string;
 }
 
 export class MailRuntime implements MailOutboxPublisher {
@@ -44,8 +49,10 @@ export class MailRuntime implements MailOutboxPublisher {
   private readonly unregisterScheduledSendHandler: () => void;
   private worker?: NocoBaseQueueWorker;
   private workerLoop?: Promise<void>;
-  private timer?: NodeJS.Timeout;
+  private relayTimer?: NodeJS.Timeout;
+  private automaticSyncTimer?: NodeJS.Timeout;
   private publishPromise?: Promise<void>;
+  private automaticSyncPromise?: Promise<void>;
   private closed = false;
 
   public constructor(private readonly options: MailRuntimeOptions) {
@@ -90,7 +97,7 @@ export class MailRuntime implements MailOutboxPublisher {
   }
 
   public start(): void {
-    if (this.timer || this.closed) return;
+    if (this.relayTimer || this.closed) return;
     this.worker = this.options.queue.createWorker({
       queues: [this.options.queueName],
     });
@@ -102,12 +109,313 @@ export class MailRuntime implements MailOutboxPublisher {
           'Mail Queue worker stopped unexpectedly.',
         );
       });
-    this.timer = setInterval(
+    this.relayTimer = setInterval(
       () => this.kick(),
       this.options.relayIntervalMs ?? 1_000,
     );
-    this.timer.unref();
+    this.relayTimer.unref();
+    this.automaticSyncTimer = setInterval(
+      () => this.scheduleAutomaticSync(),
+      this.options.automaticSyncIntervalMs ?? 300_000,
+    );
+    this.automaticSyncTimer.unref();
     this.kick();
+    this.scheduleAutomaticSync();
+  }
+
+  public scheduleAutomaticSync(): void {
+    if (this.closed || this.automaticSyncPromise) return;
+    this.automaticSyncPromise = this.createAutomaticSyncRuns()
+      .then(() => undefined)
+      .catch((error: unknown): void => {
+        this.options.logger?.error?.(
+          { error },
+          'Automatic Mail synchronization sweep failed.',
+        );
+      })
+      .finally((): void => {
+        this.automaticSyncPromise = undefined;
+      });
+  }
+
+  public async createAutomaticSyncRuns(): Promise<number> {
+    let created = 0;
+    await this.options.outboundAttachments?.cleanupExpired?.(
+      new Date().toISOString(),
+    );
+    const accounts = await this.options.store.listAllAccounts();
+    for (const account of accounts) {
+      if (account.status !== 'active') continue;
+      try {
+        await this.maintainPushSubscription(account);
+      } catch (error) {
+        this.options.logger?.error?.(
+          { accountId: account.id, error },
+          'Mail push subscription maintenance failed.',
+        );
+      }
+      try {
+        if (await this.createSyncRun(account.id)) created += 1;
+      } catch (error) {
+        this.options.logger?.error?.(
+          { accountId: account.id, error },
+          'Automatic Mail synchronization could not be scheduled.',
+        );
+      }
+    }
+    if (created > 0) this.kick();
+    return created;
+  }
+
+  public async schedulePushSync(accountId: string): Promise<boolean> {
+    if (this.closed) return false;
+    const account = await this.options.store.getAccount(accountId);
+    if (!account || account.status !== 'active') return false;
+    const requestToken = randomUUID();
+    await this.options.store.markPushSyncPending(
+      accountId,
+      account.userId,
+      requestToken,
+    );
+    const created = await this.createSyncRun(accountId);
+    if (created) {
+      await this.options.store.clearPushSyncPending(accountId, requestToken);
+      this.kick();
+    }
+    return created;
+  }
+
+  public async schedulePushSyncBatch(
+    accounts: readonly import('./types.js').MailAccount[],
+  ): Promise<void> {
+    if (this.closed || accounts.length === 0) return;
+    const requestToken = randomUUID();
+    await this.options.store.markPushSyncPendingBatch(
+      accounts.map((account) => ({
+        accountId: account.id,
+        requestedBy: account.userId,
+      })),
+      requestToken,
+    );
+    queueMicrotask(() => {
+      void this.activatePushSyncBatch(accounts, requestToken);
+    });
+  }
+
+  private async activatePushSyncBatch(
+    accounts: readonly import('./types.js').MailAccount[],
+    requestToken: string,
+  ): Promise<void> {
+    for (const account of accounts) {
+      try {
+        if (await this.createSyncRun(account.id)) {
+          await this.options.store.clearPushSyncPending(
+            account.id,
+            requestToken,
+          );
+          this.kick();
+        } else {
+          const current = await this.options.store.getAccount(account.id);
+          if (!current || current.status !== 'active') {
+            await this.options.store.clearPushSyncPending(
+              account.id,
+              requestToken,
+            );
+          }
+        }
+      } catch (error) {
+        this.options.logger?.error?.(
+          { accountId: account.id, error },
+          'Push-triggered Mail synchronization could not be activated.',
+        );
+      }
+    }
+  }
+
+  private async createSyncRun(accountId: string): Promise<boolean> {
+    const account = await this.options.store.getAccount(accountId);
+    if (!account || account.status !== 'active') return false;
+    if (await this.options.store.findActiveSyncRun(account.id)) return false;
+    const cursor = await this.options.store.getSyncCursor(account.id);
+    const id = randomUUID();
+    const run = await this.options.store.createSyncRun({
+      id,
+      accountId: account.id,
+      requestedBy: account.userId,
+      mode: cursor ? 'incremental' : 'initial',
+      policy: { maxMessages: 10_000, batchSize: 200 },
+    });
+    return run.id === id;
+  }
+
+  private async maintainPushSubscription(
+    account: import('./types.js').MailAccount,
+  ): Promise<void> {
+    const { pushWebhookUrl, pushWebhookSecret } = this.options;
+    if (!pushWebhookUrl || !pushWebhookSecret) return;
+    const notificationUrl = `${pushWebhookUrl.replace(/\/$/, '')}/${encodeURIComponent(account.provider.type)}/${encodeURIComponent(account.provider.name)}/${encodeURIComponent(pushWebhookSecret)}`;
+    const configurationFingerprint = createHash('sha256')
+      .update(`${notificationUrl}\0${pushWebhookSecret}`)
+      .digest('hex');
+    const current = await this.options.store.getPushSubscription(account.id);
+    if (
+      current &&
+      current.configurationFingerprint === configurationFingerprint &&
+      Date.parse(current.renewAfter) > Date.now()
+    ) {
+      return;
+    }
+    const leaseToken = randomUUID();
+    const now = new Date();
+    const lease = await this.options.store.claimPushSubscriptionMaintenance(
+      account,
+      leaseToken,
+      now.toISOString(),
+      new Date(now.getTime() + 60_000).toISOString(),
+    );
+    if (!lease) return;
+    const existing = lease.subscription;
+    if (
+      existing &&
+      existing.configurationFingerprint === configurationFingerprint &&
+      Date.parse(existing.renewAfter) > Date.now()
+    ) {
+      await this.options.store.releasePushSubscriptionMaintenance(
+        account.id,
+        leaseToken,
+      );
+      return;
+    }
+    let adapter: import('./types.js').MailProviderAdapter | undefined;
+    const renewLease = (): Promise<boolean> =>
+      this.options.store.renewPushSubscriptionMaintenance(
+        account.id,
+        leaseToken,
+        new Date(Date.now() + 60_000).toISOString(),
+      );
+    const leaseHeartbeat = setInterval(() => {
+      void renewLease().catch((error: unknown) => {
+        this.options.logger?.error?.(
+          { accountId: account.id, error },
+          'Mail push subscription lease could not be renewed.',
+        );
+      });
+    }, 20_000);
+    leaseHeartbeat.unref();
+    try {
+      adapter = await this.options.adapters.resolve(account);
+      if (
+        !adapter.capabilities.pushNotifications ||
+        adapter.pushNotificationsConfigured === false ||
+        !adapter.upsertPushSubscription
+      ) {
+        return;
+      }
+      const configurationChanged =
+        existing !== undefined &&
+        existing.configurationFingerprint !== configurationFingerprint;
+      const deletePushSubscription =
+        adapter.deletePushSubscription?.bind(adapter);
+      if (configurationChanged) {
+        if (!deletePushSubscription) {
+          this.options.logger?.error?.(
+            { accountId: account.id },
+            'The Provider cannot replace a stale Mail push subscription.',
+          );
+          return;
+        }
+        const removed = await deletePushSubscription(
+          existing.providerSubscriptionId,
+        );
+        if (!removed.ok) {
+          this.options.logger?.error?.(
+            { accountId: account.id, error: removed.error },
+            'The stale Mail push subscription could not be removed before replacement.',
+          );
+          return;
+        }
+        if (
+          !(await this.options.store.markPushSubscriptionReplacementNeeded(
+            account.id,
+            leaseToken,
+            new Date().toISOString(),
+          ))
+        ) {
+          return;
+        }
+      }
+      const result = await adapter.upsertPushSubscription({
+        notificationUrl,
+        clientState: pushWebhookSecret,
+        providerSubscriptionId: configurationChanged
+          ? undefined
+          : existing?.providerSubscriptionId,
+      });
+      if (!result.ok) {
+        this.options.logger?.error?.(
+          { accountId: account.id, error: result.error },
+          'Mail push subscription could not be renewed.',
+        );
+        return;
+      }
+      const providerSubscriptionIdChanged =
+        existing !== undefined &&
+        result.value.providerSubscriptionId !== existing.providerSubscriptionId;
+      const createdOrReplacedSubscription =
+        !existing || configurationChanged || providerSubscriptionIdChanged;
+      const compensateCreatedSubscription = async (): Promise<void> => {
+        if (!createdOrReplacedSubscription) return;
+        const latestAccount = await this.options.store.getAccount(account.id);
+        if (
+          !latestAccount ||
+          latestAccount.status !== 'active' ||
+          providerSubscriptionIdChanged
+        ) {
+          await adapter?.deletePushSubscription?.(
+            result.value.providerSubscriptionId,
+          );
+        }
+      };
+      if (!(await renewLease())) {
+        await compensateCreatedSubscription();
+        return;
+      }
+      const refreshedAccount = await this.options.store.getAccount(account.id);
+      if (!refreshedAccount || refreshedAccount.status !== 'active') {
+        await adapter.deletePushSubscription?.(
+          result.value.providerSubscriptionId,
+        );
+        return;
+      }
+      const persisted = await this.options.store.savePushSubscription(
+        {
+          accountId: account.id,
+          provider: account.provider,
+          configurationFingerprint,
+          ...result.value,
+          updatedAt: new Date().toISOString(),
+        },
+        leaseToken,
+      );
+      if (!persisted) {
+        await compensateCreatedSubscription();
+        return;
+      }
+      if (
+        existing &&
+        !configurationChanged &&
+        existing.providerSubscriptionId !== result.value.providerSubscriptionId
+      ) {
+        await adapter.deletePushSubscription?.(existing.providerSubscriptionId);
+      }
+    } finally {
+      clearInterval(leaseHeartbeat);
+      await this.options.store.releasePushSubscriptionMaintenance(
+        account.id,
+        leaseToken,
+      );
+      await adapter?.close?.();
+    }
   }
 
   public kick(): void {
@@ -181,9 +489,12 @@ export class MailRuntime implements MailOutboxPublisher {
   public async close(): Promise<void> {
     if (this.closed) return;
     this.closed = true;
-    if (this.timer) clearInterval(this.timer);
-    this.timer = undefined;
+    if (this.relayTimer) clearInterval(this.relayTimer);
+    if (this.automaticSyncTimer) clearInterval(this.automaticSyncTimer);
+    this.relayTimer = undefined;
+    this.automaticSyncTimer = undefined;
     await this.publishPromise;
+    await this.automaticSyncPromise;
     await this.worker?.stop();
     await this.workerLoop;
     this.unregisterHandler();

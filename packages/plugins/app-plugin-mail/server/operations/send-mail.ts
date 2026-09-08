@@ -5,6 +5,7 @@ import type {
   MailOperationContext,
   MailProviderAdapterResolver,
   MailProviderMessageInput,
+  MailOutboundAttachmentStorage,
   MailService,
   MailStore,
   MailSubmission,
@@ -14,6 +15,7 @@ export interface SendMailOperationDependencies {
   readonly store: MailStore;
   readonly adapters: MailProviderAdapterResolver;
   readonly outbox?: { kick(): void };
+  readonly outboundAttachments?: MailOutboundAttachmentStorage;
 }
 
 export interface SendMailExecutionOptions {
@@ -32,11 +34,6 @@ export class SendMailOperation {
   ): Promise<MailSubmission> {
     if (input.inReplyToMessageId && input.forwardOfMessageId) {
       throw new TypeError('A message cannot be both a reply and a forward.');
-    }
-    if ((input.attachmentIds?.length ?? 0) > 0) {
-      throw new TypeError(
-        'Attachments are outside the first mail plugin release.',
-      );
     }
     const now = Date.now();
     await this.dependencies.store.recoverExpiredSubmissions(
@@ -57,6 +54,13 @@ export class SendMailOperation {
       );
     if (existing) {
       assertMatchingRequest(existing.requestFingerprint, requestFingerprint);
+      if (
+        existing.status === 'pending' &&
+        existing.scheduledAt &&
+        !options.scheduledDelivery
+      ) {
+        return existing;
+      }
       if (existing.status !== 'pending') return existing;
     }
 
@@ -67,9 +71,16 @@ export class SendMailOperation {
       throw new Error('Mail sending identity is not available.');
     }
 
-    const providerMessage = await this.toProviderMessage(context, input);
+    const providerMessage = await this.prepareProviderMessage(context, input);
     if (input.scheduledAt && !options.scheduledDelivery) {
       const scheduledAt = parseFutureDate(input.scheduledAt);
+      await this.dependencies.store.extendOutboundAttachments(
+        context.actorId,
+        input.attachmentIds ?? [],
+        new Date(
+          new Date(scheduledAt).getTime() + 24 * 60 * 60 * 1_000,
+        ).toISOString(),
+      );
       const scheduled = await this.dependencies.store.createScheduledSubmission(
         {
           id: randomUUID(),
@@ -162,6 +173,12 @@ export class SendMailOperation {
         signal: context.signal,
       });
       if (result.status === 'accepted') {
+        if (input.draftMessageId) {
+          await this.dependencies.store.deleteMessage(
+            account.id,
+            input.draftMessageId,
+          );
+        }
         return this.dependencies.store.finishSubmission(
           {
             ...submission,
@@ -210,10 +227,16 @@ export class SendMailOperation {
     }
   }
 
-  private async toProviderMessage(
+  public async prepareProviderMessage(
     context: MailOperationContext,
     input: MailComposeInput,
   ): Promise<MailProviderMessageInput> {
+    const identity = await this.dependencies.store.getIdentity(
+      input.identityId,
+    );
+    if (!identity || identity.accountId !== input.accountId) {
+      throw new Error('Mail sending identity is not available.');
+    }
     const relatedMessageId =
       input.inReplyToMessageId ?? input.forwardOfMessageId;
     const related = relatedMessageId
@@ -227,14 +250,77 @@ export class SendMailOperation {
       throw new Error('The related mail message was not found.');
     }
     const parentInternetMessageId = related?.internetMessageId;
+    const draft = input.draftMessageId
+      ? await this.dependencies.store.getMessage(
+          context.actorId,
+          input.accountId,
+          input.draftMessageId,
+        )
+      : undefined;
+    if (input.draftMessageId && (!draft || !draft.draft)) {
+      throw new Error('Mail draft was not found.');
+    }
+    const retainedDraftAttachments = draft
+      ? input.retainedAttachmentIds === undefined
+        ? draft.attachments
+        : input.retainedAttachmentIds.map((attachmentId) => {
+            const attachment = draft.attachments.find(
+              (item) => item.id === attachmentId,
+            );
+            if (!attachment) {
+              throw new TypeError(
+                'A retained attachment does not belong to the selected draft.',
+              );
+            }
+            return attachment;
+          })
+      : [];
+    const attachments = await Promise.all(
+      (input.attachmentIds ?? []).map(async (attachmentId) => {
+        const metadata = await this.dependencies.store.getOutboundAttachment(
+          context.actorId,
+          attachmentId,
+        );
+        if (!metadata)
+          throw new Error('Mail outbound attachment was not found.');
+        const storage = this.dependencies.outboundAttachments;
+        if (!storage)
+          throw new Error('Mail attachment storage is not configured.');
+        return {
+          fileName: metadata.fileName,
+          contentType: metadata.contentType,
+          size: metadata.size,
+          inline: false,
+          open: async () =>
+            (await storage.open(context.actorId, attachmentId)).stream,
+        };
+      }),
+    );
+    const attachmentSize = attachments.reduce(
+      (total, attachment) => total + attachment.size,
+      0,
+    );
+    if (attachmentSize > 25 * 1024 * 1024) {
+      throw new TypeError('Mail attachments must not exceed 25 MB in total.');
+    }
     return {
       to: input.to,
       cc: input.cc ?? [],
       bcc: input.bcc ?? [],
       subject: input.subject,
-      text: input.text,
-      html: input.html,
-      attachments: [],
+      text: input.draftMessageId
+        ? input.text
+        : appendTextSignature(input.text, identity.signatureText),
+      html: appendHtmlSignature(
+        input.html,
+        input.draftMessageId
+          ? undefined
+          : (identity.signatureHtml ?? escapeHtml(identity.signatureText)),
+      ),
+      attachments,
+      retainedProviderAttachmentIds: retainedDraftAttachments.map(
+        (attachment) => attachment.providerAttachmentId,
+      ),
       inReplyTo: input.inReplyToMessageId ? parentInternetMessageId : undefined,
       references:
         input.inReplyToMessageId && related
@@ -245,7 +331,9 @@ export class SendMailOperation {
           : [],
       providerConversationId: input.inReplyToMessageId
         ? related?.conversationId
-        : undefined,
+        : draft?.conversationId,
+      draftProviderMessageId: draft?.providerMessageId,
+      draftProviderDraftId: draft?.providerDraftId,
       replyToProviderMessageId: input.inReplyToMessageId
         ? related?.providerMessageId
         : undefined,
@@ -254,6 +342,28 @@ export class SendMailOperation {
         : undefined,
     };
   }
+}
+
+function appendTextSignature(text: string, signature?: string): string {
+  return signature?.trim() ? `${text}\n\n-- \n${signature}` : text;
+}
+
+function appendHtmlSignature(
+  html?: string,
+  signature?: string,
+): string | undefined {
+  if (!html || !signature?.trim()) return html;
+  return `${html}<br><br><div class="nocobase-mail-signature">${signature}</div>`;
+}
+
+function escapeHtml(value?: string): string | undefined {
+  return value
+    ?.replace(/&/gu, '&amp;')
+    .replace(/</gu, '&lt;')
+    .replace(/>/gu, '&gt;')
+    .replace(/"/gu, '&quot;')
+    .replace(/'/gu, '&#39;')
+    .replace(/\n/gu, '<br>');
 }
 
 export class MailIdempotencyConflictError extends Error {
@@ -277,9 +387,11 @@ function fingerprint(input: MailComposeInput): string {
     text: input.text,
     html: input.html ?? null,
     attachmentIds: input.attachmentIds ?? [],
+    retainedAttachmentIds: input.retainedAttachmentIds ?? null,
     inReplyToMessageId: input.inReplyToMessageId ?? null,
     forwardOfMessageId: input.forwardOfMessageId ?? null,
     scheduledAt: input.scheduledAt ?? null,
+    draftMessageId: input.draftMessageId ?? null,
   };
   return createHash('sha256').update(JSON.stringify(canonical)).digest('hex');
 }

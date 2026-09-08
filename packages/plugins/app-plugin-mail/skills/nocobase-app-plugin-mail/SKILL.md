@@ -20,16 +20,23 @@ Use the Mail plugin's public Client, Server, and HTTP contracts. The plugin owns
 1. Add an enabled `mail.providers` entry with a stable `type` and `name` plus the Provider OAuth client configuration.
 2. Register the matching Gmail or Microsoft Server Provider plugin.
 3. Grant the intended role access to `mail.settings`.
-4. Open `/dev/mail/accounts`, select the mail account type, and complete its OAuth redirect.
+4. Open `/settings/mail/my-accounts`, select the mail account type, and complete its OAuth redirect.
 5. Verify that the account appears without credential references or token material in the API response.
 
-`/settings/mail/accounts` and `GET /api/mail/settings/accounts` show every connected account to users granted `page:mail.settings/access`. This Settings page is read-only. The ordinary `GET /api/mail/accounts` endpoint remains scoped to the authenticated user. Configure initial sync limits and trigger synchronization from `/dev/mail/accounts`; do not bypass Mail Core ownership checks for another user's account.
+For push synchronization, set `MAIL_PUSH_WEBHOOK_URL` to the public Mail
+webhook base URL and `MAIL_PUSH_WEBHOOK_SECRET` to a random 32–128 character
+secret. Gmail additionally needs `pushTopicName` in its Provider configuration
+and a Google Cloud Pub/Sub push subscription targeting the generated callback
+URL. Microsoft Graph subscription creation and endpoint validation are managed
+by Mail Core.
+
+`/settings/mail/my-accounts` manages the authenticated user's accounts, including default selection, suspend/resume, disconnect, and manual synchronization. `/settings/mail/accounts` and `GET /api/mail/settings/accounts` show every connected account to administrators granted `page:mail.settings/access`. The ordinary `GET /api/mail/accounts` endpoint remains scoped to the authenticated user. Do not bypass Mail Core ownership checks for another user's account.
 
 `/settings/mail/send-logs` and `GET /api/mail/settings/operation-logs` provide an all-user administration view of synchronization and delivery operations. The response includes API-safe account metadata for resolving each operation to its owner; it never includes credentials, idempotency fingerprints, leases, Provider cursors, or internal Provider error messages. The development log pages remain scoped to the authenticated user.
 
 ## Read synchronized mail
 
-Open `/dev/mail/center` in development to filter, refresh, and inspect the Mail workspace. It lists the authenticated user's accounts and Provider folders, then loads synchronized messages through the public API. Use `/dev/mail/management` to browse the complete synchronized message set across accounts in a paginated table, and `/dev/mail/send` to exercise sending with a connected account and identity. Opening a message in Mail center loads its complete Provider conversation when a stable conversation identifier exists. The plugin intentionally does not register a production `/mail` route or application-sidebar resource.
+Open `/mail` to filter, refresh, and inspect the authenticated user's synchronized mail. Opening a message loads its complete Provider conversation when a stable conversation identifier exists. The workspace can update read/starred state, move or delete messages, and securely download inbound attachments. Development diagnostics remain available under `/dev/mail`.
 
 Do not group unrelated messages by normalized subject. Gmail `threadId` and Microsoft Graph `conversationId` are normalized to `conversationId`; messages without one remain standalone. Folder filtering uses the indexed message-folder relation rather than scanning the JSON projection stored on each message.
 
@@ -41,13 +48,20 @@ Call `MailService.sendMessage()` through `mailServiceToken`, or `POST /api/mail/
 
 Review the authenticated user's recent submission results through `MailService.listSubmissions()`, `GET /api/mail/submissions`, or the development-only `/dev/mail/send-logs` page. The public view excludes idempotency fingerprints, leases, and Provider error messages.
 
-The first release supports plain text plus optional HTML and intentionally rejects outbound attachments, scheduled send, and bulk send.
+Sending supports plain text plus optional HTML, replies, forwards, Provider-backed draft creation and editing, outbound attachments, identities and signatures, reusable templates, durable scheduled delivery, and bounded per-recipient bulk delivery.
 
 ## Synchronize a mailbox
 
-Start synchronization through `MailService.startSync()` or `POST /api/mail/accounts/:accountId/sync`. Initial synchronization is resumable and bounded by `receivedAfter`, `maxMessages`, and `batchSize`; subsequent runs use the Provider cursor. The Outbox relay is the only component that publishes Queue work, and each Job delegates one bounded step to the sync Operation.
+Start synchronization through `MailService.startSync()` or `POST /api/mail/accounts/:accountId/sync`. The runtime also schedules active accounts automatically; the default interval is five minutes and `MAIL_AUTOMATIC_SYNC_INTERVAL_MS` configures it. Initial synchronization is resumable and bounded by `receivedAfter`, `maxMessages`, and `batchSize`; subsequent runs use the Provider cursor. The Outbox relay is the only component that publishes Queue work, and each Job delegates one bounded step to the sync Operation.
 
-When a Provider cursor expires, Mail Core clears it so the next request starts a fresh initial synchronization. A terminal OAuth failure changes the account to `reauthorizationRequired`; reconnect through `/dev/mail/accounts` before retrying. Review recent runs on the development-only `/dev/mail/sync-logs` page.
+When push configuration is present, the same sweep creates and renews Gmail
+watches and Microsoft Graph subscriptions. A valid notification only schedules
+the existing incremental synchronization path; duplicate concurrent notices
+coalesce behind the active-run constraint. Keep periodic synchronization
+enabled because both Providers document that notifications can be delayed or
+dropped.
+
+When a Provider cursor expires, Mail Core clears it so the next request starts a fresh initial synchronization. A terminal OAuth failure changes the account to `reauthorizationRequired`; reconnect through `/settings/mail/my-accounts` before retrying. Review recent runs on the development-only `/dev/mail/sync-logs` page.
 
 ## Verify and diagnose
 

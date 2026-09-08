@@ -3,6 +3,7 @@ import type {
   MailAccountView,
   MailAuthorizationStartResult,
   MailComposeInput,
+  MailBulkComposeInput,
   MailFolder,
   MailIdentity,
   MailListMessagesInput,
@@ -19,6 +20,10 @@ import type {
   MailSubmissionView,
   MailSyncRunView,
   MailUpdateAccountInput,
+  MailUpdateIdentityInput,
+  MailOutboundAttachmentView,
+  MailTemplate,
+  MailSaveTemplateInput,
 } from '../server/types.js';
 
 export type {
@@ -27,6 +32,7 @@ export type {
   MailAddress,
   MailAuthorizationStartResult,
   MailComposeInput,
+  MailBulkComposeInput,
   MailFolder,
   MailIdentity,
   MailInitialSyncPolicy,
@@ -45,6 +51,9 @@ export type {
   MailSyncPhase,
   MailSyncRunStatus,
   MailSyncRunView,
+  MailOutboundAttachmentView,
+  MailTemplate,
+  MailSaveTemplateInput,
 } from '../server/types.js';
 
 interface DataResponse<T> {
@@ -139,6 +148,17 @@ export class MailClient {
       .then((response) => response.data);
   }
 
+  public updateIdentity(input: MailUpdateIdentityInput): Promise<MailIdentity> {
+    const { accountId, identityId, ...json } = input;
+    return this.client
+      .request<DataResponse<MailIdentity>>({
+        path: `mail/accounts/${encodeURIComponent(accountId)}/identities/${encodeURIComponent(identityId)}`,
+        method: 'PATCH',
+        json,
+      })
+      .then((response) => response.data);
+  }
+
   public listFolders(accountId: string): Promise<readonly MailFolder[]> {
     return this.client
       .request<DataResponse<readonly MailFolder[]>>({
@@ -205,6 +225,16 @@ export class MailClient {
       .then((response) => response.data);
   }
 
+  public downloadAttachment(
+    accountId: string,
+    messageId: string,
+    attachmentId: string,
+  ): Promise<ReadableStream<Uint8Array>> {
+    return this.client.stream({
+      path: `mail/accounts/${encodeURIComponent(accountId)}/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`,
+    });
+  }
+
   public listConversationMessages(
     accountId: string,
     conversationId: string,
@@ -224,6 +254,61 @@ export class MailClient {
 
   public sendMessage(input: MailComposeInput): Promise<MailSubmissionView> {
     return this.post<MailSubmissionView>('mail/messages/send', input);
+  }
+
+  public sendBulk(
+    input: MailBulkComposeInput,
+  ): Promise<readonly MailSubmissionView[]> {
+    return this.post<readonly MailSubmissionView[]>(
+      'mail/messages/bulk',
+      input,
+    );
+  }
+
+  public uploadAttachment(file: File): Promise<MailOutboundAttachmentView> {
+    const body = new FormData();
+    body.append('file', file);
+    return this.client
+      .request<DataResponse<MailOutboundAttachmentView>>({
+        path: 'mail/attachments',
+        method: 'POST',
+        body,
+      })
+      .then((response) => response.data);
+  }
+
+  public listTemplates(): Promise<readonly MailTemplate[]> {
+    return this.client
+      .request<DataResponse<readonly MailTemplate[]>>({
+        path: 'mail/templates',
+      })
+      .then((response) => response.data);
+  }
+
+  public saveTemplate(input: MailSaveTemplateInput): Promise<MailTemplate> {
+    const { id, ...json } = input;
+    return this.client
+      .request<DataResponse<MailTemplate>>({
+        path: id
+          ? `mail/templates/${encodeURIComponent(id)}`
+          : 'mail/templates',
+        method: id ? 'PATCH' : 'POST',
+        json,
+      })
+      .then((response) => response.data);
+  }
+
+  public deleteTemplate(templateId: string): Promise<void> {
+    return this.client
+      .request({
+        path: `mail/templates/${encodeURIComponent(templateId)}`,
+        method: 'DELETE',
+      })
+      .then(() => undefined);
+  }
+
+  public saveDraft(input: MailComposeInput): Promise<MailMessage> {
+    return this.post<MailMessage>('mail/messages/drafts', input);
   }
 
   public updateMessage(input: MailUpdateMessageInput): Promise<MailMessage> {

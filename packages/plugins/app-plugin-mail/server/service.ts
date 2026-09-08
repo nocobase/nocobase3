@@ -3,6 +3,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type {
   MailAccountView,
   MailAccount,
+  MailAttachmentContent,
   MailAuthorizationStartResult,
   MailCompleteAuthorizationInput,
   MailListMessagesInput,
@@ -27,10 +28,16 @@ import type {
   MailProviderContext,
   MailProviderRegistry,
   MailProviderView,
+  MailOutboundAttachmentStorage,
+  MailOutboundAttachmentView,
+  MailUploadAttachmentInput,
 } from './types.js';
 import { SendMailOperation } from './operations/send-mail.js';
 import { toMailAccountView } from './store.js';
-import type { MailProviderAdapterResolver } from './types.js';
+import type {
+  MailProviderAdapter,
+  MailProviderAdapterResolver,
+} from './types.js';
 
 export interface MailOutboxPublisher {
   kick(): void;
@@ -47,6 +54,7 @@ export interface DefaultMailServiceDependencies {
     provider: import('./types.js').MailProviderIdentity,
   ) => MailProviderConfig;
   readonly listProviderConfigs?: () => readonly MailProviderConfig[];
+  readonly outboundAttachments?: MailOutboundAttachmentStorage;
 }
 
 export class DefaultMailService implements MailService {
@@ -196,19 +204,43 @@ export class DefaultMailService implements MailService {
           status: 'active',
           isDefault: existing?.isDefault ?? accounts.length === 0,
         };
-        await this.dependencies.store.saveAuthorizedAccount(account, [
+        const previousIdentities = existing
+          ? await this.dependencies.store.listIdentities(existing.id)
+          : [];
+        const previousByAddress = new Map(
+          previousIdentities.map((identity) => [
+            identity.address.toLowerCase(),
+            identity,
+          ]),
+        );
+        const authorizedIdentities = result.value.identities ?? [
           {
-            id: existing
-              ? ((await this.dependencies.store.listIdentities(existing.id))[0]
-                  ?.id ?? randomUUID())
-              : randomUUID(),
-            accountId: account.id,
             address: account.address,
             displayName: account.displayName,
             isPrimary: true,
             canSend: true,
           },
-        ]);
+        ];
+        await this.dependencies.store.saveAuthorizedAccount(
+          account,
+          authorizedIdentities.map((authorized) => {
+            const previous = previousByAddress.get(
+              authorized.address.toLowerCase(),
+            );
+            return {
+              id: previous?.id ?? randomUUID(),
+              accountId: account.id,
+              address: authorized.address,
+              displayName: authorized.displayName,
+              signatureText:
+                authorized.signatureText ?? previous?.signatureText,
+              signatureHtml:
+                authorized.signatureHtml ?? previous?.signatureHtml,
+              isPrimary: authorized.isPrimary,
+              canSend: authorized.canSend,
+            };
+          }),
+        );
         previousCredentialReference = existing?.credentialReference;
       } catch (error) {
         await credentials.delete(result.value.credentialReference);
@@ -278,10 +310,45 @@ export class DefaultMailService implements MailService {
     if (await this.dependencies.store.findActiveSyncRun(accountId)) {
       throw new Error('Wait for mailbox synchronization to finish first.');
     }
-    if (!(await this.dependencies.store.deleteAccount(accountId))) {
+    if (
+      !(await this.dependencies.store.markAccountRemoving(
+        account.id,
+        context.actorId,
+      ))
+    ) {
       throw new Error('Mail account was not found.');
     }
-    await this.dependencies.credentials?.delete(account.credentialReference);
+    const pushSubscription =
+      await this.dependencies.store.getPushSubscription(accountId);
+    let pushAdapter: MailProviderAdapter | undefined;
+    if (pushSubscription) {
+      try {
+        pushAdapter = await this.dependencies.adapters.resolve(account);
+      } catch {
+        // Local disconnect remains authoritative if Provider cleanup fails.
+      }
+    }
+    if (!(await this.dependencies.store.deleteAccount(accountId))) {
+      await pushAdapter?.close?.();
+      throw new Error('Mail account was not found.');
+    }
+    try {
+      if (pushAdapter && pushSubscription) {
+        await pushAdapter.deletePushSubscription?.(
+          pushSubscription.providerSubscriptionId,
+          context.signal,
+        );
+      }
+    } catch {
+      // Local disconnect remains authoritative if Provider cleanup fails.
+    } finally {
+      await pushAdapter?.close?.();
+    }
+    try {
+      await this.dependencies.credentials?.delete(account.credentialReference);
+    } catch {
+      // Credential cleanup must not make a completed account removal ambiguous.
+    }
   }
 
   public async listManagedAccounts(
@@ -322,6 +389,38 @@ export class DefaultMailService implements MailService {
   ): Promise<readonly import('./types.js').MailIdentity[]> {
     await this.requireOwnedAccount(context, accountId);
     return this.dependencies.store.listIdentities(accountId);
+  }
+
+  public async updateIdentity(
+    context: MailOperationContext,
+    input: import('./types.js').MailUpdateIdentityInput,
+  ): Promise<import('./types.js').MailIdentity> {
+    const account = await this.dependencies.store.getAccount(input.accountId);
+    if (!account || account.userId !== context.actorId) {
+      throw new Error('Mail account was not found.');
+    }
+    const identity = await this.dependencies.store.getIdentity(
+      input.identityId,
+    );
+    if (!identity || identity.accountId !== account.id) {
+      throw new Error('Mail sending identity was not found.');
+    }
+    const updated = await this.dependencies.store.updateIdentity(identity.id, {
+      displayName:
+        input.displayName === undefined
+          ? identity.displayName
+          : (input.displayName ?? undefined),
+      signatureText:
+        input.signatureText === undefined
+          ? identity.signatureText
+          : (input.signatureText ?? undefined),
+      signatureHtml:
+        input.signatureHtml === undefined
+          ? identity.signatureHtml
+          : (input.signatureHtml ?? undefined),
+    });
+    if (!updated) throw new Error('Mail sending identity was not found.');
+    return updated;
   }
 
   public async startSync(
@@ -420,6 +519,175 @@ export class DefaultMailService implements MailService {
     input: import('./types.js').MailComposeInput,
   ): Promise<MailSubmissionView> {
     return toSubmissionView(await this.sendMail.execute(context, input));
+  }
+
+  public async sendBulk(
+    context: MailOperationContext,
+    input: import('./types.js').MailBulkComposeInput,
+  ): Promise<readonly MailSubmissionView[]> {
+    if (input.recipients.length === 0 || input.recipients.length > 100) {
+      throw new TypeError('Bulk mail requires between 1 and 100 recipients.');
+    }
+    const submissions: MailSubmissionView[] = [];
+    const bulkKeyPrefix = `bulk:${createHash('sha256').update(input.idempotencyKey).digest('hex')}`;
+    for (const [index, recipient] of input.recipients.entries()) {
+      const idempotencyKey = `${bulkKeyPrefix}:${index}`;
+      const existing =
+        await this.dependencies.store.getSubmissionByIdempotencyKey(
+          input.accountId,
+          idempotencyKey,
+        );
+      submissions.push(
+        toSubmissionView(
+          await this.sendMail.execute(context, {
+            ...input,
+            to: [recipient],
+            cc: [],
+            bcc: [],
+            scheduledAt:
+              input.scheduledAt ??
+              existing?.scheduledAt ??
+              new Date(Date.now() + 1_000).toISOString(),
+            idempotencyKey,
+          }),
+        ),
+      );
+    }
+    return submissions;
+  }
+
+  public async saveDraft(
+    context: MailOperationContext,
+    input: import('./types.js').MailComposeInput,
+  ): Promise<MailMessage> {
+    if (input.scheduledAt) {
+      throw new TypeError('A draft cannot also be scheduled for delivery.');
+    }
+    const account = await this.dependencies.store.getAccount(input.accountId);
+    if (!account || account.userId !== context.actorId) {
+      throw new Error('Mail account was not found.');
+    }
+    if (account.status !== 'active') {
+      throw new Error('Mail account is not active.');
+    }
+    const identity = await this.dependencies.store.getIdentity(
+      input.identityId,
+    );
+    if (!identity || identity.accountId !== account.id || !identity.canSend) {
+      throw new Error('Mail sending identity is not available.');
+    }
+    const adapter = await this.dependencies.adapters.resolve(
+      account,
+      context.signal,
+    );
+    try {
+      if (!adapter.capabilities.drafts || !adapter.saveDraft) {
+        throw new Error('The selected Mail Provider cannot save drafts.');
+      }
+      const existingDraft = input.draftMessageId
+        ? await this.dependencies.store.getMessage(
+            context.actorId,
+            account.id,
+            input.draftMessageId,
+          )
+        : undefined;
+      if (input.draftMessageId && (!existingDraft || !existingDraft.draft)) {
+        throw new Error('Mail draft was not found.');
+      }
+      const providerMessage = await this.sendMail.prepareProviderMessage(
+        context,
+        input,
+      );
+      const draft = assertProviderResult(
+        existingDraft
+          ? await (adapter.updateDraft
+              ? adapter.updateDraft(
+                  existingDraft.providerDraftId ??
+                    existingDraft.providerMessageId,
+                  {
+                    trackingId: randomUUID(),
+                    identity,
+                    message: providerMessage,
+                    signal: context.signal,
+                  },
+                )
+              : Promise.resolve({
+                  ok: false as const,
+                  error: {
+                    code: 'MAIL_DRAFT_UPDATE_UNSUPPORTED',
+                    message: 'The selected Mail Provider cannot update drafts.',
+                    category: 'configuration' as const,
+                    retryable: false,
+                  },
+                }))
+          : await adapter.saveDraft({
+              trackingId: randomUUID(),
+              identity,
+              message: providerMessage,
+              signal: context.signal,
+            }),
+      );
+      return this.dependencies.store.saveMessage(account.id, {
+        ...draft,
+        draft: true,
+      });
+    } finally {
+      await closeAdapter(adapter);
+    }
+  }
+
+  public async uploadAttachment(
+    context: MailOperationContext,
+    input: MailUploadAttachmentInput,
+  ): Promise<MailOutboundAttachmentView> {
+    const storage = this.dependencies.outboundAttachments;
+    if (!storage) throw new Error('Mail attachment storage is not configured.');
+    return storage.create(context.actorId, input);
+  }
+
+  public listTemplates(
+    context: MailOperationContext,
+  ): Promise<readonly import('./types.js').MailTemplate[]> {
+    return this.dependencies.store.listTemplates(context.actorId);
+  }
+
+  public async saveTemplate(
+    context: MailOperationContext,
+    input: import('./types.js').MailSaveTemplateInput,
+  ): Promise<import('./types.js').MailTemplate> {
+    const name = input.name.trim();
+    if (!name) throw new TypeError('Mail template name is required.');
+    if (input.id) {
+      const owned = await this.dependencies.store.listTemplates(
+        context.actorId,
+      );
+      if (!owned.some((template) => template.id === input.id)) {
+        throw new Error('Mail template was not found.');
+      }
+    }
+    return this.dependencies.store.saveTemplate({
+      id: input.id ?? randomUUID(),
+      name,
+      subject: input.subject,
+      text: input.text,
+      html: input.html ?? '',
+      scope: 'private',
+      ownerId: context.actorId,
+    });
+  }
+
+  public async deleteTemplate(
+    context: MailOperationContext,
+    templateId: string,
+  ): Promise<void> {
+    if (
+      !(await this.dependencies.store.deleteTemplate(
+        context.actorId,
+        templateId,
+      ))
+    ) {
+      throw new Error('Mail template was not found.');
+    }
   }
 
   public async updateMessage(
@@ -530,6 +798,29 @@ export class DefaultMailService implements MailService {
       context.signal,
     );
     try {
+      if (!input.permanently && adapter.moveMessage) {
+        const trash = (
+          await this.dependencies.store.listFolders(account.id)
+        ).find((folder) => folder.type === 'trash');
+        if (trash) {
+          const moved = assertProviderResult(
+            await adapter.moveMessage(
+              message.providerMessageId,
+              trash.providerFolderId,
+              context.signal,
+            ),
+          );
+          const updated = await this.dependencies.store.moveMessage(
+            account.id,
+            message.id,
+            moved.providerMessageId,
+            trash.providerFolderId,
+          );
+          if (!updated)
+            throw new Error('Mail message was not found after delete.');
+          return;
+        }
+      }
       if (!adapter.deleteMessage) {
         throw new Error('The selected Mail Provider cannot delete messages.');
       }
@@ -543,6 +834,57 @@ export class DefaultMailService implements MailService {
       await this.dependencies.store.deleteMessage(account.id, message.id);
     } finally {
       await closeAdapter(adapter);
+    }
+  }
+
+  public async getAttachment(
+    context: MailOperationContext,
+    accountId: string,
+    messageId: string,
+    attachmentId: string,
+  ): Promise<MailAttachmentContent> {
+    const account = await this.dependencies.store.getAccount(accountId);
+    if (!account || account.userId !== context.actorId) {
+      throw new Error('Mail account was not found.');
+    }
+    const message = await this.dependencies.store.getMessage(
+      context.actorId,
+      accountId,
+      messageId,
+    );
+    if (!message) throw new Error('Mail message was not found.');
+    const attachment = message.attachments.find(
+      (item) =>
+        item.id === attachmentId || item.providerAttachmentId === attachmentId,
+    );
+    if (!attachment) throw new Error('Mail attachment was not found.');
+    const adapter = await this.dependencies.adapters.resolve(
+      account,
+      context.signal,
+    );
+    try {
+      if (!adapter.getAttachment) {
+        throw new Error(
+          'The selected Mail Provider cannot download attachments.',
+        );
+      }
+      const content = assertProviderResult(
+        await adapter.getAttachment(
+          message.providerMessageId,
+          attachment.providerAttachmentId,
+          context.signal,
+        ),
+      );
+      return {
+        ...content,
+        fileName: attachment.fileName,
+        contentType: attachment.contentType,
+        size: attachment.size || content.size,
+        stream: finalizeStream(content.stream, () => closeAdapter(adapter)),
+      };
+    } catch (error) {
+      await closeAdapter(adapter);
+      throw error;
     }
   }
 
@@ -617,6 +959,43 @@ function assertProviderResult<T>(
 ): T {
   if (!result.ok) throw new Error(result.error.message);
   return result.value;
+}
+
+function finalizeStream(
+  stream: ReadableStream<Uint8Array>,
+  finalize: () => Promise<void>,
+): ReadableStream<Uint8Array> {
+  const reader = stream.getReader();
+  let finalized = false;
+  const finish = async (): Promise<void> => {
+    if (finalized) return;
+    finalized = true;
+    reader.releaseLock();
+    await finalize();
+  };
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        const result = await reader.read();
+        if (result.done) {
+          controller.close();
+          await finish();
+        } else {
+          controller.enqueue(result.value);
+        }
+      } catch (error) {
+        controller.error(error);
+        await finish();
+      }
+    },
+    async cancel(reason) {
+      try {
+        await reader.cancel(reason);
+      } finally {
+        await finish();
+      }
+    },
+  });
 }
 
 async function closeAdapter(adapter: {

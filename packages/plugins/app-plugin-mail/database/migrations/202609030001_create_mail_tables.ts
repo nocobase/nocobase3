@@ -12,6 +12,39 @@ const migration: MigrationDefinition = defineMigration({
       collection.datetime('updatedAt', { nullable: false });
     });
 
+    await builder.createCollection('mailOutboundAttachments', (collection) => {
+      collection.uuid('id').primary();
+      collection.string('userId', { length: 255, nullable: false });
+      collection.string('disk', { length: 100, nullable: false });
+      collection.string('key', { length: 1000, nullable: false });
+      collection.string('fileName', { length: 500, nullable: false });
+      collection.string('contentType', { length: 255, nullable: false });
+      collection.integer('size', { nullable: false });
+      collection.datetime('createdAt', { nullable: false });
+      collection.datetime('expiresAt', { nullable: false });
+      collection.index(['userId', 'createdAt'], {
+        name: 'mail_outbound_attachments_user_created_idx',
+      });
+      collection.index('expiresAt', {
+        name: 'mail_outbound_attachments_expiry_idx',
+      });
+    });
+
+    await builder.createCollection('mailTemplates', (collection) => {
+      collection.uuid('id').primary();
+      collection.string('name', { length: 255, nullable: false });
+      collection.string('subject', { length: 2000, nullable: false });
+      collection.text('text');
+      collection.text('html');
+      collection.string('scope', { length: 20, nullable: false });
+      collection.string('ownerId', { length: 255, nullable: false });
+      collection.datetime('createdAt', { nullable: false });
+      collection.datetime('updatedAt', { nullable: false });
+      collection.unique(['ownerId', 'name'], {
+        name: 'mail_templates_owner_name_unique',
+      });
+    });
+
     await builder.createCollection('mailAuthorizationStates', (collection) => {
       collection.string('stateHash', { length: 64, nullable: false }).primary();
       collection.string('userId', { length: 255, nullable: false });
@@ -57,11 +90,42 @@ const migration: MigrationDefinition = defineMigration({
       });
     });
 
+    await builder.createCollection('mailPushSubscriptions', (collection) => {
+      collection.uuid('accountId').primary();
+      collection.string('providerType', { length: 100, nullable: false });
+      collection.string('providerName', { length: 255, nullable: false });
+      collection.string('providerSubscriptionId', {
+        length: 1000,
+      });
+      collection.string('configurationFingerprint', { length: 64 });
+      collection.datetime('renewAfter');
+      collection.datetime('expiresAt');
+      collection.string('leaseToken', { length: 100 });
+      collection.datetime('leaseExpiresAt');
+      collection.datetime('updatedAt', { nullable: false });
+      collection.unique(
+        ['providerType', 'providerName', 'providerSubscriptionId'],
+        { name: 'mail_push_subscriptions_provider_unique' },
+      );
+      collection.index('renewAfter', {
+        name: 'mail_push_subscriptions_renew_idx',
+      });
+    });
+
+    await builder.createCollection('mailPushPending', (collection) => {
+      collection.uuid('accountId').primary();
+      collection.string('requestedBy', { length: 255, nullable: false });
+      collection.string('requestToken', { length: 100, nullable: false });
+      collection.datetime('requestedAt', { nullable: false });
+    });
+
     await builder.createCollection('mailIdentities', (collection) => {
       collection.uuid('id').primary();
       collection.uuid('accountId', { nullable: false });
       collection.string('address', { length: 320, nullable: false });
       collection.string('displayName', { length: 255 });
+      collection.text('signatureText');
+      collection.text('signatureHtml');
       collection.boolean('isPrimary', { nullable: false, defaultValue: false });
       collection.boolean('canSend', { nullable: false, defaultValue: true });
       collection.unique(['accountId', 'address'], {
@@ -86,6 +150,7 @@ const migration: MigrationDefinition = defineMigration({
       collection.uuid('id').primary();
       collection.uuid('accountId', { nullable: false });
       collection.string('providerMessageId', { length: 500, nullable: false });
+      collection.string('providerDraftId', { length: 500 });
       collection.string('internetMessageId', { length: 1000 });
       collection.string('providerConversationId', { length: 500 });
       collection.json('providerFolderIds', { nullable: false });
@@ -232,8 +297,12 @@ const migration: MigrationDefinition = defineMigration({
     await builder.dropCollection('mailMessages');
     await builder.dropCollection('mailFolders');
     await builder.dropCollection('mailIdentities');
+    await builder.dropCollection('mailPushPending');
+    await builder.dropCollection('mailPushSubscriptions');
     await builder.dropCollection('mailAccounts');
     await builder.dropCollection('mailAuthorizationStates');
+    await builder.dropCollection('mailTemplates');
+    await builder.dropCollection('mailOutboundAttachments');
     await builder.dropCollection('mailCredentials');
   },
 });

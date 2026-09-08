@@ -14,6 +14,7 @@ describe('Mail client routes', () => {
           name: 'mail',
           path: '/mail',
           auth: 'required',
+          access: { resource: 'mail.settings', action: 'access' },
           componentLoader: expect.any(Function),
         },
       ],
@@ -30,6 +31,13 @@ describe('Mail client routes', () => {
               name: 'my-accounts',
               path: '/my-accounts',
               navigation: { title: 'nav.myAccounts' },
+              access: { resource: 'mail.settings', action: 'access' },
+              componentLoader: expect.any(Function),
+            },
+            {
+              name: 'templates',
+              path: '/templates',
+              navigation: { title: 'nav.templates' },
               access: { resource: 'mail.settings', action: 'access' },
               componentLoader: expect.any(Function),
             },
@@ -155,6 +163,7 @@ describe('Mail client routes', () => {
     ]);
     expect(resolved.settings.map((route) => route.path)).toEqual([
       '/settings/mail/my-accounts',
+      '/settings/mail/templates',
       '/settings/mail/accounts',
       '/settings/mail/send-logs',
     ]);

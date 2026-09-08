@@ -4,7 +4,16 @@ import {
   defineSettingsRoutes,
   type AppClientRouteContribution,
 } from '@nocobase/app-client/plugins';
-import { History, Inbox, Link2, Mail, Send, Table2, Users } from 'lucide-react';
+import {
+  FileText,
+  History,
+  Inbox,
+  Link2,
+  Mail,
+  Send,
+  Table2,
+  Users,
+} from 'lucide-react';
 
 const routes: readonly AppClientRouteContribution[] = [
   defineAppRoutes([
@@ -12,6 +21,7 @@ const routes: readonly AppClientRouteContribution[] = [
       name: 'mail',
       path: '/mail',
       auth: 'required',
+      access: { resource: 'mail.settings', action: 'access' },
       componentLoader: () => import('./pages/mail-workspace-page.js'),
     },
   ]),
@@ -27,6 +37,13 @@ const routes: readonly AppClientRouteContribution[] = [
           navigation: { title: 'nav.myAccounts', icon: Link2 },
           access: { resource: 'mail.settings', action: 'access' },
           componentLoader: () => import('./pages/mail-accounts-dev-page.js'),
+        },
+        {
+          name: 'templates',
+          path: '/templates',
+          navigation: { title: 'nav.templates', icon: FileText },
+          access: { resource: 'mail.settings', action: 'access' },
+          componentLoader: () => import('./pages/mail-templates-page.js'),
         },
         {
           name: 'accounts',

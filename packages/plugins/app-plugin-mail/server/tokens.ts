@@ -7,6 +7,7 @@ import type {
   MailCredentialVault,
   MailProviderAdapterResolver,
   MailProviderRegistry,
+  MailOutboundAttachmentStorage,
   MailService,
   MailStore,
 } from './types.js';
@@ -35,3 +36,8 @@ export const mailProviderAdapterResolverToken: ServiceToken<MailProviderAdapterR
 
 export const mailRuntimeToken: ServiceToken<MailRuntime> =
   createServiceToken<MailRuntime>('@nocobase/app-plugin-mail/runtime');
+
+export const mailOutboundAttachmentStorageToken: ServiceToken<MailOutboundAttachmentStorage> =
+  createServiceToken<MailOutboundAttachmentStorage>(
+    '@nocobase/app-plugin-mail/outbound-attachment-storage',
+  );
