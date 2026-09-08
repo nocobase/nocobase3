@@ -284,8 +284,8 @@ describe('Agent plugin development loop', () => {
             exports: { client: expectsClient, serverPlugin: expectsServer },
           },
           composition: {
-            client: { expected: expectsClient, registered: expectsClient },
-            server: { expected: expectsServer, registered: expectsServer },
+            client: { registered: expectsClient },
+            server: { registered: expectsServer },
           },
           consistent: true,
           issues: [],

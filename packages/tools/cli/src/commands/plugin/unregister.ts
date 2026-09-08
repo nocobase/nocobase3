@@ -25,7 +25,7 @@ import { resolveAppRoot } from '../../lib/workspace-app.ts';
 export default class PluginUnregister extends Command {
   static override summary = 'Remove a plugin from this app.';
   static override description =
-    'Undoes what register did: drops the imports and entries from the client and server composition roots, removes the nocobase.plugins registration and dependency, deletes installed skills, and uninstalls the package.';
+    'Undoes what register did: drops the imports and entries from the client and server composition roots, removes the dependency, deletes installed skills, and uninstalls the package.';
 
   static override examples = [
     '<%= config.bin %> <%= command.id %> audit-log',

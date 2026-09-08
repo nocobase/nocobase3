@@ -293,9 +293,7 @@ describe('planPluginRegistration', () => {
     expect(manifest.devDependencies).toEqual({
       '@nocobase/app-plugin-audit-log': '^1.0.0',
     });
-    expect(manifest.nocobase?.plugins).toEqual({
-      '@nocobase/app-plugin-audit-log': { enabled: true },
-    });
+    expect(manifest.nocobase?.plugins).toBeUndefined();
     expect(plan.clientPluginsText).toContain(
       '@nocobase/app-plugin-audit-log/client',
     );
@@ -391,9 +389,7 @@ describe('planPluginRegistration', () => {
     expect(plan.serverPluginsChanged).toBe(false);
     expect(plan.skippedServerEntry).toBe('disabled');
     const manifest = plannedManifest(plan.manifestText);
-    expect(manifest.nocobase?.plugins).toEqual({
-      '@nocobase/app-plugin-audit-log': { enabled: false },
-    });
+    expect(manifest.nocobase?.plugins).toBeUndefined();
   });
 
   it('reports no change when the plugin is already registered', async () => {
@@ -427,7 +423,7 @@ describe('planPluginRegistration', () => {
     expect(plan.clientPluginsText).toBeUndefined();
   });
 
-  it('flips a registration that is recorded with the other enabled state', async () => {
+  it('uses source registration despite stale legacy metadata', async () => {
     const appRoot = await createApp({
       devDependencies: { '@nocobase/app-plugin-cron': '^1.0.0' },
       nocobase: {
@@ -447,11 +443,8 @@ describe('planPluginRegistration', () => {
       pluginDirectory,
     });
 
-    expect(plan.manifestChanged).toBe(true);
-    const manifest = plannedManifest(plan.manifestText);
-    expect(manifest.nocobase?.plugins).toEqual({
-      '@nocobase/app-plugin-cron': { enabled: true },
-    });
+    expect(plan.manifestChanged).toBe(false);
+    expect(plan.serverPluginsChanged).toBe(true);
   });
 
   it('refuses to overwrite a dependency pinned at another range', async () => {
@@ -506,7 +499,10 @@ describe('planPluginRegistration', () => {
       '@nocobase/app-plugin-zulu',
     ];
     expect(Object.keys(manifest.devDependencies ?? {})).toEqual(sorted);
-    expect(Object.keys(manifest.nocobase?.plugins ?? {})).toEqual(sorted);
+    expect(Object.keys(manifest.nocobase?.plugins ?? {})).toEqual([
+      '@nocobase/app-plugin-alpha',
+      '@nocobase/app-plugin-zulu',
+    ]);
   });
 });
 
@@ -622,7 +618,6 @@ describe('planPluginUnregistration', () => {
     expect(plan.changed).toBe(true);
     expect(plan.removedFrom).toEqual([
       'devDependencies',
-      'nocobase.plugins',
       'client/plugins.ts',
       'server/plugins.ts',
     ]);
@@ -630,9 +625,7 @@ describe('planPluginUnregistration', () => {
     expect(manifest.devDependencies).toEqual({
       '@nocobase/app-plugin-keep': '^1.0.0',
     });
-    expect(Object.keys(manifest.nocobase?.plugins ?? {})).toEqual([
-      '@nocobase/app-plugin-keep',
-    ]);
+    expect(manifest.nocobase?.plugins).toBeUndefined();
     const clientPlugins = await readFile(clientPluginsPath(appRoot), 'utf8');
     expect(clientPlugins).not.toContain('audit-log');
     expect(clientPlugins).toContain('@nocobase/app-plugin-keep/client');

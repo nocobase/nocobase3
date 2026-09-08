@@ -430,11 +430,6 @@ describe('app plugin register command', () => {
       '--no-install',
     ]);
     const manifestPath = path.join(appRoot, 'package.json');
-    const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as {
-      nocobase: { plugins: Record<string, { enabled: boolean }> };
-    };
-    manifest.nocobase.plugins['@nocobase/app-plugin-audit-log'].enabled = false;
-    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
     await writeFile(
       path.join(
         appRoot,
@@ -458,11 +453,7 @@ describe('app plugin register command', () => {
     };
     expect(response.result.consistent).toBe(false);
     expect(response.result.issues.map((issue) => issue.code)).toEqual(
-      expect.arrayContaining([
-        'CLIENT_ENTRY_UNEXPECTED',
-        'SERVER_ENTRY_UNEXPECTED',
-        'SKILLS_OUT_OF_DATE',
-      ]),
+      expect.arrayContaining(['SKILLS_OUT_OF_DATE']),
     );
     expect(await readFile(manifestPath, 'utf8')).toBe(before);
   });
@@ -491,7 +482,6 @@ describe('app plugin register command', () => {
     expect(response.result.issues.map(({ code }) => code)).toEqual([
       'PLUGIN_NOT_INSTALLED',
       'DEPENDENCY_MISSING',
-      'PLUGIN_METADATA_MISSING',
     ]);
     expect(response.result.suggestions).toEqual([
       {
@@ -526,9 +516,7 @@ describe('app plugin register command', () => {
       expect(manifest.devDependencies).toEqual({
         '@nocobase/app-plugin-audit-log': '^1.0.0',
       });
-      expect(manifest.nocobase?.plugins).toEqual({
-        '@nocobase/app-plugin-audit-log': { enabled: true },
-      });
+      expect(manifest.nocobase?.plugins).toBeUndefined();
       expect(existsSync(path.join(appRoot, 'client', 'plugins.ts'))).toBe(
         clientExpected,
       );
@@ -549,7 +537,7 @@ describe('app plugin register command', () => {
     },
   );
 
-  it('registers disabled metadata without wiring runtime entries', async () => {
+  it('installs a disabled plugin without metadata or runtime entries', async () => {
     const appRoot = await createAppWithInstalledPlugin();
 
     await runCommand(config, 'plugin:register', [
@@ -563,9 +551,7 @@ describe('app plugin register command', () => {
     const manifest = JSON.parse(
       await readFile(path.join(appRoot, 'package.json'), 'utf8'),
     ) as { nocobase?: { plugins?: Record<string, { enabled: boolean }> } };
-    expect(manifest.nocobase?.plugins).toEqual({
-      '@nocobase/app-plugin-audit-log': { enabled: false },
-    });
+    expect(manifest.nocobase?.plugins).toBeUndefined();
     expect(existsSync(path.join(appRoot, 'client', 'plugins.ts'))).toBe(false);
     expect(existsSync(path.join(appRoot, 'server', 'plugins.ts'))).toBe(false);
   });
@@ -614,7 +600,7 @@ describe('app plugin register command', () => {
       nocobase?: { plugins?: Record<string, unknown> };
     };
     expect(manifest.devDependencies).toEqual({});
-    expect(manifest.nocobase?.plugins).toEqual({});
+    expect(manifest.nocobase?.plugins).toBeUndefined();
     expect(await readFile(clientPath, 'utf8')).not.toContain('audit-log');
     expect(await readFile(serverPath, 'utf8')).not.toContain('audit-log');
     expect(existsSync(path.join(appRoot, '.agents', 'skills'))).toBe(true);

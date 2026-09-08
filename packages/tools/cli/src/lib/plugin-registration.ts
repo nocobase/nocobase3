@@ -1,7 +1,7 @@
 // Registers and unregisters a plugin in an application.
 //
-// The same explicit edits happen wherever an application lives: the manifest gains a dependency and
-// `nocobase.plugins` registration, while the client and server composition roots gain imports and entries for the
+// The same explicit edits happen wherever an application lives: the manifest gains a dependency,
+// while the client and server composition roots gain imports and entries for the
 // surfaces the package exports. Only plugin lookup and the recorded dependency range differ between this repository
 // and a generated application, so those are parameters and everything else is shared.
 //
@@ -227,7 +227,6 @@ export async function planPluginRegistration({
   const manifestChanged = registerInManifest({
     dependencyField,
     dependencyRange,
-    enabled,
     manifest,
     manifestPath,
     packageName,
@@ -270,7 +269,7 @@ export async function planPluginRegistration({
       : { changed: false, filePath: cliPluginsPath(appRoot) };
 
   // Losing the whole registration because the app cannot format one file would throw away a working install and a
-  // correct manifest. The dependency, the registration and the skills need no compiler, so only this one edit
+  // correct manifest. The dependency and the skills need no compiler, so only this one edit
   // degrades, and it degrades into instructions precise enough to apply by hand.
   const resolvedSkip = client.missingTypeScript
     ? 'no-typescript'
@@ -633,14 +632,12 @@ async function planCliRemoval(
 function registerInManifest({
   dependencyField,
   dependencyRange,
-  enabled,
   manifest,
   manifestPath,
   packageName,
 }: {
   dependencyField: 'dependencies' | 'devDependencies';
   dependencyRange: string;
-  enabled: boolean;
   manifest: Record<string, unknown>;
   manifestPath: string;
   packageName: string;
@@ -658,25 +655,9 @@ function registerInManifest({
     );
   }
 
-  const nocobase = ensureRecord(manifest, 'nocobase', manifestPath);
-  const plugins = ensureRecord(nocobase, 'plugins', manifestPath);
-  const existingRegistration = plugins[packageName];
-  if (existingRegistration !== undefined && !isRecord(existingRegistration)) {
-    throw new Error(
-      `${manifestPath} has an invalid nocobase.plugins registration for ${packageName}.`,
-    );
-  }
-
   let changed = false;
   if (existingDependency === undefined) {
     insertSorted(dependencies, packageName, dependencyRange);
-    changed = true;
-  }
-  if (existingRegistration === undefined) {
-    insertSorted(plugins, packageName, { enabled });
-    changed = true;
-  } else if (existingRegistration.enabled !== enabled) {
-    existingRegistration.enabled = enabled;
     changed = true;
   }
   return changed;
