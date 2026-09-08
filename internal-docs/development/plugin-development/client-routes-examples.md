@@ -163,8 +163,7 @@ const devRoutes: AppClientDevRoutesContribution = defineDevRoutes([
 
 ## Settings 分组
 
-多个相关设置页可以共享一层分组。分组拥有自己的 name、path 和 navigation，children
-才是实际页面；Settings groups 只嵌套一层。
+App、Settings 和 Dev 都支持递归导航分组。分组拥有 name、navigation 和 children，path 可选；省略时只组织菜单，设置时提供路径前缀。页面拥有 componentLoader，也可拥有 children 和 navigation。页面通过手动放置 Outlet 渲染子页面，不能仅凭 children 判断节点是分组。
 
 ```ts
 defineSettingsRoutes([
@@ -228,6 +227,14 @@ const override = {
 
 同一个 Route 在所有来源中只能有一个最终 override。提供 `componentEntry`，使
 `client:inspect` 和后续 Agent 能定位最终页面源码。
+
+## App 菜单与子路由
+
+App 菜单与 Settings、Dev 一样，直接读取路由的 `navigation`，不再读取 Refine resources。`title` 使用所属插件的翻译命名空间，`icon` 为接受 `className` 的组件。保留 CRUD 所需 resources，但不要为了添加菜单创建 Provider。
+
+三类路由均支持递归页面子路由和可选路径的导航分组。省略 navigation 的页面仍可访问；动态参数和通配符页面不能直接生成菜单目标。页面可以同时是可点击菜单和下级菜单的父节点。业务页面手动放置 Outlet，纯分组由渲染器透传。
+
+完整示例与文件范围见[页面子路由](client-child-routes.md)。
 
 ## Provider 与 Route 的边界
 

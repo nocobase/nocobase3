@@ -19,11 +19,14 @@ export interface ClientPageDescriptor {
 
 export function describeRoutePage(
   route: AppClientRegisteredRoute,
+  defaultAccess = true,
 ): ClientPageDescriptor {
   return {
     access: route.access ?? { resource: route.name, action: 'access' },
-    checkAccess: route.auth === 'required',
-    componentLoader: route.componentLoader,
+    checkAccess:
+      route.auth === 'required' &&
+      (defaultAccess || route.access !== undefined),
+    componentLoader: route.componentLoader!,
     kind: 'page',
     label: route.name,
     packageName: route.packageName,

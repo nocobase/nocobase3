@@ -13,7 +13,7 @@ Deploy and rollback requests persist a queued operation and return HTTP 202. The
 During Hub startup, only managed Host availability is awaited. Restoring the complete deployment set runs in the background, so eager App activation does not delay Hub readiness. App Host currently reconciles that startup set through its existing serial operation queue; this bounds startup load and preserves deployment revision ordering.
 
 The management API is restricted to system administrators. The browser page is available at `/hub`.
-The Hub template redirects its root route to `/hub` and uses Applications as its primary navigation entry.
+The Hub template redirects its root route to `/hub` and uses Applications as its primary navigation entry. The plugin declares that entry, including its translated title and icon, in `client/routes.ts`; it does not register a menu ServiceProvider.
 
 This version uses an in-process deployment runner rather than a separate durable queue worker. If Hub restarts during an operation, the persisted queued/deploying record is marked failed and can be retried manually. It does not yet provide remote Hosts, multiple Hosts or environments, configuration publications, external provider integration, or database migration rollback. Start-first replacement is not a strict zero-downtime guarantee for long-lived connections or incompatible database migrations. Database migration and seed behavior remains part of App startup.
 

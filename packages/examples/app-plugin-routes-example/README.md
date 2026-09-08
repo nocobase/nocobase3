@@ -1,6 +1,6 @@
 # @nocobase/app-plugin-routes-example
 
-This full-stack Routes example is the normative reference for the four Route
+This full-stack Routes example is the normative reference for the five Route
 types contributed by an application plugin:
 
 - `server/routes/root.ts` contributes authenticated
@@ -9,7 +9,8 @@ types contributed by an application plugin:
   `GET /api/routes-example` with `defineApiRoutes()`;
 - `client/routes.ts` contributes the authenticated `/routes-example` page with
   `defineAppRoutes()` and `/settings/routes-example` with
-  `defineSettingsRoutes()`;
+  `defineSettingsRoutes()`, plus the development-only `/dev/routes-example`
+  page with `defineDevRoutes()`;
 - `client/react-providers.ts` contributes a synchronous React Provider with
   `defineClientReactProviders`;
 - `client/components/` contains React Provider component implementations;
@@ -25,6 +26,12 @@ package.
 
 The Client plugin declaration statically contributes `routes` and
 `reactProviders`; route page components remain lazy through `componentLoader()`.
+
+All three Client route APIs accept `navigation` for menu entries and `children`
+for nested pages or navigation groups. Omit `navigation` for a page without a
+menu entry, as the App page in this example does. Pages with children must place
+`<Outlet />` at the intended content location; pure navigation groups have no
+`componentLoader`. Refine resources serve CRUD configuration, not menus.
 
 The Root Route and API Route each resolve the public Authentication Token and
 install `auth.required()` on their own router. Neither depends on App

@@ -45,6 +45,33 @@ async function createInspectionApp(pluginsSource?: string): Promise<string> {
 }
 
 describe('client inspection', () => {
+  it('inspects nested page routes without loading their components', async () => {
+    const appRoot = await createInspectionApp(`
+      const page = async () => { throw new Error('must not load pages'); };
+      export default { plugins: [{
+        packageName: '@example/nested', config: [], serviceProviders: [],
+        reactProviders: [], routeComponentOverrides: [], options: {},
+        routes: [{ parent: 'app', routes: [{
+          name: 'parent', path: '/parent', componentLoader: page,
+          children: [{ name: 'child', path: 'child', componentLoader: page }],
+        }] }],
+      }], routeComponentOverrides: [] };
+    `);
+    const inspection = await inspectAppClient({ appRoot });
+    expect(inspection.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: '@example/nested:parent',
+          path: '/parent',
+        }),
+        expect.objectContaining({
+          id: '@example/nested:child',
+          path: '/parent/child',
+        }),
+      ]),
+    );
+  });
+
   it('parses the static Client contribution types', () => {
     expect(
       parseInspectAppClientArgs(['--type', 'react-providers', '--json']),
@@ -135,6 +162,11 @@ describe('client inspection', () => {
       },
       {
         auth: 'required',
+        id: '@nocobase/app-plugin-repository-example:api-examples',
+        path: '/',
+      },
+      {
+        auth: 'required',
         id: '@nocobase/app-plugin-repository-example:sort',
         path: '/repository-example/sort',
       },
@@ -165,18 +197,28 @@ describe('client inspection', () => {
       },
       {
         auth: 'required',
+        id: '@nocobase/app-plugin-repository-example:crm-group',
+        path: '/',
+      },
+      {
+        auth: 'required',
         id: '@nocobase/app-plugin-repository-example:crm',
         path: '/repository-example/crm',
       },
       {
         auth: 'required',
-        id: '@nocobase/app-plugin-repository-example:orders',
-        path: '/repository-example/orders',
+        id: '@nocobase/app-plugin-repository-example:contacts',
+        path: '/repository-example/crm/contacts',
       },
       {
         auth: 'required',
-        id: '@nocobase/app-plugin-repository-example:contacts',
-        path: '/repository-example/crm/contacts',
+        id: '@nocobase/app-plugin-repository-example:orders-group',
+        path: '/',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-repository-example:orders',
+        path: '/repository-example/orders',
       },
       {
         auth: 'required',

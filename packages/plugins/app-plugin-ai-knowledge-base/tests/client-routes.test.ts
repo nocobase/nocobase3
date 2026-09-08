@@ -20,9 +20,11 @@ test('registers six development-only Knowledge Base pages in order', async () =>
     path: '/ai-knowledge-base',
     navigation: { title: 'AI Knowledge Base' },
   });
-  expect(group && 'children' in group ? group.children : []).toHaveLength(6);
-
-  const children = group && 'children' in group ? group.children : [];
+  const children = group?.children;
+  if (!children) {
+    throw new Error('Missing Knowledge Base navigation group children.');
+  }
+  expect(children).toHaveLength(6);
   expect(
     children.map((route) => [route.name, route.path, route.navigation?.title]),
   ).toEqual(expectedNavigation);

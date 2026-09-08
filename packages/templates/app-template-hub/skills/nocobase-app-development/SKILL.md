@@ -15,6 +15,8 @@ Use this Skill when building a feature in this application: a page, an endpoint,
 
 Do not use it to develop a published plugin package. Plugin development has its own protocol and lives in a separate repository.
 
+For nested pages, route-driven Tabs, or navigation groups, read [child routes](references/client-child-routes.md). This covers route declarations, manual `Outlet` placement, menus, and verification.
+
 ## Before you start
 
 Read the application's `AGENTS.md` first for the rules that apply everywhere. This Skill's references are the detail behind it.
@@ -110,7 +112,7 @@ These cause real damage and appear in every reference:
 - **Every user-visible string goes through a translation key.**
 - **Visual consistency is application-wide.** Restyling only your part is a defect. Change the design tokens if a change is needed.
 - **Route paths never include the deployment base path.** The runtime restores it.
-- **A route does not create a sidebar entry.** That needs a Refine resource in `client/service-provider.ts`.
+- **Route navigation creates sidebar entries.** Declare `navigation` in `client/routes.ts`; Refine resources are for CRUD, not menus.
 - **Reach for the built-in mechanism first.** Changing framework structure is allowed when nothing else fits — comment it and update the docs.
 - **Tests live in `tests/` or `e2e/`,** never beside the source.
 

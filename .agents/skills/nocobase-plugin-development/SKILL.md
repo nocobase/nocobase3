@@ -55,6 +55,8 @@ for the current task:
 | Write Plugin Skills for an App Agent   | `skills.md`                                          |
 | Test, build, and verify                | `testing.md`                                         |
 
+For nested Client pages or route-driven navigation, also read `internal-docs/development/plugin-development/client-child-routes.md`. App menus are declared on routes; Refine resources serve CRUD.
+
 For every HTTP or browser Route task, read `routes.md` first. It covers all four
 Route APIs as one cross-runtime topic. For `defineRootRoutes()` or
 `defineApiRoutes()`, also read `server-routes-examples.md`. For
