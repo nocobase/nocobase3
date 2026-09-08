@@ -330,6 +330,7 @@ export class AgentService {
     let sent = 0;
     let prepared: PreparedAgentContext | undefined;
     let activeProvider: LLMProvider | undefined;
+    let llm: ResolvedAgentLLM | undefined;
     await conversation.streamCache.clear();
     await conversation.beforeExecution('streaming');
     const stopReasoning = function* (
@@ -340,7 +341,7 @@ export class AgentService {
         yield { type: 'reasoning', conversation: target, action: 'stop' };
     };
     try {
-      const llm = await this.resolveLLM(request);
+      llm = await this.resolveLLM(request);
       activeProvider = llm.provider;
       prepared = await this.prepare(
         operation,
@@ -575,7 +576,7 @@ export class AgentService {
         aborted: signal.aborted,
       });
       await conversation.streamCache.clear();
-      await prepared?.llm?.dispose?.();
+      await llm?.dispose?.();
     }
   }
 }
