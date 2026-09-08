@@ -120,7 +120,7 @@ test('segment content editors keep a fixed height and scroll internally', () => 
   }
 });
 
-test('vector database management uses row actions and spaced form fields', () => {
+test('vector database management uses row actions and matches the knowledge-base enabled row', () => {
   const source = readClient('page/vector-databases-page.tsx');
 
   expect(source).not.toMatch(/type=['"]checkbox['"]/);
@@ -132,4 +132,23 @@ test('vector database management uses row actions and spaced form fields', () =>
     /<div className='grid gap-2'>[\s\S]*?<Label htmlFor='vector-spec'/,
   );
   expect(source).toMatch(/<div key=\{field\.key\} className='grid gap-2'>/);
+  expect(source).toMatch(
+    /<div className='flex items-center justify-between gap-4'>\s*<Label htmlFor='vector-enabled'>\{t\('Enabled'\)\}<\/Label>\s*<Switch\s*id='vector-enabled'/,
+  );
+});
+
+test('document list card contains its actions, table, and pagination without an upload hint', () => {
+  for (const source of [
+    readClient('page/knowledge-base-workspace-page.tsx'),
+    readClient('dev/live/knowledge-base-workspace-page.tsx'),
+    readRegistry('workspace/page/knowledge-base-workspace-page.tsx'),
+  ]) {
+    expect(source).toMatch(
+      /<Card>\s*<CardContent className='space-y-4'>[\s\S]*?t\('Refresh'\)[\s\S]*?t\('Upload'\)[\s\S]*?<DocumentTable[\s\S]*?<PagePagination[\s\S]*?<\/CardContent>\s*<\/Card>/,
+    );
+    expect(source).not.toMatch(/Upload one supported document at a time\./);
+    expect(source).not.toMatch(
+      /Upload a ZIP archive to import multiple documents in one go\./,
+    );
+  }
 });
