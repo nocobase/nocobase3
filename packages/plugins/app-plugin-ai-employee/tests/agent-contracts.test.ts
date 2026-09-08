@@ -104,6 +104,33 @@ describe('fixed AgentService contracts', () => {
     );
     expect(pipeline).not.toContain('MessageNormalizationMiddleware');
   });
+
+  it('forbids legacy provider bridges and runtime-owned context responsibilities', () => {
+    const production = [
+      'agent/types.ts',
+      'agent/providers.ts',
+      'agent/direct.ts',
+      'agent/agent-service.ts',
+      'agent/ai-employee/providers.ts',
+      'agent/ai-employee/runtime.ts',
+      'agent/middleware/pipeline.ts',
+    ]
+      .map(read)
+      .join('\n');
+    const runtime = read('agent/ai-employee/runtime.ts');
+    expect(production).not.toMatch(/\bToolProvider\b/);
+    expect(production).not.toContain('createDefaultToolProvider');
+    expect(production).not.toContain('createAIEmployeeToolProvider');
+    expect(production).not.toContain('providers.llmProvider');
+    expect(production).not.toContain('providers.llmIdentity');
+    expect(production).not.toContain('providers.tools');
+    expect(production).not.toContain('DirectChatContextProvider');
+    expect(runtime).not.toMatch(
+      /getSystemPrompt|getAgentTools|getAvailableSkills/,
+    );
+    expect(runtime).not.toMatch(/getActivatedSkillToolNames|getToolsMap/);
+    expect(runtime).not.toMatch(/shouldInterruptToolCall|isAutoCall/);
+  });
   it('owns the only standard middleware builder and preserves its order', () => {
     const service = read('agent/agent-service.ts');
     const runtime = read('agent/ai-employee/runtime.ts');
