@@ -38,11 +38,11 @@ export const conversationMiddleware = (
   const { conversation, chatContext, chatMessageConverters } = providers;
   const { messageId, agentThread } = options;
   const identity = conversation.identity;
-  const convertAIMessage = (message: AIMessage) =>
+  const toStoredAssistantMessage = (message: AIMessage) =>
     chatMessageConverters.assistant.toStored(message, options);
-  const convertHumanMessage = (message: HumanMessage) =>
+  const toStoredHumanMessage = (message: HumanMessage) =>
     chatMessageConverters.human.toStored(message, options);
-  const convertToolMessage = (message: ToolMessage) =>
+  const toStoredToolMessage = (message: ToolMessage) =>
     chatMessageConverters.tool.toStored(message, options);
 
   const fillToolCalls = (
@@ -108,7 +108,7 @@ export const conversationMiddleware = (
       const userMessages = (
         await Promise.all(
           (userMessageCount ? humanMessages.slice(-userMessageCount) : []).map(
-            (message) => convertHumanMessage(message as HumanMessage),
+            (message) => toStoredHumanMessage(message as HumanMessage),
           ),
         )
       ).filter((message): message is AIMessageInput => message !== null);
@@ -131,7 +131,7 @@ export const conversationMiddleware = (
           state.messages
             .filter((message) => message.type === 'tool')
             .slice(state.lastMessageIndex.lastToolMessageIndex)
-            .map((message) => convertToolMessage(message as ToolMessage)),
+            .map((message) => toStoredToolMessage(message as ToolMessage)),
         )
       ).filter((message): message is AIMessageInput => message !== null);
       if (!toolMessages.length || !currentMessageId) return;
@@ -170,7 +170,7 @@ export const conversationMiddleware = (
           return nextState;
         const aiMessage = lastMessage as AIMessage;
         const toolCalls = (aiMessage.tool_calls ?? []) as AIToolCall[];
-        const values = await convertAIMessage(aiMessage);
+        const values = await toStoredAssistantMessage(aiMessage);
         if (!values) return nextState;
         const saved = await conversation.messages.saveAssistantMessage(
           values,
@@ -210,7 +210,7 @@ export const conversationMiddleware = (
           options,
         );
         await conversation.messages.add([
-          await convertToolMessage(request.messages.at(-1) as ToolMessage),
+          await toStoredToolMessage(request.messages.at(-1) as ToolMessage),
           ...appendMessages,
         ]);
         request.messages.push(
