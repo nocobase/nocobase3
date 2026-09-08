@@ -77,7 +77,7 @@ features:
         details: 'Roles, menu visibility, and which records each user may see.'
         link: /capabilities/authorization
       - title: 'Workflow'
-        details: 'Approvals and multi-step processes.'
+        details: 'Observable, versioned, multi-stage business processes.'
         link: /capabilities/workflow
       - title: 'More…'
         details: 'Notifications, files, languages, themes, AI employees and knowledge base.'
