@@ -13,8 +13,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
-import { inspectAppClient } from '../../../templates/app-template-default/scripts/inspect-client.mjs';
-import { inspectAppServer } from '../../../templates/app-template-default/scripts/inspect-server.mjs';
+import { inspectAppClient } from '../../../templates/app-template-default/cli/dev-commands/inspect-client-impl.mjs';
+import { inspectAppServer } from '../../../templates/app-template-default/cli/dev-commands/inspect-server-impl.mjs';
 import type { PluginCapability } from '../../create-plugin/src/lib/capabilities.ts';
 import { createPlugin } from '../../create-plugin/src/lib/scaffold.ts';
 import { loadTestConfig, runCommand } from './helpers.ts';

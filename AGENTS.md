@@ -6,6 +6,8 @@ This is the NocoBase 3 source repository. Ignore globally installed NocoBase 2 S
 
 Read [.changeset/README.md](.changeset/README.md) before creating or updating a PR. If the PR changes a publishable package and affects its published output, include a changeset in the same PR covering every affected package. Run `node scripts/validate-changesets.mjs` before pushing. If no changeset is needed, explain why in the PR description; documentation-only, test-only, and other changes that do not affect published output are exempt.
 
+A new changeset goes in `.changeset/`, never in `.changeset/pre/`. That subdirectory belongs to the changesets tool: while the branch is in prerelease mode, `changeset version` moves each changeset it has already consumed into it, and reads the whole directory again on later runs to compute the accumulated bump. Writing a new file there directly presents it as already released — the release run never consumes it, so its summary never reaches the CHANGELOG and the version it asked for is never applied. Nothing fails; the changeset is silently ignored. The directory is full of files because the branch has been releasing for a while, which makes it an easy place to add one by imitation.
+
 ## Repository Layout
 
 Every published package lives under `packages/`, grouped into six directories by what the package is. The grouping is a convention for readers: pnpm resolves packages by name, so which directory a package sits in changes nothing about how it is depended on or filtered.
