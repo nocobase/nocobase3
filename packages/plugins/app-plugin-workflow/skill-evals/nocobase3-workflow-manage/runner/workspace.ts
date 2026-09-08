@@ -144,7 +144,7 @@ function buildTestContext(
     'Run the real source checker with:',
     '',
     '```bash',
-    `node --import ${path.join(packageRoot, 'node_modules', 'tsx', 'dist', 'loader.mjs')} ${path.join(packageRoot, 'bin', 'workflow.ts')} check server/workflows/<workflow-key-or-workflow.ts>`,
+    `node --import ${path.join(packageRoot, 'node_modules', 'tsx', 'dist', 'loader.mjs')} ${path.join(options.repoRoot, 'packages', 'templates', 'app-template-default', 'cli', 'index.ts')} workflow check server/workflows/<workflow-key-or-workflow.ts>`,
     '```',
   ];
   if (fixtureDatabase && options.case.fixture) {

@@ -2,81 +2,56 @@ import { Command, Flags } from '@oclif/core';
 import type { Interfaces } from '@oclif/core';
 import path from 'node:path';
 
-import { runAppSeeds, databaseConfig } from '@nocobase/app-server/database';
 import { resolveStandaloneAppRuntime } from '@nocobase/app-server/node';
-
 import appRuntime from '../../server/runtime.js';
+import { runDatabaseCommand } from '../database-command.js';
 
 export default class AppSeed extends Command {
   static override summary = 'Run pending database seeds.';
   static override description =
-    'Resolves this application runtime and applies every seed the application and its plugins declare.';
+    'Runs the default connection unless --connection or --all is specified. Plugins belong to the default connection. Stops on the first failure.';
 
   static override examples: Command.Example[] = [
     '<%= config.bin %> <%= command.id %>',
-    '<%= config.bin %> <%= command.id %> --json',
+    '<%= config.bin %> <%= command.id %> --connection analytics --json',
+    '<%= config.bin %> <%= command.id %> --all',
   ];
 
   static override flags: {
     json: Interfaces.BooleanFlag<boolean>;
+    all: Interfaces.BooleanFlag<boolean>;
+    connection: Interfaces.OptionFlag<string | undefined>;
   } = {
     json: Flags.boolean({
       default: false,
       description: 'Print one machine-readable JSON result.',
     }),
+    all: Flags.boolean({
+      default: false,
+      exclusive: ['connection'],
+      description:
+        'Run all managed connections; report external connections as skipped.',
+    }),
+    connection: Flags.string({
+      exclusive: ['all'],
+      description: 'Target a named managed connection, regardless of autoRun.',
+    }),
   };
 
   public async run(): Promise<void> {
     const { flags } = await this.parse(AppSeed);
-    const runtime = await resolveStandaloneAppRuntime(appRuntime, {
-      rootDir: path.resolve(import.meta.dirname, '..', '..'),
-    });
-    const result = await runAppSeeds(
-      runtime.appConfig.get(databaseConfig),
-      runtime.configPaths,
+    await runDatabaseCommand(
+      {
+        log: (message) => this.log(message),
+        logJson: (value) => this.logJson(value),
+        exit: (code) => this.exit(code),
+      },
+      'seeds',
+      flags,
+      async () =>
+        resolveStandaloneAppRuntime(appRuntime, {
+          rootDir: path.resolve(import.meta.dirname, '..', '..'),
+        }),
     );
-
-    if (!result) {
-      if (flags.json) {
-        this.logJson({ ok: true, status: 'not-configured' });
-        return;
-      }
-      this.log('No database seeder is configured.');
-      return;
-    }
-
-    if (result.status === 'skipped') {
-      if (flags.json) {
-        this.logJson({ ok: true, status: 'skipped', reason: result.reason });
-        return;
-      }
-      this.log(`Database seeds skipped: ${result.reason}.`);
-      return;
-    }
-
-    if (flags.json) {
-      this.logJson({
-        ok: true,
-        status: 'completed',
-        executed: result.executed ?? [],
-        skipped: result.skipped ?? [],
-      });
-      return;
-    }
-
-    this.log('Database seeds completed.');
-    this.logNames('Executed', result.executed ?? []);
-    this.logNames('Skipped', result.skipped ?? []);
-  }
-
-  private logNames(label: string, names: readonly string[]): void {
-    if (names.length === 0) {
-      this.log(`${label}: none`);
-      return;
-    }
-    this.log(`${label}:`);
-    for (const name of names) {
-      this.log(`- ${name}`);
-    }
   }
 }

@@ -9,6 +9,7 @@ import { resolveConfigWatch } from './config-watch.mjs';
 import { findAvailablePort } from './ports.mjs';
 import { waitForHttpReady } from './readiness.mjs';
 
+// This entry lives in scripts/dev; all child commands run from the application root.
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '..',

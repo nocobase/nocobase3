@@ -39,7 +39,7 @@ They are published and installable like any other plugin — the difference is i
 
 Complete, runnable applications. `create-app` downloads one and scaffolds a project from it, so a template is published as its own source rather than as a built library.
 
-`app-template-default` is what `pnpm create @nocobase/app` produces. `app-template-hub` is the application hub.
+`app-template-default` is what `pnpm create @nocobase/app` produces. `app-template-hub` is the application hub. `app-template-examples` combines application-owned article management with installable capability examples and demonstration data.
 
 ## `tools/`
 

@@ -1,7 +1,7 @@
 import { createDatabaseManager, type DatabaseManager } from '@nocobase/db';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import seed from '../../database/seeds/202609080001_grant_system_administrator_user_management.js';
+import seed from '../../database/main/seeds/202609080001_grant_system_administrator_user_management.js';
 
 describe('default application user management permission seed', () => {
   let database: DatabaseManager;

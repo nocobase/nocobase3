@@ -42,6 +42,7 @@ export interface TemplateAlias {
  */
 export const TEMPLATE_ALIASES: Readonly<Record<string, TemplateAlias>> = {
   default: { kind: 'app', packageName: '@nocobase/app-template-default' },
+  examples: { kind: 'app', packageName: '@nocobase/app-template-examples' },
   hub: { kind: 'hub', packageName: '@nocobase/app-template-hub' },
 };
 

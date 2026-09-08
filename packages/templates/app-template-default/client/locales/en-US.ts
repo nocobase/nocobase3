@@ -1,6 +1,12 @@
 import type { LocaleResource } from '@nocobase/i18n';
 
 const enUS = {
+  home: {
+    title: 'Start building your application',
+    description:
+      'Describe what you need to your AI Agent, then build pages, data models, and business workflows.',
+  },
+
   appearance: {
     title: 'Appearance',
     mode: 'Color mode',
@@ -14,6 +20,7 @@ const enUS = {
     title: 'NocoBase',
   },
   actions: {
+    close: 'Close',
     save: 'Save',
     cancel: 'Cancel',
     confirm: 'Confirm',

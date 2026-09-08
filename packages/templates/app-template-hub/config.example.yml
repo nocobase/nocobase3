@@ -75,10 +75,24 @@ database:
       debug: false
       # For Oracle, use dialect: oracle and replace database with serviceName: FREEPDB1.
       # For SQL Server, use dialect: mssql and configure encrypt and trustServerCertificate.
-  migrations:
-    autoRun: true
-  seeds:
-    autoRun: true
+      schemaManagement: managed
+      migrations:
+        autoRun: true
+      seeds:
+        autoRun: true
+    # Additional managed databases use database/<connectionName>/{migrations,seeds}.
+    # analytics:
+    #   dialect: postgres
+    #   host: localhost
+    #   database: analytics
+    #   username: postgres
+    #   password: ${ANALYTICS_DB_PASSWORD}
+    #   schemaManagement: managed
+    #   migrations:
+    #     autoRun: false
+    #   seeds:
+    #     autoRun: false
+    # Existing external databases require a runtime metadataStore and do not run tasks.
 
 snowflake:
   # Assign a unique worker ID to each concurrently running instance.
