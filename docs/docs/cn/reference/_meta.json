@@ -1,0 +1,37 @@
+[
+  {
+    "type": "file",
+    "name": "index",
+    "label": "参考"
+  },
+  {
+    "type": "file",
+    "name": "commands",
+    "label": "命令列表"
+  },
+  {
+    "type": "file",
+    "name": "configuration",
+    "label": "配置项"
+  },
+  {
+    "type": "file",
+    "name": "routes",
+    "label": "路由类型对照"
+  },
+  {
+    "type": "file",
+    "name": "theme-tokens",
+    "label": "样式变量"
+  },
+  {
+    "type": "file",
+    "name": "packages",
+    "label": "包列表"
+  },
+  {
+    "type": "file",
+    "name": "glossary",
+    "label": "名词解释"
+  }
+]

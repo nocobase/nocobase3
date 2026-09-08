@@ -1,17 +1,19 @@
 ---
-title: Build and run
-description: Build for production and run standalone, or deploy with Docker.
+title: 'Build and run'
+description: 'What the build output looks like, and how to start it on a server.'
 ---
 
 # Build and run
 
 :::warning Being written
-This page is still being written.
+This page is being written.
 :::
 
-```bash
-pnpm build
-pnpm start
-```
+What the build output looks like, and how to start it on a server.
 
-This page will cover the shape of a production build, what running standalone requires, and deploying with Docker.
+## This page will cover
+
+- What `pnpm build` produces
+- What the server needs installed
+- The start command
+- Keeping the process alive

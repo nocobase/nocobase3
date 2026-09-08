@@ -1,23 +1,35 @@
 [
   {
-    "text": "Start",
+    "text": "Getting Started",
     "link": "/get-started/"
   },
   {
-    "text": "Tutorials",
+    "text": "Working with AI",
+    "link": "/ai/"
+  },
+  {
+    "text": "Tutorial",
     "link": "/tutorials/"
   },
   {
-    "text": "Building apps",
+    "text": "Application development",
     "link": "/app/"
   },
   {
-    "text": "Plugins",
-    "link": "/plugins/"
+    "text": "Built-in capabilities",
+    "link": "/capabilities/"
   },
   {
     "text": "Deployment",
     "link": "/deployment/"
+  },
+  {
+    "text": "Reference",
+    "link": "/reference/"
+  },
+  {
+    "text": "Plugin development",
+    "link": "/plugin-development/"
   },
   {
     "text": "Website",

@@ -1,17 +1,18 @@
 ---
-title: Start
-description: Create your first NocoBase 3 application, learn what it is and what it is made of, and get your first feature working.
+title: 'Getting Started'
+description: 'Create your first NocoBase 3 application and let AI build your first feature.'
 ---
 
-# Start
+# Getting Started
 
 :::warning Being written
-This page is still being written.
+This page is being written.
 :::
 
-## What this section will cover
+From nothing to a running application in ten minutes. You start an empty application, then let AI build your first complete feature.
 
-- **What NocoBase 3 is** — it generates application source code you own, not a product waiting to be configured
-- **Create an application** — `pnpm create @nocobase/app`, choose a database, start the development server
-- **Project structure** — what belongs in `client/`, `server/`, and `database/`
-- **Your first feature** — a table, an endpoint, and a page, end to end
+## In this section
+
+- [What is NocoBase 3](./what-is-nocobase) — One command generates application source code that belongs to you. You say what you want, AI writes it.
+- [Create an application](./create-app) — Run one command to generate the project, pick a database, and start it.
+- [Let AI build your first feature](./first-feature) — Say "add order management" and watch AI build the table, the API and the page together.
