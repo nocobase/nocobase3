@@ -542,6 +542,7 @@ function WorkflowRow({
   const { open } = useNotification();
   const identifier = item.id ?? item.hash;
   if (!identifier) return null;
+  const pendingArtifact = item.pendingArtifact;
   const execute = (): void => {
     setRunning(true);
     void workflowApi
@@ -587,8 +588,25 @@ function WorkflowRow({
               {t('common.runCount', { count: 0 })}
             </span>
           )}
+          {pendingArtifact ? (
+            <Badge>{t('workflows.newVersionAvailable')}</Badge>
+          ) : null}
         </div>
         <div className='workflow-row-actions'>
+          {pendingArtifact ? (
+            <button
+              className='workflow-button workflow-button-outline'
+              type='button'
+              onClick={() => {
+                void workflowApi.enable(pendingArtifact.hash).then((next) => {
+                  onChange(next);
+                  onReload();
+                });
+              }}
+            >
+              {t('actions.enableNewVersion')}
+            </button>
+          ) : null}
           <label className='workflow-switch'>
             <WorkflowStatusSwitch
               checked={item.enabled}
@@ -755,6 +773,7 @@ export function WorkflowDetailPage(): React.ReactElement {
   const identifier = workflow.id ?? workflow.hash;
   if (!identifier) return <main>{t('workflows.missingIdentifier')}</main>;
   const enabled = workflow.enabled;
+  const pendingArtifact = workflow.pendingArtifact;
   const hasInput =
     Object.keys(contextProperties(workflow.inputSchema)).length > 0;
   const revisions =
@@ -824,6 +843,22 @@ export function WorkflowDetailPage(): React.ReactElement {
             </div>
           </div>
           <div className='canvas-header-actions'>
+            {pendingArtifact ? (
+              <button
+                className='workflow-button workflow-button-outline'
+                type='button'
+                onClick={() => {
+                  void workflowApi.enable(pendingArtifact.hash).then((next) => {
+                    const nextIdentifier = next.id ?? next.hash ?? identifier;
+                    void navigate(workflowPath(nextIdentifier), {
+                      replace: true,
+                    });
+                  });
+                }}
+              >
+                {t('actions.enableNewVersion')}
+              </button>
+            ) : null}
             <label className='workflow-switch'>
               <WorkflowStatusSwitch
                 checked={enabled}

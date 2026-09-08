@@ -92,6 +92,7 @@ export function toWorkflowListItem(
               : String(latestRun.createdAt ?? ''),
         }
       : null,
+    pendingArtifact: null,
   };
 }
 
@@ -109,6 +110,7 @@ export function toDiscoveredWorkflowDefinition(
     current: null,
     executed: 0,
     latestRun: null,
+    pendingArtifact: null,
     inputSchema: artifact.workflow.inputSchema,
     parametersSchema: artifact.workflow.parameters ?? {},
     parameterValues: {},
@@ -138,6 +140,7 @@ export function toWorkflowDefinitionView(
     version: workflow.version,
     enabled: workflow.enabled,
     current: workflow.current,
+    pendingArtifact: null,
     inputSchema: workflow.inputSchema,
     parametersSchema: workflow.parametersSchema,
     parameterValues: workflow.parameterValues,
