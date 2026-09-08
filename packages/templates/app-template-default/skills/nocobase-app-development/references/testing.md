@@ -78,7 +78,6 @@ Then verify the actual behavior. Green commands mean the code compiles and the a
 ## Diagnostics
 
 ```bash
-pnpm server:config          # Resolved configuration, paths, providers
 pnpm client:inspect --json  # Resolved client composition
 pnpm server:inspect --json  # Resolved server composition
 ```

@@ -227,10 +227,10 @@ run('Build workflow artifacts', 'pnpm', [
 ]);
 writeDistEnv();
 run('Generate server package', 'node', [
-  './scripts/build-server-dist-package.mjs',
+  './scripts/utils/build-server-dist-package.mjs',
 ]);
 // Installed with pnpm, matching the rest of this project, and run with `dist` as the working directory rather than
-// through `--dir`. pnpm resolves `allowBuilds` from the directory it runs in, and `build-server-dist-package.mjs`
+// through `--dir`. pnpm resolves `allowBuilds` from the directory it runs in, and `utils/build-server-dist-package.mjs`
 // wrote a `pnpm-workspace.yaml` there carrying it. `--dir` leaves the process in the application root, where pnpm
 // reads the root's settings instead, finds the drivers undecided, and rewrites every entry in the generated file to
 // "set this to true or false" before stopping.
@@ -249,9 +249,9 @@ run(
   { cwd: distDir },
 );
 run('Materialize server dependency links', 'node', [
-  './scripts/clean-dist-bin.mjs',
+  './scripts/utils/clean-dist-bin.mjs',
 ]);
 
 console.log(
-  '\nBuild complete: dist/client, dist/server, dist/scripts, dist/.env, and dist/package.json',
+  '\nBuild complete: dist/client, dist/server, dist/cli, dist/.env, and dist/package.json',
 );

@@ -27,4 +27,4 @@ Add domain APIs here, in this application. Do not create a plugin package for a 
 - Read configuration through the typed config, not `process.env`, inside providers and routes.
 - Schema changes are migrations in `../database/migrations/`, spelled out explicitly and never importing an evolving definition.
 
-Before finishing, run `pnpm typecheck`, `pnpm test`, `pnpm lint`, and `pnpm build`. `pnpm server:config` prints resolved paths, database, and provider configuration; `pnpm server:inspect --json` prints the composition snapshot. Both report wiring, not correctness — cover behavior with tests.
+Before finishing, run `pnpm typecheck`, `pnpm test`, `pnpm lint`, and `pnpm build`. `pnpm server:inspect --json` prints the composition snapshot. It reports wiring, not correctness — cover behavior with tests.

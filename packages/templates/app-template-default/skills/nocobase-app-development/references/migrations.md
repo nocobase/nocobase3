@@ -89,7 +89,7 @@ pnpm migrate
 
 This applies pending migrations from this application and from every registered plugin, ordered by name across all sources. Migrations also run on startup while `database.migrations.autoRun` is `true` in `config.yml`.
 
-`pnpm server:config` prints the resolved migration directory and which plugins contribute their own.
+`pnpm server:inspect --json` lists the plugins that contribute migrations.
 
 ## Seeds
 

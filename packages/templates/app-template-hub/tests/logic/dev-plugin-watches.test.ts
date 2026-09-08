@@ -6,7 +6,7 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { resolvePluginWatchIncludes } from '../../scripts/dev-plugin-watches.mjs';
+import { resolvePluginWatchIncludes } from '../../scripts/dev/plugin-watches.mjs';
 
 const temporaryDirectories: string[] = [];
 

@@ -15,7 +15,7 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-const scriptPath = path.resolve('scripts/clean-dist-bin.mjs');
+const scriptPath = path.resolve('scripts/utils/clean-dist-bin.mjs');
 const temporaryDirectories: string[] = [];
 
 afterEach(() => {

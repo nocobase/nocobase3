@@ -6,6 +6,8 @@ This is the NocoBase 3 source repository. Ignore globally installed NocoBase 2 S
 
 Read [.changeset/README.md](.changeset/README.md) before creating or updating a PR. If the PR changes a publishable package and affects its published output, include a changeset in the same PR covering every affected package. Run `node scripts/validate-changesets.mjs` before pushing. If no changeset is needed, explain why in the PR description; documentation-only, test-only, and other changes that do not affect published output are exempt.
 
+A new changeset goes in `.changeset/`, never in `.changeset/pre/`. That subdirectory belongs to the changesets tool: while the branch is in prerelease mode, `changeset version` moves each changeset it has already consumed into it, and reads the whole directory again on later runs to compute the accumulated bump. Writing a new file there directly presents it as already released — the release run never consumes it, so its summary never reaches the CHANGELOG and the version it asked for is never applied. Nothing fails; the changeset is silently ignored. The directory is full of files because the branch has been releasing for a while, which makes it an easy place to add one by imitation.
+
 ## Repository Layout
 
 Every published package lives under `packages/`, grouped into six directories by what the package is. The grouping is a convention for readers: pnpm resolves packages by name, so which directory a package sits in changes nothing about how it is depended on or filtered.
@@ -108,7 +110,7 @@ changing `packages/tools/dev-config`, run
 
 ## Keeping the Two Application Templates in Sync
 
-`packages/templates/app-template-default` and `packages/templates/app-template-hub` are two applications built on the same framework. A change to the framework layer of one belongs in the other by default: the runtime composition roots, the client shell, routing, layouts and theme, the server entry points, build and dev scripts, tsconfigs, and the agent-facing documentation — `AGENTS.md`, `CLAUDE.md`, `README.MD`, the nested `client/AGENTS.md` and `server/AGENTS.md`, and `skills/`.
+`packages/templates/app-template-default` and `packages/templates/app-template-hub` are two applications built on the same framework. A change to the framework layer of one belongs in the other by default: the runtime composition roots, the client shell, routing, layouts and theme, the server entry points, the `cli/` command entry, build and dev scripts, tsconfigs, and the agent-facing documentation — `AGENTS.md`, `CLAUDE.md`, `README.MD`, the nested `client/AGENTS.md` and `server/AGENTS.md`, and `skills/`.
 
 They drift otherwise, and the drift is invisible until someone hits it. Both templates carried a `tsconfig.migrations.base.json` that nothing referenced, and both omitted `database/**/*.ts` from `tsconfig.server.json`, so an application-owned migration ran under `pnpm migrate` but was silently dropped by `pnpm build` — the same defect, twice, because a fix to one was never carried across.
 
@@ -209,6 +211,8 @@ Note that a peer written with the `workspace:` protocol resolves on its own here
 The rule applies to plugins, which are guests in an application someone else assembled: `packages/plugins` and `packages/examples`, which is what `CHECKED_GROUPS` in the check script covers.
 
 It does not apply to `packages/app` and `packages/libs`. They compose the runtime and are what puts the single copy in place — `app-server` depending on `@nocobase/db` is precisely how the one copy comes to exist. Nor does it apply to `packages/templates`, which are applications, and therefore the side that satisfies a peer range rather than declaring one. A new group under `packages/` needs a deliberate decision about which side of this line it sits on before it is added to `CHECKED_GROUPS`.
+
+A plugin that contributes CLI commands declares `@oclif/core` as a peer for a related but distinct reason: not module identity, but one shared version, so help rendering and flag parsing behave the same in the plugin and in the application that assembles its commands. See [internal-docs/cli/plugin-cli.md](internal-docs/cli/plugin-cli.md).
 
 `pnpm plugin:create` emits this shape, so a generated plugin satisfies the rule without further edits. When the list changes, update `packages/tools/create-plugin/src/lib/template.ts` and its tests in the same change — a generator that emits the old shape reintroduces the problem in every plugin created afterwards.
 

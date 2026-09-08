@@ -13,8 +13,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
-import { inspectAppClient } from '../../../templates/app-template-default/scripts/inspect-client.mjs';
-import { inspectAppServer } from '../../../templates/app-template-default/scripts/inspect-server.mjs';
+import { inspectAppClient } from '../../../templates/app-template-default/cli/dev-commands/inspect-client-impl.mjs';
+import { inspectAppServer } from '../../../templates/app-template-default/cli/dev-commands/inspect-server-impl.mjs';
 import type { PluginCapability } from '../../create-plugin/src/lib/capabilities.ts';
 import { createPlugin } from '../../create-plugin/src/lib/scaffold.ts';
 import { loadTestConfig, runCommand } from './helpers.ts';
@@ -205,7 +205,7 @@ describe('Agent plugin development loop', () => {
         );
       }
 
-      const preview = await runCommand(config, 'app:plugin:register', [
+      const preview = await runCommand(config, 'plugin:register', [
         'agent-loop',
         '--dir',
         appRoot,
@@ -239,7 +239,7 @@ describe('Agent plugin development loop', () => {
         false,
       );
 
-      const registered = await runCommand(config, 'app:plugin:register', [
+      const registered = await runCommand(config, 'plugin:register', [
         'agent-loop',
         '--dir',
         appRoot,
@@ -269,7 +269,7 @@ describe('Agent plugin development loop', () => {
         ),
       ).toBe(expectsSkill);
 
-      const inspected = await runCommand(config, 'app:plugin:inspect', [
+      const inspected = await runCommand(config, 'plugin:inspect', [
         'agent-loop',
         '--dir',
         appRoot,
@@ -331,7 +331,7 @@ describe('Agent plugin development loop', () => {
         });
       }
 
-      const repeated = await runCommand(config, 'app:plugin:register', [
+      const repeated = await runCommand(config, 'plugin:register', [
         'agent-loop',
         '--dir',
         appRoot,
@@ -361,7 +361,7 @@ describe('Agent plugin development loop', () => {
         const updatedSkill = `${await readFile(sourceSkill, 'utf8')}\nUpdated after registration.\n`;
         await writeFile(sourceSkill, updatedSkill);
 
-        const stale = await runCommand(config, 'app:plugin:inspect', [
+        const stale = await runCommand(config, 'plugin:inspect', [
           'agent-loop',
           '--dir',
           appRoot,
@@ -374,7 +374,7 @@ describe('Agent plugin development loop', () => {
           },
         });
 
-        await runCommand(config, 'app:plugin:skills:sync', [
+        await runCommand(config, 'plugin:skills:sync', [
           '--dir',
           appRoot,
           '--plugin',
@@ -383,7 +383,7 @@ describe('Agent plugin development loop', () => {
         expect(await readFile(synchronizedSkill, 'utf8')).toBe(updatedSkill);
       }
 
-      await runCommand(config, 'app:plugin:unregister', [
+      await runCommand(config, 'plugin:unregister', [
         'agent-loop',
         '--dir',
         appRoot,
