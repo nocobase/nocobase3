@@ -138,7 +138,7 @@ describe('DatabaseProvider', () => {
     registry.add(provider);
     registry.registerAll();
 
-    await expect(registry.bootAll()).rejects.toBe(error);
+    await expect(registry.bootAll()).rejects.toMatchObject({ cause: error });
 
     expect(createDatabaseSeederMock).not.toHaveBeenCalled();
     expect(database.destroy).toHaveBeenCalledOnce();
@@ -183,7 +183,7 @@ describe('standalone database tasks', () => {
 
     await expect(
       runAppMigrations(createConfig(createTempDirectory())),
-    ).rejects.toBe(error);
+    ).rejects.toMatchObject({ cause: error });
     expect(database.destroy).toHaveBeenCalledOnce();
   });
 

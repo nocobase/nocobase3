@@ -4,6 +4,12 @@ This is a NocoBase 3 application. Do not apply globally installed NocoBase 2 Ski
 
 Do not create a plugin to add a feature. Plugins are separately published packages for capabilities shared across several applications; building one for this application's own feature adds a package boundary, a version, and a release process to work that belongs in `client/` and `server/`. Create one only when the user explicitly asks for a reusable published package.
 
+## Default template scope
+
+Default is the clean application starting point. It registers product capabilities but no `app-plugin-*-example` plugins, example pages, application sample services, or sample APIs. Keep runnable demonstrations in `app-template-examples`. Application-owned server route and provider lists start empty; the only application page is a localized homepage.
+
+`database/main/` starts empty for application-owned migrations and seeds. Do not add article history, demo seeds, or compatibility copies from Examples to this template. Existing installations retain their own executed migration sources when upgrading; see `MIGRATION.md`.
+
 ## Load the development skills
 
 `skills/nocobase-app-development/` holds the detailed guidance behind this file. Read its `SKILL.md` first — it routes to the reference that matches your task instead of making you read everything:
@@ -34,8 +40,8 @@ client/locales/           Every user-visible string
 client/service-provider.ts Sidebar resources and client startup
 server/routes/            HTTP endpoints
 server/providers/         Services and their lifecycle
-database/migrations/      Schema changes
-database/seeds/           Required initial data
+database/main/migrations/      Schema changes
+database/main/seeds/           Required initial data
 cli/commands/             Commands this application owns
 tests/                    Tests; never beside the source
 ```
@@ -134,7 +140,7 @@ Keep HTTP concerns in the route and domain logic in a service under `server/prov
 
 ### Database
 
-Schema changes are migrations under `database/migrations/`. Data the application requires to run is a seed under `database/seeds/`. Seeds never create structure.
+Schema changes are migrations under `database/main/migrations/`. Data the application requires to run is a seed under `database/main/seeds/`. Seeds never create structure.
 
 ```ts
 const migration: MigrationDefinition = defineMigration({
@@ -158,7 +164,7 @@ Edit an existing migration only while the branch that introduced it is unmerged.
 
 The exported `name` must match the filename. Apply with `pnpm migrate` and verify against a real database.
 
-At runtime, resolve `databaseManagerToken` from the container and use `database.query()` to read and write.
+At runtime, resolve `databaseManagerToken` from the container and use `database.query()` to read and write the default connection. Use `database.query('analytics')` for another connection. Application tasks use `database/<connectionName>/{migrations,seeds}` and bind to that connection explicitly; plugin tasks and default runtime access stay on `database.default`. Only managed connections run migrations or seeds. See the migrations reference for execution and upgrade rules.
 
 ### User-facing text
 
@@ -200,14 +206,14 @@ To customize a plugin's page, pass an option on its registration, add a source e
 
 **You are not starting from scratch.** This application ships with plugins that already solve whole categories of requirement, and each one publishes a Skill explaining how to use it. Registration copies those Skills into `.agents/skills/`. Before implementing a feature, check whether a plugin already covers it:
 
-| The requirement sounds like                                                                       | Read the Skill for                    |
-| ------------------------------------------------------------------------------------------------- | ------------------------------------- |
-| Approvals, multi-step processes, "when X happens then Y", business rules that outlive one request | `@nocobase/app-plugin-workflow`       |
-| Email, IM, or in-app messages; notifying someone that something happened                          | `@nocobase/app-plugin-notification`   |
-| Roles, permissions, "user A may only see their own records", field-level or row-level access      | `@nocobase/app-plugin-authorization`  |
-| Sign-in, registration, sessions, password reset                                                   | `@nocobase/app-plugin-authentication` |
-| Uploads, attachments, file fields, previews                                                       | `@nocobase/app-plugin-file`           |
-| Translated text and language switching                                                            | `@nocobase/app-plugin-i18n`           |
+| The requirement sounds like                                                                       | Read the Skill for                     |
+| ------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| Approvals, multi-step processes, "when X happens then Y", business rules that outlive one request | `@nocobase/app-plugin-workflow`        |
+| Email, IM, or in-app messages; notifying someone that something happened                          | `@nocobase/app-plugin-notification`    |
+| Roles, permissions, "user A may only see their own records", field-level or row-level access      | `@nocobase/app-plugin-authorization`   |
+| Sign-in, registration, sessions, password reset                                                   | `@nocobase/app-plugin-authentication`  |
+| File upload and metadata through Repository                                                       | `@nocobase/app-plugin-file-repository` |
+| Translated text and language switching                                                            | `@nocobase/app-plugin-i18n`            |
 
 Run `pnpm plugin:skills:sync` if `.agents/skills/` is missing or looks out of date, then read the Skill for the plugin you need. It documents that plugin's public entries, the ownership boundary, and how to verify the result — which is faster and more correct than inferring an API from its source.
 

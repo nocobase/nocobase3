@@ -25,11 +25,6 @@ describe('Server inspection', () => {
           packageName === '@nocobase/app-plugin-queue-example',
       ),
     ).toMatchObject({ contributions: { jobLocations: 1 } });
-    expect(
-      inspection.serviceProviders.find(
-        ({ packageName }) => packageName === '@nocobase/app-plugin-system-info',
-      ),
-    ).toMatchObject({ constructorName: 'SystemInfoProvider' });
     expect(inspection.routes.map(({ order }) => order)).toEqual(
       inspection.routes.map((_route, index) => index + 1),
     );

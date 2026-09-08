@@ -12,14 +12,14 @@ A new changeset goes in `.changeset/`, never in `.changeset/pre/`. That subdirec
 
 Every published package lives under `packages/`, grouped into six directories by what the package is. The grouping is a convention for readers: pnpm resolves packages by name, so which directory a package sits in changes nothing about how it is depended on or filtered.
 
-| Directory             | What belongs here                                                                                                              |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `packages/libs/`      | Runtime libraries that solve one problem and know nothing about NocoBase applications, such as `caching`, `drive`, and `i18n`  |
-| `packages/app/`       | The application runtime itself — what an application is built out of, such as `app-server`, `app-client`, and `app-portal-sdk` |
-| `packages/plugins/`   | Application plugins that ship as product features, such as `app-plugin-authentication`                                         |
-| `packages/examples/`  | Application plugins that exist to demonstrate a capability, such as `app-plugin-routes-example`                                |
-| `packages/templates/` | Complete applications that `create-app` scaffolds from: `app-template-default` and `app-template-hub`                          |
-| `packages/tools/`     | Development and build tooling that never ships inside an application, such as `dev-config`, `cli`, and `create-app`            |
+| Directory             | What belongs here                                                                                                               |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/libs/`      | Runtime libraries that solve one problem and know nothing about NocoBase applications, such as `caching`, `drive`, and `i18n`   |
+| `packages/app/`       | The application runtime itself — what an application is built out of, such as `app-server`, `app-client`, and `app-portal-sdk`  |
+| `packages/plugins/`   | Application plugins that ship as product features, such as `app-plugin-authentication`                                          |
+| `packages/examples/`  | Application plugins that exist to demonstrate a capability, such as `app-plugin-routes-example`                                 |
+| `packages/templates/` | Complete applications that `create-app` scaffolds from: `app-template-default`, `app-template-examples`, and `app-template-hub` |
+| `packages/tools/`     | Development and build tooling that never ships inside an application, such as `dev-config`, `cli`, and `create-app`             |
 
 `packages/README.md` describes each directory in more detail and is the place to look when a new package does not obviously belong to one of them. `pnpm plugin:create` scaffolds into `packages/plugins/`.
 
@@ -89,7 +89,7 @@ import packageMetadata from '../package.json' with { type: 'json' };
 expect(service.getInfo()).toMatchObject({ version: packageMetadata.version });
 ```
 
-The release workflow runs `changeset version` and then runs the tests, so every published package is on a version different from the one committed by the time the suite executes. A literal that matches today fails during the next release, and it fails after the version bump — the point where the branch has already been rewritten and the run has to be repaired before anything can ship. `@nocobase/app-plugin-system-info` broke a release exactly this way, asserting `'0.0.1'` against a package `changeset version` had just moved to `0.1.0-beta.0`. `packages/templates/app-template-default` shows the shape to copy: its `declaredPluginVersion` helper resolves the version through `require` rather than repeating it.
+The release workflow runs `changeset version` and then runs the tests, so every published package is on a version different from the one committed by the time the suite executes. A literal that matches today fails during the next release, and it fails after the version bump — the point where the branch has already been rewritten and the run has to be repaired before anything can ship. `@nocobase/app-plugin-system-info` broke a release exactly this way, asserting `'0.0.1'` against a package `changeset version` had just moved to `0.1.0-beta.0`. Use the manifest import shown above, or resolve the dependency’s `package.json` through `createRequire`, rather than repeating its version.
 
 This applies to the version of any workspace package, whether the test owns it or depends on it. It does not apply to a version a test makes up for a fixture it writes itself — `version: '1.0.0'` in a synthetic `package.json` describes nothing real and never drifts.
 
@@ -108,15 +108,15 @@ exports resolve to compiled ESM JavaScript and declarations in `dist`. When
 changing `packages/tools/dev-config`, run
 `pnpm --filter @nocobase/dev-config check`; do not hand-edit generated output.
 
-## Keeping the Two Application Templates in Sync
+## Keeping the Application Templates in Sync
 
-`packages/templates/app-template-default` and `packages/templates/app-template-hub` are two applications built on the same framework. A change to the framework layer of one belongs in the other by default: the runtime composition roots, the client shell, routing, layouts and theme, the server entry points, the `cli/` command entry, build and dev scripts, tsconfigs, and the agent-facing documentation — `AGENTS.md`, `CLAUDE.md`, `README.MD`, the nested `client/AGENTS.md` and `server/AGENTS.md`, and `skills/`.
+`packages/templates/app-template-default`, `packages/templates/app-template-examples`, and `packages/templates/app-template-hub` are three applications built on the same framework. A change to the framework layer of one belongs in all applicable templates by default: the runtime composition roots, the client shell, routing, layouts and theme, the server entry points, the `cli/` command entry, build and dev scripts, tsconfigs, and the agent-facing documentation — `AGENTS.md`, `CLAUDE.md`, `README.MD`, the nested `client/AGENTS.md` and `server/AGENTS.md`, and `skills/`.
 
 They drift otherwise, and the drift is invisible until someone hits it. Both templates carried a `tsconfig.migrations.base.json` that nothing referenced, and both omitted `database/**/*.ts` from `tsconfig.server.json`, so an application-owned migration ran under `pnpm migrate` but was silently dropped by `pnpm build` — the same defect, twice, because a fix to one was never carried across.
 
-Not everything transfers. Each template keeps its own identity and the parts that follow from what it is: `package.json` name, `displayName`, and version; `nocobase.templateKind` and its plugin list; the pages, locales, and branding that make it that product. When a documentation change mentions the other template by name, reword it rather than copying the sentence — the Hub's own `server/embedded.ts` is not "the entry point when a Hub hosts the application".
+Not everything transfers. Examples owns its demonstration homepage, article module, and example plugin composition. Each template keeps its own identity and the parts that follow from what it is: `package.json` name, `displayName`, and version; `nocobase.templateKind` and its plugin list; the pages, locales, and branding that make it that product. When a documentation change mentions the other template by name, reword it rather than copying the sentence — the Hub's own `server/embedded.ts` is not "the entry point when a Hub hosts the application".
 
-Apply both sides in one change and run each template's `check`. A framework change that lands in only one template is incomplete, and a reviewer cannot tell whether the omission was a decision or an oversight; if it genuinely does not apply, say so in the pull request.
+Apply all applicable sides in one change and run each affected template's `check`. A framework change that lands in only one template is incomplete, and a reviewer cannot tell whether the omission was a decision or an oversight; if it genuinely does not apply, say so in the pull request.
 
 ## Application Themes and UI Styling
 

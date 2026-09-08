@@ -140,7 +140,7 @@ const api = app.services.resolve(apiClientToken);
 const realtime = app.services.resolve(realtimeClientToken);
 type Order = { readonly id: string };
 
-await api.request({ path: 'system-info' });
+await api.request({ path: 'healthz' });
 await api.repository<Order>('orders').findOne({
   filter: { id: 'order-1' },
 });

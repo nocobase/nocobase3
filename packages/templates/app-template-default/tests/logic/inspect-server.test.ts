@@ -20,27 +20,13 @@ describe('Server inspection', () => {
       packageName: '@nocobase/app-plugin-authentication',
     });
     expect(
-      inspection.plugins.find(
-        ({ packageName }) =>
-          packageName === '@nocobase/app-plugin-queue-example',
+      inspection.plugins.some(({ packageName }) =>
+        packageName.endsWith('-example'),
       ),
-    ).toMatchObject({ contributions: { jobLocations: 1 } });
-    expect(
-      inspection.serviceProviders.find(
-        ({ packageName }) => packageName === '@nocobase/app-plugin-system-info',
-      ),
-    ).toMatchObject({ constructorName: 'SystemInfoProvider' });
+    ).toBe(false);
     expect(inspection.routes.map(({ order }) => order)).toEqual(
       inspection.routes.map((_route, index) => index + 1),
     );
-    expect(
-      inspection.routes
-        .filter(
-          ({ packageName }) =>
-            packageName === '@nocobase/app-plugin-routes-example',
-        )
-        .map(({ scope }) => scope),
-    ).toEqual(['root', 'api']);
     expect(
       inspection.routes.some(
         ({ packageName, scope }) =>

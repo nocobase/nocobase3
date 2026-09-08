@@ -1,6 +1,11 @@
 import type { AppResource } from './en-US.js';
 
 const zhCN: AppResource = {
+  home: {
+    title: '开始构建你的应用',
+    description: '向 AI 助手描述你的需求，逐步构建页面、数据模型和业务流程。',
+  },
+
   appearance: {
     title: '外观',
     mode: '颜色模式',
@@ -14,6 +19,7 @@ const zhCN: AppResource = {
     title: 'NocoBase',
   },
   actions: {
+    close: '关闭',
     save: '保存',
     cancel: '取消',
     confirm: '确认',

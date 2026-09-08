@@ -85,12 +85,14 @@ The three files named `runtime.ts`, `plugins.ts`, and `routes.ts` are compositio
 
 ### Database
 
-| Script         | What it does                                                                               |
-| -------------- | ------------------------------------------------------------------------------------------ |
-| `pnpm migrate` | Apply pending migrations from your `database/migrations/` and from every registered plugin |
-| `pnpm seed`    | Run seeds from `database/seeds/` and from registered plugins                               |
+| Script         | What it does                                                                                    |
+| -------------- | ----------------------------------------------------------------------------------------------- |
+| `pnpm migrate` | Apply pending migrations from your `database/main/migrations/` and from every registered plugin |
+| `pnpm seed`    | Run seeds from `database/main/seeds/` and from registered plugins                               |
 
-Migrations also run automatically on startup while `database.migrations.autoRun` is `true` in `config.yml`. Run `pnpm migrate` explicitly when you want to apply a schema change without restarting.
+Migrations also run automatically on startup while `database.connections.main.migrations.autoRun` is `true` in `config.yml`. Run `pnpm migrate` explicitly when you want to apply a schema change without restarting.
+
+Database tasks support `--connection <name>` and `--all`; no argument targets `database.default`. Per-connection source and upgrade rules are documented in [migrations and seeds](skills/nocobase-app-development/references/migrations.md).
 
 ### Checks
 

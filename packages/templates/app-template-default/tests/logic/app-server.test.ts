@@ -14,6 +14,7 @@ import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Hono } from 'hono';
+import type { Knex } from 'knex';
 import { createDefaultCachingConfig } from '@nocobase/caching';
 import { CachingProvider } from '@nocobase/app-server/caching';
 import { DriveProvider } from '@nocobase/app-server/drive';
@@ -120,12 +121,6 @@ const servers: Server[] = [];
 const tempDirs: string[] = [];
 const TEST_REALTIME_TOPIC = 'test:realtime';
 const require = createRequire(import.meta.url);
-
-function declaredPluginVersion(packageName: string): string {
-  return (
-    require(`${packageName}/package.json`) as { readonly version: string }
-  ).version;
-}
 
 function requestApp(
   app: FetchableResource,
@@ -331,6 +326,11 @@ describe('app server', () => {
       {
         ...appRuntime,
         plugins: defineServerPlugins<AppConfig>([]),
+        routes: [
+          defineApiRoutes(() =>
+            new Hono().get('/test-runtime', (c) => c.json({ ok: true })),
+          ),
+        ],
         serviceProviders: [
           ...appRuntime.serviceProviders,
           TestRuntimeApplicationProvider,
@@ -358,65 +358,9 @@ describe('app server', () => {
     await app.start();
 
     expect(providerCalls).toEqual(['plugin', 'plugin service']);
-    const apiResponse = await requestApp(app, 'http://localhost/api/example');
-    const rootResponse = await requestApp(app, 'http://localhost/example');
-
-    expect(apiResponse.status).toBe(200);
-    await expect(apiResponse.json()).resolves.toEqual({
-      scope: 'api',
-      message: 'Hello from the application provider',
-    });
-    expect(rootResponse.status).toBe(200);
-    expect(rootResponse.headers.get('content-type')).toContain('text/html');
-    const rootHtml = await rootResponse.text();
-    expect(rootHtml).toContain('<h1>Application Route Example</h1>');
-    expect(rootHtml).toContain('Hello from the application provider');
-  });
-
-  it('loads and explicitly reloads plugin config from the selected YAML file', async () => {
-    const configDir = mkdtempSync(
-      path.join(tmpdir(), 'nocobase-app-template-default-config-'),
-    );
-    tempDirs.push(configDir);
-    const configPath = path.join(configDir, 'config.yaml');
-    writeFileSync(configPath, 'heartbeat:\n  enabled: false\n');
-    const runtime = await resolveAppRuntime(
-      appRuntime,
-      createEmbeddedTestScope({
-        id: 'app-template-default',
-        basePath: '/embedded-app-template-default',
-        configPath,
-      }),
-    );
-
-    expect(runtime.appConfig.raw()).toMatchObject({
-      heartbeat: { enabled: false },
-    });
-
-    writeFileSync(configPath, 'heartbeat:\n  enabled: true\n');
-    await expect(runtime.appConfig.reload()).resolves.toMatchObject({
-      changedNamespaces: ['heartbeat'],
-    });
-    expect(runtime.appConfig.raw()).toMatchObject({
-      heartbeat: { enabled: true },
-    });
-  });
-
-  it('does not leak plugin authentication into application-owned API routes', async () => {
-    const app = await createEmbeddedServer(
-      createEmbeddedTestScope({
-        id: 'app-template-default',
-        basePath: '/embedded-app-template-default',
-      }),
-    );
-
-    const apiResponse = await requestApp(app, 'http://localhost/api/example');
-
-    expect(apiResponse.status).toBe(200);
-    await expect(apiResponse.json()).resolves.toEqual({
-      scope: 'api',
-      message: 'Hello from the application provider',
-    });
+    const response = await requestApp(app, 'http://localhost/api/test-runtime');
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ ok: true });
   });
 
   it('routes authentication requests through the configured public auth URL', async () => {
@@ -654,117 +598,26 @@ describe('app server', () => {
     expect(viteRequestCount).toBe(0);
   });
 
-  it('keeps plugin API and Root Routes authenticated by their owning contributions', async () => {
+  it('starts a fresh Default without example tables or APIs', async () => {
     const app = trackCloseable(
-      await createInstalledStandaloneServer({ viteDevUrl: false }),
+      await createInstalledStandaloneServer({
+        viteDevUrl: false,
+        env: { APP_CONFIG_FILE: 'config.example.yml' },
+      }),
     );
+    const database = app.application.container.resolve(databaseManagerToken);
+    const client = await database.connection('main').client<Knex>();
+    expect(await client.schema.hasTable('articles')).toBe(false);
+    const tables = await client('sqlite_master')
+      .where({ type: 'table' })
+      .pluck('name');
+    expect(tables.some((name: string) => name.includes('example'))).toBe(false);
     const baseUrl = `http://localhost${app.application.publicBasePath}`;
-    const anonymous = await requestApp(app, `${baseUrl}/api/routes-example`);
-    const anonymousRoot = await requestApp(
-      app,
-      `${baseUrl}/routes-example/root`,
-    );
-
-    expect(anonymous.status).toBe(401);
-    expect(anonymousRoot.status).toBe(401);
-
-    const signIn = await requestApp(
-      app,
-      `${baseUrl}/api/auth/sign-in/username`,
-      {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ username: 'nocobase', password: 'admin123' }),
-      },
-    );
-    const cookie = signIn.headers.get('set-cookie');
-    expect(signIn.status).toBe(200);
-    const response = await requestApp(app, `${baseUrl}/api/routes-example`, {
-      headers: { cookie: cookie ?? '' },
-    });
-    const rootResponse = await requestApp(
-      app,
-      `${baseUrl}/routes-example/root`,
-      { headers: { cookie: cookie ?? '' } },
-    );
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      plugin: '@nocobase/app-plugin-routes-example',
-      scope: 'api',
-    });
-    expect(rootResponse.status).toBe(200);
-    await expect(rootResponse.json()).resolves.toMatchObject({
-      plugin: '@nocobase/app-plugin-routes-example',
-      scope: 'root',
-    });
-  });
-
-  it('loads the system info API from the registered app plugin', async () => {
-    const app = trackCloseable(
-      await createInstalledStandaloneServer({ viteDevUrl: false }),
-    );
-    const baseUrl = `http://localhost${app.application.publicBasePath}`;
-    const signIn = await requestApp(
-      app,
-      `${baseUrl}/api/auth/sign-in/username`,
-      {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ username: 'nocobase', password: 'admin123' }),
-      },
-    );
-    const cookie = signIn.headers.get('set-cookie');
-    expect(signIn.status).toBe(200);
-    expect(cookie).toContain('.session_token=');
-    const response = await requestApp(app, `${baseUrl}/api/system-info`, {
-      headers: { cookie: cookie ?? '' },
-    });
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      packageName: '@nocobase/app-plugin-system-info',
-      version: declaredPluginVersion('@nocobase/app-plugin-system-info'),
-      nodeVersion: process.version,
-      serverTime: expect.any(String),
-    });
-  });
-
-  it('loads the Skills example API with its owning authentication boundary', async () => {
-    const app = trackCloseable(
-      await createInstalledStandaloneServer({ viteDevUrl: false }),
-    );
-    const baseUrl = `http://localhost${app.application.publicBasePath}`;
-    const anonymous = await requestApp(
-      app,
-      `${baseUrl}/api/skills-example/notice`,
-    );
-
-    expect(anonymous.status).toBe(401);
-
-    const signIn = await requestApp(
-      app,
-      `${baseUrl}/api/auth/sign-in/username`,
-      {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ username: 'nocobase', password: 'admin123' }),
-      },
-    );
-    const cookie = signIn.headers.get('set-cookie');
-    expect(signIn.status).toBe(200);
-    const response = await requestApp(
-      app,
-      `${baseUrl}/api/skills-example/notice`,
-      { headers: { cookie: cookie ?? '' } },
-    );
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({
-      description: 'This notice was provided by a NocoBase plugin.',
-      title: 'Plugin Skills are working',
-      tone: 'success',
-    });
+    for (const endpoint of ['articles', 'example', 'routes-example']) {
+      const response = await requestApp(app, `${baseUrl}/api/${endpoint}`);
+      // Unregistered GET paths reach the application's existing SPA fallback.
+      expect(response.headers.get('content-type')).toContain('text/html');
+    }
   });
 
   it('redirects HTML navigation to installation in install mode', async () => {
@@ -796,56 +649,6 @@ describe('app server', () => {
     await expect(installResponse.text()).resolves.toContain(
       'installation page',
     );
-  });
-
-  it('dispatches jobs from enabled app plugins', async () => {
-    vi.stubEnv('QUEUE_JOBS_AUTO_LOAD', 'false');
-    const app = trackCloseable(
-      await createInstalledStandaloneServer({ viteDevUrl: false }),
-    );
-    const baseUrl = `http://localhost${app.application.publicBasePath}`;
-    const anonymous = await requestApp(app, `${baseUrl}/api/queue-example`);
-    expect(anonymous.status).toBe(401);
-
-    const signIn = await requestApp(
-      app,
-      `${baseUrl}/api/auth/sign-in/username`,
-      {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ username: 'nocobase', password: 'admin123' }),
-      },
-    );
-    const cookie = signIn.headers.get('set-cookie');
-    expect(signIn.status).toBe(200);
-    const response = await requestApp(app, `${baseUrl}/api/queue-example`, {
-      headers: { cookie: cookie ?? '' },
-    });
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      jobId: expect.any(String),
-      job: 'QueueExample',
-      queue: 'default',
-      syncExecutions: 1,
-    });
-  });
-
-  it('exposes services registered by enabled plugin providers', async () => {
-    const app = trackCloseable(
-      await createIsolatedStandaloneServer({ viteDevUrl: false }),
-    );
-    const response = await requestApp(
-      app,
-      `http://localhost${app.application.publicBasePath}/api/service-provider-example/status`,
-    );
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      service: '@nocobase/app-plugin-service-provider-example',
-      status: 'ready',
-      startedAt: expect.any(String),
-    });
   });
 
   it('mounts standalone app-local routes behind the public base path', async () => {
@@ -1517,19 +1320,11 @@ function createEmbeddedPluginFixture(rootDir: string): void {
   const pluginPackages = [
     '@nocobase/app-plugin-authentication',
     '@nocobase/app-plugin-authorization',
-    '@nocobase/app-plugin-database-example',
-    '@nocobase/app-plugin-file',
     '@nocobase/app-plugin-i18n',
     '@nocobase/app-plugin-install',
     '@nocobase/app-plugin-notification',
     '@nocobase/app-plugin-notification-in-app',
     '@nocobase/app-plugin-notification-providers',
-    '@nocobase/app-plugin-queue-example',
-    '@nocobase/app-plugin-realtime-example',
-    '@nocobase/app-plugin-routes-example',
-    '@nocobase/app-plugin-service-provider-example',
-    '@nocobase/app-plugin-skills-example',
-    '@nocobase/app-plugin-system-info',
     '@nocobase/app-plugin-workflow',
   ];
   writeFileSync(
