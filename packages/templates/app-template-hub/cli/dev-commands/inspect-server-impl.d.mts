@@ -1,8 +1,8 @@
-// Hand-written declarations for `inspect-server.mjs`.
+// Hand-written declarations for `inspect-server-impl.mjs`.
 //
-// The inspector stays JavaScript because it must not be compiled into the server deployment: `dist` has no Vite and no
-// browser client, which its client counterpart needs, and the two are kept in the same shape deliberately. These
-// declarations exist so the command wrapping it still typechecks.
+// The implementation stays JavaScript, and stays here rather than under `scripts/`, because it belongs to the command
+// that wraps it. It is kept out of TypeScript for the same reason its client counterpart is: both were written as
+// plain JavaScript, and typing them is a refactor of its own rather than part of moving them.
 export interface AppServerInspection {
   readonly app: { readonly packageName: string };
   readonly plugins: readonly {
@@ -25,3 +25,8 @@ export function inspectAppServer(options?: {
 export function formatAppServerInspection(
   inspection: AppServerInspection,
 ): string;
+
+export function parseInspectAppServerArgs(args: readonly string[]): {
+  help: boolean;
+  json: boolean;
+};

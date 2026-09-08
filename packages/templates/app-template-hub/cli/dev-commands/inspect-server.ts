@@ -1,9 +1,12 @@
 import { Command, Flags } from '@oclif/core';
 import type { Interfaces } from '@oclif/core';
 
-// The inspection itself lives in `scripts/inspect-server.mjs`, which exports it. This command is the command-line
-// surface around that function, so the two never drift into separate implementations. It is loaded inside run() so
-// that `--help` does not import the plugin declarations the inspection reads.
+// The inspection itself lives in `inspect-server-impl.ts`; this is only its command-line surface, so the two never
+// drift into separate implementations.
+import {
+  formatAppServerInspection,
+  inspectAppServer,
+} from './inspect-server-impl.mjs';
 
 export default class AppInspectServer extends Command {
   static override summary = "Inspect this app's server plugin declarations.";
@@ -26,8 +29,6 @@ export default class AppInspectServer extends Command {
 
   public async run(): Promise<void> {
     const { flags } = await this.parse(AppInspectServer);
-    const { formatAppServerInspection, inspectAppServer } =
-      await import('../../scripts/inspect-server.mjs');
     const inspection = await inspectAppServer();
 
     if (flags.json) {

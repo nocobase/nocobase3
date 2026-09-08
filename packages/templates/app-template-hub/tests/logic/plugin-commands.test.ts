@@ -52,11 +52,14 @@ describe('documented plugin commands', () => {
   });
 
   it('ships the inspector that client:inspect runs', () => {
-    const entry = path.join(appRoot, 'scripts/inspect-client.mjs');
+    const entry = path.join(
+      appRoot,
+      'cli/dev-commands/inspect-client-impl.mjs',
+    );
 
     expect(existsSync(entry)).toBe(true);
-    // A generated app only receives what `files` lists, so an unlisted script is present here and missing there.
-    expect(appPackage.files).toContain('scripts');
+    // A generated app only receives what `files` lists, so an unlisted directory is present here and missing there.
+    expect(appPackage.files).toContain('cli');
   });
 
   it('keeps synchronized Agent state out of source control and publication', () => {

@@ -12,21 +12,6 @@ const inspectionTypes = [
   'locales',
 ];
 
-const help = `Inspect the static Client Runtime and Plugin declarations this app resolves.
-
-Inspection imports declaration modules and evaluates lightweight contribution
-factories. It does not create a ClientApplication, run ServiceProvider lifecycle
-methods, load locale messages or Route page components, or render React Providers.
-
-Usage:
-  pnpm client:inspect [options]
-
-Options:
-  --type <type>      all, config, service-providers, react-providers, routes,
-                     settings, dev-routes, or locales (default: all)
-  --json             Print machine-readable JSON
-  -h, --help         Show this help`;
-
 export class ClientInspectionError extends Error {
   constructor(code, message, options) {
     super(message, options);
@@ -82,7 +67,7 @@ export function parseInspectAppClientArgs(args) {
 }
 
 export async function inspectAppClient({
-  appRoot = path.resolve(import.meta.dirname, '..'),
+  appRoot = path.resolve(import.meta.dirname, '..', '..'),
   type = 'all',
 } = {}) {
   const packageJsonPath = path.join(appRoot, 'package.json');
@@ -835,35 +820,4 @@ function formatLocales(locales) {
         `  ${locale.order}. ${locale.packageName}\n    source: ${locale.source}`,
     )
     .join('\n')}`;
-}
-
-async function main() {
-  const jsonRequested = process.argv.slice(2).includes('--json');
-  try {
-    const options = parseInspectAppClientArgs(process.argv.slice(2));
-    if (options.help) {
-      console.log(help);
-      return;
-    }
-    const inspection = await inspectAppClient({ type: options.type });
-    console.log(
-      options.json
-        ? JSON.stringify(
-            createAppClientInspectionSuccess(inspection, options.type),
-            null,
-            2,
-          )
-        : formatAppClientInspection(inspection, options.type),
-    );
-  } catch (error) {
-    if (!jsonRequested) throw error;
-    console.error(
-      JSON.stringify(createAppClientInspectionFailure(error), null, 2),
-    );
-    process.exitCode = 1;
-  }
-}
-
-if (process.argv[1] && path.resolve(process.argv[1]) === import.meta.filename) {
-  await main();
 }

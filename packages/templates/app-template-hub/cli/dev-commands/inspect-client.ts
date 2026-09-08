@@ -1,9 +1,12 @@
 import { Command, Flags } from '@oclif/core';
 import type { Interfaces } from '@oclif/core';
 
-// As with the server inspector, the logic stays in `scripts/inspect-client.mjs` and this is only its command-line
-// surface. It is loaded inside run() because client inspection pulls in Vite and browser-only client modules, which
-// must not be reached from a static import the server build would have to resolve.
+// The inspection itself lives in `inspect-client-impl.ts`; this is only its command-line surface.
+import {
+  createAppClientInspectionSuccess,
+  formatAppClientInspection,
+  inspectAppClient,
+} from './inspect-client-impl.mjs';
 
 const INSPECTION_TYPES = [
   'all',
@@ -45,11 +48,6 @@ export default class AppInspectClient extends Command {
 
   public async run(): Promise<void> {
     const { flags } = await this.parse(AppInspectClient);
-    const {
-      createAppClientInspectionSuccess,
-      formatAppClientInspection,
-      inspectAppClient,
-    } = await import('../../scripts/inspect-client.mjs');
     const inspection = await inspectAppClient();
 
     if (flags.json) {

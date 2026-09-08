@@ -221,7 +221,7 @@
     "url": "git+https://github.com/nocobase/portal-template-default.git"
   },
   "scripts": {
-    "dev": "tsx ./scripts/dev.mjs",
+    "dev": "tsx ./scripts/dev/index.mjs",
     "build": "node ./scripts/build.mjs",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0",

@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { findWorkspacePackageDirectory } from './workspace-packages.mjs';
+import { findWorkspacePackageDirectory } from '../utils/workspace-packages.mjs';
 
 const readJson = (filePath) => JSON.parse(fs.readFileSync(filePath, 'utf8'));
 

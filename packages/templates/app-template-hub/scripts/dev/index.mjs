@@ -4,10 +4,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadStandaloneAppEnv } from '@nocobase/app-server/node';
 
-import { resolvePluginWatchIncludes } from './dev-plugin-watches.mjs';
-import { resolveConfigWatch } from './dev-config-watch.mjs';
-import { findAvailablePort } from './dev-ports.mjs';
-import { waitForHttpReady } from './dev-readiness.mjs';
+import { resolvePluginWatchIncludes } from './plugin-watches.mjs';
+import { resolveConfigWatch } from './config-watch.mjs';
+import { findAvailablePort } from './ports.mjs';
+import { waitForHttpReady } from './readiness.mjs';
 
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),

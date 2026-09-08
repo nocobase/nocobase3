@@ -135,7 +135,7 @@ cli/index.ts             组装入口，pnpm nocobase 执行的就是它
 cli/plugins.ts           插件 CLI 贡献列表
 cli/commands/index.ts    App 自己的命令清单，key 就是 app topic 下的命令名
 cli/commands/*.ts        命令实现，随 dist 一起发布
-cli/dev-commands/*.ts    只在开发态存在的命令，不进 dist
+cli/dev-commands/        只在开发态存在的命令，不进 dist
 ```
 
 ### cli/plugins.ts

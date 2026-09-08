@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '..',
+  '..',
 );
 const distDir = path.resolve(process.argv[2] ?? path.join(rootDir, 'dist'));
 const realDistDir = fs.realpathSync(distDir);
