@@ -241,6 +241,7 @@ describe('client inspection', () => {
       { packageName: '@nocobase/app-plugin-workflow', order: 6 },
       { packageName: '@nocobase/app-plugin-notification', order: 7 },
       { packageName: '@nocobase/app-plugin-repository-example', order: 8 },
+      { packageName: '@nocobase/app-plugin-file-repository', order: 9 },
     ]);
     expect(inspection.configs[0]).toMatchObject({
       kind: 'factory',

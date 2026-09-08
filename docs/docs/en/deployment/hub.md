@@ -1,18 +1,19 @@
 ---
-title: Hub
-description: Create, start, and host applications with a Hub, and deploy an application to it once it is built.
+title: 'Hub'
+description: 'Managing several applications. Not finished yet — marked as planned.'
 ---
 
 # Hub
 
-:::info Planned
-This flow is still being designed and built. What follows describes the intended shape; it is not available in the current release.
+:::warning Being written
+This page is being written.
 :::
 
-A Hub is where applications are created and hosted. The intended flow is:
+Managing several applications. Not finished yet — marked as planned.
 
-1. Start a Hub
-2. Create and start an application from the prompt the Hub provides
-3. Develop it locally, then deploy it back to the Hub
+## This page will cover
 
-This page will describe the concrete steps once the capability lands.
+- What Hub is and which problem it solves
+- How it differs from deploying a single application on its own
+- Planned capabilities: create, deploy, roll back
+- Current status

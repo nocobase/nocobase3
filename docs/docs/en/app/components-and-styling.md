@@ -1,12 +1,19 @@
 ---
-title: Components and styling
-description: Compose interfaces from shadcn/ui and keep light and dark themes consistent with semantic Tailwind tokens.
+title: 'Components and styling'
+description: 'Compose the UI from ready-made components and keep light and dark modes working.'
 ---
 
 # Components and styling
 
 :::warning Being written
-This page is still being written.
+This page is being written.
 :::
 
-This page will cover adding primitives from the shadcn registry, composing your own components from them, and why styling goes through semantic tokens such as `bg-background` rather than hard-coded colors.
+Compose the UI from ready-made components and keep light and dark modes working.
+
+## This page will cover
+
+- What the component library provides, and how to add what is missing
+- Use semantic style tokens instead of hard-coded colors
+- Keeping both light and dark modes correct
+- Visual consistency is application-wide — never restyle just your own page

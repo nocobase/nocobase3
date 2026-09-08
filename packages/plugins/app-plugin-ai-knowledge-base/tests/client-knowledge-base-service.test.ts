@@ -141,11 +141,11 @@ test('directory, detail, document, retrieval, and segment reads use the server r
   });
 
   expect(calls.map(({ resource, action }) => `${resource}:${action}`)).toEqual([
-    'aiKnowledgeBase:list',
-    'aiKnowledgeBase:list',
-    'aiKnowledgeBaseDocs:get',
-    'aiKnowledgeBase:runHitTest',
-    'aiKnowledgeBaseDocSegments:getSegment',
+    'ai/aiKnowledgeBase:list',
+    'ai/aiKnowledgeBase:list',
+    'ai/aiKnowledgeBaseDocs:get',
+    'ai/aiKnowledgeBase:runHitTest',
+    'ai/aiKnowledgeBaseDocSegments:getSegment',
   ]);
   expect(calls[0]?.options?.query).toMatchObject({
     page: 1,
@@ -198,7 +198,7 @@ test('upload constraints expose the exact eleven supported extensions and size l
   expect(constraints).not.toHaveProperty('type');
   expect(calls).toEqual([
     {
-      resource: 'aiKnowledgeBaseDocs',
+      resource: 'ai/aiKnowledgeBaseDocs',
       action: 'getUploadStorage',
       options: {
         method: 'GET',
@@ -255,8 +255,8 @@ test('upload always sends multipart form data containing only the knowledge base
   ).resolves.toEqual(document);
 
   expect(calls.map(({ resource, action }) => `${resource}:${action}`)).toEqual([
-    'aiKnowledgeBaseDocs:getUploadStorage',
-    'aiKnowledgeBaseDocs:upload',
+    'ai/aiKnowledgeBaseDocs:getUploadStorage',
+    'ai/aiKnowledgeBaseDocs:upload',
   ]);
   const upload = calls[1];
   expect(upload?.options?.query).toEqual({ knowledgeBaseKey: 'handbook' });
@@ -403,7 +403,7 @@ test('knowledge base management actions use flat create, update, delete, and ena
   ]);
 
   expect(calls[0]).toEqual({
-    resource: 'aiKnowledgeBase',
+    resource: 'ai/aiKnowledgeBase',
     action: 'create',
     options: {
       method: 'POST',
@@ -421,12 +421,12 @@ test('knowledge base management actions use flat create, update, delete, and ena
     },
   });
   expect(calls[1]).toMatchObject({
-    resource: 'aiKnowledgeBase',
+    resource: 'ai/aiKnowledgeBase',
     action: 'update',
     options: { query: { filterByTk: 1 }, body: { enabled: false } },
   });
   expect(calls[2]).toMatchObject({
-    resource: 'aiKnowledgeBase',
+    resource: 'ai/aiKnowledgeBase',
     action: 'destroy',
     options: { query: { 'filterByTk[]': [1] } },
   });
