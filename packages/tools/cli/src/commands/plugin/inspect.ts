@@ -44,7 +44,7 @@ interface InspectSuggestion {
 export default class PluginInspect extends Command {
   static override summary = "Inspect a plugin's static registration state.";
   static override description =
-    'Reads the installed package, dependency and metadata records, Client and Server composition roots, and synchronized Skills without modifying the App.';
+    'Reads the installed package, dependency records, Client and Server composition roots, and synchronized Skills without modifying the App.';
   static override examples = [
     '<%= config.bin %> <%= command.id %> audit-log --json',
     '<%= config.bin %> <%= command.id %> audit-log --workspace-root . --app app-template-default --json',
@@ -118,7 +118,6 @@ async function inspectPlugin(
     name?: string;
     dependencies?: Record<string, string>;
     devDependencies?: Record<string, string>;
-    nocobase?: { plugins?: Record<string, { enabled?: boolean }> };
   };
   const pluginDirectory = await installedPluginDirectory(appRoot, packageName);
   const dependencyField = manifest.dependencies?.[packageName]
@@ -129,8 +128,6 @@ async function inspectPlugin(
   const dependencyRange =
     manifest.dependencies?.[packageName] ??
     manifest.devDependencies?.[packageName];
-  const registration = manifest.nocobase?.plugins?.[packageName];
-  const enabled = registration?.enabled === true;
   const clientExport = pluginDirectory
     ? await hasClientPluginEntry(pluginDirectory)
     : false;
@@ -154,35 +151,26 @@ async function inspectPlugin(
       message: `${packageName} is not declared as an App dependency.`,
       severity: 'error',
     });
-  if (!registration)
-    issues.push({
-      code: 'PLUGIN_METADATA_MISSING',
-      message: `${packageName} is absent from nocobase.plugins.`,
-      severity: 'error',
-    });
-
   const client = await inspectComposition(appRoot, packageName, 'client');
   const server = await inspectComposition(appRoot, packageName, 'server');
   const cli = await inspectComposition(appRoot, packageName, 'cli');
-  const expectedClient = enabled && clientExport;
-  const expectedServer = enabled && serverExport;
-  const expectedCli = enabled && cliExport;
-  if (client.registered !== expectedClient)
+  const enabled = client.registered || server.registered || cli.registered;
+  if (client.registered && !clientExport)
     issues.push({
-      code: expectedClient ? 'CLIENT_ENTRY_MISSING' : 'CLIENT_ENTRY_UNEXPECTED',
-      message: `client/plugins.ts is ${client.registered ? '' : 'not '}registered, expected ${expectedClient}.`,
+      code: 'CLIENT_ENTRY_UNEXPECTED',
+      message: 'Client registration has no matching package export.',
       severity: 'error',
     });
-  if (server.registered !== expectedServer)
+  if (server.registered && !serverExport)
     issues.push({
-      code: expectedServer ? 'SERVER_ENTRY_MISSING' : 'SERVER_ENTRY_UNEXPECTED',
-      message: `server/plugins.ts is ${server.registered ? '' : 'not '}registered, expected ${expectedServer}.`,
+      code: 'SERVER_ENTRY_UNEXPECTED',
+      message: 'Server registration has no matching package export.',
       severity: 'error',
     });
-  if (cli.registered !== expectedCli)
+  if (cli.registered && !cliExport)
     issues.push({
-      code: expectedCli ? 'CLI_ENTRY_MISSING' : 'CLI_ENTRY_UNEXPECTED',
-      message: `cli/plugins.ts is ${cli.registered ? '' : 'not '}registered, expected ${expectedCli}.`,
+      code: 'CLI_ENTRY_UNEXPECTED',
+      message: 'CLI registration has no matching package export.',
       severity: 'error',
     });
 
@@ -222,11 +210,11 @@ async function inspectPlugin(
       },
     },
     dependency: { field: dependencyField, range: dependencyRange },
-    metadata: { registered: registration !== undefined, enabled },
+    registration: { enabled },
     composition: {
-      client: { expected: expectedClient, ...client },
-      server: { expected: expectedServer, ...server },
-      cli: { expected: expectedCli, ...cli },
+      client,
+      server,
+      cli,
     },
     skills,
     consistent: issues.length === 0,

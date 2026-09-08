@@ -1,3 +1,5 @@
+import { createRequire } from 'node:module';
+import { symlink } from 'node:fs/promises';
 import {
   mkdir,
   mkdtemp,
@@ -34,7 +36,13 @@ async function createApp(
   created.push(appRoot);
   await writeFile(
     path.join(appRoot, 'package.json'),
-    JSON.stringify({ name: 'demo-app', nocobase: { plugins: registry } }),
+    JSON.stringify({ name: 'demo-app' }),
+  );
+  await writeRegisteredPlugins(
+    appRoot,
+    Object.entries(registry)
+      .filter(([, value]) => value.enabled)
+      .map(([name]) => name),
   );
   return appRoot;
 }
@@ -233,5 +241,70 @@ describe('skills synchronization', () => {
     await expect(resolveInstalledPlugins({ appRoot })).rejects.toThrow(
       'is not installed',
     );
+  });
+});
+
+async function writeRegisteredPlugins(
+  appRoot: string,
+  packages: string[],
+): Promise<void> {
+  await mkdir(path.join(appRoot, 'server'), { recursive: true });
+  await mkdir(path.join(appRoot, 'node_modules'), { recursive: true });
+  await symlink(
+    path.dirname(
+      createRequire(import.meta.url).resolve('typescript/package.json'),
+    ),
+    path.join(appRoot, 'node_modules/typescript'),
+  );
+  await writeFile(
+    path.join(appRoot, 'server/plugins.ts'),
+    packages
+      .map((name, index) => `import p${index} from '${name}/server';`)
+      .join('\n') +
+      `\nexport default defineServerPlugins([${packages.map((_, index) => `p${index}`).join(', ')}]);`,
+  );
+}
+
+describe('composition-based plugin discovery', () => {
+  it('deduplicates both runtimes and ignores unused imports and legacy metadata', async () => {
+    const appRoot = await createApp({
+      '@nocobase/app-plugin-one': { enabled: true },
+    });
+    await installPlugin(appRoot, '@nocobase/app-plugin-one');
+    await installPlugin(appRoot, '@nocobase/app-plugin-two');
+    await installPlugin(appRoot, '@nocobase/app-plugin-cli-only');
+    await mkdir(path.join(appRoot, 'cli'), { recursive: true });
+    await writeFile(
+      path.join(appRoot, 'cli/plugins.ts'),
+      `
+      import cliOnly from '@nocobase/app-plugin-cli-only/cli';
+      export default defineCliPlugins([cliOnly]);
+    `,
+    );
+    await mkdir(path.join(appRoot, 'client'), { recursive: true });
+    await writeFile(
+      path.join(appRoot, 'client/plugins.ts'),
+      `
+      import one from '@nocobase/app-plugin-one/client';
+      import two from '@nocobase/app-plugin-two/client/plugin';
+      import unused from '@nocobase/app-plugin-unused/client';
+      export default defineClientPlugins([one(), two({ example: true })]);
+    `,
+    );
+    await writeFile(
+      path.join(appRoot, 'package.json'),
+      JSON.stringify({
+        name: 'demo-app',
+        nocobase: {
+          plugins: { '@nocobase/app-plugin-unused': { enabled: true } },
+        },
+      }),
+    );
+    const result = await resolveInstalledPlugins({ appRoot });
+    expect(result.plugins.map((plugin) => plugin.packageName)).toEqual([
+      '@nocobase/app-plugin-cli-only',
+      '@nocobase/app-plugin-one',
+      '@nocobase/app-plugin-two',
+    ]);
   });
 });

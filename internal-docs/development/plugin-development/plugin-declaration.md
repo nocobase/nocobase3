@@ -212,7 +212,7 @@ export default defineServerPlugins([auditLogServer]);
 
 Client 数组顺序是静态 contribution 和 ServiceProvider lifecycle 的组合顺序。Client 和 Server 都拒绝同一包重复注册。
 
-`package.json#nocobase.plugins` 用于 CLI 插件管理、workspace build、dev watch、Skill 查找与同步；它不承担 Runtime 发现。
+CLI 批量更新和 Skill 同步从 Client 与 Server 显式注册入口发现插件；开发监听读取 Server 注册入口，部署依赖从服务端构建产物的导入发现。
 
 ## Inspector 边界
 

@@ -33,7 +33,7 @@ import {
 export default class PluginRegister extends Command {
   static override summary = 'Install a plugin and wire it into this app.';
   static override description =
-    'Adds the plugin package as a dependency, registers it under nocobase.plugins, wires its exported client and server entries into the explicit application composition roots, and copies the skills it ships into .agents/skills.';
+    'Adds the plugin package as a dependency, wires its exported client and server entries into the explicit application composition roots, and copies the skills it ships into .agents/skills.';
 
   static override examples = [
     '<%= config.bin %> <%= command.id %> audit-log',
@@ -70,7 +70,7 @@ export default class PluginRegister extends Command {
     disabled: Flags.boolean({
       default: false,
       description:
-        'Register the plugin with enabled set to false, leaving its client and server entries unwired.',
+        'Install the plugin without adding client or server entries.',
     }),
     'no-install': Flags.boolean({
       default: false,
@@ -147,7 +147,6 @@ export default class PluginRegister extends Command {
             packageName,
             checked: [
               'dependency',
-              'nocobase.plugins',
               'client/plugins.ts',
               'server/plugins.ts',
               'cli/plugins.ts',
@@ -367,7 +366,7 @@ export default class PluginRegister extends Command {
       `${dryRun ? 'Would register' : 'Registered'} ${plan.packageName} as ${plan.enabled ? 'enabled' : 'disabled'}`,
     ];
     if (plan.manifestChanged) {
-      lines.push('  package.json: dependency and nocobase.plugins');
+      lines.push('  package.json: dependency');
     }
     if (plan.clientPluginsChanged) {
       lines.push(
