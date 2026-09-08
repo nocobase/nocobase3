@@ -306,7 +306,7 @@ export class SubAgentsDispatcher {
       )
     ) {
       context = {
-        appendMessage: await agent.facade.getFormatMessages(messages),
+        appendMessages: messages,
       };
     }
 

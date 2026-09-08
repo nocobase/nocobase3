@@ -18,7 +18,6 @@ import type {
   ToolProvider,
 } from '../types.js';
 import { NativeCollectionSaver } from '../../agent/ai-employee/checkpoints/index.js';
-import type { AIMessageInput } from '@nocobase/ai-employee';
 import type { DatabaseConnection } from '@nocobase/db';
 import {
   convertAIMessage,
@@ -47,7 +46,6 @@ class ResponseMetadataCollector extends BaseCallbackHandler {
 }
 
 export interface AIEmployeeAgentFacade {
-  getFormatMessages(messages: AIMessageInput[]): Promise<unknown[]>;
   cancelToolCall(): Promise<any>;
   getToolCallHandler(): ToolCallHandler;
 }
@@ -407,19 +405,8 @@ export async function createAIEmployeeAgentProviders(
   return {
     providers,
     facade: {
-      getFormatMessages: (messages) => runtimeFormat(state, messages),
       cancelToolCall: () => state.runtime.cancelToolCall(),
       getToolCallHandler: () => conversation.toolCalls,
     },
   };
 }
-
-const runtimeFormat = async (
-  state: AIEmployeeProviderState,
-  messages: AIMessageInput[],
-) => {
-  const provider =
-    state.activeProvider ??
-    (await resolveAIEmployeeLLM(state.options, state)).provider;
-  return state.runtime.formatMessages({ messages, provider });
-};

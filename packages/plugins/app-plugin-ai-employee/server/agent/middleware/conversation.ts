@@ -5,6 +5,10 @@
  */
 
 import {
+  coerceMessageLikeToMessage,
+  type BaseMessageLike,
+} from '@langchain/core/messages';
+import {
   AIMessage,
   createMiddleware,
   HumanMessage,
@@ -71,7 +75,7 @@ export const conversationMiddleware = (
     name: 'ConversationMiddleware',
     contextSchema: z.object({
       ctx: z.any().optional(),
-      appendMessage: z.any().optional(),
+      appendMessages: z.array(z.any()).optional(),
       agentRequest: z.any().optional(),
     }),
     stateSchema: z.object({
@@ -189,17 +193,22 @@ export const conversationMiddleware = (
       }
     },
     wrapModelCall: async (request, handler) => {
-      const appendMessage = request.runtime.context?.appendMessage;
-      if (Array.isArray(appendMessage) && appendMessage.length) {
-        const messages = [
+      const appendMessages = request.runtime.context?.appendMessages;
+      if (Array.isArray(appendMessages) && appendMessages.length) {
+        const formattedMessages = await chatContext.formatMessages(
+          appendMessages,
+          options,
+        );
+        await conversation.messages.add([
           convertToolMessage(request.messages.at(-1) as ToolMessage),
-          ...appendMessage.map((message) =>
-            convertHumanMessage(message as HumanMessage),
+          ...appendMessages,
+        ]);
+        request.messages.push(
+          ...formattedMessages.map((message) =>
+            coerceMessageLikeToMessage(message as BaseMessageLike),
           ),
-        ].filter((message): message is AIMessageInput => message !== null);
-        await conversation.messages.add(messages);
-        request.messages.push(...appendMessage);
-        delete request.runtime.context.appendMessage;
+        );
+        delete request.runtime.context.appendMessages;
       }
       return handler(request);
     },

@@ -192,18 +192,6 @@ export class AIEmployeeCapabilities {
     return this.model;
   }
 
-  async getFormatMessages(userMessages: AIMessageInput[]) {
-    const { provider } =
-      await this.agentContext.ai.llmProviderManager.getLLMService(
-        this.getRequiredModel(),
-      );
-    const { messages } = await this.aiChatConversation.getChatContext({
-      userMessages,
-      formatMessages: (messages) => this.formatMessages({ messages, provider }),
-    });
-    return messages;
-  }
-
   // Agent execution and middleware orchestration are owned by AgentService.
   // === Prompts & knowledge base ===
   async getSystemPrompt(userMessages: AIMessageInput[]) {
