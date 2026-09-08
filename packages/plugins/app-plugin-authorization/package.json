@@ -86,7 +86,8 @@
   },
   "dependencies": {
     "@nocobase/authorization": "workspace:^",
-    "hono": "catalog:"
+    "hono": "catalog:",
+    "lucide-react": "^0.487.0"
   },
   "peerDependencies": {
     "@nocobase/app-client": "workspace:^",

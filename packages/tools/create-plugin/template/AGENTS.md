@@ -4,28 +4,31 @@ This is a NocoBase application plugin: a package published to a registry and ins
 
 ## Adding a dependency
 
-Where a package goes depends on where the code that imports it runs, not on what the package is for.
+Code that ships goes in `dependencies`, whether it runs on the server or in the browser.
 
-| The import is reached from                          | Declare it in                             |
-| --------------------------------------------------- | ----------------------------------------- |
-| `server/` or `database/`, at runtime                | `dependencies`                            |
-| `client/` or `registry/`                            | `devDependencies`                         |
+| The import is reached from                          | Declare it in                                |
+| --------------------------------------------------- | -------------------------------------------- |
+| `server/` or `database/`, at runtime                | `dependencies`                               |
+| `client/`, as a value import                        | `dependencies`                               |
 | A package the application must own a single copy of | `peerDependencies` **and** `devDependencies` |
-| Tests, build scripts, or `import type` only         | `devDependencies`                         |
+| `registry/`                                         | nothing — the application compiles it        |
+| Tests, build scripts, or `import type` only         | `devDependencies`                            |
 
 `pnpm deps:check` at the repository root enforces the server row and runs in CI.
 
-### Why server and client differ
+### Why a client import is a real dependency
 
-They are deployed differently, and the split follows from that.
+Ask one question: **does someone outside this repository have to resolve this import?** If yes, declare it where npm publishes it. `devDependencies` are not published at all.
 
-**Server code is deployed unbundled.** An application's `pnpm build` emits `dist/server` with its bare imports intact, generates `dist/package.json` by walking `dependencies`, and installs a `node_modules` beside it. That tree is what the deployed server resolves against, and `devDependencies` are not in it. A server import declared only as a devDependency resolves in every development checkout and is absent exactly once — on the deployed server, as a bare `Cannot find package` naming nothing that points back at this manifest.
+**A deployed server resolves its imports at runtime.** An application's `pnpm build` emits `dist/server` with its bare imports intact and generates `dist/package.json` from `dependencies`. A server import declared only as a devDependency resolves in every development checkout and is absent exactly once — on the deployed server, as a bare `Cannot find package` naming nothing that points back at this manifest.
 
-**Client code is bundled by the application.** Your `client/` is compiled by the application's Vite build, which resolves those imports at build time and inlines them. Nothing resolves them again at runtime, so a `dependencies` entry buys the bundle nothing — and costs something real, because that same walk over `dependencies` drags every one of them into the server deployment to be installed and never required. Two plugins doing this were 44 MB of exactly that before the rule was written down.
+**An installing application resolves your client imports at build time.** Your `client/` is not bundled by this plugin: `build` is `tsc`, so `dist/client/*.js` keeps its bare imports and the application's Vite build resolves them. That application installed this plugin from a registry, so it has only what the published manifest declares. A client import left in `devDependencies` fails there with `Could not resolve "…"` — and it will not fail here, because a workspace install links every devDependency into this plugin's own `node_modules`.
 
-So `hono` in `server/routes/` is a `dependency`, while `react`, `lucide-react`, `@base-ui/react`, `clsx`, and `tailwind-merge` in `client/` are `devDependencies`. A dynamic `import()` counts as a runtime import; `import type` does not, wherever it appears.
+Do not rely on the application happening to declare the same package. It might, and then the plugin works by coincidence until someone installs it into an application that does not.
 
-`registry/` is even further from a dependency: it is source the application copies into itself and compiles there, against that application's own `react` and `@/` alias. This plugin never resolves those imports at all.
+So `hono` in `server/routes/` and `sonner` in `client/` are both `dependencies`. A dynamic `import()` counts as a value import; `import type` does not, wherever it appears. When a `catalog:` version pins the development copy, keep the `devDependency` alongside the published range.
+
+`registry/` is the exception: it is source the application copies into itself and compiles there, against that application's own `react` and `@/` alias. This plugin never resolves those imports at all, so declaring them would claim dependencies it does not have.
 
 ### Prefer what the application already has
 

@@ -103,5 +103,12 @@
     "typescript": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:"
+  },
+  "dependencies": {
+    "@base-ui/react": "^1.6.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "sonner": "^2.0.3",
+    "tailwind-merge": "^3.2.0"
   }
 }

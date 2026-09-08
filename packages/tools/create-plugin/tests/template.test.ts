@@ -131,8 +131,8 @@ describe('bundled capability templates', () => {
   /**
    * The agent-facing documentation is part of the foundation rather than a capability, because the dependency rule it
    * carries applies to every plugin. A plugin generated without it reintroduces the mistake it exists to prevent:
-   * browser packages declared as `dependencies`, which the application bundles anyway and then installs a second
-   * time into a server deployment that never requires them.
+   * a client package left in `devDependencies`, which npm does not publish, so the application that installs the
+   * plugin cannot resolve the import and fails its build with `Could not resolve "…"`.
    */
   it('always emits the agent documentation, with CLAUDE.md deferring to AGENTS.md', async () => {
     const files = await listTemplateFiles(
@@ -158,7 +158,10 @@ describe('bundled capability templates', () => {
     expect(agents).toContain('dependencies');
     expect(agents).toContain('devDependencies');
     expect(agents).toContain('peerDependencies');
-    expect(agents).toContain('bundled by the application');
+    // The question that decides between them, rather than any one destination's wording.
+    expect(agents).toContain(
+      'does someone outside this repository have to resolve this import?',
+    );
   });
 
   it.each(

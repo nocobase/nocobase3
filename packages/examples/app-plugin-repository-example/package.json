@@ -77,7 +77,12 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "hono": "catalog:"
+    "@base-ui/react": "^1.6.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "hono": "catalog:",
+    "lucide-react": "^0.487.0",
+    "tailwind-merge": "^3.2.0"
   },
   "peerDependencies": {
     "@nocobase/app-client": "workspace:^",
@@ -86,7 +91,8 @@
     "@nocobase/db": "workspace:^",
     "@nocobase/i18n": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
-    "react": "^19.0.0"
+    "react": "^19.0.0",
+    "react-router": "^7.0.2"
   },
   "devDependencies": {
     "@base-ui/react": "^1.6.0",

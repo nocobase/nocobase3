@@ -142,6 +142,7 @@
   },
   "dependencies": {
     "@ai-sdk/react": "^2.0.0",
+    "@dicebear/core": "^9.4.3",
     "@langchain/core": "1.1.49",
     "@langchain/langgraph": "1.4.4",
     "@langchain/langgraph-checkpoint": "1.1.2",
@@ -157,6 +158,8 @@
     "hono": "catalog:",
     "langchain": "1.2.39",
     "lodash": "^4.17.21",
+    "lucide-react": "^0.487.0",
+    "react-hook-form": "^7.57.0",
     "remark-gfm": "^4.0.1",
     "zod": "^3"
   },
@@ -206,7 +209,7 @@
     "@nocobase/service-provider": "workspace:^",
     "@refinedev/core": "^5.0.0",
     "react": "^19.0.0",
-    "react-router": "^7.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "react-router": "^7.0.0"
   }
 }

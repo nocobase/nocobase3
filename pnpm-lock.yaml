@@ -710,10 +710,20 @@ importers:
         version: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@30.0.1(@noble/hashes@2.3.0))(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(sass-embedded@1.103.1)(sass@1.103.1)(tsx@4.23.12)(yaml@2.9.0))
 
   packages/examples/app-plugin-registry-example:
-    devDependencies:
+    dependencies:
       '@base-ui/react':
         specifier: ^1.6.0
         version: 1.7.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      class-variance-authority:
+        specifier: ^0.7.1
+        version: 0.7.1
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
+      tailwind-merge:
+        specifier: ^3.2.0
+        version: 3.6.0
+    devDependencies:
       '@nocobase/app-client':
         specifier: workspace:*
         version: link:../../app/app-client
@@ -735,12 +745,6 @@ importers:
       '@types/react-dom':
         specifier: 'catalog:'
         version: 19.2.4(@types/react@19.2.18)
-      class-variance-authority:
-        specifier: ^0.7.1
-        version: 0.7.1
-      clsx:
-        specifier: ^2.1.1
-        version: 2.1.1
       eslint:
         specifier: 'catalog:'
         version: 10.8.1(jiti@2.7.0)
@@ -756,9 +760,6 @@ importers:
       shadcn:
         specifier: ^4.13.1
         version: 4.18.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(typescript@6.0.3)
-      tailwind-merge:
-        specifier: ^3.2.0
-        version: 3.6.0
       tailwindcss:
         specifier: 'catalog:'
         version: 4.3.3
@@ -774,13 +775,25 @@ importers:
 
   packages/examples/app-plugin-repository-example:
     dependencies:
-      hono:
-        specifier: 'catalog:'
-        version: 4.13.2
-    devDependencies:
       '@base-ui/react':
         specifier: ^1.6.0
         version: 1.7.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      class-variance-authority:
+        specifier: ^0.7.1
+        version: 0.7.1
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
+      hono:
+        specifier: 'catalog:'
+        version: 4.13.2
+      lucide-react:
+        specifier: ^0.487.0
+        version: 0.487.0(react@19.2.8)
+      tailwind-merge:
+        specifier: ^3.2.0
+        version: 3.6.0
+    devDependencies:
       '@nocobase/api-client':
         specifier: workspace:*
         version: link:../../libs/api-client
@@ -823,21 +836,12 @@ importers:
       better-sqlite3:
         specifier: 'catalog:'
         version: 12.11.1
-      class-variance-authority:
-        specifier: ^0.7.1
-        version: 0.7.1
-      clsx:
-        specifier: ^2.1.1
-        version: 2.1.1
       eslint:
         specifier: 'catalog:'
         version: 10.8.1(jiti@2.7.0)
       jsdom:
         specifier: 'catalog:'
         version: 30.0.1(@noble/hashes@2.3.0)
-      lucide-react:
-        specifier: ^0.487.0
-        version: 0.487.0(react@19.2.8)
       prettier:
         specifier: 'catalog:'
         version: 3.9.6
@@ -853,9 +857,6 @@ importers:
       shadcn:
         specifier: ^4.13.1
         version: 4.18.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(typescript@6.0.3)
-      tailwind-merge:
-        specifier: ^3.2.0
-        version: 3.6.0
       tailwindcss:
         specifier: 'catalog:'
         version: 4.3.3
@@ -871,13 +872,22 @@ importers:
 
   packages/examples/app-plugin-routes-example:
     dependencies:
-      hono:
-        specifier: 'catalog:'
-        version: 4.13.2
-    devDependencies:
       '@base-ui/react':
         specifier: ^1.6.0
         version: 1.7.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      class-variance-authority:
+        specifier: ^0.7.1
+        version: 0.7.1
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
+      hono:
+        specifier: 'catalog:'
+        version: 4.13.2
+      tailwind-merge:
+        specifier: ^3.2.0
+        version: 3.6.0
+    devDependencies:
       '@nocobase/app-client':
         specifier: workspace:*
         version: link:../../app/app-client
@@ -905,12 +915,6 @@ importers:
       '@types/react':
         specifier: 'catalog:'
         version: 19.2.18
-      class-variance-authority:
-        specifier: ^0.7.1
-        version: 0.7.1
-      clsx:
-        specifier: ^2.1.1
-        version: 2.1.1
       eslint:
         specifier: 'catalog:'
         version: 10.8.1(jiti@2.7.0)
@@ -926,9 +930,6 @@ importers:
       shadcn:
         specifier: ^4.13.1
         version: 4.18.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(typescript@6.0.3)
-      tailwind-merge:
-        specifier: ^3.2.0
-        version: 3.6.0
       tailwindcss:
         specifier: 'catalog:'
         version: 4.3.3
@@ -1597,6 +1598,9 @@ importers:
       '@ai-sdk/react':
         specifier: ^2.0.0
         version: 2.0.0(react@19.2.8)(zod@3.25.76)
+      '@dicebear/core':
+        specifier: ^9.4.3
+        version: 9.4.3
       '@langchain/core':
         specifier: 1.1.49
         version: 1.1.49(@opentelemetry/api@1.9.0)(openai@6.49.0(@aws-sdk/credential-provider-node@3.972.80)(@smithy/signature-v4@5.7.2)(ws@8.21.3)(zod@3.25.76))(ws@8.21.3)
@@ -1645,6 +1649,12 @@ importers:
       lodash:
         specifier: ^4.17.21
         version: 4.18.1
+      lucide-react:
+        specifier: ^0.487.0
+        version: 0.487.0(react@19.2.8)
+      react-hook-form:
+        specifier: ^7.57.0
+        version: 7.85.0(react@19.2.8)
       remark-gfm:
         specifier: ^4.0.1
         version: 4.0.1
@@ -1655,9 +1665,6 @@ importers:
       '@base-ui/react':
         specifier: ^1.6.0
         version: 1.7.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      '@dicebear/core':
-        specifier: ^9.4.3
-        version: 9.4.3
       '@langchain/openai':
         specifier: 1.4.7
         version: 1.4.7(@aws-sdk/credential-provider-node@3.972.80)(@langchain/core@1.1.49(@opentelemetry/api@1.9.0)(openai@6.49.0(@aws-sdk/credential-provider-node@3.972.80)(@smithy/signature-v4@5.7.2)(ws@8.21.3)(zod@3.25.76))(ws@8.21.3))(@smithy/signature-v4@5.7.2)(ws@8.21.3)
@@ -1721,9 +1728,6 @@ importers:
       jsdom:
         specifier: 'catalog:'
         version: 30.0.1(@noble/hashes@2.3.0)
-      lucide-react:
-        specifier: ^0.487.0
-        version: 0.487.0(react@19.2.8)
       next-themes:
         specifier: ^0.4.6
         version: 0.4.6(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -1736,9 +1740,6 @@ importers:
       react-dom:
         specifier: 'catalog:'
         version: 19.2.8(react@19.2.8)
-      react-hook-form:
-        specifier: ^7.57.0
-        version: 7.85.0(react@19.2.8)
       react-markdown:
         specifier: ^10.1.0
         version: 10.1.0(@types/react@19.2.18)(react@19.2.8)
@@ -1760,6 +1761,9 @@ importers:
 
   packages/plugins/app-plugin-ai-knowledge-base:
     dependencies:
+      '@base-ui/react':
+        specifier: ^1.6.0
+        version: 1.7.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@langchain/community':
         specifier: 1.1.29
         version: 1.1.29(066b3381505117c151d6f87e46a969ed)
@@ -1778,15 +1782,27 @@ importers:
       '@refinedev/core':
         specifier: ^5.0.0
         version: 5.0.12(@tanstack/react-query@5.101.4(react@19.2.8))(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      class-variance-authority:
+        specifier: ^0.7.1
+        version: 0.7.1
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
       hono:
         specifier: 'catalog:'
         version: 4.13.2
+      lucide-react:
+        specifier: ^0.487.0
+        version: 0.487.0(react@19.2.8)
       nanoid:
         specifier: ^3.3.18
         version: 3.3.18
       pg:
         specifier: ^8.23.0
         version: 8.23.0
+      tailwind-merge:
+        specifier: ^3.2.0
+        version: 3.6.0
       yaml:
         specifier: 'catalog:'
         version: 2.9.0
@@ -1794,9 +1810,6 @@ importers:
         specifier: ^3.25.76
         version: 3.25.76
     devDependencies:
-      '@base-ui/react':
-        specifier: ^1.6.0
-        version: 1.7.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@nocobase/app-client':
         specifier: workspace:*
         version: link:../../app/app-client
@@ -1845,21 +1858,12 @@ importers:
       '@types/react-dom':
         specifier: 'catalog:'
         version: 19.2.4(@types/react@19.2.18)
-      class-variance-authority:
-        specifier: ^0.7.1
-        version: 0.7.1
-      clsx:
-        specifier: ^2.1.1
-        version: 2.1.1
       eslint:
         specifier: 'catalog:'
         version: 10.8.1(jiti@2.7.0)
       jsdom:
         specifier: 'catalog:'
         version: 30.0.1(@noble/hashes@2.3.0)
-      lucide-react:
-        specifier: ^0.487.0
-        version: 0.487.0(react@19.2.8)
       prettier:
         specifier: 'catalog:'
         version: 3.9.6
@@ -1872,9 +1876,6 @@ importers:
       react-router:
         specifier: 'catalog:'
         version: 7.18.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      tailwind-merge:
-        specifier: ^3.2.0
-        version: 3.6.0
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -1887,6 +1888,9 @@ importers:
 
   packages/plugins/app-plugin-authentication:
     dependencies:
+      '@base-ui/react':
+        specifier: ^1.6.0
+        version: 1.7.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@nocobase/caching':
         specifier: workspace:^
         version: link:../../libs/caching
@@ -1902,16 +1906,22 @@ importers:
       better-auth:
         specifier: 'catalog:'
         version: 1.7.1(@opentelemetry/api@1.9.0)(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg@8.23.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(vitest@4.1.10)
+      class-variance-authority:
+        specifier: ^0.7.1
+        version: 0.7.1
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
       hono:
         specifier: 'catalog:'
         version: 4.13.2
       knex:
         specifier: 'catalog:'
         version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(tedious@20.0.0)
+      tailwind-merge:
+        specifier: ^3.2.0
+        version: 3.6.0
     devDependencies:
-      '@base-ui/react':
-        specifier: ^1.6.0
-        version: 1.7.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@nocobase/app-client':
         specifier: workspace:*
         version: link:../../app/app-client
@@ -1945,12 +1955,6 @@ importers:
       better-sqlite3:
         specifier: 'catalog:'
         version: 12.11.1
-      class-variance-authority:
-        specifier: ^0.7.1
-        version: 0.7.1
-      clsx:
-        specifier: ^2.1.1
-        version: 2.1.1
       eslint:
         specifier: 'catalog:'
         version: 10.8.1(jiti@2.7.0)
@@ -1969,9 +1973,6 @@ importers:
       shadcn:
         specifier: ^4.13.1
         version: 4.18.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(typescript@6.0.3)
-      tailwind-merge:
-        specifier: ^3.2.0
-        version: 3.6.0
       tailwindcss:
         specifier: 'catalog:'
         version: 4.3.3
@@ -1993,6 +1994,9 @@ importers:
       hono:
         specifier: 'catalog:'
         version: 4.13.2
+      lucide-react:
+        specifier: ^0.487.0
+        version: 0.487.0(react@19.2.8)
     devDependencies:
       '@nocobase/app-client':
         specifier: workspace:*
@@ -2024,9 +2028,6 @@ importers:
       eslint:
         specifier: 'catalog:'
         version: 10.8.1(jiti@2.7.0)
-      lucide-react:
-        specifier: ^0.487.0
-        version: 0.487.0(react@19.2.8)
       prettier:
         specifier: 'catalog:'
         version: 3.9.6
@@ -2045,19 +2046,31 @@ importers:
 
   packages/plugins/app-plugin-file:
     dependencies:
-      '@nocobase/drive':
-        specifier: workspace:^
-        version: link:../../libs/drive
-      hono:
-        specifier: 'catalog:'
-        version: 4.13.2
-      remark-gfm:
-        specifier: 'catalog:'
-        version: 4.0.1
-    devDependencies:
       '@base-ui/react':
         specifier: ^1.6.0
         version: 1.7.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@nocobase/drive':
+        specifier: workspace:^
+        version: link:../../libs/drive
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
+      hono:
+        specifier: 'catalog:'
+        version: 4.13.2
+      lucide-react:
+        specifier: ^0.487.0
+        version: 0.487.0(react@19.2.8)
+      react-markdown:
+        specifier: 'catalog:'
+        version: 10.1.0(@types/react@19.2.18)(react@19.2.8)
+      remark-gfm:
+        specifier: 'catalog:'
+        version: 4.0.1
+      tailwind-merge:
+        specifier: ^3.2.0
+        version: 3.6.0
+    devDependencies:
       '@nocobase/app-client':
         specifier: workspace:*
         version: link:../../app/app-client
@@ -2100,18 +2113,12 @@ importers:
       '@types/react-dom':
         specifier: 'catalog:'
         version: 19.2.4(@types/react@19.2.18)
-      clsx:
-        specifier: ^2.1.1
-        version: 2.1.1
       eslint:
         specifier: 'catalog:'
         version: 10.8.1(jiti@2.7.0)
       jsdom:
         specifier: 'catalog:'
         version: 30.0.1(@noble/hashes@2.3.0)
-      lucide-react:
-        specifier: ^0.487.0
-        version: 0.487.0(react@19.2.8)
       prettier:
         specifier: 'catalog:'
         version: 3.9.6
@@ -2121,15 +2128,9 @@ importers:
       react-dom:
         specifier: 'catalog:'
         version: 19.2.8(react@19.2.8)
-      react-markdown:
-        specifier: 'catalog:'
-        version: 10.1.0(@types/react@19.2.18)(react@19.2.8)
       shadcn:
         specifier: ^4.13.1
         version: 4.18.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(typescript@6.0.3)
-      tailwind-merge:
-        specifier: ^3.2.0
-        version: 3.6.0
       tailwindcss:
         specifier: 'catalog:'
         version: 4.3.3
@@ -2145,25 +2146,6 @@ importers:
 
   packages/plugins/app-plugin-hub:
     dependencies:
-      '@nocobase/app-host':
-        specifier: workspace:^
-        version: link:../../app/app-host
-      '@nocobase/drive':
-        specifier: workspace:^
-        version: link:../../libs/drive
-      '@sinclair/typebox':
-        specifier: 'catalog:'
-        version: 0.34.52
-      hono:
-        specifier: 'catalog:'
-        version: 4.13.2
-      tar:
-        specifier: ^7.4.3
-        version: 7.5.22
-      yaml:
-        specifier: ^2.8.1
-        version: 2.9.0
-    devDependencies:
       '@base-ui/react':
         specifier: ^1.6.0
         version: 1.7.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -2179,6 +2161,40 @@ importers:
       '@codemirror/view':
         specifier: ^6.43.10
         version: 6.43.10
+      '@nocobase/app-host':
+        specifier: workspace:^
+        version: link:../../app/app-host
+      '@nocobase/drive':
+        specifier: workspace:^
+        version: link:../../libs/drive
+      '@sinclair/typebox':
+        specifier: 'catalog:'
+        version: 0.34.52
+      class-variance-authority:
+        specifier: ^0.7.1
+        version: 0.7.1
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
+      codemirror:
+        specifier: ^6.0.2
+        version: 6.0.2
+      hono:
+        specifier: 'catalog:'
+        version: 4.13.2
+      lucide-react:
+        specifier: ^0.487.0
+        version: 0.487.0(react@19.2.8)
+      tailwind-merge:
+        specifier: ^3.2.0
+        version: 3.6.0
+      tar:
+        specifier: ^7.4.3
+        version: 7.5.22
+      yaml:
+        specifier: ^2.8.1
+        version: 2.9.0
+    devDependencies:
       '@nocobase/app-client':
         specifier: workspace:*
         version: link:../../app/app-client
@@ -2209,21 +2225,9 @@ importers:
       '@types/react':
         specifier: 'catalog:'
         version: 19.2.18
-      class-variance-authority:
-        specifier: ^0.7.1
-        version: 0.7.1
-      clsx:
-        specifier: ^2.1.1
-        version: 2.1.1
-      codemirror:
-        specifier: ^6.0.2
-        version: 6.0.2
       eslint:
         specifier: 'catalog:'
         version: 10.8.1(jiti@2.7.0)
-      lucide-react:
-        specifier: ^0.487.0
-        version: 0.487.0(react@19.2.8)
       prettier:
         specifier: 'catalog:'
         version: 3.9.6
@@ -2233,9 +2237,6 @@ importers:
       shadcn:
         specifier: ^4.13.1
         version: 4.18.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(typescript@6.0.3)
-      tailwind-merge:
-        specifier: ^3.2.0
-        version: 3.6.0
       tailwindcss:
         specifier: 'catalog:'
         version: 4.3.3
@@ -2293,13 +2294,25 @@ importers:
 
   packages/plugins/app-plugin-install:
     dependencies:
-      hono:
-        specifier: 'catalog:'
-        version: 4.13.2
-    devDependencies:
       '@base-ui/react':
         specifier: ^1.6.0
         version: 1.7.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      class-variance-authority:
+        specifier: ^0.7.1
+        version: 0.7.1
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
+      hono:
+        specifier: 'catalog:'
+        version: 4.13.2
+      lucide-react:
+        specifier: ^0.487.0
+        version: 0.487.0(react@19.2.8)
+      tailwind-merge:
+        specifier: ^3.2.0
+        version: 3.6.0
+    devDependencies:
       '@nocobase/app-client':
         specifier: workspace:*
         version: link:../../app/app-client
@@ -2321,18 +2334,9 @@ importers:
       '@types/react':
         specifier: 'catalog:'
         version: 19.2.18
-      class-variance-authority:
-        specifier: ^0.7.1
-        version: 0.7.1
-      clsx:
-        specifier: ^2.1.1
-        version: 2.1.1
       eslint:
         specifier: 'catalog:'
         version: 10.8.1(jiti@2.7.0)
-      lucide-react:
-        specifier: ^0.487.0
-        version: 0.487.0(react@19.2.8)
       prettier:
         specifier: 'catalog:'
         version: 3.9.6
@@ -2342,9 +2346,6 @@ importers:
       shadcn:
         specifier: ^4.13.1
         version: 4.18.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(typescript@6.0.3)
-      tailwind-merge:
-        specifier: ^3.2.0
-        version: 3.6.0
       tailwindcss:
         specifier: 'catalog:'
         version: 4.3.3
@@ -2369,6 +2370,9 @@ importers:
       hono:
         specifier: 'catalog:'
         version: 4.13.2
+      lucide-react:
+        specifier: ^0.487.0
+        version: 0.487.0(react@19.2.8)
     devDependencies:
       '@nocobase/app-client':
         specifier: workspace:*
@@ -2415,9 +2419,6 @@ importers:
       eslint:
         specifier: 'catalog:'
         version: 10.8.1(jiti@2.7.0)
-      lucide-react:
-        specifier: ^0.487.0
-        version: 0.487.0(react@19.2.8)
       prettier:
         specifier: 'catalog:'
         version: 3.9.6
@@ -2535,10 +2536,23 @@ importers:
         version: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@30.0.1(@noble/hashes@2.3.0))(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(sass-embedded@1.103.1)(sass@1.103.1)(tsx@4.23.12)(yaml@2.9.0))
 
   packages/plugins/app-plugin-notification-provider:
-    devDependencies:
+    dependencies:
       '@base-ui/react':
         specifier: ^1.6.0
         version: 1.7.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      class-variance-authority:
+        specifier: ^0.7.1
+        version: 0.7.1
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
+      sonner:
+        specifier: ^2.0.3
+        version: 2.0.8(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      tailwind-merge:
+        specifier: ^3.2.0
+        version: 3.6.0
+    devDependencies:
       '@nocobase/app-client':
         specifier: workspace:*
         version: link:../../app/app-client
@@ -2563,12 +2577,6 @@ importers:
       '@types/react-dom':
         specifier: 'catalog:'
         version: 19.2.4(@types/react@19.2.18)
-      class-variance-authority:
-        specifier: ^0.7.1
-        version: 0.7.1
-      clsx:
-        specifier: ^2.1.1
-        version: 2.1.1
       eslint:
         specifier: 'catalog:'
         version: 10.8.1(jiti@2.7.0)
@@ -2584,12 +2592,6 @@ importers:
       shadcn:
         specifier: ^4.13.1
         version: 4.18.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(typescript@6.0.3)
-      sonner:
-        specifier: ^2.0.3
-        version: 2.0.8(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      tailwind-merge:
-        specifier: ^3.2.0
-        version: 3.6.0
       tailwindcss:
         specifier: 'catalog:'
         version: 4.3.3
@@ -2694,6 +2696,9 @@ importers:
 
   packages/plugins/app-plugin-workflow:
     dependencies:
+      '@base-ui/react':
+        specifier: ^1.6.0
+        version: 1.7.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@nocobase/drive':
         specifier: workspace:^
         version: link:../../libs/drive
@@ -2712,10 +2717,10 @@ importers:
       hono:
         specifier: 'catalog:'
         version: 4.13.2
+      lucide-react:
+        specifier: ^0.487.0
+        version: 0.487.0(react@19.2.8)
     devDependencies:
-      '@base-ui/react':
-        specifier: ^1.6.0
-        version: 1.7.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@boringnode/queue':
         specifier: ^0.7.1
         version: 0.7.1(@opentelemetry/api@1.9.0)(ioredis@5.11.1)(knex@3.3.0(better-sqlite3@13.0.3)(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0))(kysely@0.29.5)
@@ -2767,9 +2772,6 @@ importers:
       knex:
         specifier: ^3.1.0
         version: 3.3.0(better-sqlite3@13.0.3)(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)
-      lucide-react:
-        specifier: ^0.487.0
-        version: 0.487.0(react@19.2.8)
       prettier:
         specifier: 'catalog:'
         version: 3.9.6
