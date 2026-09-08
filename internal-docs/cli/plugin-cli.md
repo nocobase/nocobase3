@@ -131,10 +131,11 @@ export default cliPlugin;
 App 有一个 `cli/` 目录，与 `client/`、`server/` 并列：
 
 ```text
-cli/index.ts          组装入口，pnpm nocobase 执行的就是它
-cli/plugins.ts        插件 CLI 贡献列表
-cli/commands/index.ts App 自己的命令清单，key 就是 app topic 下的命令名
-cli/commands/*.ts     命令实现
+cli/index.ts             组装入口，pnpm nocobase 执行的就是它
+cli/plugins.ts           插件 CLI 贡献列表
+cli/commands/index.ts    App 自己的命令清单，key 就是 app topic 下的命令名
+cli/commands/*.ts        命令实现，随 dist 一起发布
+cli/dev-commands/*.ts    只在开发态存在的命令，不进 dist
 ```
 
 ### cli/plugins.ts
@@ -172,14 +173,37 @@ await runAppCli({
 ```json
 {
   "scripts": {
-    "nocobase": "tsx ./cli/index.ts"
+    "nocobase": "tsx ./cli/index.ts",
+    "migrate": "pnpm nocobase app migrate",
+    "seed": "pnpm nocobase app seed"
   }
 }
 ```
 
-`cli/` 里 import 兄弟文件写 `.ts` 后缀，不是 `.js`——它从源码跑，没有编译产物那一层，跟 `server/` 的写法不同。
+`migrate` 和 `seed` 这类脚本名保持不变——它们是人和 CI 已经在敲的——只是背后从各自一个脚本文件改成了统一走命令，实现只剩一份。注意要写 `pnpm nocobase`：PATH 上的 `nocobase` 是包自带的 bin，只有内置命令，App 自己的命令在 `cli/index.ts` 里。
 
-`cli/` 只跑源码，不进 `dist`：它是开发期工具，跟 `scripts/` 一个性质，部署到服务器的产物里没有它。所以不要把 `cli/` 加进 `tsconfig.server.json` 的 `include`——它归 `tsconfig.node.json` 管，和 `scripts/` 一起，只做 typecheck。ESLint 也按同一个判断把它当工具代码，不做类型感知检查。
+`cli/` 跟 `server/` 一起被 `tsconfig.server.json` 编译进 `dist`，所以 import 兄弟文件写 `.js` 后缀，不是 `.ts`。
+
+**部署产物里也能跑命令。** `dist/package.json` 会带上 `"nocobase": "node ./cli/index.js"`，`dist/cli/` 是编译产物，`@nocobase/nb3-cli`、`@oclif/core` 和贡献命令的插件都会进部署依赖树：
+
+```bash
+cd dist && node ./cli/index.js demo greet world
+```
+
+### 只在开发态存在的命令
+
+有些命令天然进不了部署产物——比如读取 Client 声明要用 Vite 和浏览器端代码，而服务器产物里两者都没有。这类命令放 `cli/dev-commands/`，`tsconfig.server.json` 的 `exclude` 把它排除掉，`cli/index.ts` 只在源码模式下加载它们：
+
+```ts
+const runningFromSource = import.meta.filename.endsWith('.ts');
+const devCommands: AppCliCommands = runningFromSource
+  ? (await import(`${'./dev-commands'}/index.js`)).default
+  : {};
+```
+
+那个拼接出来的 specifier 是刻意的：写成字面量的话，TypeScript 会跟着它把 `dev-commands` 拉进 server 编译,`exclude` 也拦不住。
+
+这样 `dist` 里的 `--help` 干脆不列这些命令，而不是列出来一跑就崩。
 
 ## 执行
 

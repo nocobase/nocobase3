@@ -31,8 +31,10 @@ const DOCUMENTED_SCRIPTS: Readonly<Record<string, string>> = {
   'plugin:update': 'nocobase plugin update',
   'plugin:skills:sync': 'nocobase plugin skills sync',
   nocobase: 'tsx ./cli/index.ts',
-  'client:inspect': 'tsx ./scripts/inspect-client.mjs',
-  'server:inspect': 'tsx ./scripts/inspect-server.mjs',
+  'client:inspect': 'pnpm nocobase app inspect client',
+  'server:inspect': 'pnpm nocobase app inspect server',
+  migrate: 'pnpm nocobase app migrate',
+  seed: 'pnpm nocobase app seed',
 };
 
 describe('documented plugin commands', () => {

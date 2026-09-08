@@ -22,7 +22,7 @@ pnpm dev
 - **Where the application is served.** `APP_BASE_PATH` is the public mount path, `/main` by default, so the development URL looks like `http://127.0.0.1:13000/main/`. `APP_SERVER_PORT` and `APP_SERVER_HOST` change what the server binds to.
 - **Anything a feature you enable requires** — mail delivery, IM webhooks, storage. `config.example.yml` documents every available option, including sections your `config.yml` does not yet have.
 
-`config.yml` is gitignored because it holds your `auth.secret`. Deploy it through your secret management rather than committing it, and run `pnpm server:config` to see what the application resolved.
+`config.yml` is gitignored because it holds your `auth.secret`. Deploy it through your secret management rather than committing it.
 
 To run against a production build instead:
 
@@ -120,11 +120,10 @@ Ordering in `client/plugins.ts` and `server/plugins.ts` is contribution order, a
 
 ### Diagnostics
 
-| Script                | What it does                                                                          |
-| --------------------- | ------------------------------------------------------------------------------------- |
-| `pnpm server:config`  | Print resolved configuration: paths, database, queue, providers. Secrets are redacted |
-| `pnpm client:inspect` | Print the resolved client composition: routes, providers, and which file owns each    |
-| `pnpm server:inspect` | Print the resolved server composition                                                 |
+| Script                | What it does                                                                       |
+| --------------------- | ---------------------------------------------------------------------------------- |
+| `pnpm client:inspect` | Print the resolved client composition: routes, providers, and which file owns each |
+| `pnpm server:inspect` | Print the resolved server composition                                              |
 
 These read static declarations. They report what is wired, not whether it works — a passing inspection is not a substitute for tests.
 
@@ -137,7 +136,7 @@ Two settings decide where the application is reachable:
 - `APP_BASE_PATH` is the public path the application is mounted at, `/main` by default. The browser API base URL is derived from it as `<APP_BASE_PATH>/api`.
 - `APP_PUBLIC_ORIGIN` is the external origin used to build callback and redirect URLs. Set it in production. It must not repeat the base path — the runtime joins the two.
 
-Run `pnpm server:config` to see what the application actually resolved, which is faster than reasoning about precedence between the file, environment variables, and defaults.
+Configuration is resolved from the file, environment variables, and defaults in that order of precedence.
 
 ## Testing
 

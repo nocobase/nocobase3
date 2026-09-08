@@ -253,5 +253,5 @@ run('Materialize server dependency links', 'node', [
 ]);
 
 console.log(
-  '\nBuild complete: dist/client, dist/server, dist/scripts, dist/.env, and dist/package.json',
+  '\nBuild complete: dist/client, dist/server, dist/cli, dist/.env, and dist/package.json',
 );

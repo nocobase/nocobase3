@@ -13,7 +13,7 @@ const rootPackagePath = path.join(rootDir, 'package.json');
 const distPackagePath = path.join(distDir, 'package.json');
 const distWorkspacePath = path.join(distDir, 'pnpm-workspace.yaml');
 const vendorDir = path.join(distDir, 'vendor');
-const runtimeDirs = ['server', 'database', 'scripts'];
+const runtimeDirs = ['server', 'database', 'scripts', 'cli'];
 const databaseRuntimeDrivers = [
   'better-sqlite3',
   'pg',
@@ -311,8 +311,9 @@ const distPackage = {
   },
   scripts: {
     start: 'node ./server/standalone.js',
-    migrate: 'node ./scripts/migrate.js',
-    seed: 'node ./scripts/seed.js',
+    migrate: 'node ./cli/index.js app migrate',
+    seed: 'node ./cli/index.js app seed',
+    nocobase: 'node ./cli/index.js',
   },
   engines: rootPackage.engines ?? {
     node: '>=20',
