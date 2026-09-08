@@ -1,4 +1,4 @@
-import type { ApiClient, RemoteRepository } from '@nocobase/api-client';
+import type { ApiClient, RemoteRepository } from '@nocobase/app-client';
 import type {
   FileRecord,
   UploadOneInput,
