@@ -23,9 +23,11 @@ import {
   type LLMService,
   type LLMProvider,
 } from '../llm-service-service.js';
+import { useT } from '../locales/index.js';
 
 export default function LLMServicePage(): ReactElement {
   const api = useService(apiClientToken);
+  const t = useT();
   const [services, setServices] = useState<LLMService[]>([]);
   const [providers, setProviders] = useState<LLMProvider[]>([]);
   const [error, setError] = useState<string>();
@@ -67,11 +69,11 @@ export default function LLMServicePage(): ReactElement {
         <table className='w-full text-left text-sm'>
           <thead className='bg-muted/40'>
             <tr>
-              <th className='px-3 py-2.5'>UID</th>
-              <th className='px-3 py-2.5'>Title</th>
-              <th className='px-3 py-2.5'>Provider</th>
-              <th className='px-3 py-2.5'>Models</th>
-              <th className='px-3 py-2.5'>Enabled</th>
+              <th className='px-3 py-2.5'>{t('UID')}</th>
+              <th className='px-3 py-2.5'>{t('Title')}</th>
+              <th className='px-3 py-2.5'>{t('Provider')}</th>
+              <th className='px-3 py-2.5'>{t('Models')}</th>
+              <th className='px-3 py-2.5'>{t('Enabled')}</th>
             </tr>
           </thead>
           <tbody>
@@ -101,7 +103,7 @@ export default function LLMServicePage(): ReactElement {
                 <td className='px-3 py-2.5'>
                   <Switch
                     checked={service.enabled}
-                    label={`Enable ${service.name}`}
+                    label={t('Enable {{name}}', { name: service.name })}
                     onCheckedChange={(enabled) => void toggle(service, enabled)}
                   />
                 </td>
@@ -134,6 +136,7 @@ function ProviderCell({
   name: string;
   provider?: LLMProvider;
 }): ReactElement {
+  const t = useT();
   const supportedModel = provider?.supportedModel ?? ['LLM'];
   return (
     <div className='min-w-0'>
@@ -144,7 +147,7 @@ function ProviderCell({
             key={modelType}
             className='rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground'
           >
-            {modelType === 'EMBEDDING' ? 'Embedding' : 'LLM'}
+            {modelType === 'EMBEDDING' ? t('Embedding') : t('LLM')}
           </span>
         ))}
       </div>
@@ -161,6 +164,7 @@ function ModelsCell({
   provider?: LLMProvider;
   onEdit: () => void;
 }): ReactElement {
+  const t = useT();
   const config = normalizeEnabledModels(service.enabledModels);
   const models =
     config.mode === 'recommended'
@@ -170,8 +174,8 @@ function ModelsCell({
     <div className='flex max-w-xl items-start gap-2'>
       <button
         type='button'
-        aria-label={`Edit models for ${service.name}`}
-        title='Edit models'
+        aria-label={t('Edit models for {{name}}', { name: service.name })}
+        title={t('Edit models')}
         className='mt-0.5 shrink-0 rounded p-1 text-muted-foreground hover:bg-accent hover:text-accent-foreground'
         onClick={onEdit}
       >
@@ -190,7 +194,7 @@ function ModelsCell({
           ))
         ) : (
           <span className='py-0.5 text-xs text-muted-foreground'>
-            No models
+            {t('No models')}
           </span>
         )}
       </div>
@@ -241,6 +245,7 @@ function ModelMultiSelect({
   placeholder: string;
   removeLabel: string;
 }): ReactElement {
+  const t = useT();
   const searchInputRef = useRef<HTMLInputElement>(null);
   return (
     <details
@@ -294,8 +299,8 @@ function ModelMultiSelect({
             ref={searchInputRef}
             type='search'
             className='w-full rounded border bg-background px-3 py-2 text-sm'
-            aria-label='Search provider models'
-            placeholder='Search models'
+            aria-label={t('Search provider models')}
+            placeholder={t('Search models')}
             onChange={(event) => onSearch(event.target.value)}
             onClick={(event) => event.stopPropagation()}
             onKeyDown={(event) => event.stopPropagation()}
@@ -303,7 +308,9 @@ function ModelMultiSelect({
         </div>
         <div className='max-h-[340px] overflow-y-auto py-1'>
           {loading ? (
-            <p className='px-3 py-2 text-sm text-muted-foreground'>Loading…</p>
+            <p className='px-3 py-2 text-sm text-muted-foreground'>
+              {t('Loading…')}
+            </p>
           ) : models.length ? (
             models.map((model) => {
               const checked = value.some((item) => item.value === model.value);
@@ -330,7 +337,9 @@ function ModelMultiSelect({
               );
             })
           ) : (
-            <p className='px-3 py-2 text-sm text-muted-foreground'>No models</p>
+            <p className='px-3 py-2 text-sm text-muted-foreground'>
+              {t('No models')}
+            </p>
           )}
         </div>
       </div>
@@ -349,6 +358,7 @@ function ModelEditor({
   onClose: () => void;
   onSaved: (service: LLMService) => void;
 }): ReactElement {
+  const t = useT();
   const [config, setConfig] = useState<EnabledModelsConfig>(() => {
     const normalized = normalizeEnabledModels(service.enabledModels);
     return normalized.mode === 'custom'
@@ -396,17 +406,19 @@ function ModelEditor({
   return (
     <div
       role='dialog'
-      aria-label='Edit models'
+      aria-label={t('Edit models')}
       className='fixed inset-0 grid place-items-center bg-black/30 p-4'
     >
       <div className='w-full max-w-xl space-y-5 rounded-lg bg-background p-6 shadow-lg'>
         <div>
-          <h3 className='text-lg font-semibold'>Edit models</h3>
+          <h3 className='text-lg font-semibold'>{t('Edit models')}</h3>
         </div>
         <div className='flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800'>
           <CircleAlert className='mt-0.5 h-4 w-4 shrink-0' aria-hidden='true' />
           <span>
-            Configure LLM models. Embedding models do not need to be added.
+            {t(
+              'Configure LLM models. Embedding models do not need to be added.',
+            )}
           </span>
         </div>
         <fieldset className='space-y-4'>
@@ -421,7 +433,7 @@ function ModelEditor({
                 void loadProviderModels('');
               }}
             />
-            Select models
+            {t('Select models')}
           </label>
           {config.mode === 'provider' && (
             <div className='space-y-2 pl-6'>
@@ -432,8 +444,8 @@ function ModelEditor({
                 value={config.models}
                 onSearch={(value) => void loadProviderModels(value)}
                 onChange={(models) => setConfig({ mode: 'provider', models })}
-                placeholder='Select models to enable'
-                removeLabel='Remove'
+                placeholder={t('Select models to enable')}
+                removeLabel={t('Remove')}
               />
             </div>
           )}
@@ -448,7 +460,7 @@ function ModelEditor({
                 setCustomModelKeys([]);
               }}
             />
-            Manual input
+            {t('Manual input')}
           </label>
           {config.mode === 'custom' && (
             <div className='space-y-2 pl-6'>
@@ -456,8 +468,8 @@ function ModelEditor({
                 <div key={customModelKeys[index]} className='flex gap-2'>
                   <input
                     className='min-w-0 flex-1 rounded border px-3 py-2 text-sm'
-                    aria-label='Model ID'
-                    placeholder='Model id'
+                    aria-label={t('Model ID')}
+                    placeholder={t('Model ID')}
                     value={model.value}
                     onChange={(event) =>
                       setConfig({
@@ -472,8 +484,8 @@ function ModelEditor({
                   />
                   <input
                     className='min-w-0 flex-1 rounded border px-3 py-2 text-sm'
-                    aria-label='Model label'
-                    placeholder='Display name'
+                    aria-label={t('Model label')}
+                    placeholder={t('Display name')}
                     value={model.label}
                     onChange={(event) =>
                       setConfig({
@@ -488,7 +500,9 @@ function ModelEditor({
                   />
                   <button
                     type='button'
-                    aria-label={`Remove model ${index + 1}`}
+                    aria-label={t('Remove model {{number}}', {
+                      number: index + 1,
+                    })}
                     className='rounded px-2 text-muted-foreground hover:bg-muted'
                     onClick={() => {
                       setConfig({
@@ -518,7 +532,7 @@ function ModelEditor({
                   setCustomModelKeys((keys) => [...keys, key]);
                 }}
               >
-                Add model
+                {t('Add model')}
               </button>
             </div>
           )}
@@ -534,14 +548,14 @@ function ModelEditor({
             className='rounded border px-3 py-1.5 text-sm'
             onClick={onClose}
           >
-            Cancel
+            {t('Cancel')}
           </button>
           <button
             type='button'
             className='rounded bg-primary px-3 py-1.5 text-sm text-primary-foreground'
             onClick={() => void save()}
           >
-            Submit
+            {t('Submit')}
           </button>
         </div>
       </div>
