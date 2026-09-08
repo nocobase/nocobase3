@@ -33,7 +33,6 @@ Agent 必须根据任务检查相关状态面，不能只根据命令退出码�
 | 状态面        | 位置                                  | 作用                                      |
 | ------------- | ------------------------------------- | ----------------------------------------- |
 | 包已安装      | `dependencies` 或 `devDependencies`   | App 可以解析插件包                        |
-| 插件已登记    | `package.json#nocobase.plugins`       | CLI、构建、监听和 Skills 管理 metadata    |
 | Client 已启用 | `client/plugins.ts`                   | Browser runtime 加载 Client contributions |
 | Server 已启用 | `server/plugins.ts`                   | Server runtime 加载 Server contributions  |
 | Skills 已同步 | `.agents/skills/`（本地生成，不提交） | App Agent 可以发现插件能力和集成指南      |
@@ -42,7 +41,7 @@ Client 和 Server 是否注册由包的公开 exports 分别决定：
 
 - `exports["./client"]` 存在时注册 Client factory；
 - `exports["./server"]` 存在时注册 Server definition；
-- `package.json#nocobase.plugins` 是管理 metadata，不是运行时发现机制。
+- 插件清单取自 Client、Server 与 CLI 显式注册入口的并集。
 
 ## 选择任务
 
@@ -74,7 +73,7 @@ Client 和 Server 是否注册由包的公开 exports 分别决定：
 注册任务至少需要确认：
 
 - 包可从目标 App 解析；
-- dependency 与 `nocobase.plugins` 状态符合预期；
+- dependency 与显式注册入口状态符合预期；
 - Client/Server composition roots 与包 exports 和 enabled 状态一致；
 - 没有重复注册；
 - Plugin Skills 已按预期同步，或命令明确使用了 `--no-skills`；

@@ -25,13 +25,16 @@ const scripts = appPackage.scripts ?? {};
 
 /** The command surface documented in internal-docs/cli/README.md, mapped to what it must run. */
 const DOCUMENTED_SCRIPTS: Readonly<Record<string, string>> = {
-  'plugin:register': 'nb3 app plugin register',
-  'plugin:inspect': 'nb3 app plugin inspect',
-  'plugin:unregister': 'nb3 app plugin unregister',
-  'plugin:update': 'nb3 app plugin update',
-  'plugin:skills:sync': 'nb3 app plugin skills sync',
-  'client:inspect': 'tsx ./scripts/inspect-client.mjs',
-  'server:inspect': 'tsx ./scripts/inspect-server.mjs',
+  'plugin:register': 'nocobase plugin register',
+  'plugin:inspect': 'nocobase plugin inspect',
+  'plugin:unregister': 'nocobase plugin unregister',
+  'plugin:update': 'nocobase plugin update',
+  'plugin:skills:sync': 'nocobase plugin skills sync',
+  nocobase: 'tsx ./cli/index.ts',
+  'client:inspect': 'pnpm nocobase app inspect client',
+  'server:inspect': 'pnpm nocobase app inspect server',
+  migrate: 'pnpm nocobase app migrate',
+  seed: 'pnpm nocobase app seed',
 };
 
 describe('documented plugin commands', () => {
@@ -41,7 +44,7 @@ describe('documented plugin commands', () => {
 
   it('declares the CLI that the plugin scripts invoke', () => {
     const usesCli = Object.entries(scripts).filter(([, command]) =>
-      /(^|&&\s*)nb3\s/.test(command),
+      /(^|&&\s*)nocobase\s/.test(command),
     );
 
     expect(usesCli.length).toBeGreaterThan(0);
@@ -49,11 +52,14 @@ describe('documented plugin commands', () => {
   });
 
   it('ships the inspector that client:inspect runs', () => {
-    const entry = path.join(appRoot, 'scripts/inspect-client.mjs');
+    const entry = path.join(
+      appRoot,
+      'cli/dev-commands/inspect-client-impl.mjs',
+    );
 
     expect(existsSync(entry)).toBe(true);
-    // A generated app only receives what `files` lists, so an unlisted script is present here and missing there.
-    expect(appPackage.files).toContain('scripts');
+    // A generated app only receives what `files` lists, so an unlisted directory is present here and missing there.
+    expect(appPackage.files).toContain('cli');
   });
 
   it('keeps synchronized Agent state out of source control and publication', () => {

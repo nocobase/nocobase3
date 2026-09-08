@@ -5,7 +5,7 @@ import type {
   VectorDatabaseProviderFeature,
 } from '@nocobase/ai-employee';
 import { fileStorageFactoryToken } from '@nocobase/ai-employee';
-import { aiManagerToken } from '@nocobase/app-plugin-ai-employee/server/tokens';
+import { aiManagerToken } from '@nocobase/app-plugin-ai-employee/server/plugin';
 import { driveManagerToken } from '@nocobase/app-server/drive';
 import { loggingToken } from '@nocobase/app-server/logging';
 import { queueManagerToken } from '@nocobase/app-server/queue';

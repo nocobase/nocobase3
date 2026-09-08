@@ -109,7 +109,7 @@ function SegmentNumberInput({
       <Input
         type='number'
         min={minimum}
-        step='any'
+        step={100}
         disabled={disabled}
         value={value}
         className='[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none'
@@ -195,6 +195,7 @@ function SegmentSettings({
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(() => normalizeSegmentOptions(value));
 
+  const segmentOptionsInvalid = draft.chunkOverlap >= draft.chunkSize;
   return (
     <Popover
       open={open}
@@ -217,6 +218,7 @@ function SegmentSettings({
           noValidate
           onSubmit={(event) => {
             event.preventDefault();
+            if (segmentOptionsInvalid) return;
             onRegenerate(normalizeSegmentOptions(draft));
             setOpen(false);
           }}
@@ -237,7 +239,7 @@ function SegmentSettings({
             <SegmentNumberInput
               label={t('Chunk size')}
               value={draft.chunkSize}
-              minimum={1}
+              minimum={100}
               disabled={loading}
               onChange={(chunkSize) =>
                 setDraft((current) => ({ ...current, chunkSize }))
@@ -255,6 +257,11 @@ function SegmentSettings({
                 setDraft((current) => ({ ...current, chunkOverlap }))
               }
             />
+            {segmentOptionsInvalid ? (
+              <p className='text-sm text-destructive' role='alert'>
+                {t('Chunk overlap must be less than Chunk size.')}
+              </p>
+            ) : null}
           </label>
           <div className='flex justify-end gap-2'>
             <Button
@@ -266,7 +273,11 @@ function SegmentSettings({
             >
               {t('Cancel')}
             </Button>
-            <Button type='submit' size='sm' disabled={loading}>
+            <Button
+              type='submit'
+              size='sm'
+              disabled={loading || segmentOptionsInvalid}
+            >
               {t('Regenerate')}
             </Button>
           </div>

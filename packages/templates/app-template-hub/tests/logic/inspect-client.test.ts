@@ -14,7 +14,7 @@ import {
   inspectAppClient,
   parseInspectAppClientArgs,
   selectAppClientInspection,
-} from '../../scripts/inspect-client.mjs';
+} from '../../cli/dev-commands/inspect-client-impl.mjs';
 
 async function createInspectionApp(pluginsSource?: string): Promise<string> {
   const appRoot = await mkdtemp(path.join(os.tmpdir(), 'client-inspect-'));
@@ -354,7 +354,10 @@ describe('client inspection', () => {
         [
           'exec',
           'tsx',
-          './scripts/inspect-client.mjs',
+          './cli/index.ts',
+          'app',
+          'inspect',
+          'client',
           '--type',
           'settings',
           '--json',

@@ -1,6 +1,8 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 
 import { afterEach, describe, expect, it } from 'vitest';
@@ -19,6 +21,7 @@ const testsRoot = fileURLToPath(new URL('.', import.meta.url));
 const packageRoot = path.resolve(testsRoot, '../..');
 const repoRoot = path.resolve(packageRoot, '../../..');
 const cleanup: Array<() => Promise<void>> = [];
+const execFileAsync = promisify(execFile);
 
 afterEach(async () => {
   await Promise.allSettled(cleanup.splice(0).map((run) => run()));
@@ -59,6 +62,68 @@ describe('workflow skill prompt fixtures', () => {
       cases.find((item) => item.case.id === 'update-existing-order-workflow')
         ?.case.fixture,
     ).toBe('source-existing-order-fulfillment');
+    expect(cases.some((item) => item.case.skillMode === 'implicit')).toBe(true);
+  });
+
+  it('uses the published Skill and current workflow checker paths', async () => {
+    await expect(
+      fs.stat(
+        path.join(packageRoot, 'skills/nocobase-app-plugin-workflow/SKILL.md'),
+      ),
+    ).resolves.toBeTruthy();
+    await expect(
+      fs.stat(path.join(packageRoot, 'bin/workflow.ts')),
+    ).resolves.toBeTruthy();
+
+    const promptCase = (await loadPromptCases(testsRoot))[0].case;
+    const workspace = await prepareCaseWorkspace({
+      case: promptCase,
+      repoRoot,
+      testsRoot,
+      keep: false,
+    });
+    await expect(
+      fs.readFile(path.join(workspace.root, 'TEST_CONTEXT.md'), 'utf8'),
+    ).resolves.toContain('/bin/workflow.ts');
+    const validWorkflow = path.join(
+      workspace.root,
+      'server/workflows/valid-quotation',
+    );
+    await execFileAsync(
+      process.execPath,
+      [
+        '--import',
+        path.join(packageRoot, 'node_modules/tsx/dist/loader.mjs'),
+        path.join(packageRoot, 'bin/workflow.ts'),
+        'check',
+        validWorkflow,
+      ],
+      { cwd: workspace.root },
+    );
+    await workspace.cleanup();
+  });
+
+  it('installs the published Skill for implicit-selection cases', async () => {
+    const promptCase = (await loadPromptCases(testsRoot)).find(
+      (item) => item.case.skillMode === 'implicit',
+    )?.case;
+    if (!promptCase) throw new Error('Implicit selection case was not found.');
+    const workspace = await prepareCaseWorkspace({
+      case: promptCase,
+      repoRoot,
+      testsRoot,
+      keep: false,
+    });
+    await expect(
+      fs.readFile(
+        path.join(
+          workspace.root,
+          '.agents/skills/nocobase-app-plugin-workflow/SKILL.md',
+        ),
+        'utf8',
+      ),
+    ).resolves.toContain('name: nocobase-app-plugin-workflow');
+    await workspace.cleanup();
   });
 
   it('creates isolated parallel workspaces and cleans them', async () => {

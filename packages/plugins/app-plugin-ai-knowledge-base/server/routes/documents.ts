@@ -1,3 +1,4 @@
+import { Readable } from 'node:stream';
 import type { AuthEnv } from '@nocobase/app-plugin-authentication/server';
 import type { Hono } from 'hono';
 
@@ -38,6 +39,23 @@ export function createDocumentRoutes(options: {
     return record
       ? data(context, record)
       : error(context, 404, 'Document not found');
+  });
+  routes.get('/aiKnowledgeBaseDocs:download', async (context) => {
+    const id = scalar(context, 'filterByTk');
+    if (!id) return error(context, 400, 'filterByTk is required');
+    const opened = await options.service.open(id);
+    if (!opened) return error(context, 404, 'Document not found');
+
+    return new Response(
+      Readable.toWeb(opened.stream as Readable) as ReadableStream<Uint8Array>,
+      {
+        headers: {
+          'Content-Type': opened.contentType,
+          'Content-Disposition': contentDisposition(opened.metadata.filename),
+          'X-Content-Type-Options': 'nosniff',
+        },
+      },
+    );
   });
   routes.post('/aiKnowledgeBaseDocs:upload', async (context) => {
     const contentType = context.req.header('content-type') ?? '';
@@ -114,6 +132,19 @@ export function createDocumentRoutes(options: {
       : error(context, 404, 'Knowledge base not found');
   });
   return routes;
+}
+
+function contentDisposition(filename: string): string {
+  const normalized = filename.replace(/[\r\n]/gu, '').trim() || 'document';
+  const fallback = normalized
+    .normalize('NFKD')
+    .replace(/[^\x20-\x7E]/gu, '_')
+    .replace(/["\\]/gu, '_');
+  const encoded = encodeURIComponent(normalized).replace(
+    /[!'()*]/gu,
+    (value) => `%${value.codePointAt(0)?.toString(16).toUpperCase()}`,
+  );
+  return `attachment; filename="${fallback}"; filename*=UTF-8''${encoded}`;
 }
 
 function isMultipartFormData(contentType: string): boolean {

@@ -54,12 +54,16 @@ const FALLBACK_GITIGNORE = [
   '# Local application state.',
   '/storage/',
   '/.agents/',
+  '/.agent-annotations/',
   '/.nocobase/',
   '*.log',
   '',
 ].join('\n');
 
-const REQUIRED_GITIGNORE_ENTRIES = ['/.agents/'] as const;
+const REQUIRED_GITIGNORE_ENTRIES = [
+  '/.agents/',
+  '/.agent-annotations/',
+] as const;
 
 /**
  * Ensures the generated project has a `.gitignore`.

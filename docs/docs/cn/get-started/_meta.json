@@ -1,0 +1,22 @@
+[
+  {
+    "type": "file",
+    "name": "index",
+    "label": "开始"
+  },
+  {
+    "type": "file",
+    "name": "what-is-nocobase",
+    "label": "NocoBase 3 是什么"
+  },
+  {
+    "type": "file",
+    "name": "create-app",
+    "label": "创建应用"
+  },
+  {
+    "type": "file",
+    "name": "first-feature",
+    "label": "让 AI 做第一个功能"
+  }
+]

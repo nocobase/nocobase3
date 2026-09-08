@@ -14,7 +14,7 @@ import {
   inspectAppClient,
   parseInspectAppClientArgs,
   selectAppClientInspection,
-} from '../../scripts/inspect-client.mjs';
+} from '../../cli/dev-commands/inspect-client-impl.mjs';
 
 async function createInspectionApp(pluginsSource?: string): Promise<string> {
   const appRoot = await mkdtemp(path.join(os.tmpdir(), 'client-inspect-'));
@@ -283,6 +283,7 @@ describe('client inspection', () => {
       { packageName: '@nocobase/app-plugin-workflow', order: 6 },
       { packageName: '@nocobase/app-plugin-notification', order: 7 },
       { packageName: '@nocobase/app-plugin-repository-example', order: 8 },
+      { packageName: '@nocobase/app-plugin-file-repository', order: 9 },
     ]);
     expect(inspection.configs[0]).toMatchObject({
       kind: 'factory',
@@ -446,7 +447,10 @@ describe('client inspection', () => {
         [
           'exec',
           'tsx',
-          './scripts/inspect-client.mjs',
+          './cli/index.ts',
+          'app',
+          'inspect',
+          'client',
           '--type',
           'settings',
           '--json',

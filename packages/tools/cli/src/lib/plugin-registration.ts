@@ -1,7 +1,7 @@
 // Registers and unregisters a plugin in an application.
 //
-// The same explicit edits happen wherever an application lives: the manifest gains a dependency and
-// `nocobase.plugins` registration, while the client and server composition roots gain imports and entries for the
+// The same explicit edits happen wherever an application lives: the manifest gains a dependency,
+// while the client and server composition roots gain imports and entries for the
 // surfaces the package exports. Only plugin lookup and the recorded dependency range differ between this repository
 // and a generated application, so those are parameters and everything else is shared.
 //
@@ -20,6 +20,15 @@ import {
   writeClientPlugins,
 } from './client-plugins.ts';
 import type { ManualClientPluginEdit } from './client-plugins.ts';
+import {
+  cliPluginsPath,
+  createCliPluginsEditor,
+  describeCliPluginEdit,
+  formatCliPlugins,
+  readCliPlugins,
+  writeCliPlugins,
+  type ManualCliPluginEdit,
+} from './cli-plugins.ts';
 import {
   createServerPluginsEditor,
   describeServerPluginEdit,
@@ -42,6 +51,10 @@ const SHORT_NAME_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 export interface PluginRegistrationPlan {
   /** Whether anything would change; a re-registration of an unchanged plugin is a no-op. */
   readonly changed: boolean;
+  readonly cliPluginsChanged: boolean;
+  readonly cliPluginsPath: string;
+  /** The updated `cli/plugins.ts`, absent when that file needs no change. */
+  readonly cliPluginsText?: string;
   readonly clientPluginsChanged: boolean;
   readonly clientPluginsPath: string;
   /** The updated `client/plugins.ts`, absent when that file needs no change. */
@@ -58,6 +71,8 @@ export interface PluginRegistrationPlan {
   readonly manualClientEdit?: ManualClientPluginEdit;
   /** Manual fallback when TypeScript is unavailable for the server composition root. */
   readonly manualServerEdit?: ManualServerPluginEdit;
+  /** Manual fallback when TypeScript is unavailable for the CLI composition root. */
+  readonly manualCliEdit?: ManualCliPluginEdit;
   readonly packageName: string;
   /** Why the client entry was skipped, for commands that report it. */
   readonly skippedClientEntry?:
@@ -69,10 +84,15 @@ export interface PluginRegistrationPlan {
   /** Why the server entry was skipped, for commands that report it. */
   readonly skippedServerEntry?:
     'disabled' | 'no-server-entry' | 'no-typescript';
+  /** Why the CLI entry was skipped, for commands that report it. */
+  readonly skippedCliEntry?: 'disabled' | 'no-cli-entry' | 'no-typescript';
 }
 
 export interface PluginUnregistrationPlan {
   readonly changed: boolean;
+  readonly cliPluginsChanged: boolean;
+  readonly cliPluginsPath: string;
+  readonly cliPluginsText?: string;
   readonly clientPluginsChanged: boolean;
   readonly clientPluginsPath: string;
   readonly clientPluginsText?: string;
@@ -82,6 +102,7 @@ export interface PluginUnregistrationPlan {
   /** Set when client/plugins.ts still holds the entry because the app has no TypeScript to edit it with. */
   readonly manualClientEdit?: ManualClientPluginEdit;
   readonly manualServerEdit?: ManualServerPluginEdit;
+  readonly manualCliEdit?: ManualCliPluginEdit;
   readonly packageName: string;
   /** Which parts of the application the plugin was removed from, for reporting. */
   readonly removedFrom: readonly string[];
@@ -140,7 +161,7 @@ export function pluginShortName(packageName: string): string {
  */
 async function hasPluginExport(
   pluginDirectory: string,
-  exportName: './client' | './server',
+  exportName: './client' | './server' | './cli',
 ): Promise<boolean> {
   let manifest: Record<string, unknown>;
   try {
@@ -169,6 +190,12 @@ export async function hasServerPluginEntry(
   return hasPluginExport(pluginDirectory, './server');
 }
 
+export async function hasCliPluginEntry(
+  pluginDirectory: string,
+): Promise<boolean> {
+  return hasPluginExport(pluginDirectory, './cli');
+}
+
 /**
  * Computes the registration without writing it. `pluginDirectory` is where the plugin package can be read from, which
  * is a workspace directory in this repository and an installed dependency in a generated application.
@@ -195,7 +222,6 @@ export async function planPluginRegistration({
   const manifestChanged = registerInManifest({
     dependencyField,
     dependencyRange,
-    enabled,
     manifest,
     manifestPath,
     packageName,
@@ -226,8 +252,19 @@ export async function planPluginRegistration({
       ? await planServerAddition(appRoot, packageName)
       : { changed: false, filePath: serverPluginsPath(appRoot) };
 
+  const shipsCliEntry = await hasCliPluginEntry(pluginDirectory);
+  const skippedCliEntry = !enabled
+    ? 'disabled'
+    : shipsCliEntry
+      ? undefined
+      : 'no-cli-entry';
+  const cli =
+    skippedCliEntry === undefined
+      ? await planCliAddition(appRoot, packageName)
+      : { changed: false, filePath: cliPluginsPath(appRoot) };
+
   // Losing the whole registration because the app cannot format one file would throw away a working install and a
-  // correct manifest. The dependency, the registration and the skills need no compiler, so only this one edit
+  // correct manifest. The dependency and the skills need no compiler, so only this one edit
   // degrades, and it degrades into instructions precise enough to apply by hand.
   const resolvedSkip = client.missingTypeScript
     ? 'no-typescript'
@@ -235,9 +272,15 @@ export async function planPluginRegistration({
   const resolvedServerSkip = server.missingTypeScript
     ? 'no-typescript'
     : skippedServerEntry;
+  const resolvedCliSkip = cli.missingTypeScript
+    ? 'no-typescript'
+    : skippedCliEntry;
 
   return {
-    changed: manifestChanged || client.changed || server.changed,
+    changed: manifestChanged || client.changed || server.changed || cli.changed,
+    cliPluginsChanged: cli.changed,
+    cliPluginsPath: cli.filePath,
+    ...(cli.sourceText === undefined ? {} : { cliPluginsText: cli.sourceText }),
     clientPluginsChanged: client.changed,
     clientPluginsPath: client.filePath,
     ...(client.sourceText === undefined
@@ -250,6 +293,9 @@ export async function planPluginRegistration({
     ...(server.missingTypeScript
       ? { manualServerEdit: describeServerPluginEdit(appRoot, packageName) }
       : {}),
+    ...(cli.missingTypeScript
+      ? { manualCliEdit: describeCliPluginEdit(appRoot, packageName) }
+      : {}),
     manifestChanged,
     manifestPath,
     ...(manifestChanged
@@ -257,6 +303,9 @@ export async function planPluginRegistration({
       : {}),
     packageName,
     ...(resolvedSkip === undefined ? {} : { skippedClientEntry: resolvedSkip }),
+    ...(resolvedCliSkip === undefined
+      ? {}
+      : { skippedCliEntry: resolvedCliSkip }),
     serverPluginsChanged: server.changed,
     serverPluginsPath: server.filePath,
     ...(server.sourceText === undefined
@@ -289,12 +338,24 @@ export async function planPluginUnregistration({
   if (server.changed) {
     removedFrom.push('server/plugins.ts');
   }
+  const cli = await planCliRemoval(appRoot, packageName);
+  if (cli.changed) {
+    removedFrom.push('cli/plugins.ts');
+  }
+  const compositionRoots = new Set([
+    'client/plugins.ts',
+    'server/plugins.ts',
+    'cli/plugins.ts',
+  ]);
   const manifestChanged = removedFrom.some(
-    (entry) => entry !== 'client/plugins.ts' && entry !== 'server/plugins.ts',
+    (entry) => !compositionRoots.has(entry),
   );
 
   return {
     changed: removedFrom.length > 0,
+    cliPluginsChanged: cli.changed,
+    cliPluginsPath: cli.filePath,
+    ...(cli.sourceText === undefined ? {} : { cliPluginsText: cli.sourceText }),
     clientPluginsChanged: client.changed,
     clientPluginsPath: client.filePath,
     ...(client.sourceText === undefined
@@ -310,6 +371,9 @@ export async function planPluginUnregistration({
       : {}),
     ...(server.missingTypeScript
       ? { manualServerEdit: describeServerPluginEdit(appRoot, packageName) }
+      : {}),
+    ...(cli.missingTypeScript
+      ? { manualCliEdit: describeCliPluginEdit(appRoot, packageName) }
       : {}),
     packageName,
     removedFrom,
@@ -334,6 +398,9 @@ export async function applyPluginRegistration(
   }
   if (plan.serverPluginsText !== undefined) {
     await writeServerPlugins(appRoot, plan.serverPluginsText);
+  }
+  if (plan.cliPluginsText !== undefined) {
+    await writeCliPlugins(appRoot, plan.cliPluginsText);
   }
 }
 
@@ -504,17 +571,68 @@ async function planServerRemoval(
   };
 }
 
+async function planCliAddition(
+  appRoot: string,
+  packageName: string,
+): Promise<ClientEditPlan> {
+  const { filePath, sourceText } = await readCliPlugins(appRoot);
+  let editor;
+  try {
+    editor = await createCliPluginsEditor(appRoot);
+  } catch (error) {
+    if (error instanceof MissingTypeScriptError) {
+      return { changed: false, filePath, missingTypeScript: true };
+    }
+    throw error;
+  }
+  const added = editor.add(sourceText, packageName);
+  if (!added.changed) {
+    return { changed: false, filePath };
+  }
+  return {
+    changed: true,
+    filePath,
+    sourceText: await formatCliPlugins(appRoot, added.sourceText, filePath),
+  };
+}
+
+async function planCliRemoval(
+  appRoot: string,
+  packageName: string,
+): Promise<ClientEditPlan> {
+  const { exists, filePath, sourceText } = await readCliPlugins(appRoot);
+  if (!exists) {
+    return { changed: false, filePath };
+  }
+  let editor;
+  try {
+    editor = await createCliPluginsEditor(appRoot);
+  } catch (error) {
+    if (error instanceof MissingTypeScriptError) {
+      return { changed: false, filePath, missingTypeScript: true };
+    }
+    throw error;
+  }
+  const removed = editor.remove(sourceText, packageName);
+  if (!removed.changed) {
+    return { changed: false, filePath };
+  }
+  return {
+    changed: true,
+    filePath,
+    sourceText: await formatCliPlugins(appRoot, removed.sourceText, filePath),
+  };
+}
+
 function registerInManifest({
   dependencyField,
   dependencyRange,
-  enabled,
   manifest,
   manifestPath,
   packageName,
 }: {
   dependencyField: 'dependencies' | 'devDependencies';
   dependencyRange: string;
-  enabled: boolean;
   manifest: Record<string, unknown>;
   manifestPath: string;
   packageName: string;
@@ -532,25 +650,9 @@ function registerInManifest({
     );
   }
 
-  const nocobase = ensureRecord(manifest, 'nocobase', manifestPath);
-  const plugins = ensureRecord(nocobase, 'plugins', manifestPath);
-  const existingRegistration = plugins[packageName];
-  if (existingRegistration !== undefined && !isRecord(existingRegistration)) {
-    throw new Error(
-      `${manifestPath} has an invalid nocobase.plugins registration for ${packageName}.`,
-    );
-  }
-
   let changed = false;
   if (existingDependency === undefined) {
     insertSorted(dependencies, packageName, dependencyRange);
-    changed = true;
-  }
-  if (existingRegistration === undefined) {
-    insertSorted(plugins, packageName, { enabled });
-    changed = true;
-  } else if (existingRegistration.enabled !== enabled) {
-    existingRegistration.enabled = enabled;
     changed = true;
   }
   return changed;

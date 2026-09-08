@@ -8,7 +8,7 @@
     "node": ">=24.0.0"
   },
   "bin": {
-    "nb3": "./bin/run.js"
+    "nocobase": "./bin/run.js"
   },
   "files": [
     "bin",
@@ -16,34 +16,8 @@
     "README.md"
   ],
   "oclif": {
-    "bin": "nb3",
-    "dirname": "nb3",
-    "topicSeparator": " ",
-    "helpClass": "./dist/help/runtime-help.js",
-    "additionalHelpFlags": [
-      "-h"
-    ],
-    "helpOptions": {
-      "flagSortOrder": "none"
-    },
-    "commands": {
-      "strategy": "explicit",
-      "target": "./dist/registry.js"
-    },
-    "topics": {
-      "app": {
-        "description": "Create, develop, and deploy business apps."
-      },
-      "app:plugin": {
-        "description": "Manage the plugins an app uses."
-      },
-      "app:plugin:skills": {
-        "description": "Synchronize the agent skills plugins ship."
-      },
-      "hub": {
-        "description": "Manage a local hub that hosts deployed apps."
-      }
-    }
+    "bin": "nocobase",
+    "topicSeparator": " "
   },
   "scripts": {
     "build": "node ./scripts/build.mjs",
@@ -71,12 +45,34 @@
     "vitest": "catalog:"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "exports": {
+      "./plugins": {
+        "types": "./dist/plugins/index.d.ts",
+        "import": "./dist/plugins/index.js"
+      },
+      "./runtime": {
+        "types": "./dist/runtime/index.d.ts",
+        "import": "./dist/runtime/index.js"
+      },
+      "./package.json": "./package.json"
+    }
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/nocobase/nocobase3.git",
     "directory": "packages/tools/cli"
   },
-  "license": "Apache-2.0"
+  "license": "Apache-2.0",
+  "exports": {
+    "./plugins": {
+      "types": "./src/plugins/index.ts",
+      "import": "./src/plugins/index.ts"
+    },
+    "./runtime": {
+      "types": "./src/runtime/index.ts",
+      "import": "./src/runtime/index.ts"
+    },
+    "./package.json": "./package.json"
+  }
 }

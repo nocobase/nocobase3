@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
+import { type ReactElement, useEffect, useState } from 'react';
 import { useLocation, useOutletContext, useParams } from 'react-router';
 import { useNotification, useWarnAboutChange } from '@refinedev/core';
+import { useRouteSurfaceClose } from '@nocobase/app-portal-sdk/routing';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import { LoadingState } from '@/extensions/nocobase-ai-knowledge-base-components/app-shell-loading-state';
 import { RouteDrawer } from '../extensions/nocobase-route-surfaces/index.js';
 import { useRefineUnsavedChangesGuard } from '../extensions/nocobase-route-surfaces/use-refine-unsaved-changes.js';
@@ -32,6 +34,34 @@ type Draft = {
 };
 type PartialSave = { message: string; contentHash: string };
 
+function SegmentEditorFooter({
+  disabled,
+  saving,
+  onSave,
+}: {
+  disabled: boolean;
+  saving: boolean;
+  onSave: () => void;
+}): ReactElement {
+  const close = useRouteSurfaceClose();
+  const t = useT();
+
+  return (
+    <div className='flex shrink-0 justify-end gap-2 border-t bg-popover px-5 py-4'>
+      <Button
+        type='button'
+        variant='outline'
+        disabled={saving}
+        onClick={() => void close()}
+      >
+        {t('Cancel')}
+      </Button>
+      <Button type='button' disabled={disabled || saving} onClick={onSave}>
+        {saving ? t('Saving…') : t('Save')}
+      </Button>
+    </div>
+  );
+}
 const toDraft = (segment: KnowledgeBaseSegment): Draft => ({
   title: segment.title,
   content: segment.content || '',
@@ -339,6 +369,8 @@ export default function SegmentRoute({
   const resolvedSegment = segment;
   const resolvedDraft = activeDraft;
 
+  const editorDisabled =
+    !canMaintainDocument || pending || !!partialSave || !!conflict;
   return (
     <RouteDrawer
       title={t('Edit segment')}
@@ -346,7 +378,7 @@ export default function SegmentRoute({
       closeTo={closeTo}
       beforeClose={beforeClose}
     >
-      <div className='space-y-4 overflow-auto p-5'>
+      <div className='min-h-0 flex-1 space-y-4 overflow-y-auto p-5'>
         {pending ? <SegmentPendingAlert /> : null}
         {saveError ? (
           <Alert variant='destructive'>
@@ -385,11 +417,15 @@ export default function SegmentRoute({
           onDraftChange={setDraft}
           onSave={() => void save()}
           saving={saving}
-          disabled={
-            !canMaintainDocument || pending || !!partialSave || !!conflict
-          }
+          disabled={editorDisabled}
+          showSaveAction={false}
         />
       </div>
+      <SegmentEditorFooter
+        disabled={editorDisabled}
+        saving={saving}
+        onSave={() => void save()}
+      />
       {confirmation}
     </RouteDrawer>
   );

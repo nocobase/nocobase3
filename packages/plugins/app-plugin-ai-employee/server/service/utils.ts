@@ -1,3 +1,5 @@
+import { notFoundError, validationError } from '../domain/errors.js';
+
 export type ResourceInput = Record<string, any>;
 
 export function asRecord(value: unknown): ResourceInput | undefined {
@@ -44,15 +46,11 @@ export function normalizeScope(
 }
 
 export function badRequest(message: string): Error {
-  const error: any = new Error(message);
-  error.status = 400;
-  return error;
+  return validationError(message);
 }
 
 export function notFound(resource: string, key: string): Error {
-  const error: any = new Error(`${resource} not found: ${key}`);
-  error.status = 404;
-  return error;
+  return notFoundError(`${resource} not found: ${key}`);
 }
 
 export function redactSecrets(value: unknown, parentKey = ''): unknown {

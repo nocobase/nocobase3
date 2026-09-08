@@ -3,7 +3,12 @@ import agentAnnotations from '@gchust/agent-annotations/vite';
 import fs from 'node:fs';
 import path from 'path';
 
-import { isAgentAnnotationsEnabled } from './scripts/agent-annotations.js';
+const AGENT_ANNOTATIONS_DISABLED_VALUES = new Set(['false', '0', 'no', 'off']);
+
+function isAgentAnnotationsEnabled(value: string | undefined): boolean {
+  const normalized = value?.trim().toLowerCase();
+  return !normalized || !AGENT_ANNOTATIONS_DISABLED_VALUES.has(normalized);
+}
 
 const portalTemplate = JSON.parse(
   fs.readFileSync(path.resolve(__dirname, 'package.json'), 'utf8'),

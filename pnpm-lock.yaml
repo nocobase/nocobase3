@@ -614,6 +614,33 @@ importers:
         specifier: 'catalog:'
         version: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@30.0.1(@noble/hashes@2.3.0))(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(sass-embedded@1.103.1)(sass@1.103.1)(tsx@4.23.12)(yaml@2.9.0))
 
+  packages/examples/app-plugin-cli-example:
+    devDependencies:
+      '@nocobase/dev-config':
+        specifier: workspace:*
+        version: link:../../tools/dev-config
+      '@nocobase/nb3-cli':
+        specifier: workspace:*
+        version: link:../../tools/cli
+      '@oclif/core':
+        specifier: 'catalog:'
+        version: 4.14.0
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.3
+      eslint:
+        specifier: 'catalog:'
+        version: 10.8.1(jiti@2.7.0)
+      prettier:
+        specifier: 'catalog:'
+        version: 3.9.6
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@30.0.1(@noble/hashes@2.3.0))(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(sass-embedded@1.103.1)(sass@1.103.1)(tsx@4.23.12)(yaml@2.9.0))
+
   packages/examples/app-plugin-database-example:
     devDependencies:
       '@nocobase/app-server':
@@ -634,6 +661,72 @@ importers:
       prettier:
         specifier: 'catalog:'
         version: 3.9.6
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@30.0.1(@noble/hashes@2.3.0))(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(sass-embedded@1.103.1)(sass@1.103.1)(tsx@4.23.12)(yaml@2.9.0))
+
+  packages/examples/app-plugin-file-repository-example:
+    devDependencies:
+      '@nocobase/app-client':
+        specifier: workspace:*
+        version: link:../../app/app-client
+      '@nocobase/app-plugin-file-repository':
+        specifier: workspace:*
+        version: link:../../plugins/app-plugin-file-repository
+      '@nocobase/app-server':
+        specifier: workspace:*
+        version: link:../../app/app-server
+      '@nocobase/db':
+        specifier: workspace:*
+        version: link:../../libs/db
+      '@nocobase/dev-config':
+        specifier: workspace:*
+        version: link:../../tools/dev-config
+      '@nocobase/drive':
+        specifier: workspace:*
+        version: link:../../libs/drive
+      '@nocobase/i18n':
+        specifier: workspace:*
+        version: link:../../libs/i18n
+      '@nocobase/service-provider':
+        specifier: workspace:*
+        version: link:../../libs/service-provider
+      '@testing-library/jest-dom':
+        specifier: 'catalog:'
+        version: 7.0.1(@testing-library/dom@10.4.1)(vitest@4.1.10)
+      '@testing-library/react':
+        specifier: 'catalog:'
+        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@testing-library/user-event':
+        specifier: 'catalog:'
+        version: 14.6.4(@testing-library/dom@10.4.1)
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.3
+      '@types/react':
+        specifier: 'catalog:'
+        version: 19.2.18
+      better-sqlite3:
+        specifier: 'catalog:'
+        version: 12.11.1
+      eslint:
+        specifier: 'catalog:'
+        version: 10.8.1(jiti@2.7.0)
+      hono:
+        specifier: 'catalog:'
+        version: 4.13.2
+      jsdom:
+        specifier: 'catalog:'
+        version: 30.0.1(@noble/hashes@2.3.0)
+      prettier:
+        specifier: 'catalog:'
+        version: 3.9.6
+      react:
+        specifier: 'catalog:'
+        version: 19.2.8
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -2143,6 +2236,55 @@ importers:
         specifier: 'catalog:'
         version: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@30.0.1(@noble/hashes@2.3.0))(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(sass-embedded@1.103.1)(sass@1.103.1)(tsx@4.23.12)(yaml@2.9.0))
 
+  packages/plugins/app-plugin-file-repository:
+    dependencies:
+      hono:
+        specifier: 'catalog:'
+        version: 4.13.2
+    devDependencies:
+      '@nocobase/api-client':
+        specifier: workspace:*
+        version: link:../../libs/api-client
+      '@nocobase/app-client':
+        specifier: workspace:*
+        version: link:../../app/app-client
+      '@nocobase/app-server':
+        specifier: workspace:*
+        version: link:../../app/app-server
+      '@nocobase/db':
+        specifier: workspace:*
+        version: link:../../libs/db
+      '@nocobase/dev-config':
+        specifier: workspace:*
+        version: link:../../tools/dev-config
+      '@nocobase/drive':
+        specifier: workspace:*
+        version: link:../../libs/drive
+      '@nocobase/service-provider':
+        specifier: workspace:*
+        version: link:../../libs/service-provider
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.3
+      '@types/react':
+        specifier: 'catalog:'
+        version: 19.2.18
+      better-sqlite3:
+        specifier: 'catalog:'
+        version: 12.11.1
+      eslint:
+        specifier: 'catalog:'
+        version: 10.8.1(jiti@2.7.0)
+      prettier:
+        specifier: 'catalog:'
+        version: 3.9.6
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@30.0.1(@noble/hashes@2.3.0))(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(sass-embedded@1.103.1)(sass@1.103.1)(tsx@4.23.12)(yaml@2.9.0))
+
   packages/plugins/app-plugin-hub:
     dependencies:
       '@nocobase/app-host':
@@ -2840,12 +2982,21 @@ importers:
       '@nocobase/app-plugin-authorization':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-authorization
+      '@nocobase/app-plugin-cli-example':
+        specifier: workspace:^
+        version: link:../../examples/app-plugin-cli-example
       '@nocobase/app-plugin-database-example':
         specifier: workspace:^
         version: link:../../examples/app-plugin-database-example
       '@nocobase/app-plugin-file':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-file
+      '@nocobase/app-plugin-file-repository':
+        specifier: workspace:^
+        version: link:../../plugins/app-plugin-file-repository
+      '@nocobase/app-plugin-file-repository-example':
+        specifier: workspace:^
+        version: link:../../examples/app-plugin-file-repository-example
       '@nocobase/app-plugin-i18n':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-i18n
@@ -2933,6 +3084,9 @@ importers:
       '@nocobase/snowflake':
         specifier: workspace:^
         version: link:../../libs/snowflake
+      '@oclif/core':
+        specifier: 'catalog:'
+        version: 4.14.0
       '@refinedev/cli':
         specifier: ^2.16.48
         version: 2.16.52(@types/node@24.13.3)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(bluebird@3.4.7)(encoding@0.1.13)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -3182,6 +3336,9 @@ importers:
       '@nocobase/app-plugin-authorization':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-authorization
+      '@nocobase/app-plugin-cli-example':
+        specifier: workspace:^
+        version: link:../../examples/app-plugin-cli-example
       '@nocobase/app-plugin-database-example':
         specifier: workspace:^
         version: link:../../examples/app-plugin-database-example
@@ -3275,6 +3432,9 @@ importers:
       '@nocobase/snowflake':
         specifier: workspace:^
         version: link:../../libs/snowflake
+      '@oclif/core':
+        specifier: 'catalog:'
+        version: 4.14.0
       '@refinedev/cli':
         specifier: ^2.16.48
         version: 2.16.52(@types/node@24.13.3)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(bluebird@3.4.7)(encoding@0.1.13)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)

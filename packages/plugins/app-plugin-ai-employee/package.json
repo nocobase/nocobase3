@@ -64,10 +64,6 @@
     "./server/config": {
       "types": "./server/config.ts",
       "import": "./server/config.ts"
-    },
-    "./server/tokens": {
-      "types": "./server/tokens.ts",
-      "import": "./server/tokens.ts"
     }
   },
   "publishConfig": {
@@ -113,10 +109,6 @@
       "./server/config": {
         "types": "./dist/server/config.d.ts",
         "import": "./dist/server/config.js"
-      },
-      "./server/tokens": {
-        "types": "./dist/server/tokens.d.ts",
-        "import": "./dist/server/tokens.js"
       }
     }
   },
@@ -124,8 +116,7 @@
     "plugin": {
       "database": {
         "migrations": "./database/migrations"
-      },
-      "server": "./server/bootstrap.ts"
+      }
     },
     "registry": {
       "items": {

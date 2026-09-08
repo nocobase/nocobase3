@@ -18,6 +18,8 @@ export default {
   'Choose one of the supported file types: {{types}}.':
     'Choose one of the supported file types: {{types}}.',
   'Chunk overlap': 'Chunk overlap',
+  'Chunk overlap must be less than Chunk size.':
+    'Chunk overlap must be less than Chunk size.',
   'Chunk size': 'Chunk size',
   Close: 'Close',
   'Content saved; related questions were not saved':
@@ -98,6 +100,7 @@ export default {
   'Knowledge base workspace': 'Knowledge base workspace',
   'Knowledge bases': 'Knowledge bases',
   'List view': 'List view',
+  'Loading…': 'Loading…',
   'Loading more knowledge bases…': 'Loading more knowledge bases…',
   'Loading upload requirements. Try again in a moment.':
     'Loading upload requirements. Try again in a moment.',
@@ -122,6 +125,7 @@ export default {
   Pagination: 'Pagination',
   Passage: 'Passage',
   Pending: 'Pending',
+  Processing: 'Processing',
   Preview: 'Preview',
   'Re-index {{count}} {{item}}': 'Re-index {{count}} {{item}}',
   'Re-index {{count}} {{item}}?': 'Re-index {{count}} {{item}}?',
@@ -185,6 +189,8 @@ export default {
   Send: 'Send',
   Settings: 'Settings',
   Shared: 'Shared',
+  Success: 'Success',
+  Error: 'Error',
   Size: 'Size',
   'Someone else updated this segment': 'Someone else updated this segment',
   'Split document': 'Split document',
@@ -283,6 +289,8 @@ export default {
   'Vector database': 'Vector database',
   'Embedding model': 'Embedding model',
   'Select storage': 'Select storage',
+  'Select file storage': 'Select file storage',
+  'Select a file storage disk.': 'Select a file storage disk.',
   'Select vector database': 'Select vector database',
   'Select LLM service': 'Select LLM service',
   'Select embedding model': 'Select embedding model',
@@ -303,6 +311,7 @@ export default {
   'Enable knowledge base': 'Enable knowledge base',
   'Disable knowledge base': 'Disable knowledge base',
   'Unable to update knowledge base': 'Unable to update knowledge base',
+  'Unable to delete knowledge base': 'Unable to delete knowledge base',
   'Delete knowledge base?': 'Delete knowledge base?',
   'This permanently deletes the knowledge base, its documents, segments, and vectors.':
     'This permanently deletes the knowledge base, its documents, segments, and vectors.',

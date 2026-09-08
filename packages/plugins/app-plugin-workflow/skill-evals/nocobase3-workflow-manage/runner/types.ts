@@ -14,6 +14,7 @@ export interface PromptCase {
   domain?: string;
   fixture?: string;
   preconditions?: string[];
+  skillMode?: 'explicit' | 'implicit';
   expected: string[];
   forbidden: string[];
 }
@@ -29,6 +30,7 @@ export interface AgentRunOptions {
   cwd: string;
   prompt: string;
   skillPath: string;
+  injectSkill: boolean;
   model?: string;
   sandbox: 'read-only' | 'workspace-write';
   timeoutMs: number;

@@ -97,7 +97,7 @@ export default class RebuildIndexJob extends Job<RebuildIndexPayload> {
 }
 ```
 
-Jobs in `server/jobs/` are discovered automatically; `pnpm server:config` prints the resolved locations.
+Jobs in `server/jobs/` are discovered automatically; `pnpm server:inspect --json` lists the plugins that contribute them.
 
 Dispatch by resolving the queue manager:
 

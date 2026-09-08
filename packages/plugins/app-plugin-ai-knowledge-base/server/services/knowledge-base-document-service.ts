@@ -12,6 +12,7 @@ import type {
   KnowledgeBaseRepository,
 } from '../repository/index.js';
 import { page, type PageOptions, type PageResult } from './pagination.js';
+import type { OpenedFile } from '@nocobase/ai-employee';
 
 export class KnowledgeBaseDocumentService {
   public constructor(
@@ -39,6 +40,12 @@ export class KnowledgeBaseDocumentService {
   }): Promise<Record<string, unknown> | null> {
     const record = await this.documents.findById(options.id);
     return record ? { ...record, accessAbility: 'readWrite' } : null;
+  }
+
+  public open(
+    id: string | number,
+  ): Promise<OpenedFile<KnowledgeBaseDocumentEntity> | null> {
+    return this.manager.open(id);
   }
 
   public async upload(options: {

@@ -23,9 +23,9 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import {
   ArrowLeft,
-  CircleAlert,
   CircleFadingArrowUpIcon,
   FileText,
   RefreshCw,
@@ -195,34 +195,25 @@ export default function KnowledgeBaseWorkspacePage() {
             knowledgeBaseKey: record.knowledgeBaseKey,
             documentId: record.id,
           });
-      if (!downloadable.url) {
-        throw new Error(t('The document file is unavailable.'));
-      }
-
       const suffix = downloadable.extname
         ? downloadable.extname.startsWith('.')
           ? downloadable.extname
           : `.${downloadable.extname}`
         : '';
       const title = downloadable.title || record.title;
-      const filename = title
-        ? `${title}${suffix}`
-        : downloadable.filename || `document-${downloadable.id}${suffix}`;
-      const response = await fetch(
-        nocobaseClient.resolveUrl(downloadable.url),
+      const filename =
+        downloadable.filename ||
+        record.filename ||
+        (title ? `${title}${suffix}` : `document-${downloadable.id}${suffix}`);
+      const stream = await nocobaseClient.stream(
+        'ai/aiKnowledgeBaseDocs:download',
         {
-          headers: nocobaseClient.getHeaders({
-            method: 'GET',
-            withAclMeta: false,
-            headers: { Accept: '*/*' },
-          }),
+          method: 'GET',
+          query: { filterByTk: downloadable.id },
+          headers: { Accept: '*/*' },
         },
       );
-      if (!response.ok) {
-        throw new Error(t('The document file is unavailable.'));
-      }
-
-      const objectUrl = URL.createObjectURL(await response.blob());
+      const objectUrl = URL.createObjectURL(await new Response(stream).blob());
       const link = window.document.createElement('a');
       link.href = objectUrl;
       link.download = filename;
@@ -309,103 +300,96 @@ export default function KnowledgeBaseWorkspacePage() {
           </Button>
         </div>
         {local ? (
-          <TabsContent value='documents' className='mt-5 space-y-3'>
-            <section className='space-y-3'>
-              <div className='flex items-center justify-between gap-3'>
-                <p className='flex items-center gap-1.5 whitespace-nowrap text-sm text-muted-foreground'>
-                  <CircleAlert
-                    aria-hidden='true'
-                    className='size-3.5 shrink-0'
-                  />
-                  <span>
-                    {t(
-                      'Upload a ZIP archive to import multiple documents in one go.',
-                    )}
-                  </span>
-                </p>
-                <div className='flex shrink-0 items-center gap-2'>
-                  <Button
-                    variant='outline'
-                    size='sm'
-                    disabled={documents.loading}
-                    onClick={() => documents.retry()}
-                  >
-                    <RefreshCw data-icon='inline-start' aria-hidden='true' />
-                    {t('Refresh')}
-                  </Button>
-                  <Button
-                    size='sm'
-                    render={
-                      <Link
-                        to={`${knowledgeBaseLiveRoutes.upload(base.data.key)}${location.search}${location.hash}`}
-                        state={{ from: liveLocationPath(location) }}
+          <TabsContent value='documents' className='mt-5'>
+            <Card>
+              <CardContent className='space-y-4'>
+                <div className='flex items-center justify-end gap-3'>
+                  <div className='flex shrink-0 items-center gap-2'>
+                    <Button
+                      variant='outline'
+                      size='sm'
+                      disabled={documents.loading}
+                      onClick={() => documents.retry()}
+                    >
+                      <RefreshCw data-icon='inline-start' aria-hidden='true' />
+                      {t('Refresh')}
+                    </Button>
+                    <Button
+                      size='sm'
+                      render={
+                        <Link
+                          to={`${knowledgeBaseLiveRoutes.upload(base.data.key)}${location.search}${location.hash}`}
+                          state={{ from: liveLocationPath(location) }}
+                        />
+                      }
+                    >
+                      <CircleFadingArrowUpIcon
+                        data-icon='inline-start'
+                        aria-hidden='true'
                       />
-                    }
-                  >
-                    <CircleFadingArrowUpIcon
-                      data-icon='inline-start'
-                      aria-hidden='true'
-                    />
-                    {t('Upload')}
-                  </Button>
+                      {t('Upload')}
+                    </Button>
+                  </div>
                 </div>
-              </div>
-              {documents.loading && !documents.data ? (
-                <LoadingState className='min-h-48' />
-              ) : documents.error ? (
-                <KnowledgeBaseDirectoryError
-                  error={documents.error}
-                  onRetry={documents.retry}
-                />
-              ) : documents.data?.rows.length ? (
-                <DocumentTable
-                  documents={documents.data.rows}
-                  canMaintain={canMaintainKnowledgeBaseDocument}
-                  onOpen={(document) => {
-                    setSegmentDocument(document);
-                    setSegmentDrawerOpen(true);
-                    setWorkspace({ segmentDocumentId: String(document.id) });
-                  }}
-                  onDownload={downloadDocument}
-                  onVectorize={(document) => {
-                    setDocumentAction({
-                      kind: 'vectorize',
-                      documentIds: [document.id],
-                    });
-                  }}
-                  onDelete={(document) => {
-                    setDocumentAction({
-                      kind: 'delete',
-                      documentIds: [document.id],
-                    });
-                  }}
-                />
-              ) : (
-                <Empty className='min-h-48 border'>
-                  <EmptyHeader>
-                    <EmptyMedia variant='icon'>
-                      <FileText aria-hidden='true' />
-                    </EmptyMedia>
-                    <EmptyDescription>
-                      {t('No documents are available in this knowledge base.')}
-                    </EmptyDescription>
-                  </EmptyHeader>
-                </Empty>
-              )}
-              {documents.data ? (
-                <PagePagination
-                  page={documents.data.page}
-                  pageSize={documents.data.pageSize}
-                  total={documents.data.count}
-                  onPageChange={(documentPage) =>
-                    setWorkspace({ documentPage })
-                  }
-                  onPageSizeChange={(documentPageSize) =>
-                    setWorkspace({ documentPage: 1, documentPageSize })
-                  }
-                />
-              ) : null}
-            </section>
+                {documents.loading && !documents.data ? (
+                  <LoadingState className='min-h-48' />
+                ) : documents.error ? (
+                  <KnowledgeBaseDirectoryError
+                    error={documents.error}
+                    onRetry={documents.retry}
+                  />
+                ) : documents.data?.rows.length ? (
+                  <DocumentTable
+                    documents={documents.data.rows}
+                    canMaintain={canMaintainKnowledgeBaseDocument}
+                    onOpen={(document) => {
+                      setSegmentDocument(document);
+                      setSegmentDrawerOpen(true);
+                      setWorkspace({ segmentDocumentId: String(document.id) });
+                    }}
+                    onDownload={downloadDocument}
+                    onVectorize={(document) => {
+                      setDocumentAction({
+                        kind: 'vectorize',
+                        documentIds: [document.id],
+                      });
+                    }}
+                    onDelete={(document) => {
+                      setDocumentAction({
+                        kind: 'delete',
+                        documentIds: [document.id],
+                      });
+                    }}
+                  />
+                ) : (
+                  <Empty className='min-h-48 border'>
+                    <EmptyHeader>
+                      <EmptyMedia variant='icon'>
+                        <FileText aria-hidden='true' />
+                      </EmptyMedia>
+                      <EmptyDescription>
+                        {t(
+                          'No documents are available in this knowledge base.',
+                        )}
+                      </EmptyDescription>
+                    </EmptyHeader>
+                  </Empty>
+                )}
+                {documents.data ? (
+                  <PagePagination
+                    page={documents.data.page}
+                    pageSize={documents.data.pageSize}
+                    total={documents.data.count}
+                    onPageChange={(documentPage) =>
+                      setWorkspace({ documentPage })
+                    }
+                    onPageSizeChange={(documentPageSize) =>
+                      setWorkspace({ documentPage: 1, documentPageSize })
+                    }
+                  />
+                ) : null}
+              </CardContent>
+            </Card>
           </TabsContent>
         ) : null}
         <TabsContent value='retrieve' className='mt-5'>

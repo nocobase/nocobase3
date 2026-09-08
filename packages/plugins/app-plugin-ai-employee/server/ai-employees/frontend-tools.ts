@@ -7,8 +7,9 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { ConversationRequestExecution, Context } from '../context.js';
+import type { ConversationExecution } from '../agent/contracts.js';
 import { z } from 'zod';
+import type { RepositoryFactory } from '../factory/repository-factory.js';
 import {
   EXECUTE_FRONTEND_TOOL_NAME,
   LOAD_FRONTEND_TOOL_NAME,
@@ -72,7 +73,7 @@ export const extractFrontendToolManifests = (
 };
 
 const findRequestFrontendTools = (
-  execution?: ConversationRequestExecution,
+  execution?: ConversationExecution,
 ): FrontendToolManifest[] => {
   const explicitlyProvided = normalizeFrontendToolManifests(
     execution?.frontendTools,
@@ -98,8 +99,8 @@ const findRequestFrontendTools = (
 };
 
 export const listCurrentFrontendTools = async (
-  ctx: Context,
-  execution: ConversationRequestExecution = {},
+  repositories: RepositoryFactory,
+  execution: ConversationExecution = {},
 ): Promise<FrontendToolManifest[]> => {
   const currentSessionId =
     typeof execution.sessionId === 'string' ? execution.sessionId : '';
@@ -107,7 +108,7 @@ export const listCurrentFrontendTools = async (
     return findRequestFrontendTools(execution);
   }
 
-  const conversationRepository = ctx.repositories.aiConversations;
+  const conversationRepository = repositories.aiConversations;
   const conversation = (await conversationRepository.findOne({
     filter: {
       sessionId: currentSessionId,
@@ -141,11 +142,11 @@ export const listCurrentFrontendTools = async (
 };
 
 export const findCurrentFrontendTool = async (
-  ctx: Context,
+  repositories: RepositoryFactory,
   toolId: string,
-  execution: ConversationRequestExecution = {},
+  execution: ConversationExecution = {},
 ): Promise<FrontendToolManifest | undefined> => {
-  const tools = await listCurrentFrontendTools(ctx, execution);
+  const tools = await listCurrentFrontendTools(repositories, execution);
   return tools.find((tool) => tool.id === toolId);
 };
 
@@ -210,7 +211,7 @@ export const prepareToolsForFrontendConversation = <
 };
 
 export const readFrontendToolResult = (
-  execution: ConversationRequestExecution,
+  execution: ConversationExecution,
   toolCallId: string,
 ): { provided: true; value: unknown } | undefined => {
   const result = execution.toolCallResults?.find(
