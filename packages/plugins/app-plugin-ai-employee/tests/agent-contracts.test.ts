@@ -70,9 +70,37 @@ describe('fixed AgentService contracts', () => {
     expect(runtime).not.toContain('AIChatConversation');
     expect(runtime).not.toContain('createAIChatConversation');
     expect(runtime).not.toContain('aiChatConversation');
+    expect(runtime).not.toContain('normalizeMessageAttachments');
+    expect(runtime).not.toMatch(/async normalizeMessages\s*\(/);
     expect(providers).toContain(
       'const chatConversation = createAIChatConversation({',
     );
+  });
+
+  it('removes the empty message normalization contract and middleware stage', () => {
+    const types = read('agent/types.ts');
+    const service = read('agent/agent-service.ts');
+    const providerSources = [
+      'agent/providers.ts',
+      'agent/ai-employee/providers.ts',
+    ]
+      .map(read)
+      .join('\n');
+    const pipeline = read('agent/middleware/pipeline.ts');
+
+    expect(types).not.toContain('normalizeMessages');
+    expect(types).not.toContain('messageNormalization');
+    expect(types).not.toContain('MessageNormalizationMiddleware');
+    expect(providerSources).not.toContain('normalizeMessages');
+    expect(service).not.toContain('normalizeMessages');
+    expect(service).not.toContain('messageNormalization');
+    expect(service).toContain(
+      'const allMessages = [...history, ...(request.userMessages ?? [])];',
+    );
+    expect(service).toContain(
+      'chatContext.formatMessages(allMessages, llmContext)',
+    );
+    expect(pipeline).not.toContain('MessageNormalizationMiddleware');
   });
   it('owns the only standard middleware builder and preserves its order', () => {
     const service = read('agent/agent-service.ts');

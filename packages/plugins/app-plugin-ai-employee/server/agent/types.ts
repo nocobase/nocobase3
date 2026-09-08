@@ -89,7 +89,6 @@ export interface PreparedAgentContext extends AgentMessageConversionContext {
 }
 
 export interface AgentFeatureOptions {
-  messageNormalization: boolean;
   contextEnrichment: boolean;
   skills: boolean;
   tools: boolean;
@@ -102,7 +101,6 @@ export interface AgentFeatureOptions {
 }
 
 export const DEFAULT_AGENT_FEATURES: AgentFeatureOptions = {
-  messageNormalization: true,
   contextEnrichment: true,
   skills: true,
   tools: true,
@@ -115,7 +113,6 @@ export const DEFAULT_AGENT_FEATURES: AgentFeatureOptions = {
 };
 
 export const STANDARD_AGENT_MIDDLEWARE_ORDER = [
-  'MessageNormalizationMiddleware',
   'ContextEnrichmentMiddleware',
   'SkillToolBindingMiddleware',
   'ToolInteractionMiddleware',
@@ -346,10 +343,6 @@ export interface ConversationProvider {
 }
 
 export interface ChatContextProvider {
-  normalizeMessages(
-    messages: AIMessageInput[],
-    request: AgentRequest,
-  ): Promise<AIMessageInput[]>;
   formatMessages(
     messages: AIMessageInput[],
     context: AgentMessageConversionContext,

@@ -7,7 +7,7 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { AIFileAttachment } from '@nocobase/ai-employee';
+import type { AIFileAttachment, AIMessageInput } from '@nocobase/ai-employee';
 import type { RepositoryFactory } from '../../factory/repository-factory.js';
 
 export type AttachmentId = string | number;
@@ -175,6 +175,53 @@ export async function findMessageAttachments({
   }
 
   return findSourceAttachments(actorId, repositories, lookups);
+}
+
+export async function resolveMessageAttachments({
+  actorId,
+  repositories,
+  messages,
+}: {
+  actorId: string | number | undefined;
+  repositories: RepositoryFactory;
+  messages: AIMessageInput[];
+}): Promise<AIMessageInput[]> {
+  const attachments = messages.flatMap((message) =>
+    Array.isArray(message.attachments) ? message.attachments : [],
+  );
+
+  if (!attachments.length) {
+    return messages;
+  }
+
+  const attachmentsByLookup = await findMessageAttachments({
+    actorId,
+    repositories,
+    attachments,
+  });
+
+  return messages.map((message) => {
+    if (!Array.isArray(message.attachments) || !message.attachments.length) {
+      return message;
+    }
+
+    return {
+      ...message,
+      attachments: message.attachments.flatMap((attachment) => {
+        const source = getAttachmentSource(attachment);
+        if (!source || shouldSkipAttachmentSourceLookup(source)) {
+          return [attachment];
+        }
+
+        const lookupKey = getMessageAttachmentLookupKey(attachment);
+        const verifiedAttachment = lookupKey
+          ? attachmentsByLookup.get(lookupKey)
+          : undefined;
+
+        return verifiedAttachment ? [{ ...verifiedAttachment, source }] : [];
+      }),
+    };
+  });
 }
 
 export function getMessageAttachmentLookupKey(attachment: unknown) {

@@ -43,12 +43,7 @@ import {
   serializeEmployeeSummary,
 } from '../../manager/sub-agents/shared.js';
 import { sanitizeAdditionalKwargsForToolCalls } from '../../agent/ai-employee/tool-call-sanitizer.js';
-import {
-  findMessageAttachments,
-  getAttachmentSource,
-  getMessageAttachmentLookupKey,
-  shouldSkipAttachmentSourceLookup,
-} from '../../agent/ai-employee/attachments.js';
+import { resolveMessageAttachments } from '../../agent/ai-employee/attachments.js';
 import {
   EXECUTE_FRONTEND_TOOL_NAME,
   LOAD_FRONTEND_TOOL_NAME,
@@ -610,45 +605,6 @@ If information is missing, clearly state it in the summary.</Important>`;
     return presetTools ? presetTools.autoCall === true : isAutoCall;
   }
 
-  async normalizeMessages(
-    messages: AIMessageInput[],
-  ): Promise<AIMessageInput[]> {
-    return this.normalizeMessageAttachments(messages);
-  }
-
-  private async normalizeMessageAttachments(
-    messages: AIMessageInput[],
-  ): Promise<AIMessageInput[]> {
-    const attachments = messages
-      .filter((message) => Array.isArray(message.attachments))
-      .flatMap((message) => message.attachments);
-
-    if (!attachments.length) return messages;
-
-    const attachmentsByLookup = await findMessageAttachments({
-      actorId: this.agentContext.actor.id,
-      repositories: this.repositories,
-      attachments,
-    });
-    return messages.map((message) => {
-      if (!Array.isArray(message.attachments) || !message.attachments.length)
-        return message;
-      return {
-        ...message,
-        attachments: message.attachments.flatMap((attachment) => {
-          const source = getAttachmentSource(attachment);
-          if (!source || shouldSkipAttachmentSourceLookup(source))
-            return [attachment];
-          const lookupKey = getMessageAttachmentLookupKey(attachment);
-          const verifiedAttachment = lookupKey
-            ? attachmentsByLookup.get(lookupKey)
-            : null;
-          return verifiedAttachment ? [{ ...verifiedAttachment, source }] : [];
-        }),
-      };
-    });
-  }
-
   async formatMessages({
     messages,
     provider,
@@ -658,15 +614,18 @@ If information is missing, clearly state it in the summary.</Important>`;
   }) {
     const formattedMessages = [];
     const workContextHandler = this.workContextHandler;
-    const normalizedMessages = await this.normalizeMessageAttachments(messages);
-
+    const resolvedMessages = await resolveMessageAttachments({
+      actorId: this.agentContext.actor.id,
+      repositories: this.repositories,
+      messages,
+    });
     // 截断过长的内容
     const truncate = (text: string, maxLen = 50000) => {
       if (!text || text.length <= maxLen) return text;
       return text.slice(0, maxLen) + '\n...[truncated]';
     };
 
-    for (const msg of normalizedMessages) {
+    for (const msg of resolvedMessages) {
       const attachments = msg.attachments;
       const workContext = msg.workContext;
       const userContent = msg.content;

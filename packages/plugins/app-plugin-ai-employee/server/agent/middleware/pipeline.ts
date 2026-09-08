@@ -16,9 +16,6 @@ export function buildStandardAgentMiddleware(
 ) {
   const { features } = providers;
   return [
-    features.messageNormalization
-      ? namedNoopMiddleware('MessageNormalizationMiddleware')
-      : namedNoopMiddleware('MessageNormalizationMiddleware'),
     features.contextEnrichment
       ? namedNoopMiddleware('ContextEnrichmentMiddleware')
       : namedNoopMiddleware('ContextEnrichmentMiddleware'),

@@ -330,7 +330,6 @@ export function createAIEmployeeChatContextProvider(
 ): ChatContextProvider {
   const { runtime, responseMetadata } = state;
   return {
-    normalizeMessages: (messages) => runtime.normalizeMessages(messages),
     formatMessages: (messages, model) =>
       runtime.formatMessages({ messages, provider: model.provider }),
     getSystemPrompt: (messages) => runtime.getSystemPrompt(messages),

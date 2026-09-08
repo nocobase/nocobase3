@@ -171,13 +171,8 @@ export class AgentService {
     const history = shouldLoadHistory
       ? await conversation.messages.load(request.messageId)
       : [];
-    const normalized = features.messageNormalization
-      ? await chatContext.normalizeMessages(
-          [...history, ...(request.userMessages ?? [])],
-          request,
-        )
-      : [...history, ...(request.userMessages ?? [])];
-    const formatted = await chatContext.formatMessages(normalized, llmContext);
+    const allMessages = [...history, ...(request.userMessages ?? [])];
+    const formatted = await chatContext.formatMessages(allMessages, llmContext);
     const formattedSystemPrompt = formatted
       .filter((message: any) => message?.role === 'system')
       .map((message: any) => message.content)
@@ -188,7 +183,7 @@ export class AgentService {
     );
     const systemPrompt = features.contextEnrichment
       ? [
-          await chatContext.getSystemPrompt(normalized, request),
+          await chatContext.getSystemPrompt(allMessages, request),
           formattedSystemPrompt,
         ]
           .filter(Boolean)

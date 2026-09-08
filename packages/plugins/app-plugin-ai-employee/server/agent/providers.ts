@@ -273,7 +273,6 @@ export function createDefaultChatContextProvider(
   options: { systemPrompt?: string } = {},
 ): ChatContextProvider {
   return {
-    normalizeMessages: async (messages) => messages,
     formatMessages: async (messages, context) =>
       messages.map((message) => {
         const rawContent = message.content?.content ?? '';
