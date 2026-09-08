@@ -27,7 +27,6 @@ const packageRoot = path.resolve(testsRoot, '../..');
 const repoRoot = path.resolve(packageRoot, '../../..');
 const skillPath = path.join(
   packageRoot,
-  '.agents',
   'skills',
   'nocobase-app-plugin-workflow',
   'SKILL.md',
@@ -75,6 +74,7 @@ const records = await mapLimit(selected, options.concurrency, async (item) => {
       cwd: workspace.root,
       prompt: augmentPrompt(item.case),
       skillPath,
+      injectSkill: item.case.skillMode !== 'implicit',
       model: options.model,
       sandbox: item.case.risk === 'read-only' ? 'read-only' : 'workspace-write',
       timeoutMs: options.timeoutMs,

@@ -55,11 +55,15 @@ export class CodexAppServerAdapter {
       const turnResult = await client.request('turn/start', {
         threadId: thread.id,
         input: [
-          {
-            type: 'skill',
-            name: 'nocobase-app-plugin-workflow',
-            path: options.skillPath,
-          },
+          ...(options.injectSkill
+            ? [
+                {
+                  type: 'skill',
+                  name: 'nocobase-app-plugin-workflow',
+                  path: options.skillPath,
+                },
+              ]
+            : []),
           { type: 'text', text: options.prompt, text_elements: [] },
         ],
       });
