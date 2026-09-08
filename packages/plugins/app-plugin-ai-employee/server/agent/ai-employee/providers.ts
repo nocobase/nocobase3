@@ -1,34 +1,22 @@
 import { BaseCallbackHandler } from '@langchain/core/callbacks/base';
 import type { LLMResult } from '@langchain/core/outputs';
-import type { BaseMessageLike } from '@langchain/core/messages';
-import {
-  createAgent,
-  type AIMessage as LangChainAIMessage,
-  type HumanMessage,
-  type ToolMessage,
-} from 'langchain';
+import { createAgent } from 'langchain';
 import type {
   AgentAbortHandle,
-  AgentMessageConversionContext,
   AgentProviderOverrides,
   AgentProviders,
   AgentRequest,
   AgentThread,
-  ChatMessageConverters,
   ConversationProvider,
   ResolvedAgentLLM,
   ToolCallHandler,
   ToolProvider,
 } from '../types.js';
 import { BaseChatContextProvider } from '../chat-context.js';
+import { AIEmployeeChatMessageConverters } from './message-converters.js';
 import { NativeCollectionSaver } from '../../agent/ai-employee/checkpoints/index.js';
 import { createAIChatConversation } from './ai-chat-conversation.js';
 import type { DatabaseConnection } from '@nocobase/db';
-import {
-  convertAIMessage,
-  convertHumanMessage,
-  convertToolMessage,
-} from '../../agent/ai-employee/utils.js';
 import type {
   AIEmployee as AIEmployeeType,
   AIMessageInput,
@@ -620,17 +608,6 @@ If information is missing, clearly state it in the summary.</Important>`;
     );
     return shouldAutoExecuteFrontendTool(frontendTools, args);
   }
-
-  /** @deprecated Message formatting moves to AIEmployeeChatMessageConverters in T09. */
-  public formatMessages(
-    messages: readonly AIMessageInput[],
-    context: AgentMessageConversionContext,
-  ) {
-    return this.runtime.formatMessages({
-      messages: [...messages],
-      provider: context.provider,
-    });
-  }
 }
 
 export function createAIEmployeeChatContextProvider(
@@ -638,48 +615,6 @@ export function createAIEmployeeChatContextProvider(
   state = createState(options),
 ): AIEmployeeChatContextProvider {
   return new AIEmployeeChatContextProvider(options, state.runtime);
-}
-
-function createLegacyAIEmployeeChatMessageConverters(
-  state: AIEmployeeProviderState,
-): ChatMessageConverters {
-  const { runtime } = state;
-  return {
-    formatMessages: async (messages, context) =>
-      (await runtime.formatMessages({
-        messages: [...messages],
-        provider: context.provider,
-      })) as BaseMessageLike[],
-    assistant: {
-      toStored: (message: LangChainAIMessage, context) =>
-        convertAIMessage({
-          aiEmployee: runtime,
-          providerName: context.providerName,
-          provider: context.provider,
-          llmService: context.llmService,
-          model: context.model,
-          aiMessage: message,
-        }),
-    },
-    human: {
-      toStored: (message: HumanMessage, context) =>
-        convertHumanMessage({
-          providerName: context.providerName,
-          llmService: context.llmService,
-          model: context.model,
-          humanMessage: message,
-        }),
-    },
-    tool: {
-      toStored: (message: ToolMessage, context) =>
-        convertToolMessage({
-          providerName: context.providerName,
-          llmService: context.llmService,
-          model: context.model,
-          toolMessage: message,
-        }),
-    },
-  };
 }
 
 export async function createAIEmployeeAgentProviders(
@@ -697,7 +632,7 @@ export async function createAIEmployeeAgentProviders(
   const providers = createAgentProviders({
     conversation,
     chatContext,
-    chatMessageConverters: createLegacyAIEmployeeChatMessageConverters(state),
+    chatMessageConverters: new AIEmployeeChatMessageConverters(options),
     tools,
     checkpointer:
       options.from === 'sub-agent'

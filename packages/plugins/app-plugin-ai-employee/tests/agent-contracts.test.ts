@@ -100,7 +100,7 @@ describe('fixed AgentService contracts', () => {
       'const allMessages = [...history, ...(request.userMessages ?? [])];',
     );
     expect(service).toContain(
-      'chatContext.formatMessages(allMessages, llmContext)',
+      'this.providers.chatMessageConverters.formatMessages(',
     );
     expect(pipeline).not.toContain('MessageNormalizationMiddleware');
   });

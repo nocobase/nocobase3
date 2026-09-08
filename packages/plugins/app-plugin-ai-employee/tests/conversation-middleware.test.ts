@@ -46,8 +46,12 @@ describe('conversationMiddleware', () => {
           messages: { add },
         },
         chatContext: {
+          getToolsMap: vi.fn(async () => new Map()),
+          shouldInterruptToolCall: vi.fn(() => false),
+        },
+        chatMessageConverters: {
           formatMessages,
-          convertToolMessage,
+          tool: { toStored: convertToolMessage },
         },
         tools: {},
       } as never,

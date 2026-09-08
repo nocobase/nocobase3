@@ -26,9 +26,7 @@ import type { SkillsEntity } from '@nocobase/ai-employee';
 
 import type { AIToolMessageEntity } from '../../repository/index.js';
 import type { DatabaseConnection } from '@nocobase/db';
-import { LLMProvider } from '@nocobase/ai-employee';
 import _ from 'lodash';
-import { AIMessageInput } from '@nocobase/ai-employee';
 import type { AIEmployee as AIEmployeeType } from '@nocobase/ai-employee';
 import { listSystemTools, SYSTEM_TOOLS } from '@nocobase/ai-employee';
 
@@ -37,8 +35,6 @@ import {
   listAccessibleAIEmployees,
   serializeEmployeeSummary,
 } from '../../manager/sub-agents/shared.js';
-import { sanitizeAdditionalKwargsForToolCalls } from '../../agent/ai-employee/tool-call-sanitizer.js';
-import { resolveMessageAttachments } from '../../agent/ai-employee/attachments.js';
 import {
   EXECUTE_FRONTEND_TOOL_NAME,
   LOAD_FRONTEND_TOOL_NAME,
@@ -84,16 +80,11 @@ export class AIEmployeeCapabilities {
 
   private agentContext: AppAgentContext;
   private database: DatabaseConnection;
-  private caching: Caching;
-  private fileStorage: FileStorage<AIFileEntity, AIFileMetadataCreateContext>;
   private snowflake: IdGeneratorService;
   private execution: ConversationExecution;
-  private getHeader: (name: string) => string | undefined;
   private repositories: RepositoryFactory;
   private builtInManager: BuiltInManager;
   private knowledgeBaseManager: KnowledgeBaseManager;
-  private workContextHandler: WorkContextHandler;
-  private documentLoaders: DocumentLoaders;
   private webSearch?: boolean;
   private model?: ModelRef;
   private tools: { name: string }[];
@@ -101,16 +92,11 @@ export class AIEmployeeCapabilities {
   constructor({
     agentContext,
     database,
-    caching,
-    fileStorage,
     snowflake,
     execution = {},
-    getHeader = () => undefined,
     repositories,
     builtInManager,
     knowledgeBaseManager,
-    workContextHandler,
-    documentLoaders,
     employee,
     sessionId,
     skillSettings,
@@ -122,16 +108,11 @@ export class AIEmployeeCapabilities {
     this.employee = employee;
     this.agentContext = agentContext;
     this.database = database;
-    this.caching = caching;
-    this.fileStorage = fileStorage;
     this.snowflake = snowflake;
     this.execution = execution;
-    this.getHeader = getHeader;
     this.repositories = repositories;
     this.builtInManager = builtInManager;
     this.knowledgeBaseManager = knowledgeBaseManager;
-    this.workContextHandler = workContextHandler;
-    this.documentLoaders = documentLoaders;
     this.sessionId = sessionId;
     this.skillSettings = skillSettings;
     this.model = model;
@@ -480,136 +461,6 @@ export class AIEmployeeCapabilities {
       (setting) => setting.name === tools.definition.name,
     );
     return presetTools ? presetTools.autoCall === true : isAutoCall;
-  }
-
-  async formatMessages({
-    messages,
-    provider,
-  }: {
-    messages: AIMessageInput[];
-    provider: LLMProvider;
-  }) {
-    const formattedMessages = [];
-    const workContextHandler = this.workContextHandler;
-    const resolvedMessages = await resolveMessageAttachments({
-      actorId: this.agentContext.actor.id,
-      repositories: this.repositories,
-      messages,
-    });
-    // 截断过长的内容
-    const truncate = (text: string, maxLen = 50000) => {
-      if (!text || text.length <= maxLen) return text;
-      return text.slice(0, maxLen) + '\n...[truncated]';
-    };
-
-    for (const msg of resolvedMessages) {
-      const attachments = msg.attachments;
-      const workContext = msg.workContext;
-      const userContent = msg.content;
-      let { content } = userContent ?? {};
-
-      // Handle array content from providers like Anthropic web search (backward compat)
-      if (Array.isArray(content)) {
-        const textBlocks = content.filter(
-          (block: any) => block.type === 'text',
-        );
-        content = textBlocks.map((block: any) => block.text).join('') || '';
-      }
-
-      // 截断消息内容
-      if (typeof content === 'string') {
-        content = truncate(content);
-      }
-      if (msg.role === 'user') {
-        if (typeof content === 'string') {
-          content = `<user_query>${content}</user_query>`;
-          if (workContext?.length) {
-            const workContextStr = (
-              await workContextHandler.resolve(workContext)
-            )
-              .map((x) => `<work_context>${x}</work_context>`)
-              .join('\n');
-            content = workContextStr + '\n' + content;
-          }
-        }
-        const contentBlocks = [];
-        if (attachments?.length) {
-          for (const attachment of attachments) {
-            const parsed = await provider.parseAttachment(attachment as any, {
-              fileStorage: this.fileStorage,
-              documentLoader: this.documentLoaders.cached,
-              caching: this.caching,
-              getHeader: (name: string) => this.getHeader(name),
-            });
-            if (parsed.placement === 'system') {
-              formattedMessages.push({
-                role: 'system',
-                content: parsed.content,
-              });
-            } else {
-              contentBlocks.push(parsed.content);
-            }
-          }
-          if (content && contentBlocks.length > 0) {
-            contentBlocks.push({
-              type: 'text',
-              text: content,
-            });
-          }
-        }
-        const role = 'user';
-        const additional_kwargs = { userContent, attachments, workContext };
-        if (contentBlocks.length) {
-          formattedMessages.push({
-            role,
-            additional_kwargs,
-            contentBlocks,
-          });
-        } else {
-          formattedMessages.push({
-            role,
-            additional_kwargs,
-            content,
-          });
-        }
-
-        continue;
-      }
-      if (msg.role === 'tool') {
-        formattedMessages.push({
-          role: 'tool',
-          content,
-          tool_call_id: msg.metadata?.toolCallId,
-        });
-        continue;
-      }
-      const additionalKwargs = sanitizeAdditionalKwargsForToolCalls(
-        msg.metadata?.additional_kwargs,
-        msg.toolCalls,
-        {
-          onDiscard: (info) => {
-            this.logger.warn(
-              {
-                phase: 'formatMessages',
-                messageId: msg.metadata?.id,
-                ...info,
-              },
-              'Discard malformed raw tool calls from AI message',
-            );
-          },
-        },
-      ).additionalKwargs;
-      formattedMessages.push({
-        role: 'assistant',
-        content,
-        tool_calls: msg.toolCalls,
-        response_metadata: msg.metadata?.response_metadata,
-        additional_kwargs:
-          provider.prepareStoredAssistantAdditionalKwargs(additionalKwargs),
-      });
-    }
-
-    return formattedMessages;
   }
 
   private async getToolCallMap(messageId: string): Promise<

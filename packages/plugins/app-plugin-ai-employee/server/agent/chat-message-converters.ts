@@ -25,9 +25,9 @@ export interface BaseChatMessageConvertersOptions {
 }
 
 export class BaseChatMessageConverters implements ChatMessageConverters {
-  public readonly assistant: ChatMessageConverters['assistant'];
-  public readonly human: ChatMessageConverters['human'];
-  public readonly tool: ChatMessageConverters['tool'];
+  public assistant: ChatMessageConverters['assistant'];
+  public human: ChatMessageConverters['human'];
+  public tool: ChatMessageConverters['tool'];
 
   public constructor(
     protected readonly options: BaseChatMessageConvertersOptions = {},
