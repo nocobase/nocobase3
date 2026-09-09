@@ -10,6 +10,7 @@ import routes from '../client/routes.js';
 import {
   hasHubRoleCapability,
   HUB_ROLE_CAPABILITIES,
+  HUB_ROLE_CAPABILITY_GROUPS,
 } from '../client/roles.js';
 
 describe('@nocobase/app-plugin-hub', () => {
@@ -169,5 +170,20 @@ describe('@nocobase/app-plugin-hub', () => {
     expect(viewResources && hasHubRoleCapability(role, viewResources)).toBe(
       false,
     );
+  });
+
+  it('groups every product capability exactly once', () => {
+    expect(HUB_ROLE_CAPABILITY_GROUPS).toEqual([
+      'visibility',
+      'operations',
+      'user-management',
+    ]);
+    expect(
+      HUB_ROLE_CAPABILITY_GROUPS.flatMap((group) =>
+        HUB_ROLE_CAPABILITIES.filter(
+          (capability) => capability.group === group,
+        ).map((capability) => capability.key),
+      ),
+    ).toEqual(HUB_ROLE_CAPABILITIES.map((capability) => capability.key));
   });
 });

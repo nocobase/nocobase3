@@ -3,6 +3,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { UsersNavigationProvider } from '../client/service-provider.js';
 import users from '../client/plugin.js';
 import {
+  createRoleFilterOptions,
+  createStatusFilterOptions,
+} from '../client/filter-options.js';
+import {
   emptyUserCapabilities,
   loadUserCapabilities,
   USER_MANAGEMENT_ACTIONS,
@@ -14,6 +18,41 @@ import {
 } from '../client/role-scopes.js';
 
 describe('@nocobase/app-plugin-users Client routes', () => {
+  it('keeps filter values internal while exposing readable labels', () => {
+    expect(
+      createStatusFilterOptions({
+        all: 'All statuses',
+        enabled: 'Enabled',
+        disabled: 'Disabled',
+      }),
+    ).toEqual([
+      { value: 'all', label: 'All statuses' },
+      { value: 'enabled', label: 'Enabled' },
+      { value: 'disabled', label: 'Disabled' },
+    ]);
+    expect(
+      createRoleFilterOptions(
+        [
+          {
+            key: 'hub',
+            label: 'Hub role',
+            selection: 'single',
+            requiredOnCreate: true,
+            options: [
+              { value: 'hub-administrator', label: 'Administrator' },
+              { value: 'hub-viewer', label: 'Viewer' },
+            ],
+          },
+        ],
+        'All roles',
+      ),
+    ).toEqual([
+      { value: 'all', label: 'All roles' },
+      { value: 'hub:hub-administrator', label: 'Administrator' },
+      { value: 'hub:hub-viewer', label: 'Viewer' },
+    ]);
+  });
+
   it('requires an explicit role choice and omits empty optional scopes', () => {
     const scopes = [
       {

@@ -62,6 +62,10 @@ import {
   type UserCapabilities,
 } from '../user-permissions.js';
 import {
+  createRoleFilterOptions,
+  createStatusFilterOptions,
+} from '../filter-options.js';
+import {
   UsersClient,
   type CreateUserInput,
   type ManagedUser,
@@ -109,6 +113,15 @@ export default function UsersPage(): ReactElement {
 
   const roleChoices = options.roleScopes.flatMap((scope) =>
     scope.options.map((option) => ({ scope, option })),
+  );
+  const statusOptions = createStatusFilterOptions({
+    all: t('page.allStatuses'),
+    enabled: t('page.enabled'),
+    disabled: t('page.disabled'),
+  });
+  const roleFilterOptions = createRoleFilterOptions(
+    options.roleScopes,
+    t('page.allRoles'),
   );
   const load = useCallback(async () => {
     setLoading(true);
@@ -221,6 +234,7 @@ export default function UsersPage(): ReactElement {
             />
           </label>
           <Select
+            items={statusOptions}
             value={status}
             onValueChange={(value) => {
               setStatus(value as typeof status);
@@ -238,6 +252,7 @@ export default function UsersPage(): ReactElement {
           </Select>
           {roleChoices.length ? (
             <Select
+              items={roleFilterOptions}
               value={role}
               onValueChange={(value) => {
                 setRole(String(value));
@@ -537,6 +552,7 @@ function RoleEditor({
   }
   return (
     <Select
+      items={scope.options}
       disabled={disabled}
       value={typeof value === 'string' ? value : ''}
       onValueChange={(next) => onChange(String(next))}
