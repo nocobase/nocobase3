@@ -2,6 +2,12 @@
 
 Use this guide for nested pages, page Tabs, and menu groups. Routes are the source of navigation for App, Settings, and Dev. Business page code decides how child content is presented.
 
+## Default for page Tabs
+
+When asked to build a page with Tabs, use child routes by default; the user does not need to request routing separately. This applies to App, Settings, and Dev pages, including plugin-owned pages. Follow an explicit user request for a different interaction.
+
+Declare Tab content in the parent route's `children`, place `<Outlet />` in the parent's content area, and switch Tabs through router navigation. Both fixed Tabs (such as overview and activity) and parameterized Tabs use this pattern. Derive the selected Tab from the URL rather than an independent `activeTab` state. Keep each Tab directly accessible and restorable on refresh, and verify back/forward navigation. Use the existing route API and choose paths for the business requirement; no fixed path naming format is required.
+
 ## Files to edit
 
 | File                           | Change                                           |

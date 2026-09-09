@@ -55,9 +55,14 @@ for the current task:
 | Write Plugin Skills for an App Agent   | `skills.md`                                          |
 | Test, build, and verify                | `testing.md`                                         |
 
-For frontend React Router tasks (`defineAppRoutes()`, `defineSettingsRoutes()`,
-or `defineDevRoutes()`), read the routing references in the existing
-`nocobase-app-development` Skill:
+When building a plugin page with Tabs, use child routes by default, even if the
+user does not mention routing. Declare Tab content under the plugin's parent
+route, place `Outlet` in its page, and derive the selected Tab from the URL.
+Follow an explicit user request for a different interaction.
+
+For pages with Tabs or other frontend React Router tasks (`defineAppRoutes()`,
+`defineSettingsRoutes()`, or `defineDevRoutes()`), read the routing references
+in the existing `nocobase-app-development` Skill:
 
 - [Pages, routes, and menus](../../../packages/templates/app-template-default/skills/nocobase-app-development/references/client-pages-and-routes.md)
 - [Child routes, Tabs, navigation groups, and Outlet](../../../packages/templates/app-template-default/skills/nocobase-app-development/references/client-child-routes.md)

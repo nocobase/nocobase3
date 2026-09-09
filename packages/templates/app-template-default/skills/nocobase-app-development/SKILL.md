@@ -15,7 +15,7 @@ Use this Skill when building a feature in this application: a page, an endpoint,
 
 Do not use it to develop a published plugin package. Plugin development has its own protocol and lives in a separate repository.
 
-For nested pages, route-driven Tabs, or navigation groups, read [child routes](references/client-child-routes.md). This covers route declarations, manual `Outlet` placement, menus, and verification.
+For pages with Tabs, nested pages, or navigation groups, read [child routes](references/client-child-routes.md). Page-level Tabs use child routes by default, even when the user does not mention routing. Declare their content under the parent route and derive the selected Tab from the URL; follow an explicit user request for a different interaction.
 
 Default ships with a localized homepage, empty application-owned server route/provider lists, and no example plugins or demo data. Use `app-template-examples` to explore runnable demonstrations. `database/main/` starts empty; do not copy example history into Default.
 
@@ -61,6 +61,7 @@ Read the page for the task in front of you. Do not read all of them.
 | Task                                                                             | Read                                                             |
 | -------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
 | Add a page, choose an auth mode, add navigation, customize a plugin page         | [client pages and routes](references/client-pages-and-routes.md) |
+| Build a page with Tabs, add child pages or menu groups                           | [child routes and Tabs](references/client-child-routes.md)       |
 | Add or compose UI, add a shadcn primitive, style consistently, support dark mode | [components and styling](references/components-and-styling.md)   |
 | Add an API endpoint, a webhook, or a callback; authenticate and authorize it     | [server routes](references/server-routes.md)                     |
 | Query or write data, resolve the database, work with transactions                | [database and data access](references/database-and-data.md)      |
