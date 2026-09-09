@@ -119,11 +119,11 @@ export class AIEmployeeConversationMessageStore implements ConversationMessageSt
     );
   }
 
-  public saveToolMessages(
+  public async saveToolMessages(
     sourceMessageId: string,
     messages: AIMessageInput[],
   ): Promise<void> {
-    if (!messages.length) return Promise.resolve();
+    if (!messages.length) return;
 
     const toolCallIds = messages.map((message) => {
       const toolCallId = message.metadata?.toolCallId;
@@ -133,7 +133,7 @@ export class AIEmployeeConversationMessageStore implements ConversationMessageSt
       return toolCallId;
     });
 
-    return this.options.conversation.withTransaction(
+    await this.options.conversation.withTransaction(
       async (target, transaction) => {
         await target.addMessages(messages);
         await this.options.toolMessages.update(

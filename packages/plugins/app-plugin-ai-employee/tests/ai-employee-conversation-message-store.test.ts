@@ -164,4 +164,77 @@ describe('AI employee conversation message persistence boundary', () => {
     ).rejects.toThrow('initialize failed');
     expect(fixture.conversation.withTransaction).toHaveBeenCalledOnce();
   });
+
+  it('saves tool messages and confirms derived call IDs in one transaction', async () => {
+    const fixture = createFixture();
+    const messages = [
+      {
+        role: 'tool',
+        content: { type: 'text', content: 'one' },
+        metadata: { toolCallId: 'call-1' },
+      },
+      {
+        role: 'tool',
+        content: { type: 'text', content: 'two' },
+        metadata: { toolCallId: 'call-2' },
+      },
+    ];
+
+    await fixture.store.saveToolMessages('source-message', messages);
+
+    expect(fixture.target.addMessages).toHaveBeenCalledWith(messages);
+    expect(fixture.toolMessages.update).toHaveBeenCalledWith(
+      {
+        values: { invokeStatus: 'confirmed' },
+        filter: {
+          sessionId: 'session-1',
+          messageId: 'source-message',
+          toolCallId: { $in: ['call-1', 'call-2'] },
+        },
+      },
+      { connection: fixture.transaction },
+    );
+    expect(fixture.conversation.withTransaction).toHaveBeenCalledOnce();
+  });
+
+  it('rejects invalid tool messages before starting a transaction', async () => {
+    const fixture = createFixture();
+
+    await expect(
+      fixture.store.saveToolMessages('source-message', [
+        {
+          role: 'tool',
+          content: { type: 'text', content: 'result' },
+          metadata: {},
+        },
+      ]),
+    ).rejects.toThrow('Tool message requires metadata.toolCallId');
+    expect(fixture.conversation.withTransaction).not.toHaveBeenCalled();
+    expect(fixture.target.addMessages).not.toHaveBeenCalled();
+  });
+
+  it('does nothing for an empty tool-message batch', async () => {
+    const fixture = createFixture();
+
+    await expect(
+      fixture.store.saveToolMessages('source-message', []),
+    ).resolves.toBeUndefined();
+    expect(fixture.conversation.withTransaction).not.toHaveBeenCalled();
+  });
+
+  it('propagates confirmation failures through the transaction callback', async () => {
+    const fixture = createFixture();
+    fixture.toolMessages.update.mockRejectedValue(new Error('confirm failed'));
+
+    await expect(
+      fixture.store.saveToolMessages('source-message', [
+        {
+          role: 'tool',
+          content: { type: 'text', content: 'result' },
+          metadata: { toolCallId: 'call-1' },
+        },
+      ]),
+    ).rejects.toThrow('confirm failed');
+    expect(fixture.target.addMessages).toHaveBeenCalledOnce();
+  });
 });
