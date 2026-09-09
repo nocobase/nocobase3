@@ -7,10 +7,12 @@ import {
   createMigrator,
   createSeeder,
 } from '@nocobase/db';
+import { createCaching } from '@nocobase/caching';
 import { Hono } from 'hono';
 import type { Knex } from 'knex';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { Auth, type AuthEnv } from '../../../index.js';
+import { createAuthStorage } from '../../auth-storage.js';
 import { databaseAdapter } from '../../better-auth/database-adapter.js';
 import { createUserAdministrationService } from '../../user-administration.js';
 
@@ -55,6 +57,8 @@ describe('Authentication', () => {
     },
   });
   const router = new Hono<AuthEnv>();
+  const caching = createCaching();
+  const authStorage = createAuthStorage(caching);
   let cookie = '';
   let auth: Auth;
 
@@ -71,6 +75,8 @@ describe('Authentication', () => {
         cookiePrefix: 'nocobase3',
         defaultCookieAttributes: { path: '/test-app' },
       },
+      secondaryStorage: authStorage,
+      session: { storeSessionInDatabase: true },
     });
 
     router.on(['GET', 'POST'], '/api/auth/*', (context) =>
@@ -91,6 +97,7 @@ describe('Authentication', () => {
   });
 
   afterAll(async () => {
+    await caching.dispose();
     await database.destroy();
   });
 
@@ -200,6 +207,21 @@ describe('Authentication', () => {
       connection: database.connection(),
       realtime: { disconnectUser } as never,
     });
+    const sessions = await database
+      .connection()
+      .query.selectFrom('session')
+      .select('token')
+      .where('userId', '=', String(user.id))
+      .execute();
+    expect(sessions.length).toBeGreaterThan(0);
+    for (const session of sessions) {
+      await expect(
+        authStorage.get(String(session.token)),
+      ).resolves.not.toBeNull();
+    }
+    await expect(
+      authStorage.get(`active-sessions-${String(user.id)}`),
+    ).resolves.not.toBeNull();
 
     await users.disable(String(user.id));
 
@@ -212,6 +234,12 @@ describe('Authentication', () => {
         .where('userId', '=', String(user.id))
         .execute(),
     ).resolves.toEqual([]);
+    for (const session of sessions) {
+      await expect(authStorage.get(String(session.token))).resolves.toBeNull();
+    }
+    await expect(
+      authStorage.get(`active-sessions-${String(user.id)}`),
+    ).resolves.toBeNull();
     const previousSession = await router.request('/api/private', {
       headers: { cookie },
     });

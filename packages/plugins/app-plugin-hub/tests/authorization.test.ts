@@ -132,6 +132,59 @@ describe('Hub user role scope', () => {
       ),
     ).rejects.toMatchObject({ code: 'LAST_HUB_ADMIN' });
   });
+
+  it('keeps one enabled administrator when demotion and disable compete', async () => {
+    await createUser(database, 'admin-1');
+    await createUser(database, 'admin-2');
+    for (const userId of ['admin-1', 'admin-2']) {
+      await authorization.permissionSets.assign({
+        subject: { type: 'user', id: userId },
+        permissionSet: HUB_ADMINISTRATOR,
+      });
+    }
+    const scope = createHubUserRoleScope(authorization);
+
+    const results = await Promise.allSettled([
+      database.transaction((connection) =>
+        scope.replace('admin-1', 'hub-viewer', connection),
+      ),
+      database.transaction(async (connection) => {
+        await scope.assertCanDisable!('admin-2', connection);
+        await connection.query
+          .updateTable('user')
+          .set({ disabledAt: new Date() })
+          .where('id', '=', 'admin-2')
+          .execute();
+      }),
+    ]);
+
+    expect(
+      results.filter((result) => result.status === 'fulfilled'),
+    ).toHaveLength(1);
+    const failures = results.filter(
+      (result): result is PromiseRejectedResult => result.status === 'rejected',
+    );
+    expect(failures).toHaveLength(1);
+    expect(failures[0]?.reason).toMatchObject({ code: 'LAST_HUB_ADMIN' });
+    const enabledAdministrators = await database
+      .connection()
+      .query.selectFrom('authorizationPermissionSetAssignments')
+      .innerJoin(
+        'user',
+        'user.id',
+        'authorizationPermissionSetAssignments.subjectId',
+      )
+      .select('authorizationPermissionSetAssignments.subjectId')
+      .where('authorizationPermissionSetAssignments.subjectType', '=', 'user')
+      .where(
+        'authorizationPermissionSetAssignments.permissionSetKey',
+        '=',
+        HUB_ADMINISTRATOR,
+      )
+      .where('user.disabledAt', 'is', null)
+      .execute();
+    expect(enabledAdministrators).toHaveLength(1);
+  });
 });
 
 async function migratePackage(
