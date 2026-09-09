@@ -11,6 +11,7 @@ import clientPlugins from '../../client/plugins.js';
 const appRoot = fileURLToPath(new URL('../..', import.meta.url));
 
 interface AppPackageJson {
+  readonly dependencies?: Record<string, string>;
   readonly devDependencies?: Record<string, string>;
 }
 
@@ -24,8 +25,12 @@ const registeredClientPackages = clientPlugins.plugins.map(
 
 describe('client plugin registry consistency', () => {
   it('declares every client plugin as a dependency', () => {
+    // Either section counts. A plugin with a server half is a runtime dependency and lives in `dependencies`;
+    // one that is client-only stays in `devDependencies`, since Vite inlines it and no deployment loads it.
     const undeclared = registeredClientPackages.filter(
-      (packageName) => appPackage.devDependencies?.[packageName] === undefined,
+      (packageName) =>
+        appPackage.dependencies?.[packageName] === undefined &&
+        appPackage.devDependencies?.[packageName] === undefined,
     );
 
     expect(undeclared).toEqual([]);

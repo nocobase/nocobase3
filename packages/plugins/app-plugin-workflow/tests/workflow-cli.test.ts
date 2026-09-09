@@ -35,12 +35,13 @@ describe('workflow CLI contribution', () => {
   it('exposes the cli entry and shares the app oclif runtime', () => {
     expect(packageMetadata.exports['./cli']).toBeDefined();
     expect(packageMetadata.publishConfig.exports['./cli']).toBeDefined();
+    // Declared once each. pnpm resolves both peers here on its own, so a duplicate devDependency adds nothing.
     expect(packageMetadata.peerDependencies['@nocobase/nb3-cli']).toBeTruthy();
-    expect(packageMetadata.devDependencies['@nocobase/nb3-cli']).toBe(
-      'workspace:*',
-    );
     expect(packageMetadata.peerDependencies['@oclif/core']).toBeTruthy();
-    expect(packageMetadata.devDependencies['@oclif/core']).toBe('catalog:');
+    expect(
+      packageMetadata.devDependencies?.['@nocobase/nb3-cli'],
+    ).toBeUndefined();
+    expect(packageMetadata.devDependencies?.['@oclif/core']).toBeUndefined();
   });
 
   it('gives every command, flag, and argument help text', () => {
