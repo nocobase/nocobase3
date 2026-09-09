@@ -44,6 +44,8 @@
     "template:dev": "pnpm --filter @nocobase/app-template-default dev",
     "app:build": "pnpm --filter @nocobase/app-template-default build",
     "examples:dev": "pnpm --filter @nocobase/app-template-examples dev",
+    "examples:build": "pnpm --filter @nocobase/app-template-examples build",
+    "examples:start": "pnpm --filter @nocobase/app-template-examples start",
     "hub:dev": "pnpm --filter @nocobase/app-template-hub dev",
     "hub:build": "pnpm --filter @nocobase/app-template-hub build",
     "hub:start": "pnpm --filter @nocobase/app-template-hub start",
