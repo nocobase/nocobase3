@@ -1332,6 +1332,7 @@ function createEmbeddedPluginFixture(rootDir: string): void {
   // Every plugin `server/plugins.ts` imports, not just the ones this test asserts on: the embedded server resolves
   // the whole set from the application root, and a temporary root resolves nothing it is not given.
   const pluginPackages = [
+    '@nocobase/app-plugin-ai-employee',
     '@nocobase/app-plugin-authentication',
     '@nocobase/app-plugin-authorization',
     '@nocobase/app-plugin-i18n',
