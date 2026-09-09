@@ -27,7 +27,10 @@ import {
 } from '../../ai-employees/utils.js';
 import type { LLMProvider } from '@nocobase/ai-employee';
 import { createAgentProviders } from '../providers.js';
-import { AIEmployeeCapabilities, type AIEmployeeOptions } from './runtime.js';
+import {
+  AIEmployeeCapabilities,
+  type AIEmployeeAgentRuntimeOptions,
+} from './runtime.js';
 
 class ResponseMetadataCollector extends BaseCallbackHandler {
   name = 'ResponseMetadataCollector';
@@ -55,22 +58,24 @@ export interface AIEmployeeAgentProvidersResult {
 }
 
 interface AIEmployeeProviderState {
-  options: AIEmployeeOptions;
+  options: AIEmployeeAgentRuntimeOptions;
   runtime: AIEmployeeCapabilities;
   activeProvider?: LLMProvider;
   activeIdentity?: AgentLLMIdentity;
   responseMetadata: Map<string, any>;
 }
 
-const createState = (options: AIEmployeeOptions): AIEmployeeProviderState => ({
+const createState = (
+  options: AIEmployeeAgentRuntimeOptions,
+): AIEmployeeProviderState => ({
   options,
   runtime: new AIEmployeeCapabilities(options),
   responseMetadata: new Map(),
 });
 
 function getRequiredModel(
-  options: AIEmployeeOptions,
-): NonNullable<AIEmployeeOptions['model']> {
+  options: AIEmployeeAgentRuntimeOptions,
+): NonNullable<AIEmployeeAgentRuntimeOptions['model']> {
   if (!options.model) {
     throw new Error('AI employee model is required');
   }
@@ -78,12 +83,13 @@ function getRequiredModel(
 }
 
 async function resolveAIEmployeeLLM(
-  options: AIEmployeeOptions,
+  options: AIEmployeeAgentRuntimeOptions,
   state: AIEmployeeProviderState,
 ): Promise<{ provider: LLMProvider; identity: AgentLLMIdentity }> {
-  const resolved = await options.ctx.ai.llmProviderManager.getLLMService(
-    getRequiredModel(options),
-  );
+  const resolved =
+    await options.agentContext.ai.llmProviderManager.getLLMService(
+      getRequiredModel(options),
+    );
   const identity: AgentLLMIdentity = {
     providerName: resolved.service.provider,
     llmService: resolved.service.name,
@@ -96,18 +102,19 @@ async function resolveAIEmployeeLLM(
 }
 
 export function createAIEmployeeConversationProvider(
-  options: AIEmployeeOptions,
+  options: AIEmployeeAgentRuntimeOptions,
   state = createState(options),
 ): ConversationProvider {
   const { runtime } = state;
-  const ctx = options.ctx as any;
+  const agentContext = options.agentContext;
+  const database = options.database;
   const sessionId = options.sessionId;
   const from = options.from ?? 'main-agent';
   const username = String(options.employee.username ?? '');
-  const cache = ctx.llmStreamCachedManager.getCached(sessionId);
+  const cache = options.llmStreamCachedManager.getCached(sessionId);
   const toolCalls: ToolCallHandler = {
     initialize: async (messageId, calls) =>
-      ctx.database.transaction((transaction: DatabaseConnection) =>
+      database.transaction((transaction: DatabaseConnection) =>
         runtime.initToolCall(transaction, messageId, calls),
       ),
     markInterrupted: (...args) => runtime.updateToolCallInterrupted(...args),
@@ -119,7 +126,7 @@ export function createAIEmployeeConversationProvider(
         content: (error as any)?.message ?? error,
       }),
     confirm: async (messageId, ids) =>
-      ctx.database.transaction((transaction: DatabaseConnection) =>
+      database.transaction((transaction: DatabaseConnection) =>
         runtime.confirmToolCall(transaction, messageId, ids),
       ),
     reject: async (_messageId, ids, reason) => {
@@ -184,7 +191,7 @@ export function createAIEmployeeConversationProvider(
     },
     threads: {
       current: async () => {
-        const target = await ctx.repositories.aiConversations.findOne({
+        const target = await options.repositories.aiConversations.findOne({
           filter: { sessionId },
         });
         if (!target) throw new Error('Conversation not existed');
@@ -202,9 +209,9 @@ export function createAIEmployeeConversationProvider(
             threadId: `${sessionId}:${thread}`,
           };
           const saver = new NativeCollectionSaver({
-            checkpoints: ctx.repositories.lcCheckpoints,
-            blobs: ctx.repositories.lcCheckpointBlobs,
-            writes: ctx.repositories.lcCheckpointWrites,
+            checkpoints: options.repositories.lcCheckpoints,
+            blobs: options.repositories.lcCheckpointBlobs,
+            writes: options.repositories.lcCheckpointWrites,
           });
           const agent = createAgent({
             model: llmProvider.createModel() as any,
@@ -222,7 +229,7 @@ export function createAIEmployeeConversationProvider(
         operation === 'fork' ||
         (Boolean(request.messageId) && options.legacy !== true),
       update: async (thread: AgentThread) => {
-        await ctx.repositories.aiConversations.update({
+        await options.repositories.aiConversations.update({
           values: { thread: thread.thread },
           filter: { sessionId, thread: { $lt: thread.thread } },
         });
@@ -250,13 +257,14 @@ export function createAIEmployeeConversationProvider(
       },
       useCheckpointer: () => from === 'main-agent',
     },
-    beforeExecution: async (mode) =>
-      ctx.repositories.aiConversations.update({
+    beforeExecution: async (mode) => {
+      await options.repositories.aiConversations.update({
         values: { llmActiveState: mode },
         filter: { sessionId },
-      }),
-    afterExecution: async (mode, result) =>
-      ctx.repositories.aiConversations.update({
+      });
+    },
+    afterExecution: async (mode, result) => {
+      await options.repositories.aiConversations.update({
         values: {
           llmActiveState: 'idle',
           ...(mode === 'streaming'
@@ -264,22 +272,27 @@ export function createAIEmployeeConversationProvider(
             : {}),
         },
         filter: { sessionId },
-      }),
+      });
+    },
     registerAbortHandle: (token: symbol, handle: AgentAbortHandle) =>
-      ctx.aiEmployeesManager.registerAgentAbortHandle(sessionId, token, handle),
+      options.aiEmployeesManager.registerAgentAbortHandle(
+        sessionId,
+        token,
+        handle,
+      ),
     unregisterAbortHandle: (token: symbol) =>
-      ctx.aiEmployeesManager.unregisterAgentAbortHandle(sessionId, token),
+      options.aiEmployeesManager.unregisterAgentAbortHandle(sessionId, token),
     streamCache: {
       append: (chunk) => cache.append(chunk),
       clear: () => cache.clear(),
       skipped: () => cache.skipped(),
     },
     updateAssistantResponseMetadata: async (messageId, metadata) => {
-      const message = await ctx.repositories.aiMessages.findOne({
+      const message = await options.repositories.aiMessages.findOne({
         filter: { sessionId, messageId },
       });
       if (message) {
-        await ctx.repositories.aiMessages.update({
+        await options.repositories.aiMessages.update({
           values: {
             metadata: {
               ...(message.metadata ?? {}),
@@ -293,13 +306,13 @@ export function createAIEmployeeConversationProvider(
         });
       }
     },
-    logger: ctx.logger,
+    logger: agentContext.logger,
   };
   return conversation;
 }
 
 export function createAIEmployeeToolProvider(
-  options: AIEmployeeOptions,
+  options: AIEmployeeAgentRuntimeOptions,
   state = createState(options),
 ): ToolProvider {
   const { runtime } = state;
@@ -315,7 +328,7 @@ export function createAIEmployeeToolProvider(
 }
 
 export function createAIEmployeeChatContextProvider(
-  options: AIEmployeeOptions,
+  options: AIEmployeeAgentRuntimeOptions,
   state = createState(options),
 ): ChatContextProvider {
   const { runtime, responseMetadata } = state;
@@ -367,7 +380,7 @@ export function createAIEmployeeChatContextProvider(
 }
 
 export async function createAIEmployeeAgentProviders(
-  options: AIEmployeeOptions,
+  options: AIEmployeeAgentRuntimeOptions,
   overrides?: AgentProviderOverrides,
 ): Promise<AIEmployeeAgentProvidersResult> {
   const state = createState(options);
@@ -385,9 +398,9 @@ export async function createAIEmployeeAgentProviders(
       options.from === 'sub-agent'
         ? undefined
         : new NativeCollectionSaver({
-            checkpoints: options.ctx.repositories.lcCheckpoints,
-            blobs: options.ctx.repositories.lcCheckpointBlobs,
-            writes: options.ctx.repositories.lcCheckpointWrites,
+            checkpoints: options.repositories.lcCheckpoints,
+            blobs: options.repositories.lcCheckpointBlobs,
+            writes: options.repositories.lcCheckpointWrites,
           }),
     overrides,
   });

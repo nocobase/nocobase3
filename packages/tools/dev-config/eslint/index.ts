@@ -19,6 +19,7 @@ const testFiles: string[] = [
 const toolingFiles: string[] = [
   '**/*.{config,setup}.{ts,mts,cts}',
   '**/scripts/**/*.{ts,mts,cts}',
+  '**/cli/**/*.{ts,mts,cts}',
 ];
 const portalClientFiles: string[] = [
   'client/**/*.{js,jsx,ts,tsx}',
@@ -29,6 +30,7 @@ const portalNodeFiles: string[] = [
   '*.{js,mjs,cjs}',
   'server/**/*.{js,mjs,cjs,ts,tsx,mts,cts}',
   'scripts/**/*.{js,mjs,cjs,ts,tsx,mts,cts}',
+  'cli/**/*.{js,mjs,cjs,ts,tsx,mts,cts}',
   '*.config.{js,mjs,cjs,ts,mts,cts}',
 ];
 const defaultIgnores: string[] = [

@@ -19,12 +19,6 @@ cp packages/templates/app-template-default/config.example.yml \
 
 SMTP、Resend、飞书和钉钉可以独立启用；SMTP 和 Resend 也可以同时放在同一个 Email Channel 中。未写入 `notification.channels` 的外部 Provider 不会启用。
 
-可以先检查解析后的配置。输出只包含 Provider 名称、类型、启用状态以及测试收件人是否已配置，不会显示密码、API Key、Webhook 或收件地址：
-
-```bash
-pnpm --filter @nocobase/app-template-default server:config
-```
-
 ## 配置 SMTP
 
 SMTP 适合 Gmail、企业邮箱或自建邮件服务器：

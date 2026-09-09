@@ -10,7 +10,6 @@
 '@nocobase/app-plugin-notification-in-app': minor
 '@nocobase/app-plugin-notification-provider': minor
 '@nocobase/app-plugin-notification-providers': minor
-'@nocobase/app-plugin-system-info': minor
 '@nocobase/app-plugin-workflow': minor
 '@nocobase/app-plugin-database-example': minor
 '@nocobase/app-plugin-queue-example': minor

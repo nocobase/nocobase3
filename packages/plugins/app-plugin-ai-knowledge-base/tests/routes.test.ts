@@ -6,10 +6,7 @@ import { ServiceContainer } from '@nocobase/service-provider';
 import { describe, expect, it, vi } from 'vitest';
 
 import { serviceFactoryToken } from '../server/factories/service-factory.js';
-import {
-  knowledgeBaseApiRoutes,
-  knowledgeBaseLegacyRoutes,
-} from '../server/routes/index.js';
+import routes, { knowledgeBaseApiRoutes } from '../server/routes/index.js';
 import type { KnowledgeBaseDocumentService } from '../server/services/knowledge-base-document-service.js';
 import type { KnowledgeBaseSegmentService } from '../server/services/knowledge-base-segment-service.js';
 import type { KnowledgeBaseService } from '../server/services/knowledge-base-service.js';
@@ -71,41 +68,46 @@ function createRouterContext(
 }
 
 describe('knowledge base production routes', () => {
-  it.each([
-    ['api', knowledgeBaseApiRoutes, '/aiKnowledgeBase:list'],
-    ['legacy', knowledgeBaseLegacyRoutes, '/v2/api/aiKnowledgeBase:list'],
-  ])(
-    'protects the %s contribution with authentication',
-    async (_name, contribution, path) => {
-      const router = await contribution.createRouter(
-        createRouterContext(false),
-      );
-      const response = await router.request(path);
-      expect(response.status).toBe(401);
-      await expect(response.json()).resolves.toEqual({
-        code: 'UNAUTHORIZED',
-        message: 'Authentication required',
-      });
-    },
-  );
+  it('registers only the /api/ai contribution', () => {
+    expect(routes).toEqual([knowledgeBaseApiRoutes]);
+    expect(knowledgeBaseApiRoutes.scope).toBe('api');
+  });
 
-  it.each([
-    ['api', knowledgeBaseApiRoutes, '/aiKnowledgeBase:list'],
-    ['legacy', knowledgeBaseLegacyRoutes, '/v2/api/aiKnowledgeBase:list'],
-  ])(
-    'preserves the %s action response envelope',
-    async (_name, contribution, path) => {
-      const router = await contribution.createRouter(createRouterContext(true));
-      const response = await router.request(path);
-      expect(response.status).toBe(200);
-      await expect(response.json()).resolves.toEqual({
-        data: {
-          data: [{ id: 1, name: 'Docs' }],
-          meta: { count: 1, page: 1, pageSize: 20 },
-        },
-      });
-    },
-  );
+  it('protects the /ai contribution with authentication', async () => {
+    const router = await knowledgeBaseApiRoutes.createRouter(
+      createRouterContext(false),
+    );
+    const response = await router.request('/ai/aiKnowledgeBase:list');
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({
+      code: 'UNAUTHORIZED',
+      message: 'Authentication required',
+    });
+  });
+
+  it('preserves the /ai action response envelope', async () => {
+    const router = await knowledgeBaseApiRoutes.createRouter(
+      createRouterContext(true),
+    );
+    const response = await router.request('/ai/aiKnowledgeBase:list');
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      data: {
+        data: [{ id: 1, name: 'Docs' }],
+        meta: { count: 1, page: 1, pageSize: 20 },
+      },
+    });
+  });
+
+  it('does not expose the former unprefixed API path', async () => {
+    const router = await knowledgeBaseApiRoutes.createRouter(
+      createRouterContext(true),
+    );
+
+    const response = await router.request('/aiKnowledgeBase:list');
+
+    expect(response.status).toBe(404);
+  });
 
   it('maps handler failures through the route error boundary', async () => {
     const services = createServices();
@@ -115,7 +117,7 @@ describe('knowledge base production routes', () => {
     );
     const router = await knowledgeBaseApiRoutes.createRouter(context);
 
-    const response = await router.request('/aiKnowledgeBase:list');
+    const response = await router.request('/ai/aiKnowledgeBase:list');
 
     expect(response.status).toBe(500);
     await expect(response.json()).resolves.toEqual({

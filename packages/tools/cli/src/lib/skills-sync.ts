@@ -10,6 +10,16 @@
 // under `packages/`; in a generated application they are installed into
 // `node_modules`. Everything except that lookup is shared, so the lookup is a
 // parameter rather than a branch.
+import {
+  createClientPluginsEditor,
+  readClientPlugins,
+} from './client-plugins.ts';
+import {
+  createServerPluginsEditor,
+  readServerPlugins,
+} from './server-plugins.ts';
+
+import { createCliPluginsEditor, readCliPlugins } from './cli-plugins.ts';
 import { cp, mkdir, readFile, readdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -250,7 +260,7 @@ export async function resolveInstalledPlugins({
       : appRoot;
   const packageNames =
     plugin === undefined
-      ? resolveRegisteredPluginNames(applicationPackage, packageJsonPath)
+      ? await resolveRegisteredPluginNames(appRoot)
       : [normalizePluginPackageName(plugin)];
 
   const plugins: PluginLocation[] = [];
@@ -315,27 +325,29 @@ export async function readAppPackage(
 }
 
 /** The plugin packages an application registers, in a stable order. */
-export function resolveRegisteredPluginNames(
-  applicationPackage: Record<string, unknown>,
-  packageJsonPath: string,
-): string[] {
-  const nocobase = applicationPackage.nocobase;
-  if (nocobase === undefined) {
-    return [];
+export async function resolveRegisteredPluginNames(
+  appRoot: string,
+): Promise<string[]> {
+  const names = new Set<string>();
+  const client = await readClientPlugins(appRoot);
+  if (client.exists) {
+    const editor = await createClientPluginsEditor(appRoot);
+    for (const entry of editor.list(client.sourceText))
+      names.add(entry.packageName);
   }
-  if (!isRecord(nocobase)) {
-    throw new Error(`${packageJsonPath} must define nocobase as an object.`);
+  const server = await readServerPlugins(appRoot);
+  if (server.exists) {
+    const editor = await createServerPluginsEditor(appRoot);
+    for (const entry of editor.list(server.sourceText))
+      names.add(entry.packageName);
   }
-  const plugins = nocobase.plugins;
-  if (plugins === undefined) {
-    return [];
+  const cli = await readCliPlugins(appRoot);
+  if (cli.exists) {
+    const editor = await createCliPluginsEditor(appRoot);
+    for (const entry of editor.list(cli.sourceText))
+      names.add(entry.packageName);
   }
-  if (!isRecord(plugins)) {
-    throw new Error(
-      `${packageJsonPath} must define nocobase.plugins as an object.`,
-    );
-  }
-  return Object.keys(plugins).sort();
+  return [...names].sort();
 }
 
 /**
@@ -412,10 +424,6 @@ async function listFiles(root: string): Promise<string[]> {
   };
   await walk(root, '');
   return files;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
 function isNodeError(error: unknown, code: string): boolean {

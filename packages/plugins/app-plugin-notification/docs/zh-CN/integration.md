@@ -20,25 +20,7 @@ pnpm add @nocobase/app-plugin-notification \
   @nocobase/app-plugin-notification-providers
 ```
 
-如果应用使用 `nocobase.plugins` 发现 migrations，在应用的 `package.json` 中加入：
-
-```json
-{
-  "nocobase": {
-    "plugins": {
-      "@nocobase/app-plugin-notification": {
-        "enabled": true
-      },
-      "@nocobase/app-plugin-notification-in-app": {
-        "enabled": true
-      },
-      "@nocobase/app-plugin-notification-providers": {
-        "enabled": true
-      }
-    }
-  }
-}
-```
+在应用的 `server/plugins.ts` 中注册这三个插件；不需要在 `package.json` 中维护额外的启用清单。
 
 然后执行应用的 migration 命令：
 
@@ -46,7 +28,7 @@ pnpm add @nocobase/app-plugin-notification \
 pnpm migrate
 ```
 
-`nocobase.plugins` 是管理 metadata，不承担运行时发现。默认模板还会在
+默认模板在
 `server/plugins.ts` 中显式组合各插件导出的 Server definition，由 definition 声明
 migrations、Service Providers 和 Routes；测试页面拥有独立的登录和权限边界。
 自定义宿主可继续按下面的步骤手动创建运行时和挂载路由。

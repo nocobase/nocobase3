@@ -1,12 +1,19 @@
 ---
-title: Your first feature
-description: Create a table, add an endpoint, write a page — the whole path, end to end.
+title: 'Let AI build your first feature'
+description: 'Say "add order management" and watch AI build the table, the API and the page together.'
 ---
 
-# Your first feature
+# Let AI build your first feature
 
 :::warning Being written
-This page is still being written.
+This page is being written.
 :::
 
-A feature with a page and an endpoint touches five places: a migration for the table, a server route, a page component and its route declaration, a navigation resource, and the translation keys for its text. This page walks that path from end to end.
+Say "add order management" and watch AI build the table, the API and the page together.
+
+## This page will cover
+
+- A real transcript: state the requirement, AI builds the whole feature
+- Run it and see the result
+- Look back at which files changed, and use that to explain the project layout
+- What belongs in `client/`, `server/` and `database/`

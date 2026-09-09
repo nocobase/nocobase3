@@ -40,7 +40,12 @@ test('directory is a fixed card layout with create, menu, and enabled controls',
 
 test('create and settings use a right-side half-width sheet', () => {
   expect(editor).toMatch(/<SheetContent[\s\S]*side=['"]right['"]/);
-  expect(editor).toMatch(/md:w-1\/2/);
+  expect(editor).toMatch(/md:!w-1\/2/);
+  expect(editor).toMatch(/Chunk overlap must be less than Chunk size\./);
+  expect(editor).toMatch(/segmentOptionsInvalid/);
+  expect(editor).toMatch(
+    /id=['"]chunk-size['"][^>]*min=\{100\}[^>]*step=\{100\}/,
+  );
   expect(editor).toMatch(/createKnowledgeBase/);
   expect(editor).toMatch(/updateKnowledgeBase/);
   expect(editor).toMatch(/listKnowledgeBaseManagementOptions/);

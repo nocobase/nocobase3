@@ -197,6 +197,67 @@ describe('workflow repositories', () => {
     expect(page.data.map((item) => item.key)).toEqual(['artifact-one']);
   });
 
+  it('keeps the current revision visible when a newer Artifact is deployed', async () => {
+    const current = await createTestWorkflow(database, {
+      key: 'deployed-update',
+      enabled: true,
+      nodes: [],
+    });
+    const currentHash = '1'.repeat(64);
+    const pending = createArtifact('deployed-update');
+    pending.workflow.title = 'Pending title';
+    await database
+      .query()
+      .updateTable(WORKFLOW_COLLECTIONS.workflows)
+      .set({
+        title: 'Current title',
+        version: 'version-1',
+        hash: currentHash,
+      })
+      .where('id', '=', current.id)
+      .execute();
+    const service: WorkflowServiceApi = {
+      trigger: async () => ({ status: 'accepted', eventKey: 'test-event' }),
+      triggerRevision: async () => ({
+        status: 'accepted',
+        eventKey: 'test-event',
+      }),
+      discoverArtifacts: async () => [pending],
+      ensureArtifactMaterialized: async () => undefined,
+    };
+    workflows = new WorkflowRepository(database, service);
+
+    await expect(workflows.list({ enabled: true })).resolves.toMatchObject({
+      total: 1,
+      data: [
+        {
+          id: String(current.id),
+          key: 'deployed-update',
+          title: 'Current title',
+          version: 'version-1',
+          hash: currentHash,
+          current: true,
+          enabled: true,
+          pendingArtifact: {
+            hash: pending.digest,
+            title: 'Pending title',
+          },
+        },
+      ],
+    });
+    await expect(workflows.list({ enabled: false })).resolves.toMatchObject({
+      total: 0,
+      data: [],
+    });
+    await expect(workflows.get(current.id)).resolves.toMatchObject({
+      id: String(current.id),
+      hash: currentHash,
+      current: true,
+      enabled: true,
+      pendingArtifact: { hash: pending.digest, title: 'Pending title' },
+    });
+  });
+
   it('filters executions before applying pagination', async () => {
     const leave = await createTestWorkflow(database, {
       key: 'leave-approval',

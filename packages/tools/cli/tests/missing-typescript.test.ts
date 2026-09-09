@@ -146,9 +146,7 @@ describe('registering without TypeScript', () => {
     expect(manifest.devDependencies['@nocobase/app-plugin-audit-log']).toBe(
       '^1.0.0',
     );
-    expect(manifest.nocobase.plugins['@nocobase/app-plugin-audit-log']).toEqual(
-      { enabled: true },
-    );
+    expect(manifest.nocobase.plugins).toEqual({});
     // The plan carries no new source, so applying it cannot touch either composition root.
     expect(plan.clientPluginsText).toBeUndefined();
     expect(plan.serverPluginsText).toBeUndefined();

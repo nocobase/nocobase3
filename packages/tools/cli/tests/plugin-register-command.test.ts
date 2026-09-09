@@ -112,7 +112,7 @@ describe('app plugin register command', () => {
       'SKILL.md',
     );
 
-    const result = await runCommand(config, 'app:plugin:register', [
+    const result = await runCommand(config, 'plugin:register', [
       'audit-log',
       '--dir',
       appRoot,
@@ -130,7 +130,7 @@ describe('app plugin register command', () => {
 
   it('returns structured register and unregister dry-run plans', async () => {
     const appRoot = await createAppWithInstalledPlugin();
-    const registered = await runCommand(config, 'app:plugin:register', [
+    const registered = await runCommand(config, 'plugin:register', [
       'audit-log',
       '--dir',
       appRoot,
@@ -154,13 +154,13 @@ describe('app plugin register command', () => {
       serverPluginsChanged: true,
     });
 
-    await runCommand(config, 'app:plugin:register', [
+    await runCommand(config, 'plugin:register', [
       'audit-log',
       '--dir',
       appRoot,
       '--no-install',
     ]);
-    const unregistered = await runCommand(config, 'app:plugin:unregister', [
+    const unregistered = await runCommand(config, 'plugin:unregister', [
       'audit-log',
       '--dir',
       appRoot,
@@ -194,7 +194,7 @@ describe('app plugin register command', () => {
       `${JSON.stringify({ name: 'demo-app', private: true }, null, 2)}\n`,
     );
 
-    const result = await runCommand(config, 'app:plugin:register', [
+    const result = await runCommand(config, 'plugin:register', [
       'audit-log',
       '--dir',
       appRoot,
@@ -222,9 +222,9 @@ describe('app plugin register command', () => {
   it('reports idempotent register and unregister operations as JSON no-ops', async () => {
     const appRoot = await createAppWithInstalledPlugin();
     const args = ['audit-log', '--dir', appRoot, '--no-install'];
-    await runCommand(config, 'app:plugin:register', args);
+    await runCommand(config, 'plugin:register', args);
 
-    const registered = await runCommand(config, 'app:plugin:register', [
+    const registered = await runCommand(config, 'plugin:register', [
       ...args,
       '--json',
     ]);
@@ -234,8 +234,8 @@ describe('app plugin register command', () => {
       status: 'success-noop',
     });
 
-    await runCommand(config, 'app:plugin:unregister', args);
-    const unregistered = await runCommand(config, 'app:plugin:unregister', [
+    await runCommand(config, 'plugin:unregister', args);
+    const unregistered = await runCommand(config, 'plugin:unregister', [
       ...args,
       '--json',
     ]);
@@ -257,7 +257,7 @@ describe('app plugin register command', () => {
     await mkdir(skillDirectory, { recursive: true });
     await writeFile(path.join(skillDirectory, 'SKILL.md'), '# Orphaned\n');
 
-    const result = await runCommand(config, 'app:plugin:unregister', [
+    const result = await runCommand(config, 'plugin:unregister', [
       'audit-log',
       '--dir',
       appRoot,
@@ -278,7 +278,7 @@ describe('app plugin register command', () => {
 
   it('returns a structured update dry run and update no-op', async () => {
     const appRoot = await createAppWithInstalledPlugin();
-    const empty = await runCommand(config, 'app:plugin:update', [
+    const empty = await runCommand(config, 'plugin:update', [
       '--dir',
       appRoot,
       '--dry-run',
@@ -291,13 +291,13 @@ describe('app plugin register command', () => {
       result: { packageNames: [], commands: [] },
     });
 
-    await runCommand(config, 'app:plugin:register', [
+    await runCommand(config, 'plugin:register', [
       'audit-log',
       '--dir',
       appRoot,
       '--no-install',
     ]);
-    const planned = await runCommand(config, 'app:plugin:update', [
+    const planned = await runCommand(config, 'plugin:update', [
       '--dir',
       appRoot,
       '--plugin',
@@ -324,7 +324,7 @@ describe('app plugin register command', () => {
 
   it('inspects a consistent registration without writing it', async () => {
     const appRoot = await createAppWithInstalledPlugin();
-    await runCommand(config, 'app:plugin:register', [
+    await runCommand(config, 'plugin:register', [
       'audit-log',
       '--dir',
       appRoot,
@@ -335,7 +335,7 @@ describe('app plugin register command', () => {
       'utf8',
     );
 
-    const inspected = await runCommand(config, 'app:plugin:inspect', [
+    const inspected = await runCommand(config, 'plugin:inspect', [
       'audit-log',
       '--dir',
       appRoot,
@@ -367,18 +367,13 @@ describe('app plugin register command', () => {
 
   it('reports inconsistent runtime composition and stale Skills without writing', async () => {
     const appRoot = await createAppWithInstalledPlugin();
-    await runCommand(config, 'app:plugin:register', [
+    await runCommand(config, 'plugin:register', [
       'audit-log',
       '--dir',
       appRoot,
       '--no-install',
     ]);
     const manifestPath = path.join(appRoot, 'package.json');
-    const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as {
-      nocobase: { plugins: Record<string, { enabled: boolean }> };
-    };
-    manifest.nocobase.plugins['@nocobase/app-plugin-audit-log'].enabled = false;
-    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
     await writeFile(
       path.join(
         appRoot,
@@ -391,7 +386,7 @@ describe('app plugin register command', () => {
     );
     const before = await readFile(manifestPath, 'utf8');
 
-    const inspected = await runCommand(config, 'app:plugin:inspect', [
+    const inspected = await runCommand(config, 'plugin:inspect', [
       'audit-log',
       '--dir',
       appRoot,
@@ -402,11 +397,7 @@ describe('app plugin register command', () => {
     };
     expect(response.result.consistent).toBe(false);
     expect(response.result.issues.map((issue) => issue.code)).toEqual(
-      expect.arrayContaining([
-        'CLIENT_ENTRY_UNEXPECTED',
-        'SERVER_ENTRY_UNEXPECTED',
-        'SKILLS_OUT_OF_DATE',
-      ]),
+      expect.arrayContaining(['SKILLS_OUT_OF_DATE']),
     );
     expect(await readFile(manifestPath, 'utf8')).toBe(before);
   });
@@ -414,7 +405,7 @@ describe('app plugin register command', () => {
   it('does not report stale Skills when an uninstalled plugin cannot be inspected', async () => {
     const appRoot = await createAppWithInstalledPlugin();
 
-    const inspected = await runCommand(config, 'app:plugin:inspect', [
+    const inspected = await runCommand(config, 'plugin:inspect', [
       'not-installed',
       '--dir',
       appRoot,
@@ -435,7 +426,6 @@ describe('app plugin register command', () => {
     expect(response.result.issues.map(({ code }) => code)).toEqual([
       'PLUGIN_NOT_INSTALLED',
       'DEPENDENCY_MISSING',
-      'PLUGIN_METADATA_MISSING',
     ]);
     expect(response.result.suggestions).toEqual([
       {
@@ -454,7 +444,7 @@ describe('app plugin register command', () => {
     async (_name, plugin, clientExpected, serverExpected) => {
       const appRoot = await createAppWithInstalledPlugin(plugin);
 
-      await runCommand(config, 'app:plugin:register', [
+      await runCommand(config, 'plugin:register', [
         'audit-log',
         '--dir',
         appRoot,
@@ -470,9 +460,7 @@ describe('app plugin register command', () => {
       expect(manifest.devDependencies).toEqual({
         '@nocobase/app-plugin-audit-log': '^1.0.0',
       });
-      expect(manifest.nocobase?.plugins).toEqual({
-        '@nocobase/app-plugin-audit-log': { enabled: true },
-      });
+      expect(manifest.nocobase?.plugins).toBeUndefined();
       expect(existsSync(path.join(appRoot, 'client', 'plugins.ts'))).toBe(
         clientExpected,
       );
@@ -493,10 +481,10 @@ describe('app plugin register command', () => {
     },
   );
 
-  it('registers disabled metadata without wiring runtime entries', async () => {
+  it('installs a disabled plugin without metadata or runtime entries', async () => {
     const appRoot = await createAppWithInstalledPlugin();
 
-    await runCommand(config, 'app:plugin:register', [
+    await runCommand(config, 'plugin:register', [
       'audit-log',
       '--dir',
       appRoot,
@@ -507,9 +495,7 @@ describe('app plugin register command', () => {
     const manifest = JSON.parse(
       await readFile(path.join(appRoot, 'package.json'), 'utf8'),
     ) as { nocobase?: { plugins?: Record<string, { enabled: boolean }> } };
-    expect(manifest.nocobase?.plugins).toEqual({
-      '@nocobase/app-plugin-audit-log': { enabled: false },
-    });
+    expect(manifest.nocobase?.plugins).toBeUndefined();
     expect(existsSync(path.join(appRoot, 'client', 'plugins.ts'))).toBe(false);
     expect(existsSync(path.join(appRoot, 'server', 'plugins.ts'))).toBe(false);
   });
@@ -517,7 +503,7 @@ describe('app plugin register command', () => {
   it('skips Skill synchronization when --no-skills is explicit', async () => {
     const appRoot = await createAppWithInstalledPlugin();
 
-    await runCommand(config, 'app:plugin:register', [
+    await runCommand(config, 'plugin:register', [
       'audit-log',
       '--dir',
       appRoot,
@@ -532,7 +518,7 @@ describe('app plugin register command', () => {
     const appRoot = await createAppWithInstalledPlugin();
     const args = ['audit-log', '--dir', appRoot, '--no-install'];
 
-    await runCommand(config, 'app:plugin:register', args);
+    await runCommand(config, 'plugin:register', args);
     const manifestPath = path.join(appRoot, 'package.json');
     const clientPath = path.join(appRoot, 'client', 'plugins.ts');
     const serverPath = path.join(appRoot, 'server', 'plugins.ts');
@@ -542,7 +528,7 @@ describe('app plugin register command', () => {
       ),
     );
 
-    const repeated = await runCommand(config, 'app:plugin:register', args);
+    const repeated = await runCommand(config, 'plugin:register', args);
     expect(repeated.stdout).toContain('is already registered');
     await expect(
       Promise.all(
@@ -552,13 +538,13 @@ describe('app plugin register command', () => {
       ),
     ).resolves.toEqual(before);
 
-    await runCommand(config, 'app:plugin:unregister', args);
+    await runCommand(config, 'plugin:unregister', args);
     const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as {
       devDependencies?: Record<string, string>;
       nocobase?: { plugins?: Record<string, unknown> };
     };
     expect(manifest.devDependencies).toEqual({});
-    expect(manifest.nocobase?.plugins).toEqual({});
+    expect(manifest.nocobase?.plugins).toBeUndefined();
     expect(await readFile(clientPath, 'utf8')).not.toContain('audit-log');
     expect(await readFile(serverPath, 'utf8')).not.toContain('audit-log');
     expect(existsSync(path.join(appRoot, '.agents', 'skills'))).toBe(true);
@@ -577,7 +563,7 @@ describe('app plugin register command', () => {
   it('keeps every registered surface unchanged during unregister dry-run', async () => {
     const appRoot = await createAppWithInstalledPlugin();
     const args = ['audit-log', '--dir', appRoot, '--no-install'];
-    await runCommand(config, 'app:plugin:register', args);
+    await runCommand(config, 'plugin:register', args);
     const paths = [
       path.join(appRoot, 'package.json'),
       path.join(appRoot, 'client', 'plugins.ts'),
@@ -594,7 +580,7 @@ describe('app plugin register command', () => {
       paths.map((file) => readFile(file, 'utf8')),
     );
 
-    const result = await runCommand(config, 'app:plugin:unregister', [
+    const result = await runCommand(config, 'plugin:unregister', [
       ...args,
       '--dry-run',
     ]);
@@ -608,7 +594,7 @@ describe('app plugin register command', () => {
   it('updates plugin-owned Skills explicitly without touching app-owned Skills', async () => {
     const appRoot = await createAppWithInstalledPlugin();
     const args = ['audit-log', '--dir', appRoot, '--no-install'];
-    await runCommand(config, 'app:plugin:register', args);
+    await runCommand(config, 'plugin:register', args);
 
     const installedSkill = path.join(
       appRoot,
@@ -637,7 +623,7 @@ describe('app plugin register command', () => {
     await mkdir(path.dirname(appSkill), { recursive: true });
     await writeFile(appSkill, '# App owned\n');
 
-    const dryRun = await runCommand(config, 'app:plugin:skills:sync', [
+    const dryRun = await runCommand(config, 'plugin:skills:sync', [
       '--dir',
       appRoot,
       '--plugin',
@@ -669,7 +655,7 @@ describe('app plugin register command', () => {
     ]);
     expect(await readFile(synchronizedSkill, 'utf8')).toBe('# Audit log\n');
 
-    await runCommand(config, 'app:plugin:skills:sync', [
+    await runCommand(config, 'plugin:skills:sync', [
       '--dir',
       appRoot,
       '--plugin',
@@ -692,7 +678,7 @@ describe('app plugin register command', () => {
 
     try {
       await expect(
-        config.runCommand('app:plugin:skills:sync', [
+        config.runCommand('plugin:skills:sync', [
           '--dir',
           appRoot,
           '--plugin',

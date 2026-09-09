@@ -1,7 +1,7 @@
 import { Loader2 } from 'lucide-react';
 
 import { cn } from '../lib/utils.js';
-
+import { useKnowledgeBaseComponentTranslate } from './i18n.js';
 export function LoadingState({
   className,
   fullscreen = false,
@@ -9,6 +9,7 @@ export function LoadingState({
   className?: string;
   fullscreen?: boolean;
 }) {
+  const t = useKnowledgeBaseComponentTranslate();
   return (
     <div
       role='status'
@@ -19,7 +20,7 @@ export function LoadingState({
       )}
     >
       <Loader2 className='size-7 animate-spin text-primary' />
-      <span className='sr-only'>Loading</span>
+      <span className='sr-only'>{t('Loading…')}</span>
     </div>
   );
 }

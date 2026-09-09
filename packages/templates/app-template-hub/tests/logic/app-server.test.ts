@@ -99,7 +99,6 @@ import {
 type AppConfig = object;
 
 process.env.AUTH_SECRET ??= 'test-auth-secret-at-least-32-characters';
-process.env.HUB_HOST_ENABLED ??= 'false';
 
 interface CloseableResource {
   close(): Promise<void>;
@@ -121,12 +120,6 @@ const servers: Server[] = [];
 const tempDirs: string[] = [];
 const TEST_REALTIME_TOPIC = 'test:realtime';
 const require = createRequire(import.meta.url);
-
-function declaredPluginVersion(packageName: string): string {
-  return (
-    require(`${packageName}/package.json`) as { readonly version: string }
-  ).version;
-}
 
 function requestApp(
   app: FetchableResource,
@@ -695,36 +688,6 @@ describe('app server', () => {
     await expect(rootResponse.json()).resolves.toMatchObject({
       plugin: '@nocobase/app-plugin-routes-example',
       scope: 'root',
-    });
-  });
-
-  it('loads the system info API from the registered app plugin', async () => {
-    const app = trackCloseable(
-      await createInstalledStandaloneServer({ viteDevUrl: false }),
-    );
-    const baseUrl = `http://localhost${app.application.publicBasePath}`;
-    const signIn = await requestApp(
-      app,
-      `${baseUrl}/api/auth/sign-in/username`,
-      {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ username: 'nocobase', password: 'admin123' }),
-      },
-    );
-    const cookie = signIn.headers.get('set-cookie');
-    expect(signIn.status).toBe(200);
-    expect(cookie).toContain('.session_token=');
-    const response = await requestApp(app, `${baseUrl}/api/system-info`, {
-      headers: { cookie: cookie ?? '' },
-    });
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      packageName: '@nocobase/app-plugin-system-info',
-      version: declaredPluginVersion('@nocobase/app-plugin-system-info'),
-      nodeVersion: process.version,
-      serverTime: expect.any(String),
     });
   });
 
@@ -1445,6 +1408,9 @@ function createEmbeddedTestScope(
   return {
     ...options,
     env: {
+      // Embedded scopes do not inherit process.env. These runtime tests do not
+      // install Hub tables or exercise the managed host process.
+      HUB_HOST_ENABLED: 'false',
       ...options.env,
       DB_DATABASE: path.join(databaseDir, 'database.sqlite'),
     },
@@ -1479,6 +1445,7 @@ async function createIsolatedStandaloneServer(
   return createStandaloneServer({
     ...options,
     env: {
+      HUB_HOST_ENABLED: 'false',
       ...options.env,
       DB_DATABASE: path.join(databaseDir, 'database.sqlite'),
     },
@@ -1512,7 +1479,6 @@ function createEmbeddedPluginFixture(rootDir: string): void {
     '@nocobase/app-plugin-authentication',
     '@nocobase/app-plugin-authorization',
     '@nocobase/app-plugin-database-example',
-    '@nocobase/app-plugin-file',
     '@nocobase/app-plugin-hub',
     '@nocobase/app-plugin-i18n',
     '@nocobase/app-plugin-install',
@@ -1524,7 +1490,6 @@ function createEmbeddedPluginFixture(rootDir: string): void {
     '@nocobase/app-plugin-routes-example',
     '@nocobase/app-plugin-service-provider-example',
     '@nocobase/app-plugin-skills-example',
-    '@nocobase/app-plugin-system-info',
     '@nocobase/app-plugin-workflow',
   ];
   writeFileSync(

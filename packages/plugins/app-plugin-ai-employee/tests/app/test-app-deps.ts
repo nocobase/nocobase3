@@ -1,16 +1,40 @@
-import { createConfigPaths } from '@nocobase/app-server/config';
-import { createAuthentication } from '@nocobase/app-plugin-authentication';
-import { SnowflakeIdGenerator } from '@nocobase/snowflake';
-import { createLogging } from '@nocobase/logging';
-import { createDatabaseManager } from '@nocobase/db';
+import { Readable } from 'node:stream';
+
 import {
   createAIManager,
   DriveFileStorageFactory,
+  type AIManager,
+  type FileStorageFactory,
 } from '@nocobase/ai-employee';
-import { Readable } from 'node:stream';
-import type { AppDeps } from '../../server/runtime.js';
+import {
+  createConfigPaths,
+  type ConfigPaths,
+} from '@nocobase/app-server/config';
+import {
+  createAuthentication,
+  type Auth,
+} from '@nocobase/app-plugin-authentication';
+import type { Caching } from '@nocobase/caching';
+import { createDatabaseManager, type DatabaseManager } from '@nocobase/db';
+import { createLogging, type Logging } from '@nocobase/logging';
+import {
+  SnowflakeIdGenerator,
+  type IdGeneratorService,
+} from '@nocobase/snowflake';
 
-export function createTestAppDeps(): AppDeps {
+export interface TestAppDeps {
+  readonly ai: AIManager;
+  readonly paths: ConfigPaths;
+  readonly database: DatabaseManager;
+  readonly auth: Auth;
+  readonly caching: Caching;
+  readonly fileStorageFactory: FileStorageFactory;
+  readonly aiStorageDisk: string;
+  readonly idGenerator: IdGeneratorService;
+  readonly logging: Logging;
+}
+
+export function createTestAppDeps(): TestAppDeps {
   const caches = new Map<string, Map<string, unknown>>();
   const objects = new Map<string, Uint8Array>();
   const database = createDatabaseManager({

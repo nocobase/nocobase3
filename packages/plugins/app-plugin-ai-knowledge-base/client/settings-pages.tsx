@@ -7,6 +7,7 @@ import {
   UNSAFE_LocationContext,
   UNSAFE_RouteContext,
 } from 'react-router';
+import { LoadingState } from './components/app-shell-loading-state.js';
 import KnowledgeBasesPage from './page/knowledge-bases-page.js';
 import {
   knowledgeBaseRoutePath,
@@ -31,19 +32,17 @@ export function KnowledgeBaseSettingsPage(): ReactElement {
     >
       <UNSAFE_LocationContext.Provider value={null!}>
         <MemoryRouter initialEntries={['/settings/ai']}>
-          <Suspense
-            fallback={
-              <main className='p-8 text-sm text-muted-foreground'>
-                Loading…
-              </main>
-            }
-          >
+          <Suspense fallback={<LoadingState className='min-h-64' />}>
             <Routes>
               <Route path='/settings/ai' element={<KnowledgeBasesPage />} />
               <Route
                 path={`${knowledgeBaseRoutePath}/:knowledgeBaseKey`}
                 element={<WorkspaceRoute />}
               >
+                <Route
+                  path='retrieval/:resultIndex'
+                  element={<RetrievalResultRouteEntry />}
+                />
                 <Route
                   path='documents/:documentId/segments/:segmentUid'
                   element={<SegmentRouteEntry />}
@@ -56,10 +55,6 @@ export function KnowledgeBaseSettingsPage(): ReactElement {
               <Route
                 path={`${knowledgeBaseRoutePath}/:knowledgeBaseKey/upload`}
                 element={<UploadController />}
-              />
-              <Route
-                path={`${knowledgeBaseRoutePath}/:knowledgeBaseKey/retrieval/:resultIndex`}
-                element={<RetrievalResultRouteEntry />}
               />
               <Route
                 path={vectorDatabaseRoutePath}

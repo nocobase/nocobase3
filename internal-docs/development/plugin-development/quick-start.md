@@ -37,10 +37,10 @@ description: 在 NocoBase source workspace 中按显式 capability 创建 App �
 
 ## 先预览生成计划
 
-以同时提供页面、Server API、业务 Service 和 App Agent 使用说明的 `system-info` 插件为例：
+以同时提供页面、Server API、业务 Service 和 App Agent 使用说明的 `app-status` 插件为例：
 
 ```bash
-pnpm plugin:create system-info \
+pnpm plugin:create app-status \
   --with client.routes \
   --with client.components \
   --with server.service-providers \
@@ -75,7 +75,7 @@ pnpm plugin:create plugin-core --empty --dry-run --json
 确认计划后，以相同 capability 去掉 dry-run：
 
 ```bash
-pnpm plugin:create system-info \
+pnpm plugin:create app-status \
   --with client.routes \
   --with client.components \
   --with server.service-providers \
@@ -124,22 +124,22 @@ implementation
 先运行插件自己的检查：
 
 ```bash
-pnpm --filter @nocobase/app-plugin-system-info lint
-pnpm --filter @nocobase/app-plugin-system-info typecheck
-pnpm --filter @nocobase/app-plugin-system-info test
-pnpm --filter @nocobase/app-plugin-system-info build
+pnpm --filter @nocobase/app-plugin-app-status lint
+pnpm --filter @nocobase/app-plugin-app-status typecheck
+pnpm --filter @nocobase/app-plugin-app-status test
+pnpm --filter @nocobase/app-plugin-app-status build
 ```
 
 然后注册到目标 App：
 
 ```bash
-pnpm plugin:register system-info --app app-template-default
+pnpm plugin:register app-status --app app-template-default
 ```
 
 如果需要机器可读的注册快照，或注册结果与预期不一致，可用只读命令查看 dependency、metadata、Client/Server composition root 和 Skills 副本状态：
 
 ```bash
-pnpm plugin:inspect system-info --app app-template-default --json
+pnpm plugin:inspect app-status --app app-template-default --json
 ```
 
 读取 `result.consistent` 和 `result.issues`，不要只根据 `ok` 判断命令结果。该检查不运行插件代码，也不验证插件接线之外的实现、Route 权限、测试或构建；它不是快速开始的完成门槛。

@@ -1,5 +1,37 @@
 # @nocobase/app-plugin-ai-knowledge-base
 
+## 0.1.0-beta.4
+
+### Minor Changes
+
+- dc517b1: Add declarative, Drive-backed knowledge-base Manifest imports, config-managed vector database synchronization, persistent recovery state, a public Manifest service token, and read-only protection for configuration-owned vector databases.
+
+### Patch Changes
+
+- dc517b1: Refactored the AI knowledge-base server around property-cached repository, manager, and service factories; added complete AI feature provider registries, authenticated `/api` and `/v2/api` routes, lifecycle-managed vectorization and PGVector resources, and a standardized Server registration entry.
+- dc517b1: Restore AI knowledge-base cleanup and vectorization parity by removing document and shard objects with their database records, deleting vectors with the correct knowledge-base and document selectors, persisting segment edits and deletions back to shard files, tracking segment revisions during rebuilds, and allowing stale queue jobs to exit safely.
+- 0811f18: Fix knowledge base management sizing, segment validation, date and status display, document downloads, retrieval detail overlays, scrolling, and Chinese localization coverage.
+- dc517b1: Inline vector database, LLM service, embedding model, configuration hash, and change timestamps on knowledge-base records; remove the legacy vector-store configuration repository and schema; and resolve built-in vector stores by knowledge-base key.
+- 96493f9: Remove the document-list upload hint, place document management in a card, and align the vector database enabled control with the knowledge base editor layout.
+- 96493f9: Move all AI knowledge-base APIs under `/api/ai` and remove the unprefixed `/api` and legacy `/v2/api` endpoints.
+- Updated dependencies [dc517b1]
+- Updated dependencies [d29d1fe]
+- Updated dependencies [dc517b1]
+- Updated dependencies [0811f18]
+- Updated dependencies [7057ee0]
+- Updated dependencies [5281fd1]
+  - @nocobase/app-plugin-ai-employee@0.1.0-beta.4
+  - @nocobase/app-server@1.0.0-beta.8
+  - @nocobase/ai-employee@0.2.0-beta.3
+  - @nocobase/drive@0.1.0-beta.4
+  - @nocobase/app-plugin-authentication@0.1.0-beta.8
+  - @nocobase/app-client@1.0.0-beta.11
+  - @nocobase/app-portal-sdk@1.0.0-beta.3
+  - @nocobase/db@1.0.0-beta.3
+  - @nocobase/i18n@1.0.0-beta.2
+  - @nocobase/queue@0.1.0-beta.3
+  - @nocobase/service-provider@0.0.2-beta.1
+
 ## 0.1.0-beta.3
 
 ### Minor Changes

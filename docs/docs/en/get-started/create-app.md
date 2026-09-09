@@ -1,20 +1,19 @@
 ---
-title: Create an application
-description: Generate a project with pnpm create @nocobase/app, choose a database, and start the development server.
+title: 'Create an application'
+description: 'Run one command to generate the project, pick a database, and start it.'
 ---
 
 # Create an application
 
 :::warning Being written
-This page is still being written.
+This page is being written.
 :::
 
-One command generates the whole application:
+Run one command to generate the project, pick a database, and start it.
 
-```bash
-pnpm create @nocobase/app crm
-cd crm
-pnpm dev
-```
+## This page will cover
 
-This page will cover choosing a database, the `config.yml` that gets generated and how to adjust it, and starting the development server.
+- Generate the project with `pnpm create @nocobase/app`
+- Choose a database, and what gets written into `config.yml`
+- Start with `pnpm dev` and open the printed URL
+- Closing note: Claude Code, Codex and others all work the same way — open the project directory, no extra setup

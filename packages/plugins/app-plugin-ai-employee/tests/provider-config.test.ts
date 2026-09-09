@@ -12,9 +12,16 @@ import { Hono } from 'hono';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { aiEmployeeConfig, type AIEmployeeConfig } from '../server/config.js';
-import { AIEmployeeProvider } from '../server/providers/ai-employee.js';
-import { aiManagerToken } from '../server/tokens.js';
-import { CollectionRepositoryFactory } from '../server/repository/database/factory.js';
+import {
+  AIEmployeeProvider,
+  aiManagerToken,
+} from '../server/provider/ai-employee.js';
+import { managerFactoryToken } from '../server/factory/manager-factory.js';
+import {
+  RepositoryFactory,
+  repositoryFactoryToken,
+} from '../server/factory/repository-factory.js';
+import { serviceFactoryToken } from '../server/factory/service-factory.js';
 import { createTestAppDeps } from './app/test-app-deps.js';
 
 const providers: AIEmployeeProvider[] = [];
@@ -28,6 +35,23 @@ afterEach(async () => {
 });
 
 describe('AIEmployeeProvider application config', () => {
+  it('registers all three private factories lazily and does not instantiate them during shutdown', async () => {
+    const { provider, container } = await createProvider(() => ({ ai: {} }));
+    provider.register();
+
+    expect(container.has(repositoryFactoryToken)).toBe(true);
+    expect(container.has(managerFactoryToken)).toBe(true);
+    expect(container.has(serviceFactoryToken)).toBe(true);
+    expect(container.resolveIfCreated(repositoryFactoryToken)).toBeUndefined();
+    expect(container.resolveIfCreated(managerFactoryToken)).toBeUndefined();
+    expect(container.resolveIfCreated(serviceFactoryToken)).toBeUndefined();
+
+    await provider.shutdown();
+    expect(container.resolveIfCreated(repositoryFactoryToken)).toBeUndefined();
+    expect(container.resolveIfCreated(managerFactoryToken)).toBeUndefined();
+    expect(container.resolveIfCreated(serviceFactoryToken)).toBeUndefined();
+  });
+
   it('migrates initial config into the database while preserving matching user state', async () => {
     const deps = createTestAppDeps();
     databases.push(deps.database);
@@ -37,9 +61,9 @@ describe('AIEmployeeProvider application config', () => {
       packageName: '@nocobase/app-plugin-ai-employee',
       directory: new URL('../database/migrations', import.meta.url).pathname,
     }).latest();
-    const repositories = new CollectionRepositoryFactory(
-      deps.database.connection(),
-    );
+    const repositories = new RepositoryFactory({
+      connection: deps.database.connection(),
+    });
     await repositories.llmServices.create({
       values: {
         name: 'openai',

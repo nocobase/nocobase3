@@ -1,24 +1,25 @@
 ---
-title: Building applications
-description: Build business features in your own source: developing with AI, pages and routes, API endpoints, data access, migrations, services and jobs.
+title: 'Application development'
+description: 'Consult this when you want to understand the code or change it yourself.'
 ---
 
-# Building applications
+# Application development
 
 :::warning Being written
-This page is still being written.
+This page is being written.
 :::
 
-Business logic lives in your own source. The `client/`, `server/`, and `database/` directories generated with your application belong to you and can be edited directly — there is no need to write a plugin to add a feature.
+Your business code lives in your own source. This section is organized by topic — read the part you need, not all of it.
 
-## What this section will cover
+## In this section
 
-- **Developing with AI** — how `AGENTS.md` and `skills/` get an agent to follow the project's conventions
-- **Pages and routes** — declaring routes, writing pages, registering navigation
-- **Components and styling** — shadcn/ui components and semantic Tailwind tokens
-- **API endpoints** — HTTP endpoints, webhooks, and the authentication each route owns
-- **Reading and writing data** — queries and writes at runtime
-- **Database migrations** — schema changes and seed data
-- **Services and jobs** — reusable domain logic, background work, and scheduled tasks
-- **Internationalization** — making every user-visible string translatable
-- **Testing and verification** — where tests go and what to verify after a change
+- [Overview](./overview) — How the code is divided, and what each part does.
+- [Pages and navigation](./pages-and-routes) — Add a page, put it in the menu, require sign-in.
+- [Components and styling](./components-and-styling) — Compose the UI from ready-made components and keep light and dark modes working.
+- [API endpoints](./server-routes) — Write an endpoint, and control who may call it.
+- [Reading and writing data](./database) — Query, write, and transactions.
+- [Schema changes](./migrations) — Add and alter columns, and prepare initial data.
+- [Services and background jobs](./services-and-jobs) — Scheduled work and long-running work.
+- [Configuration](./configuration) — Where the database address, secrets and the rest live.
+- [Internationalization](./i18n) — Make every user-visible string translatable.
+- [Testing](./testing) — Where tests live, and what to verify after a change.

@@ -9,7 +9,7 @@ import type {
   AIMessageRepository,
   AIToolMessageRepository,
 } from '../../../server/repository/index.js';
-import type { ModelRef } from '../../../server/ai-employees/ai-employee.js';
+import type { ModelRef } from '../../../server/domain/contracts.js';
 import type {
   AgentBuiltInService,
   AgentConversationService,

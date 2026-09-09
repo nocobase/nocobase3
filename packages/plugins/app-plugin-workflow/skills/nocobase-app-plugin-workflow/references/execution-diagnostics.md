@@ -31,7 +31,7 @@ Do not infer success from a service call alone. `trigger()` may return `{ status
 
 Follow this order so evidence remains tied to the executed revision:
 
-1. Inspect the service trigger receipt first. For `skipped`, diagnose key/current/enabled state and do not poll for a run. For `accepted`, record its event key; a run may not be persisted until asynchronous scheduling advances.
+1. Inspect the service trigger receipt first. For `skipped`, diagnose key/current/enabled state and do not poll for a run. For `accepted`, record its event key and resolve the run by that identity. In the ordinary path the run is created before the receipt returns; a concurrent duplicate call can briefly observe the shared accepted identity before the first call finishes creating it.
 2. Resolve the workflow key/definition and list revisions.
 3. Inspect the run, capturing workflow id/key, workflow version, artifact hash, event key, input, timestamps, manual flag, parent relationship where available, status, and reason.
 4. Use the run's definition id/hash, not merely the current workflow, to understand its code and topology.
@@ -41,7 +41,7 @@ Follow this order so evidence remains tied to the executed revision:
 8. Correlate structured server logs by run/execution id, node id/key, artifact digest, and module. Run-node logs include duration and `success/error/aborted`.
 9. Compare the failing node's config, resolved parameters/input, expected result contract, timeout, and artifact module specifier.
 10. Separate root cause from propagated failure. A condition parent can fail because its selected branch child failed.
-11. Recommend a source fix, setting fix, retry with the same event identity, new business invocation, or compensation. Do not erase history.
+11. Recommend a source or setting fix, a deliberately new authorized invocation, manual execution of a selected revision, or compensation. Reusing the same event key only deduplicates an uncertain submission; it does not rerun a confirmed failed execution. Do not erase history.
 
 ## Definition and version checks
 
@@ -62,7 +62,7 @@ For `QUEUEING`:
 
 - Confirm the workflow runtime/worker and queue are started.
 - Look for persisted queue job, retries, dead-letter/failure evidence, and event-key deduplication.
-- A trigger receipt without a run can be normal briefly because scheduling is asynchronous.
+- An accepted receipt without a run can occur briefly when another concurrent call with the same event key is still creating it; otherwise inspect persistence or invocation errors rather than attributing the gap to normal queue scheduling.
 
 For `STARTED`:
 
@@ -112,6 +112,7 @@ For an unexpected path:
 | `INPUT_TOO_LARGE`                | serialized UTF-8 input exceeds 65,536 bytes; pass identifiers rather than documents        |
 | duplicate-looking trigger        | caller generated different event keys for the same event                                   |
 | no second run                    | same event key was intentionally deduplicated                                              |
+| failed run unchanged after retry | same event key identifies the existing run; public APIs do not replay it                   |
 | stuck queueing                   | worker/runtime/queue not started, queue failure, retry/dead letter                         |
 | run node module error            | module omitted from artifact, bad relative specifier, missing named `run`, digest mismatch |
 | source check passes, build fails | inspect package scan and the default server build's package-relative output                |

@@ -22,6 +22,8 @@ export default {
   'Choose one or more encodings, or type an encoding name, to decode filenames stored in ZIP archives.':
     '选择一个或多个编码，或输入编码名称，以解码 ZIP 压缩包中的文件名。',
   'Chunk overlap': '分段重叠长度',
+  'Chunk overlap must be less than Chunk size.':
+    '分段重叠长度必须小于分段长度。',
   'Chunk size': '分段长度',
   Close: '关闭',
   'Content saved; related questions were not saved':
@@ -102,6 +104,7 @@ export default {
   'Leave the encoding selection empty or ask the Portal administrator to expose a supported server capability.':
     '请留空编码选择，或请 Portal 管理员开放受支持的服务器能力。',
   'List view': '列表视图',
+  'Loading…': '加载中…',
   'Loading more knowledge bases…': '正在加载更多知识库…',
   'Loading upload requirements. Try again in a moment.':
     '正在加载上传要求，请稍后重试。',
@@ -128,6 +131,7 @@ export default {
   Pagination: '分页',
   Passage: '段落',
   Pending: '等待处理',
+  Processing: '处理中',
   Preview: '预览',
   'Re-index {{count}} {{item}}': '重新索引 {{count}} 个{{item}}',
   'Re-index {{count}} {{item}}?': '重新索引 {{count}} 个{{item}}？',
@@ -191,6 +195,8 @@ export default {
   Send: '发送',
   Settings: '设置',
   Shared: '共享',
+  Success: '成功',
+  Error: '失败',
   'Show ZIP filename encoding options': '显示 ZIP 文件名编码选项',
   Size: '大小',
   'Someone else updated this segment': '其他人已更新此分段',
@@ -295,6 +301,8 @@ export default {
   'Vector database': '向量数据库',
   'Embedding model': '嵌入模型',
   'Select storage': '选择存储引擎',
+  'Select file storage': '选择文件存储',
+  'Select a file storage disk.': '请选择文件存储。',
   'Select vector database': '选择向量数据库',
   'Select LLM service': '选择大模型服务',
   'Select embedding model': '选择嵌入模型',

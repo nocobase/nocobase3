@@ -8,7 +8,7 @@ import {
   resolveAIKnowledgeBaseStorageDisks,
   type AIApplicationConfig,
 } from '../server/config.js';
-import { normalizeLLMServiceConfig } from '../server/llm-service-config.js';
+import { normalizeLLMServiceConfig } from '../server/manager/llm-service-config.js';
 
 function storageConfig(
   shared?: readonly string[],

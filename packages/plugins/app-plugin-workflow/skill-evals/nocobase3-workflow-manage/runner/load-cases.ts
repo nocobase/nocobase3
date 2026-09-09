@@ -34,6 +34,13 @@ function validateCase(value: unknown, file: string): PromptCase {
       `${file}:${String(item.id)}.preconditions`,
     );
   }
+  if (
+    item.skillMode !== undefined &&
+    item.skillMode !== 'explicit' &&
+    item.skillMode !== 'implicit'
+  ) {
+    throw new Error(`${file}: case ${String(item.id)} has invalid skillMode.`);
+  }
   return item as unknown as PromptCase;
 }
 
