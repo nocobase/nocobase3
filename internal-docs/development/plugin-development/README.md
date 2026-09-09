@@ -7,6 +7,8 @@ description: 面向 AI Agent 的 NocoBase v3 插件开发入口，按任务路�
 
 本目录面向阅读文档并实现 NocoBase v3 插件的 AI Agent。不要顺序读取全部页面：先识别任务需要的 capability 和所有权，再读取一个模块选择页，只在复杂实现或诊断时进入深入参考。
 
+页面子路由、递归导航分组和手动 `Outlet` 的开发方式见[页面子路由与导航](client-child-routes.md)。
+
 ## Agent 阅读协议
 
 1. 新插件从[快速开始](./quick-start.md)进入；完整业务需求先读[开发工作流](./development-workflow.md)。

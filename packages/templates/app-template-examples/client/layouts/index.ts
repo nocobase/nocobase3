@@ -5,9 +5,3 @@ export {
   type SurfaceCopy,
   type SurfaceLayoutProps,
 } from './surface-layout.js';
-export {
-  buildNavEntries,
-  useSurfaceAccess,
-  type SurfaceAccess,
-  type SurfaceNavEntry,
-} from './use-surface-access.js';
