@@ -20,7 +20,7 @@
     "label": "Permissions"
   },
   {
-    "type": "file",
+    "type": "dir",
     "name": "workflow",
     "label": "Workflow"
   },

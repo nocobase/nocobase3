@@ -16,7 +16,7 @@ These common requirements are already solved — install and they work. Every pa
 - [Overview](./overview) — What is available, and how to install it.
 - [Authentication](./auth) — Accounts, passwords and sessions.
 - [Permissions](./authorization) — Roles, menu visibility, and which records each user may see.
-- [Workflow](./workflow) — Approvals and multi-step processes.
+- [Workflow](./workflow) — Observable, versioned, multi-stage business processes.
 - [Notifications](./notification) — Email, in-app messages, and IM channels.
 - [Files](./file) — Uploads and attachments.
 - [Language switching](./i18n) — Switching the interface language.
