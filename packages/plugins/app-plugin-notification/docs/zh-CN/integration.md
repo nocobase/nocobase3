@@ -49,7 +49,7 @@ export const notificationConfig: NotificationConfig = {
   channels: [
     defineInAppChannelConfig({
       enabled: true,
-      providers: [{ type: 'database', name: 'in-app' }],
+      providers: [{ type: 'database', name: 'default' }],
     }),
     defineEmailChannelConfig({
       enabled: true,

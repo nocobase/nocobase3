@@ -186,7 +186,7 @@ export default function NotificationLogsPage(): ReactElement {
               </p>
             </div>
           ) : (
-            <NotificationLogsTable logs={logs} />
+            <NotificationLogsTable logs={logs} targets={testTargets} />
           )}
         </section>
       </div>
@@ -517,8 +517,10 @@ function Metric({
 
 function NotificationLogsTable({
   logs,
+  targets,
 }: {
   readonly logs: readonly NotificationLogDetails[];
+  readonly targets?: readonly NotificationTestTarget[];
 }): ReactElement {
   const { t } = useTranslation();
   return (
@@ -553,7 +555,11 @@ function NotificationLogsTable({
         </thead>
         <tbody>
           {logs.map((details) => (
-            <NotificationTableRow key={details.log.id} details={details} />
+            <NotificationTableRow
+              key={details.log.id}
+              details={details}
+              targets={targets}
+            />
           ))}
         </tbody>
       </table>
@@ -563,8 +569,10 @@ function NotificationLogsTable({
 
 function NotificationTableRow({
   details,
+  targets,
 }: {
   readonly details: NotificationLogDetails;
+  readonly targets?: readonly NotificationTestTarget[];
 }): ReactElement {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -621,7 +629,7 @@ function NotificationTableRow({
       {open ? (
         <tr className='border-b bg-muted/15'>
           <td colSpan={6} className='p-4 sm:px-12'>
-            <DeliveryTable deliveries={details.deliveries} />
+            <DeliveryTable deliveries={details.deliveries} targets={targets} />
           </td>
         </tr>
       ) : null}
@@ -631,8 +639,10 @@ function NotificationTableRow({
 
 function DeliveryTable({
   deliveries,
+  targets,
 }: {
   readonly deliveries: readonly NotificationDeliveryDetails[];
+  readonly targets?: readonly NotificationTestTarget[];
 }): ReactElement {
   const { t } = useTranslation();
   if (deliveries.length === 0) {
@@ -668,35 +678,43 @@ function DeliveryTable({
           </tr>
         </thead>
         <tbody>
-          {deliveries.map((details) => (
-            <Fragment key={details.delivery.id}>
-              <tr className='border-b'>
-                <td className='px-4 py-3'>{details.delivery.channel}</td>
-                <td className='px-4 py-3'>
-                  <div className='font-medium'>
-                    {details.delivery.providerName}
-                  </div>
-                  <div className='text-xs text-muted-foreground'>
-                    {details.delivery.providerType}
-                  </div>
-                </td>
-                <td className='px-4 py-3'>
-                  <StatusBadge status={details.delivery.status} />
-                </td>
-                <td className='px-4 py-3 text-right tabular-nums'>
-                  {details.attempts.length}
-                </td>
-                <td className='whitespace-nowrap px-4 py-3 text-muted-foreground'>
-                  {formatTime(details.delivery.updatedAt)}
-                </td>
-              </tr>
-              <tr className='border-b bg-muted/10'>
-                <td colSpan={5} className='px-4 py-3'>
-                  <AttemptList details={details} />
-                </td>
-              </tr>
-            </Fragment>
-          ))}
+          {deliveries.map((details) => {
+            const presentation = providerPresentation(
+              details.delivery.channel,
+              details.delivery.providerName,
+              details.delivery.providerType,
+              targets,
+            );
+            return (
+              <Fragment key={details.delivery.id}>
+                <tr className='border-b'>
+                  <td className='px-4 py-3'>{presentation.channel}</td>
+                  <td className='px-4 py-3'>
+                    <div className='font-medium'>{presentation.provider}</div>
+                    {presentation.detail ? (
+                      <div className='text-xs text-muted-foreground'>
+                        {presentation.detail}
+                      </div>
+                    ) : null}
+                  </td>
+                  <td className='px-4 py-3'>
+                    <StatusBadge status={details.delivery.status} />
+                  </td>
+                  <td className='px-4 py-3 text-right tabular-nums'>
+                    {details.attempts.length}
+                  </td>
+                  <td className='whitespace-nowrap px-4 py-3 text-muted-foreground'>
+                    {formatTime(details.delivery.updatedAt)}
+                  </td>
+                </tr>
+                <tr className='border-b bg-muted/10'>
+                  <td colSpan={5} className='px-4 py-3'>
+                    <AttemptList details={details} targets={targets} />
+                  </td>
+                </tr>
+              </Fragment>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -705,8 +723,10 @@ function DeliveryTable({
 
 function AttemptList({
   details,
+  targets,
 }: {
   readonly details: NotificationDeliveryDetails;
+  readonly targets?: readonly NotificationTestTarget[];
 }): ReactElement {
   const { t } = useTranslation();
   if (details.attempts.length === 0) {
@@ -718,30 +738,74 @@ function AttemptList({
   }
   return (
     <div className='grid gap-1.5'>
-      {details.attempts.map((attempt) => (
-        <div
-          key={attempt.id}
-          className='grid grid-cols-[2.5rem_minmax(8rem,1fr)_auto] items-center gap-3 rounded-md bg-muted/35 px-3 py-2 text-xs'
-        >
-          <span className='font-mono text-muted-foreground'>
-            #{attempt.sequence}
-          </span>
-          <span className='min-w-0'>
-            <strong>{attempt.providerName}</strong>
-            <span className='ml-2 text-muted-foreground'>
-              {attempt.providerType}
+      {details.attempts.map((attempt) => {
+        const presentation = providerPresentation(
+          details.delivery.channel,
+          attempt.providerName,
+          attempt.providerType,
+          targets,
+        );
+        return (
+          <div
+            key={attempt.id}
+            className='grid grid-cols-[2.5rem_minmax(8rem,1fr)_auto] items-center gap-3 rounded-md bg-muted/35 px-3 py-2 text-xs'
+          >
+            <span className='font-mono text-muted-foreground'>
+              #{attempt.sequence}
             </span>
-            {attempt.error ? (
-              <span className='mt-1 block truncate text-destructive'>
-                {attempt.error.message}
-              </span>
-            ) : null}
-          </span>
-          <StatusBadge status={attempt.status} />
-        </div>
-      ))}
+            <span className='min-w-0'>
+              <strong>{presentation.provider}</strong>
+              {presentation.detail ? (
+                <span className='ml-2 text-muted-foreground'>
+                  {presentation.detail}
+                </span>
+              ) : null}
+              {attempt.error ? (
+                <span className='mt-1 block truncate text-destructive'>
+                  {attempt.error.message}
+                </span>
+              ) : null}
+            </span>
+            <StatusBadge status={attempt.status} />
+          </div>
+        );
+      })}
     </div>
   );
+}
+
+function providerPresentation(
+  channel: string,
+  providerName: string,
+  providerType: string,
+  targets?: readonly NotificationTestTarget[],
+): {
+  readonly channel: string;
+  readonly provider: string;
+  readonly detail?: string;
+} {
+  const target = targets?.find(
+    (candidate) =>
+      candidate.channel.type === channel &&
+      candidate.provider.name === providerName &&
+      candidate.provider.type === providerType,
+  );
+  if (!target) {
+    return { channel, provider: providerName, detail: providerType };
+  }
+  const providerCount = targets?.filter(
+    (candidate) => candidate.channel.type === channel,
+  ).length;
+  return providerCount === 1
+    ? {
+        channel: target.channel.label,
+        provider: target.provider.label,
+      }
+    : {
+        channel: target.channel.label,
+        provider: target.provider.name,
+        detail: target.provider.label,
+      };
 }
 
 function StatusBadge({

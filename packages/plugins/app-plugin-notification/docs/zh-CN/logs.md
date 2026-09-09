@@ -80,7 +80,7 @@ Settings Contribution 与 `GET /api/notifications/logs` 使用同一个权限资
 `NOTIFICATION_LOGS_FORBIDDEN`，日志不存在时返回
 `NOTIFICATION_LOG_NOT_FOUND`。
 
-页面右上角的 **发送测试通知** 会列出当前启用的通知方式。只有一个 Provider 时，选项使用面向用户的名称，例如 **站内信（系统内置）**，不显示 `primary`、`database` 等内部标识；同一渠道存在多个 Provider 时，才显示配置名称以便区分。选择站内信时可以填写接收用户 ID，留空则发送给当前用户；选择 Email 时需要填写接收邮箱；IM 测试发送到所选 Webhook 所属群聊，不需要另填接收人。点击弹窗底部的 **发送** 后，页面调用通知核心插件的测试接口，通过常规 `NotificationManager` 发送真实消息，并自动刷新日志。
+页面右上角的 **发送测试通知** 会列出当前启用的通知方式。只有一个 Provider 时，选项使用面向用户的名称，例如 **站内信（系统内置）**，不显示 `default`、`database` 等内部标识；同一渠道存在多个 Provider 时，才显示配置名称以便区分。选择站内信时可以填写接收用户 ID，留空则发送给当前用户；选择 Email 时需要填写接收邮箱；IM 测试发送到所选 Webhook 所属群聊，不需要另填接收人。点击弹窗底部的 **发送** 后，页面调用通知核心插件的测试接口，通过常规 `NotificationManager` 发送真实消息，并自动刷新日志。
 
 **发送测试通知**按钮始终显示。目标接口只返回安全的 Channel、Provider 和表单字段元数据；没有可用 Provider 或目标加载失败时，弹窗会显示具体状态。服务端仅在提交测试消息时检查 `notification:test` 的 `send` 权限。
 

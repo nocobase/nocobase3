@@ -4,4 +4,4 @@
 '@nocobase/app-plugin-notification-providers': patch
 ---
 
-Ship package changelogs and return stable, localized error envelopes for notification-owned log and in-app inbox failures.
+Ship package changelogs, return stable localized error envelopes for notification-owned failures, and show user-facing Channel and Provider labels in notification logs.

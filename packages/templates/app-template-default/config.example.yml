@@ -28,7 +28,7 @@ notification:
       enabled: true
       providers:
         - type: database
-          name: primary
+          name: default
 
     # Uncomment and configure this channel to send email notifications.
     # - type: email

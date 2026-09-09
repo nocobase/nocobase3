@@ -63,7 +63,7 @@ describe('NotificationLogsPage', () => {
       {
         channel: { type: 'in-app', label: 'In-app' },
         provider: {
-          name: 'primary',
+          name: 'default',
           type: 'database',
           label: 'Built-in',
         },
@@ -80,11 +80,11 @@ describe('NotificationLogsPage', () => {
       name: 'Delivery method',
     });
     fireEvent.change(methodSelect, {
-      target: { value: 'in-app:primary:database' },
+      target: { value: 'in-app:default:database' },
     });
 
     expect(methodSelect).toHaveDisplayValue('In-app (Built-in)');
-    expect(screen.queryByText(/primary/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/default/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Database/)).not.toBeInTheDocument();
   });
 
@@ -138,6 +138,67 @@ describe('NotificationLogsPage', () => {
     expect(
       screen.getByText('Need attention').previousSibling,
     ).toHaveTextContent('1');
+  });
+
+  it('shows user-facing labels for a single Provider in recent notifications', async () => {
+    notification.listTestTargets.mockResolvedValue([
+      {
+        channel: { type: 'in-app', label: 'In-app' },
+        provider: {
+          name: 'default',
+          type: 'database',
+          label: 'Built-in',
+        },
+        fields: [],
+      },
+    ]);
+    notification.listLogs.mockResolvedValue([
+      {
+        log: {
+          id: 'notification-1',
+          sourceType: 'notification-test',
+          status: 'completed',
+          createdAt: '2026-08-28T07:00:00.000Z',
+          updatedAt: '2026-08-28T07:00:01.000Z',
+        },
+        deliveries: [
+          {
+            delivery: {
+              id: 'delivery-1',
+              channel: 'in-app',
+              providerName: 'default',
+              providerType: 'database',
+              attemptCount: 1,
+              status: 'completed',
+              createdAt: '2026-08-28T07:00:00.000Z',
+              updatedAt: '2026-08-28T07:00:01.000Z',
+            },
+            attempts: [
+              {
+                id: 'attempt-1',
+                sequence: 1,
+                providerName: 'default',
+                providerType: 'database',
+                status: 'completed',
+                startedAt: '2026-08-28T07:00:00.000Z',
+              },
+            ],
+            retryAudits: [],
+          },
+        ],
+      },
+    ]);
+
+    render(<NotificationLogsPage />);
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Expand notification' }),
+    );
+
+    expect(await screen.findByText('In-app')).toBeInTheDocument();
+    expect(screen.getAllByText('Built-in')).toHaveLength(2);
+    expect(screen.queryByText('default')).not.toBeInTheDocument();
+    expect(screen.queryByText('database')).not.toBeInTheDocument();
   });
 
   it('sends a test notification through a selected Provider and refreshes logs', async () => {

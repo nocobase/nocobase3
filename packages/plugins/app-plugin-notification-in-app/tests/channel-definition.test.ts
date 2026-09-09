@@ -35,7 +35,7 @@ describe('In-app Channel common input', () => {
           enabled: true,
           providers: [],
         },
-        providerConfig: { type: 'database', name: 'primary' },
+        providerConfig: { type: 'database', name: 'default' },
       }),
     ).toEqual({
       to: { type: 'user', id: 'user-1' },
@@ -49,7 +49,7 @@ describe('In-app Channel common input', () => {
       { logger: {} } as NotificationChannelContext,
       { type: 'in-app', enabled: true, providers: [] },
     );
-    const provider = { name: 'primary', type: 'database' };
+    const provider = { name: 'default', type: 'database' };
 
     expect(
       channel.resolveRecipient?.({
@@ -93,7 +93,7 @@ describe('In-app Channel common input', () => {
           return '2026-08-27T00:00:00.000Z';
         },
       },
-      { type: 'database', name: 'primary' },
+      { type: 'database', name: 'default' },
     );
 
     expect(provider.capabilities).toEqual({

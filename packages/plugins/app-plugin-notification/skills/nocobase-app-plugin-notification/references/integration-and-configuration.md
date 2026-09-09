@@ -25,7 +25,7 @@ const notification = {
   channels: [
     defineInAppChannelConfig({
       enabled: true,
-      providers: [{ type: 'database', name: 'primary' }],
+      providers: [{ type: 'database', name: 'default' }],
     }),
     defineEmailChannelConfig({
       enabled: true,

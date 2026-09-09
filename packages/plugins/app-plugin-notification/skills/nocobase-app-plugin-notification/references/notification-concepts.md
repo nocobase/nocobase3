@@ -17,7 +17,7 @@ One new `idempotencyKey` creates one Notification. Repeating an equivalent `send
 
 ```text
 Notification
-├── Delivery: user-1 / in-app / primary
+├── Delivery: user-1 / in-app / default
 ├── Delivery: alice@example.com / email / smtp
 ├── Delivery: ops / im / feishu
 └── Delivery: ops / im / dingtalk
