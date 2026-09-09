@@ -1,4 +1,4 @@
-# @nocobase/app-file-example
+# @nocobase/app-plugin-file-example
 
 ## 0.0.2-beta.1
 

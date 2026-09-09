@@ -5,7 +5,7 @@ import {
 import routes from './routes.js';
 import locales from './locales/index.js';
 const plugin: AppClientPluginFactory = defineClientPlugin({
-  packageName: '@nocobase/app-file-example',
+  packageName: '@nocobase/app-plugin-file-example',
   routes,
   locales,
 });

@@ -120,13 +120,8 @@ export function pluginPackageName(name: string): string {
   if (trimmed === '') {
     throw new Error('A plugin name is required.');
   }
-  if (trimmed.startsWith(PACKAGE_SCOPE)) {
-    // Explicit package names are identified by their exports, not a naming convention.
-    const shortName = trimmed.slice(
-      trimmed.startsWith(PLUGIN_PREFIX)
-        ? PLUGIN_PREFIX.length
-        : PACKAGE_SCOPE.length,
-    );
+  if (trimmed.startsWith(PLUGIN_PREFIX)) {
+    const shortName = trimmed.slice(PLUGIN_PREFIX.length);
     if (!SHORT_NAME_PATTERN.test(shortName)) {
       throw new Error(
         `Plugin name "${trimmed}" must be lower-case kebab-case, for example ${PLUGIN_PREFIX}audit-log.`,
@@ -136,7 +131,7 @@ export function pluginPackageName(name: string): string {
   }
   if (trimmed.includes('/') || trimmed.startsWith('@')) {
     throw new Error(
-      `Plugin "${trimmed}" must be a short name such as audit-log, or a full ${PACKAGE_SCOPE}* package name.`,
+      `Plugin "${trimmed}" must be a short name such as audit-log, or a full ${PLUGIN_PREFIX}* package name.`,
     );
   }
   if (!SHORT_NAME_PATTERN.test(trimmed)) {

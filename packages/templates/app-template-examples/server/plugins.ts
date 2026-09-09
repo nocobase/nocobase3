@@ -19,7 +19,7 @@ import {
 } from '@nocobase/app-server/plugins';
 import repositoryExample from '@nocobase/app-plugin-repository-example/server';
 import file from '@nocobase/app-plugin-file/server';
-import appFileExample from '@nocobase/app-file-example/server';
+import fileExample from '@nocobase/app-plugin-file-example/server';
 
 const serverPlugins: AppServerPlugins = defineServerPlugins([
   authentication,
@@ -39,7 +39,7 @@ const serverPlugins: AppServerPlugins = defineServerPlugins([
   skillsExample,
   repositoryExample,
   file,
-  appFileExample,
+  fileExample,
 ]);
 
 export default serverPlugins;

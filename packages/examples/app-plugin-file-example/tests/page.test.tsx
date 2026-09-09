@@ -28,7 +28,7 @@ vi.mock('@nocobase/i18n/client', async (importOriginal) => {
   return {
     ...original,
     useTranslation: (namespace: string) => {
-      expect(namespace).toBe('@nocobase/app-file-example');
+      expect(namespace).toBe('@nocobase/app-plugin-file-example');
       return { t: (key: string) => key };
     },
   };

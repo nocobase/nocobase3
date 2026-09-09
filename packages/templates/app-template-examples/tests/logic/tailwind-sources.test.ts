@@ -67,52 +67,43 @@ describe('tailwind content sources', () => {
     }
   });
 
-  it.each([
-    ['app-plugin-fixture', 'dist/client'],
-    ['app-file-example', 'dist/client'],
-    ['app-file-example', 'client'],
-  ])(
-    'scans %s %s through installed symlinks',
-    (packageName, clientDirectory) => {
-      // The original failure was invisible in this repository, where plugins expose TypeScript sources, and only showed
-      // up in a generated application, where they ship `dist/client`. `dist` is a build artefact that a clean checkout
-      // does not have, so rather than requiring one, this drives the configuration's own resolution over a fixture
-      // laid out the way pnpm lays out an installed package: a symlink into a store directory.
-      const store = mkdtempSync(path.join(tmpdir(), 'nb3-tailwind-'));
-      try {
-        const installed = path.join(
-          store,
-          'store',
-          packageName,
-          clientDirectory,
-        );
-        mkdirSync(installed, { recursive: true });
-        writeFileSync(
-          path.join(installed, 'page.js'),
-          'export const cls = "mt-[77px]";',
-        );
+  it('scans build output the same way, which is the layout an installed plugin has', () => {
+    // The original failure was invisible in this repository, where plugins expose TypeScript sources, and only showed
+    // up in a generated application, where they ship `dist/client`. `dist` is a build artefact that a clean checkout
+    // does not have, so rather than requiring one, this drives the configuration's own resolution over a fixture
+    // laid out the way pnpm lays out an installed package: a symlink into a store directory.
+    const store = mkdtempSync(path.join(tmpdir(), 'nb3-tailwind-'));
+    try {
+      const installed = path.join(
+        store,
+        'store/app-plugin-fixture/dist/client',
+      );
+      mkdirSync(installed, { recursive: true });
+      writeFileSync(
+        path.join(installed, 'page.js'),
+        'export const cls = "mt-[77px]";',
+      );
 
-        const scope = path.join(store, 'node_modules/@nocobase');
-        mkdirSync(scope, { recursive: true });
-        symlinkSync(
-          path.join(store, 'store', packageName),
-          path.join(scope, packageName),
-        );
+      const scope = path.join(store, 'node_modules/@nocobase');
+      mkdirSync(scope, { recursive: true });
+      symlinkSync(
+        path.join(store, 'store/app-plugin-fixture'),
+        path.join(scope, 'app-plugin-fixture'),
+      );
 
-        const files = contentFilesIn(store);
+      const files = contentFilesIn(store);
 
-        expect(files).toHaveLength(1);
-        expect(files[0]).toBe(path.join(realpathSync(installed), 'page.js'));
-        // Resolved, not merely reachable: a path still routed through the symlink is one Tailwind would refuse to
-        // expand a wildcard through, which is exactly how this broke.
-        expect(files[0]).not.toContain(
-          `node_modules${path.sep}@nocobase${path.sep}`,
-        );
-      } finally {
-        rmSync(store, { recursive: true, force: true });
-      }
-    },
-  );
+      expect(files).toHaveLength(1);
+      expect(files[0]).toBe(path.join(realpathSync(installed), 'page.js'));
+      // Resolved, not merely reachable: a path still routed through the symlink is one Tailwind would refuse to
+      // expand a wildcard through, which is exactly how this broke.
+      expect(files[0]).not.toContain(
+        `node_modules${path.sep}@nocobase${path.sep}`,
+      );
+    } finally {
+      rmSync(store, { recursive: true, force: true });
+    }
+  });
 
   it('scans canonical Registry source exposed by a plugin', () => {
     const store = mkdtempSync(path.join(tmpdir(), 'nb3-tailwind-registry-'));

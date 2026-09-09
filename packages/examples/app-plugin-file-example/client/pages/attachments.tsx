@@ -11,7 +11,7 @@ import { clientFileRepositoryManagerToken } from '@nocobase/app-plugin-file/clie
 import type { FileRecord } from '@nocobase/app-plugin-file/client';
 
 export default function AttachmentsPage(): ReactElement {
-  const { t } = useTranslation('@nocobase/app-file-example');
+  const { t } = useTranslation('@nocobase/app-plugin-file-example');
   const manager = useService(clientFileRepositoryManagerToken);
   const repository = useMemo(
     () => manager.repository('attachments'),

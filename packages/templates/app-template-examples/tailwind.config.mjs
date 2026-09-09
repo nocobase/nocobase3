@@ -28,11 +28,10 @@ function scannedDirectories(appRoot) {
 
   const directories = [];
   for (const packageName of readdirSync(scope)) {
-    // app-client supplies shared UI; plugins and app-file-example supply their own pages.
+    // app-client contributes the shared components an application renders; the plugins contribute their own pages.
     if (
       !packageName.startsWith('app-plugin-') &&
-      packageName !== 'app-client' &&
-      packageName !== 'app-file-example'
+      packageName !== 'app-client'
     ) {
       continue;
     }

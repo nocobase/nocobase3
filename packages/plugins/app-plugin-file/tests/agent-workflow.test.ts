@@ -135,7 +135,7 @@ it('builds a business attachment feature from the shipped Skill and materialized
             '@/components/ui/dialog': [
               path.join(
                 repoRoot,
-                'packages/plugins/app-plugin-ai-knowledge-base/client/components/ui/dialog.tsx',
+                'packages/templates/app-template-examples/client/components/ui/dialog.tsx',
               ),
             ],
             '@/extensions/*': ['./client/extensions/*'],

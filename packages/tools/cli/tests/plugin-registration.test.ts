@@ -120,14 +120,6 @@ async function writeAppSkill(
 }
 
 describe('pluginPackageName', () => {
-  it('preserves explicit package names outside the scaffold naming convention', () => {
-    expect(pluginPackageName('@nocobase/app-file-example')).toBe(
-      '@nocobase/app-file-example',
-    );
-    expect(() =>
-      pluginPackageName('@nocobase/app-file-example/server'),
-    ).toThrow('lower-case kebab-case');
-  });
   it('expands a short name into a plugin package', () => {
     expect(pluginPackageName('audit-log')).toBe(
       '@nocobase/app-plugin-audit-log',

@@ -5,7 +5,7 @@
 - Register `./server` and the `./client` factory to provide the two Repository managers.
 - Declare business collections and expose their operations with `defineFileRepositoryApiRoutes()`.
 - Install the `component-ui` Registry item for editable upload, list, thumbnail, and preview UI.
-- Use [app-file-example](../../examples/app-file-example/README.md) for the runnable attachments example.
+- Use [app-plugin-file-example](../../examples/app-plugin-file-example/README.md) for the runnable attachments example.
 
 Start with the [Agent integration Skill](skills/nocobase-app-plugin-file/SKILL.md). The [manual](docs/README.md) explains the API and current limitations. The plugin itself owns no collection, migration, page, or locale.
 

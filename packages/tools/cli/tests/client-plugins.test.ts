@@ -86,9 +86,6 @@ function sourceWith(...shortNames: string[]): string {
 }
 
 describe('localNameFor', () => {
-  it('names explicitly registered packages outside the plugin prefix', () => {
-    expect(localNameFor('@nocobase/app-file-example')).toBe('appFileExample');
-  });
   it('converts a kebab-case package into a camelCase binding', () => {
     expect(localNameFor('@nocobase/app-plugin-audit-log')).toBe('auditLog');
     expect(localNameFor('@nocobase/app-plugin-notification-provider')).toBe(
@@ -101,11 +98,11 @@ describe('localNameFor', () => {
   });
 
   it('rejects a package outside the plugin namespace', () => {
-    expect(() => localNameFor('@another/other')).toThrow(
-      'must match @nocobase/<name>',
+    expect(() => localNameFor('@nocobase/other')).toThrow(
+      'must match @nocobase/app-plugin-<name>',
     );
     expect(() => localNameFor('workflow')).toThrow(
-      'must match @nocobase/<name>',
+      'must match @nocobase/app-plugin-<name>',
     );
   });
 });

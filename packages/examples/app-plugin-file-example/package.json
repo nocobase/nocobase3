@@ -1,5 +1,5 @@
 {
-  "name": "@nocobase/app-file-example",
+  "name": "@nocobase/app-plugin-file-example",
   "displayName": "File Example App Plugin",
   "description": "Attachments collection, API routes, and an upload page demonstrating File Repository.",
   "version": "0.0.2-beta.1",
@@ -76,7 +76,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/nocobase/nocobase3.git",
-    "directory": "packages/examples/app-file-example"
+    "directory": "packages/examples/app-plugin-file-example"
   },
   "peerDependencies": {
     "@nocobase/app-client": "workspace:^",

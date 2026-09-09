@@ -1,5 +1,5 @@
 ---
-'@nocobase/app-file-example': patch
+'@nocobase/app-plugin-file-example': patch
 '@nocobase/app-template-default': patch
 ---
 

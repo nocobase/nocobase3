@@ -13,7 +13,7 @@
 '@nocobase/app-plugin-workflow': patch
 '@nocobase/app-plugin-cli-example': patch
 '@nocobase/app-plugin-database-example': patch
-'@nocobase/app-file-example': patch
+'@nocobase/app-plugin-file-example': patch
 '@nocobase/app-plugin-queue-example': patch
 '@nocobase/app-plugin-realtime-example': patch
 '@nocobase/app-plugin-registry-example': patch

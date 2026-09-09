@@ -6,7 +6,7 @@ export default createReactVitestConfig({
     alias: {
       '@/components/ui/dialog': fileURLToPath(
         new URL(
-          '../app-plugin-ai-knowledge-base/client/components/ui/dialog.tsx',
+          '../../templates/app-template-examples/client/components/ui/dialog.tsx',
           import.meta.url,
         ),
       ),

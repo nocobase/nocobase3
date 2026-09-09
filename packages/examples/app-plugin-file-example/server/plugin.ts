@@ -4,7 +4,7 @@ import {
 } from '@nocobase/app-server/plugins';
 import { defineFileRepositoryApiRoutes } from '@nocobase/app-plugin-file/server';
 const plugin: AppServerPlugin = defineServerPlugin({
-  packageName: '@nocobase/app-file-example',
+  packageName: '@nocobase/app-plugin-file-example',
   database: { migrations: './database/migrations' },
   routes: defineFileRepositoryApiRoutes({
     repositories: [

@@ -51,7 +51,7 @@ export default class PluginInspect extends Command {
   ];
   static override args = {
     name: Args.string({
-      description: 'Plugin short name or full @nocobase/* package name.',
+      description: 'Plugin short name or full @nocobase/app-plugin-* name.',
       required: true,
     }),
   };

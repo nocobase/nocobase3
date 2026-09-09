@@ -7,7 +7,7 @@ description: Add file collections, uploads, downloads, business attachments, and
 
 Use `@nocobase/app-plugin-file/server` and `@nocobase/app-plugin-file/client`. The plugin provides Repository managers, service tokens, route helpers, and the component-ui Registry recipe. The App or business plugin owns collections, migrations, Drive configuration, resource routes, permissions, and pages.
 
-Inspect the App's existing registrations, migrations, disks, and resources first. Register the Server default export and the Client default factory before consumers, using the App's plugin lifecycle commands. The core does not create collections or routes. `@nocobase/app-file-example` already owns `attachments` and `/dev/file-repository`; do not duplicate them when enabled. Use the example's full package name in CLI commands.
+Inspect the App's existing registrations, migrations, disks, and resources first. Register the Server default export and the Client default factory before consumers, using the App's plugin lifecycle commands. The core does not create collections or routes. `@nocobase/app-plugin-file-example` already owns `attachments` and `/dev/file-repository`; do not duplicate them when enabled. Use the example's full package name in CLI commands.
 
 The following business example uses collection `invoice_files`, resource `invoiceAttachments`, connection `main`, and disk `local`. Adapt these to the App.
 
