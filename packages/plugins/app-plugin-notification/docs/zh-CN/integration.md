@@ -193,6 +193,48 @@ export function createAppNotificationRuntime(options: {
 
 如果不需要站内信，可以删除 `inAppStore`、`in-app` Channel 和 database Provider。Email 与 IM definitions 也可以按需移除。只注册 definitions 不会发送消息；只有配置中启用相应 Provider，并调用 `send()` 后才会发生外部请求。
 
+### 自定义 Provider 的幂等契约
+
+自定义 Provider 可以通过 `capabilities.idempotency` 声明重复提交是否安全。省略该配置或设置为 `{ supported: false }` 时，通知服务会认为 Provider 不支持幂等。
+
+只有当相同 `deliveryId` 的重复提交不会产生重复消息时，才能设置 `{ supported: true }`。通知服务会在同一条 Delivery 的每次重试中复用 `deliveryId`，但不会替 Provider 实现查重。Provider 需要把它作为外部服务的幂等键，或者在自己的存储中建立唯一约束：
+
+```ts
+return {
+  name: config.name,
+  type: config.type,
+  capabilities: {
+    idempotency: { supported: true },
+  },
+  async send(input) {
+    await client.send({
+      message: input.message,
+      idempotencyKey: input.deliveryId,
+    });
+    return { status: 'accepted' };
+  },
+};
+```
+
+如果外部服务只在固定时间内保留幂等键，还需要按它承诺的有效期设置 `retentionMs`：
+
+```ts
+capabilities: {
+  idempotency: {
+    supported: true,
+    retentionMs: 24 * 60 * 60 * 1000,
+  },
+},
+```
+
+`retentionMs` 省略时，表示 Provider 能在该 Delivery 的整个生命周期内保证幂等。不要使用 `attemptId` 作为幂等键——每次实际提交都会创建新的 Attempt，因此重试时它会变化。
+
+:::warning 注意
+
+`supported: true` 只是能力声明，不会触发任何自动查重逻辑。如果 Provider 没有基于 `deliveryId` 实现幂等，通知服务会把存在重复风险的 `unknown` 重试错误地判断为安全重试。
+
+:::
+
 ## 第四步：挂载路由
 
 `manager.router` 提供 Delivery 和 Attempt 日志。站内信的收件箱 router 由 `@nocobase/app-plugin-notification-in-app` 提供，需要使用第三步创建的同一个 store：
