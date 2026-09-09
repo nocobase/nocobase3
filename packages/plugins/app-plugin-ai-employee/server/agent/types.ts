@@ -267,24 +267,16 @@ export interface ConversationMessageStore {
     messages: AIMessageInput[],
     thread?: AgentThread,
   ): Promise<void>;
-  saveAssistantMessage(
-    message: AIMessageInput,
-    toolCalls: AIToolCall[],
-  ): Promise<SavedAssistantMessage>;
+  saveAssistantMessage(message: AIMessageInput): Promise<SavedAssistantMessage>;
   saveToolMessages(
+    sourceMessageId: string,
     messages: AIMessageInput[],
-    messageId: string,
-    toolCallIds: string[],
   ): Promise<void>;
   saveInterruptedAssistantMessage(message: AIMessageInput): Promise<AIMessage>;
   shouldLoadHistory(request: AgentRequest): boolean;
 }
 
 export interface ConversationToolCallStore {
-  initialize(
-    messageId: string,
-    toolCalls: AIToolCall[],
-  ): Promise<AIToolMessage[]>;
   markInterrupted(
     sessionId: string,
     messageId: string,
@@ -303,7 +295,6 @@ export interface ConversationToolCallStore {
     toolCallId: string,
     error: unknown,
   ): Promise<number>;
-  confirm(messageId: string, toolCallIds: string[]): Promise<number>;
   reject(
     messageId: string,
     toolCallIds: string[],
