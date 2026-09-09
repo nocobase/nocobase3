@@ -76,7 +76,7 @@ Node ABI 单独用 `--node-version` 给主版本号（20 / 22 / 24 / 26，默认
 
 文件追踪只能看到字面量的 `import` / `require`，剩下三类要单独处理：
 
-**1. 框架按名字解析的包** —— 写死在代码里的 `FRAMEWORK_KEEP`，目前是 `pino-pretty`、`pino-roll`。`app-server` 在 `target: 'pino-pretty'` 这样的配置字符串里引用它们，没有任何 import 语句。这不是应用的选择，应用也没理由知道，所以不放配置——**需要每个应用靠崩一次才发现的默认值，不算默认值**。
+**1. 框架按名字解析的包** —— 写死在代码里的 `FRAMEWORK_KEEP`，目前是 `pino-pretty`、`pino-roll`、`@nocobase/nb3-cli`。前两个被 `app-server` 在 `target: 'pino-pretty'` 这样的配置字符串里引用；`nb3-cli` 是把模块路径当字符串交给 oclif 去 import，裁掉后每条命令都报 `MODULE_NOT_FOUND`、指着一个明明存在的路径。这不是应用的选择，应用也没理由知道，所以不放配置——**需要每个应用靠崩一次才发现的默认值，不算默认值**。
 
 **2. 靠扫描目录读的内容** —— 写死的 `SCANNED_DIRECTORIES`：`database`、`migrations`、`seeds`、`locales`。迁移文件是列目录读进来的，文件名不出现在任何 import 里。对所有包生效，因为插件各自带 `dist/database`，应用无法枚举哪些插件有迁移。裁掉的后果很隐蔽：服务能启动，直到第一次查询才报表不存在。
 
@@ -110,10 +110,10 @@ Node ABI 单独用 `--node-version` 给主版本号（20 / 22 / 24 / 26，默认
 ## 实现
 
 ```
-scripts/server-deps.mjs          共享分析：追踪、配置、原生模块识别、目标平台解析
-scripts/inspect-server-deps.mjs  只读报告
-scripts/prune-server-deps.mjs    执行裁剪
-scripts/retarget-native.mjs      执行原生模块换平台
+scripts/utils/server-deps.mjs          共享分析：追踪、配置、原生模块识别、目标平台解析
+scripts/utils/inspect-server-deps.mjs  只读报告
+scripts/utils/prune-server-deps.mjs    执行裁剪
+scripts/utils/retarget-native.mjs      执行原生模块换平台
 ```
 
 三个脚本读同一份分析，所以 `inspect` 是构建的**预览**而不是另一套说法。两个模板的这四个文件保持逐字节相同。

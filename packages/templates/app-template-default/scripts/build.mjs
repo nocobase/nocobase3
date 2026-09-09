@@ -256,14 +256,14 @@ run('Materialize server dependency links', 'node', [
 // difference. `pnpm server:deps:inspect` reports the same analysis without changing anything, and re-running the
 // install restores the full tree, so the step is reversible.
 run('Prune unreachable server dependencies', 'node', [
-  './scripts/prune-server-deps.mjs',
+  './scripts/utils/prune-server-deps.mjs',
   ...process.argv.slice(2),
 ]);
 // Last, because it replaces binaries the prune has already decided to keep. Native packages are kept whole, so
 // the files this swaps are still present to be swapped. Defaults to this machine, so `pnpm build && pnpm start`
 // works; a deployment build passes --target and --node-version.
 run('Retarget native modules', 'node', [
-  './scripts/retarget-native.mjs',
+  './scripts/utils/retarget-native.mjs',
   ...process.argv.slice(2),
 ]);
 

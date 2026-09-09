@@ -10,15 +10,18 @@ import path from 'node:path';
 /**
  * The entry points a deployment runs.
  *
- * `standalone` and `embedded` are the two ways the server starts. The migrate and seed scripts are separate
- * processes a deployment also executes, and they reach code the server entries do not, so a trace that omitted
- * them would prune migrations out of the deployment.
+ * `standalone` and `embedded` are the two ways the server starts. The CLI is a third process a deployment runs —
+ * `dist/package.json` invokes it for `migrate` and `seed` — and it reaches code the server entries do not, so a
+ * trace that omitted it would prune migrations out of the deployment.
+ *
+ * These are paths inside `dist`, so they follow the build's output layout rather than the source tree. Check them
+ * against `dist/package.json`'s own `scripts` when that layout changes: an entry that no longer exists is skipped
+ * silently, and the only symptom is a smaller trace.
  */
 export const ENTRY_POINTS = [
   'server/standalone.js',
   'server/embedded.js',
-  'scripts/migrate.js',
-  'scripts/seed.js',
+  'cli/index.js',
 ];
 
 /**
@@ -30,10 +33,14 @@ export const ENTRY_POINTS = [
  * no import mentions them and a trace cannot see either; without this the server dies during startup with
  * `unable to determine transport target for "pino-pretty"`.
  *
+ * `@nocobase/nb3-cli` is here for the same reason one step removed: it hands oclif a module path as a string
+ * (`'./dist/runtime/registry.js'`), and oclif imports it. Nothing in the CLI imports that file, so a trace prunes
+ * it and every command fails with `MODULE_NOT_FOUND` naming a path that is plainly correct.
+ *
  * An application adds its own runtime-resolved packages through `nocobase.serverDeps.keep`. This list is for
  * what the framework guarantees, and grows when the framework starts resolving another package by name.
  */
-export const FRAMEWORK_KEEP = ['pino-pretty', 'pino-roll'];
+export const FRAMEWORK_KEEP = ['pino-pretty', 'pino-roll', '@nocobase/nb3-cli'];
 
 /**
  * Directories published to be read by scanning rather than by importing.

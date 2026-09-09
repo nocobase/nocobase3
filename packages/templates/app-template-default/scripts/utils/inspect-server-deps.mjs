@@ -28,6 +28,7 @@ import {
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '..',
+  '..',
 );
 const distDir = path.join(rootDir, 'dist');
 const nodeModulesDir = path.join(distDir, 'node_modules');
