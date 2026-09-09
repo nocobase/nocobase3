@@ -57,6 +57,7 @@ describe('conversationMiddleware', () => {
         tools: {},
       } as never,
       options as never,
+      { error: vi.fn() } as never,
     );
     const wrapModelCall = getMiddlewareHook<
       (

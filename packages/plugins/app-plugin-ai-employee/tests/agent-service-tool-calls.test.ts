@@ -27,6 +27,7 @@ const createProviders = (
   };
   const providers: AgentProviders = {
     conversation,
+    logger: { warn: vi.fn(), error: vi.fn() } as never,
     chatContext,
     chatMessageConverters: {
       formatMessages: vi.fn(),

@@ -35,20 +35,24 @@ export function buildStandardAgentMiddleware(
         )
       : namedNoopMiddleware('ToolInteractionMiddleware'),
     features.tools && features.toolCallStatus
-      ? toolCallStatusMiddleware(providers.conversation)
+      ? toolCallStatusMiddleware(providers.conversation, providers.logger)
       : namedNoopMiddleware('ToolCallStatusMiddleware'),
     features.conversationPersistence
-      ? conversationMiddleware(providers, {
-          providerName: prepared.providerName,
-          provider: prepared.provider,
-          llmService: prepared.llmService,
-          model: prepared.model,
-          messageId: prepared.metadata.messageId as string | undefined,
-          agentThread: prepared.thread,
-        })
+      ? conversationMiddleware(
+          providers,
+          {
+            providerName: prepared.providerName,
+            provider: prepared.provider,
+            llmService: prepared.llmService,
+            model: prepared.model,
+            messageId: prepared.metadata.messageId as string | undefined,
+            agentThread: prepared.thread,
+          },
+          providers.logger,
+        )
       : namedNoopMiddleware('ConversationMiddleware'),
     features.toolCallSanitizer
-      ? toolCallSanitizerMiddleware({ logger: providers.conversation.logger })
+      ? toolCallSanitizerMiddleware({ logger: providers.logger })
       : namedNoopMiddleware('ToolCallSanitizerMiddleware'),
   ];
 }

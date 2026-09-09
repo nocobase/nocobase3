@@ -104,12 +104,17 @@ type AIEmployeeResolvedAgentLLM = ResolvedAgentLLM & {
 
 export function createAIEmployeeConversationProvider(
   options: AIEmployeeAgentOptions,
-  toolCalls: AIEmployeeToolCallHandler,
   toolCallPolicy: ToolCallPolicy,
 ): ConversationProvider {
-  const agentContext = options.agentContext;
   const database = options.database;
   const sessionId = options.sessionId;
+  const toolCalls = new AIEmployeeToolCallHandler({
+    sessionId,
+    database,
+    messages: options.repositories.aiMessages,
+    toolMessages: options.repositories.aiToolMessages,
+    snowflake: options.snowflake,
+  });
   const chatConversation = createAIChatConversation({
     repositories: options.repositories,
     database,
@@ -159,11 +164,7 @@ export function createAIEmployeeConversationProvider(
       ),
     unregisterAbortHandle: (token: symbol) =>
       options.aiEmployeesManager.unregisterAgentAbortHandle(sessionId, token),
-    streamCache: {
-      append: (chunk) => cache.append(chunk),
-      clear: () => cache.clear(),
-      skipped: () => cache.skipped(),
-    },
+    streamCache: cache,
     updateAssistantResponseMetadata: async (messageId, metadata) => {
       const message = await options.repositories.aiMessages.findOne({
         filter: { sessionId, messageId },
@@ -183,7 +184,6 @@ export function createAIEmployeeConversationProvider(
         });
       }
     },
-    logger: agentContext.logger,
   };
   return conversation;
 }
@@ -707,21 +707,14 @@ export async function createAIEmployeeAgentProviders(
   options: AIEmployeeAgentOptions,
 ): Promise<AgentProviders> {
   const chatContext = createAIEmployeeChatContextProvider(options);
-  const toolCalls = new AIEmployeeToolCallHandler({
-    sessionId: options.sessionId,
-    database: options.database,
-    messages: options.repositories.aiMessages,
-    toolMessages: options.repositories.aiToolMessages,
-    snowflake: options.snowflake,
-  });
   const conversation = createAIEmployeeConversationProvider(
     options,
-    toolCalls,
     chatContext,
   );
   return createAgentProviders({
     conversation,
     chatContext,
+    logger: options.agentContext.logger,
     chatMessageConverters: new AIEmployeeChatMessageConverters(options),
     checkpointer:
       options.from === 'sub-agent'

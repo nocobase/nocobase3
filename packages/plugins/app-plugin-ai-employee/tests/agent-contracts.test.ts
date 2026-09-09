@@ -202,8 +202,15 @@ describe('fixed AgentService contracts', () => {
         path.join(src, 'agent/ai-employee/tool-call-cancellation.ts'),
       ),
     ).toBe(false);
-    expect(providers).toContain('toolCalls: AIEmployeeToolCallHandler');
-    expect(providers).toContain('toolCalls,');
+    expect(providers).toContain(
+      'const toolCalls = new AIEmployeeToolCallHandler({',
+    );
+    expect(providers).toMatch(
+      /createAIEmployeeConversationProvider\(\s*options: AIEmployeeAgentOptions,\s*toolCallPolicy: ToolCallPolicy,?\s*\)/,
+    );
+    expect(providers).not.toMatch(
+      /createAIEmployeeAgentProviders[\s\S]*const toolCalls = new AIEmployeeToolCallHandler/,
+    );
     expect(providers).not.toMatch(/markPending:\s*\(|markDone:\s*\(/);
     expect(types).not.toMatch(/confirm\([^)]*DatabaseConnection/);
     const chatContext = read('agent/ai-employee/providers.ts');
@@ -308,16 +315,25 @@ describe('fixed AgentService contracts', () => {
   it('implements memory providers as private classes instead of inline objects', () => {
     const source = read('agent/providers.ts');
 
+    const types = read('agent/types.ts');
     expect(source).toContain('class MemoryConversationProvider');
     expect(source).toContain('class MemoryConversationMessageStore');
     expect(source).toContain('class MemoryConversationToolCallStore');
-    expect(source).toContain('class MemoryConversationStreamStore');
+    expect(source).toContain('new LLMStreamCached(');
     expect(source).toContain('class DefaultAgentProviders');
     expect(source).not.toMatch(/export\s+class\s+(?:Memory|DefaultAgent)/);
     expect(source).not.toMatch(/:\s*ConversationProvider\s*=\s*\{/);
     expect(source).not.toMatch(/messages:\s*\{/);
     expect(source).not.toMatch(/toolCalls:\s*\{/);
     expect(source).not.toContain('ConversationThreadStore');
+    expect(source).not.toContain('ConversationStreamStore');
+    expect(source).not.toMatch(/conversation\.logger/);
+    expect(types).toContain('streamCache: LLMStreamCached');
+    expect(types).not.toContain('interface ConversationStreamStore');
+    expect(
+      types.match(/export interface ConversationProvider[\s\S]*?\n}\n/)?.[0],
+    ).not.toContain('logger:');
+    expect(types).toMatch(/interface AgentProviders[\s\S]*logger: Logger/);
     expect(source).not.toMatch(/streamCache:\s*\{/);
   });
 

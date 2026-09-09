@@ -28,12 +28,17 @@ import type {
 } from '@nocobase/ai-employee';
 import type { ToolsEntity } from '@nocobase/ai-employee';
 
+import type { Logger } from '@nocobase/logging';
 export const conversationMiddleware = (
-  providers: AgentProviders,
+  providers: Pick<
+    AgentProviders,
+    'conversation' | 'chatContext' | 'chatMessageConverters'
+  >,
   options: AgentMessageConversionContext & {
     messageId?: string;
     agentThread?: AgentThread;
   },
+  logger: Logger,
 ) => {
   const { conversation, chatContext, chatMessageConverters } = providers;
   const { messageId, agentThread } = options;
@@ -193,7 +198,7 @@ export const conversationMiddleware = (
         });
         return nextState;
       } catch (error) {
-        conversation.logger.error(error);
+        logger.error(error);
       }
     },
     wrapModelCall: async (request, handler) => {

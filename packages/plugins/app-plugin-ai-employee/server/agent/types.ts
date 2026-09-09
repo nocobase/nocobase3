@@ -16,6 +16,7 @@ import type {
   AIToolMessage,
   UserDecision,
 } from '@nocobase/ai-employee';
+import type { LLMStreamCached } from '../manager/llm-stream-cached-manager.js';
 
 export type AgentExecutionSource = 'main-agent' | 'sub-agent' | (string & {});
 export type AgentExecutionMode = 'streaming' | 'invoking';
@@ -300,17 +301,11 @@ export interface ConversationToolCallStore {
   ): Promise<Map<string, AIToolMessage>>;
 }
 
-export interface ConversationStreamStore {
-  append(chunk: string): Promise<void>;
-  clear(): Promise<void>;
-  skipped(): Promise<void>;
-}
-
 export interface ConversationProvider {
   identity: AgentConversationIdentity;
   messages: ConversationMessageStore;
   toolCalls: ConversationToolCallStore;
-  streamCache: ConversationStreamStore;
+  streamCache: LLMStreamCached;
   beforeExecution(mode: AgentExecutionMode): Promise<void>;
   afterExecution(
     mode: AgentExecutionMode,
@@ -322,7 +317,6 @@ export interface ConversationProvider {
     messageId: string,
     metadata: Record<string, unknown>,
   ): Promise<void>;
-  logger: Logger;
 }
 
 export interface ChatContextProvider {
@@ -386,6 +380,7 @@ export interface AgentProviders {
   chatContext: ChatContextProvider;
   chatMessageConverters: ChatMessageConverters;
   checkpointer?: BaseCheckpointSaver | boolean;
+  logger: Logger;
   features: AgentFeatureOptions;
 }
 
@@ -393,6 +388,7 @@ export interface CreateAgentProvidersOptions {
   conversation?: ConversationProvider;
   chatContext: ChatContextProvider;
   chatMessageConverters?: ChatMessageConverters;
+  logger?: Logger;
   features?: Partial<AgentFeatureOptions>;
   checkpointer?: BaseCheckpointSaver | boolean;
 }

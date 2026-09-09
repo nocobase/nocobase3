@@ -30,6 +30,7 @@ const createProviders = (
   };
   return {
     conversation: createMemoryConversationProvider(),
+    logger: { warn: vi.fn(), error: vi.fn() } as never,
     chatContext: {
       resolveLLM: vi.fn(async () => llm),
       getSystemPrompt: vi.fn(async () => {

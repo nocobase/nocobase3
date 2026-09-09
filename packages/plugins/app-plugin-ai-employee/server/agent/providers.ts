@@ -4,6 +4,10 @@ import type {
   AIToolMessage,
 } from '@nocobase/ai-employee';
 import type { Logger } from '@nocobase/logging';
+import {
+  LLMStreamCached,
+  type LLMStreamCachedManager,
+} from '../manager/llm-stream-cached-manager.js';
 import { BaseChatMessageConverters } from './chat-message-converters.js';
 import {
   DEFAULT_AGENT_FEATURES,
@@ -15,7 +19,6 @@ import {
   type AgentThread,
   type ConversationMessageStore,
   type ConversationProvider,
-  type ConversationStreamStore,
   type ConversationToolCallStore,
   type CreateAgentProvidersOptions,
   type SavedAssistantMessage,
@@ -290,25 +293,27 @@ class MemoryConversationToolCallStore implements ConversationToolCallStore {
   }
 }
 
-class MemoryConversationStreamStore implements ConversationStreamStore {
-  public async append(_chunk: string): Promise<void> {}
-  public async clear(): Promise<void> {}
-  public async skipped(): Promise<void> {}
-}
+const memoryStreamManager = {
+  clear: async (): Promise<void> => {},
+  append: async (): Promise<void> => {},
+  async *stream(): AsyncGenerator<string, void, void> {},
+} as unknown as LLMStreamCachedManager;
 
 class MemoryConversationProvider implements ConversationProvider {
   public readonly identity: ConversationProvider['identity'];
   public readonly messages: ConversationMessageStore;
   public readonly toolCalls: ConversationToolCallStore;
-  public readonly streamCache: ConversationStreamStore;
-  public readonly logger: Logger = noopLogger;
+  public readonly streamCache: LLMStreamCached;
 
   public constructor(options: MemoryConversationOptions) {
     const state = new MemoryConversationState(options);
     this.identity = options.identity ?? { sessionId: state.sessionId };
     this.messages = new MemoryConversationMessageStore(state);
     this.toolCalls = new MemoryConversationToolCallStore(state);
-    this.streamCache = new MemoryConversationStreamStore();
+    this.streamCache = new LLMStreamCached(
+      state.sessionId,
+      memoryStreamManager,
+    );
   }
 
   public async beforeExecution(_mode: AgentExecutionMode): Promise<void> {}
@@ -328,6 +333,7 @@ class DefaultAgentProviders implements AgentProviders {
   public readonly conversation: ConversationProvider;
   public readonly chatContext: AgentProviders['chatContext'];
   public readonly chatMessageConverters: AgentProviders['chatMessageConverters'];
+  public readonly logger: Logger;
   public readonly features: AgentFeatureOptions;
   public readonly checkpointer: AgentProviders['checkpointer'];
 
@@ -335,6 +341,7 @@ class DefaultAgentProviders implements AgentProviders {
     this.conversation =
       options.conversation ?? new MemoryConversationProvider({});
     this.chatContext = options.chatContext;
+    this.logger = options.logger ?? noopLogger;
     this.chatMessageConverters =
       options.chatMessageConverters ?? new BaseChatMessageConverters();
     this.features = {

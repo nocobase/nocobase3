@@ -12,6 +12,7 @@ import {
 import z from 'zod';
 import _ from 'lodash';
 import type { ChatContextProvider, ConversationProvider } from '../types.js';
+import type { Logger } from '@nocobase/logging';
 
 export const toolInteractionMiddleware = (
   conversation: ConversationProvider,
@@ -44,6 +45,7 @@ export const toolInteractionMiddleware = (
 
 export const toolCallStatusMiddleware = (
   conversation: ConversationProvider,
+  logger: Logger,
 ): ReturnType<typeof createMiddleware> => {
   const store = conversation.toolCalls;
   return createMiddleware({
@@ -94,7 +96,7 @@ export const toolCallStatusMiddleware = (
             try {
               result = JSON.parse(toolMessage.content);
             } catch (error) {
-              conversation.logger.warn({ error }, 'tool result parse fail');
+              logger.warn({ error }, 'tool result parse fail');
               result = toolMessage.content;
             }
           } else result = toolMessage.content;
@@ -105,7 +107,7 @@ export const toolCallStatusMiddleware = (
           interrupted = true;
           throw error;
         }
-        conversation.logger.error(error);
+        logger.error(error);
         result = { status: 'error', content: error?.message };
         await store.markError(messageId, toolCallId, error);
         runtime.writer?.({
