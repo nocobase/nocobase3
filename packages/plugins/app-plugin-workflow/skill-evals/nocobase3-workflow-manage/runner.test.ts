@@ -72,7 +72,7 @@ describe('workflow skill prompt fixtures', () => {
       ),
     ).resolves.toBeTruthy();
     await expect(
-      fs.stat(path.join(packageRoot, 'bin/workflow.ts')),
+      fs.stat(path.join(packageRoot, 'cli/check.ts')),
     ).resolves.toBeTruthy();
 
     const promptCase = (await loadPromptCases(testsRoot))[0].case;
@@ -84,7 +84,7 @@ describe('workflow skill prompt fixtures', () => {
     });
     await expect(
       fs.readFile(path.join(workspace.root, 'TEST_CONTEXT.md'), 'utf8'),
-    ).resolves.toContain('/bin/workflow.ts');
+    ).resolves.toContain('/cli/index.ts workflow check');
     const validWorkflow = path.join(
       workspace.root,
       'server/workflows/valid-quotation',
@@ -94,7 +94,11 @@ describe('workflow skill prompt fixtures', () => {
       [
         '--import',
         path.join(packageRoot, 'node_modules/tsx/dist/loader.mjs'),
-        path.join(packageRoot, 'bin/workflow.ts'),
+        path.join(
+          repoRoot,
+          'packages/templates/app-template-default/cli/index.ts',
+        ),
+        'workflow',
         'check',
         validWorkflow,
       ],

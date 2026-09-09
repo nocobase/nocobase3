@@ -10,6 +10,14 @@ own `version`, and the release workflow keeps the two aligned through
 `scripts/sync-template-version.mjs`. Do not edit it by hand here — a release
 will overwrite it.
 
+## System information plugin removed
+
+`@nocobase/app-plugin-system-info` has been removed from the source workspace and template registrations. Remove its manifest entry and client/server registrations when upgrading a derived application, then reinstall dependencies and synchronize plugin Skills. The `/system-info` page and `/api/system-info` endpoint are no longer available.
+
+## File plugin removed from template registration
+
+The template no longer registers or directly depends on `@nocobase/app-plugin-file`. Its file inventory settings page and related API are no longer provided by default. When merging this update, remove the package from the manifest and both client/server plugin lists, then install dependencies and synchronize plugin Skills. This registration change does not delete stored files or database records. Independently registered file Repository capabilities remain unchanged.
+
 ## Remove duplicate plugin metadata
 
 Remove `nocobase.plugins` from the application manifest after upgrading the CLI and template scripts together. Keep `templateKind` and `defaultTemplateVersion`. Client, Server, and CLI composition roots now determine registered plugins for bulk Skills synchronization and updates. Development watches read Server registrations; deployment packaging follows server imports. Registration still copies plugin Skills, and unregistration cleans up legacy metadata when present.
@@ -65,3 +73,7 @@ page before the overlay opens.
 
 Put meaningful loading UI inside the loaded page or route surface instead,
 where it can use the correct page, drawer, dialog, or region presentation.
+
+## Database connections
+
+New applications keep database source under `database/<connectionName>/{migrations,seeds}`. The default connection is also the system/plugin database. Existing top-level task configuration and old directories remain compatible; no automatic source move occurs. See [migration and seed upgrade rules](skills/nocobase-app-development/references/migrations.md#existing-applications) before moving existing files. Use `pnpm migrate --connection <name>` or `--all` to select managed connections explicitly.

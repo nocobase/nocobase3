@@ -94,35 +94,8 @@ describe('app client runtime', () => {
       text: 'Configured application',
     });
     expect(app.refineConfig.authProvider).toBeDefined();
-    expect(app.refineConfig.resources).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          name: 'repository-example-customers',
-          list: '/repository-example/crm',
-          show: '/repository-example/crm/details/:recordId',
-        }),
-        expect.objectContaining({
-          name: 'repository-example-order-list',
-          list: '/repository-example/orders',
-        }),
-      ]),
-    );
-    expect(
-      app.refineConfig.resources?.every(
-        (resource) => resource.meta?.parent === undefined,
-      ),
-    ).toBe(true);
-    const repositoryGroups = runtime.routes.filter(
-      (route) =>
-        route.packageName === '@nocobase/app-plugin-repository-example' &&
-        !route.componentLoader,
-    );
-    expect(repositoryGroups.length).toBeGreaterThan(0);
-    expect(
-      repositoryGroups.every(
-        (route) => route.navigation && route.children?.length,
-      ),
-    ).toBe(true);
+    expect(app.refineConfig.notificationProvider).toBeDefined();
+    expect(app.refineConfig.resources ?? []).toEqual([]);
     await app.shutdown();
   });
 

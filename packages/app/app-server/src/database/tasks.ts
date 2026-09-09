@@ -5,18 +5,134 @@ import { createAppDatabaseManager } from './manager.js';
 import { createAppMigrator, type AppMigrationRunResult } from './migrator.js';
 import { createAppSeeder, type AppSeedRunResult } from './seeder.js';
 import { prepareAppDatabaseStorage } from './storage.js';
+import {
+  planAppDatabaseTasks,
+  type AppDatabaseTask,
+  type AppDatabaseTaskKind,
+  type AppDatabaseTaskSelection,
+} from './plan.js';
 import type { AppDatabaseConfig } from './types.js';
+
+export interface AppDatabaseTaskResult {
+  connection: string;
+  kind: AppDatabaseTaskKind;
+  status: 'completed' | 'skipped' | 'failed' | 'not-run';
+  reason?: string;
+  error?: string;
+  batch?: number;
+  executed?: string[];
+  skipped?: string[];
+}
+
+export interface AppDatabaseTasksResult {
+  ok: boolean;
+  status: 'completed' | 'failed' | 'not-configured';
+  results: AppDatabaseTaskResult[];
+}
+
+export class AppDatabaseTaskError extends Error {
+  constructor(
+    public readonly result: AppDatabaseTasksResult,
+    cause: unknown,
+  ) {
+    const failed = result.results.find((entry) => entry.status === 'failed');
+    super(
+      `Database ${failed?.kind} failed for connection "${failed?.connection}": ${cause instanceof Error ? cause.message : String(cause)}`,
+      { cause },
+    );
+    this.name = 'AppDatabaseTaskError';
+  }
+}
+
+/** Manual commands and startup share the same resolved, connection-bound plan. */
+export async function executeAppDatabasePlan(
+  database: DatabaseManager,
+  config: AppDatabaseConfig,
+  paths: ConfigPaths | undefined,
+  plan: readonly AppDatabaseTask[],
+): Promise<AppDatabaseTasksResult> {
+  const result: AppDatabaseTasksResult = {
+    ok: true,
+    status: 'completed',
+    results: [],
+  };
+  for (const [index, task] of plan.entries()) {
+    const identity = { connection: task.connection, kind: task.kind };
+    if (task.skipReason) {
+      result.results.push({
+        ...identity,
+        status: 'skipped',
+        reason: task.skipReason,
+      });
+      continue;
+    }
+    try {
+      await prepareAppDatabaseStorage(config, paths, [task.connection]);
+      const options = {
+        database,
+        connection: task.connection,
+        config: task.config,
+        sources: task.config.sources,
+      };
+      const completed =
+        task.kind === 'migrations'
+          ? await createAppMigrator(options).latest()
+          : await createAppSeeder(options).run();
+      result.results.push({ ...identity, ...completed });
+    } catch (error) {
+      result.ok = false;
+      result.status = 'failed';
+      result.results.push({
+        ...identity,
+        status: 'failed',
+        error: error instanceof Error ? error.message : String(error),
+      });
+      result.results.push(
+        ...plan.slice(index + 1).map((pending): AppDatabaseTaskResult => ({
+          connection: pending.connection,
+          kind: pending.kind,
+          status: 'not-run',
+          reason: 'previous-task-failed',
+        })),
+      );
+      throw new AppDatabaseTaskError(result, error);
+    }
+  }
+  return result;
+}
+
+export async function runAppDatabaseTasks(
+  config: AppDatabaseConfig,
+  paths: ConfigPaths | undefined,
+  selection: AppDatabaseTaskSelection & { kind: AppDatabaseTaskKind },
+): Promise<AppDatabaseTasksResult> {
+  const plan = planAppDatabaseTasks(config, paths, [selection.kind], selection);
+  if (!plan.length) return { ok: true, status: 'not-configured', results: [] };
+  const database = createAppDatabaseManager(config, paths);
+  if (!database) return { ok: true, status: 'not-configured', results: [] };
+  try {
+    return await executeAppDatabasePlan(database, config, paths, plan);
+  } finally {
+    await database.destroy();
+  }
+}
 
 export async function runAppMigrations(
   config: AppDatabaseConfig,
   paths?: ConfigPaths,
 ): Promise<AppMigrationRunResult | undefined> {
-  return runWithAppDatabase(config, paths, (database) =>
-    createAppMigrator({
-      database,
-      config: config.migrations,
-      sources: config.migrations.sources,
-    }).latest(),
+  const result = await runAppDatabaseTasks(config, paths, {
+    kind: 'migrations',
+  });
+  const first = result.results[0];
+  return (
+    first && {
+      status: first.status as AppMigrationRunResult['status'],
+      reason: first.reason as AppMigrationRunResult['reason'],
+      batch: first.batch,
+      executed: first.executed,
+      skipped: first.skipped,
+    }
   );
 }
 
@@ -24,34 +140,14 @@ export async function runAppSeeds(
   config: AppDatabaseConfig,
   paths?: ConfigPaths,
 ): Promise<AppSeedRunResult | undefined> {
-  const seeds = config.seeds;
-  if (!seeds) {
-    return undefined;
-  }
-
-  return runWithAppDatabase(config, paths, (database) =>
-    createAppSeeder({
-      database,
-      config: seeds,
-      sources: seeds.sources,
-    }).run(),
+  const result = await runAppDatabaseTasks(config, paths, { kind: 'seeds' });
+  const first = result.results[0];
+  return (
+    first && {
+      status: first.status as AppSeedRunResult['status'],
+      reason: first.reason as AppSeedRunResult['reason'],
+      executed: first.executed,
+      skipped: first.skipped,
+    }
   );
-}
-
-async function runWithAppDatabase<TResult>(
-  config: AppDatabaseConfig,
-  paths: ConfigPaths | undefined,
-  run: (database: DatabaseManager) => Promise<TResult>,
-): Promise<TResult | undefined> {
-  await prepareAppDatabaseStorage(config, paths);
-  const database = createAppDatabaseManager(config, paths);
-  if (!database) {
-    return undefined;
-  }
-
-  try {
-    return await run(database);
-  } finally {
-    await database.destroy();
-  }
 }

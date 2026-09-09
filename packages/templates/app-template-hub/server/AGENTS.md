@@ -25,6 +25,6 @@ Add domain APIs here, in this application. Do not create a plugin package for a 
 - Bind services to tokens in a provider's `register()`. Import a token from where it is defined; two `createServiceToken` calls with the same name are two different keys.
 - Declaration modules are imported by `server:inspect`. Nothing at module top level may connect to a database, start a worker, or execute a route factory. Long-lived resources belong in `start()` and are released in `shutdown()`.
 - Read configuration through the typed config, not `process.env`, inside providers and routes.
-- Schema changes are migrations in `../database/migrations/`, spelled out explicitly and never importing an evolving definition.
+- Schema changes are migrations in `../database/main/migrations/`, spelled out explicitly and never importing an evolving definition.
 
 Before finishing, run `pnpm typecheck`, `pnpm test`, `pnpm lint`, and `pnpm build`. `pnpm server:inspect --json` prints the composition snapshot. It reports wiring, not correctness — cover behavior with tests.

@@ -54,6 +54,25 @@ describe('DEFAULT_TEMPLATE', () => {
 });
 
 describe('TEMPLATE_ALIASES', () => {
+  it('resolves examples through the app flow and selected release channel', () => {
+    expect(TEMPLATE_ALIASES.examples).toEqual({
+      kind: 'app',
+      packageName: '@nocobase/app-template-examples',
+    });
+    expect(resolveTemplateKind('examples')).toBe('app');
+    expect(resolveTemplateSource('examples')).toBe(
+      '@nocobase/app-template-examples@latest',
+    );
+    expect(resolveTemplateSource('examples', { tag: 'beta' })).toBe(
+      '@nocobase/app-template-examples@beta',
+    );
+    expect(
+      resolveTemplateKind('./local-examples', {
+        nocobase: { templateKind: 'app' },
+      }),
+    ).toBe('app');
+  });
+
   it('maps the default name to the app template', () => {
     expect(TEMPLATE_ALIASES.default).toEqual({
       kind: 'app',

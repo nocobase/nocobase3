@@ -18,9 +18,23 @@ export {
   type CreateAppSeederOptions,
 } from './seeder.js';
 export { prepareAppDatabaseStorage } from './storage.js';
-export { runAppMigrations, runAppSeeds } from './tasks.js';
+export {
+  runAppMigrations,
+  runAppSeeds,
+  runAppDatabaseTasks,
+  AppDatabaseTaskError,
+  type AppDatabaseTaskResult,
+  type AppDatabaseTasksResult,
+} from './tasks.js';
+export {
+  planAppDatabaseTasks,
+  type AppDatabaseTask,
+  type AppDatabaseTaskKind,
+  type AppDatabaseTaskSelection,
+} from './plan.js';
 export type {
   AppDatabaseConfig,
+  AppDatabaseConnectionConfig,
   AppDatabaseMigrationConfig,
   AppDatabaseSeedConfig,
 } from './types.js';

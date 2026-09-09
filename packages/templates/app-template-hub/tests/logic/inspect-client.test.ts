@@ -157,11 +157,6 @@ describe('client inspection', () => {
       },
       {
         auth: 'required',
-        id: '@nocobase/app-plugin-system-info:index',
-        path: '/system-info',
-      },
-      {
-        auth: 'required',
         id: '@nocobase/app-plugin-hub:hub',
         path: '/hub',
       },

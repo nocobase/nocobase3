@@ -210,7 +210,7 @@ From `packages/templates/app-template-default` (or the corresponding initialized
 2. Check the DSL source:
 
    ```bash
-   pnpm exec workflow check server/workflows/<stable-key>
+   pnpm nocobase workflow check server/workflows/<stable-key>
    ```
 
    Expect `Workflow check passed: ... (<n> nodes)`. This is only the five-phase DSL/IR check described below.
@@ -219,7 +219,7 @@ From `packages/templates/app-template-default` (or the corresponding initialized
 4. Run the target application's normal server build, then build the complete Workflow Artifacts:
 
    ```bash
-   pnpm exec workflow build
+   pnpm nocobase workflow build
    ```
 
    The normal `pnpm build` also invokes this step. The standalone command scans every direct Workflow package and replaces the configured Artifact output tree, so do not point `--dist-root` at source or an unrelated directory.
@@ -399,7 +399,7 @@ Visibility is lexical and tree-based. A node may reference declared results from
 Run the installed plugin's actual checker before load/build:
 
 ```bash
-pnpm exec workflow check <package-or-workflow.ts>
+pnpm nocobase workflow check <package-or-workflow.ts>
 ```
 
 This CLI uses the workflow plugin's core `condition`, `run`, and `terminate` contracts. If the workflow uses an Instruction supplied by another installed plugin, the application must call the public `checkWorkflowPackage()`/`buildApplicationWorkflows()` APIs from its own checker/build entry and pass the same Instruction contracts registered at runtime. A default CLI pass cannot validate an application-specific Instruction, and the default CLI rejecting that node does not prove the installed extension is invalid.

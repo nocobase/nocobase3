@@ -10,7 +10,7 @@ the server runtime.
 
 The package root is the workflow authoring entry (`defineWorkflow`, `condition`,
 `terminate`, and `run`). Application integration uses the deliberately small `./server`
-entry, application build tooling uses the `workflow` command, and browser
+entry, application build tooling uses the contributed `workflow` CLI topic, and browser
 management UI uses `./client`. Runtime loading and synchronization modules are
 package-internal; `./build` remains public for applications that need to supply
 custom Instruction contracts.
@@ -19,7 +19,7 @@ Applications build their source-owned workflow packages through the installed
 command:
 
 ```bash
-pnpm exec workflow build \
+pnpm nocobase workflow build \
   --source-root server/workflows \
   --dist-root dist/server/workflows \
   --resource-root dist/server/workflows
