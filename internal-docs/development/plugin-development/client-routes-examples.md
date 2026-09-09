@@ -14,7 +14,7 @@ NocoBase v3 插件只通过一个 `client/routes.ts` entry 提供 Client Routes�
 - 页面通过 `componentLoader()` 惰性加载；
 - Client `auth` 和 `access` 保护导航与页面加载，不能替代 Server 安全边界。
 
-完整的四类 Route 选择见[Route 插件开发](./routes.md)。Client ServiceProvider、React Provider、
+完整的五类 Route（Client 三类、Server 两类）选择见[Route 插件开发](./routes.md)。Client ServiceProvider、React Provider、
 options 和 wiring 见[Client 模块选择](./client.md)。
 
 ## 先选择 App Route、Settings Route 还是 Dev Route
@@ -59,9 +59,11 @@ export default routes;
 
 | 值         | 使用场景                                     |
 | ---------- | -------------------------------------------- |
-| `required` | 只有登录用户能访问的页面；省略时也是该默认值 |
+| `required` | 只有登录用户能访问的页面                     |
 | `guest`    | 登录、注册、密码找回等访客页面               |
 | `optional` | 登录前后都能访问、页面自行调整体验的页面     |
+
+App 根节点省略 `auth` 时默认为 `required`。子节点继承父级的 `auth`，不能声明与父级不同的值；例如 `optional` 页面下的子路由省略 `auth` 时仍为 `optional`。Settings 和 Dev 路由统一要求登录。
 
 `auth` 是 Client navigation policy。页面调用的 HTTP API 仍要在对应 Server Route 中
 声明并测试自己的 authentication、authorization 或协议特定安全策略。
@@ -277,4 +279,4 @@ pnpm --filter <target-app> client:inspect --json
 - 把共享 Provider 状态复制进多个页面。
 
 返回[Route 插件开发](./routes.md)，或继续阅读[测试和验证插件](./testing.md)和
-`packages/examples/app-plugin-routes-example` 的可运行四 Route 示例。
+`packages/examples/app-plugin-routes-example` 的可运行五类 Route 示例。

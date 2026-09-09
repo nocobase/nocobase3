@@ -46,22 +46,27 @@ factory that returns its own `Hono`; do not add a helper that mutates a caller's
 router only to make tests easier. See the Server and Client Route best-practice
 pages under `internal-docs/development/plugin-development/` for the complete patterns.
 
-Enable the plugin in an App package with:
+The Examples template already registers this plugin. To enable it in another
+workspace App, run from the repository root, choosing the target with `--app`:
 
-```json
-{
-  "devDependencies": {
-    "@nocobase/app-plugin-routes-example": "workspace:^"
-  },
-  "nocobase": {
-    "plugins": {
-      "@nocobase/app-plugin-routes-example": {
-        "enabled": true
-      }
-    }
-  }
-}
+```bash
+pnpm plugin:register @nocobase/app-plugin-routes-example --app app-template-default --dry-run --json
+pnpm plugin:register @nocobase/app-plugin-routes-example --app app-template-default
 ```
+
+Registration updates the App's package dependency and adds explicit entries to
+`client/plugins.ts` and `server/plugins.ts`. Setting `enabled: true` in
+`package.json#nocobase.plugins` alone does not register the routes.
+
+The Client entry imports the factory from
+`@nocobase/app-plugin-routes-example/client` and adds `routesExample()` to
+`defineClientPlugins()`. The Server entry imports the definition from
+`@nocobase/app-plugin-routes-example/server` and adds `routesExample` to
+`defineServerPlugins()` without calling it. Keep the App's existing registrations,
+including authentication. See the Examples template's
+[Client registration](../../templates/app-template-examples/client/plugins.ts)
+and [Server registration](../../templates/app-template-examples/server/plugins.ts)
+for complete examples.
 
 The page URL includes the App's configured basename. For example, with
 `APP_BASE_PATH=/main`, open `/main/routes-example`; its API request is sent to
