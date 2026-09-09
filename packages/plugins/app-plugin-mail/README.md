@@ -21,7 +21,7 @@ The first runnable vertical slice provides:
 - account and folder filtering, refresh, message
   search, conversation detail, account connection, synchronization controls,
   sending, synchronization logs, and delivery submission logs;
-- AES-256-GCM encrypted OAuth credential storage with token-rotation support;
+- database-backed OAuth credential storage with token-rotation support;
 - a synchronous `SendMailOperation` with a persisted idempotency key and an
   explicit `unknown` result for indeterminate Provider submissions;
 - resumable initial and incremental mailbox synchronization;
@@ -65,9 +65,10 @@ The first runnable vertical slice provides:
 
 The current implementation does not yet provide generic IMAP/SMTP/JMAP
 Providers. Gmail and Microsoft implementations live in
-separate Provider plugins; Mail Core owns OAuth
-transactions and encrypted credential storage, while Provider plugins own
-protocol calls and token refresh behavior.
+separate Provider plugins; Mail Core owns OAuth transactions and a default
+plain-JSON credential store, while Provider plugins own protocol calls and
+token refresh behavior. Another plugin can register `mailCredentialVaultToken`
+before Mail Core to replace the default credential store.
 
 ## Documentation
 

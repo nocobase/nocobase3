@@ -12,7 +12,6 @@ export interface MailProviderConfigEntry {
 }
 
 export interface MailConfig {
-  readonly credentialEncryptionKey?: string;
   readonly automaticSyncIntervalMs: number;
   readonly pushWebhookUrl?: string;
   readonly pushWebhookSecret?: string;
@@ -23,12 +22,6 @@ export const mailConfig: AppConfigDefinition<MailConfig> = defineAppConfig({
   namespace: 'mail',
   schema: Type.Object(
     {
-      credentialEncryptionKey: Type.Optional(
-        Type.String({
-          minLength: 32,
-          description: 'Key used to encrypt OAuth credentials at rest.',
-        }),
-      ),
       automaticSyncIntervalMs: Type.Integer({ minimum: 60_000 }),
       pushWebhookUrl: Type.Optional(
         Type.String({
@@ -60,7 +53,6 @@ export const mailConfig: AppConfigDefinition<MailConfig> = defineAppConfig({
   ),
   defaults: { automaticSyncIntervalMs: 300_000, providers: {} },
   envMappings: {
-    MAIL_CREDENTIAL_ENCRYPTION_KEY: envString('credentialEncryptionKey'),
     MAIL_AUTOMATIC_SYNC_INTERVAL_MS: envInteger('automaticSyncIntervalMs'),
     MAIL_PUSH_WEBHOOK_URL: envString('pushWebhookUrl'),
     MAIL_PUSH_WEBHOOK_SECRET: envString('pushWebhookSecret'),

@@ -9,8 +9,8 @@
 - Add resumable, bounded mailbox synchronization through a transactional
   Outbox, Queue Job adapter, and initial-sync catch-up watermark.
 - Add the Mail database schema, runtime service wiring, and Provider contracts.
-- Add one-time PKCE OAuth orchestration and encrypted credential storage for
-  concrete Provider plugins.
+- Add one-time PKCE OAuth orchestration and a replaceable database credential
+  store for concrete Provider plugins.
 - Add `/dev/mail/center` for mailbox-style inspection, `/dev/mail/management`
   for the complete synchronized message table, and `/dev/mail/send` for test
   sending.

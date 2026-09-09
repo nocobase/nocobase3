@@ -333,7 +333,6 @@ function createAuthorization(): MailProviderAuthorization<GmailMailProviderConfi
             address: profile.value.emailAddress,
             credentialReference,
             scopes,
-            credentialExpiresAt: expiresAt,
             identities:
               identities.length > 0
                 ? identities

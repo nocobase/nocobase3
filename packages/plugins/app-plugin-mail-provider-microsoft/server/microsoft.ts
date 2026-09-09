@@ -339,7 +339,6 @@ function createAuthorization(): MailProviderAuthorization<MicrosoftMailProviderC
           authorizationSubject,
           credentialReference,
           scopes,
-          credentialExpiresAt: expiresAt,
           identities: microsoftIdentities(profile.value, address),
         } satisfies MailAuthorizedAccount,
       };

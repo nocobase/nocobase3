@@ -36,11 +36,8 @@ describe('Mail OAuth persistence', () => {
     await database.destroy();
   });
 
-  it('encrypts credentials at rest and supports token rotation', async () => {
-    const vault = createDatabaseMailCredentialVault(
-      database,
-      'test-encryption-key-with-at-least-32-characters',
-    );
+  it('stores credentials as JSON and supports token rotation', async () => {
+    const vault = createDatabaseMailCredentialVault(database);
     const reference = await vault.put({
       accessToken: 'access-secret',
       refreshToken: 'refresh-secret',
@@ -52,7 +49,10 @@ describe('Mail OAuth persistence', () => {
       .where('reference', '=', reference)
       .executeTakeFirstOrThrow();
 
-    expect(String(row.ciphertext)).not.toContain('access-secret');
+    expect(JSON.parse(String(row.value))).toEqual({
+      accessToken: 'access-secret',
+      refreshToken: 'refresh-secret',
+    });
     await expect(vault.get(reference)).resolves.toEqual({
       accessToken: 'access-secret',
       refreshToken: 'refresh-secret',
@@ -64,15 +64,31 @@ describe('Mail OAuth persistence', () => {
     });
   });
 
+  it('removes expired OAuth verifier credentials without deleting account credentials', async () => {
+    const vault = createDatabaseMailCredentialVault(database);
+    const accountReference = await vault.put({ accessToken: 'account-token' });
+    const verifierReference = await vault.put(
+      { codeVerifier: 'temporary-verifier' },
+      {
+        purpose: 'authorization',
+        expiresAt: '2026-09-04T00:00:00.000Z',
+      },
+    );
+
+    await expect(vault.deleteExpired('2026-09-04T00:00:01.000Z')).resolves.toBe(
+      1,
+    );
+    await expect(vault.get(accountReference)).resolves.toEqual({
+      accessToken: 'account-token',
+    });
+    await expect(vault.get(verifierReference)).rejects.toThrow(
+      'Mail credential was not found.',
+    );
+  });
+
   it('coalesces concurrent refreshes for the same credential', async () => {
-    const vault = createDatabaseMailCredentialVault(
-      database,
-      'test-encryption-key-with-at-least-32-characters',
-    );
-    const secondVault = createDatabaseMailCredentialVault(
-      database,
-      'test-encryption-key-with-at-least-32-characters',
-    );
+    const vault = createDatabaseMailCredentialVault(database);
+    const secondVault = createDatabaseMailCredentialVault(database);
     const reference = await vault.put({ token: 'expired' });
     let release: (() => void) | undefined;
     const gate = new Promise<void>((resolve) => {
@@ -104,18 +120,8 @@ describe('Mail OAuth persistence', () => {
   });
 
   it('renews the credential lease while a slow refresh is running', async () => {
-    const vault = new DatabaseMailCredentialVault(
-      database,
-      'test-encryption-key-with-at-least-32-characters',
-      30,
-      5,
-    );
-    const secondVault = new DatabaseMailCredentialVault(
-      database,
-      'test-encryption-key-with-at-least-32-characters',
-      30,
-      5,
-    );
+    const vault = new DatabaseMailCredentialVault(database, 30, 5);
+    const secondVault = new DatabaseMailCredentialVault(database, 30, 5);
     const reference = await vault.put({ token: 'expired' });
     const refresh = vi.fn(async () => {
       await new Promise((resolve) => setTimeout(resolve, 80));

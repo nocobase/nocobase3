@@ -7,13 +7,19 @@ const migration: MigrationDefinition = defineMigration({
       collection
         .string('reference', { length: 100, nullable: false })
         .primary();
-      collection.text('ciphertext', { nullable: false });
+      collection.text('value', { nullable: false });
+      collection.string('purpose', {
+        length: 30,
+        nullable: false,
+        defaultValue: 'account',
+      });
+      collection.datetime('expiresAt');
       collection.string('refreshLeaseToken', { length: 100 });
       collection.datetime('refreshLeaseExpiresAt');
       collection.datetime('createdAt', { nullable: false });
       collection.datetime('updatedAt', { nullable: false });
-      collection.index('refreshLeaseExpiresAt', {
-        name: 'mail_credentials_refresh_lease_idx',
+      collection.index('expiresAt', {
+        name: 'mail_credentials_expiry_idx',
       });
     });
 
@@ -27,11 +33,11 @@ const migration: MigrationDefinition = defineMigration({
       collection.integer('size', { nullable: false });
       collection.datetime('createdAt', { nullable: false });
       collection.datetime('expiresAt', { nullable: false });
-      collection.index(['userId', 'createdAt'], {
-        name: 'mail_outbound_attachments_user_created_idx',
-      });
       collection.index('expiresAt', {
         name: 'mail_outbound_attachments_expiry_idx',
+      });
+      collection.unique(['disk', 'key'], {
+        name: 'mail_outbound_attachments_disk_key_unique',
       });
     });
 
@@ -41,7 +47,6 @@ const migration: MigrationDefinition = defineMigration({
       collection.string('subject', { length: 2000, nullable: false });
       collection.text('text');
       collection.text('html');
-      collection.string('scope', { length: 20, nullable: false });
       collection.string('ownerId', { length: 255, nullable: false });
       collection.datetime('createdAt', { nullable: false });
       collection.datetime('updatedAt', { nullable: false });
@@ -82,9 +87,8 @@ const migration: MigrationDefinition = defineMigration({
       });
       collection.string('authorizationSubject', { length: 255 });
       collection.json('scopes', { nullable: false });
-      collection.datetime('credentialExpiresAt');
       collection.string('status', { length: 50, nullable: false });
-      collection.boolean('isDefault', { nullable: false, defaultValue: false });
+      collection.string('defaultForUserId', { length: 255 });
       collection.datetime('createdAt', { nullable: false });
       collection.datetime('updatedAt', { nullable: false });
       collection.index(['userId', 'status'], {
@@ -97,6 +101,9 @@ const migration: MigrationDefinition = defineMigration({
         ['providerType', 'providerName', 'authorizationSubject'],
         { name: 'mail_accounts_provider_subject_unique' },
       );
+      collection.unique('defaultForUserId', {
+        name: 'mail_accounts_default_user_unique',
+      });
     });
 
     await builder.createCollection('mailPushSubscriptions', (collection) => {
@@ -112,6 +119,12 @@ const migration: MigrationDefinition = defineMigration({
       collection.string('leaseToken', { length: 100 });
       collection.datetime('leaseExpiresAt');
       collection.datetime('updatedAt', { nullable: false });
+      collection
+        .belongsTo('account', 'mailAccounts')
+        .targetKey('id')
+        .foreignKey('accountId')
+        .constraints(true)
+        .onDelete('cascade');
       collection.unique(
         ['providerType', 'providerName', 'providerSubscriptionId'],
         { name: 'mail_push_subscriptions_provider_unique' },
@@ -123,9 +136,14 @@ const migration: MigrationDefinition = defineMigration({
 
     await builder.createCollection('mailPushPending', (collection) => {
       collection.uuid('accountId').primary();
-      collection.string('requestedBy', { length: 255, nullable: false });
       collection.string('requestToken', { length: 100, nullable: false });
       collection.datetime('requestedAt', { nullable: false });
+      collection
+        .belongsTo('account', 'mailAccounts')
+        .targetKey('id')
+        .foreignKey('accountId')
+        .constraints(true)
+        .onDelete('cascade');
     });
 
     await builder.createCollection('mailIdentities', (collection) => {
@@ -133,13 +151,20 @@ const migration: MigrationDefinition = defineMigration({
       collection.uuid('accountId', { nullable: false });
       collection.string('address', { length: 320, nullable: false });
       collection.string('displayName', { length: 255 });
-      collection.text('signatureText');
-      collection.text('signatureHtml');
-      collection.boolean('isPrimary', { nullable: false, defaultValue: false });
+      collection.uuid('primaryForAccountId');
       collection.boolean('canSend', { nullable: false, defaultValue: true });
       collection.unique(['accountId', 'address'], {
         name: 'mail_identities_account_address_unique',
       });
+      collection.unique('primaryForAccountId', {
+        name: 'mail_identities_primary_account_unique',
+      });
+      collection
+        .belongsTo('account', 'mailAccounts')
+        .targetKey('id')
+        .foreignKey('accountId')
+        .constraints(true)
+        .onDelete('cascade');
     });
 
     await builder.createCollection('mailSignatures', (collection) => {
@@ -148,18 +173,21 @@ const migration: MigrationDefinition = defineMigration({
       collection.string('name', { length: 255, nullable: false });
       collection.text('text', { nullable: false });
       collection.text('html');
-      collection.boolean('isDefault', {
-        nullable: false,
-        defaultValue: false,
-      });
+      collection.uuid('defaultForIdentityId');
       collection.datetime('createdAt', { nullable: false });
       collection.datetime('updatedAt', { nullable: false });
       collection.unique(['identityId', 'name'], {
         name: 'mail_signatures_identity_name_unique',
       });
-      collection.index(['identityId', 'isDefault'], {
-        name: 'mail_signatures_identity_default_idx',
+      collection.unique('defaultForIdentityId', {
+        name: 'mail_signatures_default_identity_unique',
       });
+      collection
+        .belongsTo('identity', 'mailIdentities')
+        .targetKey('id')
+        .foreignKey('identityId')
+        .constraints(true)
+        .onDelete('cascade');
     });
 
     await builder.createCollection('mailFolders', (collection) => {
@@ -173,6 +201,12 @@ const migration: MigrationDefinition = defineMigration({
       collection.unique(['accountId', 'providerFolderId'], {
         name: 'mail_folders_account_provider_unique',
       });
+      collection
+        .belongsTo('account', 'mailAccounts')
+        .targetKey('id')
+        .foreignKey('accountId')
+        .constraints(true)
+        .onDelete('cascade');
     });
 
     await builder.createCollection('mailMessages', (collection) => {
@@ -182,7 +216,6 @@ const migration: MigrationDefinition = defineMigration({
       collection.string('providerDraftId', { length: 500 });
       collection.string('internetMessageId', { length: 1000 });
       collection.string('providerConversationId', { length: 500 });
-      collection.json('providerFolderIds', { nullable: false });
       collection.json('sender');
       collection.json('recipients', { nullable: false });
       collection.json('replyTo', { nullable: false });
@@ -218,25 +251,48 @@ const migration: MigrationDefinition = defineMigration({
           name: 'mail_messages_account_conversation_idx',
         },
       );
+      collection
+        .belongsTo('account', 'mailAccounts')
+        .targetKey('id')
+        .foreignKey('accountId')
+        .constraints(true)
+        .onDelete('cascade');
     });
 
     await builder.createCollection('mailMessageFolders', (collection) => {
-      collection.uuid('id').primary();
       collection.uuid('accountId', { nullable: false });
       collection.uuid('messageId', { nullable: false });
       collection.string('providerFolderId', { length: 500, nullable: false });
-      collection.unique(['messageId', 'providerFolderId'], {
-        name: 'mail_message_folders_message_folder_unique',
+      collection.primary(['messageId', 'providerFolderId'], {
+        name: 'mail_message_folders_pk',
       });
       collection.index(['accountId', 'providerFolderId', 'messageId'], {
         name: 'mail_message_folders_account_folder_idx',
       });
+      collection
+        .belongsTo('account', 'mailAccounts')
+        .targetKey('id')
+        .foreignKey('accountId')
+        .constraints(true)
+        .onDelete('cascade');
+      collection
+        .belongsTo('message', 'mailMessages')
+        .targetKey('id')
+        .foreignKey('messageId')
+        .constraints(true)
+        .onDelete('cascade');
     });
 
     await builder.createCollection('mailSyncStates', (collection) => {
       collection.uuid('accountId').primary();
       collection.json('cursor', { nullable: false });
       collection.datetime('lastSyncedAt', { nullable: false });
+      collection
+        .belongsTo('account', 'mailAccounts')
+        .targetKey('id')
+        .foreignKey('accountId')
+        .constraints(true)
+        .onDelete('cascade');
     });
 
     await builder.createCollection('mailSyncRuns', (collection) => {
@@ -273,6 +329,12 @@ const migration: MigrationDefinition = defineMigration({
       collection.unique('activeKey', {
         name: 'mail_sync_runs_active_account_unique',
       });
+      collection
+        .belongsTo('account', 'mailAccounts')
+        .targetKey('id')
+        .foreignKey('accountId')
+        .constraints(true)
+        .onDelete('cascade');
     });
 
     await builder.createCollection('mailSubmissions', (collection) => {
@@ -293,12 +355,15 @@ const migration: MigrationDefinition = defineMigration({
       collection.index(['status', 'leaseExpiresAt'], {
         name: 'mail_submissions_expired_idx',
       });
-      collection.index(['status', 'scheduledAt'], {
-        name: 'mail_submissions_scheduled_idx',
-      });
       collection.unique(['accountId', 'idempotencyKey'], {
         name: 'mail_submissions_idempotency_unique',
       });
+      collection
+        .belongsTo('account', 'mailAccounts')
+        .targetKey('id')
+        .foreignKey('accountId')
+        .constraints(true)
+        .onDelete('cascade');
     });
 
     await builder.createCollection('mailOutbox', (collection) => {
@@ -319,6 +384,9 @@ const migration: MigrationDefinition = defineMigration({
       });
       collection.index(['status', 'availableAt'], {
         name: 'mail_outbox_ready_idx',
+      });
+      collection.index(['status', 'publishedAt'], {
+        name: 'mail_outbox_retention_idx',
       });
     });
   },

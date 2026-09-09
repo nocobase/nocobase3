@@ -34,12 +34,13 @@ export class MailCoreProvider extends ServiceProvider<MailCoreProviderApplicatio
     this.app.container.singleton(mailStoreToken, (container) =>
       createDatabaseMailStore(container.resolve(databaseManagerToken)),
     );
-    this.app.container.singleton(mailCredentialVaultToken, (container) =>
-      createDatabaseMailCredentialVault(
-        container.resolve(databaseManagerToken),
-        this.app.config.get(mailConfig).credentialEncryptionKey,
-      ),
-    );
+    if (!this.app.container.has(mailCredentialVaultToken)) {
+      this.app.container.singleton(mailCredentialVaultToken, (container) =>
+        createDatabaseMailCredentialVault(
+          container.resolve(databaseManagerToken),
+        ),
+      );
+    }
     this.app.container.singleton(
       mailProviderAdapterResolverToken,
       (container) =>
@@ -66,6 +67,7 @@ export class MailCoreProvider extends ServiceProvider<MailCoreProviderApplicatio
         outboundAttachments: container.resolve(
           mailOutboundAttachmentStorageToken,
         ),
+        credentials: container.resolve(mailCredentialVaultToken),
         logger: container
           .resolve(loggingToken)
           .getLogger()

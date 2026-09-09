@@ -20,6 +20,7 @@ import type {
   MailStore,
   MailSyncMailboxTaskPayload,
   MailOutboundAttachmentStorage,
+  MailCredentialVault,
 } from './types.js';
 
 export interface MailRuntimeLogger {
@@ -36,6 +37,7 @@ export interface MailRuntimeOptions {
   readonly relayIntervalMs?: number;
   readonly automaticSyncIntervalMs?: number;
   readonly outboundAttachments?: MailOutboundAttachmentStorage;
+  readonly credentials?: MailCredentialVault;
   readonly pushWebhookUrl?: string;
   readonly pushWebhookSecret?: string;
 }
@@ -125,7 +127,8 @@ export class MailRuntime implements MailOutboxPublisher {
 
   public scheduleAutomaticSync(): void {
     if (this.closed || this.automaticSyncPromise) return;
-    this.automaticSyncPromise = this.createAutomaticSyncRuns()
+    this.automaticSyncPromise = this.runMaintenance()
+      .then(() => this.createAutomaticSyncRuns())
       .then(() => undefined)
       .catch((error: unknown): void => {
         this.options.logger?.error?.(
@@ -140,9 +143,6 @@ export class MailRuntime implements MailOutboxPublisher {
 
   public async createAutomaticSyncRuns(): Promise<number> {
     let created = 0;
-    await this.options.outboundAttachments?.cleanupExpired?.(
-      new Date().toISOString(),
-    );
     const accounts = await this.options.store.listAllAccounts();
     for (const account of accounts) {
       if (account.status !== 'active') continue;
@@ -167,16 +167,22 @@ export class MailRuntime implements MailOutboxPublisher {
     return created;
   }
 
+  private async runMaintenance(): Promise<void> {
+    const now = new Date().toISOString();
+    await this.options.outboundAttachments?.cleanupExpired?.(now);
+    await this.options.store.deleteExpiredAuthorizationTransactions?.(now);
+    await this.options.credentials?.deleteExpired?.(now);
+    await this.options.store.deletePublishedOutboxBefore?.(
+      new Date(Date.now() - 7 * 24 * 60 * 60_000).toISOString(),
+    );
+  }
+
   public async schedulePushSync(accountId: string): Promise<boolean> {
     if (this.closed) return false;
     const account = await this.options.store.getAccount(accountId);
     if (!account || account.status !== 'active') return false;
     const requestToken = randomUUID();
-    await this.options.store.markPushSyncPending(
-      accountId,
-      account.userId,
-      requestToken,
-    );
+    await this.options.store.markPushSyncPending(accountId, requestToken);
     const created = await this.createSyncRun(accountId);
     if (created) {
       await this.options.store.clearPushSyncPending(accountId, requestToken);
@@ -191,10 +197,7 @@ export class MailRuntime implements MailOutboxPublisher {
     if (this.closed || accounts.length === 0) return;
     const requestToken = randomUUID();
     await this.options.store.markPushSyncPendingBatch(
-      accounts.map((account) => ({
-        accountId: account.id,
-        requestedBy: account.userId,
-      })),
+      accounts.map((account) => account.id),
       requestToken,
     );
     queueMicrotask(() => {

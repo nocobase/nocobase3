@@ -69,7 +69,6 @@ export interface MailAccount {
   readonly credentialReference: string;
   readonly authorizationSubject?: string;
   readonly scopes: readonly string[];
-  readonly credentialExpiresAt?: string;
   readonly status: MailAccountStatus;
   readonly syncCursor?: MailSyncCursor;
   readonly isDefault: boolean;
@@ -90,8 +89,6 @@ export interface MailIdentity {
   readonly accountId: string;
   readonly address: string;
   readonly displayName?: string;
-  readonly signatureText?: string;
-  readonly signatureHtml?: string;
   readonly isPrimary: boolean;
   readonly canSend: boolean;
 }
@@ -121,8 +118,6 @@ export interface MailUpdateIdentityInput {
   readonly accountId: string;
   readonly identityId: string;
   readonly displayName?: string | null;
-  readonly signatureText?: string | null;
-  readonly signatureHtml?: string | null;
 }
 
 export type MailFolderType =
@@ -206,7 +201,6 @@ export interface MailTemplate {
   readonly subject: string;
   readonly text?: string;
   readonly html: string;
-  readonly scope: 'private' | 'shared';
   readonly ownerId?: string;
 }
 
@@ -723,7 +717,6 @@ export interface MailAuthorizedAccount {
   readonly authorizationSubject?: string;
   readonly credentialReference: string;
   readonly scopes: readonly string[];
-  readonly credentialExpiresAt?: string;
   readonly identities?: readonly MailAuthorizedIdentity[];
 }
 
@@ -1035,7 +1028,13 @@ export interface MailProviderContext {
 }
 
 export interface MailCredentialVault {
-  put(value: unknown): Promise<string>;
+  put(
+    value: unknown,
+    options?: {
+      readonly purpose?: 'account' | 'authorization';
+      readonly expiresAt?: string;
+    },
+  ): Promise<string>;
   get<T>(reference: string): Promise<T>;
   replace(reference: string, value: unknown): Promise<void>;
   getOrRefresh<T>(
@@ -1044,6 +1043,7 @@ export interface MailCredentialVault {
     refresh: (value: T) => Promise<T>,
   ): Promise<T>;
   delete(reference: string): Promise<void>;
+  deleteExpired?(now: string): Promise<number>;
 }
 
 export interface MailProviderMoveResult {
@@ -1205,6 +1205,7 @@ export interface MailStore {
     stateHash: string,
     now: string,
   ): Promise<MailAuthorizationTransaction | undefined>;
+  deleteExpiredAuthorizationTransactions?(now: string): Promise<number>;
   getAccount(accountId: string): Promise<MailAccount | undefined>;
   findAccountByProviderIdentity(
     provider: MailProviderIdentity,
@@ -1257,6 +1258,7 @@ export interface MailStore {
   saveAuthorizedAccount(
     account: MailAccount,
     identities: readonly MailIdentity[],
+    signatures?: readonly MailSignature[],
   ): Promise<void>;
   listIdentities(accountId: string): Promise<readonly MailIdentity[]>;
   replaceIdentities(
@@ -1266,10 +1268,7 @@ export interface MailStore {
   getIdentity(identityId: string): Promise<MailIdentity | undefined>;
   updateIdentity(
     identityId: string,
-    patch: Pick<
-      MailIdentity,
-      'displayName' | 'signatureText' | 'signatureHtml'
-    >,
+    patch: Pick<MailIdentity, 'displayName'>,
   ): Promise<MailIdentity | undefined>;
   listSignatures(identityId: string): Promise<readonly MailSignature[]>;
   getSignature(signatureId: string): Promise<MailSignature | undefined>;
@@ -1345,16 +1344,9 @@ export interface MailStore {
   deleteMessage(accountId: string, messageId: string): Promise<boolean>;
   getSyncCursor(accountId: string): Promise<MailSyncCursor | undefined>;
   clearSyncCursor(accountId: string): Promise<void>;
-  markPushSyncPending(
-    accountId: string,
-    requestedBy: string,
-    requestToken: string,
-  ): Promise<void>;
+  markPushSyncPending(accountId: string, requestToken: string): Promise<void>;
   markPushSyncPendingBatch(
-    accounts: readonly {
-      readonly accountId: string;
-      readonly requestedBy: string;
-    }[],
+    accountIds: readonly string[],
     requestToken: string,
   ): Promise<void>;
   clearPushSyncPending(accountId: string, requestToken: string): Promise<void>;
@@ -1430,6 +1422,7 @@ export interface MailStore {
     leaseToken: string,
     publishedAt: string,
   ): Promise<boolean>;
+  deletePublishedOutboxBefore?(before: string): Promise<number>;
   releaseOutbox(
     outboxId: string,
     leaseToken: string,

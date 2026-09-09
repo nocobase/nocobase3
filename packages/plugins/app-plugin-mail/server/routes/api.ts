@@ -221,14 +221,6 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
               value.displayName,
               'displayName',
             ),
-            signatureText: optionalNullableString(
-              value.signatureText,
-              'signatureText',
-            ),
-            signatureHtml: optionalNullableString(
-              value.signatureHtml,
-              'signatureHtml',
-            ),
           }),
         });
       },

@@ -23,8 +23,6 @@ auth:
 #   secret: replace-with-a-unique-secret
 
 # User mailbox OAuth and Provider configuration.
-# Set MAIL_CREDENTIAL_ENCRYPTION_KEY to a stable random value of at least 32
-# characters before connecting accounts.
 # mail:
 #   providers:
 #     google:

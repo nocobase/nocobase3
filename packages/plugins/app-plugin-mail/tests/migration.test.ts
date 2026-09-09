@@ -16,6 +16,8 @@ interface SqliteClient {
 
 const COLLECTIONS = [
   ['mailCredentials', 'mail_credentials'],
+  ['mailOutboundAttachments', 'mail_outbound_attachments'],
+  ['mailTemplates', 'mail_templates'],
   ['mailAuthorizationStates', 'mail_authorization_states'],
   ['mailAccounts', 'mail_accounts'],
   ['mailPushSubscriptions', 'mail_push_subscriptions'],
@@ -76,7 +78,7 @@ describe('mail database migration', () => {
     ).resolves.toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          name: 'mail_credentials_refresh_lease_idx',
+          name: 'mail_credentials_expiry_idx',
         }),
       ]),
     );
@@ -90,6 +92,7 @@ describe('mail database migration', () => {
         expect.objectContaining({
           name: 'mail_accounts_provider_subject_unique',
         }),
+        expect.objectContaining({ name: 'mail_accounts_default_user_unique' }),
       ]),
     );
     await expect(
@@ -101,6 +104,55 @@ describe('mail database migration', () => {
       },
     });
     await expect(
+      metadataStore
+        .get('mailMessages')
+        .then((stored) => stored?.document.fields.providerFolderIds),
+    ).resolves.toBeUndefined();
+    await expect(
+      metadataStore
+        .get('mailTemplates')
+        .then((stored) => stored?.document.fields.scope),
+    ).resolves.toBeUndefined();
+    await expect(
+      metadataStore.get('mailCredentials').then((stored) => stored?.document),
+    ).resolves.toMatchObject({
+      fields: {
+        value: { type: 'text' },
+        purpose: { type: 'string' },
+        expiresAt: { type: 'datetime' },
+      },
+    });
+    await expect(
+      metadataStore.get('mailAccounts').then((stored) => stored?.document),
+    ).resolves.toMatchObject({
+      fields: { defaultForUserId: { type: 'string' } },
+    });
+    await expect(
+      metadataStore
+        .get('mailAccounts')
+        .then((stored) => stored?.document.fields.credentialExpiresAt),
+    ).resolves.toBeUndefined();
+    await expect(
+      metadataStore.get('mailIdentities').then((stored) => stored?.document),
+    ).resolves.toMatchObject({
+      fields: { primaryForAccountId: { type: 'uuid' } },
+    });
+    await expect(
+      metadataStore
+        .get('mailIdentities')
+        .then((stored) => stored?.document.fields.signatureText),
+    ).resolves.toBeUndefined();
+    await expect(
+      metadataStore.get('mailSignatures').then((stored) => stored?.document),
+    ).resolves.toMatchObject({
+      fields: { defaultForIdentityId: { type: 'uuid' } },
+    });
+    await expect(
+      metadataStore
+        .get('mailPushPending')
+        .then((stored) => stored?.document.fields.requestedBy),
+    ).resolves.toBeUndefined();
+    await expect(
       client.raw('PRAGMA index_list(mail_signatures)'),
     ).resolves.toEqual(
       expect.arrayContaining([
@@ -108,7 +160,7 @@ describe('mail database migration', () => {
           name: 'mail_signatures_identity_name_unique',
         }),
         expect.objectContaining({
-          name: 'mail_signatures_identity_default_idx',
+          name: 'mail_signatures_default_identity_unique',
         }),
       ]),
     );
@@ -116,13 +168,7 @@ describe('mail database migration', () => {
       expect.arrayContaining([
         expect.objectContaining({ name: 'mail_outbox_deduplication_unique' }),
         expect.objectContaining({ name: 'mail_outbox_ready_idx' }),
-      ]),
-    );
-    await expect(
-      client.raw('PRAGMA index_list(mail_submissions)'),
-    ).resolves.toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ name: 'mail_submissions_scheduled_idx' }),
+        expect.objectContaining({ name: 'mail_outbox_retention_idx' }),
       ]),
     );
     await expect(
@@ -151,7 +197,8 @@ describe('mail database migration', () => {
     ).resolves.toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          name: 'mail_message_folders_message_folder_unique',
+          origin: 'pk',
+          unique: 1,
         }),
         expect.objectContaining({
           name: 'mail_message_folders_account_folder_idx',
@@ -167,6 +214,30 @@ describe('mail database migration', () => {
         baselineCursor: { type: 'json' },
       },
     });
+    await expect(
+      client.raw('PRAGMA foreign_key_list(mail_message_folders)'),
+    ).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          table: 'mail_messages',
+          on_delete: 'CASCADE',
+        }),
+        expect.objectContaining({
+          table: 'mail_accounts',
+          on_delete: 'CASCADE',
+        }),
+      ]),
+    );
+    await expect(
+      client.raw('PRAGMA foreign_key_list(mail_signatures)'),
+    ).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          table: 'mail_identities',
+          on_delete: 'CASCADE',
+        }),
+      ]),
+    );
   });
 
   it('drops all Mail schema and metadata', async () => {

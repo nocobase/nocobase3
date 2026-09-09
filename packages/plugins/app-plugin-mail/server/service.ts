@@ -111,8 +111,11 @@ export class DefaultMailService implements MailService {
     const codeChallenge = createHash('sha256')
       .update(codeVerifier)
       .digest('base64url');
-    const verifierCredentialReference = await credentials.put({ codeVerifier });
     const expiresAt = new Date(Date.now() + 10 * 60_000).toISOString();
+    const verifierCredentialReference = await credentials.put(
+      { codeVerifier },
+      { purpose: 'authorization', expiresAt },
+    );
     try {
       const result = await definition.authorization.start(
         providerContext,
@@ -202,7 +205,6 @@ export class DefaultMailService implements MailService {
           credentialReference: result.value.credentialReference,
           authorizationSubject: result.value.authorizationSubject,
           scopes: result.value.scopes,
-          credentialExpiresAt: result.value.credentialExpiresAt,
           status: 'active',
           isDefault: existing?.isDefault ?? accounts.length === 0,
         };
@@ -223,25 +225,45 @@ export class DefaultMailService implements MailService {
             canSend: true,
           },
         ];
+        const identities = authorizedIdentities.map((authorized) => {
+          const previous = previousByAddress.get(
+            authorized.address.toLowerCase(),
+          );
+          return {
+            id: previous?.id ?? randomUUID(),
+            accountId: account.id,
+            address: normalizeAddress(authorized.address),
+            displayName: authorized.displayName,
+            isPrimary: authorized.isPrimary,
+            canSend: authorized.canSend,
+          };
+        });
+        const signatures: MailSignature[] = [];
+        for (const [index, authorized] of authorizedIdentities.entries()) {
+          if (!authorized.signatureText && !authorized.signatureHtml) continue;
+          const identity = identities[index];
+          const existingSignatures = previousByAddress.has(
+            authorized.address.toLowerCase(),
+          )
+            ? await this.dependencies.store.listSignatures(identity.id)
+            : [];
+          if (existingSignatures.length > 0) continue;
+          const now = new Date().toISOString();
+          signatures.push({
+            id: randomUUID(),
+            identityId: identity.id,
+            name: 'Provider signature',
+            text: authorized.signatureText ?? '',
+            html: authorized.signatureHtml,
+            isDefault: true,
+            createdAt: now,
+            updatedAt: now,
+          });
+        }
         await this.dependencies.store.saveAuthorizedAccount(
           account,
-          authorizedIdentities.map((authorized) => {
-            const previous = previousByAddress.get(
-              authorized.address.toLowerCase(),
-            );
-            return {
-              id: previous?.id ?? randomUUID(),
-              accountId: account.id,
-              address: normalizeAddress(authorized.address),
-              displayName: authorized.displayName,
-              signatureText:
-                authorized.signatureText ?? previous?.signatureText,
-              signatureHtml:
-                authorized.signatureHtml ?? previous?.signatureHtml,
-              isPrimary: authorized.isPrimary,
-              canSend: authorized.canSend,
-            };
-          }),
+          identities,
+          signatures,
         );
         previousCredentialReference = existing?.credentialReference;
       } catch (error) {
@@ -417,14 +439,6 @@ export class DefaultMailService implements MailService {
         input.displayName === undefined
           ? identity.displayName
           : (input.displayName ?? undefined),
-      signatureText:
-        input.signatureText === undefined
-          ? identity.signatureText
-          : (input.signatureText ?? undefined),
-      signatureHtml:
-        input.signatureHtml === undefined
-          ? identity.signatureHtml
-          : (input.signatureHtml ?? undefined),
     });
     if (!updated) throw new Error('Mail sending identity was not found.');
     return updated;
@@ -855,7 +869,6 @@ export class DefaultMailService implements MailService {
       subject: input.subject,
       text: input.text,
       html: input.html ?? '',
-      scope: 'private',
       ownerId: context.actorId,
     });
   }

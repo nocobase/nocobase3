@@ -5,7 +5,7 @@ description: Integrate and operate NocoBase Mail accounts, OAuth authorization, 
 
 # NocoBase Mail
 
-Use the Mail plugin's public Client, Server, and HTTP contracts. The plugin owns OAuth transactions, encrypted credential references, submissions, sync runs, Provider cursors, and the Outbox relay. The App owns Provider configuration, plugin registration, permission grants, and where mail UI is presented.
+Use the Mail plugin's public Client, Server, and HTTP contracts. The plugin owns OAuth transactions, credential references, submissions, sync runs, Provider cursors, and the Outbox relay. The App owns Provider configuration, plugin registration, permission grants, and where mail UI is presented. Mail Core's default credential store persists plain JSON; an App that requires encryption must register a separate `mailCredentialVaultToken` implementation before Mail Core.
 
 ## Public entry points
 

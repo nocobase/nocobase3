@@ -267,23 +267,19 @@ export class SendMailOperation {
       throw new Error('Mail signature was not found.');
     }
     const signatureText =
-      input.signatureId === null
-        ? undefined
-        : (signature?.text ?? identity.signatureText);
+      input.signatureId === null ? undefined : signature?.text;
     const signatureHtml =
       input.signatureId === null
         ? undefined
         : signature
           ? (signature.html ?? escapeHtml(signature.text))
-          : (identity.signatureHtml ?? escapeHtml(identity.signatureText));
-    const knownSignatureTexts = [
-      ...configuredSignatures.map((item) => item.text),
-      identity.signatureText,
-    ].filter((value): value is string => Boolean(value?.trim()));
-    const knownSignatureHtml = [
-      ...configuredSignatures.map((item) => item.html ?? escapeHtml(item.text)),
-      identity.signatureHtml ?? escapeHtml(identity.signatureText),
-    ].filter((value): value is string => Boolean(value?.trim()));
+          : undefined;
+    const knownSignatureTexts = configuredSignatures
+      .map((item) => item.text)
+      .filter((value): value is string => Boolean(value.trim()));
+    const knownSignatureHtml = configuredSignatures
+      .map((item) => item.html ?? escapeHtml(item.text))
+      .filter((value): value is string => Boolean(value?.trim()));
     const relatedMessageId =
       input.inReplyToMessageId ?? input.forwardOfMessageId;
     const related = relatedMessageId

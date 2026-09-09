@@ -1,10 +1,4 @@
-import {
-  createCipheriv,
-  createDecipheriv,
-  createHash,
-  randomBytes,
-  randomUUID,
-} from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 
 import type { DatabaseManager, Row } from '@nocobase/db';
 
@@ -12,7 +6,9 @@ import type { MailCredentialVault } from './types.js';
 
 interface CredentialRow extends Row {
   reference: string;
-  ciphertext: string;
+  value: string;
+  purpose: 'account' | 'authorization';
+  expiresAt?: string | null;
   refreshLeaseToken?: string | null;
   refreshLeaseExpiresAt?: string | null;
   createdAt: string;
@@ -23,21 +19,21 @@ const REFRESH_LEASE_MS = 2 * 60 * 1_000;
 const REFRESH_POLL_MS = 50;
 
 export class DatabaseMailCredentialVault implements MailCredentialVault {
-  private readonly key?: Buffer;
   private readonly refreshes = new Map<string, Promise<unknown>>();
 
   public constructor(
     private readonly database: DatabaseManager,
-    encryptionKey: string | undefined,
     private readonly refreshLeaseMs: number = REFRESH_LEASE_MS,
     private readonly refreshPollMs: number = REFRESH_POLL_MS,
-  ) {
-    this.key = encryptionKey
-      ? createHash('sha256').update(encryptionKey).digest()
-      : undefined;
-  }
+  ) {}
 
-  public async put(value: unknown): Promise<string> {
+  public async put(
+    value: unknown,
+    options: {
+      readonly purpose?: 'account' | 'authorization';
+      readonly expiresAt?: string;
+    } = {},
+  ): Promise<string> {
     const reference = `mail-credential:${randomUUID()}`;
     const now = new Date().toISOString();
     await this.database
@@ -45,7 +41,9 @@ export class DatabaseMailCredentialVault implements MailCredentialVault {
       .insertInto<CredentialRow>('mailCredentials')
       .values({
         reference,
-        ciphertext: this.encrypt(value),
+        value: JSON.stringify(value),
+        purpose: options.purpose ?? 'account',
+        expiresAt: options.expiresAt,
         createdAt: now,
         updatedAt: now,
       })
@@ -61,7 +59,7 @@ export class DatabaseMailCredentialVault implements MailCredentialVault {
       .where('reference', '=', reference)
       .executeTakeFirst<CredentialRow>();
     if (!row) throw new Error('Mail credential was not found.');
-    return this.decrypt<T>(row.ciphertext);
+    return JSON.parse(row.value) as T;
   }
 
   public async replace(reference: string, value: unknown): Promise<void> {
@@ -69,7 +67,7 @@ export class DatabaseMailCredentialVault implements MailCredentialVault {
       .query()
       .updateTable<CredentialRow>('mailCredentials')
       .set({
-        ciphertext: this.encrypt(value),
+        value: JSON.stringify(value),
         updatedAt: new Date().toISOString(),
       })
       .where('reference', '=', reference)
@@ -163,7 +161,7 @@ export class DatabaseMailCredentialVault implements MailCredentialVault {
             .query()
             .updateTable<CredentialRow>('mailCredentials')
             .set({
-              ciphertext: this.encrypt(next),
+              value: JSON.stringify(next),
               refreshLeaseToken: null,
               refreshLeaseExpiresAt: null,
               updatedAt: new Date().toISOString(),
@@ -232,49 +230,14 @@ export class DatabaseMailCredentialVault implements MailCredentialVault {
       .execute();
   }
 
-  private encrypt(value: unknown): string {
-    const key = this.requireKey();
-    const iv = randomBytes(12);
-    const cipher = createCipheriv('aes-256-gcm', key, iv);
-    const encrypted = Buffer.concat([
-      cipher.update(JSON.stringify(value), 'utf8'),
-      cipher.final(),
-    ]);
-    return [
-      'v1',
-      iv.toString('base64url'),
-      cipher.getAuthTag().toString('base64url'),
-      encrypted.toString('base64url'),
-    ].join('.');
-  }
-
-  private decrypt<T>(envelope: string): T {
-    const key = this.requireKey();
-    const [version, iv, tag, encrypted] = envelope.split('.');
-    if (version !== 'v1' || !iv || !tag || !encrypted) {
-      throw new Error('Mail credential envelope is invalid.');
-    }
-    const decipher = createDecipheriv(
-      'aes-256-gcm',
-      key,
-      Buffer.from(iv, 'base64url'),
-    );
-    decipher.setAuthTag(Buffer.from(tag, 'base64url'));
-    return JSON.parse(
-      Buffer.concat([
-        decipher.update(Buffer.from(encrypted, 'base64url')),
-        decipher.final(),
-      ]).toString('utf8'),
-    ) as T;
-  }
-
-  private requireKey(): Buffer {
-    if (!this.key) {
-      throw new Error(
-        'mail.credentialEncryptionKey is required before connecting OAuth mail accounts.',
-      );
-    }
-    return this.key;
+  public async deleteExpired(now: string): Promise<number> {
+    const result = await this.database
+      .query()
+      .deleteFrom<CredentialRow>('mailCredentials')
+      .where('purpose', '=', 'authorization')
+      .where('expiresAt', '<=', now)
+      .execute();
+    return result.deletedCount ?? 0;
   }
 }
 
@@ -296,7 +259,6 @@ async function delay(
 
 export function createDatabaseMailCredentialVault(
   database: DatabaseManager,
-  encryptionKey: string | undefined,
 ): DatabaseMailCredentialVault {
-  return new DatabaseMailCredentialVault(database, encryptionKey);
+  return new DatabaseMailCredentialVault(database);
 }

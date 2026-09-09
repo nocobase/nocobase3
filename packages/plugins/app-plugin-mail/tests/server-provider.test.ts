@@ -5,12 +5,14 @@ import { describe, expect, it } from 'vitest';
 
 import { MailCoreProvider } from '../server/providers/mail-core.js';
 import {
+  mailCredentialVaultToken,
   mailProviderRegistryToken,
   mailProviderAdapterResolverToken,
   mailRuntimeToken,
   mailServiceToken,
   mailStoreToken,
 } from '../server/tokens.js';
+import type { MailCredentialVault } from '../server/types.js';
 
 describe('@nocobase/app-plugin-mail', () => {
   it('registers the Provider Registry and lazy Mail runtime services', () => {
@@ -32,5 +34,24 @@ describe('@nocobase/app-plugin-mail', () => {
     expect(container.has(mailRuntimeToken)).toBe(true);
     expect(container.has(mailServiceToken)).toBe(true);
     expect(container.has(mailStoreToken)).toBe(true);
+    expect(container.has(mailCredentialVaultToken)).toBe(true);
+  });
+
+  it('keeps a credential vault registered by another plugin', () => {
+    const container = new ServiceContainer();
+    const credentialVault = {} as MailCredentialVault;
+    container.instance(mailCredentialVaultToken, credentialVault);
+    const provider = new MailCoreProvider({
+      appName: 'test',
+      publicBasePath: '/test',
+      config: { app: { name: 'test', publicBasePath: '/test' } },
+      paths: createConfigPaths({ rootDir: '/missing' }),
+      router: new Hono(),
+      container,
+    });
+
+    provider.register();
+
+    expect(container.resolve(mailCredentialVaultToken)).toBe(credentialVault);
   });
 });

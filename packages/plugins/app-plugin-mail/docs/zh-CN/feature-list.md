@@ -66,7 +66,7 @@ NocoBase v3 的**邮件插件（Mail）**负责连接用户自己的邮箱账户
 
 - [x] OAuth state 短时有效并且只能使用一次
 - [x] OAuth PKCE verifier 只保存在服务端
-- [x] OAuth credential 使用 AES-256-GCM 加密保存
+- [x] OAuth credential 默认以明文 JSON 保存在服务端数据库中，可由独立插件替换凭据仓库
 - [x] 支持 refresh token 轮换
 - [x] API 返回值隐藏 credential reference、authorization subject 和同步 cursor
 - [x] 公共 OAuth callback 只处理已经创建的授权事务
