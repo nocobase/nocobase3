@@ -2,7 +2,11 @@ import { concat } from '@langchain/core/utils/stream';
 import { Command } from '@langchain/langgraph';
 import { createAgent } from 'langchain';
 import { buildTool } from '@nocobase/ai-employee';
-import type { AgentContext, LLMProvider } from '@nocobase/ai-employee';
+import type {
+  AgentContext,
+  AIMessageInput,
+  LLMProvider,
+} from '@nocobase/ai-employee';
 import type {
   AgentInterruptAction,
   AgentOperation,
@@ -106,6 +110,11 @@ export class AgentService {
   abort(reason?: unknown): void {
     if (!this.activeController?.signal.aborted)
       this.activeController?.abort(reason);
+  }
+
+  /** Resolves pending persisted tool calls before starting a new user turn. */
+  cancelToolCall(): Promise<AIMessageInput[] | undefined> {
+    return this.providers.conversation.toolCalls.cancel();
   }
 
   stream(
