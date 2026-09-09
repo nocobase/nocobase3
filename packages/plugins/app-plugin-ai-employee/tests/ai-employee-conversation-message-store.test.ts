@@ -59,6 +59,24 @@ function createFixture() {
 }
 
 describe('AI employee conversation message persistence boundary', () => {
+  it('preserves single and batch shapes when forwarding add operations', async () => {
+    const fixture = createFixture();
+    const single = { role: 'user', content: { type: 'text', content: 'one' } };
+    const batch = [
+      { role: 'user', content: { type: 'text', content: 'two' } },
+      { role: 'user', content: { type: 'text', content: 'three' } },
+    ];
+    fixture.conversation.addMessages
+      .mockResolvedValueOnce({ messageId: 'one' })
+      .mockResolvedValueOnce([{ messageId: 'two' }, { messageId: 'three' }]);
+
+    await fixture.store.add(single);
+    await fixture.store.add(batch);
+
+    expect(fixture.conversation.addMessages).toHaveBeenNthCalledWith(1, single);
+    expect(fixture.conversation.addMessages).toHaveBeenNthCalledWith(2, batch);
+  });
+
   it('owns assistant tool-call initialization in a dedicated message store', () => {
     const source = read('agent/ai-employee/conversation-message-store.ts');
 

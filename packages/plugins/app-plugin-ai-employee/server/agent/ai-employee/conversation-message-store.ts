@@ -47,9 +47,9 @@ export class AIEmployeeConversationMessageStore implements ConversationMessageSt
   public add(
     messages: AIMessageInput | AIMessageInput[],
   ): Promise<AIMessage | AIMessage[]> {
-    return this.options.conversation.addMessages(
-      messages as AIMessageInput[],
-    ) as Promise<AIMessage | AIMessage[]>;
+    return Array.isArray(messages)
+      ? this.options.conversation.addMessages(messages)
+      : this.options.conversation.addMessages(messages);
   }
 
   public remove(messageId?: string): Promise<void> {
