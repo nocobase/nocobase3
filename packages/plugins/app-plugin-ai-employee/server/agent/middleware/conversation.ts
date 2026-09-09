@@ -135,12 +135,9 @@ export const conversationMiddleware = (
         )
       ).filter((message): message is AIMessageInput => message !== null);
       if (!toolMessages.length || !currentMessageId) return;
-      for (const message of toolMessages)
-        message.metadata.messageId = currentMessageId;
       await conversation.messages.saveToolMessages(
-        toolMessages,
         currentMessageId,
-        toolMessages.map((message) => message.metadata.toolCallId as string),
+        toolMessages,
       );
       runtime.writer?.({
         action: 'beforeSendToolMessage',
@@ -169,14 +166,11 @@ export const conversationMiddleware = (
         if (lastMessage?.type !== 'ai' || runtime.signal?.aborted)
           return nextState;
         const aiMessage = lastMessage as AIMessage;
-        const toolCalls = (aiMessage.tool_calls ?? []) as AIToolCall[];
         const values = await toStoredAssistantMessage(aiMessage);
         if (!values) return nextState;
-        const saved = await conversation.messages.saveAssistantMessage(
-          values,
-          toolCalls,
-        );
+        const saved = await conversation.messages.saveAssistantMessage(values);
         nextState.messageId = saved.message.messageId;
+        const toolCalls = saved.message.toolCalls ?? [];
         if (toolCalls.length) {
           fillToolCalls(
             saved.message,

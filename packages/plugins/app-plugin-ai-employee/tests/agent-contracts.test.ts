@@ -204,6 +204,11 @@ describe('fixed AgentService contracts', () => {
     expect(middleware).not.toContain('conversation.toolCalls.initialize');
     expect(middleware).not.toContain('conversation.toolCalls.confirm');
     expect(middleware).not.toContain('toolCallIds');
+    expect(middleware).not.toContain('message.metadata.messageId');
+    expect(middleware).toContain('saved.message.toolCalls ?? []');
+    expect(middleware).toMatch(
+      /saveToolMessages\(\s*currentMessageId,\s*toolMessages,?\s*\)/,
+    );
   });
   it('owns the only standard middleware builder and preserves its order', () => {
     const service = read('agent/agent-service.ts');
