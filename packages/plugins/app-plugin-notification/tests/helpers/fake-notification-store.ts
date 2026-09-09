@@ -172,8 +172,36 @@ export class FakeNotificationStore implements NotificationStore {
       attemptCount: attempt.sequence,
       status: 'submitting',
       leaseExpiresAt,
-      retryResolution: current.retryResolution,
+      retryResolution: delivery.retryResolution,
       providerIdempotency: delivery.providerIdempotency,
+      updatedAt: await this.now(),
+    };
+    this.deliveries.set(next.id, next);
+    return next;
+  }
+
+  async updateAttemptRetryResolution(
+    delivery: NotificationDeliveryRecord,
+    attempt: NotificationAttemptRecord,
+  ): Promise<NotificationDeliveryRecord | undefined> {
+    const current = this.deliveries.get(delivery.id);
+    const attempts = this.attempts.get(delivery.id) ?? [];
+    const currentAttempt = attempts.find((item) => item.id === attempt.id);
+    if (
+      !current ||
+      current.status !== 'submitting' ||
+      current.leaseToken !== delivery.leaseToken ||
+      currentAttempt?.status !== 'submitting'
+    ) {
+      return undefined;
+    }
+    this.attempts.set(
+      delivery.id,
+      attempts.map((item) => (item.id === attempt.id ? attempt : item)),
+    );
+    const next = {
+      ...current,
+      retryResolution: delivery.retryResolution,
       updatedAt: await this.now(),
     };
     this.deliveries.set(next.id, next);

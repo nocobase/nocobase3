@@ -332,31 +332,79 @@ describe('DatabaseNotificationStore', () => {
       { message: 'response lost' },
     );
 
+    const resolution = {
+      type: 'safe_provider_idempotency' as const,
+      reason: 'Provider dashboard contains no matching request.',
+      requestedAt: '2026-08-24T00:03:00.000Z',
+    };
     await expect(
-      store.retryDelivery('delivery-1', 'unknown', {
-        type: 'duplicate_risk_accepted',
-        reason: 'Provider dashboard contains no matching request.',
-        requestedAt: '2026-08-24T00:03:00.000Z',
-      }),
+      store.retryDelivery('delivery-1', 'unknown', resolution),
     ).resolves.toMatchObject({
       status: 'pending',
-      retryResolution: { type: 'duplicate_risk_accepted' },
+      retryResolution: { type: 'safe_provider_idempotency' },
       lastError: undefined,
-      providerIdempotency: undefined,
+      providerIdempotency: {
+        startedAt: '2026-08-24T00:00:01.000Z',
+        expiresAt: '2026-08-25T00:00:01.000Z',
+      },
     });
     await expect(store.listRetryAudits('delivery-1')).resolves.toMatchObject([
       {
         deliveryId: 'delivery-1',
-        resolution: {
-          type: 'duplicate_risk_accepted',
-          reason: 'Provider dashboard contains no matching request.',
-          requestedAt: '2026-08-24T00:03:00.000Z',
-        },
+        resolution,
         providerIdempotency: {
           startedAt: '2026-08-24T00:00:01.000Z',
           expiresAt: '2026-08-25T00:00:01.000Z',
         },
       },
+    ]);
+
+    const retryClaim = await store.claimDelivery(
+      'delivery-1',
+      'lease-2',
+      '2026-08-24T00:04:00.000Z',
+    );
+    const retryAttempt: NotificationAttemptRecord = {
+      ...createAttempt(),
+      id: 'attempt-2',
+      sequence: 2,
+      retryResolution: resolution,
+    };
+    const retryStarted = await store.startAttempt(
+      { ...retryClaim!, retryResolution: resolution },
+      retryAttempt,
+      '2026-08-24T00:04:00.000Z',
+    );
+    expect(retryStarted).toMatchObject({
+      status: 'submitting',
+      retryResolution: resolution,
+    });
+
+    const actualResolution = {
+      ...resolution,
+      type: 'duplicate_risk_accepted' as const,
+    };
+    await expect(
+      store.updateAttemptRetryResolution(
+        { ...retryStarted!, retryResolution: actualResolution },
+        { ...retryAttempt, retryResolution: actualResolution },
+      ),
+    ).resolves.toMatchObject({
+      status: 'submitting',
+      retryResolution: actualResolution,
+    });
+    await expect(
+      store.updateAttemptRetryResolution(
+        { ...retryStarted!, leaseToken: 'stale-lease' },
+        { ...retryAttempt, retryResolution: actualResolution },
+      ),
+    ).resolves.toBeUndefined();
+    await expect(store.listRetryAudits('delivery-1')).resolves.toMatchObject([
+      { resolution },
+    ]);
+    await expect(store.listAttempts('delivery-1')).resolves.toMatchObject([
+      { sequence: 1, retryResolution: undefined },
+      { sequence: 2, retryResolution: actualResolution },
     ]);
   });
 });

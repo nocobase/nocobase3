@@ -791,7 +791,7 @@ export class NotificationManager<
         };
       }
       return {
-        allowed: false,
+        allowed: true,
         mode: 'duplicate_risk_confirmation_required',
         reason:
           'The Provider cannot guarantee an idempotent retry for this unknown submission.',

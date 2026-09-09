@@ -248,27 +248,21 @@ export class ChannelManager {
       });
 
     const startedAt = await this.options.store.now();
-    if (
-      claimed.retryResolution?.type === 'safe_provider_idempotency' &&
-      (!providerSupportsIdempotency(provider, claimed.providerIdempotency) ||
-        !isProviderIdempotencyActive(claimed.providerIdempotency, startedAt))
-    ) {
-      return this.finishDelivery(claimed, 'unknown', {
-        code: 'PROVIDER_IDEMPOTENCY_EXPIRED',
-        message:
-          'The Provider idempotency window expired before the retry was submitted. Confirm the delivery result or explicitly accept duplicate risk before retrying.',
-        category: 'provider',
-      });
-    }
+    const retryResolution = retryResolutionForAttempt(
+      provider,
+      claimed,
+      startedAt,
+    );
     const delivery = {
       ...claimed,
+      retryResolution,
       providerIdempotency: providerIdempotencyForAttempt(
         provider,
         claimed,
         startedAt,
       ),
     };
-    const attempt: NotificationAttemptRecord = {
+    let attempt: NotificationAttemptRecord = {
       id: randomUUID(),
       deliveryId: claimed.id,
       sequence: claimed.attemptCount + 1,
@@ -276,7 +270,7 @@ export class ChannelManager {
       providerType: provider.type,
       status: 'submitting',
       startedAt,
-      retryResolution: claimed.retryResolution,
+      retryResolution,
     };
     const started = await this.options.store.startAttempt(
       delivery,
@@ -284,10 +278,32 @@ export class ChannelManager {
       await this.leaseExpiry(),
     );
     if (!started) return undefined;
-    this.changed(started);
-    const current = started;
+    let current = started;
 
-    const result = await this.invoke(provider, prepared, current, attempt.id);
+    const submittedAt = await this.options.store.now();
+    const submittedResolution = retryResolutionForAttempt(
+      provider,
+      current,
+      submittedAt,
+    );
+    if (submittedResolution?.type !== current.retryResolution?.type) {
+      attempt = { ...attempt, retryResolution: submittedResolution };
+      const updated = await this.options.store.updateAttemptRetryResolution(
+        { ...current, retryResolution: submittedResolution },
+        attempt,
+      );
+      if (!updated) return undefined;
+      current = updated;
+    }
+    this.changed(current);
+
+    const result = await this.invoke(
+      provider,
+      prepared,
+      current,
+      attempt.id,
+      submittedAt,
+    );
     const finishedAt = await this.options.store.now();
     if (result.status === 'accepted') {
       const finished = await this.finishAttemptAndDelivery(
@@ -365,10 +381,11 @@ export class ChannelManager {
     message: object,
     delivery: NotificationDeliveryRecord,
     attemptId: string,
+    submittedAt: string,
   ): Promise<ProviderSendResult> {
     const controller = new AbortController();
     const deadline = new Date(
-      Date.parse(await this.options.store.now()) + this.providerTimeoutMs,
+      Date.parse(submittedAt) + this.providerTimeoutMs,
     ).toISOString();
     let timeout: ReturnType<typeof setTimeout> | undefined;
     const timeoutResult = new Promise<ProviderSendResult>((resolve) => {
@@ -501,6 +518,22 @@ export class ChannelManager {
   private get maxAttemptsPerProvider(): number {
     return this.options.retry?.maxAttemptsPerProvider ?? 3;
   }
+}
+
+function retryResolutionForAttempt(
+  provider: NotificationProvider,
+  delivery: NotificationDeliveryRecord,
+  startedAt: string,
+): NotificationDeliveryRecord['retryResolution'] {
+  const resolution = delivery.retryResolution;
+  if (
+    resolution?.type !== 'safe_provider_idempotency' ||
+    (providerSupportsIdempotency(provider, delivery.providerIdempotency) &&
+      isProviderIdempotencyActive(delivery.providerIdempotency, startedAt))
+  ) {
+    return resolution;
+  }
+  return { ...resolution, type: 'duplicate_risk_accepted' };
 }
 
 function providerIdempotencyForAttempt(

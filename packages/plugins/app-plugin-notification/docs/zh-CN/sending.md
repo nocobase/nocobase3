@@ -232,7 +232,9 @@ await notification.retryDelivery({
 });
 ```
 
-重试会先在原 Delivery 上写入 Retry Audit，不创建新的 Notification。服务端内部记录 `terminal_failure`、`safe_provider_idempotency` 或 `duplicate_risk_accepted`；只有进入 Provider 提交阶段才会创建新的 Attempt。
+状态快照里的 `retry.allowed` 表示服务端是否接受手工重试请求。无法保证幂等的 `unknown` 仍会返回 `allowed: true`，同时通过 `mode: 'duplicate_risk_confirmation_required'` 提示调用方展示重复风险并要求填写 `reason`。
+
+重试会先在原 Delivery 上写入 Retry Audit，不创建新的 Notification。服务端内部记录 `terminal_failure`、`safe_provider_idempotency` 或 `duplicate_risk_accepted`；只有进入 Provider 提交阶段才会创建新的 Attempt。如果幂等窗口在请求被接受后、Provider 提交前过期，服务端仍会执行这次人工重试，并把实际 Attempt 标记为 `duplicate_risk_accepted`。
 
 ## 常见输入错误
 

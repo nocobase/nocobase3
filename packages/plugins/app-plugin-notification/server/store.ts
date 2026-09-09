@@ -131,6 +131,10 @@ export interface NotificationStore {
     attempt: NotificationAttemptRecord,
     leaseExpiresAt: string,
   ): Promise<NotificationDeliveryRecord | undefined>;
+  updateAttemptRetryResolution(
+    delivery: NotificationDeliveryRecord,
+    attempt: NotificationAttemptRecord,
+  ): Promise<NotificationDeliveryRecord | undefined>;
   renewLease(
     id: string,
     leaseToken: string,
@@ -429,6 +433,9 @@ export class DatabaseNotificationStore implements NotificationStore {
           .set({
             attemptCount: attempt.sequence,
             status: 'submitting',
+            retryResolution: delivery.retryResolution
+              ? JSON.stringify(delivery.retryResolution)
+              : null,
             providerIdempotency: delivery.providerIdempotency
               ? JSON.stringify(delivery.providerIdempotency)
               : null,
@@ -453,6 +460,48 @@ export class DatabaseNotificationStore implements NotificationStore {
         return row ? fromDeliveryRow(row) : undefined;
       },
     );
+  }
+
+  async updateAttemptRetryResolution(
+    delivery: NotificationDeliveryRecord,
+    attempt: NotificationAttemptRecord,
+  ): Promise<NotificationDeliveryRecord | undefined> {
+    const now = await this.now();
+    try {
+      await this.database.transaction(async (connection): Promise<void> => {
+        const attemptResult = await connection.query
+          .updateTable<AttemptRow>('notificationDeliveryAttempts')
+          .set({
+            retryResolution: attempt.retryResolution
+              ? JSON.stringify(attempt.retryResolution)
+              : null,
+          })
+          .where('id', '=', attempt.id)
+          .where('deliveryId', '=', delivery.id)
+          .where('status', '=', 'submitting')
+          .execute();
+        if (attemptResult.updatedCount !== 1)
+          throw new StaleNotificationTransitionError();
+        const deliveryResult = await connection.query
+          .updateTable<DeliveryRow>('notificationDeliveries')
+          .set({
+            retryResolution: delivery.retryResolution
+              ? JSON.stringify(delivery.retryResolution)
+              : null,
+            updatedAt: now,
+          })
+          .where('id', '=', delivery.id)
+          .where('status', '=', 'submitting')
+          .where('leaseToken', '=', delivery.leaseToken ?? '')
+          .execute();
+        if (deliveryResult.updatedCount !== 1)
+          throw new StaleNotificationTransitionError();
+      });
+    } catch (error) {
+      if (error instanceof StaleNotificationTransitionError) return undefined;
+      throw error;
+    }
+    return this.getDelivery(delivery.id);
   }
 
   async finishAttemptAndDelivery(

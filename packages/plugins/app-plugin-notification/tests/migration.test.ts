@@ -1,6 +1,9 @@
+import { resolve } from 'node:path';
+
 import {
   createDatabaseManager,
   InMemoryCollectionMetadataStore,
+  validateMigrations,
   type DatabaseManager,
   type Row,
 } from '@nocobase/db';
@@ -22,6 +25,11 @@ const COLLECTIONS = [
   ['notificationDeliveries', 'notification_deliveries'],
   ['notificationDeliveryAttempts', 'notification_delivery_attempts'],
   ['notificationDeliveryRetryAudits', 'notification_delivery_retry_audits'],
+] as const;
+const MIGRATIONS_DIRECTORY = resolve(process.cwd(), 'database/migrations');
+const MIGRATION_NAMES = [
+  '202608190001_create_notification_tables',
+  '202609080001_create_notification_idempotency',
 ] as const;
 
 interface DispatchRow extends Row {
@@ -54,7 +62,8 @@ describe('notification database migration', () => {
 
   it('creates the physical schema, indexes, constraints, and metadata', async () => {
     await migrateUp(database);
-    const client = await database.connection().client<SqliteClient>();
+    const connection = database.connection();
+    const client = await connection.client<SqliteClient>();
 
     await expect(
       Promise.all(
@@ -88,6 +97,93 @@ describe('notification database migration', () => {
         ),
       ]),
     ).resolves.toEqual([true, true, true, true, true, true, true, true]);
+    await expect(
+      connection.schemaInspector.getPhysicalCollection({
+        tableName: 'notification_dispatches',
+      }),
+    ).resolves.toMatchObject({
+      columns: expect.arrayContaining([
+        expect.objectContaining({
+          columnName: 'idempotency_key',
+          dataType: 'string',
+          length: 191,
+          nullable: true,
+        }),
+        expect.objectContaining({
+          columnName: 'request_fingerprint',
+          dataType: 'string',
+          length: 80,
+          nullable: true,
+        }),
+      ]),
+    });
+    await expect(
+      connection.schemaInspector.getPhysicalCollection({
+        tableName: 'notification_deliveries',
+      }),
+    ).resolves.toMatchObject({
+      columns: expect.arrayContaining([
+        expect.objectContaining({
+          columnName: 'retry_resolution',
+          dataType: 'json',
+          nullable: true,
+        }),
+        expect.objectContaining({
+          columnName: 'provider_idempotency',
+          dataType: 'json',
+          nullable: true,
+        }),
+      ]),
+    });
+    await expect(
+      connection.schemaInspector.getPhysicalCollection({
+        tableName: 'notification_delivery_attempts',
+      }),
+    ).resolves.toMatchObject({
+      columns: expect.arrayContaining([
+        expect.objectContaining({
+          columnName: 'retry_resolution',
+          dataType: 'json',
+          nullable: true,
+        }),
+      ]),
+    });
+    await expect(
+      connection.schemaInspector.getPhysicalCollection({
+        tableName: 'notification_delivery_retry_audits',
+      }),
+    ).resolves.toMatchObject({
+      primaryKey: { columns: ['id'] },
+      columns: expect.arrayContaining([
+        expect.objectContaining({
+          columnName: 'id',
+          dataType: 'string',
+          length: 36,
+          nullable: false,
+        }),
+        expect.objectContaining({
+          columnName: 'delivery_id',
+          dataType: 'string',
+          length: 36,
+          nullable: false,
+        }),
+        expect.objectContaining({
+          columnName: 'resolution',
+          dataType: 'json',
+          nullable: false,
+        }),
+        expect.objectContaining({
+          columnName: 'provider_idempotency',
+          dataType: 'json',
+          nullable: true,
+        }),
+        expect.objectContaining({
+          columnName: 'created_at',
+          dataType: 'text',
+          nullable: false,
+        }),
+      ]),
+    });
     await expect(
       client.raw('PRAGMA index_list(notification_dispatches)'),
     ).resolves.toEqual(
@@ -127,12 +223,46 @@ describe('notification database migration', () => {
       ]),
     );
     await expect(
-      database.connection().collections.get('notificationDeliveries'),
+      connection.collections.get('notificationDispatches'),
+    ).resolves.toMatchObject({
+      fields: expect.arrayContaining([
+        expect.objectContaining({
+          name: 'idempotencyKey',
+          type: 'string',
+          length: 191,
+          nullable: true,
+        }),
+        expect.objectContaining({
+          name: 'requestFingerprint',
+          type: 'string',
+          length: 80,
+          nullable: true,
+        }),
+      ]),
+      constraints: expect.arrayContaining([
+        expect.objectContaining({
+          name: 'notification_dispatch_idempotency_unique',
+          type: 'unique',
+          fields: ['idempotencyKey'],
+        }),
+      ]),
+    });
+    await expect(
+      connection.collections.get('notificationDeliveries'),
     ).resolves.toMatchObject({
       fields: expect.arrayContaining([
         expect.objectContaining({ name: 'notificationId' }),
         expect.objectContaining({ name: 'lastError' }),
-        expect.objectContaining({ name: 'providerIdempotency' }),
+        expect.objectContaining({
+          name: 'retryResolution',
+          type: 'json',
+          nullable: true,
+        }),
+        expect.objectContaining({
+          name: 'providerIdempotency',
+          type: 'json',
+          nullable: true,
+        }),
       ]),
       indexes: expect.arrayContaining([
         expect.objectContaining({
@@ -142,12 +272,47 @@ describe('notification database migration', () => {
       ]),
     });
     await expect(
-      database.connection().collections.get('notificationDeliveryRetryAudits'),
+      connection.collections.get('notificationDeliveryAttempts'),
     ).resolves.toMatchObject({
       fields: expect.arrayContaining([
-        expect.objectContaining({ name: 'deliveryId' }),
-        expect.objectContaining({ name: 'resolution' }),
-        expect.objectContaining({ name: 'providerIdempotency' }),
+        expect.objectContaining({
+          name: 'retryResolution',
+          type: 'json',
+          nullable: true,
+        }),
+      ]),
+    });
+    await expect(
+      connection.collections.get('notificationDeliveryRetryAudits'),
+    ).resolves.toMatchObject({
+      fields: expect.arrayContaining([
+        expect.objectContaining({
+          name: 'id',
+          type: 'string',
+          length: 36,
+          nullable: false,
+        }),
+        expect.objectContaining({
+          name: 'deliveryId',
+          type: 'string',
+          length: 36,
+          nullable: false,
+        }),
+        expect.objectContaining({
+          name: 'resolution',
+          type: 'json',
+          nullable: false,
+        }),
+        expect.objectContaining({
+          name: 'providerIdempotency',
+          type: 'json',
+          nullable: true,
+        }),
+        expect.objectContaining({
+          name: 'createdAt',
+          type: 'datetime',
+          nullable: false,
+        }),
       ]),
       indexes: expect.arrayContaining([
         expect.objectContaining({
@@ -155,6 +320,63 @@ describe('notification database migration', () => {
         }),
       ]),
     });
+  });
+
+  it('runs through the migration runner and records stable history', async () => {
+    const historyTable = 'notification_test_migrations';
+    const lockTable = 'notification_test_migration_lock';
+    const migrator = database.createMigrator({
+      directory: MIGRATIONS_DIRECTORY,
+      packageName: '@nocobase/app-plugin-notification',
+      tableName: historyTable,
+      lockTableName: lockTable,
+    });
+    const loaded = await validateMigrations({
+      directory: MIGRATIONS_DIRECTORY,
+      packageName: '@nocobase/app-plugin-notification',
+    });
+
+    expect(loaded.map(({ name }) => name)).toEqual(MIGRATION_NAMES);
+    expect(loaded.map(({ checksum }) => checksum)).toEqual([
+      expect.stringMatching(/^[a-f0-9]{64}$/),
+      expect.stringMatching(/^[a-f0-9]{64}$/),
+    ]);
+    await expect(migrator.latest()).resolves.toEqual({
+      batch: 1,
+      executed: MIGRATION_NAMES,
+      skipped: [],
+    });
+    await expect(migrator.latest()).resolves.toEqual({
+      batch: 1,
+      executed: [],
+      skipped: MIGRATION_NAMES,
+    });
+
+    const client = await database.connection().client<SqliteClient>();
+    await expect(
+      client.raw(
+        `select package_name as packageName, name, batch, checksum from ${historyTable} order by id`,
+      ),
+    ).resolves.toEqual(
+      loaded.map(({ name, checksum }) => ({
+        packageName: '@nocobase/app-plugin-notification',
+        name,
+        batch: 1,
+        checksum,
+      })),
+    );
+    await expect(migrator.rollback()).resolves.toEqual({
+      batch: 1,
+      rolledBack: [...MIGRATION_NAMES].reverse(),
+    });
+    await expect(
+      Promise.all(
+        COLLECTIONS.map(([, table]) => client.schema.hasTable(table)),
+      ),
+    ).resolves.toEqual([false, false, false, false]);
+    await expect(
+      client.raw(`select name from ${historyTable} order by id`),
+    ).resolves.toEqual([]);
   });
 
   it('reverses only the idempotency migration and leaves the base schema intact', async () => {

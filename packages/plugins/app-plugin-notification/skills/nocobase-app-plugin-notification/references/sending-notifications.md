@@ -97,7 +97,9 @@ await notification.retryDelivery({
 });
 ```
 
-The server derives the internal audit type as `terminal_failure`, `safe_provider_idempotency`, or `duplicate_risk_accepted`. Never retry a failed Delivery that already has `nextRunAt`; it is already scheduled for an automatic retry. `retryDelivery` first writes an immutable Retry Audit on the same Delivery. It creates another Attempt only after preparation succeeds and Provider submission starts, so a pre-submission failure retains the decision without claiming that a Provider call occurred.
+The server derives the internal audit type as `terminal_failure`, `safe_provider_idempotency`, or `duplicate_risk_accepted`. Never retry a failed Delivery that already has `nextRunAt`; it is already scheduled for an automatic retry. `retryDelivery` first writes an immutable Retry Audit on the same Delivery. It creates another Attempt only after preparation succeeds and Provider submission starts, so a pre-submission failure retains the decision without claiming that a Provider call occurred. If an idempotency window expires after the request is accepted but before Provider submission, the manual retry still proceeds and the actual Attempt is marked `duplicate_risk_accepted`.
+
+In a status snapshot, `retry.allowed` means the server accepts a manual retry request. An `unknown` Delivery without safe Provider idempotency still reports `allowed: true`; its `duplicate_risk_confirmation_required` mode tells the caller to surface the risk and collect the required reason before invoking `retryDelivery`.
 
 ## Send verification
 

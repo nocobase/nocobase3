@@ -4,7 +4,10 @@ import type { DatabaseManager } from '@nocobase/db';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createNotificationManager } from '../server/manager.js';
-import type { NotificationDeliveryRecord } from '../server/store.js';
+import type {
+  NotificationAttemptRecord,
+  NotificationDeliveryRecord,
+} from '../server/store.js';
 import type {
   NotificationProviderCapabilities,
   NotificationProviderSendInput,
@@ -1056,7 +1059,7 @@ describe('NotificationManager registration', () => {
     expect(sent.deliveries[0]).toMatchObject({
       status: 'unknown',
       retry: {
-        allowed: false,
+        allowed: true,
         mode: 'duplicate_risk_confirmation_required',
       },
     });
@@ -1173,7 +1176,7 @@ describe('NotificationManager registration', () => {
       deliveries: [
         {
           retry: {
-            allowed: false,
+            allowed: true,
             mode: 'duplicate_risk_confirmation_required',
           },
         },
@@ -1185,7 +1188,7 @@ describe('NotificationManager registration', () => {
     await queue.close();
   });
 
-  it('stops a safe retry when its Provider idempotency window expires during preparation', async () => {
+  it('submits an accepted-risk retry when its Provider idempotency window expires during preparation', async () => {
     const store = new ControlledNowNotificationStore(
       '2026-09-01T00:00:00.000Z',
     );
@@ -1229,15 +1232,17 @@ describe('NotificationManager registration', () => {
         reason: 'Retry while the Provider idempotency window is active.',
       }),
     ).resolves.toMatchObject({
-      status: 'unknown',
-      attemptCount: 1,
-      error: { code: 'PROVIDER_IDEMPOTENCY_EXPIRED' },
-      retry: {
-        allowed: false,
-        mode: 'duplicate_risk_confirmation_required',
-      },
+      status: 'accepted',
+      attemptCount: 2,
     });
-    expect(send).toHaveBeenCalledOnce();
+    expect(send).toHaveBeenCalledTimes(2);
+    await expect(store.listAttempts(deliveryId)).resolves.toMatchObject([
+      { sequence: 1, retryResolution: undefined },
+      {
+        sequence: 2,
+        retryResolution: { type: 'duplicate_risk_accepted' },
+      },
+    ]);
     await expect(store.listRetryAudits(deliveryId)).resolves.toMatchObject([
       {
         resolution: { type: 'safe_provider_idempotency' },
@@ -1247,22 +1252,60 @@ describe('NotificationManager registration', () => {
         },
       },
     ]);
-    await expect(manager.logs.get(sent.notificationId)).resolves.toMatchObject({
-      deliveries: [
-        {
-          retryAudits: [{ resolution: { type: 'safe_provider_idempotency' } }],
+
+    await manager.close();
+    await queue.close();
+  });
+
+  it('rechecks Provider idempotency after persisting the retry Attempt', async () => {
+    const store = new ExpiringStartAttemptNotificationStore(
+      '2026-09-01T00:00:00.000Z',
+      '2026-09-01T00:00:01.100Z',
+    );
+    const send = vi
+      .fn<
+        (input: NotificationProviderSendInput) => Promise<ProviderSendResult>
+      >()
+      .mockResolvedValueOnce({
+        status: 'submission_unknown',
+        error: { message: 'response lost', category: 'network' },
+      })
+      .mockResolvedValueOnce({ status: 'accepted' });
+    const { manager, queue } = createEmailManagerHarness({
+      send,
+      store,
+      capabilities: {
+        idempotency: {
+          supported: true,
+          retentionMs: 1_000,
         },
-      ],
+      },
     });
+    const sent = await manager.send({
+      idempotencyKey: 'retry-unknown-expired-during-attempt-start-1',
+      to: { type: 'email', address: 'buyer@example.com' },
+      channels: ['email'],
+      content: { body: 'Slow persistence.' },
+    });
+    const deliveryId = sent.deliveries[0]!.id;
+    store.setNow('2026-09-01T00:00:00.900Z');
+
     await expect(
       manager.retryDelivery({
         deliveryId,
-        reason: 'Proceed after the idempotency window expired.',
+        reason: 'Retry while the Provider idempotency window is active.',
       }),
     ).resolves.toMatchObject({ status: 'accepted', attemptCount: 2 });
+    expect(send).toHaveBeenCalledTimes(2);
+    await expect(store.listAttempts(deliveryId)).resolves.toMatchObject([
+      { sequence: 1, retryResolution: undefined },
+      {
+        sequence: 2,
+        retryResolution: { type: 'duplicate_risk_accepted' },
+      },
+    ]);
     await expect(store.listRetryAudits(deliveryId)).resolves.toMatchObject([
       { resolution: { type: 'safe_provider_idempotency' } },
-      { resolution: { type: 'duplicate_risk_accepted' } },
     ]);
 
     await manager.close();
@@ -1302,7 +1345,7 @@ describe('NotificationManager registration', () => {
       deliveries: [
         {
           retry: {
-            allowed: false,
+            allowed: true,
             mode: 'duplicate_risk_confirmation_required',
           },
         },
@@ -1346,7 +1389,7 @@ describe('NotificationManager registration', () => {
       deliveries: [
         {
           retry: {
-            allowed: false,
+            allowed: true,
             mode: 'duplicate_risk_confirmation_required',
           },
         },
@@ -1445,6 +1488,25 @@ class ControlledNowNotificationStore extends FakeNotificationStore {
 
   override async now(): Promise<string> {
     return this.currentTime;
+  }
+}
+
+class ExpiringStartAttemptNotificationStore extends ControlledNowNotificationStore {
+  constructor(
+    currentTime: string,
+    private readonly expiresAfterStart: string,
+  ) {
+    super(currentTime);
+  }
+
+  override async startAttempt(
+    delivery: NotificationDeliveryRecord,
+    attempt: NotificationAttemptRecord,
+    leaseExpiresAt: string,
+  ): Promise<NotificationDeliveryRecord | undefined> {
+    const started = await super.startAttempt(delivery, attempt, leaseExpiresAt);
+    if (attempt.sequence === 2) this.setNow(this.expiresAfterStart);
+    return started;
   }
 }
 
