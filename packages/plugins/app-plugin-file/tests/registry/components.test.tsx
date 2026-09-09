@@ -202,7 +202,7 @@ it('previews a Repository record as text and shows safe image thumbnails', async
   await screen.findByText('Invoice details');
   expect(fetcher).toHaveBeenCalledWith(
     '/main/uploads/invoices/test.txt',
-    expect.objectContaining({ credentials: 'include' }),
+    expect.objectContaining({ credentials: 'same-origin' }),
   );
   render(
     <FileThumbnail
@@ -215,37 +215,51 @@ it('previews a Repository record as text and shows safe image thumbnails', async
   );
 });
 
-it('creates and revokes a local PDF preview URL for attachment responses', async () => {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(
+it.each([
+  ['/main/uploads/invoices/test.pdf', 'same-origin'],
+  ['https://cdn.example.test/invoice.pdf', 'omit'],
+])(
+  'previews PDF %s without sending credentials to cross-origin storage',
+  async (contentUrl, credentials) => {
+    const fetcher = vi.fn(
       async () =>
         new Response('pdf', { headers: { 'content-type': 'application/pdf' } }),
-    ),
-  );
-  const create = vi.fn(() => 'blob:http://localhost/preview');
-  const revoke = vi.fn();
-  Object.defineProperty(URL, 'createObjectURL', {
-    configurable: true,
-    value: create,
-  });
-  Object.defineProperty(URL, 'revokeObjectURL', {
-    configurable: true,
-    value: revoke,
-  });
-  const { unmount } = render(
-    <FilePreviewDialog
-      files={[record({ filename: 'invoice.pdf', mimeType: 'application/pdf' })]}
-      open
-      onOpenChange={() => undefined}
-    />,
-  );
-  await waitFor(() =>
-    expect(screen.getByTitle('invoice.pdf')).toHaveAttribute(
-      'src',
-      'blob:http://localhost/preview',
-    ),
-  );
-  unmount();
-  expect(revoke).toHaveBeenCalledWith('blob:http://localhost/preview');
-});
+    );
+    vi.stubGlobal('fetch', fetcher);
+    const create = vi.fn(() => 'blob:http://localhost/preview');
+    const revoke = vi.fn();
+    Object.defineProperty(URL, 'createObjectURL', {
+      configurable: true,
+      value: create,
+    });
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      configurable: true,
+      value: revoke,
+    });
+    const { unmount } = render(
+      <FilePreviewDialog
+        files={[
+          record({
+            filename: 'invoice.pdf',
+            mimeType: 'application/pdf',
+            contentUrl,
+          }),
+        ]}
+        open
+        onOpenChange={() => undefined}
+      />,
+    );
+    await waitFor(() =>
+      expect(screen.getByTitle('invoice.pdf')).toHaveAttribute(
+        'src',
+        'blob:http://localhost/preview',
+      ),
+    );
+    expect(fetcher).toHaveBeenCalledWith(
+      contentUrl,
+      expect.objectContaining({ credentials }),
+    );
+    unmount();
+    expect(revoke).toHaveBeenCalledWith('blob:http://localhost/preview');
+  },
+);

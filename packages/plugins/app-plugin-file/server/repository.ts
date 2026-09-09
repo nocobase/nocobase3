@@ -252,7 +252,10 @@ export class ServerFileRepositoryManager {
         }
         return {
           ...result,
-          record: { ...result.record, contentUrl: getUrl(result.record) },
+          record: {
+            ...normalizeFileRecord(result.record),
+            contentUrl: getUrl(result.record),
+          },
         };
       },
       uploadMany: async ({ files }) => {
@@ -294,7 +297,7 @@ export class ServerFileRepositoryManager {
         return {
           ...result,
           records: result.records.map((record) => ({
-            ...record,
+            ...normalizeFileRecord(record),
             contentUrl: getUrl(record),
           })),
         };
@@ -320,11 +323,52 @@ export class ServerFileRepositoryManager {
             );
         return async (...args: unknown[]): Promise<unknown> => {
           await validateCollection();
-          return Reflect.apply(method, target, args);
+          const result: unknown = await Reflect.apply(method, target, args);
+          switch (property) {
+            case 'findOne':
+            case 'createOne':
+            case 'createMany':
+            case 'updateOne':
+            case 'updateMany':
+            case 'upsertOne':
+            case 'deleteOne':
+            case 'deleteMany':
+              return normalizeFileResult(result);
+            default:
+              return result;
+          }
         };
       },
     }) as ServerFileRepository;
   }
+}
+
+export function normalizeFileRecord<T extends object>(record: T): T {
+  if (!('size' in record)) return record;
+  const value: unknown = record.size;
+  const size =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'bigint' ||
+          (typeof value === 'string' && /^\d+$/.test(value))
+        ? Number(value)
+        : NaN;
+  if (!Number.isSafeInteger(size) || size < 0)
+    throw new FileRepositoryError(
+      'INVALID_FILE_METADATA',
+      'File size must be a non-negative safe integer.',
+    );
+  return { ...record, size };
+}
+
+function normalizeFileResult(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(normalizeFileResult);
+  if (!value || typeof value !== 'object') return value;
+  if ('record' in value)
+    return { ...value, record: normalizeFileResult(value.record) };
+  if ('records' in value)
+    return { ...value, records: normalizeFileResult(value.records) };
+  return normalizeFileRecord(value);
 }
 
 export function validMime(value: string): string {
@@ -333,7 +377,7 @@ export function validMime(value: string): string {
     : 'application/octet-stream';
 }
 
-function guardedQuery<T>(
+function guardedQuery<T extends object>(
   create: () => RepositoryQuery<T>,
   validate: () => Promise<void>,
 ): RepositoryQuery<T> {
@@ -341,7 +385,7 @@ function guardedQuery<T>(
   const get = (): RepositoryQuery<T> => (query ??= create());
   const run = async (): Promise<T[]> => {
     await validate();
-    return get();
+    return (await get()).map(normalizeFileRecord);
   };
   return {
     then: (yes, no) => run().then(yes, no),
@@ -349,7 +393,7 @@ function guardedQuery<T>(
     finally: (callback) => run().finally(callback),
     async *[Symbol.asyncIterator]() {
       await validate();
-      yield* get();
+      for await (const record of get()) yield normalizeFileRecord(record);
     },
   };
 }

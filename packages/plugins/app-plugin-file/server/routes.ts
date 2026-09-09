@@ -18,6 +18,7 @@ import { HTTPException } from 'hono/http-exception';
 import {
   FileRepositoryError,
   normalizeAccessPath,
+  normalizeFileRecord,
   validMime,
   type ServerFileRepository,
 } from './repository.js';
@@ -320,7 +321,7 @@ function decorate(value: unknown, getUrl: UrlBuilder): unknown {
   if (Array.isArray(value))
     return value.map((record) => decorate(record, getUrl));
   if (!value || typeof value !== 'object') return value;
-  const record = value as Record<string, unknown>;
+  const record = normalizeFileRecord(value as Record<string, unknown>);
   if (typeof record.id === 'string' && typeof record.ext === 'string')
     return {
       ...record,
@@ -330,7 +331,7 @@ function decorate(value: unknown, getUrl: UrlBuilder): unknown {
     return { ...record, record: decorate(record.record, getUrl) };
   if (record.records)
     return { ...record, records: decorate(record.records, getUrl) };
-  return value;
+  return record;
 }
 function decorateStream(
   body: ReadableStream<Uint8Array>,

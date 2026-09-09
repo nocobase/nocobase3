@@ -33,6 +33,11 @@ async function fixture(
   {
     publicBasePath = '/main',
     storageUrl = 'https://cdn.example.test/storage',
+    databaseSize,
+  }: {
+    publicBasePath?: string;
+    storageUrl?: string;
+    databaseSize?: (value: unknown) => unknown;
   } = {},
 ) {
   const root = await mkdtemp(path.join(tmpdir(), 'file-repository-'));
@@ -52,6 +57,18 @@ async function fixture(
     collection.datetime('createdAt').notNull();
     collection.datetime('updatedAt').notNull();
   });
+  if (databaseSize) {
+    // Exercise driver return types through real Repository queries and routes.
+    const knex = await db.connection().client<{
+      client: { config: { postProcessResponse?: (value: unknown) => unknown } };
+    }>();
+    const decode = (row: unknown): unknown =>
+      row && typeof row === 'object' && 'size' in row
+        ? { ...row, size: databaseSize(row.size) }
+        : row;
+    knex.client.config.postProcessResponse = (value) =>
+      Array.isArray(value) ? value.map(decode) : decode(value);
+  }
   const drive = createDriveManager({
     default: 'local',
     disks: {
@@ -119,6 +136,87 @@ const file = (name = 'hello.txt', text = 'hello'): File =>
   new File([text], name, { type: 'text/plain' });
 
 describe('server repository and Client API', () => {
+  it.each(['string', 'bigint'])(
+    'normalizes %s sizes for Server uploads, queries and mutations',
+    async (representation) => {
+      const { files, db } = await fixture(
+        {},
+        {
+          databaseSize: (value) =>
+            representation === 'string' ? String(value) : BigInt(String(value)),
+        },
+      );
+      const { record } = await files.uploadOne({ file: file() });
+      expect(record.size).toBe(5);
+      expect(
+        typeof (
+          await db
+            .repository('attachments')
+            .findOne({ filter: { id: record.id } })
+        )?.size,
+      ).toBe(representation);
+      expect(
+        (await files.uploadMany({ files: [file()] })).records[0]?.size,
+      ).toBe(5);
+      expect((await files.findOne({ filter: { id: record.id } }))?.size).toBe(
+        5,
+      );
+      expect((await files.findMany())[0]?.size).toBe(5);
+      for await (const row of files.findMany({
+        select: (s) => s.fields('size'),
+      }))
+        expect(row).toEqual({ size: 5 });
+      const updated = await files.updateOne({
+        filter: { id: record.id },
+        values: { filename: 'renamed.txt' },
+      });
+      expect(updated.record.size).toBe(5);
+      const deleted = await files.deleteOne({
+        filter: { id: record.id },
+        select: (s) => s.fields('size'),
+      });
+      expect(deleted.record?.size).toBe(5);
+    },
+  );
+  it('normalizes PostgreSQL-style string sizes in HTTP queries and NDJSON projections', async () => {
+    const { client } = await fixture({}, { databaseSize: String });
+    const { record } = await client.uploadOne({ file: file() });
+    expect(record.size).toBe(5);
+    expect(
+      (await client.uploadMany({ files: [file()] })).records[0]?.size,
+    ).toBe(5);
+    expect((await client.findOne({ filter: { id: record.id } }))?.size).toBe(5);
+    expect((await client.findMany())[0]?.size).toBe(5);
+    expect(await client.findMany({ select: (s) => s.fields('size') })).toEqual([
+      { size: 5 },
+      { size: 5 },
+    ]);
+    for await (const row of client.findMany({
+      select: (s) => s.fields('size'),
+    }))
+      expect(row).toEqual({ size: 5 });
+    const deleted = await client.deleteOne({
+      filter: { id: record.id },
+      select: (s) => s.fields('size'),
+    });
+    expect(deleted.record?.size).toBe(5);
+  });
+  it.each(['-1', '9007199254740992', 'not-a-size'])(
+    'rejects invalid database file size %s',
+    async (size) => {
+      const { files, client, db } = await fixture(
+        {},
+        { databaseSize: () => size },
+      );
+      await expect(files.uploadOne({ file: file() })).rejects.toMatchObject({
+        code: 'INVALID_FILE_METADATA',
+      });
+      expect(await db.repository('attachments').count()).toBe(1);
+      await expect(client.findMany()).rejects.toMatchObject({
+        code: 'INVALID_FILE_METADATA',
+      });
+    },
+  );
   it('uploads through the client, lists, streams, and deletes metadata only', async () => {
     const { client, files, router, drive } = await fixture();
     const { record } = await client.uploadOne({ file: file('../你好.TXT') });

@@ -17,6 +17,6 @@ export function resolveSafeFileUrl(
 
 export function fileUrlCredentials(url: string): RequestCredentials {
   return new URL(url, window.location.href).origin === window.location.origin
-    ? 'include'
+    ? 'same-origin'
     : 'omit';
 }
