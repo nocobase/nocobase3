@@ -37,12 +37,24 @@ if (!fs.existsSync(changesetDir)) {
   process.exit(0);
 }
 
-const files = fs
-  .readdirSync(changesetDir)
-  .filter((f) => f.endsWith('.md') && f !== 'README.md');
+// 也要扫 .changeset/pre/。prerelease 模式下 `changeset version` 每次都会把整个 pre/ 目录重新读一遍来计算累积 bump，所以里面的包名同样必须在 workspace 里存在。删包时漏改这里，本地和 CI 都不会报错，一直到发版那一刻才炸成 `Found changeset ... which is not in the workspace`。
+function collectChangesetFiles() {
+  const files = [];
+  for (const dir of [changesetDir, path.join(changesetDir, 'pre')]) {
+    if (!fs.existsSync(dir)) continue;
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (!entry.isFile()) continue;
+      if (!entry.name.endsWith('.md') || entry.name === 'README.md') continue;
+      files.push(path.join(dir, entry.name));
+    }
+  }
+  return files;
+}
 
-for (const file of files) {
-  const full = path.join(changesetDir, file);
+const files = collectChangesetFiles();
+
+for (const full of files) {
+  const file = path.relative(changesetDir, full);
   const raw = fs.readFileSync(full, 'utf8');
 
   const match = raw.match(/^---\r?\n([\s\S]*?)\r?\n---/);

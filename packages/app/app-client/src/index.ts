@@ -100,6 +100,8 @@ export type {
   AppClientRouteComponentOverrideDefinition,
   AppClientRouteContribution,
   AppClientRouteDefinition,
+  AppClientRoutePageDefinition,
+  AppClientRouteGroupDefinition,
   AppClientRoutes,
   AppClientServiceProviders,
   AppClientSettingIcon,

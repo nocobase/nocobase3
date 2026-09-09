@@ -297,3 +297,7 @@ The 15 read-only examples cover:
 Root queries return at most 10 records; relation previews have their own limits. Reuse the existing CRM and relationship seeds; no new migration, seed, endpoint or query syntax is introduced. Seeded data demonstrates ties, nullable assignees and empty customer orders. Empty product-item aggregates are additionally covered with isolated test records. Changes on other example pages are reflected when queries run again.
 
 `client/sort.ts` owns the builder definitions. `sortExampleRequest()` uses the HTTP client's public serializer, and integration tests verify that each displayed AST produces the same results as its builder. Cursor, distinct, unsupported scalar types and to-one include restrictions are explained on the page; their complete behavior remains documented in the database package.
+
+## Client navigation
+
+`client/routes.ts` owns the API examples, CRM, and Orders menu groups through `navigation` and pathless route groups. Each page keeps its existing URL and lazy loader. Detail routes omit `navigation`. The Client ServiceProvider retains only the CRUD list/show resource mappings; Refine resources do not define the application menu.

@@ -1,4 +1,3 @@
-import { APP_NS } from '@nocobase/i18n';
 import { ClientApplication } from '@nocobase/app-client';
 import type { ClientServiceProviderConstructor } from '@nocobase/app-client/plugins';
 import { ServiceProvider } from '@nocobase/service-provider';
@@ -12,10 +11,6 @@ export class DefaultClientServiceProvider extends ServiceProvider<ClientApplicat
       {
         name: 'articles',
         list: '/articles',
-        meta: {
-          label: 'navigation.articles',
-          i18nNs: this.app.runtime.i18n.registry.resolveNamespace(APP_NS),
-        },
       },
     ]);
     const configuredTitle = this.app.config.get<unknown>('app.title');

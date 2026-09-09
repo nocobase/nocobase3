@@ -14,7 +14,7 @@ NocoBase v3 插件只通过一个 `client/routes.ts` entry 提供 Client Routes�
 - 页面通过 `componentLoader()` 惰性加载；
 - Client `auth` 和 `access` 保护导航与页面加载，不能替代 Server 安全边界。
 
-完整的四类 Route 选择见[Route 插件开发](./routes.md)。Client ServiceProvider、React Provider、
+完整的五类 Route（Client 三类、Server 两类）选择见[Route 插件开发](./routes.md)。Client ServiceProvider、React Provider、
 options 和 wiring 见[Client 模块选择](./client.md)。
 
 ## 先选择 App Route、Settings Route 还是 Dev Route
@@ -59,9 +59,11 @@ export default routes;
 
 | 值         | 使用场景                                     |
 | ---------- | -------------------------------------------- |
-| `required` | 只有登录用户能访问的页面；省略时也是该默认值 |
+| `required` | 只有登录用户能访问的页面                     |
 | `guest`    | 登录、注册、密码找回等访客页面               |
 | `optional` | 登录前后都能访问、页面自行调整体验的页面     |
+
+App 根节点省略 `auth` 时默认为 `required`。子节点继承父级的 `auth`，不能声明与父级不同的值；例如 `optional` 页面下的子路由省略 `auth` 时仍为 `optional`。Settings 和 Dev 路由统一要求登录。
 
 `auth` 是 Client navigation policy。页面调用的 HTTP API 仍要在对应 Server Route 中
 声明并测试自己的 authentication、authorization 或协议特定安全策略。
@@ -163,8 +165,7 @@ const devRoutes: AppClientDevRoutesContribution = defineDevRoutes([
 
 ## Settings 分组
 
-多个相关设置页可以共享一层分组。分组拥有自己的 name、path 和 navigation，children
-才是实际页面；Settings groups 只嵌套一层。
+App、Settings 和 Dev 都支持递归导航分组。分组拥有 name、navigation 和 children，path 可选；省略时只组织菜单，设置时提供路径前缀。页面拥有 componentLoader，也可拥有 children 和 navigation。页面通过手动放置 Outlet 渲染子页面，不能仅凭 children 判断节点是分组。
 
 ```ts
 defineSettingsRoutes([
@@ -229,6 +230,14 @@ const override = {
 同一个 Route 在所有来源中只能有一个最终 override。提供 `componentEntry`，使
 `client:inspect` 和后续 Agent 能定位最终页面源码。
 
+## App 菜单与子路由
+
+App 菜单与 Settings、Dev 一样，直接读取路由的 `navigation`，不再读取 Refine resources。`title` 使用所属插件的翻译命名空间，`icon` 为接受 `className` 的组件。保留 CRUD 所需 resources，但不要为了添加菜单创建 Provider。
+
+三类路由均支持递归页面子路由和可选路径的导航分组。省略 navigation 的页面仍可访问；动态参数和通配符页面不能直接生成菜单目标。页面可以同时是可点击菜单和下级菜单的父节点。业务页面手动放置 Outlet，纯分组由渲染器透传。
+
+完整示例与文件范围见[页面子路由](client-child-routes.md)。
+
 ## Provider 与 Route 的边界
 
 Route 只声明页面入口。多个插件页面确实共享 React Context 时，才在
@@ -270,4 +279,4 @@ pnpm --filter <target-app> client:inspect --json
 - 把共享 Provider 状态复制进多个页面。
 
 返回[Route 插件开发](./routes.md)，或继续阅读[测试和验证插件](./testing.md)和
-`packages/examples/app-plugin-routes-example` 的可运行四 Route 示例。
+`packages/examples/app-plugin-routes-example` 的可运行五类 Route 示例。

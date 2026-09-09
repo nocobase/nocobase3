@@ -37,7 +37,7 @@ client/pages/             The page component
 client/components/        Your components
 client/components/ui/     shadcn/ui primitives; add with the CLI, do not hand-write
 client/locales/           Every user-visible string
-client/service-provider.ts Sidebar resources and client startup
+client/service-provider.ts Client startup and CRUD resource integration
 server/routes/            HTTP endpoints
 server/providers/         Services and their lifecycle
 database/main/migrations/      Schema changes
@@ -46,13 +46,13 @@ cli/commands/             Commands this application owns
 tests/                    Tests; never beside the source
 ```
 
-A feature with a page and an API touches five places: a migration for the table, a route in `server/routes/`, a page in `client/pages/` declared in `client/routes.ts`, a sidebar resource in `client/service-provider.ts`, and strings in `client/locales/`.
+A feature with a page and an API touches five places: a migration for the table, a route in `server/routes/`, a page in `client/pages/` declared in `client/routes.ts`, navigation on the page route, and strings in `client/locales/`.
 
 ### The rest is framework structure
 
 `client/routing/`, `client/shell/`, `client/layouts/`, `client/theme/`, the server entry points, the build scripts, and the tsconfigs are the scaffolding the template provides. It is still this application's own source — it shipped to the user and they may change it — but it is the part the template evolves, so an edit there is what a future upgrade has to reconcile.
 
-Prefer the mechanism the system already provides. Most tasks that look like they need a shell or router change do not: a page needs a route and a resource, a settings page needs `access`, a plugin page is customized through an option or an override. If you find yourself editing the shell to add a page, check whether you have registered the resource first.
+Prefer the mechanism the system already provides. Declare a page in `client/routes.ts` and add `navigation` when it needs a menu entry. Refine resources are only needed for CRUD integration. A settings page uses `access` to restrict access; a plugin page is customized through an option or an override. Before editing the shell to add a menu, check the route and its `navigation` declaration.
 
 When the built-in mechanism genuinely cannot express what is being asked, changing this structure is a legitimate answer — not a last resort to apologize for. Do it deliberately, and leave the next agent enough to work with:
 
@@ -82,19 +82,9 @@ Route paths are application-internal. Never write the deployment base path such 
 
 Use `defineSettingsRoutes()` for administrative pages, which mount under `/settings`, and `defineDevRoutes()` for development-only pages, which mount under `/dev` and are absent from a production build. Do not repeat `/settings` or `/dev` in the path. `defineDevRoutes()` is a build boundary, not a permission boundary: a page that must be restricted in production is a settings route with `access`, enforced by the server.
 
-**A route alone does not put the page in the sidebar.** The URL works, but nothing appears in navigation. Register a Refine resource in `client/service-provider.ts` as well:
+**Declare navigation on the route.** App, Settings and Dev menus read `navigation: { title: 'navigation.orders' }`; titles resolve in the owning locale namespace. Add the translation in `client/locales/`. Refine resources remain for CRUD and do not add menu entries.
 
-```ts
-this.app.refine.addResources([
-  {
-    name: 'orders',
-    list: '/orders',
-    meta: { label: 'navigation.orders', i18nNs: APP_NS },
-  },
-]);
-```
-
-`list` must match the route's `path`, and `meta.label` is a translation key added to `client/locales/`. So a navigable page is three edits: the route, the resource, and the label. Settings and dev pages are the exception — their `navigation` field handles it.
+Use recursive groups to organize menus; their path is optional. Pages may also have children, but must manually render `Outlet`. For examples and the exact file list, read `skills/nocobase-app-development/references/client-child-routes.md`.
 
 ### Components and styling
 
@@ -230,6 +220,45 @@ That split looks backwards until you see how the two halves are deployed. `pnpm 
 So the two mistakes fail in opposite ways. A server import left in `devDependencies` works all through development and fails only on the server, with a bare `Cannot find package` naming nothing that points back here. A client package put in `dependencies` never breaks anything — it is just installed into every deployment, where the server never requires it. That one is invisible, so it accumulates: `lucide-react` and `@xyflow/react` were 44 MB of it before this rule was written down.
 
 What decides it is where the importing file lives and what the import is, not what the package is for. `import ts from 'typescript'` in `server/` is a runtime dependency even though TypeScript sounds like tooling. `import type { Config } from 'x'` is erased before anything runs, so it stays a devDependency wherever it appears. A dynamic `import()` counts — deferring the load changes when a package is needed, not whether.
+
+### Adding a dependency
+
+Which half of the application imports it decides where it goes.
+
+| The import is reached from              | Declare it in     |
+| --------------------------------------- | ----------------- |
+| `server/`, `database/`, or `cli/`       | `dependencies`    |
+| `client/`, build tooling, tests         | `devDependencies` |
+| `import type` only, wherever it appears | `devDependencies` |
+
+`dist/package.json` is generated from `dependencies` and is what a deployment installs from, so a server import declared as a devDependency resolves in every development checkout and is absent exactly once — on the deployed server. A client import needs nothing at runtime: Vite resolves and inlines it into `dist/client` at build time.
+
+A plugin's browser packages arrive by a third route and need nothing from you. Plugins declare those as peer dependencies, so installing a plugin brings one shared copy into this application, while `dist/` sets `autoInstallPeers: false` and installs none of them.
+
+`pnpm build` checks the server half: it reads every value import in `server/`, `database/`, and `cli/` and fails the build if any of those packages is missing from `dist/package.json`. It cannot see an import whose specifier is built at run time:
+
+```ts
+await import(`${name}/index.js`); // invisible to the check
+```
+
+Declare such a package in `dependencies` when you write the code; nothing will remind you later.
+
+### Building for another platform
+
+`pnpm build` targets the machine it runs on, so `pnpm build && pnpm start` works. A deployment build says where it is going: `--target linux-x64`, `--target linux-arm64`, `--target linux-x64-musl`, plus `--node-version` when the server's Node major differs. Every build prints the platform it produced and records it in `dist/package.json` under `nocobase.buildTarget`.
+
+A `.node` binary is compiled for one platform, architecture, C library, and Node ABI at once. `pg`, `mysql2`, and `tedious` are plain JavaScript, so an application using only those is portable as built.
+
+### When a build or a deployment fails
+
+| Symptom                                                                                 | Cause                                                                        | Fix                                                                                                                                                                                  |
+| --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Cannot find module 'x'` on the server, works locally                                   | `x` is in `devDependencies`, which `dist/package.json` is not generated from | Move it to `dependencies`                                                                                                                                                            |
+| A browser package will not resolve while building the application                       | A plugin declares it as a peer and nothing provides it                       | Add it to the application's `devDependencies`                                                                                                                                        |
+| `Error loading shared library`, `invalid ELF header`, or a bare `.node` path at startup | The binary does not match the server                                         | Compare `require('./dist/package.json').nocobase.buildTarget` with the server's `process.platform`, `process.arch`, and `process.versions.modules`, then rebuild with matching flags |
+| `no prebuilt binary for <target>` during the build                                      | The package publishes no build for that combination                          | Check the package supports the target; musl coverage is thinner than glibc                                                                                                           |
+
+Node ABI to major version: 115 is Node 20, 127 is 22, 137 is 24, 147 is 26.
 
 ## Before you finish
 
