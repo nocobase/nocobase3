@@ -2290,6 +2290,9 @@ importers:
       '@nocobase/app-host':
         specifier: workspace:^
         version: link:../../app/app-host
+      '@nocobase/authorization':
+        specifier: workspace:^
+        version: link:../../libs/authorization
       '@nocobase/drive':
         specifier: workspace:^
         version: link:../../libs/drive
@@ -2330,6 +2333,9 @@ importers:
       '@nocobase/app-plugin-authorization':
         specifier: workspace:*
         version: link:../app-plugin-authorization
+      '@nocobase/app-plugin-users':
+        specifier: workspace:*
+        version: link:../app-plugin-users
       '@nocobase/app-server':
         specifier: workspace:*
         version: link:../../app/app-server
@@ -2342,6 +2348,9 @@ importers:
       '@nocobase/i18n':
         specifier: workspace:*
         version: link:../../libs/i18n
+      '@nocobase/logging':
+        specifier: workspace:*
+        version: link:../../libs/logging
       '@nocobase/service-provider':
         specifier: workspace:*
         version: link:../../libs/service-provider
@@ -2366,6 +2375,9 @@ importers:
       lucide-react:
         specifier: ^0.487.0
         version: 0.487.0(react@19.2.8)
+      knex:
+        specifier: 'catalog:'
+        version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(tedious@20.0.0)
       prettier:
         specifier: 'catalog:'
         version: 3.9.6
@@ -3348,9 +3360,6 @@ importers:
       '@nocobase/app-plugin-cli-example':
         specifier: workspace:^
         version: link:../../examples/app-plugin-cli-example
-      '@nocobase/app-plugin-users':
-        specifier: workspace:^
-        version: link:../../plugins/app-plugin-users
       '@nocobase/app-plugin-database-example':
         specifier: workspace:^
         version: link:../../examples/app-plugin-database-example
@@ -3696,6 +3705,9 @@ importers:
       '@nocobase/app-plugin-authorization':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-authorization
+      '@nocobase/app-plugin-users':
+        specifier: workspace:^
+        version: link:../../plugins/app-plugin-users
       '@nocobase/app-plugin-cli-example':
         specifier: workspace:^
         version: link:../../examples/app-plugin-cli-example
