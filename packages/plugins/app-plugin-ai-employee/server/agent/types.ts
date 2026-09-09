@@ -405,33 +405,12 @@ export interface AgentProviders {
   features: AgentFeatureOptions;
 }
 
-export interface AgentProviderOverrides {
-  conversation?: Partial<
-    Omit<
-      ConversationProvider,
-      'messages' | 'toolCalls' | 'threads' | 'streamCache'
-    >
-  > & {
-    messages?: Partial<ConversationMessageStore>;
-    toolCalls?: Partial<ConversationToolCallStore>;
-    threads?: Partial<ConversationThreadStore>;
-    streamCache?: Partial<ConversationStreamStore>;
-  };
-  chatContext?: (base: ChatContextProvider) => ChatContextProvider;
-  chatMessageConverters?: (
-    base: ChatMessageConverters,
-  ) => ChatMessageConverters;
-  features?: Partial<AgentFeatureOptions>;
-  checkpointer?: BaseCheckpointSaver | boolean;
-}
-
 export interface CreateAgentProvidersOptions {
   conversation?: ConversationProvider;
   chatContext: ChatContextProvider;
   chatMessageConverters?: ChatMessageConverters;
   features?: Partial<AgentFeatureOptions>;
   checkpointer?: BaseCheckpointSaver | boolean;
-  overrides?: AgentProviderOverrides;
 }
 export type AIEmployeeProviderOptions = {
   username?: string;

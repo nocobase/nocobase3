@@ -5,7 +5,6 @@ import type {
 } from '@nocobase/ai-employee';
 import type { Logger } from '@nocobase/logging';
 import type {
-  AgentProviderOverrides,
   AgentProviders,
   ConversationProvider,
   CreateAgentProvidersOptions,
@@ -29,19 +28,6 @@ const noopLogger = {
 } as unknown as Logger;
 
 const clone = <T extends object>(value: T): T => ({ ...value });
-
-const mergeConversation = (
-  base: ConversationProvider,
-  override = {} as NonNullable<AgentProviderOverrides['conversation']>,
-): ConversationProvider => ({
-  ...base,
-  ...override,
-  identity: override.identity ?? base.identity,
-  messages: { ...base.messages, ...override.messages },
-  toolCalls: { ...base.toolCalls, ...override.toolCalls },
-  threads: { ...base.threads, ...override.threads },
-  streamCache: { ...base.streamCache, ...override.streamCache },
-});
 
 export function createMemoryConversationProvider(
   options: {
@@ -272,28 +258,15 @@ export const createDefaultChatMessageConverters =
 export function createAgentProviders(
   options: CreateAgentProvidersOptions,
 ): AgentProviders {
-  const conversation = mergeConversation(
-    options.conversation ?? createMemoryConversationProvider(),
-    options.overrides?.conversation,
-  );
-  const chatContext = options.overrides?.chatContext
-    ? options.overrides.chatContext(options.chatContext)
-    : options.chatContext;
-  const baseChatMessageConverters =
-    options.chatMessageConverters ?? new BaseChatMessageConverters();
-  const chatMessageConverters = options.overrides?.chatMessageConverters
-    ? options.overrides.chatMessageConverters(baseChatMessageConverters)
-    : baseChatMessageConverters;
-  const features = {
-    ...DEFAULT_AGENT_FEATURES,
-    ...(options.features ?? {}),
-    ...(options.overrides?.features ?? {}),
-  };
   return {
-    conversation,
-    chatContext,
-    chatMessageConverters,
-    features,
-    checkpointer: options.overrides?.checkpointer ?? options.checkpointer,
+    conversation: options.conversation ?? createMemoryConversationProvider(),
+    chatContext: options.chatContext,
+    chatMessageConverters:
+      options.chatMessageConverters ?? new BaseChatMessageConverters(),
+    features: {
+      ...DEFAULT_AGENT_FEATURES,
+      ...(options.features ?? {}),
+    },
+    checkpointer: options.checkpointer,
   };
 }

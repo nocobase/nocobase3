@@ -169,6 +169,15 @@ describe('fixed AgentService contracts', () => {
     );
     const handler = read('agent/ai-employee/tool-call-handler.ts');
     expect(handler).toContain('implements ConversationToolCallStore');
+    expect(handler).not.toContain('RepositoryFactory');
+    expect(handler).not.toContain('llmProviderManager');
+    expect(handler).toContain('messages: AIMessageRepository');
+    expect(handler).toContain('toolMessages: AIToolMessageRepository');
+    expect(
+      fs.existsSync(
+        path.join(src, 'agent/ai-employee/tool-call-cancellation.ts'),
+      ),
+    ).toBe(false);
     expect(providers).toContain('toolCalls: AIEmployeeToolCallHandler');
     expect(providers).toContain('toolCalls,');
     expect(providers).not.toMatch(/markPending:\s*\(|markDone:\s*\(/);
@@ -229,42 +238,14 @@ describe('fixed AgentService contracts', () => {
     expect(providers).not.toContain('ctx: options.ctx');
   });
 
-  it('merges partial conversation overrides without replacing defaults', async () => {
-    const load = vi.fn(async () => []);
-    const base = createMemoryConversationProvider({ sessionId: 'direct' });
-    const providers = createAgentProviders({
-      conversation: base,
-      chatContext: new BaseChatContextProvider({
-        llmResolver: {
-          resolve: async () => ({
-            provider: llmProvider,
-            providerName: 'test',
-            model: 'test',
-          }),
-        },
-      }),
-      overrides: { conversation: { messages: { load } } },
-    });
-    expect(providers.features).toEqual(DEFAULT_AGENT_FEATURES);
-    expect(providers.conversation.messages.load).toBe(load);
-    expect(typeof providers.conversation.messages.saveAssistantMessage).toBe(
-      'function',
-    );
-    expect(typeof providers.conversation.toolCalls.markPending).toBe(
-      'function',
-    );
-    await providers.conversation.messages.load();
-    expect(load).toHaveBeenCalledOnce();
-  });
-
-  it('decorates class providers without losing prototype methods or receivers', async () => {
+  it('uses explicit provider instances and default features', async () => {
     class Context extends BaseChatContextProvider {
       readonly marker = 'base';
       override async getSystemPrompt(): Promise<string> {
         return this.marker;
       }
     }
-    const base = new Context({
+    const chatContext = new Context({
       llmResolver: {
         resolve: async () => ({
           provider: llmProvider,
@@ -273,27 +254,24 @@ describe('fixed AgentService contracts', () => {
         }),
       },
     });
-    const converters = new BaseChatMessageConverters();
+    const conversation = createMemoryConversationProvider({
+      sessionId: 'direct',
+    });
+    const chatMessageConverters = new BaseChatMessageConverters();
     const providers = createAgentProviders({
-      chatContext: base,
-      chatMessageConverters: converters,
-      overrides: {
-        chatContext: (target) =>
-          new Proxy(target, {
-            get(object, property, receiver) {
-              if (property === 'shouldInterruptToolCall') return () => true;
-              return Reflect.get(object, property, receiver);
-            },
-          }),
-      },
+      conversation,
+      chatContext,
+      chatMessageConverters,
     });
 
     const llm = await providers.chatContext.resolveLLM({});
+    expect(providers.conversation).toBe(conversation);
+    expect(providers.chatContext).toBe(chatContext);
+    expect(providers.chatMessageConverters).toBe(chatMessageConverters);
+    expect(providers.features).toEqual(DEFAULT_AGENT_FEATURES);
     expect(await providers.chatContext.getSystemPrompt([], {}, llm)).toBe(
       'base',
     );
-    expect(providers.chatContext.shouldInterruptToolCall()).toBe(true);
-    expect(providers.chatMessageConverters).toBe(converters);
   });
   it('encodes typed events with the legacy SSE envelope', () => {
     const event: AgentStreamEvent = {

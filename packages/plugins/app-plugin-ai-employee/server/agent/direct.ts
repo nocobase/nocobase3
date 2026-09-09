@@ -1,6 +1,6 @@
 import type { AIMessageInput } from '@nocobase/ai-employee';
 import type { ToolsEntity } from '@nocobase/ai-employee';
-import type { AgentProviderOverrides, ConversationProvider } from './types.js';
+import type { ConversationProvider } from './types.js';
 import type { LLMProvider } from '@nocobase/ai-employee';
 import { createAgentService, type AgentService } from './agent-service.js';
 import {
@@ -22,8 +22,6 @@ export interface CreateDirectAgentServiceOptions {
   messages?: AIMessageInput[];
   tools?: ToolsEntity[];
   conversation?: ConversationProvider;
-  conversationOverrides?: AgentProviderOverrides['conversation'];
-  overrides?: Omit<AgentProviderOverrides, 'conversation'>;
 }
 
 export function createDirectAgentService(
@@ -47,16 +45,11 @@ export function createDirectAgentService(
     systemPrompt: options.systemPrompt,
     tools: options.tools,
   });
-  const overrides: AgentProviderOverrides = {
-    ...options.overrides,
-    conversation: options.conversationOverrides,
-  };
   return createAgentService(
     createAgentProviders({
       conversation,
       chatContext,
       chatMessageConverters,
-      overrides,
     }),
   );
 }

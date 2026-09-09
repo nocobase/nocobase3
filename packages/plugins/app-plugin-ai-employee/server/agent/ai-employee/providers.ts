@@ -3,7 +3,6 @@ import type { LLMResult } from '@langchain/core/outputs';
 import { createAgent } from 'langchain';
 import type {
   AgentAbortHandle,
-  AgentProviderOverrides,
   AgentProviders,
   AgentRequest,
   AgentThread,
@@ -13,6 +12,7 @@ import type {
 import { BaseChatContextProvider } from '../chat-context.js';
 import { AIEmployeeChatMessageConverters } from './message-converters.js';
 import { NativeCollectionSaver } from '../../agent/ai-employee/checkpoints/index.js';
+import type { AIConversationRepository } from '../../repository/index.js';
 import { createAIChatConversation } from './ai-chat-conversation.js';
 import type {
   AIEmployee as AIEmployeeType,
@@ -21,7 +21,6 @@ import type {
 } from '@nocobase/ai-employee';
 import { createAgentProviders } from '../providers.js';
 import type { AIEmployeeAgentOptions } from './options.js';
-import { AIEmployeeToolCallCancellation } from './tool-call-cancellation.js';
 import { AIEmployeeToolCallHandler } from './tool-call-handler.js';
 import { getSystemPrompt } from './prompts.js';
 import {
@@ -106,11 +105,11 @@ async function resolveAIEmployeeLLM(
 }
 
 async function updateConversationThread(
-  options: Pick<AIEmployeeAgentOptions, 'repositories'>,
+  conversations: AIConversationRepository,
   thread: AgentThread,
   connection?: import('@nocobase/db').DatabaseConnection,
 ): Promise<void> {
-  await options.repositories.aiConversations.update(
+  await conversations.update(
     {
       values: { thread: thread.thread },
       filter: { sessionId: thread.sessionId, thread: { $lt: thread.thread } },
@@ -149,7 +148,11 @@ export function createAIEmployeeConversationProvider(
       saveUserMessages: async (messageId, messages, thread) =>
         chatConversation.withTransaction(async (target, transaction) => {
           if (thread)
-            await updateConversationThread(options, thread, transaction);
+            await updateConversationThread(
+              options.repositories.aiConversations,
+              thread,
+              transaction,
+            );
           if (messageId && (await target.getMessage(messageId)))
             await target.removeMessages({ messageId });
           if (messages.length) await target.addMessages(messages);
@@ -221,7 +224,10 @@ export function createAIEmployeeConversationProvider(
         operation === 'fork' ||
         (Boolean(request.messageId) && options.legacy !== true),
       update: async (thread: AgentThread) => {
-        await updateConversationThread(options, thread);
+        await updateConversationThread(
+          options.repositories.aiConversations,
+          thread,
+        );
       },
       buildInitialState: (messages) => {
         const toolMessage = messages
@@ -496,24 +502,16 @@ export function createAIEmployeeChatContextProvider(
 
 export async function createAIEmployeeAgentProviders(
   options: AIEmployeeAgentOptions,
-  overrides?: AgentProviderOverrides,
 ): Promise<AgentProviders> {
   const toolContext = new AIEmployeeToolContext(options);
   const chatContext = createAIEmployeeChatContextProvider(options, toolContext);
-  const cancellation = new AIEmployeeToolCallCancellation({
-    agentContext: options.agentContext,
-    database: options.database,
-    model: options.model,
-    repositories: options.repositories,
-    snowflake: options.snowflake,
-  });
   const toolCalls = new AIEmployeeToolCallHandler({
     sessionId: options.sessionId,
     database: options.database,
-    repositories: options.repositories,
+    messages: options.repositories.aiMessages,
+    toolMessages: options.repositories.aiToolMessages,
     snowflake: options.snowflake,
     policy: chatContext,
-    cancellation,
   });
   const conversation = createAIEmployeeConversationProvider(options, toolCalls);
   return createAgentProviders({
@@ -528,7 +526,6 @@ export async function createAIEmployeeAgentProviders(
             blobs: options.repositories.lcCheckpointBlobs,
             writes: options.repositories.lcCheckpointWrites,
           }),
-    overrides,
   });
 }
 

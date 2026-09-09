@@ -2,10 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AIMessageInput } from '@nocobase/ai-employee';
 import { AgentService } from '../server/agent/agent-service.js';
 import { createAIEmployeeAgentService } from '../server/agent/ai-employee/index.js';
-import {
-  createAgentProviders,
-  createMemoryConversationProvider,
-} from '../server/agent/providers.js';
+import { createMemoryConversationProvider } from '../server/agent/providers.js';
 import type { AgentProviders } from '../server/agent/types.js';
 
 const createProviders = (
@@ -108,63 +105,7 @@ describe('AgentService tool-call cancellation', () => {
     expectNoExecutionLifecycle(chatContext, lifecycle);
   });
 
-  it('uses the final cancel override instead of the base provider', async () => {
-    const baseCancel = vi.fn(async () => undefined);
-    const overriddenMessages: AIMessageInput[] = [
-      {
-        role: 'tool',
-        content: { type: 'text', content: 'Overridden' },
-        metadata: { toolCallId: 'call-override' },
-      },
-    ];
-    const overriddenCancel = vi.fn(async () => overriddenMessages);
-    const base = createProviders(baseCancel);
-    const finalProviders = createAgentProviders({
-      conversation: base.providers.conversation,
-      chatContext: base.providers.chatContext,
-      chatMessageConverters: base.providers.chatMessageConverters,
-      features: base.providers.features,
-      overrides: { conversation: { toolCalls: { cancel: overriddenCancel } } },
-    });
-    const service = new AgentService(finalProviders);
-
-    await expect(service.cancelToolCall()).resolves.toBe(overriddenMessages);
-    expect(overriddenCancel).toHaveBeenCalledOnce();
-    expect(baseCancel).not.toHaveBeenCalled();
-    expectNoExecutionLifecycle(base.chatContext, base.lifecycle);
-  });
-
-  it('propagates errors from the final cancel override', async () => {
-    const baseCancel = vi.fn(async () => undefined);
-    const error = new Error('override cancel failed');
-    const overriddenCancel = vi.fn(async () => {
-      throw error;
-    });
-    const base = createProviders(baseCancel);
-    const finalProviders = createAgentProviders({
-      conversation: base.providers.conversation,
-      chatContext: base.providers.chatContext,
-      chatMessageConverters: base.providers.chatMessageConverters,
-      features: base.providers.features,
-      overrides: { conversation: { toolCalls: { cancel: overriddenCancel } } },
-    });
-    const service = new AgentService(finalProviders);
-
-    await expect(service.cancelToolCall()).rejects.toBe(error);
-    expect(overriddenCancel).toHaveBeenCalledOnce();
-    expect(baseCancel).not.toHaveBeenCalled();
-    expectNoExecutionLifecycle(base.chatContext, base.lifecycle);
-  });
-
-  it('returns one AgentService from the AI employee factory and preserves overrides', async () => {
-    const overriddenMessages: AIMessageInput[] = [
-      {
-        role: 'tool',
-        content: { type: 'text', content: 'Factory override' },
-        metadata: { toolCallId: 'call-factory' },
-      },
-    ];
-    const overriddenCancel = vi.fn(async () => overriddenMessages);
+  it('returns one AgentService from the AI employee factory', async () => {
     const options = {
       sessionId: 'session-1',
       employee: { username: 'dara' },
@@ -186,9 +127,7 @@ describe('AgentService tool-call cancellation', () => {
       },
     } as any;
 
-    const agent = await createAIEmployeeAgentService(options, {
-      conversation: { toolCalls: { cancel: overriddenCancel } },
-    });
+    const agent = await createAIEmployeeAgentService(options);
 
     expect(agent).toBeInstanceOf(AgentService);
     expect(typeof agent.invoke).toBe('function');
@@ -196,7 +135,5 @@ describe('AgentService tool-call cancellation', () => {
     expect(typeof agent.cancelToolCall).toBe('function');
     expect(agent).not.toHaveProperty('service');
     expect(agent).not.toHaveProperty('facade');
-    await expect(agent.cancelToolCall()).resolves.toBe(overriddenMessages);
-    expect(overriddenCancel).toHaveBeenCalledOnce();
   });
 });

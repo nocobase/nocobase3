@@ -51,17 +51,13 @@ function createFixture(overrides: Record<string, unknown> = {}) {
     isAutoCall: vi.fn(async () => true),
     shouldInterruptToolCall: vi.fn(() => false),
   };
-  const cancellation = {
-    cancel: vi.fn(async () => undefined),
-    reject: vi.fn(async (_messageId, ids) => ids.length),
-  };
   const handler = new AIEmployeeToolCallHandler({
     sessionId: 'session-1',
     database,
-    repositories,
+    messages: aiMessages,
+    toolMessages: aiToolMessages,
     snowflake: { generate: vi.fn(() => 101) },
     policy,
-    cancellation,
     ...overrides,
   } as never);
   return {
@@ -71,7 +67,6 @@ function createFixture(overrides: Record<string, unknown> = {}) {
     repositories,
     database,
     policy,
-    cancellation,
     handler,
   };
 }
@@ -297,21 +292,135 @@ describe('AIEmployeeToolCallHandler', () => {
     );
   });
 
-  it('delegates cancellation without changing its result', async () => {
+  it('cancels pending calls within the session and inherits source metadata', async () => {
     const fixture = createFixture();
-    const messages = [
-      { role: 'tool', content: { type: 'text', content: 'cancelled' } },
+    const sourceMessage = {
+      messageId: 'message-1',
+      sessionId: 'session-1',
+      role: 'dara',
+      content: { type: 'text', content: 'calling' },
+      toolCalls: [
+        { id: 'call-1', name: 'knownTool', type: 'tool_call', args: {} },
+      ],
+      metadata: {
+        model: 'source-model',
+        provider: 'source-provider',
+        llmService: 'source-service',
+        response_metadata: { ignored: true },
+      },
+    };
+    const pendingToolMessage = {
+      id: 'tool-message-1',
+      sessionId: 'session-1',
+      messageId: 'message-1',
+      toolCallId: 'call-1',
+      invokeStatus: 'pending',
+      auto: false,
+    };
+    const createdMessages = [
+      {
+        messageId: 'continuation-1',
+        sessionId: 'session-1',
+        role: 'tool',
+        content: { type: 'text', content: expect.any(String) },
+      },
     ];
-    fixture.cancellation.cancel.mockResolvedValue(messages);
+    fixture.aiMessages.find.mockResolvedValue([sourceMessage]);
+    fixture.aiToolMessages.find.mockResolvedValue([pendingToolMessage]);
+    fixture.aiMessages.create.mockResolvedValue(createdMessages);
 
-    await expect(fixture.handler.cancel()).resolves.toBe(messages);
+    await expect(fixture.handler.cancel()).resolves.toBe(createdMessages);
+
+    expect(fixture.aiMessages.find).toHaveBeenCalledWith({
+      filter: { sessionId: 'session-1' },
+      sort: ['-messageId'],
+    });
+    expect(fixture.aiToolMessages.find).toHaveBeenCalledWith({
+      filter: {
+        sessionId: 'session-1',
+        messageId: 'message-1',
+        invokeStatus: { $ne: 'confirmed' },
+      },
+    });
+    expect(fixture.aiToolMessages.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filter: {
+          id: 'tool-message-1',
+          sessionId: 'session-1',
+          invokeStatus: 'pending',
+        },
+      }),
+      { connection: fixture.transaction },
+    );
+    expect(fixture.aiMessages.create).toHaveBeenCalledWith(
+      {
+        values: [
+          expect.objectContaining({
+            sessionId: 'session-1',
+            role: 'tool',
+            metadata: {
+              model: 'source-model',
+              provider: 'source-provider',
+              llmService: 'source-service',
+              toolCall: sourceMessage.toolCalls[0],
+              toolCallId: 'call-1',
+              sourceMessageId: 'message-1',
+              autoCall: false,
+            },
+          }),
+        ],
+      },
+      { connection: fixture.transaction },
+    );
+  });
+
+  it('returns undefined without opening a transaction when no call is pending', async () => {
+    const fixture = createFixture();
+    fixture.aiMessages.find.mockResolvedValue([
+      {
+        messageId: 'message-1',
+        sessionId: 'session-1',
+        toolCalls: [{ id: 'call-1', name: 'knownTool', args: {} }],
+      },
+    ]);
+
+    await expect(fixture.handler.cancel()).resolves.toBeUndefined();
+
+    expect(fixture.database.transaction).not.toHaveBeenCalled();
+    expect(fixture.aiMessages.create).not.toHaveBeenCalled();
+    expect(fixture.aiToolMessages.update).not.toHaveBeenCalled();
+  });
+
+  it('uses reject reason for the merged cancellation flow', async () => {
+    const fixture = createFixture();
+    fixture.aiMessages.find.mockResolvedValue([
+      {
+        messageId: 'message-1',
+        sessionId: 'session-1',
+        toolCalls: [
+          { id: 'call-1', name: 'knownTool', type: 'tool_call', args: {} },
+        ],
+      },
+    ]);
+    fixture.aiToolMessages.find.mockResolvedValue([
+      {
+        id: 'tool-message-1',
+        sessionId: 'session-1',
+        messageId: 'message-1',
+        toolCallId: 'call-1',
+        invokeStatus: 'waiting',
+      },
+    ]);
+
     await expect(
-      fixture.handler.reject('message-1', ['call-1'], 'rejected'),
+      fixture.handler.reject('message-1', ['call-1'], 'Rejected'),
     ).resolves.toBe(1);
-    expect(fixture.cancellation.reject).toHaveBeenCalledWith(
-      'message-1',
-      ['call-1'],
-      'rejected',
+
+    expect(fixture.aiToolMessages.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        values: expect.objectContaining({ content: 'Rejected' }),
+      }),
+      { connection: fixture.transaction },
     );
   });
 });
