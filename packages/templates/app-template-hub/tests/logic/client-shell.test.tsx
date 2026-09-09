@@ -10,6 +10,7 @@ import type { ComponentType, ReactElement } from 'react';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import applicationRoutes from '../../client/routes.ts';
 import { AppRouter } from '../../client/routing/app-router.tsx';
 import { AppThemeProvider } from '../../client/theme/index.ts';
 
@@ -117,6 +118,39 @@ describe('application shell', () => {
     ).toBeVisible();
   });
 
+  it('redirects the authorized Hub root through the Hub access rule', async () => {
+    const can = vi.fn().mockResolvedValue({ can: true });
+    const rootDefinition = applicationRoutes[0].routes[0];
+    renderApplication(
+      '/',
+      createAuthProvider(true),
+      [
+        {
+          ...rootDefinition,
+          auth: rootDefinition.auth ?? 'required',
+          id: '@nocobase/app-template-hub:applications-root',
+          packageName: '@nocobase/app-template-hub',
+          source: 'application',
+        },
+        {
+          ...createRoute('apps', '/apps', 'required', ApplicationsPage),
+          access: { resource: 'hub', action: 'access' },
+        },
+      ],
+      { accessControlProvider: { can } },
+    );
+
+    expect(
+      await screen.findByRole('heading', { name: 'Applications page' }),
+    ).toBeVisible();
+    expect(can).toHaveBeenCalledWith(
+      expect.objectContaining({ resource: 'hub', action: 'access' }),
+    );
+    expect(can).not.toHaveBeenCalledWith(
+      expect.objectContaining({ resource: 'applications-root' }),
+    );
+  });
+
   it('shows a protected navigation entry as selected when access is allowed', async () => {
     renderApplication(
       '/users',
@@ -201,10 +235,12 @@ function renderApplication(
     readonly resources?: readonly ResourceProps[];
   } = {},
 ): void {
-  const clientRoutes = [
-    createRoute('home', '/', 'required', HomePage, 'application'),
-    ...routes,
-  ];
+  const clientRoutes = routes.some(({ path }) => path === '/')
+    ? [...routes]
+    : [
+        createRoute('home', '/', 'required', HomePage, 'application'),
+        ...routes,
+      ];
   render(
     <MemoryRouter initialEntries={[initialEntry]}>
       <AppThemeProvider>

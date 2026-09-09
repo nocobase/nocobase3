@@ -43,11 +43,13 @@ describe('app client routes', () => {
       parent: 'app',
       routes: [
         {
+          access: { resource: 'hub', action: 'access' },
           auth: 'required',
           name: 'applications-root',
           path: '/',
         },
         {
+          access: { resource: 'hub', action: 'access' },
           auth: 'required',
           name: 'applications-legacy',
           path: '/hub',
