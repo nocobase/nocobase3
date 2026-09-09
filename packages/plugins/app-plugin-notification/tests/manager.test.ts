@@ -1095,7 +1095,7 @@ describe('NotificationManager registration', () => {
       })
       .mockResolvedValueOnce({ status: 'accepted' });
     const capabilities = {
-      idempotency: { supported: true, key: 'deliveryId' },
+      idempotency: { supported: true },
     } as const satisfies NotificationProviderCapabilities;
     const { manager, queue } = createEmailManagerHarness({
       send,
@@ -1146,7 +1146,6 @@ describe('NotificationManager registration', () => {
       capabilities: {
         idempotency: {
           supported: true,
-          key: 'deliveryId',
           retentionMs: 24 * 60 * 60 * 1_000,
         },
       },
@@ -1211,7 +1210,6 @@ describe('NotificationManager registration', () => {
       capabilities: {
         idempotency: {
           supported: true,
-          key: 'deliveryId',
           retentionMs: 1_000,
         },
       },
@@ -1244,7 +1242,6 @@ describe('NotificationManager registration', () => {
       {
         resolution: { type: 'safe_provider_idempotency' },
         providerIdempotency: {
-          key: 'deliveryId',
           startedAt: '2026-09-01T00:00:00.000Z',
           expiresAt: '2026-09-01T00:00:01.000Z',
         },
@@ -1295,7 +1292,7 @@ describe('NotificationManager registration', () => {
       send: upgradedSend,
       store,
       capabilities: {
-        idempotency: { supported: true, key: 'deliveryId' },
+        idempotency: { supported: true },
       },
     });
 
@@ -1326,7 +1323,7 @@ describe('NotificationManager registration', () => {
         error: { message: 'response lost', category: 'network' },
       }),
       capabilities: {
-        idempotency: { supported: true, key: 'deliveryId' },
+        idempotency: { supported: true },
       },
     });
     const sent = await first.manager.send({

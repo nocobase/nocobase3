@@ -22,7 +22,6 @@ export function createSmtpProviderDefinition(): NotificationProviderDefinition<
 > {
   return {
     type: 'smtp',
-    capabilities: { idempotency: { supported: false } },
     label: notificationProviderText('test.providers.smtp', 'SMTP'),
     validateConfig: validateSmtpProviderConfig,
     async createProvider(_context, config) {
@@ -37,7 +36,6 @@ export function createSmtpProviderDefinition(): NotificationProviderDefinition<
       return {
         name: config.name,
         type: 'smtp',
-        capabilities: { idempotency: { supported: false } },
         async send({ message }): Promise<ProviderSendResult> {
           try {
             const info = await transporter.sendMail({

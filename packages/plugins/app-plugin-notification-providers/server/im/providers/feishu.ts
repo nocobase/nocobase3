@@ -32,7 +32,6 @@ export function createFeishuWebhookProviderDefinition(): NotificationProviderDef
 > {
   return {
     type: 'feishu-webhook',
-    capabilities: { idempotency: { supported: false } },
     label: notificationProviderText(
       'test.providers.feishuWebhook',
       'Feishu webhook',
@@ -43,7 +42,6 @@ export function createFeishuWebhookProviderDefinition(): NotificationProviderDef
       return {
         name: config.name,
         type: 'feishu-webhook',
-        capabilities: { idempotency: { supported: false } },
         async send({
           message,
           signal,

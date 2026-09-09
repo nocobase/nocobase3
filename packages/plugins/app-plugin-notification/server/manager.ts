@@ -781,7 +781,6 @@ export class NotificationManager<
       if (
         idempotency &&
         capabilities.supported &&
-        capabilities.key === idempotency.key &&
         (idempotency.expiresAt === undefined ||
           idempotency.expiresAt > (await this.store.now()))
       ) {

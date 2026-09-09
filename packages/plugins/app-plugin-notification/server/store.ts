@@ -52,7 +52,6 @@ export interface NotificationDeliveryRecord {
 }
 
 export interface NotificationProviderIdempotencyRecord {
-  readonly key: 'deliveryId';
   readonly startedAt: string;
   readonly expiresAt?: string;
 }

@@ -366,7 +366,6 @@ export interface NotificationProviderCapabilities {
     | { readonly supported: false }
     | {
         readonly supported: true;
-        readonly key: 'deliveryId';
         readonly retentionMs?: number;
       };
 }

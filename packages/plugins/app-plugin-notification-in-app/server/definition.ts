@@ -141,7 +141,7 @@ export function createDatabaseProviderDefinition(options: {
   return {
     type: 'database',
     capabilities: {
-      idempotency: { supported: true, key: 'deliveryId' },
+      idempotency: { supported: true },
     },
     label: inAppNotificationText('test.providers.database', 'Database'),
     async createProvider(context, config) {
@@ -150,7 +150,7 @@ export function createDatabaseProviderDefinition(options: {
         name: config.name,
         type: 'database',
         capabilities: {
-          idempotency: { supported: true, key: 'deliveryId' },
+          idempotency: { supported: true },
         },
         async send({ message }) {
           try {

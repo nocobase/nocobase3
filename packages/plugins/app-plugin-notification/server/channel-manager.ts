@@ -513,7 +513,6 @@ function providerIdempotencyForAttempt(
   const idempotency = provider.capabilities?.idempotency;
   if (!idempotency?.supported) return undefined;
   return {
-    key: idempotency.key,
     startedAt,
     ...(idempotency.retentionMs === undefined
       ? {}
@@ -530,9 +529,7 @@ function providerSupportsIdempotency(
   record: NotificationDeliveryRecord['providerIdempotency'],
 ): boolean {
   const idempotency = provider.capabilities?.idempotency;
-  return Boolean(
-    record && idempotency?.supported && idempotency.key === record.key,
-  );
+  return Boolean(record && idempotency?.supported);
 }
 
 function isProviderIdempotencyActive(

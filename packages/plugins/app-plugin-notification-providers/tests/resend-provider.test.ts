@@ -35,7 +35,6 @@ describe('Resend Provider', () => {
     expect(provider.capabilities).toEqual({
       idempotency: {
         supported: true,
-        key: 'deliveryId',
         retentionMs: 86_400_000,
       },
     });

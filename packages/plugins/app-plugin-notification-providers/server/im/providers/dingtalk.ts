@@ -32,7 +32,6 @@ export function createDingTalkWebhookProviderDefinition(): NotificationProviderD
 > {
   return {
     type: 'dingtalk-webhook',
-    capabilities: { idempotency: { supported: false } },
     label: notificationProviderText(
       'test.providers.dingtalkWebhook',
       'DingTalk webhook',
@@ -43,7 +42,6 @@ export function createDingTalkWebhookProviderDefinition(): NotificationProviderD
       return {
         name: config.name,
         type: 'dingtalk-webhook',
-        capabilities: { idempotency: { supported: false } },
         async send({
           message,
           signal,

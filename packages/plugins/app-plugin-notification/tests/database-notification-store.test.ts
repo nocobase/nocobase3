@@ -54,7 +54,6 @@ describe('DatabaseNotificationStore', () => {
       {
         ...claimed!,
         providerIdempotency: {
-          key: 'deliveryId',
           startedAt: '2026-08-24T00:00:01.000Z',
           expiresAt: '2026-08-25T00:00:01.000Z',
         },
@@ -63,7 +62,6 @@ describe('DatabaseNotificationStore', () => {
       '2026-08-24T00:01:00.000Z',
     );
     expect(started?.providerIdempotency).toEqual({
-      key: 'deliveryId',
       startedAt: '2026-08-24T00:00:01.000Z',
       expiresAt: '2026-08-25T00:00:01.000Z',
     });
@@ -316,7 +314,6 @@ describe('DatabaseNotificationStore', () => {
       {
         ...claimed!,
         providerIdempotency: {
-          key: 'deliveryId',
           startedAt: '2026-08-24T00:00:01.000Z',
           expiresAt: '2026-08-25T00:00:01.000Z',
         },
@@ -356,7 +353,6 @@ describe('DatabaseNotificationStore', () => {
           requestedAt: '2026-08-24T00:03:00.000Z',
         },
         providerIdempotency: {
-          key: 'deliveryId',
           startedAt: '2026-08-24T00:00:01.000Z',
           expiresAt: '2026-08-25T00:00:01.000Z',
         },

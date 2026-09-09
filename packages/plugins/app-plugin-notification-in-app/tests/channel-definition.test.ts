@@ -84,7 +84,7 @@ describe('In-app Channel common input', () => {
     );
 
     expect(provider.capabilities).toEqual({
-      idempotency: { supported: true, key: 'deliveryId' },
+      idempotency: { supported: true },
     });
     await expect(
       provider.send({

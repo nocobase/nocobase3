@@ -32,9 +32,7 @@ describe('IM webhook Providers', () => {
         }),
       );
 
-    expect(provider.capabilities).toEqual({
-      idempotency: { supported: false },
-    });
+    expect(provider.capabilities).toBeUndefined();
     await expect(provider.send(sendInput())).resolves.toEqual({
       status: 'accepted',
     });

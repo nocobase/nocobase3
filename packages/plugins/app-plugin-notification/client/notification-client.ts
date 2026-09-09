@@ -41,7 +41,6 @@ export interface NotificationRetryAudit {
     readonly requestedAt: string;
   };
   readonly providerIdempotency?: {
-    readonly key: 'deliveryId';
     readonly startedAt: string;
     readonly expiresAt?: string;
   };

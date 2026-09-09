@@ -32,9 +32,7 @@ describe('SMTP Provider', () => {
     smtpMock.sendMail.mockResolvedValue({ messageId: 'smtp-message-1' });
     const provider = await createProvider();
 
-    expect(provider.capabilities).toEqual({
-      idempotency: { supported: false },
-    });
+    expect(provider.capabilities).toBeUndefined();
     await expect(provider.send(sendInput())).resolves.toEqual({
       status: 'accepted',
       providerMessageId: 'smtp-message-1',

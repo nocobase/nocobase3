@@ -55,7 +55,7 @@ Return `failed` when the service definitively rejected or did not submit the mes
 
 Return `submission_unknown` when the request may have reached the Provider but confirmation was lost. This prevents automatic duplicates.
 
-Declare Provider retry safety with `capabilities.idempotency`. Omitted capability is treated as `{ supported: false }`. Set `{ supported: true, key: 'deliveryId' }` only when the Provider guarantees that every retry reuses the same stable key; include `retentionMs` when the guarantee expires. The built-in database Provider is durable for the Delivery lifetime, Resend is bounded to its declared retention, and SMTP plus the built-in Webhook Providers do not claim idempotency.
+Declare Provider retry safety with `capabilities.idempotency`. Omitted capabilities are treated as `{ idempotency: { supported: false } }`. Set `{ supported: true }` only when repeated submissions with the same core-supplied `deliveryId` are idempotent; include `retentionMs` when the guarantee expires. The built-in database Provider is durable for the Delivery lifetime, Resend is bounded to its declared retention, and SMTP plus the built-in Webhook Providers omit capabilities because they do not claim idempotency.
 
 Use the core error categories: `authentication`, `channel`, `configuration`, `content`, `network`, `provider`, `rate_limit`, `recipient`, `storage`, `timeout`, or `unknown`. Error messages must be actionable and sanitized.
 
