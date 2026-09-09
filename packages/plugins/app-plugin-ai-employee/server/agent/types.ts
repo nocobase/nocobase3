@@ -433,9 +433,6 @@ export interface CreateAgentProvidersOptions {
   checkpointer?: BaseCheckpointSaver | boolean;
   overrides?: AgentProviderOverrides;
 }
-
-export type ToolCallHandler = ConversationToolCallStore;
-
 export type AIEmployeeProviderOptions = {
   username?: string;
   modelRef?: {
