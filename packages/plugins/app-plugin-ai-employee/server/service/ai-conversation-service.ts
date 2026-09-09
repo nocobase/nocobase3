@@ -57,7 +57,7 @@ async function prependCancelledToolContinuation(
   repositories: RepositoryFactory,
   sessionId: string,
   messages: AIMessageInput[],
-  toolMessages: AIMessageEntity[],
+  toolMessages: AIMessageInput[],
 ): Promise<void> {
   if (!toolMessages.length) return;
   const continuationMessageId = String(
@@ -318,7 +318,7 @@ export class AIConversationService {
   }: {
     sessionId: string;
     messages: AIMessageInput[];
-    toolMessages: AIMessageEntity[];
+    toolMessages: AIMessageInput[];
   }): Promise<void> {
     await prependCancelledToolContinuation(
       this.repositories,
@@ -752,19 +752,19 @@ export class AIConversationService {
         );
         await adapter.consume(
           request?.messageId
-            ? agent.service.forkStream(request, agentContext)
-            : agent.service.stream(request, agentContext),
+            ? agent.forkStream(request, agentContext)
+            : agent.stream(request, agentContext),
         );
         streamTarget(execution).end();
         return true;
       };
       const runInvoke = (request: any) => {
         return request?.messageId
-          ? agent.service.forkInvoke(request, agentContext)
-          : agent.service.invoke(request, agentContext);
+          ? agent.forkInvoke(request, agentContext)
+          : agent.invoke(request, agentContext);
       };
       const cancelToolCall = () => {
-        return agent.facade.cancelToolCall();
+        return agent.cancelToolCall();
       };
       if (!editingMessageId) {
         if (await this.subAgentsDispatcher.isInterrupted(sessionId)) {
@@ -1060,7 +1060,7 @@ export class AIConversationService {
       }
       if (shouldStream) {
         {
-          const { service } = await createAIEmployeeAgentService(agentOptions);
+          const service = await createAIEmployeeAgentService(agentOptions);
           await new AgentSSEAdapter(
             (chunk) => streamTarget(execution).write(chunk),
             (chunk) =>
@@ -1079,7 +1079,7 @@ export class AIConversationService {
           streamTarget(execution).end();
         }
       } else {
-        const { service } = await createAIEmployeeAgentService(agentOptions);
+        const service = await createAIEmployeeAgentService(agentOptions);
         return service.forkInvoke(
           {
             messageId,
@@ -1352,7 +1352,7 @@ export class AIConversationService {
         throw new ResourceActionError(404, 'conversation not found');
       }
       {
-        const { service } = await createAIEmployeeAgentService(agentOptions);
+        const service = await createAIEmployeeAgentService(agentOptions);
         await new AgentSSEAdapter(
           (chunk) => streamTarget(execution).write(chunk),
           (chunk) =>
