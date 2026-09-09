@@ -1,5 +1,29 @@
 # @nocobase/app-plugin-workflow
 
+## 0.1.0-beta.10
+
+### Minor Changes
+
+- 008969c: Contribute Workflow check and build commands through the application's unified `nocobase workflow` CLI topic, including structured JSON output, and register the commands in both application templates.
+
+### Patch Changes
+
+- 435e0df: Keep workflow management status aligned with the current runtime revision when a newer Artifact is deployed, and expose the pending Artifact separately for explicit enablement.
+- 5723210: Refine the published Workflow Skill to select durable business lifecycles precisely, separate orchestration from typed business code, document public recovery and custom Instruction validation boundaries, and cover implicit Skill selection in isolated evaluations.
+- Updated dependencies [d29d1fe]
+- Updated dependencies [ec576ba]
+- Updated dependencies [67907ec]
+- Updated dependencies [5281fd1]
+  - @nocobase/app-server@1.0.0-beta.8
+  - @nocobase/nb3-cli@1.0.0-beta.5
+  - @nocobase/drive@0.1.0-beta.4
+  - @nocobase/app-plugin-authentication@0.1.0-beta.8
+  - @nocobase/app-client@1.0.0-beta.11
+  - @nocobase/db@1.0.0-beta.3
+  - @nocobase/i18n@1.0.0-beta.2
+  - @nocobase/queue@0.1.0-beta.3
+  - @nocobase/service-provider@0.0.2-beta.1
+
 ## 0.1.0-beta.9
 
 ### Patch Changes
