@@ -17,7 +17,7 @@ Do not use it to develop a published plugin package. Plugin development has its 
 
 For pages with Tabs, nested pages, or navigation groups, read [child routes](references/client-child-routes.md). Page-level Tabs use child routes by default, even when the user does not mention routing. Declare their content under the parent route and derive the selected Tab from the URL. Opening the parent URL redirects to the default accessible Tab with replace and preserves query parameters; explicit Tab URLs retain their selection. Follow an explicit user request for a different interaction.
 
-Default ships with a localized homepage, empty application-owned server route/provider lists, and no example plugins or demo data. Use `app-template-examples` to explore runnable demonstrations. `database/main/` starts empty; do not copy example history into Default.
+Default ships with a localized homepage, no application-owned routes, and no example plugins or demo data. Its built-in application provider exposes Authorization Permission Sets as direct roles in the Users page; add other application services beside it. Use `app-template-examples` to explore runnable demonstrations. `database/main/` starts empty; do not copy example history into Default.
 
 ## Before you start
 
@@ -41,14 +41,15 @@ Build the feature in the application. Do not run a plugin generator, create a `p
 
 This application ships with plugins that already implement whole categories of requirement, each publishing its own Skill under `.agents/skills/` (run `pnpm plugin:skills:sync` if that directory is missing or stale):
 
-| The requirement sounds like                              | Read the Skill for                     |
-| -------------------------------------------------------- | -------------------------------------- |
-| Approvals, multi-step processes, "when X happens then Y" | `@nocobase/app-plugin-workflow`        |
-| Email, IM, or in-app messages                            | `@nocobase/app-plugin-notification`    |
-| Roles, permissions, per-user or per-record access        | `@nocobase/app-plugin-authorization`   |
-| Sign-in, registration, sessions                          | `@nocobase/app-plugin-authentication`  |
-| File upload and metadata through Repository              | `@nocobase/app-plugin-file-repository` |
-| Translated text and language switching                   | `@nocobase/app-plugin-i18n`            |
+| The requirement sounds like                               | Read the Skill for                     |
+| --------------------------------------------------------- | -------------------------------------- |
+| Approvals, multi-step processes, "when X happens then Y"  | `@nocobase/app-plugin-workflow`        |
+| Email, IM, or in-app messages                             | `@nocobase/app-plugin-notification`    |
+| Roles, permissions, per-user or per-record access         | `@nocobase/app-plugin-authorization`   |
+| Sign-in, registration, sessions                           | `@nocobase/app-plugin-authentication`  |
+| User administration and application-owned role assignment | `@nocobase/app-plugin-users`           |
+| File upload and metadata through Repository               | `@nocobase/app-plugin-file-repository` |
+| Translated text and language switching                    | `@nocobase/app-plugin-i18n`            |
 
 Read the relevant Skill before writing the feature. Implementing a permission system, a notification sender, or a scheduler by hand when a registered plugin provides one is the most expensive mistake available here.
 

@@ -645,89 +645,6 @@ describe('app server', () => {
     expect(viteRequestCount).toBe(0);
   });
 
-  it('keeps plugin API and Root Routes authenticated by their owning contributions', async () => {
-    const app = trackCloseable(
-      await createInstalledStandaloneServer({ viteDevUrl: false }),
-    );
-    const baseUrl = `http://localhost${app.application.publicBasePath}`;
-    const anonymous = await requestApp(app, `${baseUrl}/api/routes-example`);
-    const anonymousRoot = await requestApp(
-      app,
-      `${baseUrl}/routes-example/root`,
-    );
-
-    expect(anonymous.status).toBe(401);
-    expect(anonymousRoot.status).toBe(401);
-
-    const signIn = await requestApp(
-      app,
-      `${baseUrl}/api/auth/sign-in/username`,
-      {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ username: 'nocobase', password: 'admin123' }),
-      },
-    );
-    const cookie = signIn.headers.get('set-cookie');
-    expect(signIn.status).toBe(200);
-    const response = await requestApp(app, `${baseUrl}/api/routes-example`, {
-      headers: { cookie: cookie ?? '' },
-    });
-    const rootResponse = await requestApp(
-      app,
-      `${baseUrl}/routes-example/root`,
-      { headers: { cookie: cookie ?? '' } },
-    );
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      plugin: '@nocobase/app-plugin-routes-example',
-      scope: 'api',
-    });
-    expect(rootResponse.status).toBe(200);
-    await expect(rootResponse.json()).resolves.toMatchObject({
-      plugin: '@nocobase/app-plugin-routes-example',
-      scope: 'root',
-    });
-  });
-
-  it('loads the Skills example API with its owning authentication boundary', async () => {
-    const app = trackCloseable(
-      await createInstalledStandaloneServer({ viteDevUrl: false }),
-    );
-    const baseUrl = `http://localhost${app.application.publicBasePath}`;
-    const anonymous = await requestApp(
-      app,
-      `${baseUrl}/api/skills-example/notice`,
-    );
-
-    expect(anonymous.status).toBe(401);
-
-    const signIn = await requestApp(
-      app,
-      `${baseUrl}/api/auth/sign-in/username`,
-      {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ username: 'nocobase', password: 'admin123' }),
-      },
-    );
-    const cookie = signIn.headers.get('set-cookie');
-    expect(signIn.status).toBe(200);
-    const response = await requestApp(
-      app,
-      `${baseUrl}/api/skills-example/notice`,
-      { headers: { cookie: cookie ?? '' } },
-    );
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({
-      description: 'This notice was provided by a NocoBase plugin.',
-      title: 'Plugin Skills are working',
-      tone: 'success',
-    });
-  });
-
   it('redirects HTML navigation to installation in install mode', async () => {
     vi.stubEnv('APP_BASE_PATH', '/main');
     vi.stubEnv('AUTH_SECRET', 'nocobase-install-mode-test-secret');
@@ -757,56 +674,6 @@ describe('app server', () => {
     await expect(installResponse.text()).resolves.toContain(
       'installation page',
     );
-  });
-
-  it('dispatches jobs from enabled app plugins', async () => {
-    vi.stubEnv('QUEUE_JOBS_AUTO_LOAD', 'false');
-    const app = trackCloseable(
-      await createInstalledStandaloneServer({ viteDevUrl: false }),
-    );
-    const baseUrl = `http://localhost${app.application.publicBasePath}`;
-    const anonymous = await requestApp(app, `${baseUrl}/api/queue-example`);
-    expect(anonymous.status).toBe(401);
-
-    const signIn = await requestApp(
-      app,
-      `${baseUrl}/api/auth/sign-in/username`,
-      {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ username: 'nocobase', password: 'admin123' }),
-      },
-    );
-    const cookie = signIn.headers.get('set-cookie');
-    expect(signIn.status).toBe(200);
-    const response = await requestApp(app, `${baseUrl}/api/queue-example`, {
-      headers: { cookie: cookie ?? '' },
-    });
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      jobId: expect.any(String),
-      job: 'QueueExample',
-      queue: 'default',
-      syncExecutions: 1,
-    });
-  });
-
-  it('exposes services registered by enabled plugin providers', async () => {
-    const app = trackCloseable(
-      await createIsolatedStandaloneServer({ viteDevUrl: false }),
-    );
-    const response = await requestApp(
-      app,
-      `http://localhost${app.application.publicBasePath}/api/service-provider-example/status`,
-    );
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      service: '@nocobase/app-plugin-service-provider-example',
-      status: 'ready',
-      startedAt: expect.any(String),
-    });
   });
 
   it('mounts standalone app-local routes behind the public base path', async () => {
@@ -1459,38 +1326,16 @@ async function createIsolatedStandaloneServer(
   });
 }
 
-function createInstalledStandaloneServer(
-  options: StandaloneServerOptions = {},
-): Promise<StandaloneServer> {
-  return createIsolatedStandaloneServer({
-    ...options,
-    env: {
-      ...options.env,
-      DB_MIGRATIONS_AUTO_RUN: 'true',
-      DB_SEEDS_AUTO_RUN: 'true',
-    },
-  });
-}
-
 function createEmbeddedPluginFixture(rootDir: string): void {
   // Every plugin `server/plugins.ts` imports, not just the ones this test asserts on: the embedded server resolves
   // the whole set from the application root, and a temporary root resolves nothing it is not given.
   const pluginPackages = [
     '@nocobase/app-plugin-authentication',
     '@nocobase/app-plugin-authorization',
-    '@nocobase/app-plugin-database-example',
+    '@nocobase/app-plugin-users',
     '@nocobase/app-plugin-hub',
     '@nocobase/app-plugin-i18n',
     '@nocobase/app-plugin-install',
-    '@nocobase/app-plugin-notification',
-    '@nocobase/app-plugin-notification-in-app',
-    '@nocobase/app-plugin-notification-providers',
-    '@nocobase/app-plugin-queue-example',
-    '@nocobase/app-plugin-realtime-example',
-    '@nocobase/app-plugin-routes-example',
-    '@nocobase/app-plugin-service-provider-example',
-    '@nocobase/app-plugin-skills-example',
-    '@nocobase/app-plugin-workflow',
   ];
   writeFileSync(
     path.join(rootDir, 'package.json'),

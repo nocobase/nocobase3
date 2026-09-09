@@ -6,7 +6,7 @@ Do not create a plugin to add a feature. Plugins are separately published packag
 
 ## Default template scope
 
-Default is the clean application starting point. It registers product capabilities but no `app-plugin-*-example` plugins, example pages, application sample services, or sample APIs. Keep runnable demonstrations in `app-template-examples`. Application-owned server route and provider lists start empty; the only application page is a localized homepage.
+Default is the clean application starting point. It registers product capabilities but no `app-plugin-*-example` plugins, example pages, application sample services, or sample APIs. Keep runnable demonstrations in `app-template-examples`. Application-owned server routes start empty; the only built-in application provider exposes Authorization Permission Sets as direct roles in the Users page. The only application page is a localized homepage.
 
 `database/main/` starts empty for application-owned migrations and seeds. Do not add article history, demo seeds, or compatibility copies from Examples to this template. Existing installations retain their own executed migration sources when upgrading; see `MIGRATION.md`.
 
@@ -202,6 +202,7 @@ To customize a plugin's page, pass an option on its registration, add a source e
 | Email, IM, or in-app messages; notifying someone that something happened                          | `@nocobase/app-plugin-notification`    |
 | Roles, permissions, "user A may only see their own records", field-level or row-level access      | `@nocobase/app-plugin-authorization`   |
 | Sign-in, registration, sessions, password reset                                                   | `@nocobase/app-plugin-authentication`  |
+| User listing, account state, password reset, and application-owned role assignment                | `@nocobase/app-plugin-users`           |
 | File upload and metadata through Repository                                                       | `@nocobase/app-plugin-file-repository` |
 | Translated text and language switching                                                            | `@nocobase/app-plugin-i18n`            |
 

@@ -218,13 +218,6 @@ run('Rewrite server path aliases', 'pnpm', [
   '-p',
   'tsconfig.server.json',
 ]);
-run('Build workflow artifacts', 'pnpm', [
-  'nocobase',
-  'workflow',
-  'build',
-  '--resource-root',
-  './dist/server/workflows',
-]);
 writeDistEnv();
 run('Generate server package', 'node', [
   './scripts/utils/build-server-dist-package.mjs',
