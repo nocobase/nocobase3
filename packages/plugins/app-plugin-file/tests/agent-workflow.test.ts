@@ -85,11 +85,13 @@ it('builds a business attachment feature from the shipped Skill and materialized
       path.join(appRoot, 'package.json'),
       JSON.stringify({ name: 'invoice-attachment-evaluation', type: 'module' }),
     );
-    mkdirSync(path.join(appRoot, 'database/migrations'), { recursive: true });
+    mkdirSync(path.join(appRoot, 'database/main/migrations'), {
+      recursive: true,
+    });
     writeFileSync(
       path.join(
         appRoot,
-        'database/migrations/202609080001_create_invoice_files.ts',
+        'database/main/migrations/202609080001_create_invoice_files.ts',
       ),
       snippet('Collection', 'ts'),
     );

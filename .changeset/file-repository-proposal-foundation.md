@@ -2,6 +2,7 @@
 '@nocobase/app-plugin-file': minor
 '@nocobase/app-file-example': patch
 '@nocobase/app-template-default': patch
+'@nocobase/app-template-examples': patch
 '@nocobase/app-template-hub': patch
 '@nocobase/nb3-cli': patch
 ---
@@ -10,4 +11,4 @@ Replace the File plugin's legacy backend and client protocol with File Repositor
 
 This is a breaking replacement of the old File API: access-token routes, inventory settings, FilesClient, and runtime component exports are removed. Applications own file collections and route security; metadata deletion retains storage objects. The example migration remains unchanged.
 
-Scan app-file-example Client sources and published output for Tailwind utilities in both application templates.
+Keep the File core in Default and the core plus app-file-example in Examples. Preserve Hub without a default File registration. Scan app-file-example Client sources and published output for Tailwind utilities in all three application templates.

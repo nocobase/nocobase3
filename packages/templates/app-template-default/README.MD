@@ -4,6 +4,12 @@ A full-stack NocoBase 3 application. The server runs on `@nocobase/app-server` a
 
 You own everything in this directory. Add pages, API routes, database tables, and business logic directly here — this is your application's source code, not a framework you extend from the outside.
 
+## Default and Examples
+
+Default provides the application shell and product capabilities without example plugins or business demo pages. Its application-owned server route/provider lists start empty, and new databases receive no article sample data. Use `app-template-examples` for article management and runnable plugin demonstrations.
+
+Existing Default installations retain their data when example plugins are unregistered. If an installation already ran the article migration, retain its original migration sources as described in `MIGRATION.md` before upgrading. Do not erase migration history or delete existing data to make an upgrade start.
+
 ## Getting started
 
 Start the development server:
@@ -61,8 +67,9 @@ server/                  API server
 └── embedded.ts          Entry point when a host process mounts it
 
 database/
-├── migrations/          Your schema history
-└── seeds/               Your required initial data
+└── main/
+    ├── migrations/      Your schema history (initially empty)
+    └── seeds/           Your required initial data (initially empty)
 
 tests/                   Unit and integration tests
 e2e/                     Browser tests needing a real server
@@ -85,12 +92,14 @@ The three files named `runtime.ts`, `plugins.ts`, and `routes.ts` are compositio
 
 ### Database
 
-| Script         | What it does                                                                               |
-| -------------- | ------------------------------------------------------------------------------------------ |
-| `pnpm migrate` | Apply pending migrations from your `database/migrations/` and from every registered plugin |
-| `pnpm seed`    | Run seeds from `database/seeds/` and from registered plugins                               |
+| Script         | What it does                                                                                    |
+| -------------- | ----------------------------------------------------------------------------------------------- |
+| `pnpm migrate` | Apply pending migrations from your `database/main/migrations/` and from every registered plugin |
+| `pnpm seed`    | Run seeds from `database/main/seeds/` and from registered plugins                               |
 
-Migrations also run automatically on startup while `database.migrations.autoRun` is `true` in `config.yml`. Run `pnpm migrate` explicitly when you want to apply a schema change without restarting.
+Migrations also run automatically on startup while `database.connections.main.migrations.autoRun` is `true` in `config.yml`. Run `pnpm migrate` explicitly when you want to apply a schema change without restarting.
+
+Database tasks support `--connection <name>` and `--all`; no argument targets `database.default`. Per-connection source and upgrade rules are documented in [migrations and seeds](skills/nocobase-app-development/references/migrations.md).
 
 ### Checks
 

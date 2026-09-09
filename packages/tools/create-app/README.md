@@ -82,10 +82,12 @@ npm_config_registry=https://npm.nocobase.ai pnpm create @nocobase/app
 
 `--db-dialect` 接受常见别名，`postgresql`、`pg` 都会归一化成 `postgres`，`sqlite3` 归一化成 `sqlite`，`mysql2`、`mariadb` 归一化成 `mysql`，`oracledb` 归一化成 `oracle`，`sqlserver`、`sql-server`、`tedious` 归一化成 `mssql`。这些规范名才是运行时 `DB_DIALECT` 认的值，写别的会在启动时抛错。
 
-`--template` 用具名模板，目前只有一个 `default`，指向 `@nocobase/app-template-default`。以后新增模板会加新的名字，用户不需要知道背后的包名：
+`--template` 支持三个具名模板：`default`（默认应用）、`examples`（示例应用）和 `hub`（应用 Hub），分别指向对应的 `@nocobase/app-template-*` 包。Examples 沿用普通应用的数据库选择和配置流程。
 
 ```bash
 pnpm create @nocobase/app crm --template=default   # 默认值，可以不写
+pnpm create @nocobase/app examples --template=examples
+pnpm create @nocobase/app hub --template=hub
 ```
 
 `--template-tag` 决定具名模板拉哪个渠道，默认 `latest`：

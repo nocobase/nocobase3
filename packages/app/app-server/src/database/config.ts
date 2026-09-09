@@ -12,6 +12,27 @@ import { createAppPluginDatabaseConfig } from '../plugins/index.js';
 import type { ResolvedAppRuntimeConfigContext } from '../runtime/index.js';
 import type { AppDatabaseConfig } from './types.js';
 
+const taskSchema = Type.Object(
+  {
+    directory: Type.Optional(Type.String({ minLength: 1 })),
+    packageName: Type.Optional(Type.String({ minLength: 1 })),
+    autoRun: Type.Optional(Type.Boolean()),
+    tableName: Type.Optional(Type.String({ minLength: 1 })),
+    lockTableName: Type.Optional(Type.String({ minLength: 1 })),
+    extensions: Type.Optional(Type.Array(Type.String())),
+    sources: Type.Optional(
+      Type.Array(
+        Type.Object({
+          packageName: Type.String({ minLength: 1 }),
+          directory: Type.String({ minLength: 1 }),
+          extensions: Type.Optional(Type.Array(Type.String())),
+        }),
+      ),
+    ),
+  },
+  { additionalProperties: false },
+);
+
 export const databaseConfig: AppConfigDefinition<
   AppDatabaseConfig,
   ResolvedAppRuntimeConfigContext
@@ -24,6 +45,8 @@ export const databaseConfig: AppConfigDefinition<
         Type.String(),
         Type.Object(
           {
+            migrations: Type.Optional(taskSchema),
+            seeds: Type.Optional(taskSchema),
             dialect: Type.Union([
               Type.Literal('sqlite'),
               Type.Literal('postgres'),
@@ -64,30 +87,8 @@ export const databaseConfig: AppConfigDefinition<
         ),
       ),
     ),
-    migrations: Type.Object(
-      {
-        directory: Type.String(),
-        packageName: Type.Optional(Type.String()),
-        autoRun: Type.Boolean(),
-        tableName: Type.Optional(Type.String()),
-        lockTableName: Type.Optional(Type.String()),
-        extensions: Type.Optional(Type.Array(Type.String())),
-      },
-      { additionalProperties: true },
-    ),
-    seeds: Type.Optional(
-      Type.Object(
-        {
-          directory: Type.String(),
-          packageName: Type.Optional(Type.String()),
-          autoRun: Type.Boolean(),
-          tableName: Type.Optional(Type.String()),
-          lockTableName: Type.Optional(Type.String()),
-          extensions: Type.Optional(Type.Array(Type.String())),
-        },
-        { additionalProperties: true },
-      ),
-    ),
+    migrations: Type.Optional(taskSchema),
+    seeds: Type.Optional(taskSchema),
   }),
   defaults: ({ paths, plugins, appPackageName }) => {
     const database: AppDatabaseConfig = {
@@ -100,15 +101,11 @@ export const databaseConfig: AppConfigDefinition<
           debug: false,
         },
       },
-      migrations: {
-        directory: paths.database('migrations'),
+      taskSources: {
+        directory: paths.database(),
         packageName: appPackageName,
-        autoRun: true,
-      },
-      seeds: {
-        directory: paths.database('seeds'),
-        packageName: appPackageName,
-        autoRun: true,
+        migrations: [],
+        seeds: [],
       },
     };
     return createAppPluginDatabaseConfig(database, plugins).database;

@@ -15,6 +15,8 @@ Use this Skill when building a feature in this application: a page, an endpoint,
 
 Do not use it to develop a published plugin package. Plugin development has its own protocol and lives in a separate repository.
 
+Default ships with a localized homepage, empty application-owned server route/provider lists, and no example plugins or demo data. Use `app-template-examples` to explore runnable demonstrations. `database/main/` starts empty; do not copy example history into Default.
+
 ## Before you start
 
 Read the application's `AGENTS.md` first for the rules that apply everywhere. This Skill's references are the detail behind it.
@@ -43,7 +45,7 @@ This application ships with plugins that already implement whole categories of r
 | Email, IM, or in-app messages                            | `@nocobase/app-plugin-notification`   |
 | Roles, permissions, per-user or per-record access        | `@nocobase/app-plugin-authorization`  |
 | Sign-in, registration, sessions                          | `@nocobase/app-plugin-authentication` |
-| Uploads, attachments, file fields                        | `@nocobase/app-plugin-file`           |
+| File upload and metadata through Repository              | `@nocobase/app-plugin-file`           |
 | Translated text and language switching                   | `@nocobase/app-plugin-i18n`           |
 
 Read the relevant Skill before writing the feature. Implementing a permission system, a notification sender, or a scheduler by hand when a registered plugin provides one is the most expensive mistake available here.
@@ -76,7 +78,7 @@ Business code belongs in a small, stable set of places:
 ```text
 client/routes.ts, client/pages/, client/components/, client/locales/,
 client/service-provider.ts, server/routes/, server/providers/,
-database/migrations/, database/seeds/, tests/
+database/main/migrations/, database/main/seeds/, tests/
 ```
 
 Everything else — `client/routing/`, `client/shell/`, `client/layouts/`, `client/theme/`, the server entry points, the build scripts, the tsconfigs — is the framework structure the template provides and evolves. Prefer the mechanism the system already offers: most work that looks like it needs a change there does not.

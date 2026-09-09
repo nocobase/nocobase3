@@ -21,8 +21,8 @@ const featureConfig = defineAppConfig({
 });
 
 describe('AppConfig', () => {
-  it('logs successful loads and reloads without configuration values', async () => {
-    const info = vi.spyOn(console, 'info').mockImplementation(() => {});
+  it('logs successful loads and reloads to stderr without configuration values', async () => {
+    const info = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
       const config = new AppConfig([featureConfig]);
       await config.loadAll();

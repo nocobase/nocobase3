@@ -7,7 +7,7 @@ description: Run the NocoBase 3 attachments example supplied by app-file-example
 
 The example owns the attachments migration, resource routes, and /dev/file-repository page. The core @nocobase/app-plugin-file owns Repository services and Registry UI. Read its nocobase-app-plugin-file Skill for a new business collection or editable file field.
 
-Register the core first, then this example, on both Client and Server. Use the full @nocobase/app-file-example package name with plugin register/inspect/unregister commands. Run the App's migrations; the example expects an existing main connection and local Drive disk. The default template already registers both.
+Register the core first, then this example, on both Client and Server. Use the full @nocobase/app-file-example package name with plugin register/inspect/unregister commands. Run the App's migrations; the example expects an existing main connection and local Drive disk. The Examples template already registers both. Default registers only the core.
 
 Open /dev/file-repository in development. Upload one file, upload a batch, refresh the list, open each returned contentUrl, and delete a metadata record. Verify downloaded bytes match the input and batch results contain the expected files. HTTP resource actions are POST /api/attachments:action; content is GET /uploads/attachments/uuid.ext. Host prefixes are already in contentUrl.
 

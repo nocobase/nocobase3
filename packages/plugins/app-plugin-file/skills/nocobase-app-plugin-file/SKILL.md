@@ -13,7 +13,7 @@ The following business example uses collection `invoice_files`, resource `invoic
 
 ## Collection
 
-Create an App-owned, self-contained migration with a unique name matching its filename:
+Create an App-owned, self-contained migration under `database/main/migrations/` with a unique name matching its filename. Replace `main` with the target connection when needed:
 
 ```ts
 import { defineMigration, type MigrationDefinition } from '@nocobase/db';

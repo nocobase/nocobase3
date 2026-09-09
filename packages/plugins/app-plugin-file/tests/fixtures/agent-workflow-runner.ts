@@ -27,7 +27,7 @@ const db = createDatabaseManager({
 });
 try {
   const migrator = db.createMigrator({
-    directory: path.join(process.cwd(), 'database/migrations'),
+    directory: path.join(process.cwd(), 'database/main/migrations'),
     packageName: 'invoice-attachment-evaluation',
   });
   await migrator.latest();

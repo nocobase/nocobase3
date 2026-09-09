@@ -138,7 +138,8 @@ export class AppConfig<TContext = unknown> {
     const next = await this.loadConfig();
     this.validate(next);
     this.current = next;
-    console.info('App configuration loaded', {
+    // Configuration diagnostics must not corrupt machine-readable CLI stdout.
+    console.error('App configuration loaded', {
       durationMs: Date.now() - startedAt,
     });
   }
@@ -185,7 +186,7 @@ export class AppConfig<TContext = unknown> {
     const startedAt = Date.now();
     this.reloadPromise ??= this.performReload()
       .then((result) => {
-        console.info('App configuration reloaded', {
+        console.error('App configuration reloaded', {
           changedNamespaces: result.changedNamespaces,
           durationMs: Date.now() - startedAt,
         });

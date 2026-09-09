@@ -6,7 +6,7 @@ Register the core before this example in both client/plugins.ts and server/plugi
 
     pnpm plugin:register @nocobase/app-file-example --app app-template-default
 
-The default template already registers the example. Hub keeps its existing core-only File registration. Run the target App's migrations to create attachments, then open /dev/file-repository. The page demonstrates single/batch uploads, querying, opening returned content URLs, and metadata deletion.
+The Examples template already registers the core and this example. Default registers only the core; Hub does not register either by default. Run the target App's migrations to create attachments, then open /dev/file-repository. The page demonstrates single/batch uploads, querying, opening returned content URLs, and metadata deletion.
 
 The resource uses the main connection, local disk, and stream access:
 

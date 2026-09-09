@@ -130,11 +130,6 @@ describe('client inspection', () => {
       },
       {
         auth: 'required',
-        id: '@nocobase/app-plugin-system-info:index',
-        path: '/system-info',
-      },
-      {
-        auth: 'required',
         id: '@nocobase/app-plugin-hub:hub',
         path: '/hub',
       },
@@ -163,10 +158,9 @@ describe('client inspection', () => {
       { packageName: '@nocobase/app-plugin-authorization', order: 3 },
       { packageName: '@nocobase/app-plugin-i18n', order: 4 },
       { packageName: '@nocobase/app-plugin-notification-provider', order: 5 },
-      { packageName: '@nocobase/app-plugin-file', order: 6 },
-      { packageName: '@nocobase/app-plugin-workflow', order: 7 },
-      { packageName: '@nocobase/app-plugin-notification', order: 8 },
-      { packageName: '@nocobase/app-plugin-hub', order: 9 },
+      { packageName: '@nocobase/app-plugin-workflow', order: 6 },
+      { packageName: '@nocobase/app-plugin-notification', order: 7 },
+      { packageName: '@nocobase/app-plugin-hub', order: 8 },
     ]);
     expect(inspection.configs[0]).toMatchObject({
       kind: 'factory',
