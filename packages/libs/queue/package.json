@@ -39,7 +39,7 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "@boringnode/queue": "^0.7.1",
+    "@boringnode/queue": "catalog:",
     "@nocobase/db": "workspace:^",
     "@nocobase/logging": "workspace:^",
     "ioredis": "catalog:",
