@@ -8,8 +8,8 @@ import type {
   AgentRequest,
   AgentThread,
   ConversationProvider,
+  ConversationToolCallStore,
   ResolvedAgentLLM,
-  ToolCallHandler,
 } from '../types.js';
 import { BaseChatContextProvider } from '../chat-context.js';
 import { AIEmployeeChatMessageConverters } from './message-converters.js';
@@ -78,16 +78,6 @@ const responseMetadataCollector = Symbol('responseMetadataCollector');
 type AIEmployeeResolvedAgentLLM = ResolvedAgentLLM & {
   readonly [responseMetadataCollector]: ResponseMetadataCollector;
 };
-
-export interface AIEmployeeAgentFacade {
-  cancelToolCall(): Promise<any>;
-  getToolCallHandler(): ToolCallHandler;
-}
-
-export interface AIEmployeeAgentProvidersResult {
-  providers: AgentProviders;
-  facade: AIEmployeeAgentFacade;
-}
 
 interface AIEmployeeProviderState {
   options: AIEmployeeAgentRuntimeOptions;
@@ -188,7 +178,7 @@ export function createAIEmployeeConversationProvider(
   const from = options.from ?? 'main-agent';
   const username = String(options.employee.username ?? '');
   const cache = options.llmStreamCachedManager.getCached(sessionId);
-  const toolCalls: ToolCallHandler = {
+  const toolCalls: ConversationToolCallStore = {
     initialize: async (messageId, calls) =>
       database.transaction((transaction: DatabaseConnection) =>
         initializeToolCalls(
@@ -585,7 +575,7 @@ export function createAIEmployeeChatContextProvider(
 export async function createAIEmployeeAgentProviders(
   options: AIEmployeeAgentRuntimeOptions,
   overrides?: AgentProviderOverrides,
-): Promise<AIEmployeeAgentProvidersResult> {
+): Promise<AgentProviders> {
   const state = createState(options);
   const chatContext = createAIEmployeeChatContextProvider(options, state);
   const conversation = createAIEmployeeConversationProvider(
@@ -593,7 +583,7 @@ export async function createAIEmployeeAgentProviders(
     state,
     chatContext,
   );
-  const providers = createAgentProviders({
+  return createAgentProviders({
     conversation,
     chatContext,
     chatMessageConverters: new AIEmployeeChatMessageConverters(options),
@@ -607,13 +597,6 @@ export async function createAIEmployeeAgentProviders(
           }),
     overrides,
   });
-  return {
-    providers,
-    facade: {
-      cancelToolCall: () => state.runtime.cancelToolCall(),
-      getToolCallHandler: () => conversation.toolCalls,
-    },
-  };
 }
 
 function getCurrentTimezone(
