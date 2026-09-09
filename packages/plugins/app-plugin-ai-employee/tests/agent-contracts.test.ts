@@ -145,6 +145,23 @@ describe('fixed AgentService contracts', () => {
     expect(skillMiddleware).toContain('wrapModelCall');
     expect(skillMiddleware).toContain('wrapToolCall');
   });
+
+  it('keeps tool-call cancellation behind the unified AgentService contract', () => {
+    const service = read('agent/agent-service.ts');
+    const providers = read('agent/ai-employee/providers.ts');
+    const factory = read('agent/ai-employee/index.ts');
+    const types = read('agent/types.ts');
+
+    expect(service).toContain('this.providers.conversation.toolCalls.cancel()');
+    expect(providers).not.toContain('AIEmployeeAgentFacade');
+    expect(providers).not.toContain('AIEmployeeAgentProvidersResult');
+    expect(providers).not.toContain('getToolCallHandler');
+    expect(providers).not.toMatch(/return\s*\{\s*providers,?\s*facade/s);
+    expect(factory).not.toContain('interface AIEmployeeAgentService');
+    expect(factory).not.toContain('facade');
+    expect(factory).toContain('Promise<AgentService>');
+    expect(types).not.toContain('ToolCallHandler');
+  });
   it('owns the only standard middleware builder and preserves its order', () => {
     const service = read('agent/agent-service.ts');
     const runtime = read('agent/ai-employee/runtime.ts');

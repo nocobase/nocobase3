@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AIMessageInput } from '@nocobase/ai-employee';
 import { AgentService } from '../server/agent/agent-service.js';
+import { createAIEmployeeAgentService } from '../server/agent/ai-employee/index.js';
 import {
   createAgentProviders,
   createMemoryConversationProvider,
@@ -153,5 +154,49 @@ describe('AgentService tool-call cancellation', () => {
     expect(overriddenCancel).toHaveBeenCalledOnce();
     expect(baseCancel).not.toHaveBeenCalled();
     expectNoExecutionLifecycle(base.chatContext, base.lifecycle);
+  });
+
+  it('returns one AgentService from the AI employee factory and preserves overrides', async () => {
+    const overriddenMessages: AIMessageInput[] = [
+      {
+        role: 'tool',
+        content: { type: 'text', content: 'Factory override' },
+        metadata: { toolCallId: 'call-factory' },
+      },
+    ];
+    const overriddenCancel = vi.fn(async () => overriddenMessages);
+    const options = {
+      sessionId: 'session-1',
+      employee: { username: 'dara' },
+      agentContext: { logger: {}, ai: {} },
+      builtInManager: { setupBuiltInInfo: vi.fn() },
+      database: {},
+      repositories: {
+        lcCheckpoints: {},
+        lcCheckpointBlobs: {},
+        lcCheckpointWrites: {},
+      },
+      snowflake: {},
+      llmStreamCachedManager: {
+        getCached: () => ({
+          append: vi.fn(),
+          clear: vi.fn(),
+          skipped: vi.fn(),
+        }),
+      },
+    } as any;
+
+    const agent = await createAIEmployeeAgentService(options, {
+      conversation: { toolCalls: { cancel: overriddenCancel } },
+    });
+
+    expect(agent).toBeInstanceOf(AgentService);
+    expect(typeof agent.invoke).toBe('function');
+    expect(typeof agent.stream).toBe('function');
+    expect(typeof agent.cancelToolCall).toBe('function');
+    expect(agent).not.toHaveProperty('service');
+    expect(agent).not.toHaveProperty('facade');
+    await expect(agent.cancelToolCall()).resolves.toBe(overriddenMessages);
+    expect(overriddenCancel).toHaveBeenCalledOnce();
   });
 });
