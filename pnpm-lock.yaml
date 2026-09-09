@@ -869,7 +869,7 @@ importers:
         version: 19.2.8(react@19.2.8)
       shadcn:
         specifier: 'catalog:'
-        version: 4.18.0(@cfworker/json-schema@4.1.1)(typescript@6.0.3)
+        version: 4.18.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(typescript@6.0.3)
       tailwind-merge:
         specifier: 'catalog:'
         version: 3.6.0
@@ -966,7 +966,7 @@ importers:
         version: 7.18.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       shadcn:
         specifier: 'catalog:'
-        version: 4.18.0(@cfworker/json-schema@4.1.1)(typescript@6.0.3)
+        version: 4.18.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(typescript@6.0.3)
       tailwind-merge:
         specifier: 'catalog:'
         version: 3.6.0
@@ -1039,7 +1039,7 @@ importers:
         version: 19.2.8(react@19.2.8)
       shadcn:
         specifier: 'catalog:'
-        version: 4.18.0(@cfworker/json-schema@4.1.1)(typescript@6.0.3)
+        version: 4.18.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(typescript@6.0.3)
       tailwind-merge:
         specifier: 'catalog:'
         version: 3.6.0
@@ -2082,7 +2082,7 @@ importers:
         version: 19.2.8(react@19.2.8)
       shadcn:
         specifier: 'catalog:'
-        version: 4.18.0(@cfworker/json-schema@4.1.1)(typescript@6.0.3)
+        version: 4.18.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(typescript@6.0.3)
       tailwind-merge:
         specifier: 'catalog:'
         version: 3.6.0
@@ -2240,7 +2240,7 @@ importers:
         version: 4.0.1
       shadcn:
         specifier: 'catalog:'
-        version: 4.18.0(@cfworker/json-schema@4.1.1)(typescript@6.0.3)
+        version: 4.18.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(typescript@6.0.3)
       tailwind-merge:
         specifier: 'catalog:'
         version: 3.6.0
@@ -2395,7 +2395,7 @@ importers:
         version: 19.2.8
       shadcn:
         specifier: 'catalog:'
-        version: 4.18.0(@cfworker/json-schema@4.1.1)(typescript@6.0.3)
+        version: 4.18.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(typescript@6.0.3)
       tailwind-merge:
         specifier: 'catalog:'
         version: 3.6.0
@@ -2504,7 +2504,7 @@ importers:
         version: 19.2.8
       shadcn:
         specifier: 'catalog:'
-        version: 4.18.0(@cfworker/json-schema@4.1.1)(typescript@6.0.3)
+        version: 4.18.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(typescript@6.0.3)
       tailwind-merge:
         specifier: 'catalog:'
         version: 3.6.0
@@ -2677,7 +2677,7 @@ importers:
         version: 7.18.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       shadcn:
         specifier: 'catalog:'
-        version: 4.18.0(@cfworker/json-schema@4.1.1)(typescript@6.0.3)
+        version: 4.18.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(typescript@6.0.3)
       tailwind-merge:
         specifier: 'catalog:'
         version: 3.6.0
@@ -2746,7 +2746,7 @@ importers:
         version: 19.2.8(react@19.2.8)
       shadcn:
         specifier: 'catalog:'
-        version: 4.18.0(@cfworker/json-schema@4.1.1)(typescript@6.0.3)
+        version: 4.18.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(typescript@6.0.3)
       sonner:
         specifier: ^2.0.3
         version: 2.0.8(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -2922,31 +2922,7 @@ importers:
         version: 2.9.0
 
   packages/templates/app-template-default:
-    devDependencies:
-      '@ai-sdk/react':
-        specifier: 2.0.0
-        version: 2.0.0(react@19.2.8)(zod@3.25.76)
-      '@base-ui/react':
-        specifier: 'catalog:'
-        version: 1.7.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      '@dicebear/core':
-        specifier: ^9.4.3
-        version: 9.4.3
-      '@gchust/agent-annotations':
-        specifier: 0.1.8
-        version: 0.1.8(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(sass-embedded@1.103.1)(sass@1.103.1)(tsx@4.23.12)(yaml@2.9.0))
-      '@hookform/resolvers':
-        specifier: ^5.0.1
-        version: 5.8.0(@sinclair/typebox@0.34.52)(@standard-schema/spec@1.1.0)(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.85.0(react@19.2.8))(zod@3.25.76)
-      '@nocobase/ai-employee':
-        specifier: workspace:^
-        version: link:../../libs/ai-employee
-      '@nocobase/ai-employee-avatars':
-        specifier: ^1.0.2
-        version: 1.0.2(@dicebear/core@9.4.3)
-      '@nocobase/app-client':
-        specifier: workspace:^
-        version: link:../../app/app-client
+    dependencies:
       '@nocobase/app-plugin-ai-employee':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-ai-employee
@@ -2974,21 +2950,52 @@ importers:
       '@nocobase/app-plugin-notification-in-app':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-notification-in-app
-      '@nocobase/app-plugin-notification-provider':
-        specifier: workspace:^
-        version: link:../../plugins/app-plugin-notification-provider
       '@nocobase/app-plugin-notification-providers':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-notification-providers
       '@nocobase/app-plugin-workflow':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-workflow
-      '@nocobase/app-portal-sdk':
-        specifier: workspace:^
-        version: link:../../app/app-portal-sdk
       '@nocobase/app-server':
         specifier: workspace:^
         version: link:../../app/app-server
+      '@nocobase/nb3-cli':
+        specifier: workspace:^
+        version: link:../../tools/cli
+      '@oclif/core':
+        specifier: 'catalog:'
+        version: 4.14.0
+    devDependencies:
+      '@ai-sdk/react':
+        specifier: 2.0.0
+        version: 2.0.0(react@19.2.8)(zod@3.25.76)
+      '@base-ui/react':
+        specifier: 'catalog:'
+        version: 1.7.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@dicebear/core':
+        specifier: ^9.4.3
+        version: 9.4.3
+      '@gchust/agent-annotations':
+        specifier: 0.1.8
+        version: 0.1.8(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(sass-embedded@1.103.1)(sass@1.103.1)(tsx@4.23.12)(yaml@2.9.0))
+      '@hookform/resolvers':
+        specifier: ^5.0.1
+        version: 5.8.0(@sinclair/typebox@0.34.52)(@standard-schema/spec@1.1.0)(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.85.0(react@19.2.8))(zod@3.25.76)
+      '@nocobase/ai-employee':
+        specifier: workspace:^
+        version: link:../../libs/ai-employee
+      '@nocobase/ai-employee-avatars':
+        specifier: ^1.0.2
+        version: 1.0.2(@dicebear/core@9.4.3)
+      '@nocobase/app-client':
+        specifier: workspace:^
+        version: link:../../app/app-client
+      '@nocobase/app-plugin-notification-provider':
+        specifier: workspace:^
+        version: link:../../plugins/app-plugin-notification-provider
+      '@nocobase/app-portal-sdk':
+        specifier: workspace:^
+        version: link:../../app/app-portal-sdk
       '@nocobase/app-websocket':
         specifier: workspace:^
         version: link:../../app/app-websocket
@@ -3016,9 +3023,6 @@ importers:
       '@nocobase/logging':
         specifier: workspace:^
         version: link:../../libs/logging
-      '@nocobase/nb3-cli':
-        specifier: workspace:^
-        version: link:../../tools/cli
       '@nocobase/queue':
         specifier: workspace:^
         version: link:../../libs/queue
@@ -3031,9 +3035,6 @@ importers:
       '@nocobase/snowflake':
         specifier: workspace:^
         version: link:../../libs/snowflake
-      '@oclif/core':
-        specifier: 'catalog:'
-        version: 4.14.0
       '@refinedev/cli':
         specifier: ^2.16.48
         version: 2.16.52(@types/node@24.13.3)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(bluebird@3.4.7)(encoding@0.1.13)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -3207,7 +3208,7 @@ importers:
         version: 4.0.1
       shadcn:
         specifier: 'catalog:'
-        version: 4.18.0(@cfworker/json-schema@4.1.1)(typescript@6.0.3)
+        version: 4.18.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(typescript@6.0.3)
       sonner:
         specifier: ^2.0.3
         version: 2.0.8(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -3241,37 +3242,6 @@ importers:
 
   packages/templates/app-template-examples:
     dependencies:
-      '@nocobase/app-plugin-repository-example':
-        specifier: workspace:^
-        version: link:../../examples/app-plugin-repository-example
-    devDependencies:
-      '@ai-sdk/react':
-        specifier: 2.0.0
-        version: 2.0.0(react@19.2.8)(zod@3.25.76)
-      '@base-ui/react':
-        specifier: 'catalog:'
-        version: 1.7.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      '@dicebear/core':
-        specifier: ^9.4.3
-        version: 9.4.3
-      '@fontsource-variable/geist':
-        specifier: ^5.3.0
-        version: 5.3.0
-      '@gchust/agent-annotations':
-        specifier: 0.1.8
-        version: 0.1.8(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(sass-embedded@1.103.1)(sass@1.103.1)(tsx@4.23.12)(yaml@2.9.0))
-      '@hookform/resolvers':
-        specifier: ^5.0.1
-        version: 5.8.0(@sinclair/typebox@0.34.52)(@standard-schema/spec@1.1.0)(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.85.0(react@19.2.8))(zod@3.25.76)
-      '@nocobase/ai-employee':
-        specifier: workspace:^
-        version: link:../../libs/ai-employee
-      '@nocobase/ai-employee-avatars':
-        specifier: ^1.0.2
-        version: 1.0.2(@dicebear/core@9.4.3)
-      '@nocobase/app-client':
-        specifier: workspace:^
-        version: link:../../app/app-client
       '@nocobase/app-plugin-ai-employee':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-ai-employee
@@ -3308,9 +3278,6 @@ importers:
       '@nocobase/app-plugin-notification-in-app':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-notification-in-app
-      '@nocobase/app-plugin-notification-provider':
-        specifier: workspace:^
-        version: link:../../plugins/app-plugin-notification-provider
       '@nocobase/app-plugin-notification-providers':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-notification-providers
@@ -3320,6 +3287,9 @@ importers:
       '@nocobase/app-plugin-realtime-example':
         specifier: workspace:^
         version: link:../../examples/app-plugin-realtime-example
+      '@nocobase/app-plugin-repository-example':
+        specifier: workspace:^
+        version: link:../../examples/app-plugin-repository-example
       '@nocobase/app-plugin-routes-example':
         specifier: workspace:^
         version: link:../../examples/app-plugin-routes-example
@@ -3332,12 +3302,58 @@ importers:
       '@nocobase/app-plugin-workflow':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-workflow
-      '@nocobase/app-portal-sdk':
-        specifier: workspace:^
-        version: link:../../app/app-portal-sdk
       '@nocobase/app-server':
         specifier: workspace:^
         version: link:../../app/app-server
+      '@nocobase/db':
+        specifier: workspace:^
+        version: link:../../libs/db
+      '@nocobase/nb3-cli':
+        specifier: workspace:^
+        version: link:../../tools/cli
+      '@nocobase/service-provider':
+        specifier: workspace:^
+        version: link:../../libs/service-provider
+      '@oclif/core':
+        specifier: 'catalog:'
+        version: 4.14.0
+      hono:
+        specifier: 'catalog:'
+        version: 4.13.2
+    devDependencies:
+      '@ai-sdk/react':
+        specifier: 2.0.0
+        version: 2.0.0(react@19.2.8)(zod@3.25.76)
+      '@base-ui/react':
+        specifier: 'catalog:'
+        version: 1.7.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@dicebear/core':
+        specifier: ^9.4.3
+        version: 9.4.3
+      '@fontsource-variable/geist':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@gchust/agent-annotations':
+        specifier: 0.1.8
+        version: 0.1.8(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(sass-embedded@1.103.1)(sass@1.103.1)(tsx@4.23.12)(yaml@2.9.0))
+      '@hookform/resolvers':
+        specifier: ^5.0.1
+        version: 5.8.0(@sinclair/typebox@0.34.52)(@standard-schema/spec@1.1.0)(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.85.0(react@19.2.8))(zod@3.25.76)
+      '@nocobase/ai-employee':
+        specifier: workspace:^
+        version: link:../../libs/ai-employee
+      '@nocobase/ai-employee-avatars':
+        specifier: ^1.0.2
+        version: 1.0.2(@dicebear/core@9.4.3)
+      '@nocobase/app-client':
+        specifier: workspace:^
+        version: link:../../app/app-client
+      '@nocobase/app-plugin-notification-provider':
+        specifier: workspace:^
+        version: link:../../plugins/app-plugin-notification-provider
+      '@nocobase/app-portal-sdk':
+        specifier: workspace:^
+        version: link:../../app/app-portal-sdk
       '@nocobase/app-websocket':
         specifier: workspace:^
         version: link:../../app/app-websocket
@@ -3350,9 +3366,6 @@ importers:
       '@nocobase/cron':
         specifier: workspace:^
         version: link:../../libs/cron
-      '@nocobase/db':
-        specifier: workspace:^
-        version: link:../../libs/db
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
@@ -3365,24 +3378,15 @@ importers:
       '@nocobase/logging':
         specifier: workspace:^
         version: link:../../libs/logging
-      '@nocobase/nb3-cli':
-        specifier: workspace:^
-        version: link:../../tools/cli
       '@nocobase/queue':
         specifier: workspace:^
         version: link:../../libs/queue
-      '@nocobase/service-provider':
-        specifier: workspace:^
-        version: link:../../libs/service-provider
       '@nocobase/session':
         specifier: workspace:^
         version: link:../../libs/session
       '@nocobase/snowflake':
         specifier: workspace:^
         version: link:../../libs/snowflake
-      '@oclif/core':
-        specifier: 'catalog:'
-        version: 4.14.0
       '@refinedev/cli':
         specifier: ^2.16.48
         version: 2.16.52(@types/node@24.13.3)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(bluebird@3.4.7)(encoding@0.1.13)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -3506,9 +3510,6 @@ importers:
       eventsource-parser:
         specifier: 3.1.0
         version: 3.1.0
-      hono:
-        specifier: 'catalog:'
-        version: 4.13.2
       ignore:
         specifier: 'catalog:'
         version: 7.0.6
@@ -3568,7 +3569,7 @@ importers:
         version: 4.0.1
       shadcn:
         specifier: 'catalog:'
-        version: 4.18.0(@cfworker/json-schema@4.1.1)(typescript@6.0.3)
+        version: 4.18.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(typescript@6.0.3)
       sonner:
         specifier: ^2.0.3
         version: 2.0.8(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -3601,31 +3602,7 @@ importers:
         version: 3.25.76
 
   packages/templates/app-template-hub:
-    devDependencies:
-      '@ai-sdk/react':
-        specifier: 2.0.0
-        version: 2.0.0(react@19.2.8)(zod@3.25.76)
-      '@base-ui/react':
-        specifier: 'catalog:'
-        version: 1.7.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      '@dicebear/core':
-        specifier: ^9.4.3
-        version: 9.4.3
-      '@fontsource-variable/geist':
-        specifier: ^5.3.0
-        version: 5.3.0
-      '@gchust/agent-annotations':
-        specifier: 0.1.8
-        version: 0.1.8(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(sass-embedded@1.103.1)(sass@1.103.1)(tsx@4.23.12)(yaml@2.9.0))
-      '@hookform/resolvers':
-        specifier: ^5.0.1
-        version: 5.8.0(@sinclair/typebox@0.34.52)(@standard-schema/spec@1.1.0)(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.85.0(react@19.2.8))(zod@3.25.76)
-      '@nocobase/ai-employee-avatars':
-        specifier: ^1.0.2
-        version: 1.0.2(@dicebear/core@9.4.3)
-      '@nocobase/app-client':
-        specifier: workspace:^
-        version: link:../../app/app-client
+    dependencies:
       '@nocobase/app-plugin-authentication':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-authentication
@@ -3653,9 +3630,6 @@ importers:
       '@nocobase/app-plugin-notification-in-app':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-notification-in-app
-      '@nocobase/app-plugin-notification-provider':
-        specifier: workspace:^
-        version: link:../../plugins/app-plugin-notification-provider
       '@nocobase/app-plugin-notification-providers':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-notification-providers
@@ -3677,12 +3651,49 @@ importers:
       '@nocobase/app-plugin-workflow':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-workflow
-      '@nocobase/app-portal-sdk':
-        specifier: workspace:^
-        version: link:../../app/app-portal-sdk
       '@nocobase/app-server':
         specifier: workspace:^
         version: link:../../app/app-server
+      '@nocobase/nb3-cli':
+        specifier: workspace:^
+        version: link:../../tools/cli
+      '@oclif/core':
+        specifier: 'catalog:'
+        version: 4.14.0
+      hono:
+        specifier: 'catalog:'
+        version: 4.13.2
+    devDependencies:
+      '@ai-sdk/react':
+        specifier: 2.0.0
+        version: 2.0.0(react@19.2.8)(zod@3.25.76)
+      '@base-ui/react':
+        specifier: 'catalog:'
+        version: 1.7.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@dicebear/core':
+        specifier: ^9.4.3
+        version: 9.4.3
+      '@fontsource-variable/geist':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@gchust/agent-annotations':
+        specifier: 0.1.8
+        version: 0.1.8(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(sass-embedded@1.103.1)(sass@1.103.1)(tsx@4.23.12)(yaml@2.9.0))
+      '@hookform/resolvers':
+        specifier: ^5.0.1
+        version: 5.8.0(@sinclair/typebox@0.34.52)(@standard-schema/spec@1.1.0)(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.85.0(react@19.2.8))(zod@3.25.76)
+      '@nocobase/ai-employee-avatars':
+        specifier: ^1.0.2
+        version: 1.0.2(@dicebear/core@9.4.3)
+      '@nocobase/app-client':
+        specifier: workspace:^
+        version: link:../../app/app-client
+      '@nocobase/app-plugin-notification-provider':
+        specifier: workspace:^
+        version: link:../../plugins/app-plugin-notification-provider
+      '@nocobase/app-portal-sdk':
+        specifier: workspace:^
+        version: link:../../app/app-portal-sdk
       '@nocobase/app-websocket':
         specifier: workspace:^
         version: link:../../app/app-websocket
@@ -3707,9 +3718,6 @@ importers:
       '@nocobase/logging':
         specifier: workspace:^
         version: link:../../libs/logging
-      '@nocobase/nb3-cli':
-        specifier: workspace:^
-        version: link:../../tools/cli
       '@nocobase/queue':
         specifier: workspace:^
         version: link:../../libs/queue
@@ -3722,9 +3730,6 @@ importers:
       '@nocobase/snowflake':
         specifier: workspace:^
         version: link:../../libs/snowflake
-      '@oclif/core':
-        specifier: 'catalog:'
-        version: 4.14.0
       '@refinedev/cli':
         specifier: ^2.16.48
         version: 2.16.52(@types/node@24.13.3)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(bluebird@3.4.7)(encoding@0.1.13)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -3848,9 +3853,6 @@ importers:
       eventsource-parser:
         specifier: 3.1.0
         version: 3.1.0
-      hono:
-        specifier: 'catalog:'
-        version: 4.13.2
       ignore:
         specifier: 'catalog:'
         version: 7.0.6
@@ -3910,7 +3912,7 @@ importers:
         version: 4.0.1
       shadcn:
         specifier: 'catalog:'
-        version: 4.18.0(@cfworker/json-schema@4.1.1)(typescript@6.0.3)
+        version: 4.18.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(typescript@6.0.3)
       sonner:
         specifier: ^2.0.3
         version: 2.0.8(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -16375,7 +16377,7 @@ snapshots:
     dependencies:
       '@langchain/core': 1.1.49(@opentelemetry/api@1.9.0)(openai@6.49.0(@aws-sdk/credential-provider-node@3.972.80)(@smithy/signature-v4@5.7.2)(ws@8.21.3)(zod@3.25.76))(ws@8.21.3)
       '@langchain/langgraph': 1.4.4(@langchain/core@1.1.49(@opentelemetry/api@1.9.0)(openai@6.49.0(@aws-sdk/credential-provider-node@3.972.80)(@smithy/signature-v4@5.7.2)(ws@8.21.3)(zod@3.25.76))(ws@8.21.3))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(zod-to-json-schema@3.25.2(zod@3.25.76))(zod@3.25.76)
-      '@modelcontextprotocol/sdk': 1.30.0(@cfworker/json-schema@4.1.1)(zod@3.25.76)
+      '@modelcontextprotocol/sdk': 1.30.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(zod@3.25.76)
       debug: 4.4.3(supports-color@8.1.1)
       zod: 3.25.76
     optionalDependencies:
@@ -16513,7 +16515,7 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  '@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(zod@3.25.76)':
+  '@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(zod@3.25.76)':
     dependencies:
       '@hono/node-server': 2.1.1(hono@4.13.2)
       ajv: 8.20.0
@@ -16523,8 +16525,8 @@ snapshots:
       cross-spawn: 7.0.6
       eventsource: 3.0.7
       eventsource-parser: 3.1.0
-      express: 5.2.1
-      express-rate-limit: 8.6.2(express@5.2.1)
+      express: 5.2.1(supports-color@8.1.1)
+      express-rate-limit: 8.6.2(express@5.2.1(supports-color@8.1.1))(supports-color@8.1.1)
       hono: 4.13.2
       jose: 6.2.9
       json-schema-typed: 8.0.2
@@ -18844,7 +18846,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  body-parser@2.3.0:
+  body-parser@2.3.0(supports-color@8.1.1):
     dependencies:
       bytes: 3.1.2
       content-type: 2.1.0
@@ -20483,10 +20485,10 @@ snapshots:
 
   exponential-backoff@3.1.3: {}
 
-  express-rate-limit@8.6.2(express@5.2.1):
+  express-rate-limit@8.6.2(express@5.2.1(supports-color@8.1.1))(supports-color@8.1.1):
     dependencies:
       debug: 4.4.3(supports-color@8.1.1)
-      express: 5.2.1
+      express: 5.2.1(supports-color@8.1.1)
       ip-address: 10.5.0
     transitivePeerDependencies:
       - supports-color
@@ -20527,10 +20529,10 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  express@5.2.1:
+  express@5.2.1(supports-color@8.1.1):
     dependencies:
       accepts: 2.0.0
-      body-parser: 2.3.0
+      body-parser: 2.3.0(supports-color@8.1.1)
       content-disposition: 1.1.0
       content-type: 1.0.5
       cookie: 0.7.2
@@ -20540,7 +20542,7 @@ snapshots:
       encodeurl: 2.0.0
       escape-html: 1.0.3
       etag: 1.8.1
-      finalhandler: 2.1.1
+      finalhandler: 2.1.1(supports-color@8.1.1)
       fresh: 2.0.0
       http-errors: 2.0.1
       merge-descriptors: 2.0.0
@@ -20551,8 +20553,8 @@ snapshots:
       proxy-addr: 2.0.7
       qs: 6.15.3
       range-parser: 1.3.0
-      router: 2.2.0
-      send: 1.2.1
+      router: 2.2.0(supports-color@8.1.1)
+      send: 1.2.1(supports-color@8.1.1)
       serve-static: 2.2.1
       statuses: 2.0.2
       type-is: 2.1.0
@@ -20671,7 +20673,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  finalhandler@2.1.1:
+  finalhandler@2.1.1(supports-color@8.1.1):
     dependencies:
       debug: 4.4.3(supports-color@8.1.1)
       encodeurl: 2.0.0
@@ -24316,7 +24318,7 @@ snapshots:
 
   rou3@0.9.2: {}
 
-  router@2.2.0:
+  router@2.2.0(supports-color@8.1.1):
     dependencies:
       debug: 4.4.3(supports-color@8.1.1)
       depd: 2.0.0
@@ -24548,7 +24550,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  send@1.2.1:
+  send@1.2.1(supports-color@8.1.1):
     dependencies:
       debug: 4.4.3(supports-color@8.1.1)
       encodeurl: 2.0.0
@@ -24580,7 +24582,7 @@ snapshots:
       encodeurl: 2.0.0
       escape-html: 1.0.3
       parseurl: 1.3.3
-      send: 1.2.1
+      send: 1.2.1(supports-color@8.1.1)
     transitivePeerDependencies:
       - supports-color
 
@@ -24622,14 +24624,14 @@ snapshots:
       safe-buffer: 5.2.1
       to-buffer: 1.2.2
 
-  shadcn@4.18.0(@cfworker/json-schema@4.1.1)(typescript@6.0.3):
+  shadcn@4.18.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(typescript@6.0.3):
     dependencies:
       '@babel/core': 7.29.7
       '@babel/parser': 7.29.8
       '@babel/plugin-transform-typescript': 7.29.7(@babel/core@7.29.7)
       '@babel/preset-typescript': 7.29.7(@babel/core@7.29.7)
       '@dotenvx/dotenvx': 1.75.1
-      '@modelcontextprotocol/sdk': 1.30.0(@cfworker/json-schema@4.1.1)(zod@3.25.76)
+      '@modelcontextprotocol/sdk': 1.30.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(zod@3.25.76)
       '@types/validate-npm-package-name': 4.0.2
       browserslist: 4.28.8
       commander: 14.0.3
