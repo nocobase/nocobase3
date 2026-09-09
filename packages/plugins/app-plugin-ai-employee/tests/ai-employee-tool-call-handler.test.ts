@@ -285,37 +285,4 @@ describe('AIEmployeeToolCallHandler', () => {
     expect(fixture.aiMessages.create).not.toHaveBeenCalled();
     expect(fixture.aiToolMessages.update).not.toHaveBeenCalled();
   });
-
-  it('uses reject reason for the merged cancellation flow', async () => {
-    const fixture = createFixture();
-    fixture.aiMessages.find.mockResolvedValue([
-      {
-        messageId: 'message-1',
-        sessionId: 'session-1',
-        toolCalls: [
-          { id: 'call-1', name: 'knownTool', type: 'tool_call', args: {} },
-        ],
-      },
-    ]);
-    fixture.aiToolMessages.find.mockResolvedValue([
-      {
-        id: 'tool-message-1',
-        sessionId: 'session-1',
-        messageId: 'message-1',
-        toolCallId: 'call-1',
-        invokeStatus: 'waiting',
-      },
-    ]);
-
-    await expect(
-      fixture.handler.reject('message-1', ['call-1'], 'Rejected'),
-    ).resolves.toBe(1);
-
-    expect(fixture.aiToolMessages.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        values: expect.objectContaining({ content: 'Rejected' }),
-      }),
-      { connection: fixture.transaction },
-    );
-  });
 });

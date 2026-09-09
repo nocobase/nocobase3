@@ -164,7 +164,7 @@ export class AgentService {
     agentContext?: AgentContext,
   ): Promise<PreparedAgentContext> {
     const { conversation, chatContext, features } = this.providers;
-    const shouldLoadHistory = conversation.messages.shouldLoadHistory(request);
+    const shouldLoadHistory = Boolean(request.messageId);
     const history = shouldLoadHistory
       ? await conversation.messages.load(request.messageId)
       : [];
@@ -567,7 +567,7 @@ export class AgentService {
               ...(value.metadata ?? {}),
               interrupted: true,
             } as any;
-            await conversation.messages.saveInterruptedAssistantMessage(value);
+            await conversation.messages.saveAssistantMessage(value);
           }
         }
         throw new AgentServiceError('ABORTED', 'Agent execution aborted', {

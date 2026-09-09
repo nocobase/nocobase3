@@ -140,17 +140,8 @@ export class AIEmployeeToolCallHandler implements ConversationToolCallStore {
     });
   }
 
-  public async reject(
-    _messageId: string,
-    toolCallIds: string[],
-    reason?: string,
-  ): Promise<number> {
-    await this.cancelWithReason(reason);
-    return toolCallIds.length;
-  }
-
   public cancel(): Promise<AIMessageInput[] | undefined> {
-    return this.cancelWithReason();
+    return this.cancelPendingToolCalls();
   }
 
   public async get(
@@ -180,9 +171,11 @@ export class AIEmployeeToolCallHandler implements ConversationToolCallStore {
     return result;
   }
 
-  private async cancelWithReason(
-    reason: string = 'The user ignored the application for tools usage and will continued to ask questions',
-  ): Promise<AIMessageInput[] | undefined> {
+  private async cancelPendingToolCalls(): Promise<
+    AIMessageInput[] | undefined
+  > {
+    const reason =
+      'The user ignored the application for tools usage and will continued to ask questions';
     const historyMessages = await this.options.messages.find({
       filter: { sessionId: this.options.sessionId },
       sort: ['-messageId'],

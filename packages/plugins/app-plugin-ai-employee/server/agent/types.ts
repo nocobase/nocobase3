@@ -258,13 +258,9 @@ export interface SavedAssistantMessage {
 
 export interface ConversationMessageStore {
   load(messageId?: string): Promise<AIMessage[]>;
-  get(messageId: string): Promise<AIMessage | null>;
-  add(messages: AIMessageInput): Promise<AIMessage>;
-  add(messages: AIMessageInput[]): Promise<AIMessage[]>;
-  remove(messageId?: string): Promise<void>;
   saveUserMessages(
-    messageId: string | undefined,
     messages: AIMessageInput[],
+    messageId?: string,
     thread?: AgentThread,
   ): Promise<void>;
   saveAssistantMessage(message: AIMessageInput): Promise<SavedAssistantMessage>;
@@ -272,8 +268,6 @@ export interface ConversationMessageStore {
     sourceMessageId: string,
     messages: AIMessageInput[],
   ): Promise<void>;
-  saveInterruptedAssistantMessage(message: AIMessageInput): Promise<AIMessage>;
-  shouldLoadHistory(request: AgentRequest): boolean;
 }
 
 export interface ConversationToolCallStore {
@@ -294,11 +288,6 @@ export interface ConversationToolCallStore {
     messageId: string,
     toolCallId: string,
     error: unknown,
-  ): Promise<number>;
-  reject(
-    messageId: string,
-    toolCallIds: string[],
-    reason?: string,
   ): Promise<number>;
   cancel(): Promise<AIMessageInput[] | undefined>;
   get(messageId: string, toolCallId: string): Promise<AIToolMessage | null>;

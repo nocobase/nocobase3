@@ -172,6 +172,8 @@ describe('fixed AgentService contracts', () => {
     expect(handler).not.toContain('RepositoryFactory');
     expect(handler).not.toMatch(/\binitialize(?:InTransaction)?\s*\(/);
     expect(handler).not.toMatch(/\bconfirm(?:InTransaction)?\s*\(/);
+    expect(handler).not.toMatch(/\breject\s*\(/);
+    expect(types).not.toMatch(/\breject\s*\(/);
     expect(handler).not.toContain('ToolCallPolicy');
     expect(handler).not.toContain('llmProviderManager');
     expect(handler).toContain('messages: AIMessageRepository');
@@ -260,6 +262,23 @@ describe('fixed AgentService contracts', () => {
     expect(service).toContain('agentContext');
     expect(service).not.toContain('context.ctx');
     expect(providers).not.toContain('ctx: options.ctx');
+  });
+
+  it('implements memory providers as private classes instead of inline objects', () => {
+    const source = read('agent/providers.ts');
+
+    expect(source).toContain('class MemoryConversationProvider');
+    expect(source).toContain('class MemoryConversationMessageStore');
+    expect(source).toContain('class MemoryConversationToolCallStore');
+    expect(source).toContain('class MemoryConversationThreadStore');
+    expect(source).toContain('class MemoryConversationStreamStore');
+    expect(source).toContain('class DefaultAgentProviders');
+    expect(source).not.toMatch(/export\s+class\s+(?:Memory|DefaultAgent)/);
+    expect(source).not.toMatch(/:\s*ConversationProvider\s*=\s*\{/);
+    expect(source).not.toMatch(/messages:\s*\{/);
+    expect(source).not.toMatch(/toolCalls:\s*\{/);
+    expect(source).not.toMatch(/threads:\s*\{/);
+    expect(source).not.toMatch(/streamCache:\s*\{/);
   });
 
   it('uses explicit provider instances and default features', async () => {

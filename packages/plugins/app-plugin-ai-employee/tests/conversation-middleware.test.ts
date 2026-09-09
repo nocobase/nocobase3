@@ -19,7 +19,7 @@ function getMiddlewareHook<T extends (...args: any[]) => any>(
 }
 
 describe('conversationMiddleware', () => {
-  it('persists appended domain messages directly and formats them only for the model', async () => {
+  it('confirms the tool result before persisting appended domain messages', async () => {
     const appendedMessage = {
       role: 'user',
       content: { type: 'text', content: 'continue the task' },
@@ -31,7 +31,8 @@ describe('conversationMiddleware', () => {
       metadata: { toolCallId: 'call-1' },
     };
     const formattedMessage = new HumanMessage('continue the task');
-    const add = vi.fn().mockResolvedValue(undefined);
+    const saveToolMessages = vi.fn().mockResolvedValue(undefined);
+    const saveUserMessages = vi.fn().mockResolvedValue(undefined);
     const formatMessages = vi.fn().mockResolvedValue([formattedMessage]);
     const convertToolMessage = vi.fn().mockReturnValue(storedToolMessage);
     const options = {
@@ -43,7 +44,7 @@ describe('conversationMiddleware', () => {
       {
         conversation: {
           identity: { sessionId: 'sub-session' },
-          messages: { add },
+          messages: { saveToolMessages, saveUserMessages },
         },
         chatContext: {
           getToolsMap: vi.fn(async () => new Map()),
@@ -69,6 +70,7 @@ describe('conversationMiddleware', () => {
     });
     const request = {
       messages: [toolMessage],
+      state: { messageId: 'assistant-message-1' },
       runtime: {
         context: { appendMessages: [appendedMessage] },
       },
@@ -78,7 +80,13 @@ describe('conversationMiddleware', () => {
     await expect(wrapModelCall(request, handler)).resolves.toBe('done');
 
     expect(convertToolMessage).toHaveBeenCalledWith(toolMessage, options);
-    expect(add).toHaveBeenCalledWith([storedToolMessage, appendedMessage]);
+    expect(saveToolMessages).toHaveBeenCalledWith('assistant-message-1', [
+      storedToolMessage,
+    ]);
+    expect(saveUserMessages).toHaveBeenCalledWith([appendedMessage]);
+    expect(saveToolMessages.mock.invocationCallOrder[0]).toBeLessThan(
+      saveUserMessages.mock.invocationCallOrder[0],
+    );
     expect(formatMessages).toHaveBeenCalledWith([appendedMessage], options);
     expect(request.messages).toEqual([toolMessage, formattedMessage]);
     expect(request.runtime.context).not.toHaveProperty('appendMessages');

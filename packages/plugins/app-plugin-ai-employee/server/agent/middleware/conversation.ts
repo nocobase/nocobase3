@@ -113,8 +113,8 @@ export const conversationMiddleware = (
         )
       ).filter((message): message is AIMessageInput => message !== null);
       await conversation.messages.saveUserMessages(
-        messageId,
         userMessages,
+        messageId,
         agentThread,
       );
       return {
@@ -203,10 +203,19 @@ export const conversationMiddleware = (
           appendMessages,
           options,
         );
-        await conversation.messages.add([
-          await toStoredToolMessage(request.messages.at(-1) as ToolMessage),
-          ...appendMessages,
+        const currentMessageId = request.state.messageId;
+        const toolMessage = await toStoredToolMessage(
+          request.messages.at(-1) as ToolMessage,
+        );
+        if (!currentMessageId || !toolMessage) {
+          throw new Error(
+            'Cannot persist appended messages without the current tool message',
+          );
+        }
+        await conversation.messages.saveToolMessages(currentMessageId, [
+          toolMessage,
         ]);
+        await conversation.messages.saveUserMessages(appendMessages);
         request.messages.push(
           ...formattedMessages.map((message) =>
             coerceMessageLikeToMessage(message as BaseMessageLike),
