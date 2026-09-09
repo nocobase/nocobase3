@@ -58,6 +58,8 @@ for the current task:
 When building a plugin page with Tabs, use child routes by default, even if the
 user does not mention routing. Declare Tab content under the plugin's parent
 route, place `Outlet` in its page, and derive the selected Tab from the URL.
+Opening the parent URL redirects to the default accessible Tab with replace and
+preserves query parameters; explicit Tab URLs retain their selection.
 Follow an explicit user request for a different interaction.
 
 For pages with Tabs or other frontend React Router tasks (`defineAppRoutes()`,

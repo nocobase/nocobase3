@@ -15,7 +15,7 @@ Use this Skill when building a feature in this application: a page, an endpoint,
 
 Do not use it to develop a published plugin package. Plugin development has its own protocol and lives in a separate repository.
 
-For pages with Tabs, nested pages, or navigation groups, read [child routes](references/client-child-routes.md). Page-level Tabs use child routes by default, even when the user does not mention routing. Declare their content under the parent route and derive the selected Tab from the URL; follow an explicit user request for a different interaction.
+For pages with Tabs, nested pages, or navigation groups, read [child routes](references/client-child-routes.md). Page-level Tabs use child routes by default, even when the user does not mention routing. Declare their content under the parent route and derive the selected Tab from the URL. Opening the parent URL redirects to the default accessible Tab with replace and preserves query parameters; explicit Tab URLs retain their selection. Follow an explicit user request for a different interaction.
 
 ## Before you start
 
