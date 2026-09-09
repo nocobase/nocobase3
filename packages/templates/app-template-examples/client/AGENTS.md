@@ -14,7 +14,7 @@ This directory is the application's browser client. Read the application's root 
 ## Rules
 
 - Keep every page behind a lazy `componentLoader()`, default-exporting its component. Route metadata stays synchronous.
-- A route makes the URL work; it does not add a sidebar entry. That needs a Refine resource in `service-provider.ts` whose `list` matches the route path, with `meta.label` as a translation key and `meta.i18nNs` set to `APP_NS`. Settings and dev pages instead use the route's own `navigation` field.
+- All three route surfaces define sidebar entries with `navigation` on routes. Refine resources serve CRUD, not menus. Recursive groups organize navigation; page children require a manually placed `Outlet`. Read `skills/nocobase-app-development/references/client-child-routes.md` from the application root.
 - Never write the deployment base path such as `/main` into a route path. The runtime restores it.
 - `auth` on a route controls browser navigation only. The endpoint it calls enforces its own authentication.
 - Pages declared with `defineDevRoutes()` mount under `/dev` and are absent from a production build. That is a build boundary, not a permission boundary.

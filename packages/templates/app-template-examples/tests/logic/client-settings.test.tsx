@@ -11,11 +11,10 @@ import {
 } from '@refinedev/core';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactElement } from 'react';
-import { MemoryRouter, useParams } from 'react-router';
+import { MemoryRouter, Outlet, useParams } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AppRouter } from '../../client/routing/app-router.tsx';
-import { buildNavEntries } from '../../client/layouts/index.ts';
 import { AppThemeProvider } from '../../client/theme/index.ts';
 
 function WorkflowDetailTestPage(): ReactElement {
@@ -94,11 +93,9 @@ describe('settings centre', () => {
 
     renderApp(
       <AppRouter
-        clientDevRouteGroups={[]}
-        clientDevRoutes={[devRoute]}
+        devRouteTree={toRouteTree([devRoute], [])}
         clientRoutes={[]}
-        clientSettingGroups={[]}
-        clientSettings={[]}
+        settingsRouteTree={[]}
       />,
       '/dev/playground',
     );
@@ -166,6 +163,109 @@ describe('settings centre', () => {
     expect(
       screen.getAllByRole('link', { name: 'Workflow General' })[0],
     ).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('retains the default App permission for pages mounted inside settings', async () => {
+    const loader = vi.fn(async () => ({ default: () => <h3>App overlay</h3> }));
+    renderSettings(
+      '/settings/overlay',
+      { can: async ({ resource }) => ({ can: resource !== 'overlay' }) },
+      [],
+      [],
+      [
+        {
+          auth: 'required',
+          id: 'overlay',
+          name: 'overlay',
+          packageName: 'test',
+          source: 'plugin',
+          path: '/settings/overlay',
+          componentLoader: loader,
+        },
+      ],
+    );
+    expect(await screen.findByText('Access denied')).toBeVisible();
+    expect(loader).not.toHaveBeenCalled();
+  });
+
+  it('keeps the parent layout when a nested page denies access', async () => {
+    const loader = vi.fn(async () => ({
+      default: () => <h3>Secret child</h3>,
+    }));
+    const parent: AppClientRegisteredRoute = {
+      auth: 'required',
+      id: 'parent',
+      name: 'parent',
+      packageName: 'test',
+      source: 'plugin',
+      path: '/settings/parent',
+      navigation: { title: 'Parent' },
+      componentLoader: async () => ({
+        default: () => (
+          <>
+            <h2>Parent layout</h2>
+            <Outlet />
+          </>
+        ),
+      }),
+      children: [
+        {
+          auth: 'required',
+          id: 'child',
+          name: 'child',
+          packageName: 'test',
+          source: 'plugin',
+          path: '/settings/parent/child',
+          access: { resource: 'secret', action: 'read' },
+          componentLoader: loader,
+        },
+      ],
+    };
+    renderSettings(
+      '/settings/parent/child',
+      { can: async ({ resource }) => ({ can: resource !== 'secret' }) },
+      [],
+      [],
+      [],
+      [parent],
+    );
+    expect(await screen.findByText('Access denied')).toBeVisible();
+    expect(screen.getByText('Parent layout')).toBeVisible();
+    expect(loader).not.toHaveBeenCalled();
+  });
+
+  it('keeps developer pages inside their surface when wrapped in a pathless App group', async () => {
+    renderSettings(
+      '/settings/grouped',
+      undefined,
+      [],
+      [],
+      [
+        {
+          auth: 'required',
+          id: 'group',
+          name: 'group',
+          path: '/',
+          source: 'plugin',
+          packageName: 'test',
+          children: [
+            {
+              auth: 'required',
+              id: 'page',
+              name: 'page',
+              path: '/settings/grouped',
+              source: 'plugin',
+              packageName: 'test',
+              componentLoader: async () => ({
+                default: () => <h2>Grouped surface page</h2>,
+              }),
+            },
+          ],
+        },
+      ],
+    );
+    expect(await screen.findByText('Grouped surface page')).toBeVisible();
+    expect(screen.getByRole('navigation', { name: 'Settings' })).toBeVisible();
   });
 
   it('drops a group whose every page the user is denied', async () => {
@@ -349,6 +449,7 @@ function renderSettings(
   settings: readonly AppClientRegisteredSetting[] = SETTINGS,
   groups: readonly AppClientRegisteredSettingGroup[] = GROUPS,
   routes: readonly AppClientRegisteredRoute[] = [],
+  tree?: readonly AppClientRegisteredRoute[],
 ): void {
   render(
     <MemoryRouter initialEntries={[initialEntry]}>
@@ -372,11 +473,9 @@ function renderSettings(
           options={{ disableTelemetry: true }}
         >
           <AppRouter
-            clientDevRouteGroups={[]}
-            clientDevRoutes={[]}
+            devRouteTree={[]}
             clientRoutes={routes}
-            clientSettingGroups={groups}
-            clientSettings={settings}
+            settingsRouteTree={tree ?? toRouteTree(settings, groups)}
           />
         </Refine>
       </AppThemeProvider>
@@ -447,4 +546,92 @@ function createSetting(
     surface: 'settings',
     title,
   };
+}
+
+function toRouteTree(
+  settings: readonly AppClientRegisteredSetting[],
+  groups: readonly AppClientRegisteredSettingGroup[],
+): AppClientRegisteredRoute[] {
+  const page = (
+    setting: AppClientRegisteredSetting,
+  ): AppClientRegisteredRoute => ({
+    id: setting.id,
+    name: setting.id,
+    path: setting.path,
+    auth: 'required',
+    packageName: setting.packageName,
+    source: setting.source,
+    componentLoader: setting.pageLoader,
+    access: setting.access,
+    ...(setting.navigation !== false
+      ? { navigation: { title: setting.title, icon: setting.icon } }
+      : {}),
+  });
+  return buildNavEntries(settings, groups)
+    .map((entry): AppClientRegisteredRoute =>
+      entry.kind === 'page'
+        ? page(entry.setting)
+        : {
+            id: entry.group.id,
+            name: entry.group.id,
+            path: '/settings',
+            auth: 'required',
+            packageName: entry.group.packageName,
+            source: entry.group.source,
+            navigation: { title: entry.group.title, icon: entry.group.icon },
+            children: entry.group.settings.map(page),
+          },
+    )
+    .concat(
+      settings.filter((setting) => setting.navigation === false).map(page),
+    );
+}
+
+type SurfaceNavEntry =
+  | { kind: 'group'; group: AppClientRegisteredSettingGroup }
+  | { kind: 'page'; setting: AppClientRegisteredSetting };
+
+export function buildNavEntries(
+  visible: readonly AppClientRegisteredSetting[],
+  groups: readonly AppClientRegisteredSettingGroup[],
+): readonly SurfaceNavEntry[] {
+  const visiblePaths = new Set(
+    visible
+      .filter((setting) => setting.navigation !== false)
+      .map((setting) => setting.path),
+  );
+  const groupsById = new Map(groups.map((group) => [group.id, group]));
+  const entries: SurfaceNavEntry[] = [];
+  const seenGroups = new Set<string>();
+
+  for (const setting of visible) {
+    if (setting.navigation === false) {
+      continue;
+    }
+    if (setting.groupId === undefined) {
+      entries.push({ kind: 'page', setting });
+      continue;
+    }
+    if (seenGroups.has(setting.groupId)) {
+      continue;
+    }
+    const group = groupsById.get(setting.groupId);
+    if (!group) {
+      // A page naming a group nobody registered still has to be reachable, so it renders flat rather than vanishing.
+      entries.push({ kind: 'page', setting });
+      continue;
+    }
+    seenGroups.add(group.id);
+    entries.push({
+      kind: 'group',
+      group: {
+        ...group,
+        settings: group.settings.filter((child) =>
+          visiblePaths.has(child.path),
+        ),
+      },
+    });
+  }
+
+  return entries;
 }
