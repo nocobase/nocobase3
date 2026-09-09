@@ -222,6 +222,12 @@ describe('fixed AgentService contracts', () => {
     expect(types).toMatch(
       /saveToolMessages\(\s*sourceMessageId: string,\s*messages: AIMessageInput\[\],?\s*\)/,
     );
+    expect(types).toMatch(/loadMessages\(messageId\?: string\)/);
+    expect(types).toMatch(/currentThread\(\)/);
+    expect(types).toMatch(/forkThread\(provider: LLMProvider\)/);
+    expect(types).toMatch(/updateThread\(thread: AgentThread\)/);
+    expect(types).not.toContain('ConversationThreadStore');
+    expect(types).not.toMatch(/\bthreads:\s*ConversationThreadStore/);
     expect(types).not.toMatch(/\binitialize\(|\bconfirm\(/);
     expect(middleware).not.toContain('conversation.toolCalls.initialize');
     expect(middleware).not.toContain('conversation.toolCalls.confirm');
@@ -290,14 +296,13 @@ describe('fixed AgentService contracts', () => {
     expect(source).toContain('class MemoryConversationProvider');
     expect(source).toContain('class MemoryConversationMessageStore');
     expect(source).toContain('class MemoryConversationToolCallStore');
-    expect(source).toContain('class MemoryConversationThreadStore');
     expect(source).toContain('class MemoryConversationStreamStore');
     expect(source).toContain('class DefaultAgentProviders');
     expect(source).not.toMatch(/export\s+class\s+(?:Memory|DefaultAgent)/);
     expect(source).not.toMatch(/:\s*ConversationProvider\s*=\s*\{/);
     expect(source).not.toMatch(/messages:\s*\{/);
     expect(source).not.toMatch(/toolCalls:\s*\{/);
-    expect(source).not.toMatch(/threads:\s*\{/);
+    expect(source).not.toContain('ConversationThreadStore');
     expect(source).not.toMatch(/streamCache:\s*\{/);
   });
 
@@ -345,6 +350,27 @@ describe('fixed AgentService contracts', () => {
       role: 'assistant',
       content: { type: 'text', content: 'answer' },
       toolCalls: [{ id: 'call-1', name: 'search', args: {} }],
+    });
+
+    expect(await conversation.messages.loadMessages()).toHaveLength(1);
+    expect(await conversation.messages.currentThread()).toMatchObject({
+      sessionId: 'memory',
+      thread: 0,
+      threadId: 'memory:0',
+    });
+    expect(await conversation.messages.forkThread({} as never)).toMatchObject({
+      sessionId: 'memory',
+      thread: 1,
+      threadId: 'memory:1',
+    });
+    await conversation.messages.updateThread({
+      sessionId: 'memory',
+      thread: 3,
+      threadId: 'memory:3',
+    });
+    expect(await conversation.messages.currentThread()).toMatchObject({
+      thread: 3,
+      threadId: 'memory:3',
     });
 
     expect(saved.initializedToolCalls).toHaveLength(1);

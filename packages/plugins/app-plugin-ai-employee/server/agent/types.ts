@@ -257,7 +257,7 @@ export interface SavedAssistantMessage {
 }
 
 export interface ConversationMessageStore {
-  load(messageId?: string): Promise<AIMessage[]>;
+  loadMessages(messageId?: string): Promise<AIMessage[]>;
   saveUserMessages(
     messages: AIMessageInput[],
     messageId?: string,
@@ -268,6 +268,9 @@ export interface ConversationMessageStore {
     sourceMessageId: string,
     messages: AIMessageInput[],
   ): Promise<void>;
+  currentThread(): Promise<AgentThread | undefined>;
+  forkThread(provider: LLMProvider): Promise<AgentThread | undefined>;
+  updateThread(thread: AgentThread): Promise<void>;
 }
 
 export interface ConversationToolCallStore {
@@ -297,12 +300,6 @@ export interface ConversationToolCallStore {
   ): Promise<Map<string, AIToolMessage>>;
 }
 
-export interface ConversationThreadStore {
-  current(): Promise<AgentThread | undefined>;
-  fork(provider: LLMProvider): Promise<AgentThread | undefined>;
-  update(thread: AgentThread): Promise<void>;
-}
-
 export interface ConversationStreamStore {
   append(chunk: string): Promise<void>;
   clear(): Promise<void>;
@@ -313,7 +310,6 @@ export interface ConversationProvider {
   identity: AgentConversationIdentity;
   messages: ConversationMessageStore;
   toolCalls: ConversationToolCallStore;
-  threads: ConversationThreadStore;
   streamCache: ConversationStreamStore;
   beforeExecution(mode: AgentExecutionMode): Promise<void>;
   afterExecution(

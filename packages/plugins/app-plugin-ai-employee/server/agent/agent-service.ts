@@ -206,7 +206,7 @@ export class AgentService {
     const { conversation, chatContext, features } = this.providers;
     const shouldLoadHistory = Boolean(request.messageId);
     const history = shouldLoadHistory
-      ? await conversation.messages.load(request.messageId)
+      ? await conversation.messages.loadMessages(request.messageId)
       : [];
     const allMessages = [...history, ...(request.userMessages ?? [])];
     const formatted = await this.providers.chatMessageConverters.formatMessages(
@@ -236,9 +236,9 @@ export class AgentService {
       ? await chatContext.activeTools(request)
       : new Set(sourceTools.map((tool) => tool.definition.name));
     const resolvedTools = llm.provider.resolveTools(sourceTools.map(buildTool));
-    let thread = await conversation.threads.current();
+    let thread = await conversation.messages.currentThread();
     if (this.shouldFork(operation, request)) {
-      thread = await conversation.threads.fork(llm.provider);
+      thread = await conversation.messages.forkThread(llm.provider);
     }
     const state = shouldLoadHistory
       ? this.buildInitialState(history)

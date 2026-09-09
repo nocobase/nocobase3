@@ -41,7 +41,7 @@ describe('direct AgentService', () => {
       sessionId: 'custom',
     });
     const load = vi.fn(async () => []);
-    conversation.messages.load = load;
+    conversation.messages.loadMessages = load;
     const service = createDirectAgentService({
       llmProvider: createLLMProvider(),
       conversation,

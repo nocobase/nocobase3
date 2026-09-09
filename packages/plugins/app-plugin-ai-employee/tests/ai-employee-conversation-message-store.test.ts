@@ -26,7 +26,10 @@ function createFixture() {
     create: vi.fn(async ({ values }) => values),
     update: vi.fn(async () => 1),
   };
-  const conversations = { update: vi.fn(async () => 1) };
+  const conversations = {
+    findOne: vi.fn(async () => ({ sessionId: 'session-1', thread: 0 })),
+    update: vi.fn(async () => 1),
+  };
   const toolCallPolicy = {
     getToolsMap: vi.fn(
       async () =>
@@ -46,6 +49,9 @@ function createFixture() {
     toolMessages,
     snowflake: { generate: vi.fn(() => 101) },
     toolCallPolicy,
+    checkpoints: {},
+    checkpointBlobs: {},
+    checkpointWrites: {},
   } as never);
   return {
     transaction,

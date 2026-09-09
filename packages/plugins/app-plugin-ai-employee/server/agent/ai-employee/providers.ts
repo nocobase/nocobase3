@@ -1,11 +1,9 @@
 import { BaseCallbackHandler } from '@langchain/core/callbacks/base';
 import type { LLMResult } from '@langchain/core/outputs';
-import { createAgent } from 'langchain';
 import type {
   AgentAbortHandle,
   AgentProviders,
   AgentRequest,
-  AgentThread,
   ConversationProvider,
   ResolvedAgentLLM,
 } from '../types.js';
@@ -128,49 +126,14 @@ export function createAIEmployeeConversationProvider(
     toolMessages: options.repositories.aiToolMessages,
     snowflake: options.snowflake,
     toolCallPolicy,
+    checkpoints: options.repositories.lcCheckpoints,
+    checkpointBlobs: options.repositories.lcCheckpointBlobs,
+    checkpointWrites: options.repositories.lcCheckpointWrites,
   });
   const conversation: ConversationProvider = {
     identity: { sessionId, from, username, metadata: { kind: 'ai-employee' } },
     toolCalls,
     messages: messageStore,
-    threads: {
-      current: async () => {
-        const target = await options.repositories.aiConversations.findOne({
-          filter: { sessionId },
-        });
-        if (!target) throw new Error('Conversation not existed');
-        const thread = target.thread ?? 0;
-        return { sessionId, thread, threadId: `${sessionId}:${thread}` };
-      },
-      fork: async (llmProvider) => {
-        const current = await conversation.threads.current();
-        if (!current) return undefined;
-        for (let attempt = 0; attempt < 4; attempt++) {
-          const thread = current.thread + attempt + 1;
-          const candidate = {
-            sessionId,
-            thread,
-            threadId: `${sessionId}:${thread}`,
-          };
-          const saver = new NativeCollectionSaver({
-            checkpoints: options.repositories.lcCheckpoints,
-            blobs: options.repositories.lcCheckpointBlobs,
-            writes: options.repositories.lcCheckpointWrites,
-          });
-          const agent = createAgent({
-            model: llmProvider.createModel() as any,
-            tools: [],
-            checkpointer: saver as any,
-          });
-          const snapshot = await agent.graph.getState({
-            configurable: { thread_id: candidate.threadId },
-          });
-          if (!snapshot.config.configurable?.checkpoint_id) return candidate;
-        }
-        throw new Error('Fail to create new agent thread');
-      },
-      update: (thread: AgentThread) => messageStore.updateThread(thread),
-    },
     beforeExecution: async (mode) => {
       await options.repositories.aiConversations.update({
         values: { llmActiveState: mode },

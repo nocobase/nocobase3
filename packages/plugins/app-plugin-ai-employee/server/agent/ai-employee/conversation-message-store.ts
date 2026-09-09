@@ -1,21 +1,26 @@
+import { createAgent } from 'langchain';
 import type {
   AIChatConversation,
   AIMessage,
   AIMessageInput,
   AIToolMessage,
+  LLMProvider,
 } from '@nocobase/ai-employee';
 import type { DatabaseConnection } from '@nocobase/db';
 import type { IdGeneratorService } from '@nocobase/snowflake';
-
 import type {
   AIConversationRepository,
   AIToolMessageRepository,
+  LCCheckpointBlobRepository,
+  LCCheckpointRepository,
+  LCCheckpointWriteRepository,
 } from '../../repository/index.js';
 import type {
   AgentThread,
   ConversationMessageStore,
   SavedAssistantMessage,
 } from '../types.js';
+import { NativeCollectionSaver } from './checkpoints/index.js';
 import type { ToolCallPolicy } from './tool-call-policy.js';
 
 export interface AIEmployeeConversationMessageStoreOptions {
@@ -25,6 +30,9 @@ export interface AIEmployeeConversationMessageStoreOptions {
   readonly toolMessages: AIToolMessageRepository;
   readonly snowflake: IdGeneratorService;
   readonly toolCallPolicy: ToolCallPolicy;
+  readonly checkpoints: LCCheckpointRepository;
+  readonly checkpointBlobs: LCCheckpointBlobRepository;
+  readonly checkpointWrites: LCCheckpointWriteRepository;
 }
 
 export class AIEmployeeConversationMessageStore implements ConversationMessageStore {
@@ -34,6 +42,9 @@ export class AIEmployeeConversationMessageStore implements ConversationMessageSt
   private readonly toolMessages: AIToolMessageRepository;
   private readonly snowflake: IdGeneratorService;
   private readonly toolCallPolicy: ToolCallPolicy;
+  private readonly checkpoints: LCCheckpointRepository;
+  private readonly checkpointBlobs: LCCheckpointBlobRepository;
+  private readonly checkpointWrites: LCCheckpointWriteRepository;
 
   public constructor(options: AIEmployeeConversationMessageStoreOptions) {
     this.sessionId = options.sessionId;
@@ -42,9 +53,12 @@ export class AIEmployeeConversationMessageStore implements ConversationMessageSt
     this.toolMessages = options.toolMessages;
     this.snowflake = options.snowflake;
     this.toolCallPolicy = options.toolCallPolicy;
+    this.checkpoints = options.checkpoints;
+    this.checkpointBlobs = options.checkpointBlobs;
+    this.checkpointWrites = options.checkpointWrites;
   }
 
-  public load(messageId?: string): Promise<AIMessage[]> {
+  public loadMessages(messageId?: string): Promise<AIMessage[]> {
     return this.conversation.listMessages({ messageId });
   }
   public saveUserMessages(
@@ -53,7 +67,7 @@ export class AIEmployeeConversationMessageStore implements ConversationMessageSt
     thread?: AgentThread,
   ): Promise<void> {
     return this.conversation.withTransaction(async (target, transaction) => {
-      if (thread) await this.updateThread(thread, transaction);
+      if (thread) await this.updateThreadWithConnection(thread, transaction);
       if (messageId && (await target.getMessage(messageId))) {
         await target.removeMessages({ messageId });
       }
@@ -133,7 +147,53 @@ export class AIEmployeeConversationMessageStore implements ConversationMessageSt
     });
   }
 
-  public updateThread(
+  public async currentThread(): Promise<AgentThread> {
+    const target = await this.conversations.findOne({
+      filter: { sessionId: this.sessionId },
+    });
+    if (!target) throw new Error('Conversation not existed');
+    const thread = target.thread ?? 0;
+    return {
+      sessionId: this.sessionId,
+      thread,
+      threadId: `${this.sessionId}:${thread}`,
+    };
+  }
+
+  public async forkThread(
+    llmProvider: LLMProvider,
+  ): Promise<AgentThread | undefined> {
+    const current = await this.currentThread();
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const thread = current.thread + attempt + 1;
+      const candidate = {
+        sessionId: this.sessionId,
+        thread,
+        threadId: `${this.sessionId}:${thread}`,
+      };
+      const saver = new NativeCollectionSaver({
+        checkpoints: this.checkpoints,
+        blobs: this.checkpointBlobs,
+        writes: this.checkpointWrites,
+      });
+      const agent = createAgent({
+        model: llmProvider.createModel() as any,
+        tools: [],
+        checkpointer: saver as any,
+      });
+      const snapshot = await agent.graph.getState({
+        configurable: { thread_id: candidate.threadId },
+      });
+      if (!snapshot.config.configurable?.checkpoint_id) return candidate;
+    }
+    throw new Error('Fail to create new agent thread');
+  }
+
+  public updateThread(thread: AgentThread): Promise<void> {
+    return this.updateThreadWithConnection(thread);
+  }
+
+  private updateThreadWithConnection(
     thread: AgentThread,
     connection?: DatabaseConnection,
   ): Promise<void> {

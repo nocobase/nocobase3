@@ -16,7 +16,6 @@ import {
   type ConversationMessageStore,
   type ConversationProvider,
   type ConversationStreamStore,
-  type ConversationThreadStore,
   type ConversationToolCallStore,
   type CreateAgentProvidersOptions,
   type SavedAssistantMessage,
@@ -118,7 +117,7 @@ class MemoryConversationState {
 class MemoryConversationMessageStore implements ConversationMessageStore {
   public constructor(private readonly state: MemoryConversationState) {}
 
-  public async load(messageId?: string): Promise<StoredMessage[]> {
+  public async loadMessages(messageId?: string): Promise<StoredMessage[]> {
     return messageId
       ? this.state.messages
           .filter((message) => String(message.messageId) < String(messageId))
@@ -186,6 +185,27 @@ class MemoryConversationMessageStore implements ConversationMessageStore {
         invokeStatus: 'confirmed',
       });
     }
+  }
+
+  public async currentThread(): Promise<AgentThread> {
+    return this.thread();
+  }
+
+  public async forkThread(): Promise<AgentThread> {
+    this.state.thread += 1;
+    return this.thread();
+  }
+
+  public async updateThread(value: AgentThread): Promise<void> {
+    this.state.thread = Math.max(this.state.thread, value.thread);
+  }
+
+  private thread(): AgentThread {
+    return {
+      sessionId: this.state.sessionId,
+      thread: this.state.thread,
+      threadId: `${this.state.sessionId}:${this.state.thread}`,
+    };
   }
 }
 
@@ -270,31 +290,6 @@ class MemoryConversationToolCallStore implements ConversationToolCallStore {
   }
 }
 
-class MemoryConversationThreadStore implements ConversationThreadStore {
-  public constructor(private readonly state: MemoryConversationState) {}
-
-  public async current(): Promise<AgentThread> {
-    return this.thread();
-  }
-
-  public async fork(): Promise<AgentThread> {
-    this.state.thread += 1;
-    return this.thread();
-  }
-
-  public async update(value: AgentThread): Promise<void> {
-    this.state.thread = Math.max(this.state.thread, value.thread);
-  }
-
-  private thread(): AgentThread {
-    return {
-      sessionId: this.state.sessionId,
-      thread: this.state.thread,
-      threadId: `${this.state.sessionId}:${this.state.thread}`,
-    };
-  }
-}
-
 class MemoryConversationStreamStore implements ConversationStreamStore {
   public async append(_chunk: string): Promise<void> {}
   public async clear(): Promise<void> {}
@@ -305,7 +300,6 @@ class MemoryConversationProvider implements ConversationProvider {
   public readonly identity: ConversationProvider['identity'];
   public readonly messages: ConversationMessageStore;
   public readonly toolCalls: ConversationToolCallStore;
-  public readonly threads: ConversationThreadStore;
   public readonly streamCache: ConversationStreamStore;
   public readonly logger: Logger = noopLogger;
 
@@ -314,7 +308,6 @@ class MemoryConversationProvider implements ConversationProvider {
     this.identity = options.identity ?? { sessionId: state.sessionId };
     this.messages = new MemoryConversationMessageStore(state);
     this.toolCalls = new MemoryConversationToolCallStore(state);
-    this.threads = new MemoryConversationThreadStore(state);
     this.streamCache = new MemoryConversationStreamStore();
   }
 
