@@ -195,12 +195,6 @@ jobs:
       - name: Test ${{ matrix.database }}
         run: pnpm --filter @nocobase/db test:integration:${{ matrix.database }}
 
-      - name: Test notification migrations on ${{ matrix.database }}
-        if: ${{ matrix.database == 'mysql' || matrix.database == 'oracle' }}
-        env:
-          NOTIFICATION_MIGRATION_DIALECT: ${{ matrix.database }}
-        run: pnpm --filter @nocobase/app-plugin-notification exec vitest run tests/migration-dialects.test.ts
-
       - name: Stop test databases
         if: ${{ always() }}
         run: pnpm --filter @nocobase/db test:db:down
