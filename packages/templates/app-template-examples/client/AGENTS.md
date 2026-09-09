@@ -7,7 +7,7 @@ This directory is the application's browser client. Read the application's root 
 - `routes.ts` declares your page routes. `pages/` holds the components they load.
 - `components/` holds your components; `components/ui/` holds shadcn/ui primitives added with `pnpm exec shadcn add`.
 - `locales/` holds every user-visible string.
-- `runtime.ts` is the composition root. `service-provider.ts` holds startup logic and the Refine resources that populate the sidebar, `react-providers.ts` your React context providers, and `plugins.ts` the plugins the browser loads.
+- `runtime.ts` is the composition root. `service-provider.ts` holds startup logic and Refine resources for CRUD integration. `react-providers.ts` holds your React context providers, and `plugins.ts` lists the plugins the browser loads. Sidebar entries come from route `navigation` declarations.
 - `routing/`, `layouts/`, `shell/`, and `theme/` are the framework structure: route rendering and access checks, the settings and dev shells, the authenticated chrome, and the theme provider. The template evolves these, so an edit here is what a future upgrade has to reconcile — prefer the built-in mechanism, and when you do change them, comment why. Do not declare product routes in any of them.
 - `extensions/*/extension.ts` are application-owned copies of plugin-published UI, discovered automatically.
 
