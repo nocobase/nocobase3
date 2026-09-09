@@ -8,10 +8,6 @@
  */
 
 export type {
-  VectorDatabaseFeature,
-  VectorDatabaseInfo,
-} from './vector-database.js';
-export type {
   VectorDatabaseProviderFeature,
   VectorDatabaseProviderInfo,
   VectorDatabaseProvider,

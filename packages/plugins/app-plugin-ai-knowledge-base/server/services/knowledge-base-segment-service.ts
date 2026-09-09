@@ -1,0 +1,92 @@
+import type { SegmentOptions, SegmentQuestion } from '../internal-types.js';
+
+import type {
+  KnowledgeBaseSegmentEntity,
+  KnowledgeBaseDocumentRepository,
+  KnowledgeBaseSegmentRepository,
+} from '../repository/index.js';
+import type { KnowledgeBaseDocumentManager } from '../managers/knowledge-base-document-manager.js';
+import type { KnowledgeBaseSegmentManager } from '../managers/knowledge-base-segment-manager.js';
+import { normalizeSegmentOptions } from '../managers/segment-options.js';
+import { page, type PageOptions, type PageResult } from './pagination.js';
+
+export class KnowledgeBaseSegmentService {
+  public constructor(
+    private readonly manager: KnowledgeBaseSegmentManager,
+    private readonly documentManager: KnowledgeBaseDocumentManager,
+    private readonly segments: KnowledgeBaseSegmentRepository,
+    private readonly documents: KnowledgeBaseDocumentRepository,
+  ) {}
+
+  public list(
+    options: PageOptions & { documentId: string | number },
+  ): Promise<PageResult<KnowledgeBaseSegmentEntity>> {
+    return page({
+      repository: this.segments,
+      paging: options,
+      filter: { knowledgeBaseDocsId: options.documentId },
+    });
+  }
+
+  public get(options: {
+    readonly documentId: string | number;
+    readonly segmentUid: string;
+  }): Promise<Record<string, unknown> | null> {
+    return this.manager.getContent(options.documentId, options.segmentUid);
+  }
+
+  public update(options: {
+    readonly documentId: string | number;
+    readonly segmentUid: string;
+    readonly expectedContentHash: string;
+    readonly title?: string;
+    readonly content?: string;
+    readonly questions?: readonly SegmentQuestion[];
+    readonly userId?: string | number;
+  }): Promise<Record<string, unknown>> {
+    return this.manager.updateContent(options.documentId, options.segmentUid, {
+      contentHash: options.expectedContentHash,
+      ...(options.title !== undefined ? { title: options.title } : {}),
+      ...(options.content !== undefined ? { content: options.content } : {}),
+      ...(options.questions ? { questions: [...options.questions] } : {}),
+    });
+  }
+
+  public async setEnabled(options: {
+    readonly documentId: string | number;
+    readonly segmentUid: string;
+    readonly enabled: boolean;
+  }): Promise<Record<string, unknown> | null> {
+    const segment = await this.segments.findOne({
+      knowledgeBaseDocsId: options.documentId,
+      uid: options.segmentUid,
+    });
+    if (!segment) return null;
+    await this.segments.update(
+      { id: segment.id },
+      { enabled: options.enabled },
+    );
+    await this.documentManager.markSegmentsChanged(segment.knowledgeBaseDocsId);
+    return this.manager.getContent(segment.knowledgeBaseDocsId, segment.uid);
+  }
+
+  public delete(options: {
+    readonly documentId: string | number;
+    readonly segmentUid: string;
+  }): Promise<boolean> {
+    return this.manager.deleteContent(options.documentId, options.segmentUid);
+  }
+
+  public async regenerate(options: {
+    readonly documentId: string | number;
+    readonly segmentOptions?: SegmentOptions | Record<string, unknown>;
+  }): Promise<void> {
+    if (options.segmentOptions) {
+      await this.documents.update(
+        { id: options.documentId },
+        { segmentOptions: normalizeSegmentOptions(options.segmentOptions) },
+      );
+    }
+    await this.documentManager.dispatchVectorization(options.documentId);
+  }
+}

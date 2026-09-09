@@ -74,7 +74,6 @@ export default function VectorDatabasesPage(): React.ReactElement {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [count, setCount] = useState(0);
-  const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [open, setOpen] = useState(false);
   const [providerMenuOpen, setProviderMenuOpen] = useState(false);
   const [editing, setEditing] = useState<VectorDatabase>();
@@ -252,50 +251,6 @@ export default function VectorDatabasesPage(): React.ReactElement {
       return false;
     }
   };
-  const bulkDelete = async (): Promise<void> => {
-    const selectedRows = rows.filter((item) => selected.has(String(item.id)));
-    if (!selectedRows.length) return;
-    if (
-      !window.confirm(
-        t('Delete {{count}} selected vector database(s)?', {
-          count: selectedRows.length,
-        }),
-      )
-    )
-      return;
-    setBusy(true);
-    setPageError('');
-    const failures: string[] = [];
-    for (const row of selectedRows) {
-      const related = await service
-        .findRelatedKnowledgeBases(row.key)
-        .catch(() => undefined);
-      if (!related) {
-        failures.push(row.name);
-        continue;
-      }
-      if (related.length) {
-        failures.push(
-          `${row.name} (${related.map((item) => item.name).join(', ')})`,
-        );
-        continue;
-      }
-      try {
-        await service.deleteVectorDatabase(row.id);
-      } catch {
-        failures.push(row.name);
-      }
-    }
-    setSelected(new Set());
-    if (failures.length)
-      setPageError(
-        t('Some vector databases were not deleted: {{names}}', {
-          names: failures.join('; '),
-        }),
-      );
-    await load();
-    setBusy(false);
-  };
 
   return (
     <main className='p-6'>
@@ -312,21 +267,16 @@ export default function VectorDatabasesPage(): React.ReactElement {
               />
               {t('Refresh')}
             </Button>
-            <Button
-              disabled={!selected.size || busy}
-              variant='outline'
-              onClick={() => void bulkDelete()}
-            >
-              <Trash2 className='size-4' />
-              {t('Delete')}
-            </Button>
             <DropdownMenu
               open={providerMenuOpen}
               onOpenChange={setProviderMenuOpen}
             >
               <DropdownMenuTrigger
                 render={
-                  <Button disabled={!providers.length}>
+                  <Button
+                    disabled={!providers.length}
+                    onMouseEnter={() => setProviderMenuOpen(true)}
+                  >
                     <Plus className='size-4' />
                     {t('Add new')}
                     <ChevronDown className='size-4' />
@@ -357,9 +307,6 @@ export default function VectorDatabasesPage(): React.ReactElement {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className='w-10'>
-                    <span className='sr-only'>{t('Select')}</span>
-                  </TableHead>
                   <TableHead>{t('Key')}</TableHead>
                   <TableHead>{t('Name')}</TableHead>
                   <TableHead>{t('Vector database')}</TableHead>
@@ -370,23 +317,22 @@ export default function VectorDatabasesPage(): React.ReactElement {
               <TableBody>
                 {rows.map((row) => (
                   <TableRow key={String(row.id)}>
-                    <TableCell>
-                      <input
-                        aria-label={t('Select {{name}}', { name: row.name })}
-                        type='checkbox'
-                        checked={selected.has(String(row.id))}
-                        onChange={(event) =>
-                          setSelected((current) => {
-                            const next = new Set(current);
-                            if (event.target.checked) next.add(String(row.id));
-                            else next.delete(String(row.id));
-                            return next;
-                          })
-                        }
-                      />
-                    </TableCell>
                     <TableCell>{row.key}</TableCell>
-                    <TableCell className='font-medium'>{row.name}</TableCell>
+                    <TableCell className='font-medium'>
+                      <div className='flex items-center gap-2'>
+                        <span>{row.name}</span>
+                        {row.managedBy === 'config' ? (
+                          <span
+                            className='rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground'
+                            title={t(
+                              'This vector database is managed through application config.',
+                            )}
+                          >
+                            {t('Config managed')}
+                          </span>
+                        ) : null}
+                      </div>
+                    </TableCell>
                     <TableCell>{row.databaseSpec}</TableCell>
                     <TableCell>
                       {row.enabled ? (
@@ -403,26 +349,34 @@ export default function VectorDatabasesPage(): React.ReactElement {
                     </TableCell>
                     <TableCell className='text-left'>
                       <div className='flex items-center justify-start gap-1'>
-                        <Button
-                          variant='ghost'
-                          className='h-8 px-2'
-                          onClick={() => void start(row)}
-                        >
-                          <Pencil className='size-4' />
-                          {t('Edit')}
-                        </Button>
-                        <Button
-                          variant='ghost'
-                          className='h-8 px-2'
-                          onClick={() =>
-                            void remove(row).then((deleted) => {
-                              if (deleted) return load();
-                            })
-                          }
-                        >
-                          <Trash2 className='size-4' />
-                          {t('Delete')}
-                        </Button>
+                        {row.managedBy === 'config' ? (
+                          <span className='text-xs text-muted-foreground'>
+                            {t('Change in application config')}
+                          </span>
+                        ) : (
+                          <>
+                            <Button
+                              variant='ghost'
+                              className='h-8 px-2'
+                              onClick={() => void start(row)}
+                            >
+                              <Pencil className='size-4' />
+                              {t('Edit')}
+                            </Button>
+                            <Button
+                              variant='ghost'
+                              className='h-8 px-2'
+                              onClick={() =>
+                                void remove(row).then((deleted) => {
+                                  if (deleted) return load();
+                                })
+                              }
+                            >
+                              <Trash2 className='size-4' />
+                              {t('Delete')}
+                            </Button>
+                          </>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -430,7 +384,7 @@ export default function VectorDatabasesPage(): React.ReactElement {
                 {!rows.length && !loading ? (
                   <TableRow>
                     <TableCell
-                      colSpan={6}
+                      colSpan={5}
                       className='h-32 text-center text-muted-foreground'
                     >
                       {t('No vector databases yet.')}
@@ -474,7 +428,7 @@ export default function VectorDatabasesPage(): React.ReactElement {
                 {formError}
               </p>
             ) : null}
-            <div>
+            <div className='grid gap-2'>
               <Label htmlFor='vector-spec'>{t('Vector database')}</Label>
               <Input
                 id='vector-spec'
@@ -482,7 +436,7 @@ export default function VectorDatabasesPage(): React.ReactElement {
                 value={form.databaseSpec ?? ''}
               />
             </div>
-            <div>
+            <div className='grid gap-2'>
               <Label htmlFor='vector-key'>{t('Key')}</Label>
               <Input
                 id='vector-key'
@@ -493,7 +447,7 @@ export default function VectorDatabasesPage(): React.ReactElement {
                 }
               />
             </div>
-            <div>
+            <div className='grid gap-2'>
               <Label htmlFor='vector-name'>{t('Name')}</Label>
               <Input
                 id='vector-name'
@@ -511,7 +465,7 @@ export default function VectorDatabasesPage(): React.ReactElement {
               </p>
             ) : (
               fields.map((field) => (
-                <div key={field.key}>
+                <div key={field.key} className='grid gap-2'>
                   <Label htmlFor={`vector-${field.key}`}>
                     {field.key === 'host'
                       ? t('Host')
@@ -550,14 +504,15 @@ export default function VectorDatabasesPage(): React.ReactElement {
                 </div>
               ))
             )}
-            <div className='flex items-center gap-3'>
+            <div className='flex items-center justify-between gap-4'>
+              <Label htmlFor='vector-enabled'>{t('Enabled')}</Label>
               <Switch
+                id='vector-enabled'
                 checked={form.enabled === true}
                 onCheckedChange={(enabled) =>
                   setForm((value) => ({ ...value, enabled }))
                 }
               />
-              <Label>{t('Enabled')}</Label>
             </div>
           </div>
           <SheetFooter className='flex-row justify-end border-t px-6 py-4'>

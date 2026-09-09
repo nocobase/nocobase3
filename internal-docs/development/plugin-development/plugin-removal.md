@@ -38,7 +38,7 @@ pnpm plugin:unregister audit-log --no-install
 解除注册按实际状态清理：
 
 - 插件同步到 App 的 Skills；
-- dependency 和 `nocobase.plugins` 记录；
+- dependency 和显式注册入口记录；
 - `client/plugins.ts` 中的 import 和数组项；
 - `server/plugins.ts` 中的 import 和数组项；
 - 安装依赖，除非显式使用 `--no-install`。
@@ -53,7 +53,7 @@ pnpm plugin:unregister audit-log --no-install
 pnpm plugin:remove audit-log
 ```
 
-`plugin:remove` 是 source workspace 专属的破坏性命令。它会拒绝删除仍被 App dependency、`nocobase.plugins`、Client composition root 或 Server composition root 引用的插件，但 Agent 仍必须在执行前完成只读确认。
+`plugin:remove` 是 source workspace 专属的破坏性命令。它会拒绝删除仍被 App dependency、Client composition root 或 Server composition root 引用的插件，但 Agent 仍必须在执行前完成只读确认。
 
 ## 删除前检查
 

@@ -1,5 +1,4 @@
 import { execFile } from 'node:child_process';
-import fs from 'node:fs';
 import fsPromises from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -7,37 +6,67 @@ import { promisify } from 'node:util';
 
 import { describe, expect, it } from 'vitest';
 
+import WorkflowBuild from '../cli/build.ts';
+import WorkflowCheck from '../cli/check.ts';
+import cliPlugin from '../cli/index.ts';
+import packageMetadata from '../package.json' with { type: 'json' };
+
 const execFileAsync = promisify(execFile);
 const packageRoot = path.resolve(import.meta.dirname, '..');
+const repoRoot = path.resolve(packageRoot, '../../..');
+const appCli = path.join(
+  repoRoot,
+  'packages/templates/app-template-default/cli/index.ts',
+);
+const tsxLoader = path.join(packageRoot, 'node_modules/tsx/dist/loader.mjs');
 
-describe('workflow CLI', () => {
-  it('uses TypeScript in the source workspace and compiled JavaScript when published', () => {
-    const manifest = JSON.parse(
-      fs.readFileSync(path.join(packageRoot, 'package.json'), 'utf8'),
-    ) as {
-      bin?: Record<string, string>;
-      exports?: Record<string, unknown>;
-      publishConfig?: {
-        bin?: Record<string, string>;
-        exports?: Record<string, unknown>;
-      };
-    };
-
-    expect(manifest.bin?.workflow).toBe('./bin/workflow.ts');
-    expect(manifest.publishConfig?.bin?.workflow).toBe(
-      './dist/bin/workflow.js',
-    );
-    expect(manifest.exports?.['./build']).toEqual({
-      types: './build/index.ts',
-      import: './build/index.ts',
-    });
-    expect(manifest.publishConfig?.exports?.['./build']).toEqual({
-      types: './dist/build/index.d.ts',
-      import: './dist/build/index.js',
+describe('workflow CLI contribution', () => {
+  it('declares the workflow topic and command map', () => {
+    expect(cliPlugin).toMatchObject({
+      packageName: packageMetadata.name,
+      topic: 'workflow',
+      commands: {
+        check: WorkflowCheck,
+        build: WorkflowBuild,
+      },
     });
   });
 
-  it('runs from source before the package is built and accepts a relative package path', async () => {
+  it('exposes the cli entry and shares the app oclif runtime', () => {
+    expect(packageMetadata.exports['./cli']).toBeDefined();
+    expect(packageMetadata.publishConfig.exports['./cli']).toBeDefined();
+    // Declared once each. pnpm resolves both peers here on its own, so a duplicate devDependency adds nothing.
+    expect(packageMetadata.peerDependencies['@nocobase/nb3-cli']).toBeTruthy();
+    expect(packageMetadata.peerDependencies['@oclif/core']).toBeTruthy();
+    expect(
+      packageMetadata.devDependencies?.['@nocobase/nb3-cli'],
+    ).toBeUndefined();
+    expect(packageMetadata.devDependencies?.['@oclif/core']).toBeUndefined();
+  });
+
+  it('gives every command, flag, and argument help text', () => {
+    for (const [name, command] of Object.entries(cliPlugin.commands)) {
+      expect(command.summary, `${name} has no summary`).toBeTruthy();
+      expect(
+        command.examples?.length,
+        `${name} has no example`,
+      ).toBeGreaterThan(0);
+      for (const [flag, definition] of Object.entries(command.flags ?? {})) {
+        expect(
+          definition.description ?? definition.summary,
+          `${name} --${flag} has no description`,
+        ).toBeTruthy();
+      }
+      for (const [argument, definition] of Object.entries(command.args ?? {})) {
+        expect(
+          definition.description,
+          `${name} ${argument} has no description`,
+        ).toBeTruthy();
+      }
+    }
+  });
+
+  it('checks a relative workflow path through the application CLI', async () => {
     const fixture = path.relative(
       packageRoot,
       path.join(
@@ -45,11 +74,16 @@ describe('workflow CLI', () => {
         'skill-evals/nocobase3-workflow-manage/fixtures/workflows/valid-quotation',
       ),
     );
-    await execFileAsync(
+    const { stdout } = await execFileAsync(
       process.execPath,
-      [path.join(packageRoot, 'bin/workflow.ts'), 'check', fixture],
+      ['--import', tsxLoader, appCli, 'workflow', 'check', fixture, '--json'],
       { cwd: packageRoot },
     );
+
+    expect(JSON.parse(stdout)).toMatchObject({
+      ok: true,
+      status: 'success',
+    });
   });
 
   it('builds application workflow artifacts with default paths', async () => {
@@ -65,7 +99,7 @@ describe('workflow CLI', () => {
       );
       await execFileAsync(
         process.execPath,
-        [path.join(packageRoot, 'bin/workflow.ts'), 'build'],
+        ['--import', tsxLoader, appCli, 'workflow', 'build'],
         { cwd: root },
       );
       const keyRoot = path.join(root, 'dist/server/workflows/example');

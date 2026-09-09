@@ -1,7 +1,6 @@
 import { useNotification } from '@refinedev/core';
 import { useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router';
-import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert.js';
 import { LoadingState } from '../components/app-shell-loading-state.js';
 import {
   Empty,
@@ -15,10 +14,7 @@ import {
   defaultDocumentExtensions,
 } from '../components/index.js';
 import { useKnowledgeBase, useKnowledgeBaseDocument } from '../hooks/index.js';
-import {
-  canMaintainKnowledgeBaseDocuments,
-  isAsyncUploadResult,
-} from '../providers/index.js';
+import { canMaintainKnowledgeBaseDocuments } from '../providers/index.js';
 import { knowledgeBaseLiveRoutes } from '../knowledge-base-routes.js';
 import { notifyKnowledgeBaseMutationError } from './notifications.js';
 import { liveReturnTo } from './url-state.js';
@@ -32,22 +28,18 @@ export default function UploadController() {
   const navigate = useNavigate();
   const knowledgeBase = useKnowledgeBase({ knowledgeBaseKey });
   const [file, setFile] = useState<File>();
-  const [encodings, setEncodings] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string>();
-  const isZip = file?.name.toLowerCase().endsWith('.zip') ?? false;
   const base = knowledgeBase.knowledgeBase;
   const documentState = useKnowledgeBaseDocument({
     knowledgeBaseKey: base.data?.key ?? knowledgeBaseKey,
     upload: {
       enabled: !!(base.data?.key ?? knowledgeBaseKey),
       includeConstraints: true,
-      includeZipEncodingOptions: isZip,
     },
   });
   const { service } = documentState;
   const constraints = documentState.upload.constraints;
-  const encodingOptions = documentState.upload.zipEncodingOptions;
 
   const fallback = knowledgeBaseKey
     ? `${knowledgeBaseLiveRoutes.workspace(knowledgeBaseKey)}${location.search}${location.hash}`
@@ -113,7 +105,7 @@ export default function UploadController() {
       return;
     }
     if (
-      constraints.data.maxFileSizeBytes &&
+      constraints.data.maxFileSizeBytes !== undefined &&
       file.size > constraints.data.maxFileSizeBytes
     ) {
       setError(t('This file exceeds the server upload limit.'));
@@ -123,21 +115,16 @@ export default function UploadController() {
     setSubmitting(true);
     setError(undefined);
     try {
-      const result = await service.uploadDocument({
+      await service.uploadDocument({
         knowledgeBaseKey: activeBase.key,
         file,
-        ...(isZip && encodings.length
-          ? { zipFilenameEncodings: encodings }
-          : {}),
       });
-      const uploadNotice = isAsyncUploadResult(result)
-        ? result.message ||
-          t('The upload task was submitted. Indexing may take a few moments.')
-        : t('The document was uploaded. Refreshing the document list.');
       notify?.({
         type: 'success',
         message: t('Upload submitted'),
-        description: uploadNotice,
+        description: t(
+          'The document was uploaded. Refreshing the document list.',
+        ),
       });
       navigate(closeTo);
     } catch (nextError) {
@@ -148,12 +135,9 @@ export default function UploadController() {
     }
   };
 
-  const allowedExtensions = constraints.data?.acceptedExtensions?.length
+  const allowedExtensions = constraints.data?.acceptedExtensions.length
     ? constraints.data.acceptedExtensions
     : defaultDocumentExtensions;
-  const defaultZipFilenameEncoding = encodingOptions.data?.find(
-    (option) => option.isDefault,
-  )?.value;
   const dialogError =
     error ||
     (constraints.error
@@ -163,47 +147,22 @@ export default function UploadController() {
       : undefined);
 
   return (
-    <>
-      {encodingOptions.error && isZip ? (
-        <div className='px-4 pt-4 md:px-7'>
-          <Alert>
-            <AlertTitle>{t('ZIP encoding options unavailable')}</AlertTitle>
-            <AlertDescription>
-              {t(
-                'Leave the encoding selection empty or ask the Portal administrator to expose a supported server capability.',
-              )}
-            </AlertDescription>
-          </Alert>
-        </div>
-      ) : null}
-      <UploadDocumentDialog
-        open
-        onOpenChange={(open) => {
-          if (!open) navigate(closeTo);
-        }}
-        file={file}
-        onFileChange={(next) => {
-          setFile(next);
-          setEncodings([]);
-          setError(undefined);
-        }}
-        zipFilenameEncodings={encodings}
-        encodingOptions={encodingOptions.data ?? []}
-        defaultZipFilenameEncoding={defaultZipFilenameEncoding}
-        onZipFilenameEncodingsChange={(values) =>
-          setEncodings(
-            Array.from(
-              new Set(values.map((value) => value.trim()).filter(Boolean)),
-            ),
-          )
-        }
-        onSubmit={() => void submit()}
-        submitting={submitting}
-        error={dialogError}
-        allowedExtensions={allowedExtensions}
-        maxFileSizeBytes={constraints.data?.maxFileSizeBytes}
-        onFileRejected={(message) => setError(message || undefined)}
-      />
-    </>
+    <UploadDocumentDialog
+      open
+      onOpenChange={(open) => {
+        if (!open) navigate(closeTo);
+      }}
+      file={file}
+      onFileChange={(next) => {
+        setFile(next);
+        setError(undefined);
+      }}
+      onSubmit={() => void submit()}
+      submitting={submitting}
+      error={dialogError}
+      allowedExtensions={allowedExtensions}
+      maxFileSizeBytes={constraints.data?.maxFileSizeBytes}
+      onFileRejected={(message) => setError(message || undefined)}
+    />
   );
 }

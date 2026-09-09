@@ -5,8 +5,11 @@ import type {
   NewFileMetadata,
 } from '@nocobase/ai-employee';
 
-import type { TableRepository } from '../repository.js';
-import type { KnowledgeBaseDocumentRecord, SegmentOptions } from '../types.js';
+import type { SegmentOptions } from '../internal-types.js';
+import type {
+  KnowledgeBaseDocumentEntity,
+  KnowledgeBaseDocumentRepository,
+} from '../repository/index.js';
 
 export interface KnowledgeBaseDocumentMetadataCreateContext {
   readonly key: string;
@@ -17,8 +20,8 @@ export interface KnowledgeBaseDocumentMetadataCreateContext {
 }
 
 export function mapKnowledgeBaseDocumentMetadata(
-  entity: KnowledgeBaseDocumentRecord,
-): FileMetadata<KnowledgeBaseDocumentRecord> {
+  entity: KnowledgeBaseDocumentEntity,
+): FileMetadata<KnowledgeBaseDocumentEntity> {
   return {
     id: entity.id,
     disk: entity.disk,
@@ -33,17 +36,17 @@ export function mapKnowledgeBaseDocumentMetadata(
 }
 
 export class KnowledgeBaseDocumentMetadataRepository implements FileMetadataRepository<
-  KnowledgeBaseDocumentRecord,
+  KnowledgeBaseDocumentEntity,
   KnowledgeBaseDocumentMetadataCreateContext
 > {
   public constructor(
-    private readonly repository: TableRepository<KnowledgeBaseDocumentRecord>,
+    private readonly repository: KnowledgeBaseDocumentRepository,
   ) {}
 
   public async create(
     metadata: NewFileMetadata,
     context: KnowledgeBaseDocumentMetadataCreateContext,
-  ): Promise<FileMetadata<KnowledgeBaseDocumentRecord>> {
+  ): Promise<FileMetadata<KnowledgeBaseDocumentEntity>> {
     const entity = await this.repository.create({
       ...(metadata.id !== undefined ? { id: metadata.id } : {}),
       key: context.key,
@@ -75,7 +78,7 @@ export class KnowledgeBaseDocumentMetadataRepository implements FileMetadataRepo
 
   public async findById(
     id: FileMetadataId,
-  ): Promise<FileMetadata<KnowledgeBaseDocumentRecord> | null> {
+  ): Promise<FileMetadata<KnowledgeBaseDocumentEntity> | null> {
     const entity = await this.repository.findById(id);
     return entity ? mapKnowledgeBaseDocumentMetadata(entity) : null;
   }

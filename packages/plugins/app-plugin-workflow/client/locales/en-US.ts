@@ -39,6 +39,7 @@ const enUS = {
     more: 'More actions',
     enableWorkflow: 'Enable {{title}}',
     disableWorkflow: 'Disable {{title}}',
+    enableNewVersion: 'Enable new version',
     parameterSettings: 'Parameter settings',
     runManually: 'Run manually',
   },
@@ -58,6 +59,7 @@ const enUS = {
     noDescription: 'No workflow description provided.',
     noNodeDescription: 'No node description provided.',
     version: 'Version',
+    newVersionAvailable: 'New version available',
     runFailed: 'Unable to run workflow',
     parametersMissingIdentifier:
       'Workflow has no identifier for editing parameters.',

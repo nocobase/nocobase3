@@ -1,0 +1,25 @@
+{
+  "extends": "@nocobase/dev-config/tsconfig/client.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "paths": {
+      "@/components/ui/*": ["./client/components/ui/*"],
+      "@/lib/utils": ["./client/lib/utils.ts"],
+      "@/extensions/nocobase-ai-knowledge-base-providers": [
+        "./registry/providers/index.ts"
+      ],
+      "@/extensions/nocobase-ai-knowledge-base-components": [
+        "./registry/components/index.ts"
+      ],
+      "@/extensions/nocobase-ai-knowledge-base-components/*": [
+        "./registry/components/*"
+      ]
+    }
+  },
+  "include": [
+    "registry/**/*.ts",
+    "registry/**/*.tsx",
+    "client/env.d.ts",
+    "../../app/app-portal-sdk/src/env.d.ts"
+  ]
+}

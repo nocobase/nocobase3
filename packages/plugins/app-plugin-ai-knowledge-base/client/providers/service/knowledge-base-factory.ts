@@ -1,5 +1,6 @@
 import { normalizePagedResult, type PagedResult } from '../utils.js';
 import type { KnowledgeBaseService } from './knowledge-base.js';
+import { SUPPORTED_KNOWLEDGE_BASE_DOCUMENT_EXTENSIONS } from '../types.js';
 import type {
   KnowledgeBase,
   KnowledgeBaseManagementOption,
@@ -15,7 +16,6 @@ import type {
   KnowledgeBaseSegmentQuestion,
   UploadConstraints,
   UploadResult,
-  ZipFilenameEncodingOption,
 } from '../types.js';
 
 /**
@@ -25,7 +25,7 @@ import type {
  * administrator-only vector-store or knowledge-base configuration actions.
  */
 type ActionOptions = {
-  method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  method?: 'GET' | 'POST' | 'DELETE';
   query?: Record<
     string,
     string | number | boolean | Array<string | number | boolean> | undefined
@@ -42,13 +42,10 @@ type NocoBaseKnowledgeBaseClient = {
   ): Promise<T>;
 };
 type UnknownRecord = Record<string, unknown>;
-type UploadStorage = {
-  disk: string;
-  type?: string;
-  maxFileSizeBytes?: number;
-};
 
-const supportedExtensions = ['.doc', '.docx', '.md', '.pdf', '.txt', '.zip'];
+const supportedExtensions: string[] = [
+  ...SUPPORTED_KNOWLEDGE_BASE_DOCUMENT_EXTENSIONS,
+];
 
 const isRecord = (value: unknown): value is UnknownRecord =>
   !!value && typeof value === 'object' && !Array.isArray(value);
@@ -78,7 +75,24 @@ const required = <T>(value: T | undefined, field: string): T => {
   return value;
 };
 
-const optionalDate = (value: unknown) => text(value);
+const optionalDate = (value: unknown): string | undefined => {
+  const numeric =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string' && /^-?\d+(?:\.\d+)?$/u.test(value.trim())
+        ? Number(value)
+        : undefined;
+  if (numeric !== undefined && Number.isFinite(numeric)) {
+    const milliseconds =
+      Math.abs(numeric) < 1_000_000_000_000 ? numeric * 1000 : numeric;
+    const date = new Date(milliseconds);
+    return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+  }
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? undefined : value.toISOString();
+  }
+  return text(value);
+};
 
 function toSegmentOptions(
   value: unknown,
@@ -118,9 +132,6 @@ function toKnowledgeBase(value: unknown): KnowledgeBase {
     enabled: required(boolean(item.enabled), 'enabled'),
     ...(text(item.vectorStoreProvider)
       ? { vectorStoreProvider: text(item.vectorStoreProvider) }
-      : {}),
-    ...(text(item.vectorStoreConfigKey)
-      ? { vectorStoreConfigKey: text(item.vectorStoreConfigKey) }
       : {}),
     ...(text(item.vectorDatabaseKey)
       ? { vectorDatabaseKey: text(item.vectorDatabaseKey) }
@@ -319,6 +330,7 @@ function toVectorDatabase(value: unknown): VectorDatabase {
     provider: required(text(item.provider), 'vectorDatabase.provider'),
     connectProps: isRecord(item.connectProps) ? item.connectProps : {},
     enabled: required(boolean(item.enabled), 'vectorDatabase.enabled'),
+    ...(item.managedBy === 'config' ? { managedBy: 'config' as const } : {}),
     ...(optionalDate(item.createdAt)
       ? { createdAt: optionalDate(item.createdAt) }
       : {}),
@@ -350,15 +362,27 @@ const mapPagedResult = <T>(
   return { ...normalized, rows: normalized.rows.map(mapper) };
 };
 
-const storageFromPayload = (payload: unknown): UploadStorage => {
+const uploadConstraintsFromPayload = (payload: unknown): UploadConstraints => {
   const value = responseData(payload);
-  const storage = isRecord(value) ? value : {};
-  const rules = isRecord(storage.rules) ? storage.rules : {};
+  const constraints = isRecord(value) ? value : {};
+  const advertisedExtensions = Array.isArray(constraints.acceptedExtensions)
+    ? constraints.acceptedExtensions.filter(
+        (extension): extension is string => typeof extension === 'string',
+      )
+    : [];
+  const acceptedExtensions = Array.from(
+    new Set(
+      advertisedExtensions
+        .map((extension) => extension.trim().toLowerCase())
+        .filter((extension) => supportedExtensions.includes(extension)),
+    ),
+  );
   return {
-    disk: required(text(storage.disk), 'uploadStorage.disk'),
-    ...(text(storage.type) ? { type: text(storage.type) } : {}),
-    ...(number(rules.size) !== undefined
-      ? { maxFileSizeBytes: number(rules.size) }
+    acceptedExtensions: acceptedExtensions.length
+      ? acceptedExtensions
+      : [...supportedExtensions],
+    ...(number(constraints.maxFileSizeBytes) !== undefined
+      ? { maxFileSizeBytes: number(constraints.maxFileSizeBytes) }
       : {}),
   };
 };
@@ -405,7 +429,6 @@ export function normalizeKnowledgeBaseMutation(
   for (const field of [
     'disk',
     'vectorDatabaseKey',
-    'vectorStoreConfigKey',
     'llmService',
     'embeddingModel',
     'vectorStoreProvider',
@@ -471,12 +494,12 @@ function toManagementOption(
 export function createKnowledgeBaseService(
   client: NocoBaseKnowledgeBaseClient,
 ): KnowledgeBaseService {
-  const getUploadStorage = async (
+  const getUploadConstraints = async (
     knowledgeBaseKey: string,
     signal?: AbortSignal,
-  ) =>
-    storageFromPayload(
-      await action(client, 'aiKnowledgeBaseDocs', 'getUploadStorage', {
+  ): Promise<UploadConstraints> =>
+    uploadConstraintsFromPayload(
+      await action(client, 'ai/aiKnowledgeBaseDocs', 'getUploadStorage', {
         method: 'GET',
         query: { knowledgeBaseKey },
         signal,
@@ -487,7 +510,7 @@ export function createKnowledgeBaseService(
     async createKnowledgeBase(values) {
       return toKnowledgeBase(
         responseData(
-          await action(client, 'aiKnowledgeBase', 'create', {
+          await action(client, 'ai/aiKnowledgeBase', 'create', {
             method: 'POST',
             body: normalizeKnowledgeBaseMutation(values),
           }),
@@ -497,7 +520,7 @@ export function createKnowledgeBaseService(
     async updateKnowledgeBase(id, values) {
       return toKnowledgeBase(
         responseData(
-          await action(client, 'aiKnowledgeBase', 'update', {
+          await action(client, 'ai/aiKnowledgeBase', 'update', {
             method: 'POST',
             query: { filterByTk: id },
             body: values,
@@ -506,7 +529,7 @@ export function createKnowledgeBaseService(
       );
     },
     deleteKnowledgeBase: (id) =>
-      action(client, 'aiKnowledgeBase', 'destroy', {
+      action(client, 'ai/aiKnowledgeBase', 'destroy', {
         method: 'POST',
         query: { 'filterByTk[]': [id] },
       }),
@@ -517,17 +540,24 @@ export function createKnowledgeBaseService(
         storageDisksPayload,
         externalProvidersPayload,
       ] = await Promise.all([
-        action(client, 'aiVectorDatabases', 'listEnabled', { method: 'GET' }),
+        action(client, 'ai/aiVectorDatabases', 'listEnabled', {
+          method: 'GET',
+        }),
         action(client, 'ai/ai', 'listLLMServices', {
           method: 'GET',
           query: { model: 'EMBEDDING' },
         }),
-        action(client, 'aiKnowledgeBase', 'listStorageDisks', {
+        action(client, 'ai/aiKnowledgeBase', 'listStorageDisks', {
           method: 'GET',
         }),
-        action(client, 'aiKnowledgeBase', 'listExternalVectorStoreProviders', {
-          method: 'GET',
-        }).catch(() => undefined),
+        action(
+          client,
+          'ai/aiKnowledgeBase',
+          'listExternalVectorStoreProviders',
+          {
+            method: 'GET',
+          },
+        ).catch(() => undefined),
       ]);
       const serviceValues = responseData(servicesPayload);
       const llmServices = (
@@ -583,7 +613,7 @@ export function createKnowledgeBaseService(
     },
     async listVectorDatabaseProviders() {
       const payload = responseData(
-        await action(client, 'aiVectorDatabases', 'listProviders', {
+        await action(client, 'ai/aiVectorDatabases', 'listProviders', {
           method: 'GET',
         }),
       );
@@ -594,7 +624,7 @@ export function createKnowledgeBaseService(
         : [];
     },
     async listVectorDatabases(request) {
-      const payload = await action(client, 'aiVectorDatabases', 'list', {
+      const payload = await action(client, 'ai/aiVectorDatabases', 'list', {
         query: listQuery(request),
         signal: request.signal,
       });
@@ -607,7 +637,7 @@ export function createKnowledgeBaseService(
     async getVectorDatabase(id, signal) {
       return toVectorDatabase(
         responseData(
-          await action(client, 'aiVectorDatabases', 'get', {
+          await action(client, 'ai/aiVectorDatabases', 'get', {
             query: { filterByTk: id },
             signal,
           }),
@@ -617,7 +647,7 @@ export function createKnowledgeBaseService(
     async createVectorDatabase(values) {
       return toVectorDatabase(
         responseData(
-          await action(client, 'aiVectorDatabases', 'create', {
+          await action(client, 'ai/aiVectorDatabases', 'create', {
             method: 'POST',
             body: normalizeVectorDatabaseMutation(values),
           }),
@@ -627,7 +657,7 @@ export function createKnowledgeBaseService(
     async updateVectorDatabase(id, values) {
       return toVectorDatabase(
         responseData(
-          await action(client, 'aiVectorDatabases', 'update', {
+          await action(client, 'ai/aiVectorDatabases', 'update', {
             method: 'POST',
             query: { filterByTk: id },
             body: values,
@@ -636,13 +666,13 @@ export function createKnowledgeBaseService(
       );
     },
     deleteVectorDatabase: (id) =>
-      action(client, 'aiVectorDatabases', 'destroy', {
+      action(client, 'ai/aiVectorDatabases', 'destroy', {
         method: 'POST',
         query: { 'filterByTk[]': [id] },
       }),
     async testVectorDatabaseConnection(values) {
       const payload = responseData(
-        await action(client, 'aiVectorDatabases', 'testConnection', {
+        await action(client, 'ai/aiVectorDatabases', 'testConnection', {
           method: 'POST',
           body: values,
         }),
@@ -655,7 +685,7 @@ export function createKnowledgeBaseService(
     },
     async listEnabledVectorDatabases() {
       const payload = responseData(
-        await action(client, 'aiVectorDatabases', 'listEnabled', {
+        await action(client, 'ai/aiVectorDatabases', 'listEnabled', {
           method: 'GET',
         }),
       );
@@ -663,15 +693,20 @@ export function createKnowledgeBaseService(
     },
     async findRelatedKnowledgeBases(vectorDatabaseKey) {
       const payload = responseData(
-        await action(client, 'aiVectorDatabases', 'findRelatedKnowledgeBase', {
-          method: 'GET',
-          query: { vectorDatabaseKey },
-        }),
+        await action(
+          client,
+          'ai/aiVectorDatabases',
+          'findRelatedKnowledgeBase',
+          {
+            method: 'GET',
+            query: { vectorDatabaseKey },
+          },
+        ),
       );
       return Array.isArray(payload) ? payload.map(toKnowledgeBase) : [];
     },
     async listKnowledgeBases(request) {
-      const payload = await action(client, 'aiKnowledgeBase', 'list', {
+      const payload = await action(client, 'ai/aiKnowledgeBase', 'list', {
         query: {
           ...listQuery(request),
           ...(request.query
@@ -689,7 +724,7 @@ export function createKnowledgeBaseService(
 
     async getKnowledgeBase(key, signal) {
       // The Live route uses the public knowledge-base key, while filterByTk targets the bigint primary key.
-      const payload = await action(client, 'aiKnowledgeBase', 'list', {
+      const payload = await action(client, 'ai/aiKnowledgeBase', 'list', {
         query: { paginate: false, 'filter[key]': key },
         signal,
       });
@@ -706,7 +741,7 @@ export function createKnowledgeBaseService(
     },
 
     async listDocuments(request) {
-      const payload = await action(client, 'aiKnowledgeBaseDocs', 'list', {
+      const payload = await action(client, 'ai/aiKnowledgeBaseDocs', 'list', {
         query: {
           ...listQuery(request),
           'filter[knowledgeBaseKey]': request.knowledgeBaseKey,
@@ -726,7 +761,7 @@ export function createKnowledgeBaseService(
     async getDocument(request) {
       const document = toDocument(
         responseData(
-          await action(client, 'aiKnowledgeBaseDocs', 'get', {
+          await action(client, 'ai/aiKnowledgeBaseDocs', 'get', {
             query: { filterByTk: request.documentId },
             signal: request.signal,
           }),
@@ -742,7 +777,7 @@ export function createKnowledgeBaseService(
 
     async runRetrieval(request) {
       const payload = responseData(
-        await action(client, 'aiKnowledgeBase', 'runHitTest', {
+        await action(client, 'ai/aiKnowledgeBase', 'runHitTest', {
           method: 'POST',
           body: {
             knowledgeBaseKey: request.knowledgeBaseKey,
@@ -759,7 +794,7 @@ export function createKnowledgeBaseService(
     async listSegments(request) {
       const payload = await action(
         client,
-        'aiKnowledgeBaseDocSegments',
+        'ai/aiKnowledgeBaseDocSegments',
         'list',
         {
           query: {
@@ -783,7 +818,7 @@ export function createKnowledgeBaseService(
 
     async getSegment(request) {
       const payload = responseData(
-        await action(client, 'aiKnowledgeBaseDocSegments', 'getSegment', {
+        await action(client, 'ai/aiKnowledgeBaseDocSegments', 'getSegment', {
           method: 'GET',
           query: {
             knowledgeBaseKey: request.knowledgeBaseKey,
@@ -799,141 +834,43 @@ export function createKnowledgeBaseService(
     },
 
     async getUploadConstraints(request): Promise<UploadConstraints> {
-      const storage = await getUploadStorage(
-        request.knowledgeBaseKey,
-        request.signal,
-      );
-      return {
-        acceptedExtensions: supportedExtensions,
-        ...(storage.maxFileSizeBytes
-          ? { maxFileSizeBytes: storage.maxFileSizeBytes }
-          : {}),
-      };
-    },
-
-    async getZipFilenameEncodingOptions(request) {
-      const payload = responseData(
-        await action(
-          client,
-          'aiKnowledgeBaseDocs',
-          'getZipFilenameEncodingOptions',
-          {
-            method: 'GET',
-            signal: request.signal,
-          },
-        ),
-      );
-      const result = isRecord(payload) ? payload : {};
-      return Array.isArray(result.options)
-        ? result.options.flatMap((option): ZipFilenameEncodingOption[] => {
-            const item = isRecord(option) ? option : {};
-            const value = text(item.value);
-            const label = text(item.label);
-            if (!value || !label) return [];
-            return [
-              {
-                value,
-                label,
-                ...(text(item.description)
-                  ? { description: text(item.description) }
-                  : {}),
-                ...(boolean(item.isDefault) !== undefined
-                  ? { isDefault: boolean(item.isDefault) }
-                  : {}),
-              },
-            ];
-          })
-        : [];
+      return getUploadConstraints(request.knowledgeBaseKey, request.signal);
     },
 
     async uploadDocument(request): Promise<UploadResult> {
-      const storage = await getUploadStorage(request.knowledgeBaseKey);
+      const constraints = await getUploadConstraints(request.knowledgeBaseKey);
       if (
-        storage.maxFileSizeBytes &&
-        request.file.size > storage.maxFileSizeBytes
+        constraints.maxFileSizeBytes !== undefined &&
+        request.file.size > constraints.maxFileSizeBytes
       ) {
         throw new Error('This file exceeds the server upload limit.');
       }
-      if (!supportedExtensions.includes(extensionOf(request.file))) {
+      const extension = extensionOf(request.file);
+      const acceptedExtensions = constraints.acceptedExtensions.map((value) =>
+        value.toLowerCase(),
+      );
+      if (
+        !supportedExtensions.includes(extension) ||
+        !acceptedExtensions.includes(extension)
+      ) {
         throw new Error(
-          `Unsupported file type: ${extensionOf(request.file) || 'no extension'}.`,
+          `Unsupported file type: ${extension || 'no extension'}.`,
         );
       }
 
-      let payload: unknown;
-      if (storage.type === 's3-compatible') {
-        const presigned = responseData(
-          await action(client, 'storages', 'createPresignedUrl', {
-            method: 'POST',
-            body: {
-              name: request.file.name,
-              size: request.file.size,
-              type: request.file.type,
-              disk: storage.disk,
-              storageType: storage.type,
-            },
-          }),
-        );
-        const upload = isRecord(presigned) ? presigned : {};
-        const putUrl = text(upload.putUrl);
-        const fileInfo = isRecord(upload.fileInfo) ? upload.fileInfo : {};
-        if (!putUrl)
-          throw new Error(
-            'The upload service did not return a presigned upload URL.',
-          );
-        const put = await fetch(putUrl, {
-          method: 'PUT',
-          headers: request.file.type
-            ? { 'Content-Type': request.file.type }
-            : undefined,
-          body: request.file,
-        });
-        if (!put.ok) throw new Error(`File upload failed (${put.status}).`);
-        payload = await action(client, 'aiKnowledgeBaseDocs', 'upload', {
-          method: 'POST',
-          query: { knowledgeBaseKey: request.knowledgeBaseKey },
-          body: {
-            title: text(fileInfo.title) || request.file.name,
-            filename: request.file.name,
-            extname: text(fileInfo.extname) || extensionOf(request.file),
-            path: required(text(fileInfo.key), 'presignedUpload.fileInfo.key'),
-            size: number(fileInfo.size) ?? request.file.size,
-            url: required(text(fileInfo.url), 'presignedUpload.fileInfo.url'),
-            mimetype: text(fileInfo.mimetype) || request.file.type,
-            disk: storage.disk,
-            meta: {},
-            ...(request.zipFilenameEncodings?.length
-              ? { zipFilenameEncoding: request.zipFilenameEncodings }
-              : {}),
-          },
-        });
-      } else {
-        const formData = new FormData();
-        formData.append('knowledgeBaseKey', request.knowledgeBaseKey);
-        for (const encoding of request.zipFilenameEncodings ?? []) {
-          formData.append('zipFilenameEncoding[]', encoding);
-        }
-        formData.append('file', request.file);
-        payload = await action(client, 'aiKnowledgeBaseDocs', 'upload', {
-          method: 'POST',
-          query: { knowledgeBaseKey: request.knowledgeBaseKey },
-          body: formData,
-        });
-      }
-
-      const result = responseData(payload);
-      const record = isRecord(result) ? result : {};
-      if (recordId(record.taskId) !== undefined) {
-        return {
-          taskId: recordId(record.taskId)!,
-          ...(text(record.message) ? { message: text(record.message) } : {}),
-        };
-      }
-      return toDocument(result);
+      const formData = new FormData();
+      formData.append('knowledgeBaseKey', request.knowledgeBaseKey);
+      formData.append('file', request.file);
+      const payload = await action(client, 'ai/aiKnowledgeBaseDocs', 'upload', {
+        method: 'POST',
+        query: { knowledgeBaseKey: request.knowledgeBaseKey },
+        body: formData,
+      });
+      return toDocument(responseData(payload));
     },
 
     vectorizeDocuments: ({ knowledgeBaseKey, documentIds }) =>
-      action(client, 'aiKnowledgeBaseDocs', 'vectorization', {
+      action(client, 'ai/aiKnowledgeBaseDocs', 'vectorization', {
         method: 'POST',
         query: {
           knowledgeBaseKey,
@@ -942,7 +879,7 @@ export function createKnowledgeBaseService(
       }),
 
     deleteDocuments: ({ documentIds }) =>
-      action(client, 'aiKnowledgeBaseDocs', 'destroy', {
+      action(client, 'ai/aiKnowledgeBaseDocs', 'destroy', {
         method: 'POST',
         query: { 'filterByTk[]': documentIds },
       }),
@@ -950,10 +887,15 @@ export function createKnowledgeBaseService(
     updateSegment: async ({ documentId, ...request }) =>
       toSegment(
         responseData(
-          await action(client, 'aiKnowledgeBaseDocSegments', 'updateSegment', {
-            method: 'POST',
-            body: { ...request, knowledgeBaseDocsId: documentId },
-          }),
+          await action(
+            client,
+            'ai/aiKnowledgeBaseDocSegments',
+            'updateSegment',
+            {
+              method: 'POST',
+              body: { ...request, knowledgeBaseDocsId: documentId },
+            },
+          ),
         ),
       ),
 
@@ -962,7 +904,7 @@ export function createKnowledgeBaseService(
         responseData(
           await action(
             client,
-            'aiKnowledgeBaseDocSegments',
+            'ai/aiKnowledgeBaseDocSegments',
             'updateQuestions',
             {
               method: 'POST',
@@ -980,7 +922,7 @@ export function createKnowledgeBaseService(
     }) =>
       toSegment(
         responseData(
-          await action(client, 'aiKnowledgeBaseDocSegments', 'setEnabled', {
+          await action(client, 'ai/aiKnowledgeBaseDocSegments', 'setEnabled', {
             method: 'POST',
             body: {
               knowledgeBaseKey,
@@ -993,13 +935,13 @@ export function createKnowledgeBaseService(
       ),
 
     deleteSegment: ({ knowledgeBaseKey, documentId, segmentUid }) =>
-      action(client, 'aiKnowledgeBaseDocSegments', 'deleteSegment', {
+      action(client, 'ai/aiKnowledgeBaseDocSegments', 'deleteSegment', {
         method: 'POST',
         body: { knowledgeBaseKey, knowledgeBaseDocsId: documentId, segmentUid },
       }),
 
     regenerateSegments: ({ knowledgeBaseKey, documentId, segmentOptions }) =>
-      action(client, 'aiKnowledgeBaseDocSegments', 'regenerate', {
+      action(client, 'ai/aiKnowledgeBaseDocSegments', 'regenerate', {
         method: 'POST',
         body: {
           knowledgeBaseKey,

@@ -1,4 +1,18 @@
-import type { Context } from '../../context.js';
+import type { ModelRef } from '../../domain/contracts.js';
+import type { AppAgentContext } from '../context.js';
+import type { ConversationExecution } from '../contracts.js';
+import type { Caching } from '@nocobase/caching';
+import type { IdGeneratorService } from '@nocobase/snowflake';
+import type { FileStorage } from '@nocobase/ai-employee';
+import type { AIFileEntity } from '../../repository/ai-file.js';
+import type { AIFileMetadataCreateContext } from '../../repository/file-storage/ai-file-metadata-repository.js';
+import type { RepositoryFactory } from '../../factory/repository-factory.js';
+import type { AIEmployeesManager } from '../../manager/ai-employees-manager.js';
+import type { BuiltInManager } from '../../manager/built-in-manager.js';
+import type { KnowledgeBaseManager } from '../../manager/knowledge-base-manager.js';
+import type { LLMStreamCachedManager } from '../../manager/llm-stream-cached-manager.js';
+import type { WorkContextHandler } from '../../manager/work-context/index.js';
+import type { DocumentLoaders } from '@nocobase/ai-employee';
 import type { ToolsEntity } from '@nocobase/ai-employee';
 import type { SkillsEntity } from '@nocobase/ai-employee';
 /**
@@ -20,16 +34,15 @@ import { createAIChatConversation } from '../../ai-employees/ai-chat-conversatio
 import type { AIEmployee as AIEmployeeType } from '@nocobase/ai-employee';
 import { listSystemTools, SYSTEM_TOOLS } from '@nocobase/ai-employee';
 import {
-  getCurrentRoleNames,
   getKnowledgeBaseBackgroundPrompt,
   normalizeKnowledgeBaseRetrievalStrategy,
-} from './ai-knowledge-base.js';
+} from '../../manager/knowledge-base-manager.js';
 
 import type { ToolsFilter, ToolsManager } from '@nocobase/ai-employee';
 import {
   listAccessibleAIEmployees,
   serializeEmployeeSummary,
-} from '../../ai-employees/sub-agents/shared.js';
+} from '../../manager/sub-agents/shared.js';
 import { sanitizeAdditionalKwargsForToolCalls } from '../../ai-employees/tool-call-sanitizer.js';
 import {
   findMessageAttachments,
@@ -47,13 +60,21 @@ import {
   shouldAutoExecuteFrontendTool,
 } from '../../ai-employees/frontend-tools.js';
 
-export interface ModelRef {
-  llmService: string;
-  model: string;
-}
-
-export interface AIEmployeeOptions {
-  ctx: Context;
+export interface AIEmployeeAgentRuntimeOptions {
+  agentContext: AppAgentContext;
+  database: DatabaseConnection;
+  caching: Caching;
+  fileStorage: FileStorage<AIFileEntity, AIFileMetadataCreateContext>;
+  snowflake: IdGeneratorService;
+  execution?: ConversationExecution;
+  getHeader?: (name: string) => string | undefined;
+  repositories: RepositoryFactory;
+  aiEmployeesManager: AIEmployeesManager;
+  builtInManager: BuiltInManager;
+  llmStreamCachedManager: LLMStreamCachedManager;
+  knowledgeBaseManager: KnowledgeBaseManager;
+  workContextHandler: WorkContextHandler;
+  documentLoaders: DocumentLoaders;
   employee: any;
   sessionId: string;
   systemMessage?: string;
@@ -73,14 +94,36 @@ export class AIEmployeeCapabilities {
   skillSettings?: Record<string, any>;
   userMessageCount = 0;
 
-  private ctx: Context;
+  private agentContext: AppAgentContext;
+  private database: DatabaseConnection;
+  private caching: Caching;
+  private fileStorage: FileStorage<AIFileEntity, AIFileMetadataCreateContext>;
+  private snowflake: IdGeneratorService;
+  private execution: ConversationExecution;
+  private getHeader: (name: string) => string | undefined;
+  private repositories: RepositoryFactory;
+  private builtInManager: BuiltInManager;
+  private knowledgeBaseManager: KnowledgeBaseManager;
+  private workContextHandler: WorkContextHandler;
+  private documentLoaders: DocumentLoaders;
   private systemMessage?: string;
   private webSearch?: boolean;
   private model?: ModelRef;
   private tools: { name: string }[];
 
   constructor({
-    ctx,
+    agentContext,
+    database,
+    caching,
+    fileStorage,
+    snowflake,
+    execution = {},
+    getHeader = () => undefined,
+    repositories,
+    builtInManager,
+    knowledgeBaseManager,
+    workContextHandler,
+    documentLoaders,
     employee,
     sessionId,
     systemMessage,
@@ -89,24 +132,36 @@ export class AIEmployeeCapabilities {
     model,
     from = 'main-agent',
     tools = [],
-  }: AIEmployeeOptions) {
+  }: AIEmployeeAgentRuntimeOptions) {
     this.employee = employee;
-    this.ctx = ctx;
+    this.agentContext = agentContext;
+    this.database = database;
+    this.caching = caching;
+    this.fileStorage = fileStorage;
+    this.snowflake = snowflake;
+    this.execution = execution;
+    this.getHeader = getHeader;
+    this.repositories = repositories;
+    this.builtInManager = builtInManager;
+    this.knowledgeBaseManager = knowledgeBaseManager;
+    this.workContextHandler = workContextHandler;
+    this.documentLoaders = documentLoaders;
     this.sessionId = sessionId;
     this.systemMessage = systemMessage;
-    this.aiChatConversation = createAIChatConversation(
-      this.ctx,
-      this.sessionId,
-    );
+    this.aiChatConversation = createAIChatConversation({
+      repositories: this.repositories,
+      database: this.database,
+      snowflake: this.snowflake,
+      sessionId: this.sessionId,
+    });
     this.skillSettings = skillSettings;
     this.model = model;
     this.from = from;
     this.tools = tools;
-    const builtInManager = this.ctx.builtInManager;
-    builtInManager.setupBuiltInInfo(
-      ctx,
-      this.employee as unknown as AIEmployeeType,
-    );
+    this.builtInManager.setupBuiltInInfo({
+      employee: this.employee as unknown as AIEmployeeType,
+      translate: agentContext.translate,
+    });
     this.webSearch = webSearch;
   }
 
@@ -138,9 +193,10 @@ export class AIEmployeeCapabilities {
   }
 
   async getFormatMessages(userMessages: AIMessageInput[]) {
-    const { provider } = await this.ctx.ai.llmProviderManager.getLLMService(
-      this.getRequiredModel(),
-    );
+    const { provider } =
+      await this.agentContext.ai.llmProviderManager.getLLMService(
+        this.getRequiredModel(),
+      );
     const { messages } = await this.aiChatConversation.getChatContext({
       userMessages,
       formatMessages: (messages) => this.formatMessages({ messages, provider }),
@@ -160,9 +216,9 @@ export class AIEmployeeCapabilities {
       return about;
     }
 
-    const userConfig = await this.ctx.repositories.usersAiEmployees.findOne({
+    const userConfig = await this.repositories.usersAiEmployees.findOne({
       filter: {
-        userId: this.ctx.auth?.user?.id ?? 0,
+        userId: this.agentContext.actor.id,
         aiEmployee: this.employee.username,
       },
     });
@@ -173,10 +229,8 @@ export class AIEmployeeCapabilities {
     }
 
     const aiMessages = await this.aiChatConversation.listMessages();
-    const workContextBackground = await this.ctx.workContextHandler.background(
-      this.ctx,
-      aiMessages,
-    );
+    const workContextBackground =
+      await this.workContextHandler.background(aiMessages);
     if (workContextBackground?.length) {
       background = `${background}\n${workContextBackground.join('\n')}`;
     }
@@ -185,11 +239,11 @@ export class AIEmployeeCapabilities {
       background = `${background}\n${addSystemPrompt.map((it) => it.content).join('\n')}`;
     }
 
-    const knowledgeBaseManager = this.ctx.knowledgeBaseManager;
+    const knowledgeBaseManager = this.knowledgeBaseManager;
     const employee = this.employee as unknown as AIEmployeeType;
     const knowledgeBaseEnabled =
       await knowledgeBaseManager.isEnabledKnowledgeBase(employee);
-    const roleNames = getCurrentRoleNames(this.ctx.state);
+    const roleNames = this.agentContext.actor.roles;
     const hasAccessibleKnowledgeBase = knowledgeBaseEnabled
       ? await knowledgeBaseManager.hasAccessibleKnowledgeBase({
           employee,
@@ -244,12 +298,12 @@ export class AIEmployeeCapabilities {
       },
       personal: userConfig?.prompt,
       environment: {
-        locale: this.ctx.getCurrentLocale?.() || 'en-US',
+        locale: this.agentContext.actor.locale || 'en-US',
         currentDateTime: getCurrentDateTimeForPrompt(
-          this.ctx.getCurrentLocale?.(),
-          getCurrentTimezone(this.ctx),
+          this.agentContext.actor.locale,
+          getCurrentTimezone(this.execution, this.getHeader),
         ),
-        timezone: getCurrentTimezone(this.ctx),
+        timezone: getCurrentTimezone(this.execution, this.getHeader),
       },
       knowledgeBase,
       availableSkills,
@@ -257,7 +311,7 @@ export class AIEmployeeCapabilities {
       webSearch: this.webSearch,
     });
 
-    const { important } = this.ctx.requestExecution ?? {};
+    const { important } = this.execution ?? {};
     if (important === 'GraphRecursionError') {
       const importantPrompt = `<Important>You have already called tools multiple times and gathered sufficient information.
 First, provide a summary based on the existing information. Do not call additional tools.
@@ -283,8 +337,8 @@ If information is missing, clearly state it in the summary.</Important>`;
     const currentFrontendTools = toolCalls.some(
       (toolCall) => toolCall.name === EXECUTE_FRONTEND_TOOL_NAME,
     )
-      ? await listCurrentFrontendTools(this.ctx, {
-          ...this.ctx.requestExecution,
+      ? await listCurrentFrontendTools(this.repositories, {
+          ...this.execution,
           sessionId: this.sessionId,
         })
       : [];
@@ -302,16 +356,18 @@ If information is missing, clearly state it in the summary.</Important>`;
                 )
               : this.isAutoCall(tools);
           return {
-            id: this.ctx.snowflake.generate(),
+            id: this.snowflake.generate(),
             sessionId: this.sessionId,
             messageId,
             toolCallId: toolCall.id,
             toolName: toolCall.name,
-            status: toolsExisted ? null : 'error',
-            content: toolsExisted ? null : `Tool ${toolCall.name} not found`,
+            status: toolsExisted ? (null as unknown as string) : 'error',
+            content: toolsExisted
+              ? (null as unknown as string)
+              : `Tool ${toolCall.name} not found`,
             invokeStatus: toolsExisted ? 'init' : 'done',
-            invokeStartTime: toolsExisted ? null : nowTime,
-            invokeEndTime: toolsExisted ? null : nowTime,
+            invokeStartTime: toolsExisted ? (null as unknown as Date) : nowTime,
+            invokeEndTime: toolsExisted ? (null as unknown as Date) : nowTime,
             auto,
             execution: tools?.execution ?? 'backend',
           };
@@ -332,7 +388,7 @@ If information is missing, clearly state it in the summary.</Important>`;
       allowed_decisions?: string[];
     },
   ) {
-    return await this.ctx.database.transaction(async (transaction) => {
+    return await this.database.transaction(async (transaction) => {
       const updated = await this.aiToolMessagesRepo.update(
         {
           values: {
@@ -463,7 +519,7 @@ If information is missing, clearly state it in the summary.</Important>`;
     reason = 'The user ignored the application for tools usage and will continued to ask questions',
   ) {
     let messageId;
-    const historyMessages = await this.ctx.repositories.aiMessages.find({
+    const historyMessages = await this.repositories.aiMessages.find({
       sort: ['-messageId'],
     });
     const [lastMessage] = historyMessages;
@@ -486,13 +542,13 @@ If information is missing, clearly state it in the summary.</Important>`;
     }
 
     const { model, service } =
-      await this.ctx.ai.llmProviderManager.getLLMService(
+      await this.agentContext.ai.llmProviderManager.getLLMService(
         this.getRequiredModel(),
       );
     const toolCallMap = await this.getToolCallMap(messageId);
     const now = new Date();
     const toolMessageContent = reason;
-    return await this.ctx.database.transaction(async (transaction) => {
+    return await this.database.transaction(async (transaction) => {
       for (const toolMessage of toolMessages) {
         await this.aiToolMessagesRepo.update(
           {
@@ -511,10 +567,10 @@ If information is missing, clearly state it in the summary.</Important>`;
           { connection: transaction },
         );
       }
-      return await this.ctx.repositories.aiMessages.create(
+      return await this.repositories.aiMessages.create(
         {
           values: toolMessages.map((toolMessage) => ({
-            messageId: String(this.ctx.snowflake.generate()),
+            messageId: String(this.snowflake.generate()),
             role: 'tool',
             content: {
               type: 'text',
@@ -538,7 +594,7 @@ If information is missing, clearly state it in the summary.</Important>`;
   }
 
   get logger() {
-    return this.ctx.logger;
+    return this.agentContext.logger;
   }
 
   // === Conversation/thread helpers ===
@@ -595,10 +651,11 @@ If information is missing, clearly state it in the summary.</Important>`;
 
     if (!attachments.length) return messages;
 
-    const attachmentsByLookup = await findMessageAttachments(
-      this.ctx,
+    const attachmentsByLookup = await findMessageAttachments({
+      actorId: this.agentContext.actor.id,
+      repositories: this.repositories,
       attachments,
-    );
+    });
     return messages.map((message) => {
       if (!Array.isArray(message.attachments) || !message.attachments.length)
         return message;
@@ -626,7 +683,7 @@ If information is missing, clearly state it in the summary.</Important>`;
     provider: LLMProvider;
   }) {
     const formattedMessages = [];
-    const workContextHandler = this.ctx.workContextHandler;
+    const workContextHandler = this.workContextHandler;
     const normalizedMessages = await this.normalizeMessageAttachments(messages);
 
     // 截断过长的内容
@@ -658,7 +715,7 @@ If information is missing, clearly state it in the summary.</Important>`;
           content = `<user_query>${content}</user_query>`;
           if (workContext?.length) {
             const workContextStr = (
-              await workContextHandler.resolve(this.ctx, workContext)
+              await workContextHandler.resolve(workContext)
             )
               .map((x) => `<work_context>${x}</work_context>`)
               .join('\n');
@@ -669,10 +726,10 @@ If information is missing, clearly state it in the summary.</Important>`;
         if (attachments?.length) {
           for (const attachment of attachments) {
             const parsed = await provider.parseAttachment(attachment as any, {
-              fileStorage: this.ctx.fileStorage,
-              documentLoader: this.ctx.documentLoaders.cached,
-              caching: this.ctx.caching,
-              getHeader: (name: string) => this.ctx.get(name),
+              fileStorage: this.fileStorage,
+              documentLoader: this.documentLoaders.cached,
+              caching: this.caching,
+              getHeader: (name: string) => this.getHeader(name),
             });
             if (parsed.placement === 'system') {
               formattedMessages.push({
@@ -722,12 +779,12 @@ If information is missing, clearly state it in the summary.</Important>`;
         {
           onDiscard: (info) => {
             this.logger.warn(
-              'Discard malformed raw tool calls from AI message',
               {
                 phase: 'formatMessages',
                 messageId: msg.metadata?.id,
                 ...info,
               },
+              'Discard malformed raw tool calls from AI message',
             );
           },
         },
@@ -757,9 +814,10 @@ If information is missing, clearly state it in the summary.</Important>`;
     >
   > {
     const result = new Map();
-    const { toolCalls } = await this.aiMessagesRepo.findOne({
+    const message = await this.aiMessagesRepo.findOne({
       filter: { messageId },
     });
+    const toolCalls = message?.toolCalls;
     if (!toolCalls) {
       return result;
     }
@@ -773,20 +831,20 @@ If information is missing, clearly state it in the summary.</Important>`;
     ToolsEntity | undefined
   > {
     const employee = this.employee as unknown as AIEmployeeType;
-    const knowledgeBaseManager = this.ctx.knowledgeBaseManager;
+    const knowledgeBaseManager = this.knowledgeBaseManager;
     if (!(await knowledgeBaseManager.isEnabledKnowledgeBase(employee))) {
       return undefined;
     }
     const hasAccessibleKnowledgeBase =
       await knowledgeBaseManager.hasAccessibleKnowledgeBase({
         employee,
-        roleNames: getCurrentRoleNames(this.ctx.state),
+        roleNames: this.agentContext.actor.roles,
       });
     if (!hasAccessibleKnowledgeBase) {
       return undefined;
     }
     return this.toolsManager.getTools(SYSTEM_TOOLS.KNOWLEDGE_BASE, {
-      ctx: this.ctx,
+      ctx: this.agentContext,
     });
   }
 
@@ -794,13 +852,16 @@ If information is missing, clearly state it in the summary.</Important>`;
     if (!this.areToolsEnabled()) {
       return [];
     }
-    const currentFrontendTools = await listCurrentFrontendTools(this.ctx, {
-      ...this.ctx.requestExecution,
-      sessionId: this.sessionId,
-    });
+    const currentFrontendTools = await listCurrentFrontendTools(
+      this.repositories,
+      {
+        ...this.execution,
+        sessionId: this.sessionId,
+      },
+    );
     const tools: ToolsEntity[] = await this.listTools({ scope: 'GENERAL' });
     const getSkill = await this.toolsManager.getTools(SYSTEM_TOOLS.GET_SKILL, {
-      ctx: this.ctx,
+      ctx: this.agentContext,
     });
     if (getSkill) {
       tools.push(getSkill);
@@ -808,7 +869,7 @@ If information is missing, clearly state it in the summary.</Important>`;
     if (this.webSearch === true) {
       const subAgentWebSearch = await this.toolsManager.getTools(
         SYSTEM_TOOLS.WEB_SEARCH,
-        { ctx: this.ctx },
+        { ctx: this.agentContext },
       );
       if (subAgentWebSearch) {
         tools.push(subAgentWebSearch);
@@ -871,7 +932,7 @@ If information is missing, clearly state it in the summary.</Important>`;
     if (!this.areSkillsEnabled()) {
       return [];
     }
-    const { skillsManager } = this.ctx.ai;
+    const { skillsManager } = this.agentContext.ai;
     const aIEmployeeTools = await this.getAIEmployeeTools();
     const getSkill = aIEmployeeTools.find(
       (it) => it.definition.name === 'getSkill',
@@ -982,7 +1043,7 @@ If information is missing, clearly state it in the summary.</Important>`;
     }
     const availableSkills = await this.getAvailableSkills();
     const loadedSkills =
-      await this.ctx.ai.skillsManager.getSkills(loadedSkillNames);
+      await this.agentContext.ai.skillsManager.getSkills(loadedSkillNames);
     const normalizedLoadedSkills = Array.isArray(loadedSkills)
       ? loadedSkills
       : [loadedSkills];
@@ -1009,8 +1070,19 @@ If information is missing, clearly state it in the summary.</Important>`;
     if (!specifiedToolNames.includes('dispatch-sub-agent-task')) {
       return [];
     }
-    const availableAIEmployees = (await listAccessibleAIEmployees(this.ctx))
-      .map((employee) => serializeEmployeeSummary(this.ctx, employee))
+    const availableAIEmployees = (
+      await listAccessibleAIEmployees({
+        roleNames: this.agentContext.actor.roles,
+        repositories: this.repositories,
+      })
+    )
+      .map((employee) =>
+        serializeEmployeeSummary({
+          employee,
+          builtInManager: this.builtInManager,
+          translate: this.agentContext.translate,
+        }),
+      )
       .filter((it) => it.username !== this.employee.username);
     return availableAIEmployees;
   }
@@ -1025,38 +1097,32 @@ If information is missing, clearly state it in the summary.</Important>`;
   private listTools(filter?: ToolsFilter) {
     return this.toolsManager.listTools({
       ...filter,
-      ctx: this.ctx,
+      ctx: this.agentContext,
     });
   }
 
   private get toolsManager(): ToolsManager {
-    return this.ctx.ai.toolsManager;
+    return this.agentContext.ai.toolsManager;
   }
 
   private get aiConversationsRepo() {
-    return this.ctx.repositories.aiConversations;
+    return this.repositories.aiConversations;
   }
 
   private get aiMessagesRepo() {
-    return this.ctx.repositories.aiMessages;
+    return this.repositories.aiMessages;
   }
 
   private get aiToolMessagesRepo() {
-    return this.ctx.repositories.aiToolMessages;
+    return this.repositories.aiToolMessages;
   }
 }
 
-function getCurrentTimezone(ctx: Context): string | undefined {
-  const value =
-    ctx.requestExecution?.timezone ||
-    ctx.get?.('x-timezone') ||
-    Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-  if (Array.isArray(value)) {
-    return value[0];
-  }
-
-  return typeof value === 'string' ? value : undefined;
+function getCurrentTimezone(
+  execution: ConversationExecution,
+  getHeader: (name: string) => string | undefined,
+): string | undefined {
+  return execution.timezone || getHeader('x-timezone') || undefined;
 }
 
 function getCurrentDateTimeForPrompt(

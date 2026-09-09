@@ -1,3 +1,5 @@
+import { createRequire } from 'node:module';
+import { symlink, mkdir } from 'node:fs/promises';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -27,14 +29,10 @@ async function createApp(
     path.join(appRoot, 'package.json'),
     JSON.stringify({
       name: 'demo-app',
-      nocobase: {
-        plugins: Object.fromEntries(
-          plugins.map((name) => [name, { enabled: true }]),
-        ),
-      },
       ...extra,
     }),
   );
+  await writeRegisteredPlugins(appRoot, plugins);
   return appRoot;
 }
 
@@ -119,3 +117,24 @@ describe('planPluginUpdate', () => {
     expect(plan.args[0]).toBe('up');
   });
 });
+
+async function writeRegisteredPlugins(
+  appRoot: string,
+  packages: string[],
+): Promise<void> {
+  await mkdir(path.join(appRoot, 'server'), { recursive: true });
+  await mkdir(path.join(appRoot, 'node_modules'), { recursive: true });
+  await symlink(
+    path.dirname(
+      createRequire(import.meta.url).resolve('typescript/package.json'),
+    ),
+    path.join(appRoot, 'node_modules/typescript'),
+  );
+  await writeFile(
+    path.join(appRoot, 'server/plugins.ts'),
+    packages
+      .map((name, index) => `import p${index} from '${name}/server';`)
+      .join('\n') +
+      `\nexport default defineServerPlugins([${packages.map((_, index) => `p${index}`).join(', ')}]);`,
+  );
+}

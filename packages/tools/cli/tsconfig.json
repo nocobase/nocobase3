@@ -1,6 +1,11 @@
 {
   "extends": "@nocobase/dev-config/tsconfig/server.json",
   "compilerOptions": {
+    // Declarations are emitted for `./plugins` and `./runtime`, the two entries plugins and applications import.
+    // `isolatedDeclarations` is deliberately not enabled: the command classes are internal, and requiring an explicit
+    // annotation on every oclif static would buy nothing for types no consumer reads.
+    "declaration": true,
+    "declarationMap": true,
     "rootDir": "src",
     "outDir": "dist",
     "tsBuildInfoFile": "dist/.tsbuildinfo"

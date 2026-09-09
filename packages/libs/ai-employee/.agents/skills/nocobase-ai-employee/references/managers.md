@@ -270,7 +270,6 @@ A capability plugin can attach optional implementations:
 ```ts
 deps.ai.features.enableFeatures({
   knowledgeBase: knowledgeBaseFeature,
-  vectorDatabase: vectorDatabaseFeature,
 });
 ```
 

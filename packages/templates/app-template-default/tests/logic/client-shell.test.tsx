@@ -2,7 +2,7 @@ import type { AppClientRegisteredRoute } from '@nocobase/app-client/plugins';
 import { Refine, type AuthProvider } from '@refinedev/core';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { ComponentType, ReactElement } from 'react';
-import { MemoryRouter } from 'react-router';
+import { Outlet, MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AppRouter } from '../../client/routing/app-router.tsx';
@@ -32,19 +32,89 @@ describe('application shell', () => {
       'aria-current',
       'page',
     );
+    expect(
+      screen.getByRole('complementary', { name: 'Application navigation' }),
+    ).toHaveClass(
+      'bg-sidebar',
+      'text-sidebar-foreground',
+      'border-sidebar-border',
+    );
+    expect(screen.getByRole('link', { name: 'Home' })).toHaveClass(
+      'bg-sidebar-primary',
+      'text-sidebar-primary-foreground',
+      'focus-visible:ring-sidebar-ring',
+    );
     // The account menu is a real dropdown, so its contents exist only once opened; the trigger carries the name.
     expect(
       await screen.findByRole('button', { name: 'Open account menu' }),
     ).toHaveAttribute('title', 'Alice');
-    expect(
-      screen.getByRole('button', { name: /Switch to .* theme/ }),
-    ).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Appearance' })).toBeVisible();
     expect(screen.getByRole('link', { name: 'Settings' })).toBeVisible();
     expect(screen.getByText('AI builds freely.')).toBeVisible();
     expect(screen.getByText('Default Template v0.0.0')).toBeVisible();
     expect(
       screen.getByRole('heading', { name: 'App client is ready' }),
     ).toBeVisible();
+  });
+
+  it('renders nested pages through manual outlets and selects the nearest menu ancestor', async () => {
+    const child = createRoute('detail', '/orders/42', 'required', () => (
+      <h3>Order detail</h3>
+    ));
+    const parent = {
+      ...createRoute('orders', '/orders', 'required', () => (
+        <>
+          <h2>Orders layout</h2>
+          <Outlet />
+        </>
+      )),
+      navigation: { title: 'Orders' },
+      children: [child],
+    };
+    renderApplication('/orders/42', createAuthProvider(true), [parent]);
+    expect(await screen.findByText('Order detail')).toBeVisible();
+    expect(screen.getByText('Orders layout')).toBeVisible();
+    expect(
+      screen.getByRole('link', { name: 'Orders' }).querySelector('svg'),
+    ).toBeNull();
+    expect(screen.getByRole('link', { name: 'Orders' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+  });
+
+  it('keeps a parent page link clickable independently of its menu disclosure', async () => {
+    const child = {
+      ...createRoute('reports', '/orders/reports', 'required', () => (
+        <h3>Reports page</h3>
+      )),
+      navigation: { title: 'Reports' },
+    };
+    const parent = {
+      ...createRoute('orders', '/orders', 'required', () => (
+        <>
+          <h2>Orders layout</h2>
+          <Outlet />
+        </>
+      )),
+      navigation: { title: 'Orders' },
+      children: [child],
+    };
+    renderApplication('/orders', createAuthProvider(true), [parent]);
+    expect(await screen.findByRole('link', { name: 'Orders' })).toHaveAttribute(
+      'href',
+      '/orders',
+    );
+    const toggle = screen.getByRole('button', { name: 'Orders' });
+    fireEvent.click(toggle);
+    expect(
+      screen.queryByRole('link', { name: 'Reports' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Orders' })).toBeVisible();
+    fireEvent.click(toggle);
+    fireEvent.click(screen.getByRole('link', { name: 'Reports' }));
+    expect(await screen.findByText('Reports page')).toBeVisible();
+    expect(screen.getByText('Orders layout')).toBeVisible();
   });
 
   it('collapses and expands the desktop navigation', async () => {
@@ -92,9 +162,7 @@ describe('application shell', () => {
     expect(
       screen.queryByRole('navigation', { name: 'Application navigation' }),
     ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: /Switch to .* theme/ }),
-    ).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Appearance' })).toBeVisible();
   });
 });
 
@@ -128,11 +196,9 @@ function renderApplication(
           options={{ disableTelemetry: true }}
         >
           <AppRouter
-            clientDevRouteGroups={[]}
-            clientDevRoutes={[]}
+            devRouteTree={[]}
             clientRoutes={clientRoutes}
-            clientSettingGroups={[]}
-            clientSettings={[]}
+            settingsRouteTree={[]}
           />
         </Refine>
       </AppThemeProvider>
@@ -170,6 +236,7 @@ function createRoute(
       : '@nocobase/app-plugin-test';
   return {
     auth,
+    ...(name === 'home' ? { navigation: { title: 'Home' } } : {}),
     componentLoader: async () => ({ default: Component }),
     id: `${packageName}:${name}`,
     name,

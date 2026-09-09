@@ -49,7 +49,7 @@ Do not reimplement a primitive's behavior — focus, keyboard handling, and ARIA
 
 ## Style with semantic tokens
 
-Use the tokens, not literal colors:
+Read [the token reference](theme-tokens.md) when styling UI. It is the shared contract for component authors and theme authors: names, meanings, defaults, units and caveats. Prefer its semantic classes, not literal colors, fonts, sizes or shadows:
 
 | Use                                        | Not                           |
 | ------------------------------------------ | ----------------------------- |
@@ -59,13 +59,17 @@ Use the tokens, not literal colors:
 | `bg-primary`, `text-primary-foreground`    | `bg-blue-600`, `text-white`   |
 | `bg-destructive`, `text-destructive`       | `bg-red-500`                  |
 
-Tokens are defined in `client/styles.css` for both themes. A literal color looks fine in whichever theme you happened to be viewing and breaks in the other — this is the most common styling defect in this codebase.
+Tokens are defined in `client/theme/themes/*.css` for both themes. A literal color looks fine in whichever theme you happened to be viewing and breaks in the other — this is the most common styling defect in this codebase.
+
+Body uses `font-sans text-base`; semantic h1–h6 use `font-heading`, and code/pre/kbd/samp use `font-mono`. A title rendered as another element needs `font-heading`. Use `text-sm`, `p-4`, `gap-2`, `h-8`, `rounded-lg`, and `shadow-md` instead of equivalent arbitrary values. Sidebar and chart colors have their own semantic classes.
+
+Retain deliberate constraints (image sizes, viewport limits, circular icons), but check whether fixed sizes, explicit line heights, or shadow color classes override the intended theme. Do not globally restyle isolated third-party content. Font resources must be loaded before a font variable can select them.
 
 ## Consistency is application-wide
 
 **The application must look like one product.** Before writing a component, look at how nearby pages handle the same problem: spacing scale, heading sizes, card versus plain section, where actions sit. Match it.
 
-**If a change genuinely calls for a different look, change it everywhere.** Edit the design tokens in `client/styles.css`, or update the shared component every page uses, so the whole application moves together.
+**If a change genuinely calls for a different look, change it everywhere.** Edit the design tokens in `client/theme/themes/*.css`, or update the shared component every page uses, so the whole application moves together.
 
 **Never restyle only the part you are working on.** A page with its own spacing scale, its own button treatment, or its own palette is a defect. If you believe the application's style should change, say so and change it globally — do not fork the look of one page.
 
@@ -95,6 +99,9 @@ Every user-visible string goes through a translation key. See [internationalizat
 
 - Both light and dark themes render correctly.
 - The page's spacing, typography, and components match its neighbours.
-- No literal color classes.
+- Theme tokens control ordinary colors, typography, spacing, corners and elevation; intentional fixed values are understood.
+- Test changed font/size/spacing/shadow values, CJK and long text, narrow screens and portal content. Preserve visible keyboard focus.
 - Interactive elements are reachable and operable by keyboard.
 - Loading, empty, and error states all render.
+
+For creating or editing theme presets, read `skills/nocobase-app-development/references/themes.md` (from the application root).

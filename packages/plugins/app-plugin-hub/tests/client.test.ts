@@ -1,39 +1,14 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { Boxes } from 'lucide-react';
 
 import routes from '../client/routes.js';
-import { HubNavigationProvider } from '../client/providers/hub-navigation.js';
+import plugin from '../client/plugin.js';
 
 describe('@nocobase/app-plugin-hub', () => {
-  it('declares the authenticated Hub page and lazy-loads it', async () => {
-    expect(routes.parent).toBe('app');
-    expect(routes.routes).toHaveLength(1);
+  it('declares its translated menu directly on the route without a menu provider', () => {
     expect(routes.routes[0]).toMatchObject({
-      name: 'hub',
-      path: '/hub',
-      auth: 'required',
+      navigation: { title: 'navigation.applications', icon: Boxes },
     });
-    await expect(routes.routes[0]?.componentLoader?.()).resolves.toMatchObject({
-      default: expect.any(Function),
-    });
-  });
-
-  it('registers the Hub page in the application navigation', async () => {
-    const addResources = vi.fn();
-    const provider = new HubNavigationProvider({
-      refine: { addResources },
-    } as never);
-
-    await provider.boot();
-
-    expect(addResources).toHaveBeenCalledWith([
-      expect.objectContaining({
-        name: 'hub',
-        list: '/hub',
-        meta: expect.objectContaining({
-          label: 'navigation.applications',
-          i18nNs: '@nocobase/app-plugin-hub',
-        }),
-      }),
-    ]);
+    expect(plugin.serviceProviders).toBeUndefined();
   });
 });

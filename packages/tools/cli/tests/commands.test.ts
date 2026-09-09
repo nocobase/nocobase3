@@ -11,11 +11,11 @@ import { loadTestConfig, runCommand } from './helpers.ts';
  * internal-docs/cli.
  */
 const EXPECTED_IDS = [
-  'app:plugin:inspect',
-  'app:plugin:register',
-  'app:plugin:skills:sync',
-  'app:plugin:unregister',
-  'app:plugin:update',
+  'plugin:inspect',
+  'plugin:register',
+  'plugin:skills:sync',
+  'plugin:unregister',
+  'plugin:update',
 ];
 
 let config: Config;
@@ -29,8 +29,8 @@ describe('command tree', () => {
     expect([...config.commandIDs].sort()).toEqual([...EXPECTED_IDS].sort());
   });
 
-  it('groups every command under the app topic', () => {
-    expect(config.topics.map((topic) => topic.name)).toContain('app');
+  it('groups every command under the plugin topic', () => {
+    expect(config.topics.map((topic) => topic.name)).toContain('plugin');
   });
 
   it('gives every command a summary so help output is never blank', () => {
@@ -91,10 +91,10 @@ describe('documented argument contract', () => {
    * a workspace application's plugins are linked from source rather than installed.
    */
   it.each([
-    'app:plugin:inspect',
-    'app:plugin:register',
-    'app:plugin:unregister',
-    'app:plugin:skills:sync',
+    'plugin:inspect',
+    'plugin:register',
+    'plugin:unregister',
+    'plugin:skills:sync',
   ])('%s can target a workspace application', (id) => {
     expect(
       Object.keys(config.findCommand(id, { must: true }).flags ?? {}),
@@ -103,9 +103,9 @@ describe('documented argument contract', () => {
 
   it('names the plugin as an argument where one must be chosen', () => {
     for (const id of [
-      'app:plugin:inspect',
-      'app:plugin:register',
-      'app:plugin:unregister',
+      'plugin:inspect',
+      'plugin:register',
+      'plugin:unregister',
     ]) {
       const command = config.findCommand(id, { must: true });
       expect(command.args?.name?.required, `${id} should require a name`).toBe(
@@ -118,7 +118,7 @@ describe('documented argument contract', () => {
 describe('argument errors', () => {
   it('rejects a missing required argument', async () => {
     await expect(
-      runCommand(config, 'app:plugin:register', []),
+      runCommand(config, 'plugin:register', []),
     ).rejects.toMatchObject({
       oclif: { exit: 2 },
     });
@@ -126,7 +126,7 @@ describe('argument errors', () => {
 
   it('rejects an unknown flag', async () => {
     await expect(
-      runCommand(config, 'app:plugin:inspect', ['--nonexistent']),
+      runCommand(config, 'plugin:inspect', ['--nonexistent']),
     ).rejects.toMatchObject({
       oclif: { exit: 2 },
     });

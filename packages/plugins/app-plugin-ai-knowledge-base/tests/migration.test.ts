@@ -27,4 +27,28 @@ describe('knowledge base migration contract', () => {
       "['knowledgeBaseDocsId', 'segmentVersion', 'shardNo']",
     );
   });
+
+  it('drops the legacy config schema without reading or backfilling data', () => {
+    const source = readFileSync(
+      path.resolve(
+        'database/migrations/202609020001_inline_knowledge_base_vector_config.ts',
+      ),
+      'utf8',
+    );
+    for (const snippet of [
+      "collection.string('vectorDatabaseKey'",
+      "collection.string('llmService'",
+      "collection.string('embeddingModel'",
+      "collection.string('vectorStoreConfigHash'",
+      "collection.datetime('vectorStoreUpdatedAt'",
+    ]) {
+      expect(source).toContain(snippet);
+    }
+    expect(source).toContain("collection.dropField('vectorStoreConfigKey')");
+    expect(source).toContain("collection.dropField('vectorStoreConfigId')");
+    expect(source).toContain("builder.dropCollection('aiVectorStoreConfig')");
+    expect(source).toContain('irreversible: true');
+    expect(source).not.toMatch(/\bquery\b/);
+    expect(source).not.toMatch(/selectFrom|findOne|find\(/);
+  });
 });

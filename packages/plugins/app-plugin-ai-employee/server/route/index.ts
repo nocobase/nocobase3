@@ -1,0 +1,50 @@
+import type { Auth } from '@nocobase/app-plugin-authentication';
+import type { Logger } from '@nocobase/logging';
+import { Hono } from 'hono';
+
+import type { ServiceFactory } from '../factory/service-factory.js';
+import { createAIConversationsRouter } from './ai-conversations.js';
+import { createAIEmployeeRouter } from './ai-employees.js';
+import { createAIFilesRouter } from './ai-files.js';
+import { createAIMCPServersRouter } from './ai-mcp-servers.js';
+import { createAISkillsRouter } from './ai-skills.js';
+import { createAIToolsRouter } from './ai-tools.js';
+import { createAIRouter } from './ai.js';
+import {
+  createAIActorMiddleware,
+  createAIRequestMiddleware,
+  errorResponse,
+} from './utils.js';
+import { createLLMServicesRouter } from './llm-services.js';
+
+export * from './contracts.js';
+
+export interface CreateAIEmployeeRoutesOptions {
+  readonly authentication: Auth;
+  readonly services: ServiceFactory;
+  readonly logger: Logger;
+}
+
+export function createAIEmployeeRoutes(
+  options: CreateAIEmployeeRoutesOptions,
+): Hono {
+  const routes = new Hono();
+  routes.onError((error) => errorResponse(error));
+  routes.use('*', createAIActorMiddleware(options.authentication));
+  routes.use(
+    '*',
+    createAIRequestMiddleware({
+      ready: () => options.services.ready(),
+      logger: options.logger,
+    }),
+  );
+  createAIRouter(routes, options.services);
+  createAIEmployeeRouter(routes, options.services);
+  createAIConversationsRouter(routes, options.services);
+  createAIFilesRouter(routes, options.services);
+  createAIToolsRouter(routes, options.services);
+  createAISkillsRouter(routes, options.services);
+  createLLMServicesRouter(routes, options.services);
+  createAIMCPServersRouter(routes, options.services);
+  return routes;
+}
