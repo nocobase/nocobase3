@@ -1,7 +1,9 @@
+import { decimalString } from '../../numeric/decimal.js';
 import type {
   CollectionDefinition,
   FieldDefinition,
 } from '../../collection/types.js';
+import { decodeIntegerValue } from '../integer.js';
 import { decodeBooleanValue } from '../boolean.js';
 import { normalizeCharValue } from '../char.js';
 import { normalizeEnumValue } from '../enum.js';
@@ -21,9 +23,13 @@ const decodeTemporal: ScalarDecoder = (field, value) =>
     field.name,
   ]);
 
-/** Preserve existing read semantics; no new coercion or JSON parsing here. */
+/** Normalize logical scalar values without parsing JSON payloads. */
 const scalarDecoders: ReadonlyMap<string, ScalarDecoder> = new Map([
   ['boolean', decodeBooleanValue],
+  ['integer', decodeIntegerValue],
+  ['increments', decodeIntegerValue],
+  ['bigInt', decodeIntegerValue],
+  ['decimal', (_field, value) => decimalString(value)],
   [
     'enum',
     (field, value) =>

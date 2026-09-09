@@ -1,3 +1,15 @@
+import { decimalString } from '../../../numeric/decimal.js';
+import type {
+  CollectionDefinition,
+  FieldDefinition,
+} from '../../../collection/types.js';
+import {
+  aggregateSql,
+  aggregateProjection,
+  hasNativeNumericResults,
+  decodeAggregate,
+} from '../../../numeric/aggregate.js';
+
 import type { Knex } from 'knex';
 
 import type { NamingStrategy } from '../../../naming/strategy.js';
@@ -31,16 +43,27 @@ import type {
   UpdateResult,
 } from '../../types.js';
 
+type CollectionLookup = (
+  name: string,
+) => Promise<CollectionDefinition | undefined>;
+
 export class KnexQueryAdapter implements QueryAdapter {
   constructor(
     private readonly getClient: () => Knex,
     private readonly naming: NamingStrategy,
+    private readonly lookup: CollectionLookup | undefined = undefined,
   ) {}
 
   selectFrom<TRecord extends Row = Row>(
     table: string,
   ): SelectQuery<TRecord, Row> {
-    return new KnexSelectQuery<TRecord>(this.getClient, this.naming, table);
+    return new KnexSelectQuery<TRecord>(
+      this.getClient,
+      this.naming,
+      table,
+      emptySelectState(),
+      this.lookup,
+    );
   }
 
   insertInto<TRecord extends Row = Row>(table: string): InsertQuery<TRecord> {
@@ -112,6 +135,7 @@ class KnexSelectQuery<
     private readonly naming: NamingStrategy,
     private readonly tableName: string,
     private readonly state: SelectState = emptySelectState(),
+    private readonly lookup: CollectionLookup | undefined = undefined,
   ) {}
 
   select(
@@ -301,19 +325,57 @@ class KnexSelectQuery<
   }
 
   async execute<T = TResult>(): Promise<T[]> {
-    const { query, resultMap } = this.buildSelectQuery();
+    const lookup = hasNativeNumericResults(this.getClient())
+      ? undefined
+      : memoizedCollectionLookup(this.lookup);
+    const selections = await prepareDecimalSelections(
+      this.state.selections,
+      [this.tableName, ...this.state.joins.map((join) => join.table)],
+      lookup,
+    );
+    const numericCollections = lookup
+      ? await collectNumericCollections(this.state, this.tableName, lookup)
+      : undefined;
+    const { query, resultMap } = this.buildSelectQuery(
+      selections,
+      numericCollections,
+    );
+    const decode = await prepareAggregateDecoder(
+      selections,
+      [this.tableName, ...this.state.joins.map((join) => join.table)],
+      lookup,
+    );
     const rows = await query;
     return normalizeRows(rows).map((row) =>
-      mapResultRow(row, resultMap, this.naming),
+      decode(mapResultRow(row, resultMap, this.naming)),
     ) as T[];
   }
 
   async executeTakeFirst<T = TResult>(): Promise<T | undefined> {
-    const { query, resultMap } = this.buildSelectQuery();
+    const lookup = hasNativeNumericResults(this.getClient())
+      ? undefined
+      : memoizedCollectionLookup(this.lookup);
+    const selections = await prepareDecimalSelections(
+      this.state.selections,
+      [this.tableName, ...this.state.joins.map((join) => join.table)],
+      lookup,
+    );
+    const numericCollections = lookup
+      ? await collectNumericCollections(this.state, this.tableName, lookup)
+      : undefined;
+    const { query, resultMap } = this.buildSelectQuery(
+      selections,
+      numericCollections,
+    );
+    const decode = await prepareAggregateDecoder(
+      selections,
+      [this.tableName, ...this.state.joins.map((join) => join.table)],
+      lookup,
+    );
     const row = await query.first();
     return row === undefined
       ? undefined
-      : (mapResultRow(row as Row, resultMap, this.naming) as T);
+      : (decode(mapResultRow(row as Row, resultMap, this.naming)) as T);
   }
 
   async executeTakeFirstOrThrow<T = TResult>(): Promise<T> {
@@ -404,19 +466,27 @@ class KnexSelectQuery<
           ? patch.offset
           : this.state.offset,
       },
+      this.lookup,
     );
   }
 
-  private buildSelectQuery(): {
+  private buildSelectQuery(
+    selections = this.state.selections,
+    numericCollections?: ReadonlyMap<string, CollectionDefinition>,
+  ): {
     query: Knex.QueryBuilder;
     resultMap: ResultMap;
   } {
     this.assertPortablePagination();
 
     const client = this.getClient();
-    const tableScope = this.createTableScope();
+    const tableScope: TableScope = {
+      ...this.createTableScope(),
+      numericCollections,
+      aggregates: selectionAggregates(this.state.selections),
+    };
     const query = this.buildFilteredQuery(client, tableScope);
-    const resultMap = applySelections(query, this.state.selections, {
+    const resultMap = applySelections(query, selections, {
       client,
       naming: this.naming,
       getClient: this.getClient,
@@ -424,6 +494,28 @@ class KnexSelectQuery<
       tableScope,
     });
 
+    if (client.client.config.client === 'oracledb') {
+      const aliases = new Set(
+        this.state.selections.flatMap((item) => {
+          if (item.type !== 'selection' || typeof item.selection === 'string')
+            return [];
+          const node = getExpressionNode(item.selection);
+          return node.type === 'aliasedExpression' &&
+            (node.expression.type === 'aggregate' ||
+              (node.expression.type === 'subquery' &&
+                node.expression.query.aggregateResult()))
+            ? [mapIdentifier(node.alias, this.naming)]
+            : [];
+        }),
+      );
+      const driver = client.client.driver;
+      query.options({
+        fetchTypeHandler: (column: { name: string; dbType: unknown }) =>
+          aliases.has(column.name) && column.dbType === driver.DB_TYPE_NUMBER
+            ? { type: driver.STRING }
+            : undefined,
+      });
+    }
     if (this.state.distinct) {
       query.distinct();
     }
@@ -440,10 +532,81 @@ class KnexSelectQuery<
       });
     }
     for (const item of this.state.orderBy) {
-      query.orderBy(
-        mapReference(item.column, this.naming, tableScope),
-        item.direction,
+      const aggregate = this.state.selections.find(
+        (entry) =>
+          entry.type === 'selection' &&
+          typeof entry.selection !== 'string' &&
+          'alias' in entry.selection &&
+          entry.selection.alias === item.column,
       );
+      let ordering: string | Knex.Raw = mapReference(
+        item.column,
+        this.naming,
+        tableScope,
+      );
+      if (
+        aggregate?.type === 'selection' &&
+        typeof aggregate.selection !== 'string'
+      ) {
+        const node = getExpressionNode(aggregate.selection);
+        if (
+          node.type === 'aliasedExpression' &&
+          node.expression.type === 'aggregate'
+        ) {
+          ordering = aggregateNodeToRaw(
+            {
+              client,
+              naming: this.naming,
+              getClient: this.getClient,
+              clause: 'having',
+              tableScope,
+            },
+            node.expression,
+          );
+          if (
+            client.client.config.client === 'better-sqlite3' &&
+            ['sum', 'avg'].includes(node.expression.fn)
+          )
+            ordering = client.raw('nb_decimal_key(?)', [ordering]);
+        }
+      }
+      const decimalSelection = selections.find(
+        (entry) =>
+          entry.type === 'selection' &&
+          typeof entry.selection !== 'string' &&
+          entry.selection.alias === item.column,
+      );
+      if (
+        decimalSelection?.type === 'selection' &&
+        typeof decimalSelection.selection !== 'string'
+      ) {
+        const node = getExpressionNode(decimalSelection.selection);
+        if (
+          node.type === 'aliasedExpression' &&
+          node.expression.type === 'decimalResult'
+        )
+          ordering = expressionNodeToRaw(
+            {
+              client,
+              naming: this.naming,
+              getClient: this.getClient,
+              clause: 'having',
+              tableScope,
+            },
+            node.expression.expression,
+          );
+      }
+      if (this.state.distinct && decimalSelection) {
+        // DISTINCT requires the numeric ORDER BY expression in SELECT too.
+        // This is determined by an existing result value, so it does not
+        // change distinctness; remove the helper before returning records.
+        const hidden = (resultMap.hidden ??= new Set<string>());
+        let alias = `__nb_decimal_order_${hidden.size}`;
+        while (resultMap.explicit.has(alias) || hidden.has(alias)) alias += '_';
+        hidden.add(alias);
+        query.select(client.raw('? as ??', [ordering, alias]));
+      }
+      query.orderBy(ordering, item.direction);
     }
     if (this.state.limit !== undefined) {
       query.limit(this.state.limit);
@@ -877,6 +1040,94 @@ class KnexSubqueryBuilder<
     );
   }
 
+  async collectNumericCollections(
+    lookup: CollectionLookup,
+    collections: Map<string, CollectionDefinition>,
+  ): Promise<void> {
+    await collectNumericCollections(
+      this.state,
+      this.tableName,
+      lookup,
+      collections,
+    );
+  }
+
+  async hasDecimalResult(
+    lookup?: CollectionLookup,
+    outerTables: string[] = [],
+  ): Promise<boolean> {
+    const first = this.state.selections[0];
+    if (first?.type !== 'selection') return false;
+    return selectionIsDecimal(
+      first.selection,
+      [
+        this.tableName,
+        ...this.state.joins.map((join) => join.table),
+        ...outerTables,
+      ],
+      lookup,
+    );
+  }
+
+  async resultDecoder(
+    lookup?: CollectionLookup,
+  ): Promise<(value: unknown) => unknown> {
+    const decode = await prepareAggregateDecoder(
+      this.state.selections,
+      [this.tableName, ...this.state.joins.map((join) => join.table)],
+      lookup,
+    );
+    const first = this.state.selections[0];
+    const selection = first?.type === 'selection' ? first.selection : undefined;
+    if (selection && typeof selection !== 'string') {
+      const node = getExpressionNode(selection);
+      if (node.type === 'aliasedExpression')
+        return (value) => decode({ [node.alias]: value })[node.alias];
+    }
+    return (value) => value;
+  }
+
+  resultSource(parent: TableScope): FieldDefinition | undefined {
+    const scope = createTableScope(
+      [this.tableName, ...this.state.joins.map((join) => join.table)],
+      this.naming,
+      parent,
+    );
+    const first = this.state.selections[0];
+    if (first?.type !== 'selection' || typeof first.selection === 'string')
+      return undefined;
+    let node = getExpressionNode(first.selection);
+    if (node.type === 'aliasedExpression') node = node.expression;
+    if (node.type === 'subquery') return node.query.resultSource(scope);
+    return node.type === 'aggregate' && node.operand?.type === 'ref'
+      ? numericSource(node.operand.reference, scope)
+      : undefined;
+  }
+
+  aggregateResult(): boolean {
+    const first = this.state.selections[0];
+    if (first?.type !== 'selection' || typeof first.selection === 'string')
+      return false;
+    let node = getExpressionNode(first.selection);
+    if (node.type === 'aliasedExpression') node = node.expression;
+    return (
+      node.type === 'aggregate' ||
+      (node.type === 'subquery' && node.query.aggregateResult())
+    );
+  }
+
+  numericResult(): boolean {
+    const first = this.state.selections[0];
+    if (first?.type !== 'selection' || typeof first.selection === 'string')
+      return false;
+    let node = getExpressionNode(first.selection);
+    if (node.type === 'aliasedExpression') node = node.expression;
+    return (
+      node.type === 'aggregate' &&
+      ['count', 'countAll', 'sum', 'avg'].includes(node.fn)
+    );
+  }
+
   buildQuery(
     client = this.getClient(),
     parentScope?: TableScope,
@@ -896,6 +1147,7 @@ class KnexSubqueryBuilder<
       naming: this.naming,
       getClient: this.getClient,
       clause: 'where',
+      subquery: true,
       tableScope,
     });
     if (this.state.distinct) {
@@ -906,13 +1158,49 @@ class KnexSubqueryBuilder<
       naming: this.naming,
       getClient: this.getClient,
       clause: 'where',
+      subquery: true,
       tableScope,
     });
     for (const item of this.state.orderBy) {
-      query.orderBy(
-        mapReference(item.column, this.naming, tableScope),
-        item.direction,
+      const aggregate = this.state.selections.find(
+        (entry) =>
+          entry.type === 'selection' &&
+          typeof entry.selection !== 'string' &&
+          'alias' in entry.selection &&
+          entry.selection.alias === item.column,
       );
+      let ordering: string | Knex.Raw = mapReference(
+        item.column,
+        this.naming,
+        tableScope,
+      );
+      if (
+        aggregate?.type === 'selection' &&
+        typeof aggregate.selection !== 'string'
+      ) {
+        const node = getExpressionNode(aggregate.selection);
+        if (
+          node.type === 'aliasedExpression' &&
+          node.expression.type === 'aggregate'
+        ) {
+          ordering = aggregateNodeToRaw(
+            {
+              client,
+              naming: this.naming,
+              getClient: this.getClient,
+              clause: 'having',
+              tableScope,
+            },
+            node.expression,
+          );
+          if (
+            client.client.config.client === 'better-sqlite3' &&
+            ['sum', 'avg'].includes(node.expression.fn)
+          )
+            ordering = client.raw('nb_decimal_key(?)', [ordering]);
+        }
+      }
+      query.orderBy(ordering, item.direction);
     }
     if (this.state.limit !== undefined) {
       query.limit(this.state.limit);
@@ -1024,6 +1312,7 @@ type ExpressionNode =
       distinct: boolean;
       table?: string;
     }
+  | { type: 'decimalResult'; expression: ExpressionNode }
   | { type: 'parens'; expression: ExpressionNode }
   | { type: 'subquery'; query: KnexSubqueryBuilder }
   | { type: 'aliasedExpression'; expression: ExpressionNode; alias: string };
@@ -1039,12 +1328,19 @@ interface ExpressionCompileContext {
   naming: NamingStrategy;
   getClient: () => Knex;
   clause: 'where' | 'having';
+  subquery?: boolean;
   tableScope: TableScope;
 }
 
 interface TableScope {
+  readonly tables?: readonly string[];
+  readonly numericCollections?: ReadonlyMap<string, CollectionDefinition>;
   readonly qualifiers: ReadonlyMap<string, string>;
   readonly parent?: TableScope;
+  readonly aggregates?: ReadonlyMap<
+    string,
+    Extract<ExpressionNode, { type: 'aggregate' }>
+  >;
 }
 
 interface ResolvedTableSource {
@@ -1054,6 +1350,7 @@ interface ResolvedTableSource {
 }
 
 interface ResultMap {
+  hidden?: Set<string>;
   explicit: Map<string, string>;
   mapUnmatchedColumns: boolean;
 }
@@ -1435,6 +1732,7 @@ function applyExpressionNode(
     case 'exists':
       applyExistsExpression(query, expression, context, bool, false);
       break;
+    case 'decimalResult':
     case 'parens':
       applyExpressionGroup(
         query,
@@ -1537,6 +1835,36 @@ function applyBinaryExpression(
   const lhs = compileOperand(context, expression.lhs);
   const op = expression.op;
   const rhs = expression.rhs;
+  if (
+    context.client.client.config.client === 'better-sqlite3' &&
+    (operandIsDecimalAggregate(expression.lhs, context) ||
+      operandIsDecimalAggregate(rhs, context))
+  ) {
+    const key = (value: Knex.Raw) =>
+      context.client.raw('nb_decimal_key(?)', [value]);
+    const left = key(typeof lhs === 'string' ? context.client.ref(lhs) : lhs);
+    if (rhs.type === 'value') {
+      const value = Array.isArray(rhs.value)
+        ? rhs.value.map((value) => key(context.client.raw('?', [value] as any)))
+        : rhs.value === null
+          ? null
+          : key(context.client.raw('?', [rhs.value] as any));
+      callValueComparison(query, context, bool, left, op, value);
+    } else {
+      const right =
+        rhs.type === 'ref'
+          ? context.client.ref(
+              mapReference(rhs.reference, context.naming, context.tableScope),
+            )
+          : rhs.type === 'expression'
+            ? expressionNodeToRaw(context, rhs.expression)
+            : context.client.raw('(?)', [
+                rhs.query.buildQuery(context.client, context.tableScope),
+              ]);
+      callBasicComparison(query, context, bool, left, op, key(right));
+    }
+    return;
+  }
 
   if (rhs.type === 'ref') {
     callColumnComparison(
@@ -1584,7 +1912,19 @@ function applyBetweenExpression(
   bool: 'and' | 'or',
   not: boolean,
 ): void {
-  const lhs = compileOperand(context, expression.expression);
+  let lhs = compileOperand(context, expression.expression);
+  let start = expression.start;
+  let end = expression.end;
+  if (
+    context.client.client.config.client === 'better-sqlite3' &&
+    operandIsDecimalAggregate(expression.expression, context)
+  ) {
+    lhs = context.client.raw('nb_decimal_key(?)', [
+      typeof lhs === 'string' ? context.client.ref(lhs) : lhs,
+    ]);
+    start = context.client.raw('nb_decimal_key(?)', [start] as any);
+    end = context.client.raw('nb_decimal_key(?)', [end] as any);
+  }
   const method =
     context.clause === 'having'
       ? not
@@ -1593,10 +1933,7 @@ function applyBetweenExpression(
       : not
         ? 'whereNotBetween'
         : 'whereBetween';
-  callBooleanMethod(query, bool, method, lhs, [
-    expression.start,
-    expression.end,
-  ]);
+  callBooleanMethod(query, bool, method, lhs, [start, end]);
 }
 
 function applyExistsExpression(
@@ -1825,6 +2162,7 @@ function applyJoinExpressionNode(
     case 'exists':
       applyJoinExistsExpression(clause, expression, context, bool, false);
       break;
+    case 'decimalResult':
     case 'parens':
       applyJoinExpressionGroup(
         clause,
@@ -2060,12 +2398,18 @@ function compileOperand(
   operand: OperandNode,
 ): string | Knex.Raw {
   switch (operand.type) {
-    case 'ref':
+    case 'ref': {
+      const aggregate =
+        context.clause === 'having'
+          ? context.tableScope.aggregates?.get(operand.reference)
+          : undefined;
+      if (aggregate) return aggregateNodeToRaw(context, aggregate);
       return mapReference(
         operand.reference,
         context.naming,
         context.tableScope,
       );
+    }
     case 'expression':
       return expressionNodeToRaw(context, operand.expression);
     case 'value':
@@ -2095,6 +2439,8 @@ function expressionNodeToRaw(
       return context.client.raw('(?)', [
         expression.query.buildQuery(context.client, context.tableScope),
       ] as any);
+    case 'decimalResult':
+      return expressionNodeToRaw(context, expression.expression);
     case 'parens':
       return context.client.raw('(?)', [
         expressionNodeToRaw(context, expression.expression),
@@ -2111,14 +2457,32 @@ function expressionNodeToSelectRaw(
   expression: ExpressionNode,
   physicalAlias: string,
 ): Knex.Raw {
+  if (expression.type === 'decimalResult') {
+    return context.client.raw('? as ??', [
+      aggregateProjection(
+        context.client,
+        expressionNodeToRaw(context, expression.expression),
+      ),
+      physicalAlias,
+    ]);
+  }
   if (expression.type === 'aggregate') {
     return aggregateNodeToRaw(context, expression, physicalAlias);
   }
   if (expression.type === 'subquery') {
-    return context.client.raw('(?) as ??', [
+    const value = context.client.raw('(?)', [
       expression.query.buildQuery(context.client, context.tableScope),
+    ]);
+    return context.client.raw('? as ??', [
+      expression.query.numericResult() && !context.subquery
+        ? aggregateProjection(
+            context.client,
+            value,
+            expression.query.resultSource(context.tableScope),
+          )
+        : value,
       physicalAlias,
-    ] as any);
+    ]);
   }
   return context.client.raw('? as ??', [
     expressionNodeToRaw(context, expression),
@@ -2131,34 +2495,31 @@ function aggregateNodeToRaw(
   expression: Extract<ExpressionNode, { type: 'aggregate' }>,
   physicalAlias?: string,
 ): Knex.Raw {
-  const fn = expression.fn === 'countAll' ? 'count' : expression.fn;
-  const bindings: unknown[] = [];
-  let sql: string;
-
-  if (expression.fn === 'countAll') {
-    sql = `${fn}(*)`;
-  } else {
-    const operand = expression.operand;
-    if (!operand || operand.type !== 'ref') {
-      throw new Error(`${expression.fn}() expects a column reference.`);
-    }
-    const castMssqlAverage =
-      expression.fn === 'avg' &&
-      context.client.client.config.client === 'mssql';
-    sql = castMssqlAverage
-      ? `${fn}(${expression.distinct ? 'distinct ' : ''}cast(?? as float))`
-      : `${fn}(${expression.distinct ? 'distinct ' : ''}??)`;
-    bindings.push(
-      mapReference(operand.reference, context.naming, context.tableScope),
-    );
-  }
-
-  if (physicalAlias) {
-    sql = `${sql} as ??`;
-    bindings.push(physicalAlias);
-  }
-
-  return context.client.raw(sql, bindings as any);
+  const kind = expression.fn === 'countAll' ? 'count' : expression.fn;
+  const operand = expression.operand;
+  if (expression.fn !== 'countAll' && operand?.type !== 'ref')
+    throw new Error(`${expression.fn}() expects a column reference.`);
+  const field =
+    operand?.type === 'ref'
+      ? mapReference(operand.reference, context.naming, context.tableScope)
+      : '*';
+  const source =
+    operand?.type === 'ref'
+      ? numericSource(operand.reference, context.tableScope)
+      : undefined;
+  const native = aggregateSql(
+    context.client,
+    kind,
+    field,
+    expression.distinct,
+    source,
+  );
+  if (!physicalAlias) return native;
+  const projected =
+    ['count', 'sum', 'avg'].includes(kind) && !context.subquery
+      ? aggregateProjection(context.client, native, source)
+      : native;
+  return context.client.raw('? as ??', [projected, physicalAlias]);
 }
 
 function normalizeSelectionInput(
@@ -2267,7 +2628,12 @@ function createTableScope(
     );
   }
 
-  return { qualifiers, parent };
+  return {
+    qualifiers,
+    parent,
+    tables: tableExpressions,
+    numericCollections: parent?.numericCollections,
+  };
 }
 
 function resolveTableQualifier(
@@ -2364,11 +2730,13 @@ function mapResultRow(
   const shouldCamelCaseUnmatched =
     resultMap.mapUnmatchedColumns && isUnderscoredNaming(naming);
   return Object.fromEntries(
-    Object.entries(row).map(([key, value]) => [
-      resultMap.explicit.get(key) ??
-        (shouldCamelCaseUnmatched ? camelCase(key) : key),
-      value,
-    ]),
+    Object.entries(row)
+      .filter(([key]) => !resultMap.hidden?.has(key))
+      .map(([key, value]) => [
+        resultMap.explicit.get(key) ??
+          (shouldCamelCaseUnmatched ? camelCase(key) : key),
+        value,
+      ]),
   );
 }
 
@@ -2510,4 +2878,314 @@ function lastReferenceSegment(reference: string): string {
 
 function assertNever(value: never): never {
   throw new Error(`Unhandled value: ${JSON.stringify(value)}`);
+}
+
+function selectionAggregates(
+  selections: readonly SelectItem[],
+): Map<string, Extract<ExpressionNode, { type: 'aggregate' }>> {
+  const result = new Map<
+    string,
+    Extract<ExpressionNode, { type: 'aggregate' }>
+  >();
+  for (const item of selections) {
+    if (item.type !== 'selection' || typeof item.selection === 'string')
+      continue;
+    const node = getExpressionNode(item.selection);
+    if (
+      node.type === 'aliasedExpression' &&
+      node.expression.type === 'aggregate'
+    )
+      result.set(node.alias, node.expression);
+  }
+  return result;
+}
+
+function operandIsDecimalAggregate(
+  operand: OperandNode,
+  context: ExpressionCompileContext,
+): boolean {
+  if (operand.type === 'subquery') return operand.query.numericResult();
+  const node =
+    operand.type === 'ref'
+      ? context.tableScope.aggregates?.get(operand.reference)
+      : operand.type === 'expression'
+        ? operand.expression
+        : undefined;
+  if (node?.type === 'subquery') return node.query.numericResult();
+  return node?.type === 'aggregate' && ['sum', 'avg'].includes(node.fn);
+}
+
+async function prepareAggregateDecoder(
+  selections: readonly SelectItem[],
+  tables: string[],
+  lookup?: CollectionLookup,
+): Promise<(row: Row) => Row> {
+  const decoders = new Map<string, (value: unknown) => unknown>();
+  for (const item of selections) {
+    if (item.type !== 'selection' || typeof item.selection === 'string')
+      continue;
+    const node = getExpressionNode(item.selection);
+    if (node.type !== 'aliasedExpression') continue;
+    if (node.expression.type === 'decimalResult') {
+      decoders.set(node.alias, decimalString);
+      continue;
+    }
+    if (node.expression.type === 'subquery') {
+      decoders.set(
+        node.alias,
+        await node.expression.query.resultDecoder(lookup),
+      );
+      continue;
+    }
+    if (node.expression.type !== 'aggregate') continue;
+    const expression = node.expression;
+    let source: FieldDefinition | undefined;
+    if (
+      lookup &&
+      expression.operand?.type === 'ref' &&
+      ['min', 'max', 'sum', 'avg'].includes(expression.fn)
+    ) {
+      const parts = expression.operand.reference.split('.');
+      const name = parts.pop()!;
+      const qualifier = parts.join('.');
+      for (const table of tables) {
+        const parsed = parseAliasedIdentifier(table);
+        if (qualifier && qualifier !== (parsed.alias ?? parsed.identifier))
+          continue;
+        const collection = await lookup(parsed.identifier);
+        const field = collection?.fields?.find(
+          (field) => field.name === name && !('target' in field),
+        );
+        if (field) {
+          source = field as FieldDefinition;
+          break;
+        }
+      }
+    }
+    const kind = expression.fn === 'countAll' ? 'count' : expression.fn;
+    decoders.set(node.alias, (value) => decodeAggregate(kind, value, source));
+  }
+  if (decoders.size === 0) return (row) => row;
+  return (row) => {
+    for (const [key, decode] of decoders) {
+      if (Object.hasOwn(row, key)) row[key] = decode(row[key]);
+    }
+    return row;
+  };
+}
+
+async function decimalField(
+  reference: string,
+  tables: string[],
+  lookup?: CollectionLookup,
+): Promise<boolean> {
+  if (!lookup) return false;
+  const parts = reference.split('.');
+  const name = parts.pop();
+  const qualifier = parts.join('.');
+  for (const table of tables) {
+    const parsed = parseAliasedIdentifier(table);
+    if (qualifier && qualifier !== (parsed.alias ?? parsed.identifier))
+      continue;
+    const collection = await lookup(parsed.identifier);
+    const field = collection?.fields?.find((field) => field.name === name);
+    if (field) return field.type === 'decimal';
+  }
+  return false;
+}
+
+async function selectionIsDecimal(
+  selection: SelectionExpression,
+  tables: string[],
+  lookup?: CollectionLookup,
+): Promise<boolean> {
+  if (typeof selection === 'string')
+    return decimalField(
+      parseAliasedIdentifier(selection).identifier,
+      tables,
+      lookup,
+    );
+  let node = getExpressionNode(selection);
+  if (node.type === 'aliasedExpression') node = node.expression;
+  if (node.type === 'ref') return decimalField(node.reference, tables, lookup);
+  if (
+    node.type === 'aggregate' &&
+    ['min', 'max'].includes(node.fn) &&
+    node.operand?.type === 'ref'
+  )
+    return decimalField(node.operand.reference, tables, lookup);
+  if (node.type === 'subquery')
+    return node.query.hasDecimalResult(lookup, tables);
+  return false;
+}
+
+/** Cast only selected result values; predicates and inner SQL keep numeric types. */
+async function prepareDecimalSelections(
+  selections: readonly SelectItem[],
+  tables: string[],
+  lookup?: CollectionLookup,
+): Promise<SelectItem[]> {
+  if (!lookup) return [...selections];
+  const expanded: SelectItem[] = [];
+  for (const item of selections.length
+    ? selections
+    : [{ type: 'all' } as SelectItem]) {
+    const star =
+      item.type === 'all'
+        ? item.table
+          ? `${item.table}.*`
+          : '*'
+        : typeof item.selection === 'string' &&
+            (item.selection === '*' || item.selection.endsWith('.*'))
+          ? item.selection
+          : undefined;
+    if (!star) {
+      expanded.push(item);
+      continue;
+    }
+    const matching = tables.filter((table) => {
+      const parsed = parseAliasedIdentifier(table);
+      return (
+        star === '*' ||
+        star.slice(0, -2) === (parsed.alias ?? parsed.identifier)
+      );
+    });
+    if (matching.length === 0) {
+      expanded.push(item);
+      continue;
+    }
+    for (const table of matching) {
+      const parsed = parseAliasedIdentifier(table);
+      const collection = await lookup(parsed.identifier);
+      if (!collection?.fields?.some((field) => field.type === 'decimal')) {
+        expanded.push({
+          type: 'all',
+          table: parsed.alias ?? parsed.identifier,
+        });
+        continue;
+      }
+      for (const field of collection.fields) {
+        if ('target' in field) continue;
+        expanded.push({
+          type: 'selection',
+          selection: `${parsed.alias ?? parsed.identifier}.${field.name}`,
+        });
+      }
+    }
+  }
+  const result: SelectItem[] = [];
+  for (const item of expanded) {
+    if (
+      item.type !== 'selection' ||
+      !(await selectionIsDecimal(item.selection, tables, lookup))
+    ) {
+      result.push(item);
+      continue;
+    }
+    const node =
+      typeof item.selection === 'string'
+        ? {
+            type: 'aliasedExpression' as const,
+            alias: logicalResultKeyForSelection(item.selection),
+            expression: {
+              type: 'ref' as const,
+              reference: parseAliasedIdentifier(item.selection).identifier,
+            },
+          }
+        : getExpressionNode(item.selection);
+    if (node.type !== 'aliasedExpression') {
+      result.push(item);
+      continue;
+    }
+    result.push({
+      type: 'selection',
+      selection: createAliasedExpression(
+        { type: 'decimalResult', expression: node.expression },
+        node.alias,
+      ),
+    });
+  }
+  return result;
+}
+
+/** Prepare schema only for adapters needing aggregate input types; PG/MySQL bypass this. */
+async function collectNumericCollections(
+  state: SelectState,
+  table: string,
+  lookup: CollectionLookup,
+  collections = new Map<string, CollectionDefinition>(),
+): Promise<Map<string, CollectionDefinition>> {
+  for (const name of [table, ...state.joins.map((join) => join.table)]) {
+    const identifier = parseAliasedIdentifier(name).identifier;
+    if (!collections.has(identifier)) {
+      const collection = await lookup(identifier);
+      if (collection) collections.set(identifier, collection);
+    }
+  }
+  const visit = async (node: ExpressionNode | OperandNode): Promise<void> => {
+    if (node.type === 'subquery' || node.type === 'exists') {
+      await node.query.collectNumericCollections(lookup, collections);
+    } else if (node.type === 'binary') {
+      await visit(node.lhs);
+      await visit(node.rhs);
+    } else if (node.type === 'and' || node.type === 'or') {
+      for (const expression of node.expressions) await visit(expression);
+    } else if (
+      node.type === 'not' ||
+      node.type === 'parens' ||
+      node.type === 'aliasedExpression' ||
+      node.type === 'decimalResult' ||
+      node.type === 'expression' ||
+      node.type === 'between'
+    ) {
+      await visit(node.expression);
+    }
+  };
+  for (const item of state.selections) {
+    if (item.type === 'selection' && typeof item.selection !== 'string')
+      await visit(getExpressionNode(item.selection));
+  }
+  for (const expression of [
+    ...state.where,
+    ...state.having,
+    ...state.joins.flatMap((join) => join.conditions),
+  ])
+    await visit(expression);
+  return collections;
+}
+
+function numericSource(
+  reference: string,
+  scope: TableScope,
+): FieldDefinition | undefined {
+  const parts = reference.split('.');
+  const name = parts.pop();
+  const qualifier = parts.join('.');
+  for (const table of scope.tables ?? []) {
+    const parsed = parseAliasedIdentifier(table);
+    if (qualifier && qualifier !== (parsed.alias ?? parsed.identifier))
+      continue;
+    const collection = scope.numericCollections?.get(parsed.identifier);
+    const field = collection?.fields?.find(
+      (field) => field.name === name && !('target' in field),
+    );
+    if (field) return field as FieldDefinition;
+    if (qualifier) return undefined;
+  }
+  return scope.parent ? numericSource(reference, scope.parent) : undefined;
+}
+
+function memoizedCollectionLookup(
+  lookup?: CollectionLookup,
+): CollectionLookup | undefined {
+  if (!lookup) return undefined;
+  const cache = new Map<string, ReturnType<CollectionLookup>>();
+  return (name) => {
+    let value = cache.get(name);
+    if (!value) {
+      value = lookup(name);
+      cache.set(name, value);
+    }
+    return value;
+  };
 }

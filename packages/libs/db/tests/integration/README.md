@@ -11,6 +11,8 @@ The suite is split by public capability:
 tests/
   fixtures/
   integration/
+    bigint/
+    count/
     builder/
     collection/
     metadata/
@@ -21,6 +23,9 @@ tests/
     seed/
 ```
 
+`bigint/` groups cross-API BIGINT precision scenarios for Query, Repository,
+and database driver behavior. See its [coverage index](./bigint/README.md).
+`count/` verifies safe number results for COUNT across all five databases, including aliases, DISTINCT, nulls, empty sets, groups, transactions and scalar subqueries.
 `builder/` covers Collection Builder DDL and metadata synchronization.
 `collection/` covers the resolved Collection API for managed and external
 Schemas. `metadata/` covers persistent Store, compare-and-swap, pagination, and

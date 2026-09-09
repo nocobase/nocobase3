@@ -44,9 +44,21 @@ describeIntegrationDatabases('query joins', (context) => {
         .orderBy('o.orderNo')
         .execute(),
     ).resolves.toEqual([
-      { order_id: 1, order_no: 'SO-001', customer_name: 'Ada' },
-      { order_id: 2, order_no: 'SO-002', customer_name: 'Grace' },
-      { order_id: 3, order_no: 'SO-003', customer_name: null },
+      {
+        order_id: context.spec.dialect === 'oracle' ? '1' : 1,
+        order_no: 'SO-001',
+        customer_name: 'Ada',
+      },
+      {
+        order_id: context.spec.dialect === 'oracle' ? '2' : 2,
+        order_no: 'SO-002',
+        customer_name: 'Grace',
+      },
+      {
+        order_id: context.spec.dialect === 'oracle' ? '3' : 3,
+        order_no: 'SO-003',
+        customer_name: null,
+      },
     ]);
 
     await expect(

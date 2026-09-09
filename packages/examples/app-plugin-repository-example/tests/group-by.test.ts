@@ -48,20 +48,20 @@ it('groups customer totals and composite enum/price keys with readable names', a
       name: 'Mechanical Keyboard',
       price: 11900,
       count: 1,
-      quantity: 2,
+      quantity: '2',
     },
     {
       id: 'demo-product-1',
       name: 'Mechanical Keyboard',
       price: 12900,
       count: 1,
-      quantity: 1,
+      quantity: '1',
     },
   ]);
   expect(examples[2]?.rows[0]).toMatchObject({
     name: '27-inch Monitor',
     count: 1,
-    quantity: 3,
+    quantity: '3',
   });
   expect(calls.filter((call) => call.action === 'groupBy')).toHaveLength(3);
 });
@@ -81,7 +81,7 @@ it('applies HAVING to each group instead of the customer total or unit quantity'
       name: 'USB-C Dock',
       price: 18900,
       count: 2,
-      quantity: 2,
+      quantity: '2',
     },
   ]);
 });

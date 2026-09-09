@@ -118,7 +118,7 @@ Full DB package acceptance, including every integration suite: **3,325 passed, z
 | Oracle Free 23 integration      |    600 |      0 |       1 |
 | SQL Server 2022 integration     |    600 |      0 |       1 |
 
-All four skips are the same existing PostgreSQL-specific bigint-string transport scenario, executed successfully on PostgreSQL and not applicable to the other four backends. No failures were converted to skips. BigInt/Decimal transport redesign remains deferred.
+All four skips in this historical snapshot are the same existing PostgreSQL-specific bigint-string transport scenario. The newer [five-database BigInt coverage](#bigint-precise-string-transport) exercises all backends without skips; the former PostgreSQL-only identity scenario now runs on all five too. BigInt/Decimal transport redesign remains deferred.
 
 Reproduce from the DB package directory with Node 24+ and all services ready:
 
@@ -133,6 +133,70 @@ The SQL Server matrix runs test files serially to isolate DDL fixtures; explicit
 - Type tests require `pnpm typecheck`; a Vitest pass alone does not evaluate negative compile-time assertions.
 - Test services use the dedicated `codex-filter-regression` Compose project; services are stopped after acceptance and volumes retained.
 - PostgreSQL still emits a non-failing concurrent-client query deprecation warning; the pg 9 follow-up is recorded below.
+
+### BigInt precise string transport
+
+[BigInt transport](../bigint/transport.test.ts) runs 20 cases per
+database, 100 in the complete matrix, without skips. BIGINT values, including
+zero and small values, must return exact strings from both Query and
+Repository; null remains null. The [identity suite](./identity/key-types-and-returning.test.ts)
+also checks a primary key above `Number.MAX_SAFE_INTEGER` on all five databases.
+
+Coverage includes CRUD results, Query writes and aliased joins, exact string
+predicates and numeric ordering of adjacent large values, positive/negative
+safe and unsafe ranges, 18-digit and signed 64-bit limits, null, native bigint
+bindings, scalar and relation streams, nested transactions, ordinary integer
+preservation, expression validation versus plain values, and atomic increments.
+SQL-side text projections verify stored digits independently from driver
+result decoding.
+
+Validation on 2026-09-09 (Node 24.15.0): the complete five-database package run
+executed 3,885 tests in 185 files (3,870 passed, seven old type assertions
+failed, eight pre-existing skips). After updating the Oracle physical-type
+assertions, focused reruns passed all 142 cases across four files and all 145
+cases across three files, including every previously failing case and all
+100 bigint transport cases. The initial full run was not repeated. All 29
+downstream package suites passed after updating their bigint expectations;
+lint, typechecks, builds, API checks, changeset validation, and a deployed
+SQLite BIGINT read smoke test passed. The three application templates built
+successfully; Hub was rebuilt serially after concurrent dependency rebuilds
+removed a shared dist directory. The dedicated database services were stopped
+without deleting volumes.
+
+The driver codecs preserve integers before JS number conversion. SQLite uses
+statement column metadata and exact int64 reads, MySQL enables big-number
+strings, and Oracle fetches `NUMBER(p,0)` with `p >= 16` as strings. PostgreSQL
+and SQL Server already decode BIGINT as strings by default. Repository also
+normalizes logical bigInt fields and rejects already rounded numbers instead
+of fabricating exact strings. Ordinary Repository integer/increment fields
+remain safe numbers. Query uses physical result metadata, so Oracle INTEGER
+(which is NUMBER(38,0)) returns strings too; SQLite expressions without declared
+column types retain safe numbers and use strings for unsafe int64 results.
+
+Remaining defects are explicitly characterized, not claimed to be fixed:
+
+- Oracle Builder's non-generated bigInt remains NUMBER(18,0), so the full signed
+  64-bit limits are rejected.
+- SQL Server still rejects native bigint create/Query parameters. String
+  parameters are exact.
+- Incrementing `9007199254740993` by number `2` on SQLite or string/bigint `2`
+  on MySQL stores `9007199254740994`, rather than `9007199254740995`, because
+  the SQL expression uses floating-point arithmetic. Read codecs preserve the
+  stored result but cannot repair arithmetic that already lost precision.
+- Repository string filters still fail with INVALID_FILTER. Plain unsafe
+  number writes bypass the expression validator; SQL Server rejects them at
+  the driver boundary, while four drivers accept the already rounded value.
+
+Reproduce from the package directory with Node 24+ and all services ready:
+
+```sh
+INTEGRATION_DB_CONNECTIONS=all pnpm exec vitest run tests/integration/bigint tests/integration/repository/identity/key-types-and-returning.test.ts
+```
+
+Arithmetic overflow, JSON-embedded numbers, external
+schemas with different physical types, and caller-supplied driver parsers are
+not a universal precision contract. See the remaining
+[precise numeric value proposal](../../../docs/zh-CN/proposals/precise-numeric-values.md).
 
 ### Unified findMany consumption
 
@@ -186,3 +250,7 @@ Stream lifecycle tests exposed a delayed Knex close listener racing database poo
 Malformed Select tests exposed native TypeErrors when traversing invalid fields/includes. Repository now validates these structures before traversal and rejects them with INVALID_SELECT before executing writes.
 
 Relation result tests also exposed malformed combine branches being accepted or raising native TypeErrors. Explicit null/false results, non-object branch maps and malformed branch selections now fail with INVALID_SELECT; unknown aggregate functions retain INVALID_AGGREGATE. All seven mutation returning methods (including both upsert branches) preserve root/child rows and managed versions on this rejection.
+
+Aggregate results now follow the [shared precise numeric contract](../bigint/README.md#aggregate-results).
+COUNT is a safe integer number at root, group, relation, and standalone Repository entry points. Counts above Number.MAX_SAFE_INTEGER fail with INVALID_STORED_VALUE.
+The historical validation counts above predate this change.

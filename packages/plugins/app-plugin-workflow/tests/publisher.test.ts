@@ -85,7 +85,10 @@ describe('workflow publisher', () => {
         .select(['workflowId', 'hash'])
         .where('id', '=', oldRunId)
         .executeTakeFirstOrThrow<Row>(),
-    ).resolves.toEqual({ workflowId: second.workflowId, hash: v2.digest });
+    ).resolves.toEqual({
+      workflowId: String(second.workflowId),
+      hash: v2.digest,
+    });
   });
   it('rolls back DB registration after a consistency failure while leaving the imported orphan safe', async () => {
     const value = await artifact(storage, 'bad', 'bad');

@@ -30,6 +30,8 @@
     "build": "node ./scripts/clean-dist.mjs && tsc -p tsconfig.build.json",
     "prepack": "pnpm build",
     "example": "tsx ./examples/command.ts",
+    "benchmark:numeric": "tsx ./benchmarks/numeric/run.ts",
+    "typecheck:benchmarks": "tsc -p benchmarks/tsconfig.json --noEmit",
     "playground": "tsx ./playground/command.ts",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",

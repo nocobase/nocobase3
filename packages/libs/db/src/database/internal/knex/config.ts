@@ -167,6 +167,9 @@ function resolveMysqlConnection(
 
   return compactObject({
     ...config.driverOptions,
+    supportBigNumbers: true,
+    bigNumberStrings: true,
+    decimalNumbers: false,
     host: config.host,
     port: config.port,
     database: config.database,

@@ -89,7 +89,7 @@ it('infers empty, default, records-only and aggregate-only selections without ex
   expectTypeOf<keyof Aggregates['tasks']>().toEqualTypeOf<'count' | 'sum'>();
   expectTypeOf<Aggregates['tasks']['count']>().toEqualTypeOf<number>();
   expectTypeOf<Aggregates['tasks']['sum']>().toEqualTypeOf<
-    number | string | bigint | null
+    string | number | null
   >();
   expectTypeOf<ReturnType<typeof _createEmptyUsers>>().toEqualTypeOf<
     Promise<CreateManyResult<Pick<UserRecord, never>>>
@@ -181,9 +181,7 @@ it('infers relation aggregate and combine outputs with selected root fields', ()
   expectTypeOf<Row['id']>().toEqualTypeOf<string>();
   expectTypeOf<Row['comments']>().toEqualTypeOf<number>();
   expectTypeOf<Row['tasks']['count']>().toEqualTypeOf<number>();
-  expectTypeOf<Row['tasks']['total']>().toEqualTypeOf<
-    number | string | bigint | null
-  >();
+  expectTypeOf<Row['tasks']['total']>().toEqualTypeOf<string | number | null>();
   expectTypeOf<
     keyof Row['tasks']['records'][number]
   >().toEqualTypeOf<'title'>();

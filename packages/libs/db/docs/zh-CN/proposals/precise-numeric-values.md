@@ -5,6 +5,8 @@ description: 记录 Query where 与 Repository filter 的精确数值风险、�
 
 # BigInt 与 Decimal 精确数值处理
 
+> Implementation update: BIGINT column reads now preserve exact strings in Query and Repository across the five default drivers. See [Query results](../query/overview.md#exact-bigint-results) and [Repository values](../repository/values.md). The original observations below are historical; remaining Filter/input, arithmetic, Decimal, and aggregate policy is still deferred.
+
 > 状态：待决策，暂缓实施。本文记录问题与候选方案，不代表当前 API 或已批准的实现计划。记录日期：2026-09-05。
 
 ## 问题

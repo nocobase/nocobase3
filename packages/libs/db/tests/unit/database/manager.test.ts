@@ -898,7 +898,9 @@ describe('DatabaseManager', () => {
         },
       }).connection,
     ).toEqual({
-      decimalNumbers: true,
+      decimalNumbers: false,
+      supportBigNumbers: true,
+      bigNumberStrings: true,
       host: '127.0.0.1',
       port: 3306,
       database: 'orders',
@@ -918,6 +920,9 @@ describe('DatabaseManager', () => {
       }).connection,
     ).toEqual({
       socketPath: '/tmp/mysql.sock',
+      decimalNumbers: false,
+      supportBigNumbers: true,
+      bigNumberStrings: true,
       database: 'orders',
       user: 'orders_user',
       password: 'secret',

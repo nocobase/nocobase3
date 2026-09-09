@@ -122,9 +122,9 @@ describeIntegrationDatabases(
         );
         const after = await context.db(context.table(c.table)).orderBy('id');
         expect(after).toHaveLength(before.length + 1);
-        expect(after.filter((row) => row.id !== firstTarget.id)).toEqual(
-          before,
-        );
+        expect(
+          after.filter((row) => String(row.id) !== String(firstTarget.id)),
+        ).toEqual(before);
         if (many) expect(second.record[c.relation]).toHaveLength(1);
       },
     );

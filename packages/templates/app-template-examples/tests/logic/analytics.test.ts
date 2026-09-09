@@ -317,7 +317,9 @@ it('reads relations, aggregates and groups seeded metrics through the analytics 
     await (
       await request('analyticsDailyMetrics', 'aggregate', { aggregate })
     ).json(),
-  ).toEqual({ data: { count: 12, spendCents: 186000, revenueCents: 1344000 } });
+  ).toEqual({
+    data: { count: 12, spendCents: '186000', revenueCents: '1344000' },
+  });
   const grouped = await request('analyticsDailyMetrics', 'groupBy', {
     by: ['campaignId'],
     aggregate,
@@ -328,14 +330,14 @@ it('reads relations, aggregates and groups seeded metrics through the analytics 
       {
         campaignId: 'campaign-search',
         count: 3,
-        spendCents: 108000,
-        revenueCents: 576000,
+        spendCents: '108000',
+        revenueCents: '576000',
       },
       {
         campaignId: 'campaign-draft',
         count: 3,
-        spendCents: 0,
-        revenueCents: 0,
+        spendCents: '0',
+        revenueCents: '0',
       },
     ]),
   });

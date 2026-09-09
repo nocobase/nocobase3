@@ -14,3 +14,5 @@
 供 App Agent 使用的集成指南见 [SKILL](skills/nocobase-app-plugin-file-repository/SKILL.md)。当前认证授权、stream 和文件删除边界见手册的[当前限制](docs/README.md#当前限制)。
 
 已采纳的设计保留在[提案文档](docs/proposals/README.md)，用于追溯设计约定与暂未实现的范围。
+
+`FileRecord.size` 的类型是 `string | number`：`bigInt` 字段返回精确整数字符串，`integer` 字段返回数字。前端展示和 HTTP 传输应保留字符串，避免大文件大小转换为 `number` 后失真。

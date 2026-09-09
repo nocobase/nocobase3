@@ -663,7 +663,7 @@ export interface AggregateExpression<T = unknown> {
   readonly [aggregateExpressionType]?: T;
 }
 
-export type RepositoryAggregateNumeric = number | string | bigint;
+export type RepositoryAggregateNumeric = string | number;
 
 export interface AggregateBuilder<TRecord extends object = RepositoryRecord> {
   count(field?: keyof TRecord & string): AggregateExpression<number>;

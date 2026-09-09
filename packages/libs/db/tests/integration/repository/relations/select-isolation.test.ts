@@ -171,7 +171,10 @@ describeIntegrationDatabases('Repository Select isolation', (context) => {
         expect(rows).toEqual([
           {
             id: 'P',
-            tasks: { count: ids.length, records: ids.map((id) => ({ id })) },
+            tasks: {
+              count: ids.length,
+              records: ids.map((id) => ({ id })),
+            },
           },
         ]);
       }

@@ -108,6 +108,7 @@ export class KnexDatabaseConnection implements DatabaseConnection {
         underscored: this.config.naming?.underscored,
         tablePrefix: this.config.naming?.tablePrefix,
       }),
+      (name) => this.collections.get(name),
     );
     const collections = new CollectionRegistry({
       inspector: this.schemaInspector,

@@ -14,6 +14,7 @@ description: 在 NocoBase 3 App 中接入文件 collection，声明文件 API �
 - Server 插件列表注册 `./server` 默认导出；Client 列表注册 `./client` 默认导出工厂的调用结果。核心插件排在使用它的业务插件之前。
 - 核心插件不会自动建表或开放文件资源。按任务需要在 App 或业务插件中添加自包含迁移及路由。
 - 独立的 `@nocobase/app-plugin-file-repository-example` 已拥有 `attachments` 迁移、资源路由和 `/dev/file-repository` 页面。启用它时不要重复注册这些资源。
+- `FileRecord.size` returns an exact string for a `bigInt` column and a number for an `integer` column. Keep the string intact for transport and display.
 - 文件 collection 必须具备固定字段，无映射：`id` 为 UUID 兼容的唯一主键字段；`disk`、`key`、`filename`、`ext`、`mimeType` 为 string/char/text；`size` 为 integer/bigInt；`createdAt`、`updatedAt` 为 datetime/datetimeTz。字符串主键须容纳 36 字符。
 - 上传由服务端生成 UUID/key、规范化文件名与扩展名、读取实际存储大小并写时间。额外业务必填字段需要默认值，上传不接收 `values`。`contentUrl` 为响应字段，不建列。
 

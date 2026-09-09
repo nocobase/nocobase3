@@ -112,7 +112,7 @@ describe('database file store', () => {
       key: created.key,
       filename: created.filename,
       mimeType: created.mimeType,
-      size: 42,
+      size: '42',
       public: 0,
     });
 

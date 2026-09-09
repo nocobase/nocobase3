@@ -111,7 +111,7 @@ describe('server repository and Client API', () => {
     expect(record).toMatchObject({
       filename: '你好.TXT',
       ext: 'txt',
-      size: 5,
+      size: '5',
       disk: 'local',
       mimeType: 'text/plain',
     });

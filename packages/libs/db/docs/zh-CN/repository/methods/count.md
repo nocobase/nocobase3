@@ -41,7 +41,7 @@ const result = await db.repository('projects').count({
 
 仅接受 filter/context，不接受 select、sort、limit、distinct，也不继承其他查询的条件。省略 filter 检查全部记录；空对象 Filter 不表示全选。
 
-查询列表与总数时显式复用 Filter；两次调用不自动共享快照。count 统计记录行数，按字段非 NULL 计数用 [aggregate](./aggregate.md)，分组计数用 [groupBy](./group-by.md)。当前 count 转为 number，超大计数存在安全整数边界，不应据返回类型推断无精度风险。
+查询列表与总数时显式复用 Filter；两次调用不自动共享快照。count 统计记录行数，按字段非 NULL 计数用 [aggregate](./aggregate.md)，分组计数用 [groupBy](./group-by.md)。count 返回安全整数 number；超过 Number.MAX_SAFE_INTEGER 时抛出 INVALID_STORED_VALUE，避免静默舍入。
 
 关系条件参见 [Filter](../filter.md)，上下文解析规则参见 [Context](../context.md)。
 
@@ -76,7 +76,7 @@ const all = await projects.count();
 // rows: [{ id: 'ct-b' }]; total: 2; all: 3
 ```
 
-测试断言：count 不继承 limit/offset，也不继承上一次查询的 Filter；同一个 Filter 模板用 `{ status: 'draft' }` 得到 1，用 `{ status: 'missing' }` 得到 0。缺失 `$status` 应报 VARIABLE_NOT_FOUND，不能当成 0。多次查询是否共享一致快照由事务和数据库隔离级别决定。
+测试断言：count 不继承 limit/offset，也不继承上一次查询的 Filter；同一个 Filter 模板用 `{ status: 'draft' }` 得到 `1`，用 `{ status: 'missing' }` 得到 `0`。缺失 `$status` 应报 VARIABLE_NOT_FOUND，不能当成 0。多次查询是否共享一致快照由事务和数据库隔离级别决定。
 
 ## 场景 CT-02：统计父记录，不统计关联目标数
 
@@ -100,7 +100,7 @@ await projects.createOne({ values: { id: 'ct-parent-b', name: 'B' } });
 const parents = await projects.count({
   filter: (f) => f.relation('tasks').some((t) => t.string('status').eq('open')),
 });
-// parents: 1, not 2
+// parents: 1
 ```
 
 测试断言：一个父记录有多个符合条件的关联目标时仍只计一次；无任务的父记录不匹配 some。统计任务总数应使用 tasks Repository，按父记录返回任务统计应使用关系 Select 的 count/combine。
@@ -112,3 +112,5 @@ CT-01 / CT-02 已落为独立集成测试，使用与文档相同的关键数据
 ## 验证依据
 
 行为覆盖见 [count.test.ts](../../../../tests/integration/repository/methods/count.test.ts)；公开签名见 [API 参考](../../reference/repository-api.md)。
+
+COUNT 返回安全整数 number，空集合返回 `0`。只检查存在性时可以使用 `exists()`。写入结果中的 createdCount/updatedCount/deletedCount 仍为 number。

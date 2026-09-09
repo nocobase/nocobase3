@@ -89,11 +89,22 @@ Collection 不要求 id 或主键。单条写入需要完整非空主键或无�
 - 自增、数据库生成和乐观锁版本字段由数据库／Repository 管理，不手动赋值。
 - 更新省略字段表示不改动；null 表示写入空值，受实际约束限制。
 - context 不自动填充任何字段，也不充当权限控制。
-- 各字段名不决定类型；bigInt/decimal 的统一精度契约尚未完成，仍属于[提案议题](../proposals/precise-numeric-values.md)，不要将候选方案视为当前返回类型承诺。
+- Field names do not determine types. `bigInt` reads return exact integer strings; `decimal` reads preserve database decimal strings; the remaining numeric input/filter rules are tracked in the [proposal](../proposals/precise-numeric-values.md).
 
 ## 写入值与返回值不是同一层契约
 
-values callback 和变量只处理输入，不改变驱动的结果解码。尤其 JSON 字段可能由驱动返回对象或 JSON 文本，Decimal／BigInt 也没有统一的跨数据库返回表示；不能仅根据写入时传了对象或字符串，断言查询返回同一种 JS 类型。验证精度和 JSON 内容应使用目标数据库的实际读写结果，不能用类型断言替代验证。
+Values callbacks and variables process inputs independently of result decoding.
+`bigInt` fields return exact integer strings on all five databases, including
+small values such as `"0"`; null stays null. This applies to normal reads,
+relations, iteration, and mutation results. Integer/increment fields remain
+safe numbers. The driver preserves the integer before JavaScript number
+conversion; an already rounded number is rejected rather than stringified.
+
+JSON fields may still return objects or JSON text depending on the driver,
+and Decimal does not have a unified return representation. Exact reads cannot
+repair unsafe input numbers or SQL arithmetic that already lost precision.
+Repository numeric filters still require finite numbers; do not use `Number()`
+to force an exact bigint string through that restriction.
 
 ## 数值原子更新
 
@@ -142,3 +153,30 @@ await db.repository('tasks').updateOne({
 操作结构必须由调用方明确声明，变量解析出的对象不能变成 increment/connect 等操作。根级 upsert 两个分支都会预校验，即使最终只执行一个分支。
 
 验证依据：[变量与 callback](../../../tests/integration/repository/capabilities/values-variables.test.ts)、[原子更新](../../../tests/unit/repository/values/atomic.test.ts)。
+
+### DECIMAL read results
+
+Query and Repository return `decimal` values as strings or null across all five
+databases. Ordinary reads and MIN/MAX preserve the database's output format:
+PostgreSQL/MySQL may return `'42.00'`; Oracle/SQLite may return `'42'` or another
+equivalent decimal representation. Trailing zeros are neither stripped nor padded.
+This includes column aliases, scalar subqueries, grouped fields, relation records,
+forward iteration, and mutation records.
+
+PostgreSQL/MySQL use native driver results without decimal text projections or
+numeric field lookups in Query. MySQL enforces `decimalNumbers: false` alongside
+`supportBigNumbers: true` and `bigNumberStrings: true`, overriding conflicting
+`driverOptions.decimalNumbers`; custom parsers must preserve exact strings.
+PostgreSQL creation uses exact RETURNING values
+without a decimal-specific reload. Other drivers receive text projections where
+needed before a number conversion could lose precision; mutation reloads remain
+where required. Numeric predicates and ordering retain numeric SQL semantics.
+COUNT returns a checked safe integer number. SUM/AVG of integer, BIGINT and
+DECIMAL fields preserve database decimal strings; FLOAT/DOUBLE SUM/AVG return
+numbers. PostgreSQL/MySQL use native aggregate computation and formatting.
+
+SQLite retains its native numeric/REAL storage. The codec preserves the stored
+value and avoids SQLite's default text conversion truncating significant digits;
+it cannot recover precision lost when a value was stored as REAL. FLOAT and
+DOUBLE ordinary reads remain numbers. Numeric input and filter validation are
+unchanged.

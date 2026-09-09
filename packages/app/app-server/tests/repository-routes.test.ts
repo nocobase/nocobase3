@@ -135,7 +135,7 @@ describe('Repository API routes', () => {
       await orders.aggregate({
         aggregate: (a) => ({ count: a.count(), total: a.sum('version') }),
       }),
-    ).toEqual({ count: 1, total: 1 });
+    ).toEqual({ count: 1, total: '1' });
     const groups = buildGroupByOptions<Order>({
       by: ['status'],
       aggregate: (a) => ({ count: a.count() }),
@@ -570,7 +570,7 @@ describe('Repository API routes', () => {
       }),
     ).toEqual({
       id: 'parent',
-      children: { records: [{ id: 'child', points: 5 }], total: 5 },
+      children: { records: [{ id: 'child', points: 5 }], total: '5' },
     });
     await expect(
       parents.createOne({
@@ -662,8 +662,8 @@ describe('Repository API routes', () => {
     // maxLimit restricts findMany, never the input rows of an aggregate.
     expect(await orders.aggregate({ aggregate })).toEqual({
       count: 3,
-      total: 3,
-      average: 1,
+      total: '3',
+      average: '1',
       minimum: 1,
       maximum: 1,
     });
@@ -678,7 +678,7 @@ describe('Repository API routes', () => {
     });
     expect(
       await orders.aggregate({ filter: { status: 'paid' }, aggregate }),
-    ).toMatchObject({ count: 2, total: 2 });
+    ).toMatchObject({ count: 2, total: '2' });
     expect(
       await orders.groupBy({
         by: ['status'],
@@ -709,8 +709,8 @@ describe('Repository API routes', () => {
       {
         status: 'paid',
         count: 2,
-        total: 2,
-        average: 1,
+        total: '2',
+        average: '1',
         minimum: 1,
         maximum: 1,
       },

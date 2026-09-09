@@ -1,3 +1,10 @@
+import { decimalString } from '../../numeric/decimal.js';
+import {
+  aggregateSql,
+  aggregateProjection,
+  decodeAggregate,
+  decodeCount,
+} from '../../numeric/aggregate.js';
 import type { Knex } from 'knex';
 import { Readable } from 'node:stream';
 import type {
@@ -20,6 +27,7 @@ import {
 } from '../boolean.js';
 import { normalizeEnumValue } from '../enum.js';
 import { spoolRows } from './row-spool.js';
+import { decodeIntegerValue } from '../integer.js';
 import { prepareScalarRowDecoder } from './row-decoder.js';
 import { isTemporalType, normalizeTemporalValue } from '../temporal.js';
 import { temporalBinding, temporalProjection } from './temporal-sql.js';
@@ -245,9 +253,12 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
   async count(plan: RepositoryFilterPlan): Promise<number> {
     const client = this.getClient();
     const alias = 'repository_root';
-    const query = tableQuery(client, plan.collection, alias).count({
-      count: '*',
-    });
+    const query = tableQuery(client, plan.collection, alias).select(
+      client.raw('? as ??', [
+        aggregateProjection(client, aggregateSql(client, 'count', '*')),
+        'count',
+      ]),
+    );
     const graph = await this.prepareFilterGraph(
       plan.collection,
       plan.filter?.root,
@@ -262,7 +273,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     );
     const row = (await query.first()) as
       { count?: string | number } | undefined;
-    return Number(row?.count ?? 0);
+    return decodeCount(row?.count);
   }
 
   async exists(plan: RepositoryFilterPlan): Promise<boolean> {
@@ -296,24 +307,29 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
         item.field !== undefined
           ? qualified(alias, column(plan.collection, item.field))
           : '*';
-      if (item.kind === 'count') query.count({ [resultAlias]: field });
-      if (item.kind === 'sum') query.sum({ [resultAlias]: field });
-      if (item.kind === 'avg') query.avg({ [resultAlias]: field });
-      if (item.kind === 'min' || item.kind === 'max') {
-        const source = scalarFields(plan.collection).find(
-          (source) => source.name === item.field,
-        );
-        query.select(
-          client.raw('? as ??', [
-            temporalProjection(
-              client,
-              source,
-              client.raw(`${item.kind}(??)`, [field]),
-            ),
-            resultAlias,
-          ]),
-        );
-      }
+      const source = scalarFields(plan.collection).find(
+        (source) => source.name === item.field,
+      );
+      const expression = aggregateSql(client, item.kind, field, false, source);
+      const numeric =
+        ['count', 'sum', 'avg'].includes(item.kind) ||
+        (source &&
+          [
+            'bigInt',
+            'integer',
+            'increments',
+            'decimal',
+            'float',
+            'double',
+          ].includes(source.type));
+      query.select(
+        client.raw('? as ??', [
+          numeric
+            ? aggregateProjection(client, expression, source)
+            : temporalProjection(client, source, expression),
+          resultAlias,
+        ]),
+      );
       return { item, resultAlias };
     });
     const graph = await this.prepareFilterGraph(
@@ -347,10 +363,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
             'FIELD_CAPABILITY_NOT_SUPPORTED',
             ['aggregate', item.alias],
           );
-        return [
-          item.alias,
-          item.kind === 'count' ? Number(value ?? 0) : (value ?? null),
-        ];
+        return [item.alias, decodeAggregate(item.kind, value, source)];
       }),
     );
   }
@@ -386,11 +399,20 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
         item.field !== undefined
           ? qualified(rootAlias, column(plan.collection, item.field))
           : '*';
-      if (item.kind === 'count') inner.count({ [internal]: field });
-      if (item.kind === 'sum') inner.sum({ [internal]: field });
-      if (item.kind === 'avg') inner.avg({ [internal]: field });
-      if (item.kind === 'min') inner.min({ [internal]: field });
-      if (item.kind === 'max') inner.max({ [internal]: field });
+      inner.select(
+        client.raw('? as ??', [
+          aggregateSql(
+            client,
+            item.kind,
+            field,
+            false,
+            scalarFields(plan.collection).find(
+              (source) => source.name === item.field,
+            ),
+          ),
+          internal,
+        ]),
+      );
       outputs.push({ name: item.alias, internal, aggregate: item.kind });
     }
     const graph = await this.prepareFilterGraph(
@@ -411,14 +433,36 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       .queryBuilder()
       .from(inner.as(resultAlias))
       .select(
-        outputs.map((output) =>
-          selectColumn(
+        outputs.map((output) => {
+          const field = scalarFields(outputCollection).find(
+            (field) => field.name === output.internal,
+          );
+          const expression = client.ref(
+            qualified(resultAlias, output.internal),
+          );
+          if (
+            output.aggregate &&
+            field &&
+            [
+              'bigInt',
+              'integer',
+              'increments',
+              'decimal',
+              'float',
+              'double',
+            ].includes(field.type)
+          )
+            return client.raw('? as ??', [
+              aggregateProjection(client, expression, field),
+              output.internal,
+            ]);
+          return selectColumn(
             client,
             outputCollection,
             { column: output.internal, alias: output.internal },
             resultAlias,
-          ),
-        ),
+          );
+        }),
       );
     const internalByName = new Map(
       outputs.map((output) => [output.name, output.internal]),
@@ -439,30 +483,43 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       }
       const internal = internalByName.get(item.path[0]);
       if (!internal) throw new Error('GroupBy sort Field was not mapped.');
+      const output = outputs.find((entry) => entry.internal === internal);
+      const orderValue =
+        client.client.config.client === 'better-sqlite3' &&
+        output?.aggregate &&
+        ['sum', 'avg'].includes(output.aggregate)
+          ? client.raw('nb_decimal_key(??)', [qualified(resultAlias, internal)])
+          : qualified(resultAlias, internal);
       applyOrderBy(
         query,
         client,
-        qualified(resultAlias, internal),
+        orderValue,
         item.direction,
         item.nulls ?? 'last',
       );
     }
     const rows = (await query) as RepositoryRecord[];
     const decodeRow = prepareScalarRowDecoder(outputCollection);
+    const fieldsByName = new Map(
+      scalarFields(outputCollection).map((field) => [field.name, field]),
+    );
+    const resultDecoders = outputs.map((output) => {
+      const source = fieldsByName.get(output.internal);
+      const kind = output.aggregate;
+      return {
+        ...output,
+        decode: kind
+          ? (value: unknown) => decodeAggregate(kind, value, source)
+          : (value: RepositoryRecord[string]) => value,
+      };
+    });
     return rows.map((row) => {
       const decoded = decodeRow(row);
       return Object.fromEntries(
-        outputs.map((output) => {
-          const value = decoded[output.internal];
-          return [
-            output.name,
-            output.aggregate === 'count'
-              ? Number(value ?? 0)
-              : output.aggregate
-                ? (value ?? null)
-                : value,
-          ];
-        }),
+        resultDecoders.map((output) => [
+          output.name,
+          output.decode(decoded[output.internal]),
+        ]),
       );
     });
   }
@@ -1177,6 +1234,25 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     )) as unknown;
     const returnedRow = firstReturnedRow(returned);
     if (returnedRow) {
+      if (
+        client.client.config.client !== 'pg' &&
+        scalarFields(collection).some((field) => field.type === 'decimal')
+      ) {
+        const returnedValues = Object.fromEntries(
+          fields.map((field) => [
+            field,
+            returnedRow[column(collection, field)] ?? returnedRow[field],
+          ]),
+        );
+        const selector = deriveCreatedSelector(
+          collection,
+          { ...returnedValues, ...values },
+          returned,
+        );
+        const record = await this.findByUnique(collection, selector);
+        if (!record) throw new Error('Created record could not be reloaded.');
+        return record;
+      }
       const mapped = mapRow(collection, fields, returnedRow);
       // Supplied temporal identities are already canonical; raw RETURNING values
       // may have been converted to a host-zone Date by the driver.
@@ -2089,7 +2165,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     const client = this.getClient();
     const query = tableQuery(client, resolved.target, targetAlias).select(
       uniqueSelectionColumns(selected).map((field) =>
-        selectColumn(client, resolved.target, field, targetAlias),
+        selectColumn(client, resolved.target, field, targetAlias, false),
       ),
     );
     if (resolved.type === 'belongsTo') {
@@ -2238,16 +2314,36 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       const field = node.result.field
         ? qualified(alias, node.result.field)
         : '*';
-      if (node.result.kind === 'count')
-        aggregateQuery.count({ [resultKey]: field });
-      if (node.result.kind === 'sum')
-        aggregateQuery.sum({ [resultKey]: field });
-      if (node.result.kind === 'avg')
-        aggregateQuery.avg({ [resultKey]: field });
-      if (node.result.kind === 'min')
-        aggregateQuery.min({ [resultKey]: field });
-      if (node.result.kind === 'max')
-        aggregateQuery.max({ [resultKey]: field });
+      const aggregateField = node.result.field;
+      const source = scalarFields(resolved.target).find(
+        (source) => source.name === aggregateField,
+      );
+      const expression = aggregateSql(
+        client,
+        node.result.kind,
+        field,
+        false,
+        source,
+      );
+      const numeric =
+        ['count', 'sum', 'avg'].includes(node.result.kind) ||
+        (source &&
+          [
+            'bigInt',
+            'integer',
+            'increments',
+            'decimal',
+            'float',
+            'double',
+          ].includes(source.type));
+      aggregateQuery.select(
+        client.raw('? as ??', [
+          numeric
+            ? aggregateProjection(client, expression, source)
+            : expression,
+          resultKey,
+        ]),
+      );
       const aggregates = (await aggregateQuery) as RepositoryRecord[];
       const values = new Map(
         aggregates.map((row) => [
@@ -2275,10 +2371,45 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
             'FIELD_CAPABILITY_NOT_SUPPORTED',
             ['select', node.relation],
           );
-        parent[node.relation] =
-          node.result.kind === 'count' ? Number(value ?? 0) : (value ?? null);
+        parent[node.relation] = decodeAggregate(
+          node.result.kind,
+          value,
+          source,
+        );
       }
       return;
+    }
+    // Preserve native numeric values through relation ranking and aggregation.
+    // Project decimal text only when returning the final record branch.
+    const readAlias = 'relation_decimal_result';
+    if (
+      selected.some((selection) =>
+        scalarFields(resolved.target).some(
+          (field) =>
+            field.type === 'decimal' &&
+            column(resolved.target, field.name) === selection.column,
+        ),
+      )
+    ) {
+      scoped = client.from(scoped.clear('order').as(readAlias)).select(
+        uniqueSelectionColumns([
+          ...selected,
+          { column: parentKey, alias: parentKey },
+        ]).map((selection) => {
+          const field = scalarFields(resolved.target).find(
+            (field) => column(resolved.target, field.name) === selection.column,
+          );
+          const value = client.ref(qualified(readAlias, selection.alias));
+          return client.raw('? as ??', [
+            field?.type === 'decimal'
+              ? aggregateProjection(client, value)
+              : value,
+            selection.alias,
+          ]);
+        }),
+      );
+      // The outer query must explicitly retain each relation's numeric order.
+      scoped.orderByRaw('?', [ordering(readAlias, true)]);
     }
     const targets = (await scoped) as RepositoryRecord[];
     const grouped = new Map<string, RepositoryRecord[]>();
@@ -2490,6 +2621,7 @@ function selectColumn(
   collection: CollectionDefinition,
   selection: SelectionColumn,
   alias?: string,
+  resultBoundary = true,
 ): Knex.Raw {
   const field = scalarFields(collection).find(
     (item) => column(collection, item.name) === selection.column,
@@ -2499,7 +2631,12 @@ function selectColumn(
     field,
     alias ? qualified(alias, selection.column) : selection.column,
   );
-  return client.raw('? as ??', [expression, selection.alias]);
+  return client.raw('? as ??', [
+    field?.type === 'decimal' && resultBoundary
+      ? aggregateProjection(client, expression)
+      : expression,
+    selection.alias,
+  ]);
 }
 
 function decodeBooleanRow(
@@ -2508,6 +2645,13 @@ function decodeBooleanRow(
 ): RepositoryRecord {
   const result = { ...row };
   for (const field of scalarFields(collection)) {
+    if (
+      ['integer', 'increments', 'bigInt'].includes(field.type) &&
+      Object.hasOwn(result, field.name)
+    )
+      result[field.name] = decodeIntegerValue(field, result[field.name]);
+    if (field.type === 'decimal' && Object.hasOwn(result, field.name))
+      result[field.name] = decimalString(result[field.name]);
     if (field.type === 'boolean' && Object.hasOwn(result, field.name))
       result[field.name] = decodeBooleanValue(field, result[field.name]);
     if (field.type === 'enum' && Object.hasOwn(result, field.name))
@@ -2710,10 +2854,19 @@ function internalGroupResultCollection(
       if (!source) throw new Error('GroupBy aggregate Field was not found.');
       return { ...source, name: output.internal, nullable: true };
     }
+    const source = scalarFields(plan.collection).find(
+      (field) => field.name === aggregate.field,
+    );
     return {
       name: output.internal,
-      type: aggregate.kind === 'count' ? 'integer' : 'decimal',
+      type:
+        aggregate.kind === 'count'
+          ? 'bigInt'
+          : source && ['float', 'double'].includes(source.type)
+            ? source.type
+            : 'decimal',
       nullable: aggregate.kind !== 'count',
+      db: { preciseAggregate: true },
     };
   });
   return {
@@ -2764,12 +2917,11 @@ function qualified(alias: string, columnName: string): string {
 function applyOrderBy(
   query: Knex.QueryBuilder,
   client: Knex,
-  value: string | Knex.QueryBuilder,
+  value: string | Knex.QueryBuilder | Knex.Raw,
   direction: 'asc' | 'desc',
   nulls: 'first' | 'last',
 ): void {
-  const nullValue =
-    typeof value === 'string' ? client.ref(value) : value.clone();
+  const nullValue = typeof value === 'string' ? client.ref(value) : value;
   query.orderBy(
     client.raw(
       nulls === 'last'
@@ -3093,6 +3245,30 @@ function applyCondition(
     ? qualified(sourceAlias, directColumn)
     : directColumn;
   const field = collection.fields?.find((item) => item.name === node.path[0]);
+  if (
+    query.client.config.client === 'better-sqlite3' &&
+    field &&
+    field.db?.preciseAggregate &&
+    node.value != null
+  ) {
+    const operators: Record<string, string> = {
+      $eq: '=',
+      $ne: '<>',
+      $gt: '>',
+      $gte: '>=',
+      $lt: '<',
+      $lte: '<=',
+    };
+    const operator = operators[node.operator];
+    if (operator) {
+      query[boolean === 'or' ? 'orWhereRaw' : 'whereRaw'](
+        `nb_decimal_key(??) ${operator} nb_decimal_key(?)`,
+        [name, node.value as Knex.Value],
+      );
+      return;
+    }
+  }
+
   if (
     field?.type === 'enum' &&
     typeof node.value === 'string' &&
@@ -3447,11 +3623,23 @@ function relationSortSubquery(
   const aggregateColumn = value.field
     ? qualified(currentAlias, column(currentCollection, value.field))
     : '*';
-  if (value.aggregate === 'count') return query.count(aggregateColumn);
-  if (value.aggregate === 'sum') {
-    return query.select(client.raw('coalesce(sum(??), 0)', [aggregateColumn]));
-  }
-  return query[value.aggregate](aggregateColumn);
+  const expression = aggregateSql(
+    client,
+    value.aggregate,
+    aggregateColumn,
+    false,
+    scalarFields(currentCollection).find((field) => field.name === value.field),
+  );
+  const result =
+    value.aggregate === 'sum'
+      ? client.raw('coalesce(?, 0)', [expression])
+      : expression;
+  return query.select(
+    client.client.config.client === 'better-sqlite3' &&
+      ['sum', 'avg'].includes(value.aggregate)
+      ? client.raw('nb_decimal_key(?)', [result])
+      : result,
+  );
 }
 
 function joinRelation(

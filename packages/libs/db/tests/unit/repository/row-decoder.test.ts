@@ -73,3 +73,45 @@ describe('Prepared scalar row decoding', () => {
     expect(second({ enabled: 1 })).toEqual({ enabled: 1 });
   });
 });
+
+describe('Exact integer row decoding', () => {
+  const decode = prepareScalarRowDecoder({
+    fields: [
+      { name: 'large', type: 'bigInt' },
+      { name: 'count', type: 'integer' },
+      { name: 'sequence', type: 'increments' },
+    ],
+  });
+
+  it('returns bigInt strings regardless of magnitude and preserves ordinary numbers', () => {
+    expect(decode({ large: 0, count: '7', sequence: 1n })).toEqual({
+      large: '0',
+      count: 7,
+      sequence: 1,
+    });
+    expect(decode({ large: 9007199254740993n })).toEqual({
+      large: '9007199254740993',
+    });
+    expect(decode({ large: '-9007199254740993' })).toEqual({
+      large: '-9007199254740993',
+    });
+    expect(decode({ large: null })).toEqual({ large: null });
+  });
+
+  it('rejects already rounded or invalid values instead of fabricating exact strings', () => {
+    for (const large of [
+      Number.MAX_SAFE_INTEGER + 1,
+      1.5,
+      '1.5',
+      'invalid',
+      Infinity,
+    ]) {
+      expect(() => decode({ large })).toThrow(
+        expect.objectContaining({ code: 'INVALID_STORED_VALUE' }),
+      );
+    }
+    expect(() => decode({ count: '9007199254740993' })).toThrow(
+      expect.objectContaining({ code: 'INVALID_STORED_VALUE' }),
+    );
+  });
+});

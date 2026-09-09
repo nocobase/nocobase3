@@ -4,36 +4,33 @@ import { describeIntegrationDatabases } from '../../helpers.js';
 describeIntegrationDatabases(
   'Repository identity feature combinations',
   (context) => {
-    it.skipIf(context.spec.dialect !== 'postgres')(
-      'preserves PostgreSQL bigint identities above Number.MAX_SAFE_INTEGER',
-      async () => {
-        const key = '9007199254740993';
-        await context.builder.createCollection('exactKeys', (c) => {
-          c.bigInt('key').primary().notNull();
-          c.string('label');
-        });
-        const records = context.database.repository('exactKeys');
-        expect(
-          (await records.createOne({ values: { key, label: 'original' } }))
-            .record.key,
-        ).toBe(key);
-        expect(
-          (
-            await records.updateOne({
-              filter: { label: 'original' },
-              values: { label: 'changed' },
-            })
-          ).record.key,
-        ).toBe(key);
-        expect(
-          await records.deleteOne({
-            filter: { label: 'changed' },
-            select: (s) => s.fields('key'),
-          }),
-        ).toEqual({ deleted: true, record: { key } });
-        expect(await records.count()).toBe(0);
-      },
-    );
+    it('preserves bigint identities above Number.MAX_SAFE_INTEGER', async () => {
+      const key = '9007199254740993';
+      await context.builder.createCollection('exactKeys', (c) => {
+        c.bigInt('key').primary().notNull();
+        c.string('label');
+      });
+      const records = context.database.repository('exactKeys');
+      expect(
+        (await records.createOne({ values: { key, label: 'original' } })).record
+          .key,
+      ).toBe(key);
+      expect(
+        (
+          await records.updateOne({
+            filter: { label: 'original' },
+            values: { label: 'changed' },
+          })
+        ).record.key,
+      ).toBe(key);
+      expect(
+        await records.deleteOne({
+          filter: { label: 'changed' },
+          select: (s) => s.fields('key'),
+        }),
+      ).toEqual({ deleted: true, record: { key } });
+      expect(await records.count()).toBe(0);
+    });
     it('uses a non-id generated primary key through create and returning mutations', async () => {
       await context.builder.createCollection('generatedKeys', (c) => {
         c.increments('sequence');

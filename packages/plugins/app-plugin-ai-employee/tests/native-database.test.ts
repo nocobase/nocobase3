@@ -168,8 +168,8 @@ describe('native AI employee persistence', () => {
       invokeStatus: 'confirmed',
       status: 'success',
       content,
-      invokeStartTime: invokeStartTime.getTime(),
-      invokeEndTime: Date.parse(invokeEndTime),
+      invokeStartTime: String(invokeStartTime.getTime()),
+      invokeEndTime: String(Date.parse(invokeEndTime)),
     });
   });
 
