@@ -113,24 +113,24 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "peerDependencies": {
+    "@base-ui/react": "^1.6.0",
     "@nocobase/app-client": "workspace:^",
     "@nocobase/app-server": "workspace:^",
     "@nocobase/db": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
     "@refinedev/core": "^5.0.0",
-    "react": "^19.0.0"
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "react": "^19.0.0",
+    "tailwind-merge": "^3.2.0"
   },
   "dependencies": {
-    "@base-ui/react": "^1.6.0",
     "@nocobase/caching": "workspace:^",
     "@nocobase/snowflake": "workspace:^",
     "@sinclair/typebox": "catalog:",
     "better-auth": "catalog:",
-    "class-variance-authority": "^0.7.1",
-    "clsx": "^2.1.1",
     "hono": "catalog:",
-    "knex": "catalog:",
-    "tailwind-merge": "^3.2.0"
+    "knex": "catalog:"
   },
   "devDependencies": {
     "@base-ui/react": "^1.6.0",

@@ -251,25 +251,17 @@ run(
 run('Materialize server dependency links', 'node', [
   './scripts/utils/clean-dist-bin.mjs',
 ]);
-// Runs after the install because it prunes what the install produced. The install resolves `dependencies`
-// transitively, which installs whole packages to satisfy imports that reach a few files; this removes the
-// difference. `pnpm server:deps:inspect` reports the same analysis without changing anything, and re-running the
-// install restores the full tree, so the step is reversible.
-run('Prune unreachable server dependencies', 'node', [
-  './scripts/utils/prune-server-deps.mjs',
-  ...process.argv.slice(2),
-]);
-// Last, because it replaces binaries the prune has already decided to keep. Native packages are kept whole, so
-// the files this swaps are still present to be swapped. Defaults to this machine, so `pnpm build && pnpm start`
-// works; a deployment build passes --target and --node-version.
+// A `.node` binary is compiled for one platform, architecture, C library, and Node ABI at once, so an install run
+// here produces binaries for this machine. Defaults to this machine so `pnpm build && pnpm start` works; a
+// deployment build passes --target and --node-version.
 run('Retarget native modules', 'node', [
   './scripts/utils/retarget-native.mjs',
   ...process.argv.slice(2),
 ]);
-// Fails the build when something this application's own server or CLI code imports did not survive the prune.
-// It has to run here rather than before the build, because what it checks is the pruned tree — the question is
-// not whether a package is declared, but whether it is still loadable once `dist` is assembled. Catching it here
-// costs a build; the alternative is finding out from `Cannot find module` on a deployed server.
+// Fails the build when something the application's own server, database, or CLI code imports would not be usable
+// in a deployment. It runs against the installed tree rather than the manifest alone, because the question is not
+// whether a package is declared but whether the deployment install will actually fetch it. Catching it here costs
+// a build; the alternative is finding out from `Cannot find module` on a deployed server.
 run('Verify server dependencies', 'node', [
   './scripts/utils/verify-server-deps.mjs',
 ]);

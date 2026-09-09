@@ -89,16 +89,13 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "@base-ui/react": "^1.6.0",
     "@nocobase/drive": "workspace:^",
     "@nocobase/logging": "workspace:^",
     "@sinclair/typebox": "catalog:",
-    "@xyflow/react": "^12.11.3",
-    "elkjs": "^0.10.2",
-    "hono": "catalog:",
-    "lucide-react": "^0.487.0"
+    "hono": "catalog:"
   },
   "peerDependencies": {
+    "@base-ui/react": "^1.6.0",
     "@nocobase/app-client": "workspace:^",
     "@nocobase/app-plugin-authentication": "workspace:^",
     "@nocobase/app-server": "workspace:^",
@@ -107,8 +104,11 @@
     "@nocobase/nb3-cli": "workspace:^",
     "@nocobase/queue": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
-    "@refinedev/core": "^5.0.0",
     "@oclif/core": "^4.14.0",
+    "@refinedev/core": "^5.0.0",
+    "@xyflow/react": "^12.11.3",
+    "elkjs": "^0.10.2",
+    "lucide-react": "^0.487.0",
     "react": "^19.0.0",
     "react-router": "^7.0.2",
     "typescript": "^6.0.3"
@@ -130,12 +130,14 @@
     "@nocobase/nb3-cli": "workspace:*",
     "@nocobase/queue": "workspace:*",
     "@nocobase/service-provider": "workspace:*",
-    "@refinedev/core": "catalog:",
     "@oclif/core": "catalog:",
+    "@refinedev/core": "catalog:",
     "@testing-library/react": "catalog:",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
+    "@xyflow/react": "^12.11.3",
     "better-sqlite3": "^13.0.3",
+    "elkjs": "^0.10.2",
     "eslint": "catalog:",
     "jsdom": "catalog:",
     "knex": "^3.1.0",

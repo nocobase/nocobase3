@@ -1,17 +1,17 @@
-// Fails the build when something this application's own server or CLI code imports did not survive into `dist`.
+// Fails the build when something this application's own server or CLI code imports would not be usable in a
+// deployment.
 //
-// The prune keeps what a file trace can reach from the server entry points. Anything reached by a name assembled at
-// run time is invisible to that trace and is removed, and the failure surfaces later as `Cannot find module` on a
-// deployed server — naming a package whose declaration in `package.json` is plainly correct, which is the least
-// useful place to start debugging.
+// `dist/package.json` is generated from `dependencies` and is what a deployment installs from, so a package a
+// server module imports but declares as a devDependency resolves in every development checkout and is absent
+// exactly once — on the deployed server, as `Cannot find module` naming a package whose declaration looks
+// perfectly correct.
 //
-// So this checks the one thing the trace cannot confirm about itself: that every package the application's own
-// `server/`, `database/`, and `cli/` code imports still has executable code in the pruned tree. A package reduced to
-// its `package.json` is the signature of exactly this problem — it was reached for its manifest and nothing else.
+// Client packages are deliberately not in that tree: plugins declare them as peer dependencies so an application
+// installs one shared copy for its Vite build, while `dist` opts out of peers entirely. A server module importing
+// one of those is the same mistake in the other direction, and this catches it too.
 //
 // Only the application's own source is scanned. A plugin's imports are that plugin's contract with its own
-// manifest, checked by `pnpm deps:check` at the repository root, and a plugin reached through a runtime name is the
-// case `nocobase.serverDeps.keep` exists for.
+// manifest, checked by `pnpm deps:check` at the repository root.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -104,11 +104,10 @@ function collectSourceFiles(directory, found = []) {
 /**
  * How a package fares in the deployment, as a reason string, or `undefined` when it is fine.
  *
- * Two questions, and both matter. `dist/package.json` is what a deployment installs from, so a package missing
- * there is absent on the server however much of it happens to sit in the local tree — a transitive dependency of
- * something else can leave a package fully present here and entirely absent after a real deploy. And a package
- * that survived the prune with only its `package.json` was reached for its manifest and nothing else, so nothing
- * it exports can load.
+ * `dist/package.json` is what a deployment installs from, so a package missing there is absent on the server
+ * however much of it happens to sit in the local tree — a transitive dependency of something else can leave a
+ * package fully present here and entirely absent after a real deploy. Checking the installed directory as well
+ * catches the case where the manifest lists it but the install did not produce it.
  */
 function deploymentProblem(packageName, distDependencies) {
   if (!Object.hasOwn(distDependencies, packageName)) {
@@ -128,7 +127,7 @@ function deploymentProblem(packageName, distDependencies) {
   walk(packageDir);
 
   return count <= 1
-    ? 'only package.json survived the prune, so nothing it exports can load'
+    ? 'installed as a bare manifest, so nothing it exports can load'
     : undefined;
 }
 
@@ -177,10 +176,7 @@ console.error(
   '\nA package your server imports belongs in "dependencies". `dist/package.json` is generated from there, and\n' +
     'it is what a deployment installs from, so a devDependency is absent on the server however complete the local\n' +
     'tree looks.\n\n' +
-    'If it is already declared and the prune removed it, the import is one no trace can follow — a name assembled\n' +
-    'at run time. Name the package so the build keeps it:\n\n' +
-    '  "nocobase": { "serverDeps": { "keep": ["<package>"] } }\n\n' +
-    'Try it for one build first with: pnpm build --keep <package>\n' +
-    'See pnpm server:deps:inspect for the full picture.',
+    'A client-only package is the other way round: plugins declare those as peer dependencies and `dist` does not\n' +
+    'install peers, so importing one from server code will not work in a deployment.',
 );
 process.exit(1);

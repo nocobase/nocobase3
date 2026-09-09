@@ -10,10 +10,7 @@
   "packageManager": "pnpm@11.7.0",
   "nocobase": {
     "templateKind": "hub",
-    "defaultTemplateVersion": "1.0.0-beta.8",
-    "serverDeps": {
-      "keep": []
-    }
+    "defaultTemplateVersion": "1.0.0-beta.8"
   },
   "devDependencies": {
     "@ai-sdk/react": "2.0.0",
@@ -83,7 +80,6 @@
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
-    "@vercel/nft": "^1.11.0",
     "@vitejs/plugin-react": "catalog:",
     "@vitest/coverage-v8": "catalog:",
     "ai": "5.0.0",
@@ -182,8 +178,6 @@
     "plugin:skills:sync": "nocobase plugin skills sync",
     "client:inspect": "pnpm nocobase app inspect client",
     "server:inspect": "pnpm nocobase app inspect server",
-    "server:deps:inspect": "node ./scripts/utils/inspect-server-deps.mjs",
-    "server:deps:prune": "node ./scripts/utils/prune-server-deps.mjs",
     "server:deps:retarget": "node ./scripts/utils/retarget-native.mjs",
     "server:deps:verify": "node ./scripts/utils/verify-server-deps.mjs",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.server.json --noEmit",

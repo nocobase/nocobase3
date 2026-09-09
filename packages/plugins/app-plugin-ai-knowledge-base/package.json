@@ -127,6 +127,7 @@
     "prepack": "pnpm registry:build && pnpm build"
   },
   "peerDependencies": {
+    "@base-ui/react": "^1.6.0",
     "@nocobase/app-client": "workspace:^",
     "@nocobase/app-plugin-ai-employee": "workspace:^",
     "@nocobase/app-plugin-authentication": "workspace:^",
@@ -137,23 +138,22 @@
     "@nocobase/queue": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
     "@refinedev/core": "^5.0.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.487.0",
     "react": "^19.0.0",
-    "react-router": "^7.0.0"
+    "react-router": "^7.0.0",
+    "tailwind-merge": "^3.2.0"
   },
   "dependencies": {
-    "@base-ui/react": "^1.6.0",
     "@langchain/community": "1.1.29",
     "@langchain/core": "1.1.49",
     "@langchain/textsplitters": "1.0.1",
     "@nocobase/ai-employee": "workspace:^",
     "@nocobase/drive": "workspace:^",
-    "class-variance-authority": "^0.7.1",
-    "clsx": "^2.1.1",
     "hono": "catalog:",
-    "lucide-react": "^0.487.0",
     "nanoid": "^3.3.18",
     "pg": "^8.23.0",
-    "tailwind-merge": "^3.2.0",
     "yaml": "catalog:",
     "zod": "^3.25.76"
   },

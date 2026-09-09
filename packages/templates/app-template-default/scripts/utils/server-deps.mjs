@@ -1,63 +1,10 @@
-// Shared analysis behind `inspect-server-deps.mjs` and `prune-server-deps.mjs`.
+// Shared helpers for the deployment build.
 //
-// The two scripts answer the same question — what does the deployed server actually need — and must answer it
-// identically, or the report stops describing what the build does. Keeping the trace, the configuration, and the
-// native-module classification here is what makes an inspection a preview of the prune rather than a second
-// opinion about it.
+// `parseTarget` resolves the platform, architecture, C library, and Node ABI a build is producing binaries for.
+// The rest classify native modules, which is what `retarget-native.mjs` acts on and `verify-server-deps.mjs`
+// reports against.
 import fs from 'node:fs';
 import path from 'node:path';
-
-/**
- * The entry points a deployment runs.
- *
- * `standalone` and `embedded` are the two ways the server starts. The CLI is a third process a deployment runs —
- * `dist/package.json` invokes it for `migrate` and `seed` — and it reaches code the server entries do not, so a
- * trace that omitted it would prune migrations out of the deployment.
- *
- * These are paths inside `dist`, so they follow the build's output layout rather than the source tree. Check them
- * against `dist/package.json`'s own `scripts` when that layout changes: an entry that no longer exists is skipped
- * silently, and the only symptom is a smaller trace.
- */
-export const ENTRY_POINTS = [
-  'server/standalone.js',
-  'server/embedded.js',
-  'cli/index.js',
-];
-
-/**
- * Packages the framework loads by a name it holds itself, rather than by an import.
- *
- * These are not the application's choice and it has no reason to know about them, so they are kept by default
- * instead of being listed in every generated application's `package.json` — a default that each application has
- * to rediscover by crashing is not a default. `app-server` names both pino transports in a `target:` string, so
- * no import mentions them and a trace cannot see either; without this the server dies during startup with
- * `unable to determine transport target for "pino-pretty"`.
- *
- * `@nocobase/nb3-cli` is here for the same reason one step removed: it hands oclif a module path as a string
- * (`'./dist/runtime/registry.js'`), and oclif imports it. Nothing in the CLI imports that file, so a trace prunes
- * it and every command fails with `MODULE_NOT_FOUND` naming a path that is plainly correct.
- *
- * An application adds its own runtime-resolved packages through `nocobase.serverDeps.keep`. This list is for
- * what the framework guarantees, and grows when the framework starts resolving another package by name.
- */
-export const FRAMEWORK_KEEP = ['pino-pretty', 'pino-roll', '@nocobase/nb3-cli'];
-
-/**
- * Directories published to be read by scanning rather than by importing.
- *
- * A migration is discovered by listing a directory and reading whatever is in it, so no import statement names a
- * migration file and a trace sees none of them. Pruning them leaves a deployment that starts and then fails on
- * the first query against a table its migration would have created. Locales fall back to their keys the same way.
- *
- * Kept for every package, because a plugin ships its own `dist/database` and the application cannot enumerate
- * which of its plugins have migrations.
- */
-export const SCANNED_DIRECTORIES = new Set([
-  'database',
-  'migrations',
-  'seeds',
-  'locales',
-]);
 
 /** Install scripts that mean the package compiles or downloads a binary at install time. */
 const NATIVE_INSTALL_SIGNAL =
@@ -76,24 +23,20 @@ export const sizeOf = (file) => {
 export const formatMegabytes = (bytes) =>
   `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 
-export const directorySize = (directory) => {
-  let total = 0;
+export function findBinaries(directory, found = []) {
   let entries;
   try {
     entries = fs.readdirSync(directory, { withFileTypes: true });
   } catch {
-    return 0;
+    return found;
   }
   for (const entry of entries) {
     const entryPath = path.join(directory, entry.name);
-    total += entry.isDirectory() ? directorySize(entryPath) : sizeOf(entryPath);
+    if (entry.isDirectory()) findBinaries(entryPath, found);
+    else if (entry.name.endsWith('.node')) found.push(entryPath);
   }
-  return total;
-};
-
-/** The installed package a path inside `dist` belongs to, or `undefined` for application code. */
-export const owningPackage = (file) =>
-  file.match(/(?:^|\/)node_modules\/((?:@[^/]+\/)?[^/]+)(?:\/|$)/u)?.[1];
+  return found;
+}
 
 /**
  * Every installed package directory, including scoped ones.
@@ -101,7 +44,7 @@ export const owningPackage = (file) =>
  * An explicit walk rather than a glob because a scope directory holds packages one level deeper, and treating
  * `@scope` itself as a package would read a `package.json` that does not exist.
  */
-export function* installedPackages(nodeModulesDir) {
+function* installedPackages(nodeModulesDir) {
   let entries;
   try {
     entries = fs.readdirSync(nodeModulesDir, { withFileTypes: true });
@@ -120,76 +63,10 @@ export function* installedPackages(nodeModulesDir) {
 }
 
 /**
- * The application's `nocobase.serverDeps` configuration.
- *
- * Detection is generic, but two decisions cannot be derived from the tree and have to be written down:
- *
- * - `keep` lists packages a file trace cannot see. A package loaded by a name computed at runtime — a driver
- *   chosen by a connection setting, a plugin resolved from a database value — appears in no import statement, so
- *   the trace correctly reports it unreachable and pruning it would break the deployment at first use. An entry
- *   ending in `*` matches by prefix.
- * `--keep <names>` adds to the configured list for one run, comma-separated, so a package can be identified
- * before it is written down. The manifest is the durable answer: an entry only on a command line is missing from
- * the next build, and from everyone else's.
- */
-export function readServerDepsConfig(manifest, argv = []) {
-  const configured = manifest.nocobase?.serverDeps ?? {};
-  const fromManifest = configured.keep ?? [];
-
-  const fromArgv = [];
-  for (let index = 0; index < argv.length; index += 1) {
-    const argument = argv[index];
-    const inline = argument.startsWith('--keep=')
-      ? argument.slice('--keep='.length)
-      : argument === '--keep'
-        ? argv[index + 1]
-        : undefined;
-    if (inline) fromArgv.push(...inline.split(',').map((name) => name.trim()));
-  }
-
-  return {
-    keep: [
-      ...new Set([
-        ...FRAMEWORK_KEEP,
-        ...fromManifest,
-        ...fromArgv.filter(Boolean),
-      ]),
-    ],
-    keepFromManifest: fromManifest,
-    keepFromArgv: fromArgv.filter(Boolean),
-  };
-}
-
-/** Whether a package name is covered by a `keep` entry, supporting a trailing `*` as a prefix match. */
-export function isKept(packageName, keep) {
-  return keep.some((entry) =>
-    entry.endsWith('*')
-      ? packageName.startsWith(entry.slice(0, -1))
-      : packageName === entry,
-  );
-}
-
-export function findBinaries(directory, found = []) {
-  let entries;
-  try {
-    entries = fs.readdirSync(directory, { withFileTypes: true });
-  } catch {
-    return found;
-  }
-  for (const entry of entries) {
-    const entryPath = path.join(directory, entry.name);
-    if (entry.isDirectory()) findBinaries(entryPath, found);
-    else if (entry.name.endsWith('.node')) found.push(entryPath);
-  }
-  return found;
-}
-
-/**
  * How a package obtains its `.node` binary, or `undefined` when it has none.
  *
  * Classified by manifest signal rather than by package name, so a native dependency an application adds later is
- * handled without anyone extending a list here. A hard-coded set of names would silently mis-handle whatever an
- * application adds next, which is the failure this is meant to prevent.
+ * handled without anyone extending a list here.
  *
  * - `platform-package` — the manifest declares `cpu`/`os`, so the package *is* one platform's binary and another
  *   target means a different package. Its parent lists the whole set in `optionalDependencies`.
@@ -200,7 +77,7 @@ export function findBinaries(directory, found = []) {
  * - `bundled-single-platform` — one binary, no install script, no platform metadata. Nothing can be inferred, so
  *   it is reported for a human to judge.
  */
-export function classifyNative(packageDir) {
+function classifyNative(packageDir) {
   const manifest = readJson(path.join(packageDir, 'package.json'));
   const binaries = findBinaries(packageDir);
   const installScript =
@@ -259,18 +136,6 @@ export function findNativeModules(nodeModulesDir) {
     if (classified) natives.push({ packageDir, ...classified });
   }
   return natives;
-}
-
-/** Traces the server entry points and returns the reachable files plus unresolved specifiers. */
-export async function traceServer(distDir) {
-  const { nodeFileTrace } = await import('@vercel/nft');
-  const entryPoints = ENTRY_POINTS.map((entry) =>
-    path.join(distDir, entry),
-  ).filter((entry) => fs.existsSync(entry));
-  const { fileList, warnings } = await nodeFileTrace(entryPoints, {
-    base: distDir,
-  });
-  return { entryPoints, files: [...fileList], warnings };
 }
 
 /**

@@ -87,13 +87,11 @@
     "vitest": "catalog:"
   },
   "peerDependencies": {
-    "@nocobase/app-client": "workspace:^",
-    "react": "^19.0.0"
-  },
-  "dependencies": {
     "@base-ui/react": "^1.6.0",
+    "@nocobase/app-client": "workspace:^",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "react": "^19.0.0",
     "tailwind-merge": "^3.2.0"
   }
 }

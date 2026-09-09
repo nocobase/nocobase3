@@ -129,46 +129,46 @@ Ordering in `client/plugins.ts` and `server/plugins.ts` is contribution order, a
 
 ### Diagnostics
 
-| Script                      | What it does                                                                                        |
-| --------------------------- | --------------------------------------------------------------------------------------------------- |
-| `pnpm client:inspect`       | Print the resolved client composition: routes, providers, and which file owns each                  |
-| `pnpm server:inspect`       | Print the resolved server composition                                                               |
-| `pnpm server:deps:inspect`  | Print what the deployed server actually reaches, and what each native module needs to run elsewhere |
-| `pnpm server:deps:prune`    | Remove what the server never loads from `dist/node_modules`; part of `pnpm build`                   |
-| `pnpm server:deps:retarget` | Replace native binaries with the target platform's; part of `pnpm build`                            |
-| `pnpm server:deps:verify`   | Check that everything your server and CLI import reaches a deployment; part of `pnpm build`         |
+| Script                      | What it does                                                                                |
+| --------------------------- | ------------------------------------------------------------------------------------------- |
+| `pnpm client:inspect`       | Print the resolved client composition: routes, providers, and which file owns each          |
+| `pnpm server:inspect`       | Print the resolved server composition                                                       |
+| `pnpm server:deps:retarget` | Replace native binaries with the target platform's; part of `pnpm build`                    |
+| `pnpm server:deps:verify`   | Check that everything your server and CLI import reaches a deployment; part of `pnpm build` |
 
 These read static declarations. They report what is wired, not whether it works — a passing inspection is not a substitute for tests.
 
 #### Deploying to a different machine
 
-`pnpm build` produces `dist/`, which is the whole deployment: copy it to a server and run it. There is no install step and no compiler on the far side — `pnpm start` runs exactly what `dist/` contains.
+`pnpm build` produces `dist/`, which is the whole deployment: copy it to a server and run it. It carries its own `package.json`, and `pnpm install --prod` there installs exactly what the server needs.
 
-Two things happen during the build to make that true. Everything the server never loads is removed, which takes the dependency tree from roughly 540 MB to 110 MB. And every native binary is made to match the platform you are deploying to, because a `.node` file is compiled for one platform, architecture, C library, and Node version at once.
+Client packages are not among them. Plugins declare what their browser code needs as peer dependencies, so your application installs one shared copy for its Vite build, while `dist/` opts out of peer installation entirely — `lucide-react`, `@base-ui/react`, `sonner` and the rest never reach a server that has no browser in it.
 
-**`pnpm build` targets the machine you run it on**, so `pnpm build && pnpm start` works. Building for a server means saying so:
+**The build targets the machine you run it on**, so `pnpm build && pnpm start` works. Deploying elsewhere means saying where:
 
 ```bash
-pnpm build                                  # this machine, ready to run locally
-pnpm build --target linux-x64               # most Linux servers
-pnpm build --target linux-arm64             # ARM servers, Graviton
-pnpm build --target linux-x64-musl          # Alpine, and most slim container images
+pnpm build                                        # this machine
+pnpm build --target linux-x64                     # most Linux servers
+pnpm build --target linux-arm64                   # ARM servers, Graviton
+pnpm build --target linux-x64-musl                # Alpine, and most slim container images
 pnpm build --target linux-x64 --node-version 22   # when the server runs Node 22
 ```
 
-The build prints which platform it produced on every run, and records it in `dist/package.json` under `nocobase.buildTarget`, so a `dist/` built for the wrong machine can be identified rather than guessed at.
+A `.node` binary is compiled for one platform, architecture, C library, and Node version at once, so a build made on a Mac installs binaries a Linux server cannot load. `--target` sets platform, architecture, and C library together, because they are chosen together: `linux-x64` and `linux-x64-musl` are different binaries, and Alpine needs the musl one. If you are unsure, `ldd --version` on the server prints `musl` for musl and `GNU libc` otherwise.
 
-`--target` sets platform, architecture, and C library together, because they are chosen together. The C library matters as much as the architecture: `linux-x64` and `linux-x64-musl` are different binaries, and Alpine needs the musl one. If you are unsure, `ldd --version` on the server prints `musl` for musl and `GNU libc` otherwise.
+`--node-version` takes the major version your server runs, separately, because the same Linux host may run any of several. Supported: 20, 22, 24, 26.
 
-`--node-version` takes the major version your server runs. It is separate because the same Linux host may run any of several Node versions. Supported: 20, 22, 24, 26.
+Every build prints the platform it produced and records it in `dist/package.json` under `nocobase.buildTarget`, so a `dist/` built for the wrong machine can be identified rather than guessed at.
 
-If your application has no native modules — `pg`, `mysql2`, and `tedious` are all plain JavaScript — none of this applies and `dist/` is portable as built. `pnpm server:deps:inspect` tells you which case you are in.
+If your application has no native modules — `pg`, `mysql2`, and `tedious` are all plain JavaScript — none of this applies and `dist/` is portable as built.
 
 #### Adding a dependency your server or CLI uses
 
-Put it in `dependencies`. `dist/package.json` is generated from `dependencies` alone and is what a server installs from, so a package in `devDependencies` is missing there however well it works locally.
+Put it in `dependencies`. That is what `dist/package.json` is generated from and what a server installs, so a package in `devDependencies` is missing there however well it works locally.
 
-`pnpm build` verifies this for you: it reads what `server/`, `database/`, and `cli/` import and fails the build if any of it would not reach a deployment. You will see the package named, with what to do about it.
+Client packages stay in `devDependencies`: Vite resolves and inlines them into `dist/client` at build time, and nothing loads them again at runtime.
+
+`pnpm build` verifies this for you. It reads what `server/`, `database/`, and `cli/` import and fails the build if any of it would not reach a deployment, naming the package and what to do about it.
 
 One case it cannot check is an import whose name is assembled while the program runs:
 
@@ -176,35 +176,13 @@ One case it cannot check is an import whose name is assembled while the program 
 await import(`${name}/index.js`);
 ```
 
-Nothing can tell in advance which package that is, so the build removes it as unused. If you load a package this way, list it when you write the code:
-
-```json
-{
-  "nocobase": {
-    "serverDeps": { "keep": ["the-package"] }
-  }
-}
-```
+Nothing can tell in advance which package that names, so declare it in `dependencies` when you write the code.
 
 #### When the build or the deployment goes wrong
 
-Every check below is a command you can run; none of them require reading the build scripts.
+**`Cannot find module` on the server, but it runs locally.** The package is in `devDependencies`, which `dist/package.json` is not generated from. Move it to `dependencies` and rebuild.
 
-**Start here.** `pnpm server:deps:inspect` reports what the server actually reaches, every native module and how each gets its binary, and every specifier the analysis could not resolve. It changes nothing.
-
-**`Cannot find module 'x'` on the server, but the application runs locally.** The pruning removed it. That happens when nothing imports the package by a literal name — a driver named in a config value, a plugin loaded from a database row — so the analysis cannot see it. Name it:
-
-```json
-{
-  "nocobase": {
-    "serverDeps": { "keep": ["x"] }
-  }
-}
-```
-
-Its own dependencies come along automatically. Use `pnpm build --keep x` to confirm the fix before writing it down; a name passed that way applies to one build only. A trailing `*` matches a prefix, as in `@acme/driver-*`.
-
-**A table is missing, or a translation falls back to its key.** Migrations, seeds, and locales are read by scanning directories rather than by importing files, so they are kept wholesale by directory name. If you keep application data somewhere else that is read the same way, add that package to `keep`.
+**A browser package fails to resolve while building your application.** A plugin declares it as a peer dependency and something has to provide it. Add it to your `devDependencies`.
 
 **`Error loading shared library`, `invalid ELF header`, or a bare reference to a `.node` file at startup.** The binary does not match the server. Compare what the build targeted against the server:
 
@@ -214,17 +192,9 @@ node -p "process.platform + '-' + process.arch"   # on the server
 node -p "process.versions.modules"                # on the server: the ABI
 ```
 
-Rebuild with a `--target` and `--node-version` that match. ABI 115 is Node 20, 127 is Node 22, 137 is Node 24, 147 is Node 26.
+Rebuild with a matching `--target` and `--node-version`. ABI 115 is Node 20, 127 is Node 22, 137 is Node 24, 147 is Node 26.
 
-**`no prebuilt binary for <target>`during the build.** The package publishes no build for that combination. Check whether the version you depend on supports the target at all, and whether a musl build exists if you asked for one — musl coverage is thinner than glibc.
-
-**Ruling pruning out entirely.** Reinstall the full tree in place and run again:
-
-```bash
-cd dist && pnpm install --prod --no-lockfile
-```
-
-Nothing is rewritten by the prune except the contents of `dist/node_modules`, so this restores the pre-prune state. If the problem persists, it is not the pruning.
+**`no prebuilt binary for <target>` during the build.** The package publishes no build for that combination. Check whether the version you depend on supports the target, and whether a musl build exists if you asked for one — musl coverage is thinner than glibc.
 
 ## Configuration
 

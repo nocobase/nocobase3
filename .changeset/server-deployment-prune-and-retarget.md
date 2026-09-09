@@ -4,12 +4,12 @@
 '@nocobase/app-template-hub': minor
 ---
 
-Make `dist/` a deployment that runs without an install step or a compiler on the target machine.
+Keep client packages out of the server deployment, and make every native binary match the platform being deployed to.
 
-`pnpm build` now removes what the server never loads and makes every native binary match the platform being deployed to. The dependency tree drops from 542 MB to 111 MB in the default template and from 206 MB to 50 MB in Hub, because resolving `dependencies` transitively is a package-level answer to a file-level question: 296 packages were installed whole to satisfy a read of their `package.json`, `lucide-react` contributing 31 MB of React components to a tree with no browser in it.
+A plugin's `client/` is compiled by the consuming application's Vite build, so the packages it imports have to be published in the plugin's manifest — but a server has no client build and never requires them. Plugins now declare those as peer dependencies, and the generated `dist/pnpm-workspace.yaml` sets `autoInstallPeers: false`, so an application installs one shared copy while a deployment installs none. What reaches a server is decided by declarations rather than by analysis.
 
-The build targets the machine it runs on, so `pnpm build && pnpm start` still works. Deploying elsewhere takes `--target linux-x64` (or `linux-arm64`, `linux-x64-musl`, `darwin-arm64`, `win32-x64`) and `--node-version` when the server's Node major differs; a `.node` binary is compiled for one platform, architecture, C library, and Node ABI at once. Each build states the platform it produced and records it in `dist/package.json` under `nocobase.buildTarget`.
+Native binaries are compiled for one platform, architecture, C library, and Node ABI at once, so a build made on a Mac installs binaries a Linux server cannot load. `pnpm build` targets the machine it runs on, keeping `pnpm build && pnpm start` working; `--target linux-x64` (or `linux-arm64`, `linux-x64-musl`, `darwin-arm64`, `win32-x64`) and `--node-version` select another. Each build states the platform it produced and records it in `dist/package.json` under `nocobase.buildTarget`.
 
-The build then verifies its own result: `verify-server-deps.mjs` fails it when a package the application's own server, database, or CLI code imports would not reach a deployment — absent from `dist/package.json`, or pruned to a bare manifest. It reads literal specifiers only, so an import whose name is assembled at run time is invisible to it exactly as it is to the prune, and such a package still has to be named in `keep`.
+The build then verifies its own result: it fails when a package the application's own server, database, or CLI code imports would not reach a deployment. It reads literal specifiers, so an import whose name is assembled at run time is invisible to it and has to be declared deliberately.
 
-Add `pnpm server:deps:inspect`, which reports the same analysis without changing anything, alongside `pnpm server:deps:prune`, `pnpm server:deps:retarget`, and `pnpm server:deps:verify`. Packages an application resolves by a name assembled at runtime are named in `nocobase.serverDeps.keep`, with `--keep` for a single build; packages the framework resolves by name and directories read by scanning are kept without configuration.
+Add `pnpm server:deps:retarget` and `pnpm server:deps:verify`, which run the two steps on their own.
