@@ -258,6 +258,12 @@ run('Retarget native modules', 'node', [
   './scripts/utils/retarget-native.mjs',
   ...process.argv.slice(2),
 ]);
+// Removes type declarations, third-party source maps, and third-party documentation from the installed tree. Runs
+// after the native retarget, which installs platform packages of its own, and before verification, which reads
+// `dist/package.json` and package directories rather than any of the files removed here.
+run('Prune deployment artifacts', 'node', [
+  './scripts/utils/prune-dist-artifacts.mjs',
+]);
 // Fails the build when something the application's own server, database, or CLI code imports would not be usable
 // in a deployment. It runs against the installed tree rather than the manifest alone, because the question is not
 // whether a package is declared but whether the deployment install will actually fetch it. Catching it here costs
