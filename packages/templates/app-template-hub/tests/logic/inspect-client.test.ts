@@ -45,6 +45,33 @@ async function createInspectionApp(pluginsSource?: string): Promise<string> {
 }
 
 describe('client inspection', () => {
+  it('inspects nested page routes without loading their components', async () => {
+    const appRoot = await createInspectionApp(`
+      const page = async () => { throw new Error('must not load pages'); };
+      export default { plugins: [{
+        packageName: '@example/nested', config: [], serviceProviders: [],
+        reactProviders: [], routeComponentOverrides: [], options: {},
+        routes: [{ parent: 'app', routes: [{
+          name: 'parent', path: '/parent', componentLoader: page,
+          children: [{ name: 'child', path: 'child', componentLoader: page }],
+        }] }],
+      }], routeComponentOverrides: [] };
+    `);
+    const inspection = await inspectAppClient({ appRoot });
+    expect(inspection.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: '@example/nested:parent',
+          path: '/parent',
+        }),
+        expect.objectContaining({
+          id: '@example/nested:child',
+          path: '/parent/child',
+        }),
+      ]),
+    );
+  });
+
   it('parses the static Client contribution types', () => {
     expect(
       parseInspectAppClientArgs(['--type', 'react-providers', '--json']),
@@ -160,7 +187,6 @@ describe('client inspection', () => {
       { packageName: '@nocobase/app-plugin-notification-provider', order: 5 },
       { packageName: '@nocobase/app-plugin-workflow', order: 6 },
       { packageName: '@nocobase/app-plugin-notification', order: 7 },
-      { packageName: '@nocobase/app-plugin-hub', order: 8 },
     ]);
     expect(inspection.configs[0]).toMatchObject({
       kind: 'factory',

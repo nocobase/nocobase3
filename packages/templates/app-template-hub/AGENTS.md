@@ -31,7 +31,7 @@ client/pages/             The page component
 client/components/        Your components
 client/components/ui/     shadcn/ui primitives; add with the CLI, do not hand-write
 client/locales/           Every user-visible string
-client/service-provider.ts Sidebar resources and client startup
+client/service-provider.ts Client startup and CRUD resource integration
 server/routes/            HTTP endpoints
 server/providers/         Services and their lifecycle
 database/main/migrations/      Schema changes
@@ -40,13 +40,13 @@ cli/commands/             Commands this application owns
 tests/                    Tests; never beside the source
 ```
 
-A feature with a page and an API touches five places: a migration for the table, a route in `server/routes/`, a page in `client/pages/` declared in `client/routes.ts`, a sidebar resource in `client/service-provider.ts`, and strings in `client/locales/`.
+A feature with a page and an API touches five places: a migration for the table, a route in `server/routes/`, a page in `client/pages/` declared in `client/routes.ts`, navigation on the page route, and strings in `client/locales/`.
 
 ### The rest is framework structure
 
 `client/routing/`, `client/shell/`, `client/layouts/`, `client/theme/`, the server entry points, the build scripts, and the tsconfigs are the scaffolding the template provides. It is still this application's own source — it shipped to the user and they may change it — but it is the part the template evolves, so an edit there is what a future upgrade has to reconcile.
 
-Prefer the mechanism the system already provides. Most tasks that look like they need a shell or router change do not: a page needs a route and a resource, a settings page needs `access`, a plugin page is customized through an option or an override. If you find yourself editing the shell to add a page, check whether you have registered the resource first.
+Prefer the mechanism the system already provides. Declare a page in `client/routes.ts` and add `navigation` when it needs a menu entry. Refine resources are only needed for CRUD integration. A settings page uses `access` to restrict access; a plugin page is customized through an option or an override. Before editing the shell to add a menu, check the route and its `navigation` declaration.
 
 When the built-in mechanism genuinely cannot express what is being asked, changing this structure is a legitimate answer — not a last resort to apologize for. Do it deliberately, and leave the next agent enough to work with:
 
@@ -76,19 +76,9 @@ Route paths are application-internal. Never write the deployment base path such 
 
 Use `defineSettingsRoutes()` for administrative pages, which mount under `/settings`, and `defineDevRoutes()` for development-only pages, which mount under `/dev` and are absent from a production build. Do not repeat `/settings` or `/dev` in the path. `defineDevRoutes()` is a build boundary, not a permission boundary: a page that must be restricted in production is a settings route with `access`, enforced by the server.
 
-**A route alone does not put the page in the sidebar.** The URL works, but nothing appears in navigation. Register a Refine resource in `client/service-provider.ts` as well:
+**Declare navigation on the route.** App, Settings and Dev menus read `navigation: { title: 'navigation.orders' }`; titles resolve in the owning locale namespace. Add the translation in `client/locales/`. Refine resources remain for CRUD and do not add menu entries.
 
-```ts
-this.app.refine.addResources([
-  {
-    name: 'orders',
-    list: '/orders',
-    meta: { label: 'navigation.orders', i18nNs: APP_NS },
-  },
-]);
-```
-
-`list` must match the route's `path`, and `meta.label` is a translation key added to `client/locales/`. So a navigable page is three edits: the route, the resource, and the label. Settings and dev pages are the exception — their `navigation` field handles it.
+Use recursive groups to organize menus; their path is optional. Pages may also have children, but must manually render `Outlet`. For examples and the exact file list, read `skills/nocobase-app-development/references/client-child-routes.md`.
 
 ### Components and styling
 
