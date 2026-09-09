@@ -176,7 +176,7 @@ const healthUrl = `${appServerUrl}/${[appBasePath, 'api/healthz']
   .filter(Boolean)
   .join('/')}`;
 const viteUrl = `${nextEnv.APP_VITE_DEV_URL}/${appBasePath ? `${appBasePath}/` : ''}`;
-const workflowBuild = spawn.sync('workflow', ['build'], {
+const workflowBuild = spawn.sync('pnpm', ['nocobase', 'workflow', 'build'], {
   cwd: rootDir,
   env: nextEnv,
   stdio: 'inherit',
