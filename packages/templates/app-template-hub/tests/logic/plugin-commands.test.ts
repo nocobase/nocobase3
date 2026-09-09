@@ -48,7 +48,9 @@ describe('documented plugin commands', () => {
     );
 
     expect(usesCli.length).toBeGreaterThan(0);
-    expect(appPackage.devDependencies?.['@nocobase/nb3-cli']).toBeTruthy();
+    // A runtime dependency, not tooling: `cli/index.ts` imports it and `dist/cli` ships to a deployment,
+    // which installs from `dependencies` alone.
+    expect(appPackage.dependencies?.['@nocobase/nb3-cli']).toBeTruthy();
   });
 
   it('ships the inspector that client:inspect runs', () => {

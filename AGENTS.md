@@ -148,9 +148,43 @@ When another native dependency needs the same treatment, add it to `DRIVERS_NEED
 
 A separate failure mode is worth knowing: `ignore-scripts=true` in a developer's npm configuration suppresses install scripts globally and outranks `allowBuilds`, so a correct `allowBuilds` still yields an uncompiled addon. `pnpm install` cannot repair this — the package is already in the store, so pnpm skips it and reports success without building. `pnpm rebuild <package>` does, and works without changing the developer's configuration. `create-app` verifies the driver by loading it and runs that rebuild automatically.
 
+### Declaring dependencies so they reach the right side
+
+`pnpm build` emits a `dist/` that a server installs from its own `package.json`. What reaches that server is decided entirely by declarations — the build scans no code and prunes nothing.
+
+A plugin has three answers:
+
+| The import is reached from                  | Declare it in      |
+| ------------------------------------------- | ------------------ |
+| `server/` or `database/`, at runtime        | `dependencies`     |
+| `client/`, as a value import                | `peerDependencies` |
+| Tests, build scripts, or `import type` only | `devDependencies`  |
+
+The client row is the one worth understanding. A plugin's `client/` is not bundled by the plugin — `build` is `tsc`, so `dist/client/*.js` keeps its bare imports and the installing application's Vite build resolves them. The package therefore has to appear in the published manifest, and `devDependencies` are not published. But a server has no client build and never requires it, so `dependencies` would install tens of megabytes into every deployment that nothing loads. A peer satisfies both: the application installs one shared copy, and `dist/pnpm-workspace.yaml` sets `autoInstallPeers: false` so a deployment installs none. One declaration is enough — pnpm installs and links a peer here, so the plugin's own lint, tests, and build resolve it without a second entry.
+
+`optional` on a peer means the consumer may legitimately not need it, not "skip this at deploy time". An optional peer is not auto-installed anywhere, including in the application that needs it — which is the failure this arrangement exists to prevent. `@nocobase/i18n`'s `hono` is the legitimate case: a browser-only consumer has no use for it.
+
+An application has two, and the question is which half imports it: `server/`, `database/`, and `cli/` imports go in `dependencies`, because `dist/package.json` is generated from there; `client/` imports and build tooling stay in `devDependencies`, because Vite inlines them at build time and nothing resolves them again.
+
+`build-server-dist-package.mjs` used to walk the built output for bare imports and expand every transitive dependency by hand. It had to, because applications declared their server packages in `devDependencies` and nothing else could tell which of them a deployment needed. Once those moved to `dependencies` the walk had nothing left to discover, and it was removed: `pnpm install` applies the same rules, and a scan that resolves specifiers is a scan that can miss one. Workspace packages remain the exception, vendored into `dist/vendor` under a `file:` path because a `workspace:` range means nothing to a deployment.
+
+The shared UI packages — `@base-ui/react`, `class-variance-authority`, `clsx`, `lucide-react`, `shadcn`, `tailwind-merge`, `tw-animate-css` — resolve through `catalog:` wherever they are declared, peers included; `pnpm pack` expands the reference before publishing.
+
+An earlier version of this pruned `dist/node_modules` with a `@vercel/nft` file trace. It produced a far smaller tree, but what it could not see it deleted — the pino transports named in a `target:` string, each plugin's `dist/database` read by directory scan, `@nocobase/nb3-cli`'s registry module handed to oclif as a path. Every one surfaced only by running the built `dist/`, and every one would have shipped as a successful build. Declarations cannot fail that way.
+
+### Building for another platform
+
+`retarget-native.mjs` is unrelated to the above and stays: a `.node` binary is compiled for one platform, architecture, C library, and Node ABI at once, so a build for another target obtains different binaries. It classifies packages by manifest signal rather than by name — `cpu`/`os` fields, an install script invoking a native build helper, bundled `.node` files — so a native dependency an application adds later is handled without extending a list. Keep that.
+
+The build targets the machine it runs on so `pnpm build && pnpm start` works, and `--target` plus `--node-version` select another. A forgotten `--target` produces a `dist/` that fails only on the server, so every build states the platform it produced and records it in `dist/package.json` under `nocobase.buildTarget`.
+
+`verify-server-deps.mjs` runs last and fails the build when a package the application's own `server/`, `database/`, or `cli/` code imports is not in `dist/package.json`. It reads literal specifiers, so `await import(`${name}/index.js`)` is invisible to it — that case has to be declared deliberately, and no static check can cover it.
+
+The `parseTarget` mapping from Node major to ABI is written out rather than taken from `node-abi`, which given a bare major returns the major itself: `getAbi('24')` is 24, not 137. A wrong ABI downloads a binary that will not load.
+
 ## Depending on Identity-Sensitive Packages
 
-A plugin declares the runtime it plugs into as a `peerDependency` paired with a `devDependency`, never as a `dependency`. `pnpm peers:check` enforces this and runs in CI.
+A plugin declares the runtime it plugs into as a `peerDependency`, never as a `dependency`. `pnpm peers:check` enforces this and runs in CI.
 
 ### Deciding whether a package belongs to the rule
 
@@ -194,17 +228,13 @@ It cannot be reproduced here. The monorepo links every consumer to one directory
 
 ```json
 {
-  "peerDependencies": { "@nocobase/app-server": "workspace:^" },
-  "devDependencies": { "@nocobase/app-server": "workspace:*" }
+  "peerDependencies": { "@nocobase/app-server": "workspace:^" }
 }
 ```
 
-The two entries say different things about the same package, and each is load-bearing:
+**`peerDependencies` is the published contract.** It is what npm ships in the package metadata, and it tells the installing application "provide this, and provide exactly one". `devDependencies` are not published at all, so without the peer entry an installed plugin declares no requirement and a package manager is free to give it a second copy.
 
-- **`peerDependencies` is the published contract.** It is what npm ships in the package metadata, and it tells the installing application "provide this, and provide exactly one". `devDependencies` are not published at all, so without the peer entry an installed plugin declares no requirement and a package manager is free to give it a second copy.
-- **`devDependencies` pins the version used here.** The peer range is deliberately wide — `workspace:^` publishes as `^1.0.0` — because an application may reasonably satisfy it with any compatible version. Development and tests should not float across that range; `workspace:*` resolves to the copy in this repository, which is the one being changed alongside the plugin.
-
-Note that a peer written with the `workspace:` protocol resolves on its own here, so the `devDependency` is not what makes the package importable — pnpm links a `workspace:` peer whether or not it is also a devDependency. It matters for version pinning and for keeping the two declarations honest about their audiences. A peer written as a plain semver range does _not_ resolve on its own, so if an entry ever needs a non-workspace range, the devDependency becomes load-bearing for resolution as well.
+One declaration is enough. pnpm installs a peer and links it into the plugin's own `node_modules`, `workspace:^` resolving to the copy in this repository exactly as `workspace:*` would — a plugin with its devDependency removed still links, typechecks, builds, and tests against it. A paired `devDependency` used to be required on the grounds that development would otherwise float across the wide peer range; it does not, so the second entry only added a line to keep in step.
 
 ### Scope
 
@@ -218,25 +248,31 @@ A plugin that contributes CLI commands declares `@oclif/core` as a peer for a re
 
 ## Declaring Dependencies by How They Are Used
 
-Server code that ships goes in `dependencies`. Client code, build tooling, tests, and type-only imports go in `devDependencies` — or in `peerDependencies` when the consuming application must provide a single shared copy. `pnpm deps:check` enforces the server half and runs in CI.
+Server code that ships goes in `dependencies`. Browser code a consumer has to resolve goes in `peerDependencies`. Build tooling, tests, and type-only imports go in `devDependencies`. `pnpm deps:check` enforces the server half and runs in CI.
 
-The asymmetry is not a style preference. It follows from the two halves being deployed differently.
+The rule is one question: **does someone outside this repository have to resolve this import?** If yes, the package has to be declared where npm publishes it, and `devDependencies` are not published at all.
 
-**The server half is deployed unbundled.** `pnpm build` emits `dist/server` with its bare imports intact, then generates `dist/package.json` by walking `dependencies` and installs a `node_modules` beside it. That tree is what a deployed server resolves against, and `devDependencies` are not part of it. A server module importing something declared only as a devDependency therefore resolves in every development checkout and is absent exactly once — on the deployed server. `@nocobase/app-plugin-workflow` shipped this: `server/loader/source-parser.ts` imports `typescript`, the engine reaches that module through a static import chain, and `typescript` sat in `devDependencies`. Nothing warned at install time; the application crashed on start with `Cannot find package 'typescript'`, an error naming nothing that points back at the manifest.
+**A deployed server resolves its imports at runtime.** `pnpm build` emits `dist/server` with its bare imports intact and generates `dist/package.json` by walking `dependencies`. A server module importing something declared only as a devDependency resolves in every development checkout and is absent exactly once — on the deployed server. `@nocobase/app-plugin-workflow` shipped this: `server/loader/source-parser.ts` imports `typescript`, and `typescript` sat in `devDependencies`. The application crashed on start with `Cannot find package 'typescript'`, an error naming nothing that points back at the manifest.
 
-**The client half is bundled by the application.** A plugin's `client/` is compiled by the consuming application's Vite build, which resolves those imports at build time and inlines them into `dist/client`. Nothing resolves them again at runtime, so a `dependencies` entry buys the bundle nothing — and costs something real, because the same walk that builds `dist/package.json` drags every one of them into the server deployment to be installed and never required. `lucide-react` and `@xyflow/react` alone were 44 MB of that, in a tree whose server code references neither.
+**An installing application resolves a plugin's client imports at build time.** A plugin's `client/` is not bundled by the plugin — `build` is `tsc`, so `dist/client/*.js` keeps its bare imports, and the consuming application's Vite build is what resolves them. That application installed the plugin from a registry, so it has only what the published manifest declares. `@nocobase/app-plugin-notification-provider` shipped `sonner` in `devDependencies`; a generated application failed on `pnpm dev` with `Could not resolve "sonner"`, and `@nocobase/app-plugin-workflow` failed the same way on `@xyflow/react`.
 
-So the question is where the importing code runs, and then what the import actually is:
+That failure cannot be reproduced here, which is why it reached npm twice. The monorepo installs every devDependency and links it into the plugin's own `node_modules`, so the import resolves in development and fails only once the plugin is installed from a registry.
+
+A plugin's client dependency is also easy to believe is fine when it is not. Ten of the twelve affected plugins appeared to work because `app-template-default` happened to declare the same package for its own use; `@nocobase/app-plugin-hub`'s CodeMirror packages had no such coincidence and were simply broken. Relying on a template to satisfy a plugin's dependency is not a design, and an application the template did not generate has no reason to declare any of it.
+
+So the question is who resolves the import, and then what the import actually is:
 
 - **A server value import belongs in `dependencies`.** `import ts from 'typescript'` in `server/` needs it even though TypeScript sounds like build tooling.
-- **A client import belongs in `devDependencies`.** `react`, `lucide-react`, `@base-ui/react`, `clsx`, and everything else reached only from `client/` — the application bundles them, and it declares its own copies.
+- **A client value import belongs in `peerDependencies`.** `sonner`, `lucide-react`, `@base-ui/react`, `clsx` — the installing application resolves them from the published manifest and provides one shared copy, while a server deployment installs none.
 - **A type-only import belongs in `devDependencies` wherever it lives.** `import type { Config } from 'x'` and `import { type A, type B } from 'x'` are erased before anything runs.
 - **A dynamic `import()` counts as a value import.** Deferring the load changes when a package is needed, not whether.
 - **The `files` field decides whether code ships at all.** A test, an eval harness, or a build script excluded from `files` never reaches a consumer, so its imports are correctly devDependencies.
 
-`registry/` is excluded for a stronger reason than `client/`: it is shadcn-style source copied into an application and compiled there against that application's own `react` and `@/` alias. The plugin cannot resolve those imports at all, so declaring them would claim dependencies it does not have.
+`registry/` is excluded for a stronger reason than the rest: it is shadcn-style source copied into an application and compiled there against that application's own `react` and `@/` alias. The plugin cannot resolve those imports at all, so declaring them would claim dependencies it does not have.
 
-`peerDependencies` is the third answer, for a package the application must supply exactly one copy of. `@nocobase/i18n` is the shape to copy: it exports a server entry and a client entry from one package, so `i18next` is an ordinary dependency while `react`, `hono`, and `react-i18next` are optional peers — a server-only consumer installs none of them, and a browser consumer gets the application's single copy rather than a second one that would leave `useTranslation` reading an empty provider. Mark such a peer `optional` in `peerDependenciesMeta` so the consumer that legitimately does not need it gets no warning.
+`peerDependencies` is the third answer, for a package the application must supply exactly one copy of. `react`, `react-dom`, `react-router`, and everything in `IDENTITY_SENSITIVE_PACKAGES` belong here rather than in `dependencies`: a second copy of a router or a React context does not merely waste space, it silently breaks. `@nocobase/i18n` is the shape to copy: it exports a server entry and a client entry from one package, so `i18next` is an ordinary dependency while `react`, `hono`, and `react-i18next` are optional peers. Mark such a peer `optional` in `peerDependenciesMeta` so the consumer that legitimately does not need it gets no warning.
+
+This rule changed once, and the reason is worth recording. Client imports used to belong in `devDependencies`, because `dist/package.json` was built by walking `dependencies` transitively and dragged every client package into the server deployment — `lucide-react` and `@xyflow/react` alone were 44 MB installed and never required. They are peers now, which keeps them out of a deployment without keeping them out of the application that has to resolve them.
 
 When the check reports something, there are two correct fixes and picking the wrong one is worse than the original: declare it in `dependencies` if server code genuinely imports it, or stop importing it from server code if it is client or build-time code that leaked across. Adding a declaration to silence the check trades a startup crash for a dependency every deployment carries forever.
 

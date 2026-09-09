@@ -18,13 +18,10 @@ const clientPlugins: AppClientPlugins = defineClientPlugins([
   hub({
     applicationsPath: '/apps',
     rolesPath: '/roles',
-    userAccessNavigation: true,
   }),
   users({
     mount: 'app',
     path: '/users',
-    navigationParent: 'hub-user-access',
-    navigationOrder: 10,
   }),
   i18n(),
   install(),

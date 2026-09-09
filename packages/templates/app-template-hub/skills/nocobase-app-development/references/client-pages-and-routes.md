@@ -1,6 +1,6 @@
 # Client pages and routes
 
-Pages are React components in `client/pages/`. Routes that point at them are declared in `client/routes.ts`.
+Pages are React components in `client/pages/`. Routes and menu entries are declared in `client/routes.ts`. For nested pages, Tabs and groups, also read [child routes](client-child-routes.md).
 
 ## Add a page
 
@@ -52,11 +52,13 @@ Never write the deployment base path into a route. The application is mounted so
 
 ## Choosing an auth mode
 
-| Mode       | For                                                                        |
-| ---------- | -------------------------------------------------------------------------- |
-| `required` | Pages only signed-in users may open. The default when omitted              |
-| `guest`    | Sign-in, registration, password reset. A signed-in user is redirected away |
-| `optional` | Pages that work signed in or out and adapt themselves                      |
+| Mode       | For                                                                           |
+| ---------- | ----------------------------------------------------------------------------- |
+| `required` | Pages only signed-in users may open. The default for root routes when omitted |
+| `guest`    | Sign-in, registration, password reset. A signed-in user is redirected away    |
+| `optional` | Pages that work signed in or out and adapt themselves                         |
+
+Descendants inherit their entry route’s auth mode and cannot switch it. App pages without a page ancestor retain the default `resource: name, action: access` check; nested pages add a check only when they declare `access`. Every parent check must pass before its children render.
 
 `auth` governs browser navigation. It is not server security: an endpoint the page calls must authenticate independently. See [server routes](server-routes.md).
 
@@ -94,66 +96,19 @@ A settings page without `access` is open to every signed-in user who can reach t
 
 ## Putting the page in the sidebar
 
-**Declaring a route does not put it in the sidebar.** The two are separate concerns: the route makes the URL work, and a **Refine resource** makes the entry appear. A page added to `client/routes.ts` alone is reachable by URL but invisible in navigation — this is the most common thing to get wrong.
+Declare `navigation: { title: 'navigation.orders' }` on the route. The application sidebar, settings navigation, and dev navigation all read their route declarations. Titles resolve in the owning application's or plugin's translation namespace; `icon` is an optional component accepting `className`.
 
-The sidebar is built from Refine's `useMenu()` hook, which reads the `resources` array passed to Refine's `<Refine>` component. This application collects that array through `app.refine`, so registering a resource is how anything reaches navigation.
+Omit `navigation` for a reachable page that should not have a menu entry. Menu targets must resolve to concrete paths: dynamic parameter and wildcard pages do not declare `navigation`. Visiting such a page selects its nearest visible menu ancestor.
 
-Register it in the application's client service provider:
+Do not add a Refine resource just to create a menu. Resources remain useful for CRUD integration, but do not supply application navigation. The home link is also declared in routes rather than hardcoded in the sidebar.
 
-```ts
-// client/service-provider.ts
-import { APP_NS } from '@nocobase/i18n';
+### Groups and page children
 
-public override boot(): Promise<void> {
-  this.app.refine.addResources([
-    {
-      name: 'orders',
-      list: '/orders',
-      meta: { label: 'navigation.orders', i18nNs: APP_NS },
-    },
-  ]);
-  return Promise.resolve();
-}
-```
+All three route functions support recursive `children`. A group has `name`, `navigation`, and `children`, without `componentLoader`. Its optional `path` prefixes descendants; omit it for a menu-only group. A page has `componentLoader` and may also have navigation and children. A clickable page with child menu items has separate link and expand controls.
 
-### What the fields mean
+Groups do not render business components. Pages must place `<Outlet />` explicitly where child content belongs. See [child routes](client-child-routes.md) for complete examples and verification.
 
-These are Refine's own `ResourceProps`, not a NocoBase invention. The type is exported from `@refinedev/core`, and the full set of fields is documented in Refine's resource reference:
-
-| Field                    | Meaning                                                                                                       |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------- |
-| `name`                   | The resource identifier Refine uses internally. Keep it stable; other Refine hooks address the resource by it |
-| `list`                   | The path the sidebar entry links to. Must match the route's `path`                                            |
-| `create`, `edit`, `show` | Optional paths for the other CRUD screens, if the resource has them                                           |
-| `identifier`             | Use when two resources would otherwise share a `name`                                                         |
-| `meta.label`             | What the entry displays. See the note below — this is a translation key here                                  |
-| `meta.icon`              | A React node, typically a `lucide-react` icon. Entries without one get a default list icon                    |
-| `meta.parent`            | The `name` of another resource, to nest this one beneath it                                                   |
-| `meta.access`            | Optional `{ resource, action }`; the sidebar keeps the entry hidden until the Client access check allows it   |
-
-**`meta.label` is a translation key, not finished text.** A resource is registered at startup, before any language is known, so pass the key and set `meta.i18nNs` to the namespace holding it — `APP_NS` for the application's own strings. Add the key to `client/locales/`. A label with no `i18nNs` is rendered literally, which is only correct for text that never needs translating.
-
-`meta.i18nNs` and `meta.access` are this application's conventions, read by
-`client/shell/app-sidebar.tsx`; the remaining fields are standard Refine.
-
-Use the same access tuple on the Route and its resource. The resource check
-prevents disclosing the navigation entry, while the Route check protects direct
-URL visits. Both are Client interaction boundaries; the Server API still
-enforces its own authorization.
-
-Reference: <https://refine.dev/docs/core/refine-component/#resources> and the `useMenu` hook at <https://refine.dev/docs/core/hooks/utilities/use-menu/>. The `ResourceProps` type ships with `@refinedev/core`, so your editor will complete the remaining fields.
-
-### A navigable page is three edits
-
-```text
-client/routes.ts           the route    → the URL works
-client/service-provider.ts the resource → it appears in the sidebar
-client/locales/            the label    → it reads correctly in every language
-```
-
-Settings and dev pages do not need a resource — they get their navigation from the `navigation` field on the route itself.
-
-The sidebar renders these entries in `client/shell/app-sidebar.tsx`, alongside the home item from `client/shell/navigation.ts`. Adding a page should not require editing either.
+A navigable page normally changes `client/routes.ts`, its page component, and `client/locales/`. Do not edit the shell or a ServiceProvider merely to add a menu.
 
 ## Customizing a plugin's page
 

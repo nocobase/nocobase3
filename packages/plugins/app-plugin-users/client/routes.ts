@@ -24,7 +24,13 @@ export function createUsersRoutes(
     componentLoader: () => import('./pages/users-page.js'),
   } as const;
   if ((options.mount ?? 'settings') === 'app') {
-    return defineAppRoutes([{ ...page, auth: 'required' }]);
+    return defineAppRoutes([
+      {
+        ...page,
+        auth: 'required',
+        navigation: { title: options.title ?? 'nav.users', icon: UsersRound },
+      },
+    ]);
   }
   return defineSettingsRoutes([
     {

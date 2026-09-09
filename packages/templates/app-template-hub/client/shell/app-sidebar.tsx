@@ -1,7 +1,13 @@
 import { useTranslation } from '@nocobase/i18n/client';
-import { useCan, useMenu, type TreeMenuItem } from '@refinedev/core';
-import { ChevronRight, List, ShieldCheck, X } from 'lucide-react';
-import { useMemo, type ReactElement, type ReactNode } from 'react';
+import type { AppClientRegisteredRoute } from '@nocobase/app-client/plugins';
+import {
+  routeKey,
+  useRouteNavigation,
+  selectedNavigationId,
+  type RouteNavigationItem,
+} from '../routing/route-navigation.js';
+import { ChevronRight, ShieldCheck, X } from 'lucide-react';
+import { useState, type ReactElement, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router';
 
 import { Button } from '@/components/ui/button';
@@ -9,23 +15,26 @@ import { Button } from '@/components/ui/button';
 import { AppBrand } from './app-brand.js';
 
 export interface AppSidebarProps {
+  readonly routes: readonly AppClientRegisteredRoute[];
   readonly desktopCollapsed: boolean;
   readonly mobileOpen: boolean;
   readonly onCloseMobile: () => void;
 }
 
 export function AppSidebar({
+  routes,
   desktopCollapsed,
   mobileOpen,
   onCloseMobile,
 }: AppSidebarProps): ReactElement {
-  const { menuItems, selectedKey } = useMenu();
-  const { pathname } = useLocation();
-  const { t } = useTranslation();
-  const orderedMenuItems = useMemo(
-    () => orderNavigationItems(menuItems),
-    [menuItems],
+  const { items, denied } = useRouteNavigation(routes);
+  const menuItems = orderHubNavigation(items);
+  const selectedKey = selectedNavigationId(
+    routes,
+    useLocation().pathname,
+    denied,
   );
+  const { t } = useTranslation();
 
   return (
     <>
@@ -72,13 +81,12 @@ export function AppSidebar({
           })}
           className={`flex-1 space-y-1 overflow-x-hidden overflow-y-auto py-3 ${desktopCollapsed ? 'px-3 md:px-2' : 'px-3'}`}
         >
-          {orderedMenuItems.map((item) => (
+          {menuItems.map((item) => (
             <NavigationTree
               collapsed={desktopCollapsed}
               item={item}
-              key={item.key || item.name}
+              key={routeKey(item.route)}
               onNavigate={onCloseMobile}
-              pathname={pathname}
               selectedKey={selectedKey}
             />
           ))}
@@ -89,89 +97,108 @@ export function AppSidebar({
   );
 }
 
-interface NavigationTreeProps {
-  readonly collapsed: boolean;
-  readonly item: TreeMenuItem;
-  readonly onNavigate: () => void;
-  readonly pathname: string;
-  readonly selectedKey: string;
-}
+const HUB_NAVIGATION_PATHS = ['/apps', '/users', '/roles'] as const;
 
-interface NavigationAccess {
-  readonly resource: string;
-  readonly action: string;
-}
-
-/**
- * The label a menu entry shows.
- *
- * A resource registers its label at bootstrap, before any language is known, so a plugin passes a translation key and
- * its namespace instead of a finished string. An entry without a namespace is already literal text.
- */
-function useMenuLabel(item: TreeMenuItem): string {
-  const { t } = useTranslation();
-  const meta = item.meta as { label?: string; i18nNs?: string } | undefined;
-  const label = item.label ?? meta?.label ?? item.name;
-
-  return meta?.i18nNs ? t(label, { ns: meta.i18nNs }) : label;
-}
-
-function NavigationTree({
-  item,
-  ...props
-}: NavigationTreeProps): ReactElement | null {
-  const access = navigationAccess(item);
-  return access ? (
-    <GuardedNavigationTree access={access} item={item} {...props} />
-  ) : (
-    <NavigationTreeContent item={item} {...props} />
+function orderHubNavigation(
+  items: readonly RouteNavigationItem[],
+): RouteNavigationItem[] {
+  const order = new Map<string, number>(
+    HUB_NAVIGATION_PATHS.map((path, index) => [path, index]),
+  );
+  return [...items].sort(
+    (left, right) =>
+      (order.get(left.route.path) ?? Number.MAX_SAFE_INTEGER) -
+      (order.get(right.route.path) ?? Number.MAX_SAFE_INTEGER),
   );
 }
 
-function GuardedNavigationTree({
-  access,
-  ...props
-}: NavigationTreeProps & {
-  readonly access: NavigationAccess;
-}): ReactElement | null {
-  const { data, isLoading } = useCan({
-    resource: access.resource,
-    action: access.action,
-    queryOptions: {
-      staleTime: 0,
-      refetchOnMount: 'always',
-    },
-  });
-
-  if (isLoading || data?.can !== true) return null;
-  return <NavigationTreeContent {...props} />;
+interface NavigationTreeProps {
+  readonly collapsed: boolean;
+  readonly item: RouteNavigationItem;
+  readonly onNavigate: () => void;
+  readonly selectedKey: string | undefined;
 }
 
-function NavigationTreeContent({
+export function NavigationTree({
   collapsed,
   item,
   onNavigate,
-  pathname,
   selectedKey,
 }: NavigationTreeProps): ReactElement | null {
-  const label = useMenuLabel(item);
-  const isSelected = isNavigationItemSelected(item, selectedKey, pathname);
+  const { t } = useTranslation(item.route.packageName);
+  const label = t(item.route.navigation!.title, {
+    defaultValue: item.route.navigation!.title,
+  });
+  const isSelected = routeKey(item.route) === selectedKey;
   const children = item.children ?? [];
-  const icon = item.meta?.icon ?? item.icon ?? <List />;
+  const Icon = item.route.navigation?.icon;
+  const icon = Icon ? <Icon /> : null;
 
-  if (children.length > 0 && !item.route) {
+  const selected = containsSelection(item, selectedKey);
+  const [disclosure, setDisclosure] = useState({
+    key: selectedKey,
+    expanded: selected,
+  });
+  const expanded =
+    disclosure.key === selectedKey ? disclosure.expanded : selected;
+
+  if (children.length > 0 && item.route.componentLoader) {
     return (
-      <details
-        className='group'
-        open={children.some((child) => child.key === selectedKey)}
-      >
+      <div>
+        <div className='flex items-center'>
+          <div className='min-w-0 flex-1'>
+            <NavigationLink
+              collapsed={collapsed}
+              icon={icon}
+              isSelected={isSelected}
+              label={label}
+              onNavigate={onNavigate}
+              route={item.route.path}
+            />
+          </div>
+          <button
+            type='button'
+            aria-label={label}
+            aria-expanded={expanded}
+            onClick={() =>
+              setDisclosure({ key: selectedKey, expanded: !expanded })
+            }
+            className={`rounded-lg p-2 hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring ${collapsed ? 'md:hidden' : ''}`}
+          >
+            <ChevronRight className={`size-4 ${expanded ? 'rotate-90' : ''}`} />
+          </button>
+        </div>
+        {expanded ? (
+          <div
+            className={`ml-3 space-y-1 border-l border-sidebar-border pl-2 ${collapsed ? 'md:hidden' : ''}`}
+          >
+            {children.map((child) => (
+              <NavigationTree
+                key={routeKey(child.route)}
+                item={child}
+                collapsed={collapsed}
+                onNavigate={onNavigate}
+                selectedKey={selectedKey}
+              />
+            ))}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (children.length > 0) {
+    return (
+      <details className='group' open={containsSelection(item, selectedKey)}>
         <summary
           className={`flex cursor-pointer list-none items-center rounded-lg px-3 py-2 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground [&::-webkit-details-marker]:hidden ${collapsed ? 'md:justify-center md:px-2' : 'justify-between'}`}
           title={collapsed ? label : undefined}
         >
           <span className='flex min-w-0 items-center gap-3'>
-            <NavigationIcon>{icon}</NavigationIcon>
-            <span className={`truncate ${collapsed ? 'md:hidden' : ''}`}>
+            {icon ? <NavigationIcon>{icon}</NavigationIcon> : null}
+            <span
+              className={`truncate ${collapsed && icon ? 'md:hidden' : ''}`}
+            >
               {label}
             </span>
           </span>
@@ -186,9 +213,8 @@ function NavigationTreeContent({
             <NavigationTree
               collapsed={collapsed}
               item={child}
-              key={child.key || child.name}
+              key={routeKey(child.route)}
               onNavigate={onNavigate}
-              pathname={pathname}
               selectedKey={selectedKey}
             />
           ))}
@@ -197,7 +223,7 @@ function NavigationTreeContent({
     );
   }
 
-  if (!item.route) {
+  if (!item.route.componentLoader) {
     return null;
   }
 
@@ -208,50 +234,20 @@ function NavigationTreeContent({
       isSelected={isSelected}
       label={label}
       onNavigate={onNavigate}
-      route={item.route}
+      route={item.route.path}
     />
   );
 }
 
-function isNavigationItemSelected(
-  item: TreeMenuItem,
-  selectedKey: string,
-  pathname: string,
+function containsSelection(
+  item: RouteNavigationItem,
+  id: string | undefined,
 ): boolean {
-  if (item.key === selectedKey) return true;
-  if (!item.route) return false;
-  const route = item.route.replace(/\/$/u, '') || '/';
-  const current = pathname.replace(/\/$/u, '') || '/';
   return (
-    current === route || (route !== '/' && current.startsWith(`${route}/`))
+    routeKey(item.route) === id ||
+    item.children.some((child) => containsSelection(child, id))
   );
 }
-
-function navigationAccess(item: TreeMenuItem): NavigationAccess | undefined {
-  const access = item.meta?.access as Partial<NavigationAccess> | undefined;
-  return typeof access?.resource === 'string' &&
-    typeof access.action === 'string'
-    ? { resource: access.resource, action: access.action }
-    : undefined;
-}
-
-function orderNavigationItems(items: readonly TreeMenuItem[]): TreeMenuItem[] {
-  return [...items]
-    .sort((left, right) => navigationOrder(left) - navigationOrder(right))
-    .map((item) => ({
-      ...item,
-      children: orderNavigationItems(item.children ?? []),
-    }));
-}
-
-function navigationOrder(item: TreeMenuItem): number {
-  const meta = item.meta as { order?: unknown } | undefined;
-  const order = meta?.order;
-  return typeof order === 'number' && Number.isFinite(order)
-    ? order
-    : Number.MAX_SAFE_INTEGER;
-}
-
 interface NavigationLinkProps {
   readonly collapsed: boolean;
   readonly icon: ReactNode;
@@ -277,8 +273,8 @@ function NavigationLink({
       title={collapsed ? label : undefined}
       to={route}
     >
-      <NavigationIcon>{icon}</NavigationIcon>
-      <span className={`truncate ${collapsed ? 'md:hidden' : ''}`}>
+      {icon ? <NavigationIcon>{icon}</NavigationIcon> : null}
+      <span className={`truncate ${collapsed && icon ? 'md:hidden' : ''}`}>
         {label}
       </span>
     </Link>

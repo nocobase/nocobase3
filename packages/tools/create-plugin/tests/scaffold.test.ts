@@ -186,11 +186,10 @@ describe('createPlugin', () => {
         peerDependencyNames,
       );
 
-      // A workspace peer is paired with a devDependency so development and tests pin this repository's copy rather
-      // than floating across the wide peer range.
+      // Each peer is declared once: pnpm resolves a `workspace:` peer to this repository's copy on its own, so a
+      // duplicate devDependency would only be a second line to keep in step.
       for (const packageName of Object.keys(manifest.peerDependencies ?? {})) {
-        if (!packageName.startsWith('@nocobase/')) continue;
-        expect(manifest.devDependencies ?? {}).toHaveProperty(packageName);
+        expect(manifest.devDependencies ?? {}).not.toHaveProperty(packageName);
       }
     },
   );

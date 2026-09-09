@@ -135,6 +135,11 @@ describe('client inspection', () => {
       },
       {
         auth: 'required',
+        id: '@nocobase/app-plugin-repository-example:api-examples',
+        path: '/',
+      },
+      {
+        auth: 'required',
         id: '@nocobase/app-plugin-repository-example:sort',
         path: '/repository-example/sort',
       },
@@ -165,18 +170,28 @@ describe('client inspection', () => {
       },
       {
         auth: 'required',
+        id: '@nocobase/app-plugin-repository-example:crm-group',
+        path: '/',
+      },
+      {
+        auth: 'required',
         id: '@nocobase/app-plugin-repository-example:crm',
         path: '/repository-example/crm',
       },
       {
         auth: 'required',
-        id: '@nocobase/app-plugin-repository-example:orders',
-        path: '/repository-example/orders',
+        id: '@nocobase/app-plugin-repository-example:contacts',
+        path: '/repository-example/crm/contacts',
       },
       {
         auth: 'required',
-        id: '@nocobase/app-plugin-repository-example:contacts',
-        path: '/repository-example/crm/contacts',
+        id: '@nocobase/app-plugin-repository-example:orders-group',
+        path: '/',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-repository-example:orders',
+        path: '/repository-example/orders',
       },
       {
         auth: 'required',

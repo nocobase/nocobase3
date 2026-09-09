@@ -1,7 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { Boxes, ShieldCheck } from 'lucide-react';
 
 import hub from '../client/plugin.js';
-import { HubNavigationProvider } from '../client/providers/hub-navigation.js';
 import {
   emptyHubCapabilities,
   visibleHubDetailTabs,
@@ -22,6 +22,7 @@ describe('@nocobase/app-plugin-hub', () => {
       path: '/hub',
       auth: 'required',
       access: { resource: 'hub', action: 'access' },
+      navigation: { title: 'navigation.applications', icon: Boxes },
     });
     await expect(routes.routes[0]?.componentLoader?.()).resolves.toMatchObject({
       default: expect.any(Function),
@@ -60,39 +61,10 @@ describe('@nocobase/app-plugin-hub', () => {
     ]);
   });
 
-  it('registers the Hub page in the application navigation', async () => {
-    const addResources = vi.fn();
-    const provider = new HubNavigationProvider(
-      {
-        refine: { addResources },
-      } as never,
-      {
-        packageName: '@nocobase/app-plugin-hub',
-        source: 'plugin',
-        options: {},
-      },
-    );
-
-    await provider.boot();
-
-    expect(addResources).toHaveBeenCalledWith([
-      expect.objectContaining({
-        name: 'hub',
-        list: '/hub',
-        meta: expect.objectContaining({
-          label: 'navigation.applications',
-          i18nNs: '@nocobase/app-plugin-hub',
-          access: { resource: 'hub', action: 'access' },
-        }),
-      }),
-    ]);
-  });
-
   it('can expose a Hub console with applications and read-only roles', async () => {
     const registration = hub({
       applicationsPath: '/apps',
       rolesPath: '/roles',
-      userAccessNavigation: true,
     });
     expect(registration.routes[0]).toMatchObject({
       parent: 'app',
@@ -101,48 +73,20 @@ describe('@nocobase/app-plugin-hub', () => {
           name: 'hub',
           path: '/apps',
           access: { resource: 'hub', action: 'access' },
+          navigation: { title: 'navigation.applications', icon: Boxes },
         },
         {
           name: 'hub-roles',
           path: '/roles',
           access: { resource: 'users', action: 'access' },
+          navigation: { title: 'navigation.roles', icon: ShieldCheck },
         },
       ],
     });
     await expect(
       registration.routes[0]?.routes[1]?.componentLoader(),
     ).resolves.toMatchObject({ default: expect.any(Function) });
-
-    const addResources = vi.fn();
-    const provider = new HubNavigationProvider(
-      { refine: { addResources } } as never,
-      {
-        packageName: registration.packageName,
-        source: 'plugin',
-        options: registration.options,
-      },
-    );
-    await provider.boot();
-
-    expect(addResources).toHaveBeenCalledWith([
-      expect.objectContaining({
-        name: 'hub',
-        list: '/apps',
-        meta: expect.objectContaining({ order: 10 }),
-      }),
-      expect.objectContaining({
-        name: 'hub-user-access',
-        meta: expect.objectContaining({ order: 20 }),
-      }),
-      expect.objectContaining({
-        name: 'hub-roles',
-        list: '/roles',
-        meta: expect.objectContaining({
-          parent: 'hub-user-access',
-          order: 20,
-        }),
-      }),
-    ]);
+    expect(registration.serviceProviders).toEqual([]);
   });
 
   it('derives the product matrix from the grants returned by the server', () => {

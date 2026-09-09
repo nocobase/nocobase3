@@ -3,6 +3,7 @@ import {
   type AppClientAppRoutesContribution,
   type AppClientRouteDefinition,
 } from '@nocobase/app-client/plugins';
+import { Boxes, ShieldCheck } from 'lucide-react';
 
 import type { HubClientOptions } from './plugin.js';
 
@@ -14,7 +15,6 @@ export const HUB_USER_ACCESS = {
   resource: 'users',
   action: 'access',
 } as const;
-export const HUB_USER_ACCESS_NAVIGATION = 'hub-user-access';
 
 export function createHubRoutes(
   options: HubClientOptions = {},
@@ -25,6 +25,7 @@ export function createHubRoutes(
       path: normalizeHubRoutePath(options.applicationsPath ?? '/hub'),
       auth: 'required',
       access: HUB_APPLICATIONS_ACCESS,
+      navigation: { title: 'navigation.applications', icon: Boxes },
       componentLoader: () => import('./pages/hub-page.js'),
     },
   ];
@@ -34,6 +35,7 @@ export function createHubRoutes(
       path: normalizeHubRoutePath(options.rolesPath),
       auth: 'required',
       access: HUB_USER_ACCESS,
+      navigation: { title: 'navigation.roles', icon: ShieldCheck },
       componentLoader: () => import('./pages/roles-page.js'),
     });
   }

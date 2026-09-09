@@ -2,4 +2,4 @@
 // its client/plugins.ts.
 export { default } from './plugin.js';
 export type { HubClientOptions } from './plugin.js';
-export { createHubRoutes, HUB_USER_ACCESS_NAVIGATION } from './routes.js';
+export { createHubRoutes } from './routes.js';

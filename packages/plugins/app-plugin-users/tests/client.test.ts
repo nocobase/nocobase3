@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+import { UsersRound } from 'lucide-react';
 
-import { UsersNavigationProvider } from '../client/service-provider.js';
 import users from '../client/plugin.js';
 import {
   createRoleFilterOptions,
@@ -178,48 +178,16 @@ describe('@nocobase/app-plugin-users Client routes', () => {
           path: '/team/users',
           auth: 'required',
           access: { resource: 'users', action: 'access' },
+          navigation: { title: 'nav.users', icon: UsersRound },
         },
       ],
     });
-    expect(registration.serviceProviders).toEqual([UsersNavigationProvider]);
+    expect(registration.serviceProviders).toEqual([]);
     expect(registration.routeComponentOverrides).toEqual([
       {
         routeId: '@nocobase/app-plugin-users:users',
         componentLoader,
       },
-    ]);
-  });
-
-  it('registers a protected, translated App navigation entry', async () => {
-    const addResources = vi.fn();
-    const provider = new UsersNavigationProvider(
-      { refine: { addResources } } as never,
-      {
-        packageName: '@nocobase/app-plugin-users',
-        source: 'plugin',
-        options: {
-          mount: 'app',
-          path: '/team/users',
-          navigationParent: 'hub-user-access',
-          navigationOrder: 10,
-        },
-      },
-    );
-
-    await provider.boot();
-
-    expect(addResources).toHaveBeenCalledWith([
-      expect.objectContaining({
-        name: 'users',
-        list: '/team/users',
-        meta: expect.objectContaining({
-          access: { resource: 'users', action: 'access' },
-          label: 'nav.users',
-          i18nNs: '@nocobase/app-plugin-users',
-          parent: 'hub-user-access',
-          order: 10,
-        }),
-      }),
     ]);
   });
 

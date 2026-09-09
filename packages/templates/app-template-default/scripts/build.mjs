@@ -251,6 +251,26 @@ run(
 run('Materialize server dependency links', 'node', [
   './scripts/utils/clean-dist-bin.mjs',
 ]);
+// A `.node` binary is compiled for one platform, architecture, C library, and Node ABI at once, so an install run
+// here produces binaries for this machine. Defaults to this machine so `pnpm build && pnpm start` works; a
+// deployment build passes --target and --node-version.
+run('Retarget native modules', 'node', [
+  './scripts/utils/retarget-native.mjs',
+  ...process.argv.slice(2),
+]);
+// Removes type declarations, third-party source maps, and third-party documentation from the installed tree. Runs
+// after the native retarget, which installs platform packages of its own, and before verification, which reads
+// `dist/package.json` and package directories rather than any of the files removed here.
+run('Prune deployment artifacts', 'node', [
+  './scripts/utils/prune-dist-artifacts.mjs',
+]);
+// Fails the build when something the application's own server, database, or CLI code imports would not be usable
+// in a deployment. It runs against the installed tree rather than the manifest alone, because the question is not
+// whether a package is declared but whether the deployment install will actually fetch it. Catching it here costs
+// a build; the alternative is finding out from `Cannot find module` on a deployed server.
+run('Verify server dependencies', 'node', [
+  './scripts/utils/verify-server-deps.mjs',
+]);
 
 console.log(
   '\nBuild complete: dist/client, dist/server, dist/cli, dist/.env, and dist/package.json',

@@ -1,18 +1,12 @@
 import { Authenticated } from '@refinedev/core';
-import type {
-  AppClientRegisteredDevRoute,
-  AppClientRegisteredDevRouteGroup,
-  AppClientRegisteredRoute,
-  AppClientRegisteredSetting,
-  AppClientRegisteredSettingGroup,
-} from '@nocobase/app-client/plugins';
+import type { AppClientRegisteredRoute } from '@nocobase/app-client/plugins';
 import { lazy, Suspense, useMemo, type ReactElement } from 'react';
 import { Navigate, Outlet, Route, Routes } from 'react-router';
 
 import { Loading } from '@/components/loading';
 
 import { AppShell } from '../shell/index.js';
-import { ClientRoute } from './client-route.js';
+import { renderRouteTree } from './route-tree.js';
 import { StandalonePageLayout } from './standalone-page-layout.js';
 
 // The dev tools exist only while developing the application. Resolving the import inside an `import.meta.env.DEV`
@@ -25,21 +19,19 @@ const DevLayout = import.meta.env.DEV
   : undefined;
 
 export interface AppRouterProps {
+  readonly settingsRouteTree: readonly AppClientRegisteredRoute[];
+  readonly devRouteTree: readonly AppClientRegisteredRoute[];
   readonly clientRoutes: readonly AppClientRegisteredRoute[];
-  readonly clientSettings: readonly AppClientRegisteredSetting[];
-  readonly clientSettingGroups: readonly AppClientRegisteredSettingGroup[];
-  readonly clientDevRoutes: readonly AppClientRegisteredDevRoute[];
-  readonly clientDevRouteGroups: readonly AppClientRegisteredDevRouteGroup[];
 }
 
 export function AppRouter({
+  devRouteTree,
   clientRoutes,
-  clientDevRoutes,
-  clientDevRouteGroups,
 }: AppRouterProps): ReactElement {
   const devRoutes = useMemo(
     () =>
-      clientRoutes.filter(
+      filterRouteTree(
+        clientRoutes,
         (route) => route.auth === 'required' && route.path.startsWith('/dev/'),
       ),
     [clientRoutes],
@@ -48,7 +40,8 @@ export function AppRouter({
     () => ({
       guest: clientRoutes.filter((route) => route.auth === 'guest'),
       optional: clientRoutes.filter((route) => route.auth === 'optional'),
-      required: clientRoutes.filter(
+      required: filterRouteTree(
+        clientRoutes,
         (route) =>
           route.auth === 'required' &&
           !route.path.startsWith('/settings/') &&
@@ -70,14 +63,8 @@ export function AppRouter({
           </Authenticated>
         }
       >
-        <Route element={<AppShell />}>
-          {routeGroups.required.map((route) => (
-            <Route
-              key={route.id}
-              path={route.path}
-              element={<ClientRoute route={route} />}
-            />
-          ))}
+        <Route element={<AppShell routes={routeGroups.required} />}>
+          {renderRouteTree(routeGroups.required)}
         </Route>
         {/* Hub is a control-plane App. Its administration pages live in the
             primary console, so the ordinary App settings centre is disabled. */}
@@ -91,11 +78,7 @@ export function AppRouter({
                   <Loading className='min-h-svh' label='Loading dev tools' />
                 }
               >
-                <DevLayout
-                  devRoutes={clientDevRoutes}
-                  groups={clientDevRouteGroups}
-                  routes={devRoutes}
-                />
+                <DevLayout routeTree={devRouteTree} routes={devRoutes} />
               </Suspense>
             }
           />
@@ -110,27 +93,27 @@ export function AppRouter({
         }
       >
         <Route element={<StandalonePageLayout />}>
-          {routeGroups.guest.map((route) => (
-            <Route
-              key={route.id}
-              path={route.path}
-              element={<ClientRoute route={route} />}
-            />
-          ))}
+          {renderRouteTree(routeGroups.guest)}
         </Route>
       </Route>
 
       <Route element={<StandalonePageLayout />}>
-        {routeGroups.optional.map((route) => (
-          <Route
-            key={route.id}
-            path={route.path}
-            element={<ClientRoute route={route} />}
-          />
-        ))}
+        {renderRouteTree(routeGroups.optional)}
       </Route>
 
       <Route path='*' element={<Navigate to='/' replace />} />
     </Routes>
   );
+}
+
+/** Pure groups can span surfaces; a page and its descendants always share their shell. */
+function filterRouteTree(
+  routes: readonly AppClientRegisteredRoute[],
+  predicate: (route: AppClientRegisteredRoute) => boolean,
+): AppClientRegisteredRoute[] {
+  return routes.flatMap((route) => {
+    if (route.componentLoader) return predicate(route) ? [route] : [];
+    const children = filterRouteTree(route.children ?? [], predicate);
+    return children.length ? [{ ...route, children }] : [];
+  });
 }

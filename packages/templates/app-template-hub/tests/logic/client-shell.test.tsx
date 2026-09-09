@@ -3,11 +3,10 @@ import {
   Refine,
   type AccessControlProvider,
   type AuthProvider,
-  type ResourceProps,
 } from '@refinedev/core';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ComponentType, ReactElement } from 'react';
-import { MemoryRouter } from 'react-router';
+import { Outlet, MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import applicationRoutes from '../../client/routes.ts';
@@ -58,6 +57,66 @@ describe('application shell', () => {
     expect(
       screen.getByRole('heading', { name: 'App client is ready' }),
     ).toBeVisible();
+  });
+
+  it('renders nested pages through manual outlets and selects the nearest menu ancestor', async () => {
+    const child = createRoute('detail', '/orders/42', 'required', () => (
+      <h3>Order detail</h3>
+    ));
+    const parent = {
+      ...createRoute('orders', '/orders', 'required', () => (
+        <>
+          <h2>Orders layout</h2>
+          <Outlet />
+        </>
+      )),
+      navigation: { title: 'Orders' },
+      children: [child],
+    };
+    renderApplication('/orders/42', createAuthProvider(true), [parent]);
+    expect(await screen.findByText('Order detail')).toBeVisible();
+    expect(screen.getByText('Orders layout')).toBeVisible();
+    expect(
+      screen.getByRole('link', { name: 'Orders' }).querySelector('svg'),
+    ).toBeNull();
+    expect(screen.getByRole('link', { name: 'Orders' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+  });
+
+  it('keeps a parent page link clickable independently of its menu disclosure', async () => {
+    const child = {
+      ...createRoute('reports', '/orders/reports', 'required', () => (
+        <h3>Reports page</h3>
+      )),
+      navigation: { title: 'Reports' },
+    };
+    const parent = {
+      ...createRoute('orders', '/orders', 'required', () => (
+        <>
+          <h2>Orders layout</h2>
+          <Outlet />
+        </>
+      )),
+      navigation: { title: 'Orders' },
+      children: [child],
+    };
+    renderApplication('/orders', createAuthProvider(true), [parent]);
+    expect(await screen.findByRole('link', { name: 'Orders' })).toHaveAttribute(
+      'href',
+      '/orders',
+    );
+    const toggle = screen.getByRole('button', { name: 'Orders' });
+    fireEvent.click(toggle);
+    expect(
+      screen.queryByRole('link', { name: 'Reports' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Orders' })).toBeVisible();
+    fireEvent.click(toggle);
+    fireEvent.click(screen.getByRole('link', { name: 'Reports' }));
+    expect(await screen.findByText('Reports page')).toBeVisible();
+    expect(screen.getByText('Orders layout')).toBeVisible();
   });
 
   it('collapses and expands the desktop navigation', async () => {
@@ -155,12 +214,21 @@ describe('application shell', () => {
     renderApplication(
       '/users',
       createAuthProvider(true),
-      [createRoute('users', '/users', 'required', UsersPage, 'plugin', true)],
+      [
+        createRoute(
+          'users',
+          '/users',
+          'required',
+          UsersPage,
+          'plugin',
+          'User management',
+          true,
+        ),
+      ],
       {
         accessControlProvider: {
           can: vi.fn().mockResolvedValue({ can: true }),
         },
-        resources: [protectedUsersResource()],
       },
     );
 
@@ -175,10 +243,19 @@ describe('application shell', () => {
     renderApplication(
       '/users',
       createAuthProvider(true),
-      [createRoute('users', '/users', 'required', UsersPage, 'plugin', true)],
+      [
+        createRoute(
+          'users',
+          '/users',
+          'required',
+          UsersPage,
+          'plugin',
+          'User management',
+          true,
+        ),
+      ],
       {
         accessControlProvider: { can },
-        resources: [protectedUsersResource()],
       },
     );
 
@@ -201,15 +278,35 @@ describe('application shell', () => {
       '/users',
       createAuthProvider(true),
       [
-        createRoute('applications', '/apps', 'required', ApplicationsPage),
-        createRoute('users', '/users', 'required', UsersPage),
-        createRoute('roles', '/roles', 'required', RolesPage),
+        createRoute(
+          'roles',
+          '/roles',
+          'required',
+          RolesPage,
+          'plugin',
+          'Roles & permissions',
+        ),
+        createRoute(
+          'applications',
+          '/apps',
+          'required',
+          ApplicationsPage,
+          'plugin',
+          'Applications',
+        ),
+        createRoute(
+          'users',
+          '/users',
+          'required',
+          UsersPage,
+          'plugin',
+          'User management',
+        ),
       ],
       {
         accessControlProvider: {
           can: vi.fn().mockResolvedValue({ can: true }),
         },
-        resources: hubResources(),
       },
     );
 
@@ -232,7 +329,6 @@ function renderApplication(
   routes: readonly AppClientRegisteredRoute[] = [],
   options: {
     readonly accessControlProvider?: AccessControlProvider;
-    readonly resources?: readonly ResourceProps[];
   } = {},
 ): void {
   const clientRoutes = routes.some(({ path }) => path === '/')
@@ -261,14 +357,11 @@ function renderApplication(
             custom: vi.fn(),
           }}
           options={{ disableTelemetry: true }}
-          resources={[...(options.resources ?? [])]}
         >
           <AppRouter
-            clientDevRouteGroups={[]}
-            clientDevRoutes={[]}
+            devRouteTree={[]}
             clientRoutes={clientRoutes}
-            clientSettingGroups={[]}
-            clientSettings={[]}
+            settingsRouteTree={[]}
           />
         </Refine>
       </AppThemeProvider>
@@ -299,6 +392,7 @@ function createRoute(
   auth: AppClientRegisteredRoute['auth'],
   Component: ComponentType,
   source: AppClientRegisteredRoute['source'] = 'plugin',
+  navigationTitle?: string,
   protectedRoute: boolean = false,
 ): AppClientRegisteredRoute {
   const packageName =
@@ -313,54 +407,9 @@ function createRoute(
     packageName,
     path,
     source,
+    ...(navigationTitle ? { navigation: { title: navigationTitle } } : {}),
     ...(protectedRoute ? { access: { resource: name, action: 'access' } } : {}),
   };
-}
-
-function protectedUsersResource(): ResourceProps {
-  return {
-    name: 'users',
-    list: '/users',
-    meta: {
-      access: { resource: 'users', action: 'access' },
-      label: 'User management',
-    },
-  };
-}
-
-function hubResources(): ResourceProps[] {
-  const access = { resource: 'users', action: 'access' };
-  return [
-    {
-      name: 'hub',
-      list: '/apps',
-      meta: { label: 'Applications', order: 10 },
-    },
-    {
-      name: 'hub-user-access',
-      meta: { access, label: 'Users & permissions', order: 20 },
-    },
-    {
-      name: 'hub-roles',
-      list: '/roles',
-      meta: {
-        access,
-        label: 'Roles & permissions',
-        order: 20,
-        parent: 'hub-user-access',
-      },
-    },
-    {
-      name: 'users',
-      list: '/users',
-      meta: {
-        access,
-        label: 'User management',
-        order: 10,
-        parent: 'hub-user-access',
-      },
-    },
-  ];
 }
 
 function HomePage(): ReactElement {

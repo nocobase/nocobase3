@@ -36,8 +36,6 @@ both `create` and `assign-role`.
 2. Configure the Client factory. `users({ mount: 'settings', path: '/users' })`
    produces `/settings/users`; `mount: 'app'` makes the path App-relative and
    registers a primary-navigation entry protected by the same page access rule.
-   Set `navigationParent` when the App groups that entry below another resource,
-   and `navigationOrder` when the host navigation supports an explicit sibling order.
 3. Grant `page:users/access` to roles that may open the page.
 4. Grant only the `user` actions those roles need. The plugin creates no roles
    and grants no access by itself.
