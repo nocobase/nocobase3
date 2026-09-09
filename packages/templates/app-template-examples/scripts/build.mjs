@@ -266,6 +266,13 @@ run('Retarget native modules', 'node', [
   './scripts/utils/retarget-native.mjs',
   ...process.argv.slice(2),
 ]);
+// Fails the build when something this application's own server or CLI code imports did not survive the prune.
+// It has to run here rather than before the build, because what it checks is the pruned tree — the question is
+// not whether a package is declared, but whether it is still loadable once `dist` is assembled. Catching it here
+// costs a build; the alternative is finding out from `Cannot find module` on a deployed server.
+run('Verify server dependencies', 'node', [
+  './scripts/utils/verify-server-deps.mjs',
+]);
 
 console.log(
   '\nBuild complete: dist/client, dist/server, dist/cli, dist/.env, and dist/package.json',

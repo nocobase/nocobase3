@@ -136,6 +136,7 @@ Ordering in `client/plugins.ts` and `server/plugins.ts` is contribution order, a
 | `pnpm server:deps:inspect`  | Print what the deployed server actually reaches, and what each native module needs to run elsewhere |
 | `pnpm server:deps:prune`    | Remove what the server never loads from `dist/node_modules`; part of `pnpm build`                   |
 | `pnpm server:deps:retarget` | Replace native binaries with the target platform's; part of `pnpm build`                            |
+| `pnpm server:deps:verify`   | Check that everything your server and CLI import reaches a deployment; part of `pnpm build`         |
 
 These read static declarations. They report what is wired, not whether it works — a passing inspection is not a substitute for tests.
 
@@ -162,6 +163,28 @@ The build prints which platform it produced on every run, and records it in `dis
 `--node-version` takes the major version your server runs. It is separate because the same Linux host may run any of several Node versions. Supported: 20, 22, 24, 26.
 
 If your application has no native modules — `pg`, `mysql2`, and `tedious` are all plain JavaScript — none of this applies and `dist/` is portable as built. `pnpm server:deps:inspect` tells you which case you are in.
+
+#### Adding a dependency your server or CLI uses
+
+Put it in `dependencies`. `dist/package.json` is generated from `dependencies` alone and is what a server installs from, so a package in `devDependencies` is missing there however well it works locally.
+
+`pnpm build` verifies this for you: it reads what `server/`, `database/`, and `cli/` import and fails the build if any of it would not reach a deployment. You will see the package named, with what to do about it.
+
+One case it cannot check is an import whose name is assembled while the program runs:
+
+```ts
+await import(`${name}/index.js`);
+```
+
+Nothing can tell in advance which package that is, so the build removes it as unused. If you load a package this way, list it when you write the code:
+
+```json
+{
+  "nocobase": {
+    "serverDeps": { "keep": ["the-package"] }
+  }
+}
+```
 
 #### When the build or the deployment goes wrong
 

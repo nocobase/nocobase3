@@ -185,6 +185,7 @@
     "server:deps:inspect": "node ./scripts/utils/inspect-server-deps.mjs",
     "server:deps:prune": "node ./scripts/utils/prune-server-deps.mjs",
     "server:deps:retarget": "node ./scripts/utils/retarget-native.mjs",
+    "server:deps:verify": "node ./scripts/utils/verify-server-deps.mjs",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.server.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

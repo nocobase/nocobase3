@@ -253,6 +253,20 @@ Packages the framework itself resolves by name, and directories read by scanning
 }
 ```
 
+### Adding a server or CLI dependency
+
+Put it in `dependencies`, not `devDependencies`. `dist/package.json` is generated from `dependencies` alone and is what a deployment installs from, so a devDependency is absent on the server no matter how complete the local tree looks.
+
+`pnpm build` checks this. It reads every value import in `server/`, `database/`, and `cli/`, and fails the build if any of those packages would not reach a deployment — either because `dist/package.json` does not list it, or because the prune reduced it to a bare manifest. The check runs after the prune, since what it verifies is the pruned result rather than the declaration.
+
+It cannot see an import whose specifier is built at run time:
+
+```ts
+await import(`${name}/index.js`); // invisible to the check, and to the prune
+```
+
+Neither can the prune, which is why such a package is removed. If you load a package this way, name it in `nocobase.serverDeps.keep` when you write the code — nothing will remind you later, and the failure appears only on a deployed server.
+
 ### When a build or a deployment fails
 
 Diagnose with commands rather than by reading the build scripts. Start with `pnpm server:deps:inspect`, which is read-only.

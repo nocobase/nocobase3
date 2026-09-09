@@ -96,6 +96,22 @@ Node ABI 单独用 `--node-version` 给主版本号（20 / 22 / 24 / 26，默认
 
 原生模块一律整包保留，不参与裁剪：它们的二进制是靠运行时搜文件系统找到的，不是可解析的 specifier，删错的代价远大于省下的那几 MB。
 
+## 构建自带的校验
+
+`pnpm build` 最后一步跑 `verify-server-deps.mjs`：读应用自己 `server/`、`database/`、`cli/` 里的值导入，逐个确认它能进部署——既在 `dist/package.json` 里，裁剪后又不止剩一个 `package.json`。任一条不满足就让构建失败，并说明该怎么改。
+
+它必须在裁剪**之后**跑，因为要检查的是裁剪结果，不是声明本身。构建前跑没有可查的对象。
+
+**它抓得到的**：服务端 import 了一个只声明在 `devDependencies` 的包——这是最常见也最机械的错误，`dist/package.json` 只从 `dependencies` 生成，devDeps 在服务器上根本不存在。
+
+**它抓不到的**，也没打算假装能抓：
+
+```ts
+await import(`${name}/index.js`);
+```
+
+包名要运行时才存在，静态分析拿不到——裁剪看不见它，校验同样看不见。这类只能在写代码时就写进 `nocobase.serverDeps.keep`。把这条明说出来，比让人以为"构建通过就万无一失"要好。
+
 ## 出问题怎么查
 
 | 现象 | 原因 | 处理 |
@@ -110,10 +126,11 @@ Node ABI 单独用 `--node-version` 给主版本号（20 / 22 / 24 / 26，默认
 ## 实现
 
 ```
-scripts/utils/server-deps.mjs          共享分析：追踪、配置、原生模块识别、目标平台解析
-scripts/utils/inspect-server-deps.mjs  只读报告
-scripts/utils/prune-server-deps.mjs    执行裁剪
-scripts/utils/retarget-native.mjs      执行原生模块换平台
+scripts/utils/server-deps.mjs           共享分析：追踪、配置、原生模块识别、目标平台解析
+scripts/utils/inspect-server-deps.mjs   只读报告
+scripts/utils/prune-server-deps.mjs     执行裁剪
+scripts/utils/retarget-native.mjs       执行原生模块换平台
+scripts/utils/verify-server-deps.mjs    构建末尾校验，不通过就失败
 ```
 
 三个脚本读同一份分析，所以 `inspect` 是构建的**预览**而不是另一套说法。两个模板的这四个文件保持逐字节相同。

@@ -160,6 +160,10 @@ Detection is by manifest signal, never by package name: `cpu`/`os` fields mark a
 
 `ENTRY_POINTS` in `server-deps.mjs` lists paths inside `dist`, so it follows the build's output layout rather than the source tree. Check it against `dist/package.json`'s own `scripts` whenever that layout changes: an entry that no longer exists is skipped silently, and the only symptom is a smaller trace. Moving migrations from `dist/scripts` into `dist/cli` did exactly that, and the CLI's whole dependency tree went unreached until the list caught up.
 
+`verify-server-deps.mjs` runs last and fails the build when a package the application's own `server/`, `database/`, or `cli/` code imports would not reach a deployment — absent from `dist/package.json`, or pruned to a bare manifest. It runs after the prune because what it verifies is the pruned result, not the declaration.
+
+Its limit is worth stating rather than papering over: it reads literal specifiers, so `await import(`${name}/index.js`)` is invisible to it, exactly as it is to the trace that pruned the package. There is no static answer to that case; the package has to be named in `nocobase.serverDeps.keep` when the code is written. The check exists for the mistake that is common and mechanical — a server import left in `devDependencies` — not for the one that cannot be detected.
+
 Three things the trace cannot see, and how each is handled:
 
 - **Packages loaded by a name assembled at runtime** are named in `nocobase.serverDeps.keep` in the application's `package.json`, with their dependencies followed. `pino-pretty` is the case to reason from: the logger names it in a `target:` string, so nothing imports it and pruning it leaves a deployment that dies during startup.
