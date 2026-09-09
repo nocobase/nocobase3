@@ -1,3 +1,18 @@
+// Generates the `package.json` and `pnpm-workspace.yaml` a deployable `dist/` installs from.
+//
+// The manifest lists what this application declares in `dependencies`, and nothing else. `pnpm install` resolves
+// the rest: a plugin's own `dependencies` come along transitively, its `peerDependencies` are skipped because the
+// generated workspace sets `autoInstallPeers: false`, and `devDependencies` were never published. Every rule that
+// decides what reaches a server is the package manager's, applied to declarations that are already correct.
+//
+// This used to walk the built output for bare imports and expand every transitive dependency by hand, because the
+// application declared its server packages in `devDependencies` and nothing else could tell which of them a
+// deployment needed. Once those moved to `dependencies` the walk had nothing left to discover, and a scan that
+// resolves specifiers is a scan that can miss one.
+//
+// Workspace packages are the exception and are vendored rather than installed: a `workspace:` range means nothing
+// to a deployment. Their compiled output is copied into `dist/vendor` and referenced by a `file:` path, so a plugin
+// developed in this repository deploys the same way as one installed from a registry.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -14,7 +29,6 @@ const rootPackagePath = path.join(rootDir, 'package.json');
 const distPackagePath = path.join(distDir, 'package.json');
 const distWorkspacePath = path.join(distDir, 'pnpm-workspace.yaml');
 const vendorDir = path.join(distDir, 'vendor');
-const runtimeDirs = ['server', 'database', 'scripts', 'cli'];
 const databaseRuntimeDrivers = [
   'better-sqlite3',
   'pg',
@@ -29,52 +43,6 @@ const readJson = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
 
 const writeJson = (file, value) => {
   fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
-};
-
-const walkFiles = (directory) => {
-  if (!fs.existsSync(directory)) return [];
-
-  return fs
-    .readdirSync(directory, { withFileTypes: true })
-    .flatMap((entry) => {
-      if (entry.name === 'node_modules') return [];
-
-      const entryPath = path.join(directory, entry.name);
-      return entry.isDirectory() ? walkFiles(entryPath) : [entryPath];
-    })
-    .sort((left, right) => left.localeCompare(right));
-};
-
-const getPackageName = (specifier) => {
-  if (
-    specifier.startsWith('.') ||
-    specifier.startsWith('/') ||
-    specifier.startsWith('node:')
-  ) {
-    return undefined;
-  }
-
-  const parts = specifier.split('/');
-  return specifier.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0];
-};
-
-const findBareImports = (content) => {
-  const specifiers = new Set();
-  const patterns = [
-    /\bimport\s+(?:[^"'()]+?\s+from\s+)?["']([^"']+)["']/g,
-    /\bexport\s+[^"']*?\s+from\s+["']([^"']+)["']/g,
-    /\bimport\s*\(\s*["']([^"']+)["']\s*\)/g,
-    /\brequire\s*\(\s*["']([^"']+)["']\s*\)/g,
-  ];
-
-  for (const pattern of patterns) {
-    for (const match of content.matchAll(pattern)) {
-      const packageName = getPackageName(match[1]);
-      if (packageName) specifiers.add(packageName);
-    }
-  }
-
-  return specifiers;
 };
 
 const getInstalledVersion = (packageName, fromDir = rootDir) => {
@@ -187,11 +155,6 @@ if (!fs.existsSync(path.join(distDir, 'server'))) {
 
 const rootPackage = readJson(rootPackagePath);
 const workspacePackages = listWorkspacePackages(rootDir);
-const files = runtimeDirs.flatMap((runtimeDir) =>
-  walkFiles(path.join(distDir, runtimeDir)).filter((file) =>
-    /\.[cm]?js$/.test(file),
-  ),
-);
 const workspacePackageNames = new Set();
 const externalPackageNames = new Map();
 
@@ -270,11 +233,10 @@ const addDeclaredDatabaseDrivers = () => {
   }
 };
 
-for (const file of files) {
-  const content = fs.readFileSync(file, 'utf8');
-  for (const packageName of findBareImports(content)) {
-    addPackage(packageName);
-  }
+// Start from what the application declares. `addPackage` follows workspace packages into `dist/vendor` and
+// records everything else for pnpm to install.
+for (const packageName of Object.keys(rootPackage.dependencies ?? {})) {
+  addPackage(packageName);
 }
 
 addDeclaredDatabaseDrivers();

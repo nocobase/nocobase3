@@ -1,17 +1,15 @@
 ---
 title: Server Deployment Build
-description: 前后端依赖怎么声明，以及跨平台构建
+description: 插件和应用的依赖分别声明在哪里，以及跨平台构建
 ---
 
 # Server Deployment Build
 
-`pnpm build` 产出的 `dist/` 是一份可直接运行的部署包：拷到服务器，`pnpm install --prod` 装出来的就是运行所需的全部，不需要编译工具链。
+`pnpm build` 产出的 `dist/` 是一份可直接运行的部署包：拷到服务器，`pnpm install --prod` 装出来的就是运行所需的全部。
 
-哪些依赖进服务器、哪些不进，**完全由声明决定**，不做任何静态分析。
+**哪些依赖进服务器完全由声明决定**，构建脚本不做任何代码扫描或依赖裁剪。`dist/package.json` 只列应用自己声明的 `dependencies`，剩下的交给 pnpm：插件的 `dependencies` 递归装上，`peerDependencies` 被 `autoInstallPeers: false` 挡掉，`devDependencies` 本来就不发布。
 
-## 依赖怎么声明
-
-### 插件（发布到 npm）
+## 插件的依赖怎么声明
 
 | 依赖类型 | 声明位置 | 应用侧装吗 | 部署侧装吗 |
 | --- | --- | --- | --- |
@@ -20,20 +18,28 @@ description: 前后端依赖怎么声明，以及跨平台构建
 | 只在开发/测试用 | `devDependencies` | 不装 | 不装 |
 | 消费方可有可无 | `peerDependencies` + `optional` | 不装 | 不装 |
 
-**前端依赖为什么是 peer**：插件的 `client/` 不由插件自己打包——`build` 就是 `tsc`，`dist/client/*.js` 保留裸导入，由**安装它的应用**用 Vite 解析。所以这些包必须随 manifest 发布，否则应用构建时报 `Could not resolve`。但服务器没有前端构建，永远不 require 它们。声明成 peer 同时满足两边：应用装一份共享的，`dist/` 通过 `autoInstallPeers: false` 一个都不装。
+**前端依赖为什么是 peer**：插件的 `client/` 不由插件自己打包——`build` 就是 `tsc`，`dist/client/*.js` 保留裸导入，由**安装它的应用**用 Vite 解析。所以这些包必须随 manifest 发布，否则应用构建时报 `Could not resolve`。但服务器没有前端构建，永远不 require 它们，声明成 `dependencies` 会让每个部署都白装几十 MB。peer 同时满足两边。
 
-**配套的 `devDependencies` 是必需的**：peer 在仓库内不会自动安装，没有它插件自己的 lint / test / build 都跑不起来。它同时钉住开发时用的版本。
+**配套的 `devDependencies` 是必需的**：peer 在仓库内不会自动安装，没有它插件自己的 lint / test / build 都跑不起来。
 
-**`optional` 不是"这个阶段不装"**。标了 `optional` 的 peer 在**任何地方**都不自动安装，包括真正需要它的那个应用——那正是这套机制要避免的故障。它的正确含义是"消费方可能真的不需要它"，比如 `@nocobase/i18n` 的 `hono` 对纯浏览器消费方无意义。屏蔽部署侧安装是 `autoInstallPeers: false` 的职责，不需要 `optional` 参与。
+**`optional` 不是「这个阶段不装」**。标了 `optional` 的 peer 在**任何地方**都不自动安装，包括真正需要它的那个应用——那正是这套机制要避免的故障。它的正确含义是「消费方可能真的不需要它」，比如 `@nocobase/i18n` 的 `hono` 对纯浏览器消费方无意义。屏蔽部署侧安装是 `autoInstallPeers: false` 的职责。
 
-### 应用（create-app 生成的项目）
+## 应用的依赖怎么声明
 
 | 依赖类型 | 声明位置 |
 | --- | --- |
-| 服务端运行时用 | `dependencies` |
-| 前端用、构建工具、测试 | `devDependencies` |
+| `server/`、`database/`、`cli/` 里 import 的 | `dependencies` |
+| `client/` 里 import 的、构建工具、测试 | `devDependencies` |
 
-应用是终点，没有人会安装它，所以只有两档。前端依赖放 `devDependencies` 是对的：Vite 在构建时把它们内联进 `dist/client`，运行时不再解析。
+判断标准是**哪半边的代码 import 它**。`dist/package.json` 从 `dependencies` 生成，放错了服务器上就找不到；前端依赖由 Vite 在构建时内联进 `dist/client`，运行时不再解析，所以留在 `devDependencies`。
+
+`import type` 无论在哪都算 `devDependencies`——类型在运行前就被擦除了。
+
+## 共享 UI 包走 catalog
+
+`@base-ui/react`、`class-variance-authority`、`clsx`、`lucide-react`、`shadcn`、`tailwind-merge`、`tw-animate-css` 统一用 `catalog:` 引用，版本定义在根 `pnpm-workspace.yaml`。
+
+`peerDependencies` 里也可以写 `catalog:`——`pnpm pack` 会在发布前展开成实数范围，消费方读到的是普通版本号。
 
 ## 跨平台构建
 
@@ -47,38 +53,27 @@ pnpm build --target linux-x64-musl                # Alpine，以及大部分 sli
 pnpm build --target linux-x64 --node-version 22   # 服务器跑 Node 22
 ```
 
-**默认目标是当前机器**，因为构建后想立刻看效果是最常见的动作。部署到别处必须显式写 `--target`。每次构建都会打印产出的平台，并记进 `dist/package.json` 的 `nocobase.buildTarget`，出问题时能对照。
+**默认目标是当前机器**，因为构建后想立刻看效果是最常见的动作。部署到别处必须显式写 `--target`。每次构建都会打印产出的平台，并记进 `dist/package.json` 的 `nocobase.buildTarget`。
 
 `--target` 把平台、架构、C 库合在一起，因为它们是一起决定的：`linux-x64` 和 `linux-x64-musl` 是两个不同的二进制，Alpine 上用错会在启动时报共享库加载失败。服务器上 `ldd --version` 输出 `musl` 就是 musl。
 
-`--node-version` 单独给主版本号（20 / 22 / 24 / 26，默认 24），因为同一台 Linux 可以跑任意 Node 版本。ABI 对照：115 = Node 20，127 = 22，137 = 24，147 = 26。
+`--node-version` 单独给主版本号（20 / 22 / 24 / 26，默认 24）。ABI 对照：115 = Node 20，127 = 22，137 = 24，147 = 26。
 
-> ABI 表是写死的，没用 `node-abi`——那个库拿到裸主版本号会静默返回错值：`getAbi('24')` 返回 24 而不是 137。ABI 错了会下载一个加载不了的二进制。
+> ABI 表是写死的，没用 `node-abi`——那个库拿到裸主版本号会静默返回错值：`getAbi('24')` 返回 24 而不是 137，会下载一个加载不了的二进制。
 
-原生模块按 **manifest 信号**识别，不认包名，所以应用后续自己装的原生依赖也能被正确处理：
-
-| 信号 | 机制 | 换目标平台的方式 |
-| --- | --- | --- |
-| manifest 有 `cpu` / `os` | 包本身就是某平台的二进制 | 下载同组里目标平台那个包 |
-| install 脚本含 `prebuild-install` / `node-gyp` 等 | 装机时下载或编译 | 带 `--platform` / `--arch` / `--libc` / `--target` 重新下载 |
-| 包里有多个 `.node` | 自带多平台 | 留目标平台那个，删其余 |
-| 只有一个 `.node`、无 install 脚本 | 无从判断 | 报出来，人工确认 |
-
-`pg`、`mysql2`、`tedious` 是纯 JS，只用这三个驱动的应用天然跨平台。
+原生模块按 **manifest 信号**识别，不认包名，所以应用后续自己装的原生依赖也能被正确处理：`cpu`/`os` 字段表示包本身就是某平台的二进制，install 脚本含 `prebuild-install` / `node-gyp` 等表示装机时下载或编译，包里有多个 `.node` 表示自带多平台。`pg`、`mysql2`、`tedious` 是纯 JS，只用这三个驱动的应用天然跨平台。
 
 ## 构建自带的校验
 
-`pnpm build` 最后跑 `verify-server-deps.mjs`：读应用自己 `server/`、`database/`、`cli/` 里的值导入，确认每个包都能进部署。不通过就让构建失败。
+`pnpm build` 最后跑 `verify-server-deps.mjs`：读应用自己 `server/`、`database/`、`cli/` 里的值导入，确认每个包都进了 `dist/package.json`。不通过就让构建失败。
 
-**它抓得到**：服务端 import 了一个只声明在 `devDependencies` 的包——`dist/package.json` 只从 `dependencies` 生成，devDeps 在服务器上不存在。
-
-**它抓不到**，也不假装能抓：
+它抓得到「服务端 import 了一个只声明在 `devDependencies` 的包」。抓不到的是运行时拼出来的名字：
 
 ```ts
 await import(`${name}/index.js`);
 ```
 
-包名要运行时才存在，静态分析拿不到。这类只能在写代码时就声明进 `dependencies`。
+包名要运行时才存在，静态分析拿不到，这类只能在写代码时就声明进 `dependencies`。
 
 ## 出问题怎么查
 
@@ -98,4 +93,4 @@ scripts/utils/retarget-native.mjs            按目标平台替换原生二进�
 scripts/utils/verify-server-deps.mjs         构建末尾校验
 ```
 
-`dist/pnpm-workspace.yaml` 里的 `autoInstallPeers: false` 是把前端依赖挡在服务器外的关键，`nodeLinker: hoisted` 产出部署期望的扁平 `node_modules`，`allowBuilds` 决定哪些原生包可以跑 install 脚本。
+仓库内的 workspace 包不能靠安装（`workspace:` 范围对部署没有意义），它们的编译产物被复制进 `dist/vendor`，以 `file:` 路径引用。

@@ -148,22 +148,37 @@ When another native dependency needs the same treatment, add it to `DRIVERS_NEED
 
 A separate failure mode is worth knowing: `ignore-scripts=true` in a developer's npm configuration suppresses install scripts globally and outranks `allowBuilds`, so a correct `allowBuilds` still yields an uncompiled addon. `pnpm install` cannot repair this — the package is already in the store, so pnpm skips it and reports success without building. `pnpm rebuild <package>` does, and works without changing the developer's configuration. `create-app` verifies the driver by loading it and runs that rebuild automatically.
 
-### Building a deployment
+### Declaring dependencies so they reach the right side
 
-`pnpm build` in any application template emits a `dist/` that a server installs from its own `package.json`. What reaches that server is decided by declarations rather than by analysis, and the split is worth stating because it is not the obvious one:
+`pnpm build` emits a `dist/` that a server installs from its own `package.json`. What reaches that server is decided entirely by declarations — the build scans no code and prunes nothing.
 
-- **A server dependency is an ordinary `dependency`.** `dist/package.json` is generated from `dependencies`, so this is the only place a server import can be declared.
-- **A plugin's browser dependency is a `peerDependency`.** An installing application resolves the plugin's `client/` imports through its own Vite build, so the package has to be published in the manifest — but a server has no client build and never requires it. Declaring it as a peer satisfies both: the application installs one shared copy, and `dist/pnpm-workspace.yaml` sets `autoInstallPeers: false` so the deployment installs none of them.
-- **`optional` on a peer means the consumer may legitimately not need it**, not "skip this at deploy time". An optional peer is not auto-installed anywhere, including in the application that needs it, which is exactly the failure this arrangement exists to prevent. Use it only for a peer that is genuinely optional, such as `@nocobase/i18n`'s `hono` for a browser-only consumer.
-- **Development-only packages stay in `devDependencies`**, which npm does not publish, so they reach neither side.
+A plugin has three answers:
 
-This replaced a file-trace pruner built on `@vercel/nft`. The trace produced a much smaller tree, but what it could not see it deleted: the pino transports named in a `target:` string, each plugin's `dist/database` read by directory scan, and `@nocobase/nb3-cli`'s registry module handed to oclif as a path. Each surfaced only by running the built `dist/`, and each would have shipped as a successful build. Declarations cannot fail that way, which is worth more than the megabytes.
+| The import is reached from                  | Declare it in                                |
+| ------------------------------------------- | -------------------------------------------- |
+| `server/` or `database/`, at runtime        | `dependencies`                               |
+| `client/`, as a value import                | `peerDependencies` **and** `devDependencies` |
+| Tests, build scripts, or `import type` only | `devDependencies`                            |
 
-`retarget-native.mjs` still runs, and is unrelated to any of the above: a `.node` binary is compiled for one platform, architecture, C library, and Node ABI at once, so a build for another target obtains different binaries. It classifies packages by manifest signal rather than by name — `cpu`/`os` fields, an install script invoking a native build helper, bundled `.node` files — so a native dependency an application adds later is handled without extending a list. Keep that; a hard-coded set of names would silently mis-handle whatever an application adds next.
+The client row is the one worth understanding. A plugin's `client/` is not bundled by the plugin — `build` is `tsc`, so `dist/client/*.js` keeps its bare imports and the installing application's Vite build resolves them. The package therefore has to appear in the published manifest, and `devDependencies` are not published. But a server has no client build and never requires it, so `dependencies` would install tens of megabytes into every deployment that nothing loads. A peer satisfies both: the application installs one shared copy, and `dist/pnpm-workspace.yaml` sets `autoInstallPeers: false` so a deployment installs none. Keep a matching `devDependency` or the plugin's own lint, tests, and build cannot resolve the package.
 
-The build targets the machine it runs on so `pnpm build && pnpm start` works, and `--target` plus `--node-version` select another. A forgotten `--target` produces a `dist/` that fails only on the server, so every build states the platform it produced and records it in `dist/package.json` under `nocobase.buildTarget`; both are what make that failure diagnosable.
+`optional` on a peer means the consumer may legitimately not need it, not "skip this at deploy time". An optional peer is not auto-installed anywhere, including in the application that needs it — which is the failure this arrangement exists to prevent. `@nocobase/i18n`'s `hono` is the legitimate case: a browser-only consumer has no use for it.
 
-`verify-server-deps.mjs` runs last and fails the build when a package the application's own `server/`, `database/`, or `cli/` code imports would not reach a deployment. Its limit is worth stating rather than papering over: it reads literal specifiers, so `await import(`${name}/index.js`)` is invisible to it. The check covers the mistake that is common and mechanical — a server import left in `devDependencies` — and no static check can cover the other.
+An application has two, and the question is which half imports it: `server/`, `database/`, and `cli/` imports go in `dependencies`, because `dist/package.json` is generated from there; `client/` imports and build tooling stay in `devDependencies`, because Vite inlines them at build time and nothing resolves them again.
+
+`build-server-dist-package.mjs` used to walk the built output for bare imports and expand every transitive dependency by hand. It had to, because applications declared their server packages in `devDependencies` and nothing else could tell which of them a deployment needed. Once those moved to `dependencies` the walk had nothing left to discover, and it was removed: `pnpm install` applies the same rules, and a scan that resolves specifiers is a scan that can miss one. Workspace packages remain the exception, vendored into `dist/vendor` under a `file:` path because a `workspace:` range means nothing to a deployment.
+
+The shared UI packages — `@base-ui/react`, `class-variance-authority`, `clsx`, `lucide-react`, `shadcn`, `tailwind-merge`, `tw-animate-css` — resolve through `catalog:` wherever they are declared, peers included; `pnpm pack` expands the reference before publishing.
+
+An earlier version of this pruned `dist/node_modules` with a `@vercel/nft` file trace. It produced a far smaller tree, but what it could not see it deleted — the pino transports named in a `target:` string, each plugin's `dist/database` read by directory scan, `@nocobase/nb3-cli`'s registry module handed to oclif as a path. Every one surfaced only by running the built `dist/`, and every one would have shipped as a successful build. Declarations cannot fail that way.
+
+### Building for another platform
+
+`retarget-native.mjs` is unrelated to the above and stays: a `.node` binary is compiled for one platform, architecture, C library, and Node ABI at once, so a build for another target obtains different binaries. It classifies packages by manifest signal rather than by name — `cpu`/`os` fields, an install script invoking a native build helper, bundled `.node` files — so a native dependency an application adds later is handled without extending a list. Keep that.
+
+The build targets the machine it runs on so `pnpm build && pnpm start` works, and `--target` plus `--node-version` select another. A forgotten `--target` produces a `dist/` that fails only on the server, so every build states the platform it produced and records it in `dist/package.json` under `nocobase.buildTarget`.
+
+`verify-server-deps.mjs` runs last and fails the build when a package the application's own `server/`, `database/`, or `cli/` code imports is not in `dist/package.json`. It reads literal specifiers, so `await import(`${name}/index.js`)` is invisible to it — that case has to be declared deliberately, and no static check can cover it.
 
 The `parseTarget` mapping from Node major to ABI is written out rather than taken from `node-abi`, which given a bare major returns the major itself: `getAbi('24')` is 24, not 137. A wrong ABI downloads a binary that will not load.
 

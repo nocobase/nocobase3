@@ -155,15 +155,20 @@ Every build prints the platform it produced and records it in `dist/package.json
 
 If your application has no native modules — `pg`, `mysql2`, and `tedious` are all plain JavaScript — none of this applies and `dist/` is portable as built.
 
-#### Adding a dependency your server or CLI uses
+#### Adding a dependency
 
-Put it in `dependencies`. That is what `dist/package.json` is generated from and what a server installs, so a package in `devDependencies` is missing there however well it works locally.
+Where a package goes depends on which half of your application imports it.
 
-Client packages stay in `devDependencies`: Vite resolves and inlines them into `dist/client` at build time, and nothing loads them again at runtime.
+| Imported from                     | Declare it in     |
+| --------------------------------- | ----------------- |
+| `server/`, `database/`, or `cli/` | `dependencies`    |
+| `client/`, build tooling, tests   | `devDependencies` |
 
-`pnpm build` verifies this for you. It reads what `server/`, `database/`, and `cli/` import and fails the build if any of it would not reach a deployment, naming the package and what to do about it.
+`dist/package.json` is generated from `dependencies` and is what a server installs, so a package in `devDependencies` is missing there however well it works locally. Client packages need nothing at runtime — Vite resolves and inlines them into `dist/client` while building.
 
-One case it cannot check is an import whose name is assembled while the program runs:
+Plugins' browser packages need nothing from you: a plugin declares those as peer dependencies, so installing the plugin brings one shared copy into your application, and `dist/` never installs them.
+
+`pnpm build` verifies the server half and fails the build if something is missing, naming the package. One case it cannot check is an import whose name is assembled while the program runs:
 
 ```ts
 await import(`${name}/index.js`);

@@ -229,13 +229,21 @@ So the two mistakes fail in opposite ways. A server import left in `devDependenc
 
 What decides it is where the importing file lives and what the import is, not what the package is for. `import ts from 'typescript'` in `server/` is a runtime dependency even though TypeScript sounds like tooling. `import type { Config } from 'x'` is erased before anything runs, so it stays a devDependency wherever it appears. A dynamic `import()` counts — deferring the load changes when a package is needed, not whether.
 
-### Adding a server or CLI dependency
+### Adding a dependency
 
-Put it in `dependencies`. `dist/package.json` is generated from `dependencies` and is what a deployment installs from, so a package a server module imports but declares as a devDependency resolves in every development checkout and is absent exactly once — on the deployed server.
+Which half of the application imports it decides where it goes.
 
-Client packages stay in `devDependencies`. Vite resolves and inlines them into `dist/client` at build time, and nothing loads them again at runtime. A plugin's browser packages arrive differently: plugins declare those as peer dependencies, so installing a plugin brings one shared copy into the application and `dist/` — which sets `autoInstallPeers: false` — never installs them at all.
+| The import is reached from              | Declare it in     |
+| --------------------------------------- | ----------------- |
+| `server/`, `database/`, or `cli/`       | `dependencies`    |
+| `client/`, build tooling, tests         | `devDependencies` |
+| `import type` only, wherever it appears | `devDependencies` |
 
-`pnpm build` checks this. It reads every value import in `server/`, `database/`, and `cli/` and fails the build if any of those packages would not reach a deployment. It cannot see an import whose specifier is built at run time:
+`dist/package.json` is generated from `dependencies` and is what a deployment installs from, so a server import declared as a devDependency resolves in every development checkout and is absent exactly once — on the deployed server. A client import needs nothing at runtime: Vite resolves and inlines it into `dist/client` at build time.
+
+A plugin's browser packages arrive by a third route and need nothing from you. Plugins declare those as peer dependencies, so installing a plugin brings one shared copy into this application, while `dist/` sets `autoInstallPeers: false` and installs none of them.
+
+`pnpm build` checks the server half: it reads every value import in `server/`, `database/`, and `cli/` and fails the build if any of those packages is missing from `dist/package.json`. It cannot see an import whose specifier is built at run time:
 
 ```ts
 await import(`${name}/index.js`); // invisible to the check
