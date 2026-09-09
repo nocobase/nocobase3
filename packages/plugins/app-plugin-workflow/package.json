@@ -95,7 +95,7 @@
     "hono": "catalog:"
   },
   "peerDependencies": {
-    "@base-ui/react": "^1.6.0",
+    "@base-ui/react": "catalog:",
     "@nocobase/app-client": "workspace:^",
     "@nocobase/app-plugin-authentication": "workspace:^",
     "@nocobase/app-server": "workspace:^",
@@ -108,7 +108,7 @@
     "@refinedev/core": "^5.0.0",
     "@xyflow/react": "^12.11.3",
     "elkjs": "^0.10.2",
-    "lucide-react": "^0.487.0",
+    "lucide-react": "catalog:",
     "react": "^19.0.0",
     "react-router": "^7.0.2",
     "typescript": "^6.0.3"
@@ -119,7 +119,7 @@
     }
   },
   "devDependencies": {
-    "@base-ui/react": "^1.6.0",
+    "@base-ui/react": "catalog:",
     "@boringnode/queue": "^0.7.1",
     "@nocobase/app-client": "workspace:*",
     "@nocobase/app-plugin-authentication": "workspace:*",
@@ -141,7 +141,7 @@
     "eslint": "catalog:",
     "jsdom": "catalog:",
     "knex": "^3.1.0",
-    "lucide-react": "^0.487.0",
+    "lucide-react": "catalog:",
     "prettier": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",

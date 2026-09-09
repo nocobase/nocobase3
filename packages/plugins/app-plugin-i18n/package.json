@@ -73,7 +73,7 @@
     "@nocobase/i18n": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
     "hono": "catalog:",
-    "react": "catalog:"
+    "react": "^19.0.0"
   },
   "devDependencies": {
     "@nocobase/app-client": "workspace:*",

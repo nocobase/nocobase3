@@ -127,7 +127,7 @@
     "prepack": "pnpm registry:build && pnpm build"
   },
   "peerDependencies": {
-    "@base-ui/react": "^1.6.0",
+    "@base-ui/react": "catalog:",
     "@nocobase/app-client": "workspace:^",
     "@nocobase/app-plugin-ai-employee": "workspace:^",
     "@nocobase/app-plugin-authentication": "workspace:^",
@@ -138,12 +138,12 @@
     "@nocobase/queue": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
     "@refinedev/core": "^5.0.0",
-    "class-variance-authority": "^0.7.1",
-    "clsx": "^2.1.1",
-    "lucide-react": "^0.487.0",
+    "class-variance-authority": "catalog:",
+    "clsx": "catalog:",
+    "lucide-react": "catalog:",
     "react": "^19.0.0",
     "react-router": "^7.0.0",
-    "tailwind-merge": "^3.2.0"
+    "tailwind-merge": "catalog:"
   },
   "dependencies": {
     "@langchain/community": "1.1.29",
@@ -158,7 +158,7 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@base-ui/react": "^1.6.0",
+    "@base-ui/react": "catalog:",
     "@nocobase/app-client": "workspace:*",
     "@nocobase/app-plugin-ai-employee": "workspace:*",
     "@nocobase/app-plugin-authentication": "workspace:*",
@@ -175,16 +175,16 @@
     "@types/pg": "^8.15.5",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
-    "class-variance-authority": "^0.7.1",
-    "clsx": "^2.1.1",
+    "class-variance-authority": "catalog:",
+    "clsx": "catalog:",
     "eslint": "catalog:",
     "jsdom": "catalog:",
-    "lucide-react": "^0.487.0",
+    "lucide-react": "catalog:",
     "prettier": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
     "react-router": "catalog:",
-    "tailwind-merge": "^3.2.0",
+    "tailwind-merge": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:"

@@ -4,29 +4,30 @@ This is a NocoBase application plugin: a package published to a registry and ins
 
 ## Adding a dependency
 
-Code that ships goes in `dependencies`, whether it runs on the server or in the browser.
+Where a package goes depends on who has to resolve the import, and there are three different answers.
 
-| The import is reached from                          | Declare it in                                |
-| --------------------------------------------------- | -------------------------------------------- |
-| `server/` or `database/`, at runtime                | `dependencies`                               |
-| `client/`, as a value import                        | `dependencies`                               |
-| A package the application must own a single copy of | `peerDependencies` **and** `devDependencies` |
-| `registry/`                                         | nothing — the application compiles it        |
-| Tests, build scripts, or `import type` only         | `devDependencies`                            |
+| The import is reached from                  | Declare it in                                |
+| ------------------------------------------- | -------------------------------------------- |
+| `server/` or `database/`, at runtime        | `dependencies`                               |
+| `client/`, as a value import                | `peerDependencies` **and** `devDependencies` |
+| `registry/`                                 | nothing — the application compiles it        |
+| Tests, build scripts, or `import type` only | `devDependencies`                            |
 
 `pnpm deps:check` at the repository root enforces the server row and runs in CI.
 
-### Why a client import is a real dependency
+### Why the client row is different
 
-Ask one question: **does someone outside this repository have to resolve this import?** If yes, declare it where npm publishes it. `devDependencies` are not published at all.
+**A deployed server resolves its imports at runtime.** An application's `pnpm build` generates `dist/package.json` from `dependencies` and installs from it. A server import declared only as a devDependency resolves in every development checkout and is absent exactly once — on the deployed server, as a bare `Cannot find package` naming nothing that points back at this manifest.
 
-**A deployed server resolves its imports at runtime.** An application's `pnpm build` emits `dist/server` with its bare imports intact and generates `dist/package.json` from `dependencies`. A server import declared only as a devDependency resolves in every development checkout and is absent exactly once — on the deployed server, as a bare `Cannot find package` naming nothing that points back at this manifest.
+**An installing application resolves your client imports at build time.** Your `client/` is not bundled by this plugin: `build` is `tsc`, so `dist/client/*.js` keeps its bare imports and the application's Vite build resolves them. That application has only what the published manifest declares, and npm does not publish `devDependencies` — so a client import left there fails with `Could not resolve "…"`. It will not fail here, because a workspace install links every devDependency into this plugin's own `node_modules`, which is why this mistake reaches a registry before anyone sees it.
 
-**An installing application resolves your client imports at build time.** Your `client/` is not bundled by this plugin: `build` is `tsc`, so `dist/client/*.js` keeps its bare imports and the application's Vite build resolves them. That application installed this plugin from a registry, so it has only what the published manifest declares. A client import left in `devDependencies` fails there with `Could not resolve "…"` — and it will not fail here, because a workspace install links every devDependency into this plugin's own `node_modules`.
+**But that same server never requires a browser package.** Declaring one as a `dependency` would install it into every deployment, where nothing loads it.
 
-Do not rely on the application happening to declare the same package. It might, and then the plugin works by coincidence until someone installs it into an application that does not.
+`peerDependencies` is what satisfies both: the application installs one shared copy for its Vite build, while a deployment sets `autoInstallPeers: false` and installs none of them. Keep a matching `devDependency` so this plugin's own lint, tests, and build still resolve the package, and so the version used here stays pinned.
 
-So `hono` in `server/routes/` and `sonner` in `client/` are both `dependencies`. A dynamic `import()` counts as a value import; `import type` does not, wherever it appears. When a `catalog:` version pins the development copy, keep the `devDependency` alongside the published range.
+Do not mark such a peer `optional`. An optional peer is not auto-installed anywhere, including in the application that needs it, which is the failure this arrangement exists to prevent. `optional` means the consumer may legitimately not need the package at all.
+
+So `hono` in `server/routes/` is a `dependency`, and `sonner` in `client/` is a peer plus a devDependency. A dynamic `import()` counts as a value import; `import type` does not, wherever it appears.
 
 `registry/` is the exception: it is source the application copies into itself and compiles there, against that application's own `react` and `@/` alias. This plugin never resolves those imports at all, so declaring them would claim dependencies it does not have.
 

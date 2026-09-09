@@ -111,7 +111,7 @@
     "@nocobase/i18n": "workspace:^",
     "@nocobase/queue": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
-    "lucide-react": "^0.487.0",
+    "lucide-react": "catalog:",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
@@ -131,7 +131,7 @@
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "eslint": "catalog:",
-    "lucide-react": "^0.487.0",
+    "lucide-react": "catalog:",
     "prettier": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",

@@ -431,9 +431,9 @@ async function renderManifest(
     devDependencies.react = 'catalog:';
   }
   if (capabilities.registry) {
-    devDependencies.shadcn = '^4.13.1';
+    devDependencies.shadcn = 'catalog:';
     devDependencies.tailwindcss = 'catalog:';
-    devDependencies['tw-animate-css'] = '^1.2.5';
+    devDependencies['tw-animate-css'] = 'catalog:';
   }
 
   const files = ['dist', 'README.md', 'CHANGELOG.md'];
