@@ -456,7 +456,6 @@ export async function createAIEmployeeAgentProviders(
     messages: options.repositories.aiMessages,
     toolMessages: options.repositories.aiToolMessages,
     snowflake: options.snowflake,
-    policy: chatContext,
   });
   const conversation = createAIEmployeeConversationProvider(
     options,

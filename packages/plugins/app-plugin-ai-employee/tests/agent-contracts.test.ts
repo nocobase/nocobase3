@@ -170,6 +170,9 @@ describe('fixed AgentService contracts', () => {
     const handler = read('agent/ai-employee/tool-call-handler.ts');
     expect(handler).toContain('implements ConversationToolCallStore');
     expect(handler).not.toContain('RepositoryFactory');
+    expect(handler).not.toMatch(/\binitialize(?:InTransaction)?\s*\(/);
+    expect(handler).not.toMatch(/\bconfirm(?:InTransaction)?\s*\(/);
+    expect(handler).not.toContain('ToolCallPolicy');
     expect(handler).not.toContain('llmProviderManager');
     expect(handler).toContain('messages: AIMessageRepository');
     expect(handler).toContain('toolMessages: AIToolMessageRepository');

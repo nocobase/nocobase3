@@ -1,8 +1,4 @@
-import type {
-  AIMessageInput,
-  AIToolCall,
-  AIToolMessage,
-} from '@nocobase/ai-employee';
+import type { AIMessageInput, AIToolMessage } from '@nocobase/ai-employee';
 import type { DatabaseConnection } from '@nocobase/db';
 import type { IdGeneratorService } from '@nocobase/snowflake';
 
@@ -15,7 +11,6 @@ import type {
   AgentInterruptAction,
   ConversationToolCallStore,
 } from '../types.js';
-import type { ToolCallPolicy } from './tool-call-policy.js';
 
 export interface AIEmployeeToolCallHandlerOptions {
   sessionId: string;
@@ -23,7 +18,6 @@ export interface AIEmployeeToolCallHandlerOptions {
   messages: AIMessageRepository;
   toolMessages: AIToolMessageRepository;
   snowflake: IdGeneratorService;
-  policy: ToolCallPolicy;
 }
 
 type NormalizedToolCallResult = {
@@ -62,49 +56,6 @@ export class AIEmployeeToolCallHandler implements ConversationToolCallStore {
   public constructor(
     private readonly options: AIEmployeeToolCallHandlerOptions,
   ) {}
-
-  public initialize(
-    messageId: string,
-    toolCalls: AIToolCall[],
-  ): Promise<AIToolMessage[]> {
-    return this.options.database.transaction((transaction) =>
-      this.initializeInTransaction(transaction, messageId, toolCalls),
-    );
-  }
-
-  public async initializeInTransaction(
-    transaction: DatabaseConnection,
-    messageId: string,
-    toolCalls: AIToolCall[],
-  ): Promise<AIToolMessage[]> {
-    const now = new Date();
-    const toolsMap = await this.options.policy.getToolsMap();
-    return this.options.toolMessages.create(
-      {
-        values: await Promise.all(
-          toolCalls.map(async (toolCall) => {
-            const tool = toolsMap.get(toolCall.name);
-            const exists = Boolean(tool);
-            return {
-              id: this.options.snowflake.generate(),
-              sessionId: this.options.sessionId,
-              messageId,
-              toolCallId: toolCall.id,
-              toolName: toolCall.name,
-              status: exists ? null : 'error',
-              content: exists ? null : `Tool ${toolCall.name} not found`,
-              invokeStatus: exists ? 'init' : 'done',
-              invokeStartTime: exists ? null : now,
-              invokeEndTime: exists ? null : now,
-              auto: await this.options.policy.isAutoCall(tool, toolCall.args),
-              execution: tool?.execution ?? 'backend',
-            };
-          }),
-        ),
-      },
-      { connection: transaction },
-    );
-  }
 
   public markInterrupted(
     sessionId: string,
@@ -187,30 +138,6 @@ export class AIEmployeeToolCallHandler implements ConversationToolCallStore {
       status: 'error',
       content: error instanceof Error ? error.message : error,
     });
-  }
-
-  public confirm(messageId: string, toolCallIds: string[]): Promise<number> {
-    return this.options.database.transaction((transaction) =>
-      this.confirmInTransaction(transaction, messageId, toolCallIds),
-    );
-  }
-
-  public confirmInTransaction(
-    transaction: DatabaseConnection,
-    messageId: string,
-    toolCallIds: string[],
-  ): Promise<number> {
-    return this.options.toolMessages.update(
-      {
-        values: { invokeStatus: 'confirmed' },
-        filter: {
-          sessionId: this.options.sessionId,
-          messageId,
-          toolCallId: { $in: toolCallIds },
-        },
-      },
-      { connection: transaction },
-    );
   }
 
   public async reject(
