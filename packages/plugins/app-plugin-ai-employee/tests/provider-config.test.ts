@@ -276,6 +276,10 @@ async function createProvider(
 
   const container = new ServiceContainer();
   container.instance(databaseManagerToken, deps.database);
+  deps.auth.init({
+    connection: deps.database.connection(),
+    secret: 'ai-employee-test-auth-secret-at-least-32-characters',
+  });
   container.instance(authenticationToken, deps.auth);
   container.instance(cachingToken, deps.caching);
   container.instance(idGeneratorToken, deps.idGenerator);

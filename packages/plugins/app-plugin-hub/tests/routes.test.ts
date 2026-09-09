@@ -1,6 +1,6 @@
 import {
   authenticationToken,
-  type Auth,
+  type AuthManager,
 } from '@nocobase/app-plugin-authentication';
 import {
   authorizationToken,
@@ -325,7 +325,7 @@ function createApplication(
       }
       await next();
     },
-  } as Auth);
+  } as AuthManager);
   container.instance(authorizationToken, {
     middleware: () => async (context, next) => {
       context.set('authz', {

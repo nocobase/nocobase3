@@ -12,7 +12,7 @@
   -> AuthClient
   -> ApiClient + RealtimeClient
   -> /api/auth/*
-  -> Auth / Better Auth
+  -> AuthManager / Better Auth
   -> NocoBase Database Adapter
   -> user / session / account / verification
 ```
@@ -39,7 +39,7 @@ Better Auth
 
 ## 默认行为
 
-`Auth` 在调用 Better Auth 前补充以下默认值：
+`AuthenticationProvider` 提供应用的默认认证配置：
 
 - `appName` 默认为 `NocoBase3`。
 - `emailAndPassword.enabled` 默认为 `true`。

@@ -172,3 +172,23 @@ Two things to decide before shipping one:
 - The job runs with a realistic payload, and running it twice is harmless.
 - A failure retries or terminates as intended.
 - A scheduled tick's work is tested directly, and running it on more than one instance does not duplicate its effect.
+
+## Authentication configuration
+
+Resolve `authenticationToken` from `@nocobase/app-plugin-authentication/server` in an
+App Provider's `register()` to call `plugin()`, `socialProviders()`, or `mergeOptions()`.
+Add the Provider to `server/providers/index.ts`. The authentication plugin must precede
+extensions that depend on it. Put executable callbacks here; read credentials through
+the App config service. Resolve callback dependencies when the callback runs.
+
+All registration finishes before authentication initializes in `boot()`. After startup,
+`container.resolve(authenticationToken).api` exposes native Better Auth methods;
+`required()`, `optional()`, and `getSession()` provide the application integration.
+Register configuration before startup. Options are shallowly merged; a later nested object replaces the earlier object as a whole.
+
+`auth.username.enabled` controls the default username plugin. Better Auth's
+`auth.emailAndPassword.enabled` controls email/password login and signup;
+`auth.emailAndPassword.disableSignUp` disables signup independently. Existing credential
+accounts can still use username login when email/password is disabled. OAuth account
+creation follows each provider's options. Adjust application forms to match enabled
+server capabilities.

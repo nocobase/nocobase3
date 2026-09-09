@@ -3,8 +3,7 @@ import {
   type ServiceToken,
 } from '@nocobase/service-provider';
 
-import type { Auth } from './auth.js';
+import type { AuthManager } from './auth-manager.js';
 
-export const authenticationToken: ServiceToken<Auth> = createServiceToken<Auth>(
-  '@nocobase/app/authentication',
-);
+export const authenticationToken: ServiceToken<AuthManager> =
+  createServiceToken<AuthManager>('@nocobase/app/authentication');

@@ -10,12 +10,12 @@ import {
 import { Type } from '@sinclair/typebox';
 import type { ResolvedAppRuntimeConfigContext } from '@nocobase/app-server/runtime';
 
-import type { CreateAuthenticationOptions } from './auth.js';
+import type { AuthOptions } from './auth-manager.js';
 
 export type AuthenticationConfig = Omit<
-  CreateAuthenticationOptions,
+  AuthOptions,
   'basePath' | 'baseURL' | 'connection'
->;
+> & { username?: { enabled?: boolean } };
 
 export const authenticationConfig: AppConfigDefinition<
   AuthenticationConfig,
@@ -30,10 +30,17 @@ export const authenticationConfig: AppConfigDefinition<
           description: 'Secret used to sign authentication tokens and cookies.',
         }),
       ),
+      username: Type.Optional(
+        Type.Object(
+          { enabled: Type.Boolean({ default: true }) },
+          { additionalProperties: false },
+        ),
+      ),
       emailAndPassword: Type.Object(
         {
           enabled: Type.Boolean({ default: true }),
           autoSignIn: Type.Boolean({ default: false }),
+          disableSignUp: Type.Optional(Type.Boolean({ default: false })),
         },
         { additionalProperties: false },
       ),
@@ -50,6 +57,7 @@ export const authenticationConfig: AppConfigDefinition<
     { additionalProperties: true },
   ),
   defaults: {
+    username: { enabled: true },
     emailAndPassword: { enabled: true, autoSignIn: false },
     session: { storeSessionInDatabase: true },
   },

@@ -1,4 +1,4 @@
-import type { Auth } from '@nocobase/app-plugin-authentication';
+import type { AuthManager } from '@nocobase/app-plugin-authentication';
 import type { Logger } from '@nocobase/logging';
 import { Hono } from 'hono';
 
@@ -20,7 +20,7 @@ import { createLLMServicesRouter } from './llm-services.js';
 export * from './contracts.js';
 
 export interface CreateAIEmployeeRoutesOptions {
-  readonly authentication: Auth;
+  readonly authentication: AuthManager;
   readonly services: ServiceFactory;
   readonly logger: Logger;
 }

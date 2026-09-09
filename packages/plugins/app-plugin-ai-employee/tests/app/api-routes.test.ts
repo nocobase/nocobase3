@@ -112,6 +112,10 @@ describe('AI action routers', () => {
   it('returns direct JSON with the local marker and rejects legacy methods', async () => {
     const app = new Hono();
     const { deps, services } = createTestAIEmployeeFixture();
+    deps.auth.init({
+      connection: deps.database.connection(),
+      secret: 'ai-employee-test-auth-secret-at-least-32-characters',
+    });
     services.ready = async () => undefined;
     services.employeeService.list = async () => [];
     services.conversationService.unreadCounts = async () => ({
@@ -149,6 +153,10 @@ describe('AI action routers', () => {
   it('preserves the legacy error envelope while mapping explicit statuses', async () => {
     const app = new Hono();
     const { deps, services } = createTestAIEmployeeFixture();
+    deps.auth.init({
+      connection: deps.database.connection(),
+      secret: 'ai-employee-test-auth-secret-at-least-32-characters',
+    });
     services.ready = async () => undefined;
     const routes = createAIEmployeeRoutes({
       authentication: deps.auth,

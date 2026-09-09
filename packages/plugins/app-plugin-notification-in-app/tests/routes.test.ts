@@ -1,6 +1,6 @@
 import {
   authenticationToken,
-  type Auth,
+  type AuthManager,
 } from '@nocobase/app-plugin-authentication';
 import { databaseManagerToken, type DatabaseManager } from '@nocobase/db';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
@@ -17,7 +17,7 @@ describe('@nocobase/app-plugin-notification-in-app routes', () => {
     container.instance(databaseManagerToken, {} as DatabaseManager);
     const auth = {
       getSession: vi.fn(async () => null),
-    } as unknown as Auth;
+    } as unknown as AuthManager;
     container.instance(authenticationToken, auth);
     const router = new Hono();
     const provider = new InAppNotificationProvider(

@@ -12,9 +12,12 @@ client:
 auth:
   # Generate a unique secret, for example with: openssl rand -hex 32
   # secret: replace-with-a-unique-secret
+  username:
+    enabled: true
   emailAndPassword:
     enabled: true
     autoSignIn: false
+    disableSignUp: false
   session:
     storeSessionInDatabase: true
 

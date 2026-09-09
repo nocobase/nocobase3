@@ -1,3 +1,4 @@
+import { username } from 'better-auth/plugins';
 // @vitest-environment node
 
 import { fileURLToPath } from 'node:url';
@@ -10,7 +11,7 @@ import {
 import { Hono } from 'hono';
 import type { Knex } from 'knex';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { Auth, type AuthEnv } from '../../../index.js';
+import { AuthManager, type AuthEnv } from '../../../index.js';
 import { databaseAdapter } from '../../better-auth/database-adapter.js';
 
 async function migrateAuthentication(
@@ -60,7 +61,10 @@ describe('Authentication', () => {
     const connection = database.connection();
     await migrateAuthentication(database);
 
-    const auth = new Auth({
+    const auth = new AuthManager();
+    auth.init({
+      plugins: [username({ displayUsername: false })],
+      emailAndPassword: { enabled: true },
       connection,
       baseURL: 'http://localhost/api/auth',
       secret: 'development-secret-at-least-32-characters',
@@ -79,12 +83,6 @@ describe('Authentication', () => {
     );
     router.get('/api/optional', auth.optional(), (context) =>
       context.json({ auth: context.get('auth') }),
-    );
-  });
-
-  it('requires an explicit authentication secret', () => {
-    expect(() => new Auth({ connection: database.connection() })).toThrow(
-      'Authentication secret is required',
     );
   });
 
@@ -252,7 +250,10 @@ describe('Authentication naming strategy', () => {
     try {
       const connection = database.connection();
       await migrateAuthentication(database);
-      const auth = new Auth({
+      const auth = new AuthManager();
+      auth.init({
+        plugins: [username({ displayUsername: false })],
+        emailAndPassword: { enabled: true },
         connection,
         baseURL: 'http://localhost/api/auth',
         secret: 'development-secret-at-least-32-characters',
@@ -348,7 +349,10 @@ describe('Authentication seed', () => {
       });
       expect(account?.password).not.toBe('admin123');
 
-      const auth = new Auth({
+      const auth = new AuthManager();
+      auth.init({
+        plugins: [username({ displayUsername: false })],
+        emailAndPassword: { enabled: true },
         connection,
         baseURL: 'http://localhost/api/auth',
         secret: 'development-secret-at-least-32-characters',

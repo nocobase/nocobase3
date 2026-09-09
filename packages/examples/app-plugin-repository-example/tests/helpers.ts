@@ -1,6 +1,9 @@
 import path from 'node:path';
 import { createDatabaseManager, databaseManagerToken } from '@nocobase/db';
-import { Auth, authenticationToken } from '@nocobase/app-plugin-authentication';
+import {
+  AuthManager,
+  authenticationToken,
+} from '@nocobase/app-plugin-authentication';
 import { createConfigPaths } from '@nocobase/app-server/config';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { createApiClient } from '@nocobase/app-client';
@@ -19,7 +22,9 @@ export async function createFixture() {
   await migrator.latest();
   const container = new ServiceContainer();
   container.instance(databaseManagerToken, database);
-  const authentication = new Auth({
+  const authentication = new AuthManager();
+  authentication.init({
+    emailAndPassword: { enabled: true },
     connection: database.connection(),
     secret: 'repository-example-test-secret-at-least-32-characters',
     baseURL: 'http://example.test',

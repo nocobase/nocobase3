@@ -365,7 +365,8 @@ plugin schema 和 migration 应保持一致。增加字段时，两处需要一�
 在应用创建 authentication service 时加入 plugin：
 
 ```ts
-const auth = createAuthentication({
+const auth = new AuthManager();
+auth.init({
   connection: services.resolve(databaseManagerToken).connection(),
   secret: app.config.get(authenticationConfig).secret,
   plugins: [

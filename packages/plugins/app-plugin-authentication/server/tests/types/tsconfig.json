@@ -1,0 +1,6 @@
+{
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": { "noEmit": true, "isolatedDeclarations": false },
+  "include": ["./auth-extensions.ts"],
+  "exclude": []
+}

@@ -9,11 +9,26 @@ import {} from '@nocobase/app-plugin-authentication';
 import {} from '@nocobase/app-plugin-authentication/server';
 ```
 
-### Auth
+### AuthManager 和 authenticationToken
+
+`container.resolve(authenticationToken)` 返回 App 的 AuthManager。
+
+- `plugin(plugin)`、`socialProviders(providers)`、`mergeOptions(patch)`：注册阶段配置。
+- `init(options)`：由 AuthenticationProvider.boot 调用，同步创建 Better Auth 实例。
+- `api`：原生 Better Auth API。
+- `auth`：原生 Better Auth 实例。
+- `handler()`、`getSession()`、`required()`、`optional()`：应用集成接口。
+
+`AuthenticationPluginTypes` 支持模块声明扩展，`ServerAuth` 是组合后的原生实例类型。
+`AuthOptionsPatch` 是配置补丁类型，排除了框架持有的部署配置。
+
+### AuthManager
 
 ```ts
-class Auth {
-  constructor(options: AuthOptions);
+class AuthManager {
+  init(options: AuthOptions): void;
+  readonly auth: ServerAuth;
+  readonly api: ServerAuth['api'];
   handler(request: Request): Promise<Response>;
   getSession(headers: Headers): Promise<AuthSession>;
   optional(options?: AuthMiddlewareOptions): MiddlewareHandler<AuthEnv>;
@@ -21,16 +36,8 @@ class Auth {
 }
 ```
 
-`Auth` 封装 Better Auth handler、session API 和 Hono middleware。
-
-### createAuthentication
-
-```ts
-function createAuthentication(options: CreateAuthenticationOptions): Auth;
-```
-
-创建 `Auth`。`options.connection` 在类型上允许省略，以便应用组合配置，但运行时
-必须存在；缺少时抛出 `Authentication requires a database connection.`。
+独立使用时先创建 `new AuthManager()`，再 `auth.init(options)`。
+App 内由 AuthenticationProvider 负责初始化。
 
 ### AuthOptions
 
@@ -42,16 +49,6 @@ interface AuthOptions extends Omit<BetterAuthOptions, 'database'> {
 
 Better Auth 配置加 NocoBase database connection。数据库实现由本包接管，调用方
 不能通过 `database` 覆盖。
-
-### CreateAuthenticationOptions
-
-```ts
-interface CreateAuthenticationOptions extends Omit<AuthOptions, 'connection'> {
-  connection?: DatabaseConnection;
-}
-```
-
-用于应用运行时组合依赖。虽然 `connection` 可选，运行时仍是必需依赖。
 
 ### AuthSession
 
@@ -116,7 +113,7 @@ function databaseAdapter(
 ```
 
 将 NocoBase `DatabaseConnection` 适配为 Better Auth database factory。通常由
-`Auth` 内部调用；只有扩展或测试 adapter 时才需要直接使用。
+`AuthManager` 内部调用；只有扩展或测试 adapter 时才需要直接使用。
 
 ## 客户端入口
 

@@ -1,3 +1,4 @@
+import { resolvePublicPath, toPublicRequest } from '../http.js';
 import { describe, expect, it, vi } from 'vitest';
 
 import { databaseManagerToken, type DatabaseManager } from '@nocobase/db';
@@ -17,22 +18,26 @@ const authHandler = vi.hoisted(() =>
   vi.fn((request: Request) => Promise.resolve(new Response(request.url))),
 );
 const getSession = vi.hoisted(() => vi.fn());
-const createAuthentication = vi.hoisted(() =>
-  vi.fn(() => ({ handler: authHandler, getSession })),
+const betterAuth = vi.hoisted(() =>
+  vi.fn(() => ({
+    handler: authHandler,
+    api: { getSession },
+    $context: Promise.resolve({}),
+  })),
 );
-
-vi.mock('../auth.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../auth.js')>();
-  return { ...actual, createAuthentication };
-});
+vi.mock('better-auth', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('better-auth')>()),
+  betterAuth,
+}));
 
 import {
   AuthenticationProvider,
   createCookiePrefix,
-  resolvePublicPath,
-  toPublicRequest,
 } from '../providers/authentication.js';
 import { authenticationToken } from '../tokens.js';
+import { apiRoutes } from '../routes/index.js';
+import { UsernameProvider } from '../providers/username.js';
+import serviceProviders from '../providers/index.js';
 import { authenticationConfig } from '../config.js';
 
 describe('authentication provider', () => {
@@ -59,17 +64,23 @@ describe('authentication provider', () => {
     container.instance(databaseManagerToken, database);
     container.instance(cachingToken, caching);
     container.instance(idGeneratorToken, idGenerator);
-    const provider = new AuthenticationProvider({
+    const application = {
       appName: 'main app',
       publicBasePath: '/main',
       config,
       container,
       paths: createConfigPaths({ rootDir: '/test/app' }),
       router: new Hono(),
-    });
+    };
+    const provider = new AuthenticationProvider(application);
 
     provider.register();
+    new UsernameProvider(application).register();
     const auth = container.resolve(authenticationToken);
+    expect(betterAuth).not.toHaveBeenCalled();
+    expect(() => auth.api).toThrow('not initialized');
+    auth.mergeOptions({ session: { expiresIn: 1234 } });
+    await provider.boot();
     getSession.mockResolvedValueOnce({ user: { id: 'user-1' } });
 
     expect(container.has(realtimePrincipalResolverToken)).toBe(true);
@@ -79,9 +90,10 @@ describe('authentication provider', () => {
         .resolve(new Request('http://localhost/ws')),
     ).resolves.toEqual({ userId: 'user-1' });
     expect(provider.name).toBe('@nocobase/app-plugin-authentication');
-    expect(createAuthentication).toHaveBeenCalledExactlyOnceWith(
+    expect(betterAuth).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({
-        connection,
+        plugins: [expect.objectContaining({ id: 'username' })],
+        session: expect.objectContaining({ expiresIn: 1234 }),
         appName: 'main app',
         baseURL: 'https://example.com',
         basePath: '/main/api/auth',
@@ -94,15 +106,38 @@ describe('authentication provider', () => {
     );
 
     const generateId =
-      createAuthentication.mock.calls[0]?.[0].advanced?.database?.generateId;
+      betterAuth.mock.calls[0]?.[0].advanced?.database?.generateId;
     expect(generateId?.({ model: 'user', size: 12 })).toBe('generated-id');
 
-    const response = await auth.handler(
-      new Request('http://localhost/api/auth/get-session'),
+    const router = new Hono();
+    router.route('/api', await apiRoutes.createRouter(application));
+    const response = await router.request(
+      'http://localhost/api/auth/get-session',
     );
     await expect(response.text()).resolves.toBe(
       'http://localhost/main/api/auth/get-session',
     );
+  });
+
+  it('registers username after authentication and respects the disabled config', async () => {
+    expect(serviceProviders).toEqual([
+      AuthenticationProvider,
+      UsernameProvider,
+    ]);
+    const container = new ServiceContainer();
+    const application = {
+      appName: 'test',
+      publicBasePath: '',
+      container,
+      config: await createConfig(false),
+      paths: createConfigPaths({ rootDir: '/test/app' }),
+      router: new Hono(),
+    };
+    new AuthenticationProvider(application).register();
+    const auth = container.resolve(authenticationToken);
+    const addPlugin = vi.spyOn(auth, 'plugin');
+    new UsernameProvider(application).register();
+    expect(addPlugin).not.toHaveBeenCalled();
   });
 
   it('normalizes public paths, requests, and cookie prefixes', async () => {
@@ -131,7 +166,7 @@ describe('authentication provider', () => {
   });
 });
 
-async function createConfig(): Promise<AppConfig> {
+async function createConfig(usernameEnabled = true): Promise<AppConfig> {
   const config = new AppConfig([
     {
       ...appConfig,
@@ -146,6 +181,7 @@ async function createConfig(): Promise<AppConfig> {
     {
       ...authenticationConfig,
       defaults: {
+        username: { enabled: usernameEnabled },
         emailAndPassword: { enabled: true, autoSignIn: false },
         session: { storeSessionInDatabase: true },
         secret: 'test-auth-secret-at-least-32-characters',

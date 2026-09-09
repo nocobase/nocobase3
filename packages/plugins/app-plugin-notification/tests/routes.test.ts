@@ -1,6 +1,6 @@
 import {
   authenticationToken,
-  type Auth,
+  type AuthManager,
 } from '@nocobase/app-plugin-authentication';
 import {
   authorizationToken,
@@ -233,7 +233,7 @@ async function createRouter(options: RouterOptions = {}): Promise<{
       context.set('auth', { user: { id: 'user-1' }, session: {} });
       await next();
     },
-  } as unknown as Auth);
+  } as unknown as AuthManager);
   container.instance(authorizationToken, {
     middleware: () => async (context, next) => {
       context.set('authz', { can });

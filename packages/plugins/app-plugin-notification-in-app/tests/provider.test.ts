@@ -6,7 +6,7 @@ import {
 import { ServiceContainer } from '@nocobase/service-provider';
 import {
   authenticationToken,
-  type Auth,
+  type AuthManager,
 } from '@nocobase/app-plugin-authentication';
 import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
@@ -29,7 +29,7 @@ describe('@nocobase/app-plugin-notification-in-app provider', () => {
     container.instance(notificationExtensionRegistryToken, {
       registerChannel,
     } as unknown as NotificationExtensionRegistry);
-    container.instance(authenticationToken, {} as Auth);
+    container.instance(authenticationToken, {} as AuthManager);
     container.instance(realtimeServiceToken, {
       defineTopic,
     } as unknown as RealtimeService);

@@ -100,7 +100,7 @@
   "scripts": {
     "clean": "node ./scripts/clean-dist.mjs",
     "build": "pnpm clean && tsc -p tsconfig.json && tsc -p tsconfig.migrations.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.migrations.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.migrations.json --noEmit && tsc -p server/tests/types/tsconfig.json",
     "test": "vitest run",
     "registry:build": "node ../../../scripts/registry.mjs build --package .",
     "registry:materialize": "node ../../../scripts/registry.mjs materialize --package .",

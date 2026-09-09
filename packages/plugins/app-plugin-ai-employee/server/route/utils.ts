@@ -1,5 +1,5 @@
 import { DomainError } from '../domain/errors.js';
-import type { Auth } from '@nocobase/app-plugin-authentication';
+import type { AuthManager } from '@nocobase/app-plugin-authentication';
 import type { Logger } from '@nocobase/logging';
 import type { Actor } from '../domain/contracts.js';
 import type { Context as HonoContext, MiddlewareHandler } from 'hono';
@@ -17,7 +17,7 @@ export interface AIRequestMiddlewareOptions {
   readonly logger: Logger;
 }
 
-export function createAIActorMiddleware(auth: Auth): MiddlewareHandler {
+export function createAIActorMiddleware(auth: AuthManager): MiddlewareHandler {
   return async (context, next) => {
     context.set(
       'currentUser',
@@ -111,7 +111,7 @@ function statusForError(message: string): number {
 }
 
 async function resolveAuthenticatedUser(
-  auth: Auth,
+  auth: AuthManager,
   request: Request,
 ): Promise<Actor> {
   const session = await auth.getSession(request.headers);

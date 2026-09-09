@@ -1,6 +1,6 @@
 # 快速开始
 
-这篇文档完成一条最小认证链路：准备数据表、创建 `Auth`、挂载 Hono 路由、
+这篇文档完成一条最小认证链路：准备数据表、创建 `AuthManager`、挂载 Hono 路由、
 保护业务接口，再把客户端接入 Refine。
 
 ## 1. 准备认证表
@@ -22,14 +22,15 @@
 ## 2. 创建认证服务
 
 ```ts
-import { createAuthentication } from '@nocobase/app-plugin-authentication';
+import { AuthManager } from '@nocobase/app-plugin-authentication';
 
 const secret = process.env.AUTH_SECRET;
 if (!secret) {
   throw new Error('AUTH_SECRET is required.');
 }
 
-const auth = createAuthentication({
+const auth = new AuthManager();
+auth.init({
   connection: database.connection(),
   baseURL: 'https://example.com/api/auth',
   secret,
@@ -44,8 +45,7 @@ const auth = createAuthentication({
 });
 ```
 
-`connection` 和非空 `secret` 都是必需的。`createAuthentication()` 缺少连接时
-会立即报错，`Auth` 收到空 secret 时也会立即报错。
+`connection` 和非空 `secret` 都是必需的。`auth.init(options)` 在缺少连接或 secret 时拒绝初始化。
 
 ## 3. 挂载认证协议路由
 

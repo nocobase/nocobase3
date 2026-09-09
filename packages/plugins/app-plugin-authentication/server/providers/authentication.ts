@@ -1,9 +1,6 @@
-import { joinBasePath, normalizeBasePath } from '@nocobase/app-server/support';
+import { resolvePublicPath } from '../http.js';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
-import {
-  ServiceProvider,
-  type ServiceResolver,
-} from '@nocobase/service-provider';
+import { ServiceProvider } from '@nocobase/service-provider';
 import { databaseManagerToken } from '@nocobase/db';
 import { cachingToken } from '@nocobase/app-server/caching';
 import { idGeneratorToken } from '@nocobase/app-server/id-generator';
@@ -13,18 +10,10 @@ import {
   type RealtimePrincipal,
 } from '@nocobase/app-server/realtime';
 
-import {
-  createAuthentication,
-  type Auth,
-  type CreateAuthenticationOptions,
-} from '../auth.js';
+import { AuthManager, type AuthOptions } from '../auth-manager.js';
 import { createAuthStorage } from '../auth-storage.js';
 import { authenticationToken } from '../tokens.js';
 import { authenticationConfig, resolveAuthSecret } from '../config.js';
-
-interface RequestInitWithDuplex extends RequestInit {
-  duplex?: 'half';
-}
 
 export interface AuthenticationProviderConfig {
   readonly app: {
@@ -32,10 +21,9 @@ export interface AuthenticationProviderConfig {
     readonly publicOrigin: string | undefined;
     readonly publicBasePath: string;
   };
-  readonly auth: Omit<
-    CreateAuthenticationOptions,
-    'basePath' | 'baseURL' | 'connection'
-  >;
+  readonly auth: Omit<AuthOptions, 'basePath' | 'baseURL' | 'connection'> & {
+    username?: { enabled?: boolean };
+  };
 }
 
 export type AuthenticationProviderApplication<
@@ -50,9 +38,7 @@ export class AuthenticationProvider<
   public readonly name: string = '@nocobase/app-plugin-authentication';
 
   public override register(): void {
-    this.app.container.singleton(authenticationToken, (container) =>
-      this.createAuthentication(container),
-    );
+    this.app.container.singleton(authenticationToken, () => new AuthManager());
     if (!this.app.container.has(realtimePrincipalResolverToken)) {
       this.app.container.singleton(
         realtimePrincipalResolverToken,
@@ -70,23 +56,24 @@ export class AuthenticationProvider<
     }
   }
 
-  private createAuthentication(container: ServiceResolver): Auth {
-    const app = this.app.config.get(appConfig);
-    const configuredAuth = this.app.config.get(authenticationConfig);
-    const authConfig = {
-      ...configuredAuth,
-      secret: resolveAuthSecret(configuredAuth.secret, this.app.paths.root()),
-    };
+  public override async boot(): Promise<void> {
+    const { container, config, paths } = this.app;
+    const app = config.get(appConfig);
+    const { username: _username, ...authConfig } =
+      config.get(authenticationConfig);
     const caching = container.resolve(cachingToken);
     const idGenerator = container.resolve(idGeneratorToken);
     const database = container.has(databaseManagerToken)
       ? container.resolve(databaseManagerToken)
       : undefined;
-    const auth = createAuthentication({
-      connection: database?.connection(),
+    if (!database)
+      throw new Error('Authentication requires a database connection.');
+    container.resolve(authenticationToken).init({
+      connection: database.connection(),
       secondaryStorage: createAuthStorage(caching),
       appName: app.name,
       ...authConfig,
+      secret: resolveAuthSecret(authConfig.secret, paths.root()),
       baseURL: app.publicOrigin,
       basePath: resolvePublicPath('/api/auth', app.publicBasePath),
       advanced: {
@@ -104,10 +91,6 @@ export class AuthenticationProvider<
         },
       },
     });
-    const originalAuthHandler = auth.handler.bind(auth);
-    auth.handler = (request: Request): Promise<Response> =>
-      originalAuthHandler(toPublicRequest(request, app.publicBasePath));
-    return auth;
   }
 }
 
@@ -118,44 +101,4 @@ export function createCookiePrefix(appName: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
   return normalized || 'nocobase3';
-}
-
-/** Resolves an app-local pathname to the path exposed by the app runtime. */
-export function resolvePublicPath(
-  appLocalPath: string,
-  publicBasePath: string,
-): string {
-  const basePath = normalizeBasePath(publicBasePath);
-  const localPath = normalizeBasePath(appLocalPath);
-
-  if (!basePath) {
-    return localPath || '/';
-  }
-
-  return localPath ? joinBasePath(basePath, localPath) : `${basePath}/`;
-}
-
-/** Restores the public mount path on an app-local request. */
-export function toPublicRequest(
-  request: Request,
-  publicBasePath: string,
-): Request {
-  if (!normalizeBasePath(publicBasePath)) {
-    return request;
-  }
-
-  const url = new URL(request.url);
-  url.pathname = resolvePublicPath(url.pathname, publicBasePath);
-
-  const init: RequestInitWithDuplex = {
-    method: request.method,
-    headers: request.headers,
-    signal: request.signal,
-  };
-  if (request.method !== 'GET' && request.method !== 'HEAD') {
-    init.body = request.body;
-    init.duplex = 'half';
-  }
-
-  return new Request(url, init);
 }
