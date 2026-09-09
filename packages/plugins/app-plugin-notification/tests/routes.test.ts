@@ -37,6 +37,24 @@ describe('@nocobase/app-plugin-notification routes', () => {
     });
   });
 
+  it('returns a stable localized error when log access is denied', async () => {
+    const { router } = await createRouter({ allowed: false });
+
+    const response = await router.request('/notifications/logs', {
+      headers: { 'accept-language': 'zh-CN' },
+    });
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: 'NOTIFICATION_LOGS_FORBIDDEN',
+        message: '需要通知日志访问权限。',
+        ns: NOTIFICATION_NAMESPACE,
+        key: 'errors.logsForbidden',
+      },
+    });
+  });
+
   it('lists only safe targets without requiring send permission', async () => {
     const targets = [
       {

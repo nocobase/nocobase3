@@ -2,6 +2,7 @@
 '@nocobase/app-plugin-notification': patch
 '@nocobase/app-plugin-notification-in-app': patch
 '@nocobase/app-template-default': patch
+'@nocobase/app-template-examples': patch
 '@nocobase/app-template-hub': patch
 ---
 

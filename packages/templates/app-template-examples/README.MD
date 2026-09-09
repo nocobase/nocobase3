@@ -243,9 +243,9 @@ After signing in with the `notification:test` `send` permission, use the
 notification logs settings page to send a real message through the durable
 Notification Manager. The form is generated from safe Channel test metadata;
 Email tests require an address and IM tests use the configured logical target.
-The button is unavailable unless the protected targets endpoint is authorized,
-and testing is disabled unless `notification.test.enabled` is explicitly set
-to `true` in `config.yml`.
+The button remains visible so configuration problems are discoverable. The
+server enforces the `notification:test` `send` permission only when the message
+is submitted.
 
 ## Working with an AI agent
 

@@ -62,6 +62,8 @@ Custom hosts can create a registry, register Channel and Provider definitions, c
 
 The core `manager.router` exposes `GET /logs` and `GET /logs/:id` without adding authentication itself. The plugin's normal route contribution mounts it at `/api/notifications` with required authentication, authorization middleware, and `page:notification.logs` `access` checks. Custom hosts must provide equivalent protection.
 
+For a custom host, register the exported `NOTIFICATION_NAMESPACE` / `notificationServerLocales` and `IN_APP_NOTIFICATION_NAMESPACE` / `inAppNotificationServerLocales` pairs with the host `I18nRuntime`, initialize it, then mount its request i18n middleware before the core logs and in-app routers. Notification-owned failures use a stable `error.code/message/ns/key/params` envelope; clients should branch on `code`, display `message`, and may retranslate with `ns`, `key`, and `params`. Authentication middleware retains its owning plugin's error contract.
+
 The in-app router must derive the current user from trusted authentication state. Never accept a client-supplied user id as the current identity. Its write endpoints use a CSRF token/cookie pair.
 
 List the current user's inbox with `GET /api/notifications/in-app`. `limit` must be an integer from 1 through 100. When the response includes `nextCursor`, pass that opaque base64url value back as `cursor`; do not parse, edit, or manufacture cursors. Write requests accept only `read`, `unread`, and `delete`, require a JSON object body, and reject malformed JSON or unknown actions.

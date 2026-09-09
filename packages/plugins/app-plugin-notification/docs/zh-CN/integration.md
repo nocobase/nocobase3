@@ -258,6 +258,31 @@ app.route(
 ```
 
 `resolveRequestUserId` 必须从当前请求中得到登录用户 ID。不要接受客户端直接提交的用户 ID 作为当前用户身份。
+通知日志和站内信 router 会从请求上下文取得 translator，以返回包含
+`code/message/ns/key/params` 的结构化错误。自定义宿主需要把公开的 locale loaders
+注册到自己的 `I18nRuntime`，再在这些 router 之前挂载请求 i18n middleware：
+
+```ts
+import {
+  NOTIFICATION_NAMESPACE,
+  notificationServerLocales,
+} from '@nocobase/app-plugin-notification';
+import {
+  IN_APP_NOTIFICATION_NAMESPACE,
+  inAppNotificationServerLocales,
+} from '@nocobase/app-plugin-notification-in-app';
+import { createI18nMiddleware } from '@nocobase/i18n/server';
+
+i18n.registerNamespace(NOTIFICATION_NAMESPACE, notificationServerLocales);
+i18n.registerNamespace(
+  IN_APP_NOTIFICATION_NAMESPACE,
+  inAppNotificationServerLocales,
+);
+await i18n.init();
+app.use('*', createI18nMiddleware(i18n));
+```
+
+这里的 `i18n` 是宿主拥有的 `I18nRuntime`。认证 middleware 自己产生的错误仍遵循认证插件的契约。
 
 ## 第五步：接入生命周期
 

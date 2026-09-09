@@ -2,6 +2,8 @@ import type { LocaleResource } from '@nocobase/i18n';
 
 const enUS = {
   errors: {
+    logsForbidden: 'Notification logs access is required.',
+    logNotFound: 'Notification log not found.',
     testHeaderRequired: 'The notification test request header is required.',
     testForbidden: 'Notification test send permission is required.',
     testInvalidRequest:
