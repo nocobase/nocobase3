@@ -292,6 +292,43 @@ describe('fixed AgentService contracts', () => {
       'base',
     );
   });
+
+  it('keeps memory message and tool-call state behind the same contract', async () => {
+    const conversation = createMemoryConversationProvider({
+      sessionId: 'memory',
+    });
+    const saved = await conversation.messages.saveAssistantMessage({
+      role: 'assistant',
+      content: { type: 'text', content: 'answer' },
+      toolCalls: [{ id: 'call-1', name: 'search', args: {} }],
+    });
+
+    expect(saved.initializedToolCalls).toHaveLength(1);
+    expect(
+      await conversation.toolCalls.get(
+        String(saved.message.messageId),
+        'call-1',
+      ),
+    ).toMatchObject({ invokeStatus: 'init' });
+
+    await conversation.messages.saveToolMessages(
+      String(saved.message.messageId),
+      [
+        {
+          role: 'tool',
+          content: { type: 'text', content: 'result' },
+          metadata: { toolCallId: 'call-1' },
+        },
+      ],
+    );
+
+    expect(
+      await conversation.toolCalls.get(
+        String(saved.message.messageId),
+        'call-1',
+      ),
+    ).toMatchObject({ invokeStatus: 'confirmed' });
+  });
   it('encodes typed events with the legacy SSE envelope', () => {
     const event: AgentStreamEvent = {
       type: 'content',

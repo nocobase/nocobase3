@@ -106,29 +106,13 @@ export function createMemoryConversationProvider(
         }
         add(values);
       },
-      saveAssistantMessage: async (message, calls) => {
+      saveAssistantMessage: async (message) => {
         const saved = add(message) as StoredMessage;
-        const initialized = await provider.toolCalls.initialize(
-          String(saved.messageId),
-          calls,
-        );
-        return { message: saved, initializedToolCalls: initialized };
-      },
-      saveToolMessages: async (values, messageId, ids) => {
-        add(values);
-        await provider.toolCalls.confirm(messageId, ids);
-      },
-      saveInterruptedAssistantMessage: async (message) =>
-        add(message) as StoredMessage,
-      shouldLoadHistory: (request) => Boolean(request.messageId),
-    },
-    toolCalls: {
-      initialize: async (messageId, calls) =>
-        calls.map((call) => {
+        const initializedToolCalls = (saved.toolCalls ?? []).map((call) => {
           const value = {
             id: String(nextId++),
             sessionId,
-            messageId,
+            messageId: String(saved.messageId),
             toolCallId: call.id,
             toolName: call.name,
             invokeStatus: 'init',
@@ -137,9 +121,30 @@ export function createMemoryConversationProvider(
             auto: false,
             execution: 'backend',
           } as unknown as AIToolMessage;
-          toolCalls.set(key(messageId, call.id), value);
+          toolCalls.set(key(String(saved.messageId), call.id), value);
           return value;
-        }),
+        });
+        return { message: saved, initializedToolCalls };
+      },
+      saveToolMessages: async (sourceMessageId, values) => {
+        if (!values.length) return;
+        const ids = values.map((message) => {
+          const toolCallId = message.metadata?.toolCallId;
+          if (typeof toolCallId !== 'string' || !toolCallId) {
+            throw new Error('Tool message requires metadata.toolCallId');
+          }
+          return toolCallId;
+        });
+        add(values);
+        for (const id of ids) {
+          updateTool(sourceMessageId, id, { invokeStatus: 'confirmed' });
+        }
+      },
+      saveInterruptedAssistantMessage: async (message) =>
+        add(message) as StoredMessage,
+      shouldLoadHistory: (request) => Boolean(request.messageId),
+    },
+    toolCalls: {
       markInterrupted: async (
         _sessionId,
         messageId,
@@ -171,12 +176,6 @@ export function createMemoryConversationProvider(
           status: 'error',
           content: error?.message ?? error,
         }),
-      confirm: async (messageId, ids) =>
-        ids.reduce(
-          (count, id) =>
-            count + updateTool(messageId, id, { invokeStatus: 'confirmed' }),
-          0,
-        ),
       reject: async (messageId, ids, reason = 'Tool call rejected') =>
         ids.reduce(
           (count, id) =>
