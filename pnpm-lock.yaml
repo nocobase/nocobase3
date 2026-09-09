@@ -3311,6 +3311,9 @@ importers:
       '@nocobase/app-server':
         specifier: workspace:^
         version: link:../../app/app-server
+      '@nocobase/config':
+        specifier: workspace:^
+        version: link:../../libs/config
       '@nocobase/db':
         specifier: workspace:^
         version: link:../../libs/db
@@ -3323,6 +3326,9 @@ importers:
       '@oclif/core':
         specifier: 'catalog:'
         version: 4.14.0
+      better-sqlite3:
+        specifier: 'catalog:'
+        version: 12.11.1
       hono:
         specifier: 'catalog:'
         version: 4.13.2
@@ -3366,9 +3372,6 @@ importers:
       '@nocobase/caching':
         specifier: workspace:^
         version: link:../../libs/caching
-      '@nocobase/config':
-        specifier: workspace:^
-        version: link:../../libs/config
       '@nocobase/cron':
         specifier: workspace:^
         version: link:../../libs/cron

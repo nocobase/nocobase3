@@ -94,18 +94,16 @@ database:
         autoRun: true
       seeds:
         autoRun: true
-    # Additional managed databases use database/<connectionName>/{migrations,seeds}.
-    # analytics:
-    #   dialect: postgres
-    #   host: localhost
-    #   database: analytics
-    #   username: postgres
-    #   password: ${ANALYTICS_DB_PASSWORD}
-    #   schemaManagement: managed
-    #   migrations:
-    #     autoRun: false
-    #   seeds:
-    #     autoRun: false
+    # Application-owned analytics examples; also supplied as application defaults.
+    # Sources live in database/analytics/{migrations,seeds}.
+    analytics:
+      dialect: sqlite
+      database: analytics.sqlite
+      schemaManagement: managed
+      migrations:
+        autoRun: true
+      seeds:
+        autoRun: true
     # Existing external databases require a runtime metadataStore and do not run tasks.
 
 snowflake:

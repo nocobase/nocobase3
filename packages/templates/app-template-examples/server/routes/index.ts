@@ -9,6 +9,7 @@ import {
 import { Hono } from 'hono';
 
 import { articlesRoutes } from './articles.js';
+import { analyticsRoutes } from './analytics.js';
 
 import { appExampleServiceToken } from '../providers/index.js';
 
@@ -59,6 +60,7 @@ const routes: readonly AppRouteContribution<Application>[] = [
   apiRoutes,
   rootRoutes,
   articlesRoutes,
+  analyticsRoutes,
 ];
 
 export default routes;

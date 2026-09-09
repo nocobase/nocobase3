@@ -88,9 +88,12 @@ server/                  API server
 └── embedded.ts          Entry point when a host process mounts it
 
 database/
-└── main/
-    ├── migrations/      Schema history for the main connection
-    └── seeds/           Initial example data
+├── main/
+│   ├── migrations/      Schema history for the main connection
+│   └── seeds/           Initial example data
+└── analytics/
+    ├── migrations/      Independent analytics schema
+    └── seeds/           Channel, campaign and daily metric examples
 
 tests/                   Unit and integration tests
 e2e/                     Browser tests needing a real server
@@ -121,6 +124,71 @@ The three files named `runtime.ts`, `plugins.ts`, and `routes.ts` are compositio
 Migrations also run automatically on startup while `database.connections.main.migrations.autoRun` is `true` in `config.yml`. Run `pnpm migrate` explicitly when you want to apply a schema change without restarting.
 
 Database tasks support `--connection <name>` and `--all`; no argument targets `database.default`. Per-connection source and upgrade rules are documented in [migrations and seeds](skills/nocobase-app-development/references/migrations.md).
+
+### Analytics database example
+
+The application supplies an independent managed `analytics` SQLite connection,
+stored at `storage/analytics.sqlite` when running standalone. Its defaults are
+loaded before `config.yml`, so existing and generated main-only configurations
+work, and explicit file settings can override the connection. `main` remains the
+system database. This demonstration belongs only to Examples.
+
+Migrations and seeds run automatically on startup. To initialize only analytics
+from this application directory:
+
+```bash
+pnpm migrate --connection analytics
+pnpm seed --connection analytics
+```
+
+| Collection     | Initial records | Purpose                                                        |
+| -------------- | --------------- | -------------------------------------------------------------- |
+| `channels`     | 3               | Search, social and email channels; unique channel code         |
+| `campaigns`    | 4               | Channel-linked campaigns in draft, active and completed states |
+| `dailyMetrics` | 12              | One row per campaign and date for September 6–8, 2026          |
+
+Channels have many campaigns; campaigns have many daily metrics. Each campaign
+and date pair is unique. Deleting a campaign cascades to its metrics; deleting a
+channel with campaigns is rejected. Budgets, spend and revenue are integer cents.
+The draft campaign has zero metrics to demonstrate the distinction between zero
+and absent data. Seeds use stable IDs and a transaction; normal reruns preserve
+edits and deletions, and explicit replays insert only missing identities.
+
+`server/routes/analytics.ts` exposes the following through
+`defineRepositoryApiRoutes`, each explicitly bound to `analytics`:
+
+| Repository API name     | Collection     |
+| ----------------------- | -------------- |
+| `analyticsChannels`     | `channels`     |
+| `analyticsCampaigns`    | `campaigns`    |
+| `analyticsDailyMetrics` | `dailyMetrics` |
+
+Each supports `findMany` (maximum 100), `findOne`, `count`, `exists`, `aggregate`,
+`groupBy`, `createOne`, `updateOne`, and `deleteOne`. Like the Repository example
+plugin, all signed-in users can manage the sample records. Server write policies
+allow only declared fields; use `channel.connect` and `campaign.connect` for
+relations. IDs are accepted on creation but cannot be changed through updates.
+
+Requests use `POST <app-base>/api/<repository>:<action>`, for example
+`POST /main/api/analyticsDailyMetrics:groupBy` with this JSON body:
+
+```json
+{
+  "by": ["campaignId"],
+  "aggregate": {
+    "kind": "aggregate",
+    "version": 1,
+    "items": [
+      { "kind": "count", "alias": "days" },
+      { "kind": "sum", "field": "spendCents", "alias": "spendCents" },
+      { "kind": "sum", "field": "revenueCents", "alias": "revenueCents" }
+    ]
+  }
+}
+```
+
+The response is wrapped in `{ "data": ... }`. Use the application's authenticated
+API client, for example `api.repository('analyticsChannels').findMany({ limit: 10 })`.
 
 ### Checks
 

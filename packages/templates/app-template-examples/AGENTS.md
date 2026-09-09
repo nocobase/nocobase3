@@ -138,6 +138,15 @@ Keep HTTP concerns in the route and domain logic in a service under `server/prov
 
 ### Database
 
+This Examples application also owns the `analytics` connection, with sources in
+`database/analytics/{migrations,seeds}` and authenticated Repository endpoints in
+`server/routes/analytics.ts`. `server/config/index.ts` supplies its SQLite defaults
+before loading `config.yml`, so generated applications with a main-only config
+still run the demonstration. File configuration can override the connection.
+This is example content specific to this template; Default and Hub do not need it.
+Every signed-in user may manage these sample records, as in the Repository plugin
+example. Each exposure explicitly binds to `analytics` and declares write policies.
+
 Schema changes are migrations under `database/main/migrations/`. Data the application requires to run is a seed under `database/main/seeds/`. Seeds never create structure.
 
 ```ts

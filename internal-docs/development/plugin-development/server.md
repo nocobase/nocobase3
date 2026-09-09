@@ -13,7 +13,7 @@ Server 插件把可复用领域逻辑放入 Service，用 Token 表达稳定能�
 | ------------------------------ | ----------------------- | -------------------------------------------------------------------------- |
 | 可复用领域逻辑                 | Service                 | [Services、Tokens 与 ServiceProviders](./server-services-and-providers.md) |
 | 跨模块/插件的稳定能力 identity | ServiceToken            | [Services、Tokens 与 ServiceProviders](./server-services-and-providers.md) |
-| 注册实现和管理生命周期         | ServiceProvider         | [Services、Tokens 与 ServiceProviders](./server-services-and-providers.md) |
+| 注册实现和管理生命周期         | ServiceProvider         | [ServiceProvider 使用指南](./service-provider-guide.md) |
 | App 内 `/api` 接口             | `defineApiRoutes()`     | [Server Routes](./server-routes-examples.md)                               |
 | callback、webhook 或顶层入口   | `defineRootRoutes()`    | [Server Routes](./server-routes-examples.md)                               |
 | 异步、延迟、批量或可重试工作   | Queue Job               | [Server Jobs](./server-jobs.md)                                            |
