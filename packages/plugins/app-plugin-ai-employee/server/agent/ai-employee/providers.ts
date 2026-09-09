@@ -217,10 +217,7 @@ export function createAIEmployeeConversationProvider(
     },
     get: (...args) => runtime.getToolCallResult(...args),
     getMany: (...args) => runtime.getToolCallResultMap(...args),
-    cancel: async () => {
-      await runtime.cancelToolCall();
-      return [];
-    },
+    cancel: () => runtime.cancelToolCall(),
   };
   const conversation: ConversationProvider = {
     identity: { sessionId, from, username, metadata: { kind: 'ai-employee' } },

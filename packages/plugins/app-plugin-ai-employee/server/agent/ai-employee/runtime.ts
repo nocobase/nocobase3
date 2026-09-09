@@ -3,7 +3,7 @@ import type { AppAgentContext } from '../context.js';
 import type { ConversationExecution } from '../contracts.js';
 import type { Caching } from '@nocobase/caching';
 import type { IdGeneratorService } from '@nocobase/snowflake';
-import type { FileStorage } from '@nocobase/ai-employee';
+import type { AIMessageInput, FileStorage } from '@nocobase/ai-employee';
 import type { AIFileEntity } from '../../repository/ai-file.js';
 import type { AIFileMetadataCreateContext } from '../../repository/file-storage/ai-file-metadata-repository.js';
 import type { RepositoryFactory } from '../../factory/repository-factory.js';
@@ -224,8 +224,8 @@ export class AIEmployeeCapabilities {
   }
 
   async cancelToolCall(
-    reason = 'The user ignored the application for tools usage and will continued to ask questions',
-  ) {
+    reason: string = 'The user ignored the application for tools usage and will continued to ask questions',
+  ): Promise<AIMessageInput[] | undefined> {
     let messageId;
     const historyMessages = await this.repositories.aiMessages.find({
       sort: ['-messageId'],
