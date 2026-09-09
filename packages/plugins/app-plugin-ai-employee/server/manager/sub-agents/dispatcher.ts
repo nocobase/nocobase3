@@ -310,7 +310,7 @@ export class SubAgentsDispatcher {
       };
     }
 
-    const result = await agent.service.invoke(
+    const result = await agent.invoke(
       {
         userDecisions: decisions ?? undefined,
         userMessages: decisions
