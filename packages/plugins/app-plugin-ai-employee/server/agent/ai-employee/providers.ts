@@ -24,6 +24,18 @@ import { listSystemTools, SYSTEM_TOOLS } from '@nocobase/ai-employee';
 import _ from 'lodash';
 import { createAgentProviders } from '../providers.js';
 import type { AIEmployeeAgentOptions } from './options.js';
+import type { AIEmployeeSkillSettings } from './options.js';
+import type { AppAgentContext } from '../context.js';
+import type { ConversationExecution } from '../contracts.js';
+import type { Actor, ModelRef, Translate } from '../../types.js';
+import type { BuiltInManager } from '../../manager/built-in-manager.js';
+import type { KnowledgeBaseManager } from '../../manager/knowledge-base-manager.js';
+import type {
+  AIConversationRepository,
+  AIToolMessageRepository,
+  UserAIEmployeeRepository,
+} from '../../repository/index.js';
+import type { AIEmployeeRepository } from '@nocobase/ai-employee';
 import { AIEmployeeToolCallHandler } from './tool-call-handler.js';
 import { AIEmployeeConversationMessageStore } from './conversation-message-store.js';
 import { getSystemPrompt } from './prompts.js';
@@ -89,35 +101,6 @@ const responseMetadataCollector = Symbol('responseMetadataCollector');
 type AIEmployeeResolvedAgentLLM = ResolvedAgentLLM & {
   readonly [responseMetadataCollector]: ResponseMetadataCollector;
 };
-
-function getRequiredModel(
-  options: AIEmployeeAgentOptions,
-): NonNullable<AIEmployeeAgentOptions['model']> {
-  if (!options.model) {
-    throw new Error('AI employee model is required');
-  }
-  return options.model;
-}
-
-async function resolveAIEmployeeLLM(
-  options: AIEmployeeAgentOptions,
-): Promise<AIEmployeeResolvedAgentLLM> {
-  const resolved =
-    await options.agentContext.ai.llmProviderManager.getLLMService(
-      getRequiredModel(options),
-    );
-  const metadata = new ExecutionResponseMetadata();
-  const collector = new ResponseMetadataCollector(resolved.provider, metadata);
-  return {
-    providerName: resolved.service.provider,
-    llmService: resolved.service.name,
-    model: resolved.model,
-    provider: resolved.provider,
-    takeResponseMetadata: (id) => metadata.take(id),
-    dispose: () => metadata.dispose(),
-    [responseMetadataCollector]: collector,
-  };
-}
 
 export function createAIEmployeeConversationProvider(
   options: AIEmployeeAgentOptions,
@@ -205,18 +188,98 @@ export function createAIEmployeeConversationProvider(
   return conversation;
 }
 
+export interface AIEmployeeChatContextProviderOptions {
+  readonly employee: AIEmployeeType;
+  readonly sessionId: string;
+  readonly model?: ModelRef;
+  readonly actor: Actor;
+  readonly translate?: Translate;
+  readonly toolRuntimeContext: AppAgentContext;
+  readonly llmProviderManager: AppAgentContext['ai']['llmProviderManager'];
+  readonly toolsManager: AppAgentContext['ai']['toolsManager'];
+  readonly skillsManager: AppAgentContext['ai']['skillsManager'];
+  readonly builtInManager: BuiltInManager;
+  readonly knowledgeBaseManager: KnowledgeBaseManager;
+  readonly conversations: AIConversationRepository;
+  readonly employees: AIEmployeeRepository;
+  readonly toolMessages: AIToolMessageRepository;
+  readonly usersAiEmployees: UserAIEmployeeRepository;
+  readonly execution?: ConversationExecution;
+  readonly getHeader?: (name: string) => string | undefined;
+  readonly systemMessage?: string;
+  readonly skillSettings?: AIEmployeeSkillSettings;
+  readonly webSearch?: boolean;
+  readonly tools?: { name: string }[];
+}
+
 export class AIEmployeeChatContextProvider implements ChatContextProvider {
-  public constructor(
-    private readonly aiEmployeeOptions: AIEmployeeAgentOptions,
-  ) {
-    aiEmployeeOptions.builtInManager.setupBuiltInInfo({
-      employee: aiEmployeeOptions.employee as unknown as AIEmployeeType,
-      translate: aiEmployeeOptions.agentContext.translate,
+  private readonly employee: AIEmployeeType;
+  private readonly sessionId: string;
+  private readonly model?: ModelRef;
+  private readonly actor: Actor;
+  private readonly translate?: Translate;
+  private readonly toolRuntimeContext: AppAgentContext;
+  private readonly llmProviderManager: AppAgentContext['ai']['llmProviderManager'];
+  private readonly toolsManager: AppAgentContext['ai']['toolsManager'];
+  private readonly skillsManager: AppAgentContext['ai']['skillsManager'];
+  private readonly builtInManager: BuiltInManager;
+  private readonly knowledgeBaseManager: KnowledgeBaseManager;
+  private readonly conversations: AIConversationRepository;
+  private readonly employees: AIEmployeeRepository;
+  private readonly toolMessages: AIToolMessageRepository;
+  private readonly usersAiEmployees: UserAIEmployeeRepository;
+  private readonly execution: ConversationExecution;
+  private readonly getHeader: (name: string) => string | undefined;
+  private readonly systemMessage: string;
+  private readonly skillSettings?: AIEmployeeSkillSettings;
+  private readonly webSearch: boolean;
+  private readonly tools: { name: string }[];
+
+  public constructor(options: AIEmployeeChatContextProviderOptions) {
+    this.employee = options.employee;
+    this.sessionId = options.sessionId;
+    this.model = options.model;
+    this.actor = options.actor;
+    this.translate = options.translate;
+    this.toolRuntimeContext = options.toolRuntimeContext;
+    this.llmProviderManager = options.llmProviderManager;
+    this.toolsManager = options.toolsManager;
+    this.skillsManager = options.skillsManager;
+    this.builtInManager = options.builtInManager;
+    this.knowledgeBaseManager = options.knowledgeBaseManager;
+    this.conversations = options.conversations;
+    this.employees = options.employees;
+    this.toolMessages = options.toolMessages;
+    this.usersAiEmployees = options.usersAiEmployees;
+    this.execution = options.execution ?? {};
+    this.getHeader = options.getHeader ?? (() => undefined);
+    this.systemMessage = options.systemMessage ?? '';
+    this.skillSettings = options.skillSettings;
+    this.webSearch = options.webSearch ?? false;
+    this.tools = options.tools ?? [];
+    this.builtInManager.setupBuiltInInfo({
+      employee: this.employee,
+      translate: this.translate,
     });
   }
 
-  public resolveLLM(_request: AgentRequest): Promise<ResolvedAgentLLM> {
-    return resolveAIEmployeeLLM(this.aiEmployeeOptions);
+  public async resolveLLM(_request: AgentRequest): Promise<ResolvedAgentLLM> {
+    if (!this.model) throw new Error('AI employee model is required');
+    const resolved = await this.llmProviderManager.getLLMService(this.model);
+    const metadata = new ExecutionResponseMetadata();
+    const collector = new ResponseMetadataCollector(
+      resolved.provider,
+      metadata,
+    );
+    return {
+      providerName: resolved.service.provider,
+      llmService: resolved.service.name,
+      model: resolved.model,
+      provider: resolved.provider,
+      takeResponseMetadata: (id) => metadata.take(id),
+      dispose: () => metadata.dispose(),
+      [responseMetadataCollector]: collector,
+    } as AIEmployeeResolvedAgentLLM;
   }
 
   public async getSystemPrompt(
@@ -224,7 +287,7 @@ export class AIEmployeeChatContextProvider implements ChatContextProvider {
     _request: AgentRequest,
     _llm: ResolvedAgentLLM,
   ): Promise<string | undefined> {
-    const { employee } = this.aiEmployeeOptions;
+    const employee = this.employee;
     const promptMode =
       (employee.chatSettings?.systemPromptMode as
         'default' | 'raw' | 'none' | undefined) ?? 'default';
@@ -237,16 +300,15 @@ export class AIEmployeeChatContextProvider implements ChatContextProvider {
       return about;
     }
 
-    const { actor } = this.aiEmployeeOptions.agentContext;
-    const userConfig =
-      await this.aiEmployeeOptions.repositories.usersAiEmployees.findOne({
-        filter: {
-          userId: actor.id,
-          aiEmployee: employee.username,
-        },
-      });
+    const actor = this.actor;
+    const userConfig = await this.usersAiEmployees.findOne({
+      filter: {
+        userId: actor.id,
+        aiEmployee: employee.username,
+      },
+    });
 
-    let background = this.aiEmployeeOptions.systemMessage ?? '';
+    let background = this.systemMessage ?? '';
     const additionalSystemPrompts = userMessages.filter(
       (message) => message.role === 'system',
     );
@@ -257,12 +319,12 @@ export class AIEmployeeChatContextProvider implements ChatContextProvider {
     }
 
     const employeeWithKnowledgeBase = employee as unknown as AIEmployeeType;
-    const { knowledgeBaseManager } = this.aiEmployeeOptions;
+    const knowledgeBaseManager = this.knowledgeBaseManager;
     const knowledgeBaseEnabled =
       await knowledgeBaseManager.isEnabledKnowledgeBase(
         employeeWithKnowledgeBase,
       );
-    const roleNames = actor.roles;
+    const roleNames = [...actor.roles];
     const hasAccessibleKnowledgeBase = knowledgeBaseEnabled
       ? await knowledgeBaseManager.hasAccessibleKnowledgeBase({
           employee: employeeWithKnowledgeBase,
@@ -308,8 +370,8 @@ export class AIEmployeeChatContextProvider implements ChatContextProvider {
     const availableSkills = await this.getAvailableSkills();
     const availableAIEmployees = await this.getAvailableAIEmployees();
     const timezone = getCurrentTimezone(
-      this.aiEmployeeOptions.execution ?? {},
-      this.aiEmployeeOptions.getHeader ?? (() => undefined),
+      this.execution ?? {},
+      this.getHeader ?? (() => undefined),
     );
     const systemPrompt = getSystemPrompt({
       aiEmployee: {
@@ -326,10 +388,10 @@ export class AIEmployeeChatContextProvider implements ChatContextProvider {
       knowledgeBase,
       availableSkills,
       availableAIEmployees,
-      webSearch: this.aiEmployeeOptions.webSearch,
+      webSearch: this.webSearch,
     });
 
-    if (this.aiEmployeeOptions.execution?.important === 'GraphRecursionError') {
+    if (this.execution?.important === 'GraphRecursionError') {
       const importantPrompt = `<Important>You have already called tools multiple times and gathered sufficient information.
 First, provide a summary based on the existing information. Do not call additional tools.
 If information is missing, clearly state it in the summary.</Important>`;
@@ -368,7 +430,7 @@ If information is missing, clearly state it in the summary.</Important>`;
     enableSkills?: boolean;
     enableTools?: boolean;
   } {
-    return (this.aiEmployeeOptions.employee.chatSettings ?? {}) as {
+    return (this.employee.chatSettings ?? {}) as {
       enableSkills?: boolean;
       enableTools?: boolean;
     };
@@ -377,71 +439,56 @@ If information is missing, clearly state it in the summary.</Important>`;
   private async getKnowledgeBaseRetrieveTool(): Promise<
     ToolsEntity | undefined
   > {
-    const employee = this.aiEmployeeOptions
-      .employee as unknown as AIEmployeeType;
+    const employee = this.employee;
+    if (!(await this.knowledgeBaseManager.isEnabledKnowledgeBase(employee)))
+      return undefined;
     if (
-      !(await this.aiEmployeeOptions.knowledgeBaseManager.isEnabledKnowledgeBase(
+      !(await this.knowledgeBaseManager.hasAccessibleKnowledgeBase({
         employee,
-      ))
+        roleNames: [...this.actor.roles],
+      }))
     )
       return undefined;
-    if (
-      !(await this.aiEmployeeOptions.knowledgeBaseManager.hasAccessibleKnowledgeBase(
-        {
-          employee,
-          roleNames: this.aiEmployeeOptions.agentContext.actor.roles,
-        },
-      ))
-    )
-      return undefined;
-    return this.aiEmployeeOptions.agentContext.ai.toolsManager.getTools(
-      SYSTEM_TOOLS.KNOWLEDGE_BASE,
-      {
-        ctx: this.aiEmployeeOptions.agentContext,
-      },
-    );
+    return this.toolsManager.getTools(SYSTEM_TOOLS.KNOWLEDGE_BASE, {
+      ctx: this.toolRuntimeContext,
+    });
   }
 
   private listTools(filter?: ToolsFilter): Promise<ToolsEntity[]> {
-    return this.aiEmployeeOptions.agentContext.ai.toolsManager.listTools({
+    return this.toolsManager.listTools({
       ...filter,
-      ctx: this.aiEmployeeOptions.agentContext,
+      ctx: this.toolRuntimeContext,
     });
   }
 
   private async getAIEmployeeTools(): Promise<ToolsEntity[]> {
     if (this.chatSettings.enableTools === false) return [];
     const currentFrontendTools = await listCurrentFrontendTools(
-      this.aiEmployeeOptions.repositories,
+      this.conversations,
       {
-        ...(this.aiEmployeeOptions.execution ?? {}),
-        sessionId: this.aiEmployeeOptions.sessionId,
+        ...(this.execution ?? {}),
+        sessionId: this.sessionId,
       },
     );
     const tools = await this.listTools({ scope: 'GENERAL' });
-    const getSkill =
-      await this.aiEmployeeOptions.agentContext.ai.toolsManager.getTools(
-        SYSTEM_TOOLS.GET_SKILL,
+    const getSkill = await this.toolsManager.getTools(SYSTEM_TOOLS.GET_SKILL, {
+      ctx: this.toolRuntimeContext,
+    });
+    if (getSkill) tools.push(getSkill);
+    if (this.webSearch === true) {
+      const webSearch = await this.toolsManager.getTools(
+        SYSTEM_TOOLS.WEB_SEARCH,
         {
-          ctx: this.aiEmployeeOptions.agentContext,
+          ctx: this.toolRuntimeContext,
         },
       );
-    if (getSkill) tools.push(getSkill);
-    if (this.aiEmployeeOptions.webSearch === true) {
-      const webSearch =
-        await this.aiEmployeeOptions.agentContext.ai.toolsManager.getTools(
-          SYSTEM_TOOLS.WEB_SEARCH,
-          {
-            ctx: this.aiEmployeeOptions.agentContext,
-          },
-        );
       if (webSearch) tools.push(webSearch);
     }
     const generalNames = new Set(tools.map((tool) => tool.definition.name));
     const toolMap = await this.getToolsMap();
     const configured = [
-      ...(this.aiEmployeeOptions.employee.skillSettings?.tools ?? []),
-      ...(this.aiEmployeeOptions.tools ?? []),
+      ...(this.employee.skillSettings?.tools ?? []),
+      ...(this.tools ?? []),
     ];
     if (await this.getKnowledgeBaseRetrieveTool())
       configured.push({ name: SYSTEM_TOOLS.KNOWLEDGE_BASE });
@@ -456,7 +503,7 @@ If information is missing, clearly state it in the summary.</Important>`;
       LOAD_FRONTEND_TOOL_NAME,
       EXECUTE_FRONTEND_TOOL_NAME,
     ];
-    const settings = this.aiEmployeeOptions.skillSettings;
+    const settings = this.skillSettings;
     if (!settings)
       return prepareToolsForFrontendConversation(tools, currentFrontendTools);
     const filter = settings.tools;
@@ -487,16 +534,16 @@ If information is missing, clearly state it in the summary.</Important>`;
 
   public async getAvailableSkills(): Promise<SkillsEntity[]> {
     if (this.chatSettings.enableSkills === false) return [];
-    const skillsManager = this.aiEmployeeOptions.agentContext.ai.skillsManager;
+    const skillsManager = this.skillsManager;
     const getSkill = (await this.getAIEmployeeTools()).find(
       (tool) => tool.definition.name === SYSTEM_TOOLS.GET_SKILL,
     );
     if (!getSkill) return [];
     const general = await skillsManager.listSkills({ scope: 'GENERAL' });
-    const names = this.aiEmployeeOptions.employee.skillSettings?.skills ?? [];
+    const names = this.employee.skillSettings?.skills ?? [];
     const specified = names.length ? await skillsManager.getSkills(names) : [];
     const merged = _.uniqBy([...(specified || []), ...(general || [])], 'name');
-    const settings = this.aiEmployeeOptions.skillSettings;
+    const settings = this.skillSettings;
     if (!settings) return merged;
     const filter = settings.skills ?? [];
     if (!settings.skillsVersion) {
@@ -533,9 +580,9 @@ If information is missing, clearly state it in the summary.</Important>`;
   }
 
   private async getLoadedSkillNames(): Promise<string[]> {
-    const list = await this.aiEmployeeOptions.repositories.aiToolMessages.find({
+    const list = await this.toolMessages.find({
       filter: {
-        sessionId: this.aiEmployeeOptions.sessionId,
+        sessionId: this.sessionId,
         toolName: SYSTEM_TOOLS.GET_SKILL,
         status: 'success',
       },
@@ -562,10 +609,7 @@ If information is missing, clearly state it in the summary.</Important>`;
   public async getActivatedSkillToolNames(): Promise<Set<string>> {
     const names = await this.getLoadedSkillNames();
     if (!names.length) return new Set();
-    const loaded =
-      await this.aiEmployeeOptions.agentContext.ai.skillsManager.getSkills(
-        names,
-      );
+    const loaded = await this.skillsManager.getSkills(names);
     const normalized = Array.isArray(loaded) ? loaded : [loaded];
     const skills = new Map(
       [...(await this.getAvailableSkills()), ...normalized.filter(Boolean)].map(
@@ -579,32 +623,29 @@ If information is missing, clearly state it in the summary.</Important>`;
     ReturnType<typeof serializeEmployeeSummary>[]
   > {
     const configured =
-      this.aiEmployeeOptions.employee.skillSettings?.tools?.map(
+      this.employee.skillSettings?.tools?.map(
         ({ name }: { name: string }) => name,
       ) ?? [];
     if (!configured.includes('dispatch-sub-agent-task')) return [];
     return (
       await listAccessibleAIEmployees({
-        roleNames: this.aiEmployeeOptions.agentContext.actor.roles,
-        repositories: this.aiEmployeeOptions.repositories,
+        roleNames: [...this.actor.roles],
+        employees: this.employees,
       })
     )
       .map((employee) =>
         serializeEmployeeSummary({
           employee,
-          builtInManager: this.aiEmployeeOptions.builtInManager,
-          translate: this.aiEmployeeOptions.agentContext.translate,
+          builtInManager: this.builtInManager,
+          translate: this.translate,
         }),
       )
-      .filter(
-        (employee) =>
-          employee.username !== this.aiEmployeeOptions.employee.username,
-      );
+      .filter((employee) => employee.username !== this.employee.username);
   }
 
   public async getToolsMap(): Promise<ReadonlyMap<string, ToolsEntity>> {
     const tools = await this.listTools({
-      sessionId: this.aiEmployeeOptions.sessionId,
+      sessionId: this.sessionId,
     });
     return new Map(tools.map((tool) => [tool.definition.name, tool]));
   }
@@ -618,19 +659,16 @@ If information is missing, clearly state it in the summary.</Important>`;
     args: unknown,
   ): Promise<boolean> {
     if (tool?.definition.name === EXECUTE_FRONTEND_TOOL_NAME) {
-      const frontendTools = await listCurrentFrontendTools(
-        this.aiEmployeeOptions.repositories,
-        {
-          ...(this.aiEmployeeOptions.execution ?? {}),
-          sessionId: this.aiEmployeeOptions.sessionId,
-        },
-      );
+      const frontendTools = await listCurrentFrontendTools(this.conversations, {
+        ...(this.execution ?? {}),
+        sessionId: this.sessionId,
+      });
       return shouldAutoExecuteFrontendTool(frontendTools, args);
     }
     if (!tool) return false;
     const fallback = tool.defaultPermission === 'ALLOW';
     if (tool.scope !== 'CUSTOM') return fallback;
-    const preset = this.aiEmployeeOptions.employee.skillSettings?.tools?.find(
+    const preset = this.employee.skillSettings?.tools?.find(
       (setting: { name: string }) => setting.name === tool.definition.name,
     );
     return preset ? preset.autoCall === true : fallback;
@@ -640,7 +678,29 @@ If information is missing, clearly state it in the summary.</Important>`;
 export function createAIEmployeeChatContextProvider(
   options: AIEmployeeAgentOptions,
 ): AIEmployeeChatContextProvider {
-  return new AIEmployeeChatContextProvider(options);
+  return new AIEmployeeChatContextProvider({
+    employee: options.employee as AIEmployeeType,
+    sessionId: options.sessionId,
+    model: options.model,
+    actor: options.agentContext.actor,
+    translate: options.agentContext.translate,
+    toolRuntimeContext: options.agentContext,
+    llmProviderManager: options.agentContext.ai.llmProviderManager,
+    toolsManager: options.agentContext.ai.toolsManager,
+    skillsManager: options.agentContext.ai.skillsManager,
+    builtInManager: options.builtInManager,
+    knowledgeBaseManager: options.knowledgeBaseManager,
+    conversations: options.repositories.aiConversations,
+    employees: options.repositories.aiEmployees,
+    toolMessages: options.repositories.aiToolMessages,
+    usersAiEmployees: options.repositories.usersAiEmployees,
+    execution: options.execution,
+    getHeader: options.getHeader,
+    systemMessage: options.systemMessage,
+    skillSettings: options.skillSettings,
+    webSearch: options.webSearch,
+    tools: options.tools,
+  });
 }
 
 export async function createAIEmployeeAgentProviders(

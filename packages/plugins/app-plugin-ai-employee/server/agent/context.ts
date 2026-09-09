@@ -128,7 +128,11 @@ export function createAgentContext({
     },
     frontendTools: {
       find: (toolId) =>
-        findCurrentFrontendTool(repositories, toolId, execution),
+        findCurrentFrontendTool(
+          repositories.aiConversations,
+          toolId,
+          execution,
+        ),
       readResult: (toolCallId) => readFrontendToolResult(execution, toolCallId),
     },
   };

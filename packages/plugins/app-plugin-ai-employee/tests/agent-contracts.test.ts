@@ -209,6 +209,12 @@ describe('fixed AgentService contracts', () => {
     const chatContext = read('agent/ai-employee/providers.ts');
     expect(chatContext).not.toContain('implements ToolCallPolicy');
     expect(chatContext).not.toContain('AIEmployeeToolContext');
+    expect(chatContext).not.toContain('private readonly aiEmployeeOptions');
+    expect(chatContext).not.toMatch(/this\.[A-Za-z]*repositories/i);
+    expect(chatContext).toContain('private readonly conversations:');
+    expect(chatContext).toContain('private readonly employees:');
+    expect(chatContext).toContain('private readonly toolMessages:');
+    expect(chatContext).toContain('private readonly usersAiEmployees:');
     expect(types).toContain('export type ToolCallPolicy = Pick<');
     expect(types).toContain(
       "'getToolsMap' | 'isAutoCall' | 'shouldInterruptToolCall'",

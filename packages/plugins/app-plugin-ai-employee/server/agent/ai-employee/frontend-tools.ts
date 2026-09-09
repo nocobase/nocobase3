@@ -9,7 +9,7 @@
 
 import type { ConversationExecution } from '../contracts.js';
 import { z } from 'zod';
-import type { RepositoryFactory } from '../../factory/repository-factory.js';
+import type { AIConversationRepository } from '../../repository/index.js';
 import {
   EXECUTE_FRONTEND_TOOL_NAME,
   LOAD_FRONTEND_TOOL_NAME,
@@ -99,7 +99,7 @@ const findRequestFrontendTools = (
 };
 
 export const listCurrentFrontendTools = async (
-  repositories: RepositoryFactory,
+  conversations: AIConversationRepository,
   execution: ConversationExecution = {},
 ): Promise<FrontendToolManifest[]> => {
   const currentSessionId =
@@ -108,8 +108,7 @@ export const listCurrentFrontendTools = async (
     return findRequestFrontendTools(execution);
   }
 
-  const conversationRepository = repositories.aiConversations;
-  const conversation = (await conversationRepository.findOne({
+  const conversation = (await conversations.findOne({
     filter: {
       sessionId: currentSessionId,
     },
@@ -127,7 +126,7 @@ export const listCurrentFrontendTools = async (
     return frontendTools;
   }
 
-  await conversationRepository.update({
+  await conversations.update({
     filter: {
       sessionId: currentSessionId,
     },
@@ -142,11 +141,11 @@ export const listCurrentFrontendTools = async (
 };
 
 export const findCurrentFrontendTool = async (
-  repositories: RepositoryFactory,
+  conversations: AIConversationRepository,
   toolId: string,
   execution: ConversationExecution = {},
 ): Promise<FrontendToolManifest | undefined> => {
-  const tools = await listCurrentFrontendTools(repositories, execution);
+  const tools = await listCurrentFrontendTools(conversations, execution);
   return tools.find((tool) => tool.id === toolId);
 };
 

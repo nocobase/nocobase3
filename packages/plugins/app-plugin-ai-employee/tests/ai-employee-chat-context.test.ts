@@ -6,6 +6,15 @@ const createFixture = (promptMode: 'default' | 'raw' | 'none' = 'default') => {
   const provider = {
     parseResponseMetadata: vi.fn((output) => [output.id, output.metadata]),
   } as unknown as LLMProvider;
+  const actor = { id: 1, roles: ['member'], locale: 'en-US' };
+  const llmProviderManager = {
+    getLLMService: vi.fn(async () => ({
+      provider,
+      service: { provider: 'test-provider', name: 'test-service' },
+      model: 'model-1',
+    })),
+  };
+  const toolRuntimeContext = { actor, ai: {} };
   const options = {
     model: { model: 'model-1' },
     employee: {
@@ -14,21 +23,16 @@ const createFixture = (promptMode: 'default' | 'raw' | 'none' = 'default') => {
       about: 'Employee prompt',
       chatSettings: { systemPromptMode: promptMode },
     },
-    agentContext: {
-      actor: { id: 1, roles: ['member'], locale: 'en-US' },
-      ai: {
-        llmProviderManager: {
-          getLLMService: vi.fn(async () => ({
-            provider,
-            service: { provider: 'test-provider', name: 'test-service' },
-            model: 'model-1',
-          })),
-        },
-      },
-    },
-    repositories: {
-      usersAiEmployees: { findOne: vi.fn(async () => null) },
-    },
+    sessionId: 'session-1',
+    actor,
+    toolRuntimeContext,
+    llmProviderManager,
+    toolsManager: {},
+    skillsManager: {},
+    conversations: {},
+    employees: {},
+    toolMessages: {},
+    usersAiEmployees: { findOne: vi.fn(async () => null) },
     knowledgeBaseManager: {
       isEnabledKnowledgeBase: vi.fn(async () => false),
       hasAccessibleKnowledgeBase: vi.fn(async () => false),

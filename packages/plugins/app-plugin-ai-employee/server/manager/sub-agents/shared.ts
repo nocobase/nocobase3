@@ -9,20 +9,23 @@
 
 import type { BuiltInManager } from '../built-in-manager.js';
 import type { RepositoryFactory } from '../../factory/repository-factory.js';
-import type { AIEmployeeEntity } from '@nocobase/ai-employee';
+import type {
+  AIEmployeeEntity,
+  AIEmployeeRepository,
+} from '@nocobase/ai-employee';
 import type { AIEmployee as AIEmployeeType } from '@nocobase/ai-employee';
 import type { SubAgentConversationMetadata } from '@nocobase/ai-employee';
 import type { Translate } from '../../types.js';
 
 export async function listAccessibleAIEmployees({
   roleNames,
-  repositories,
+  employees,
 }: {
   roleNames: readonly string[];
-  repositories: RepositoryFactory;
+  employees: AIEmployeeRepository;
 }): Promise<AIEmployeeEntity[]> {
   const filter = buildAccessibleEmployeeFilter(roleNames);
-  return repositories.aiEmployees.find({
+  return employees.find({
     filter,
     sort: ['sort', 'username'],
   });

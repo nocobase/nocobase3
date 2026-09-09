@@ -1171,9 +1171,13 @@ export class AIConversationService {
         : undefined;
       const frontendTool =
         typeof toolId === 'string'
-          ? await findCurrentFrontendTool(this.repositories, toolId, {
-              sessionId: message.sessionId,
-            })
+          ? await findCurrentFrontendTool(
+              this.repositories.aiConversations,
+              toolId,
+              {
+                sessionId: message.sessionId,
+              },
+            )
           : undefined;
       if (!frontendTool) {
         throw new ResourceActionError(
