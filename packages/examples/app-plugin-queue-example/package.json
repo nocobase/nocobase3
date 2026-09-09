@@ -43,11 +43,7 @@
     "hono": "catalog:"
   },
   "devDependencies": {
-    "@nocobase/app-plugin-authentication": "workspace:*",
-    "@nocobase/app-server": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
-    "@nocobase/queue": "workspace:*",
-    "@nocobase/service-provider": "workspace:*",
     "@types/node": "catalog:",
     "eslint": "catalog:",
     "prettier": "catalog:",

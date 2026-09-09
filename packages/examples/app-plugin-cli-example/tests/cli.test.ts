@@ -29,7 +29,8 @@ describe('cli plugin definition', () => {
 
   it('declares oclif as a peer so the app provides one copy', () => {
     expect(packageMetadata.peerDependencies['@oclif/core']).toBeTruthy();
-    expect(packageMetadata.devDependencies['@oclif/core']).toBe('catalog:');
+    // Declared once. pnpm resolves the peer here on its own, so a duplicate devDependency would add nothing.
+    expect(packageMetadata.devDependencies?.['@oclif/core']).toBeUndefined();
   });
 });
 

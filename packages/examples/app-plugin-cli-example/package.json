@@ -49,8 +49,6 @@
   },
   "devDependencies": {
     "@nocobase/dev-config": "workspace:*",
-    "@nocobase/nb3-cli": "workspace:*",
-    "@oclif/core": "catalog:",
     "@types/node": "catalog:",
     "eslint": "catalog:",
     "prettier": "catalog:",

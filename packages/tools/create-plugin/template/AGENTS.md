@@ -9,7 +9,7 @@ Where a package goes depends on who has to resolve the import, and there are thr
 | The import is reached from                  | Declare it in                                |
 | ------------------------------------------- | -------------------------------------------- |
 | `server/` or `database/`, at runtime        | `dependencies`                               |
-| `client/`, as a value import                | `peerDependencies` **and** `devDependencies` |
+| `client/`, as a value import                | `peerDependencies`                           |
 | `registry/`                                 | nothing — the application compiles it        |
 | Tests, build scripts, or `import type` only | `devDependencies`                            |
 
@@ -23,11 +23,11 @@ Where a package goes depends on who has to resolve the import, and there are thr
 
 **But that same server never requires a browser package.** Declaring one as a `dependency` would install it into every deployment, where nothing loads it.
 
-`peerDependencies` is what satisfies both: the application installs one shared copy for its Vite build, while a deployment sets `autoInstallPeers: false` and installs none of them. Keep a matching `devDependency` so this plugin's own lint, tests, and build still resolve the package, and so the version used here stays pinned.
+`peerDependencies` is what satisfies both: the application installs one shared copy for its Vite build, while a deployment sets `autoInstallPeers: false` and installs none of them. One declaration is enough — pnpm installs and links a peer here, so this plugin's own lint, tests, and build resolve it without a second entry.
 
 Do not mark such a peer `optional`. An optional peer is not auto-installed anywhere, including in the application that needs it, which is the failure this arrangement exists to prevent. `optional` means the consumer may legitimately not need the package at all.
 
-So `hono` in `server/routes/` is a `dependency`, and `sonner` in `client/` is a peer plus a devDependency. A dynamic `import()` counts as a value import; `import type` does not, wherever it appears.
+So `hono` in `server/routes/` is a `dependency`, and `sonner` in `client/` is a peer. A dynamic `import()` counts as a value import; `import type` does not, wherever it appears.
 
 `registry/` is the exception: it is source the application copies into itself and compiles there, against that application's own `react` and `@/` alias. This plugin never resolves those imports at all, so declaring them would claim dependencies it does not have.
 

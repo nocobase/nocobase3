@@ -14,13 +14,13 @@ description: 插件和应用的依赖分别声明在哪里，以及跨平台构�
 | 依赖类型 | 声明位置 | 应用侧装吗 | 部署侧装吗 |
 | --- | --- | --- | --- |
 | 服务端运行时用 | `dependencies` | 装 | **装** |
-| 前端用（浏览器代码 import） | `peerDependencies` + `devDependencies` | **装** | 不装 |
+| 前端用（浏览器代码 import） | `peerDependencies` | **装** | 不装 |
 | 只在开发/测试用 | `devDependencies` | 不装 | 不装 |
 | 消费方可有可无 | `peerDependencies` + `optional` | 不装 | 不装 |
 
 **前端依赖为什么是 peer**：插件的 `client/` 不由插件自己打包——`build` 就是 `tsc`，`dist/client/*.js` 保留裸导入，由**安装它的应用**用 Vite 解析。所以这些包必须随 manifest 发布，否则应用构建时报 `Could not resolve`。但服务器没有前端构建，永远不 require 它们，声明成 `dependencies` 会让每个部署都白装几十 MB。peer 同时满足两边。
 
-**配套的 `devDependencies` 是必需的**：peer 在仓库内不会自动安装，没有它插件自己的 lint / test / build 都跑不起来。
+**只声明一处就够**：pnpm 会安装 peer 并链接进插件的 `node_modules`，`workspace:^` 解析到的就是仓库内那份，插件自己的 lint / test / build 都正常。早先要求配一个同名 `devDependencies`，理由是"否则开发时会在宽 peer 范围里漂移"——实测不会，所以那条只是多一行要同步维护的声明。
 
 **`optional` 不是「这个阶段不装」**。标了 `optional` 的 peer 在**任何地方**都不自动安装，包括真正需要它的那个应用——那正是这套机制要避免的故障。它的正确含义是「消费方可能真的不需要它」，比如 `@nocobase/i18n` 的 `hono` 对纯浏览器消费方无意义。屏蔽部署侧安装是 `autoInstallPeers: false` 的职责。
 
