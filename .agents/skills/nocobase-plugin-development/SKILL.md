@@ -55,15 +55,28 @@ for the current task:
 | Write Plugin Skills for an App Agent   | `skills.md`                                          |
 | Test, build, and verify                | `testing.md`                                         |
 
-For nested Client pages or route-driven navigation, also read `internal-docs/development/plugin-development/client-child-routes.md`. App menus are declared on routes; Refine resources serve CRUD.
+For frontend React Router tasks (`defineAppRoutes()`, `defineSettingsRoutes()`,
+or `defineDevRoutes()`), read the routing references in the existing
+`nocobase-app-development` Skill:
 
-For every HTTP or browser Route task, read `routes.md` first. It covers all four
-Route APIs as one cross-runtime topic. For `defineRootRoutes()` or
-`defineApiRoutes()`, also read `server-routes-examples.md`. For
-`defineAppRoutes()` or `defineSettingsRoutes()`, also read
-`client-routes-examples.md`. Read `client.md` or `server.md` to choose an
-adjacent module, then read only that module's page rather than loading every
-Client or Server guide.
+- [Pages, routes, and menus](../../../packages/templates/app-template-default/skills/nocobase-app-development/references/client-pages-and-routes.md)
+- [Child routes, Tabs, navigation groups, and Outlet](../../../packages/templates/app-template-default/skills/nocobase-app-development/references/client-child-routes.md)
+
+These links use Default as the shared routing reference. When integrating with
+Examples or Hub, use the same reference files under that target template's
+`skills/nocobase-app-development/` directory. Reuse the React Router, navigation,
+and verification guidance; plugin source ownership and registration remain
+governed by this Skill. In particular, declare plugin routes in the plugin's
+`client/routes.ts`, not the application's route file. Read
+`internal-docs/development/plugin-development/client-routes-examples.md` and
+`internal-docs/development/plugin-development/client-child-routes.md` for the
+plugin-specific declarations and examples. App menus are declared on routes;
+Refine resources serve CRUD.
+
+For server HTTP Route tasks (`defineRootRoutes()` or `defineApiRoutes()`), read
+`internal-docs/development/plugin-development/routes.md` and
+`internal-docs/development/plugin-development/server-routes-examples.md`.
+Read `client.md` or `server.md` only when choosing an adjacent module.
 Inspect only the matching files in `packages/examples/app-plugin-routes-example` when a
 runnable reference is needed.
 
