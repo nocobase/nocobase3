@@ -25,6 +25,7 @@ export function renderRouteTree(
       element={
         route.componentLoader ? (
           <ClientRoute
+            key={routeKey(route)}
             route={route}
             defaultAccess={!surface && !hasPageAncestor}
           />

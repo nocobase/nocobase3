@@ -35,6 +35,47 @@ describe('settings centre', () => {
     }));
   });
 
+  it.each(['settings', 'dev'] as const)(
+    'opens a healthy %s page after another page fails to load',
+    async (surface) => {
+      const broken: AppClientRegisteredRoute = {
+        id: 'broken',
+        name: 'broken',
+        path: `/${surface}/broken`,
+        auth: 'required',
+        packageName: 'test',
+        source: 'application',
+        navigation: { title: 'Broken page' },
+        componentLoader: async () => {
+          throw new Error('Module unavailable');
+        },
+      };
+      const healthy: AppClientRegisteredRoute = {
+        ...broken,
+        id: 'healthy',
+        name: 'healthy',
+        path: `/${surface}/healthy`,
+        navigation: { title: 'Healthy page' },
+        componentLoader: async () => ({
+          default: () => <h2>Healthy content</h2>,
+        }),
+      };
+      const tree = [broken, healthy];
+      renderApp(
+        <AppRouter
+          clientRoutes={[]}
+          settingsRouteTree={surface === 'settings' ? tree : []}
+          devRouteTree={surface === 'dev' ? tree : []}
+        />,
+        broken.path,
+      );
+      expect(await screen.findByText('Unable to load page')).toBeVisible();
+      fireEvent.click(screen.getByRole('link', { name: 'Healthy page' }));
+      expect(await screen.findByText('Healthy content')).toBeVisible();
+      expect(screen.queryByText('Unable to load page')).not.toBeInTheDocument();
+    },
+  );
+
   it('renders the requested setting with a grouped navigation of the rest', async () => {
     renderSettings('/settings/authorization/default-access');
 
