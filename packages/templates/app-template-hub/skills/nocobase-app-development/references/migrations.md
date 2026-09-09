@@ -1,15 +1,17 @@
 # Migrations and seeds
 
-Migrations under `database/migrations/` are the application's schema history. Seeds under `database/seeds/` insert records the application requires to run.
+Migrations under `database/main/migrations/` are the application's schema history. Seeds under `database/main/seeds/` insert records the application requires to run.
 
 Migrations create structure. Seeds never do.
+
+`database/tsconfig.json` extends the server configuration so editor tooling and ESLint recognize migrations and seeds as Node source. Keep it in place when adding connection directories.
 
 ## Writing a migration
 
 Name the file with a sortable timestamp prefix. The exported `name` must match the filename:
 
 ```ts
-// database/migrations/202609020001_create_orders.ts
+// database/main/migrations/202609020001_create_orders.ts
 import { defineMigration, type MigrationDefinition } from '@nocobase/db';
 
 const migration: MigrationDefinition = defineMigration({
@@ -87,16 +89,47 @@ Set `tableName` or `columnName` explicitly when you need to override the derivat
 pnpm migrate
 ```
 
-This applies pending migrations from this application and from every registered plugin, ordered by name across all sources. Migrations also run on startup while `database.migrations.autoRun` is `true` in `config.yml`.
+This applies pending migrations for `database.default`, including registered plugins, ordered by name across all sources. The template defaults to `main`. Plugin migrations, seeds and runtime default reads/writes always use this same connection; changing `database.default` changes the application system database.
 
-`pnpm server:config` prints the resolved migration directory and which plugins contribute their own.
+## Multiple connections
+
+Use `database/<connectionName>/migrations` and `database/<connectionName>/seeds`. Each name must match a configured connection and contain only letters, digits, underscores or hyphens. Directories do not register connections. A connection without application-owned database source needs no empty directory.
+
+Configure `connections.<name>.migrations` and `.seeds` in the database section. Each accepts `autoRun`, `directory` or `sources`, `packageName`, `tableName`, `lockTableName`, and `extensions`. Explicit paths resolve relative to the application root and must exist when executed. Without an explicit path the application resolves the per-connection directory under its runtime database directory, including `dist/database` after compilation. Custom sources replace the application's conventional source; registered plugin sources are still added only on the default connection.
+
+The default connection runs migrations and seeds automatically unless disabled; other connections default to `autoRun: false`. Startup runs the default connection first, then other names in stable ascending order, migrations before seeds within each connection. A failure stops startup; completed database changes remain committed. No cross-connection transaction or rollback is provided.
+
+```bash
+pnpm migrate --connection analytics
+pnpm seed --connection analytics
+pnpm migrate --all --json
+pnpm seed --all --json
+```
+
+Manual execution ignores `autoRun`. `--connection` and `--all` are mutually exclusive. `--all` uses the same connection order and stops at the first failure. Its JSON result includes completed, skipped, failed and not-run entries; failures exit nonzero. Single-connection JSON retains `status`, `batch` (migrations), `executed`, and `skipped`, with an added `connection` field.
+
+`schemaManagement: external` describes ownership, not read-only credentials. Startup and `--all` skip external connections; explicitly targeting one for migrations or seeds is an error. Runtime access still requires an explicit metadata store. Seeds also use history and lock tables, so they are not a workaround for external schema ownership.
+
+Use one managed connection per physical database/schema. Identical configured targets are rejected before execution, even when only one is selected. Hostname aliases, symlinks and driver-specific routing can hide a shared target; do not configure these as independent managed databases. Distinct history or lock table names alone do not isolate collection metadata and schema ownership.
+
+## Existing applications
+
+Old top-level `database.migrations` and `database.seeds` remain accepted and apply only to the current default connection, never automatically to `main`. Legacy fields override matching per-connection fields, including existing `DB_MIGRATIONS_*` / `DB_SEEDS_*` environment settings. Connection environment variables such as `DB_DATABASE` retain their existing `main` mapping. Prefer the new connection settings for new configuration; remove old overrides when adopting them.
+
+Different explicit old/new directories, two explicit source arrays, or a combined directory and source array are configuration errors. Without an explicit source, the default connection falls back to `database/migrations` or `database/seeds` when present. If both old and new conventional directories exist, execution fails until you select one explicitly. Non-default connections never use the legacy directory.
+
+No command moves source files or rewrites history. When moving a directory, preserve the target database, package identity, filenames, exported names, file contents and history/lock table configuration. Do not copy already-applied migrations to another database as an upgrade. Verify a repeat run executes nothing. An explicitly configured source missing from a release is an error; an absent conventional source is permitted for applications with no owned tasks. Verify release packaging separately to catch accidental omission of conventional sources.
+
+Checksums are based on file contents. Moving unchanged files preserves them; compiling TypeScript into different JavaScript is not guaranteed to preserve an existing development database's checksums. Verify upgrades against the same execution artifact format, and never rewrite checksums to bypass a mismatch.
+
+`pnpm server:inspect --json` lists the plugins that contribute migrations.
 
 ## Seeds
 
 Seeds are for records the application cannot run without — a default configuration row, a fixed system record. Not demo data, and not test fixtures.
 
 ```ts
-// database/seeds/202609020002_seed_order_statuses.ts
+// database/main/seeds/202609020002_seed_order_statuses.ts
 import { defineSeed, type SeedDefinition } from '@nocobase/db';
 
 const seed: SeedDefinition = defineSeed({

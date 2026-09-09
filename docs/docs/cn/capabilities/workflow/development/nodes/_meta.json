@@ -1,0 +1,22 @@
+[
+  {
+    "type": "file",
+    "name": "index",
+    "label": "节点概览"
+  },
+  {
+    "type": "file",
+    "name": "run",
+    "label": "Run 节点"
+  },
+  {
+    "type": "file",
+    "name": "condition",
+    "label": "Condition 节点"
+  },
+  {
+    "type": "file",
+    "name": "terminate",
+    "label": "Terminate 节点"
+  }
+]

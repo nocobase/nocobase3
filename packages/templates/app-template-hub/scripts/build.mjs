@@ -219,7 +219,7 @@ run('Rewrite server path aliases', 'pnpm', [
   'tsconfig.server.json',
 ]);
 run('Build workflow artifacts', 'pnpm', [
-  'exec',
+  'nocobase',
   'workflow',
   'build',
   '--resource-root',
@@ -227,10 +227,10 @@ run('Build workflow artifacts', 'pnpm', [
 ]);
 writeDistEnv();
 run('Generate server package', 'node', [
-  './scripts/build-server-dist-package.mjs',
+  './scripts/utils/build-server-dist-package.mjs',
 ]);
 // Installed with pnpm, matching the rest of this project, and run with `dist` as the working directory rather than
-// through `--dir`. pnpm resolves `allowBuilds` from the directory it runs in, and `build-server-dist-package.mjs`
+// through `--dir`. pnpm resolves `allowBuilds` from the directory it runs in, and `utils/build-server-dist-package.mjs`
 // wrote a `pnpm-workspace.yaml` there carrying it. `--dir` leaves the process in the application root, where pnpm
 // reads the root's settings instead, finds the drivers undecided, and rewrites every entry in the generated file to
 // "set this to true or false" before stopping.
@@ -249,7 +249,7 @@ run(
   { cwd: distDir },
 );
 run('Materialize server dependency links', 'node', [
-  './scripts/clean-dist-bin.mjs',
+  './scripts/utils/clean-dist-bin.mjs',
 ]);
 // Runs after the install because it prunes what the install produced. The install resolves `dependencies`
 // transitively, which installs whole packages to satisfy imports that reach a few files; this removes the
@@ -260,13 +260,13 @@ run('Prune unreachable server dependencies', 'node', [
   ...process.argv.slice(2),
 ]);
 // Last, because it replaces binaries the prune has already decided to keep. Native packages are kept whole, so
-// the files this swaps are still present to be swapped. Defaults to linux-x64 on Node 24 rather than to this
-// machine: a build that silently targets the developer's laptop fails only once it reaches a server.
+// the files this swaps are still present to be swapped. Defaults to this machine, so `pnpm build && pnpm start`
+// works; a deployment build passes --target and --node-version.
 run('Retarget native modules', 'node', [
   './scripts/retarget-native.mjs',
   ...process.argv.slice(2),
 ]);
 
 console.log(
-  '\nBuild complete: dist/client, dist/server, dist/scripts, dist/.env, and dist/package.json',
+  '\nBuild complete: dist/client, dist/server, dist/cli, dist/.env, and dist/package.json',
 );

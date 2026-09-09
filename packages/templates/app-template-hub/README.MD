@@ -22,7 +22,7 @@ pnpm dev
 - **Where the application is served.** `APP_BASE_PATH` is the public mount path, `/main` by default, so the development URL looks like `http://127.0.0.1:13000/main/`. `APP_SERVER_PORT` and `APP_SERVER_HOST` change what the server binds to.
 - **Anything a feature you enable requires** — mail delivery, IM webhooks, storage. `config.example.yml` documents every available option, including sections your `config.yml` does not yet have.
 
-`config.yml` is gitignored because it holds your `auth.secret`. Deploy it through your secret management rather than committing it, and run `pnpm server:config` to see what the application resolved.
+`config.yml` is gitignored because it holds your `auth.secret`. Deploy it through your secret management rather than committing it.
 
 To run against a production build instead:
 
@@ -85,12 +85,14 @@ The three files named `runtime.ts`, `plugins.ts`, and `routes.ts` are compositio
 
 ### Database
 
-| Script         | What it does                                                                               |
-| -------------- | ------------------------------------------------------------------------------------------ |
-| `pnpm migrate` | Apply pending migrations from your `database/migrations/` and from every registered plugin |
-| `pnpm seed`    | Run seeds from `database/seeds/` and from registered plugins                               |
+| Script         | What it does                                                                                    |
+| -------------- | ----------------------------------------------------------------------------------------------- |
+| `pnpm migrate` | Apply pending migrations from your `database/main/migrations/` and from every registered plugin |
+| `pnpm seed`    | Run seeds from `database/main/seeds/` and from registered plugins                               |
 
-Migrations also run automatically on startup while `database.migrations.autoRun` is `true` in `config.yml`. Run `pnpm migrate` explicitly when you want to apply a schema change without restarting.
+Migrations also run automatically on startup while `database.connections.main.migrations.autoRun` is `true` in `config.yml`. Run `pnpm migrate` explicitly when you want to apply a schema change without restarting.
+
+Database tasks support `--connection <name>` and `--all`; no argument targets `database.default`. Per-connection source and upgrade rules are documented in [migrations and seeds](skills/nocobase-app-development/references/migrations.md).
 
 ### Checks
 
@@ -122,7 +124,6 @@ Ordering in `client/plugins.ts` and `server/plugins.ts` is contribution order, a
 
 | Script                      | What it does                                                                                        |
 | --------------------------- | --------------------------------------------------------------------------------------------------- |
-| `pnpm server:config`        | Print resolved configuration: paths, database, queue, providers. Secrets are redacted               |
 | `pnpm client:inspect`       | Print the resolved client composition: routes, providers, and which file owns each                  |
 | `pnpm server:inspect`       | Print the resolved server composition                                                               |
 | `pnpm server:deps:inspect`  | Print what the deployed server actually reaches, and what each native module needs to run elsewhere |
@@ -204,7 +205,7 @@ Two settings decide where the application is reachable:
 - `APP_BASE_PATH` is the public path the application is mounted at, `/main` by default. The browser API base URL is derived from it as `<APP_BASE_PATH>/api`.
 - `APP_PUBLIC_ORIGIN` is the external origin used to build callback and redirect URLs. Set it in production. It must not repeat the base path — the runtime joins the two.
 
-Run `pnpm server:config` to see what the application actually resolved, which is faster than reasoning about precedence between the file, environment variables, and defaults.
+Configuration is resolved from the file, environment variables, and defaults in that order of precedence.
 
 ## Testing
 

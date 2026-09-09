@@ -4,8 +4,8 @@ import {
 } from '@nocobase/service-provider';
 import { databaseManagerToken } from '@nocobase/db';
 import { createAppDatabaseManager } from './manager.js';
-import { createAppMigrator } from './migrator.js';
-import { createAppSeeder } from './seeder.js';
+import { executeAppDatabasePlan } from './tasks.js';
+import { planAppDatabaseTasks } from './plan.js';
 import { prepareAppDatabaseStorage } from './storage.js';
 import { databaseConfig } from './config.js';
 import type { AppConfigAccessor, ConfigPaths } from '../config/index.js';
@@ -43,24 +43,20 @@ export class DatabaseProvider extends ServiceProvider<DatabaseProviderApplicatio
     }
 
     const config = this.getDatabaseConfig();
-    await prepareAppDatabaseStorage(config, this.app.paths);
+    const plan = planAppDatabaseTasks(
+      config,
+      this.app.paths,
+      ['migrations', 'seeds'],
+      { autoRun: true },
+    );
+    // All SQLite connections must be usable by runtime services even without automatic tasks.
+    await prepareAppDatabaseStorage(
+      config,
+      this.app.paths,
+      Object.keys(config.connections),
+    );
     const database = container.resolve(databaseManagerToken);
-
-    if (config.migrations.autoRun) {
-      await createAppMigrator({
-        database,
-        config: config.migrations,
-        sources: config.migrations.sources,
-      }).latest();
-    }
-
-    if (config.seeds?.autoRun) {
-      await createAppSeeder({
-        database,
-        config: config.seeds,
-        sources: config.seeds.sources,
-      }).run();
-    }
+    await executeAppDatabasePlan(database, config, this.app.paths, plan);
   }
 
   public override async shutdown(): Promise<void> {

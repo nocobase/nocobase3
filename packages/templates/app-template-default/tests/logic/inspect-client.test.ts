@@ -14,7 +14,7 @@ import {
   inspectAppClient,
   parseInspectAppClientArgs,
   selectAppClientInspection,
-} from '../../scripts/inspect-client.mjs';
+} from '../../cli/dev-commands/inspect-client-impl.mjs';
 
 async function createInspectionApp(pluginsSource?: string): Promise<string> {
   const appRoot = await mkdtemp(path.join(os.tmpdir(), 'client-inspect-'));
@@ -110,16 +110,6 @@ describe('client inspection', () => {
       },
       {
         auth: 'required',
-        id: '@nocobase/app-plugin-notification-provider:demo',
-        path: '/notification-provider',
-      },
-      {
-        auth: 'required',
-        id: '@nocobase/app-plugin-routes-example:index',
-        path: '/routes-example',
-      },
-      {
-        auth: 'required',
         id: '@nocobase/app-plugin-workflow:workflow-detail',
         path: '/settings/automation/workflows/:workflowId',
       },
@@ -127,91 +117,6 @@ describe('client inspection', () => {
         auth: 'required',
         id: '@nocobase/app-plugin-workflow:workflow-run-detail',
         path: '/settings/automation/workflow-runs/:runId',
-      },
-      {
-        auth: 'required',
-        id: '@nocobase/app-plugin-system-info:index',
-        path: '/system-info',
-      },
-      {
-        auth: 'required',
-        id: '@nocobase/app-plugin-repository-example:sort',
-        path: '/repository-example/sort',
-      },
-      {
-        auth: 'required',
-        id: '@nocobase/app-plugin-repository-example:select-combine',
-        path: '/repository-example/select-combine',
-      },
-      {
-        auth: 'required',
-        id: '@nocobase/app-plugin-repository-example:relation-mutations',
-        path: '/repository-example/relation-mutations',
-      },
-      {
-        auth: 'required',
-        id: '@nocobase/app-plugin-repository-example:find-many',
-        path: '/repository-example/find-many',
-      },
-      {
-        auth: 'required',
-        id: '@nocobase/app-plugin-repository-example:aggregate',
-        path: '/repository-example/aggregate',
-      },
-      {
-        auth: 'required',
-        id: '@nocobase/app-plugin-repository-example:atomic',
-        path: '/repository-example/atomic',
-      },
-      {
-        auth: 'required',
-        id: '@nocobase/app-plugin-repository-example:crm',
-        path: '/repository-example/crm',
-      },
-      {
-        auth: 'required',
-        id: '@nocobase/app-plugin-repository-example:orders',
-        path: '/repository-example/orders',
-      },
-      {
-        auth: 'required',
-        id: '@nocobase/app-plugin-repository-example:contacts',
-        path: '/repository-example/crm/contacts',
-      },
-      {
-        auth: 'required',
-        id: '@nocobase/app-plugin-repository-example:items',
-        path: '/repository-example/orders/items',
-      },
-      {
-        auth: 'required',
-        id: '@nocobase/app-plugin-repository-example:products',
-        path: '/repository-example/orders/products',
-      },
-      {
-        auth: 'required',
-        id: '@nocobase/app-plugin-repository-example:crm-detail',
-        path: '/repository-example/crm/details/:recordId',
-      },
-      {
-        auth: 'required',
-        id: '@nocobase/app-plugin-repository-example:orders-detail',
-        path: '/repository-example/orders/details/:recordId',
-      },
-      {
-        auth: 'required',
-        id: '@nocobase/app-plugin-repository-example:contacts-detail',
-        path: '/repository-example/crm/contacts/details/:recordId',
-      },
-      {
-        auth: 'required',
-        id: '@nocobase/app-plugin-repository-example:items-detail',
-        path: '/repository-example/orders/items/details/:recordId',
-      },
-      {
-        auth: 'required',
-        id: '@nocobase/app-plugin-repository-example:products-detail',
-        path: '/repository-example/orders/products/details/:recordId',
       },
     ]);
     expect(
@@ -221,10 +126,6 @@ describe('client inspection', () => {
       {
         id: '@nocobase/app-plugin-notification-provider:notification-host',
         order: 2,
-      },
-      {
-        id: '@nocobase/app-plugin-routes-example:routes-example',
-        order: 3,
       },
     ]);
     expect(
@@ -240,7 +141,7 @@ describe('client inspection', () => {
       { packageName: '@nocobase/app-plugin-notification-provider', order: 5 },
       { packageName: '@nocobase/app-plugin-workflow', order: 6 },
       { packageName: '@nocobase/app-plugin-notification', order: 7 },
-      { packageName: '@nocobase/app-plugin-repository-example', order: 8 },
+      { packageName: '@nocobase/app-plugin-file-repository', order: 8 },
     ]);
     expect(inspection.configs[0]).toMatchObject({
       kind: 'factory',
@@ -404,7 +305,10 @@ describe('client inspection', () => {
         [
           'exec',
           'tsx',
-          './scripts/inspect-client.mjs',
+          './cli/index.ts',
+          'app',
+          'inspect',
+          'client',
           '--type',
           'settings',
           '--json',

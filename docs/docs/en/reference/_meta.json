@@ -1,0 +1,37 @@
+[
+  {
+    "type": "file",
+    "name": "index",
+    "label": "Reference"
+  },
+  {
+    "type": "file",
+    "name": "commands",
+    "label": "Commands"
+  },
+  {
+    "type": "file",
+    "name": "configuration",
+    "label": "Configuration options"
+  },
+  {
+    "type": "file",
+    "name": "routes",
+    "label": "Route types"
+  },
+  {
+    "type": "file",
+    "name": "theme-tokens",
+    "label": "Style tokens"
+  },
+  {
+    "type": "file",
+    "name": "packages",
+    "label": "Packages"
+  },
+  {
+    "type": "file",
+    "name": "glossary",
+    "label": "Glossary"
+  }
+]

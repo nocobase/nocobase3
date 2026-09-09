@@ -499,7 +499,7 @@ export function createKnowledgeBaseService(
     signal?: AbortSignal,
   ): Promise<UploadConstraints> =>
     uploadConstraintsFromPayload(
-      await action(client, 'aiKnowledgeBaseDocs', 'getUploadStorage', {
+      await action(client, 'ai/aiKnowledgeBaseDocs', 'getUploadStorage', {
         method: 'GET',
         query: { knowledgeBaseKey },
         signal,
@@ -510,7 +510,7 @@ export function createKnowledgeBaseService(
     async createKnowledgeBase(values) {
       return toKnowledgeBase(
         responseData(
-          await action(client, 'aiKnowledgeBase', 'create', {
+          await action(client, 'ai/aiKnowledgeBase', 'create', {
             method: 'POST',
             body: normalizeKnowledgeBaseMutation(values),
           }),
@@ -520,7 +520,7 @@ export function createKnowledgeBaseService(
     async updateKnowledgeBase(id, values) {
       return toKnowledgeBase(
         responseData(
-          await action(client, 'aiKnowledgeBase', 'update', {
+          await action(client, 'ai/aiKnowledgeBase', 'update', {
             method: 'POST',
             query: { filterByTk: id },
             body: values,
@@ -529,7 +529,7 @@ export function createKnowledgeBaseService(
       );
     },
     deleteKnowledgeBase: (id) =>
-      action(client, 'aiKnowledgeBase', 'destroy', {
+      action(client, 'ai/aiKnowledgeBase', 'destroy', {
         method: 'POST',
         query: { 'filterByTk[]': [id] },
       }),
@@ -540,17 +540,24 @@ export function createKnowledgeBaseService(
         storageDisksPayload,
         externalProvidersPayload,
       ] = await Promise.all([
-        action(client, 'aiVectorDatabases', 'listEnabled', { method: 'GET' }),
+        action(client, 'ai/aiVectorDatabases', 'listEnabled', {
+          method: 'GET',
+        }),
         action(client, 'ai/ai', 'listLLMServices', {
           method: 'GET',
           query: { model: 'EMBEDDING' },
         }),
-        action(client, 'aiKnowledgeBase', 'listStorageDisks', {
+        action(client, 'ai/aiKnowledgeBase', 'listStorageDisks', {
           method: 'GET',
         }),
-        action(client, 'aiKnowledgeBase', 'listExternalVectorStoreProviders', {
-          method: 'GET',
-        }).catch(() => undefined),
+        action(
+          client,
+          'ai/aiKnowledgeBase',
+          'listExternalVectorStoreProviders',
+          {
+            method: 'GET',
+          },
+        ).catch(() => undefined),
       ]);
       const serviceValues = responseData(servicesPayload);
       const llmServices = (
@@ -606,7 +613,7 @@ export function createKnowledgeBaseService(
     },
     async listVectorDatabaseProviders() {
       const payload = responseData(
-        await action(client, 'aiVectorDatabases', 'listProviders', {
+        await action(client, 'ai/aiVectorDatabases', 'listProviders', {
           method: 'GET',
         }),
       );
@@ -617,7 +624,7 @@ export function createKnowledgeBaseService(
         : [];
     },
     async listVectorDatabases(request) {
-      const payload = await action(client, 'aiVectorDatabases', 'list', {
+      const payload = await action(client, 'ai/aiVectorDatabases', 'list', {
         query: listQuery(request),
         signal: request.signal,
       });
@@ -630,7 +637,7 @@ export function createKnowledgeBaseService(
     async getVectorDatabase(id, signal) {
       return toVectorDatabase(
         responseData(
-          await action(client, 'aiVectorDatabases', 'get', {
+          await action(client, 'ai/aiVectorDatabases', 'get', {
             query: { filterByTk: id },
             signal,
           }),
@@ -640,7 +647,7 @@ export function createKnowledgeBaseService(
     async createVectorDatabase(values) {
       return toVectorDatabase(
         responseData(
-          await action(client, 'aiVectorDatabases', 'create', {
+          await action(client, 'ai/aiVectorDatabases', 'create', {
             method: 'POST',
             body: normalizeVectorDatabaseMutation(values),
           }),
@@ -650,7 +657,7 @@ export function createKnowledgeBaseService(
     async updateVectorDatabase(id, values) {
       return toVectorDatabase(
         responseData(
-          await action(client, 'aiVectorDatabases', 'update', {
+          await action(client, 'ai/aiVectorDatabases', 'update', {
             method: 'POST',
             query: { filterByTk: id },
             body: values,
@@ -659,13 +666,13 @@ export function createKnowledgeBaseService(
       );
     },
     deleteVectorDatabase: (id) =>
-      action(client, 'aiVectorDatabases', 'destroy', {
+      action(client, 'ai/aiVectorDatabases', 'destroy', {
         method: 'POST',
         query: { 'filterByTk[]': [id] },
       }),
     async testVectorDatabaseConnection(values) {
       const payload = responseData(
-        await action(client, 'aiVectorDatabases', 'testConnection', {
+        await action(client, 'ai/aiVectorDatabases', 'testConnection', {
           method: 'POST',
           body: values,
         }),
@@ -678,7 +685,7 @@ export function createKnowledgeBaseService(
     },
     async listEnabledVectorDatabases() {
       const payload = responseData(
-        await action(client, 'aiVectorDatabases', 'listEnabled', {
+        await action(client, 'ai/aiVectorDatabases', 'listEnabled', {
           method: 'GET',
         }),
       );
@@ -686,15 +693,20 @@ export function createKnowledgeBaseService(
     },
     async findRelatedKnowledgeBases(vectorDatabaseKey) {
       const payload = responseData(
-        await action(client, 'aiVectorDatabases', 'findRelatedKnowledgeBase', {
-          method: 'GET',
-          query: { vectorDatabaseKey },
-        }),
+        await action(
+          client,
+          'ai/aiVectorDatabases',
+          'findRelatedKnowledgeBase',
+          {
+            method: 'GET',
+            query: { vectorDatabaseKey },
+          },
+        ),
       );
       return Array.isArray(payload) ? payload.map(toKnowledgeBase) : [];
     },
     async listKnowledgeBases(request) {
-      const payload = await action(client, 'aiKnowledgeBase', 'list', {
+      const payload = await action(client, 'ai/aiKnowledgeBase', 'list', {
         query: {
           ...listQuery(request),
           ...(request.query
@@ -712,7 +724,7 @@ export function createKnowledgeBaseService(
 
     async getKnowledgeBase(key, signal) {
       // The Live route uses the public knowledge-base key, while filterByTk targets the bigint primary key.
-      const payload = await action(client, 'aiKnowledgeBase', 'list', {
+      const payload = await action(client, 'ai/aiKnowledgeBase', 'list', {
         query: { paginate: false, 'filter[key]': key },
         signal,
       });
@@ -729,7 +741,7 @@ export function createKnowledgeBaseService(
     },
 
     async listDocuments(request) {
-      const payload = await action(client, 'aiKnowledgeBaseDocs', 'list', {
+      const payload = await action(client, 'ai/aiKnowledgeBaseDocs', 'list', {
         query: {
           ...listQuery(request),
           'filter[knowledgeBaseKey]': request.knowledgeBaseKey,
@@ -749,7 +761,7 @@ export function createKnowledgeBaseService(
     async getDocument(request) {
       const document = toDocument(
         responseData(
-          await action(client, 'aiKnowledgeBaseDocs', 'get', {
+          await action(client, 'ai/aiKnowledgeBaseDocs', 'get', {
             query: { filterByTk: request.documentId },
             signal: request.signal,
           }),
@@ -765,7 +777,7 @@ export function createKnowledgeBaseService(
 
     async runRetrieval(request) {
       const payload = responseData(
-        await action(client, 'aiKnowledgeBase', 'runHitTest', {
+        await action(client, 'ai/aiKnowledgeBase', 'runHitTest', {
           method: 'POST',
           body: {
             knowledgeBaseKey: request.knowledgeBaseKey,
@@ -782,7 +794,7 @@ export function createKnowledgeBaseService(
     async listSegments(request) {
       const payload = await action(
         client,
-        'aiKnowledgeBaseDocSegments',
+        'ai/aiKnowledgeBaseDocSegments',
         'list',
         {
           query: {
@@ -806,7 +818,7 @@ export function createKnowledgeBaseService(
 
     async getSegment(request) {
       const payload = responseData(
-        await action(client, 'aiKnowledgeBaseDocSegments', 'getSegment', {
+        await action(client, 'ai/aiKnowledgeBaseDocSegments', 'getSegment', {
           method: 'GET',
           query: {
             knowledgeBaseKey: request.knowledgeBaseKey,
@@ -849,7 +861,7 @@ export function createKnowledgeBaseService(
       const formData = new FormData();
       formData.append('knowledgeBaseKey', request.knowledgeBaseKey);
       formData.append('file', request.file);
-      const payload = await action(client, 'aiKnowledgeBaseDocs', 'upload', {
+      const payload = await action(client, 'ai/aiKnowledgeBaseDocs', 'upload', {
         method: 'POST',
         query: { knowledgeBaseKey: request.knowledgeBaseKey },
         body: formData,
@@ -858,7 +870,7 @@ export function createKnowledgeBaseService(
     },
 
     vectorizeDocuments: ({ knowledgeBaseKey, documentIds }) =>
-      action(client, 'aiKnowledgeBaseDocs', 'vectorization', {
+      action(client, 'ai/aiKnowledgeBaseDocs', 'vectorization', {
         method: 'POST',
         query: {
           knowledgeBaseKey,
@@ -867,7 +879,7 @@ export function createKnowledgeBaseService(
       }),
 
     deleteDocuments: ({ documentIds }) =>
-      action(client, 'aiKnowledgeBaseDocs', 'destroy', {
+      action(client, 'ai/aiKnowledgeBaseDocs', 'destroy', {
         method: 'POST',
         query: { 'filterByTk[]': documentIds },
       }),
@@ -875,10 +887,15 @@ export function createKnowledgeBaseService(
     updateSegment: async ({ documentId, ...request }) =>
       toSegment(
         responseData(
-          await action(client, 'aiKnowledgeBaseDocSegments', 'updateSegment', {
-            method: 'POST',
-            body: { ...request, knowledgeBaseDocsId: documentId },
-          }),
+          await action(
+            client,
+            'ai/aiKnowledgeBaseDocSegments',
+            'updateSegment',
+            {
+              method: 'POST',
+              body: { ...request, knowledgeBaseDocsId: documentId },
+            },
+          ),
         ),
       ),
 
@@ -887,7 +904,7 @@ export function createKnowledgeBaseService(
         responseData(
           await action(
             client,
-            'aiKnowledgeBaseDocSegments',
+            'ai/aiKnowledgeBaseDocSegments',
             'updateQuestions',
             {
               method: 'POST',
@@ -905,7 +922,7 @@ export function createKnowledgeBaseService(
     }) =>
       toSegment(
         responseData(
-          await action(client, 'aiKnowledgeBaseDocSegments', 'setEnabled', {
+          await action(client, 'ai/aiKnowledgeBaseDocSegments', 'setEnabled', {
             method: 'POST',
             body: {
               knowledgeBaseKey,
@@ -918,13 +935,13 @@ export function createKnowledgeBaseService(
       ),
 
     deleteSegment: ({ knowledgeBaseKey, documentId, segmentUid }) =>
-      action(client, 'aiKnowledgeBaseDocSegments', 'deleteSegment', {
+      action(client, 'ai/aiKnowledgeBaseDocSegments', 'deleteSegment', {
         method: 'POST',
         body: { knowledgeBaseKey, knowledgeBaseDocsId: documentId, segmentUid },
       }),
 
     regenerateSegments: ({ knowledgeBaseKey, documentId, segmentOptions }) =>
-      action(client, 'aiKnowledgeBaseDocSegments', 'regenerate', {
+      action(client, 'ai/aiKnowledgeBaseDocSegments', 'regenerate', {
         method: 'POST',
         body: {
           knowledgeBaseKey,

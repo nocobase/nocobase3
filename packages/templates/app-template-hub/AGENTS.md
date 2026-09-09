@@ -34,8 +34,9 @@ client/locales/           Every user-visible string
 client/service-provider.ts Sidebar resources and client startup
 server/routes/            HTTP endpoints
 server/providers/         Services and their lifecycle
-database/migrations/      Schema changes
-database/seeds/           Required initial data
+database/main/migrations/      Schema changes
+database/main/seeds/           Required initial data
+cli/commands/             Commands this application owns
 tests/                    Tests; never beside the source
 ```
 
@@ -133,7 +134,7 @@ Keep HTTP concerns in the route and domain logic in a service under `server/prov
 
 ### Database
 
-Schema changes are migrations under `database/migrations/`. Data the application requires to run is a seed under `database/seeds/`. Seeds never create structure.
+Schema changes are migrations under `database/main/migrations/`. Data the application requires to run is a seed under `database/main/seeds/`. Seeds never create structure.
 
 ```ts
 const migration: MigrationDefinition = defineMigration({
@@ -157,7 +158,7 @@ Edit an existing migration only while the branch that introduced it is unmerged.
 
 The exported `name` must match the filename. Apply with `pnpm migrate` and verify against a real database.
 
-At runtime, resolve `databaseManagerToken` from the container and use `database.query()` to read and write.
+At runtime, resolve `databaseManagerToken` from the container and use `database.query()` to read and write the default connection. Use `database.query('analytics')` for another connection. Application tasks use `database/<connectionName>/{migrations,seeds}` and bind to that connection explicitly; plugin tasks and default runtime access stay on `database.default`. Only managed connections run migrations or seeds. See the migrations reference for execution and upgrade rules.
 
 ### User-facing text
 
@@ -172,9 +173,24 @@ To reword a plugin's string, add an `overrides` block keyed by that plugin's pac
 
 The account menu language control in `client/shell/language-switcher.tsx` uses a shadcn submenu with radio items. Render it inside `DropdownMenuContent` to preserve menu keyboard navigation and selection semantics.
 
+## The command line
+
+`pnpm nocobase` runs this application's CLI. It holds three kinds of command: `plugin *` manages the plugins this application uses, `app *` is what this application writes for itself in `cli/commands/`, and each registered plugin contributes its own commands under a topic it declares — a workflow plugin's commands appear under `workflow`.
+
+```bash
+pnpm nocobase --help          # every topic and command
+pnpm nocobase app info        # a command this application owns
+```
+
+Add a command of your own as an oclif `Command` subclass in `cli/commands/`, then list it in `cli/commands/index.ts`; the key becomes its name under `app`. These commands are static tooling — they read and write files and packages. They do not start the application, so nothing in them may resolve a service or query the database. Anything needing the running application is a server route or a job, not a command.
+
+`cli/` is compiled into `dist` alongside the server, so a deployed application runs the same commands with `node ./cli/index.js`. `pnpm migrate` and `pnpm seed` are these commands rather than separate scripts.
+
+A command that cannot work in a deployment belongs in `cli/dev-commands/` instead, which the build excludes — client inspection is there because it needs Vite and the browser client, and neither exists in `dist`. Put a command there rather than shipping one that fails the moment someone runs it.
+
 ## Plugins
 
-Plugins are registered in `client/plugins.ts` and `server/plugins.ts`. Presence in the array enables a plugin and array order is contribution order.
+Plugins are registered in `client/plugins.ts`, `server/plugins.ts`, and `cli/plugins.ts`. Presence in the array enables a plugin and array order is contribution order. A plugin appears in the roots matching what it ships, so a plugin with only commands is listed in `cli/plugins.ts` alone. Bulk Skills synchronization and plugin updates discover plugins from these composition roots.
 
 Let `pnpm plugin:register` and `pnpm plugin:unregister` add and remove entries. Edit these files by hand only to reorder entries or to pass a plugin its options.
 
@@ -190,7 +206,6 @@ To customize a plugin's page, pass an option on its registration, add a source e
 | Email, IM, or in-app messages; notifying someone that something happened                          | `@nocobase/app-plugin-notification`   |
 | Roles, permissions, "user A may only see their own records", field-level or row-level access      | `@nocobase/app-plugin-authorization`  |
 | Sign-in, registration, sessions, password reset                                                   | `@nocobase/app-plugin-authentication` |
-| Uploads, attachments, file fields, previews                                                       | `@nocobase/app-plugin-file`           |
 | Translated text and language switching                                                            | `@nocobase/app-plugin-i18n`           |
 
 Run `pnpm plugin:skills:sync` if `.agents/skills/` is missing or looks out of date, then read the Skill for the plugin you need. It documents that plugin's public entries, the ownership boundary, and how to verify the result — which is faster and more correct than inferring an API from its source.

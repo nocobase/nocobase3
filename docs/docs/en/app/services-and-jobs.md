@@ -1,12 +1,19 @@
 ---
-title: Services and jobs
-description: Collect domain logic into services you reuse across routes, and run background and scheduled work.
+title: 'Services and background jobs'
+description: 'Scheduled work and long-running work.'
 ---
 
-# Services and jobs
+# Services and background jobs
 
 :::warning Being written
-This page is still being written.
+This page is being written.
 :::
 
-This page will cover moving domain logic out of routes and into services, registering and resolving them by token, and running background and scheduled work.
+Scheduled work and long-running work.
+
+## This page will cover
+
+- Collect domain logic into services you can reuse
+- Background jobs: slow work that must not block a request
+- Scheduled jobs
+- What happens when a job fails
