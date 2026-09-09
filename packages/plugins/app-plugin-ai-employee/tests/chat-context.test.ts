@@ -1,9 +1,6 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { LLMProvider, ToolsEntity } from '@nocobase/ai-employee';
-import {
-  BaseChatContextProvider,
-  createFixedLLMResolver,
-} from '../server/agent/chat-context.js';
+import { FixedChatContextProvider } from '../server/agent/chat-context.js';
 
 const provider = {
   modelOptions: { model: 'fixed-model' },
@@ -12,14 +9,12 @@ const provider = {
 const tool = (name: string): ToolsEntity =>
   ({ definition: { name } }) as unknown as ToolsEntity;
 
-describe('BaseChatContextProvider', () => {
+describe('FixedChatContextProvider', () => {
   it('resolves a fixed provider without application dependencies', async () => {
-    const context = new BaseChatContextProvider({
-      llmResolver: createFixedLLMResolver({
-        provider,
-        providerName: 'fixed',
-        llmService: 'service',
-      }),
+    const context = new FixedChatContextProvider({
+      provider,
+      providerName: 'fixed',
+      llmService: 'service',
       systemPrompt: 'Direct prompt',
       tools: [tool('one'), tool('two')],
     });
@@ -40,22 +35,26 @@ describe('BaseChatContextProvider', () => {
       ]),
     );
     expect(context.shouldInterruptToolCall()).toBe(false);
+    expect(context.isAutoCall(undefined, undefined)).toBe(false);
+    expect(await context.getToolsMap()).toEqual(
+      new Map([
+        ['one', expect.objectContaining({ definition: { name: 'one' } })],
+        ['two', expect.objectContaining({ definition: { name: 'two' } })],
+      ]),
+    );
   });
 
-  it('retains class method receivers through concurrent calls', async () => {
-    const resolve = vi.fn(async () => ({
+  it('returns independent resolved contexts through concurrent calls', async () => {
+    const context = new FixedChatContextProvider({
       provider,
       providerName: 'fixed',
-      model: 'fixed-model',
-    }));
-    const context = new BaseChatContextProvider({ llmResolver: { resolve } });
+    });
 
     const [first, second] = await Promise.all([
       context.resolveLLM({ context: { request: 1 } }),
       context.resolveLLM({ context: { request: 2 } }),
     ]);
 
-    expect(resolve).toHaveBeenCalledTimes(2);
     expect(first).not.toBe(second);
     expect(first.provider).toBe(provider);
     expect(second.provider).toBe(provider);

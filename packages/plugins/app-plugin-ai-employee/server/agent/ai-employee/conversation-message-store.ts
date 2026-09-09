@@ -19,9 +19,9 @@ import type {
   AgentThread,
   ConversationMessageStore,
   SavedAssistantMessage,
+  ToolCallPolicy,
 } from '../types.js';
 import { NativeCollectionSaver } from './checkpoints/index.js';
-import type { ToolCallPolicy } from './tool-call-policy.js';
 
 export interface AIEmployeeConversationMessageStoreOptions {
   readonly sessionId: string;

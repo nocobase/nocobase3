@@ -7,10 +7,7 @@ import {
   createAgentProviders,
   createMemoryConversationProvider,
 } from './providers.js';
-import {
-  BaseChatContextProvider,
-  createFixedLLMResolver,
-} from './chat-context.js';
+import { FixedChatContextProvider } from './chat-context.js';
 import { BaseChatMessageConverters } from './chat-message-converters.js';
 
 export interface CreateDirectAgentServiceOptions {
@@ -30,18 +27,12 @@ export function createDirectAgentService(
   const conversation =
     options.conversation ??
     createMemoryConversationProvider({ initialMessages: options.messages });
-  const providerName =
-    options.providerName ?? options.llmProvider.constructor.name;
-  const model =
-    options.model ?? String(options.llmProvider.modelOptions?.model ?? '');
   const chatMessageConverters = new BaseChatMessageConverters();
-  const chatContext = new BaseChatContextProvider({
-    llmResolver: createFixedLLMResolver({
-      provider: options.llmProvider,
-      providerName,
-      llmService: options.llmService,
-      model,
-    }),
+  const chatContext = new FixedChatContextProvider({
+    provider: options.llmProvider,
+    providerName: options.providerName,
+    llmService: options.llmService,
+    model: options.model,
     systemPrompt: options.systemPrompt,
     tools: options.tools,
   });

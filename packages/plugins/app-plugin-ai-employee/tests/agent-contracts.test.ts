@@ -12,7 +12,7 @@ import {
   createAgentProviders,
   createMemoryConversationProvider,
 } from '../server/agent/providers.js';
-import { BaseChatContextProvider } from '../server/agent/chat-context.js';
+import { FixedChatContextProvider } from '../server/agent/chat-context.js';
 import { BaseChatMessageConverters } from '../server/agent/chat-message-converters.js';
 import {
   encodeAgentEventSSE,
@@ -130,7 +130,6 @@ describe('fixed AgentService contracts', () => {
       'agent/agent-service.ts',
       'agent/ai-employee/providers.ts',
       'agent/ai-employee/tool-call-handler.ts',
-      'agent/ai-employee/tool-context.ts',
       'agent/middleware/pipeline.ts',
     ]
       .map(read)
@@ -207,9 +206,19 @@ describe('fixed AgentService contracts', () => {
     expect(providers).toContain('toolCalls,');
     expect(providers).not.toMatch(/markPending:\s*\(|markDone:\s*\(/);
     expect(types).not.toMatch(/confirm\([^)]*DatabaseConnection/);
-    expect(read('agent/ai-employee/tool-context.ts')).toContain(
-      'implements ToolCallPolicy',
+    const chatContext = read('agent/ai-employee/providers.ts');
+    expect(chatContext).not.toContain('implements ToolCallPolicy');
+    expect(chatContext).not.toContain('AIEmployeeToolContext');
+    expect(types).toContain('export type ToolCallPolicy = Pick<');
+    expect(types).toContain(
+      "'getToolsMap' | 'isAutoCall' | 'shouldInterruptToolCall'",
     );
+    expect(
+      fs.existsSync(path.join(src, 'agent/ai-employee/tool-call-policy.ts')),
+    ).toBe(false);
+    expect(
+      fs.existsSync(path.join(src, 'agent/ai-employee/tool-context.ts')),
+    ).toBe(false);
   });
 
   it('keeps split-table persistence behind the conversation message store', () => {
@@ -307,20 +316,16 @@ describe('fixed AgentService contracts', () => {
   });
 
   it('uses explicit provider instances and default features', async () => {
-    class Context extends BaseChatContextProvider {
+    class Context extends FixedChatContextProvider {
       readonly marker = 'base';
       override async getSystemPrompt(): Promise<string> {
         return this.marker;
       }
     }
     const chatContext = new Context({
-      llmResolver: {
-        resolve: async () => ({
-          provider: llmProvider,
-          providerName: 'test',
-          model: 'test',
-        }),
-      },
+      provider: llmProvider,
+      providerName: 'test',
+      model: 'test',
     });
     const conversation = createMemoryConversationProvider({
       sessionId: 'direct',

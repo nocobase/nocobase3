@@ -33,21 +33,25 @@ const createFixture = (promptMode: 'default' | 'raw' | 'none' = 'default') => {
       isEnabledKnowledgeBase: vi.fn(async () => false),
       hasAccessibleKnowledgeBase: vi.fn(async () => false),
     },
+    builtInManager: { setupBuiltInInfo: vi.fn() },
     execution: {},
   } as any;
+  const context = new AIEmployeeChatContextProvider(options);
   const toolContext = {
-    getAvailableSkills: vi.fn(async () => []),
-    getAvailableAIEmployees: vi.fn(async () => []),
-    getAgentTools: vi.fn(async () => ({ tools: [], baseToolNames: new Set() })),
-    getActivatedSkillToolNames: vi.fn(async () => new Set()),
-    shouldInterruptToolCall: vi.fn(() => false),
-    getToolsMap: vi.fn(async () => new Map()),
-    isAutoCall: vi.fn(async () => true),
-  } as any;
-  return {
-    provider,
-    context: new AIEmployeeChatContextProvider(options, toolContext),
+    getAvailableSkills: vi
+      .spyOn(context, 'getAvailableSkills')
+      .mockResolvedValue([]),
+    getAvailableAIEmployees: vi
+      .spyOn(context, 'getAvailableAIEmployees')
+      .mockResolvedValue([]),
+    getAgentTools: vi
+      .spyOn(context, 'getAgentTools')
+      .mockResolvedValue({ tools: [], baseToolNames: new Set() }),
+    getActivatedSkillToolNames: vi
+      .spyOn(context, 'getActivatedSkillToolNames')
+      .mockResolvedValue(new Set()),
   };
+  return { provider, context, toolContext };
 };
 
 describe('AIEmployeeChatContextProvider', () => {
@@ -86,8 +90,7 @@ describe('AIEmployeeChatContextProvider', () => {
   });
 
   it('re-reads activated skill tools on every activeTools query', async () => {
-    const { context } = createFixture();
-    const toolContext = (context as any).toolContext;
+    const { context, toolContext } = createFixture();
     toolContext.getAgentTools.mockResolvedValue({
       tools: [
         { definition: { name: 'getSkill' } },

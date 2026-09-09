@@ -1,37 +1,19 @@
-import type { LLMProvider, ToolsEntity } from '@nocobase/ai-employee';
+import type {
+  AIMessageInput,
+  LLMProvider,
+  ToolsEntity,
+} from '@nocobase/ai-employee';
 import type {
   AgentRequest,
   ChatContextProvider,
   ResolvedAgentLLM,
 } from './types.js';
 
-export interface AgentLLMResolver {
-  resolve(request: AgentRequest): Promise<ResolvedAgentLLM>;
-}
-
-export interface FixedLLMResolverOptions {
+export interface FixedChatContextProviderOptions {
   readonly provider: LLMProvider;
   readonly providerName?: string;
   readonly llmService?: string;
   readonly model?: string;
-}
-
-export function createFixedLLMResolver(
-  options: FixedLLMResolverOptions,
-): AgentLLMResolver {
-  return {
-    resolve: async () => ({
-      providerName: options.providerName ?? options.provider.constructor.name,
-      llmService: options.llmService,
-      model:
-        options.model ?? String(options.provider.modelOptions?.model ?? ''),
-      provider: options.provider,
-    }),
-  };
-}
-
-export interface BaseChatContextProviderOptions {
-  readonly llmResolver: AgentLLMResolver;
   readonly tools?: readonly ToolsEntity[];
   readonly systemPrompt?: string;
   readonly executionConfig?: (
@@ -40,17 +22,25 @@ export interface BaseChatContextProviderOptions {
   ) => Promise<Record<string, unknown>>;
 }
 
-export class BaseChatContextProvider implements ChatContextProvider {
+export class FixedChatContextProvider implements ChatContextProvider {
   public constructor(
-    protected readonly options: BaseChatContextProviderOptions,
+    private readonly options: FixedChatContextProviderOptions,
   ) {}
 
-  public resolveLLM(request: AgentRequest): Promise<ResolvedAgentLLM> {
-    return this.options.llmResolver.resolve(request);
+  public resolveLLM(_request: AgentRequest): Promise<ResolvedAgentLLM> {
+    return Promise.resolve({
+      providerName:
+        this.options.providerName ?? this.options.provider.constructor.name,
+      llmService: this.options.llmService,
+      model:
+        this.options.model ??
+        String(this.options.provider.modelOptions?.model ?? ''),
+      provider: this.options.provider,
+    });
   }
 
   public getSystemPrompt(
-    _messages: readonly import('@nocobase/ai-employee').AIMessageInput[],
+    _messages: readonly AIMessageInput[],
     _request: AgentRequest,
     _llm: ResolvedAgentLLM,
   ): Promise<string | undefined> {
@@ -81,8 +71,15 @@ export class BaseChatContextProvider implements ChatContextProvider {
     return false;
   }
 
+  public isAutoCall(
+    _tool: ToolsEntity | undefined,
+    _args: unknown,
+  ): boolean | Promise<boolean> {
+    return false;
+  }
+
   public async getToolsMap(
-    request: AgentRequest,
+    request: AgentRequest = {},
   ): Promise<ReadonlyMap<string, ToolsEntity>> {
     const tools = await this.discoveredTools(request);
     return new Map(tools.map((tool) => [tool.definition.name, tool]));

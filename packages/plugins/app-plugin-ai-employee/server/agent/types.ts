@@ -339,8 +339,19 @@ export interface ChatContextProvider {
     llm: ResolvedAgentLLM,
   ): Promise<Record<string, unknown>>;
   shouldInterruptToolCall(tool?: ToolsEntity): boolean;
-  getToolsMap(request: AgentRequest): Promise<ReadonlyMap<string, ToolsEntity>>;
+  isAutoCall(
+    tool: ToolsEntity | undefined,
+    args: unknown,
+  ): boolean | Promise<boolean>;
+  getToolsMap(
+    request?: AgentRequest,
+  ): Promise<ReadonlyMap<string, ToolsEntity>>;
 }
+
+export type ToolCallPolicy = Pick<
+  ChatContextProvider,
+  'getToolsMap' | 'isAutoCall' | 'shouldInterruptToolCall'
+>;
 
 export interface ChatMessageToStoredConverter<TSource, TResult> {
   toStored(

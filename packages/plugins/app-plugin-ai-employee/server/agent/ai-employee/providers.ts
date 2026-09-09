@@ -4,10 +4,11 @@ import type {
   AgentAbortHandle,
   AgentProviders,
   AgentRequest,
+  ChatContextProvider,
   ConversationProvider,
   ResolvedAgentLLM,
+  ToolCallPolicy,
 } from '../types.js';
-import { BaseChatContextProvider } from '../chat-context.js';
 import { AIEmployeeChatMessageConverters } from './message-converters.js';
 import { NativeCollectionSaver } from '../../agent/ai-employee/checkpoints/index.js';
 import { createAIChatConversation } from './ai-chat-conversation.js';
@@ -15,7 +16,12 @@ import type {
   AIEmployee as AIEmployeeType,
   AIMessageInput,
   LLMProvider,
+  SkillsEntity,
+  ToolsEntity,
+  ToolsFilter,
 } from '@nocobase/ai-employee';
+import { listSystemTools, SYSTEM_TOOLS } from '@nocobase/ai-employee';
+import _ from 'lodash';
 import { createAgentProviders } from '../providers.js';
 import type { AIEmployeeAgentOptions } from './options.js';
 import { AIEmployeeToolCallHandler } from './tool-call-handler.js';
@@ -25,8 +31,19 @@ import {
   getKnowledgeBaseBackgroundPrompt,
   normalizeKnowledgeBaseRetrievalStrategy,
 } from '../../manager/knowledge-base-manager.js';
-import type { ToolCallPolicy } from './tool-call-policy.js';
-import { AIEmployeeToolContext } from './tool-context.js';
+import {
+  listAccessibleAIEmployees,
+  serializeEmployeeSummary,
+} from '../../manager/sub-agents/shared.js';
+import {
+  EXECUTE_FRONTEND_TOOL_NAME,
+  LOAD_FRONTEND_TOOL_NAME,
+} from './common/frontend-tools.js';
+import {
+  listCurrentFrontendTools,
+  prepareToolsForFrontendConversation,
+  shouldAutoExecuteFrontendTool,
+} from './frontend-tools.js';
 
 class ExecutionResponseMetadata {
   private readonly metadata = new Map<string, Record<string, unknown>>();
@@ -188,28 +205,21 @@ export function createAIEmployeeConversationProvider(
   return conversation;
 }
 
-export class AIEmployeeChatContextProvider
-  extends BaseChatContextProvider
-  implements ToolCallPolicy
-{
+export class AIEmployeeChatContextProvider implements ChatContextProvider {
   public constructor(
     private readonly aiEmployeeOptions: AIEmployeeAgentOptions,
-    private readonly toolContext: AIEmployeeToolContext = new AIEmployeeToolContext(
-      aiEmployeeOptions,
-    ),
   ) {
-    super({
-      llmResolver: {
-        resolve: () => resolveAIEmployeeLLM(aiEmployeeOptions),
-      },
+    aiEmployeeOptions.builtInManager.setupBuiltInInfo({
+      employee: aiEmployeeOptions.employee as unknown as AIEmployeeType,
+      translate: aiEmployeeOptions.agentContext.translate,
     });
   }
 
-  public override resolveLLM(request: AgentRequest): Promise<ResolvedAgentLLM> {
-    return super.resolveLLM(request);
+  public resolveLLM(_request: AgentRequest): Promise<ResolvedAgentLLM> {
+    return resolveAIEmployeeLLM(this.aiEmployeeOptions);
   }
 
-  public override async getSystemPrompt(
+  public async getSystemPrompt(
     userMessages: readonly AIMessageInput[],
     _request: AgentRequest,
     _llm: ResolvedAgentLLM,
@@ -295,9 +305,8 @@ export class AIEmployeeChatContextProvider
       background = `${background}\n${knowledgeBaseBackgroundPrompt}`;
     }
 
-    const availableSkills = await this.toolContext.getAvailableSkills();
-    const availableAIEmployees =
-      await this.toolContext.getAvailableAIEmployees();
+    const availableSkills = await this.getAvailableSkills();
+    const availableAIEmployees = await this.getAvailableAIEmployees();
     const timezone = getCurrentTimezone(
       this.aiEmployeeOptions.execution ?? {},
       this.aiEmployeeOptions.getHeader ?? (() => undefined),
@@ -329,23 +338,23 @@ If information is missing, clearly state it in the summary.</Important>`;
     return systemPrompt;
   }
 
-  public override async discoveredTools(
+  public async discoveredTools(
     _request: AgentRequest,
   ): Promise<readonly import('@nocobase/ai-employee').ToolsEntity[]> {
-    return (await this.toolContext.getAgentTools()).tools;
+    return (await this.getAgentTools()).tools;
   }
 
-  public override async activeTools(
+  public async activeTools(
     _request: AgentRequest,
   ): Promise<ReadonlySet<string>> {
     const [{ baseToolNames }, activatedSkillToolNames] = await Promise.all([
-      this.toolContext.getAgentTools(),
-      this.toolContext.getActivatedSkillToolNames(),
+      this.getAgentTools(),
+      this.getActivatedSkillToolNames(),
     ]);
     return new Set([...baseToolNames, ...activatedSkillToolNames]);
   }
 
-  public override getExecutionConfig(
+  public getExecutionConfig(
     _request: AgentRequest,
     llm: ResolvedAgentLLM,
   ): Promise<Record<string, unknown>> {
@@ -355,38 +364,289 @@ If information is missing, clearly state it in the summary.</Important>`;
     return Promise.resolve(collector ? { callbacks: [collector] } : {});
   }
 
-  public override shouldInterruptToolCall(
-    tool?: import('@nocobase/ai-employee').ToolsEntity,
-  ): boolean {
-    return this.toolContext.shouldInterruptToolCall(tool);
+  private get chatSettings(): {
+    enableSkills?: boolean;
+    enableTools?: boolean;
+  } {
+    return (this.aiEmployeeOptions.employee.chatSettings ?? {}) as {
+      enableSkills?: boolean;
+      enableTools?: boolean;
+    };
   }
 
-  public override getToolsMap(
-    _request?: AgentRequest,
-  ): Promise<ReadonlyMap<string, import('@nocobase/ai-employee').ToolsEntity>> {
-    return this.toolContext.getToolsMap();
+  private async getKnowledgeBaseRetrieveTool(): Promise<
+    ToolsEntity | undefined
+  > {
+    const employee = this.aiEmployeeOptions
+      .employee as unknown as AIEmployeeType;
+    if (
+      !(await this.aiEmployeeOptions.knowledgeBaseManager.isEnabledKnowledgeBase(
+        employee,
+      ))
+    )
+      return undefined;
+    if (
+      !(await this.aiEmployeeOptions.knowledgeBaseManager.hasAccessibleKnowledgeBase(
+        {
+          employee,
+          roleNames: this.aiEmployeeOptions.agentContext.actor.roles,
+        },
+      ))
+    )
+      return undefined;
+    return this.aiEmployeeOptions.agentContext.ai.toolsManager.getTools(
+      SYSTEM_TOOLS.KNOWLEDGE_BASE,
+      {
+        ctx: this.aiEmployeeOptions.agentContext,
+      },
+    );
+  }
+
+  private listTools(filter?: ToolsFilter): Promise<ToolsEntity[]> {
+    return this.aiEmployeeOptions.agentContext.ai.toolsManager.listTools({
+      ...filter,
+      ctx: this.aiEmployeeOptions.agentContext,
+    });
+  }
+
+  private async getAIEmployeeTools(): Promise<ToolsEntity[]> {
+    if (this.chatSettings.enableTools === false) return [];
+    const currentFrontendTools = await listCurrentFrontendTools(
+      this.aiEmployeeOptions.repositories,
+      {
+        ...(this.aiEmployeeOptions.execution ?? {}),
+        sessionId: this.aiEmployeeOptions.sessionId,
+      },
+    );
+    const tools = await this.listTools({ scope: 'GENERAL' });
+    const getSkill =
+      await this.aiEmployeeOptions.agentContext.ai.toolsManager.getTools(
+        SYSTEM_TOOLS.GET_SKILL,
+        {
+          ctx: this.aiEmployeeOptions.agentContext,
+        },
+      );
+    if (getSkill) tools.push(getSkill);
+    if (this.aiEmployeeOptions.webSearch === true) {
+      const webSearch =
+        await this.aiEmployeeOptions.agentContext.ai.toolsManager.getTools(
+          SYSTEM_TOOLS.WEB_SEARCH,
+          {
+            ctx: this.aiEmployeeOptions.agentContext,
+          },
+        );
+      if (webSearch) tools.push(webSearch);
+    }
+    const generalNames = new Set(tools.map((tool) => tool.definition.name));
+    const toolMap = await this.getToolsMap();
+    const configured = [
+      ...(this.aiEmployeeOptions.employee.skillSettings?.tools ?? []),
+      ...(this.aiEmployeeOptions.tools ?? []),
+    ];
+    if (await this.getKnowledgeBaseRetrieveTool())
+      configured.push({ name: SYSTEM_TOOLS.KNOWLEDGE_BASE });
+    for (const setting of configured) {
+      if (!generalNames.has(setting.name)) {
+        const tool = toolMap.get(setting.name);
+        if (tool) tools.push(tool);
+      }
+    }
+    const systemTools = [
+      ...listSystemTools(),
+      LOAD_FRONTEND_TOOL_NAME,
+      EXECUTE_FRONTEND_TOOL_NAME,
+    ];
+    const settings = this.aiEmployeeOptions.skillSettings;
+    if (!settings)
+      return prepareToolsForFrontendConversation(tools, currentFrontendTools);
+    const filter = settings.tools;
+    if (!settings.toolsVersion) {
+      const names = filter ?? [];
+      return prepareToolsForFrontendConversation(
+        tools.filter(
+          (tool) =>
+            names.length === 0 ||
+            systemTools.includes(tool.definition.name) ||
+            names.includes(tool.definition.name),
+        ),
+        currentFrontendTools,
+      );
+    }
+    if (Array.isArray(filter)) {
+      return prepareToolsForFrontendConversation(
+        tools.filter(
+          (tool) =>
+            systemTools.includes(tool.definition.name) ||
+            filter.includes(tool.definition.name),
+        ),
+        currentFrontendTools,
+      );
+    }
+    return prepareToolsForFrontendConversation(tools, currentFrontendTools);
+  }
+
+  public async getAvailableSkills(): Promise<SkillsEntity[]> {
+    if (this.chatSettings.enableSkills === false) return [];
+    const skillsManager = this.aiEmployeeOptions.agentContext.ai.skillsManager;
+    const getSkill = (await this.getAIEmployeeTools()).find(
+      (tool) => tool.definition.name === SYSTEM_TOOLS.GET_SKILL,
+    );
+    if (!getSkill) return [];
+    const general = await skillsManager.listSkills({ scope: 'GENERAL' });
+    const names = this.aiEmployeeOptions.employee.skillSettings?.skills ?? [];
+    const specified = names.length ? await skillsManager.getSkills(names) : [];
+    const merged = _.uniqBy([...(specified || []), ...(general || [])], 'name');
+    const settings = this.aiEmployeeOptions.skillSettings;
+    if (!settings) return merged;
+    const filter = settings.skills ?? [];
+    if (!settings.skillsVersion) {
+      return merged.filter(
+        (skill) => filter.length === 0 || filter.includes(skill.name),
+      );
+    }
+    return Array.isArray(filter)
+      ? merged.filter((skill) => filter.includes(skill.name))
+      : merged;
+  }
+
+  public async getAgentTools(): Promise<{
+    tools: ToolsEntity[];
+    baseToolNames: Set<string>;
+  }> {
+    if (this.chatSettings.enableTools === false)
+      return { tools: [], baseToolNames: new Set() };
+    const baseTools = await this.getAIEmployeeTools();
+    const toolMap = new Map(await this.getToolsMap());
+    for (const tool of baseTools) toolMap.set(tool.definition.name, tool);
+    const skillToolNames = new Set(
+      (await this.getAvailableSkills()).flatMap((skill) => skill.tools ?? []),
+    );
+    const baseToolNames = new Set(
+      baseTools
+        .map((tool) => tool.definition.name)
+        .filter(
+          (name) =>
+            name === SYSTEM_TOOLS.GET_SKILL || !skillToolNames.has(name),
+        ),
+    );
+    return { tools: Array.from(toolMap.values()), baseToolNames };
+  }
+
+  private async getLoadedSkillNames(): Promise<string[]> {
+    const list = await this.aiEmployeeOptions.repositories.aiToolMessages.find({
+      filter: {
+        sessionId: this.aiEmployeeOptions.sessionId,
+        toolName: SYSTEM_TOOLS.GET_SKILL,
+        status: 'success',
+      },
+      sort: ['id'],
+    });
+    const names = new Set<string>();
+    for (const item of list) {
+      let content: unknown = item.content;
+      if (typeof content === 'string') {
+        try {
+          content = JSON.parse(content);
+        } catch {
+          continue;
+        }
+      }
+      if (content && typeof content === 'object') {
+        const name = (content as Record<string, unknown>).skillName;
+        if (typeof name === 'string') names.add(name);
+      }
+    }
+    return [...names];
+  }
+
+  public async getActivatedSkillToolNames(): Promise<Set<string>> {
+    const names = await this.getLoadedSkillNames();
+    if (!names.length) return new Set();
+    const loaded =
+      await this.aiEmployeeOptions.agentContext.ai.skillsManager.getSkills(
+        names,
+      );
+    const normalized = Array.isArray(loaded) ? loaded : [loaded];
+    const skills = new Map(
+      [...(await this.getAvailableSkills()), ...normalized.filter(Boolean)].map(
+        (skill) => [skill.name, skill],
+      ),
+    );
+    return new Set(names.flatMap((name) => skills.get(name)?.tools ?? []));
+  }
+
+  public async getAvailableAIEmployees(): Promise<
+    ReturnType<typeof serializeEmployeeSummary>[]
+  > {
+    const configured =
+      this.aiEmployeeOptions.employee.skillSettings?.tools?.map(
+        ({ name }: { name: string }) => name,
+      ) ?? [];
+    if (!configured.includes('dispatch-sub-agent-task')) return [];
+    return (
+      await listAccessibleAIEmployees({
+        roleNames: this.aiEmployeeOptions.agentContext.actor.roles,
+        repositories: this.aiEmployeeOptions.repositories,
+      })
+    )
+      .map((employee) =>
+        serializeEmployeeSummary({
+          employee,
+          builtInManager: this.aiEmployeeOptions.builtInManager,
+          translate: this.aiEmployeeOptions.agentContext.translate,
+        }),
+      )
+      .filter(
+        (employee) =>
+          employee.username !== this.aiEmployeeOptions.employee.username,
+      );
+  }
+
+  public async getToolsMap(): Promise<ReadonlyMap<string, ToolsEntity>> {
+    const tools = await this.listTools({
+      sessionId: this.aiEmployeeOptions.sessionId,
+    });
+    return new Map(tools.map((tool) => [tool.definition.name, tool]));
+  }
+
+  public shouldInterruptToolCall(tool?: ToolsEntity): boolean {
+    return tool?.execution === 'frontend' || !this.isAutoCall(tool, undefined);
   }
 
   public async isAutoCall(
-    tool: import('@nocobase/ai-employee').ToolsEntity | undefined,
+    tool: ToolsEntity | undefined,
     args: unknown,
   ): Promise<boolean> {
-    return this.toolContext.isAutoCall(tool, args);
+    if (tool?.definition.name === EXECUTE_FRONTEND_TOOL_NAME) {
+      const frontendTools = await listCurrentFrontendTools(
+        this.aiEmployeeOptions.repositories,
+        {
+          ...(this.aiEmployeeOptions.execution ?? {}),
+          sessionId: this.aiEmployeeOptions.sessionId,
+        },
+      );
+      return shouldAutoExecuteFrontendTool(frontendTools, args);
+    }
+    if (!tool) return false;
+    const fallback = tool.defaultPermission === 'ALLOW';
+    if (tool.scope !== 'CUSTOM') return fallback;
+    const preset = this.aiEmployeeOptions.employee.skillSettings?.tools?.find(
+      (setting: { name: string }) => setting.name === tool.definition.name,
+    );
+    return preset ? preset.autoCall === true : fallback;
   }
 }
 
 export function createAIEmployeeChatContextProvider(
   options: AIEmployeeAgentOptions,
-  toolContext: AIEmployeeToolContext = new AIEmployeeToolContext(options),
 ): AIEmployeeChatContextProvider {
-  return new AIEmployeeChatContextProvider(options, toolContext);
+  return new AIEmployeeChatContextProvider(options);
 }
 
 export async function createAIEmployeeAgentProviders(
   options: AIEmployeeAgentOptions,
 ): Promise<AgentProviders> {
-  const toolContext = new AIEmployeeToolContext(options);
-  const chatContext = createAIEmployeeChatContextProvider(options, toolContext);
+  const chatContext = createAIEmployeeChatContextProvider(options);
   const toolCalls = new AIEmployeeToolCallHandler({
     sessionId: options.sessionId,
     database: options.database,
