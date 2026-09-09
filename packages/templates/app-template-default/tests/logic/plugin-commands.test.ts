@@ -35,6 +35,8 @@ const DOCUMENTED_SCRIPTS: Readonly<Record<string, string>> = {
   'server:inspect': 'pnpm nocobase app inspect server',
   migrate: 'pnpm nocobase app migrate',
   seed: 'pnpm nocobase app seed',
+  'scheduler:sync':
+    'tsx --tsconfig tsconfig.server.json ./scripts/scheduler-sync.ts',
 };
 
 describe('documented plugin commands', () => {
@@ -62,6 +64,14 @@ describe('documented plugin commands', () => {
     expect(existsSync(entry)).toBe(true);
     // A generated app only receives what `files` lists, so an unlisted directory is present here and missing there.
     expect(appPackage.files).toContain('cli');
+  });
+
+  it('ships a one-shot Schedule sync command with finalize support', () => {
+    const entry = path.join(appRoot, 'scripts/scheduler-sync.ts');
+    expect(existsSync(entry)).toBe(true);
+    const source = readFileSync(entry, 'utf8');
+    expect(source).toContain("process.argv.includes('--finalize')");
+    expect(source).toContain("kind: 'sync-only'");
   });
 
   it('keeps synchronized Agent state out of source control and publication', () => {

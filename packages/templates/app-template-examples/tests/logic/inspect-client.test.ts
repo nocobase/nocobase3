@@ -228,6 +228,11 @@ describe('client inspection', () => {
         id: '@nocobase/app-plugin-repository-example:products-detail',
         path: '/repository-example/orders/products/details/:recordId',
       },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-scheduler:schedule-detail',
+        path: '/settings/automation/schedules/:scheduleId',
+      },
     ]);
     expect(
       inspection.reactProviders.map(({ id, order }) => ({ id, order })),

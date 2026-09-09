@@ -15,6 +15,7 @@ import notification from '@nocobase/app-plugin-notification/client';
 import repositoryExample from '@nocobase/app-plugin-repository-example/client';
 import fileRepository from '@nocobase/app-plugin-file-repository/client';
 import fileRepositoryExample from '@nocobase/app-plugin-file-repository-example/client';
+import scheduler from '@nocobase/app-plugin-scheduler/client';
 
 // Array order is contribution order. A plugin is enabled by appearing in this
 // list; removing its entry and its import disables it.
@@ -32,6 +33,7 @@ const clientPlugins: AppClientPlugins = defineClientPlugins([
   repositoryExample(),
   fileRepository(),
   fileRepositoryExample(),
+  scheduler(),
 ]);
 
 export default clientPlugins;

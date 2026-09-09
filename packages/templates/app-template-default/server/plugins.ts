@@ -12,6 +12,7 @@ import {
   type AppServerPlugins,
 } from '@nocobase/app-server/plugins';
 import fileRepository from '@nocobase/app-plugin-file-repository/server';
+import scheduler from '@nocobase/app-plugin-scheduler/server';
 
 const serverPlugins: AppServerPlugins = defineServerPlugins([
   authentication,
@@ -24,6 +25,7 @@ const serverPlugins: AppServerPlugins = defineServerPlugins([
   notificationProviders,
   workflow,
   fileRepository,
+  scheduler,
 ]);
 
 export default serverPlugins;

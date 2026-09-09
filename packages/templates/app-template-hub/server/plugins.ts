@@ -17,6 +17,7 @@ import {
 } from '@nocobase/app-server/plugins';
 import skillsExample from '@nocobase/app-plugin-skills-example/server';
 import hub from '@nocobase/app-plugin-hub/server';
+import scheduler from '@nocobase/app-plugin-scheduler/server';
 
 const serverPlugins: AppServerPlugins = defineServerPlugins([
   authentication,
@@ -34,6 +35,7 @@ const serverPlugins: AppServerPlugins = defineServerPlugins([
   workflow,
   skillsExample,
   hub,
+  scheduler,
 ]);
 
 export default serverPlugins;

@@ -4,6 +4,8 @@ import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { databaseManagerToken } from '@nocobase/db';
 import type { AppDriveConfig, FsDriveDiskConfig } from '@nocobase/drive';
 import { ServiceProvider } from '@nocobase/service-provider';
+import { scheduleTargetRegistryToken } from '@nocobase/app-plugin-scheduler/server/tokens';
+import { WorkflowScheduleTarget } from './schedule-target.js';
 
 import { workflowConfig } from './config.js';
 import { WorkflowService } from './service.js';
@@ -56,6 +58,18 @@ export class WorkflowProvider<
     this.app.container.singleton(workflowServiceToken, (container) =>
       container.resolve(internalWorkflowServiceToken),
     );
+  }
+
+  public override async boot(): Promise<void> {
+    if (!this.app.container.has(scheduleTargetRegistryToken)) return;
+    this.app.container
+      .resolve(scheduleTargetRegistryToken)
+      .register(
+        new WorkflowScheduleTarget(
+          this.app.container.resolve(databaseManagerToken),
+          this.app.container.resolve(workflowServiceToken),
+        ),
+      );
   }
 
   public override async shutdown(): Promise<void> {

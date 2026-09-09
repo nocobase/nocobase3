@@ -20,6 +20,8 @@ import {
 import repositoryExample from '@nocobase/app-plugin-repository-example/server';
 import fileRepository from '@nocobase/app-plugin-file-repository/server';
 import fileRepositoryExample from '@nocobase/app-plugin-file-repository-example/server';
+import scheduledWorkflowExample from '@nocobase/app-plugin-scheduled-workflow-example/server';
+import scheduler from '@nocobase/app-plugin-scheduler/server';
 
 const serverPlugins: AppServerPlugins = defineServerPlugins([
   authentication,
@@ -40,6 +42,8 @@ const serverPlugins: AppServerPlugins = defineServerPlugins([
   repositoryExample,
   fileRepository,
   fileRepositoryExample,
+  scheduler,
+  scheduledWorkflowExample,
 ]);
 
 export default serverPlugins;

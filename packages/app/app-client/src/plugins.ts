@@ -108,6 +108,8 @@ export interface AppClientSettingsRouteGroupDefinition {
   readonly navigation: AppClientSettingsRouteNavigation;
   readonly componentLoader?: never;
   readonly children: readonly AppClientSettingsRouteDefinition[];
+  /** Append children to a group owned by another contribution instead of defining the group itself. */
+  readonly extend?: boolean;
 }
 
 /** A child Route contributed to the built-in Settings Route. */
@@ -596,6 +598,12 @@ export function resolveAppClientContributions(
   const devRouteGroups: AppClientRegisteredDevRouteGroup[] = [];
   const reactProviders: AppClientRegisteredReactProvider[] = [];
   const reactProviderIds = new Set<string>();
+  const groupExtensions: Array<{
+    packageName: string;
+    source: AppClientContributionSource;
+    surface: AppClientNavigationSurface;
+    group: AppClientSettingsRouteGroupDefinition;
+  }> = [];
 
   for (const contribution of contributions) {
     const packageName = normalizePackageName(contribution.packageName);
@@ -604,8 +612,19 @@ export function resolveAppClientContributions(
     const routeContributions = normalizeRouteContributions(contribution.routes);
     for (const routeContribution of routeContributions) {
       const surface = routeContribution.parent;
+      const definitions = routeContribution.routes.filter((route) => {
+        if (
+          surface !== 'app' &&
+          isAppClientSettingsRouteGroup(route) &&
+          route.extend === true
+        ) {
+          groupExtensions.push({ packageName, source, surface, group: route });
+          return false;
+        }
+        return true;
+      });
       const tree = resolveRouteTree(
-        routeContribution.routes,
+        definitions,
         packageName,
         source,
         surface,
@@ -619,46 +638,6 @@ export function resolveAppClientContributions(
       } else {
         const targetTree = surface === 'dev' ? devRouteTree : settingsRouteTree;
         targetTree.push(...tree);
-        const pages = surface === 'dev' ? devRoutes : settings;
-        const groups = surface === 'dev' ? devRouteGroups : settingGroups;
-        const project = (
-          nodes: readonly AppClientRegisteredRoute[],
-          groupId?: string,
-        ): AppClientRegisteredSetting[] =>
-          nodes.flatMap((node) => {
-            if (!node.componentLoader) {
-              const children = project(node.children ?? [], node.id);
-              groups.push(
-                Object.freeze({
-                  id: node.id,
-                  title: node.navigation!.title,
-                  ...(node.navigation?.icon
-                    ? { icon: node.navigation.icon }
-                    : {}),
-                  surface,
-                  packageName,
-                  source,
-                  settings: Object.freeze(children),
-                }),
-              );
-              return children;
-            }
-            const setting: AppClientRegisteredSetting = Object.freeze({
-              id: node.id,
-              path: node.path,
-              title: node.navigation?.title ?? node.name,
-              navigation: !!node.navigation,
-              surface,
-              packageName,
-              source,
-              pageLoader: node.componentLoader,
-              ...(node.access ? { access: node.access } : {}),
-              ...(node.navigation?.icon ? { icon: node.navigation.icon } : {}),
-              ...(groupId ? { groupId } : {}),
-            });
-            return [setting, ...project(node.children ?? [], groupId)];
-          });
-        pages.push(...project(tree));
       }
     }
 
@@ -678,6 +657,117 @@ export function resolveAppClientContributions(
       reactProviders.push(registeredReactProvider);
     }
   }
+
+  for (const extension of groupExtensions) {
+    const targetTree =
+      extension.surface === 'dev' ? devRouteTree : settingsRouteTree;
+    const groupId = normalizeSettingId(
+      extension.group.name,
+      extension.packageName,
+      `${describeSurface(extension.surface)} group extension`,
+    );
+    const ownerIndex = targetTree.findIndex((node) => node.id === groupId);
+    if (ownerIndex === -1) {
+      targetTree.push(
+        ...resolveRouteTree(
+          [extension.group],
+          extension.packageName,
+          extension.source,
+          extension.surface,
+          `/${extension.surface}`,
+          undefined,
+          routeIds,
+          claimedPaths,
+        ),
+      );
+      continue;
+    }
+
+    const owner = targetTree[ownerIndex];
+    const declaredPath = extension.group.path;
+    if (declaredPath !== undefined) {
+      const normalizedPath = normalizeRoutePath(
+        '/' + declaredPath.replace(/^\/+/, ''),
+        extension.packageName,
+        groupId,
+      );
+      const extensionPath = `/${extension.surface}${normalizedPath}`;
+      if (extensionPath !== owner.path) {
+        throw new Error(
+          `Client ${describeSurface(extension.surface)} group extension "${groupId}" from plugin "${extension.packageName}" must use owner path "${owner.path}".`,
+        );
+      }
+    }
+    const added = resolveRouteTree(
+      extension.group.children,
+      extension.packageName,
+      extension.source,
+      extension.surface,
+      owner.path,
+      owner.auth,
+      routeIds,
+      claimedPaths,
+    );
+    const childIds = new Set((owner.children ?? []).map((child) => child.id));
+    for (const child of added) {
+      if (childIds.has(child.id)) {
+        throw new Error(
+          `Client ${describeSurface(extension.surface)} group extension "${groupId}" from plugin "${extension.packageName}" defines duplicate child id "${child.id}".`,
+        );
+      }
+      childIds.add(child.id);
+    }
+    targetTree[ownerIndex] = Object.freeze({
+      ...owner,
+      children: Object.freeze([...(owner.children ?? []), ...added]),
+    });
+  }
+
+  const projectSurface = (
+    tree: readonly AppClientRegisteredRoute[],
+    surface: AppClientNavigationSurface,
+    pages: AppClientRegisteredSetting[],
+    groups: AppClientRegisteredSettingGroup[],
+  ): void => {
+    const project = (
+      nodes: readonly AppClientRegisteredRoute[],
+      groupId?: string,
+    ): AppClientRegisteredSetting[] =>
+      nodes.flatMap((node) => {
+        if (!node.componentLoader) {
+          const children = project(node.children ?? [], node.id);
+          groups.push(
+            Object.freeze({
+              id: node.id,
+              title: node.navigation!.title,
+              ...(node.navigation?.icon ? { icon: node.navigation.icon } : {}),
+              surface,
+              packageName: node.packageName,
+              source: node.source,
+              settings: Object.freeze(children),
+            }),
+          );
+          return children;
+        }
+        const setting: AppClientRegisteredSetting = Object.freeze({
+          id: node.id,
+          path: node.path,
+          title: node.navigation?.title ?? node.name,
+          navigation: !!node.navigation,
+          surface,
+          packageName: node.packageName,
+          source: node.source,
+          pageLoader: node.componentLoader,
+          ...(node.access ? { access: node.access } : {}),
+          ...(node.navigation?.icon ? { icon: node.navigation.icon } : {}),
+          ...(groupId ? { groupId } : {}),
+        });
+        return [setting, ...project(node.children ?? [], groupId)];
+      });
+    pages.push(...project(tree));
+  };
+  projectSurface(settingsRouteTree, 'settings', settings, settingGroups);
+  projectSurface(devRouteTree, 'dev', devRoutes, devRouteGroups);
 
   return Object.freeze({
     routes: Object.freeze(routes),
