@@ -20,7 +20,7 @@
     "label": "权限"
   },
   {
-    "type": "file",
+    "type": "dir",
     "name": "workflow",
     "label": "工作流"
   },

@@ -14,7 +14,6 @@
 '@nocobase/app-plugin-routes-example': patch
 '@nocobase/app-plugin-service-provider-example': patch
 '@nocobase/app-plugin-skills-example': patch
-'@nocobase/app-plugin-system-info': patch
 '@nocobase/app-plugin-workflow': patch
 ---
 
