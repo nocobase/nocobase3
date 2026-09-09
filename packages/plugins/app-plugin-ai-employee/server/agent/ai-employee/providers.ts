@@ -12,7 +12,6 @@ import type {
 import { BaseChatContextProvider } from '../chat-context.js';
 import { AIEmployeeChatMessageConverters } from './message-converters.js';
 import { NativeCollectionSaver } from '../../agent/ai-employee/checkpoints/index.js';
-import type { AIConversationRepository } from '../../repository/index.js';
 import { createAIChatConversation } from './ai-chat-conversation.js';
 import type {
   AIEmployee as AIEmployeeType,
@@ -22,6 +21,7 @@ import type {
 import { createAgentProviders } from '../providers.js';
 import type { AIEmployeeAgentOptions } from './options.js';
 import { AIEmployeeToolCallHandler } from './tool-call-handler.js';
+import { AIEmployeeConversationMessageStore } from './conversation-message-store.js';
 import { getSystemPrompt } from './prompts.js';
 import {
   getKnowledgeBaseBackgroundPrompt,
@@ -104,23 +104,10 @@ async function resolveAIEmployeeLLM(
   };
 }
 
-async function updateConversationThread(
-  conversations: AIConversationRepository,
-  thread: AgentThread,
-  connection?: import('@nocobase/db').DatabaseConnection,
-): Promise<void> {
-  await conversations.update(
-    {
-      values: { thread: thread.thread },
-      filter: { sessionId: thread.sessionId, thread: { $lt: thread.thread } },
-    },
-    connection ? { connection } : undefined,
-  );
-}
-
 export function createAIEmployeeConversationProvider(
   options: AIEmployeeAgentOptions,
   toolCalls: AIEmployeeToolCallHandler,
+  toolCallPolicy: ToolCallPolicy,
 ): ConversationProvider {
   const agentContext = options.agentContext;
   const database = options.database;
@@ -134,56 +121,19 @@ export function createAIEmployeeConversationProvider(
   const from = options.from ?? 'main-agent';
   const username = String(options.employee.username ?? '');
   const cache = options.llmStreamCachedManager.getCached(sessionId);
+  const messageStore = new AIEmployeeConversationMessageStore({
+    sessionId,
+    conversation: chatConversation,
+    conversations: options.repositories.aiConversations,
+    toolMessages: options.repositories.aiToolMessages,
+    snowflake: options.snowflake,
+    toolCallPolicy,
+    legacy: options.legacy,
+  });
   const conversation: ConversationProvider = {
     identity: { sessionId, from, username, metadata: { kind: 'ai-employee' } },
     toolCalls,
-    messages: {
-      load: (messageId) => chatConversation.listMessages({ messageId }),
-      get: (messageId) => chatConversation.getMessage(messageId),
-      add: ((messages: any) =>
-        chatConversation.addMessages(
-          messages,
-        )) as ConversationProvider['messages']['add'],
-      remove: (messageId) => chatConversation.removeMessages({ messageId }),
-      saveUserMessages: async (messageId, messages, thread) =>
-        chatConversation.withTransaction(async (target, transaction) => {
-          if (thread)
-            await updateConversationThread(
-              options.repositories.aiConversations,
-              thread,
-              transaction,
-            );
-          if (messageId && (await target.getMessage(messageId)))
-            await target.removeMessages({ messageId });
-          if (messages.length) await target.addMessages(messages);
-        }),
-      saveAssistantMessage: async (message, calls) =>
-        chatConversation.withTransaction(async (target, transaction) => {
-          const saved = await target.addMessages(message);
-          const initialized = calls.length
-            ? await toolCalls.initializeInTransaction(
-                transaction,
-                saved.messageId,
-                calls,
-              )
-            : [];
-          return {
-            message: saved,
-            initializedToolCalls: initialized,
-          };
-        }),
-      saveToolMessages: async (messages, messageId, ids) =>
-        chatConversation.withTransaction(async (target, transaction) => {
-          await target.addMessages(messages);
-          await toolCalls.confirmInTransaction(transaction, messageId, ids);
-        }),
-      saveInterruptedAssistantMessage: (message) =>
-        chatConversation.withTransaction((target) =>
-          target.addMessages(message),
-        ),
-      shouldLoadHistory: (request) =>
-        Boolean(request.messageId) || options.legacy === true,
-    },
+    messages: messageStore,
     threads: {
       current: async () => {
         const target = await options.repositories.aiConversations.findOne({
@@ -223,12 +173,7 @@ export function createAIEmployeeConversationProvider(
       shouldFork: (operation, request) =>
         operation === 'fork' ||
         (Boolean(request.messageId) && options.legacy !== true),
-      update: async (thread: AgentThread) => {
-        await updateConversationThread(
-          options.repositories.aiConversations,
-          thread,
-        );
-      },
+      update: (thread: AgentThread) => messageStore.updateThread(thread),
       buildInitialState: (messages) => {
         const toolMessage = messages
           .slice()
@@ -513,7 +458,11 @@ export async function createAIEmployeeAgentProviders(
     snowflake: options.snowflake,
     policy: chatContext,
   });
-  const conversation = createAIEmployeeConversationProvider(options, toolCalls);
+  const conversation = createAIEmployeeConversationProvider(
+    options,
+    toolCalls,
+    chatContext,
+  );
   return createAgentProviders({
     conversation,
     chatContext,
