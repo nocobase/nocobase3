@@ -120,6 +120,7 @@ export function createAIEmployeeConversationProvider(
   });
   const from = options.from ?? 'main-agent';
   const username = String(options.employee.username ?? '');
+  const legacy = options.legacy;
   const cache = options.llmStreamCachedManager.getCached(sessionId);
   const messageStore = new AIEmployeeConversationMessageStore({
     sessionId,
@@ -128,7 +129,7 @@ export function createAIEmployeeConversationProvider(
     toolMessages: options.repositories.aiToolMessages,
     snowflake: options.snowflake,
     toolCallPolicy,
-    legacy: options.legacy,
+    ...(legacy === undefined ? {} : { legacy }),
   });
   const conversation: ConversationProvider = {
     identity: { sessionId, from, username, metadata: { kind: 'ai-employee' } },

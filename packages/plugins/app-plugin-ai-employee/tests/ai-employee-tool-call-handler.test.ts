@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createAIEmployeeConversationProvider } from '../server/agent/ai-employee/providers.js';
 import { AIEmployeeToolCallHandler } from '../server/agent/ai-employee/tool-call-handler.js';
 
 function createFixture(overrides: Record<string, unknown> = {}) {
@@ -24,32 +23,8 @@ function createFixture(overrides: Record<string, unknown> = {}) {
     find: vi.fn(async () => []),
     destroy: vi.fn(async () => 0),
   };
-  const repositories = {
-    aiToolMessages,
-    aiMessages,
-    aiConversations: {
-      update: vi.fn(async () => 1),
-      findOne: vi.fn(async () => ({ sessionId: 'session-1', thread: 0 })),
-    },
-  };
   const database = {
     transaction: vi.fn(async (callback) => callback(transaction)),
-  };
-  const policy = {
-    getToolsMap: vi.fn(
-      async () =>
-        new Map([
-          [
-            'knownTool',
-            {
-              definition: { name: 'knownTool' },
-              execution: 'frontend',
-            },
-          ],
-        ]),
-    ),
-    isAutoCall: vi.fn(async () => true),
-    shouldInterruptToolCall: vi.fn(() => false),
   };
   const handler = new AIEmployeeToolCallHandler({
     sessionId: 'session-1',
@@ -57,97 +32,18 @@ function createFixture(overrides: Record<string, unknown> = {}) {
     messages: aiMessages,
     toolMessages: aiToolMessages,
     snowflake: { generate: vi.fn(() => 101) },
-    policy,
     ...overrides,
   } as never);
   return {
     transaction,
     aiToolMessages,
     aiMessages,
-    repositories,
     database,
-    policy,
     handler,
   };
 }
 
 describe('AIEmployeeToolCallHandler', () => {
-  it('initializes known and missing tools with the shared policy', async () => {
-    const fixture = createFixture();
-
-    const result = await fixture.handler.initialize('message-1', [
-      { id: 'call-1', name: 'knownTool', args: { value: 1 } },
-      { id: 'call-2', name: 'missingTool', args: { value: 2 } },
-    ]);
-
-    expect(fixture.database.transaction).toHaveBeenCalledOnce();
-    expect(fixture.policy.getToolsMap).toHaveBeenCalledOnce();
-    expect(fixture.policy.isAutoCall).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({ definition: { name: 'knownTool' } }),
-      { value: 1 },
-    );
-    expect(fixture.policy.isAutoCall).toHaveBeenNthCalledWith(2, undefined, {
-      value: 2,
-    });
-    expect(result).toEqual([
-      expect.objectContaining({
-        id: 101,
-        sessionId: 'session-1',
-        messageId: 'message-1',
-        toolCallId: 'call-1',
-        invokeStatus: 'init',
-        execution: 'frontend',
-        auto: true,
-      }),
-      expect.objectContaining({
-        toolCallId: 'call-2',
-        status: 'error',
-        content: 'Tool missingTool not found',
-        invokeStatus: 'done',
-        execution: 'backend',
-      }),
-    ]);
-    expect(result[1].invokeStartTime).toBeInstanceOf(Date);
-    expect(result[1].invokeEndTime).toBe(result[1].invokeStartTime);
-    expect(fixture.aiToolMessages.create).toHaveBeenCalledWith(
-      expect.anything(),
-      { connection: fixture.transaction },
-    );
-  });
-
-  it('uses an explicit connection without opening a transaction', async () => {
-    const fixture = createFixture();
-    const connection = { id: 'caller-transaction' };
-
-    await fixture.handler.initializeInTransaction(
-      connection as never,
-      'message-1',
-      [{ id: 'call-1', name: 'knownTool', args: {} }],
-    );
-    await fixture.handler.confirmInTransaction(
-      connection as never,
-      'message-1',
-      ['call-1'],
-    );
-
-    expect(fixture.database.transaction).not.toHaveBeenCalled();
-    expect(fixture.aiToolMessages.create).toHaveBeenCalledWith(
-      expect.anything(),
-      { connection },
-    );
-    expect(fixture.aiToolMessages.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        filter: {
-          sessionId: 'session-1',
-          messageId: 'message-1',
-          toolCallId: { $in: ['call-1'] },
-        },
-      }),
-      { connection },
-    );
-  });
-
   it('moves init or waiting calls to pending within the current session', async () => {
     const fixture = createFixture();
 
@@ -254,7 +150,7 @@ describe('AIEmployeeToolCallHandler', () => {
     expect(fixture.aiMessages.update).not.toHaveBeenCalled();
   });
 
-  it('confirms and queries only records owned by the handler session', async () => {
+  it('queries only records owned by the handler session', async () => {
     const fixture = createFixture();
     fixture.aiToolMessages.findOne.mockResolvedValue({
       sessionId: 'session-1',
@@ -266,7 +162,6 @@ describe('AIEmployeeToolCallHandler', () => {
       { content: 'invalid' },
     ]);
 
-    await fixture.handler.confirm('message-1', ['call-1']);
     await fixture.handler.get('message-1', 'call-1');
     const result = await fixture.handler.getMany('message-1', [
       'call-1',
@@ -422,109 +317,5 @@ describe('AIEmployeeToolCallHandler', () => {
       }),
       { connection: fixture.transaction },
     );
-  });
-});
-
-describe('AI employee conversation transaction wiring', () => {
-  it('shares the message transaction with initialize, confirm, and thread updates', async () => {
-    const fixture = createFixture();
-    const handler = fixture.handler;
-    const initialize = vi.spyOn(handler, 'initializeInTransaction');
-    const confirm = vi.spyOn(handler, 'confirmInTransaction');
-    const options = {
-      sessionId: 'session-1',
-      employee: { username: 'dara' },
-      agentContext: { logger: {}, ai: {} },
-      database: fixture.database,
-      repositories: fixture.repositories,
-      snowflake: { generate: vi.fn(() => 201) },
-      llmStreamCachedManager: {
-        getCached: () => ({
-          append: vi.fn(),
-          clear: vi.fn(),
-          skipped: vi.fn(),
-        }),
-      },
-    } as never;
-    const conversation = createAIEmployeeConversationProvider(options, handler);
-
-    await conversation.messages.saveAssistantMessage(
-      { role: 'dara', content: { type: 'text', content: 'answer' } },
-      [{ id: 'call-1', name: 'knownTool', args: {} }],
-    );
-    await conversation.messages.saveToolMessages(
-      [{ role: 'tool', content: { type: 'text', content: 'result' } }],
-      'message-1',
-      ['call-1'],
-    );
-    await conversation.messages.saveUserMessages(
-      undefined,
-      [{ role: 'user', content: { type: 'text', content: 'next' } }],
-      { sessionId: 'session-1', thread: 2, threadId: 'session-1:2' },
-    );
-
-    expect(initialize).toHaveBeenCalledWith(
-      fixture.transaction,
-      expect.any(String),
-      expect.any(Array),
-    );
-    expect(confirm).toHaveBeenCalledWith(fixture.transaction, 'message-1', [
-      'call-1',
-    ]);
-    expect(fixture.repositories.aiConversations.update).toHaveBeenCalledWith(
-      {
-        values: { thread: 2 },
-        filter: { sessionId: 'session-1', thread: { $lt: 2 } },
-      },
-      { connection: fixture.transaction },
-    );
-
-    await conversation.threads.update({
-      sessionId: 'session-1',
-      thread: 3,
-      threadId: 'session-1:3',
-    });
-    expect(
-      fixture.repositories.aiConversations.update,
-    ).toHaveBeenLastCalledWith(
-      {
-        values: { thread: 3 },
-        filter: { sessionId: 'session-1', thread: { $lt: 3 } },
-      },
-      undefined,
-    );
-  });
-
-  it('propagates handler failures through the message transaction callback', async () => {
-    const fixture = createFixture();
-    vi.spyOn(fixture.handler, 'initializeInTransaction').mockRejectedValue(
-      new Error('initialize failed'),
-    );
-    const options = {
-      sessionId: 'session-1',
-      employee: { username: 'dara' },
-      agentContext: { logger: {}, ai: {} },
-      database: fixture.database,
-      repositories: fixture.repositories,
-      snowflake: { generate: vi.fn(() => 201) },
-      llmStreamCachedManager: {
-        getCached: () => ({
-          append: vi.fn(),
-          clear: vi.fn(),
-          skipped: vi.fn(),
-        }),
-      },
-    } as never;
-    const conversation = createAIEmployeeConversationProvider(
-      options,
-      fixture.handler,
-    );
-
-    await expect(
-      conversation.messages.saveAssistantMessage(
-        { role: 'dara', content: { type: 'text', content: 'answer' } },
-        [{ id: 'call-1', name: 'knownTool', args: {} }],
-      ),
-    ).rejects.toThrow('initialize failed');
   });
 });
