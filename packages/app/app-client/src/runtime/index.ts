@@ -1,9 +1,10 @@
-import type { I18nRuntime } from '@nocobase/i18n';
+import { resolveSupportedLocale, type I18nRuntime } from '@nocobase/i18n';
 
 import type { ClientApplication } from '../application.js';
 import type { AppClientConfig, AppClientConfigFactory } from '../config.js';
 import {
   createAppI18nRuntime,
+  readStoredLocale,
   type AppClientLocaleContribution,
 } from '../i18n.js';
 import {
@@ -117,8 +118,28 @@ export async function resolveAppRuntime(
     applicationContribution,
     ...pluginContributions,
   ]);
+  const localeContributions = collectLocaleContributions(definition);
+  const supportedLocales = [
+    'en-US',
+    ...localeContributions.flatMap(({ locales }) =>
+      Object.keys('default' in locales ? locales.default : locales),
+    ),
+  ];
+  const configuredLocale = config.get<unknown>('app.defaultLocale');
+  const initialLocale = [
+    readStoredLocale(),
+    configuredLocale,
+    globalThis.navigator?.language,
+  ]
+    .map((locale) =>
+      typeof locale === 'string'
+        ? resolveSupportedLocale(locale, supportedLocales)
+        : undefined,
+    )
+    .find((locale) => locale !== undefined);
   const i18n = await createAppI18nRuntime({
-    contributions: collectLocaleContributions(definition),
+    contributions: localeContributions,
+    initialLocale: initialLocale ?? 'en-US',
   });
   const extensionOverrides = collectSourceExtensionRouteOverrides(
     definition.sourceExtensions ?? [],

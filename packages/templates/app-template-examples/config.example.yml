@@ -8,6 +8,10 @@
 client:
   app:
     title: NocoBase Examples
+    # Defaults apply only when no valid browser-local choice is saved.
+    # defaultLocale: zh-CN
+    # defaultColorScheme: system # light | dark | system
+    # defaultTheme: compact # ID from client/theme/theme-presets.ts
 
 auth:
   # Generate a unique secret, for example with: openssl rand -hex 32
