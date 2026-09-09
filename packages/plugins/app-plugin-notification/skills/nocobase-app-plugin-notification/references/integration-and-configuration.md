@@ -68,11 +68,11 @@ List the current user's inbox with `GET /api/notifications/in-app`. `limit` must
 
 ## Notification test surface
 
-The core package exposes `GET /api/notifications/test/targets`, `POST /api/notifications/test/send`, and `GET /api/notifications/test/:id/status` only when `notification.test.enabled` is true. All three require authentication, the `notification:test` `send` permission, and `x-nocobase-notification-test: 1`. Logs remain separately protected by `page:notification.logs` `access`.
+The core package exposes `GET /api/notifications/test/targets`, `POST /api/notifications/test/send`, and `GET /api/notifications/test/:id/status`. All three require authentication and `x-nocobase-notification-test: 1`; only `POST /send` requires the `notification:test` `send` permission. Logs remain separately protected by `page:notification.logs` `access`.
 
 Targets are the intersection of registered definitions and enabled configured instances. Their public descriptors contain only Channel/Provider identities, labels, and safe form-field metadata. Configuration, Webhook URLs, API keys, and secrets stay on the server. Channel definitions convert test fields into the same normal `send()` inputs; each test creates persistent logs, and status is visible only to its creating user.
 
-Keep the test surface disabled by default in production. A production test is a real external send and requires explicit scope, recipient, Provider, and follow-up verification.
+A production test is a real external send and requires explicit scope, recipient, Provider, permission, and follow-up verification.
 
 ## Configuration verification
 

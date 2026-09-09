@@ -115,7 +115,11 @@ describe('@nocobase/app-plugin-notification client', () => {
     );
 
     await expect(
-      new NotificationClient({ request }).listTestTargets(),
+      new NotificationClient({ request }).sendTest({
+        channel: 'email',
+        provider: { name: 'primary', type: 'smtp' },
+        values: { recipient: 'test@example.com' },
+      }),
     ).rejects.toEqual(
       expect.objectContaining({
         name: 'NotificationTestApiError',

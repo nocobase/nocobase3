@@ -2,7 +2,6 @@ import type { LocaleResource } from '@nocobase/i18n';
 
 const enUS = {
   errors: {
-    testDisabled: 'Notification testing is not available.',
     testHeaderRequired: 'The notification test request header is required.',
     testForbidden: 'Notification test send permission is required.',
     testInvalidRequest:

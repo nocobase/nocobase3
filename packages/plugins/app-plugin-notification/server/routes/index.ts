@@ -18,7 +18,6 @@ import {
   type Translator,
 } from '@nocobase/i18n/server';
 
-import { notificationConfig } from '../config.js';
 import { notificationRuntimeToken } from '../runtime.js';
 import { isNotificationTestSendRequest } from '../test-contract.js';
 import type { NotificationProviderApplicationConfig } from '../providers/notification.js';
@@ -36,7 +35,7 @@ const TEST_HEADER = 'x-nocobase-notification-test';
 
 export const apiRoutes: AppApiRouteContribution<
   AppPluginApplication<NotificationProviderApplicationConfig>
-> = defineApiRoutes(({ config, container }) => {
+> = defineApiRoutes(({ container }) => {
   const router = new Hono();
   const notification = container.resolve(notificationRuntimeToken);
   const auth = container.resolve(authenticationToken);
@@ -78,13 +77,6 @@ export const apiRoutes: AppApiRouteContribution<
   });
   tests.use('*', auth.required(), authorization.middleware());
   tests.use('*', async (context, next) => {
-    if (!config.get(notificationConfig).test?.enabled) {
-      throw notificationTestError(
-        'NOTIFICATION_TEST_DISABLED',
-        'errors.testDisabled',
-        { status: 404 },
-      );
-    }
     if (context.req.header(TEST_HEADER) !== '1') {
       throw notificationTestError(
         'NOTIFICATION_TEST_HEADER_REQUIRED',
@@ -92,6 +84,9 @@ export const apiRoutes: AppApiRouteContribution<
         { status: 403 },
       );
     }
+    await next();
+  });
+  tests.use('/send', async (context, next) => {
     const allowed = await context.get('authz').can({
       resource: { type: 'notification', id: 'test' },
       action: 'send',

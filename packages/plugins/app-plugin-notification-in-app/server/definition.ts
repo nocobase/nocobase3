@@ -143,7 +143,7 @@ export function createDatabaseProviderDefinition(options: {
     capabilities: {
       idempotency: { supported: true },
     },
-    label: inAppNotificationText('test.providers.database', 'Database'),
+    label: inAppNotificationText('test.providers.builtIn', 'Built-in'),
     async createProvider(context, config) {
       const { store } = options;
       return {

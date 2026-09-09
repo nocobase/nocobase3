@@ -121,7 +121,7 @@ Rollback guidance:
 - Provider routing uses names from enabled configuration and `all` fan-out is intentional.
 - Every real send supplies a stable `idempotencyKey`, records its Notification id, and reads back Delivery/Attempt status.
 - `accepted`, `failed` with `nextRunAt`, and `unknown` are interpreted according to the runtime contract.
-- Log routes enforce authentication and `page:notification.logs` `access`; test routes separately enforce authentication, `notification:test` `send`, the feature flag, and the anti-CSRF header.
+- Log routes enforce authentication and `page:notification.logs` `access`; test routes enforce authentication and the anti-CSRF header, while only test submission enforces `notification:test` `send`.
 - Package lint, typecheck, tests, and build pass for every changed notification package.
 
 # Minimal Test Scenarios
@@ -130,7 +130,7 @@ Rollback guidance:
 2. Valid fan-out: multiple recipients/Channels or `strategy: 'all'` create the expected independent Deliveries with stable Provider identities.
 3. Invalid input: an empty recipient/Channel list or unknown Provider is rejected before an external Provider call.
 4. Runtime failure: missing definitions, queue failure, retryable Provider failure, and submission timeout produce the documented persisted/reconciled outcome.
-5. Authentication and safety: unauthenticated/unauthorized log or test requests are denied, test mode/header gates are enforced, and secret/message snapshots are absent from log API responses.
+5. Authentication and safety: unauthenticated log or test requests are denied, unauthorized test submission is denied, the test header is enforced, and secret/message snapshots are absent from log API responses.
 
 # Output Contract
 

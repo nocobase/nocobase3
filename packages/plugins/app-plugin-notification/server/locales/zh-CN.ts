@@ -2,7 +2,6 @@ import type { NotificationServerResource } from './en-US.js';
 
 const zhCN: NotificationServerResource = {
   errors: {
-    testDisabled: '通知测试功能不可用。',
     testHeaderRequired: '缺少通知测试请求头。',
     testForbidden: '需要发送通知测试的权限。',
     testInvalidRequest: '请求体必须包含测试目标和字段值。',

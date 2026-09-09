@@ -92,7 +92,6 @@ describe('notification test sending', () => {
       queue,
       logger: createLogger({ level: 'silent' }),
       config: {
-        test: { enabled: true },
         channels: [
           {
             type: 'email',
@@ -182,7 +181,7 @@ describe('notification test sending', () => {
       database: {} as DatabaseManager,
       queue,
       logger: createLogger({ level: 'silent' }),
-      config: { channels: [], test: { enabled: true } },
+      config: { channels: [] },
       store,
     });
 

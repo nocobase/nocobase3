@@ -26,6 +26,8 @@ export const notificationConfig: AppConfigDefinition<NotificationConfig> =
           ),
         }),
       ),
+      // Accepted for backward-compatible configuration parsing. Test sending is
+      // now controlled only by the notification:test send permission.
       test: Type.Optional(
         Type.Object({
           enabled: Type.Boolean(),

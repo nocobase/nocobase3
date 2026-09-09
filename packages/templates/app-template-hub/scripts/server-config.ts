@@ -182,9 +182,6 @@ const report = {
       : [2, 100],
   },
   notification: {
-    test: {
-      enabled: notification.test?.enabled ?? false,
-    },
     channels: notification.channels.map((channel) => ({
       type: channel.type,
       enabled: channel.enabled,

@@ -3,7 +3,7 @@ import type { InAppNotificationResource } from './en-US.js';
 const zhCN: InAppNotificationResource = {
   test: {
     channels: { inApp: '站内信' },
-    providers: { database: '数据库' },
+    providers: { builtIn: '系统内置' },
     fields: {
       recipientUserId: '接收用户 ID',
       title: '标题',

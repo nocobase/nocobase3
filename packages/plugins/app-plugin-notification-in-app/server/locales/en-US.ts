@@ -3,7 +3,7 @@ import type { LocaleResource } from '@nocobase/i18n';
 const enUS = {
   test: {
     channels: { inApp: 'In-app' },
-    providers: { database: 'Database' },
+    providers: { builtIn: 'Built-in' },
     fields: {
       recipientUserId: 'Recipient user ID',
       title: 'Title',

@@ -21,6 +21,7 @@ export default function NotificationLogsPage(): ReactElement {
   const [testOpen, setTestOpen] = useState(false);
   const [testTargets, setTestTargets] =
     useState<readonly NotificationTestTarget[]>();
+  const [testTargetsError, setTestTargetsError] = useState<string>();
 
   const refresh = (): void => {
     setLoading(true);
@@ -60,16 +61,29 @@ export default function NotificationLogsPage(): ReactElement {
     let active = true;
     void notification.listTestTargets().then(
       (targets) => {
-        if (active) setTestTargets(targets);
+        if (active) {
+          setTestTargets(targets);
+          setTestTargetsError(undefined);
+        }
       },
-      () => {
-        if (active) setTestTargets(undefined);
+      (cause: unknown) => {
+        if (active) {
+          setTestTargets([]);
+          setTestTargetsError(
+            errorMessage(
+              cause,
+              t('errors.requestFailed', {
+                defaultValue: 'Notification request failed.',
+              }),
+            ),
+          );
+        }
       },
     );
     return () => {
       active = false;
     };
-  }, []);
+  }, [t]);
 
   const totals = useMemo(
     () => ({
@@ -110,17 +124,15 @@ export default function NotificationLogsPage(): ReactElement {
                 ? t('logs.refreshing', { defaultValue: 'Refreshing…' })
                 : t('logs.refresh', { defaultValue: 'Refresh' })}
             </button>
-            {testTargets && testTargets.length > 0 ? (
-              <button
-                className='inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-xs hover:bg-primary/90'
-                onClick={() => setTestOpen(true)}
-                type='button'
-              >
-                {t('logs.sendTest', {
-                  defaultValue: 'Send test notification',
-                })}
-              </button>
-            ) : null}
+            <button
+              className='inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-xs hover:bg-primary/90'
+              onClick={() => setTestOpen(true)}
+              type='button'
+            >
+              {t('logs.sendTest', {
+                defaultValue: 'Send test notification',
+              })}
+            </button>
           </div>
         </div>
       </header>
@@ -180,7 +192,8 @@ export default function NotificationLogsPage(): ReactElement {
       </div>
       {testOpen ? (
         <TestNotificationDialog
-          targets={testTargets ?? []}
+          targets={testTargets}
+          targetsError={testTargetsError}
           onClose={() => setTestOpen(false)}
           onSent={refresh}
         />
@@ -191,10 +204,12 @@ export default function NotificationLogsPage(): ReactElement {
 
 function TestNotificationDialog({
   targets,
+  targetsError,
   onClose,
   onSent,
 }: {
-  readonly targets: readonly NotificationTestTarget[];
+  readonly targets?: readonly NotificationTestTarget[];
+  readonly targetsError?: string;
   readonly onClose: () => void;
   readonly onSent: () => void;
 }): ReactElement {
@@ -206,7 +221,15 @@ function TestNotificationDialog({
   const [success, setSuccess] = useState<string>();
 
   const channels = useMemo(
-    () => [...new Set(targets.map((item) => item.channel.type))],
+    () => [...new Set((targets ?? []).map((item) => item.channel.type))],
+    [targets],
+  );
+  const providerCounts = useMemo(
+    () =>
+      (targets ?? []).reduce<Record<string, number>>((counts, item) => {
+        counts[item.channel.type] = (counts[item.channel.type] ?? 0) + 1;
+        return counts;
+      }, {}),
     [targets],
   );
 
@@ -287,7 +310,17 @@ function TestNotificationDialog({
         </div>
 
         <div className='space-y-4 px-5 py-5'>
-          {targets.length === 0 && !error ? (
+          {targetsError ? (
+            <div className='rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive'>
+              {targetsError}
+            </div>
+          ) : targets === undefined ? (
+            <span className='rounded-md border bg-muted/20 p-3 text-sm text-muted-foreground'>
+              {t('test.loadingProviders', {
+                defaultValue: 'Loading configured Providers…',
+              })}
+            </span>
+          ) : targets.length === 0 ? (
             <span className='rounded-md border bg-muted/20 p-3 text-sm text-muted-foreground'>
               {t('test.noProviders', {
                 defaultValue: 'No enabled Providers are configured.',
@@ -296,21 +329,21 @@ function TestNotificationDialog({
           ) : (
             <label className='grid gap-1.5 text-sm font-medium'>
               {t('test.channelProvider', {
-                defaultValue: 'Channel and Provider',
+                defaultValue: 'Delivery method',
               })}
               <select
                 aria-label={t('test.channelProvider', {
-                  defaultValue: 'Channel and Provider',
+                  defaultValue: 'Delivery method',
                 })}
                 className='h-9 w-full rounded-md border bg-background px-3 font-normal outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50'
                 disabled={sending}
                 onChange={(event) => {
                   setSelected(
-                    targets.find(
+                    targets?.find(
                       (item) => providerKey(item) === event.target.value,
                     ),
                   );
-                  const target = targets.find(
+                  const target = targets?.find(
                     (item) => providerKey(item) === event.target.value,
                   );
                   setValues(
@@ -326,14 +359,14 @@ function TestNotificationDialog({
               >
                 <option value=''>
                   {t('test.selectProvider', {
-                    defaultValue: 'Select a Channel and Provider',
+                    defaultValue: 'Select a delivery method',
                   })}
                 </option>
                 {channels.map((channel) => (
                   <optgroup
                     key={channel}
                     label={
-                      targets.find((item) => item.channel.type === channel)
+                      targets?.find((item) => item.channel.type === channel)
                         ?.channel.label ?? channel
                     }
                   >
@@ -344,7 +377,16 @@ function TestNotificationDialog({
                           key={providerKey(item)}
                           value={providerKey(item)}
                         >
-                          {providerLabel(item)}
+                          {providerLabel(
+                            item,
+                            providerCounts[item.channel.type] ?? 0,
+                            (channel, provider) =>
+                              t('test.singleProviderLabel', {
+                                defaultValue: `${channel} (${provider})`,
+                                channel,
+                                provider,
+                              }),
+                          )}
                         </option>
                       ))}
                   </optgroup>
@@ -442,8 +484,14 @@ function providerKey(item: NotificationTestTarget): string {
   return `${item.channel.type}:${item.provider.name}:${item.provider.type}`;
 }
 
-function providerLabel(item: NotificationTestTarget): string {
-  return `${item.provider.name} (${item.provider.label})`;
+function providerLabel(
+  item: NotificationTestTarget,
+  providerCount: number,
+  formatSingleProvider: (channel: string, provider: string) => string,
+): string {
+  return providerCount === 1
+    ? formatSingleProvider(item.channel.label, item.provider.label)
+    : `${item.provider.name} (${item.provider.label})`;
 }
 
 function Metric({

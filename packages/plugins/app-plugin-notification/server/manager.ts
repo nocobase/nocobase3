@@ -143,7 +143,6 @@ export class NotificationManager<
   }
 
   listTestTargets(): readonly NotificationTestTargetDescriptor[] {
-    if (!this.options.config.test?.enabled) return [];
     return this.registry.testTargets(this.options.config);
   }
 
@@ -151,13 +150,6 @@ export class NotificationManager<
     request: NotificationTestSendRequest,
     actor: NotificationTestActor,
   ): Promise<NotificationSendResult> {
-    if (!this.options.config.test?.enabled) {
-      throw notificationTestError(
-        'NOTIFICATION_TEST_DISABLED',
-        'errors.testDisabled',
-        { status: 404 },
-      );
-    }
     const target = this.resolveTestTarget(request);
     const channelConfig = this.options.config.channels.find(
       (candidate) => candidate.type === request.channel && candidate.enabled,
@@ -205,7 +197,6 @@ export class NotificationManager<
     notificationId: string,
     actor: NotificationTestActor,
   ): Promise<import('./logs.js').NotificationLogDetails | undefined> {
-    if (!this.options.config.test?.enabled) return undefined;
     const details = await this.logs.get(notificationId);
     return details?.log.sourceType === 'notification-test' &&
       details.log.sourceReferenceId === actor.userId

@@ -11,6 +11,19 @@ import {
 import { MemoryInAppStore } from '../server/store.js';
 
 describe('In-app Channel common input', () => {
+  it('describes its test target without exposing storage terminology', () => {
+    const store = new MemoryInAppStore();
+
+    expect(createInAppChannelDefinition().test?.label).toMatchObject({
+      key: 'test.channels.inApp',
+      defaultValue: 'In-app',
+    });
+    expect(createDatabaseProviderDefinition({ store }).label).toMatchObject({
+      key: 'test.providers.builtIn',
+      defaultValue: 'Built-in',
+    });
+  });
+
   it('defaults test delivery to the authenticated user', () => {
     const adapter = createInAppChannelDefinition().test;
     expect(

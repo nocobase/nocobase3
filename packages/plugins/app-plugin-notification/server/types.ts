@@ -276,6 +276,7 @@ export interface NotificationChannelConfig {
 
 export interface NotificationConfig {
   readonly channels: readonly NotificationChannelConfig[];
+  /** @deprecated Test sending is controlled by authorization. */
   readonly test?: {
     readonly enabled: boolean;
   };
