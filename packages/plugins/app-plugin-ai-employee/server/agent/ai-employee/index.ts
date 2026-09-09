@@ -1,10 +1,10 @@
 import type { AgentProviderOverrides } from '../types.js';
-import type { AIEmployeeAgentRuntimeOptions } from './runtime.js';
+import type { AIEmployeeAgentOptions } from './options.js';
 import { createAgentService, type AgentService } from '../agent-service.js';
 import { createAIEmployeeAgentProviders } from './providers.js';
 
 export async function createAIEmployeeAgentService(
-  options: AIEmployeeAgentRuntimeOptions,
+  options: AIEmployeeAgentOptions,
   overrides?: AgentProviderOverrides,
 ): Promise<AgentService> {
   const providers = await createAIEmployeeAgentProviders(options, overrides);
@@ -12,5 +12,5 @@ export async function createAIEmployeeAgentService(
 }
 
 export * from './providers.js';
-export type { AIEmployeeAgentRuntimeOptions as AIEmployeeAgentOptions } from './runtime.js';
+export type { AIEmployeeAgentOptions } from './options.js';
 export type { ModelRef as AIEmployeeAgentModelRef } from '../../types.js';

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createAIEmployeeConversationProvider } from '../server/agent/ai-employee/providers.js';
-import { AIEmployeeCapabilities } from '../server/agent/ai-employee/runtime.js';
+import { AIEmployeeToolCallCancellation } from '../server/agent/ai-employee/tool-call-cancellation.js';
 
 const tool = (permission: 'ALLOW' | 'DENY' = 'ALLOW') =>
   ({
@@ -9,138 +9,7 @@ const tool = (permission: 'ALLOW' | 'DENY' = 'ALLOW') =>
     execution: 'backend',
   }) as any;
 
-describe('AI employee ToolCallPolicy injection', () => {
-  it('uses one policy for persisted auto and tool availability', async () => {
-    const create = vi.fn(async ({ values }) => values);
-    const policy = {
-      getToolsMap: vi.fn(async () => new Map([['customTool', tool()]])),
-      isAutoCall: vi.fn(async () => true),
-      shouldInterruptToolCall: vi.fn(() => false),
-    };
-    const runtime = {
-      initToolCall: vi.fn(() => {
-        throw new Error('legacy policy must not be used');
-      }),
-    };
-    const options = {
-      sessionId: 'session-1',
-      employee: { username: 'dara' },
-      agentContext: { logger: {}, ai: {} },
-      database: { transaction: (callback) => callback({}) },
-      repositories: {
-        aiToolMessages: { create },
-      },
-      snowflake: { generate: () => 1 },
-      llmStreamCachedManager: {
-        getCached: () => ({
-          append: vi.fn(),
-          clear: vi.fn(),
-          skipped: vi.fn(),
-        }),
-      },
-    } as any;
-    const state = { options, runtime } as any;
-    const conversation = createAIEmployeeConversationProvider(
-      options,
-      state,
-      policy,
-    );
-
-    const [stored] = await conversation.toolCalls.initialize('message-1', [
-      { id: 'call-1', name: 'customTool', args: { value: 1 } },
-    ]);
-
-    expect(policy.getToolsMap).toHaveBeenCalledOnce();
-    expect(policy.isAutoCall).toHaveBeenCalledWith(
-      expect.objectContaining({ definition: { name: 'customTool' } }),
-      { value: 1 },
-    );
-    expect(stored).toMatchObject({
-      toolName: 'customTool',
-      auto: true,
-      invokeStatus: 'init',
-      execution: 'backend',
-    });
-    expect(runtime.initToolCall).not.toHaveBeenCalled();
-  });
-
-  it('returns cancelled tool messages from the AI employee runtime', async () => {
-    const cancelledMessages = [
-      {
-        role: 'tool',
-        content: { type: 'text', content: 'Ignored' },
-        metadata: {
-          sourceMessageId: 'message-1',
-          toolCallId: 'call-1',
-          toolCall: { id: 'call-1', name: 'customTool', args: {} },
-        },
-      },
-    ];
-    const cancelToolCall = vi.fn(async () => cancelledMessages);
-    const options = {
-      sessionId: 'session-1',
-      employee: { username: 'dara' },
-      agentContext: { logger: {}, ai: {} },
-      database: {},
-      repositories: {},
-      snowflake: {},
-      llmStreamCachedManager: {
-        getCached: () => ({
-          append: vi.fn(),
-          clear: vi.fn(),
-          skipped: vi.fn(),
-        }),
-      },
-    } as any;
-    const conversation = createAIEmployeeConversationProvider(
-      options,
-      { options, runtime: { cancelToolCall } } as any,
-      {} as any,
-    );
-
-    await expect(conversation.toolCalls.cancel()).resolves.toBe(
-      cancelledMessages,
-    );
-    expect(cancelToolCall).toHaveBeenCalledOnce();
-    expect(cancelledMessages[0]).toMatchObject({
-      role: 'tool',
-      metadata: {
-        sourceMessageId: 'message-1',
-        toolCallId: 'call-1',
-        toolCall: { id: 'call-1', name: 'customTool' },
-      },
-    });
-  });
-
-  it('preserves undefined when the runtime has no pending tool calls', async () => {
-    const cancelToolCall = vi.fn(async () => undefined);
-    const options = {
-      sessionId: 'session-1',
-      employee: { username: 'dara' },
-      agentContext: { logger: {}, ai: {} },
-      database: {},
-      repositories: {},
-      snowflake: {},
-      llmStreamCachedManager: {
-        getCached: () => ({
-          append: vi.fn(),
-          clear: vi.fn(),
-          skipped: vi.fn(),
-        }),
-      },
-    } as any;
-    const conversation = createAIEmployeeConversationProvider(
-      options,
-      { options, runtime: { cancelToolCall } } as any,
-      {} as any,
-    );
-
-    await expect(conversation.toolCalls.cancel()).resolves.toBeUndefined();
-    expect(cancelToolCall).toHaveBeenCalledOnce();
-  });
-});
-
-describe('AIEmployeeCapabilities tool-call cancellation', () => {
+describe('AIEmployeeToolCallCancellation', () => {
   it('updates persisted tool-call state and returns created continuation messages', async () => {
     const update = vi.fn(async () => 1);
     const createdMessages = [
@@ -157,7 +26,7 @@ describe('AIEmployeeCapabilities tool-call cancellation', () => {
       },
     ];
     const create = vi.fn(async () => createdMessages);
-    const runtime = new AIEmployeeCapabilities({
+    const cancellation = new AIEmployeeToolCallCancellation({
       agentContext: {
         ai: {
           llmProviderManager: {
@@ -213,7 +82,7 @@ describe('AIEmployeeCapabilities tool-call cancellation', () => {
       },
     } as any);
 
-    await expect(runtime.cancelToolCall('Cancelled')).resolves.toBe(
+    await expect(cancellation.cancel('Cancelled')).resolves.toBe(
       createdMessages,
     );
     expect(update).toHaveBeenCalledWith(
@@ -256,7 +125,7 @@ describe('AIEmployeeCapabilities tool-call cancellation', () => {
     const update = vi.fn();
     const create = vi.fn();
     const getLLMService = vi.fn();
-    const runtime = new AIEmployeeCapabilities({
+    const cancellation = new AIEmployeeToolCallCancellation({
       agentContext: {
         ai: { llmProviderManager: { getLLMService } },
         logger: {},
@@ -280,7 +149,7 @@ describe('AIEmployeeCapabilities tool-call cancellation', () => {
       },
     } as any);
 
-    await expect(runtime.cancelToolCall()).resolves.toBeUndefined();
+    await expect(cancellation.cancel()).resolves.toBeUndefined();
     expect(update).not.toHaveBeenCalled();
     expect(create).not.toHaveBeenCalled();
     expect(getLLMService).not.toHaveBeenCalled();

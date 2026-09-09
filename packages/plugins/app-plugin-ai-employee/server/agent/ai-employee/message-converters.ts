@@ -14,7 +14,7 @@ import { BaseChatMessageConverters } from '../chat-message-converters.js';
 import type { AgentMessageConversionContext } from '../types.js';
 import { resolveMessageAttachments } from './attachments.js';
 import { sanitizeAdditionalKwargsForToolCalls } from './tool-call-sanitizer.js';
-import type { AIEmployeeAgentRuntimeOptions } from './runtime.js';
+import type { AIEmployeeAgentOptions } from './options.js';
 
 const toStoredAssistantMessage = ({
   aiEmployee,
@@ -199,9 +199,7 @@ const toStoredToolMessage = ({
 };
 
 export class AIEmployeeChatMessageConverters extends BaseChatMessageConverters {
-  public constructor(
-    private readonly aiOptions: AIEmployeeAgentRuntimeOptions,
-  ) {
+  public constructor(private readonly aiOptions: AIEmployeeAgentOptions) {
     super({
       assistantRole: String(aiOptions.employee.username ?? ''),
       logger: aiOptions.agentContext.logger,

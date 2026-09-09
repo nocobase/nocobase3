@@ -67,13 +67,10 @@ describe('fixed AgentService contracts', () => {
   });
 
   it('keeps AI chat conversation ownership in the conversation provider', () => {
-    const runtime = read('agent/ai-employee/runtime.ts');
     const providers = read('agent/ai-employee/providers.ts');
-    expect(runtime).not.toContain('AIChatConversation');
-    expect(runtime).not.toContain('createAIChatConversation');
-    expect(runtime).not.toContain('aiChatConversation');
-    expect(runtime).not.toContain('normalizeMessageAttachments');
-    expect(runtime).not.toMatch(/async normalizeMessages\s*\(/);
+    expect(fs.existsSync(path.join(src, 'agent/ai-employee/runtime.ts'))).toBe(
+      false,
+    );
     expect(providers).toContain(
       'const chatConversation = createAIChatConversation({',
     );
@@ -112,12 +109,13 @@ describe('fixed AgentService contracts', () => {
       'agent/direct.ts',
       'agent/agent-service.ts',
       'agent/ai-employee/providers.ts',
-      'agent/ai-employee/runtime.ts',
+      'agent/ai-employee/tool-call-handler.ts',
+      'agent/ai-employee/tool-context.ts',
       'agent/middleware/pipeline.ts',
     ]
       .map(read)
       .join('\n');
-    const runtime = read('agent/ai-employee/runtime.ts');
+    const toolCallHandler = read('agent/ai-employee/tool-call-handler.ts');
     expect(production).not.toMatch(/\bToolProvider\b/);
     expect(production).not.toContain('createDefaultToolProvider');
     expect(production).not.toContain('createAIEmployeeToolProvider');
@@ -125,11 +123,13 @@ describe('fixed AgentService contracts', () => {
     expect(production).not.toContain('providers.llmIdentity');
     expect(production).not.toContain('providers.tools');
     expect(production).not.toContain('DirectChatContextProvider');
-    expect(runtime).not.toMatch(
+    expect(toolCallHandler).not.toMatch(
       /getSystemPrompt|getAgentTools|getAvailableSkills/,
     );
-    expect(runtime).not.toMatch(/getActivatedSkillToolNames|getToolsMap/);
-    expect(runtime).not.toMatch(/shouldInterruptToolCall|isAutoCall/);
+    expect(toolCallHandler).not.toMatch(/getActivatedSkillToolNames/);
+    expect(toolCallHandler).not.toMatch(
+      /public\s+(?:async\s+)?(?:getToolsMap|shouldInterruptToolCall|isAutoCall)\s*\(/,
+    );
     expect(read('agent/ai-employee/providers.ts')).not.toMatch(
       /activeProvider|activeIdentity/,
     );
@@ -137,8 +137,8 @@ describe('fixed AgentService contracts', () => {
       /Object\.assign\([^)]*(chatContext|converter)/,
     );
     expect(production).not.toMatch(/\.\.\.(options\.)?chatContext/);
-    expect(read('agent/ai-employee/message-converters.ts')).not.toContain(
-      'AIEmployeeCapabilities',
+    expect(read('agent/ai-employee/message-converters.ts')).toContain(
+      "from './options.js'",
     );
     const skillMiddleware = read('agent/middleware/skill-tools.ts');
     expect(skillMiddleware).toContain('activeTools(options.request)');
@@ -153,22 +153,37 @@ describe('fixed AgentService contracts', () => {
     const types = read('agent/types.ts');
 
     expect(service).toContain('this.providers.conversation.toolCalls.cancel()');
-    expect(providers).not.toContain('AIEmployeeAgentFacade');
+    expect(providers).not.toContain(['AIEmployeeAgent', 'Facade'].join(''));
     expect(providers).not.toContain('AIEmployeeAgentProvidersResult');
-    expect(providers).not.toContain('getToolCallHandler');
+    expect(providers).not.toContain(['getToolCall', 'Handler'].join(''));
     expect(providers).not.toMatch(/return\s*\{\s*providers,?\s*facade/s);
     expect(factory).not.toContain('interface AIEmployeeAgentService');
     expect(factory).not.toContain('facade');
     expect(factory).toContain('Promise<AgentService>');
     expect(types).not.toContain('ToolCallHandler');
+    expect(providers).not.toContain('async function initializeToolCalls');
+    expect(providers).not.toMatch(/runtime\.(initToolCall|confirmToolCall)/);
+    expect(types).not.toMatch(/initialize\([^)]*transaction/);
+    expect(fs.existsSync(path.join(src, 'agent/ai-employee/runtime.ts'))).toBe(
+      false,
+    );
+    const handler = read('agent/ai-employee/tool-call-handler.ts');
+    expect(handler).toContain('implements ConversationToolCallStore');
+    expect(providers).toContain('toolCalls: AIEmployeeToolCallHandler');
+    expect(providers).toContain('toolCalls,');
+    expect(providers).not.toMatch(/markPending:\s*\(|markDone:\s*\(/);
+    expect(types).not.toMatch(/confirm\([^)]*DatabaseConnection/);
+    expect(read('agent/ai-employee/tool-context.ts')).toContain(
+      'implements ToolCallPolicy',
+    );
   });
   it('owns the only standard middleware builder and preserves its order', () => {
     const service = read('agent/agent-service.ts');
-    const runtime = read('agent/ai-employee/runtime.ts');
     const pipeline = read('agent/middleware/pipeline.ts');
+    const handler = read('agent/ai-employee/tool-call-handler.ts');
     expect(service).toContain('buildStandardAgentMiddleware');
-    expect(runtime).not.toContain('getMiddleware(');
-    expect(runtime).not.toContain('createAgent(');
+    expect(handler).not.toContain('getMiddleware(');
+    expect(handler).not.toContain('createAgent(');
     const positions = STANDARD_AGENT_MIDDLEWARE_ORDER.map((name) =>
       pipeline.indexOf(`'${name}'`),
     );
@@ -187,7 +202,8 @@ describe('fixed AgentService contracts', () => {
   it('removes data source context from the new AgentService path', () => {
     const agentSource = [
       'agent/agent-service.ts',
-      'agent/ai-employee/runtime.ts',
+      'agent/ai-employee/options.ts',
+      'agent/ai-employee/tool-call-handler.ts',
       'agent/ai-employee/providers.ts',
       'agent/types.ts',
     ]

@@ -19,11 +19,11 @@ import {
   prepareToolsForFrontendConversation,
   shouldAutoExecuteFrontendTool,
 } from './frontend-tools.js';
-import type { AIEmployeeAgentRuntimeOptions } from './runtime.js';
+import type { AIEmployeeAgentOptions } from './options.js';
 import type { ToolCallPolicy } from './tool-call-policy.js';
 
 export class AIEmployeeToolContext implements ToolCallPolicy {
-  public constructor(private readonly options: AIEmployeeAgentRuntimeOptions) {
+  public constructor(private readonly options: AIEmployeeAgentOptions) {
     options.builtInManager.setupBuiltInInfo({
       employee: options.employee as unknown as AIEmployeeType,
       translate: options.agentContext.translate,

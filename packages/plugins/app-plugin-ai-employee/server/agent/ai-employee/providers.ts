@@ -8,24 +8,21 @@ import type {
   AgentRequest,
   AgentThread,
   ConversationProvider,
-  ConversationToolCallStore,
   ResolvedAgentLLM,
 } from '../types.js';
 import { BaseChatContextProvider } from '../chat-context.js';
 import { AIEmployeeChatMessageConverters } from './message-converters.js';
 import { NativeCollectionSaver } from '../../agent/ai-employee/checkpoints/index.js';
 import { createAIChatConversation } from './ai-chat-conversation.js';
-import type { DatabaseConnection } from '@nocobase/db';
 import type {
   AIEmployee as AIEmployeeType,
   AIMessageInput,
   LLMProvider,
 } from '@nocobase/ai-employee';
 import { createAgentProviders } from '../providers.js';
-import {
-  AIEmployeeCapabilities,
-  type AIEmployeeAgentRuntimeOptions,
-} from './runtime.js';
+import type { AIEmployeeAgentOptions } from './options.js';
+import { AIEmployeeToolCallCancellation } from './tool-call-cancellation.js';
+import { AIEmployeeToolCallHandler } from './tool-call-handler.js';
 import { getSystemPrompt } from './prompts.js';
 import {
   getKnowledgeBaseBackgroundPrompt,
@@ -79,23 +76,9 @@ type AIEmployeeResolvedAgentLLM = ResolvedAgentLLM & {
   readonly [responseMetadataCollector]: ResponseMetadataCollector;
 };
 
-interface AIEmployeeProviderState {
-  options: AIEmployeeAgentRuntimeOptions;
-  runtime: AIEmployeeCapabilities;
-  toolContext: AIEmployeeToolContext;
-}
-
-const createState = (
-  options: AIEmployeeAgentRuntimeOptions,
-): AIEmployeeProviderState => ({
-  options,
-  runtime: new AIEmployeeCapabilities(options),
-  toolContext: new AIEmployeeToolContext(options),
-});
-
 function getRequiredModel(
-  options: AIEmployeeAgentRuntimeOptions,
-): NonNullable<AIEmployeeAgentRuntimeOptions['model']> {
+  options: AIEmployeeAgentOptions,
+): NonNullable<AIEmployeeAgentOptions['model']> {
   if (!options.model) {
     throw new Error('AI employee model is required');
   }
@@ -103,7 +86,7 @@ function getRequiredModel(
 }
 
 async function resolveAIEmployeeLLM(
-  options: AIEmployeeAgentRuntimeOptions,
+  options: AIEmployeeAgentOptions,
 ): Promise<AIEmployeeResolvedAgentLLM> {
   const resolved =
     await options.agentContext.ai.llmProviderManager.getLLMService(
@@ -122,50 +105,24 @@ async function resolveAIEmployeeLLM(
   };
 }
 
-async function initializeToolCalls(
-  options: AIEmployeeAgentRuntimeOptions,
-  policy: ToolCallPolicy,
-  transaction: DatabaseConnection,
-  messageId: string,
-  toolCalls: { id: string; name: string; args: unknown }[],
-) {
-  const now = new Date();
-  const toolsMap = await policy.getToolsMap();
-  return options.repositories.aiToolMessages.create(
+async function updateConversationThread(
+  options: Pick<AIEmployeeAgentOptions, 'repositories'>,
+  thread: AgentThread,
+  connection?: import('@nocobase/db').DatabaseConnection,
+): Promise<void> {
+  await options.repositories.aiConversations.update(
     {
-      values: await Promise.all(
-        toolCalls.map(async (toolCall) => {
-          const tool = toolsMap.get(toolCall.name);
-          const exists = Boolean(tool);
-          return {
-            id: options.snowflake.generate(),
-            sessionId: options.sessionId,
-            messageId,
-            toolCallId: toolCall.id,
-            toolName: toolCall.name,
-            status: exists ? (null as unknown as string) : 'error',
-            content: exists
-              ? (null as unknown as string)
-              : `Tool ${toolCall.name} not found`,
-            invokeStatus: exists ? 'init' : 'done',
-            invokeStartTime: exists ? (null as unknown as Date) : now,
-            invokeEndTime: exists ? (null as unknown as Date) : now,
-            auto: await policy.isAutoCall(tool, toolCall.args),
-            execution: tool?.execution ?? 'backend',
-          };
-        }),
-      ),
+      values: { thread: thread.thread },
+      filter: { sessionId: thread.sessionId, thread: { $lt: thread.thread } },
     },
-    { connection: transaction },
+    connection ? { connection } : undefined,
   );
 }
 
 export function createAIEmployeeConversationProvider(
-  options: AIEmployeeAgentRuntimeOptions,
-  state = createState(options),
-  toolCallPolicy: ToolCallPolicy,
+  options: AIEmployeeAgentOptions,
+  toolCalls: AIEmployeeToolCallHandler,
 ): ConversationProvider {
-  const { runtime } = state;
   const agentContext = options.agentContext;
   const database = options.database;
   const sessionId = options.sessionId;
@@ -178,37 +135,6 @@ export function createAIEmployeeConversationProvider(
   const from = options.from ?? 'main-agent';
   const username = String(options.employee.username ?? '');
   const cache = options.llmStreamCachedManager.getCached(sessionId);
-  const toolCalls: ConversationToolCallStore = {
-    initialize: async (messageId, calls) =>
-      database.transaction((transaction: DatabaseConnection) =>
-        initializeToolCalls(
-          options,
-          toolCallPolicy,
-          transaction,
-          messageId,
-          calls,
-        ),
-      ),
-    markInterrupted: (...args) => runtime.updateToolCallInterrupted(...args),
-    markPending: (...args) => runtime.updateToolCallPending(...args),
-    markDone: (...args) => runtime.updateToolCallDone(...args),
-    markError: (messageId, toolCallId, error) =>
-      runtime.updateToolCallDone(messageId, toolCallId, {
-        status: 'error',
-        content: (error as any)?.message ?? error,
-      }),
-    confirm: async (messageId, ids) =>
-      database.transaction((transaction: DatabaseConnection) =>
-        runtime.confirmToolCall(transaction, messageId, ids),
-      ),
-    reject: async (_messageId, ids, reason) => {
-      await runtime.cancelToolCall(reason);
-      return ids.length;
-    },
-    get: (...args) => runtime.getToolCallResult(...args),
-    getMany: (...args) => runtime.getToolCallResultMap(...args),
-    cancel: () => runtime.cancelToolCall(),
-  };
   const conversation: ConversationProvider = {
     identity: { sessionId, from, username, metadata: { kind: 'ai-employee' } },
     toolCalls,
@@ -222,7 +148,8 @@ export function createAIEmployeeConversationProvider(
       remove: (messageId) => chatConversation.removeMessages({ messageId }),
       saveUserMessages: async (messageId, messages, thread) =>
         chatConversation.withTransaction(async (target, transaction) => {
-          if (thread) await runtime.updateThread(transaction, thread);
+          if (thread)
+            await updateConversationThread(options, thread, transaction);
           if (messageId && (await target.getMessage(messageId)))
             await target.removeMessages({ messageId });
           if (messages.length) await target.addMessages(messages);
@@ -231,9 +158,7 @@ export function createAIEmployeeConversationProvider(
         chatConversation.withTransaction(async (target, transaction) => {
           const saved = await target.addMessages(message);
           const initialized = calls.length
-            ? await initializeToolCalls(
-                options,
-                toolCallPolicy,
+            ? await toolCalls.initializeInTransaction(
                 transaction,
                 saved.messageId,
                 calls,
@@ -247,7 +172,7 @@ export function createAIEmployeeConversationProvider(
       saveToolMessages: async (messages, messageId, ids) =>
         chatConversation.withTransaction(async (target, transaction) => {
           await target.addMessages(messages);
-          await runtime.confirmToolCall(transaction, messageId, ids);
+          await toolCalls.confirmInTransaction(transaction, messageId, ids);
         }),
       saveInterruptedAssistantMessage: (message) =>
         chatConversation.withTransaction((target) =>
@@ -296,10 +221,7 @@ export function createAIEmployeeConversationProvider(
         operation === 'fork' ||
         (Boolean(request.messageId) && options.legacy !== true),
       update: async (thread: AgentThread) => {
-        await options.repositories.aiConversations.update({
-          values: { thread: thread.thread },
-          filter: { sessionId, thread: { $lt: thread.thread } },
-        });
+        await updateConversationThread(options, thread);
       },
       buildInitialState: (messages) => {
         const toolMessage = messages
@@ -383,7 +305,7 @@ export class AIEmployeeChatContextProvider
   implements ToolCallPolicy
 {
   public constructor(
-    private readonly aiEmployeeOptions: AIEmployeeAgentRuntimeOptions,
+    private readonly aiEmployeeOptions: AIEmployeeAgentOptions,
     private readonly toolContext: AIEmployeeToolContext = new AIEmployeeToolContext(
       aiEmployeeOptions,
     ),
@@ -494,7 +416,7 @@ export class AIEmployeeChatContextProvider
     );
     const systemPrompt = getSystemPrompt({
       aiEmployee: {
-        nickname: employee.nickname,
+        nickname: employee.nickname ?? employee.username,
         about,
       },
       task: { background },
@@ -566,23 +488,34 @@ If information is missing, clearly state it in the summary.</Important>`;
 }
 
 export function createAIEmployeeChatContextProvider(
-  options: AIEmployeeAgentRuntimeOptions,
-  state = createState(options),
+  options: AIEmployeeAgentOptions,
+  toolContext: AIEmployeeToolContext = new AIEmployeeToolContext(options),
 ): AIEmployeeChatContextProvider {
-  return new AIEmployeeChatContextProvider(options, state.toolContext);
+  return new AIEmployeeChatContextProvider(options, toolContext);
 }
 
 export async function createAIEmployeeAgentProviders(
-  options: AIEmployeeAgentRuntimeOptions,
+  options: AIEmployeeAgentOptions,
   overrides?: AgentProviderOverrides,
 ): Promise<AgentProviders> {
-  const state = createState(options);
-  const chatContext = createAIEmployeeChatContextProvider(options, state);
-  const conversation = createAIEmployeeConversationProvider(
-    options,
-    state,
-    chatContext,
-  );
+  const toolContext = new AIEmployeeToolContext(options);
+  const chatContext = createAIEmployeeChatContextProvider(options, toolContext);
+  const cancellation = new AIEmployeeToolCallCancellation({
+    agentContext: options.agentContext,
+    database: options.database,
+    model: options.model,
+    repositories: options.repositories,
+    snowflake: options.snowflake,
+  });
+  const toolCalls = new AIEmployeeToolCallHandler({
+    sessionId: options.sessionId,
+    database: options.database,
+    repositories: options.repositories,
+    snowflake: options.snowflake,
+    policy: chatContext,
+    cancellation,
+  });
+  const conversation = createAIEmployeeConversationProvider(options, toolCalls);
   return createAgentProviders({
     conversation,
     chatContext,
@@ -600,7 +533,7 @@ export async function createAIEmployeeAgentProviders(
 }
 
 function getCurrentTimezone(
-  execution: NonNullable<AIEmployeeAgentRuntimeOptions['execution']>,
+  execution: NonNullable<AIEmployeeAgentOptions['execution']>,
   getHeader: (name: string) => string | undefined,
 ): string | undefined {
   return execution.timezone || getHeader('x-timezone') || undefined;
