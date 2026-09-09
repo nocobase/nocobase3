@@ -11,4 +11,4 @@ This is a breaking replacement of the old File API: access-token routes, invento
 
 Keep the File core in Default and the core plus app-plugin-file-example in Examples. Preserve Hub without a default File registration.
 
-Require the unified API version for Registry components, preserve PDF previews across cross-origin storage redirects, and normalize database file sizes to safe numeric values.
+Require the unified API version for Registry components, preserve PDF previews across cross-origin storage redirects, and normalize database file sizes to safe numeric values without treating custom record or records fields as response envelopes.

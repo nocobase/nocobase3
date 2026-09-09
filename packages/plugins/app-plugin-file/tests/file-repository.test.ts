@@ -34,10 +34,12 @@ async function fixture(
     publicBasePath = '/main',
     storageUrl = 'https://cdn.example.test/storage',
     databaseSize,
+    databaseJsonField,
   }: {
     publicBasePath?: string;
     storageUrl?: string;
     databaseSize?: (value: unknown) => unknown;
+    databaseJsonField?: string;
   } = {},
 ) {
   const root = await mkdtemp(path.join(tmpdir(), 'file-repository-'));
@@ -62,10 +64,20 @@ async function fixture(
     const knex = await db.connection().client<{
       client: { config: { postProcessResponse?: (value: unknown) => unknown } };
     }>();
-    const decode = (row: unknown): unknown =>
-      row && typeof row === 'object' && 'size' in row
-        ? { ...row, size: databaseSize(row.size) }
-        : row;
+    const decode = (row: unknown): unknown => {
+      if (!row || typeof row !== 'object') return row;
+      const result =
+        'size' in row ? { ...row, size: databaseSize(row.size) } : row;
+      if (databaseJsonField && databaseJsonField in result) {
+        const json: unknown = Reflect.get(result, databaseJsonField);
+        if (typeof json === 'string')
+          return {
+            ...result,
+            [databaseJsonField]: JSON.parse(json) as unknown,
+          };
+      }
+      return result;
+    };
     knex.client.config.postProcessResponse = (value) =>
       Array.isArray(value) ? value.map(decode) : decode(value);
   }
@@ -176,6 +188,82 @@ describe('server repository and Client API', () => {
         select: (s) => s.fields('size'),
       });
       expect(deleted.record?.size).toBe(5);
+    },
+  );
+  it.each(['record', 'records'])(
+    'preserves the custom %s field while normalizing file metadata',
+    async (field) => {
+      const { files, client, db } = await fixture(
+        {
+          actions: {
+            findOne: {},
+            findMany: {},
+            updateOne: { writePolicy: { fields: ['filename'] } },
+          },
+        },
+        { databaseSize: String, databaseJsonField: field },
+      );
+      await db.builder().alterCollection('attachments', (collection) => {
+        collection.json(field);
+      });
+      const { record } = await files.uploadOne({ file: file() });
+      const businessValue = { size: 'business-size' };
+      await db.repository('attachments').updateOne({
+        filter: { id: record.id },
+        values: { [field]: businessValue },
+      });
+      const stored = await db
+        .repository('attachments')
+        .findOne({ filter: { id: record.id } });
+      expect(stored?.size).toBe('5');
+      const storedBusinessValue = stored?.[field];
+      expect(storedBusinessValue).toEqual(businessValue);
+      expect(await files.findOne({ filter: { id: record.id } })).toMatchObject({
+        size: 5,
+        [field]: storedBusinessValue,
+      });
+      expect(
+        await files.findOne({
+          filter: { id: record.id },
+          select: (s) => s.fields(field),
+        }),
+      ).toEqual({ [field]: storedBusinessValue });
+      expect(
+        await client.findOne({
+          filter: { id: record.id },
+          select: (s) => s.fields(field),
+        }),
+      ).toEqual({ [field]: storedBusinessValue });
+      const streamed = [];
+      for await (const row of client.findMany({
+        select: (s) => s.fields('size', field),
+      }))
+        streamed.push(row);
+      expect(streamed).toEqual([{ size: 5, [field]: storedBusinessValue }]);
+      const clientUpdated = await client.updateOne({
+        filter: { id: record.id },
+        values: { filename: 'client-renamed.txt' },
+        select: (s) => s.fields('size', field),
+      });
+      expect(clientUpdated.record).toEqual({
+        size: 5,
+        [field]: storedBusinessValue,
+      });
+      const updated = await files.updateOne({
+        filter: { id: record.id },
+        values: { filename: 'renamed.txt' },
+      });
+      expect(updated.record).toMatchObject({
+        size: 5,
+        [field]: storedBusinessValue,
+      });
+      const deleted = await files.deleteMany({
+        filter: { id: record.id },
+        select: (s) => s.fields('size', field),
+      });
+      expect(deleted.records).toEqual([
+        { size: 5, [field]: storedBusinessValue },
+      ]);
     },
   );
   it('normalizes PostgreSQL-style string sizes in HTTP queries and NDJSON projections', async () => {

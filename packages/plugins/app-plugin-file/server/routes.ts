@@ -146,7 +146,14 @@ export function defineFileRepositoryApiRoutes(
               } else {
                 const envelope = (await c.res.json()) as { data: unknown };
                 c.res = Response.json(
-                  { ...envelope, data: decorate(envelope.data, getUrl) },
+                  {
+                    ...envelope,
+                    data: decorate(
+                      envelope.data,
+                      getUrl,
+                      action !== 'findOne' && action !== 'findMany',
+                    ),
+                  },
                   { status: c.res.status, headers: c.res.headers },
                 );
               }
@@ -211,6 +218,7 @@ export function defineFileRepositoryApiRoutes(
                   data: decorate(
                     await files.uploadOne({ file: value }),
                     getUrl,
+                    true,
                   ),
                 });
               }
@@ -234,6 +242,7 @@ export function defineFileRepositoryApiRoutes(
                 data: decorate(
                   await files.uploadMany({ files: uploads as File[] }),
                   getUrl,
+                  true,
                 ),
               });
             },
@@ -317,20 +326,25 @@ function fileRouter(): Hono {
 }
 
 type UrlBuilder = (record: { id: string; ext: string }) => string;
-function decorate(value: unknown, getUrl: UrlBuilder): unknown {
+function decorate(
+  value: unknown,
+  getUrl: UrlBuilder,
+  mutationResult: boolean = false,
+): unknown {
   if (Array.isArray(value))
     return value.map((record) => decorate(record, getUrl));
   if (!value || typeof value !== 'object') return value;
+  // Only mutation responses wrap records; collections may use these field names.
+  if (mutationResult && 'record' in value)
+    return { ...value, record: decorate(value.record, getUrl) };
+  if (mutationResult && 'records' in value)
+    return { ...value, records: decorate(value.records, getUrl) };
   const record = normalizeFileRecord(value as Record<string, unknown>);
   if (typeof record.id === 'string' && typeof record.ext === 'string')
     return {
       ...record,
       contentUrl: getUrl({ id: record.id, ext: record.ext }),
     };
-  if (record.record)
-    return { ...record, record: decorate(record.record, getUrl) };
-  if (record.records)
-    return { ...record, records: decorate(record.records, getUrl) };
   return record;
 }
 function decorateStream(

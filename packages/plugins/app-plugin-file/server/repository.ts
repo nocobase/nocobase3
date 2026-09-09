@@ -333,7 +333,7 @@ export class ServerFileRepositoryManager {
             case 'upsertOne':
             case 'deleteOne':
             case 'deleteMany':
-              return normalizeFileResult(result);
+              return normalizeFileResult(result, property !== 'findOne');
             default:
               return result;
           }
@@ -361,12 +361,17 @@ export function normalizeFileRecord<T extends object>(record: T): T {
   return { ...record, size };
 }
 
-function normalizeFileResult(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(normalizeFileResult);
+function normalizeFileResult(
+  value: unknown,
+  mutationResult: boolean = false,
+): unknown {
+  if (Array.isArray(value))
+    return value.map((record) => normalizeFileResult(record));
   if (!value || typeof value !== 'object') return value;
-  if ('record' in value)
+  // Only mutation responses wrap records; collections may use these field names.
+  if (mutationResult && 'record' in value)
     return { ...value, record: normalizeFileResult(value.record) };
-  if ('records' in value)
+  if (mutationResult && 'records' in value)
     return { ...value, records: normalizeFileResult(value.records) };
   return normalizeFileRecord(value);
 }
