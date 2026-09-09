@@ -1,10 +1,19 @@
 import { resolveAppClientContributions } from '@nocobase/app-client/plugins';
-import { describe, expect, it } from 'vitest';
+import {
+  apiClientToken,
+  realtimeClientToken,
+  type ApiClient,
+  type RealtimeClient,
+} from '@nocobase/app-client';
+import { ServiceContainer } from '@nocobase/service-provider';
+import { describe, expect, it, vi } from 'vitest';
 
 import reactProviders from '../client/react-providers.js';
 import { AuthorizationServiceProvider } from '../client/service-provider.js';
 import routes from '../client/routes.js';
 import { firstActions } from '../client/components/rule-utils.js';
+import { AuthorizationClient } from '../client/authorization-client.js';
+import { authorizationClientToken } from '../client/tokens.js';
 
 describe('@nocobase/app-plugin-authorization client', () => {
   it('contributes its administration pages as one settings group', () => {
@@ -96,5 +105,52 @@ describe('@nocobase/app-plugin-authorization client', () => {
         'audit-log',
       ),
     ).toEqual(['read']);
+  });
+
+  it('notifies consumers when the cached permission snapshot is invalidated', () => {
+    const client = new AuthorizationClient({ request: vi.fn() } as never);
+    const listener = vi.fn();
+    const unsubscribe = client.onPermissionsInvalidated(listener);
+
+    client.invalidatePermissions();
+    expect(listener).toHaveBeenCalledOnce();
+
+    unsubscribe();
+    client.invalidatePermissions();
+    expect(listener).toHaveBeenCalledOnce();
+  });
+
+  it('registers one injectable Authorization Client for other plugins', async () => {
+    const container = new ServiceContainer();
+    const api = { request: vi.fn<ApiClient['request']>() } as ApiClient;
+    const realtime = {
+      connected: false,
+      subscribe: vi.fn(() => vi.fn()),
+      onOpen: vi.fn(() => vi.fn()),
+      onError: vi.fn(() => vi.fn()),
+      reconnect: vi.fn(),
+      close: vi.fn(),
+    } satisfies RealtimeClient;
+    const setAccessControlProvider = vi.fn();
+    container.instance(apiClientToken, api);
+    container.instance(realtimeClientToken, realtime);
+    const provider = new AuthorizationServiceProvider({
+      container,
+      refine: { setAccessControlProvider },
+    } as never);
+
+    provider.register();
+    expect(
+      container.resolveIfCreated(authorizationClientToken),
+    ).toBeUndefined();
+
+    await provider.boot();
+
+    expect(container.resolve(authorizationClientToken)).toBeInstanceOf(
+      AuthorizationClient,
+    );
+    expect(setAccessControlProvider).toHaveBeenCalledOnce();
+    expect(realtime.subscribe).toHaveBeenCalledTimes(2);
+    expect(realtime.onOpen).toHaveBeenCalledOnce();
   });
 });

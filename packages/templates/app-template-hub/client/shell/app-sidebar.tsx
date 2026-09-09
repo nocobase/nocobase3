@@ -27,7 +27,8 @@ export function AppSidebar({
   mobileOpen,
   onCloseMobile,
 }: AppSidebarProps): ReactElement {
-  const { items: menuItems, denied } = useRouteNavigation(routes);
+  const { items, denied } = useRouteNavigation(routes);
+  const menuItems = orderHubNavigation(items);
   const selectedKey = selectedNavigationId(
     routes,
     useLocation().pathname,
@@ -93,6 +94,21 @@ export function AppSidebar({
         <SidebarFooter collapsed={desktopCollapsed} />
       </aside>
     </>
+  );
+}
+
+const HUB_NAVIGATION_PATHS = ['/apps', '/users', '/roles'] as const;
+
+function orderHubNavigation(
+  items: readonly RouteNavigationItem[],
+): RouteNavigationItem[] {
+  const order = new Map<string, number>(
+    HUB_NAVIGATION_PATHS.map((path, index) => [path, index]),
+  );
+  return [...items].sort(
+    (left, right) =>
+      (order.get(left.route.path) ?? Number.MAX_SAFE_INTEGER) -
+      (order.get(right.route.path) ?? Number.MAX_SAFE_INTEGER),
   );
 }
 
@@ -232,7 +248,6 @@ function containsSelection(
     item.children.some((child) => containsSelection(child, id))
   );
 }
-
 interface NavigationLinkProps {
   readonly collapsed: boolean;
   readonly icon: ReactNode;
@@ -286,7 +301,7 @@ function SidebarFooter({
   const templateName =
     typeof __PORTAL_TEMPLATE_NAME__ === 'string'
       ? __PORTAL_TEMPLATE_NAME__
-      : 'Hub Template';
+      : 'NocoBase Hub';
   const templateVersion =
     typeof __PORTAL_TEMPLATE_VERSION__ === 'string'
       ? __PORTAL_TEMPLATE_VERSION__
