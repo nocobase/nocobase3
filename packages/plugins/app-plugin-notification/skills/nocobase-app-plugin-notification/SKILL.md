@@ -92,7 +92,7 @@ Rules:
 - Keep SMTP passwords, API keys, Webhook URLs, signing secrets, message bodies, and recipient snapshots out of source control and logs.
 - Use authenticated, authorized routes for logs and Provider testing. Keep the test surface disabled in production unless explicitly needed for a controlled verification.
 - Preserve Provider `name` and `type` while Deliveries are pending. A missing or changed Provider makes the persisted Delivery fail; it does not safely reroute.
-- Treat `unknown` as potentially delivered. Check the external Provider using the Attempt metadata before calling `retryDelivery`; require declared Provider idempotency, confirmed non-delivery, or explicit duplicate-risk acceptance.
+- Treat `unknown` as potentially delivered. Check the external Provider using the Attempt metadata before calling `retryDelivery`. Every manual retry requires a reason; when Provider idempotency is unavailable, invoking it accepts possible duplication, so record the evidence and business decision in that reason.
 - Require explicit secondary confirmation before bulk sends, production Provider tests, changing a live Provider identity, or resending an `unknown` Delivery.
 
 Secondary confirmation template:

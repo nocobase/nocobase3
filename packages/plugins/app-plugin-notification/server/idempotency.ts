@@ -45,7 +45,10 @@ export function notificationRequestFingerprint<
       ),
   );
   const canonical = normalizeValue({
-    source: input.source,
+    source: {
+      type: input.source?.type ?? 'application',
+      referenceId: input.source?.referenceId,
+    },
     recipients: sorted(recipients),
     channels,
     routing,
@@ -83,7 +86,7 @@ function normalizeValue(value: unknown): unknown {
   return Object.fromEntries(
     Object.entries(value)
       .filter(([, item]) => item !== undefined)
-      .sort(([left], [right]) => left.localeCompare(right))
+      .sort(([left], [right]) => compareCanonicalStrings(left, right))
       .map(([key, item]) => [key, normalizeValue(item)]),
   );
 }
@@ -92,15 +95,19 @@ function uniqueSorted(values: readonly unknown[]): readonly unknown[] {
   return [
     ...new Map(values.map((value) => [JSON.stringify(value), value])).entries(),
   ]
-    .sort(([left], [right]) => left.localeCompare(right))
+    .sort(([left], [right]) => compareCanonicalStrings(left, right))
     .map(([, value]) => value);
 }
 
 function sorted(values: readonly unknown[]): readonly unknown[] {
   return values
     .map((value) => [JSON.stringify(value), value] as const)
-    .sort(([left], [right]) => left.localeCompare(right))
+    .sort(([left], [right]) => compareCanonicalStrings(left, right))
     .map(([, value]) => value);
+}
+
+function compareCanonicalStrings(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

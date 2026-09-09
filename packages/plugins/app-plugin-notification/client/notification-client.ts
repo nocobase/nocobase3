@@ -29,6 +29,25 @@ export interface NotificationAttempt {
   readonly error?: { readonly message: string; readonly code?: string };
 }
 
+export interface NotificationRetryAudit {
+  readonly id: string;
+  readonly deliveryId: string;
+  readonly resolution: {
+    readonly type:
+      | 'safe_provider_idempotency'
+      | 'duplicate_risk_accepted'
+      | 'terminal_failure';
+    readonly reason: string;
+    readonly requestedAt: string;
+  };
+  readonly providerIdempotency?: {
+    readonly key: 'deliveryId';
+    readonly startedAt: string;
+    readonly expiresAt?: string;
+  };
+  readonly createdAt: string;
+}
+
 export interface NotificationDeliveryDetails {
   readonly delivery: {
     readonly id: string;
@@ -43,6 +62,7 @@ export interface NotificationDeliveryDetails {
     readonly updatedAt: string;
   };
   readonly attempts: readonly NotificationAttempt[];
+  readonly retryAudits: readonly NotificationRetryAudit[];
 }
 
 export interface NotificationLogDetails {

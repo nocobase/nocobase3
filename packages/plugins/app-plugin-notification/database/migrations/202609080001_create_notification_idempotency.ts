@@ -20,8 +20,22 @@ const migration: MigrationDefinition = defineMigration({
       table.json('retryResolution').nullable();
       table.json('providerIdempotency').nullable();
     });
+    await builder.createCollection(
+      'notificationDeliveryRetryAudits',
+      (table) => {
+        table.string('id', { length: 36 }).primary();
+        table.string('deliveryId', { length: 36 }).notNull();
+        table.json('resolution').notNull();
+        table.json('providerIdempotency').nullable();
+        table.datetime('createdAt').notNull();
+        table.index('deliveryId', {
+          name: 'notification_retry_audits_delivery_idx',
+        });
+      },
+    );
   },
   async down({ builder }) {
+    await builder.dropCollection('notificationDeliveryRetryAudits');
     await builder.alterCollection('notificationDeliveries', (table) => {
       table.dropField('providerIdempotency');
       table.dropField('retryResolution');

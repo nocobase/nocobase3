@@ -26,8 +26,9 @@ the key with equivalent input returns the original Notification; reusing it
 with different input is rejected. Consumers can query current state with
 `getByIdempotencyKey()` or `getNotification()`, use `onStatusChanged()` as a
 non-blocking process-local convenience, and call `retryDelivery()` for terminal
-failures or explicitly resolved unknown submissions. Provider capabilities
-determine whether an unknown retry is safe without duplicate-risk confirmation.
+failures or unknown submissions. Every manual retry requires a reason. Provider
+capabilities determine whether an unknown retry is internally audited as safely
+idempotent or as accepting possible duplication.
 
 ## Runtime requirements
 

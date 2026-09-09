@@ -87,27 +87,17 @@ For an operator task, use bounded polling when a process-local listener cannot c
 
 The runtime retries only failures whose Provider returns `disposition: 'same_provider'`, bounded by manager retry settings. It never switches Providers automatically. A `submission_unknown` outcome is terminal `unknown` and is not retried automatically.
 
-A terminal `failed` Delivery can be retried with `retryDelivery({ deliveryId })` after correcting the cause, except when its recipient was unsupported and must be corrected in a new logical send. An `unknown` Delivery is retryable without confirmation only while its Provider declares idempotency for the original `deliveryId`. Otherwise the caller must first confirm non-delivery or explicitly accept duplicate risk, and provide an audit reason:
+A terminal `failed` Delivery can be retried after correcting the cause, except when its recipient was unsupported and must be corrected in a new logical send. Every manual retry requires a non-empty reason. For an `unknown` Delivery without valid Provider idempotency, invoking retry explicitly accepts possible duplication; write the evidence and business decision in the reason:
 
 ```ts
 await notification.retryDelivery({
   deliveryId,
-  resolution: {
-    type: 'confirmed_not_delivered',
-    reason: 'The Provider dashboard has no matching submission.',
-  },
-});
-
-await notification.retryDelivery({
-  deliveryId,
-  resolution: {
-    type: 'accept_duplicate_risk',
-    reason: 'The business owner prefers a possible duplicate to an omission.',
-  },
+  reason:
+    'The Provider dashboard has no matching submission; the business owner approved resending.',
 });
 ```
 
-Never retry a failed Delivery that already has `nextRunAt`; it is already scheduled for an automatic retry. `retryDelivery` always creates another Attempt on the same Delivery and preserves the resolution in the audit trail.
+The server derives the internal audit type as `terminal_failure`, `safe_provider_idempotency`, or `duplicate_risk_accepted`. Never retry a failed Delivery that already has `nextRunAt`; it is already scheduled for an automatic retry. `retryDelivery` first writes an immutable Retry Audit on the same Delivery. It creates another Attempt only after preparation succeeds and Provider submission starts, so a pre-submission failure retains the decision without claiming that a Provider call occurred.
 
 ## Send verification
 

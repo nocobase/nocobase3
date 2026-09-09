@@ -1,19 +1,24 @@
-import type {
-  NotificationAttemptRecord,
-  NotificationDeliveryRecord,
-  NotificationDeliveryStatus,
-  NotificationErrorRecord,
-  NotificationLogBundle,
-  NotificationLogRecord,
-  NotificationLogStatus,
-  NotificationRetryResolutionRecord,
-  NotificationStore,
+import {
+  summarizeNotificationDeliveries,
+  type NotificationAttemptRecord,
+  type NotificationDeliveryRecord,
+  type NotificationDeliveryStatus,
+  type NotificationErrorRecord,
+  type NotificationLogBundle,
+  type NotificationLogRecord,
+  type NotificationRetryAuditRecord,
+  type NotificationRetryResolutionRecord,
+  type NotificationStore,
 } from '../../server/store.js';
 
 export class FakeNotificationStore implements NotificationStore {
   private readonly logs = new Map<string, NotificationLogRecord>();
   private readonly deliveries = new Map<string, NotificationDeliveryRecord>();
   private readonly attempts = new Map<string, NotificationAttemptRecord[]>();
+  private readonly retryAudits = new Map<
+    string,
+    NotificationRetryAuditRecord[]
+  >();
 
   async now(): Promise<string> {
     return new Date().toISOString();
@@ -107,6 +112,12 @@ export class FakeNotificationStore implements NotificationStore {
     deliveryId: string,
   ): Promise<readonly NotificationAttemptRecord[]> {
     return this.attempts.get(deliveryId) ?? [];
+  }
+
+  async listRetryAudits(
+    deliveryId: string,
+  ): Promise<readonly NotificationRetryAuditRecord[]> {
+    return this.retryAudits.get(deliveryId) ?? [];
   }
 
   async claimDelivery(
@@ -282,6 +293,16 @@ export class FakeNotificationStore implements NotificationStore {
           : undefined,
       updatedAt: await this.now(),
     };
+    this.retryAudits.set(id, [
+      ...(this.retryAudits.get(id) ?? []),
+      {
+        id: `retry-audit-${id}-${(this.retryAudits.get(id)?.length ?? 0) + 1}`,
+        deliveryId: id,
+        resolution,
+        providerIdempotency: delivery.providerIdempotency,
+        createdAt: resolution.requestedAt,
+      },
+    ]);
     this.deliveries.set(id, retried);
     return retried;
   }
@@ -325,7 +346,7 @@ export class FakeNotificationStore implements NotificationStore {
     const deliveries = await this.listDeliveries(log.id);
     return {
       ...log,
-      status: summarize(deliveries),
+      status: summarizeNotificationDeliveries(deliveries),
       updatedAt: deliveries.reduce(
         (latest, delivery) =>
           delivery.updatedAt > latest ? delivery.updatedAt : latest,
@@ -333,29 +354,4 @@ export class FakeNotificationStore implements NotificationStore {
       ),
     };
   }
-}
-
-function summarize(
-  deliveries: readonly NotificationDeliveryRecord[],
-): NotificationLogStatus {
-  if (deliveries.every((delivery) => delivery.status === 'pending'))
-    return 'pending';
-  if (
-    deliveries.some(
-      (delivery) =>
-        delivery.status === 'pending' ||
-        delivery.status === 'preparing' ||
-        delivery.status === 'submitting' ||
-        (delivery.status === 'failed' && delivery.nextRunAt !== undefined),
-    )
-  ) {
-    return 'processing';
-  }
-  if (deliveries.some((delivery) => delivery.status === 'unknown'))
-    return 'unknown';
-  if (deliveries.every((delivery) => delivery.status === 'accepted'))
-    return 'completed';
-  if (deliveries.every((delivery) => delivery.status === 'failed'))
-    return 'failed';
-  return 'partial';
 }

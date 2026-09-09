@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import type { DatabaseManager, Row } from '@nocobase/db';
 import {
   isNotificationProviderErrorCategory,
@@ -72,11 +74,18 @@ export interface NotificationAttemptRecord {
 export interface NotificationRetryResolutionRecord {
   readonly type:
     | 'safe_provider_idempotency'
-    | 'confirmed_not_delivered'
-    | 'accept_duplicate_risk'
+    | 'duplicate_risk_accepted'
     | 'terminal_failure';
   readonly reason: string;
   readonly requestedAt: string;
+}
+
+export interface NotificationRetryAuditRecord {
+  readonly id: string;
+  readonly deliveryId: string;
+  readonly resolution: NotificationRetryResolutionRecord;
+  readonly providerIdempotency?: NotificationProviderIdempotencyRecord;
+  readonly createdAt: string;
 }
 
 export interface NotificationLogBundle {
@@ -110,6 +119,9 @@ export interface NotificationStore {
   listAttempts(
     deliveryId: string,
   ): Promise<readonly NotificationAttemptRecord[]>;
+  listRetryAudits(
+    deliveryId: string,
+  ): Promise<readonly NotificationRetryAuditRecord[]>;
   claimDelivery(
     id: string,
     leaseToken: string,
@@ -195,6 +207,14 @@ interface AttemptRow extends Row {
   errorCode?: string;
   errorMessage?: string;
   retryResolution?: NotificationRetryResolutionRecord | string | null;
+}
+
+interface RetryAuditRow extends Row {
+  id: string;
+  deliveryId: string;
+  resolution: NotificationRetryResolutionRecord | string;
+  providerIdempotency?: NotificationProviderIdempotencyRecord | string | null;
+  createdAt: string;
 }
 
 export class DatabaseNotificationStore implements NotificationStore {
@@ -350,6 +370,20 @@ export class DatabaseNotificationStore implements NotificationStore {
       .orderBy('sequence', 'asc')
       .execute<AttemptRow>();
     return rows.map(fromAttemptRow);
+  }
+
+  async listRetryAudits(
+    deliveryId: string,
+  ): Promise<readonly NotificationRetryAuditRecord[]> {
+    const rows = await this.database
+      .query()
+      .selectFrom<RetryAuditRow>('notificationDeliveryRetryAudits')
+      .selectAll()
+      .where('deliveryId', '=', deliveryId)
+      .orderBy('createdAt', 'asc')
+      .orderBy('id', 'asc')
+      .execute<RetryAuditRow>();
+    return rows.map(fromRetryAuditRow);
   }
 
   async claimDelivery(
@@ -532,26 +566,54 @@ export class DatabaseNotificationStore implements NotificationStore {
     resolution: NotificationRetryResolutionRecord,
   ): Promise<NotificationDeliveryRecord | undefined> {
     const now = await this.now();
-    const result = await this.database
-      .query()
-      .updateTable<DeliveryRow>('notificationDeliveries')
-      .set({
-        status: 'pending',
-        nextRunAt: null,
-        lastError: null,
-        retryResolution: JSON.stringify(resolution),
-        ...(resolution.type === 'safe_provider_idempotency'
-          ? {}
-          : { providerIdempotency: null }),
-        leaseToken: null,
-        leaseExpiresAt: null,
-        updatedAt: now,
-      })
-      .where('id', '=', id)
-      .where('status', '=', expectedStatus)
-      .where('nextRunAt', 'is', null)
-      .execute();
-    if (result.updatedCount !== 1) return undefined;
+    const updated = await this.database.transaction(
+      async (connection): Promise<boolean> => {
+        const current = await connection.query
+          .selectFrom<DeliveryRow>('notificationDeliveries')
+          .selectAll()
+          .where('id', '=', id)
+          .where('status', '=', expectedStatus)
+          .where('nextRunAt', 'is', null)
+          .executeTakeFirst<DeliveryRow>();
+        if (!current) return false;
+        const result = await connection.query
+          .updateTable<DeliveryRow>('notificationDeliveries')
+          .set({
+            status: 'pending',
+            nextRunAt: null,
+            lastError: null,
+            retryResolution: JSON.stringify(resolution),
+            ...(resolution.type === 'safe_provider_idempotency'
+              ? {}
+              : { providerIdempotency: null }),
+            leaseToken: null,
+            leaseExpiresAt: null,
+            updatedAt: now,
+          })
+          .where('id', '=', id)
+          .where('status', '=', expectedStatus)
+          .where('nextRunAt', 'is', null)
+          .execute();
+        if (result.updatedCount !== 1) return false;
+        await connection.query
+          .insertInto<RetryAuditRow>('notificationDeliveryRetryAudits')
+          .values({
+            id: randomUUID(),
+            deliveryId: id,
+            resolution: JSON.stringify(resolution),
+            providerIdempotency:
+              typeof current.providerIdempotency === 'string'
+                ? current.providerIdempotency
+                : current.providerIdempotency
+                  ? JSON.stringify(current.providerIdempotency)
+                  : null,
+            createdAt: resolution.requestedAt,
+          })
+          .execute();
+        return true;
+      },
+    );
+    if (!updated) return undefined;
     return this.getDelivery(id);
   }
 
@@ -648,7 +710,7 @@ export function createDatabaseNotificationStore(
   return new DatabaseNotificationStore(database);
 }
 
-function summarize(
+export function summarizeNotificationDeliveries(
   deliveries: readonly NotificationDeliveryRecord[],
 ): NotificationLogStatus {
   if (deliveries.every((item) => item.status === 'pending')) return 'pending';
@@ -700,7 +762,7 @@ function fromLogRow(
     sourceType: row.sourceType,
     sourceReferenceId: row.sourceReferenceId,
     messageSnapshot,
-    status: summarize(deliveries),
+    status: summarizeNotificationDeliveries(deliveries),
     createdAt: row.createdAt,
     updatedAt: deliveries.reduce(
       (latest, delivery) =>
@@ -838,6 +900,19 @@ function fromAttemptRow(row: AttemptRow): NotificationAttemptRecord {
   };
 }
 
+function fromRetryAuditRow(row: RetryAuditRow): NotificationRetryAuditRecord {
+  return {
+    id: row.id,
+    deliveryId: row.deliveryId,
+    resolution: parseRequiredJson<NotificationRetryResolutionRecord>(
+      row.resolution,
+      'retry resolution',
+    ),
+    providerIdempotency: parseProviderIdempotency(row.providerIdempotency),
+    createdAt: row.createdAt,
+  };
+}
+
 function parseRetryResolution(
   value: NotificationRetryResolutionRecord | string | null | undefined,
 ): NotificationRetryResolutionRecord | undefined {
@@ -852,6 +927,15 @@ function parseProviderIdempotency(
   if (!value) return undefined;
   if (typeof value !== 'string') return value;
   return JSON.parse(value) as NotificationProviderIdempotencyRecord;
+}
+
+function parseRequiredJson<T>(value: T | string, label: string): T {
+  if (typeof value !== 'string') return value;
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    throw new Error(`Stored notification ${label} is invalid.`);
+  }
 }
 
 function isUniqueConstraintViolation(error: unknown): boolean {

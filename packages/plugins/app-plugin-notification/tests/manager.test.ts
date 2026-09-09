@@ -882,6 +882,33 @@ describe('NotificationManager registration', () => {
     await queue.close();
   });
 
+  it('derives a self-consistent status snapshot from one Delivery read', async () => {
+    const store = new StaleLogStatusNotificationStore();
+    const { manager, queue } = createEmailManagerHarness({
+      store,
+      send: async () => ({ status: 'accepted' }),
+    });
+
+    const sent = await manager.send({
+      idempotencyKey: 'consistent-status-snapshot-1',
+      to: { type: 'email', address: 'buyer@example.com' },
+      channels: ['email'],
+      content: { body: 'Consistent status.' },
+    });
+
+    await expect(
+      manager.getNotification(sent.notificationId),
+    ).resolves.toMatchObject({
+      status: 'completed',
+      terminal: true,
+      summary: { accepted: 1, pending: 0 },
+      deliveries: [{ status: 'accepted' }],
+    });
+
+    await manager.close();
+    await queue.close();
+  });
+
   it('emits process-local status events without awaiting listener work', async () => {
     const { manager, queue } = createEmailManagerHarness({
       send: async () => ({ status: 'accepted' }),
@@ -941,7 +968,10 @@ describe('NotificationManager registration', () => {
     );
     await gate.captured;
 
-    await manager.retryDelivery({ deliveryId: sent.deliveries[0]!.id });
+    await manager.retryDelivery({
+      deliveryId: sent.deliveries[0]!.id,
+      reason: 'Retry after correcting the terminal failure.',
+    });
     await vi.waitFor(() => expect(statuses).toContain('completed'));
     gate.release();
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -976,7 +1006,19 @@ describe('NotificationManager registration', () => {
       retry: { allowed: true, mode: 'safe' },
     });
     await expect(
-      manager.retryDelivery({ deliveryId: sent.deliveries[0]!.id }),
+      manager.retryDelivery({
+        deliveryId: sent.deliveries[0]!.id,
+        reason: '   ',
+      }),
+    ).rejects.toMatchObject({
+      code: 'NOTIFICATION_DELIVERY_RETRY_NOT_ALLOWED',
+      message: expect.stringContaining('reason'),
+    });
+    await expect(
+      manager.retryDelivery({
+        deliveryId: sent.deliveries[0]!.id,
+        reason: 'Retry after correcting the terminal failure.',
+      }),
     ).resolves.toMatchObject({ status: 'accepted', attemptCount: 2 });
     await expect(
       store.listAttempts(sent.deliveries[0]!.id),
@@ -992,7 +1034,7 @@ describe('NotificationManager registration', () => {
     await queue.close();
   });
 
-  it('requires an explicit resolution before retrying an unsafe unknown Delivery', async () => {
+  it('requires a reason before retrying an unsafe unknown Delivery', async () => {
     const send = vi
       .fn<
         (input: NotificationProviderSendInput) => Promise<ProviderSendResult>
@@ -1018,24 +1060,23 @@ describe('NotificationManager registration', () => {
         mode: 'duplicate_risk_confirmation_required',
       },
     });
-    await expect(manager.retryDelivery({ deliveryId })).rejects.toMatchObject({
+    await expect(
+      manager.retryDelivery({ deliveryId, reason: '   ' }),
+    ).rejects.toMatchObject({
       code: 'NOTIFICATION_DELIVERY_RETRY_NOT_ALLOWED',
     });
     await expect(
       manager.retryDelivery({
         deliveryId,
-        resolution: {
-          type: 'accept_duplicate_risk',
-          reason:
-            'The business owner prefers a possible duplicate to an omission.',
-        },
+        reason:
+          'The business owner prefers a possible duplicate to an omission.',
       }),
     ).resolves.toMatchObject({ status: 'accepted', attemptCount: 2 });
     await expect(store.listAttempts(deliveryId)).resolves.toMatchObject([
       { sequence: 1 },
       {
         sequence: 2,
-        retryResolution: { type: 'accept_duplicate_risk' },
+        retryResolution: { type: 'duplicate_risk_accepted' },
       },
     ]);
 
@@ -1072,9 +1113,12 @@ describe('NotificationManager registration', () => {
       allowed: true,
       mode: 'safe',
     });
-    await expect(manager.retryDelivery({ deliveryId })).resolves.toMatchObject({
-      status: 'accepted',
-    });
+    await expect(
+      manager.retryDelivery({
+        deliveryId,
+        reason: 'Retry within the Provider idempotency window.',
+      }),
+    ).resolves.toMatchObject({ status: 'accepted' });
     expect(send.mock.calls.map(([input]) => input.deliveryId)).toEqual([
       deliveryId,
       deliveryId,
@@ -1116,10 +1160,12 @@ describe('NotificationManager registration', () => {
     const deliveryId = sent.deliveries[0]!.id;
 
     store.setNow('2026-09-01T23:00:00.000Z');
-    await expect(manager.retryDelivery({ deliveryId })).resolves.toMatchObject({
-      status: 'unknown',
-      attemptCount: 2,
-    });
+    await expect(
+      manager.retryDelivery({
+        deliveryId,
+        reason: 'Retry within the Provider idempotency window.',
+      }),
+    ).resolves.toMatchObject({ status: 'unknown', attemptCount: 2 });
     store.setNow('2026-09-02T01:00:00.000Z');
 
     await expect(
@@ -1133,9 +1179,6 @@ describe('NotificationManager registration', () => {
           },
         },
       ],
-    });
-    await expect(manager.retryDelivery({ deliveryId })).rejects.toMatchObject({
-      code: 'NOTIFICATION_DELIVERY_RETRY_NOT_ALLOWED',
     });
     expect(send).toHaveBeenCalledTimes(2);
 
@@ -1182,7 +1225,12 @@ describe('NotificationManager registration', () => {
     const deliveryId = sent.deliveries[0]!.id;
     store.setNow('2026-09-01T00:00:00.900Z');
 
-    await expect(manager.retryDelivery({ deliveryId })).resolves.toMatchObject({
+    await expect(
+      manager.retryDelivery({
+        deliveryId,
+        reason: 'Retry while the Provider idempotency window is active.',
+      }),
+    ).resolves.toMatchObject({
       status: 'unknown',
       attemptCount: 1,
       error: { code: 'PROVIDER_IDEMPOTENCY_EXPIRED' },
@@ -1192,6 +1240,33 @@ describe('NotificationManager registration', () => {
       },
     });
     expect(send).toHaveBeenCalledOnce();
+    await expect(store.listRetryAudits(deliveryId)).resolves.toMatchObject([
+      {
+        resolution: { type: 'safe_provider_idempotency' },
+        providerIdempotency: {
+          key: 'deliveryId',
+          startedAt: '2026-09-01T00:00:00.000Z',
+          expiresAt: '2026-09-01T00:00:01.000Z',
+        },
+      },
+    ]);
+    await expect(manager.logs.get(sent.notificationId)).resolves.toMatchObject({
+      deliveries: [
+        {
+          retryAudits: [{ resolution: { type: 'safe_provider_idempotency' } }],
+        },
+      ],
+    });
+    await expect(
+      manager.retryDelivery({
+        deliveryId,
+        reason: 'Proceed after the idempotency window expired.',
+      }),
+    ).resolves.toMatchObject({ status: 'accepted', attemptCount: 2 });
+    await expect(store.listRetryAudits(deliveryId)).resolves.toMatchObject([
+      { resolution: { type: 'safe_provider_idempotency' } },
+      { resolution: { type: 'duplicate_risk_accepted' } },
+    ]);
 
     await manager.close();
     await queue.close();
@@ -1225,9 +1300,16 @@ describe('NotificationManager registration', () => {
     });
 
     await expect(
-      upgraded.manager.retryDelivery({ deliveryId: sent.deliveries[0]!.id }),
-    ).rejects.toMatchObject({
-      code: 'NOTIFICATION_DELIVERY_RETRY_NOT_ALLOWED',
+      upgraded.manager.getNotification(sent.notificationId),
+    ).resolves.toMatchObject({
+      deliveries: [
+        {
+          retry: {
+            allowed: false,
+            mode: 'duplicate_risk_confirmation_required',
+          },
+        },
+      ],
     });
     expect(upgradedSend).not.toHaveBeenCalled();
 
@@ -1262,9 +1344,16 @@ describe('NotificationManager registration', () => {
     const current = createEmailManagerHarness({ send: currentSend, store });
 
     await expect(
-      current.manager.retryDelivery({ deliveryId: sent.deliveries[0]!.id }),
-    ).rejects.toMatchObject({
-      code: 'NOTIFICATION_DELIVERY_RETRY_NOT_ALLOWED',
+      current.manager.getNotification(sent.notificationId),
+    ).resolves.toMatchObject({
+      deliveries: [
+        {
+          retry: {
+            allowed: false,
+            mode: 'duplicate_risk_confirmation_required',
+          },
+        },
+      ],
     });
     expect(currentSend).not.toHaveBeenCalled();
 
@@ -1393,6 +1482,13 @@ class DelayedLogNotificationStore extends FakeNotificationStore {
       await gate.released;
     }
     return snapshot;
+  }
+}
+
+class StaleLogStatusNotificationStore extends FakeNotificationStore {
+  override async getLog(id: string) {
+    const log = await super.getLog(id);
+    return log ? { ...log, status: 'pending' as const } : undefined;
   }
 }
 

@@ -18,6 +18,7 @@ import {
 import { createNotificationRouter } from './router.js';
 import {
   createDatabaseNotificationStore,
+  summarizeNotificationDeliveries,
   type NotificationDeliveryRecord,
   type NotificationErrorRecord,
   type NotificationLogRecord,
@@ -580,6 +581,13 @@ export class NotificationManager<
   async retryDelivery(
     input: NotificationRetryDeliveryInput,
   ): Promise<NotificationDeliveryStatusSnapshot> {
+    const reason = input.reason?.trim();
+    if (!reason) {
+      throw new NotificationDeliveryRetryError(
+        input.deliveryId,
+        'A retry reason is required.',
+      );
+    }
     const delivery = await this.store.getDelivery(input.deliveryId);
     if (!delivery) {
       throw new NotificationDeliveryRetryError(
@@ -598,7 +606,7 @@ export class NotificationManager<
     const resolution = this.retryResolution(
       delivery,
       decision,
-      input,
+      reason,
       await this.store.now(),
     );
     const retried = await this.store.retryDelivery(
@@ -694,13 +702,17 @@ export class NotificationManager<
       failed: snapshots.filter((item) => item.status === 'failed').length,
       unknown: snapshots.filter((item) => item.status === 'unknown').length,
     };
+    const status = summarizeNotificationDeliveries(deliveries);
+    const updatedAt = deliveries.reduce(
+      (latest, delivery) =>
+        delivery.updatedAt > latest ? delivery.updatedAt : latest,
+      log.updatedAt,
+    );
     return {
       notificationId: log.id,
       idempotencyKey: log.idempotencyKey,
-      status: log.status,
-      terminal: ['completed', 'partial', 'failed', 'unknown'].includes(
-        log.status,
-      ),
+      status,
+      terminal: ['completed', 'partial', 'failed', 'unknown'].includes(status),
       requiresAction:
         summary.unknown > 0 ||
         snapshots.some(
@@ -708,7 +720,7 @@ export class NotificationManager<
             item.status === 'failed' &&
             item.retry.mode !== 'automatic_retry_scheduled',
         ),
-      updatedAt: log.updatedAt,
+      updatedAt,
       summary,
       deliveries: snapshots,
     };
@@ -796,16 +808,9 @@ export class NotificationManager<
   private retryResolution(
     delivery: NotificationDeliveryRecord,
     decision: NotificationDeliveryRetryDecision,
-    input: NotificationRetryDeliveryInput,
+    reason: string,
     requestedAt: string,
   ): NotificationRetryResolutionRecord {
-    const reason = input.resolution?.reason.trim();
-    if (input.resolution && !reason) {
-      throw new NotificationDeliveryRetryError(
-        delivery.id,
-        'A retry resolution reason is required.',
-      );
-    }
     if (delivery.status === 'failed') {
       if (!decision.allowed) {
         throw new NotificationDeliveryRetryError(
@@ -815,35 +820,20 @@ export class NotificationManager<
       }
       return {
         type: 'terminal_failure',
-        reason: reason ?? 'Retry requested after terminal failure.',
+        reason,
         requestedAt,
       };
     }
     if (decision.allowed && decision.mode === 'safe') {
       return {
         type: 'safe_provider_idempotency',
-        reason: reason ?? decision.reason ?? 'Safe idempotent retry requested.',
+        reason,
         requestedAt,
       };
     }
-    if (!input.resolution) {
-      throw new NotificationDeliveryRetryError(
-        delivery.id,
-        decision.reason ?? 'Unknown Delivery requires an explicit resolution.',
-      );
-    }
-    if (
-      input.resolution.type !== 'confirmed_not_delivered' &&
-      input.resolution.type !== 'accept_duplicate_risk'
-    ) {
-      throw new NotificationDeliveryRetryError(
-        delivery.id,
-        'Unknown Delivery retry resolution is invalid.',
-      );
-    }
     return {
-      type: input.resolution.type,
-      reason: reason!,
+      type: 'duplicate_risk_accepted',
+      reason,
       requestedAt,
     };
   }

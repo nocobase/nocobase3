@@ -259,15 +259,7 @@ export type NotificationStatusChangedListener = (
 
 export interface NotificationRetryDeliveryInput {
   readonly deliveryId: string;
-  readonly resolution?:
-    | {
-        readonly type: 'confirmed_not_delivered';
-        readonly reason: string;
-      }
-    | {
-        readonly type: 'accept_duplicate_risk';
-        readonly reason: string;
-      };
+  readonly reason: string;
 }
 
 export interface NotificationProviderConfig {

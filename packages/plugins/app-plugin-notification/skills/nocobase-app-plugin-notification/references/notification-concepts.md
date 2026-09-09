@@ -59,4 +59,4 @@ Delivery adds `preparing`, `submitting`, and `accepted`. A failed Delivery with 
 
 The manager persists work before dispatching the queue job. If queue dispatch fails, the reconciler can enqueue ready Deliveries later. Leases protect concurrent workers. An expired lease during preparation returns the Delivery to pending; an expired lease during submission becomes unknown because the external effect cannot be proven absent.
 
-Use Notification, Delivery, and Attempt records as the audit trail. A manual Delivery retry creates a new Attempt on the same Delivery and records its retry resolution. Preserve them during diagnosis and recovery.
+Use Notification, Delivery, Retry Audit, and Attempt records as the audit trail. Every accepted manual retry request creates an immutable Retry Audit on the same Delivery, including the decision and Provider-idempotency evidence available at that time. Provider submission then creates an Attempt; a retry that stops during preparation has a Retry Audit without another Attempt. Preserve them during diagnosis and recovery.

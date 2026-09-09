@@ -221,29 +221,18 @@ const unsubscribe = notification.onStatusChanged(
 
 `idempotencyKey` 必传，由调用方按业务事件、收件人范围、Channel，以及必要时的 Provider 范围稳定生成。同一逻辑发送发生超时、重复提交或服务恢复时必须复用原键。相同键和等价输入返回原 Notification，并令 `deduplicated` 为 `true`；相同键配不同内容会抛出 `IDEMPOTENCY_KEY_CONFLICT`。当前不提供 `idempotencyExpiresAt`，键不会因调用方等待超时而自动失效。
 
-对终态 `failed`，可在问题修复后调用 `retryDelivery({ deliveryId })`。如果 Delivery 已有 `nextRunAt`，表示自动重试已排期，不允许再手工重试。接收人类型不受 Channel 支持时，原 Delivery 无法原地修正，必须用正确接收人发起新的业务发送。
+对终态 `failed`，可在问题修复后调用 `retryDelivery`。如果 Delivery 已有 `nextRunAt`，表示自动重试已排期，不允许再手工重试。接收人类型不受 Channel 支持时，原 Delivery 无法原地修正，必须用正确接收人发起新的业务发送。
 
-对 `unknown`，只有 Provider 声明并仍处于 `deliveryId` 幂等保留期内时，才能直接重试。否则必须明确提供以下一种处理结论，并记录原因：
+所有手工重试都必须提供非空 `reason`。服务端会根据 Delivery 状态和 Provider 幂等能力记录内部处理类型。对 `unknown`，如果 Provider 无法保证安全幂等，那么调用重试就表示接受可能重复发送的风险，`reason` 应写明判断依据：
 
 ```ts
 await notification.retryDelivery({
   deliveryId,
-  resolution: {
-    type: 'confirmed_not_delivered',
-    reason: 'Provider 后台未找到对应提交记录。',
-  },
-});
-
-await notification.retryDelivery({
-  deliveryId,
-  resolution: {
-    type: 'accept_duplicate_risk',
-    reason: '业务确认相比漏发更愿意承担重复风险。',
-  },
+  reason: 'Provider 后台未找到对应提交记录，业务同意重新发送。',
 });
 ```
 
-重试会在原 Delivery 上创建新的 Attempt，不创建新的 Notification；原始状态和处理结论会保留在审计记录中。
+重试会先在原 Delivery 上写入 Retry Audit，不创建新的 Notification。服务端内部记录 `terminal_failure`、`safe_provider_idempotency` 或 `duplicate_risk_accepted`；只有进入 Provider 提交阶段才会创建新的 Attempt。
 
 ## 常见输入错误
 

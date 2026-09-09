@@ -29,7 +29,7 @@ Delivery 还会出现 `preparing`、`submitting` 和 `accepted`。其中：
 - `failed`——投递失败；如果存在 `nextRunAt`，会在该时间后重试
 - `unknown`——消息可能已经被 Provider 接受，不会自动重试
 
-`accepted` 不等于终端用户已经阅读，也不保证供应商最终送达。遇到 `unknown` 时，应先查询供应商记录；只有 Provider 声明的幂等能力仍有效，或调用方明确确认未送达/接受重复风险后，才通过 `retryDelivery()` 在原 Delivery 上重试。
+`accepted` 不等于终端用户已经阅读，也不保证供应商最终送达。遇到 `unknown` 时，应先查询供应商记录。所有手工重试都必须填写原因；Provider 幂等能力仍有效时可安全重试，否则调用 `retryDelivery()` 即表示接受可能重复发送的风险，原因中应记录判断依据和业务决定。
 
 ## 查看 Attempt
 

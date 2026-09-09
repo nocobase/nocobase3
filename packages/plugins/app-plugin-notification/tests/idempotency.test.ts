@@ -71,6 +71,15 @@ describe('notification idempotency', () => {
     );
   });
 
+  it('treats omitted and explicit default source as equivalent', () => {
+    const omitted = request({ source: undefined });
+    const explicit = request({ source: { type: 'application' } });
+
+    expect(notificationRequestFingerprint(omitted)).toBe(
+      notificationRequestFingerprint(explicit),
+    );
+  });
+
   it('requires a trimmed key with a bounded length', () => {
     expect(() =>
       validateNotificationIdempotencyKey('order:42:user:7'),

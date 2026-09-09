@@ -313,7 +313,14 @@ describe('DatabaseNotificationStore', () => {
     );
     const attempt = createAttempt();
     const started = await store.startAttempt(
-      claimed!,
+      {
+        ...claimed!,
+        providerIdempotency: {
+          key: 'deliveryId',
+          startedAt: '2026-08-24T00:00:01.000Z',
+          expiresAt: '2026-08-25T00:00:01.000Z',
+        },
+      },
       attempt,
       '2026-08-24T00:01:00.000Z',
     );
@@ -330,16 +337,31 @@ describe('DatabaseNotificationStore', () => {
 
     await expect(
       store.retryDelivery('delivery-1', 'unknown', {
-        type: 'confirmed_not_delivered',
+        type: 'duplicate_risk_accepted',
         reason: 'Provider dashboard contains no matching request.',
         requestedAt: '2026-08-24T00:03:00.000Z',
       }),
     ).resolves.toMatchObject({
       status: 'pending',
-      retryResolution: { type: 'confirmed_not_delivered' },
+      retryResolution: { type: 'duplicate_risk_accepted' },
       lastError: undefined,
       providerIdempotency: undefined,
     });
+    await expect(store.listRetryAudits('delivery-1')).resolves.toMatchObject([
+      {
+        deliveryId: 'delivery-1',
+        resolution: {
+          type: 'duplicate_risk_accepted',
+          reason: 'Provider dashboard contains no matching request.',
+          requestedAt: '2026-08-24T00:03:00.000Z',
+        },
+        providerIdempotency: {
+          key: 'deliveryId',
+          startedAt: '2026-08-24T00:00:01.000Z',
+          expiresAt: '2026-08-25T00:00:01.000Z',
+        },
+      },
+    ]);
   });
 });
 
