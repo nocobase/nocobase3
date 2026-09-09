@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { LLMProvider } from '@nocobase/ai-employee';
 import { BaseChatMessageConverters } from '../server/agent/chat-message-converters.js';
 
+import { AIEmployeeChatMessageConverters } from '../server/agent/ai-employee/message-converters.js';
 const prepareStoredAssistantAdditionalKwargs = vi.fn((value) => value);
 const context = {
   providerName: 'test-provider',
@@ -10,6 +11,7 @@ const context = {
   model: 'test-model',
   provider: {
     prepareStoredAssistantAdditionalKwargs,
+    reshapeAIMessage: vi.fn(),
   } as unknown as LLMProvider,
 };
 
@@ -85,6 +87,30 @@ describe('BaseChatMessageConverters', () => {
     expect(tool.metadata).toMatchObject({
       toolCallId: 'call-1',
       toolName: 'search',
+    });
+  });
+
+  it('stores assistant tool calls on the complete message input', async () => {
+    const converters = new AIEmployeeChatMessageConverters({
+      employee: { username: 'dara' },
+      agentContext: { logger: {} },
+      skillSettings: {},
+    } as never);
+    const stored = await converters.assistant.toStored(
+      new AIMessage({
+        content: 'answer',
+        tool_calls: [
+          { id: 'call-1', name: 'search', args: { query: 'NocoBase' } },
+        ],
+      }),
+      context,
+    );
+
+    expect(stored).toMatchObject({
+      role: 'dara',
+      toolCalls: [
+        { id: 'call-1', name: 'search', args: { query: 'NocoBase' } },
+      ],
     });
   });
 });

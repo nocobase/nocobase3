@@ -186,6 +186,22 @@ describe('fixed AgentService contracts', () => {
       'implements ToolCallPolicy',
     );
   });
+
+  it('keeps split-table persistence behind the conversation message store', () => {
+    const types = read('agent/types.ts');
+    const middleware = read('agent/middleware/conversation.ts');
+
+    expect(types).toMatch(
+      /saveAssistantMessage\(\s*message: AIMessageInput,?\s*\)/,
+    );
+    expect(types).toMatch(
+      /saveToolMessages\(\s*sourceMessageId: string,\s*messages: AIMessageInput\[\],?\s*\)/,
+    );
+    expect(types).not.toMatch(/\binitialize\(|\bconfirm\(/);
+    expect(middleware).not.toContain('conversation.toolCalls.initialize');
+    expect(middleware).not.toContain('conversation.toolCalls.confirm');
+    expect(middleware).not.toContain('toolCallIds');
+  });
   it('owns the only standard middleware builder and preserves its order', () => {
     const service = read('agent/agent-service.ts');
     const pipeline = read('agent/middleware/pipeline.ts');
