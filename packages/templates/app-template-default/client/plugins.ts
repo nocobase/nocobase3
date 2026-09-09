@@ -3,7 +3,6 @@ import {
   type AppClientPlugins,
 } from '@nocobase/app-client/plugins';
 import aiEmployee from '@nocobase/app-plugin-ai-employee/client';
-import aiKnowledgeBase from '@nocobase/app-plugin-ai-knowledge-base/client';
 import authentication from '@nocobase/app-plugin-authentication/client';
 import authorization from '@nocobase/app-plugin-authorization/client';
 import install from '@nocobase/app-plugin-install/client';
@@ -19,7 +18,6 @@ import file from '@nocobase/app-plugin-file/client';
 const clientPlugins: AppClientPlugins = defineClientPlugins([
   authentication(),
   aiEmployee(),
-  aiKnowledgeBase(),
   authorization(),
   i18n(),
   install(),

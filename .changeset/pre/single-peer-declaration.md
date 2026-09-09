@@ -1,6 +1,5 @@
 ---
 '@nocobase/app-plugin-ai-employee': patch
-'@nocobase/app-plugin-ai-knowledge-base': patch
 '@nocobase/app-plugin-authentication': patch
 '@nocobase/app-plugin-authorization': patch
 '@nocobase/app-plugin-file': patch
