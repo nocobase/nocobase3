@@ -6,7 +6,7 @@ import {
   selectedNavigationId,
   type RouteNavigationItem,
 } from '../routing/route-navigation.js';
-import { ChevronRight, List, ShieldCheck, X } from 'lucide-react';
+import { ChevronRight, ShieldCheck, X } from 'lucide-react';
 import { useState, type ReactElement, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router';
 
@@ -116,7 +116,7 @@ export function NavigationTree({
   const isSelected = routeKey(item.route) === selectedKey;
   const children = item.children ?? [];
   const Icon = item.route.navigation?.icon;
-  const icon = Icon ? <Icon /> : <List />;
+  const icon = Icon ? <Icon /> : null;
 
   const selected = containsSelection(item, selectedKey);
   const [disclosure, setDisclosure] = useState({
@@ -179,8 +179,10 @@ export function NavigationTree({
           title={collapsed ? label : undefined}
         >
           <span className='flex min-w-0 items-center gap-3'>
-            <NavigationIcon>{icon}</NavigationIcon>
-            <span className={`truncate ${collapsed ? 'md:hidden' : ''}`}>
+            {icon ? <NavigationIcon>{icon}</NavigationIcon> : null}
+            <span
+              className={`truncate ${collapsed && icon ? 'md:hidden' : ''}`}
+            >
               {label}
             </span>
           </span>
@@ -256,8 +258,8 @@ function NavigationLink({
       title={collapsed ? label : undefined}
       to={route}
     >
-      <NavigationIcon>{icon}</NavigationIcon>
-      <span className={`truncate ${collapsed ? 'md:hidden' : ''}`}>
+      {icon ? <NavigationIcon>{icon}</NavigationIcon> : null}
+      <span className={`truncate ${collapsed && icon ? 'md:hidden' : ''}`}>
         {label}
       </span>
     </Link>

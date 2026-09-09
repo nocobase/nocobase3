@@ -74,6 +74,9 @@ describe('application shell', () => {
     renderApplication('/orders/42', createAuthProvider(true), [parent]);
     expect(await screen.findByText('Order detail')).toBeVisible();
     expect(screen.getByText('Orders layout')).toBeVisible();
+    expect(
+      screen.getByRole('link', { name: 'Orders' }).querySelector('svg'),
+    ).toBeNull();
     expect(screen.getByRole('link', { name: 'Orders' })).toHaveAttribute(
       'aria-current',
       'page',
