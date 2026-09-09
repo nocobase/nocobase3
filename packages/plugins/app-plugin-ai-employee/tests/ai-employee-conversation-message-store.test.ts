@@ -1,10 +1,62 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+import { AIEmployeeConversationMessageStore } from '../server/agent/ai-employee/conversation-message-store.js';
 
 const serverRoot = path.resolve(import.meta.dirname, '../server');
 const read = (relative: string): string =>
   fs.readFileSync(path.join(serverRoot, relative), 'utf8');
+
+function createFixture() {
+  const transaction = { id: 'transaction-1' };
+  const target = {
+    addMessages: vi.fn(),
+    getMessage: vi.fn(async () => null),
+    removeMessages: vi.fn(async () => undefined),
+  };
+  const conversation = {
+    withTransaction: vi.fn(async (callback) => callback(target, transaction)),
+    listMessages: vi.fn(async () => []),
+    getMessage: vi.fn(async () => null),
+    addMessages: vi.fn(),
+    removeMessages: vi.fn(async () => undefined),
+  };
+  const toolMessages = {
+    create: vi.fn(async ({ values }) => values),
+    update: vi.fn(async () => 1),
+  };
+  const conversations = { update: vi.fn(async () => 1) };
+  const toolCallPolicy = {
+    getToolsMap: vi.fn(
+      async () =>
+        new Map([
+          [
+            'knownTool',
+            { definition: { name: 'knownTool' }, execution: 'frontend' },
+          ],
+        ]),
+    ),
+    isAutoCall: vi.fn(async () => true),
+  };
+  const store = new AIEmployeeConversationMessageStore({
+    sessionId: 'session-1',
+    conversation,
+    conversations,
+    toolMessages,
+    snowflake: { generate: vi.fn(() => 101) },
+    toolCallPolicy,
+  } as never);
+  return {
+    transaction,
+    target,
+    conversation,
+    toolMessages,
+    conversations,
+    toolCallPolicy,
+    store,
+  };
+}
 
 describe('AI employee conversation message persistence boundary', () => {
   it('owns assistant tool-call initialization in a dedicated message store', () => {
@@ -21,5 +73,95 @@ describe('AI employee conversation message persistence boundary', () => {
     expect(source).toContain('Tool message requires metadata.toolCallId');
     expect(source).toContain("values: { invokeStatus: 'confirmed' }");
     expect(source).toContain('toolCallId: { $in: toolCallIds }');
+  });
+
+  it('initializes known and missing calls from the persisted assistant message', async () => {
+    const fixture = createFixture();
+    fixture.target.addMessages.mockResolvedValue({
+      messageId: 'persisted-message',
+      sessionId: 'session-1',
+      role: 'dara',
+      content: { type: 'text', content: 'answer' },
+      toolCalls: [
+        { id: 'call-1', name: 'knownTool', args: { value: 1 } },
+        { id: 'call-2', name: 'missingTool', args: { value: 2 } },
+      ],
+    });
+
+    const result = await fixture.store.saveAssistantMessage({
+      role: 'dara',
+      content: { type: 'text', content: 'answer' },
+      toolCalls: [{ id: 'input-call', name: 'ignoredTool', args: {} }],
+    });
+
+    expect(fixture.toolMessages.create).toHaveBeenCalledWith(
+      {
+        values: [
+          expect.objectContaining({
+            messageId: 'persisted-message',
+            toolCallId: 'call-1',
+            invokeStatus: 'init',
+            execution: 'frontend',
+            auto: true,
+          }),
+          expect.objectContaining({
+            messageId: 'persisted-message',
+            toolCallId: 'call-2',
+            status: 'error',
+            content: 'Tool missingTool not found',
+            invokeStatus: 'done',
+            execution: 'backend',
+          }),
+        ],
+      },
+      { connection: fixture.transaction },
+    );
+    expect(result.message.messageId).toBe('persisted-message');
+    expect(result.initializedToolCalls).toHaveLength(2);
+    expect(result.initializedToolCalls[1]?.invokeStartTime).toBeInstanceOf(
+      Date,
+    );
+    expect(result.initializedToolCalls[1]?.invokeEndTime).toBe(
+      result.initializedToolCalls[1]?.invokeStartTime,
+    );
+  });
+
+  it('does not access the tool-message repository without persisted tool calls', async () => {
+    const fixture = createFixture();
+    fixture.target.addMessages.mockResolvedValue({
+      messageId: 'persisted-message',
+      sessionId: 'session-1',
+      role: 'dara',
+      content: { type: 'text', content: 'answer' },
+    });
+
+    await expect(
+      fixture.store.saveAssistantMessage({
+        role: 'dara',
+        content: { type: 'text', content: 'answer' },
+      }),
+    ).resolves.toMatchObject({ initializedToolCalls: [] });
+    expect(fixture.toolMessages.create).not.toHaveBeenCalled();
+    expect(fixture.toolCallPolicy.getToolsMap).not.toHaveBeenCalled();
+  });
+
+  it('propagates initialization failures from the message transaction', async () => {
+    const fixture = createFixture();
+    fixture.target.addMessages.mockResolvedValue({
+      messageId: 'persisted-message',
+      sessionId: 'session-1',
+      toolCalls: [{ id: 'call-1', name: 'knownTool', args: {} }],
+    });
+    fixture.toolMessages.create.mockRejectedValue(
+      new Error('initialize failed'),
+    );
+
+    await expect(
+      fixture.store.saveAssistantMessage({
+        role: 'dara',
+        content: { type: 'text', content: 'answer' },
+      }),
+    ).rejects.toThrow('initialize failed');
+    expect(fixture.conversation.withTransaction).toHaveBeenCalledOnce();
   });
 });
