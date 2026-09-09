@@ -1,7 +1,6 @@
 ---
 '@nocobase/create-plugin': patch
 '@nocobase/app-plugin-queue-example': patch
-'@nocobase/app-plugin-system-info': patch
 '@nocobase/app-plugin-routes-example': patch
 '@nocobase/app-plugin-database-example': patch
 '@nocobase/app-plugin-workflow': patch
