@@ -169,32 +169,7 @@ export function createAIEmployeeConversationProvider(
         }
         throw new Error('Fail to create new agent thread');
       },
-      shouldFork: (operation, request) =>
-        operation === 'fork' ||
-        (Boolean(request.messageId) && options.legacy !== true),
       update: (thread: AgentThread) => messageStore.updateThread(thread),
-      buildInitialState: (messages) => {
-        const toolMessage = messages
-          .slice()
-          .reverse()
-          .find((message) => message.toolCalls?.length);
-        return {
-          messageId: toolMessage?.messageId,
-          lastMessageIndex: {
-            lastHumanMessageIndex: messages.filter(
-              (message) => message.role === 'user',
-            ).length,
-            lastAIMessageIndex: messages.filter(
-              (message) => message.role === username,
-            ).length,
-            lastToolMessageIndex: messages.filter(
-              (message) => message.role === 'tool',
-            ).length,
-            lastMessageIndex: messages.length,
-          },
-        };
-      },
-      useCheckpointer: () => from === 'main-agent',
     },
     beforeExecution: async (mode) => {
       await options.repositories.aiConversations.update({

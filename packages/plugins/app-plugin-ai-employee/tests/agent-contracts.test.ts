@@ -51,6 +51,26 @@ describe('fixed AgentService contracts', () => {
     expect(prepared).not.toMatch(/\bmiddleware\??:/);
   });
 
+  it('keeps thread execution policy private to AgentService', () => {
+    const types = read('agent/types.ts');
+    const service = read('agent/agent-service.ts');
+    const providerSources = [
+      'agent/providers.ts',
+      'agent/ai-employee/providers.ts',
+    ]
+      .map(read)
+      .join('\n');
+
+    for (const method of [
+      'shouldFork',
+      'buildInitialState',
+      'useCheckpointer',
+    ]) {
+      expect(types).not.toContain(`${method}(`);
+      expect(providerSources).not.toContain(`${method}(`);
+      expect(service).toContain(`private ${method}(`);
+    }
+  });
   it('keeps request-derived execution details out of chat context providers', () => {
     const providerSources = [
       'agent/providers.ts',

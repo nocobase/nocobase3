@@ -300,10 +300,7 @@ export interface ConversationToolCallStore {
 export interface ConversationThreadStore {
   current(): Promise<AgentThread | undefined>;
   fork(provider: LLMProvider): Promise<AgentThread | undefined>;
-  shouldFork(operation: AgentOperation, request: AgentRequest): boolean;
   update(thread: AgentThread): Promise<void>;
-  buildInitialState(messages: AIMessage[]): AgentGraphState;
-  useCheckpointer(): boolean;
 }
 
 export interface ConversationStreamStore {

@@ -10,7 +10,6 @@ import {
   type AgentAbortHandle,
   type AgentExecutionMode,
   type AgentFeatureOptions,
-  type AgentGraphState,
   type AgentInterruptAction,
   type AgentProviders,
   type AgentThread,
@@ -283,40 +282,8 @@ class MemoryConversationThreadStore implements ConversationThreadStore {
     return this.thread();
   }
 
-  public shouldFork(): boolean {
-    return false;
-  }
-
   public async update(value: AgentThread): Promise<void> {
     this.state.thread = Math.max(this.state.thread, value.thread);
-  }
-
-  public buildInitialState(history: StoredMessage[]): AgentGraphState {
-    return {
-      messageId: history
-        .slice()
-        .reverse()
-        .find((message) => message.toolCalls?.length)?.messageId,
-      lastMessageIndex: {
-        lastHumanMessageIndex: history.filter(
-          (message) => message.role === 'user',
-        ).length,
-        lastAIMessageIndex: history.filter(
-          (message) =>
-            message.role !== 'user' &&
-            message.role !== 'tool' &&
-            message.role !== 'system',
-        ).length,
-        lastToolMessageIndex: history.filter(
-          (message) => message.role === 'tool',
-        ).length,
-        lastMessageIndex: history.length,
-      },
-    };
-  }
-
-  public useCheckpointer(): boolean {
-    return false;
   }
 
   private thread(): AgentThread {

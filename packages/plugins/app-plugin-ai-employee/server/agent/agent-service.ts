@@ -4,10 +4,12 @@ import { createAgent } from 'langchain';
 import { buildTool } from '@nocobase/ai-employee';
 import type {
   AgentContext,
+  AIMessage,
   AIMessageInput,
   LLMProvider,
 } from '@nocobase/ai-employee';
 import type {
+  AgentGraphState,
   AgentInterruptAction,
   AgentOperation,
   AgentProviders,
@@ -157,6 +159,44 @@ export class AgentService {
   private resolveLLM(request: AgentRequest): Promise<ResolvedAgentLLM> {
     return this.providers.chatContext.resolveLLM(request);
   }
+
+  private shouldFork(
+    operation: AgentOperation,
+    request: AgentRequest,
+  ): boolean {
+    return operation === 'fork' || Boolean(request.messageId);
+  }
+
+  private buildInitialState(messages: AIMessage[]): AgentGraphState {
+    const assistantRole = this.providers.conversation.identity.username;
+    const toolMessage = messages
+      .slice()
+      .reverse()
+      .find((message) => message.toolCalls?.length);
+    return {
+      messageId: toolMessage?.messageId,
+      lastMessageIndex: {
+        lastHumanMessageIndex: messages.filter(
+          (message) => message.role === 'user',
+        ).length,
+        lastAIMessageIndex: messages.filter((message) =>
+          assistantRole
+            ? message.role === assistantRole
+            : message.role !== 'user' &&
+              message.role !== 'tool' &&
+              message.role !== 'system',
+        ).length,
+        lastToolMessageIndex: messages.filter(
+          (message) => message.role === 'tool',
+        ).length,
+        lastMessageIndex: messages.length,
+      },
+    };
+  }
+
+  private useCheckpointer(): boolean {
+    return Boolean(this.providers.checkpointer);
+  }
   private async prepare(
     operation: AgentOperation,
     request: AgentRequest,
@@ -197,11 +237,11 @@ export class AgentService {
       : new Set(sourceTools.map((tool) => tool.definition.name));
     const resolvedTools = llm.provider.resolveTools(sourceTools.map(buildTool));
     let thread = await conversation.threads.current();
-    if (conversation.threads.shouldFork(operation, request)) {
+    if (this.shouldFork(operation, request)) {
       thread = await conversation.threads.fork(llm.provider);
     }
     const state = shouldLoadHistory
-      ? conversation.threads.buildInitialState(history)
+      ? this.buildInitialState(history)
       : undefined;
     const input = request.userDecisions?.decisions?.length
       ? new Command({
@@ -225,7 +265,7 @@ export class AgentService {
       },
       recursionLimit: 200,
       configurable:
-        conversation.threads.useCheckpointer() && thread
+        this.useCheckpointer() && thread
           ? { thread_id: thread.threadId }
           : undefined,
       writer: request.writer,
@@ -245,7 +285,7 @@ export class AgentService {
       config,
       state,
       thread,
-      checkpointer: conversation.threads.useCheckpointer()
+      checkpointer: this.useCheckpointer()
         ? this.providers.checkpointer
         : undefined,
       metadata: {
