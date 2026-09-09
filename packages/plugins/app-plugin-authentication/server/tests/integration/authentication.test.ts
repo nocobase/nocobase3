@@ -134,6 +134,30 @@ describe('Authentication', () => {
     });
   });
 
+  it('reports stable conflicts for duplicate administrator-created identities', async () => {
+    const users = createUserAdministrationService({
+      auth,
+      connection: database.connection(),
+    });
+
+    await expect(
+      users.create({
+        name: 'Duplicate email',
+        username: 'another.user',
+        email: 'ALICE@EXAMPLE.COM',
+        password: 'correct horse battery staple',
+      }),
+    ).rejects.toMatchObject({ code: 'USER_EMAIL_CONFLICT' });
+    await expect(
+      users.create({
+        name: 'Duplicate username',
+        username: 'ALICE.ADMIN',
+        email: 'another@example.com',
+        password: 'correct horse battery staple',
+      }),
+    ).rejects.toMatchObject({ code: 'USER_USERNAME_CONFLICT' });
+  });
+
   it('signs in with a normalized username without a display username field', async () => {
     const response = await router.request('/api/auth/sign-in/username', {
       method: 'POST',

@@ -1,6 +1,7 @@
 import {
   authenticationToken,
   type Auth,
+  UserAdministrationError,
 } from '@nocobase/app-plugin-authentication';
 import {
   authorizationToken,
@@ -101,6 +102,36 @@ describe('@nocobase/app-plugin-users API routes', () => {
     expect(JSON.stringify(logger.info.mock.calls)).not.toContain(
       'do-not-log-this',
     );
+  });
+
+  it('returns 409 when an administrator creates a duplicate identity', async () => {
+    const service = userService();
+    vi.mocked(service.create).mockRejectedValue(
+      new UserAdministrationError(
+        'USER_EMAIL_CONFLICT',
+        'A user with this email already exists',
+      ),
+    );
+    const router = await apiRoutes.createRouter(
+      createApplication('allowed', service),
+    );
+
+    const response = await router.request('/users', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Alice',
+        email: 'alice@example.com',
+        password: 'secret123',
+        roleScopes: { hub: 'hub-viewer' },
+      }),
+    });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      code: 'USER_EMAIL_CONFLICT',
+      message: 'A user with this email already exists',
+    });
   });
 
   it.each([

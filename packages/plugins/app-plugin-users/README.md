@@ -47,7 +47,10 @@ Users does not create roles or grant access by itself.
 Authentication owns the `user`, `account`, and `session` tables. This plugin
 uses Authentication's public administration service and never duplicates or
 directly owns those records. Creating a user and assigning application roles
-uses one database transaction.
+uses one database transaction. Password reset and database Session revocation
+also share a transaction, so a revocation failure does not leave the new
+password committed. Duplicate administrator-created emails or usernames return
+a stable `409` conflict instead of exposing a database error.
 
 ## Client contract
 

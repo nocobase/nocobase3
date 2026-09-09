@@ -6,7 +6,7 @@ import {
   createMigrator,
   type DatabaseManager,
 } from '@nocobase/db';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   createHubUserRoleScope,
@@ -85,6 +85,31 @@ describe('Hub user role scope', () => {
         scope.replace('user-1', ['hub-viewer', 'hub-operator'], connection),
       ),
     ).rejects.toMatchObject({ code: 'INVALID_ROLE_SCOPE_VALUE' });
+  });
+
+  it('loads one page of Hub roles through one batch read', async () => {
+    await createUser(database, 'user-1');
+    await createUser(database, 'user-2');
+    await authorization.permissionSets.assign({
+      subject: { type: 'user', id: 'user-1' },
+      permissionSet: 'hub-operator',
+    });
+    const listAssignments = vi.spyOn(
+      authorization.permissionSets,
+      'listAssignments',
+    );
+    vi.spyOn(authorization.permissionSets, 'withConnection').mockReturnValue(
+      authorization.permissionSets,
+    );
+    const scope = createHubUserRoleScope(authorization);
+
+    await expect(
+      scope.getMany?.(['user-1', 'user-2'], database.connection()),
+    ).resolves.toEqual({
+      'user-1': 'hub-operator',
+      'user-2': '',
+    });
+    expect(listAssignments).toHaveBeenCalledTimes(1);
   });
 
   it('protects the last enabled Hub administrator', async () => {

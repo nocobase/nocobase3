@@ -51,7 +51,12 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
         );
       }
       if (error instanceof UserAdministrationError) {
-        const status = error.code === 'USER_NOT_FOUND' ? 404 : 400;
+        const status =
+          error.code === 'USER_NOT_FOUND'
+            ? 404
+            : error.code.endsWith('_CONFLICT')
+              ? 409
+              : 400;
         return context.json(
           { code: error.code, message: error.message },
           status,

@@ -173,8 +173,12 @@ class DefaultUserManagementService implements UserManagementService {
     return this.withRoleScopes(user, this.services.database.connection());
   }
 
-  resetPassword(userId: string, password: string): Promise<void> {
-    return this.services.users.resetPassword(userId, password);
+  async resetPassword(userId: string, password: string): Promise<void> {
+    await this.services.database.transaction((connection) =>
+      this.services.users
+        .withConnection(connection)
+        .resetPassword(userId, password),
+    );
   }
 
   revokeSessions(userId: string): Promise<void> {

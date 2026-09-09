@@ -103,6 +103,8 @@ uses it for list pages and falls back to `get()` for existing scopes.
   requested `user` action return `403`.
 - Creating a user with a required role scope creates both records, while role
   assignment failure rolls back the user.
+- Duplicate emails or usernames return a stable `409` conflict. Password reset
+  and database Session revocation commit or roll back together.
 - Disabling a user invalidates HTTP Sessions and Realtime connections; enabling
   the user requires a new login.
 - Role changes become visible after transaction commit and do not alter

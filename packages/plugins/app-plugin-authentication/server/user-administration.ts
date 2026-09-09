@@ -60,7 +60,12 @@ export interface UserAdministrationService {
 export class UserAdministrationError extends Error {
   constructor(
     readonly code:
-      'USER_NOT_FOUND' | 'PASSWORD_TOO_SHORT' | 'PASSWORD_TOO_LONG',
+      | 'USER_NOT_FOUND'
+      | 'USER_EMAIL_CONFLICT'
+      | 'USER_USERNAME_CONFLICT'
+      | 'USER_IDENTITY_CONFLICT'
+      | 'PASSWORD_TOO_SHORT'
+      | 'PASSWORD_TOO_LONG',
     message: string,
   ) {
     super(message);
@@ -150,16 +155,21 @@ class DefaultUserAdministrationService implements UserAdministrationService {
   ): Promise<AdministratedUser> {
     const context = await this.options.auth.administrationContext();
     validatePassword(input.password, context.password.config);
-    const user = await context.internalAdapter.createUser(
-      {
-        name: requiredText(input.name, 'User name'),
-        username: optionalUsername(input.username),
-        email: requiredText(input.email, 'User email').toLowerCase(),
-        emailVerified: false,
-        disabledAt: null,
-      },
-      { method: 'admin' },
-    );
+    const username = optionalUsername(input.username);
+    const email = normalizedEmail(input.email);
+    await this.assertIdentityAvailable({ email, username });
+    const user = await context.internalAdapter
+      .createUser(
+        {
+          name: requiredText(input.name, 'User name'),
+          username,
+          email,
+          emailVerified: false,
+          disabledAt: null,
+        },
+        { method: 'admin' },
+      )
+      .catch(throwIdentityConflict);
     await context.internalAdapter.createAccount({
       issuer: 'local:credential',
       accountId: user.id,
@@ -176,17 +186,30 @@ class DefaultUserAdministrationService implements UserAdministrationService {
   ): Promise<AdministratedUser> {
     await this.requireUser(userId);
     const context = await this.options.auth.administrationContext();
-    await context.internalAdapter.updateUser(userId, {
-      ...(input.name === undefined
-        ? {}
-        : { name: requiredText(input.name, 'User name') }),
-      ...(input.username === undefined
-        ? {}
-        : { username: optionalUsername(input.username ?? undefined) ?? null }),
-      ...(input.email === undefined
-        ? {}
-        : { email: requiredText(input.email, 'User email').toLowerCase() }),
-    });
+    const username =
+      input.username === undefined
+        ? undefined
+        : (optionalUsername(input.username ?? undefined) ?? null);
+    const email =
+      input.email === undefined ? undefined : normalizedEmail(input.email);
+    await this.assertIdentityAvailable(
+      {
+        ...(email === undefined ? {} : { email }),
+        ...(username == null ? {} : { username }),
+      },
+      userId,
+    );
+    try {
+      await context.internalAdapter.updateUser(userId, {
+        ...(input.name === undefined
+          ? {}
+          : { name: requiredText(input.name, 'User name') }),
+        ...(input.username === undefined ? {} : { username }),
+        ...(email === undefined ? {} : { email }),
+      });
+    } catch (error) {
+      throwIdentityConflict(error);
+    }
     return (await this.get(userId))!;
   }
 
@@ -243,6 +266,38 @@ class DefaultUserAdministrationService implements UserAdministrationService {
       );
     }
     return user;
+  }
+
+  private async assertIdentityAvailable(
+    identity: { readonly email?: string; readonly username?: string },
+    excludeUserId?: string,
+  ): Promise<void> {
+    for (const [field, value, code, message] of [
+      [
+        'email',
+        identity.email,
+        'USER_EMAIL_CONFLICT',
+        'A user with this email already exists',
+      ],
+      [
+        'username',
+        identity.username,
+        'USER_USERNAME_CONFLICT',
+        'A user with this username already exists',
+      ],
+    ] as const) {
+      if (value === undefined) continue;
+      let query = this.options.connection.query
+        .selectFrom('user')
+        .select('id')
+        .where(field, '=', value);
+      if (excludeUserId !== undefined) {
+        query = query.where('id', '<>', excludeUserId);
+      }
+      if (await query.executeTakeFirst()) {
+        throw new UserAdministrationError(code, message);
+      }
+    }
   }
 }
 
@@ -317,6 +372,45 @@ function requiredText(value: string, label: string): string {
 function optionalUsername(value: string | undefined): string | undefined {
   const normalized = value?.trim().toLowerCase();
   return normalized || undefined;
+}
+
+function normalizedEmail(value: string): string {
+  return requiredText(value, 'User email').toLowerCase();
+}
+
+function throwIdentityConflict(error: unknown): never {
+  if (isUniqueConstraintViolation(error)) {
+    throw new UserAdministrationError(
+      'USER_IDENTITY_CONFLICT',
+      'A user with this email or username already exists',
+    );
+  }
+  throw error;
+}
+
+function isUniqueConstraintViolation(error: unknown): boolean {
+  const visited = new Set<unknown>();
+  let current: unknown = error;
+  while (current && typeof current === 'object' && !visited.has(current)) {
+    visited.add(current);
+    const record = current as Record<string, unknown>;
+    const number = record.errno ?? record.number ?? record.errorNum;
+    if (
+      record.code === '23505' ||
+      record.code === 'ER_DUP_ENTRY' ||
+      record.code === 'SQLITE_CONSTRAINT' ||
+      record.code === 'SQLITE_CONSTRAINT_UNIQUE' ||
+      record.code === 'SQLITE_CONSTRAINT_PRIMARYKEY' ||
+      number === 1 ||
+      number === 1062 ||
+      number === 2601 ||
+      number === 2627
+    ) {
+      return true;
+    }
+    current = record.cause ?? record.originalError;
+  }
+  return false;
 }
 
 function validatePassword(

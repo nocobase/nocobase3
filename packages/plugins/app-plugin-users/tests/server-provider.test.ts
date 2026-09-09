@@ -114,6 +114,58 @@ describe('@nocobase/app-plugin-users service', () => {
     expect(events).toEqual(['role-write', 'notified-after-commit']);
   });
 
+  it('rolls back a password change when Session revocation fails', async () => {
+    const database = createDatabaseManager({
+      default: 'main',
+      connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
+    });
+    databases.push(database);
+    await database
+      .connection()
+      .builder.createCollection('testPasswordState', (collection) => {
+        collection.string('id').primary();
+        collection.string('password').notNull();
+        collection.boolean('sessionActive').notNull();
+      });
+    await database
+      .connection()
+      .query.insertInto('testPasswordState')
+      .values({ id: 'user-1', password: 'old-hash', sessionActive: true })
+      .execute();
+
+    const createUsers = (
+      connection: DatabaseConnection,
+    ): UserAdministrationService => ({
+      ...administrationService(connection),
+      withConnection: createUsers,
+      async resetPassword() {
+        await connection.query
+          .updateTable('testPasswordState')
+          .set({ password: 'new-hash' })
+          .where('id', '=', 'user-1')
+          .execute();
+        throw new Error('Session revocation failed');
+      },
+    });
+    const service = createUserManagementService({
+      database,
+      users: createUsers(database.connection()),
+      roleScopes: createUserRoleScopeRegistry(),
+    });
+
+    await expect(
+      service.resetPassword('user-1', 'new-password'),
+    ).rejects.toThrow('Session revocation failed');
+    await expect(
+      database
+        .connection()
+        .query.selectFrom('testPasswordState')
+        .select(['password', 'sessionActive'])
+        .where('id', '=', 'user-1')
+        .executeTakeFirstOrThrow(),
+    ).resolves.toMatchObject({ password: 'old-hash' });
+  });
+
   it('rejects duplicate role scope registrations and unregisters by identity', () => {
     const registry = createUserRoleScopeRegistry();
     const scope = roleScope();

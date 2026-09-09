@@ -133,6 +133,25 @@ export function createHubUserRoleScope(
         )?.permissionSet ?? ''
       );
     },
+    async getMany(userIds, connection) {
+      const requested = new Set(userIds);
+      const roles: Record<string, string> = Object.fromEntries(
+        userIds.map((userId) => [userId, '']),
+      );
+      const assignments = await authorization.permissionSets
+        .withConnection(connection)
+        .listAssignments();
+      for (const assignment of assignments) {
+        if (
+          assignment.subject.type === 'user' &&
+          requested.has(assignment.subject.id) &&
+          isHubPermissionSet(assignment.permissionSet)
+        ) {
+          roles[assignment.subject.id] = assignment.permissionSet;
+        }
+      }
+      return roles;
+    },
     async findUserIds(role, connection) {
       requireHubRole(role);
       const assignments = await authorization.permissionSets
