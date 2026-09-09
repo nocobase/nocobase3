@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { UsersNavigationProvider } from '../client/service-provider.js';
 import users from '../client/plugin.js';
 import {
   emptyUserCapabilities,
@@ -64,6 +65,7 @@ describe('@nocobase/app-plugin-users Client routes', () => {
   });
   it('mounts one protected Settings page at a relative path', async () => {
     const registration = users({ mount: 'settings', path: '/users' });
+    expect(registration.serviceProviders).toEqual([]);
     expect(registration.routes).toHaveLength(1);
     expect(registration.routes[0]).toMatchObject({
       parent: 'settings',
@@ -99,11 +101,45 @@ describe('@nocobase/app-plugin-users Client routes', () => {
         },
       ],
     });
+    expect(registration.serviceProviders).toEqual([UsersNavigationProvider]);
     expect(registration.routeComponentOverrides).toEqual([
       {
         routeId: '@nocobase/app-plugin-users:users',
         componentLoader,
       },
+    ]);
+  });
+
+  it('registers a protected, translated App navigation entry', async () => {
+    const addResources = vi.fn();
+    const provider = new UsersNavigationProvider(
+      { refine: { addResources } } as never,
+      {
+        packageName: '@nocobase/app-plugin-users',
+        source: 'plugin',
+        options: {
+          mount: 'app',
+          path: '/team/users',
+          navigationParent: 'hub-user-access',
+          navigationOrder: 10,
+        },
+      },
+    );
+
+    await provider.boot();
+
+    expect(addResources).toHaveBeenCalledWith([
+      expect.objectContaining({
+        name: 'users',
+        list: '/team/users',
+        meta: expect.objectContaining({
+          access: { resource: 'users', action: 'access' },
+          label: 'nav.users',
+          i18nNs: '@nocobase/app-plugin-users',
+          parent: 'hub-user-access',
+          order: 10,
+        }),
+      }),
     ]);
   });
 

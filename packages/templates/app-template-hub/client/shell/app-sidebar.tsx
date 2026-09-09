@@ -1,8 +1,8 @@
 import { useTranslation } from '@nocobase/i18n/client';
-import { useMenu, type TreeMenuItem } from '@refinedev/core';
+import { useCan, useMenu, type TreeMenuItem } from '@refinedev/core';
 import { ChevronRight, List, ShieldCheck, X } from 'lucide-react';
-import type { ReactElement, ReactNode } from 'react';
-import { Link } from 'react-router';
+import { useMemo, type ReactElement, type ReactNode } from 'react';
+import { Link, useLocation } from 'react-router';
 
 import { Button } from '@/components/ui/button';
 
@@ -20,7 +20,12 @@ export function AppSidebar({
   onCloseMobile,
 }: AppSidebarProps): ReactElement {
   const { menuItems, selectedKey } = useMenu();
+  const { pathname } = useLocation();
   const { t } = useTranslation();
+  const orderedMenuItems = useMemo(
+    () => orderNavigationItems(menuItems),
+    [menuItems],
+  );
 
   return (
     <>
@@ -67,12 +72,13 @@ export function AppSidebar({
           })}
           className={`flex-1 space-y-1 overflow-x-hidden overflow-y-auto py-3 ${desktopCollapsed ? 'px-3 md:px-2' : 'px-3'}`}
         >
-          {menuItems.map((item) => (
+          {orderedMenuItems.map((item) => (
             <NavigationTree
               collapsed={desktopCollapsed}
               item={item}
               key={item.key || item.name}
               onNavigate={onCloseMobile}
+              pathname={pathname}
               selectedKey={selectedKey}
             />
           ))}
@@ -87,7 +93,13 @@ interface NavigationTreeProps {
   readonly collapsed: boolean;
   readonly item: TreeMenuItem;
   readonly onNavigate: () => void;
+  readonly pathname: string;
   readonly selectedKey: string;
+}
+
+interface NavigationAccess {
+  readonly resource: string;
+  readonly action: string;
 }
 
 /**
@@ -105,13 +117,45 @@ function useMenuLabel(item: TreeMenuItem): string {
 }
 
 function NavigationTree({
+  item,
+  ...props
+}: NavigationTreeProps): ReactElement | null {
+  const access = navigationAccess(item);
+  return access ? (
+    <GuardedNavigationTree access={access} item={item} {...props} />
+  ) : (
+    <NavigationTreeContent item={item} {...props} />
+  );
+}
+
+function GuardedNavigationTree({
+  access,
+  ...props
+}: NavigationTreeProps & {
+  readonly access: NavigationAccess;
+}): ReactElement | null {
+  const { data, isLoading } = useCan({
+    resource: access.resource,
+    action: access.action,
+    queryOptions: {
+      staleTime: 0,
+      refetchOnMount: 'always',
+    },
+  });
+
+  if (isLoading || data?.can !== true) return null;
+  return <NavigationTreeContent {...props} />;
+}
+
+function NavigationTreeContent({
   collapsed,
   item,
   onNavigate,
+  pathname,
   selectedKey,
 }: NavigationTreeProps): ReactElement | null {
   const label = useMenuLabel(item);
-  const isSelected = item.key === selectedKey;
+  const isSelected = isNavigationItemSelected(item, selectedKey, pathname);
   const children = item.children ?? [];
   const icon = item.meta?.icon ?? item.icon ?? <List />;
 
@@ -144,6 +188,7 @@ function NavigationTree({
               item={child}
               key={child.key || child.name}
               onNavigate={onNavigate}
+              pathname={pathname}
               selectedKey={selectedKey}
             />
           ))}
@@ -166,6 +211,45 @@ function NavigationTree({
       route={item.route}
     />
   );
+}
+
+function isNavigationItemSelected(
+  item: TreeMenuItem,
+  selectedKey: string,
+  pathname: string,
+): boolean {
+  if (item.key === selectedKey) return true;
+  if (!item.route) return false;
+  const route = item.route.replace(/\/$/u, '') || '/';
+  const current = pathname.replace(/\/$/u, '') || '/';
+  return (
+    current === route || (route !== '/' && current.startsWith(`${route}/`))
+  );
+}
+
+function navigationAccess(item: TreeMenuItem): NavigationAccess | undefined {
+  const access = item.meta?.access as Partial<NavigationAccess> | undefined;
+  return typeof access?.resource === 'string' &&
+    typeof access.action === 'string'
+    ? { resource: access.resource, action: access.action }
+    : undefined;
+}
+
+function orderNavigationItems(items: readonly TreeMenuItem[]): TreeMenuItem[] {
+  return [...items]
+    .sort((left, right) => navigationOrder(left) - navigationOrder(right))
+    .map((item) => ({
+      ...item,
+      children: orderNavigationItems(item.children ?? []),
+    }));
+}
+
+function navigationOrder(item: TreeMenuItem): number {
+  const meta = item.meta as { order?: unknown } | undefined;
+  const order = meta?.order;
+  return typeof order === 'number' && Number.isFinite(order)
+    ? order
+    : Number.MAX_SAFE_INTEGER;
 }
 
 interface NavigationLinkProps {
@@ -221,7 +305,7 @@ function SidebarFooter({
   const templateName =
     typeof __PORTAL_TEMPLATE_NAME__ === 'string'
       ? __PORTAL_TEMPLATE_NAME__
-      : 'Default Template';
+      : 'NocoBase Hub';
   const templateVersion =
     typeof __PORTAL_TEMPLATE_VERSION__ === 'string'
       ? __PORTAL_TEMPLATE_VERSION__

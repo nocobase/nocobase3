@@ -3705,15 +3705,6 @@ importers:
       '@nocobase/app-plugin-authorization':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-authorization
-      '@nocobase/app-plugin-users':
-        specifier: workspace:^
-        version: link:../../plugins/app-plugin-users
-      '@nocobase/app-plugin-cli-example':
-        specifier: workspace:^
-        version: link:../../examples/app-plugin-cli-example
-      '@nocobase/app-plugin-database-example':
-        specifier: workspace:^
-        version: link:../../examples/app-plugin-database-example
       '@nocobase/app-plugin-hub':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-hub
@@ -3723,36 +3714,12 @@ importers:
       '@nocobase/app-plugin-install':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-install
-      '@nocobase/app-plugin-notification':
-        specifier: workspace:^
-        version: link:../../plugins/app-plugin-notification
-      '@nocobase/app-plugin-notification-in-app':
-        specifier: workspace:^
-        version: link:../../plugins/app-plugin-notification-in-app
       '@nocobase/app-plugin-notification-provider':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-notification-provider
-      '@nocobase/app-plugin-notification-providers':
+      '@nocobase/app-plugin-users':
         specifier: workspace:^
-        version: link:../../plugins/app-plugin-notification-providers
-      '@nocobase/app-plugin-queue-example':
-        specifier: workspace:^
-        version: link:../../examples/app-plugin-queue-example
-      '@nocobase/app-plugin-realtime-example':
-        specifier: workspace:^
-        version: link:../../examples/app-plugin-realtime-example
-      '@nocobase/app-plugin-routes-example':
-        specifier: workspace:^
-        version: link:../../examples/app-plugin-routes-example
-      '@nocobase/app-plugin-service-provider-example':
-        specifier: workspace:^
-        version: link:../../examples/app-plugin-service-provider-example
-      '@nocobase/app-plugin-skills-example':
-        specifier: workspace:^
-        version: link:../../examples/app-plugin-skills-example
-      '@nocobase/app-plugin-workflow':
-        specifier: workspace:^
-        version: link:../../plugins/app-plugin-workflow
+        version: link:../../plugins/app-plugin-users
       '@nocobase/app-portal-sdk':
         specifier: workspace:^
         version: link:../../app/app-portal-sdk

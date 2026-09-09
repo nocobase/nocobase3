@@ -18,8 +18,12 @@ users;
 ```
 
 The default route is `/settings/users`. Set `mount: 'app'` to mount the same
-owned route under the App, or provide `componentLoader` to replace only the page
-implementation without changing its identity or path.
+owned route under the App and add its protected primary-navigation entry. The
+route and navigation use the same `page:users/access` check. Use
+`navigationParent` to place the entry under an application-owned group. Provide
+`navigationOrder` when the host navigation supports an explicit sibling order. Provide
+`componentLoader` to replace only the page implementation without changing its
+identity, path, or navigation.
 
 The application must grant `page:users/access` and the required `user` actions.
 Users does not create roles or grant access by itself.

@@ -1,6 +1,11 @@
 import type { AppClientRegisteredRoute } from '@nocobase/app-client/plugins';
-import { Refine, type AuthProvider } from '@refinedev/core';
-import { fireEvent, render, screen } from '@testing-library/react';
+import {
+  Refine,
+  type AccessControlProvider,
+  type AuthProvider,
+  type ResourceProps,
+} from '@refinedev/core';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ComponentType, ReactElement } from 'react';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -43,9 +48,12 @@ describe('application shell', () => {
       await screen.findByRole('button', { name: 'Open account menu' }),
     ).toHaveAttribute('title', 'Alice');
     expect(screen.getByRole('button', { name: 'Appearance' })).toBeVisible();
-    expect(screen.getByRole('link', { name: 'Settings' })).toBeVisible();
+    expect(
+      screen.queryByRole('link', { name: 'Settings' }),
+    ).not.toBeInTheDocument();
     expect(screen.getByText('AI builds freely.')).toBeVisible();
-    expect(screen.getByText('Default Template v0.0.0')).toBeVisible();
+    expect(screen.getByText('NocoBase Hub v0.0.0')).toBeVisible();
+    expect(screen.getByText('Hub console')).toBeVisible();
     expect(
       screen.getByRole('heading', { name: 'App client is ready' }),
     ).toBeVisible();
@@ -98,12 +106,100 @@ describe('application shell', () => {
     ).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Appearance' })).toBeVisible();
   });
+
+  it('redirects ordinary App settings paths into the Hub console', async () => {
+    renderApplication('/settings/users', createAuthProvider(true), [
+      createRoute('apps', '/apps', 'required', ApplicationsPage),
+    ]);
+
+    expect(
+      await screen.findByRole('heading', { name: 'Applications page' }),
+    ).toBeVisible();
+  });
+
+  it('shows a protected navigation entry as selected when access is allowed', async () => {
+    renderApplication(
+      '/users',
+      createAuthProvider(true),
+      [createRoute('users', '/users', 'required', UsersPage, 'plugin', true)],
+      {
+        accessControlProvider: {
+          can: vi.fn().mockResolvedValue({ can: true }),
+        },
+        resources: [protectedUsersResource()],
+      },
+    );
+
+    expect(
+      await screen.findByRole('link', { name: 'User management' }),
+    ).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByText('Users page')).toBeVisible();
+  });
+
+  it('never discloses a protected navigation entry when access is denied', async () => {
+    const can = vi.fn().mockResolvedValue({ can: false });
+    renderApplication(
+      '/users',
+      createAuthProvider(true),
+      [createRoute('users', '/users', 'required', UsersPage, 'plugin', true)],
+      {
+        accessControlProvider: { can },
+        resources: [protectedUsersResource()],
+      },
+    );
+
+    expect(
+      screen.queryByRole('link', { name: 'User management' }),
+    ).not.toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Access denied' }),
+    ).toBeVisible();
+    expect(can).toHaveBeenCalledWith(
+      expect.objectContaining({ resource: 'users', action: 'access' }),
+    );
+    expect(
+      screen.queryByRole('link', { name: 'User management' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('orders Hub navigation and puts users before roles', async () => {
+    renderApplication(
+      '/users',
+      createAuthProvider(true),
+      [
+        createRoute('applications', '/apps', 'required', ApplicationsPage),
+        createRoute('users', '/users', 'required', UsersPage),
+        createRoute('roles', '/roles', 'required', RolesPage),
+      ],
+      {
+        accessControlProvider: {
+          can: vi.fn().mockResolvedValue({ can: true }),
+        },
+        resources: hubResources(),
+      },
+    );
+
+    const navigation = await screen.findByRole('navigation', {
+      name: 'Application navigation',
+    });
+    await waitFor(() =>
+      expect(
+        Array.from(navigation.querySelectorAll('a')).map((link) =>
+          link.textContent?.trim(),
+        ),
+      ).toEqual(['Applications', 'User management', 'Roles & permissions']),
+    );
+  });
 });
 
 function renderApplication(
   initialEntry: string,
   authProvider: AuthProvider,
   routes: readonly AppClientRegisteredRoute[] = [],
+  options: {
+    readonly accessControlProvider?: AccessControlProvider;
+    readonly resources?: readonly ResourceProps[];
+  } = {},
 ): void {
   const clientRoutes = [
     createRoute('home', '/', 'required', HomePage, 'application'),
@@ -113,6 +209,7 @@ function renderApplication(
     <MemoryRouter initialEntries={[initialEntry]}>
       <AppThemeProvider>
         <Refine
+          accessControlProvider={options.accessControlProvider}
           authProvider={authProvider}
           dataProvider={{
             getList: vi.fn(),
@@ -128,6 +225,7 @@ function renderApplication(
             custom: vi.fn(),
           }}
           options={{ disableTelemetry: true }}
+          resources={[...(options.resources ?? [])]}
         >
           <AppRouter
             clientDevRouteGroups={[]}
@@ -165,6 +263,7 @@ function createRoute(
   auth: AppClientRegisteredRoute['auth'],
   Component: ComponentType,
   source: AppClientRegisteredRoute['source'] = 'plugin',
+  protectedRoute: boolean = false,
 ): AppClientRegisteredRoute {
   const packageName =
     source === 'application'
@@ -178,7 +277,54 @@ function createRoute(
     packageName,
     path,
     source,
+    ...(protectedRoute ? { access: { resource: name, action: 'access' } } : {}),
   };
+}
+
+function protectedUsersResource(): ResourceProps {
+  return {
+    name: 'users',
+    list: '/users',
+    meta: {
+      access: { resource: 'users', action: 'access' },
+      label: 'User management',
+    },
+  };
+}
+
+function hubResources(): ResourceProps[] {
+  const access = { resource: 'users', action: 'access' };
+  return [
+    {
+      name: 'hub',
+      list: '/apps',
+      meta: { label: 'Applications', order: 10 },
+    },
+    {
+      name: 'hub-user-access',
+      meta: { access, label: 'Users & permissions', order: 20 },
+    },
+    {
+      name: 'hub-roles',
+      list: '/roles',
+      meta: {
+        access,
+        label: 'Roles & permissions',
+        order: 20,
+        parent: 'hub-user-access',
+      },
+    },
+    {
+      name: 'users',
+      list: '/users',
+      meta: {
+        access,
+        label: 'User management',
+        order: 10,
+        parent: 'hub-user-access',
+      },
+    },
+  ];
 }
 
 function HomePage(): ReactElement {
@@ -187,4 +333,16 @@ function HomePage(): ReactElement {
 
 function GuestPage(): ReactElement {
   return <div>Guest login page</div>;
+}
+
+function UsersPage(): ReactElement {
+  return <div>Users page</div>;
+}
+
+function ApplicationsPage(): ReactElement {
+  return <h2>Applications page</h2>;
+}
+
+function RolesPage(): ReactElement {
+  return <h2>Roles page</h2>;
 }

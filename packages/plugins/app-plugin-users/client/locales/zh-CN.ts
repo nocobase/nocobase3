@@ -1,7 +1,7 @@
 import type { UsersResource } from './en-US.js';
 
 const zhCN: UsersResource = {
-  nav: { users: '用户' },
+  nav: { users: '用户管理' },
   page: {
     title: '用户',
     description: '创建账号、分配角色并管理登录状态。',

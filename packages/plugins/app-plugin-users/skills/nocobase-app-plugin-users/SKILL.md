@@ -34,7 +34,10 @@ both `create` and `assign-role`.
 1. Register Authentication, Authorization, and then Users in the App's Client
    and Server plugin arrays.
 2. Configure the Client factory. `users({ mount: 'settings', path: '/users' })`
-   produces `/settings/users`; `mount: 'app'` makes the path App-relative.
+   produces `/settings/users`; `mount: 'app'` makes the path App-relative and
+   registers a primary-navigation entry protected by the same page access rule.
+   Set `navigationParent` when the App groups that entry below another resource,
+   and `navigationOrder` when the host navigation supports an explicit sibling order.
 3. Grant `page:users/access` to roles that may open the page.
 4. Grant only the `user` actions those roles need. The plugin creates no roles
    and grants no access by itself.
@@ -73,6 +76,9 @@ business invariants such as the last-administrator rule on the server.
 
 - Browser route access is only navigation control. The Server independently
   authenticates and authorizes every request.
+- An App-mounted page hides its primary-navigation entry until
+  `page:users/access` is allowed. Direct navigation is checked separately by
+  the Client Route.
 - A conditional grant is not accepted as an unrestricted user-management
   grant; use explicit static grants for this resource.
 - The plugin does not provide user deletion or invitations.

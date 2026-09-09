@@ -144,16 +144,6 @@ Configuration is resolved from the file, environment variables, and defaults in 
 
 Tests live in `tests/`, never beside the source they cover. Put logic and integration tests under `tests/logic/` and component tests under `tests/components/`. Tests needing a real server, real authentication, or a real database belong in `e2e/`.
 
-### Notification testing
-
-After signing in with the `notification:test` `send` permission, use the
-notification logs settings page to send a real message through the durable
-Notification Manager. The form is generated from safe Channel test metadata;
-Email tests require an address and IM tests use the configured logical target.
-The button is unavailable unless the protected targets endpoint is authorized,
-and testing is disabled unless `notification.test.enabled` is explicitly set
-to `true` in `config.yml`.
-
 ## Working with an AI agent
 
 `AGENTS.md` describes how to build features here, and `skills/` holds the in-depth references it links to. If you use Claude Code, `CLAUDE.md` points at the same guidance. Keeping these accurate as your application grows is what keeps agent-written code consistent with the rest of it.

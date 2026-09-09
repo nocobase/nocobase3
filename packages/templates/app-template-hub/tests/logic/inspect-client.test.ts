@@ -84,6 +84,11 @@ describe('client inspection', () => {
         path: '/',
       },
       {
+        auth: 'required',
+        id: '@nocobase/app-template-hub:applications-legacy',
+        path: '/hub',
+      },
+      {
         auth: 'guest',
         id: '@nocobase/app-plugin-authentication:login',
         path: '/login',
@@ -104,34 +109,24 @@ describe('client inspection', () => {
         path: '/reset-password',
       },
       {
+        auth: 'required',
+        id: '@nocobase/app-plugin-hub:hub',
+        path: '/apps',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-hub:hub-roles',
+        path: '/roles',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-users:users',
+        path: '/users',
+      },
+      {
         auth: 'guest',
         id: '@nocobase/app-plugin-install:install',
         path: '/install',
-      },
-      {
-        auth: 'required',
-        id: '@nocobase/app-plugin-notification-provider:demo',
-        path: '/notification-provider',
-      },
-      {
-        auth: 'required',
-        id: '@nocobase/app-plugin-routes-example:index',
-        path: '/routes-example',
-      },
-      {
-        auth: 'required',
-        id: '@nocobase/app-plugin-workflow:workflow-detail',
-        path: '/settings/automation/workflows/:workflowId',
-      },
-      {
-        auth: 'required',
-        id: '@nocobase/app-plugin-workflow:workflow-run-detail',
-        path: '/settings/automation/workflow-runs/:runId',
-      },
-      {
-        auth: 'required',
-        id: '@nocobase/app-plugin-hub:hub',
-        path: '/hub',
       },
     ]);
     expect(
@@ -141,10 +136,6 @@ describe('client inspection', () => {
       {
         id: '@nocobase/app-plugin-notification-provider:notification-host',
         order: 2,
-      },
-      {
-        id: '@nocobase/app-plugin-routes-example:routes-example',
-        order: 3,
       },
     ]);
     expect(
@@ -156,30 +147,21 @@ describe('client inspection', () => {
       { packageName: '@nocobase/app-template-hub', order: 1 },
       { packageName: '@nocobase/app-plugin-authentication', order: 2 },
       { packageName: '@nocobase/app-plugin-authorization', order: 3 },
-      { packageName: '@nocobase/app-plugin-i18n', order: 4 },
-      { packageName: '@nocobase/app-plugin-notification-provider', order: 5 },
-      { packageName: '@nocobase/app-plugin-workflow', order: 6 },
-      { packageName: '@nocobase/app-plugin-notification', order: 7 },
-      { packageName: '@nocobase/app-plugin-hub', order: 8 },
+      { packageName: '@nocobase/app-plugin-hub', order: 4 },
+      { packageName: '@nocobase/app-plugin-users', order: 5 },
+      { packageName: '@nocobase/app-plugin-i18n', order: 6 },
+      { packageName: '@nocobase/app-plugin-notification-provider', order: 7 },
     ]);
     expect(inspection.configs[0]).toMatchObject({
       kind: 'factory',
       packageName: '@nocobase/app-template-hub',
       source: 'application',
     });
-    expect(inspection.locales).toEqual(
-      expect.arrayContaining([
-        {
-          order: 1,
-          packageName: '@nocobase/app-template-hub',
-          source: 'application',
-        },
-        expect.objectContaining({
-          packageName: '@nocobase/app-plugin-workflow',
-          source: 'plugin',
-        }),
-      ]),
-    );
+    expect(inspection.locales[0]).toEqual({
+      order: 1,
+      packageName: '@nocobase/app-template-hub',
+      source: 'application',
+    });
     expect(inspection.settings.slice(0, 4).map(({ id }) => id)).toEqual([
       'permission-sets',
       'default-access',

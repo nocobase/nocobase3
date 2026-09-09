@@ -17,7 +17,7 @@ Hub 当前只有“系统管理员”和“非系统管理员”两种状态。�
 2. Hub 有哪些角色，角色如何分配给用户；
 3. 前后端如何执行权限，确保不能通过直接调用 API 越权。
 
-适用基线为 `develop@9048dc38`。首期不包含邀请、强制首次改密、自定义角色和 App 级授权。
+适用基线为 `develop@d29d1fe9`。首期不包含邀请、强制首次改密、自定义角色和 App 级授权。
 
 本方案只处理通过浏览器登录的人员账号。CLI/CI 使用的部署 Token 属于机器身份，不复用用户密码和浏览器 Session；其签发、保存、撤销和权限范围另行设计，最终仍接入同一套 `resource/action` 服务端鉴权。
 
@@ -45,7 +45,7 @@ Hub 当前只有“系统管理员”和“非系统管理员”两种状态。�
 
 Hub 的角色、资源和业务规则全部由 `@nocobase/app-plugin-hub` 提供：
 
-- `hub-administrator`、`hub-operator`、`hub-viewer` 及其 grants 写在 Hub migration 和 seed 中；
+- Hub migration 写入 `hub-administrator`、`hub-operator`、`hub-viewer` 及其 grants，seed 只负责给初始管理员分配角色；
 - `hub.app`、`hub.host` 的 resource handler 在 Hub Server Provider 中注册；
 - Hub 的角色范围、单角色约束和最后管理员保护也在 Hub 中实现。
 
@@ -54,7 +54,7 @@ Users 和 Authorization 只提供通用机制，不能包含 `hub-*` key、Hub a
 ```text
 app-plugin-hub
   ├─ resolve(authorizationToken) 注册 Hub 资源并执行鉴权
-  └─ resolve(userRoleScopesToken) 注册 Hub 角色范围
+  └─ resolve(userRoleScopeRegistryToken) 注册 Hub 角色范围
 
 app-plugin-users ──→ authentication + authorization
 app-plugin-authorization ──→ authorization library
@@ -73,7 +73,7 @@ app-plugin-authorization ──→ authorization library
 - `UserManagementService`；
 - 供应用注册角色规则的 `UserRoleScope` 扩展点。
 
-Users 不固定页面路径和导航位置。Hub 将 Users 页面挂载到 Settings 下的 `/settings/users`；默认 App 可按自身布局挂载到首页、Settings 或其他位置。应用可以覆盖入口和路由，页面与用户管理能力保持复用。
+Users 不固定页面路径和导航位置。Hub 把它挂载到主控制台的“用户与权限”分组：`/users` 是“用户管理”，`/roles` 是 Hub 提供的只读角色权限矩阵，最终地址分别为 `/hub/users` 和 `/hub/roles`；默认 App 仍挂载到 `/settings/users`。应用通过注册参数选择挂载位置、相对路径和导航分组；组件覆盖只替换页面实现，不改变路径。
 
 Users 不预设任何应用角色，也不自行授予访问权。安装它的应用必须通过 Permission Set 配置 `page:users/access` 和相应的 `user` actions。默认 App 可以注册自己的角色范围，也可以只使用用户资料、禁用、密码重置和 Session 管理。
 
@@ -92,7 +92,7 @@ Users 不建立第二份用户数据。首期复用现有表：
 
 ### 3.3 Authentication 用户服务
 
-Authentication 新增稳定的 `UserAdministrationServiceToken`，向 Users 提供用户查询、创建、更新、启停、重置密码和撤销 Session 的能力，并支持绑定数据库事务。Users 不直接操作 Authentication 的内部表。
+Authentication 新增稳定的 `userAdministrationServiceToken`，向 Users 提供用户查询、创建、更新、启停、重置密码和撤销 Session 的能力，并支持绑定数据库事务。Users 不直接操作 Authentication 的内部表。
 
 密码长度校验和哈希使用 Authentication 中现有的 Better Auth 配置。服务不返回密码哈希、Session token 或重置 token。
 
@@ -149,7 +149,7 @@ Operator 是可信运维角色，可以读取和修改原始配置。如果需�
 
 ### 4.2 Hub 角色范围
 
-Users 通过 `userRoleScopesToken` 暴露角色范围扩展点，应用可以提供可选角色、读取和替换分配关系，并在禁用用户前执行约束检查。Hub 注册自己的 `UserRoleScope`：
+Users 通过 `userRoleScopeRegistryToken` 暴露角色范围扩展点，应用可以提供可选角色、读取和替换分配关系，并在禁用用户前执行约束检查。Hub 注册自己的 `UserRoleScope`：
 
 Hub scope 的配置为：
 
@@ -227,9 +227,11 @@ await context.get('authz').require({
 
 Authorization Client 通过 `authorizationClientToken` 提供权限判断和权限快照失效能力。Client 使用同一份权限快照控制路由、Tab 和按钮：
 
-- `page:hub/access` 控制 `/hub`；
-- `page:users/access` 控制应用实际挂载的 Users 页面入口；
+- `page:hub/access` 控制主控制台的 `/apps`；
+- `page:users/access` 控制“用户与权限”分组、`/users` 用户管理和 `/roles` 角色权限矩阵，权限结果返回前不展示入口；
 - App 操作按钮按 `hub.app` action 显示。
+
+角色权限矩阵通过 `GET /api/hub/roles` 读取三个 Hub Permission Set 的实际 grants，只读展示，不开放通用 Permission Set 编辑器。
 
 前端控制只改善体验。登录身份变化、当前用户角色变化或第一次收到 403 时清除权限快照并重新加载；刷新后仍无权则展示权限错误，不循环重试。
 
@@ -283,10 +285,10 @@ auth:
 
 | 顺序 | 包 | 改造内容 |
 | --- | --- | --- |
-| 1 | `app-plugin-authentication` | 增加 `disabledAt`、`UserAdministrationServiceToken` 和禁用用户检查 |
+| 1 | `app-plugin-authentication` | 增加 `disabledAt`、`userAdministrationServiceToken` 和禁用用户检查 |
 | 2 | `app-server` Realtime | 支持按 user ID 关闭现有连接 |
 | 3 | `authorization` / `app-plugin-authorization` | 支持受保护 Permission Set、事务化替换 assignments、权限快照失效 |
 | 4 | `app-plugin-users` | 实现用户服务、API、可复用页面、`user` resource 和 `UserRoleScope` 扩展点 |
-| 5 | `app-plugin-hub` | 注册 Hub 资源、三个角色和 Hub role scope；挂载 Users 页面并实现最后管理员保护 |
-| 6 | `app-template-default` / `app-template-hub` | 注册 Users 插件；由应用决定页面入口，仅 Hub 模板关闭公开注册 |
+| 5 | `app-plugin-hub` | 注册 Hub 资源、三个角色和 Hub role scope；提供只读角色矩阵并实现最后管理员保护 |
+| 6 | `app-template-default` / `app-template-hub` | 注册 Users 插件；默认 App 放在 Settings，Hub 放在主控制台且关闭公开注册 |
 | 7 | 上述各包 | 完成 migration、seed、单元测试、集成测试和三角色 E2E |

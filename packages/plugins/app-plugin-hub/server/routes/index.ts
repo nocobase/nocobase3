@@ -29,6 +29,7 @@ import {
   deploymentResponse,
   deploymentListResponse,
 } from './responses.js';
+import { HUB_PERMISSION_SET_KEYS } from '../authorization.js';
 
 const MAX_ARTIFACT_SIZE = 256 * 1024 * 1024;
 
@@ -59,6 +60,36 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       return respond(context, async () =>
         (await hub.listApps()).map(appSummaryResponse),
       );
+    });
+    routes.get('/roles', async (context) => {
+      await context.get('authz').require({
+        resource: { type: 'user', id: '*' },
+        action: 'read',
+      });
+      const permissionSets = await authorization.permissionSets.list();
+      const byKey = new Map(
+        permissionSets.map((permissionSet) => [
+          permissionSet.key,
+          permissionSet,
+        ]),
+      );
+      return context.json({
+        data: HUB_PERMISSION_SET_KEYS.flatMap((key) => {
+          const permissionSet = byKey.get(key);
+          return permissionSet
+            ? [
+                {
+                  key: permissionSet.key,
+                  title: permissionSet.title,
+                  grants: permissionSet.grants.map((grant) => ({
+                    resource: grant.resource,
+                    actions: grant.actions.map(({ action }) => action),
+                  })),
+                },
+              ]
+            : [];
+        }),
+      });
     });
     routes.post('/apps', async (context) => {
       await requireHubAction(context, '*', 'create');

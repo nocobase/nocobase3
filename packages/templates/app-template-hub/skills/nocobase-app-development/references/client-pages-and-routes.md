@@ -129,10 +129,17 @@ These are Refine's own `ResourceProps`, not a NocoBase invention. The type is ex
 | `meta.label`             | What the entry displays. See the note below — this is a translation key here                                  |
 | `meta.icon`              | A React node, typically a `lucide-react` icon. Entries without one get a default list icon                    |
 | `meta.parent`            | The `name` of another resource, to nest this one beneath it                                                   |
+| `meta.access`            | Optional `{ resource, action }`; the sidebar keeps the entry hidden until the Client access check allows it   |
 
 **`meta.label` is a translation key, not finished text.** A resource is registered at startup, before any language is known, so pass the key and set `meta.i18nNs` to the namespace holding it — `APP_NS` for the application's own strings. Add the key to `client/locales/`. A label with no `i18nNs` is rendered literally, which is only correct for text that never needs translating.
 
-`meta.i18nNs` is this application's convention, read by `useMenuLabel` in `client/shell/app-sidebar.tsx`; everything else in the table is standard Refine.
+`meta.i18nNs` and `meta.access` are this application's conventions, read by
+`client/shell/app-sidebar.tsx`; the remaining fields are standard Refine.
+
+Use the same access tuple on the Route and its resource. The resource check
+prevents disclosing the navigation entry, while the Route check protects direct
+URL visits. Both are Client interaction boundaries; the Server API still
+enforces its own authorization.
 
 Reference: <https://refine.dev/docs/core/refine-component/#resources> and the `useMenu` hook at <https://refine.dev/docs/core/hooks/utilities/use-menu/>. The `ResourceProps` type ships with `@refinedev/core`, so your editor will complete the remaining fields.
 

@@ -7,11 +7,7 @@ import authorization from '@nocobase/app-plugin-authorization/client';
 import users from '@nocobase/app-plugin-users/client';
 import install from '@nocobase/app-plugin-install/client';
 import notificationProvider from '@nocobase/app-plugin-notification-provider/client';
-import notificationInApp from '@nocobase/app-plugin-notification-in-app/client';
-import routesExample from '@nocobase/app-plugin-routes-example/client';
 import i18n from '@nocobase/app-plugin-i18n/client';
-import workflow from '@nocobase/app-plugin-workflow/client';
-import notification from '@nocobase/app-plugin-notification/client';
 import hub from '@nocobase/app-plugin-hub/client';
 
 // Array order is contribution order. A plugin is enabled by appearing in this
@@ -19,15 +15,20 @@ import hub from '@nocobase/app-plugin-hub/client';
 const clientPlugins: AppClientPlugins = defineClientPlugins([
   authentication(),
   authorization(),
-  users({ mount: 'settings', path: '/users' }),
+  hub({
+    applicationsPath: '/apps',
+    rolesPath: '/roles',
+    userAccessNavigation: true,
+  }),
+  users({
+    mount: 'app',
+    path: '/users',
+    navigationParent: 'hub-user-access',
+    navigationOrder: 10,
+  }),
   i18n(),
   install(),
-  notificationProvider(),
-  notificationInApp(),
-  routesExample(),
-  workflow(),
-  notification(),
-  hub(),
+  notificationProvider({ demo: false }),
 ]);
 
 export default clientPlugins;

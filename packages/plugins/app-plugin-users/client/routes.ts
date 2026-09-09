@@ -8,15 +8,19 @@ import { UsersRound } from 'lucide-react';
 import type { UsersClientOptions } from './plugin.js';
 
 export const USERS_ROUTE_ID = '@nocobase/app-plugin-users:users';
+export const USERS_PAGE_ACCESS = {
+  resource: 'users',
+  action: 'access',
+} as const;
 
 export function createUsersRoutes(
   options: UsersClientOptions,
 ): AppClientRouteContribution {
-  const path = normalizeRoutePath(options.path ?? '/users');
+  const path = normalizeUsersRoutePath(options.path ?? '/users');
   const page = {
     name: 'users',
     path,
-    access: { resource: 'users', action: 'access' },
+    access: USERS_PAGE_ACCESS,
     componentLoader: () => import('./pages/users-page.js'),
   } as const;
   if ((options.mount ?? 'settings') === 'app') {
@@ -30,7 +34,7 @@ export function createUsersRoutes(
   ]);
 }
 
-function normalizeRoutePath(value: string): string {
+export function normalizeUsersRoutePath(value: string): string {
   const trimmed = value.trim();
   if (!trimmed || trimmed === '/') {
     throw new TypeError('Users route path must contain a path segment');

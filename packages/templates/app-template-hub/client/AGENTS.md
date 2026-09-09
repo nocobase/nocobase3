@@ -14,7 +14,7 @@ This directory is the application's browser client. Read the application's root 
 ## Rules
 
 - Keep every page behind a lazy `componentLoader()`, default-exporting its component. Route metadata stays synchronous.
-- A route makes the URL work; it does not add a sidebar entry. That needs a Refine resource in `service-provider.ts` whose `list` matches the route path, with `meta.label` as a translation key and `meta.i18nNs` set to `APP_NS`. Settings and dev pages instead use the route's own `navigation` field.
+- A route makes the URL work; it does not add a sidebar entry. That needs a Refine resource in `service-provider.ts` whose `list` matches the route path, with `meta.label` as a translation key and `meta.i18nNs` set to `APP_NS`. For a protected entry, set `meta.access` to the same `{ resource, action }` as the route; it stays hidden until allowed. Settings and dev pages instead use the route's own `navigation` field.
 - Never write the deployment base path such as `/main` into a route path. The runtime restores it.
 - `auth` on a route controls browser navigation only. The endpoint it calls enforces its own authentication.
 - Pages declared with `defineDevRoutes()` mount under `/dev` and are absent from a production build. That is a build boundary, not a permission boundary.

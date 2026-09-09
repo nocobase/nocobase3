@@ -11,6 +11,12 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
     name: 'applications-root',
     path: '/',
   },
+  {
+    auth: 'required',
+    componentLoader: () => import('./pages/applications-redirect.js'),
+    name: 'applications-legacy',
+    path: '/hub',
+  },
 ]);
 
 const settingsRoutes: AppClientRouteContribution = defineSettingsRoutes([]);

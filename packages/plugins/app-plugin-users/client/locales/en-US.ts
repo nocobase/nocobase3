@@ -1,7 +1,7 @@
 import type { LocaleResource } from '@nocobase/i18n';
 
 const enUS = {
-  nav: { users: 'Users' },
+  nav: { users: 'User management' },
   page: {
     title: 'Users',
     description: 'Create accounts, assign roles, and control active sessions.',

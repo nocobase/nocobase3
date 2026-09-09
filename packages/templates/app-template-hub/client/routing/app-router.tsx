@@ -15,12 +15,6 @@ import { AppShell } from '../shell/index.js';
 import { ClientRoute } from './client-route.js';
 import { StandalonePageLayout } from './standalone-page-layout.js';
 
-// The settings centre brings its own chrome and navigation, none of which the application needs until someone opens
-// it. Loading it lazily keeps it out of the entry chunk, the same way every page it hosts stays out.
-const SettingsLayout = lazy(async () => ({
-  default: (await import('../layouts/settings-layout.js')).SettingsLayout,
-}));
-
 // The dev tools exist only while developing the application. Resolving the import inside an `import.meta.env.DEV`
 // branch lets a production build prove the module is unreachable and drop it, along with every dev page and any
 // module only those pages import.
@@ -40,19 +34,9 @@ export interface AppRouterProps {
 
 export function AppRouter({
   clientRoutes,
-  clientSettings,
-  clientSettingGroups,
   clientDevRoutes,
   clientDevRouteGroups,
 }: AppRouterProps): ReactElement {
-  const settingsRoutes = useMemo(
-    () =>
-      clientRoutes.filter(
-        (route) =>
-          route.auth === 'required' && route.path.startsWith('/settings/'),
-      ),
-    [clientRoutes],
-  );
   const devRoutes = useMemo(
     () =>
       clientRoutes.filter(
@@ -95,22 +79,9 @@ export function AppRouter({
             />
           ))}
         </Route>
-        <Route
-          path='/settings/*'
-          element={
-            <Suspense
-              fallback={
-                <Loading className='min-h-svh' label='Loading settings' />
-              }
-            >
-              <SettingsLayout
-                groups={clientSettingGroups}
-                routes={settingsRoutes}
-                settings={clientSettings}
-              />
-            </Suspense>
-          }
-        />
+        {/* Hub is a control-plane App. Its administration pages live in the
+            primary console, so the ordinary App settings centre is disabled. */}
+        <Route path='/settings/*' element={<Navigate to='/apps' replace />} />
         {import.meta.env.DEV && DevLayout ? (
           <Route
             path='/dev/*'
