@@ -5,14 +5,21 @@ export type UserRoleValue = string | readonly string[];
 export interface UserRoleOption {
   readonly value: string;
   readonly label: string;
+  readonly labelI18nKey?: string;
+  readonly labelI18nNs?: string;
   readonly description?: string;
+  readonly assignable?: boolean;
+  readonly removable?: boolean;
 }
 
 export interface UserRoleScopeOption {
   readonly key: string;
   readonly label: string;
+  readonly labelI18nKey?: string;
+  readonly labelI18nNs?: string;
   readonly selection: 'single' | 'multiple';
   readonly requiredOnCreate: boolean;
+  readonly hasAuthenticatedDefaultAccess?: boolean;
   readonly options: readonly UserRoleOption[];
 }
 

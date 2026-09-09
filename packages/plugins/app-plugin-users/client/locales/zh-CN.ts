@@ -16,6 +16,12 @@ const zhCN: UsersResource = {
     previous: '上一页',
     next: '下一页',
     selectRole: '选择角色',
+    roles: '角色',
+    systemAdministrator: '系统管理员',
+    noDirectRoles: '未分配角色',
+    protectedRole: '受保护角色',
+    authenticatedDefaultAccess:
+      '这里显示的是直接分配给用户的角色。面向所有登录用户的默认权限会另外生效，并在 Authorization 中配置。',
     columns: { user: '用户', status: '状态', actions: '操作' },
     actions: {
       menu: '用户操作',

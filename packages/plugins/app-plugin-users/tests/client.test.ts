@@ -12,8 +12,10 @@ import {
   USER_MANAGEMENT_ACTIONS,
 } from '../client/user-permissions.js';
 import {
+  assignableRoleScopes,
   emptyRoleScopeValues,
   hasEveryRequiredRoleScope,
+  localizeRoleScopes,
   selectedRoleScopeValues,
 } from '../client/role-scopes.js';
 
@@ -38,6 +40,7 @@ describe('@nocobase/app-plugin-users Client routes', () => {
             label: 'Hub role',
             selection: 'single',
             requiredOnCreate: true,
+            hasAuthenticatedDefaultAccess: false,
             options: [
               { value: 'hub-administrator', label: 'Administrator' },
               { value: 'hub-viewer', label: 'Viewer' },
@@ -60,6 +63,7 @@ describe('@nocobase/app-plugin-users Client routes', () => {
         label: 'Hub role',
         selection: 'single' as const,
         requiredOnCreate: true,
+        hasAuthenticatedDefaultAccess: false,
         options: [
           { value: 'hub-administrator', label: 'Administrator' },
           { value: 'hub-viewer', label: 'Viewer' },
@@ -70,6 +74,7 @@ describe('@nocobase/app-plugin-users Client routes', () => {
         label: 'Teams',
         selection: 'multiple' as const,
         requiredOnCreate: false,
+        hasAuthenticatedDefaultAccess: true,
         options: [{ value: 'support', label: 'Support' }],
       },
     ];
@@ -83,6 +88,42 @@ describe('@nocobase/app-plugin-users Client routes', () => {
         hub: 'hub-viewer',
       }),
     ).toEqual({ hub: 'hub-viewer' });
+  });
+
+  it('localizes role labels and omits protected-only scopes from creation', () => {
+    const scopes = [
+      {
+        key: 'app',
+        label: 'Roles',
+        labelI18nKey: 'page.roles',
+        labelI18nNs: '@nocobase/app-plugin-users',
+        selection: 'multiple' as const,
+        requiredOnCreate: false,
+        hasAuthenticatedDefaultAccess: true,
+        options: [
+          {
+            value: 'system-administrator',
+            label: 'System administrator',
+            labelI18nKey: 'page.systemAdministrator',
+            labelI18nNs: '@nocobase/app-plugin-users',
+            assignable: false,
+            removable: false,
+          },
+        ],
+      },
+    ];
+
+    expect(
+      localizeRoleScopes(scopes, (key) =>
+        key === 'page.roles' ? '角色' : '系统管理员',
+      ),
+    ).toMatchObject([
+      {
+        label: '角色',
+        options: [{ label: '系统管理员' }],
+      },
+    ]);
+    expect(assignableRoleScopes(scopes)).toEqual([]);
   });
 
   it('loads every user action for button-level access control', async () => {

@@ -55,8 +55,16 @@ class DefaultUserManagementService implements UserManagementService {
         this.services.roleScopes.list().map(async (scope) => ({
           key: scope.key,
           label: scope.label,
+          ...(scope.labelI18nKey === undefined
+            ? {}
+            : { labelI18nKey: scope.labelI18nKey }),
+          ...(scope.labelI18nNs === undefined
+            ? {}
+            : { labelI18nNs: scope.labelI18nNs }),
           selection: scope.selection,
           requiredOnCreate: scope.requiredOnCreate ?? false,
+          hasAuthenticatedDefaultAccess:
+            scope.hasAuthenticatedDefaultAccess ?? false,
           options: await scope.options(),
         })),
       ),
@@ -85,9 +93,7 @@ class DefaultUserManagementService implements UserManagementService {
     });
     return {
       ...page,
-      items: await Promise.all(
-        page.items.map((user) => this.withRoleScopes(user, connection)),
-      ),
+      items: await this.withRoleScopesForUsers(page.items, connection),
     };
   }
 
@@ -238,6 +244,40 @@ class DefaultUserManagementService implements UserManagementService {
         ),
     );
     return { ...user, roleScopes: Object.fromEntries(entries) };
+  }
+
+  private async withRoleScopesForUsers(
+    users: readonly AdministratedUser[],
+    connection: ReturnType<DatabaseManager['connection']>,
+  ): Promise<readonly ManagedUser[]> {
+    const scopes = this.services.roleScopes.list();
+    const valuesByScope = await Promise.all(
+      scopes.map(async (scope) => {
+        const values = scope.getMany
+          ? await scope.getMany(
+              users.map(({ id }) => id),
+              connection,
+            )
+          : Object.fromEntries(
+              await Promise.all(
+                users.map(
+                  async (user) =>
+                    [user.id, await scope.get(user.id, connection)] as const,
+                ),
+              ),
+            );
+        return [scope, values] as const;
+      }),
+    );
+    return users.map((user) => ({
+      ...user,
+      roleScopes: Object.fromEntries(
+        valuesByScope.map(([scope, values]) => [
+          scope.key,
+          values[user.id] ?? (scope.selection === 'multiple' ? [] : ''),
+        ]),
+      ),
+    }));
   }
 }
 

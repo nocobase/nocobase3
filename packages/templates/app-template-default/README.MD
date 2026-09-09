@@ -6,7 +6,7 @@ You own everything in this directory. Add pages, API routes, database tables, an
 
 ## Default and Examples
 
-Default provides the application shell and product capabilities without example plugins or business demo pages. Its application-owned server route/provider lists start empty, and new databases receive no article sample data. Use `app-template-examples` for article management and runnable plugin demonstrations.
+Default provides the application shell and product capabilities without example plugins or business demo pages. Application-owned routes start empty, and new databases receive no article sample data. Its built-in Users integration lists direct Authorization Permission Sets as application roles, while access assigned to all authenticated users remains separate. Use `app-template-examples` for article management and runnable plugin demonstrations.
 
 Existing Default installations retain their data when example plugins are unregistered. If an installation already ran the article migration, retain its original migration sources as described in `MIGRATION.md` before upgrading. Do not erase migration history or delete existing data to make an upgrade start.
 

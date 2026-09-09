@@ -15,16 +15,30 @@ export type UserRoleValue = string | readonly string[];
 export interface UserRoleOption {
   readonly value: string;
   readonly label: string;
+  readonly labelI18nKey?: string;
+  readonly labelI18nNs?: string;
   readonly description?: string;
+  /** Defaults to true. Set to false for assignments that this scope may show but not add. */
+  readonly assignable?: boolean;
+  /** Defaults to true. Set to false for protected assignments that this scope may not revoke. */
+  readonly removable?: boolean;
 }
 
 export interface UserRoleScope {
   readonly key: string;
   readonly label: string;
+  readonly labelI18nKey?: string;
+  readonly labelI18nNs?: string;
   readonly selection: UserRoleSelection;
   readonly requiredOnCreate?: boolean;
+  /** The scope shows direct roles while authenticated-subject permissions apply separately. */
+  readonly hasAuthenticatedDefaultAccess?: boolean;
   options(): Promise<readonly UserRoleOption[]>;
   get(userId: string, connection: DatabaseConnection): Promise<UserRoleValue>;
+  getMany?(
+    userIds: readonly string[],
+    connection: DatabaseConnection,
+  ): Promise<Readonly<Record<string, UserRoleValue>>>;
   findUserIds(
     role: string,
     connection: DatabaseConnection,
@@ -61,8 +75,11 @@ export interface UserManagementOptions {
   readonly roleScopes: readonly {
     key: string;
     label: string;
+    labelI18nKey?: string;
+    labelI18nNs?: string;
     selection: UserRoleSelection;
     requiredOnCreate: boolean;
+    hasAuthenticatedDefaultAccess: boolean;
     options: readonly UserRoleOption[];
   }[];
 }

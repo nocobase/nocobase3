@@ -60,6 +60,17 @@ For a required single-role scope, set `selection: 'single'` and
 `requiredOnCreate: true`. Reject invalid values in the scope and enforce
 business invariants such as the last-administrator rule on the server.
 
+Set `assignable: false` or `removable: false` on an option when the Users page
+must show a protected assignment but must not add or revoke it. Enforce the
+same rule in `replace()` because these flags only control the Client. Set
+`hasAuthenticatedDefaultAccess: true` when the scope lists direct assignments
+but all signed-in users also inherit separately configured default access; the
+page then explains that distinction instead of treating the default as a role.
+Use `labelI18nKey` with `labelI18nNs` on a scope or option when its owner has
+registered Client locale resources; keep `label` as the readable fallback.
+Implement optional `getMany()` when assignments can be read as a batch. Users
+uses it for list pages and falls back to `get()` for existing scopes.
+
 ## Ownership
 
 - Authentication owns user identity, credentials, account state, password

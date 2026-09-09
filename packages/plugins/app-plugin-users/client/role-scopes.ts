@@ -1,5 +1,34 @@
 import type { UserRoleScopeOption, UserRoleValue } from './user-client.js';
 
+export function localizeRoleScopes(
+  scopes: readonly UserRoleScopeOption[],
+  translate: (key: string, namespace?: string) => string,
+): readonly UserRoleScopeOption[] {
+  return scopes.map((scope) => ({
+    ...scope,
+    label: scope.labelI18nKey
+      ? translate(scope.labelI18nKey, scope.labelI18nNs)
+      : scope.label,
+    options: scope.options.map((option) => ({
+      ...option,
+      label: option.labelI18nKey
+        ? translate(option.labelI18nKey, option.labelI18nNs)
+        : option.label,
+    })),
+  }));
+}
+
+export function assignableRoleScopes(
+  scopes: readonly UserRoleScopeOption[],
+): readonly UserRoleScopeOption[] {
+  return scopes
+    .map((scope) => ({
+      ...scope,
+      options: scope.options.filter((option) => option.assignable !== false),
+    }))
+    .filter((scope) => scope.requiredOnCreate || scope.options.length > 0);
+}
+
 export function emptyRoleScopeValues(
   scopes: readonly UserRoleScopeOption[],
 ): Record<string, UserRoleValue> {

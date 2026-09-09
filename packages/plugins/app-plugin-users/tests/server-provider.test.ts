@@ -128,6 +128,97 @@ describe('@nocobase/app-plugin-users service', () => {
     expect(registry.list()).toEqual([]);
   });
 
+  it('publishes role option protections and default-access context', async () => {
+    const database = createDatabaseManager({
+      default: 'main',
+      connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
+    });
+    databases.push(database);
+    const registry = createUserRoleScopeRegistry();
+    registry.register(
+      roleScope({
+        hasAuthenticatedDefaultAccess: true,
+        options: () =>
+          Promise.resolve([
+            {
+              value: 'system-administrator',
+              label: 'System administrator',
+              assignable: false,
+              removable: false,
+            },
+          ]),
+      }),
+    );
+    const service = createUserManagementService({
+      database,
+      users: administrationService(database.connection()),
+      roleScopes: registry,
+    });
+
+    await expect(service.options()).resolves.toMatchObject({
+      roleScopes: [
+        {
+          key: 'test',
+          hasAuthenticatedDefaultAccess: true,
+          options: [
+            {
+              value: 'system-administrator',
+              assignable: false,
+              removable: false,
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  it('loads one page of role assignments through the scope batch API', async () => {
+    const database = createDatabaseManager({
+      default: 'main',
+      connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
+    });
+    databases.push(database);
+    const now = new Date();
+    const get = vi.fn(() =>
+      Promise.reject(new Error('unexpected single read')),
+    );
+    const getMany = vi.fn(() =>
+      Promise.resolve({ 'user-1': ['editor'], 'user-2': [] }),
+    );
+    const registry = createUserRoleScopeRegistry();
+    registry.register(roleScope({ selection: 'multiple', get, getMany }));
+    const baseUsers = administrationService(database.connection());
+    const service = createUserManagementService({
+      database,
+      users: {
+        ...baseUsers,
+        list: () =>
+          Promise.resolve({
+            items: [
+              administratedUser('user-1', now),
+              administratedUser('user-2', now),
+            ],
+            total: 2,
+            page: 1,
+            pageSize: 20,
+          }),
+      },
+      roleScopes: registry,
+    });
+
+    await expect(service.list()).resolves.toMatchObject({
+      items: [
+        { id: 'user-1', roleScopes: { test: ['editor'] } },
+        { id: 'user-2', roleScopes: { test: [] } },
+      ],
+    });
+    expect(getMany).toHaveBeenCalledWith(
+      ['user-1', 'user-2'],
+      database.connection(),
+    );
+    expect(get).not.toHaveBeenCalled();
+  });
+
   it('rejects an empty required role and values with the wrong selection shape', async () => {
     const database = createDatabaseManager({
       default: 'main',
@@ -256,4 +347,16 @@ function administrationService(
     revokeSessions: vi.fn(),
   });
   return create(initialConnection);
+}
+
+function administratedUser(id: string, now: Date) {
+  return {
+    id,
+    name: id,
+    email: `${id}@example.com`,
+    emailVerified: false,
+    disabledAt: null,
+    createdAt: now,
+    updatedAt: now,
+  };
 }

@@ -16,6 +16,12 @@ const enUS = {
     previous: 'Previous',
     next: 'Next',
     selectRole: 'Select role',
+    roles: 'Roles',
+    systemAdministrator: 'System administrator',
+    noDirectRoles: 'No direct roles',
+    protectedRole: 'Protected role',
+    authenticatedDefaultAccess:
+      'Roles shown here are assigned directly to each user. Default access for all signed-in users applies separately and is configured in Authorization.',
     columns: { user: 'User', status: 'Status', actions: 'Actions' },
     actions: {
       menu: 'User actions',

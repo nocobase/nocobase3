@@ -34,6 +34,14 @@ Users does not create roles or grant access by itself.
   password reset, Session revocation, and role-scope replacement operations.
 - `userRoleScopeRegistryToken` lets an application plugin expose its own role
   choices and assignment implementation through `UserRoleScope`.
+- Role options may be marked non-assignable or non-removable when a scope needs
+  to display protected assignments without letting the Users page change them.
+  A scope can also declare that authenticated-subject defaults apply separately
+  so the page does not present inherited access as a direct user role.
+  Application-owned labels can provide an i18n key and namespace while keeping
+  the plain label as a fallback.
+- Scopes backed by a shared assignment store should implement optional
+  `getMany()` so one user-list page does not issue one role query per user.
 - All `/api/users/*` routes require an authenticated session and a matching
   `user:<id>:<action>` grant. Creating a user requires both `create` and
   `assign-role`.
@@ -49,7 +57,8 @@ uses one database transaction.
 `@nocobase/app-plugin-users/client/user-client` for App-owned UI that needs the
 same API contract. The built-in page supports pagination, search, status and
 role filters, account editing, enable/disable, password reset, Session
-revocation, and application-provided role scopes.
+revocation, and application-provided role scopes. Empty scopes are shown as
+unassigned rather than silently disappearing from the user row.
 
 ## Verification
 
