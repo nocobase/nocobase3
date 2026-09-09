@@ -1,5 +1,15 @@
 # @nocobase/create-app
 
+## 0.1.0-beta.11
+
+### Minor Changes
+
+- d29d1fe: Add an independent Examples application template based on Default, with a localized examples homepage, article management, initial data, and registered capability examples. Add the `examples` template alias to create-app and include the template in release version synchronization.
+
+### Patch Changes
+
+- c033168: Ignore root-level `.agent-annotations/` in generated applications, including when a template provides its own ignore file.
+
 ## 0.1.0-beta.10
 
 ### Minor Changes

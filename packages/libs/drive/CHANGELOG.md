@@ -1,5 +1,13 @@
 # @nocobase/drive
 
+## 0.1.0-beta.4
+
+### Patch Changes
+
+- 5281fd1: Allow drive configurations to omit storage links so application startup succeeds when no symbolic links are configured.
+
+  Display an empty links map in application configuration summaries when drive links are omitted.
+
 ## 0.1.0-beta.3
 
 ### Minor Changes

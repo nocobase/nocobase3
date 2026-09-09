@@ -1,5 +1,27 @@
 # @nocobase/app-plugin-ai-employee
 
+## 0.1.0-beta.4
+
+### Minor Changes
+
+- dc517b1: Add typed application configuration schemas for declarative AI knowledge-base vector databases and manifest sources.
+
+### Patch Changes
+
+- 0811f18: Localize the LLM service table, model editor, model search, controls, and accessibility labels in English and Chinese.
+- 7057ee0: Remove the internal aggregate runtime context, pass explicit route and service inputs, and remove legacy task conversations.
+- Updated dependencies [d29d1fe]
+- Updated dependencies [dc517b1]
+- Updated dependencies [5281fd1]
+  - @nocobase/app-server@1.0.0-beta.8
+  - @nocobase/ai-employee@0.2.0-beta.3
+  - @nocobase/drive@0.1.0-beta.4
+  - @nocobase/app-plugin-authentication@0.1.0-beta.8
+  - @nocobase/app-client@1.0.0-beta.11
+  - @nocobase/db@1.0.0-beta.3
+  - @nocobase/i18n@1.0.0-beta.2
+  - @nocobase/service-provider@0.0.2-beta.1
+
 ## 0.1.0-beta.3
 
 ### Patch Changes
