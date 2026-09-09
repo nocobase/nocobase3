@@ -3,8 +3,8 @@ import { describeIntegrationDatabases } from '../helpers.js';
 
 describeIntegrationDatabases('query subquery', (context) => {
   it('supports subquery operands, exists, and not exists against a real connection', async () => {
-    const ordersTable = context.table('whereOrders');
-    const paymentsTable = context.table('wherePayments');
+    const ordersTable = 'whereOrders';
+    const paymentsTable = 'wherePayments';
 
     await context.builder.createCollection('whereOrders', (collection) => {
       collection.increments('id');
@@ -102,8 +102,8 @@ describeIntegrationDatabases('query subquery', (context) => {
   });
 
   it('selects scalar subqueries with stable aliases', async () => {
-    const ordersTable = context.table('whereOrders');
-    const paymentsTable = context.table('wherePayments');
+    const ordersTable = 'whereOrders';
+    const paymentsTable = 'wherePayments';
 
     await context.builder.createCollection('whereOrders', (collection) => {
       collection.increments('id');
@@ -156,5 +156,53 @@ describeIntegrationDatabases('query subquery', (context) => {
       { orderNo: 'SO-002', firstPaymentStatus: 'failed' },
       { orderNo: 'SO-003', firstPaymentStatus: null },
     ]);
+  });
+
+  it('keeps subquery aliases and qualified wildcards in their local scope', async () => {
+    const ordersTable = 'whereOrders';
+    const paymentsTable = 'wherePayments';
+
+    await context.builder.createCollection(ordersTable, (collection) => {
+      collection.increments('id');
+      collection.string('orderNo');
+    });
+    await context.builder.createCollection(paymentsTable, (collection) => {
+      collection.increments('id');
+      collection.integer('orderId');
+      collection.string('status');
+    });
+
+    await context.database
+      .query()
+      .insertInto(ordersTable)
+      .values([{ orderNo: 'SO-001' }, { orderNo: 'SO-002' }])
+      .execute();
+    await context.database
+      .query()
+      .insertInto(paymentsTable)
+      .values([
+        { orderId: 1, status: 'failed' },
+        { orderId: 1, status: 'paid' },
+      ])
+      .execute();
+
+    await expect(
+      context.database
+        .query()
+        .selectFrom(`${ordersTable} as orderRows`)
+        .select('orderRows.orderNo as orderNo')
+        .where(({ exists, selectFrom }) =>
+          exists(
+            selectFrom(`${paymentsTable} as paymentRows`)
+              .selectAll('paymentRows')
+              .distinct()
+              .whereRef('paymentRows.orderId', '=', 'orderRows.id')
+              .orderBy('paymentRows.id')
+              .limit(1)
+              .offset(0),
+          ),
+        )
+        .execute(),
+    ).resolves.toEqual([{ orderNo: 'SO-001' }]);
   });
 });

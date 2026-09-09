@@ -1,4 +1,8 @@
-import { appApiClientToken, useService } from '@nocobase/app-client';
+import {
+  apiClientToken,
+  realtimeClientToken,
+  useService,
+} from '@nocobase/app-client';
 import {
   useCallback,
   useEffect,
@@ -18,7 +22,8 @@ import { subscribeToInboxInvalidations } from '../subscription.js';
 export function NotificationInAppProvider({
   children,
 }: PropsWithChildren): ReactElement {
-  const appClient = useService(appApiClientToken);
+  const appClient = useService(apiClientToken);
+  const realtime = useService(realtimeClientToken);
   const [unreadCount, setUnreadCount] = useState(0);
   const [revision, setRevision] = useState(0);
   const refresh = useCallback(
@@ -35,8 +40,8 @@ export function NotificationInAppProvider({
   }, [appClient, revision]);
 
   useEffect(() => {
-    return subscribeToInboxInvalidations(appClient, window, refresh);
-  }, [appClient, refresh]);
+    return subscribeToInboxInvalidations(realtime, window, refresh);
+  }, [realtime, refresh]);
 
   const value = useMemo<NotificationInAppRuntimeValue>(
     () => ({ unreadCount, revision, refresh }),

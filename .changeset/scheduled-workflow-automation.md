@@ -5,6 +5,7 @@
 '@nocobase/app-client': minor
 '@nocobase/app-plugin-workflow': patch
 '@nocobase/app-template-default': patch
+'@nocobase/app-template-examples': patch
 '@nocobase/app-template-hub': patch
 ---
 

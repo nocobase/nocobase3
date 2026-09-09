@@ -20,34 +20,39 @@ export function createAppDatabaseManager(
     defineDatabase({
       default: config.default,
       connections: resolveConnections(config.connections, paths),
+      metadataStore: config.metadataStore,
     }),
   );
 }
 
-function resolveConnections(
+export function resolveConnections(
   connections: AppDatabaseConfig['connections'],
   paths: ConfigPaths | undefined,
-): AppDatabaseConfig['connections'] {
-  const main = connections.main;
-  if (!main) return connections;
-  if (main.dialect === 'mysql') {
-    return {
-      ...connections,
-      main: {
-        host: '127.0.0.1',
-        port: 3306,
+): Record<string, ConnectionConfig> {
+  return Object.fromEntries(
+    Object.entries(connections).map(([name, config]) => {
+      const { migrations: _migrations, seeds: _seeds, ...connection } = config;
+      return [name, normalizeConnection(connection, paths)];
+    }),
+  );
+}
+
+function normalizeConnection(
+  connection: ConnectionConfig,
+  paths: ConfigPaths | undefined,
+): ConnectionConfig {
+  switch (connection.dialect) {
+    case 'mysql':
+      return {
+        ...(connection.socketPath ? {} : { host: '127.0.0.1', port: 3306 }),
         database: 'app',
         username: 'root',
         password: '',
         charset: 'utf8mb4',
-        ...main,
-      } as ConnectionConfig,
-    };
-  }
-  if (main.dialect === 'postgres') {
-    return {
-      ...connections,
-      main: {
+        ...connection,
+      } as ConnectionConfig;
+    case 'postgres':
+      return {
         host: '127.0.0.1',
         port: 5432,
         database: 'app',
@@ -55,14 +60,39 @@ function resolveConnections(
         password: '',
         ssl: false,
         schema: ['public'],
-        ...main,
-      },
-    };
+        ...connection,
+      };
+    case 'oracle':
+      return {
+        ...connection,
+        host: connection.host ?? '127.0.0.1',
+        port: connection.port ?? 1521,
+        serviceName: connection.serviceName || 'FREEPDB1',
+        username: connection.username ?? 'nocobase',
+        password: connection.password ?? '',
+      };
+    case 'mssql':
+      return {
+        host: '127.0.0.1',
+        port: 1433,
+        database: 'app',
+        username: 'sa',
+        password: '',
+        encrypt: false,
+        trustServerCertificate: false,
+        ...connection,
+      };
+    case 'sqlite': {
+      const database = (connection as ConnectionConfig & { database?: string })
+        .database;
+      const filename = database ?? connection.filename;
+      return {
+        ...connection,
+        filename:
+          filename && filename !== ':memory:' && paths
+            ? paths.storage(filename)
+            : filename,
+      };
+    }
   }
-  const database = (main as ConnectionConfig & { database?: string }).database;
-  if (!database || !paths) return connections;
-  return {
-    ...connections,
-    main: { ...main, filename: paths.storage(database) },
-  };
 }

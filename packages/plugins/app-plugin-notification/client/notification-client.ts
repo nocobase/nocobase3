@@ -1,4 +1,4 @@
-import type { AppClient } from '@nocobase/app-client';
+import type { ApiClient } from '@nocobase/app-client';
 import type {
   NotificationSendResult,
   NotificationTestFieldDescriptor,
@@ -111,46 +111,44 @@ export class NotificationTestApiError extends Error {
 }
 
 export class NotificationClient {
-  constructor(private readonly client: AppClient) {}
+  constructor(private readonly api: ApiClient) {}
 
   listLogs(): Promise<readonly NotificationLogDetails[]> {
-    return this.client
-      .request<DataResponse<readonly NotificationLogDetails[]>>(
-        'notifications/logs',
-      )
+    return this.api
+      .request<DataResponse<readonly NotificationLogDetails[]>>({
+        path: 'notifications/logs',
+      })
       .then((response) => response.data);
   }
 
   listTestTargets(): Promise<readonly NotificationTestTarget[]> {
-    return this.client
-      .request<DataResponse<readonly NotificationTestTarget[]>>(
-        'notifications/test/targets',
-        { headers: { 'x-nocobase-notification-test': '1' } },
-      )
+    return this.api
+      .request<DataResponse<readonly NotificationTestTarget[]>>({
+        path: 'notifications/test/targets',
+        headers: { 'x-nocobase-notification-test': '1' },
+      })
       .then((response) => response.data)
       .catch(rethrowNotificationTestError);
   }
 
   sendTest(input: NotificationTestInput): Promise<NotificationTestResult> {
-    return this.client
-      .request<DataResponse<NotificationTestResult>>(
-        'notifications/test/send',
-        {
-          method: 'POST',
-          headers: { 'x-nocobase-notification-test': '1' },
-          body: JSON.stringify(input),
-        },
-      )
+    return this.api
+      .request<DataResponse<NotificationTestResult>>({
+        path: 'notifications/test/send',
+        method: 'POST',
+        headers: { 'x-nocobase-notification-test': '1' },
+        json: input,
+      })
       .then((response) => response.data)
       .catch(rethrowNotificationTestError);
   }
 
   getTestStatus(id: string): Promise<NotificationLogDetails> {
-    return this.client
-      .request<DataResponse<NotificationLogDetails>>(
-        `notifications/test/${encodeURIComponent(id)}/status`,
-        { headers: { 'x-nocobase-notification-test': '1' } },
-      )
+    return this.api
+      .request<DataResponse<NotificationLogDetails>>({
+        path: `notifications/test/${encodeURIComponent(id)}/status`,
+        headers: { 'x-nocobase-notification-test': '1' },
+      })
       .then((response) => response.data)
       .catch(rethrowNotificationTestError);
   }

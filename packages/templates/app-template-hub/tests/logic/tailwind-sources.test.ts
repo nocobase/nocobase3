@@ -1,3 +1,4 @@
+import clientPlugins from '../../client/plugins.js';
 // @vitest-environment node
 
 import {
@@ -26,15 +27,9 @@ describe('tailwind content sources', () => {
   const content = tailwindConfig.content as string[];
 
   it('scans the client files of every enabled plugin', () => {
-    const manifest = JSON.parse(
-      readFileSync(path.join(appRoot, 'package.json'), 'utf8'),
-    ) as { nocobase?: { plugins?: Record<string, { enabled?: boolean }> } };
-    const plugins = Object.entries(manifest.nocobase?.plugins ?? {})
-      .filter(
-        ([name, config]) =>
-          config.enabled && name.startsWith('@nocobase/app-plugin-'),
-      )
-      .map(([name]) => name.slice('@nocobase/'.length));
+    const plugins = clientPlugins.plugins.map((plugin) =>
+      plugin.packageName.slice('@nocobase/'.length),
+    );
 
     expect(plugins.length).toBeGreaterThan(0);
 

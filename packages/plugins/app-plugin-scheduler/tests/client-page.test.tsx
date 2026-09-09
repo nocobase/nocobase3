@@ -106,7 +106,7 @@ const mocks = vi.hoisted(() => {
 });
 
 vi.mock('@nocobase/app-client', () => ({
-  appApiClientToken: Symbol('app-api-client'),
+  apiClientToken: Symbol('api-client'),
   useService: () => mocks.api,
 }));
 vi.mock('@nocobase/i18n/client', () => ({
@@ -304,7 +304,7 @@ describe('SchedulesPage', () => {
   });
 
   it('renders the read-only overview on the dedicated detail route', async () => {
-    mocks.request.mockImplementation((path: string) =>
+    mocks.request.mockImplementation(({ path }: { path: string }) =>
       Promise.resolve({ data: path === 'schedules' ? schedules : [] }),
     );
     renderDetail();
@@ -352,7 +352,7 @@ describe('SchedulesPage', () => {
   });
 
   it('renders trigger timing, status, and reason without internal metadata', async () => {
-    mocks.request.mockImplementation((path: string) =>
+    mocks.request.mockImplementation(({ path }: { path: string }) =>
       Promise.resolve({
         data:
           path === 'schedules'

@@ -45,7 +45,7 @@ describe('ScheduleStore reconciliation', () => {
         status: 'active',
         runCount: 0,
         lastRunAt: null,
-        nextRunAt: Date.parse('2026-03-09T00:00:00.000Z'),
+        nextRunAt: String(Date.parse('2026-03-09T00:00:00.000Z')) + '.0',
       },
     ]);
   });
@@ -92,7 +92,7 @@ describe('ScheduleStore reconciliation', () => {
     ]);
     await expect(queueRow(id)).resolves.toMatchObject({
       runCount: 4,
-      nextRunAt: Date.parse('2026-03-08T12:00:00.000Z'),
+      nextRunAt: String(Date.parse('2026-03-08T12:00:00.000Z')) + '.0',
     });
   });
 

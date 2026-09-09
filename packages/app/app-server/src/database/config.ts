@@ -12,6 +12,27 @@ import { createAppPluginDatabaseConfig } from '../plugins/index.js';
 import type { ResolvedAppRuntimeConfigContext } from '../runtime/index.js';
 import type { AppDatabaseConfig } from './types.js';
 
+const taskSchema = Type.Object(
+  {
+    directory: Type.Optional(Type.String({ minLength: 1 })),
+    packageName: Type.Optional(Type.String({ minLength: 1 })),
+    autoRun: Type.Optional(Type.Boolean()),
+    tableName: Type.Optional(Type.String({ minLength: 1 })),
+    lockTableName: Type.Optional(Type.String({ minLength: 1 })),
+    extensions: Type.Optional(Type.Array(Type.String())),
+    sources: Type.Optional(
+      Type.Array(
+        Type.Object({
+          packageName: Type.String({ minLength: 1 }),
+          directory: Type.String({ minLength: 1 }),
+          extensions: Type.Optional(Type.Array(Type.String())),
+        }),
+      ),
+    ),
+  },
+  { additionalProperties: false },
+);
+
 export const databaseConfig: AppConfigDefinition<
   AppDatabaseConfig,
   ResolvedAppRuntimeConfigContext
@@ -24,16 +45,21 @@ export const databaseConfig: AppConfigDefinition<
         Type.String(),
         Type.Object(
           {
+            migrations: Type.Optional(taskSchema),
+            seeds: Type.Optional(taskSchema),
             dialect: Type.Union([
               Type.Literal('sqlite'),
               Type.Literal('postgres'),
               Type.Literal('mysql'),
+              Type.Literal('oracle'),
+              Type.Literal('mssql'),
             ]),
             filename: Type.Optional(Type.String()),
             host: Type.Optional(Type.String()),
             port: Type.Optional(Type.Number()),
             socketPath: Type.Optional(Type.String()),
             database: Type.Optional(Type.String()),
+            serviceName: Type.Optional(Type.String()),
             username: Type.Optional(Type.String()),
             password: Type.Optional(Type.String()),
             charset: Type.Optional(Type.String()),
@@ -47,7 +73,11 @@ export const databaseConfig: AppConfigDefinition<
                 Type.Record(Type.String(), Type.Unknown()),
               ]),
             ),
-            managed: Type.Optional(Type.Boolean()),
+            encrypt: Type.Optional(Type.Boolean()),
+            trustServerCertificate: Type.Optional(Type.Boolean()),
+            schemaManagement: Type.Optional(
+              Type.Union([Type.Literal('managed'), Type.Literal('external')]),
+            ),
             debug: Type.Optional(Type.Boolean()),
             driverOptions: Type.Optional(
               Type.Record(Type.String(), Type.Unknown()),
@@ -57,30 +87,8 @@ export const databaseConfig: AppConfigDefinition<
         ),
       ),
     ),
-    migrations: Type.Object(
-      {
-        directory: Type.String(),
-        packageName: Type.Optional(Type.String()),
-        autoRun: Type.Boolean(),
-        tableName: Type.Optional(Type.String()),
-        lockTableName: Type.Optional(Type.String()),
-        extensions: Type.Optional(Type.Array(Type.String())),
-      },
-      { additionalProperties: true },
-    ),
-    seeds: Type.Optional(
-      Type.Object(
-        {
-          directory: Type.String(),
-          packageName: Type.Optional(Type.String()),
-          autoRun: Type.Boolean(),
-          tableName: Type.Optional(Type.String()),
-          lockTableName: Type.Optional(Type.String()),
-          extensions: Type.Optional(Type.Array(Type.String())),
-        },
-        { additionalProperties: true },
-      ),
-    ),
+    migrations: Type.Optional(taskSchema),
+    seeds: Type.Optional(taskSchema),
   }),
   defaults: ({ paths, plugins, appPackageName }) => {
     const database: AppDatabaseConfig = {
@@ -89,18 +97,15 @@ export const databaseConfig: AppConfigDefinition<
         main: {
           dialect: 'sqlite',
           filename: paths.storage('database.sqlite'),
+          schemaManagement: 'managed',
           debug: false,
         },
       },
-      migrations: {
-        directory: paths.database('migrations'),
+      taskSources: {
+        directory: paths.database(),
         packageName: appPackageName,
-        autoRun: true,
-      },
-      seeds: {
-        directory: paths.database('seeds'),
-        packageName: appPackageName,
-        autoRun: true,
+        migrations: [],
+        seeds: [],
       },
     };
     return createAppPluginDatabaseConfig(database, plugins).database;
@@ -108,13 +113,19 @@ export const databaseConfig: AppConfigDefinition<
   envMappings: {
     DB_DIALECT: envString('connections.main.dialect'),
     DB_DATABASE: envString('connections.main.database'),
+    DB_SERVICE_NAME: envString('connections.main.serviceName'),
     DB_HOST: envString('connections.main.host'),
     DB_PORT: envInteger('connections.main.port'),
     DB_USERNAME: envString('connections.main.username'),
     DB_PASSWORD: envString('connections.main.password'),
     DB_CHARSET: envString('connections.main.charset'),
     DB_SSL: envBoolean('connections.main.ssl'),
+    DB_ENCRYPT: envBoolean('connections.main.encrypt'),
+    DB_TRUST_SERVER_CERTIFICATE: envBoolean(
+      'connections.main.trustServerCertificate',
+    ),
     DB_SCHEMA: envStrings('connections.main.schema'),
+    DB_SCHEMA_MANAGEMENT: envString('connections.main.schemaManagement'),
     DB_DEBUG: envBoolean('connections.main.debug'),
     DB_MIGRATIONS_AUTO_RUN: envBoolean('migrations.autoRun'),
     DB_MIGRATIONS_TABLE: envString('migrations.tableName'),

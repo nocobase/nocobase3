@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { defineSeed, type SeedContext } from '../../../src/index.js';
 import {
-  defineSeed,
   isDefinedSeed,
   SEED_DEFINITION_SYMBOL,
-  type SeedContext,
-} from '../../../src/index.js';
+} from '../../../src/seed/internal/marker.js';
 
 describe('defineSeed', () => {
   it('marks seed definitions without exposing the marker in enumeration', () => {

@@ -1,4 +1,4 @@
-import { appApiClientToken, useService } from '@nocobase/app-client';
+import { apiClientToken, useService } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import {
   CalendarClock,
@@ -134,7 +134,7 @@ function StatusBadge({
 }
 
 export default function SchedulesPage(): ReactElement {
-  const api = useService(appApiClientToken);
+  const api = useService(apiClientToken);
   const { i18n, t } = useTranslation(SCHEDULER_NS);
   const [items, setItems] = useState<readonly ScheduleItem[]>([]);
   const [listError, setListError] = useState<string>();
@@ -146,7 +146,8 @@ export default function SchedulesPage(): ReactElement {
   useEffect(() => {
     const controller = new AbortController();
     void api
-      .request<{ data: readonly ScheduleItem[] }>('schedules', {
+      .request<{ data: readonly ScheduleItem[] }>({
+        path: 'schedules',
         signal: controller.signal,
       })
       .then((response) => setItems(response.data))

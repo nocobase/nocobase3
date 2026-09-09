@@ -1,19 +1,28 @@
 import { SupportedModel } from '@nocobase/ai-employee';
-import type { Context } from '../context.js';
+import type { AIManager } from '@nocobase/ai-employee';
 import { randomUUID } from 'node:crypto';
 import type {
   EnabledLLMServiceDto,
   ProviderModelDto,
   ProviderModelListRequest,
-} from '../routes/contracts.js';
+} from '../domain/api-contracts.js';
 import { badRequest, notFound, requiredString } from './utils.js';
 
 /**
  * LLM service / model service — uses the provider manager and shared in-memory `llmServices` store.
  */
+export interface ModelServiceOptions {
+  readonly ai: AIManager;
+}
+
 export class ModelService {
-  async listEnabled(ctx: Context): Promise<EnabledLLMServiceDto[]> {
-    const list = await ctx.ai.llmProviderManager.listAllEnabledModels();
+  private readonly ai: AIManager;
+
+  public constructor({ ai }: ModelServiceOptions) {
+    this.ai = ai;
+  }
+  async listEnabled(_options: {}): Promise<EnabledLLMServiceDto[]> {
+    const list = await this.ai.llmProviderManager.listAllEnabledModels();
     return list.map((service) => ({
       llmService: service.llmService,
       llmServiceTitle: service.llmServiceTitle,
@@ -26,25 +35,26 @@ export class ModelService {
     }));
   }
 
-  listLLMProviders(
-    ctx: Context,
-  ): ReturnType<Context['ai']['llmProviderManager']['listLLMProviders']> {
-    return ctx.ai.llmProviderManager.listLLMProviders();
+  listLLMProviders(_options: {}): ReturnType<
+    AIManager['llmProviderManager']['listLLMProviders']
+  > {
+    return this.ai.llmProviderManager.listLLMProviders();
   }
 
-  async listLLMServices(
-    ctx: Context,
-    model?: string,
-  ): Promise<Array<{ name: string; title: string; provider: string }>> {
+  async listLLMServices({
+    model,
+  }: {
+    model?: string;
+  }): Promise<Array<{ name: string; title: string; provider: string }>> {
     const supportedProviders = model
       ? new Set(
-          ctx.ai.llmProviderManager.getSupportedProvider(
+          this.ai.llmProviderManager.getSupportedProvider(
             model as SupportedModel,
           ),
         )
       : undefined;
     if (supportedProviders && !supportedProviders.size) return [];
-    const services = await ctx.ai.llmServiceManager.listLLMServices({
+    const services = await this.ai.llmServiceManager.listLLMServices({
       enabled: true,
     });
     return services
@@ -55,14 +65,16 @@ export class ModelService {
       .map(({ name, title, provider }) => ({ name, title, provider }));
   }
 
-  async listModels(
-    ctx: Context,
-    llmService: string,
-    model?: string,
-  ): Promise<Array<{ id: string }>> {
-    const service = await ctx.ai.llmServiceManager.getLLMService(llmService);
+  async listModels({
+    llmService,
+    model,
+  }: {
+    llmService: string;
+    model?: string;
+  }): Promise<Array<{ id: string }>> {
+    const service = await this.ai.llmServiceManager.getLLMService(llmService);
     if (!service || service.enabled === false) return [];
-    const provider = ctx.ai.llmProviderManager.llmProviders.get(
+    const provider = this.ai.llmProviderManager.llmProviders.get(
       service.provider,
     );
     if (!provider) return [];
@@ -73,14 +85,15 @@ export class ModelService {
     }
     return [];
   }
-  async listProviderModels(
-    ctx: Context,
-    input: ProviderModelListRequest,
-  ): Promise<ProviderModelDto[]> {
+  async listProviderModels({
+    input,
+  }: {
+    input: ProviderModelListRequest;
+  }): Promise<ProviderModelDto[]> {
     const llmService = requiredString(input.llmService, 'llmService');
-    const service = await ctx.ai.llmServiceManager.getLLMService(llmService);
+    const service = await this.ai.llmServiceManager.getLLMService(llmService);
     if (!service) throw notFound('llmServices', llmService);
-    const providerMeta = ctx.ai.llmProviderManager.llmProviders.get(
+    const providerMeta = this.ai.llmProviderManager.llmProviders.get(
       service.provider,
     );
     if (!providerMeta) {
@@ -121,21 +134,22 @@ export class ModelService {
     });
   }
 
-  async getSupportedProvider(ctx: Context, model: string): Promise<string[]> {
-    return ctx.ai.llmProviderManager.getSupportedProvider(model as any);
+  async getSupportedProvider({ model }: { model: string }): Promise<string[]> {
+    return this.ai.llmProviderManager.getSupportedProvider(model as any);
   }
 
-  async requireModel(
-    ctx: Context,
-    model: { llmService: string; model: string },
-  ): Promise<{ llmService: string; provider: string }> {
-    const service = await ctx.ai.llmServiceManager.getLLMService(
+  async requireModel({
+    model,
+  }: {
+    model: { llmService: string; model: string };
+  }): Promise<{ llmService: string; provider: string }> {
+    const service = await this.ai.llmServiceManager.getLLMService(
       model.llmService,
     );
     if (!service || service.enabled === false) {
       throw new Error(`LLM service not found or disabled: ${model.llmService}`);
     }
-    const providerMeta = ctx.ai.llmProviderManager.llmProviders.get(
+    const providerMeta = this.ai.llmProviderManager.llmProviders.get(
       service.provider,
     );
     if (!providerMeta) {
@@ -164,7 +178,7 @@ export class ModelService {
     return { llmService: model.llmService, provider: service.provider };
   }
 
-  randomUuid(_ctx: Context): string {
+  randomUuid(_options: {}): string {
     return randomUUID();
   }
 }

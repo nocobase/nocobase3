@@ -1,5 +1,11 @@
 # @nocobase/ai-employee
 
+## 0.2.0-beta.3
+
+### Patch Changes
+
+- dc517b1: Restore AI knowledge-base cleanup and vectorization parity by removing document and shard objects with their database records, deleting vectors with the correct knowledge-base and document selectors, persisting segment edits and deletions back to shard files, tracking segment revisions during rebuilds, and allowing stale queue jobs to exit safely.
+
 ## 0.2.0-beta.2
 
 ### Patch Changes

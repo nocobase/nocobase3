@@ -1,6 +1,15 @@
 import type { AppResource } from './en-US.js';
 
 const zhCN: AppResource = {
+  appearance: {
+    title: '外观',
+    mode: '颜色模式',
+    preset: '主题',
+    light: '浅色',
+    dark: '深色',
+    system: '跟随系统',
+    themes: { default: '默认', compact: '紧凑' },
+  },
   app: {
     title: 'NocoBase',
   },
@@ -17,7 +26,6 @@ const zhCN: AppResource = {
     signingOut: '正在退出…',
   },
   navigation: {
-    home: '首页',
     open: '打开导航',
     close: '关闭导航',
     expand: '展开导航',

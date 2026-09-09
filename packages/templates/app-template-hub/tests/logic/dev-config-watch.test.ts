@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { resolveConfigWatch } from '../../scripts/dev-config-watch.mjs';
+import { resolveConfigWatch } from '../../scripts/dev/config-watch.mjs';
 
 describe('development config watch', () => {
   it('watches all supported default config filenames', () => {

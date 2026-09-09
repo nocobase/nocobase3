@@ -1,7 +1,6 @@
 import authentication from '@nocobase/app-plugin-authentication/server';
 import authorization from '@nocobase/app-plugin-authorization/server';
 import databaseExample from '@nocobase/app-plugin-database-example/server';
-import file from '@nocobase/app-plugin-file/server';
 import i18n from '@nocobase/app-plugin-i18n/server';
 import install from '@nocobase/app-plugin-install/server';
 import notification from '@nocobase/app-plugin-notification/server';
@@ -16,15 +15,14 @@ import {
   defineServerPlugins,
   type AppServerPlugins,
 } from '@nocobase/app-server/plugins';
-import systemInfo from '@nocobase/app-plugin-system-info/server';
-import scheduler from '@nocobase/app-plugin-scheduler/server';
 import skillsExample from '@nocobase/app-plugin-skills-example/server';
+import hub from '@nocobase/app-plugin-hub/server';
+import scheduler from '@nocobase/app-plugin-scheduler/server';
 
 const serverPlugins: AppServerPlugins = defineServerPlugins([
   authentication,
   authorization,
   databaseExample,
-  file,
   i18n,
   install,
   notification,
@@ -35,9 +33,9 @@ const serverPlugins: AppServerPlugins = defineServerPlugins([
   routesExample,
   serviceProviderExample,
   workflow,
-  systemInfo,
-  scheduler,
   skillsExample,
+  hub,
+  scheduler,
 ]);
 
 export default serverPlugins;

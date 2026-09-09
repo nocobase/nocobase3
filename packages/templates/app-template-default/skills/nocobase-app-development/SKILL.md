@@ -15,6 +15,10 @@ Use this Skill when building a feature in this application: a page, an endpoint,
 
 Do not use it to develop a published plugin package. Plugin development has its own protocol and lives in a separate repository.
 
+For pages with Tabs, nested pages, or navigation groups, read [child routes](references/client-child-routes.md). Page-level Tabs use child routes by default, even when the user does not mention routing. Declare their content under the parent route and derive the selected Tab from the URL. Opening the parent URL redirects to the default accessible Tab with replace and preserves query parameters; explicit Tab URLs retain their selection. Follow an explicit user request for a different interaction.
+
+Default ships with a localized homepage, empty application-owned server route/provider lists, and no example plugins or demo data. Use `app-template-examples` to explore runnable demonstrations. `database/main/` starts empty; do not copy example history into Default.
+
 ## Before you start
 
 Read the application's `AGENTS.md` first for the rules that apply everywhere. This Skill's references are the detail behind it.
@@ -37,16 +41,18 @@ Build the feature in the application. Do not run a plugin generator, create a `p
 
 This application ships with plugins that already implement whole categories of requirement, each publishing its own Skill under `.agents/skills/` (run `pnpm plugin:skills:sync` if that directory is missing or stale):
 
-| The requirement sounds like                              | Read the Skill for                    |
-| -------------------------------------------------------- | ------------------------------------- |
-| Approvals, multi-step processes, "when X happens then Y" | `@nocobase/app-plugin-workflow`       |
-| Email, IM, or in-app messages                            | `@nocobase/app-plugin-notification`   |
-| Roles, permissions, per-user or per-record access        | `@nocobase/app-plugin-authorization`  |
-| Sign-in, registration, sessions                          | `@nocobase/app-plugin-authentication` |
-| Uploads, attachments, file fields                        | `@nocobase/app-plugin-file`           |
-| Translated text and language switching                   | `@nocobase/app-plugin-i18n`           |
+| The requirement sounds like                              | Read the Skill for                     |
+| -------------------------------------------------------- | -------------------------------------- |
+| Approvals, multi-step processes, "when X happens then Y" | `@nocobase/app-plugin-workflow`        |
+| Email, IM, or in-app messages                            | `@nocobase/app-plugin-notification`    |
+| Roles, permissions, per-user or per-record access        | `@nocobase/app-plugin-authorization`   |
+| Sign-in, registration, sessions                          | `@nocobase/app-plugin-authentication`  |
+| File upload and metadata through Repository              | `@nocobase/app-plugin-file-repository` |
+| Translated text and language switching                   | `@nocobase/app-plugin-i18n`            |
 
 Read the relevant Skill before writing the feature. Implementing a permission system, a notification sender, or a scheduler by hand when a registered plugin provides one is the most expensive mistake available here.
+
+Bulk plugin Skills synchronization reads the explicit `client/plugins.ts`, `server/plugins.ts`, and `cli/plugins.ts` registrations. A package used only through imported components can have its Skills synchronized explicitly with the CLI plugin option.
 
 ## Choose your reference
 
@@ -55,6 +61,7 @@ Read the page for the task in front of you. Do not read all of them.
 | Task                                                                             | Read                                                             |
 | -------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
 | Add a page, choose an auth mode, add navigation, customize a plugin page         | [client pages and routes](references/client-pages-and-routes.md) |
+| Build a page with Tabs, add child pages or menu groups                           | [child routes and Tabs](references/client-child-routes.md)       |
 | Add or compose UI, add a shadcn primitive, style consistently, support dark mode | [components and styling](references/components-and-styling.md)   |
 | Add an API endpoint, a webhook, or a callback; authenticate and authorize it     | [server routes](references/server-routes.md)                     |
 | Query or write data, resolve the database, work with transactions                | [database and data access](references/database-and-data.md)      |
@@ -65,6 +72,8 @@ Read the page for the task in front of you. Do not read all of them.
 
 A feature with a page and an API usually needs four: migrations, server routes, client pages and routes, and i18n.
 
+For creating, editing or removing theme presets, read [themes](references/themes.md). For any UI styling, read [the shared token reference](references/theme-tokens.md); prefer these tokens so AI-authored components respond to theme changes.
+
 ## Where to work
 
 Business code belongs in a small, stable set of places:
@@ -72,7 +81,7 @@ Business code belongs in a small, stable set of places:
 ```text
 client/routes.ts, client/pages/, client/components/, client/locales/,
 client/service-provider.ts, server/routes/, server/providers/,
-database/migrations/, database/seeds/, tests/
+database/main/migrations/, database/main/seeds/, tests/
 ```
 
 Everything else — `client/routing/`, `client/shell/`, `client/layouts/`, `client/theme/`, the server entry points, the build scripts, the tsconfigs — is the framework structure the template provides and evolves. Prefer the mechanism the system already offers: most work that looks like it needs a change there does not.
@@ -108,7 +117,7 @@ These cause real damage and appear in every reference:
 - **Every user-visible string goes through a translation key.**
 - **Visual consistency is application-wide.** Restyling only your part is a defect. Change the design tokens if a change is needed.
 - **Route paths never include the deployment base path.** The runtime restores it.
-- **A route does not create a sidebar entry.** That needs a Refine resource in `client/service-provider.ts`.
+- **Route navigation creates sidebar entries.** Declare `navigation` in `client/routes.ts`; Refine resources are for CRUD, not menus.
 - **Reach for the built-in mechanism first.** Changing framework structure is allowed when nothing else fits — comment it and update the docs.
 - **Tests live in `tests/` or `e2e/`,** never beside the source.
 

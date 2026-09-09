@@ -1,4 +1,9 @@
 import { createRefineI18nProvider } from '@nocobase/i18n/client';
+import { createApiClient, type ApiClient } from '@nocobase/api-client';
+import {
+  createRealtimeClient,
+  type RealtimeClient,
+} from '@nocobase/realtime/client';
 import {
   createServiceToken,
   ServiceContainer,
@@ -9,7 +14,7 @@ import {
   type ServiceToken,
 } from '@nocobase/service-provider';
 
-import { createAppClient, type AppClient } from './client.js';
+import { resolveAppUrl } from './client.js';
 import type {
   AppClientConfig,
   AppClientRefineConfig,
@@ -26,8 +31,11 @@ import {
   type AppClientRefineConfigCollector,
 } from './runtime/refine-config-collector.js';
 
-export const appApiClientToken: ServiceToken<AppClient> =
-  createServiceToken<AppClient>('@nocobase/app-client/app-api-client');
+export const apiClientToken: ServiceToken<ApiClient> =
+  createServiceToken<ApiClient>('@nocobase/app-client/api-client');
+
+export const realtimeClientToken: ServiceToken<RealtimeClient> =
+  createServiceToken<RealtimeClient>('@nocobase/app-client/realtime-client');
 
 export type ClientApplicationRenderConfigFactory = (
   app: ClientApplication,
@@ -45,18 +53,24 @@ class CoreClientServiceProvider extends ServiceProvider<ClientApplication> {
   public readonly name: string = '@nocobase/app-client/core';
 
   public override register(): void {
-    this.app.container.singleton(appApiClientToken, (): AppClient => {
+    this.app.container.singleton(apiClientToken, (): ApiClient => {
       const baseURL = this.app.config.get<string>('api.baseURL');
-      const realtimeURL = this.app.config.get<string>('api.realtimeURL');
-      return createAppClient({
-        ...(baseURL === undefined ? {} : { baseURL }),
-        ...(realtimeURL === undefined ? {} : { realtimeURL }),
-      });
+      return createApiClient({ baseURL: baseURL ?? resolveAppUrl('/api') });
     });
+    this.app.container.singleton(realtimeClientToken, (): RealtimeClient =>
+      createRealtimeClient({
+        resolveUrl: () => {
+          const realtimeURL = this.app.config.get<string>('api.realtimeURL');
+          const baseURL =
+            this.app.config.get<string>('api.baseURL') ?? resolveAppUrl('/api');
+          return realtimeURL ?? `${baseURL.replace(/\/+$/u, '')}/../ws`;
+        },
+      }),
+    );
   }
 
   public override shutdown(): Promise<void> {
-    this.app.container.resolveIfCreated(appApiClientToken)?.realtime?.close();
+    this.app.container.resolveIfCreated(realtimeClientToken)?.close();
     return Promise.resolve();
   }
 }

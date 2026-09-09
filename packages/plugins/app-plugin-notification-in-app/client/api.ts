@@ -1,4 +1,4 @@
-import type { AppClient } from '@nocobase/app-client';
+import type { ApiClient } from '@nocobase/app-client';
 
 export type InboxMutationAction = 'read' | 'unread' | 'delete';
 
@@ -25,14 +25,15 @@ export interface InboxListResponse {
 }
 
 export async function fetchInbox(
-  client: AppClient,
+  client: ApiClient,
   filters: InboxFilters,
   signal?: AbortSignal,
 ): Promise<InboxListResponse> {
   const query = new URLSearchParams({ limit: String(filters.limit ?? 25) });
   if (filters.unreadOnly) query.set('unreadOnly', 'true');
   if (filters.cursor) query.set('cursor', filters.cursor);
-  const value = await client.request<unknown>(`notifications/in-app?${query}`, {
+  const value = await client.request<unknown>({
+    path: `notifications/in-app?${query}`,
     signal,
   });
   if (Array.isArray(value)) return { data: value as readonly InboxItem[] };
@@ -47,18 +48,18 @@ export async function fetchInbox(
 }
 
 export async function fetchUnreadCount(
-  client: AppClient,
+  client: ApiClient,
   signal?: AbortSignal,
 ): Promise<number> {
-  const response = await client.request<{ readonly count: number }>(
-    'notifications/in-app/unread-count',
-    { signal },
-  );
+  const response = await client.request<{ readonly count: number }>({
+    path: 'notifications/in-app/unread-count',
+    signal,
+  });
   return response.count;
 }
 
 export async function mutateInboxItem(
-  client: AppClient,
+  client: ApiClient,
   id: string,
   action: InboxMutationAction,
 ): Promise<InboxItem> {
@@ -70,7 +71,7 @@ export async function mutateInboxItem(
   return response.data;
 }
 
-export async function markInboxRead(client: AppClient): Promise<number> {
+export async function markInboxRead(client: ApiClient): Promise<number> {
   const response = await mutation<{ readonly updated: number }>(
     client,
     'notifications/in-app/read-all',
@@ -80,17 +81,18 @@ export async function markInboxRead(client: AppClient): Promise<number> {
 }
 
 async function mutation<T>(
-  client: AppClient,
+  client: ApiClient,
   path: string,
   body: object,
 ): Promise<T> {
-  const csrf = await client.request<{ readonly token: string }>(
-    'notifications/in-app/csrf',
-  );
-  return client.request<T>(path, {
+  const csrf = await client.request<{ readonly token: string }>({
+    path: 'notifications/in-app/csrf',
+  });
+  return client.request<T>({
+    path,
     method: 'POST',
     headers: { 'x-csrf-token': csrf.token },
-    body: JSON.stringify(body),
+    json: body,
   });
 }
 

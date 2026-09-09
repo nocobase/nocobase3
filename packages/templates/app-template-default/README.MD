@@ -4,6 +4,12 @@ A full-stack NocoBase 3 application. The server runs on `@nocobase/app-server` a
 
 You own everything in this directory. Add pages, API routes, database tables, and business logic directly here — this is your application's source code, not a framework you extend from the outside.
 
+## Default and Examples
+
+Default provides the application shell and product capabilities without example plugins or business demo pages. Its application-owned server route/provider lists start empty, and new databases receive no article sample data. Use `app-template-examples` for article management and runnable plugin demonstrations.
+
+Existing Default installations retain their data when example plugins are unregistered. If an installation already ran the article migration, retain its original migration sources as described in `MIGRATION.md` before upgrading. Do not erase migration history or delete existing data to make an upgrade start.
+
 ## Getting started
 
 Start the development server:
@@ -22,7 +28,7 @@ pnpm dev
 - **Where the application is served.** `APP_BASE_PATH` is the public mount path, `/main` by default, so the development URL looks like `http://127.0.0.1:13000/main/`. `APP_SERVER_PORT` and `APP_SERVER_HOST` change what the server binds to.
 - **Anything a feature you enable requires** — mail delivery, IM webhooks, storage. `config.example.yml` documents every available option, including sections your `config.yml` does not yet have.
 
-`config.yml` is gitignored because it holds your `auth.secret`. Deploy it through your secret management rather than committing it, and run `pnpm server:config` to see what the application resolved.
+`config.yml` is gitignored because it holds your `auth.secret`. Deploy it through your secret management rather than committing it.
 
 To run against a production build instead:
 
@@ -61,8 +67,9 @@ server/                  API server
 └── embedded.ts          Entry point when a host process mounts it
 
 database/
-├── migrations/          Your schema history
-└── seeds/               Your required initial data
+└── main/
+    ├── migrations/      Your schema history (initially empty)
+    └── seeds/           Your required initial data (initially empty)
 
 tests/                   Unit and integration tests
 e2e/                     Browser tests needing a real server
@@ -85,12 +92,14 @@ The three files named `runtime.ts`, `plugins.ts`, and `routes.ts` are compositio
 
 ### Database
 
-| Script         | What it does                                                                               |
-| -------------- | ------------------------------------------------------------------------------------------ |
-| `pnpm migrate` | Apply pending migrations from your `database/migrations/` and from every registered plugin |
-| `pnpm seed`    | Run seeds from `database/seeds/` and from registered plugins                               |
+| Script         | What it does                                                                                    |
+| -------------- | ----------------------------------------------------------------------------------------------- |
+| `pnpm migrate` | Apply pending migrations from your `database/main/migrations/` and from every registered plugin |
+| `pnpm seed`    | Run seeds from `database/main/seeds/` and from registered plugins                               |
 
-Migrations also run automatically on startup while `database.migrations.autoRun` is `true` in `config.yml`. Run `pnpm migrate` explicitly when you want to apply a schema change without restarting.
+Migrations also run automatically on startup while `database.connections.main.migrations.autoRun` is `true` in `config.yml`. Run `pnpm migrate` explicitly when you want to apply a schema change without restarting.
+
+Database tasks support `--connection <name>` and `--all`; no argument targets `database.default`. Per-connection source and upgrade rules are documented in [migrations and seeds](skills/nocobase-app-development/references/migrations.md).
 
 ### Checks
 
@@ -120,13 +129,77 @@ Ordering in `client/plugins.ts` and `server/plugins.ts` is contribution order, a
 
 ### Diagnostics
 
-| Script                | What it does                                                                          |
-| --------------------- | ------------------------------------------------------------------------------------- |
-| `pnpm server:config`  | Print resolved configuration: paths, database, queue, providers. Secrets are redacted |
-| `pnpm client:inspect` | Print the resolved client composition: routes, providers, and which file owns each    |
-| `pnpm server:inspect` | Print the resolved server composition                                                 |
+| Script                      | What it does                                                                                |
+| --------------------------- | ------------------------------------------------------------------------------------------- |
+| `pnpm client:inspect`       | Print the resolved client composition: routes, providers, and which file owns each          |
+| `pnpm server:inspect`       | Print the resolved server composition                                                       |
+| `pnpm server:deps:retarget` | Replace native binaries with the target platform's; part of `pnpm build`                    |
+| `pnpm server:deps:verify`   | Check that everything your server and CLI import reaches a deployment; part of `pnpm build` |
 
 These read static declarations. They report what is wired, not whether it works — a passing inspection is not a substitute for tests.
+
+#### Deploying to a different machine
+
+`pnpm build` produces `dist/`, which is the whole deployment: copy it to a server and run it. It carries its own `package.json`, and `pnpm install --prod` there installs exactly what the server needs.
+
+Client packages are not among them. Plugins declare what their browser code needs as peer dependencies, so your application installs one shared copy for its Vite build, while `dist/` opts out of peer installation entirely — `lucide-react`, `@base-ui/react`, `sonner` and the rest never reach a server that has no browser in it.
+
+**The build targets the machine you run it on**, so `pnpm build && pnpm start` works. Deploying elsewhere means saying where:
+
+```bash
+pnpm build                                        # this machine
+pnpm build --target linux-x64                     # most Linux servers
+pnpm build --target linux-arm64                   # ARM servers, Graviton
+pnpm build --target linux-x64-musl                # Alpine, and most slim container images
+pnpm build --target linux-x64 --node-version 22   # when the server runs Node 22
+```
+
+A `.node` binary is compiled for one platform, architecture, C library, and Node version at once, so a build made on a Mac installs binaries a Linux server cannot load. `--target` sets platform, architecture, and C library together, because they are chosen together: `linux-x64` and `linux-x64-musl` are different binaries, and Alpine needs the musl one. If you are unsure, `ldd --version` on the server prints `musl` for musl and `GNU libc` otherwise.
+
+`--node-version` takes the major version your server runs, separately, because the same Linux host may run any of several. Supported: 20, 22, 24, 26.
+
+Every build prints the platform it produced and records it in `dist/package.json` under `nocobase.buildTarget`, so a `dist/` built for the wrong machine can be identified rather than guessed at.
+
+If your application has no native modules — `pg`, `mysql2`, and `tedious` are all plain JavaScript — none of this applies and `dist/` is portable as built.
+
+#### Adding a dependency
+
+Where a package goes depends on which half of your application imports it.
+
+| Imported from                     | Declare it in     |
+| --------------------------------- | ----------------- |
+| `server/`, `database/`, or `cli/` | `dependencies`    |
+| `client/`, build tooling, tests   | `devDependencies` |
+
+`dist/package.json` is generated from `dependencies` and is what a server installs, so a package in `devDependencies` is missing there however well it works locally. Client packages need nothing at runtime — Vite resolves and inlines them into `dist/client` while building.
+
+Plugins' browser packages need nothing from you: a plugin declares those as peer dependencies, so installing the plugin brings one shared copy into your application, and `dist/` never installs them.
+
+`pnpm build` verifies the server half and fails the build if something is missing, naming the package. One case it cannot check is an import whose name is assembled while the program runs:
+
+```ts
+await import(`${name}/index.js`);
+```
+
+Nothing can tell in advance which package that names, so declare it in `dependencies` when you write the code.
+
+#### When the build or the deployment goes wrong
+
+**`Cannot find module` on the server, but it runs locally.** The package is in `devDependencies`, which `dist/package.json` is not generated from. Move it to `dependencies` and rebuild.
+
+**A browser package fails to resolve while building your application.** A plugin declares it as a peer dependency and something has to provide it. Add it to your `devDependencies`.
+
+**`Error loading shared library`, `invalid ELF header`, or a bare reference to a `.node` file at startup.** The binary does not match the server. Compare what the build targeted against the server:
+
+```bash
+node -e "console.log(require('./dist/package.json').nocobase.buildTarget)"
+node -p "process.platform + '-' + process.arch"   # on the server
+node -p "process.versions.modules"                # on the server: the ABI
+```
+
+Rebuild with a matching `--target` and `--node-version`. ABI 115 is Node 20, 127 is Node 22, 137 is Node 24, 147 is Node 26.
+
+**`no prebuilt binary for <target>` during the build.** The package publishes no build for that combination. Check whether the version you depend on supports the target, and whether a musl build exists if you asked for one — musl coverage is thinner than glibc.
 
 ## Configuration
 
@@ -137,7 +210,7 @@ Two settings decide where the application is reachable:
 - `APP_BASE_PATH` is the public path the application is mounted at, `/main` by default. The browser API base URL is derived from it as `<APP_BASE_PATH>/api`.
 - `APP_PUBLIC_ORIGIN` is the external origin used to build callback and redirect URLs. Set it in production. It must not repeat the base path — the runtime joins the two.
 
-Run `pnpm server:config` to see what the application actually resolved, which is faster than reasoning about precedence between the file, environment variables, and defaults.
+Configuration is resolved from the file, environment variables, and defaults in that order of precedence.
 
 ## Testing
 

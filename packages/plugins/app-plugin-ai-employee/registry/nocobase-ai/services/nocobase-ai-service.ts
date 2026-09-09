@@ -1,7 +1,8 @@
 import {
-  createAppClient,
+  createApiClient,
   resolveAppUrl,
-  type AppClient,
+  type ApiClient,
+  type ApiRequestOptions,
 } from '@nocobase/app-client';
 import type {
   AIChatMessage,
@@ -211,26 +212,22 @@ type AIRequestOptions = {
   readonly signal?: AbortSignal;
 };
 
-function createRequestPath(
+function createRequestOptions(
   endpoint: string,
-  query?: AIRequestOptions['query'],
-): string {
-  const search = new URLSearchParams();
-  for (const [key, value] of Object.entries(query ?? {})) {
-    if (value !== undefined && value !== null) search.set(key, String(value));
-  }
-  const suffix = search.toString();
-  return `ai/${endpoint}${suffix ? `?${suffix}` : ''}`;
-}
-
-function createRequestInit(options: AIRequestOptions): RequestInit {
-  const body =
-    options.body === undefined || options.body instanceof FormData
-      ? options.body
-      : JSON.stringify(options.body);
+  options: AIRequestOptions,
+): ApiRequestOptions {
+  const method =
+    options.method ?? (options.body === undefined ? 'GET' : 'POST');
+  const body = options.body;
   return {
-    method: options.method ?? (body === undefined ? 'GET' : 'POST'),
-    ...(body === undefined ? {} : { body }),
+    path: `ai/${endpoint}`,
+    method,
+    ...(options.query === undefined ? {} : { query: options.query }),
+    ...(typeof FormData !== 'undefined' && body instanceof FormData
+      ? { body }
+      : body === undefined
+        ? {}
+        : { json: body }),
     ...(options.signal === undefined ? {} : { signal: options.signal }),
   };
 }
@@ -241,7 +238,11 @@ function resolveResourceUrl(value: string): string {
 }
 
 export class NocoBaseAIService implements AIService {
-  constructor(private readonly client: AppClient = createAppClient()) {}
+  constructor(
+    private readonly client: ApiClient = createApiClient({
+      baseURL: resolveAppUrl('/api'),
+    }),
+  ) {}
 
   private aiAction<T>(
     resource: string,
@@ -249,8 +250,7 @@ export class NocoBaseAIService implements AIService {
     options: AIRequestOptions = {},
   ): Promise<T> {
     return this.client.request<T>(
-      createRequestPath(`${resource}:${action}`, options.query),
-      createRequestInit(options),
+      createRequestOptions(`${resource}:${action}`, options),
     );
   }
 
@@ -258,10 +258,7 @@ export class NocoBaseAIService implements AIService {
     endpoint: string,
     options: AIRequestOptions = {},
   ): Promise<ReadableStream<Uint8Array>> {
-    return this.client.stream(
-      createRequestPath(endpoint, options.query),
-      createRequestInit(options),
-    );
+    return this.client.stream(createRequestOptions(endpoint, options));
   }
   async listEmployees() {
     const employees = await this.aiAction<AIEmployee[]>(

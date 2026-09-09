@@ -5,24 +5,9 @@ import { describe, expect, it } from 'vitest';
 import {
   formatAppServerInspection,
   inspectAppServer,
-  parseInspectAppServerArgs,
-} from '../../scripts/inspect-server.mjs';
+} from '../../cli/dev-commands/inspect-server-impl.mjs';
 
 describe('Server inspection', () => {
-  it('parses JSON and help options', () => {
-    expect(parseInspectAppServerArgs(['--json'])).toEqual({
-      help: false,
-      json: true,
-    });
-    expect(parseInspectAppServerArgs(['--help'])).toEqual({
-      help: true,
-      json: false,
-    });
-    expect(() => parseInspectAppServerArgs(['--type', 'routes'])).toThrow(
-      'Unknown argument: --type',
-    );
-  });
-
   it('inspects the real Server composition without runtime execution', async () => {
     const inspection = await inspectAppServer();
 
@@ -40,11 +25,6 @@ describe('Server inspection', () => {
           packageName === '@nocobase/app-plugin-queue-example',
       ),
     ).toMatchObject({ contributions: { jobLocations: 1 } });
-    expect(
-      inspection.serviceProviders.find(
-        ({ packageName }) => packageName === '@nocobase/app-plugin-system-info',
-      ),
-    ).toMatchObject({ constructorName: 'SystemInfoProvider' });
     expect(inspection.routes.map(({ order }) => order)).toEqual(
       inspection.routes.map((_route, index) => index + 1),
     );

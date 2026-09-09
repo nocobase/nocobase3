@@ -1,59 +1,65 @@
-# Workflow Concepts
+# Workflow Architecture Decisions
 
-## What a workflow is
+Use this guide while designing new application behavior, even when the request does not explicitly mention Workflow. Its purpose is to choose the right boundary between process orchestration and ordinary typed code, not to force every multi-step implementation into a workflow.
 
-A NocoBase 3 workflow is a source-managed, versioned description of a business process. Its definition declares an invocation input contract, administrator parameters, an ordered tree of nodes, branch rules, node configuration, and stable node keys. At runtime, each accepted invocation is persisted as a Workflow Run tied to one exact definition version and artifact hash. Node Runs preserve the executed path, status, timing, result, error, and logs.
+## Start with the business lifecycle
 
-The workflow answers process questions: where is this business case, why did it take this path, what happened at each step, and what follows. Ordinary code answers implementation questions: how to calculate, validate, transform, query, or call a particular system.
+A NocoBase Workflow gives one business process instance a persisted identity and an exact versioned definition. It makes the ordered path, status, timing, node results, failures, and logs inspectable across background execution and worker restarts.
 
-## When to use it now
+Ask whether the business needs to answer questions such as:
 
-With the default application's currently aggregated `condition`, `run`, and `terminate` instructions, prefer Workflow when one or more of these are central:
+- Where is this process instance now, which path did it take, and what happens next?
+- Must ordered steps or decisions remain explicit and reviewable outside the implementation of one function?
+- Must operators inspect, diagnose, retry, or compensate a process using persisted execution evidence?
+- Do process-level idempotency, timeouts, version history, or durable background execution materially affect correctness?
 
-- Background business steps must execute in a durable, explicit order and survive worker restarts.
-- Ordered steps and conditional paths must be explicit and reviewable.
-- Operators need versioned definitions and inspectable execution history.
-- Typed scripts coordinate services or external systems without requiring a pause for human parameters.
-- Event-key idempotency, node timeout, audit history, or process-level diagnosis matters.
+If those are not requirements, Workflow usually adds lifecycle and operational complexity without providing a useful business capability.
 
-Prefer ordinary typed code or a service when the operation is atomic, synchronous, algorithm-heavy, dominated by data transformation, or needs no process state/audit trail. A common design is code inside one `run` node, followed by a `condition` that uses its declared result to choose the process path.
+Do not choose Workflow merely because implementation code calls several functions, uses a queue, writes logs, or performs more than one database query. Those are implementation details, not evidence that the business process needs its own lifecycle.
 
-Long-running human approval, externally resumable waiting, loops, notifications as process instructions, and subflows are product-direction scenarios, not default-template capabilities. They apply only after the owning plugin exports the corresponding Instruction class, the target application supplies it to the checker and Artifact-build registry, registers it with the runtime, and enables the plugin. A `run` script cannot suspend/resume the processor or manufacture those control-flow semantics.
+## Choose the ownership boundary
 
-## Current conceptual boundaries
+| Put in Workflow                                                      | Put in ordinary typed code or a service                         |
+| -------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Process stages, durable order, supported branches, and termination   | Atomic validation, calculations, queries, and mutations         |
+| Stable node identity and process-level execution evidence            | Algorithms and data transformations                             |
+| Process-level timeout, event-key idempotency, and recovery decisions | Authentication, authorization, and transaction-local invariants |
+| Coordination of separately meaningful business actions               | Protocol clients and concrete external-system integrations      |
 
-- A workflow describes process control, not every business rule.
-- The TypeScript DSL is authoring parameters. Loading compiles it to immutable tree-shaped IR and materialized definitions; runtime does not reinterpret the current source file.
-- Invocation source is outside the definition. The DSL has no `trigger` field. Cron, webhook, domain event, or another module calls the internal workflow service.
-- The current workflow plugin exports `ConditionInstruction`, `RunInstruction`, and `TerminateInstruction`. `terminate` can finish the complete execution early, including from inside a condition branch. Do not assume approval, wait, loop, notification, subflow, or other Instruction classes unless an installed plugin exports them and the application registers them.
-- Extension discovery is not automatic across layers. Confirm the exported Instruction class, checker contracts, Artifact builder registry, runtime registry, and owning plugin deployment separately.
-- The topology is an ordered tree of blocks with branches and common successors, not an arbitrary DAG: no `goto`, joins, general cycles, or cross-branch edges.
-- Workflow input (per invocation) and workflow input (administrator configuration) are different contracts and different lifecycles.
+A common design uses both: Workflow owns the process path, while a typed `run` script calls an application service for each business action. Keep reusable domain logic in services rather than embedding it in the DSL or duplicating it across run scripts.
 
-## Definition and execution terms
+Prefer ordinary code alone when the behavior is atomic, request-bound, algorithm-heavy, or requires one transaction with no independently useful process state. Prefer Workflow plus typed code when the sequence, branch history, background durability, or operational visibility is itself part of the business requirement.
 
-| Term          | Meaning                                                                  |
-| ------------- | ------------------------------------------------------------------------ |
-| workflow key  | Stable package directory name used by business `trigger()` calls         |
-| definition id | A particular persisted workflow revision, used by management operations  |
-| current       | The selected revision for a workflow key                                 |
-| enabled       | Whether normal business invocation is accepted                           |
-| artifact hash | Immutable package/build identity used by runs and run scripts            |
-| event key     | Unique invocation identity and idempotency key                           |
-| Workflow Run  | One persisted invocation tied to a concrete definition                   |
-| Node Run      | One node attempt inside a Workflow Run; reruns can create later attempts |
+## Check that required process semantics exist
 
-## Design check before authoring
+Architecture suitability is not enough; the target application must have Instruction contracts for the required control flow. The workflow plugin currently provides `condition`, `run`, and `terminate`. Other instructions are available only when an installed plugin exports them and the application supplies the same contracts to the source checker, Artifact builder, and runtime registry.
 
-Write down:
+Do not simulate missing process semantics inside a long-running `run` script. Human approval, externally resumable waiting, loops, notification instructions, and subflows require their corresponding registered Instructions. A `run` script can call a service or external system, but it cannot manufacture a durable pause/resume point or a new control-flow construct.
 
-1. The stable business event and workflow key.
-2. The per-run JSON input and its strict schema.
-3. Administrator-tunable scalar parameters and safe defaults.
-4. Ordered process steps and branch decisions.
-5. Side effects and their idempotency/compensation behavior.
-6. Stable node keys that survive title and layout changes.
-7. Expected outputs required by later nodes, with precise result schemas.
-8. Operational evidence needed when a step fails.
+If the required Instruction does not exist:
 
-If the proposed process cannot be expressed with the application's registered node contracts, do not invent DSL. Implement/register an instruction or move the behavior into a `run` script, depending on whether it introduces process semantics or merely performs business work.
+- Keep ordinary business work in a typed service or `run` script.
+- Add and register an Instruction only when the missing behavior is reusable process-control semantics.
+- Redesign or defer the workflow when the required lifecycle cannot be represented safely.
+
+## Produce a decomposition before authoring
+
+For a new feature or a migration from code, identify enough of the following to make the boundary explicit:
+
+1. The business event that creates one process instance and the identity used for retries.
+2. The per-invocation input versus administrator-tunable parameters.
+3. The durable stages and supported branch decisions that belong in Workflow.
+4. The atomic business actions that remain in typed services or `run` scripts.
+5. Side effects and their idempotency, transaction, retry, and compensation boundaries.
+6. Results that later nodes need and the operational evidence required for diagnosis.
+
+Do not require every detail before beginning when it can be derived safely from the existing application. Surface the chosen Workflow/code boundary and any unsupported process semantic that materially changes the design.
+
+## Examples
+
+| Requirement                                                                  | Decision                                                                                                    |
+| ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Validate input and create one record in a transaction                        | Ordinary typed service                                                                                      |
+| Calculate a score, persist it, and return it within one HTTP request         | Ordinary typed code unless the business needs a durable process record                                      |
+| Run durable fulfillment stages, branch on risk, and retain execution history | Workflow for orchestration; typed services or `run` scripts for fulfillment actions and risk scoring        |
+| Wait for a person to approve and resume days later                           | Workflow only if a registered approval/wait Instruction provides that lifecycle; do not emulate it in `run` |

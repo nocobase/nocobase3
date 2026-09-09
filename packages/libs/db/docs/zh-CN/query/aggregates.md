@@ -1,3 +1,8 @@
+---
+title: Query 聚合与 having
+description: 使用聚合表达式、groupBy、having 和 havingRef 编写跨数据库统计查询，并处理方言返回类型差异。
+---
+
 # 聚合和 having
 
 聚合通过 `eb.fn` 表达：

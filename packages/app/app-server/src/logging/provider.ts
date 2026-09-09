@@ -36,6 +36,7 @@ export class LoggingProvider extends ServiceProvider<AppPluginApplication> {
             colorize: true,
             translateTime: 'SYS:standard',
             ignore: 'pid,hostname',
+            singleLine: true,
           },
         }
       : {

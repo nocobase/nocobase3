@@ -1,14 +1,19 @@
 ---
-title: Database migrations
-description: Record schema changes as migrations, and prepare the data the application needs as seeds.
+title: 'Schema changes'
+description: 'Add and alter columns, and prepare initial data.'
 ---
 
-# Database migrations
+# Schema changes
 
 :::warning Being written
-This page is still being written.
+This page is being written.
 :::
 
-A migration is immutable history and must be self-contained — every field, index, and constraint spelled out in the migration itself, never read from a definition that keeps evolving. Seeds write data and never create structure.
+Add and alter columns, and prepare initial data.
 
-This page will cover writing a migration, keeping `up` and `down` in correspondence, and the division of labour between migrations and seeds.
+## This page will cover
+
+- How to write a migration, with both `up` and `down`
+- A migration is a historical record — once merged, never edit it again
+- Never reference definitions that keep evolving; spell everything out in the migration
+- Seeds: the initial data the application requires

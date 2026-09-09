@@ -40,4 +40,43 @@ describe('buildConfigFile', () => {
     expect(config).toContain('ssl: false');
     expect(config).not.toContain('charset:');
   });
+
+  it('builds Oracle-specific config without a database field', () => {
+    const config = buildConfigFile({
+      secret: 'test-secret',
+      database: {
+        dialect: 'oracle',
+        host: 'localhost',
+        port: 1521,
+        serviceName: 'FREEPDB1',
+        username: 'nocobase',
+        password: 'password',
+      },
+    });
+
+    expect(config).toContain('dialect: oracle');
+    expect(config).toContain('serviceName: "FREEPDB1"');
+    expect(config).not.toMatch(/^\s{6}database:/mu);
+  });
+
+  it('builds MSSQL-specific TLS config', () => {
+    const config = buildConfigFile({
+      secret: 'test-secret',
+      database: {
+        dialect: 'mssql',
+        host: 'localhost',
+        port: 1433,
+        database: 'nocobase',
+        username: 'sa',
+        password: 'password',
+        encrypt: false,
+        trustServerCertificate: true,
+      },
+    });
+
+    expect(config).toContain('dialect: mssql');
+    expect(config).toContain('database: "nocobase"');
+    expect(config).toContain('encrypt: false');
+    expect(config).toContain('trustServerCertificate: true');
+  });
 });

@@ -1,40 +1,15 @@
-import { appApiClientToken, useService } from '@nocobase/app-client';
-import { useGetIdentity } from '@refinedev/core';
-import { useCallback, type ReactElement } from 'react';
-
-import { SkillsExampleNotice } from '../components/skills-example-notice';
-import { loadSkillsExampleNotice } from '../components/skills-example-notice-data';
-
-interface AppIdentity {
-  email?: string;
-  fullName?: string;
-  id: string | number;
-}
+import { useTranslation } from '@nocobase/i18n/client';
+import type { ReactElement } from 'react';
 
 export default function HomePage(): ReactElement {
-  const { data: identity } = useGetIdentity<AppIdentity>();
-  // The Application's own API client, so the notice request follows its configured `api.baseURL`.
-  const appClient = useService(appApiClientToken);
-  const loadNotice = useCallback(
-    () => loadSkillsExampleNotice(appClient),
-    [appClient],
-  );
-
+  const { t } = useTranslation();
   return (
     <section className='mx-auto grid min-h-[calc(100svh-4rem)] w-full max-w-5xl place-items-center px-6 py-10'>
       <div className='max-w-xl space-y-6 text-center'>
-        <h2 className='text-3xl font-semibold tracking-tight'>
-          Start building with your AI Agent
-        </h2>
-        <p className='text-muted-foreground'>
-          {identity?.fullName || identity?.email
-            ? `Welcome, ${identity.fullName ?? identity.email}. `
-            : ''}
-          Describe what you need, and your AI Agent will help you build it.
-        </p>
-        <div className='text-left'>
-          <SkillsExampleNotice loadNotice={loadNotice} />
-        </div>
+        <h1 className='font-heading text-3xl font-semibold tracking-tight'>
+          {t('home.title')}
+        </h1>
+        <p className='text-muted-foreground'>{t('home.description')}</p>
       </div>
     </section>
   );

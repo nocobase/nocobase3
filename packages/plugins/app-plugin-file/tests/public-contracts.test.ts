@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 
-import type { AppClient } from '@nocobase/app-client';
+import type { ApiClient } from '@nocobase/app-client';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -41,7 +41,7 @@ describe('file plugin public contracts', () => {
     const routeFactory: (options: CreateFileRouteOptions) => unknown =
       createFileRoute;
     const clientFactory: (options: {
-      appClient: AppClient;
+      api: ApiClient;
       endpoint: string;
     }) => FilesClient = createFilesClient;
     const previewField = FilePreviewField;

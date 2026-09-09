@@ -3,7 +3,7 @@ import { describeIntegrationDatabases } from '../helpers.js';
 
 describeIntegrationDatabases('query transactions', (context) => {
   it('runs query operations inside transactions on a real connection', async () => {
-    const ordersTable = context.table('queryOrders');
+    const ordersTable = 'queryOrders';
 
     await context.builder.createCollection('queryOrders', (collection) => {
       collection.increments('id');
@@ -40,6 +40,13 @@ describeIntegrationDatabases('query transactions', (context) => {
     ).resolves.toBe(false);
 
     await context.database.transaction(async (connection) => {
+      const compiled = connection.query
+        .selectFrom(ordersTable)
+        .select('orderNo')
+        .compile();
+      expect(compiled.sql).toContain(context.table(ordersTable));
+      expect(compiled.sql).toContain('order_no');
+
       await connection.query
         .insertInto(ordersTable)
         .values({ orderNo: 'SO-commit', status: 'paid' })

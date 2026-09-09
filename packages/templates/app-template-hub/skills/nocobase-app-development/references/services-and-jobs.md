@@ -68,7 +68,8 @@ Declaration modules are imported by `server:inspect`, so nothing at module top l
 The client has the same pattern. `client/service-provider.ts` holds application startup logic, and services are resolved with `useService`:
 
 ```tsx
-const appClient = useService(appApiClientToken);
+const api = useService(apiClientToken);
+const realtime = useService(realtimeClientToken);
 ```
 
 ## Background jobs
@@ -96,7 +97,7 @@ export default class RebuildIndexJob extends Job<RebuildIndexPayload> {
 }
 ```
 
-Jobs in `server/jobs/` are discovered automatically; `pnpm server:config` prints the resolved locations.
+Jobs in `server/jobs/` are discovered automatically; `pnpm server:inspect --json` lists the plugins that contribute them.
 
 Dispatch by resolving the queue manager:
 

@@ -1,4 +1,7 @@
-import type { AppWebSocket, AppWebSocketMessageData } from '../websocket.js';
+import type {
+  AppWebSocket,
+  AppWebSocketMessageData,
+} from '@nocobase/app-websocket';
 import {
   createServiceToken,
   type ServiceToken,

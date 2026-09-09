@@ -14,7 +14,7 @@ import {
   inspectAppClient,
   parseInspectAppClientArgs,
   selectAppClientInspection,
-} from '../../scripts/inspect-client.mjs';
+} from '../../cli/dev-commands/inspect-client-impl.mjs';
 
 async function createInspectionApp(pluginsSource?: string): Promise<string> {
   const appRoot = await mkdtemp(path.join(os.tmpdir(), 'client-inspect-'));
@@ -45,6 +45,33 @@ async function createInspectionApp(pluginsSource?: string): Promise<string> {
 }
 
 describe('client inspection', () => {
+  it('inspects nested page routes without loading their components', async () => {
+    const appRoot = await createInspectionApp(`
+      const page = async () => { throw new Error('must not load pages'); };
+      export default { plugins: [{
+        packageName: '@example/nested', config: [], serviceProviders: [],
+        reactProviders: [], routeComponentOverrides: [], options: {},
+        routes: [{ parent: 'app', routes: [{
+          name: 'parent', path: '/parent', componentLoader: page,
+          children: [{ name: 'child', path: 'child', componentLoader: page }],
+        }] }],
+      }], routeComponentOverrides: [] };
+    `);
+    const inspection = await inspectAppClient({ appRoot });
+    expect(inspection.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: '@example/nested:parent',
+          path: '/parent',
+        }),
+        expect.objectContaining({
+          id: '@example/nested:child',
+          path: '/parent/child',
+        }),
+      ]),
+    );
+  });
+
   it('parses the static Client contribution types', () => {
     expect(
       parseInspectAppClientArgs(['--type', 'react-providers', '--json']),
@@ -110,16 +137,6 @@ describe('client inspection', () => {
       },
       {
         auth: 'required',
-        id: '@nocobase/app-plugin-notification-provider:demo',
-        path: '/notification-provider',
-      },
-      {
-        auth: 'required',
-        id: '@nocobase/app-plugin-routes-example:index',
-        path: '/routes-example',
-      },
-      {
-        auth: 'required',
         id: '@nocobase/app-plugin-workflow:workflow-detail',
         path: '/settings/automation/workflows/:workflowId',
       },
@@ -127,11 +144,6 @@ describe('client inspection', () => {
         auth: 'required',
         id: '@nocobase/app-plugin-workflow:workflow-run-detail',
         path: '/settings/automation/workflow-runs/:runId',
-      },
-      {
-        auth: 'required',
-        id: '@nocobase/app-plugin-system-info:index',
-        path: '/system-info',
       },
       {
         auth: 'required',
@@ -147,10 +159,6 @@ describe('client inspection', () => {
         id: '@nocobase/app-plugin-notification-provider:notification-host',
         order: 2,
       },
-      {
-        id: '@nocobase/app-plugin-routes-example:routes-example',
-        order: 3,
-      },
     ]);
     expect(
       inspection.serviceProviders.map(({ packageName, order }) => ({
@@ -165,6 +173,7 @@ describe('client inspection', () => {
       { packageName: '@nocobase/app-plugin-notification-provider', order: 5 },
       { packageName: '@nocobase/app-plugin-workflow', order: 6 },
       { packageName: '@nocobase/app-plugin-notification', order: 7 },
+      { packageName: '@nocobase/app-plugin-file-repository', order: 8 },
     ]);
     expect(inspection.configs[0]).toMatchObject({
       kind: 'factory',
@@ -328,7 +337,10 @@ describe('client inspection', () => {
         [
           'exec',
           'tsx',
-          './scripts/inspect-client.mjs',
+          './cli/index.ts',
+          'app',
+          'inspect',
+          'client',
           '--type',
           'settings',
           '--json',

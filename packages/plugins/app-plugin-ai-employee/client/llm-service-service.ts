@@ -1,4 +1,4 @@
-import type { AppClient } from '@nocobase/app-client';
+import type { ApiClient } from '@nocobase/app-client';
 
 import { requestAIAction } from './api-client.js';
 
@@ -92,7 +92,7 @@ export function prepareEnabledModels(
 }
 
 export async function listLLMServices(
-  client?: AppClient,
+  client?: ApiClient,
 ): Promise<LLMService[]> {
   const response = await requestAIAction<unknown>(
     'llmServices',
@@ -116,7 +116,7 @@ export async function listLLMServices(
 }
 
 export async function listLLMProviders(
-  client?: AppClient,
+  client?: ApiClient,
 ): Promise<LLMProvider[]> {
   const response = await requestAIAction<unknown>(
     'ai',
@@ -150,7 +150,7 @@ export async function listLLMProviders(
 export async function updateLLMService(
   name: string,
   values: { enabled?: boolean; enabledModels?: EnabledModelsConfig },
-  client?: AppClient,
+  client?: ApiClient,
 ): Promise<LLMService> {
   const response = await requestAIAction<unknown>(
     'llmServices',
@@ -179,7 +179,7 @@ export async function updateLLMService(
 export async function listProviderModels(
   llmService: string,
   search?: string,
-  client?: AppClient,
+  client?: ApiClient,
 ): Promise<EnabledModel[]> {
   const response = await requestAIAction<unknown>(
     'ai',

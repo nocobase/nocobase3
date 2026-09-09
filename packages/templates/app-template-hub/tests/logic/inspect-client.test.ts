@@ -14,7 +14,7 @@ import {
   inspectAppClient,
   parseInspectAppClientArgs,
   selectAppClientInspection,
-} from '../../scripts/inspect-client.mjs';
+} from '../../cli/dev-commands/inspect-client-impl.mjs';
 
 async function createInspectionApp(pluginsSource?: string): Promise<string> {
   const appRoot = await mkdtemp(path.join(os.tmpdir(), 'client-inspect-'));
@@ -45,6 +45,33 @@ async function createInspectionApp(pluginsSource?: string): Promise<string> {
 }
 
 describe('client inspection', () => {
+  it('inspects nested page routes without loading their components', async () => {
+    const appRoot = await createInspectionApp(`
+      const page = async () => { throw new Error('must not load pages'); };
+      export default { plugins: [{
+        packageName: '@example/nested', config: [], serviceProviders: [],
+        reactProviders: [], routeComponentOverrides: [], options: {},
+        routes: [{ parent: 'app', routes: [{
+          name: 'parent', path: '/parent', componentLoader: page,
+          children: [{ name: 'child', path: 'child', componentLoader: page }],
+        }] }],
+      }], routeComponentOverrides: [] };
+    `);
+    const inspection = await inspectAppClient({ appRoot });
+    expect(inspection.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: '@example/nested:parent',
+          path: '/parent',
+        }),
+        expect.objectContaining({
+          id: '@example/nested:child',
+          path: '/parent/child',
+        }),
+      ]),
+    );
+  });
+
   it('parses the static Client contribution types', () => {
     expect(
       parseInspectAppClientArgs(['--type', 'react-providers', '--json']),
@@ -80,7 +107,7 @@ describe('client inspection', () => {
     ).toEqual([
       {
         auth: 'required',
-        id: '@nocobase/app-template-hub:home',
+        id: '@nocobase/app-template-hub:applications-root',
         path: '/',
       },
       {
@@ -130,8 +157,8 @@ describe('client inspection', () => {
       },
       {
         auth: 'required',
-        id: '@nocobase/app-plugin-system-info:index',
-        path: '/system-info',
+        id: '@nocobase/app-plugin-hub:hub',
+        path: '/hub',
       },
       {
         auth: 'required',
@@ -327,7 +354,10 @@ describe('client inspection', () => {
         [
           'exec',
           'tsx',
-          './scripts/inspect-client.mjs',
+          './cli/index.ts',
+          'app',
+          'inspect',
+          'client',
           '--type',
           'settings',
           '--json',

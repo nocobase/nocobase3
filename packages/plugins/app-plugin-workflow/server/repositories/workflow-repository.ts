@@ -68,40 +68,14 @@ export class WorkflowRepository {
     const deployedRowByKey = new Map(
       deployedRows.map((row) => [String(row.key), row]),
     );
-    const overriddenKeys = deployed
-      .filter((artifact) => {
-        const row = deployedRowByKey.get(artifact.key);
-        return row && row.hash !== artifact.digest;
-      })
-      .map((artifact) => artifact.key);
-    const matchingOverriddenKeys = overriddenKeys.filter((key) => {
-      const artifact = deployedByKey.get(key);
-      return artifact
-        ? this.artifactMatchesListOptions(artifact, options)
-        : false;
-    });
     const applyFilters = (
       query: SelectQuery<Row, Row>,
     ): SelectQuery<Row, Row> => {
       let filtered = query.where('current', '=', true);
-      if (overriddenKeys.length > 0) {
+      if (options.key || options.query || options.enabled !== undefined)
         filtered = filtered.where((eb) =>
-          eb.or([
-            ...(matchingOverriddenKeys.length > 0
-              ? [eb('key', 'in', matchingOverriddenKeys)]
-              : []),
-            eb.and([
-              eb('key', 'not in', overriddenKeys),
-              ...this.workflowFilterExpressions(eb, options),
-            ]),
-          ]),
+          eb.and(this.workflowFilterExpressions(eb, options)),
         );
-      } else {
-        if (options.key || options.query || options.enabled !== undefined)
-          filtered = filtered.where((eb) =>
-            eb.and(this.workflowFilterExpressions(eb, options)),
-          );
-      }
       return filtered;
     };
     const novelArtifacts = deployed.filter(
@@ -206,14 +180,10 @@ export class WorkflowRepository {
       if (artifact && artifact.digest !== item.hash) {
         return {
           ...item,
-          id: null,
-          title: artifact.workflow.title ?? null,
-          enabled: false,
-          current: null,
-          hasParameters:
-            Object.keys(artifact.workflow.parameters ?? {}).length > 0,
-          version: null,
-          hash: artifact.digest,
+          pendingArtifact: {
+            hash: artifact.digest,
+            title: artifact.workflow.title ?? null,
+          },
         };
       }
       return item;
@@ -237,6 +207,7 @@ export class WorkflowRepository {
         hash: artifact.digest,
         activeRunCount: 0,
         latestRun: null,
+        pendingArtifact: null,
       });
     }
     return {
@@ -390,11 +361,23 @@ export class WorkflowRepository {
         throw new BadRequestError(`Workflow ${String(id)} was not found.`);
       return toDiscoveredWorkflowDefinition(artifact);
     }
-    return {
+    const view: WorkflowDefinitionView = {
       ...toWorkflowDefinitionView(workflow),
       executed: await this.getExecutedCount(workflow.key),
       latestRun: null,
     };
+    if (workflow.current) {
+      const artifact = (await this.service.discoverArtifacts()).find(
+        (candidate) =>
+          candidate.key === workflow.key && candidate.digest !== workflow.hash,
+      );
+      if (artifact)
+        view.pendingArtifact = {
+          hash: artifact.digest,
+          title: artifact.workflow.title ?? null,
+        };
+    }
+    return view;
   }
 
   async revisions(id: WorkflowId): Promise<WorkflowDefinitionView[]> {

@@ -1,4 +1,4 @@
-import { appApiClientToken, useService } from '@nocobase/app-client';
+import { apiClientToken, useService } from '@nocobase/app-client';
 import { useMemo } from 'react';
 
 import { AIProvider, type AIProviderProps } from '../providers/ai-provider.js';
@@ -22,10 +22,10 @@ export function NocoBaseAIRootProvider({
   service: providedService,
   ...aiProviderProps
 }: NocoBaseAIRootProviderProps) {
-  const appClient = useService(appApiClientToken);
+  const api = useService(apiClientToken);
   const service = useMemo(
-    () => providedService ?? new NocoBaseAIService(appClient),
-    [appClient, providedService],
+    () => providedService ?? new NocoBaseAIService(api),
+    [api, providedService],
   );
   return (
     <AIProvider {...aiProviderProps} service={service}>

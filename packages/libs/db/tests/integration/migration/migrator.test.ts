@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { createMigrator, loadMigrations } from '../../../src/index.js';
 import { describeIntegrationDatabases } from '../helpers.js';
 
@@ -43,14 +43,17 @@ describeIntegrationDatabases('migration runner', (context) => {
     `,
     );
 
-    const migrator = createMigrator({
-      database: context.database,
+    const migrator = context.database.createMigrator({
       connection: context.spec.name,
       directory,
       packageName: '@nocobase/plugin-users',
       tableName,
       lockTableName,
     });
+    const invalidate = vi.spyOn(
+      context.database.connection().collections,
+      'invalidate',
+    );
 
     await expect(migrator.latest()).resolves.toMatchObject({
       batch: 1,
@@ -60,12 +63,15 @@ describeIntegrationDatabases('migration runner', (context) => {
     expect(
       await context.db.schema.hasTable(context.table('migrationUsers')),
     ).toBe(true);
+    expect(invalidate).toHaveBeenCalled();
 
+    invalidate.mockClear();
     await expect(migrator.latest()).resolves.toMatchObject({
       batch: 1,
       executed: [],
       skipped: ['202608180001_create_migration_users'],
     });
+    expect(invalidate).not.toHaveBeenCalled();
 
     const history = await context
       .db(tableName)
@@ -77,6 +83,82 @@ describeIntegrationDatabases('migration runner', (context) => {
         batch: 1,
       },
     ]);
+  });
+
+  it('runs pending migrations through an inclusive target', async () => {
+    const directory = await createTempDirectory();
+    const tableName = context.table('targetMigrationHistory');
+    const lockTableName = context.table('targetMigrationLock');
+    const dataTableName = context.table('targetMigrationEvents');
+    const migrationNames = [
+      '202608180001_target_first',
+      '202608180002_target_second',
+      '202608180003_target_third',
+    ] as const;
+    await context.db.schema.createTable(dataTableName, (table) => {
+      table.increments('id').primary();
+      table.string('event').notNullable();
+    });
+    for (const name of migrationNames) {
+      await writeEventMigration(directory, name, dataTableName);
+    }
+
+    const migrator = context.database.createMigrator({
+      connection: context.spec.name,
+      directory,
+      tableName,
+      lockTableName,
+    });
+
+    await expect(migrator.upTo(migrationNames[1])).resolves.toEqual({
+      batch: 1,
+      executed: migrationNames.slice(0, 2),
+      skipped: [],
+    });
+    await expect(migrator.upTo(migrationNames[1])).resolves.toEqual({
+      batch: 1,
+      executed: [],
+      skipped: migrationNames.slice(0, 2),
+    });
+    await expect(migrator.latest()).resolves.toEqual({
+      batch: 2,
+      executed: [migrationNames[2]],
+      skipped: migrationNames.slice(0, 2),
+    });
+    await expect(migrator.upTo(migrationNames[1])).resolves.toEqual({
+      batch: 2,
+      executed: [],
+      skipped: migrationNames.slice(0, 2),
+    });
+    await expect(migrator.rollback()).resolves.toEqual({
+      batch: 2,
+      rolledBack: [migrationNames[2]],
+    });
+    await expect(
+      context.db(dataTableName).select('event').orderBy('id'),
+    ).resolves.toEqual([
+      { event: `up:${migrationNames[0]}` },
+      { event: `up:${migrationNames[1]}` },
+      { event: `up:${migrationNames[2]}` },
+      { event: `down:${migrationNames[2]}` },
+    ]);
+  });
+
+  it('rejects an unknown or empty migration target', async () => {
+    const directory = await createTempDirectory();
+    const migrator = context.database.createMigrator({
+      connection: context.spec.name,
+      directory,
+      tableName: context.table('invalidTargetMigrationHistory'),
+      lockTableName: context.table('invalidTargetMigrationLock'),
+    });
+
+    await expect(migrator.upTo('')).rejects.toThrow(
+      'Migration target name must be a non-empty string.',
+    );
+    await expect(migrator.upTo('202608180001_missing')).rejects.toThrow(
+      'Migration target "202608180001_missing" was not found.',
+    );
   });
 
   it('upgrades legacy history tables and preserves applied migrations', async () => {
@@ -310,8 +392,6 @@ describeIntegrationDatabases('migration runner', (context) => {
     const directory = await createTempDirectory();
     const tableName = context.table('failedHistory');
     const lockTableName = context.table('failedLock');
-    const dataTableName = context.table('migrationRows');
-
     await context.builder.createCollection('migrationRows', (collection) => {
       collection.increments('id');
       collection.string('status');
@@ -327,7 +407,7 @@ describeIntegrationDatabases('migration runner', (context) => {
 
         async up({ query }) {
           await query
-            .insertInto('${dataTableName}')
+            .insertInto('migrationRows')
             .values({ status: 'created' })
             .execute();
           throw new Error('migration failed on purpose');
@@ -335,7 +415,7 @@ describeIntegrationDatabases('migration runner', (context) => {
 
         async down({ query }) {
           await query
-            .deleteFrom('${dataTableName}')
+            .deleteFrom('migrationRows')
             .where('status', '=', 'created')
             .execute();
         },
@@ -357,7 +437,7 @@ describeIntegrationDatabases('migration runner', (context) => {
     await expect(
       context.database
         .query()
-        .selectFrom(dataTableName)
+        .selectFrom('migrationRows')
         .select('status')
         .execute(),
     ).resolves.toEqual([]);

@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   LLMServiceConfigSynchronizer,
   expandEnvironmentReferences,
-} from '../server/llm-service-config.js';
+} from '../server/manager/llm-service-config.js';
 
 function createManager(): AIManager {
   return new AIManager({ repositories: new MemoryRepositoryFactory() });

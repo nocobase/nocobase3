@@ -440,7 +440,11 @@ function dateValue(
   value: Date | string | number | null | undefined,
 ): string | undefined {
   if (!value) return undefined;
-  return new Date(value).toISOString();
+  const normalized =
+    typeof value === 'string' && /^\d+(?:\.0+)?$/u.test(value)
+      ? Number(value)
+      : value;
+  return new Date(normalized).toISOString();
 }
 
 function jsonObject(value: string | Record<string, unknown>): JsonObject {

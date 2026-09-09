@@ -1,0 +1,22 @@
+[
+  {
+    "type": "file",
+    "name": "index",
+    "label": "工作流概览"
+  },
+  {
+    "type": "file",
+    "name": "quick-start",
+    "label": "快速开始"
+  },
+  {
+    "type": "dir",
+    "name": "development",
+    "label": "使用 Agent 开发"
+  },
+  {
+    "type": "dir",
+    "name": "management",
+    "label": "管理工作流"
+  }
+]

@@ -1,5 +1,34 @@
 # @nocobase/app-client
 
+## 1.0.0-beta.11
+
+### Patch Changes
+
+- 9536bf5: Reach the API client through `@nocobase/app-client` instead of importing `@nocobase/api-client` directly from the example plugin's client code. The plugin value-imported `ApiClientError` and `buildFindManyOptions` from a package it declares only as a `devDependency`, which resolved solely because pnpm happened to hoist that package for another consumer. `ApiClientError` is also compared with `instanceof`, so a second copy would make the check silently return false and leave `error.code` undefined under code that looks correct. Re-export `buildFindManyOptions` alongside the existing `ApiClientError` so the plugin resolves both through the single copy the application already provides.
+
+## 1.0.0-beta.10
+
+### Major Changes
+
+- 90a4903: Extract the shared realtime wire protocol and browser WebSocket client into `@nocobase/realtime`. Replace the session-specific client reconnect method with a transport-level `reconnect()` operation, and make the application client and server consume the shared package.
+- 90a4903: Replace the composite application transport with application-owned `ApiClient` and `RealtimeClient` services. Client plugins, examples, and application templates now use object-style HTTP request options through the shared API client, while realtime subscriptions resolve their dedicated WebSocket client.
+
+### Patch Changes
+
+- 90a4903: Preserve configured API and realtime endpoints after splitting the client services. Integrate file inventory and the plugin-owned inbox with the shared API and realtime clients, including reconnection refresh and isolated event listeners.
+
+  Allow the Oracle driver install script in both templates’ standalone deployment workspace settings.
+
+  Resolve SQLite auto-incrementing bigint metadata correctly, narrow Oracle LOB values before reading their type, preserve legacy file timestamps, and rebuild the AI registry against the current API client.
+
+- 90a4903: Support asynchronous iteration of remote Repository `findMany` queries over framed NDJSON while preserving array consumption through `await`.
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+  - @nocobase/realtime@0.0.2-beta.0
+  - @nocobase/api-client@0.1.0-beta.0
+
 ## 1.0.0-beta.9
 
 ### Minor Changes

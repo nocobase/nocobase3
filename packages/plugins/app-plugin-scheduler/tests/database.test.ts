@@ -105,12 +105,16 @@ describe('@nocobase/app-plugin-scheduler database', () => {
       }),
     ]);
     await expect(
-      metadataStore.getCollection('scheduleOccurrences'),
+      metadataStore
+        .get('scheduleOccurrences')
+        .then((stored) => stored?.document),
     ).resolves.toMatchObject({
-      fields: expect.arrayContaining([
-        expect.objectContaining({ name: 'schedule' }),
-        expect.objectContaining({ name: 'executionCount' }),
-      ]),
+      fields: {
+        executionCount: { type: 'integer' },
+      },
+      relations: {
+        schedule: { target: 'scheduleDefinitions' },
+      },
     });
   });
 
@@ -128,9 +132,7 @@ describe('@nocobase/app-plugin-scheduler database', () => {
       'queueSchedules',
       'scheduleOccurrences',
     ]) {
-      await expect(
-        metadataStore.getCollection(collection),
-      ).resolves.toBeUndefined();
+      await expect(metadataStore.get(collection)).resolves.toBeUndefined();
     }
   });
 });

@@ -4,7 +4,7 @@ import { createQueryOrdersCollection, seedQueryOrders } from './helpers.js';
 
 describeIntegrationDatabases('query aggregates', (context) => {
   it('supports groupBy, aggregate expressions, and having', async () => {
-    const ordersTable = context.table('queryOrders');
+    const ordersTable = 'queryOrders';
 
     await createQueryOrdersCollection(context);
     await seedQueryOrders(context, ordersTable);
@@ -34,7 +34,7 @@ describeIntegrationDatabases('query aggregates', (context) => {
   });
 
   it('supports count, count distinct, avg, min, max, and clearGroupBy/clearHaving', async () => {
-    const ordersTable = context.table('queryOrders');
+    const ordersTable = 'queryOrders';
 
     await createQueryOrdersCollection(context);
     await seedQueryOrders(context, ordersTable);
@@ -75,7 +75,7 @@ describeIntegrationDatabases('query aggregates', (context) => {
   });
 
   it('supports havingRef with mapped physical columns', async () => {
-    const metricsTable = context.table('queryMetrics');
+    const metricsTable = 'queryMetrics';
 
     await context.builder.createCollection('queryMetrics', (collection) => {
       collection.increments('id');

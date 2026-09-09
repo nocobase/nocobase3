@@ -219,7 +219,7 @@ run('Rewrite server path aliases', 'pnpm', [
   'tsconfig.server.json',
 ]);
 run('Build workflow artifacts', 'pnpm', [
-  'exec',
+  'nocobase',
   'workflow',
   'build',
   '--resource-root',
@@ -227,10 +227,10 @@ run('Build workflow artifacts', 'pnpm', [
 ]);
 writeDistEnv();
 run('Generate server package', 'node', [
-  './scripts/build-server-dist-package.mjs',
+  './scripts/utils/build-server-dist-package.mjs',
 ]);
 // Installed with pnpm, matching the rest of this project, and run with `dist` as the working directory rather than
-// through `--dir`. pnpm resolves `allowBuilds` from the directory it runs in, and `build-server-dist-package.mjs`
+// through `--dir`. pnpm resolves `allowBuilds` from the directory it runs in, and `utils/build-server-dist-package.mjs`
 // wrote a `pnpm-workspace.yaml` there carrying it. `--dir` leaves the process in the application root, where pnpm
 // reads the root's settings instead, finds the drivers undecided, and rewrites every entry in the generated file to
 // "set this to true or false" before stopping.
@@ -248,7 +248,30 @@ run(
   ['install', '--prod', '--no-lockfile'],
   { cwd: distDir },
 );
+run('Materialize server dependency links', 'node', [
+  './scripts/utils/clean-dist-bin.mjs',
+]);
+// A `.node` binary is compiled for one platform, architecture, C library, and Node ABI at once, so an install run
+// here produces binaries for this machine. Defaults to this machine so `pnpm build && pnpm start` works; a
+// deployment build passes --target and --node-version.
+run('Retarget native modules', 'node', [
+  './scripts/utils/retarget-native.mjs',
+  ...process.argv.slice(2),
+]);
+// Removes type declarations, third-party source maps, and third-party documentation from the installed tree. Runs
+// after the native retarget, which installs platform packages of its own, and before verification, which reads
+// `dist/package.json` and package directories rather than any of the files removed here.
+run('Prune deployment artifacts', 'node', [
+  './scripts/utils/prune-dist-artifacts.mjs',
+]);
+// Fails the build when something the application's own server, database, or CLI code imports would not be usable
+// in a deployment. It runs against the installed tree rather than the manifest alone, because the question is not
+// whether a package is declared but whether the deployment install will actually fetch it. Catching it here costs
+// a build; the alternative is finding out from `Cannot find module` on a deployed server.
+run('Verify server dependencies', 'node', [
+  './scripts/utils/verify-server-deps.mjs',
+]);
 
 console.log(
-  '\nBuild complete: dist/client, dist/server, dist/scripts, dist/.env, and dist/package.json',
+  '\nBuild complete: dist/client, dist/server, dist/cli, dist/.env, and dist/package.json',
 );

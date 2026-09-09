@@ -1,4 +1,4 @@
-import { appApiClientToken, useService } from '@nocobase/app-client';
+import { apiClientToken, useService } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { ArrowLeft, CalendarClock, CircleAlert } from 'lucide-react';
 import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
@@ -128,7 +128,7 @@ function DefinitionRow({
 }
 
 export default function ScheduleDetailPage(): ReactElement {
-  const api = useService(appApiClientToken);
+  const api = useService(apiClientToken);
   const { i18n, t } = useTranslation(SCHEDULER_NS);
   const { scheduleId = '' } = useParams();
   const [item, setItem] = useState<ScheduleItem>();
@@ -144,7 +144,8 @@ export default function ScheduleDetailPage(): ReactElement {
   useEffect(() => {
     const controller = new AbortController();
     void api
-      .request<{ data: readonly ScheduleItem[] }>('schedules', {
+      .request<{ data: readonly ScheduleItem[] }>({
+        path: 'schedules',
         signal: controller.signal,
       })
       .then((response) => {
@@ -164,10 +165,10 @@ export default function ScheduleDetailPage(): ReactElement {
         }
       });
     void api
-      .request<{ data: readonly OccurrenceItem[] }>(
-        `schedules/${encodeURIComponent(scheduleId)}/occurrences`,
-        { signal: controller.signal },
-      )
+      .request<{ data: readonly OccurrenceItem[] }>({
+        path: `schedules/${encodeURIComponent(scheduleId)}/occurrences`,
+        signal: controller.signal,
+      })
       .then((response) => {
         setOccurrencesError(undefined);
         setOccurrences(response.data);

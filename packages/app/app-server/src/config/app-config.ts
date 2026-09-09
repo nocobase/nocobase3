@@ -134,9 +134,14 @@ export class AppConfig<TContext = unknown> {
   }
 
   public async loadAll(): Promise<void> {
+    const startedAt = Date.now();
     const next = await this.loadConfig();
     this.validate(next);
     this.current = next;
+    // Configuration diagnostics must not corrupt machine-readable CLI stdout.
+    console.error('App configuration loaded', {
+      durationMs: Date.now() - startedAt,
+    });
   }
 
   public get<TValue>(definition: AppConfigToken<TValue>): TValue;
@@ -178,9 +183,18 @@ export class AppConfig<TContext = unknown> {
   }
 
   public reload(): Promise<AppConfigReloadResult> {
-    this.reloadPromise ??= this.performReload().finally(() => {
-      this.reloadPromise = undefined;
-    });
+    const startedAt = Date.now();
+    this.reloadPromise ??= this.performReload()
+      .then((result) => {
+        console.error('App configuration reloaded', {
+          changedNamespaces: result.changedNamespaces,
+          durationMs: Date.now() - startedAt,
+        });
+        return result;
+      })
+      .finally(() => {
+        this.reloadPromise = undefined;
+      });
     return this.reloadPromise;
   }
 

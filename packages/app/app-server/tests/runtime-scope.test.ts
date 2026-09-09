@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   createAppConfigPaths,
@@ -79,11 +79,39 @@ describe('application scope paths', () => {
 });
 
 describe('application scope environment', () => {
-  it('uses the process environment when the host does not supply an env map', () => {
-    const scope = createScope({ rootDir: createTempDirectory() });
+  it('uses the process environment for standalone Apps without an env map', () => {
+    const scope = createScope({
+      rootDir: createTempDirectory(),
+      mode: 'standalone',
+    });
     const paths = resolveAppScopePaths(scope);
 
     expect(resolveAppScopeEnv(scope, paths)).toEqual(process.env);
+  });
+
+  it.each(['embedded', undefined] as const)(
+    'does not inherit the parent configuration in mode %s',
+    (mode) => {
+      vi.stubEnv('APP_PUBLIC_ORIGIN', 'http://127.0.0.1:13000');
+      vi.stubEnv('AUTH_SECRET', 'parent-only-secret');
+      try {
+        const scope = createScope({ rootDir: '/srv/apps/a', mode });
+        expect(resolveAppScopeRuntime(scope).env).toEqual({});
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    },
+  );
+
+  it('preserves explicitly supplied embedded configuration', () => {
+    const scope = createScope({
+      rootDir: '/srv/apps/a',
+      mode: 'embedded',
+      env: { APP_PUBLIC_ORIGIN: 'https://app.example.com' },
+    });
+    expect(resolveAppScopeRuntime(scope).env).toEqual({
+      APP_PUBLIC_ORIGIN: 'https://app.example.com',
+    });
   });
 
   it('prefers a host env map and applies explicit resolver overrides last', () => {

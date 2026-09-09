@@ -42,7 +42,6 @@ const migration: MigrationDefinition = defineMigration({
       collection.unique(['appName', 'owner', 'key'], { mode: 'index' });
     });
     await builder.createCollection('queueJobs', (collection) => {
-      collection.tableName('queue_jobs');
       collection.string('id', { length: 255, nullable: false });
       collection.string('queue', { length: 255, nullable: false });
       collection.string('status', { length: 20, nullable: false });
@@ -82,7 +81,6 @@ const migration: MigrationDefinition = defineMigration({
       );
     }
     await builder.createCollection('queueSchedules', (collection) => {
-      collection.tableName('queue_schedules');
       collection.string('id').primary().notNull();
       collection.string('status').notNull().defaultTo('active');
       collection.string('name').notNull();
@@ -103,6 +101,7 @@ const migration: MigrationDefinition = defineMigration({
       collection.string('id', { primaryKey: true, nullable: false });
       collection
         .belongsTo('schedule', 'scheduleDefinitions')
+        .targetKey('id')
         .foreignKey('scheduleId')
         .foreignKeyType('string')
         .notNull()

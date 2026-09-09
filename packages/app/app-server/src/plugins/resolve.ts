@@ -58,35 +58,16 @@ export function createAppPluginDatabaseConfig(
   resolved: ResolvedAppServerPlugins,
 ): ResolvedAppPluginDatabaseConfig {
   const plugins = resolved.plugins.map((plugin) => plugin.metadata);
-  const appMigrationSource: MigrationSource = {
-    packageName: resolved.appPackageName,
-    directory: database.migrations.directory,
-  };
-  const appSeedSource: SeedSource | undefined = database.seeds
-    ? {
-        packageName: resolved.appPackageName,
-        directory: database.seeds.directory,
-      }
-    : undefined;
-
   return {
     plugins,
     database: {
       ...database,
-      migrations: {
-        ...database.migrations,
+      taskSources: {
+        ...database.taskSources,
         packageName: resolved.appPackageName,
-        sources: [appMigrationSource, ...createPluginMigrationSources(plugins)],
+        migrations: createPluginMigrationSources(plugins),
+        seeds: createPluginSeedSources(plugins),
       },
-      seeds: database.seeds
-        ? {
-            ...database.seeds,
-            packageName: resolved.appPackageName,
-            sources: appSeedSource
-              ? [appSeedSource, ...createPluginSeedSources(plugins)]
-              : undefined,
-          }
-        : undefined,
     },
   };
 }

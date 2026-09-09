@@ -407,9 +407,10 @@ async function renderManifest(
   // — service tokens, React contexts, the queue's job registry — is declared as a peer and never installed by the
   // plugin itself. The matching devDependency pins this repository's copy for development and tests, which the wide
   // peer range deliberately does not. See AGENTS.md, "Depending on Identity-Sensitive Packages".
+  // Declared once. pnpm resolves a `workspace:` peer to this repository's copy without a devDependency, so the
+  // second declaration would only be another line to keep in step.
   const addRuntimePeer = (packageName: string): void => {
     peerDependencies[packageName] = 'workspace:^';
-    devDependencies[packageName] = 'workspace:*';
   };
 
   if (capabilities.client.locales || capabilities.server.locales)
@@ -426,14 +427,12 @@ async function renderManifest(
   if (react) peerDependencies.react = '^19.0.0';
 
   if (serverPlugin || !browserCode) devDependencies['@types/node'] = 'catalog:';
-  if (react) {
-    devDependencies['@types/react'] = 'catalog:';
-    devDependencies.react = 'catalog:';
-  }
+  // `@types/react` is not a peer, so it stays. `react` itself is declared once, as a peer.
+  if (react) devDependencies['@types/react'] = 'catalog:';
   if (capabilities.registry) {
-    devDependencies.shadcn = '^4.13.1';
+    devDependencies.shadcn = 'catalog:';
     devDependencies.tailwindcss = 'catalog:';
-    devDependencies['tw-animate-css'] = '^1.2.5';
+    devDependencies['tw-animate-css'] = 'catalog:';
   }
 
   const files = ['dist', 'README.md', 'CHANGELOG.md'];

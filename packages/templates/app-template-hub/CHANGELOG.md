@@ -1,5 +1,122 @@
 # @nocobase/app-template-hub
 
+## 1.0.0-beta.9
+
+### Minor Changes
+
+- 52d1107: Keep client packages out of the server deployment, and make every native binary match the platform being deployed to.
+
+  A plugin's `client/` is compiled by the consuming application's Vite build, so the packages it imports have to be published in the plugin's manifest — but a server has no client build and never requires them. Plugins now declare those as peer dependencies, and the generated `dist/pnpm-workspace.yaml` sets `autoInstallPeers: false`, so an application installs one shared copy while a deployment installs none. What reaches a server is decided by declarations rather than by analysis.
+
+  Native binaries are compiled for one platform, architecture, C library, and Node ABI at once, so a build made on a Mac installs binaries a Linux server cannot load. `pnpm build` targets the machine it runs on, keeping `pnpm build && pnpm start` working; `--target linux-x64` (or `linux-arm64`, `linux-x64-musl`, `darwin-arm64`, `win32-x64`) and `--node-version` select another. Each build states the platform it produced and records it in `dist/package.json` under `nocobase.buildTarget`.
+
+  The build then verifies its own result: it fails when a package the application's own server, database, or CLI code imports would not reach a deployment. It reads literal specifiers, so an import whose name is assembled at run time is invisible to it and has to be declared deliberately.
+
+  Add `pnpm server:deps:retarget` and `pnpm server:deps:verify`, which run the two steps on their own.
+
+### Patch Changes
+
+- 52d1107: Declare the packages an application's server, database, and CLI code imports in `dependencies` rather than `devDependencies`, and generate `dist/package.json` from that declaration instead of by scanning the built output.
+
+  The scan existed because the declaration did not: with every package in `devDependencies`, nothing could tell which of them a deployment needed, so the build walked `dist/server` for bare imports and expanded each transitive dependency by hand. With the declaration correct, `pnpm install` applies the same rules — a plugin's `dependencies` come along, its `peerDependencies` are skipped by `autoInstallPeers: false`, and `devDependencies` were never published — and a scan that resolves specifiers is a scan that can miss one.
+
+- 52d1107: Resolve the shared UI packages through the workspace catalog: `@base-ui/react`, `class-variance-authority`, `clsx`, `lucide-react`, `shadcn`, `tailwind-merge`, and `tw-animate-css`.
+
+  Every package already agreed on one version for each of these — the catalog is what keeps them agreeing. A range edited in one manifest and not the others would otherwise put two copies of a UI primitive into an application's bundle, which is the kind of drift nothing reports until a component behaves differently depending on which plugin rendered it.
+
+  Peer dependencies use `catalog:` too. `pnpm pack` resolves it before publishing, so a consumer still reads an ordinary range.
+
+- Updated dependencies [52d1107]
+- Updated dependencies [52d1107]
+- Updated dependencies [52d1107]
+  - @nocobase/app-plugin-authentication@0.1.0-beta.9
+  - @nocobase/app-plugin-authorization@0.2.0-beta.8
+  - @nocobase/app-plugin-hub@0.0.2-beta.2
+  - @nocobase/app-plugin-i18n@0.1.0-beta.4
+  - @nocobase/app-plugin-install@0.1.0-beta.6
+  - @nocobase/app-plugin-notification@0.1.0-beta.5
+  - @nocobase/app-plugin-notification-in-app@0.2.0-beta.6
+  - @nocobase/app-plugin-workflow@0.1.0-beta.11
+  - @nocobase/app-plugin-routes-example@0.1.0-beta.8
+  - @nocobase/app-plugin-notification-providers@0.2.0-beta.3
+  - @nocobase/app-plugin-cli-example@0.1.0-beta.1
+  - @nocobase/app-plugin-database-example@0.1.0-beta.5
+  - @nocobase/app-plugin-queue-example@0.1.0-beta.5
+  - @nocobase/app-plugin-realtime-example@0.1.0-beta.5
+  - @nocobase/app-plugin-service-provider-example@0.1.0-beta.3
+  - @nocobase/app-plugin-skills-example@0.1.0-beta.2
+
+## 1.0.0-beta.8
+
+### Minor Changes
+
+- d29d1fe: Run application migrations and seeds on explicitly selected database connections, with per-connection configuration, startup policies, isolated results and fail-fast execution. Keep plugin tasks on the default system connection and reject task execution against externally managed databases. Preserve legacy configuration and directory support while adopting database/<connectionName> source directories in both application templates; add --connection and --all CLI options and document upgrade rules.
+- ec576ba: Let plugins contribute commands to an application's CLI, and rename the bin to `nocobase`.
+
+  An application now has a `cli/` composition root beside `client/` and `server/`. Its `cli/index.ts` calls `runAppCli()` from `@nocobase/nb3-cli/runtime`, which assembles one command tree from three sources: the built-in plugin management commands under `plugin`, the application's own commands under `app`, and each registered plugin's commands under the topic that plugin declares. `pnpm nocobase` runs it.
+
+  A plugin contributes commands by exporting a `./cli` entry that calls `defineCliPlugin()` with a topic and a map of oclif `Command` subclasses. `@nocobase/app-plugin-cli-example` is the reference implementation. `@oclif/core` is a peer dependency of such a plugin so that the plugin and the application share one copy, which is what keeps help rendering and flag parsing consistent.
+
+  `plugin register`, `plugin unregister`, and `plugin inspect` maintain `cli/plugins.ts` the same way they already maintain `client/plugins.ts` and `server/plugins.ts`, keyed on whether the plugin exports `./cli`. An application without TypeScript degrades to printed instructions for that file exactly as it does for the other two.
+
+  `cli/` is compiled into `dist`, so a deployed application runs the same commands with `node ./cli/index.js`. The application's own `migrate` and `seed` are now commands rather than separate scripts, and `pnpm migrate` / `pnpm seed` dispatch through the CLI — the script names are unchanged. A command that cannot work in a deployment goes in `cli/dev-commands/`, which the build excludes; client inspection lives there because it needs Vite and the browser client. `server:config` was removed outright.
+
+  Two breaking changes come with this. The bin is `nocobase` rather than `nb3`, and the five plugin commands moved from `app plugin *` to the top-level `plugin *`, which frees the `app` topic for the commands an application writes itself. The `pnpm plugin:*` script names are unchanged, so anything invoking those scripts is unaffected.
+
+- d29d1fe: Remove the system information plugin package from the workspace and all application templates. Remove its client page, server API, plugin registrations, dependencies, synchronized Skills and integration test references. Document the source upgrade and use a new plugin name in the scaffolding tutorial.
+- d29d1fe: Remove `@nocobase/app-plugin-file` from all application templates, including client/server registration, direct dependencies, test fixtures and installed-plugin guidance. The plugin's file inventory settings page and API are no longer included by default. Preserve stored files and independently registered file Repository capabilities.
+
+### Patch Changes
+
+- d29d1fe: Resolve the development entry point's application root two levels above scripts/dev. Start workflow builds, plugin watchers, Vite and the application server from the application directory so pnpm dev no longer tries to read scripts/package.json or writes workflow artifacts under scripts/dist.
+- d29d1fe: Add a database-local TypeScript project in both templates so ESLint and editor tooling recognize per-connection migrations and seeds.
+- 93f6cc1: Fix `pnpm dev`, which stopped starting after the development scripts were reorganized.
+
+  `scripts/dev.mjs` became `scripts/dev/index.mjs`, but it finds the application root by walking up from its own location and still walked up only one level. It therefore resolved `scripts/` as the root, looked for a tsconfig that is not there, and reported `Cannot resolve tsconfig at path: .../scripts/tsconfig.server.json`. The same miscalculation sent the workflow build into `scripts/dist/server/workflows`.
+
+  A test now checks the invariant directly: any file resolving the application root from `import.meta.dirname` — or from `path.dirname(fileURLToPath(import.meta.url))` — must walk up exactly as many levels as it sits deep. Moving such a file has broken this several times, always silently, because the wrong path still resolves and only fails somewhere else.
+
+- f5b066d: Fix development startup by building workflows through the application CLI instead of the removed standalone workflow command.
+- 008969c: Contribute Workflow check and build commands through the application's unified `nocobase workflow` CLI topic, including structured JSON output, and register the commands in both application templates.
+- 67907ec: Remove the duplicate application plugin registry from package.json. Discover registered plugins from explicit Client, Server, and CLI composition roots for CLI updates, Skills synchronization, and development watches, and package server dependencies from compiled imports. Preserve legacy metadata cleanup during unregistration.
+- 5281fd1: Allow drive configurations to omit storage links so application startup succeeds when no symbolic links are configured.
+
+  Display an empty links map in application configuration summaries when drive links are omitted.
+
+## 1.0.0-beta.7
+
+### Minor Changes
+
+- 0e9505a: Add App-scoped appearance preferences, theme presets and saved preference restoration. Support semantic colors, sidebar and chart palettes, fonts, type scales, spacing, radius and runtime shadows, with shared AI guidance for theme authors and component authors.
+
+  Provide Default and Compact presets. Compact keeps Default's colors, fonts and shadows while using tighter dimensions.
+
+### Patch Changes
+
+- 9536bf5: Restore the client dependencies an installed application needs to bundle the workflow canvas and the Sonner-backed notification provider. A plugin's `client/` is compiled by the consuming application's Vite build and its `dist/client` keeps bare imports intact, so a package declared only as a `devDependency` is absent once the plugin is installed from the registry rather than linked from this workspace: `pnpm dev` failed with `Could not resolve "@xyflow/react"` and `Could not resolve "sonner"`. Move `@xyflow/react` back into the workflow plugin's `dependencies`, and declare `sonner` in both application templates.
+
+## 1.0.0-beta.6
+
+### Minor Changes
+
+- 90a4903: Add Microsoft SQL Server support through Knex and the `tedious` driver, including connection configuration, Collection Builder and Query behavior, Schema Inspector introspection, real Docker integration tests, generated-application driver installation, and template runtime packaging.
+- 90a4903: Add Oracle Database support through the `oracledb` Thin driver, including connection configuration, Collection Builder and Query behavior, Schema Inspector introspection, real Docker integration tests, generated-application driver installation, and template runtime packaging.
+
+### Patch Changes
+
+- cd59102: Use `client.app.title` from application configuration for the Refine application title and the browser document title.
+- a864497: Add standalone and Hub-managed host modes, startup-only YAML or JSON host configuration, FS and S3 release deployment through NocoBase Drive, strict desired deployment reconciliation, file configuration path selection, host-owned structured logging, shared ws-backed App WebSocket handling, private authenticated child-process management over Node IPC, and bounded managed-host crash recovery. Managed deployments use checksum-addressed immutable revision directories, stop-first Runtime replacement with bounded graceful request draining, and a three-revision local cache for fast rollback. Rename the Host's in-process runtime implementation to `InProcessAppHandle`.
+- a864497: Register the Application Hub in the Hub template and provide an application control plane. Release artifacts supply their version and an optional `config.example.yml` or `config.example.yaml` template, while applications choose Config file or External configuration and reserve Hub-managed configuration for a future database-backed implementation. Hub actions reconcile only the selected application, reuse an already installed matching artifact, report deployment phase timings, and support removing an application and its persisted resources. Separate Hub desired configuration files from Host-owned runtime configuration, rebuild recovery targets when Host becomes ready, and split the management page into business modules.
+- 90a4903: Replace the composite application transport with application-owned `ApiClient` and `RealtimeClient` services. Client plugins, examples, and application templates now use object-style HTTP request options through the shared API client, while realtime subscriptions resolve their dedicated WebSocket client.
+- 20d2cf2: Replace the account menu language select with a labeled shadcn submenu that displays the current language and uses radio items for selection, with keyboard navigation and selected-language indicators.
+- 90a4903: Preserve configured API and realtime endpoints after splitting the client services. Integrate file inventory and the plugin-owned inbox with the shared API and realtime clients, including reconnection refresh and isolated event listeners.
+
+  Allow the Oracle driver install script in both templates’ standalone deployment workspace settings.
+
+  Resolve SQLite auto-incrementing bigint metadata correctly, narrow Oracle LOB values before reading their type, preserve legacy file timestamps, and rebuild the AI registry against the current API client.
+
+- 19ae76a: Route generated NocoBase 3 applications to their local development guidance instead of globally installed NocoBase 2 Skills.
+
 ## 1.0.0-beta.5
 
 ### Patch Changes

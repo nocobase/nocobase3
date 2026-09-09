@@ -94,6 +94,8 @@ describe('app client runtime', () => {
       text: 'Configured application',
     });
     expect(app.refineConfig.authProvider).toBeDefined();
+    expect(app.refineConfig.notificationProvider).toBeDefined();
+    expect(app.refineConfig.resources ?? []).toEqual([]);
     await app.shutdown();
   });
 

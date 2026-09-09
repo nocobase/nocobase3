@@ -1,4 +1,4 @@
-import { appApiClientToken, useService } from '@nocobase/app-client';
+import { apiClientToken, useService } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import {
   AlertTriangle,
@@ -27,7 +27,7 @@ const PAGE_SIZE = 25;
 
 export default function FileInventoryPage(): ReactElement {
   const { t } = useTranslation();
-  const appClient = useService(appApiClientToken);
+  const appClient = useService(apiClientToken);
   const [sources, setSources] = useState<readonly FileInventorySource[]>([]);
   const [selectedId, setSelectedId] = useState<string>();
   const [page, setPage] = useState(1);
@@ -63,10 +63,10 @@ export default function FileInventoryPage(): ReactElement {
 
   const loadSources = useCallback(
     (signal: AbortSignal): Promise<FileInventorySourcesResponse> =>
-      appClient.request<FileInventorySourcesResponse>(
-        'files/inventory/sources',
-        { signal },
-      ),
+      appClient.request<FileInventorySourcesResponse>({
+        path: 'files/inventory/sources',
+        signal,
+      }),
     [appClient],
   );
 
@@ -130,10 +130,10 @@ export default function FileInventoryPage(): ReactElement {
     const query = new URLSearchParams({ pageSize: String(PAGE_SIZE) });
     if (cursor !== undefined) query.set('cursor', cursor);
     void appClient
-      .request<FileInventoryFilesResponse>(
-        `files/inventory/sources/${encodeURIComponent(selectedSourceId)}/files?${query.toString()}`,
-        { signal: controller.signal },
-      )
+      .request<FileInventoryFilesResponse>({
+        path: `files/inventory/sources/${encodeURIComponent(selectedSourceId)}/files?${query.toString()}`,
+        signal: controller.signal,
+      })
       .then((response) => {
         if (!isCurrentRequest()) return;
         if (page > 1 && response.data.length === 0) {
