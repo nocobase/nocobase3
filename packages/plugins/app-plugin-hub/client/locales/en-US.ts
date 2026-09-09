@@ -15,9 +15,6 @@ const enUS = {
     capability: 'Capability',
     allowed: 'Allowed',
     notAllowed: 'Not allowed',
-    noteTitle: 'Hub roles are predefined',
-    note: 'To change a user’s role, go to User management.',
-    manageUsers: 'Manage user roles',
     names: {
       'hub-administrator': 'Administrator',
       'hub-operator': 'Operator',

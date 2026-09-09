@@ -1,10 +1,6 @@
-import {
-  apiClientToken,
-  resolveAppUrl,
-  useService,
-} from '@nocobase/app-client';
+import { apiClientToken, useService } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
-import { ArrowRight, Check, CircleMinus, LoaderCircle } from 'lucide-react';
+import { Check, CircleMinus, LoaderCircle } from 'lucide-react';
 import {
   Fragment,
   useCallback,
@@ -162,21 +158,6 @@ export default function RolesPage(): ReactElement {
             </Table>
           </Card>
         )}
-
-        <section className='flex flex-wrap items-center justify-between gap-4 rounded-xl border bg-card p-4'>
-          <div className='space-y-1'>
-            <h2 className='text-sm font-semibold'>{t('roles.noteTitle')}</h2>
-            <p className='text-sm text-muted-foreground'>{t('roles.note')}</p>
-          </div>
-          <Button
-            nativeButton={false}
-            render={<a href={resolveAppUrl('/users')} />}
-            variant='outline'
-          >
-            {t('roles.manageUsers')}
-            <ArrowRight aria-hidden='true' />
-          </Button>
-        </section>
       </div>
     </main>
   );

@@ -15,9 +15,6 @@ const zhCN: HubResource = {
     capability: '能力',
     allowed: '允许',
     notAllowed: '不允许',
-    noteTitle: 'Hub 角色为预设角色',
-    note: '如需调整某个用户的角色，请前往用户管理。',
-    manageUsers: '管理用户角色',
     names: {
       'hub-administrator': '管理员',
       'hub-operator': '运维人员',
