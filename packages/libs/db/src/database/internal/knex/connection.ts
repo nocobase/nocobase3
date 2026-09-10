@@ -82,13 +82,17 @@ export class KnexDatabaseConnection implements DatabaseConnection {
       this.dialect,
       this.config.capabilities,
     );
-    this.schemaInspector = resolveKnexDatabaseDialectAdapter(
-      this.dialect,
-    ).createSchemaInspector({
-      connectionName: this.name,
-      config: this.config,
-      resolveClient: () => this.resolveClient(),
-    });
+    this.schemaInspector = dialectDriver?.createSchemaInspector
+      ? dialectDriver.createSchemaInspector({
+          connectionName: this.name,
+          config: this.config,
+          resolveClient: () => this.resolveClient(),
+        })
+      : resolveKnexDatabaseDialectAdapter(this.dialect).createSchemaInspector({
+          connectionName: this.name,
+          config: this.config,
+          resolveClient: () => this.resolveClient(),
+        });
     this.schema = new SchemaManagementSchemaAdapter(
       new LazySchemaAdapter(
         () => this.resolveClient(),

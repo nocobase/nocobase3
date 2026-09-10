@@ -2,6 +2,7 @@ import type { NamingOptions } from '../collection/types.js';
 import type { CollectionMetadataStore } from '../metadata/document-store.js';
 import type { DatabaseCapabilities } from '../schema/adapter.js';
 import type { Knex } from 'knex';
+import type { SchemaInspector } from '../schema/inspector/types.js';
 
 export interface DatabaseConfig {
   default?: string;
@@ -26,6 +27,11 @@ export interface DatabaseDriverDefinition<TDialect extends string = string> {
     searchPath?: string[];
     useNullAsDefault?: boolean;
   };
+  readonly createSchemaInspector?: (context: {
+    connectionName: string;
+    config: unknown;
+    resolveClient: () => Promise<Knex>;
+  }) => SchemaInspector;
   readonly configurePool?: (
     config: unknown,
     pool: Knex.PoolConfig,
