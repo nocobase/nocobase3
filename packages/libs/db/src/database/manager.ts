@@ -6,7 +6,11 @@ import type { Repository, RepositoryRecord } from '../repository/types.js';
 import { createSeeder, type Seeder } from '../seed/seeder.js';
 import type { DatabaseSeederOptions } from '../seed/types.js';
 import type { DatabaseConfig } from './config.js';
-import type { DatabaseDriverDefinition, ConnectionConfig } from './config.js';
+import type {
+  ConnectionConfig,
+  DatabaseDriverDefinition,
+  DatabaseDriverRegistration,
+} from './config.js';
 import type { DatabaseConnection } from './connection.js';
 import { DefaultConnectionFactory, type ConnectionFactory } from './factory.js';
 import { KnexConnectionAdapter } from './internal/knex/adapter.js';
@@ -180,12 +184,15 @@ export class DefaultDatabaseManager implements DatabaseManager {
 
 function resolveConnectionDriver(
   connection: ConnectionConfig,
-  drivers: Record<string, DatabaseDriverDefinition> | undefined,
+  drivers: Record<string, DatabaseDriverRegistration> | undefined,
   name: string,
 ): ConnectionConfig {
   const supplied = connection.databaseDriver;
   const registeredValue = drivers?.[connection.dialect];
-  const registered = resolveDriverDefinition(registeredValue);
+  const registered = resolveDriverDefinition(
+    registeredValue,
+    connection.dialect,
+  );
   if (supplied && supplied.dialect !== connection.dialect) {
     throw new Error(
       `Database connection "${name}" uses dialect "${connection.dialect}" but its driver is for "${supplied.dialect}".`,
@@ -201,11 +208,40 @@ function resolveConnectionDriver(
 }
 
 function resolveDriverDefinition(
-  value: DatabaseDriverDefinition | undefined,
+  value: DatabaseDriverRegistration | undefined,
+  expectedDialect: string,
 ): DatabaseDriverDefinition | undefined {
   if (!value) return undefined;
-  const factory = value as DatabaseDriverDefinition & {
+  const candidate = value as DatabaseDriverRegistration & {
     driver?: DatabaseDriverDefinition;
   };
-  return typeof factory.driver === 'object' ? factory.driver : value;
+  const isFactory =
+    typeof candidate === 'function' &&
+    typeof candidate.driver === 'object' &&
+    candidate.driver !== null;
+  const driver = isFactory ? candidate.driver : value;
+
+  if (
+    typeof driver !== 'object' ||
+    driver === null ||
+    typeof driver.dialect !== 'string'
+  ) {
+    throw new Error(
+      `Invalid database driver registration for dialect "${expectedDialect}". Expected a driver descriptor or a dialect factory.`,
+    );
+  }
+  if (driver.dialect !== expectedDialect) {
+    throw new Error(
+      `Database driver registration for dialect "${expectedDialect}" points to dialect "${driver.dialect}".`,
+    );
+  }
+  if (
+    isFactory &&
+    (candidate.dialect !== expectedDialect || candidate.driver !== driver)
+  ) {
+    throw new Error(
+      `Database driver factory for dialect "${expectedDialect}" has inconsistent dialect metadata.`,
+    );
+  }
+  return driver;
 }

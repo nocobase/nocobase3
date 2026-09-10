@@ -7,7 +7,7 @@ import type { SchemaInspector } from '../schema/inspector/types.js';
 export interface DatabaseConfig {
   default?: string;
   /** Database drivers available to connections that use declarative configs. */
-  drivers?: Record<string, DatabaseDriverDefinition>;
+  drivers?: Record<string, DatabaseDriverRegistration>;
   connections: Record<string, ConnectionConfig>;
   metadataStore?: CollectionMetadataStore;
 }
@@ -37,6 +37,26 @@ export interface DatabaseDriverDefinition<TDialect extends string = string> {
     pool: Knex.PoolConfig,
   ) => Knex.PoolConfig;
 }
+
+/**
+ * Factory exported by a dialect package.  A factory returns a connection
+ * config with the package's driver already attached, while its `.driver`
+ * property is the descriptor used by declarative registrations.
+ */
+export interface DatabaseDriverFactory<
+  TDialect extends string = string,
+  TOptions extends object = Record<string, unknown>,
+> {
+  (options?: TOptions): BaseConnectionConfig & {
+    dialect: TDialect;
+    databaseDriver: DatabaseDriverDefinition<TDialect>;
+  };
+  readonly dialect: TDialect;
+  readonly driver: DatabaseDriverDefinition<TDialect>;
+}
+
+export type DatabaseDriverRegistration<TDialect extends string = string> =
+  DatabaseDriverDefinition<TDialect> | DatabaseDriverFactory<TDialect>;
 
 export type DatabaseDialect =
   'sqlite' | 'postgres' | 'mysql' | 'oracle' | 'mssql';

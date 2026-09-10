@@ -309,6 +309,54 @@ describe('DatabaseManager', () => {
     }
   });
 
+  it('accepts a dialect factory in the declarative driver registry', () => {
+    const driver = {
+      dialect: 'sqlite' as const,
+    };
+    const sqlite = Object.assign(
+      (options: { filename?: string } = {}) => ({
+        ...options,
+        dialect: 'sqlite' as const,
+        databaseDriver: driver,
+      }),
+      {
+        dialect: 'sqlite' as const,
+        driver,
+      },
+    );
+    const db = createDatabaseManager({
+      drivers: { sqlite },
+      connections: {
+        main: {
+          dialect: 'sqlite',
+          filename: ':memory:',
+        },
+      },
+    });
+
+    expect(db.connection().dialect).toBe('sqlite');
+  });
+
+  it('rejects inconsistent dialect registrations before creating a connection', () => {
+    const db = createDatabaseManager({
+      drivers: {
+        sqlite: {
+          dialect: 'postgres',
+        },
+      },
+      connections: {
+        main: {
+          dialect: 'sqlite',
+          filename: ':memory:',
+        },
+      },
+    } as never);
+
+    expect(() => db.connection()).toThrow(
+      'Database driver registration for dialect "sqlite" points to dialect "postgres".',
+    );
+  });
+
   it('executes query adapter operations against the selected connection', async () => {
     const db = createDatabaseManager({
       connections: {
