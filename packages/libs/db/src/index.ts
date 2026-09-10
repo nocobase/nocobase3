@@ -101,6 +101,11 @@ export type { CollectionMetadataStore } from './metadata/document-store.js';
 
 export type { DatabaseCapabilities } from './schema/adapter.js';
 export type { SchemaInspector } from './schema/inspector/types.js';
+export { PostgresSchemaInspector } from './schema/internal/knex/inspectors/postgres.js';
+export { MysqlSchemaInspector } from './schema/internal/knex/inspectors/mysql.js';
+export { SqliteSchemaInspector } from './schema/internal/knex/inspectors/sqlite.js';
+export { OracleSchemaInspector } from './schema/internal/knex/inspectors/oracle.js';
+export { MssqlSchemaInspector } from './schema/internal/knex/inspectors/mssql.js';
 
 export { UnsupportedCapabilityError } from './schema/capabilities.js';
 

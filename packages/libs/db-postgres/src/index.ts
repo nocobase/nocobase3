@@ -3,6 +3,7 @@ import type {
   DatabaseDriverDefinition,
   PostgresConnectionConfig,
 } from '@nocobase/db';
+import { PostgresSchemaInspector } from '@nocobase/db';
 
 export type PostgresOptions = Omit<
   PostgresConnectionConfig,
@@ -39,13 +40,25 @@ export const postgresDriver: DatabaseDriverDefinition<'postgres'> = {
             : [...config.schema],
     };
   },
+  createSchemaInspector: (context) => {
+    const schema = (context.config as PostgresConnectionConfig).schema;
+    return new PostgresSchemaInspector({
+      connectionName: context.connectionName,
+      searchPath:
+        typeof schema === 'string'
+          ? [schema]
+          : schema
+            ? [...schema]
+            : undefined,
+      resolveClient: context.resolveClient,
+    });
+  },
 } satisfies DatabaseDriverDefinition<'postgres'>;
 
-export type PostgresConnection = Omit<ConnectionConfig, 'dialect'> &
-  PostgresOptions & {
-    dialect: 'postgres';
-    databaseDriver: typeof postgresDriver;
-  };
+export type PostgresConnection = PostgresOptions & {
+  dialect: 'postgres';
+  databaseDriver: typeof postgresDriver;
+};
 
 export interface PostgresFactory {
   (options?: PostgresOptions): PostgresConnection;

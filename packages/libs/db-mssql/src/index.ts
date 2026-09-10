@@ -3,6 +3,7 @@ import type {
   DatabaseDriverDefinition,
   MssqlConnectionConfig,
 } from '@nocobase/db';
+import { MssqlSchemaInspector } from '@nocobase/db';
 export type MssqlOptions = Omit<
   MssqlConnectionConfig,
   'dialect' | 'driver' | 'databaseDriver'
@@ -29,9 +30,16 @@ export const mssqlDriver: DatabaseDriverDefinition<'mssql'> = {
       },
     };
   },
+  createSchemaInspector: (context) =>
+    new MssqlSchemaInspector({
+      connectionName: context.connectionName,
+      resolveClient: context.resolveClient,
+    }),
 };
-export type MssqlConnection = Omit<ConnectionConfig, 'dialect'> &
-  MssqlOptions & { dialect: 'mssql'; databaseDriver: typeof mssqlDriver };
+export type MssqlConnection = MssqlOptions & {
+  dialect: 'mssql';
+  databaseDriver: typeof mssqlDriver;
+};
 export interface MssqlFactory {
   (options?: MssqlOptions): MssqlConnection;
   readonly dialect: 'mssql';

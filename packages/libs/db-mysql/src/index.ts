@@ -3,6 +3,7 @@ import type {
   DatabaseDriverDefinition,
   MysqlConnectionConfig,
 } from '@nocobase/db';
+import { MysqlSchemaInspector } from '@nocobase/db';
 export type MysqlOptions = Omit<
   MysqlConnectionConfig,
   'dialect' | 'driver' | 'databaseDriver'
@@ -28,9 +29,16 @@ export const mysqlDriver: DatabaseDriverDefinition<'mysql'> = {
       },
     };
   },
+  createSchemaInspector: (context) =>
+    new MysqlSchemaInspector({
+      connectionName: context.connectionName,
+      resolveClient: context.resolveClient,
+    }),
 };
-export type MysqlConnection = Omit<ConnectionConfig, 'dialect'> &
-  MysqlOptions & { dialect: 'mysql'; databaseDriver: typeof mysqlDriver };
+export type MysqlConnection = MysqlOptions & {
+  dialect: 'mysql';
+  databaseDriver: typeof mysqlDriver;
+};
 export interface MysqlFactory {
   (options?: MysqlOptions): MysqlConnection;
   readonly dialect: 'mysql';

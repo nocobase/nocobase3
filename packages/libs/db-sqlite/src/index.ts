@@ -3,6 +3,7 @@ import type {
   DatabaseDriverDefinition,
   SqliteConnectionConfig,
 } from '@nocobase/db';
+import { SqliteSchemaInspector } from '@nocobase/db';
 export type SqliteOptions = Omit<
   SqliteConnectionConfig,
   'dialect' | 'driver' | 'databaseDriver'
@@ -18,9 +19,16 @@ export const sqliteDriver: DatabaseDriverDefinition<'sqlite'> = {
       useNullAsDefault: true,
     };
   },
+  createSchemaInspector: (context) =>
+    new SqliteSchemaInspector({
+      connectionName: context.connectionName,
+      resolveClient: context.resolveClient,
+    }),
 };
-export type SqliteConnection = Omit<ConnectionConfig, 'dialect'> &
-  SqliteOptions & { dialect: 'sqlite'; databaseDriver: typeof sqliteDriver };
+export type SqliteConnection = SqliteOptions & {
+  dialect: 'sqlite';
+  databaseDriver: typeof sqliteDriver;
+};
 export interface SqliteFactory {
   (options?: SqliteOptions): SqliteConnection;
   readonly dialect: 'sqlite';

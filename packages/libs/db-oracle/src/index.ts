@@ -3,6 +3,7 @@ import type {
   DatabaseDriverDefinition,
   OracleConnectionConfig,
 } from '@nocobase/db';
+import { OracleSchemaInspector } from '@nocobase/db';
 export type OracleOptions = Omit<
   OracleConnectionConfig,
   'dialect' | 'driver' | 'databaseDriver'
@@ -22,9 +23,16 @@ export const oracleDriver: DatabaseDriverDefinition<'oracle'> = {
       },
     };
   },
+  createSchemaInspector: (context) =>
+    new OracleSchemaInspector({
+      connectionName: context.connectionName,
+      resolveClient: context.resolveClient,
+    }),
 };
-export type OracleConnection = Omit<ConnectionConfig, 'dialect'> &
-  OracleOptions & { dialect: 'oracle'; databaseDriver: typeof oracleDriver };
+export type OracleConnection = OracleOptions & {
+  dialect: 'oracle';
+  databaseDriver: typeof oracleDriver;
+};
 export interface OracleFactory {
   (options?: OracleOptions): OracleConnection;
   readonly dialect: 'oracle';
