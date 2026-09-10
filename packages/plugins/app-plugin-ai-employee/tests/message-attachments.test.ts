@@ -1,7 +1,7 @@
 import type { AIMessageInput, LLMProvider } from '@nocobase/ai-employee';
 import { describe, expect, it, vi } from 'vitest';
 
-import { AIEmployeeChatMessageConverters } from '../server/agent/ai-employee/message-converters.js';
+import { DefaultChatMessageConverters } from '../server/agent/chat-message-converters.js';
 import type { AIEmployeeAgentOptions } from '../server/agent/ai-employee/options.js';
 
 function createOptions(records: Record<string, unknown>[]) {
@@ -73,7 +73,7 @@ describe('AI employee message attachment boundary', () => {
       createdById: 7,
     };
     const { options, find, collectionRepository } = createOptions([canonical]);
-    const converters = new AIEmployeeChatMessageConverters(options);
+    const converters = new DefaultChatMessageConverters(options);
     const { provider, parseAttachment } = createProvider();
 
     await converters.formatMessages([createMessage()], { provider } as any);
@@ -99,7 +99,7 @@ describe('AI employee message attachment boundary', () => {
       createdById: 7,
     };
     const { options, find } = createOptions([canonical]);
-    const converters = new AIEmployeeChatMessageConverters(options);
+    const converters = new DefaultChatMessageConverters(options);
     const { provider, parseAttachment } = createProvider();
 
     await converters.formatMessages([createMessage()], { provider } as any);
@@ -113,7 +113,7 @@ describe('AI employee message attachment boundary', () => {
 
   it('does not pass unresolved attachments to the provider', async () => {
     const { options, find } = createOptions([]);
-    const converters = new AIEmployeeChatMessageConverters(options);
+    const converters = new DefaultChatMessageConverters(options);
     const { provider, parseAttachment } = createProvider();
 
     const formatted = await converters.formatMessages([createMessage()], {

@@ -1,9 +1,8 @@
 import { AIMessage, HumanMessage, ToolMessage } from '@langchain/core/messages';
 import { describe, expect, it, vi } from 'vitest';
 import type { LLMProvider } from '@nocobase/ai-employee';
-import { BaseChatMessageConverters } from '../server/agent/chat-message-converters.js';
 
-import { AIEmployeeChatMessageConverters } from '../server/agent/ai-employee/message-converters.js';
+import { DefaultChatMessageConverters } from '../server/agent/chat-message-converters.js';
 const prepareStoredAssistantAdditionalKwargs = vi.fn((value) => value);
 const context = {
   providerName: 'test-provider',
@@ -15,9 +14,9 @@ const context = {
   } as unknown as LLMProvider,
 };
 
-describe('BaseChatMessageConverters', () => {
+describe('DefaultChatMessageConverters', () => {
   it('formats each supported stored message role', async () => {
-    const converters = new BaseChatMessageConverters();
+    const converters = new DefaultChatMessageConverters();
     const messages = await converters.formatMessages(
       [
         { role: 'system', content: { type: 'text', content: 'system' } },
@@ -44,21 +43,21 @@ describe('BaseChatMessageConverters', () => {
   });
 
   it('returns null for empty assistant and unannotated human messages', async () => {
-    const converters = new BaseChatMessageConverters();
+    const converters = new DefaultChatMessageConverters();
     expect(
-      await converters.assistant.toStored(
+      await converters.assistant.convert(
         new AIMessage({ content: null as never }),
         context,
       ),
     ).toBeNull();
     expect(
-      await converters.human.toStored(new HumanMessage('generated'), context),
+      await converters.human.convert(new HumanMessage('generated'), context),
     ).toBeNull();
   });
 
   it('retains explicit human source data and tool identity', async () => {
-    const converters = new BaseChatMessageConverters();
-    const human = await converters.human.toStored(
+    const converters = new DefaultChatMessageConverters();
+    const human = await converters.human.convert(
       new HumanMessage({
         content: 'formatted',
         additional_kwargs: {
@@ -69,7 +68,7 @@ describe('BaseChatMessageConverters', () => {
       }),
       context,
     );
-    const tool = await converters.tool.toStored(
+    const tool = await converters.tool.convert(
       new ToolMessage({
         content: 'result',
         tool_call_id: 'call-1',
@@ -91,12 +90,12 @@ describe('BaseChatMessageConverters', () => {
   });
 
   it('stores assistant tool calls on the complete message input', async () => {
-    const converters = new AIEmployeeChatMessageConverters({
+    const converters = new DefaultChatMessageConverters({
       employee: { username: 'dara' },
       agentContext: { logger: {} },
       skillSettings: {},
     } as never);
-    const stored = await converters.assistant.toStored(
+    const stored = await converters.assistant.convert(
       new AIMessage({
         content: 'answer',
         tool_calls: [

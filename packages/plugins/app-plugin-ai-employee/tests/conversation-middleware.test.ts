@@ -52,7 +52,7 @@ describe('conversationMiddleware', () => {
         },
         chatMessageConverters: {
           formatMessages,
-          tool: { toStored: convertToolMessage },
+          tool: { convert: convertToolMessage },
         },
         tools: {},
       } as never,

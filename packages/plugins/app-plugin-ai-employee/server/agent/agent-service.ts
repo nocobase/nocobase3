@@ -602,7 +602,7 @@ export class AgentService {
       if (signal.aborted) {
         if (gathered && prepared) {
           const value =
-            await this.providers.chatMessageConverters.assistant.toStored(
+            await this.providers.chatMessageConverters.assistant.convert(
               gathered,
               prepared,
             );

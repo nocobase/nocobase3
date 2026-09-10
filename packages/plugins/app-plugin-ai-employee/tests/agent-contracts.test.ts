@@ -13,7 +13,7 @@ import {
   createMemoryConversationProvider,
 } from '../server/agent/providers.js';
 import { FixedChatContextProvider } from '../server/agent/chat-context.js';
-import { BaseChatMessageConverters } from '../server/agent/chat-message-converters.js';
+import { DefaultChatMessageConverters } from '../server/agent/chat-message-converters.js';
 import {
   encodeAgentEventSSE,
   toLegacyAgentEventPayload,
@@ -160,8 +160,8 @@ describe('fixed AgentService contracts', () => {
       /Object\.assign\([^)]*(chatContext|converter)/,
     );
     expect(production).not.toMatch(/\.\.\.(options\.)?chatContext/);
-    expect(read('agent/ai-employee/message-converters.ts')).toContain(
-      "from './options.js'",
+    expect(read('agent/chat-message-converters.ts')).toContain(
+      "from './ai-employee/options.js'",
     );
     const skillMiddleware = read('agent/middleware/skill-tools.ts');
     expect(skillMiddleware).toContain('activeTools(options.request)');
@@ -223,6 +223,19 @@ describe('fixed AgentService contracts', () => {
     expect(options).toContain('aiToolMessages: AIToolMessageRepository');
     expect(options).toContain('aiConversations: AIConversationRepository');
     expect(handler).toContain('class DefaultToolCallHandler');
+    expect(providers).toContain('new DefaultChatMessageConverters(options)');
+    expect(read('agent/chat-message-converters.ts')).toContain(
+      'export class DefaultChatMessageConverters',
+    );
+    expect(read('agent/chat-message-converters.ts')).not.toContain(
+      'export class BaseChatMessageConverters',
+    );
+    expect(read('agent/chat-message-converters.ts')).toContain(
+      'export class DefaultChatMessageConverters',
+    );
+    expect(
+      fs.existsSync(path.join(src, 'agent/ai-employee/message-converters.ts')),
+    ).toBe(false);
     expect(handler).not.toContain('private readonly options:');
     expect(providers).not.toMatch(/markPending:\s*\(|markDone:\s*\(/);
     expect(types).not.toMatch(/confirm\([^)]*DatabaseConnection/);
@@ -367,7 +380,7 @@ describe('fixed AgentService contracts', () => {
     const conversation = createMemoryConversationProvider({
       sessionId: 'direct',
     });
-    const chatMessageConverters = new BaseChatMessageConverters();
+    const chatMessageConverters = new DefaultChatMessageConverters();
     const providers = createAgentProviders({
       conversation,
       chatContext,

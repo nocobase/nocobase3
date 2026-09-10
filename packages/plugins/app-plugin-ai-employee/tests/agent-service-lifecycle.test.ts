@@ -54,9 +54,9 @@ const createProviders = (
     },
     chatMessageConverters: {
       formatMessages: vi.fn(async (messages) => messages),
-      assistant: { toStored: vi.fn() },
-      human: { toStored: vi.fn() },
-      tool: { toStored: vi.fn() },
+      assistant: { convert: vi.fn() },
+      human: { convert: vi.fn() },
+      tool: { convert: vi.fn() },
     },
     features: {
       contextEnrichment: true,

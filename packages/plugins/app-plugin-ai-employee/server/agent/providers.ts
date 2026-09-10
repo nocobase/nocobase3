@@ -8,7 +8,7 @@ import {
   LLMStreamCached,
   type LLMStreamCachedManager,
 } from '../manager/llm-stream-cached-manager.js';
-import { BaseChatMessageConverters } from './chat-message-converters.js';
+import { DefaultChatMessageConverters } from './chat-message-converters.js';
 import {
   DEFAULT_AGENT_FEATURES,
   type AgentAbortHandle,
@@ -69,7 +69,7 @@ class MemoryConversationState {
       options.sessionId ??
       `agent-${crypto.randomUUID()}`;
     for (const message of options.initialMessages ?? []) {
-      this.messages.push(this.toStored(message));
+      this.messages.push(this.convert(message));
     }
   }
 
@@ -79,7 +79,7 @@ class MemoryConversationState {
     input: AIMessageInput | AIMessageInput[],
   ): StoredMessage | StoredMessage[] {
     const values = (Array.isArray(input) ? input : [input]).map((message) =>
-      this.toStored(message),
+      this.convert(message),
     );
     this.messages.push(...values);
     return Array.isArray(input) ? values : values[0];
@@ -108,7 +108,7 @@ class MemoryConversationState {
     return 1;
   }
 
-  private toStored(message: AIMessageInput): StoredMessage {
+  private convert(message: AIMessageInput): StoredMessage {
     return {
       ...message,
       sessionId: this.sessionId,
@@ -346,7 +346,7 @@ class DefaultAgentProviders implements AgentProviders {
     this.chatContext = options.chatContext;
     this.logger = options.logger ?? noopLogger;
     this.chatMessageConverters =
-      options.chatMessageConverters ?? new BaseChatMessageConverters();
+      options.chatMessageConverters ?? new DefaultChatMessageConverters();
     this.features = {
       ...DEFAULT_AGENT_FEATURES,
       ...(options.features ?? {}),
@@ -361,9 +361,9 @@ export function createMemoryConversationProvider(
   return new MemoryConversationProvider(options);
 }
 
-/** @deprecated Construct a BaseChatMessageConverters directly. */
+/** @deprecated Construct a DefaultChatMessageConverters directly. */
 export const createDefaultChatMessageConverters =
-  (): BaseChatMessageConverters => new BaseChatMessageConverters();
+  (): DefaultChatMessageConverters => new DefaultChatMessageConverters();
 
 export function createAgentProviders(
   options: CreateAgentProvidersOptions,

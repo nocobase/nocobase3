@@ -9,7 +9,7 @@ import type {
   ResolvedAgentLLM,
   ToolCallPolicy,
 } from '../types.js';
-import { AIEmployeeChatMessageConverters } from './message-converters.js';
+import { DefaultChatMessageConverters } from '../chat-message-converters.js';
 import { NativeCollectionSaver } from '../../agent/ai-employee/checkpoints/index.js';
 import { createAIChatConversation } from './ai-chat-conversation.js';
 import type {
@@ -709,7 +709,7 @@ export async function createAIEmployeeAgentProviders(
     conversation,
     chatContext,
     logger: options.agentContext.logger,
-    chatMessageConverters: new AIEmployeeChatMessageConverters(options),
+    chatMessageConverters: new DefaultChatMessageConverters(options),
     checkpointer:
       options.from === 'sub-agent'
         ? undefined

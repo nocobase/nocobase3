@@ -43,12 +43,12 @@ export const conversationMiddleware = (
   const { conversation, chatContext, chatMessageConverters } = providers;
   const { messageId, agentThread } = options;
   const identity = conversation.identity;
-  const toStoredAssistantMessage = (message: AIMessage) =>
-    chatMessageConverters.assistant.toStored(message, options);
-  const toStoredHumanMessage = (message: HumanMessage) =>
-    chatMessageConverters.human.toStored(message, options);
-  const toStoredToolMessage = (message: ToolMessage) =>
-    chatMessageConverters.tool.toStored(message, options);
+  const convertAssistantMessage = (message: AIMessage) =>
+    chatMessageConverters.assistant.convert(message, options);
+  const convertHumanMessage = (message: HumanMessage) =>
+    chatMessageConverters.human.convert(message, options);
+  const convertToolMessage = (message: ToolMessage) =>
+    chatMessageConverters.tool.convert(message, options);
 
   const fillToolCalls = (
     message: AIConversationMessage,
@@ -113,7 +113,7 @@ export const conversationMiddleware = (
       const userMessages = (
         await Promise.all(
           (userMessageCount ? humanMessages.slice(-userMessageCount) : []).map(
-            (message) => toStoredHumanMessage(message as HumanMessage),
+            (message) => convertHumanMessage(message as HumanMessage),
           ),
         )
       ).filter((message): message is AIMessageInput => message !== null);
@@ -136,7 +136,7 @@ export const conversationMiddleware = (
           state.messages
             .filter((message) => message.type === 'tool')
             .slice(state.lastMessageIndex.lastToolMessageIndex)
-            .map((message) => toStoredToolMessage(message as ToolMessage)),
+            .map((message) => convertToolMessage(message as ToolMessage)),
         )
       ).filter((message): message is AIMessageInput => message !== null);
       if (!toolMessages.length || !currentMessageId) return;
@@ -171,7 +171,7 @@ export const conversationMiddleware = (
         if (lastMessage?.type !== 'ai' || runtime.signal?.aborted)
           return nextState;
         const aiMessage = lastMessage as AIMessage;
-        const values = await toStoredAssistantMessage(aiMessage);
+        const values = await convertAssistantMessage(aiMessage);
         if (!values) return nextState;
         const saved = await conversation.messages.saveAssistantMessage(values);
         nextState.messageId = saved.message.messageId;
@@ -209,7 +209,7 @@ export const conversationMiddleware = (
           options,
         );
         const currentMessageId = request.state.messageId;
-        const toolMessage = await toStoredToolMessage(
+        const toolMessage = await convertToolMessage(
           request.messages.at(-1) as ToolMessage,
         );
         if (!currentMessageId || !toolMessage) {

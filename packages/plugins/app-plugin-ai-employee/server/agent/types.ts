@@ -350,8 +350,8 @@ export type ToolCallPolicy = Pick<
   'getToolsMap' | 'isAutoCall' | 'shouldInterruptToolCall'
 >;
 
-export interface ChatMessageToStoredConverter<TSource, TResult> {
-  toStored(
+export interface ChatMessageConverter<TSource, TResult> {
+  convert(
     source: TSource,
     context: AgentMessageConversionContext,
   ): TResult | Promise<TResult>;
@@ -362,15 +362,12 @@ export interface ChatMessageConverters {
     messages: readonly AIMessageInput[],
     context: AgentMessageConversionContext,
   ): Promise<readonly BaseMessageLike[]>;
-  readonly assistant: ChatMessageToStoredConverter<
+  readonly assistant: ChatMessageConverter<
     LangChainAIMessage,
     AIMessageInput | null
   >;
-  readonly human: ChatMessageToStoredConverter<
-    HumanMessage,
-    AIMessageInput | null
-  >;
-  readonly tool: ChatMessageToStoredConverter<ToolMessage, AIMessageInput>;
+  readonly human: ChatMessageConverter<HumanMessage, AIMessageInput | null>;
+  readonly tool: ChatMessageConverter<ToolMessage, AIMessageInput>;
 }
 
 export interface AgentAbortHandle {
