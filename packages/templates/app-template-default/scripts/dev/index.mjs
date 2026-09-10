@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadStandaloneAppEnv } from '@nocobase/app-server/node';
 
+import { readCliHooks, runHookStage } from '../utils/cli-hooks.mjs';
 import { resolvePluginWatchIncludes } from './plugin-watches.mjs';
 import { resolveConfigWatch } from './config-watch.mjs';
 import { findAvailablePort } from './ports.mjs';
@@ -176,13 +177,23 @@ const healthUrl = `${appServerUrl}/${[appBasePath, 'api/healthz']
   .filter(Boolean)
   .join('/')}`;
 const viteUrl = `${nextEnv.APP_VITE_DEV_URL}/${appBasePath ? `${appBasePath}/` : ''}`;
-const workflowBuild = spawn.sync('pnpm', ['nocobase', 'workflow', 'build'], {
-  cwd: rootDir,
-  env: nextEnv,
-  stdio: 'inherit',
-});
-if (workflowBuild.error) throw workflowBuild.error;
-if (workflowBuild.status !== 0) process.exit(workflowBuild.status ?? 1);
+// Plugin work that has to happen before the client and server processes start. A failure stops the dev run rather
+// than being reported and stepped over: whatever the hook produces is something the application is about to read, so
+// starting without it gives a running application that is quietly wrong.
+const runDevHook = (label, command, args) => {
+  console.log(`\n> ${label}`);
+
+  const result = spawn.sync(command, args, {
+    cwd: rootDir,
+    env: nextEnv,
+    stdio: 'inherit',
+  });
+
+  if (result.error) throw result.error;
+  if (result.status !== 0) process.exit(result.status ?? 1);
+};
+
+runHookStage(readCliHooks(rootDir).dev, 'beforeDev', runDevHook);
 const pluginWatchIncludes = resolvePluginWatchIncludes(rootDir);
 
 console.log(`\n  Starting app dev server...`);
