@@ -154,7 +154,65 @@ A group has `navigation` and `children`, with no component loader. Its `path` is
 
 Omit `navigation` for details, Tab content, or another page that should not appear in the sidebar. A descendant can have navigation even when an ancestor omits it. Dynamic and wildcard paths are not concrete menu targets, so leave their navigation unset. Paths, route IDs, and component exports must resolve correctly; URL spelling is not otherwise prescribed by this guide.
 
-The route renderer supplies outlets for pure groups. Business pages place their own outlet; no outlet is inserted automatically into a page. Put it where the next page belongs. For future business dialog wrappers, put nested content outside the parent's dialog panel; this change does not provide `RouteDialog` or `RouteDrawer`.
+The route renderer supplies outlets for pure groups. Business pages place their own outlet; no outlet is inserted automatically into a page. Put it where the next page belongs. Route overlays use the wrappers described below, which provide their own nested outlet.
+
+## Route dialogs and drawers
+
+Use `RouteDialog` from `@/components/route-dialog` or `RouteDrawer` from `@/components/route-drawer` when a child page should open as an overlay. The parent page renders `<Outlet />`; the child renders the wrapper. Both wrappers automatically render their next child outlet outside the panel, within the underlying dialog context. Do not add another outlet inside them.
+
+```ts
+// Inside a parent page route in client/routes.ts:
+children: [{
+  name: 'orderEditor',
+  path: ':orderId/edit',
+  componentLoader: () => import('./pages/order-editor.js'),
+  children: [{
+    name: 'orderDetails',
+    path: 'details',
+    componentLoader: () => import('./pages/order-details.js'),
+  }],
+}],
+```
+
+```tsx
+// client/pages/order-editor.tsx
+import { useTranslation } from '@nocobase/i18n/client';
+import { Link } from 'react-router';
+import { RouteDialog } from '@/components/route-dialog';
+import { useRouteOverlay } from '@/components/use-route-overlay';
+import { Button } from '@/components/ui/button';
+
+function EditorActions() {
+  const { t } = useTranslation();
+  const { close, isClosing } = useRouteOverlay();
+  return (
+    <Button disabled={isClosing} onClick={() => void close()}>
+      {t('actions.cancel')}
+    </Button>
+  );
+}
+
+export default function OrderEditor() {
+  const { t } = useTranslation();
+  return (
+    <RouteDialog title={t('orders.edit')} footer={<EditorActions />}>
+      <Link to='details'>{t('orders.details')}</Link>
+    </RouteDialog>
+  );
+}
+```
+
+Default-export a page rendering `RouteDrawer` from `order-details.tsx` to open a drawer above the dialog. Add the example's business translation keys to every supported locale. Opening a child URL directly also renders its ancestors. Parent page and form state stay mounted when child overlays open; only the top layer responds to Escape or its backdrop.
+
+Both wrappers accept `title` (required accessible name), `description`, `children`, `footer`, `closeTo`, `beforeClose`, and `className`. `className` styles the panel, including its width. Dialogs are centered; drawers enter from the right. The header and optional footer stay visible while the body scrolls. There are no default business buttons or controlled `open` props: route matching determines whether the overlay exists.
+
+Closing defaults to `..` with React Router's route-relative resolution and `replace: true`, preserving the current query and clearing the hash. It moves to the parent route, which can differ from removing one URL segment. Explicit `closeTo` accepts React Router's `To` and uses exactly that target without merging the query. Do not include a deployment prefix. Close does not use history back, so directly loaded overlays can close to their parent.
+
+`useRouteOverlay()` returns the nearest wrapper's `close(): Promise<void>` and `isClosing`. It works in the body and footer; calling it outside a wrapper throws. Close buttons, backdrop clicks, Escape and `close()` share `beforeClose?: () => boolean | Promise<boolean>`. Returning false keeps the overlay open. Pending checks set `isClosing` and coalesce repeated close requests. A rejected check leaves the overlay open: callers of `close()` must handle the rejection when their check can throw; built-in controls catch and log it. Checks that finish after navigation away cannot navigate again.
+
+Browser back, forward and other route navigation bypass `beforeClose`. This hook is not a general unsaved-changes navigation blocker. Successful close navigates immediately; exiting pages are not cached for an exit animation.
+
+Verify direct links, deployment prefixes, query preservation, custom targets, nested Dialog/Drawer combinations, parent form state, top-layer Escape and focus restoration. Also check rejected and pending close checks, browser history, long content, narrow screens and both color modes.
 
 ## Settings and Dev
 
