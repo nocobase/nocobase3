@@ -24,6 +24,31 @@ export const mssqlDriver: DatabaseDriverDefinition<'mssql'> = {
     nativeTypes: true,
     comments: true,
   } satisfies Partial<DatabaseCapabilities>,
+  createRuntime: ({ dialect, capabilities }) => ({
+    dialect,
+    capabilities,
+    numeric: {
+      aggregateSql: ({ client, kind, field, distinct, source }) => {
+        const operand = field === '*' ? client.raw('*') : client.ref(field);
+        const prefix = distinct ? 'distinct ' : '';
+        if (kind === 'count') {
+          return client.raw(`count_big(${prefix}?)`, [operand]);
+        }
+        const floating = source && ['float', 'double'].includes(source.type);
+        if (!floating && (kind === 'avg' || kind === 'sum')) {
+          if (source?.type === 'decimal') {
+            return client.raw(`${kind}(${prefix}?)`, [operand]);
+          }
+          return client.raw(`${kind}(${prefix}cast(? as decimal(38,0)))`, [
+            operand,
+          ]);
+        }
+        return client.raw(`${kind}(${prefix}?)`, [operand]);
+      },
+      aggregateProjection: ({ client, expression }) =>
+        client.raw('cast(? as varchar(max))', [expression]),
+    },
+  }),
   createKnexClient: (_config, baseClient) => {
     if (!baseClient) return 'mssql';
     class MssqlClientWithDriver extends baseClient {

@@ -23,6 +23,31 @@ export const sqliteDriver: DatabaseDriverDefinition<'sqlite'> = {
   capabilities: {
     partialIndexes: true,
   } satisfies Partial<DatabaseCapabilities>,
+  createRuntime: ({ dialect, capabilities }) => ({
+    dialect,
+    capabilities,
+    numeric: {
+      aggregateSql: ({ client, kind, field, distinct, source }) => {
+        const operand = field === '*' ? client.raw('*') : client.ref(field);
+        const prefix = distinct ? 'distinct ' : '';
+        const floating = source && ['float', 'double'].includes(source.type);
+        if (!floating && (kind === 'avg' || kind === 'sum')) {
+          return client.raw(`nb_decimal_${kind}(${prefix}?)`, [operand]);
+        }
+        return client.raw(`${kind}(${prefix}?)`, [operand]);
+      },
+      aggregateProjection: ({ client, expression }) =>
+        client.raw('nb_decimal_text(?)', [expression]),
+    },
+    query: {
+      wrapAggregateOrdering: ({ client, ordering, functionName }) =>
+        ['sum', 'avg'].includes(functionName)
+          ? client.raw('nb_decimal_key(?)', [ordering])
+          : ordering,
+      decimalAggregateKey: ({ client, value }) =>
+        client.raw('nb_decimal_key(?)', [value]),
+    },
+  }),
   createKnexClient: () => preciseIntegerClient(BetterSqlite3),
   resolveConnection: (source: ConnectionConfig) => {
     const config = source as SqliteConnectionConfig;

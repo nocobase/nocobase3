@@ -31,6 +31,14 @@ export const postgresDriver: DatabaseDriverDefinition<'postgres'> = {
     nativeTypes: true,
     comments: true,
   } satisfies Partial<DatabaseCapabilities>,
+  createRuntime: ({ dialect, capabilities }) => ({
+    dialect,
+    capabilities,
+    numeric: {
+      hasNativeResults: true,
+      aggregateProjection: ({ expression }) => expression,
+    },
+  }),
   createKnexClient: (_config, baseClient) => {
     if (!baseClient) return 'pg';
     class PostgresClientWithQueryStream extends baseClient {

@@ -22,6 +22,14 @@ export const mysqlDriver: DatabaseDriverDefinition<'mysql'> = {
     comments: true,
     nativeTypes: true,
   } satisfies Partial<DatabaseCapabilities>,
+  createRuntime: ({ dialect, capabilities }) => ({
+    dialect,
+    capabilities,
+    numeric: {
+      hasNativeResults: true,
+      aggregateProjection: ({ expression }) => expression,
+    },
+  }),
   createKnexClient: (_config, baseClient) => {
     if (!baseClient) return 'mysql2';
     class MysqlClientWithDriver extends baseClient {

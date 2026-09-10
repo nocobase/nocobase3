@@ -2,6 +2,9 @@ import type { Knex } from 'knex';
 import type { DatabaseCapabilities } from '../schema/adapter.js';
 import type { ConnectionConfig } from './config.js';
 import type { KnexConnectionConfig } from './internal/knex/config.js';
+import type { FieldDefinition } from '../collection/types.js';
+
+export type RuntimeNumericAggregate = 'count' | 'sum' | 'avg' | 'min' | 'max';
 
 /**
  * The resolved runtime context handed to a dialect package.
@@ -32,9 +35,23 @@ export interface DatabaseDriverRuntime {
   readonly query?: DatabaseQueryRuntimeStrategy;
   readonly repository?: DatabaseRepositoryRuntimeStrategy;
   readonly schema?: DatabaseSchemaRuntimeStrategy;
+  readonly numeric?: DatabaseNumericRuntimeStrategy;
 }
 
 export interface DatabaseQueryRuntimeStrategy {
+  readonly configureAggregateResults?: (context: {
+    query: Knex.QueryBuilder;
+    aliases: ReadonlySet<string>;
+  }) => void;
+  readonly wrapAggregateOrdering?: (context: {
+    client: Knex;
+    ordering: Knex.Raw;
+    functionName: string;
+  }) => Knex.Raw;
+  readonly decimalAggregateKey?: (context: {
+    client: Knex;
+    value: Knex.Raw;
+  }) => Knex.Raw;
   readonly [key: string]: unknown;
 }
 
@@ -44,6 +61,22 @@ export interface DatabaseRepositoryRuntimeStrategy {
 
 export interface DatabaseSchemaRuntimeStrategy {
   readonly [key: string]: unknown;
+}
+
+export interface DatabaseNumericRuntimeStrategy {
+  readonly aggregateSql?: (context: {
+    client: Knex;
+    kind: RuntimeNumericAggregate;
+    field: string;
+    distinct: boolean;
+    source?: FieldDefinition;
+  }) => Knex.Raw;
+  readonly hasNativeResults?: boolean;
+  readonly aggregateProjection?: (context: {
+    client: Knex;
+    expression: Knex.Raw;
+    source?: FieldDefinition;
+  }) => Knex.Raw;
 }
 
 export type DatabaseDriverRuntimeFactory = (
@@ -57,4 +90,19 @@ export function createDefaultDatabaseDriverRuntime(
     dialect: context.dialect,
     capabilities: context.capabilities,
   };
+}
+
+const runtimeByClient = new WeakMap<object, DatabaseDriverRuntime>();
+
+export function attachDatabaseDriverRuntime(
+  client: Knex,
+  runtime: DatabaseDriverRuntime,
+): void {
+  runtimeByClient.set(client, runtime);
+}
+
+export function getDatabaseDriverRuntime(
+  client: Knex,
+): DatabaseDriverRuntime | undefined {
+  return runtimeByClient.get(client);
 }

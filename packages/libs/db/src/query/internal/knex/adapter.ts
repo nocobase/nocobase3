@@ -13,7 +13,10 @@ import {
 import type { Knex } from 'knex';
 
 import type { NamingStrategy } from '../../../naming/strategy.js';
-import type { DatabaseDriverRuntime } from '../../../database/runtime.js';
+import {
+  getDatabaseDriverRuntime,
+  type DatabaseDriverRuntime,
+} from '../../../database/runtime.js';
 import type {
   AggregateExpression,
   AliasedExpression,
@@ -496,7 +499,9 @@ class KnexSelectQuery<
       tableScope,
     });
 
-    if (client.client.config.client === 'oracledb') {
+    const configureAggregateResults =
+      getDatabaseDriverRuntime(client)?.query?.configureAggregateResults;
+    if (configureAggregateResults) {
       const aliases = new Set(
         this.state.selections.flatMap((item) => {
           if (item.type !== 'selection' || typeof item.selection === 'string')
@@ -510,13 +515,7 @@ class KnexSelectQuery<
             : [];
         }),
       );
-      const driver = client.client.driver;
-      query.options({
-        fetchTypeHandler: (column: { name: string; dbType: unknown }) =>
-          aliases.has(column.name) && column.dbType === driver.DB_TYPE_NUMBER
-            ? { type: driver.STRING }
-            : undefined,
-      });
+      configureAggregateResults({ query, aliases });
     }
     if (this.state.distinct) {
       query.distinct();
@@ -565,11 +564,15 @@ class KnexSelectQuery<
             },
             node.expression,
           );
-          if (
-            client.client.config.client === 'better-sqlite3' &&
-            ['sum', 'avg'].includes(node.expression.fn)
-          )
-            ordering = client.raw('nb_decimal_key(?)', [ordering]);
+          const wrapAggregateOrdering =
+            getDatabaseDriverRuntime(client)?.query?.wrapAggregateOrdering;
+          if (wrapAggregateOrdering && typeof ordering !== 'string') {
+            ordering = wrapAggregateOrdering({
+              client,
+              ordering,
+              functionName: node.expression.fn,
+            });
+          }
         }
       }
       const decimalSelection = selections.find(
@@ -1195,11 +1198,15 @@ class KnexSubqueryBuilder<
             },
             node.expression,
           );
-          if (
-            client.client.config.client === 'better-sqlite3' &&
-            ['sum', 'avg'].includes(node.expression.fn)
-          )
-            ordering = client.raw('nb_decimal_key(?)', [ordering]);
+          const wrapAggregateOrdering =
+            getDatabaseDriverRuntime(client)?.query?.wrapAggregateOrdering;
+          if (wrapAggregateOrdering && typeof ordering !== 'string') {
+            ordering = wrapAggregateOrdering({
+              client,
+              ordering,
+              functionName: node.expression.fn,
+            });
+          }
         }
       }
       query.orderBy(ordering, item.direction);
@@ -1837,13 +1844,15 @@ function applyBinaryExpression(
   const lhs = compileOperand(context, expression.lhs);
   const op = expression.op;
   const rhs = expression.rhs;
+  const decimalAggregateKey = getDatabaseDriverRuntime(context.client)?.query
+    ?.decimalAggregateKey;
   if (
-    context.client.client.config.client === 'better-sqlite3' &&
+    decimalAggregateKey &&
     (operandIsDecimalAggregate(expression.lhs, context) ||
       operandIsDecimalAggregate(rhs, context))
   ) {
     const key = (value: Knex.Raw) =>
-      context.client.raw('nb_decimal_key(?)', [value]);
+      decimalAggregateKey({ client: context.client, value });
     const left = key(typeof lhs === 'string' ? context.client.ref(lhs) : lhs);
     if (rhs.type === 'value') {
       const value = Array.isArray(rhs.value)
@@ -1917,15 +1926,24 @@ function applyBetweenExpression(
   let lhs = compileOperand(context, expression.expression);
   let start = expression.start;
   let end = expression.end;
+  const decimalAggregateKey = getDatabaseDriverRuntime(context.client)?.query
+    ?.decimalAggregateKey;
   if (
-    context.client.client.config.client === 'better-sqlite3' &&
+    decimalAggregateKey &&
     operandIsDecimalAggregate(expression.expression, context)
   ) {
-    lhs = context.client.raw('nb_decimal_key(?)', [
-      typeof lhs === 'string' ? context.client.ref(lhs) : lhs,
-    ]);
-    start = context.client.raw('nb_decimal_key(?)', [start] as any);
-    end = context.client.raw('nb_decimal_key(?)', [end] as any);
+    lhs = decimalAggregateKey({
+      client: context.client,
+      value: typeof lhs === 'string' ? context.client.ref(lhs) : lhs,
+    });
+    start = decimalAggregateKey({
+      client: context.client,
+      value: start as Knex.Raw,
+    });
+    end = decimalAggregateKey({
+      client: context.client,
+      value: end as Knex.Raw,
+    });
   }
   const method =
     context.clause === 'having'

@@ -4,6 +4,7 @@ import type { FieldDefinition } from '../collection/types.js';
 import { decodeIntegerValue } from '../repository/integer.js';
 import { RepositoryError } from '../repository/errors.js';
 import { decimalString, normalizeDecimal } from './decimal.js';
+import { getDatabaseDriverRuntime } from '../database/runtime.js';
 
 export type NumericAggregate = 'count' | 'sum' | 'avg' | 'min' | 'max';
 
@@ -14,34 +15,25 @@ export function aggregateSql(
   distinct = false,
   source?: FieldDefinition,
 ): Knex.Raw {
-  const dialect = client.client.config.client;
+  const strategy = getDatabaseDriverRuntime(client)?.numeric;
+  if (strategy?.aggregateSql) {
+    return strategy.aggregateSql({
+      client,
+      kind,
+      field,
+      distinct,
+      source,
+    });
+  }
   const operand = field === '*' ? client.raw('*') : client.ref(field);
   const prefix = distinct ? 'distinct ' : '';
-  if (kind === 'count')
-    return client.raw(
-      `${dialect === 'mssql' ? 'count_big' : 'count'}(${prefix}?)`,
-      [operand],
-    );
-  const floating = source && ['float', 'double'].includes(source.type);
-  if (
-    !floating &&
-    (kind === 'avg' || kind === 'sum') &&
-    dialect === 'better-sqlite3'
-  )
-    return client.raw(`nb_decimal_${kind}(${prefix}?)`, [operand]);
-  if (!floating && (kind === 'avg' || kind === 'sum') && dialect === 'mssql') {
-    // DECIMAL aggregates already widen to precision 38. Integral inputs need
-    // promotion before AVG (fractional results) and SUM (int64 overflow).
-    if (source?.type === 'decimal')
-      return client.raw(`${kind}(${prefix}?)`, [operand]);
-    return client.raw(`${kind}(${prefix}cast(? as decimal(38,0)))`, [operand]);
-  }
+  if (kind === 'count') return client.raw(`count(${prefix}?)`, [operand]);
   return client.raw(`${kind}(${prefix}?)`, [operand]);
 }
 
 /** Drivers that already transport BIGINT and DECIMAL as strings. */
 export function hasNativeNumericResults(client: Knex): boolean {
-  return ['pg', 'mysql2'].includes(client.client.config.client);
+  return getDatabaseDriverRuntime(client)?.numeric?.hasNativeResults ?? false;
 }
 
 /** Apply only at a result boundary; comparisons must retain numeric SQL types. */
@@ -50,20 +42,15 @@ export function aggregateProjection(
   expression: Knex.Raw,
   source?: FieldDefinition,
 ): Knex.Raw {
+  const strategy = getDatabaseDriverRuntime(client)?.numeric;
   if (
     hasNativeNumericResults(client) ||
     (source && ['float', 'double'].includes(source.type))
   )
     return expression;
-  const dialect = client.client.config.client;
-  if (dialect === 'oracledb')
-    return client.raw(`to_char(?, 'TM9', 'NLS_NUMERIC_CHARACTERS=''.,''')`, [
-      expression,
-    ]);
-  if (dialect === 'better-sqlite3')
-    return client.raw('nb_decimal_text(?)', [expression]);
-  if (dialect === 'mssql')
-    return client.raw('cast(? as varchar(max))', [expression]);
+  if (strategy?.aggregateProjection) {
+    return strategy.aggregateProjection({ client, expression, source });
+  }
   return client.raw('cast(? as text)', [expression]);
 }
 

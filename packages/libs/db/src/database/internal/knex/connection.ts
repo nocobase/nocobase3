@@ -28,6 +28,7 @@ import type {
 import type { SchemaInspector } from '../../../schema/inspector/types.js';
 import { resolveDatabaseCapabilities } from '../../capabilities.js';
 import {
+  attachDatabaseDriverRuntime,
   createDefaultDatabaseDriverRuntime,
   type DatabaseDriverRuntime,
 } from '../../runtime.js';
@@ -101,6 +102,9 @@ export class KnexDatabaseConnection implements DatabaseConnection {
       throw new Error(
         `Database driver runtime for dialect "${this.dialect}" resolved to "${this.runtime.dialect}".`,
       );
+    }
+    if (this.knexInstance) {
+      attachDatabaseDriverRuntime(this.knexInstance, this.runtime);
     }
     if (!dialectDriver?.createSchemaInspector) {
       throw new Error(
@@ -260,6 +264,7 @@ export class KnexDatabaseConnection implements DatabaseConnection {
   private getClient(): Knex {
     if (!this.knexInstance) {
       this.knexInstance = createKnexClient(this.config);
+      attachDatabaseDriverRuntime(this.knexInstance, this.runtime);
     }
     return this.knexInstance;
   }

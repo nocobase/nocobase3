@@ -27,6 +27,30 @@ export const oracleDriver: DatabaseDriverDefinition<'oracle'> = {
     nativeTypes: true,
     comments: true,
   } satisfies Partial<DatabaseCapabilities>,
+  createRuntime: ({ dialect, capabilities }) => ({
+    dialect,
+    capabilities,
+    numeric: {
+      aggregateProjection: ({ client, expression }) =>
+        client.raw(`to_char(?, 'TM9', 'NLS_NUMERIC_CHARACTERS=''.,''')`, [
+          expression,
+        ]),
+    },
+    query: {
+      configureAggregateResults: ({ query, aliases }) => {
+        const driver = Oracledb as {
+          DB_TYPE_NUMBER: unknown;
+          STRING: unknown;
+        };
+        query.options({
+          fetchTypeHandler: (column: { name: string; dbType: unknown }) =>
+            aliases.has(column.name) && column.dbType === driver.DB_TYPE_NUMBER
+              ? { type: driver.STRING }
+              : undefined,
+        });
+      },
+    },
+  }),
   createKnexClient: () =>
     // Oracle's integer codecs are installed by the shared Knex helper.
     preciseIntegerClient(Oracledb),

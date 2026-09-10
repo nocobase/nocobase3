@@ -27,6 +27,7 @@ export type {
   DatabaseDriverRuntime,
   DatabaseDriverRuntimeContext,
   DatabaseDriverRuntimeFactory,
+  DatabaseNumericRuntimeStrategy,
   DatabaseQueryRuntimeStrategy,
   DatabaseRepositoryRuntimeStrategy,
   DatabaseSchemaRuntimeStrategy,
