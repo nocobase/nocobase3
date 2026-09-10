@@ -186,7 +186,9 @@ If your application has no native modules — `pg`, `mysql2`, and `tedious` are 
 
 #### Packing the build
 
-`pnpm build --tar` writes `storage/dist.tar.gz` once the build finishes. Without the flag no archive is produced, which is what you want while you are only running the build locally.
+`pnpm build --tar` writes `storage/dist.tar.gz`, the artifact you upload to a Hub to deploy this application.
+
+The archive has two levels: `config.example.yml` and `dist/` sit at the root, and the build is inside `dist/`. What `dist/` holds varies with the application; this is the shape:
 
 ```text
 dist.tar.gz
@@ -199,10 +201,6 @@ dist.tar.gz
     ├── package.json
     └── pnpm-workspace.yaml
 ```
-
-`database/` joins them once your application owns migrations or seeds.
-
-`dist/` is inside the archive as a directory, so extracting it anywhere gives you a `dist/` next to `config.example.yml` rather than scattering `server/`, `client/`, and `node_modules/` across whatever directory you unpacked in. `config.example.yml` comes along because a server has to write a `config.yml` before it can start, and the example is the only statement of what may go in that file.
 
 Combine it with `--target` when the archive is for another machine:
 
