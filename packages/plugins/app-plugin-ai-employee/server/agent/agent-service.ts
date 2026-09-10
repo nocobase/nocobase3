@@ -1,3 +1,5 @@
+import { BaseCallbackHandler } from '@langchain/core/callbacks/base';
+import type { LLMResult } from '@langchain/core/outputs';
 import { concat } from '@langchain/core/utils/stream';
 import { Command } from '@langchain/langgraph';
 import { createAgent } from 'langchain';
@@ -105,6 +107,45 @@ const toInterruptActions = (interrupt: Interrupt): AgentInterruptAction[] => {
     }
   });
 };
+
+type ResponseMetadata = Record<string, unknown>;
+
+class ExecutionResponseMetadata {
+  private readonly metadata = new Map<string, ResponseMetadata>();
+  private disposed = false;
+
+  public collect(id: unknown, data: unknown): void {
+    if (this.disposed || !id || !data || typeof data !== 'object') return;
+    this.metadata.set(String(id), data as ResponseMetadata);
+  }
+
+  public take(id: string): ResponseMetadata | undefined {
+    const data = this.metadata.get(id);
+    this.metadata.delete(id);
+    return data;
+  }
+
+  public dispose(): void {
+    this.disposed = true;
+    this.metadata.clear();
+  }
+}
+
+class ResponseMetadataCollector extends BaseCallbackHandler {
+  public name = 'ResponseMetadataCollector';
+
+  public constructor(
+    private readonly provider: LLMProvider,
+    private readonly metadata: ExecutionResponseMetadata,
+  ) {
+    super();
+  }
+
+  public handleLLMEnd(output: LLMResult): void {
+    const [id, data] = this.provider.parseResponseMetadata(output);
+    this.metadata.collect(id, data);
+  }
+}
 
 export class AgentService {
   private activeController?: AbortController;
@@ -420,12 +461,18 @@ export class AgentService {
     try {
       llm = await this.resolveLLM(request);
       activeProvider = llm.provider;
+      const responseMetadata = new ExecutionResponseMetadata();
+      const responseMetadataCollector = new ResponseMetadataCollector(
+        llm.provider,
+        responseMetadata,
+      );
       prepared = await this.prepare(
         operation,
         { ...request, signal },
         llm,
         agentContext,
       );
+      prepared.config.callbacks = [responseMetadataCollector];
       const stream = await this.create(prepared).stream(
         prepared.input as any,
         {
