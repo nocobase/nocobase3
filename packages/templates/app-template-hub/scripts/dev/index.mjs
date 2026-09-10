@@ -176,13 +176,10 @@ const healthUrl = `${appServerUrl}/${[appBasePath, 'api/healthz']
   .filter(Boolean)
   .join('/')}`;
 const viteUrl = `${nextEnv.APP_VITE_DEV_URL}/${appBasePath ? `${appBasePath}/` : ''}`;
-const workflowBuild = spawn.sync('pnpm', ['nocobase', 'workflow', 'build'], {
-  cwd: rootDir,
-  env: nextEnv,
-  stdio: 'inherit',
-});
-if (workflowBuild.error) throw workflowBuild.error;
-if (workflowBuild.status !== 0) process.exit(workflowBuild.status ?? 1);
+// Workflows are not built here. In development the Workflow plugin compiles
+// `server/workflows` on demand and produces the same content-addressed digest
+// `nocobase workflow build` would, so an edited definition is picked up without
+// a build step and without restarting this process.
 const pluginWatchIncludes = resolvePluginWatchIncludes(rootDir);
 
 console.log(`\n  Starting app dev server...`);
