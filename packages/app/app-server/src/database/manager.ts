@@ -4,6 +4,11 @@ import {
   type ConnectionConfig,
   type DatabaseManager,
 } from '@nocobase/db';
+import postgres from '@nocobase/db-postgres';
+import mysql from '@nocobase/db-mysql';
+import sqlite from '@nocobase/db-sqlite';
+import oracle from '@nocobase/db-oracle';
+import mssql from '@nocobase/db-mssql';
 
 import type { ConfigPaths } from '../config/index.js';
 import type { AppDatabaseConfig } from './types.js';
@@ -19,6 +24,7 @@ export function createAppDatabaseManager(
   return createDatabaseManager(
     defineDatabase({
       default: config.default,
+      drivers: { postgres, mysql, sqlite, oracle, mssql },
       connections: resolveConnections(config.connections, paths),
       metadataStore: config.metadataStore,
     }),
