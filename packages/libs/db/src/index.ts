@@ -103,6 +103,37 @@ export type { CollectionMetadataStore } from './metadata/document-store.js';
 
 export type { DatabaseCapabilities } from './schema/adapter.js';
 export type { SchemaInspector } from './schema/inspector/types.js';
+export { BaseSchemaInspector } from './schema/inspector/base.js';
+export type { NormalizedPhysicalCollectionListOptions } from './schema/inspector/base.js';
+export {
+  numberValue,
+  optionalString,
+  rawRows,
+} from './schema/inspector/shared/result.js';
+export {
+  normalizePhysicalDataType,
+  normalizeReferentialAction,
+  parseColumnDefault,
+  temporalFractionalSecondsPrecision,
+} from './schema/inspector/shared/type-normalization.js';
+export {
+  numericCapabilities,
+  sqliteAffinity,
+} from './schema/inspector/shared/column-capabilities.js';
+export type { DecodedPhysicalCollectionCursor } from './schema/inspector/shared/cursor.js';
+export type {
+  PhysicalCheckConstraintSchema,
+  PhysicalCollectionIdentifier,
+  PhysicalCollectionKind,
+  PhysicalCollectionSchema,
+  PhysicalCollectionSummary,
+  PhysicalForeignKeySchema,
+  PhysicalIndexKey,
+  PhysicalIndexSchema,
+  PhysicalSchemaInfo,
+  PhysicalUniqueConstraintSchema,
+  SchemaInspectionWarning,
+} from './schema/inspector/types.js';
 export { PostgresSchemaInspector } from './schema/internal/knex/inspectors/postgres.js';
 export { MysqlSchemaInspector } from './schema/internal/knex/inspectors/mysql.js';
 export { SqliteSchemaInspector } from './schema/internal/knex/inspectors/sqlite.js';

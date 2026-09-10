@@ -3,7 +3,7 @@ import type {
   DatabaseDriverDefinition,
   PostgresConnectionConfig,
 } from '@nocobase/db';
-import { PostgresSchemaInspector } from '@nocobase/db';
+import { PostgresSchemaInspector } from './inspectors/postgres.js';
 
 export type PostgresOptions = Omit<
   PostgresConnectionConfig,

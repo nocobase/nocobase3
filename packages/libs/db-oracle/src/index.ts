@@ -3,7 +3,8 @@ import type {
   DatabaseDriverDefinition,
   OracleConnectionConfig,
 } from '@nocobase/db';
-import { OracleSchemaInspector, preciseIntegerClient } from '@nocobase/db';
+import { preciseIntegerClient } from '@nocobase/db';
+import { OracleSchemaInspector } from './inspectors/oracle.js';
 export type OracleOptions = Omit<
   OracleConnectionConfig,
   'dialect' | 'driver' | 'databaseDriver'

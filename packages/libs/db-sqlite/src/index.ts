@@ -3,11 +3,8 @@ import type {
   DatabaseDriverDefinition,
   SqliteConnectionConfig,
 } from '@nocobase/db';
-import {
-  installDecimalAggregates,
-  preciseIntegerClient,
-  SqliteSchemaInspector,
-} from '@nocobase/db';
+import { installDecimalAggregates, preciseIntegerClient } from '@nocobase/db';
+import { SqliteSchemaInspector } from './inspectors/sqlite.js';
 export type SqliteOptions = Omit<
   SqliteConnectionConfig,
   'dialect' | 'driver' | 'databaseDriver'

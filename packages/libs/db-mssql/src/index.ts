@@ -3,7 +3,7 @@ import type {
   DatabaseDriverDefinition,
   MssqlConnectionConfig,
 } from '@nocobase/db';
-import { MssqlSchemaInspector } from '@nocobase/db';
+import { MssqlSchemaInspector } from './inspectors/mssql.js';
 export type MssqlOptions = Omit<
   MssqlConnectionConfig,
   'dialect' | 'driver' | 'databaseDriver'

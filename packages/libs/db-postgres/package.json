@@ -44,6 +44,7 @@
     "@nocobase/dev-config": "workspace:*",
     "@types/node": "catalog:",
     "eslint": "catalog:",
+    "knex": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

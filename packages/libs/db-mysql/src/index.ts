@@ -3,7 +3,7 @@ import type {
   DatabaseDriverDefinition,
   MysqlConnectionConfig,
 } from '@nocobase/db';
-import { MysqlSchemaInspector } from '@nocobase/db';
+import { MysqlSchemaInspector } from './inspectors/mysql.js';
 export type MysqlOptions = Omit<
   MysqlConnectionConfig,
   'dialect' | 'driver' | 'databaseDriver'
