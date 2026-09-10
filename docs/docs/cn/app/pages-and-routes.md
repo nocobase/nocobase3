@@ -6,18 +6,17 @@ keywords: 'NocoBase,页面,路由,菜单,导航,访问控制,设置页'
 
 # 页面和菜单
 
-加一个页面分三步：加一条路由声明作为菜单入口，给这条声明接上页面组件，再写页面内容。菜单和页面写在同一处，也就是 `client/routes.ts`。下面用「订单」页面走一遍。
+下面讲解一下，如何添加一个页面。
 
-## 添加一个页面菜单
+## 添加一个菜单
 
-在 `client/routes.ts` 里加一条路由，其中 `navigation` 描述的就是侧边栏菜单项：
+首先，需要在 `client/routes.ts` 里加一条路由，通过 `navigation` 配置菜单的名称和图标：
 
 ```ts
 // client/routes.ts
 import { Package } from 'lucide-react';
 import {
   defineAppRoutes,
-  defineSettingsRoutes,
   type AppClientRouteContribution,
 } from '@nocobase/app-client/plugins';
 
@@ -25,38 +24,17 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
   {
     name: 'orders',
     path: '/orders',
-    navigation: { title: 'navigation.orders', icon: Package },
+    navigation: { title: 'Orders', icon: Package },
     componentLoader: () => import('./pages/orders.js'),
   },
 ]);
 
-const settingsRoutes: AppClientRouteContribution = defineSettingsRoutes([]);
-
-const routes: readonly AppClientRouteContribution[] = [
-  appRoutes,
-  settingsRoutes,
-];
+const routes: readonly AppClientRouteContribution[] = [appRoutes];
 
 export default routes;
 ```
 
-`title` 是翻译 key，不是写死的中文。文案先加到 `client/locales/en-US.ts`，它定义了翻译文件的结构，再在 `client/locales/zh-CN.ts` 里给译文：
-
-```ts
-// client/locales/en-US.ts（节选）
-navigation: {
-  orders: 'Orders',
-},
-```
-
-```ts
-// client/locales/zh-CN.ts（节选）
-navigation: {
-  orders: '订单',
-},
-```
-
-`icon` 是接受 `className` 的组件，`lucide-react` 的图标可以直接用。菜单顺序就是数组顺序。
+`title` 是菜单的名称，`icon` 是菜单图标，值是一个 React 组件。图标可以用 [lucide-react](https://lucide.dev/) 提供的组件，也可以自己写一个 React 组件。
 
 <!-- 需要一张侧边栏中出现「订单」菜单项的截图 -->
 
@@ -69,12 +47,12 @@ navigation: {
 defineAppRoutes([
   {
     name: 'business',
-    navigation: { title: 'navigation.business' },
+    navigation: { title: 'Business' },
     children: [
       {
         name: 'orders',
         path: '/orders',
-        navigation: { title: 'navigation.orders', icon: Package },
+        navigation: { title: 'Orders', icon: Package },
         componentLoader: () => import('./pages/orders.js'),
       },
     ],
@@ -83,8 +61,6 @@ defineAppRoutes([
 ```
 
 分组也可以带 `path`，作为子页面的路径前缀。页面同样可以有 `children`，用来放 Tab 或子页面，这时要在父页面里自己放一个 `<Outlet />`。
-
-带参数的页面和通配符页面不能作为菜单目标，不要给它们写 `navigation`。用 URL 打开这类页面时，侧边栏会选中它最近的可见菜单项。
 
 ## 添加页面，并跟菜单关联
 
