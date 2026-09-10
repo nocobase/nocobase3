@@ -20,6 +20,8 @@ export const mysqlDriver: DatabaseDriverDefinition<'mysql'> = {
   packageName: '@nocobase/db-mysql',
   nativeDriver: 'mysql2',
   knexClient: 'mysql2',
+  resolveKnexClient: () =>
+    require('knex/lib/dialects/mysql2/index.js') as typeof import('knex').Knex.Client,
   capabilities: {
     comments: true,
     nativeTypes: true,
@@ -206,3 +208,5 @@ function compactObject(
     Object.entries(input).filter(([, value]) => value !== undefined),
   );
 }
+
+export { mysqlTypes, mysqlNumeric } from './inspectors/mysql.js';

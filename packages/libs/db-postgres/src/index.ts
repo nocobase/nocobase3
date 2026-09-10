@@ -23,6 +23,8 @@ export const postgresDriver: DatabaseDriverDefinition<'postgres'> = {
   packageName: '@nocobase/db-postgres',
   nativeDriver: 'pg',
   knexClient: 'pg',
+  resolveKnexClient: () =>
+    require('knex/lib/dialects/postgres/index.js') as typeof import('knex').Knex.Client,
   capabilities: {
     schemas: true,
     materializedViews: true,
@@ -217,3 +219,5 @@ function compactObject(
     Object.entries(input).filter(([, value]) => value !== undefined),
   );
 }
+
+export { postgresTypes, postgresNumeric } from './inspectors/postgres.js';

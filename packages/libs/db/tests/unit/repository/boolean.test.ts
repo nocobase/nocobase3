@@ -2,26 +2,20 @@ import { describe, expect, it } from 'vitest';
 import {
   booleanStorageValue,
   decodeBooleanValue,
+  nativeBooleanCodec,
   normalizeBooleanValue,
+  numericBooleanCodec,
   resolveBooleanStorageCodec,
 } from '../../../src/repository/boolean.js';
 
 const field = { name: 'enabled', type: 'boolean' };
 
 describe('Boolean value contract', () => {
-  it('reuses stateless codecs and resolves Oracle from its physical type', () => {
-    const numeric = resolveBooleanStorageCodec('mysql2', field);
-    const native = resolveBooleanStorageCodec('pg', field);
-    expect(resolveBooleanStorageCodec('better-sqlite3', field)).toBe(numeric);
-    expect(resolveBooleanStorageCodec('oracledb', field)).toBe(numeric);
-    expect(
-      resolveBooleanStorageCodec('oracledb', {
-        ...field,
-        db: { nativeType: 'BOOLEAN' },
-      }),
-    ).toBe(native);
-    expect(numeric.encode(true)).toBe(1);
-    expect(native.encode(true)).toBe(true);
+  it('reuses stateless codecs', () => {
+    const numeric = resolveBooleanStorageCodec('numeric', field);
+    const native = resolveBooleanStorageCodec('native', field);
+    expect(numeric).toBe(numericBooleanCodec);
+    expect(native).toBe(nativeBooleanCodec);
     for (const codec of [numeric, native]) {
       expect(Object.isFrozen(codec)).toBe(true);
       expect(codec.encode(null)).toBeNull();
@@ -30,10 +24,7 @@ describe('Boolean value contract', () => {
         expect.objectContaining({ code: 'INVALID_STORED_VALUE' }),
       );
     }
-    // A changed physical definition is resolved afresh, without stale column caching.
-    expect(resolveBooleanStorageCodec('oracledb', field)).toBe(numeric);
   });
-
   it.each([true, false, null])('accepts public value %s', (value) => {
     expect(normalizeBooleanValue(field, value)).toBe(value);
   });
@@ -77,20 +68,14 @@ describe('Boolean value contract', () => {
       ).toThrow();
     }
   });
-  it.each([
-    'pg',
-    'postgres',
-    'postgresql',
-    'mssql',
-    'mysql',
-    'mysql2',
-    'better-sqlite3',
-    'oracledb',
-  ])('binds %s without public input coercion', (engine) => {
-    const native = ['pg', 'postgres', 'postgresql', 'mssql'].includes(engine);
-    expect(booleanStorageValue(engine, field, true)).toBe(native ? true : 1);
-    expect(booleanStorageValue(engine, field, false)).toBe(native ? false : 0);
-    expect(booleanStorageValue(engine, field, null)).toBeNull();
-    expect(() => booleanStorageValue(engine, field, 1)).toThrow();
-  });
+  it.each(['native', 'numeric'] as const)(
+    'binds %s without public input coercion',
+    (kind) => {
+      const native = kind === 'native';
+      expect(booleanStorageValue(kind, field, true)).toBe(native ? true : 1);
+      expect(booleanStorageValue(kind, field, false)).toBe(native ? false : 0);
+      expect(booleanStorageValue(kind, field, null)).toBeNull();
+      expect(() => booleanStorageValue(kind, field, 1)).toThrow();
+    },
+  );
 });

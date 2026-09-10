@@ -8,6 +8,7 @@ export { defineDatabase } from './database/config.js';
 export { SchemaManagementNotAllowedError } from './database/schema-management.js';
 export type {
   ConnectionConfig,
+  GenericConnectionConfig,
   DatabaseConfig,
   DatabaseDialect,
   DatabaseDriverDefinition,
@@ -125,6 +126,8 @@ export {
   parseColumnDefault,
   temporalFractionalSecondsPrecision,
 } from './schema/inspector/shared/type-normalization.js';
+export type { PhysicalTypeNormalizationStrategy } from './schema/inspector/shared/type-normalization.js';
+export type { NumericCapabilityStrategy } from './schema/inspector/shared/column-capabilities.js';
 export {
   numericCapabilities,
   sqliteAffinity,

@@ -24,6 +24,8 @@ export interface DatabaseDriverDefinition<TDialect extends string = string> {
   /** Native driver package name owned by the dialect package. */
   readonly nativeDriver?: string;
   readonly knexClient?: string;
+  /** Resolves the base Knex dialect class without core dialect knowledge. */
+  readonly resolveKnexClient?: () => typeof Knex.Client;
   /** Capabilities supplied by the dialect package for this connection. */
   readonly capabilities?: Partial<DatabaseCapabilities>;
   /** Creates the runtime strategy object used by the core adapters. */
@@ -68,8 +70,7 @@ export interface DatabaseDriverFactory<
 export type DatabaseDriverRegistration<TDialect extends string = string> =
   DatabaseDriverDefinition<TDialect> | DatabaseDriverFactory<TDialect>;
 
-export type DatabaseDialect =
-  'sqlite' | 'postgres' | 'mysql' | 'oracle' | 'mssql';
+export type DatabaseDialect = string;
 
 export type SchemaManagementMode = 'managed' | 'external';
 
@@ -129,12 +130,20 @@ export type MssqlConnectionConfig = BaseConnectionConfig & {
   trustServerCertificate?: boolean;
 };
 
+/** Extensible connection shape for dialect packages outside the core workspace. */
+export interface GenericConnectionConfig extends BaseConnectionConfig {
+  dialect: string;
+  driver?: string;
+  [key: string]: unknown;
+}
+
 export type ConnectionConfig =
   | SqliteConnectionConfig
   | PostgresConnectionConfig
   | MysqlConnectionConfig
   | OracleConnectionConfig
-  | MssqlConnectionConfig;
+  | MssqlConnectionConfig
+  | GenericConnectionConfig;
 
 /** Native driver identifier supplied by a dialect package. */
 export type DatabaseDriver = string;

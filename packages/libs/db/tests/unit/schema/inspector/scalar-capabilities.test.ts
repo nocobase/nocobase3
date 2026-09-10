@@ -1,3 +1,8 @@
+import { postgresTypes, postgresNumeric } from '@nocobase/db-postgres';
+import { mysqlTypes, mysqlNumeric } from '@nocobase/db-mysql';
+import { sqliteTypes } from '@nocobase/db-sqlite';
+import { oracleTypes, oracleNumeric } from '@nocobase/db-oracle';
+import { mssqlTypes, mssqlNumeric } from '@nocobase/db-mssql';
 import { describe, expect, it } from 'vitest';
 import {
   numericCapabilities,
@@ -30,7 +35,14 @@ describe('Physical scalar capabilities', () => {
     ['sqlite', 'BOOLEAN', 'boolean'],
     ['postgres', 'varchar_custom', 'native'],
   ] as const)('%s %s is %s', (dialect, nativeType, expected) => {
-    expect(normalizePhysicalDataType(dialect, nativeType)).toBe(expected);
+    const strategy = {
+      postgres: postgresTypes,
+      mysql: mysqlTypes,
+      sqlite: sqliteTypes,
+      oracle: oracleTypes,
+      mssql: mssqlTypes,
+    }[dialect];
+    expect(normalizePhysicalDataType(strategy, nativeType)).toBe(expected);
   });
   it.each([
     ['postgres', 'int2', { integerBits: 16, unsigned: false }],
@@ -46,7 +58,14 @@ describe('Physical scalar capabilities', () => {
   ] as const)(
     'reports %s %s capacity without guessing logical types',
     (dialect, nativeType, expected) => {
-      expect(numericCapabilities(dialect, nativeType)).toEqual(expected);
+      const strategy = {
+        postgres: postgresNumeric,
+        mysql: mysqlNumeric,
+        sqlite: { ignore: () => true },
+        oracle: oracleNumeric,
+        mssql: mssqlNumeric,
+      }[dialect];
+      expect(numericCapabilities(strategy, nativeType)).toEqual(expected);
     },
   );
   it.each([

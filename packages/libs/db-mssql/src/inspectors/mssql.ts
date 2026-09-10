@@ -24,6 +24,57 @@ import type {
   PhysicalUniqueConstraintSchema,
 } from '@nocobase/db';
 
+export const mssqlTypes = {
+  temporal: (type: string) =>
+    type === 'date'
+      ? 'date'
+      : type === 'datetimeoffset'
+        ? 'datetimeTz'
+        : type === 'datetime' ||
+            type === 'datetime2' ||
+            type === 'smalldatetime'
+          ? 'datetime'
+          : type === 'time'
+            ? 'time'
+            : undefined,
+  special: (type: string, base: string) =>
+    /^(n?varchar)\(max\)$/.test(type) || base === 'ntext'
+      ? 'text'
+      : base === 'bit'
+        ? 'boolean'
+        : base === 'uniqueidentifier'
+          ? 'uuid'
+          : base === 'timestamp' || base === 'rowversion' || base === 'image'
+            ? 'blob'
+            : base === 'money' || base === 'smallmoney'
+              ? 'decimal'
+              : base === 'float'
+                ? Number(type.match(/\((\d+)\)/)?.[1] ?? 53) <= 24
+                  ? 'float'
+                  : 'double'
+                : undefined,
+  temporalPrecision: (type: string, temporal: string | undefined) =>
+    temporal
+      ? type === 'smalldatetime'
+        ? 0
+        : type === 'datetime'
+          ? undefined
+          : type.match(/\((\d+)\)/)?.[1]
+            ? Number(type.match(/\((\d+)\)/)![1])
+            : 7
+      : undefined,
+};
+export const mssqlNumeric = {
+  unsigned: (_type: string, base: string) => base === 'tinyint',
+  special: (type: string, base: string) =>
+    base === 'float'
+      ? {
+          binaryPrecision:
+            Number(type.match(/\((\d+)\)/)?.[1] ?? 53) <= 24 ? 24 : 53,
+        }
+      : undefined,
+};
+
 interface MssqlCollectionRow {
   readonly object_id: number;
   readonly schema_name: string;
@@ -115,6 +166,14 @@ export class MssqlSchemaInspector extends BaseSchemaInspector {
     super(options.connectionName, 'mssql');
   }
 
+  protected override isRetryableError(error: unknown): boolean {
+    return (
+      Boolean(error) &&
+      typeof error === 'object' &&
+      Number((error as Record<string, unknown>).number) === 1205
+    );
+  }
+
   protected override async canRetryDeadlock(): Promise<boolean> {
     // SQL Server rolls back a deadlock victim's entire transaction. Retrying
     // only inspection could silently lose earlier DDL and report missing tables.
@@ -170,9 +229,9 @@ export class MssqlSchemaInspector extends BaseSchemaInspector {
         return {
           columnName: column.column_name,
           ordinalPosition: Number(column.column_id),
-          dataType: normalizePhysicalDataType('mssql', nativeType),
+          dataType: normalizePhysicalDataType(mssqlTypes, nativeType),
           nativeType,
-          ...numericCapabilities('mssql', nativeType),
+          ...numericCapabilities(mssqlNumeric, nativeType),
           lengthUnit:
             mssqlColumnLength(column) === undefined
               ? undefined
@@ -196,7 +255,7 @@ export class MssqlSchemaInspector extends BaseSchemaInspector {
           precision: mssqlPrecision(column),
           scale: mssqlScale(column),
           fractionalSecondsPrecision: temporalFractionalSecondsPrecision(
-            'mssql',
+            mssqlTypes,
             nativeType,
           ),
           comment: optionalString(column.comments),

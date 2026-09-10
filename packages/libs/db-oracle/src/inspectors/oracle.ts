@@ -26,6 +26,38 @@ import type {
   SchemaInspectionWarning,
 } from '@nocobase/db';
 
+export const oracleTypes = {
+  temporal: (type: string) =>
+    type === 'date'
+      ? 'datetime'
+      : type === 'timestamp with time zone' ||
+          type === 'timestamp with local time zone'
+        ? 'datetimeTz'
+        : type === 'timestamp'
+          ? 'datetime'
+          : undefined,
+  special: (_type: string, base: string) =>
+    base === 'float' ? 'decimal' : undefined,
+  temporalPrecision: (type: string, temporal: string | undefined) =>
+    temporal
+      ? type === 'date'
+        ? 0
+        : type.match(/\((\d+)\)/)?.[1]
+          ? Number(type.match(/\((\d+)\)/)![1])
+          : 6
+      : undefined,
+};
+export const oracleNumeric = {
+  special: (_type: string, base: string) =>
+    base === 'binary_float'
+      ? { binaryPrecision: 24 }
+      : base === 'binary_double'
+        ? { binaryPrecision: 53 }
+        : base === 'float'
+          ? { binaryPrecision: 126 }
+          : undefined,
+};
+
 interface OracleCollectionRow {
   readonly schema_name: string;
   readonly table_name: string;
@@ -220,9 +252,9 @@ export class OracleSchemaInspector extends BaseSchemaInspector {
         return {
           columnName: column.column_name,
           ordinalPosition: Number(column.column_id),
-          dataType: normalizePhysicalDataType('oracle', column.data_type),
+          dataType: normalizePhysicalDataType(oracleTypes, column.data_type),
           nativeType,
-          ...numericCapabilities('oracle', nativeType),
+          ...numericCapabilities(oracleNumeric, nativeType),
           lengthUnit:
             column.char_used === 'B'
               ? ('bytes' as const)
@@ -243,17 +275,17 @@ export class OracleSchemaInspector extends BaseSchemaInspector {
           length: oracleColumnLength(column),
           precision:
             column.data_type.toUpperCase() !== 'FLOAT' &&
-            temporalFractionalSecondsPrecision('oracle', nativeType) ===
+            temporalFractionalSecondsPrecision(oracleTypes, nativeType) ===
               undefined
               ? precision
               : undefined,
           scale:
-            temporalFractionalSecondsPrecision('oracle', nativeType) ===
+            temporalFractionalSecondsPrecision(oracleTypes, nativeType) ===
             undefined
               ? scale
               : undefined,
           fractionalSecondsPrecision: temporalFractionalSecondsPrecision(
-            'oracle',
+            oracleTypes,
             nativeType,
           ),
           comment: optionalString(column.comments),

@@ -25,6 +25,32 @@ import type {
   SchemaInspectionWarning,
 } from '@nocobase/db';
 
+export const mysqlTypes = {
+  special: (_type: string, base: string) =>
+    base === 'float' ? 'float' : undefined,
+  temporal: (type: string) =>
+    type === 'timestamp'
+      ? 'datetimeTz'
+      : type === 'datetime'
+        ? 'datetime'
+        : type === 'time'
+          ? 'time'
+          : type === 'date'
+            ? 'date'
+            : undefined,
+  temporalPrecision: (type: string, temporal: string | undefined) =>
+    temporal
+      ? type.match(/\((\d+)\)/)?.[1]
+        ? Number(type.match(/\((\d+)\)/)![1])
+        : 0
+      : undefined,
+};
+export const mysqlNumeric = {
+  unsigned: (type: string) => /\bunsigned\b/.test(type),
+  special: (type: string, base: string) =>
+    base === 'float' ? { binaryPrecision: 24 } : undefined,
+};
+
 interface MysqlCollectionRow {
   readonly table_schema: string;
   readonly table_name: string;
@@ -213,9 +239,9 @@ export class MysqlSchemaInspector extends BaseSchemaInspector {
         return {
           columnName: column.column_name,
           ordinalPosition: Number(column.ordinal_position),
-          dataType: normalizePhysicalDataType('mysql', column.data_type),
+          dataType: normalizePhysicalDataType(mysqlTypes, column.data_type),
           nativeType: column.column_type,
-          ...numericCapabilities('mysql', column.column_type),
+          ...numericCapabilities(mysqlNumeric, column.column_type),
           lengthUnit: column.character_set_name
             ? ('characters' as const)
             : undefined,
@@ -232,7 +258,7 @@ export class MysqlSchemaInspector extends BaseSchemaInspector {
           precision: numberValue(column.numeric_precision),
           scale: numberValue(column.numeric_scale),
           fractionalSecondsPrecision: temporalFractionalSecondsPrecision(
-            'mysql',
+            mysqlTypes,
             column.column_type,
           ),
           comment: optionalString(column.column_comment),

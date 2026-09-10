@@ -43,8 +43,7 @@ function numbers(name: string, fallback: string, allowZero = false): number[] {
   return result;
 }
 const requested = options.get('databases') ?? 'all';
-const selected =
-  requested === 'all' ? dialects : (requested.split(',') as DatabaseDialect[]);
+const selected = requested === 'all' ? dialects : requested.split(',');
 if (selected.some((d) => !dialects.includes(d)))
   throw new Error('Unsupported database; use --help.');
 const drivers = { postgres, mysql, sqlite, oracle, mssql };

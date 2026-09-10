@@ -23,6 +23,25 @@ import type {
   SchemaInspectionWarning,
 } from '@nocobase/db';
 
+export const sqliteTypes = {
+  special: (_type: string, base: string) =>
+    base === 'float' ? 'float' : undefined,
+  temporal: (type: string) =>
+    type === 'date'
+      ? 'date'
+      : type === 'time'
+        ? 'time'
+        : type === 'datetime' || type === 'timestamp'
+          ? 'datetime'
+          : undefined,
+  temporalPrecision: (type: string, temporal: string | undefined) =>
+    temporal
+      ? type.match(/\((\d+)\)/)?.[1]
+        ? Number(type.match(/\((\d+)\)/)![1])
+        : undefined
+      : undefined,
+};
+
 interface SqliteSchemaRow {
   readonly name: string;
   readonly type: 'table' | 'view' | 'index';
@@ -154,21 +173,21 @@ export class SqliteSchemaInspector extends BaseSchemaInspector {
           return {
             columnName: column.name,
             ordinalPosition: column.cid + 1,
-            dataType: normalizePhysicalDataType('sqlite', column.type),
+            dataType: normalizePhysicalDataType(sqliteTypes, column.type),
             nativeType: column.type,
             affinity: sqliteAffinity(column.type),
             nullable: column.notnull === 0 && column.pk === 0,
             default: parseColumnDefault(column.dflt_value),
             autoIncrement: column.name === autoIncrementColumn,
             length:
-              temporalFractionalSecondsPrecision('sqlite', column.type) ===
+              temporalFractionalSecondsPrecision(sqliteTypes, column.type) ===
               undefined
                 ? modifiers.length
                 : undefined,
             precision: modifiers.precision,
             scale: modifiers.scale,
             fractionalSecondsPrecision: temporalFractionalSecondsPrecision(
-              'sqlite',
+              sqliteTypes,
               column.type,
             ),
             generated:

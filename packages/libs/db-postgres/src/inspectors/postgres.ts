@@ -25,6 +25,37 @@ import type {
   PhysicalUniqueConstraintSchema,
 } from '@nocobase/db';
 
+export const postgresTypes = {
+  temporal: (type: string) =>
+    type === 'timestamptz' || type === 'timestamp with time zone'
+      ? 'datetimeTz'
+      : type === 'timestamp' || type === 'timestamp without time zone'
+        ? 'datetime'
+        : type === 'time' || type === 'time without time zone'
+          ? 'time'
+          : type === 'date'
+            ? 'date'
+            : undefined,
+  special: (type: string, base: string) =>
+    base === 'bpchar'
+      ? 'char'
+      : type === 'char' || type === '"char"'
+        ? 'native'
+        : undefined,
+  temporalPrecision: (type: string, temporal: string | undefined) => {
+    const explicit = type.match(/\((\d+)\)/)?.[1];
+    if (/^(timetz|time(?:\(\d+\))? with time zone)$/.test(type))
+      return explicit ? Number(explicit) : 6;
+    return temporal ? (explicit ? Number(explicit) : 6) : undefined;
+  },
+};
+export const postgresNumeric = {
+  special: (type: string, base: string) =>
+    base === 'float'
+      ? { binaryPrecision: Number(type.match(/\((\d+)\)/)?.[1] ?? 126) }
+      : undefined,
+};
+
 interface PostgresCollectionRow {
   readonly oid: string | number;
   readonly schema: string;
@@ -176,12 +207,12 @@ export class PostgresSchemaInspector extends BaseSchemaInspector {
           columnName: column.column_name,
           ordinalPosition: column.attnum,
           dataType: normalizePhysicalDataType(
-            'postgres',
+            postgresTypes,
             column.native_type_name,
           ),
           nativeType: column.native_type,
           nativeTypeSchema: column.native_type_schema,
-          ...numericCapabilities('postgres', column.native_type_name),
+          ...numericCapabilities(postgresNumeric, column.native_type_name),
           lengthUnit:
             modifiers.length !== undefined &&
             ['bpchar', 'varchar'].includes(column.native_type_name)
@@ -199,7 +230,7 @@ export class PostgresSchemaInspector extends BaseSchemaInspector {
           precision: modifiers.precision,
           scale: modifiers.scale,
           fractionalSecondsPrecision: temporalFractionalSecondsPrecision(
-            'postgres',
+            postgresTypes,
             column.native_type,
           ),
           comment: optionalString(column.comment),
@@ -646,7 +677,9 @@ function parseTypeModifiers(nativeType: string): {
   scale?: number;
 } {
   const match = nativeType.match(/\((\d+)(?:,(\d+))?\)/);
-  if (temporalFractionalSecondsPrecision('postgres', nativeType) !== undefined)
+  if (
+    temporalFractionalSecondsPrecision(postgresTypes, nativeType) !== undefined
+  )
     return {};
   if (!match) {
     return {};

@@ -21,6 +21,8 @@ export const sqliteDriver: DatabaseDriverDefinition<'sqlite'> = {
   packageName: '@nocobase/db-sqlite',
   nativeDriver: 'better-sqlite3',
   knexClient: 'better-sqlite3',
+  resolveKnexClient: () =>
+    require('knex/lib/dialects/better-sqlite3/index.js') as typeof import('knex').Knex.Client,
   capabilities: {
     partialIndexes: true,
   } satisfies Partial<DatabaseCapabilities>,
@@ -203,3 +205,5 @@ function compactObject(
     Object.entries(input).filter(([, value]) => value !== undefined),
   );
 }
+
+export { sqliteTypes } from './inspectors/sqlite.js';

@@ -19,6 +19,8 @@ export const oracleDriver: DatabaseDriverDefinition<'oracle'> = {
   packageName: '@nocobase/db-oracle',
   nativeDriver: 'oracledb',
   knexClient: 'oracledb',
+  resolveKnexClient: () =>
+    require('knex/lib/dialects/oracledb/index.js') as typeof import('knex').Knex.Client,
   capabilities: {
     schemas: true,
     materializedViews: true,
@@ -341,3 +343,5 @@ function compactObject(
     Object.entries(input).filter(([, value]) => value !== undefined),
   );
 }
+
+export { oracleTypes, oracleNumeric } from './inspectors/oracle.js';

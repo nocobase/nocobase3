@@ -19,6 +19,8 @@ export const mssqlDriver: DatabaseDriverDefinition<'mssql'> = {
   packageName: '@nocobase/db-mssql',
   nativeDriver: 'tedious',
   knexClient: 'mssql',
+  resolveKnexClient: () =>
+    require('knex/lib/dialects/mssql/index.js') as typeof import('knex').Knex.Client,
   capabilities: {
     schemas: true,
     partialIndexes: true,
@@ -315,3 +317,5 @@ function mssqlLiteral(value: unknown): string {
     `MSSQL filtered index predicate value must be a scalar, received ${typeof value}.`,
   );
 }
+
+export { mssqlTypes, mssqlNumeric } from './inspectors/mssql.js';

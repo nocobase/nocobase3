@@ -1,3 +1,15 @@
+import { postgresTypes } from '@nocobase/db-postgres';
+import { mysqlTypes } from '@nocobase/db-mysql';
+import { sqliteTypes } from '@nocobase/db-sqlite';
+import { oracleTypes } from '@nocobase/db-oracle';
+import { mssqlTypes } from '@nocobase/db-mssql';
+const typeStrategies = {
+  postgres: postgresTypes,
+  mysql: mysqlTypes,
+  sqlite: sqliteTypes,
+  oracle: oracleTypes,
+  mssql: mssqlTypes,
+} as const;
 import { describe, expect, it, vi } from 'vitest';
 import knex from 'knex';
 import { BaseSchemaInspector } from '../../../../src/schema/inspector/base.js';
@@ -317,27 +329,54 @@ describe('BaseSchemaInspector error normalization', () => {
 
 describe('SchemaInspector type normalization', () => {
   it('normalizes portable types without guessing unknown native types', () => {
-    expect(normalizePhysicalDataType('mysql', 'bigint unsigned')).toBe(
-      'bigInt',
-    );
-    expect(normalizePhysicalDataType('mysql', 'tinyint(1)')).toBe('integer');
-    expect(normalizePhysicalDataType('postgres', 'jsonb')).toBe('json');
-    expect(normalizePhysicalDataType('postgres', 'timestamptz')).toBe(
-      'datetimeTz',
+    expect(
+      normalizePhysicalDataType(typeStrategies['mysql'], 'bigint unsigned'),
+    ).toBe('bigInt');
+    expect(
+      normalizePhysicalDataType(typeStrategies['mysql'], 'tinyint(1)'),
+    ).toBe('integer');
+    expect(normalizePhysicalDataType(typeStrategies['postgres'], 'jsonb')).toBe(
+      'json',
     );
     expect(
-      normalizePhysicalDataType('postgres', 'time without time zone'),
+      normalizePhysicalDataType(typeStrategies['postgres'], 'timestamptz'),
+    ).toBe('datetimeTz');
+    expect(
+      normalizePhysicalDataType(
+        typeStrategies['postgres'],
+        'time without time zone',
+      ),
     ).toBe('time');
-    expect(normalizePhysicalDataType('postgres', 'inet')).toBe('native');
-    expect(normalizePhysicalDataType('sqlite', '')).toBe('native');
-    expect(normalizePhysicalDataType('mssql', 'bit')).toBe('boolean');
-    expect(normalizePhysicalDataType('mssql', 'uniqueidentifier')).toBe('uuid');
-    expect(normalizePhysicalDataType('mssql', 'datetime2(3)')).toBe('datetime');
-    expect(normalizePhysicalDataType('mssql', 'rowversion')).toBe('blob');
-    expect(normalizePhysicalDataType('mssql', 'nvarchar(max)')).toBe('text');
-    expect(normalizePhysicalDataType('mssql', 'varchar(max)')).toBe('text');
-    expect(normalizePhysicalDataType('mssql', 'nvarchar(255)')).toBe('string');
-    expect(normalizePhysicalDataType('oracle', 'float(126)')).toBe('decimal');
+    expect(normalizePhysicalDataType(typeStrategies['postgres'], 'inet')).toBe(
+      'native',
+    );
+    expect(normalizePhysicalDataType(typeStrategies['sqlite'], '')).toBe(
+      'native',
+    );
+    expect(normalizePhysicalDataType(typeStrategies['mssql'], 'bit')).toBe(
+      'boolean',
+    );
+    expect(
+      normalizePhysicalDataType(typeStrategies['mssql'], 'uniqueidentifier'),
+    ).toBe('uuid');
+    expect(
+      normalizePhysicalDataType(typeStrategies['mssql'], 'datetime2(3)'),
+    ).toBe('datetime');
+    expect(
+      normalizePhysicalDataType(typeStrategies['mssql'], 'rowversion'),
+    ).toBe('blob');
+    expect(
+      normalizePhysicalDataType(typeStrategies['mssql'], 'nvarchar(max)'),
+    ).toBe('text');
+    expect(
+      normalizePhysicalDataType(typeStrategies['mssql'], 'varchar(max)'),
+    ).toBe('text');
+    expect(
+      normalizePhysicalDataType(typeStrategies['mssql'], 'nvarchar(255)'),
+    ).toBe('string');
+    expect(
+      normalizePhysicalDataType(typeStrategies['oracle'], 'float(126)'),
+    ).toBe('decimal');
   });
 
   it('preserves default expressions while parsing safe literals', () => {

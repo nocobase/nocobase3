@@ -23,7 +23,6 @@ import { resolveKnexConnectionConfig } from '../../../src/database/internal/knex
 import type {
   ConnectionConfig,
   DatabaseConfig,
-  DatabaseDialect,
 } from '../../../src/database/config.js';
 
 const testDrivers = { postgres, mysql, sqlite, oracle, mssql };
@@ -36,7 +35,7 @@ function createTestDatabase(config: DatabaseConfig) {
 }
 
 function resolveTestKnexConnectionConfig(config: ConnectionConfig) {
-  const factory = testDrivers[config.dialect as DatabaseDialect];
+  const factory = testDrivers[config.dialect as keyof typeof testDrivers];
   return resolveKnexConnectionConfig(config, factory.driver);
 }
 

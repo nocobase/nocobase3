@@ -1,3 +1,15 @@
+import { postgresTypes } from '@nocobase/db-postgres';
+import { mysqlTypes } from '@nocobase/db-mysql';
+import { sqliteTypes } from '@nocobase/db-sqlite';
+import { oracleTypes } from '@nocobase/db-oracle';
+import { mssqlTypes } from '@nocobase/db-mssql';
+const typeStrategies = {
+  postgres: postgresTypes,
+  mysql: mysqlTypes,
+  sqlite: sqliteTypes,
+  oracle: oracleTypes,
+  mssql: mssqlTypes,
+} as const;
 import { describe, expect, it } from 'vitest';
 import {
   normalizePhysicalDataType,
@@ -35,10 +47,12 @@ describe('Temporal physical type classification', () => {
   ] as const)(
     '%s %s retains its temporal meaning',
     (dialect, nativeType, dataType, precision) => {
-      expect(normalizePhysicalDataType(dialect, nativeType)).toBe(dataType);
-      expect(temporalFractionalSecondsPrecision(dialect, nativeType)).toBe(
-        precision,
-      );
+      expect(
+        normalizePhysicalDataType(typeStrategies[dialect], nativeType),
+      ).toBe(dataType);
+      expect(
+        temporalFractionalSecondsPrecision(typeStrategies[dialect], nativeType),
+      ).toBe(precision);
     },
   );
 
@@ -46,12 +60,18 @@ describe('Temporal physical type classification', () => {
     'does not confuse numeric precision with temporal precision in %s',
     (dialect) => {
       expect(
-        temporalFractionalSecondsPrecision(dialect, 'decimal(18,4)'),
+        temporalFractionalSecondsPrecision(
+          typeStrategies[dialect],
+          'decimal(18,4)',
+        ),
       ).toBeUndefined();
       expect(
-        temporalFractionalSecondsPrecision(dialect, 'varchar(64)'),
+        temporalFractionalSecondsPrecision(
+          typeStrategies[dialect],
+          'varchar(64)',
+        ),
       ).toBeUndefined();
-      expect(normalizePhysicalDataType(dialect, 'date')).toBe(
+      expect(normalizePhysicalDataType(typeStrategies[dialect], 'date')).toBe(
         dialect === 'oracle' ? 'datetime' : 'date',
       );
     },
