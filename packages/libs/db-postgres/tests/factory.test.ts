@@ -1,5 +1,6 @@
+import { EventEmitter } from 'node:events';
 import { PassThrough, Readable } from 'node:stream';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createDatabaseManager } from '@nocobase/db';
 import postgres from '../src/index.js';
 
@@ -61,6 +62,41 @@ describe('postgres factory', () => {
         {},
       );
       await expect(query).resolves.toBeUndefined();
+    } finally {
+      await manager.destroy();
+    }
+  });
+
+  it('propagates query-stream failures to the promise and output stream', async () => {
+    const manager = createDatabaseManager({
+      connections: {
+        main: postgres({ host: 'localhost', database: 'app' }),
+      },
+    });
+    try {
+      const client = await manager.connection().client<any>();
+      const output = new PassThrough();
+      const emitted = vi.fn();
+      output.on('error', emitted);
+      const failure = new Error('stream failed');
+      const query = client.client._stream(
+        {
+          query() {
+            const source = new EventEmitter() as EventEmitter & {
+              pipe(destination: NodeJS.WritableStream): NodeJS.WritableStream;
+            };
+            source.pipe = (destination) => destination;
+            queueMicrotask(() => source.emit('error', failure));
+            return source;
+          },
+        },
+        { sql: 'select 1', bindings: [] },
+        output,
+        {},
+      );
+
+      await expect(query).rejects.toThrow('stream failed');
+      expect(emitted).toHaveBeenCalledWith(failure);
     } finally {
       await manager.destroy();
     }

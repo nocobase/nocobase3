@@ -26,6 +26,36 @@ function createRuntime() {
 }
 
 describe('oracle runtime strategy', () => {
+  it('initializes Oracle session formats before invoking the pool callback', async () => {
+    const configuredAfterCreate = vi.fn();
+    const pool = oracle.driver.configurePool?.(
+      {} as never,
+      {
+        afterCreate: configuredAfterCreate,
+      } as never,
+    ) as {
+      afterCreate(
+        connection: unknown,
+        done: (error: unknown, connection?: unknown) => void,
+      ): void;
+    };
+    const connection = {
+      execute: vi.fn().mockResolvedValue(undefined),
+    };
+    const done = vi.fn();
+
+    pool.afterCreate(connection, done);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(connection.execute).toHaveBeenCalledWith(
+      "alter session set nls_date_format = 'YYYY-MM-DD HH24:MI:SS'",
+    );
+    expect(connection.execute).toHaveBeenCalledWith(
+      "alter session set nls_timestamp_format = 'YYYY-MM-DD HH24:MI:SS'",
+    );
+    expect(configuredAfterCreate).toHaveBeenCalledWith(connection, done);
+  });
+
   it('owns Oracle schema restrictions, types and foreign-key actions', async () => {
     const { client, runtime } = createRuntime();
     const schema = runtime.schema!;

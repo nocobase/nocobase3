@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import knex from 'knex';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import sqlite from '../src/index.js';
 
 function createRuntime() {
@@ -19,6 +19,29 @@ function createRuntime() {
 }
 
 describe('sqlite runtime strategy', () => {
+  it('installs SQLite decimal and integer functions on pooled connections', () => {
+    const afterCreate = vi.fn();
+    const pool = sqlite.driver.configurePool?.(
+      {} as never,
+      {
+        afterCreate,
+      } as never,
+    ) as {
+      afterCreate(connection: unknown, done: (error: unknown) => void): void;
+    };
+    const connection = {
+      aggregate: vi.fn(),
+      function: vi.fn(),
+    };
+    const done = vi.fn();
+
+    pool.afterCreate(connection, done);
+
+    expect(connection.aggregate).toHaveBeenCalledTimes(2);
+    expect(connection.function).toHaveBeenCalledTimes(6);
+    expect(afterCreate).toHaveBeenCalledWith(connection, done);
+  });
+
   it('uses decimal helper functions for precise aggregates and ordering', () => {
     const { client, runtime } = createRuntime();
     const aggregate = runtime.numeric!.aggregateSql!({
