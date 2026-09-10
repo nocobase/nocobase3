@@ -266,7 +266,7 @@ export class AIEmployeeChatContextProvider implements ChatContextProvider {
       llmService: resolved.service.name,
       model: resolved.model,
       provider: resolved.provider,
-      takeResponseMetadata: (id) => metadata.take(id),
+      takeResponseMetadata: (id: string) => metadata.take(id),
       dispose: () => metadata.dispose(),
       [responseMetadataCollector]: collector,
     } as AIEmployeeResolvedAgentLLM;

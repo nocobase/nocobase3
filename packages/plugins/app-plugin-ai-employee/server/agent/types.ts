@@ -64,8 +64,6 @@ export interface ResolvedAgentLLM {
   readonly llmService?: string;
   readonly model: string;
   readonly provider: LLMProvider;
-  takeResponseMetadata?(id: string): Record<string, unknown> | undefined;
-  dispose?(): void | Promise<void>;
 }
 
 export type AgentMessageConversionContext = Pick<
@@ -321,10 +319,6 @@ export interface ChatContextProvider {
   ): Promise<string | undefined>;
   discoveredTools(request: AgentRequest): Promise<readonly ToolsEntity[]>;
   activeTools(request: AgentRequest): Promise<ReadonlySet<string>>;
-  getExecutionConfig(
-    request: AgentRequest,
-    llm: ResolvedAgentLLM,
-  ): Promise<Record<string, unknown>>;
   shouldInterruptToolCall(tool?: ToolsEntity): boolean;
   isAutoCall(
     tool: ToolsEntity | undefined,
