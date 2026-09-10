@@ -1,85 +1,85 @@
-import type { ApiClient, RealtimeClient } from '@nocobase/app-client';
-import { createAuthClient, type AuthClient } from '../auth-client.js';
+import { usernameClient } from 'better-auth/client/plugins';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-
+import { createAuthClient } from '../auth-client.js';
 import { createAuthProvider } from '../auth-provider.js';
 
-describe('authentication provider password reset flow', () => {
+function setup(response: unknown = null, status = 200) {
+  const fetch = vi
+    .fn()
+    .mockImplementation(async () => Response.json(response, { status }));
+  const reconnect = vi.fn();
+  const client = createAuthClient({
+    baseURL: 'http://localhost/main/api/auth',
+    plugins: [usernameClient({ displayUsername: false })],
+    fetchOptions: { customFetchImpl: fetch },
+  });
+  return {
+    provider: createAuthProvider(client, { reconnect }),
+    fetch,
+    reconnect,
+  };
+}
+
+describe('native authentication Refine adapter', () => {
   beforeEach(() => {
     Object.assign(window, { APP_BASE_PATH: '/main/' });
     window.history.replaceState({}, '', '/main/');
   });
-
-  it('requests a basename-aware reset callback', async () => {
-    const client = createAuthClientMock();
-    const provider = createAuthProvider(client);
-
+  it('uses the public callback URL for password reset', async () => {
+    const { provider, fetch } = setup({ status: true });
     await expect(
       provider.forgotPassword?.({ email: 'alice@example.com' }),
     ).resolves.toEqual({ success: true });
-    expect(client.requestPasswordReset).toHaveBeenCalledWith(
-      'alice@example.com',
-      '/main/reset-password',
-    );
+    expect(JSON.parse(fetch.mock.calls[0]?.[1].body as string)).toEqual({
+      email: 'alice@example.com',
+      redirectTo: new URL('/main/reset-password', window.location.origin).href,
+    });
   });
-
-  it('uses the URL token when updating the password', async () => {
-    const client = createAuthClientMock();
-    const provider = createAuthProvider(client);
+  it('uses the URL token to reset a password', async () => {
+    const { provider, fetch } = setup({ status: true });
     window.history.replaceState(
       {},
       '',
       '/main/reset-password?token=reset-token',
     );
-
     await expect(
       provider.updatePassword?.({ newPassword: 'new-password' }),
     ).resolves.toEqual({ success: true, redirectTo: '/login' });
-    expect(client.resetPassword).toHaveBeenCalledWith(
-      'new-password',
-      'reset-token',
-    );
+    expect(JSON.parse(fetch.mock.calls[0]?.[1].body as string)).toEqual({
+      newPassword: 'new-password',
+      token: 'reset-token',
+    });
   });
-
-  it('refreshes realtime authentication when the session is anonymous', async () => {
-    const client = createAuthClientMock();
-    vi.spyOn(client, 'getSession').mockResolvedValue(null);
-    const refreshRealtimeSession = vi.spyOn(client, 'refreshRealtimeSession');
-    const provider = createAuthProvider(client);
-
+  it('reconnects when the current session is anonymous', async () => {
+    const { provider, reconnect } = setup();
     await expect(provider.check()).resolves.toEqual({
       authenticated: false,
       redirectTo: '/login',
     });
-    expect(refreshRealtimeSession).toHaveBeenCalledOnce();
+    expect(reconnect).toHaveBeenCalledOnce();
   });
-
-  it('refreshes realtime authentication after an unauthorized response', async () => {
-    const client = createAuthClientMock();
-    const refreshRealtimeSession = vi.spyOn(client, 'refreshRealtimeSession');
-    const provider = createAuthProvider(client);
-
-    await expect(provider.onError({ status: 401 })).resolves.toEqual({
-      logout: true,
-      redirectTo: '/login',
+  it('returns a failed login for native API errors', async () => {
+    const { provider, reconnect } = setup(
+      { message: 'Invalid credentials' },
+      401,
+    );
+    await expect(
+      provider.login({ identifier: 'alice', password: 'wrong' }),
+    ).resolves.toMatchObject({
+      success: false,
+      error: { message: 'Invalid credentials' },
     });
-    expect(refreshRealtimeSession).toHaveBeenCalledOnce();
+    expect(reconnect).not.toHaveBeenCalled();
+  });
+  it('reconnects after successful login and logout', async () => {
+    const { provider, reconnect } = setup({
+      token: 'token',
+      user: { id: '1' },
+    });
+    await expect(
+      provider.login({ identifier: 'alice', password: 'password' }),
+    ).resolves.toMatchObject({ success: true });
+    await provider.logout({});
+    expect(reconnect).toHaveBeenCalledTimes(2);
   });
 });
-
-function createAuthClientMock(): AuthClient {
-  const client = createAuthClient({
-    api: { request: vi.fn() } as ApiClient,
-    realtime: {
-      connected: false,
-      subscribe: vi.fn(() => vi.fn()),
-      onOpen: vi.fn(() => vi.fn()),
-      onError: vi.fn(() => vi.fn()),
-      reconnect: vi.fn(),
-      close: vi.fn(),
-    } satisfies RealtimeClient,
-  });
-  vi.spyOn(client, 'requestPasswordReset').mockResolvedValue(undefined);
-  vi.spyOn(client, 'resetPassword').mockResolvedValue(undefined);
-  return client;
-}

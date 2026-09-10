@@ -6,7 +6,7 @@ import {
 import { ServiceProvider } from '@nocobase/service-provider';
 
 import type { AppPluginApplication } from '../plugins/index.js';
-import { loggingConfig } from './config.js';
+import { type AppLoggingConfig } from './config.js';
 import { loggingToken } from './token.js';
 
 export class LoggingProvider extends ServiceProvider<AppPluginApplication> {
@@ -19,12 +19,12 @@ export class LoggingProvider extends ServiceProvider<AppPluginApplication> {
   }
 
   private createLoggingConfig(): LoggingConfig {
-    const { pretty, nodeEnv, ...config } = this.app.config.get(loggingConfig);
+    const { pretty, ...config } =
+      this.app.config.get<AppLoggingConfig>('logging')!;
     return {
       ...config,
       transport:
-        config.transport ??
-        this.createDefaultTransport(pretty ?? nodeEnv !== 'production'),
+        config.transport ?? this.createDefaultTransport(pretty ?? true),
     };
   }
 

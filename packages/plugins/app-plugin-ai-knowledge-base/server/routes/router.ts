@@ -1,7 +1,4 @@
-import type {
-  AuthManager,
-  AuthEnv,
-} from '@nocobase/app-plugin-authentication/server';
+import type { Auth, AuthEnv } from '@nocobase/app-plugin-authentication/server';
 import { Hono } from 'hono';
 
 import type { KnowledgeBaseServiceFactory } from '../factories/service-factory.js';
@@ -11,7 +8,7 @@ import { createSegmentRoutes } from './segments.js';
 import { createVectorDatabaseRoutes } from './vector-databases.js';
 
 export function createKnowledgeBaseRouter(options: {
-  readonly authentication: AuthManager;
+  readonly authentication: Auth;
   readonly services: KnowledgeBaseServiceFactory;
 }): Hono<AuthEnv> {
   const router = new Hono<AuthEnv>();

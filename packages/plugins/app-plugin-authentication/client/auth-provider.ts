@@ -1,12 +1,13 @@
-import { resolveAppUrl } from '@nocobase/app-client';
+import { resolveAppUrl, type RealtimeClient } from '@nocobase/app-client';
 import type { AuthProvider } from '@refinedev/core';
 import type { AuthClient } from './auth-client.js';
 
-export function createAuthProvider(client: AuthClient): AuthProvider {
-  type CurrentUser = NonNullable<
-    Awaited<ReturnType<AuthClient['getSession']>>
-  >['user'];
-  let currentUser: CurrentUser | null | undefined;
+export function createAuthProvider(
+  client: AuthClient,
+  realtime: Pick<RealtimeClient, 'reconnect'>,
+): AuthProvider {
+  type User = AuthClient['$Infer']['Session']['user'];
+  let currentUser: User | null | undefined;
   let currentRequest: Promise<typeof currentUser> | undefined;
 
   const getUser = async () => {
@@ -14,9 +15,9 @@ export function createAuthProvider(client: AuthClient): AuthProvider {
       return currentUser;
     }
     currentRequest ??= client
-      .getSession()
+      .getSession({ fetchOptions: { throw: true } })
       .then((session) => {
-        if (!session) client.refreshRealtimeSession();
+        if (!session) realtime.reconnect();
         currentUser = session?.user ?? null;
         return currentUser;
       })
@@ -34,10 +35,22 @@ export function createAuthProvider(client: AuthClient): AuthProvider {
   return {
     login: async (params) => {
       try {
-        await client.signIn(
-          String(params?.identifier ?? params?.email ?? params?.username ?? ''),
-          String(params?.password ?? ''),
+        const identifier = String(
+          params?.identifier ?? params?.email ?? params?.username ?? '',
         );
+        const password = String(params?.password ?? '');
+        if (identifier.includes('@')) {
+          await client.signIn.email(
+            { email: identifier, password },
+            { throw: true },
+          );
+        } else {
+          await client.signIn.username(
+            { username: identifier, password },
+            { throw: true },
+          );
+        }
+        realtime.reconnect();
         clear();
         return { success: true, redirectTo: params?.redirectTo ?? '/' };
       } catch (error) {
@@ -49,12 +62,16 @@ export function createAuthProvider(client: AuthClient): AuthProvider {
     },
     register: async (params) => {
       try {
-        await client.signUp(
-          String(params?.name ?? ''),
-          String(params?.username ?? ''),
-          String(params?.email ?? ''),
-          String(params?.password ?? ''),
+        await client.signUp.email(
+          {
+            name: String(params?.name ?? ''),
+            username: String(params?.username ?? ''),
+            email: String(params?.email ?? ''),
+            password: String(params?.password ?? ''),
+          },
+          { throw: true },
         );
+        realtime.reconnect();
         clear();
         return { success: true, redirectTo: params?.redirectTo ?? '/login' };
       } catch (error) {
@@ -67,8 +84,14 @@ export function createAuthProvider(client: AuthClient): AuthProvider {
     forgotPassword: async (params) => {
       try {
         await client.requestPasswordReset(
-          String(params?.email ?? ''),
-          resolveAppUrl('/reset-password'),
+          {
+            email: String(params?.email ?? ''),
+            redirectTo: new URL(
+              resolveAppUrl('/reset-password'),
+              window.location.origin,
+            ).href,
+          },
+          { throw: true },
         );
         return { success: true };
       } catch (error) {
@@ -81,12 +104,15 @@ export function createAuthProvider(client: AuthClient): AuthProvider {
     updatePassword: async (params) => {
       try {
         await client.resetPassword(
-          String(params?.newPassword ?? params?.password ?? ''),
-          String(
-            params?.token ??
-              new URLSearchParams(window.location.search).get('token') ??
-              '',
-          ),
+          {
+            newPassword: String(params?.newPassword ?? params?.password ?? ''),
+            token: String(
+              params?.token ??
+                new URLSearchParams(window.location.search).get('token') ??
+                '',
+            ),
+          },
+          { throw: true },
         );
         clear();
         return { success: true, redirectTo: '/login' };
@@ -98,7 +124,8 @@ export function createAuthProvider(client: AuthClient): AuthProvider {
       }
     },
     logout: async () => {
-      await client.signOut();
+      await client.signOut({}, { throw: true });
+      realtime.reconnect();
       clear();
       return { success: true, redirectTo: '/login' };
     },
@@ -131,7 +158,7 @@ export function createAuthProvider(client: AuthClient): AuthProvider {
     },
     onError: async (error) => {
       if (isUnauthorized(error)) {
-        client.refreshRealtimeSession();
+        realtime.reconnect();
         clear();
         return { logout: true, redirectTo: '/login' };
       }
@@ -143,7 +170,9 @@ export function createAuthProvider(client: AuthClient): AuthProvider {
 function authError(error: unknown, fallback: string) {
   return {
     name: 'AuthenticationError',
-    message: error instanceof Error ? error.message : fallback,
+    message:
+      nativeErrorMessage(error) ??
+      (error instanceof Error ? error.message : fallback),
   };
 }
 
@@ -154,4 +183,16 @@ function isUnauthorized(error: unknown): boolean {
     'status' in error &&
     error.status === 401
   );
+}
+
+function nativeErrorMessage(error: unknown): string | undefined {
+  if (typeof error !== 'object' || error === null || !('error' in error))
+    return undefined;
+  const body = error.error;
+  return typeof body === 'object' &&
+    body !== null &&
+    'message' in body &&
+    typeof body.message === 'string'
+    ? body.message
+    : undefined;
 }

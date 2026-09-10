@@ -4,7 +4,6 @@ import type { ComponentType } from 'react';
 
 import type { ClientApplication } from './application.js';
 import type {
-  AppClientConfigContribution,
   AppClientReactProvider,
   AppClientRefineConfig,
 } from './config.js';
@@ -304,8 +303,6 @@ export interface ResolvedAppClientContributions {
 export interface AppClientPluginDefinition<
   TOptions,
 > extends AppClientContribution<TOptions> {
-  readonly config?:
-    AppClientConfigContribution | readonly AppClientConfigContribution[];
   /** Maps options to route component overrides. Return an empty array for none. */
   readonly routeComponentOverrides?: (
     options: TOptions,
@@ -314,7 +311,6 @@ export interface AppClientPluginDefinition<
 
 export interface AppClientPluginRegistration {
   readonly packageName: string;
-  readonly config: readonly AppClientConfigContribution[];
   readonly serviceProviders: readonly ClientServiceProviderConstructor[];
   readonly routes: readonly AppClientRouteContribution[];
   readonly reactProviders: readonly AppClientReactProviderDefinition[];
@@ -352,7 +348,6 @@ export function defineClientPlugin<TOptions = void>(
 
     return Object.freeze({
       packageName,
-      config: freezeConfigContributions(definition.config),
       serviceProviders: Object.freeze(
         resolveServiceProviders(definition.serviceProviders, resolvedOptions),
       ),
@@ -398,26 +393,6 @@ export function defineClientPlugins(
     plugins: Object.freeze(plugins),
     routeComponentOverrides: Object.freeze(routeComponentOverrides),
   });
-}
-
-function freezeConfigContributions(
-  config:
-    | AppClientConfigContribution
-    | readonly AppClientConfigContribution[]
-    | undefined,
-): readonly AppClientConfigContribution[] {
-  if (config === undefined) {
-    return Object.freeze([]);
-  }
-  return Object.freeze([
-    ...(isConfigContributionArray(config) ? config : [config]),
-  ]);
-}
-
-function isConfigContributionArray(
-  value: AppClientConfigContribution | readonly AppClientConfigContribution[],
-): value is readonly AppClientConfigContribution[] {
-  return Array.isArray(value);
 }
 
 function resolveContribution<TOptions, TResult>(

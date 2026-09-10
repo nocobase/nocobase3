@@ -306,7 +306,6 @@ describe('client inspection', () => {
       }
       const plugin = {
         packageName: '@example/client-plugin',
-        config: [],
         serviceProviders: [ExampleProvider],
         locales: {
           'en-US': async () => {
@@ -355,7 +354,6 @@ describe('client inspection', () => {
       globalThis.__clientLocalesOnlyCalls = { lifecycle: 0, locale: 0, route: 0 };
       const plugin = {
         packageName: '@example/client-locales-only-inspection',
-        config: [],
         serviceProviders: [],
         locales: {
           'en-US': async () => {

@@ -1,6 +1,6 @@
 import {
   authenticationToken,
-  type AuthManager,
+  type Auth,
 } from '@nocobase/app-plugin-authentication';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { ServiceContainer } from '@nocobase/service-provider';
@@ -17,9 +17,7 @@ describe('@nocobase/app-plugin-skills-example routes', () => {
   it('returns the default notice for an authenticated request', async () => {
     const router = await apiRoutes.createRouter(
       createApplication(
-        {
-          required: () => async (_context, next) => next(),
-        } as unknown as AuthManager,
+        { required: () => async (_context, next) => next() } as unknown as Auth,
         {
           getDefaultNotice: () => ({
             title: 'Hello',
@@ -46,7 +44,7 @@ describe('@nocobase/app-plugin-skills-example routes', () => {
         {
           required: () => (context) =>
             context.json({ code: 'UNAUTHORIZED' }, 401),
-        } as unknown as AuthManager,
+        } as unknown as Auth,
         {
           getDefaultNotice: () => {
             throw new Error('Anonymous requests must not read the service.');
@@ -67,7 +65,7 @@ describe('@nocobase/app-plugin-skills-example routes', () => {
 });
 
 function createApplication(
-  authentication: AuthManager,
+  authentication: Auth,
   notice: AppNoticeService,
 ): AppPluginApplication {
   const container = new ServiceContainer();

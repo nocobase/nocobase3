@@ -12,3 +12,9 @@ const config = new Config();
 await config.load(objectProvider({ port: 3000 }));
 console.log(config.integer('port'));
 ```
+
+## TypeScript defaults and YAML
+
+`objectProvider` accepts code configuration, including callbacks and class instances. Plain objects and arrays are copied; functions and non-plain objects retain their references. Ordinary objects merge recursively, while arrays and callbacks are replaced by later sources.
+
+Use `yamlParser()` from `@nocobase/config/parsers/yaml` with `fileProvider` for deployment settings. An absent optional file contributes an empty map. A parser is applied only when a provider returns bytes. Keep code values in TypeScript rather than serializing them into deployment files.

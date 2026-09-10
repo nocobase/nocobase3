@@ -5,8 +5,6 @@ import {
 } from '@nocobase/app-server/router';
 import { Hono } from 'hono';
 
-import { appConfig } from '@nocobase/app-server/config';
-import { toPublicRequest } from '../http.js';
 import { authenticationToken } from '../tokens.js';
 import type { AuthenticationProviderConfig } from '../providers/authentication.js';
 
@@ -15,10 +13,9 @@ export const apiRoutes: AppApiRouteContribution<
 > = defineApiRoutes((app) => {
   const router = new Hono();
 
-  const publicBasePath = app.config.get(appConfig).publicBasePath;
   const auth = app.container.resolve(authenticationToken);
   router.on(['GET', 'POST'], '/auth/*', (context) =>
-    auth.handler(toPublicRequest(context.req.raw, publicBasePath)),
+    auth.handler(context.req.raw),
   );
   return router;
 });

@@ -5,12 +5,12 @@ import {
 import type { SharingRule } from '@nocobase/authorization/sharing-rules';
 import type { RestrictionRule } from '@nocobase/authorization/restriction-rules';
 import type { PermissionGrant } from '@nocobase/authorization/permissions';
-import type { AuthManager } from '@nocobase/app-plugin-authentication';
+import type { Auth } from '@nocobase/app-plugin-authentication';
 import { Hono } from 'hono';
 import type { AppAuthorization } from '../authorization.js';
 
 export function createAuthorizationRoutes(
-  auth: AuthManager,
+  auth: Auth,
   authorization: AppAuthorization,
 ): Hono<AuthorizationEnv> {
   const routes = new Hono<AuthorizationEnv>();

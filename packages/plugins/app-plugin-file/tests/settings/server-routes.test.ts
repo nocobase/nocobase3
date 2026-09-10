@@ -1,6 +1,6 @@
 import {
   authenticationToken,
-  type AuthManager,
+  type Auth,
 } from '@nocobase/app-plugin-authentication';
 import {
   authorizationToken,
@@ -278,7 +278,7 @@ function createApplication(options: {
         }
         return next();
       },
-    } as unknown as AuthManager);
+    } as unknown as Auth);
   }
   if (options.authorization) {
     const pageGrant = options.pageGrant ?? '*';

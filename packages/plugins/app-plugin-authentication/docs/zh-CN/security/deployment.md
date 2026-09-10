@@ -27,7 +27,7 @@ if (!secret) {
 生产环境应配置外部可访问的 HTTPS URL：
 
 ```ts
-auth.init({
+createAuthentication({
   connection,
   secret,
   baseURL: 'https://apps.example.com/my-app/api/auth',

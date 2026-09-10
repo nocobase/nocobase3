@@ -206,7 +206,8 @@
     ]
   },
   "dependencies": {
-    "@nocobase/app-plugin-repository-example": "workspace:^"
+    "@nocobase/app-plugin-repository-example": "workspace:^",
+    "better-auth": "catalog:"
   },
   "description": "Runnable NocoBase 3 examples for application development.",
   "license": "Apache-2.0"

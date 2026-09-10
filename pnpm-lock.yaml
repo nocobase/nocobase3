@@ -96,9 +96,6 @@ catalogs:
     '@vitest/eslint-plugin':
       specifier: ^1.6.27
       version: 1.6.27
-    ajv:
-      specifier: ^8.20.0
-      version: 8.20.0
     better-auth:
       specifier: ^1.7.1
       version: 1.7.1
@@ -557,9 +554,6 @@ importers:
       '@sinclair/typebox':
         specifier: 'catalog:'
         version: 0.34.52
-      ajv:
-        specifier: 'catalog:'
-        version: 8.20.0
       hono:
         specifier: 'catalog:'
         version: 4.13.2
@@ -1316,6 +1310,9 @@ importers:
 
   packages/libs/config:
     dependencies:
+      '@iarna/toml':
+        specifier: ^2.2.5
+        version: 2.2.5
       yaml:
         specifier: 'catalog:'
         version: 2.9.0
@@ -2901,6 +2898,10 @@ importers:
         version: 2.9.0
 
   packages/templates/app-template-default:
+    dependencies:
+      better-auth:
+        specifier: 'catalog:'
+        version: 1.7.1(@opentelemetry/api@1.9.0)(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg@8.23.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(vitest@4.1.10)
     devDependencies:
       '@ai-sdk/react':
         specifier: 2.0.0
@@ -3223,6 +3224,9 @@ importers:
       '@nocobase/app-plugin-repository-example':
         specifier: workspace:^
         version: link:../../examples/app-plugin-repository-example
+      better-auth:
+        specifier: 'catalog:'
+        version: 1.7.1(@opentelemetry/api@1.9.0)(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg@8.23.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(vitest@4.1.10)
     devDependencies:
       '@ai-sdk/react':
         specifier: 2.0.0
@@ -3580,6 +3584,10 @@ importers:
         version: 3.25.76
 
   packages/templates/app-template-hub:
+    dependencies:
+      better-auth:
+        specifier: 'catalog:'
+        version: 1.7.1(@opentelemetry/api@1.9.0)(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg@8.23.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(vitest@4.1.10)
     devDependencies:
       '@ai-sdk/react':
         specifier: 2.0.0

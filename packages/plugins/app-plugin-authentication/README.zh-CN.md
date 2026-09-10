@@ -58,3 +58,7 @@ pnpm --filter @nocobase/app-plugin-authentication typecheck
 pnpm --filter @nocobase/app-plugin-authentication test
 pnpm --filter @nocobase/app-plugin-authentication build
 ```
+
+## 应用配置
+
+模板中的 `server/config/auth.ts` 和 `client/config/auth.ts` 分别提供认证服务端与原生客户端 options。两端均从对应的 authentication 入口导入 `AuthConfig`。插件列表和回调写在 TS 中，部署密钥写在 `config.yml` 或 `AUTH_SECRET` 中。详细用法见 [服务端配置](./docs/zh-CN/server/integration.md) 与 [客户端配置](./docs/zh-CN/client/integration.md)。

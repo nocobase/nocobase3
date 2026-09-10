@@ -30,12 +30,13 @@ export type {
 } from '@nocobase/realtime/client';
 export {
   createAppClientConfig,
-  defineAppClientConfig,
+  defineAppConfig,
+  defaultAppConfigs,
+  type AppConfigFactory,
   defineAppClientRenderConfig,
   normalizeAppClientBasename,
   type AppClientConfig,
   type AppClientConfigContext,
-  type AppClientConfigContribution,
   type AppClientConfigFactory,
   type AppClientConfigMap,
   type AppClientConfigPrimitive,

@@ -95,6 +95,7 @@ allowBuilds:
   # unicons regenerates its own fonts; the .woff2 files ship in the published package, so compiling the native addon
   # at install time produces nothing anything reads.
   ttf2woff2: false
+  '@parcel/watcher': false
 
 # Reports a dependency whose install script was skipped as a warning instead of failing the install.
 # allowBuilds decides the packages known today; this keeps a newly introduced transitive dependency

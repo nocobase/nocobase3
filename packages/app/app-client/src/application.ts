@@ -25,7 +25,7 @@ import type {
   AppClientRegisteredServiceProvider,
   ClientServiceProviderContext,
 } from './plugins.js';
-import type { ResolvedAppRuntime } from './runtime/index.js';
+import type { AppRuntimeContext } from './runtime/index.js';
 import {
   createRefineConfigCollector,
   type AppClientRefineConfigCollector,
@@ -42,7 +42,7 @@ export type ClientApplicationRenderConfigFactory = (
 ) => AppClientRenderConfig;
 
 export interface ClientApplicationOptions {
-  readonly runtime: ResolvedAppRuntime;
+  readonly runtime: AppRuntimeContext;
   readonly createRenderConfig: ClientApplicationRenderConfigFactory;
 }
 
@@ -122,7 +122,7 @@ class ContextualServiceProvider implements ServiceProviderLifecycle {
 }
 
 export class ClientApplication {
-  public readonly runtime: ResolvedAppRuntime;
+  public readonly runtime: AppRuntimeContext;
   public readonly config: AppClientConfig;
   public readonly container: ServiceContainer;
   public readonly services: ServiceResolver;
@@ -306,7 +306,7 @@ export class ClientApplication {
 }
 
 export function createApp(
-  runtime: ResolvedAppRuntime,
+  runtime: AppRuntimeContext,
   createRenderConfig: ClientApplicationRenderConfigFactory,
 ): ClientApplication {
   return new ClientApplication({ runtime, createRenderConfig });

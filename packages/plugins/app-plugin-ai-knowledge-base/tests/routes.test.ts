@@ -1,7 +1,4 @@
-import type {
-  AuthManager,
-  AuthEnv,
-} from '@nocobase/app-plugin-authentication/server';
+import type { Auth, AuthEnv } from '@nocobase/app-plugin-authentication/server';
 import type { MiddlewareHandler } from 'hono';
 import { Hono } from 'hono';
 import { authenticationToken } from '@nocobase/app-plugin-authentication/server';
@@ -16,7 +13,7 @@ import type { KnowledgeBaseService } from '../server/services/knowledge-base-ser
 import type { VectorDatabaseService } from '../server/services/vector-database-service.js';
 import type { KnowledgeBaseServiceFactory } from '../server/factories/service-factory.js';
 
-function createAuthentication(authenticated: boolean): AuthManager {
+function createAuthentication(authenticated: boolean): Auth {
   return {
     required: (): MiddlewareHandler<AuthEnv> => async (context, next) => {
       if (!authenticated) {
@@ -31,7 +28,7 @@ function createAuthentication(authenticated: boolean): AuthManager {
       } as never);
       await next();
     },
-  } as AuthManager;
+  } as Auth;
 }
 
 function createServices() {

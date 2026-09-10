@@ -1,9 +1,12 @@
 import {
-  aiConfig,
+  type AIApplicationConfig,
   resolveAIKnowledgeBaseStorageDisks,
 } from '@nocobase/app-plugin-ai-employee/server/config';
 import { aiManagerToken } from '@nocobase/app-plugin-ai-employee/server/plugin';
-import { driveConfig, driveManagerToken } from '@nocobase/app-server/drive';
+import {
+  type AppDriveConfig,
+  driveManagerToken,
+} from '@nocobase/app-server/drive';
 import { loggingToken } from '@nocobase/app-server/logging';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { queueManagerToken } from '@nocobase/app-server/queue';
@@ -57,8 +60,8 @@ export class KnowledgeBaseProvider extends ServiceProvider<AppPluginApplication>
 
   public override register(): void {
     const allowedStorageDisks = resolveAIKnowledgeBaseStorageDisks(
-      this.app.config.get(aiConfig),
-      this.app.config.get(driveConfig).default,
+      this.app.config.get<AIApplicationConfig>('ai')!,
+      this.app.config.get<AppDriveConfig>('drive')!.default,
     );
     this.app.container.singleton(
       repositoryFactoryToken,
@@ -156,12 +159,12 @@ export class KnowledgeBaseProvider extends ServiceProvider<AppPluginApplication>
       () => managers.vectorStores.clear(),
     );
     this.vectorConfigSynchronizer = synchronizer;
-    const config = this.app.config.get(aiConfig);
+    const config = this.app.config.get<AIApplicationConfig>('ai')!;
     try {
       await synchronizer.enqueue(config.aiKnowledgeBase?.vectorDatabases);
 
-      this.unsubscribeConfig = this.app.config.subscribe(
-        aiConfig,
+      this.unsubscribeConfig = this.app.config.subscribe<AIApplicationConfig>(
+        'ai',
         async ({ current }): Promise<void> => {
           await synchronizer.enqueue(current.aiKnowledgeBase?.vectorDatabases);
         },

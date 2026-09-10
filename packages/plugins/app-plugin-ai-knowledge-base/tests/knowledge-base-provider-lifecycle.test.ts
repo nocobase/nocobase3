@@ -2,7 +2,7 @@ import type { AIManager } from '@nocobase/ai-employee';
 import { fileStorageFactoryToken } from '@nocobase/ai-employee';
 import type { AIApplicationConfig } from '@nocobase/app-plugin-ai-employee/server/config';
 import { aiManagerToken } from '@nocobase/app-plugin-ai-employee/server/plugin';
-import { driveConfig, driveManagerToken } from '@nocobase/app-server/drive';
+import { driveManagerToken } from '@nocobase/app-server/drive';
 import { loggingToken } from '@nocobase/app-server/logging';
 import { queueManagerToken } from '@nocobase/app-server/queue';
 import { databaseManagerToken } from '@nocobase/db';
@@ -109,7 +109,7 @@ function createHarness(initialConfig: AIApplicationConfig) {
   const unsubscribe = vi.fn();
   const config = {
     get: vi.fn((definition: unknown) =>
-      definition === driveConfig ? { default: 'local' } : currentConfig,
+      definition === 'drive' ? { default: 'local' } : currentConfig,
     ),
     subscribe: vi.fn((_definition: unknown, next: ConfigChangeListener) => {
       listener = next;

@@ -16,7 +16,6 @@ import {
   notificationServiceToken,
 } from '../tokens.js';
 import type { NotificationChannelMap, NotificationConfig } from '../types.js';
-import { notificationConfig } from '../config.js';
 
 export interface NotificationProviderApplicationConfig {
   readonly app: {
@@ -53,7 +52,7 @@ export class NotificationProvider<
         logger: container.resolve(loggingToken).getLogger().child({
           module: 'notification',
         }),
-        config: this.app.config.get(notificationConfig),
+        config: this.app.config.get<NotificationConfig>('notification')!,
         registry,
       }),
     );

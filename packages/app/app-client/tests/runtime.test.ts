@@ -1,3 +1,4 @@
+import type { AppRuntimeContext } from '../src/runtime/index.js';
 import {
   createElement,
   Fragment,
@@ -8,7 +9,11 @@ import {
 import { ServiceProvider } from '@nocobase/service-provider';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createAppClientConfig, defineAppClientConfig } from '../src/config.js';
+import {
+  createAppClientConfig,
+  defineAppConfig,
+  defaultAppConfigs,
+} from '../src/config.js';
 import {
   defineAppRoutes,
   defineClientPlugin,
@@ -16,18 +21,46 @@ import {
   defineClientReactProviders,
 } from '../src/plugins.js';
 import { defineAppRuntime, resolveAppRuntime } from '../src/runtime/index.js';
-import type { ClientApplication } from '../src/application.js';
+import { ClientApplication } from '../src/application.js';
 
 function Wrapper({ children }: PropsWithChildren): ReactElement {
   return createElement(Fragment, undefined, children);
 }
 
 describe('app runtime', () => {
+  it('assembles complete configuration before the application is created', async () => {
+    const callback = vi.fn();
+    const configure = vi.fn((context: AppRuntimeContext) => ({
+      enabled: true,
+      callback: () => callback(context.app),
+    }));
+    const runtime = await resolveAppRuntime(
+      defineAppRuntime({
+        packageName: '@example/app',
+        createAppConfig: createAppClientConfig,
+        defaultConfigs: defaultAppConfigs({ auth: defineAppConfig(configure) }),
+        plugins: defineClientPlugins([]),
+      }),
+      { rawConfig: { auth: { enabled: false } } },
+    );
+    expect(runtime.app).toBeUndefined();
+    const app = new ClientApplication({
+      runtime,
+      createRenderConfig: () => ({ routes: null }),
+    });
+    runtime.app = app;
+    expect(app.config).toBe(runtime.config);
+    expect(runtime.config.get('auth.enabled')).toBe(false);
+    runtime.config.get<() => void>('auth.callback')!();
+    expect(callback).toHaveBeenCalledWith(runtime.app);
+    expect(configure).toHaveBeenCalledOnce();
+  });
+
   it('defines immutable static declarations without activating them', () => {
     const serviceProviders = vi.fn(() => []);
     const definition = defineAppRuntime({
       packageName: '@example/app',
-      config: createAppClientConfig,
+      createAppConfig: createAppClientConfig,
       serviceProviders,
       plugins: defineClientPlugins([]),
       routeComponentOverrides: [],
@@ -54,10 +87,6 @@ describe('app runtime', () => {
     const ApplicationOverridePage: ComponentType = () => null;
     const plugin = defineClientPlugin({
       packageName: '@example/plugin',
-      config: defineAppClientConfig({
-        namespace: 'feature',
-        defaults: { enabled: false },
-      }),
       serviceProviders: [Provider],
       reactProviders: defineClientReactProviders([
         { name: 'feature', component: Wrapper },
@@ -72,7 +101,7 @@ describe('app runtime', () => {
     const definition = defineAppRuntime({
       packageName: '@example/app',
       basename: '/portal',
-      config: createAppClientConfig,
+      createAppConfig: createAppClientConfig,
       routes: defineAppRoutes([
         {
           name: 'home',
@@ -122,7 +151,7 @@ describe('app runtime', () => {
     await expect(runtime.routes[1].componentLoader()).resolves.toEqual({
       default: ApplicationOverridePage,
     });
-    expect(Object.isFrozen(runtime)).toBe(true);
+    expect(Object.isFrozen(runtime.serviceProviders)).toBe(true);
   });
 
   it('does not run application validation while resolving runtime', async () => {
@@ -130,7 +159,7 @@ describe('app runtime', () => {
     const runtime = await resolveAppRuntime(
       defineAppRuntime({
         packageName: '@example/app',
-        config: createAppClientConfig,
+        createAppConfig: createAppClientConfig,
         plugins: defineClientPlugins([]),
         validate,
       }),

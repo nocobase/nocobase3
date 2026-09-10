@@ -1,6 +1,6 @@
 import {
   authenticationToken,
-  type AuthManager,
+  type Auth,
 } from '@nocobase/app-plugin-authentication';
 import {
   createConfigPaths,
@@ -40,9 +40,7 @@ describe('queue example plugin routes', () => {
     managers.push(queueManager);
     const router = await apiRoutes.createRouter(
       createApplication(
-        {
-          required: () => async (_context, next) => next(),
-        } as unknown as AuthManager,
+        { required: () => async (_context, next) => next() } as unknown as Auth,
         queueManager,
       ),
     );
@@ -73,7 +71,7 @@ describe('queue example plugin routes', () => {
         {
           required: () => (context) =>
             context.json({ code: 'UNAUTHORIZED' }, 401),
-        } as unknown as AuthManager,
+        } as unknown as Auth,
         queueManager,
       ),
     );
@@ -93,7 +91,7 @@ describe('queue example plugin routes', () => {
         {
           required: () => (context) =>
             context.json({ code: 'UNAUTHORIZED' }, 401),
-        } as unknown as AuthManager,
+        } as unknown as Auth,
         queueManager,
       ),
     );
@@ -112,7 +110,7 @@ describe('queue example plugin routes', () => {
 });
 
 function createApplication(
-  authentication: AuthManager,
+  authentication: Auth,
   queueManager: NocoBaseQueueManager,
 ): AppPluginApplication {
   const container = new ServiceContainer();

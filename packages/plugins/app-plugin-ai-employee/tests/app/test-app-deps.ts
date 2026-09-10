@@ -10,7 +10,10 @@ import {
   createConfigPaths,
   type ConfigPaths,
 } from '@nocobase/app-server/config';
-import { AuthManager } from '@nocobase/app-plugin-authentication';
+import {
+  createAuthentication,
+  type Auth,
+} from '@nocobase/app-plugin-authentication';
 import type { Caching } from '@nocobase/caching';
 import { createDatabaseManager, type DatabaseManager } from '@nocobase/db';
 import { createLogging, type Logging } from '@nocobase/logging';
@@ -23,7 +26,7 @@ export interface TestAppDeps {
   readonly ai: AIManager;
   readonly paths: ConfigPaths;
   readonly database: DatabaseManager;
-  readonly auth: AuthManager;
+  readonly auth: Auth;
   readonly caching: Caching;
   readonly fileStorageFactory: FileStorageFactory;
   readonly aiStorageDisk: string;
@@ -42,7 +45,10 @@ export function createTestAppDeps(): TestAppDeps {
     ai: createAIManager(),
     paths: createConfigPaths({ rootDir: process.cwd() }),
     database,
-    auth: new AuthManager(),
+    auth: createAuthentication({
+      connection: database.connection(),
+      secret: 'ai-employee-test-auth-secret-at-least-32-characters',
+    }),
     caching: {
       getCache: ({ namespace }) => {
         const store = caches.get(namespace) ?? new Map<string, unknown>();

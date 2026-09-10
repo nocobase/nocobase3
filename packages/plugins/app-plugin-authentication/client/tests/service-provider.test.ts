@@ -40,6 +40,7 @@ describe('client ServiceProvider', () => {
     };
 
     const app = {
+      config: { get: vi.fn(() => undefined) },
       container: {
         resolve: vi.fn((token) => {
           if (token === apiClientToken) return api;

@@ -1,6 +1,6 @@
 import type { ExecutionContext, Hono } from 'hono';
 import type { AppConfigAccessor } from '../config/index.js';
-import { appConfig } from '../config/index.js';
+import { type AppIdentityConfig } from '../config/index.js';
 
 import type { ConfigPaths } from '../config/index.js';
 import {
@@ -124,11 +124,13 @@ export class Application<
   }
 
   public get appName(): string {
-    return resolveAppName(this.config.get(appConfig).name);
+    return resolveAppName(this.config.get<AppIdentityConfig>('app')!.name);
   }
 
   public get publicBasePath(): string {
-    return normalizeBasePath(this.config.get(appConfig).publicBasePath);
+    return normalizeBasePath(
+      this.config.get<AppIdentityConfig>('app')!.publicBasePath,
+    );
   }
 
   public get router(): Hono {

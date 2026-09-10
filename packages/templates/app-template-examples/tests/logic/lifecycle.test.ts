@@ -10,10 +10,7 @@ import {
 } from '@nocobase/service-provider';
 import { createDefaultCachingConfig } from '@nocobase/caching';
 import { CachingProvider, cachingToken } from '@nocobase/app-server/caching';
-import type {
-  AppConfigAccessor,
-  AppConfigToken,
-} from '@nocobase/app-server/config';
+import type { AppConfigAccessor } from '@nocobase/app-server/config';
 import { DriveProvider, driveManagerToken } from '@nocobase/app-server/drive';
 import {
   IdGeneratorProvider,
@@ -200,8 +197,7 @@ function createTestConfig(
   values: Readonly<Record<string, unknown>>,
 ): AppConfigAccessor {
   return {
-    get: <TValue>(definition: AppConfigToken<TValue>): TValue =>
-      values[definition.namespace] as TValue,
+    get: <TValue>(definition: string): TValue => values[definition] as TValue,
     raw: () => values,
     reload: () => Promise.resolve({ changedNamespaces: [] }),
     subscribe: () => () => undefined,

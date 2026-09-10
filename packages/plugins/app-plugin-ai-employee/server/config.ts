@@ -1,12 +1,7 @@
-import {
-  defineAppConfig,
-  type AppConfigDefinition,
-} from '@nocobase/app-server/config';
 import type {
   EnabledModelsConfig,
   LLMServiceOptions,
 } from '@nocobase/ai-employee';
-import { Type } from '@sinclair/typebox';
 
 export interface AIStorageConfig {
   readonly disk?: readonly string[];
@@ -63,115 +58,6 @@ export interface AIApplicationConfig {
 }
 
 export type AIEmployeeConfig = AIApplicationConfig;
-
-const nonBlankStringSchema = Type.String({ pattern: '.*\\S.*' });
-const manifestLocationSchema = Type.String({ pattern: '.*[^\\s/].*' });
-
-const storageSchema = Type.Object(
-  {
-    disk: Type.Optional(Type.Array(Type.String())),
-  },
-  { additionalProperties: false },
-);
-
-const enabledModelItemSchema = Type.Object(
-  {
-    label: Type.String(),
-    value: Type.String(),
-  },
-  { additionalProperties: false },
-);
-
-const enabledModelsSchema = Type.Array(enabledModelItemSchema);
-
-const vectorDatabaseConnectionSchema = Type.Object(
-  {
-    host: nonBlankStringSchema,
-    port: Type.Integer({ minimum: 1, maximum: 65535 }),
-    user: nonBlankStringSchema,
-    password: Type.Optional(Type.String()),
-    database: nonBlankStringSchema,
-    tableName: nonBlankStringSchema,
-  },
-  { additionalProperties: false },
-);
-
-const vectorDatabaseSchema = Type.Object(
-  {
-    name: nonBlankStringSchema,
-    provider: Type.Optional(nonBlankStringSchema),
-    databaseSpec: Type.Optional(nonBlankStringSchema),
-    connection: vectorDatabaseConnectionSchema,
-    enabled: Type.Optional(Type.Boolean()),
-  },
-  { additionalProperties: false },
-);
-
-const manifestConfigSchema = Type.Object(
-  {
-    disk: nonBlankStringSchema,
-    locations: Type.Array(manifestLocationSchema, { minItems: 1 }),
-  },
-  { additionalProperties: false },
-);
-
-const llmServiceSchema = Type.Object(
-  {
-    name: nonBlankStringSchema,
-    title: Type.Optional(Type.String()),
-    provider: nonBlankStringSchema,
-    options: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
-    enabledModels: Type.Optional(enabledModelsSchema),
-    modelOptions: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
-    enabled: Type.Optional(Type.Boolean()),
-    sort: Type.Optional(Type.Number()),
-  },
-  { additionalProperties: false },
-);
-
-export const aiConfig: AppConfigDefinition<AIApplicationConfig> =
-  defineAppConfig({
-    namespace: 'ai',
-    schema: Type.Unsafe<AIApplicationConfig>(
-      Type.Object(
-        {
-          storage: storageSchema,
-          aiEmployee: Type.Object(
-            { storage: storageSchema },
-            { additionalProperties: false },
-          ),
-          aiKnowledgeBase: Type.Object(
-            {
-              storage: storageSchema,
-              vectorDatabases: Type.Array(vectorDatabaseSchema, {
-                uniqueItemProperties: ['name'],
-              }),
-              manifests: Type.Array(manifestConfigSchema),
-            },
-            { additionalProperties: false },
-          ),
-          llmServices: Type.Array(llmServiceSchema, {
-            uniqueItemProperties: ['name'],
-          }),
-        },
-        { additionalProperties: true },
-      ),
-    ),
-    defaults: {
-      storage: {},
-      aiEmployee: { storage: {} },
-      aiKnowledgeBase: {
-        storage: {},
-        vectorDatabases: [],
-        manifests: [],
-      },
-      llmServices: [],
-    },
-  });
-
-export const aiEmployeeConfig: AppConfigDefinition<AIApplicationConfig> =
-  aiConfig;
-
 export type AIEmployeeEnabledModelsConfig = EnabledModelsConfig;
 
 export function normalizeDisks(

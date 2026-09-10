@@ -1,6 +1,6 @@
 import {
   authenticationToken,
-  type AuthManager,
+  type Auth,
 } from '@nocobase/app-plugin-authentication';
 import { createConfigPaths } from '@nocobase/app-server/config';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
@@ -14,7 +14,7 @@ import { rootRoutes } from '../server/routes/root.js';
 
 const allowAuthentication = {
   required: () => async (_context, next) => next(),
-} as unknown as AuthManager;
+} as unknown as Auth;
 
 const denyAuthentication = {
   required: () => (context) =>
@@ -22,7 +22,7 @@ const denyAuthentication = {
       { code: 'UNAUTHORIZED', message: 'Authentication required' },
       401,
     ),
-} as unknown as AuthManager;
+} as unknown as Auth;
 
 describe('routes example plugin', () => {
   it('serves API and Root Routes after their own authentication boundaries allow the request', async () => {
@@ -102,7 +102,7 @@ describe('routes example plugin', () => {
   });
 });
 
-function createApplication(authentication: AuthManager): AppPluginApplication {
+function createApplication(authentication: Auth): AppPluginApplication {
   const container = new ServiceContainer();
   container.instance(authenticationToken, authentication);
   return {

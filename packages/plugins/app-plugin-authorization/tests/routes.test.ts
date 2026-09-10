@@ -4,7 +4,7 @@ import { createConfigPaths } from '@nocobase/app-server/config';
 import { ServiceContainer } from '@nocobase/service-provider';
 import {
   authenticationToken,
-  type AuthManager,
+  type Auth,
 } from '@nocobase/app-plugin-authentication';
 
 import { authorizationToken, type AppAuthorization } from '../server/index.js';
@@ -21,7 +21,7 @@ describe('@nocobase/app-plugin-authorization routes', () => {
             401,
           ),
         ),
-    } as unknown as AuthManager);
+    } as unknown as Auth);
     container.instance(authorizationToken, {
       middleware: () => async (_context, next) => next(),
     } as unknown as AppAuthorization);
@@ -61,7 +61,7 @@ describe('@nocobase/app-plugin-authorization routes', () => {
       const set = vi.fn((rule: object) => Promise.resolve(rule));
       container.instance(authenticationToken, {
         required: () => async (_context, next) => next(),
-      } as unknown as AuthManager);
+      } as unknown as Auth);
       container.instance(authorizationToken, {
         middleware: () => async (context, next) => {
           context.set('authz', { require });

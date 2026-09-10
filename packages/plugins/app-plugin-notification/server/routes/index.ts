@@ -18,7 +18,7 @@ import {
   type Translator,
 } from '@nocobase/i18n/server';
 
-import { notificationConfig } from '../config.js';
+import { type NotificationConfig } from '../config.js';
 import { notificationRuntimeToken } from '../runtime.js';
 import { isNotificationTestSendRequest } from '../test-contract.js';
 import type { NotificationProviderApplicationConfig } from '../providers/notification.js';
@@ -78,7 +78,7 @@ export const apiRoutes: AppApiRouteContribution<
   });
   tests.use('*', auth.required(), authorization.middleware());
   tests.use('*', async (context, next) => {
-    if (!config.get(notificationConfig).test?.enabled) {
+    if (!config.get<NotificationConfig>('notification')!.test?.enabled) {
       throw notificationTestError(
         'NOTIFICATION_TEST_DISABLED',
         'errors.testDisabled',

@@ -1,6 +1,5 @@
 export * from './application/index.js';
 export * from './config/index.js';
-export * from './core-configs.js';
 export * from './database/index.js';
 export * from './caching/index.js';
 export * from './drive/index.js';

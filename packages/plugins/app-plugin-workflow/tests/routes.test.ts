@@ -1,6 +1,6 @@
 import {
   authenticationToken,
-  type AuthManager,
+  type Auth,
 } from '@nocobase/app-plugin-authentication';
 import { databaseManagerToken } from '@nocobase/db';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
@@ -138,7 +138,7 @@ describe('@nocobase/app-plugin-workflow routes', () => {
     const database = await createTestDatabase();
     const application = createWorkflowApplication({
       required: () => async (_context, next) => next(),
-    } as unknown as AuthManager);
+    } as unknown as Auth);
     const ensureArtifactMaterialized = vi.fn(async () => undefined);
     application.container.instance(databaseManagerToken, database);
     application.container.instance(internalWorkflowServiceToken, {
@@ -172,7 +172,7 @@ describe('@nocobase/app-plugin-workflow routes', () => {
       createWorkflowApplication({
         required: () => (context) =>
           context.json({ code: 'UNAUTHORIZED' }, 401),
-      } as unknown as AuthManager),
+      } as unknown as Auth),
     );
     application.route('/api', pluginRouter);
     application.get('/api/later-plugin', (context) => context.text('later'));
@@ -190,7 +190,7 @@ describe('@nocobase/app-plugin-workflow routes', () => {
     const router = await apiRoutes.createRouter(
       createWorkflowApplication({
         required: () => async (_context, next) => next(),
-      } as unknown as AuthManager),
+      } as unknown as Auth),
     );
 
     const app = new Hono();
@@ -262,7 +262,7 @@ function registerTestRoutes(app: Hono, repositories: TestRepositories): void {
 }
 
 function createWorkflowApplication(
-  authentication: AuthManager,
+  authentication: Auth,
 ): AppPluginApplication<WorkflowProviderConfig> {
   const container = new ServiceContainer();
   container.instance(authenticationToken, authentication);

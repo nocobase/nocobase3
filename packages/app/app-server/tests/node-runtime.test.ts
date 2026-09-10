@@ -1,3 +1,4 @@
+import { objectProvider } from '@nocobase/config/providers/object';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -7,7 +8,6 @@ import { Hono } from 'hono';
 
 import { Application } from '../src/application/index.js';
 import {
-  appConfig,
   AppConfig,
   type AppConfigAccessor,
   type ConfigPaths,
@@ -15,7 +15,6 @@ import {
 import {
   createStandaloneServer,
   defineStandaloneServer,
-  nodeServerConfig,
   type StandaloneApplicationDefinition,
   type StandaloneAppScope,
 } from '../src/node/index.js';
@@ -27,8 +26,6 @@ import {
   type AppRuntimeDefinition,
   type AppScope,
 } from '../src/runtime/index.js';
-
-const serverConfig = nodeServerConfig;
 
 const tempDirs: string[] = [];
 
@@ -132,11 +129,10 @@ function createStandaloneDefinition(
   return {
     rootDir,
     appRuntime,
-    serverConfig,
     createServer: async (scope) => {
       onCreate(scope);
       const runtime = await resolveAppRuntime(appRuntime, scope);
-      const app = createApplication(runtime.appConfig, runtime.configPaths);
+      const app = createApplication(runtime.config, runtime.configPaths);
       return startApplicationInScope(scope, app);
     },
   };
@@ -145,19 +141,17 @@ function createStandaloneDefinition(
 function createDefinition(_publicBasePath: string): AppRuntimeDefinition {
   return defineAppRuntime({
     config: async (context) => {
-      const config = new AppConfig(
-        [
-          appConfig,
-          {
-            ...serverConfig,
-            defaults: {
-              host: '127.0.0.1',
-              port: 13000,
-              startLog: false,
-            },
+      const config = new AppConfig();
+      config.load(
+        objectProvider({
+          app: {
+            name: context.routing.name,
+            publicBasePath: context.routing.publicBasePath,
+            internalBasePath: context.routing.internalBasePath,
+            publicApiUrl: context.routing.publicBasePath + '/api',
           },
-        ],
-        { context },
+          server: { host: '127.0.0.1', port: 13000, startLog: false },
+        }),
       );
       return config;
     },
