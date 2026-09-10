@@ -10,6 +10,10 @@
     ".": {
       "types": "./src/index.ts",
       "import": "./src/index.ts"
+    },
+    "./integration-suite": {
+      "types": "./tests/integration/suite.ts",
+      "import": "./tests/integration/suite.ts"
     }
   },
   "files": [
