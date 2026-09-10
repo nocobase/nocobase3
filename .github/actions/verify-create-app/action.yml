@@ -46,6 +46,10 @@ runs:
 
     # Registering over HTTP rather than driving `npm adduser` through expect: the endpoint returns the token directly,
     # so nothing has to be installed on the runner and there is no interactive prompt to keep in step.
+    #
+    # Basic auth is sent along with the registration. A fresh container has no such user and returns the token from
+    # the registration itself; a container that already has one answers 409 to an anonymous request but 201 with a
+    # token when the credentials are presented. Sending them always covers both without branching on the status.
     - name: Authenticate against the throwaway registry
       shell: bash
       env:
@@ -54,7 +58,8 @@ runs:
         set -euo pipefail
         TOKEN=$(curl -fsS -X PUT \
           -H 'Content-Type: application/json' \
-          -d '{"name":"release-ci","password":"release-ci"}' \
+          -u release-ci:release-ci \
+          -d '{"name":"release-ci","password":"release-ci","type":"user","roles":[]}' \
           "http://localhost:$PORT/-/user/org.couchdb.user:release-ci" \
           | node -e 'let s="";process.stdin.on("data",c=>s+=c).on("end",()=>process.stdout.write(JSON.parse(s).token??""))')
 
@@ -69,7 +74,18 @@ runs:
         # repository, which is mid-release and about to have its whole working tree committed.
         NPMRC="${NPM_CONFIG_USERCONFIG:-$HOME/.npmrc}"
         echo "npmrc=$NPMRC" >> "$GITHUB_ENV"
-        echo "//localhost:$PORT/:_authToken=$TOKEN" >> "$NPMRC"
+
+        # `npm config set` rather than appending with `>>`. setup-node writes its file without a trailing newline, so
+        # an appended line joins the last one — `always-auth=false//localhost:4873/:_authToken=...` parses as a value
+        # for always-auth and the credential silently does not exist. That is what produced E401 against a registry
+        # the run had otherwise reached correctly. npm parses and rewrites the whole file, so the newline is its
+        # problem rather than ours.
+        npm config set "//localhost:$PORT/:_authToken=$TOKEN"
+
+        # A scoped registry outranks the global one, and `pnpm config get registry` does not show it — so a stale or
+        # inherited @nocobase:registry would send the publish to the real registry while every check here passed.
+        # Pointing the scope at the throwaway registry explicitly removes that possibility rather than detecting it.
+        npm config set "@nocobase:registry=http://localhost:$PORT/"
 
     # Environment variables rather than an .npmrc edit: the repository is mid-release and its whole working tree is
     # about to be committed, so nothing tracked can be touched, and a variable that only exists for this step cannot
@@ -97,13 +113,17 @@ runs:
         # setup-node's .npmrc interpolates this; leaving it unset would make npm fail to read its own configuration.
         export NODE_AUTH_TOKEN=''
 
+        # Both the global registry and the @nocobase scope, because the scope is what actually decides where these
+        # packages go and it is invisible to a check that only reads the global value.
         for tool in pnpm npm; do
-          RESOLVED="$("$tool" config get registry | tr -d '\r' | tail -1)"
-          if [ "$RESOLVED" != "$LOCAL" ] && [ "$RESOLVED" != "${LOCAL%/}" ]; then
-            echo "::error::$tool resolves the registry to '$RESOLVED' instead of '$LOCAL'. Publishing now would reach the real registry."
-            exit 1
-          fi
-          echo "$tool -> $RESOLVED"
+          for setting in registry @nocobase:registry; do
+            RESOLVED="$("$tool" config get "$setting" | tr -d '\r' | tail -1)"
+            if [ "$RESOLVED" != "$LOCAL" ] && [ "$RESOLVED" != "${LOCAL%/}" ]; then
+              echo "::error::$tool resolves $setting to '$RESOLVED' instead of '$LOCAL'. Publishing now would reach the real registry."
+              exit 1
+            fi
+            echo "$tool $setting -> $RESOLVED"
+          done
         done
 
         pnpm changeset publish --no-git-tag
