@@ -1,9 +1,14 @@
+import { createRequire } from 'node:module';
 import type {
   ConnectionConfig,
   DatabaseDriverDefinition,
   PostgresConnectionConfig,
 } from '@nocobase/db';
 import { PostgresSchemaInspector } from './inspectors/postgres.js';
+
+const require = createRequire(import.meta.url);
+const PgQueryStream =
+  require('pg-query-stream') as typeof import('pg-query-stream');
 
 export type PostgresOptions = Omit<
   PostgresConnectionConfig,
@@ -14,6 +19,38 @@ export const postgresDriver: DatabaseDriverDefinition<'postgres'> = {
   dialect: 'postgres',
   packageName: '@nocobase/db-postgres',
   knexClient: 'pg',
+  createKnexClient: (_config, baseClient) => {
+    if (!baseClient) return 'pg';
+    class PostgresClientWithQueryStream extends baseClient {
+      _stream(
+        connection: {
+          query(query: unknown): NodeJS.ReadableStream;
+        },
+        obj: { sql?: string; bindings?: unknown[] },
+        stream: NodeJS.WritableStream,
+        options: unknown,
+      ): Promise<void> {
+        if (!obj.sql) throw new Error('The query is empty');
+        const sql = obj.sql;
+        return new Promise((resolve, reject) => {
+          const queryStream = connection.query(
+            new PgQueryStream(
+              sql,
+              obj.bindings,
+              options as PgQueryStreamConfig,
+            ),
+          );
+          queryStream.on('error', (error) => {
+            reject(error instanceof Error ? error : new Error(String(error)));
+            stream.emit('error', error);
+          });
+          queryStream.on('end', resolve);
+          queryStream.pipe(stream);
+        });
+      }
+    }
+    return PostgresClientWithQueryStream;
+  },
   resolveConnection: (
     source: ConnectionConfig,
   ): {
@@ -92,6 +129,13 @@ export const postgres: PostgresFactory = Object.assign(
 );
 
 export default postgres;
+
+type PgQueryStreamConfig = {
+  batchSize?: number;
+  highWaterMark?: number;
+  rowMode?: 'array';
+  types?: unknown;
+};
 
 function assertDriverOptions(
   driverOptions: Record<string, unknown> | undefined,

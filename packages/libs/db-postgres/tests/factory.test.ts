@@ -1,4 +1,6 @@
+import { PassThrough, Readable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
+import { createDatabaseManager } from '@nocobase/db';
 import postgres from '../src/index.js';
 
 describe('postgres factory', () => {
@@ -29,5 +31,34 @@ describe('postgres factory', () => {
       },
       searchPath: undefined,
     });
+  });
+
+  it('loads pg-query-stream from the dialect package', async () => {
+    const manager = createDatabaseManager({
+      connections: {
+        main: postgres({ host: 'localhost', database: 'app' }),
+      },
+    });
+    try {
+      const client = await manager.connection().client<any>();
+      const output = new PassThrough();
+      const query = client.client._stream(
+        {
+          query(input: unknown) {
+            expect(input).toBeDefined();
+            expect(
+              (input as { constructor: { name: string } }).constructor.name,
+            ).toBe('QueryStream');
+            return Readable.from([]);
+          },
+        },
+        { sql: 'select 1', bindings: [] },
+        output,
+        {},
+      );
+      await expect(query).resolves.toBeUndefined();
+    } finally {
+      await manager.destroy();
+    }
   });
 });
