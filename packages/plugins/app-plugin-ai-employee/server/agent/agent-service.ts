@@ -271,6 +271,7 @@ export class AgentService {
     request: AgentRequest,
     llm: ResolvedAgentLLM,
     agentContext?: AgentContext,
+    responseMetadataCollector?: BaseCallbackHandler,
   ): Promise<PreparedAgentContext> {
     const { conversation, chatContext, features } = this.providers;
     const shouldLoadHistory = Boolean(request.messageId);
@@ -339,7 +340,9 @@ export class AgentService {
           : undefined,
       writer: request.writer,
       signal: request.signal,
-      ...(await chatContext.getExecutionConfig(request, llm)),
+      ...(responseMetadataCollector
+        ? { callbacks: [responseMetadataCollector] }
+        : {}),
       metadata: { currentConversation: conversation.identity },
     };
     if (!config.configurable) delete config.configurable;
@@ -472,8 +475,8 @@ export class AgentService {
         { ...request, signal },
         llm,
         agentContext,
+        responseMetadataCollector,
       );
-      prepared.config.callbacks = [responseMetadataCollector];
       const stream = await this.create(prepared).stream(
         prepared.input as any,
         {
