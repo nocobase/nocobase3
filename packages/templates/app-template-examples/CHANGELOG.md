@@ -1,5 +1,11 @@
 # @nocobase/app-template-examples
 
+## 0.1.0-beta.3
+
+### Patch Changes
+
+- f5b066d: Declare `@nocobase/db` and `@nocobase/service-provider` in `dependencies`, so a generated application can build its server
+
 ## 0.1.0-beta.2
 
 ### Minor Changes
