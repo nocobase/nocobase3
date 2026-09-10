@@ -173,19 +173,35 @@ remain safe numbers. Query uses physical result metadata, so Oracle INTEGER
 (which is NUMBER(38,0)) returns strings too; SQLite expressions without declared
 column types retain safe numbers and use strings for unsafe int64 results.
 
-Remaining defects are explicitly characterized, not claimed to be fixed:
+Remaining storage and low-level driver limits:
 
 - Oracle Builder's non-generated bigInt remains NUMBER(18,0), so the full signed
   64-bit limits are rejected.
-- SQL Server still rejects native bigint create/Query parameters. String
-  parameters are exact.
-- Incrementing `9007199254740993` by number `2` on SQLite or string/bigint `2`
-  on MySQL stores `9007199254740994`, rather than `9007199254740995`, because
-  the SQL expression uses floating-point arithmetic. Read codecs preserve the
-  stored result but cannot repair arithmetic that already lost precision.
-- Repository string filters still fail with INVALID_FILTER. Plain unsafe
-  number writes bypass the expression validator; SQL Server rejects them at
-  the driver boundary, while four drivers accept the already rounded value.
+- SQL Server still rejects native bigint parameters through low-level Query.
+  Repository normalizes native bigint writes to exact string parameters.
+- Oracle storage range and SQLite DECIMAL/REAL storage precision are unchanged.
+
+Repository accepts exact BIGINT and DECIMAL strings in shorthand filters,
+`f.number(field)` comparisons and context variables. INTEGER/increments require
+safe integer numbers; FLOAT/DOUBLE require finite numbers. Range predicates use
+`f.and` with comparisons, and alternatives use `f.or`. This does not add new
+membership operators to the Filter AST. SQL Server expands exponential decimal
+string operands before binding; PG/MySQL retain native comparison behavior.
+
+Plain Repository INTEGER/BIGINT writes now use the same validation as expression
+writes, rejecting unsafe number values before executing SQL. BIGINT inputs may
+use exact integer strings or native bigint values. Query remains the lower-level
+API and does not acquire Collection metadata for write validation.
+
+Integer atomic updates preserve large values with number, string and bigint
+operands. MySQL/SQL Server use exact DECIMAL operands, SQLite uses local int64
+functions and rejects overflow before storage, and PG/Oracle retain native
+arithmetic. DECIMAL operands retain their own scale when bound on MySQL/SQL
+Server. Fractional division into integer columns still follows each database's
+rounding/truncation rules; this is not a cross-database division policy.
+The [input contract suite](../bigint/input-contract.test.ts) verifies exact
+filters, invalid plain writes, arithmetic results, SQL-side stored digits,
+rollback, overflow, and decimal operands on all five engines without skips.
 
 Reproduce from the package directory with Node 24+ and all services ready:
 

@@ -61,6 +61,18 @@ describe('portable query builders', () => {
     expect(buildFilter(ast)).not.toBe(ast);
   });
 
+  it('preserves exact numeric strings in serialized filter builders', () => {
+    const ast = buildFilter((f) =>
+      f.and([
+        f.number('amount').eq('9007199254740993'),
+        f.number('price').gte('0.100000'),
+      ]),
+    );
+    expect(JSON.parse(JSON.stringify(ast))).toMatchObject({
+      root: { items: [{ value: '9007199254740993' }, { value: '0.100000' }] },
+    });
+  });
+
   it('converts nested selects and combine branches to complete JSON', () => {
     const ast = buildSelect<Order>((s) =>
       s.fields('id').include('tasks', (t) =>

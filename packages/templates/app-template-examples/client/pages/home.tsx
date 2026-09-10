@@ -3,10 +3,12 @@ import {
   ArrowUpRight,
   BookOpen,
   Database,
+  Hash,
   FileText,
   FolderOpen,
   ShoppingCart,
   Users,
+  Workflow,
 } from 'lucide-react';
 import type { ReactElement } from 'react';
 import { Link } from 'react-router';
@@ -14,11 +16,13 @@ import { Button } from '@/components/ui/button';
 
 const examples = [
   { key: 'articles', path: '/articles', icon: FileText },
+  { key: 'numbers', path: '/numeric-examples', icon: Hash },
   { key: 'repository', path: '/repository-example/find-many', icon: Database },
   { key: 'crm', path: '/repository-example/crm', icon: Users },
   { key: 'orders', path: '/repository-example/orders', icon: ShoppingCart },
   { key: 'files', path: '/file-repository', icon: FolderOpen },
   { key: 'routes', path: '/routes-example', icon: BookOpen },
+  { key: 'workflows', path: '/settings/automation/workflows', icon: Workflow },
 ] as const;
 
 export default function ExamplesHomePage(): ReactElement {

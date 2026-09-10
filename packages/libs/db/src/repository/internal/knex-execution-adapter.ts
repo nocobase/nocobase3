@@ -1,4 +1,8 @@
-import { decimalString } from '../../numeric/decimal.js';
+import {
+  decimalString,
+  decimalParts,
+  normalizeDecimal,
+} from '../../numeric/decimal.js';
 import {
   aggregateSql,
   aggregateProjection,
@@ -2985,6 +2989,8 @@ function writeValue(
   value: RepositoryRecord[string],
 ): RepositoryRecord[string] | Knex.Raw {
   const field = collection.fields?.find((item) => item.name === name);
+  if (field?.type === 'bigInt' && typeof value === 'bigint')
+    return String(value);
   if (field && isScalarField(field) && field.type === 'boolean')
     return booleanStorageValue(
       String(client.client.config.client),
@@ -3028,13 +3034,53 @@ function mapUpdate(
         multiply: '*',
         divide: '/',
       }[value.operation];
-      return [
-        name,
-        client.raw(`?? ${operator} ?`, [
+      const definition = collection.fields?.find((item) => item.name === field);
+      const dialect = String(client.client.config.client);
+      const integral =
+        definition?.type === 'integer' || definition?.type === 'bigInt';
+      const operand =
+        typeof value.value === 'bigint' ? String(value.value) : value.value;
+      if (integral && dialect === 'better-sqlite3') {
+        // SQLite promotes overflowing integer arithmetic to REAL. The local
+        // function keeps int64 operations exact and fails before storing a rounded value.
+        return [
           name,
-          typeof value.value === 'bigint' ? String(value.value) : value.value,
-        ]),
-      ];
+          client.raw(`nb_integer_${value.operation}(??, ?)`, [
+            name,
+            String(operand),
+          ]),
+        ];
+      }
+      if (
+        (integral || definition?.type === 'decimal') &&
+        (dialect === 'mysql2' || dialect === 'mssql')
+      ) {
+        // A textual parameter otherwise promotes MySQL arithmetic to DOUBLE.
+        // Bind a decimal operand whose precision/scale describe the operand,
+        // not the destination column (which could round it before calculation).
+        const { coefficient, scale } = decimalParts(operand);
+        const digits = (
+          coefficient < 0n ? -coefficient : coefficient
+        ).toString().length;
+        const precision = Math.max(digits, scale, 1);
+        const maxPrecision = dialect === 'mysql2' ? 65 : 38;
+        const maxScale = dialect === 'mysql2' ? 30 : 38;
+        if (precision > maxPrecision || scale > maxScale) {
+          throw new RepositoryError(
+            'INVALID_MUTATION',
+            'Numeric operand exceeds the database decimal precision.',
+            { field },
+          );
+        }
+        return [
+          name,
+          client.raw(
+            `?? ${operator} cast(? as decimal(${precision}, ${scale}))`,
+            [name, normalizeDecimal(operand)],
+          ),
+        ];
+      }
+      return [name, client.raw(`?? ${operator} ?`, [name, operand])];
     }),
   );
 }
@@ -3245,6 +3291,16 @@ function applyCondition(
     ? qualified(sourceAlias, directColumn)
     : directColumn;
   const field = collection.fields?.find((item) => item.name === node.path[0]);
+  // SQL Server cannot implicitly convert exponential NVARCHAR to DECIMAL.
+  // Expand only its bound operand, without touching the indexed column.
+  if (
+    query.client.config.client === 'mssql' &&
+    field?.type === 'decimal' &&
+    typeof node.value === 'string' &&
+    /[eE]/.test(node.value)
+  ) {
+    node = { ...node, value: normalizeDecimal(node.value) };
+  }
   if (
     query.client.config.client === 'better-sqlite3' &&
     field &&

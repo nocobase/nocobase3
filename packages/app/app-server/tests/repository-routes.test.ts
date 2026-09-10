@@ -85,6 +85,62 @@ describe('Repository API routes', () => {
     await database.destroy();
   });
 
+  it('preserves precise numeric strings through HTTP filters, updates and errors', async () => {
+    await database.builder().createCollection('balances', (c) => {
+      c.string('id').primary();
+      c.bigInt('amount');
+      c.decimal('price', { precision: 20, scale: 6 });
+    });
+    const contribution = defineRepositoryApiRoutes({
+      repositories: [
+        {
+          name: 'balances',
+          collection: 'balances',
+          actions: {
+            findOne: {},
+            createOne: { writePolicy: { fields: ['id', 'amount', 'price'] } },
+            updateOne: { writePolicy: { fields: ['amount'] } },
+          },
+        },
+      ],
+    });
+    router.route('/api', await contribution.createRouter({ container }));
+    const balances = client().repository<{
+      id: string;
+      amount: string;
+      price: string;
+    }>('balances');
+    await balances.createOne({
+      values: { id: 'A', amount: '9007199254740993', price: '42.125000' },
+    });
+    expect(
+      await balances.findOne({
+        filter: (f) => f.number('amount').eq('9007199254740993'),
+      }),
+    ).toMatchObject({ id: 'A', amount: '9007199254740993' });
+    expect(
+      await balances.findOne({ filter: { price: '42.125' } }),
+    ).toMatchObject({ id: 'A' });
+    expect(
+      await balances.updateOne({
+        filter: { amount: '9007199254740993' },
+        values: { amount: { increment: '2' } },
+      }),
+    ).toMatchObject({ record: { amount: '9007199254740995' } });
+    const rejected = await router.request('/api/balances:updateOne', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        filter: { id: 'A' },
+        values: { amount: Number.MAX_SAFE_INTEGER + 1 },
+      }),
+    });
+    expect(rejected.status).toBe(400);
+    expect(
+      await database.repository('balances').findOne({ filter: { id: 'A' } }),
+    ).toMatchObject({ amount: '9007199254740995' });
+  });
+
   function client() {
     return createApiClient({
       baseURL: 'http://localhost/api',

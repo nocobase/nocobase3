@@ -138,13 +138,12 @@ describeIntegrationDatabases('BigInt precise string transport', (context) => {
       if (context.spec.dialect === 'mssql') {
         // Knex currently binds native bigint as a string parameter without
         // converting the value, which tedious rejects before executing SQL.
-        await expect(create()).rejects.toThrow(
-          /Validation failed for parameter.*Invalid string/,
-        );
+        expect((await create()).record.amount).toBe(String(amount));
+        expect(await storedAmount(context, 'A')).toBe(String(amount));
         await expect(find()).rejects.toThrow(
           /Validation failed for parameter.*Invalid string/,
         );
-        expect(await repository.count()).toBe(0);
+        expect(await repository.count()).toBe(1);
       } else {
         expect((await create()).record.amount).toBe(String(amount));
         expect(await storedAmount(context, 'A')).toBe(String(amount));
@@ -181,14 +180,7 @@ describeIntegrationDatabases('BigInt precise string transport', (context) => {
         filter: { key: 'A' },
         values: { amount: { increment } },
       });
-      // MySQL promotes BIGINT + a string operand to floating-point arithmetic.
-      // Native bigint atomic operands are also bound as strings by the adapter.
-      // SQLite number bindings use REAL, which also loses integer precision.
-      const stored =
-        (context.spec.dialect === 'mysql' && typeof increment !== 'number') ||
-        (context.spec.dialect === 'sqlite' && typeof increment === 'number')
-          ? '9007199254740994'
-          : '9007199254740995';
+      const stored = '9007199254740995';
       expect(await storedAmount(context, 'A')).toBe(stored);
       expect(updated.record.amount).toBe(stored);
     },
@@ -227,7 +219,7 @@ describeIntegrationDatabases('BigInt precise string transport', (context) => {
     ).toEqual([{ key: 'C' }, { key: 'A' }, { key: 'B' }]);
   });
 
-  it('rejects unsafe expression writes and exact-string Repository filters', async () => {
+  it('rejects unsafe expression writes and accepts exact-string Repository filters', async () => {
     const repository = context.database.repository('bigintValues');
     for (const amount of [
       Number.MAX_SAFE_INTEGER + 1,
@@ -250,21 +242,18 @@ describeIntegrationDatabases('BigInt precise string transport', (context) => {
     });
     await expect(
       repository.findOne({ filter: { amount: '9007199254740993' } }),
-    ).rejects.toMatchObject({ code: 'INVALID_FILTER' });
+    ).resolves.toMatchObject({ amount: '9007199254740993' });
   });
   it.each([Number.MAX_SAFE_INTEGER + 1, Number.MIN_SAFE_INTEGER - 1])(
-    'characterizes unvalidated plain unsafe number input %s',
+    'rejects plain unsafe number input %s',
     async (amount) => {
       const repository = context.database.repository('bigintValues');
       const create = () =>
         repository.createOne({ values: { key: 'A', amount } });
-      if (context.spec.dialect === 'mssql') {
-        await expect(create()).rejects.toThrow(/Bigint must be safe integer/);
-        expect(await repository.count()).toBe(0);
-      } else {
-        await create();
-        expect(await storedAmount(context, 'A')).toBe(String(amount));
-      }
+      await expect(create()).rejects.toMatchObject({
+        code: 'INVALID_MUTATION',
+      });
+      expect(await repository.count()).toBe(0);
     },
   );
   it('preserves aliases, joins, streams, relations, and nested transactions', async () => {

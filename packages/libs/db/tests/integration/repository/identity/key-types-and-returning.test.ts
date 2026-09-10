@@ -197,9 +197,11 @@ describeIntegrationDatabases(
       await expect(
         records.updateOne({
           filter: { externalKey: String(key) },
-          values: { label: 'unsupported' },
+          values: { label: 'string-filter' },
         }),
-      ).rejects.toMatchObject({ code: 'INVALID_FILTER' });
+      ).resolves.toMatchObject({
+        record: { externalKey: String(key), label: 'string-filter' },
+      });
       expect(
         (
           await records.updateOne({

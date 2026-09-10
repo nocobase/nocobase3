@@ -48,6 +48,11 @@ describe('app client routes', () => {
           path: '/',
         },
         { auth: 'required', name: 'articles', path: '/articles' },
+        {
+          auth: 'required',
+          name: 'numeric-examples',
+          path: '/numeric-examples',
+        },
       ],
     });
     expect(applicationRoutes[1]).toEqual({

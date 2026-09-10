@@ -89,7 +89,7 @@ Collection 不要求 id 或主键。单条写入需要完整非空主键或无�
 - 自增、数据库生成和乐观锁版本字段由数据库／Repository 管理，不手动赋值。
 - 更新省略字段表示不改动；null 表示写入空值，受实际约束限制。
 - context 不自动填充任何字段，也不充当权限控制。
-- Field names do not determine types. `bigInt` reads return exact integer strings; `decimal` reads preserve database decimal strings; the remaining numeric input/filter rules are tracked in the [proposal](../proposals/precise-numeric-values.md).
+- Field names do not determine types. `bigInt` reads return exact integer strings; `decimal` reads preserve database decimal strings; BIGINT/DECIMAL filters accept exact numeric strings. Plain INTEGER/BIGINT writes reject unsafe integer numbers before SQL execution. See the [numeric input contract](./numeric-inputs.md).
 
 ## 写入值与返回值不是同一层契约
 

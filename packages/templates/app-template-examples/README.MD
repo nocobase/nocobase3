@@ -322,3 +322,121 @@ to `true` in `config.yml`.
 ## License
 
 MIT
+
+## Workflow examples
+
+Open **Workflow examples** on the homepage, or **Settings → Automation → Workflows**.
+The three application-owned packages under `server/workflows/` are built by
+`pnpm dev` and `pnpm build`. Enable a definition, open its detail page, choose
+**Run**, and enter the sample values below. Inspect the run diagram and select a
+node to see its output, errors, and logs.
+
+| Workflow                        | Sample input                                    | Expected result                                                                    |
+| ------------------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Example: Quotation routing      | `quotationId: Q-100`, `amountCents: 50000`      | Standard branch, followed by the shared summary node.                              |
+| Example: Quotation routing      | `quotationId: Q-100`, `amountCents: 150000`     | Manual follow-up classification. This is not a human approval or waiting step.     |
+| Example: Analytics daily report | `date: 2026-09-08`                              | Read four seeded metric rows, calculate totals, and save one report for that date. |
+| Example: Analytics daily report | `date: 2000-01-01`                              | Successful early termination without creating a report.                            |
+| Example: Failure diagnostics    | `reference: DIAG-100`, `simulateFailure: true`  | The execute node fails deliberately; the finish node does not run.                 |
+| Example: Failure diagnostics    | `reference: DIAG-100`, `simulateFailure: false` | A new run completes all three steps.                                               |
+
+Quotation routing exposes an administrator parameter, `reviewThresholdCents`,
+whose default is `100000`. Amounts at or above the threshold take the follow-up
+branch. Parameter changes apply to new runs; existing executions retain their
+parameter snapshots. The quotation and diagnostic examples only produce workflow
+execution evidence, with no external side effects.
+
+The report reads `analytics.dailyMetrics` and upserts `exampleDailyReports` in the
+application's default database by its unique date. With unchanged seed data,
+`2026-09-08` produces 96,000 impressions, 3,120 clicks, 168 conversions, 93,000
+spend cents, 672,000 revenue cents, and 579,000 profit cents. The `saveReport`
+node output contains the saved report. Repeating the workflow refreshes that date's
+report instead of inserting duplicates. Reports are application-owned data;
+workflow definitions and execution history remain owned by the plugin. Reading
+analytics and writing the report are separate operations, not a cross-database
+transaction.
+
+For development, check a package and regenerate development artifacts after editing:
+
+```bash
+pnpm nocobase workflow check server/workflows/example-quotation-routing
+pnpm nocobase workflow check server/workflows/example-analytics-report
+pnpm nocobase workflow check server/workflows/example-failure-diagnostics
+pnpm nocobase workflow build
+```
+
+Enable the newly built revision in the management UI before invoking it as a
+business workflow. Source validation, artifact generation, enablement, and
+execution are distinct steps. Never seed or edit the plugin's materialized tables.
+Production artifacts contain the JavaScript emitted by the normal server build.
+Keep the workflow artifact disk under the deployed application directory (the
+default local storage layout), so run modules resolve the same application
+`node_modules` and service tokens. Moving that disk outside the application tree
+currently requires a deployment-level module-resolution arrangement; an arbitrary
+external storage directory cannot resolve the report workflow’s `@nocobase/db`
+import on its own.
+
+Application code invokes an enabled package through the public
+`workflowServiceToken.trigger(key, input, { eventKey })` contract. An `accepted`
+receipt is not completion; execution is asynchronous. A `skipped` receipt creates
+no run. Reusing an event key deduplicates the same submission and does not replay
+a failed execution. The management UI starts a new manual run for each Run action.
+These examples do not implement approval, durable waits, node replay, or automatic
+retry. The plugin's management APIs currently require sign-in without per-action
+ACL; keep these workflows on demonstration data. Business trigger endpoints must
+supply their own authentication, authorization, and input validation.
+
+## 数字类型示例
+
+首页的“数字类型”卡片和侧栏入口打开 `/numeric-examples`。页面调用当前默认数据库的
+`GET /api/numeric-examples`，可切换 Query / Repository 和全部样本、空值样本、空结果。
+接口仅供已登录用户读取共享示例数据，不开放写入或任意 SQL。
+
+`database/main/migrations/202609100002_create_numeric_examples.ts` 创建
+`numericExamples`，声明 `increments` ID、唯一的样本名称以及 INTEGER、BIGINT、
+DECIMAL(30,6)、FLOAT、DOUBLE 字段。
+`database/main/seeds/202609100002_seed_numeric_examples.ts` 使用 Query insertInto
+插入七组固定样本：小整数、负数、零、相邻的大整数、小数和空值。
+BIGINT 使用字符串 `9007199254740992` / `9007199254740993`，不会先转成 JavaScript number。
+重复执行种子不会覆盖已编辑的同名样本；初始化数据是 Examples 模板的教学内容。
+
+应用启动时按现有配置执行迁移与种子。关闭自动执行时，在模板目录运行：
+
+```sh
+pnpm migrate
+pnpm seed
+```
+
+页面使用带引号的 JSON 值和实际 JavaScript 类型标签展示普通读取，并支持按 increments、INTEGER、BIGINT、DECIMAL、FLOAT 或 DOUBLE 升序 / 降序排序，以及查看各字段的 COUNT、SUM、AVG、MIN、MAX。DECIMAL 保留数据库格式；SQLite 的底层存储精度限制、
+浮点舍入和 increments 的数据库差异均保持可见，不在页面中做 Number() 转换或补零。
+空值样本的 ID 非空，所以 COUNT(id) 为 1；其他数字字段 COUNT 为 0。
+
+后端实现位于 `server/providers/numeric-examples-service.ts` 和
+`server/routes/numeric-examples.ts`，页面位于 `client/pages/numeric-examples.tsx`。
+这是 Examples 独有内容，不改变 Default / Hub 模板或数据库运行时。
+
+## Numeric types example
+
+Open **Numeric types** from the homepage or navigation (`/numeric-examples`).
+The page reads the current default database through the authenticated, read-only
+`GET /api/numeric-examples` endpoint. Switch between Query and Repository, or
+select all samples, the null sample, and empty input. Tables show actual JSON
+values and JavaScript types, plus COUNT(field), SUM, AVG, MIN and MAX.
+
+The application owns `numericExamples`: an `increments` ID, a unique sample key,
+and INTEGER, BIGINT, DECIMAL(30,6), FLOAT and DOUBLE fields. The migration is
+`database/main/migrations/202609100002_create_numeric_examples.ts`; initial data
+lives in `database/main/seeds/202609100002_seed_numeric_examples.ts`. Run
+`pnpm migrate` and `pnpm seed` when automatic startup tasks are disabled. Seeds
+insert missing sample keys and preserve existing records on repeat runs.
+
+Seven fixed samples include 42, negatives, zero, the adjacent BIGINT values
+9007199254740992 and 9007199254740993, fractions and nulls. Exact inputs use
+strings; the page never converts BIGINT or DECIMAL to Number. Decimal formatting
+and native floating arithmetic may differ by database. SQLite still has numeric
+storage precision limits, and increments uses each database's physical ID type.
+Every signed-in user may read these sample records; the endpoint exposes no
+writes or arbitrary collection/query parameters. Row previews are capped at 100;
+aggregates cover the entire selected sample set.
+
+This is Examples-only teaching content, so it does not change Default or Hub.

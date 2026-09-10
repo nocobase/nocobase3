@@ -1,7 +1,54 @@
 import type { AppResource } from './en-US.js';
 
 const zhCN: AppResource = {
+  numbers: {
+    title: '数字类型',
+    description:
+      '通过 Query 和 Repository 对比数据库实际返回值与 JavaScript 类型。所有结果均来自当前应用数据库。',
+    sort: '排序字段',
+    asc: '升序',
+    desc: '降序',
+    sortNote:
+      '排序由数据库执行，保留数字顺序；BIGINT 和 DECIMAL 不会转换为 Number().',
+    source: '读取方式',
+    sample: '数据范围',
+    all: '全部样本',
+    nullOnly: '空值样本',
+    emptyOnly: '空结果',
+    refresh: '刷新',
+    loading: '正在读取数字示例…',
+    error: '无法读取数字示例，请检查网络和登录状态后重试。',
+    retry: '重试',
+    empty: '当前范围没有记录，聚合结果显示在下方。',
+    rows: '字段读取结果',
+    aggregates: '聚合结果',
+    field: '字段 / 类型',
+    scenario: '样本',
+    database: '当前数据库：{{dialect}}',
+    legend:
+      '数值以 JSON 形式显示：字符串有引号，数字没有引号。下方标注实际 JavaScript 类型；空值保持为 null。',
+    aggregateNote:
+      'COUNT(字段) 不计入 null。INTEGER、BIGINT、DECIMAL 的 SUM/AVG 保留数据库字符串；FLOAT、DOUBLE 的 SUM/AVG 与字段读取一致返回 number。MIN/MAX 保留字段类型。空结果的 COUNT 为 0，其他聚合为 null。自增 ID 非空，因此在空值样本中仍会被计数。',
+    precisionNote:
+      'DECIMAL 字符串保留数据库的小数格式。SQLite 数值存储和浮点运算可能发生舍入，转成字符串无法恢复已丢失的精度。使用 BIGINT 或 DECIMAL 时避免通过 Number() 转换。',
+    idNote:
+      'ID 使用 increments 自动生成，物理类型取决于数据库，因此 Query 和 Repository 读取此字段时可能返回不同类型。',
+    samples: {
+      small: '小整数',
+      negative: '负数',
+      zero: '零',
+      large: '大数值',
+      adjacent: '相邻大整数',
+      fraction: '小数',
+      null: '空值',
+    },
+  },
   examples: {
+    numbers: {
+      title: '数字类型',
+      description:
+        '对比 INTEGER、BIGINT、DECIMAL、FLOAT、DOUBLE 的读取值、返回类型及聚合结果。',
+    },
     eyebrow: 'NocoBase 示例中心',
     title: '从可运行的示例开始',
     description:
@@ -30,6 +77,11 @@ const zhCN: AppResource = {
     files: {
       title: '文件管理',
       description: '体验文件仓库示例中的上传入口和文件管理界面。',
+    },
+    workflows: {
+      title: '工作流示例',
+      description:
+        '体验报价分流、营销日报和失败诊断。打开工作流并启用，按说明填写示例输入，即可查看执行路径与节点结果。',
     },
     routes: {
       title: '应用路由',
@@ -94,6 +146,7 @@ const zhCN: AppResource = {
     signingOut: '正在退出…',
   },
   navigation: {
+    numbers: '数字类型',
     articles: '文章',
     home: '首页',
     open: '打开导航',

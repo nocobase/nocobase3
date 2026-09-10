@@ -1599,10 +1599,25 @@ function validateResolvedConditionValue(
           typeof value === 'string' ||
           (value === null && ['$eq', '$ne'].includes(operator))
         );
+      case 'bigInt':
+        return (
+          (typeof value === 'number' && Number.isSafeInteger(value)) ||
+          (typeof value === 'string' && /^[+-]?\d+$/.test(value)) ||
+          (value === null && ['$eq', '$ne'].includes(operator))
+        );
+      case 'decimal':
+        return (
+          (typeof value === 'number' && Number.isFinite(value)) ||
+          (typeof value === 'string' &&
+            /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(value)) ||
+          (value === null && ['$eq', '$ne'].includes(operator))
+        );
       case 'increments':
       case 'integer':
-      case 'bigInt':
-      case 'decimal':
+        return (
+          (typeof value === 'number' && Number.isSafeInteger(value)) ||
+          (value === null && ['$eq', '$ne'].includes(operator))
+        );
       case 'float':
       case 'double':
         return (

@@ -89,6 +89,11 @@ describe('client inspection', () => {
         path: '/articles',
       },
       {
+        auth: 'required',
+        id: '@nocobase/app-template-examples:numeric-examples',
+        path: '/numeric-examples',
+      },
+      {
         auth: 'guest',
         id: '@nocobase/app-plugin-authentication:login',
         path: '/login',

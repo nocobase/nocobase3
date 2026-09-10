@@ -2,6 +2,7 @@
 import ArticlesProvider from '../../server/providers/articles.ts';
 import { articlesRoutes } from '../../server/routes/articles.ts';
 import { analyticsRoutes } from '../../server/routes/analytics.ts';
+import { numericExamplesRoutes } from '../../server/routes/numeric-examples.ts';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -330,7 +331,10 @@ describe('app server', () => {
         plugins: defineServerPlugins<AppConfig>([]),
         // This composition fixture deliberately omits authentication/authorization plugins.
         routes: appRuntime.routes.filter(
-          (route) => route !== articlesRoutes && route !== analyticsRoutes,
+          (route) =>
+            route !== articlesRoutes &&
+            route !== analyticsRoutes &&
+            route !== numericExamplesRoutes,
         ),
         serviceProviders: [
           ...appRuntime.serviceProviders.filter(
