@@ -27,6 +27,10 @@ import type {
 } from '../../../schema/adapter.js';
 import type { SchemaInspector } from '../../../schema/inspector/types.js';
 import { resolveDatabaseCapabilities } from '../../capabilities.js';
+import {
+  createDefaultDatabaseDriverRuntime,
+  type DatabaseDriverRuntime,
+} from '../../runtime.js';
 import type {
   ConnectionConfig,
   DatabaseDialect,
@@ -47,6 +51,7 @@ export class KnexDatabaseConnection implements DatabaseConnection {
   readonly dialect: DatabaseDialect;
   readonly schemaManagement: SchemaManagementMode;
   readonly capabilities: DatabaseCapabilities;
+  readonly runtime: DatabaseDriverRuntime;
   readonly schema: SchemaAdapter;
   readonly schemaInspector: SchemaInspector;
   readonly builder: CollectionBuilder;
@@ -81,6 +86,22 @@ export class KnexDatabaseConnection implements DatabaseConnection {
       ...dialectDriver?.capabilities,
       ...this.config.capabilities,
     });
+    const runtimeContext = {
+      dialect: this.dialect,
+      sourceConfig: this.sourceConfig,
+      config: this.config,
+      capabilities: this.capabilities,
+      getClient: () => this.getClient(),
+      resolveClient: () => this.resolveClient(),
+    };
+    this.runtime = dialectDriver?.createRuntime
+      ? dialectDriver.createRuntime(runtimeContext)
+      : createDefaultDatabaseDriverRuntime(runtimeContext);
+    if (this.runtime.dialect !== this.dialect) {
+      throw new Error(
+        `Database driver runtime for dialect "${this.dialect}" resolved to "${this.runtime.dialect}".`,
+      );
+    }
     if (!dialectDriver?.createSchemaInspector) {
       throw new Error(
         `Database driver for dialect "${this.dialect}" must create a schema inspector.`,
@@ -98,6 +119,7 @@ export class KnexDatabaseConnection implements DatabaseConnection {
           new KnexSchemaAdapter(client, {
             dialect: this.dialect,
             capabilities: this.capabilities,
+            runtime: this.runtime,
           }),
         this.dialect,
         this.capabilities,
@@ -114,6 +136,7 @@ export class KnexDatabaseConnection implements DatabaseConnection {
         tablePrefix: this.config.naming?.tablePrefix,
       }),
       (name) => this.collections.get(name),
+      this.runtime,
     );
     const collections = new CollectionRegistry({
       inspector: this.schemaInspector,
@@ -176,6 +199,7 @@ export class KnexDatabaseConnection implements DatabaseConnection {
       adapter: new KnexRepositoryExecutionAdapter(
         () => this.getClient(),
         (name) => this.collections.get(name),
+        this.runtime,
       ),
     });
   }

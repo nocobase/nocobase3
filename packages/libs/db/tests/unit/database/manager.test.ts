@@ -14,6 +14,7 @@ import {
   ModuleCollectionMetadataStore,
   SchemaManagementNotAllowedError,
   type DatabaseConnection,
+  type DatabaseDriverRuntimeContext,
 } from '../../../src/index.js';
 import { CollectionRenameAtomicityError } from '../../../src/collection/builder/builder.js';
 import { DatabaseCollectionMetadataStore } from '../../../src/metadata/internal/database-document-store.js';
@@ -343,6 +344,29 @@ describe('DatabaseManager', () => {
     } finally {
       await db.destroy();
     }
+  });
+
+  it('creates the runtime strategy from the registered dialect driver', () => {
+    const runtimeMarker = { name: 'sqlite-runtime' };
+    const driver = {
+      ...sqlite.driver,
+      createRuntime: (context: DatabaseDriverRuntimeContext) => ({
+        dialect: context.dialect,
+        capabilities: context.capabilities,
+        query: runtimeMarker,
+      }),
+    };
+    const db = createDatabaseManager({
+      drivers: { sqlite: driver },
+      connections: {
+        main: {
+          dialect: 'sqlite',
+          filename: ':memory:',
+        },
+      },
+    });
+
+    expect(db.connection().runtime.query).toBe(runtimeMarker);
   });
 
   it('accepts a dialect factory in the declarative driver registry', () => {

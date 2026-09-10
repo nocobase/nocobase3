@@ -13,6 +13,7 @@ import {
 import type { Knex } from 'knex';
 
 import type { NamingStrategy } from '../../../naming/strategy.js';
+import type { DatabaseDriverRuntime } from '../../../database/runtime.js';
 import type {
   AggregateExpression,
   AliasedExpression,
@@ -52,6 +53,7 @@ export class KnexQueryAdapter implements QueryAdapter {
     private readonly getClient: () => Knex,
     private readonly naming: NamingStrategy,
     private readonly lookup: CollectionLookup | undefined = undefined,
+    readonly runtime: DatabaseDriverRuntime | undefined = undefined,
   ) {}
 
   selectFrom<TRecord extends Row = Row>(

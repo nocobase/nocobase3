@@ -10,6 +10,7 @@ import {
   decodeCount,
 } from '../../numeric/aggregate.js';
 import type { Knex } from 'knex';
+import type { DatabaseDriverRuntime } from '../../database/runtime.js';
 import { Readable } from 'node:stream';
 import type {
   AnyFieldDefinition,
@@ -102,6 +103,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     private readonly getCollection: (
       name: string,
     ) => Promise<CollectionDefinition | undefined>,
+    readonly runtime: DatabaseDriverRuntime | undefined = undefined,
   ) {}
 
   async findMany(plan: RepositoryReadPlan): Promise<RepositoryRecord[]> {

@@ -10,6 +10,7 @@ import type {
   DatabaseDriver,
   SchemaManagementMode,
 } from './config.js';
+import type { DatabaseDriverRuntime } from './runtime.js';
 
 export interface DatabaseConnection {
   name: string;
@@ -17,6 +18,8 @@ export interface DatabaseConnection {
   dialect: DatabaseDialect;
   schemaManagement: SchemaManagementMode;
   capabilities: DatabaseCapabilities;
+  /** Runtime strategies supplied by the registered dialect package. */
+  runtime: DatabaseDriverRuntime;
 
   /** Collection schema and metadata builder. Uses Collection and Field logical names. */
   builder: CollectionBuilder;

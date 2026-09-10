@@ -1,6 +1,7 @@
 import type { Knex } from 'knex';
 
 import type { DatabaseCapabilities, SchemaAdapter } from '../../adapter.js';
+import type { DatabaseDriverRuntime } from '../../../database/runtime.js';
 import type {
   ColumnSchemaDefinition,
   FilterExpression,
@@ -18,12 +19,19 @@ export class KnexSchemaAdapter implements SchemaAdapter {
   readonly dialect?: string;
   readonly capabilities?: DatabaseCapabilities;
 
+  readonly runtime?: DatabaseDriverRuntime;
+
   constructor(
     private readonly knex: Knex,
-    options: { dialect?: string; capabilities?: DatabaseCapabilities } = {},
+    options: {
+      dialect?: string;
+      capabilities?: DatabaseCapabilities;
+      runtime?: DatabaseDriverRuntime;
+    } = {},
   ) {
     this.dialect = options.dialect;
     this.capabilities = options.capabilities;
+    this.runtime = options.runtime;
   }
 
   async execute(operations: SchemaOperation[]): Promise<void> {

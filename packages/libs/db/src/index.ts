@@ -23,6 +23,14 @@ export type {
 } from './database/config.js';
 export type { DatabaseConnection } from './database/connection.js';
 export type { DatabaseManager } from './database/manager.js';
+export type {
+  DatabaseDriverRuntime,
+  DatabaseDriverRuntimeContext,
+  DatabaseDriverRuntimeFactory,
+  DatabaseQueryRuntimeStrategy,
+  DatabaseRepositoryRuntimeStrategy,
+  DatabaseSchemaRuntimeStrategy,
+} from './database/runtime.js';
 
 export { CollectionRelationValidationError } from './collection/registry/relation-validator.js';
 export { CollectionResolutionError } from './collection/resolver/errors.js';

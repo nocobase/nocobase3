@@ -3,6 +3,7 @@ import type { CollectionMetadataStore } from '../metadata/document-store.js';
 import type { DatabaseCapabilities } from '../schema/adapter.js';
 import type { Knex } from 'knex';
 import type { SchemaInspector } from '../schema/inspector/types.js';
+import type { DatabaseDriverRuntimeFactory } from './runtime.js';
 
 export interface DatabaseConfig {
   default?: string;
@@ -25,6 +26,8 @@ export interface DatabaseDriverDefinition<TDialect extends string = string> {
   readonly knexClient?: string;
   /** Capabilities supplied by the dialect package for this connection. */
   readonly capabilities?: Partial<DatabaseCapabilities>;
+  /** Creates the runtime strategy object used by the core adapters. */
+  readonly createRuntime?: DatabaseDriverRuntimeFactory;
   readonly createKnexClient?: (
     config: unknown,
     baseClient?: typeof Knex.Client,
