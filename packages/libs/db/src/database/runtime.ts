@@ -131,6 +131,21 @@ export interface DatabaseRepositoryRuntimeStrategy {
     value: unknown,
   ) => boolean | number | null;
   readonly encodeBlobNull?: (client: Knex) => Knex.Raw | undefined;
+  readonly temporalBinding?: (context: {
+    client: Knex;
+    field: FieldDefinition;
+    value: unknown;
+  }) => Knex.Raw | string | null;
+  readonly temporalProjection?: (context: {
+    client: Knex;
+    field: FieldDefinition | undefined;
+    reference: string | Knex.Raw;
+  }) => Knex.Raw | Knex.Ref<string, Record<string, string>>;
+  readonly compileJsonCondition?: (context: {
+    client: Knex;
+    column: string;
+    node: FilterConditionNode;
+  }) => Knex.Raw;
   readonly [key: string]: unknown;
 }
 

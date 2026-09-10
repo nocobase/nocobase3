@@ -1,4 +1,7 @@
 import knex from 'knex';
+import { attachDatabaseDriverRuntime } from '../../../src/database/runtime.js';
+import mssql from '@nocobase/db-mssql';
+import oracle from '@nocobase/db-oracle';
 import { describe, expect, it } from 'vitest';
 import {
   temporalBinding,
@@ -8,6 +11,17 @@ import {
 describe('native temporal SQL boundaries', () => {
   it('rejects legacy SQL Server range and precision loss', () => {
     const client = knex({ client: 'mssql' });
+    attachDatabaseDriverRuntime(
+      client,
+      mssql.driver.createRuntime!({
+        dialect: 'mssql',
+        sourceConfig: {} as never,
+        config: {} as never,
+        capabilities: (mssql.driver.capabilities ?? {}) as never,
+        getClient: () => client,
+        resolveClient: async () => client,
+      }),
+    );
     const field = {
       name: 'occurredAt',
       type: 'datetime',
@@ -43,6 +57,28 @@ describe('native temporal SQL boundaries', () => {
 
   it('rejects precision loss before SQL is executed', () => {
     const client = knex({ client: 'oracledb' });
+    attachDatabaseDriverRuntime(
+      client,
+      oracle.driver.createRuntime!({
+        dialect: 'oracle',
+        sourceConfig: {} as never,
+        config: {} as never,
+        capabilities: (oracle.driver.capabilities ?? {}) as never,
+        getClient: () => client,
+        resolveClient: async () => client,
+      }),
+    );
+    attachDatabaseDriverRuntime(
+      client,
+      oracle.driver.createRuntime!({
+        dialect: 'oracle',
+        sourceConfig: {} as never,
+        config: {} as never,
+        capabilities: (oracle.driver.capabilities ?? {}) as never,
+        getClient: () => client,
+        resolveClient: async () => client,
+      }),
+    );
     const field = {
       name: 'occurredAt',
       type: 'datetimeTz',
@@ -67,6 +103,17 @@ describe('native temporal SQL boundaries', () => {
 
   it('preserves Oracle null instants before appending the UTC suffix', () => {
     const client = knex({ client: 'oracledb' });
+    attachDatabaseDriverRuntime(
+      client,
+      oracle.driver.createRuntime!({
+        dialect: 'oracle',
+        sourceConfig: {} as never,
+        config: {} as never,
+        capabilities: (oracle.driver.capabilities ?? {}) as never,
+        getClient: () => client,
+        resolveClient: async () => client,
+      }),
+    );
     const expression = temporalProjection(
       client,
       { name: 'occurredAt', type: 'datetimeTz' },

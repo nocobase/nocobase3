@@ -6,6 +6,7 @@ import type {
   PostgresConnectionConfig,
 } from '@nocobase/db';
 import { PostgresSchemaInspector } from './inspectors/postgres.js';
+import { compilePostgresJsonCondition } from './json.js';
 
 const require = createRequire(import.meta.url);
 const Pg: unknown = require('pg') as unknown;
@@ -37,6 +38,28 @@ export const postgresDriver: DatabaseDriverDefinition<'postgres'> = {
     numeric: {
       hasNativeResults: true,
       aggregateProjection: ({ expression }) => expression,
+    },
+    repository: {
+      compileJsonCondition: ({ client, column, node }) =>
+        compilePostgresJsonCondition(client, column, node),
+      temporalBinding: ({ value }) => String(value),
+      temporalProjection: ({ client, field, reference }) => {
+        if (!field)
+          return typeof reference === 'string'
+            ? client.ref(reference)
+            : reference;
+        const instant = field.type === 'datetimeTz';
+        const format =
+          field.type === 'date'
+            ? 'YYYY-MM-DD'
+            : field.type === 'time'
+              ? 'HH24:MI:SS.MS'
+              : 'YYYY-MM-DD"T"HH24:MI:SS.MS';
+        return client.raw(
+          `to_char(${instant ? "?? at time zone 'UTC'" : '??'}, ?)${instant ? " || 'Z'" : ''}`,
+          [reference, format],
+        );
+      },
     },
   }),
   createKnexClient: (_config, baseClient) => {

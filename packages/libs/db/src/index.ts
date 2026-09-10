@@ -147,6 +147,10 @@ export type {
 export { UnsupportedCapabilityError } from './schema/capabilities.js';
 
 export { RepositoryError } from './repository/errors.js';
+export {
+  isTemporalType,
+  normalizeTemporalValue,
+} from './repository/temporal.js';
 export type {
   AggregateAst,
   AggregateBuilder,

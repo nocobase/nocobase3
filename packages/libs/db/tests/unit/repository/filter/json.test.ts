@@ -1,4 +1,8 @@
 import knex from 'knex';
+import { attachDatabaseDriverRuntime } from '../../../../src/database/runtime.js';
+import postgres from '@nocobase/db-postgres';
+import mysql from '@nocobase/db-mysql';
+import sqlite from '@nocobase/db-sqlite';
 import { expect, it } from 'vitest';
 import {
   compileJsonCondition,
@@ -12,8 +16,23 @@ it('keeps JSON paths immutable and all user SQL data bound', () => {
   expect(json.eq({}).jsonPath).toBeUndefined();
   expect(nested.path(['name']).eq('x').jsonPath).toEqual(['profile', 'name']);
   expect(nested.eq({}).jsonPath).toEqual(['profile']);
-  for (const client of ['pg', 'mysql2', 'better-sqlite3']) {
+  for (const [client, driver] of [
+    ['pg', postgres.driver],
+    ['mysql2', mysql.driver],
+    ['better-sqlite3', sqlite.driver],
+  ] as const) {
     const db = knex({ client, useNullAsDefault: true });
+    attachDatabaseDriverRuntime(
+      db,
+      driver.createRuntime!({
+        dialect: driver.dialect,
+        sourceConfig: {} as never,
+        config: {} as never,
+        capabilities: (driver.capabilities ?? {}) as never,
+        getClient: () => db,
+        resolveClient: async () => db,
+      }),
+    );
     const sql = compileJsonCondition(
       db,
       'payload',

@@ -8,6 +8,7 @@ import type {
 import { installDecimalAggregates } from './numeric.js';
 import { preciseIntegerClient } from './precise-integers.js';
 import { SqliteSchemaInspector } from './inspectors/sqlite.js';
+import { compileSqliteJsonCondition } from './json.js';
 
 const require = createRequire(import.meta.url);
 const BetterSqlite3: unknown = require('better-sqlite3') as unknown;
@@ -48,6 +49,8 @@ export const sqliteDriver: DatabaseDriverDefinition<'sqlite'> = {
         client.raw('nb_decimal_key(?)', [value]),
     },
     repository: {
+      compileJsonCondition: ({ client, column, node }) =>
+        compileSqliteJsonCondition(client, column, node),
       encodeBoolean: (_field, value) => (value === null ? null : value ? 1 : 0),
       numericMutation: ({ client, field, name, operation, operand }) => {
         if (field?.type !== 'integer' && field?.type !== 'bigInt')

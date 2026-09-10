@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module';
+import { RepositoryError } from '@nocobase/db';
 import type {
   ConnectionConfig,
   DatabaseCapabilities,
@@ -6,6 +7,7 @@ import type {
   MysqlConnectionConfig,
 } from '@nocobase/db';
 import { MysqlSchemaInspector } from './inspectors/mysql.js';
+import { compileMysqlJsonCondition } from './json.js';
 
 const require = createRequire(import.meta.url);
 const Mysql2: unknown = require('mysql2') as unknown;
@@ -28,6 +30,57 @@ export const mysqlDriver: DatabaseDriverDefinition<'mysql'> = {
     numeric: {
       hasNativeResults: true,
       aggregateProjection: ({ expression }) => expression,
+    },
+    repository: {
+      compileJsonCondition: ({ client, column, node }) =>
+        compileMysqlJsonCondition(client, column, node),
+      encodeBoolean: (_field, value) => (value === null ? null : value ? 1 : 0),
+      temporalBinding: ({ client, field, value }) => {
+        const normalized = String(value);
+        const instant = field.type === 'datetimeTz';
+        const physical = normalized.replace('T', ' ').replace(/Z$/, '');
+        if (
+          instant &&
+          /^timestamp(?:\(|$)/i.test(String(field.db?.nativeType))
+        ) {
+          if (
+            normalized < '1970-01-01T00:00:01.000Z' ||
+            normalized > '2038-01-19T03:14:07.000Z'
+          )
+            throw new RepositoryError(
+              'INVALID_MUTATION',
+              'Value exceeds the native MySQL TIMESTAMP range.',
+            );
+          return client.raw("convert_tz(?, '+00:00', @@session.time_zone)", [
+            physical,
+          ]);
+        }
+        return physical;
+      },
+      temporalProjection: ({ client, field, reference }) => {
+        if (!field)
+          return typeof reference === 'string'
+            ? client.ref(reference)
+            : reference;
+        const instant = field.type === 'datetimeTz';
+        const source =
+          instant && /^timestamp(?:\(|$)/i.test(String(field.db?.nativeType))
+            ? "convert_tz(??, @@session.time_zone, '+00:00')"
+            : '??';
+        const format =
+          field.type === 'date'
+            ? '%Y-%m-%d'
+            : field.type === 'time'
+              ? '%H:%i:%s.%f'
+              : '%Y-%m-%dT%H:%i:%s.%f';
+        const length =
+          field.type === 'date' ? 10 : field.type === 'time' ? 12 : 23;
+        const formatted = `left(date_format(${source}, ?), ${length})`;
+        return client.raw(instant ? `concat(${formatted}, 'Z')` : formatted, [
+          reference,
+          format,
+        ]);
+      },
     },
   }),
   createKnexClient: (_config, baseClient) => {

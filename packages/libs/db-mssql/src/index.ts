@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module';
+import { RepositoryError } from '@nocobase/db';
 import type {
   ConnectionConfig,
   DatabaseCapabilities,
@@ -47,6 +48,101 @@ export const mssqlDriver: DatabaseDriverDefinition<'mssql'> = {
       },
       aggregateProjection: ({ client, expression }) =>
         client.raw('cast(? as varchar(max))', [expression]),
+    },
+    repository: {
+      encodeBoolean: (_field, value) =>
+        value === null ? null : Boolean(value),
+      reloadReturnedDecimal: true,
+      encodeBlobNull: (client) => client.raw('cast(null as varbinary(max))'),
+      escapeLikePattern: (value) =>
+        value.replace(/[%_[]/g, (char) => `\\${char}`),
+      numericMutation: ({ client, field, name, operation, operand }) => {
+        const integral = field?.type === 'integer' || field?.type === 'bigInt';
+        if (!integral && field?.type !== 'decimal') return undefined;
+        const text = String(operand);
+        const match = text.match(/^([+-]?)(\d*)(?:\.(\d*))?(?:e([+-]?\d+))?$/i);
+        if (!match || !(match[2] || match[3])) return undefined;
+        const scale = Math.max(
+          0,
+          (match[3]?.length ?? 0) - Number(match[4] ?? 0),
+        );
+        const digits =
+          (match[2] + (match[3] ?? '')).replace(/^0+(?=\d)/, '').length || 1;
+        const precision = Math.max(digits, scale, 1);
+        if (precision > 38 || scale > 38)
+          throw new RepositoryError(
+            'INVALID_MUTATION',
+            'Numeric operand exceeds the database decimal precision.',
+          );
+        const operator = (
+          {
+            increment: '+',
+            decrement: '-',
+            multiply: '*',
+            divide: '/',
+          } as Record<string, string>
+        )[operation];
+        return client.raw(
+          `?? ${operator} cast(? as decimal(${precision}, ${scale}))`,
+          [name, text],
+        );
+      },
+      temporalBinding: ({ client, field, value }) => {
+        const normalized = String(value);
+        const native = String(field.db?.nativeType).toLowerCase();
+        if (
+          native === 'smalldatetime' &&
+          (normalized < '1900-01-01T00:00:00.000' ||
+            normalized > '2079-06-06T23:59:00.000' ||
+            !normalized.endsWith(':00.000'))
+        )
+          throw new RepositoryError(
+            'INVALID_MUTATION',
+            'SMALLDATETIME requires a value in its native range with minute precision.',
+          );
+        if (
+          native === 'datetime' &&
+          (normalized < '1753-01-01T00:00:00.000' ||
+            normalized > '9999-12-31T23:59:59.997')
+        )
+          throw new RepositoryError(
+            'INVALID_MUTATION',
+            'Value exceeds the native SQL Server DATETIME range.',
+          );
+        if (native === 'datetime' && !/[037]$/.test(normalized))
+          throw new RepositoryError(
+            'INVALID_MUTATION',
+            'SQL Server DATETIME requires milliseconds ending in 0, 3, or 7 to avoid rounding.',
+          );
+        const type = (
+          {
+            date: 'date',
+            time: 'time(3)',
+            datetime: 'datetime2(3)',
+            datetimeTz: 'datetimeoffset(3)',
+          } as Record<string, string>
+        )[field.type];
+        return client.raw(`cast(? as ${type})`, [normalized]);
+      },
+      temporalProjection: ({ client, field, reference }) => {
+        if (!field)
+          return typeof reference === 'string'
+            ? client.ref(reference)
+            : reference;
+        if (field.type === 'date')
+          return client.raw('convert(varchar(10), ??, 23)', [reference]);
+        if (field.type === 'time')
+          return client.raw('convert(varchar(12), cast(?? as time(3)), 114)', [
+            reference,
+          ]);
+        const instant = field.type === 'datetimeTz';
+        return client.raw(
+          instant
+            ? "replace(convert(varchar(23), cast(switchoffset(??, '+00:00') as datetime2(3)), 121), ' ', 'T') + 'Z'"
+            : "replace(convert(varchar(23), cast(?? as datetime2(3)), 121), ' ', 'T')",
+          [reference],
+        );
+      },
     },
   }),
   createKnexClient: (_config, baseClient) => {

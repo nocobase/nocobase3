@@ -36,6 +36,94 @@ export const oracleDriver: DatabaseDriverDefinition<'oracle'> = {
           expression,
         ]),
     },
+    repository: {
+      streamOptions: () => ({
+        outFormat: (Oracledb as { OUT_FORMAT_OBJECT: number })
+          .OUT_FORMAT_OBJECT,
+      }),
+      decodeStreamRow: async (row) => {
+        const driver = Oracledb as { CLOB: object; NCLOB: object };
+        for (const [field, value] of Object.entries(row)) {
+          if (
+            !value ||
+            typeof value !== 'object' ||
+            !(Symbol.asyncIterator in value)
+          )
+            continue;
+          const lob = value as AsyncIterable<Buffer> & { type?: object };
+          const textual = lob.type === driver.CLOB || lob.type === driver.NCLOB;
+          const chunks: Buffer[] = [];
+          for await (const chunk of lob) chunks.push(Buffer.from(chunk));
+          row[field] = textual
+            ? Buffer.concat(chunks).toString('utf8')
+            : Buffer.concat(chunks);
+        }
+        return row;
+      },
+      createManyFallback: (collection) =>
+        collection.fields?.some(
+          (field) =>
+            !('target' in field) &&
+            ['date', 'time', 'datetime', 'datetimeTz'].includes(field.type),
+        ) ?? false,
+      emptyInsertValue: ({ client, collection }) => {
+        const field = collection.fields?.find(
+          (item) => !('target' in item) && item.db?.generated === undefined,
+        );
+        return field ? { [field.name]: client.raw('default') } : undefined;
+      },
+      reloadReturnedDecimal: true,
+      collectionAliasKeyword: ' ',
+      limitLockedQuery: (query) => {
+        query.whereRaw('rownum <= ?', [2]);
+      },
+      encodeBoolean: (field, value) =>
+        field.db?.nativeType && /^boolean$/i.test(String(field.db.nativeType))
+          ? value === null
+            ? null
+            : Boolean(value)
+          : value === null
+            ? null
+            : value
+              ? 1
+              : 0,
+      temporalBinding: ({ client, field, value }) => {
+        const normalized = String(value);
+        if (field.type === 'date')
+          return client.raw("to_date(?, 'YYYY-MM-DD')", [normalized]);
+        if (field.type === 'time') return normalized;
+        const instant = field.type === 'datetimeTz';
+        return instant
+          ? client.raw(
+              'to_timestamp_tz(?, \'YYYY-MM-DD"T"HH24:MI:SS.FF3TZH:TZM\')',
+              [normalized.replace('Z', '+00:00')],
+            )
+          : client.raw('to_timestamp(?, \'YYYY-MM-DD"T"HH24:MI:SS.FF3\')', [
+              normalized,
+            ]);
+      },
+      temporalProjection: ({ client, field, reference }) => {
+        if (!field)
+          return typeof reference === 'string'
+            ? client.ref(reference)
+            : reference;
+        if (field.type === 'time')
+          return typeof reference === 'string'
+            ? client.ref(reference)
+            : reference;
+        const instant = field.type === 'datetimeTz';
+        const format =
+          field.type === 'date' ? 'YYYY-MM-DD' : 'YYYY-MM-DD"T"HH24:MI:SS.FF3';
+        return client.raw(
+          instant
+            ? `case when ?? is null then null else to_char(sys_extract_utc(??), ?) || 'Z' end`
+            : field.type === 'datetime'
+              ? 'to_char(cast(?? as timestamp(3)), ?)'
+              : 'to_char(??, ?)',
+          instant ? [reference, reference, format] : [reference, format],
+        );
+      },
+    },
     query: {
       configureAggregateResults: ({ query, aliases }) => {
         const driver = Oracledb as {
