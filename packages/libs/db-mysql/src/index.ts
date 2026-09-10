@@ -81,6 +81,7 @@ export const mysql: MysqlFactory = Object.assign(
   (options: MysqlOptions = {}) => ({
     ...options,
     dialect: 'mysql' as const,
+    driver: 'mysql2' as const,
     databaseDriver: mysqlDriver,
   }),
   { dialect: 'mysql' as const, driver: mysqlDriver },

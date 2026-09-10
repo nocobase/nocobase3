@@ -79,6 +79,7 @@ export const mssql: MssqlFactory = Object.assign(
   (options: MssqlOptions = {}) => ({
     ...options,
     dialect: 'mssql' as const,
+    driver: 'tedious' as const,
     databaseDriver: mssqlDriver,
   }),
   { dialect: 'mssql' as const, driver: mssqlDriver },

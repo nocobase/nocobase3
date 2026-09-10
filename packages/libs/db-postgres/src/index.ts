@@ -125,6 +125,7 @@ export const postgres: PostgresFactory = Object.assign(
   (options: PostgresOptions = {}) => ({
     ...options,
     dialect: 'postgres' as const,
+    driver: 'pg' as const,
     databaseDriver: postgresDriver,
   }),
   {

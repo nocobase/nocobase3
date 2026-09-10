@@ -79,6 +79,7 @@ export const sqlite: SqliteFactory = Object.assign(
   (options: SqliteOptions = { filename: ':memory:' }) => ({
     ...options,
     dialect: 'sqlite' as const,
+    driver: 'better-sqlite3' as const,
     databaseDriver: sqliteDriver,
   }),
   { dialect: 'sqlite' as const, driver: sqliteDriver },

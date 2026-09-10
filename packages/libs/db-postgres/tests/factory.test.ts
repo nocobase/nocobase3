@@ -5,9 +5,13 @@ import postgres from '../src/index.js';
 
 describe('postgres factory', () => {
   it('binds the dialect driver to the connection', () => {
-    const connection = postgres({ host: 'localhost' });
+    const connection = postgres({
+      host: 'localhost',
+      driver: 'mysql2',
+    } as never);
     expect(connection).toMatchObject({
       dialect: 'postgres',
+      driver: 'pg',
       databaseDriver: postgres.driver,
       host: 'localhost',
     });

@@ -100,6 +100,7 @@ export const oracle: OracleFactory = Object.assign(
   (options: OracleOptions = { serviceName: 'FREEPDB1' }) => ({
     ...options,
     dialect: 'oracle' as const,
+    driver: 'oracledb' as const,
     databaseDriver: oracleDriver,
   }),
   { dialect: 'oracle' as const, driver: oracleDriver },
