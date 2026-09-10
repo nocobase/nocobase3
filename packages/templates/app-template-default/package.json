@@ -27,13 +27,11 @@
     "@nocobase/caching": "workspace:^",
     "@nocobase/config": "workspace:^",
     "@nocobase/cron": "workspace:^",
-    "@nocobase/db": "workspace:^",
     "@nocobase/dev-config": "workspace:*",
     "@nocobase/drive": "workspace:^",
     "@nocobase/i18n": "workspace:^",
     "@nocobase/logging": "workspace:^",
     "@nocobase/queue": "workspace:^",
-    "@nocobase/service-provider": "workspace:^",
     "@nocobase/session": "workspace:^",
     "@nocobase/snowflake": "workspace:^",
     "@refinedev/cli": "^2.16.48",
@@ -193,7 +191,9 @@
     "@nocobase/app-plugin-users": "workspace:^",
     "@nocobase/app-plugin-workflow": "workspace:^",
     "@nocobase/app-server": "workspace:^",
+    "@nocobase/db": "workspace:^",
     "@nocobase/nb3-cli": "workspace:^",
+    "@nocobase/service-provider": "workspace:^",
     "@oclif/core": "catalog:"
   }
 }
