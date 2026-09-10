@@ -1,5 +1,5 @@
 import { Command } from '@oclif/core';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { defineCliPlugin, defineCliPlugins } from '../src/plugins/index.ts';
 import { assembleCli } from '../src/runtime/assemble.ts';
@@ -28,6 +28,7 @@ describe('assembly', () => {
       builtinTopics,
     });
     expect(Object.keys(commands).sort()).toEqual([
+      'plugin:cli-hooks',
       'plugin:inspect',
       'plugin:register',
       'plugin:skills:sync',
@@ -130,13 +131,41 @@ describe('definition validation', () => {
     );
   });
 
-  it('rejects a plugin declaring no commands', () => {
+  it('warns about a plugin declaring neither commands nor hooks', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
     expect(() =>
       defineCliPlugin({
         packageName: '@nocobase/app-plugin-a',
         topic: 'x',
         commands: {},
       }),
-    ).toThrow(/no commands/);
+    ).not.toThrow();
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringMatching(/neither commands nor hooks/),
+    );
+
+    warn.mockRestore();
+  });
+
+  it('accepts a plugin contributing hooks alone', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const build = defineCliPlugin({
+      packageName: '@nocobase/app-plugin-a',
+      topic: 'x',
+      buildHooks: { beforeBuild: [{ command: ['node', '-e', ''] }] },
+    });
+    const dev = defineCliPlugin({
+      packageName: '@nocobase/app-plugin-b',
+      topic: 'y',
+      devHooks: { beforeDev: [{ command: ['node', '-e', ''] }] },
+    });
+
+    expect(build.commands).toEqual({});
+    expect(dev.commands).toEqual({});
+    expect(warn).not.toHaveBeenCalled();
+
+    warn.mockRestore();
   });
 });

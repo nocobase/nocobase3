@@ -194,14 +194,14 @@ To customize a plugin's page, pass an option on its registration, add a source e
 
 **You are not starting from scratch.** This application ships with plugins that already solve whole categories of requirement, and each one publishes a Skill explaining how to use it. Registration copies those Skills into `.agents/skills/`. Before implementing a feature, check whether a plugin already covers it:
 
-| The requirement sounds like                                                                       | Read the Skill for                     |
-| ------------------------------------------------------------------------------------------------- | -------------------------------------- |
-| Approvals, multi-step processes, "when X happens then Y", business rules that outlive one request | `@nocobase/app-plugin-workflow`        |
-| Email, IM, or in-app messages; notifying someone that something happened                          | `@nocobase/app-plugin-notification`    |
-| Roles, permissions, "user A may only see their own records", field-level or row-level access      | `@nocobase/app-plugin-authorization`   |
-| Sign-in, registration, sessions, password reset                                                   | `@nocobase/app-plugin-authentication`  |
-| File upload and metadata through Repository                                                       | `@nocobase/app-plugin-file-repository` |
-| Translated text and language switching                                                            | `@nocobase/app-plugin-i18n`            |
+| The requirement sounds like                                                                       | Read the Skill for                    |
+| ------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| Approvals, multi-step processes, "when X happens then Y", business rules that outlive one request | `@nocobase/app-plugin-workflow`       |
+| Email, IM, or in-app messages; notifying someone that something happened                          | `@nocobase/app-plugin-notification`   |
+| Roles, permissions, "user A may only see their own records", field-level or row-level access      | `@nocobase/app-plugin-authorization`  |
+| Sign-in, registration, sessions, password reset                                                   | `@nocobase/app-plugin-authentication` |
+| File upload and metadata through Repository                                                       | `@nocobase/app-plugin-file`           |
+| Translated text and language switching                                                            | `@nocobase/app-plugin-i18n`           |
 
 Run `pnpm plugin:skills:sync` if `.agents/skills/` is missing or looks out of date, then read the Skill for the plugin you need. It documents that plugin's public entries, the ownership boundary, and how to verify the result — which is faster and more correct than inferring an API from its source.
 
@@ -241,6 +241,14 @@ await import(`${name}/index.js`); // invisible to the check
 
 Declare such a package in `dependencies` when you write the code; nothing will remind you later.
 
+### Packing the build for a deployment
+
+`pnpm build --tar` writes `storage/dist.tar.gz` after the build. The archive holds `dist/` as a directory next to `config.example.yml`, so extracting it produces exactly those two paths rather than scattering `server/` and `node_modules/` into whatever directory you unpacked in.
+
+`config.example.yml` travels with it because a deployment has to write a `config.yml` before it can start, and the example is the only statement of what may go in it. Directories of executable shims are left out: a `.bin` entry points at a path on the machine that installed it, and a dangling one makes `pnpm install` in the extracted tree report a corrupt store rather than repair it.
+
+Without `--tar` no archive is produced, which is what you want when the build is only going to be run locally.
+
 ### Building for another platform
 
 `pnpm build` targets the machine it runs on, so `pnpm build && pnpm start` works. A deployment build says where it is going: `--target linux-x64`, `--target linux-arm64`, `--target linux-x64-musl`, plus `--node-version` when the server's Node major differs. Every build prints the platform it produced and records it in `dist/package.json` under `nocobase.buildTarget`.
@@ -274,3 +282,5 @@ Add tests for what you changed: a route's authenticated, unauthenticated, and un
 For creating or editing theme presets, read `skills/nocobase-app-development/references/themes.md` (from the application root).
 
 For UI styling, use the shared color, font, size, spacing, radius and shadow contract in `skills/nocobase-app-development/references/theme-tokens.md` (from the application root). Prefer its Tailwind utilities so components respond to theme changes; keep deliberate fixed-size exceptions explicit.
+
+Application startup defaults belong in `config.yml` under `client.app`: `defaultLocale`, `defaultColorScheme`, and `defaultTheme`. Valid browser-local choices take precedence. See the i18n and themes references for fallback behavior.

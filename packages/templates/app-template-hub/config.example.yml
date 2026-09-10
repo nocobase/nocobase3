@@ -8,6 +8,10 @@ app:
 client:
   app:
     title: NocoBase
+    # Defaults apply only when no valid browser-local choice is saved.
+    # defaultLocale: zh-CN
+    # defaultColorScheme: system # light | dark | system
+    # defaultTheme: compact # ID from client/theme/theme-presets.ts
 
 auth:
   # Generate a unique secret, for example with: openssl rand -hex 32
@@ -15,6 +19,7 @@ auth:
   emailAndPassword:
     enabled: true
     autoSignIn: false
+    disableSignUp: true
   session:
     storeSessionInDatabase: true
 
@@ -28,7 +33,7 @@ notification:
       enabled: true
       providers:
         - type: database
-          name: primary
+          name: default
 
     # Uncomment and configure this channel to send email notifications.
     # - type: email

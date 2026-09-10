@@ -13,12 +13,6 @@ import './styles.css';
 import { initializeTheme } from './theme/theme-preferences';
 import { themePresets } from './theme/theme-presets';
 
-// Restore preferences at normal client startup; first-paint theme matching is deferred.
-initializeTheme(
-  resolveAppBase(),
-  themePresets.map((preset) => preset.id),
-);
-
 const container = document.getElementById('root');
 
 if (!container) {
@@ -31,6 +25,12 @@ let applicationStarted = false;
 
 async function start(): Promise<void> {
   try {
+    // Restore preferences at normal client startup; first-paint theme matching is deferred.
+    initializeTheme(
+      resolveAppBase(),
+      themePresets.map((preset) => preset.id),
+    );
+
     const runtime = await resolveAppRuntime(appRuntime);
 
     app = createApp(runtime);

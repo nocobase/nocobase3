@@ -96,5 +96,13 @@ describeIntegrationDatabases('collection alteration', (context) => {
     } else {
       expect(remainingIndexNames).not.toContain(paidAtIndexName);
     }
+
+    await context.builder.dropConstraint('orders', paidAtUniqueName);
+    await expect(
+      context.db(context.table('orders')).insert({
+        amount: 3,
+        paid_at: '2026-08-13 10:00:00',
+      }),
+    ).resolves.toBeDefined();
   });
 });

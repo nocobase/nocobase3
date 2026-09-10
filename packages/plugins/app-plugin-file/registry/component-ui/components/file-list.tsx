@@ -1,12 +1,9 @@
 import { Download, Eye, Trash2 } from 'lucide-react';
 import { useState, type ReactElement } from 'react';
 
-import type {
-  FileListProps,
-  FileRecord,
-} from '@nocobase/app-plugin-file/client/types';
+import type { FileListProps, FileRecord } from '../types';
 import { Button } from '@/components/ui/button';
-import { publicDownloadUrl, resolveSafeFileUrl } from '../lib/file-url';
+import { resolveSafeFileUrl } from '../lib/file-url';
 import { FilePreviewDialog } from './file-preview-dialog';
 import { FileThumbnail } from './file-thumbnail';
 
@@ -19,7 +16,6 @@ function triggerDownload(url: string, filename: string): void {
 }
 
 export function FileList({
-  client,
   files,
   onPreview,
   onDownload,
@@ -45,9 +41,7 @@ export function FileList({
       return;
     }
     void (async () => {
-      const raw = file.public
-        ? publicDownloadUrl(file.contentUrl)
-        : (await client.createAccessUrl(file.id)).url;
+      const raw = file.contentUrl;
       const url = raw ? resolveSafeFileUrl(raw) : undefined;
       if (!url) throw new Error('File URL is not allowed.');
       triggerDownload(url, file.filename);
@@ -74,7 +68,7 @@ export function FileList({
                 {file.filename}
               </div>
               <div className='text-sm text-muted-foreground'>
-                {file.mimeType} · {file.public ? 'Public' : 'Private'}
+                {file.mimeType}
               </div>
             </div>
             <div className='flex shrink-0 items-center gap-1'>
@@ -119,7 +113,6 @@ export function FileList({
         ))}
       </ul>
       <FilePreviewDialog
-        client={client}
         files={files}
         initialIndex={previewIndex}
         open={previewOpen}

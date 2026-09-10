@@ -1,7 +1,7 @@
 {
   "name": "@nocobase/app-template-hub",
   "displayName": "NocoBase Hub",
-  "version": "1.0.0-beta.9",
+  "version": "1.0.0-beta.11",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -10,7 +10,7 @@
   "packageManager": "pnpm@11.7.0",
   "nocobase": {
     "templateKind": "hub",
-    "defaultTemplateVersion": "1.0.0-beta.9"
+    "defaultTemplateVersion": "1.0.0-beta.11"
   },
   "devDependencies": {
     "@ai-sdk/react": "2.0.0",
@@ -32,7 +32,6 @@
     "@nocobase/i18n": "workspace:^",
     "@nocobase/logging": "workspace:^",
     "@nocobase/queue": "workspace:^",
-    "@nocobase/service-provider": "workspace:^",
     "@nocobase/session": "workspace:^",
     "@nocobase/snowflake": "workspace:^",
     "@refinedev/cli": "^2.16.48",
@@ -99,6 +98,7 @@
     "sonner": "^2.0.3",
     "tailwind-merge": "catalog:",
     "tailwindcss": "catalog:",
+    "tar": "^7.5.22",
     "tsc-alias": "^1.9.2",
     "tsx": "catalog:",
     "tw-animate-css": "catalog:",
@@ -108,6 +108,7 @@
     "zod": "^3.25.76"
   },
   "files": [
+    ".env.example",
     ".prettierignore",
     "cli",
     "client",
@@ -184,22 +185,13 @@
   "dependencies": {
     "@nocobase/app-plugin-authentication": "workspace:^",
     "@nocobase/app-plugin-authorization": "workspace:^",
-    "@nocobase/app-plugin-cli-example": "workspace:^",
-    "@nocobase/app-plugin-database-example": "workspace:^",
     "@nocobase/app-plugin-hub": "workspace:^",
     "@nocobase/app-plugin-i18n": "workspace:^",
     "@nocobase/app-plugin-install": "workspace:^",
-    "@nocobase/app-plugin-notification": "workspace:^",
-    "@nocobase/app-plugin-notification-in-app": "workspace:^",
-    "@nocobase/app-plugin-notification-providers": "workspace:^",
-    "@nocobase/app-plugin-queue-example": "workspace:^",
-    "@nocobase/app-plugin-realtime-example": "workspace:^",
-    "@nocobase/app-plugin-routes-example": "workspace:^",
-    "@nocobase/app-plugin-service-provider-example": "workspace:^",
-    "@nocobase/app-plugin-skills-example": "workspace:^",
-    "@nocobase/app-plugin-workflow": "workspace:^",
+    "@nocobase/app-plugin-users": "workspace:^",
     "@nocobase/app-server": "workspace:^",
     "@nocobase/nb3-cli": "workspace:^",
+    "@nocobase/service-provider": "workspace:^",
     "@oclif/core": "catalog:",
     "hono": "catalog:"
   }

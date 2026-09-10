@@ -105,11 +105,12 @@ The three files named `runtime.ts`, `plugins.ts`, and `routes.ts` are compositio
 
 ### Everyday development
 
-| Script       | What it does                                      |
-| ------------ | ------------------------------------------------- |
-| `pnpm dev`   | Start the API server and client with hot reload   |
-| `pnpm build` | Build the client and server into `dist/`          |
-| `pnpm start` | Run the built server; requires `pnpm build` first |
+| Script             | What it does                                                                 |
+| ------------------ | ---------------------------------------------------------------------------- |
+| `pnpm dev`         | Start the API server and client with hot reload                              |
+| `pnpm build`       | Build the client and server into `dist/`                                     |
+| `pnpm start`       | Run the built server; requires `pnpm build` first                            |
+| `pnpm build --tar` | Build, then pack `dist/` and `config.example.yml` into `storage/dist.tar.gz` |
 
 ### Database
 
@@ -183,6 +184,30 @@ Every build prints the platform it produced and records it in `dist/package.json
 
 If your application has no native modules — `pg`, `mysql2`, and `tedious` are all plain JavaScript — none of this applies and `dist/` is portable as built.
 
+#### Packing the build
+
+`pnpm build --tar` writes `storage/dist.tar.gz`, the artifact you upload to a Hub to deploy this application.
+
+The archive has two levels: `config.example.yml` and `dist/` sit at the root, and the build is inside `dist/`. What `dist/` holds varies with the application; this is the shape:
+
+```text
+dist.tar.gz
+├── config.example.yml
+└── dist/
+    ├── cli/
+    ├── client/
+    ├── node_modules/
+    ├── server/
+    ├── package.json
+    └── pnpm-workspace.yaml
+```
+
+Combine it with `--target` when the archive is for another machine:
+
+```bash
+pnpm build --target linux-x64 --tar
+```
+
 #### Adding a dependency
 
 Where a package goes depends on which half of your application imports it.
@@ -243,9 +268,9 @@ After signing in with the `notification:test` `send` permission, use the
 notification logs settings page to send a real message through the durable
 Notification Manager. The form is generated from safe Channel test metadata;
 Email tests require an address and IM tests use the configured logical target.
-The button is unavailable unless the protected targets endpoint is authorized,
-and testing is disabled unless `notification.test.enabled` is explicitly set
-to `true` in `config.yml`.
+The button remains visible so configuration problems are discoverable. The
+server enforces the `notification:test` `send` permission only when the message
+is submitted.
 
 ## Working with an AI agent
 

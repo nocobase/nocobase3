@@ -2,7 +2,7 @@
 // 确定判断，没有让它流到发版时才炸的理由。
 //
 // 只检查已经存在的文件是否合法，不判断「该不该有 changeset」——那是
-// advise-changesets.mjs 的职责，且只提醒不阻塞。
+// require-changesets.mjs 的职责。
 import fs from 'node:fs';
 import path from 'node:path';
 

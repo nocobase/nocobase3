@@ -37,6 +37,8 @@ import { shortId, deploymentPhaseLabel, formatDateTime } from './utils.js';
 export function Deployments({
   app,
   busy,
+  canDeploy,
+  canRollback,
   onDeploy,
   onRollback,
   pagination,
@@ -45,6 +47,8 @@ export function Deployments({
 }: {
   readonly app: AppDetail;
   readonly busy: boolean;
+  readonly canDeploy: boolean;
+  readonly canRollback: boolean;
   readonly onDeploy: () => void;
   readonly onRollback: (deploymentId: string) => void;
   readonly pagination: { page: number; pageSize: number; total: number };
@@ -61,9 +65,11 @@ export function Deployments({
         title='No deployments yet'
         description='Deploy a release to create the first deployment.'
         action={
-          <Button disabled={busy || !app.hasReleases} onClick={onDeploy}>
-            <Play className='size-4' /> Deploy
-          </Button>
+          canDeploy ? (
+            <Button disabled={busy || !app.hasReleases} onClick={onDeploy}>
+              <Play className='size-4' /> Deploy
+            </Button>
+          ) : undefined
         }
       />
     );
@@ -78,9 +84,11 @@ export function Deployments({
             deployment using the selected release and configuration.
           </p>
         </div>
-        <Button disabled={busy || !app.hasReleases} onClick={onDeploy}>
-          <Play className='size-4' /> Deploy
-        </Button>
+        {canDeploy ? (
+          <Button disabled={busy || !app.hasReleases} onClick={onDeploy}>
+            <Play className='size-4' /> Deploy
+          </Button>
+        ) : null}
       </div>
       <div
         className='overflow-hidden rounded-lg border bg-card'
@@ -145,31 +153,35 @@ export function Deployments({
                     {formatDateTime(deployment.createdAt)}
                   </TableCell>
                   <TableCell className='py-3 text-right'>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger
-                        render={
-                          <Button
-                            aria-label={`Actions for deployment ${shortId(deployment.id)}`}
-                            className='size-8 text-muted-foreground'
-                            size='icon'
-                            variant='ghost'
-                          >
-                            <MoreHorizontal />
-                          </Button>
-                        }
-                      />
-                      <DropdownMenuContent align='end' className='w-40'>
-                        <DropdownMenuItem
-                          disabled={
-                            busy || deployment.status !== 'succeeded' || current
+                    {canRollback ? (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
+                          render={
+                            <Button
+                              aria-label={`Actions for deployment ${shortId(deployment.id)}`}
+                              className='size-8 text-muted-foreground'
+                              size='icon'
+                              variant='ghost'
+                            >
+                              <MoreHorizontal />
+                            </Button>
                           }
-                          onClick={() => onRollback(deployment.id)}
-                        >
-                          <RotateCcw />
-                          Roll back
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                        />
+                        <DropdownMenuContent align='end' className='w-40'>
+                          <DropdownMenuItem
+                            disabled={
+                              busy ||
+                              deployment.status !== 'succeeded' ||
+                              current
+                            }
+                            onClick={() => onRollback(deployment.id)}
+                          >
+                            <RotateCcw />
+                            Roll back
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    ) : null}
                   </TableCell>
                 </TableRow>
               );

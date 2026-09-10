@@ -1,0 +1,58 @@
+# Verdaccio configuration for the release smoke test.
+#
+# The registry stands in front of the real one for exactly as long as one release run takes: the packages this release
+# produces are published here first, an application is generated against them, and only once that application boots is
+# anything published for real. Nothing here is written to disk outside the container, and the container is discarded
+# with the job.
+#
+# Two uplinks rather than one. Everything under @nocobase comes from the registry that actually serves v3, so a package
+# this release does not touch resolves to the artifact users already have rather than to something rebuilt here. Every
+# other package goes straight to npmjs: npm.nocobase.ai proxies it too, but routing tens of thousands of public tarballs
+# through a second hop only makes the generated application's install slower.
+
+storage: /verdaccio/storage/data
+
+auth:
+  htpasswd:
+    file: /verdaccio/storage/htpasswd
+    # The workflow registers one throwaway user to obtain a publish token. Registration has to stay open for that.
+    max_users: 100
+
+uplinks:
+  nocobase:
+    url: https://npm.nocobase.ai/
+    timeout: 60s
+    max_fails: 10
+    fail_timeout: 1m
+    cache: true
+  npmjs:
+    url: https://registry.npmjs.org/
+    timeout: 60s
+    max_fails: 10
+    fail_timeout: 1m
+    cache: true
+
+packages:
+  '@nocobase/*':
+    access: $all
+    publish: $authenticated
+    unpublish: $authenticated
+    proxy: nocobase
+  '@*/*':
+    access: $all
+    publish: $authenticated
+    unpublish: $authenticated
+    proxy: npmjs
+  '**':
+    access: $all
+    publish: $authenticated
+    unpublish: $authenticated
+    proxy: npmjs
+
+# The default is 10mb, which a template tarball can exceed.
+max_body_size: 500mb
+
+log:
+  type: stdout
+  format: pretty
+  level: warn

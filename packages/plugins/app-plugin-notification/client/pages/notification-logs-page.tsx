@@ -21,6 +21,7 @@ export default function NotificationLogsPage(): ReactElement {
   const [testOpen, setTestOpen] = useState(false);
   const [testTargets, setTestTargets] =
     useState<readonly NotificationTestTarget[]>();
+  const [testTargetsError, setTestTargetsError] = useState<string>();
 
   const refresh = (): void => {
     setLoading(true);
@@ -60,16 +61,29 @@ export default function NotificationLogsPage(): ReactElement {
     let active = true;
     void notification.listTestTargets().then(
       (targets) => {
-        if (active) setTestTargets(targets);
+        if (active) {
+          setTestTargets(targets);
+          setTestTargetsError(undefined);
+        }
       },
-      () => {
-        if (active) setTestTargets(undefined);
+      (cause: unknown) => {
+        if (active) {
+          setTestTargets([]);
+          setTestTargetsError(
+            errorMessage(
+              cause,
+              t('errors.requestFailed', {
+                defaultValue: 'Notification request failed.',
+              }),
+            ),
+          );
+        }
       },
     );
     return () => {
       active = false;
     };
-  }, []);
+  }, [t]);
 
   const totals = useMemo(
     () => ({
@@ -110,17 +124,15 @@ export default function NotificationLogsPage(): ReactElement {
                 ? t('logs.refreshing', { defaultValue: 'Refreshing…' })
                 : t('logs.refresh', { defaultValue: 'Refresh' })}
             </button>
-            {testTargets && testTargets.length > 0 ? (
-              <button
-                className='inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-xs hover:bg-primary/90'
-                onClick={() => setTestOpen(true)}
-                type='button'
-              >
-                {t('logs.sendTest', {
-                  defaultValue: 'Send test notification',
-                })}
-              </button>
-            ) : null}
+            <button
+              className='inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-xs hover:bg-primary/90'
+              onClick={() => setTestOpen(true)}
+              type='button'
+            >
+              {t('logs.sendTest', {
+                defaultValue: 'Send test notification',
+              })}
+            </button>
           </div>
         </div>
       </header>
@@ -174,13 +186,14 @@ export default function NotificationLogsPage(): ReactElement {
               </p>
             </div>
           ) : (
-            <NotificationLogsTable logs={logs} />
+            <NotificationLogsTable logs={logs} targets={testTargets} />
           )}
         </section>
       </div>
       {testOpen ? (
         <TestNotificationDialog
-          targets={testTargets ?? []}
+          targets={testTargets}
+          targetsError={testTargetsError}
           onClose={() => setTestOpen(false)}
           onSent={refresh}
         />
@@ -191,10 +204,12 @@ export default function NotificationLogsPage(): ReactElement {
 
 function TestNotificationDialog({
   targets,
+  targetsError,
   onClose,
   onSent,
 }: {
-  readonly targets: readonly NotificationTestTarget[];
+  readonly targets?: readonly NotificationTestTarget[];
+  readonly targetsError?: string;
   readonly onClose: () => void;
   readonly onSent: () => void;
 }): ReactElement {
@@ -206,7 +221,15 @@ function TestNotificationDialog({
   const [success, setSuccess] = useState<string>();
 
   const channels = useMemo(
-    () => [...new Set(targets.map((item) => item.channel.type))],
+    () => [...new Set((targets ?? []).map((item) => item.channel.type))],
+    [targets],
+  );
+  const providerCounts = useMemo(
+    () =>
+      (targets ?? []).reduce<Record<string, number>>((counts, item) => {
+        counts[item.channel.type] = (counts[item.channel.type] ?? 0) + 1;
+        return counts;
+      }, {}),
     [targets],
   );
 
@@ -287,7 +310,17 @@ function TestNotificationDialog({
         </div>
 
         <div className='space-y-4 px-5 py-5'>
-          {targets.length === 0 && !error ? (
+          {targetsError ? (
+            <div className='rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive'>
+              {targetsError}
+            </div>
+          ) : targets === undefined ? (
+            <span className='rounded-md border bg-muted/20 p-3 text-sm text-muted-foreground'>
+              {t('test.loadingProviders', {
+                defaultValue: 'Loading configured Providers…',
+              })}
+            </span>
+          ) : targets.length === 0 ? (
             <span className='rounded-md border bg-muted/20 p-3 text-sm text-muted-foreground'>
               {t('test.noProviders', {
                 defaultValue: 'No enabled Providers are configured.',
@@ -296,21 +329,21 @@ function TestNotificationDialog({
           ) : (
             <label className='grid gap-1.5 text-sm font-medium'>
               {t('test.channelProvider', {
-                defaultValue: 'Channel and Provider',
+                defaultValue: 'Delivery method',
               })}
               <select
                 aria-label={t('test.channelProvider', {
-                  defaultValue: 'Channel and Provider',
+                  defaultValue: 'Delivery method',
                 })}
                 className='h-9 w-full rounded-md border bg-background px-3 font-normal outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50'
                 disabled={sending}
                 onChange={(event) => {
                   setSelected(
-                    targets.find(
+                    targets?.find(
                       (item) => providerKey(item) === event.target.value,
                     ),
                   );
-                  const target = targets.find(
+                  const target = targets?.find(
                     (item) => providerKey(item) === event.target.value,
                   );
                   setValues(
@@ -326,14 +359,14 @@ function TestNotificationDialog({
               >
                 <option value=''>
                   {t('test.selectProvider', {
-                    defaultValue: 'Select a Channel and Provider',
+                    defaultValue: 'Select a delivery method',
                   })}
                 </option>
                 {channels.map((channel) => (
                   <optgroup
                     key={channel}
                     label={
-                      targets.find((item) => item.channel.type === channel)
+                      targets?.find((item) => item.channel.type === channel)
                         ?.channel.label ?? channel
                     }
                   >
@@ -344,7 +377,16 @@ function TestNotificationDialog({
                           key={providerKey(item)}
                           value={providerKey(item)}
                         >
-                          {providerLabel(item)}
+                          {providerLabel(
+                            item,
+                            providerCounts[item.channel.type] ?? 0,
+                            (channel, provider) =>
+                              t('test.singleProviderLabel', {
+                                defaultValue: `${channel} (${provider})`,
+                                channel,
+                                provider,
+                              }),
+                          )}
                         </option>
                       ))}
                   </optgroup>
@@ -442,8 +484,14 @@ function providerKey(item: NotificationTestTarget): string {
   return `${item.channel.type}:${item.provider.name}:${item.provider.type}`;
 }
 
-function providerLabel(item: NotificationTestTarget): string {
-  return `${item.provider.name} (${item.provider.label})`;
+function providerLabel(
+  item: NotificationTestTarget,
+  providerCount: number,
+  formatSingleProvider: (channel: string, provider: string) => string,
+): string {
+  return providerCount === 1
+    ? formatSingleProvider(item.channel.label, item.provider.label)
+    : `${item.provider.name} (${item.provider.label})`;
 }
 
 function Metric({
@@ -469,8 +517,10 @@ function Metric({
 
 function NotificationLogsTable({
   logs,
+  targets,
 }: {
   readonly logs: readonly NotificationLogDetails[];
+  readonly targets?: readonly NotificationTestTarget[];
 }): ReactElement {
   const { t } = useTranslation();
   return (
@@ -505,7 +555,11 @@ function NotificationLogsTable({
         </thead>
         <tbody>
           {logs.map((details) => (
-            <NotificationTableRow key={details.log.id} details={details} />
+            <NotificationTableRow
+              key={details.log.id}
+              details={details}
+              targets={targets}
+            />
           ))}
         </tbody>
       </table>
@@ -515,8 +569,10 @@ function NotificationLogsTable({
 
 function NotificationTableRow({
   details,
+  targets,
 }: {
   readonly details: NotificationLogDetails;
+  readonly targets?: readonly NotificationTestTarget[];
 }): ReactElement {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -573,7 +629,7 @@ function NotificationTableRow({
       {open ? (
         <tr className='border-b bg-muted/15'>
           <td colSpan={6} className='p-4 sm:px-12'>
-            <DeliveryTable deliveries={details.deliveries} />
+            <DeliveryTable deliveries={details.deliveries} targets={targets} />
           </td>
         </tr>
       ) : null}
@@ -583,8 +639,10 @@ function NotificationTableRow({
 
 function DeliveryTable({
   deliveries,
+  targets,
 }: {
   readonly deliveries: readonly NotificationDeliveryDetails[];
+  readonly targets?: readonly NotificationTestTarget[];
 }): ReactElement {
   const { t } = useTranslation();
   if (deliveries.length === 0) {
@@ -620,35 +678,43 @@ function DeliveryTable({
           </tr>
         </thead>
         <tbody>
-          {deliveries.map((details) => (
-            <Fragment key={details.delivery.id}>
-              <tr className='border-b'>
-                <td className='px-4 py-3'>{details.delivery.channel}</td>
-                <td className='px-4 py-3'>
-                  <div className='font-medium'>
-                    {details.delivery.providerName}
-                  </div>
-                  <div className='text-xs text-muted-foreground'>
-                    {details.delivery.providerType}
-                  </div>
-                </td>
-                <td className='px-4 py-3'>
-                  <StatusBadge status={details.delivery.status} />
-                </td>
-                <td className='px-4 py-3 text-right tabular-nums'>
-                  {details.attempts.length}
-                </td>
-                <td className='whitespace-nowrap px-4 py-3 text-muted-foreground'>
-                  {formatTime(details.delivery.updatedAt)}
-                </td>
-              </tr>
-              <tr className='border-b bg-muted/10'>
-                <td colSpan={5} className='px-4 py-3'>
-                  <AttemptList details={details} />
-                </td>
-              </tr>
-            </Fragment>
-          ))}
+          {deliveries.map((details) => {
+            const presentation = providerPresentation(
+              details.delivery.channel,
+              details.delivery.providerName,
+              details.delivery.providerType,
+              targets,
+            );
+            return (
+              <Fragment key={details.delivery.id}>
+                <tr className='border-b'>
+                  <td className='px-4 py-3'>{presentation.channel}</td>
+                  <td className='px-4 py-3'>
+                    <div className='font-medium'>{presentation.provider}</div>
+                    {presentation.detail ? (
+                      <div className='text-xs text-muted-foreground'>
+                        {presentation.detail}
+                      </div>
+                    ) : null}
+                  </td>
+                  <td className='px-4 py-3'>
+                    <StatusBadge status={details.delivery.status} />
+                  </td>
+                  <td className='px-4 py-3 text-right tabular-nums'>
+                    {details.attempts.length}
+                  </td>
+                  <td className='whitespace-nowrap px-4 py-3 text-muted-foreground'>
+                    {formatTime(details.delivery.updatedAt)}
+                  </td>
+                </tr>
+                <tr className='border-b bg-muted/10'>
+                  <td colSpan={5} className='px-4 py-3'>
+                    <AttemptList details={details} targets={targets} />
+                  </td>
+                </tr>
+              </Fragment>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -657,8 +723,10 @@ function DeliveryTable({
 
 function AttemptList({
   details,
+  targets,
 }: {
   readonly details: NotificationDeliveryDetails;
+  readonly targets?: readonly NotificationTestTarget[];
 }): ReactElement {
   const { t } = useTranslation();
   if (details.attempts.length === 0) {
@@ -670,30 +738,74 @@ function AttemptList({
   }
   return (
     <div className='grid gap-1.5'>
-      {details.attempts.map((attempt) => (
-        <div
-          key={attempt.id}
-          className='grid grid-cols-[2.5rem_minmax(8rem,1fr)_auto] items-center gap-3 rounded-md bg-muted/35 px-3 py-2 text-xs'
-        >
-          <span className='font-mono text-muted-foreground'>
-            #{attempt.sequence}
-          </span>
-          <span className='min-w-0'>
-            <strong>{attempt.providerName}</strong>
-            <span className='ml-2 text-muted-foreground'>
-              {attempt.providerType}
+      {details.attempts.map((attempt) => {
+        const presentation = providerPresentation(
+          details.delivery.channel,
+          attempt.providerName,
+          attempt.providerType,
+          targets,
+        );
+        return (
+          <div
+            key={attempt.id}
+            className='grid grid-cols-[2.5rem_minmax(8rem,1fr)_auto] items-center gap-3 rounded-md bg-muted/35 px-3 py-2 text-xs'
+          >
+            <span className='font-mono text-muted-foreground'>
+              #{attempt.sequence}
             </span>
-            {attempt.error ? (
-              <span className='mt-1 block truncate text-destructive'>
-                {attempt.error.message}
-              </span>
-            ) : null}
-          </span>
-          <StatusBadge status={attempt.status} />
-        </div>
-      ))}
+            <span className='min-w-0'>
+              <strong>{presentation.provider}</strong>
+              {presentation.detail ? (
+                <span className='ml-2 text-muted-foreground'>
+                  {presentation.detail}
+                </span>
+              ) : null}
+              {attempt.error ? (
+                <span className='mt-1 block truncate text-destructive'>
+                  {attempt.error.message}
+                </span>
+              ) : null}
+            </span>
+            <StatusBadge status={attempt.status} />
+          </div>
+        );
+      })}
     </div>
   );
+}
+
+function providerPresentation(
+  channel: string,
+  providerName: string,
+  providerType: string,
+  targets?: readonly NotificationTestTarget[],
+): {
+  readonly channel: string;
+  readonly provider: string;
+  readonly detail?: string;
+} {
+  const target = targets?.find(
+    (candidate) =>
+      candidate.channel.type === channel &&
+      candidate.provider.name === providerName &&
+      candidate.provider.type === providerType,
+  );
+  if (!target) {
+    return { channel, provider: providerName, detail: providerType };
+  }
+  const providerCount = targets?.filter(
+    (candidate) => candidate.channel.type === channel,
+  ).length;
+  return providerCount === 1
+    ? {
+        channel: target.channel.label,
+        provider: target.provider.label,
+      }
+    : {
+        channel: target.channel.label,
+        provider: target.provider.name,
+        detail: target.provider.label,
+      };
 }
 
 function StatusBadge({
