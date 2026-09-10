@@ -8,10 +8,16 @@ import type { PermissionGrant } from '@nocobase/authorization/permissions';
 import type { Auth } from '@nocobase/app-plugin-authentication';
 import { Hono } from 'hono';
 import type { AppAuthorization } from '../authorization.js';
+import type { ProtectedPermissionSetRegistry } from '../protected-permission-sets.js';
+import {
+  PermissionSetConflictError,
+  PermissionSetNotFoundError,
+} from '@nocobase/authorization/permissions';
 
 export function createAuthorizationRoutes(
   auth: Auth,
   authorization: AppAuthorization,
+  protectedPermissionSets: ProtectedPermissionSetRegistry,
 ): Hono<AuthorizationEnv> {
   const routes = new Hono<AuthorizationEnv>();
   routes.onError((error, context) => {
@@ -21,6 +27,16 @@ export function createAuthorizationRoutes(
       return context.json(
         { code: 'INVALID_AUTHORIZATION_INPUT', message: error.message },
         400,
+      );
+    if (error instanceof PermissionSetNotFoundError)
+      return context.json(
+        { code: 'PERMISSION_SET_NOT_FOUND', message: error.message },
+        404,
+      );
+    if (error instanceof PermissionSetConflictError)
+      return context.json(
+        { code: 'PERMISSION_SET_CONFLICT', message: error.message },
+        409,
       );
     throw error;
   });
@@ -54,19 +70,83 @@ export function createAuthorizationRoutes(
     });
   });
   routes.delete('/permission-sets/system-administrator', (context) =>
-    protectedSystemAdministrator(context),
+    protectedPermissionSet(context, 'system-administrator'),
   );
   routes.delete('/permission-sets/assignments/:id', async (context, next) => {
     const assignment = (
       await authorization.permissionSets.listAssignments()
     ).find((item) => item.id === context.req.param('id'));
-    if (assignment?.permissionSet === 'system-administrator') {
-      return protectedSystemAdministrator(context);
+    if (
+      assignment &&
+      protectedPermissionSets.isProtected(assignment.permissionSet)
+    ) {
+      return protectedPermissionSet(context, assignment.permissionSet);
     }
     await next();
   });
+  routes.post('/permission-sets', async (context) => {
+    await admin(context, 'permission-sets', 'create');
+    const input = parsePermissionSet(await context.req.json());
+    if (protectedPermissionSets.isProtected(input.key)) {
+      return protectedPermissionSet(context, input.key);
+    }
+    return context.json(
+      { data: await authorization.permissionSets.create(input) },
+      201,
+    );
+  });
+  routes.put('/permission-sets/:key', async (context) => {
+    await admin(context, 'permission-sets', 'update');
+    const key = context.req.param('key');
+    const input = parsePermissionSet(await context.req.json());
+    if (
+      protectedPermissionSets.isProtected(key) ||
+      protectedPermissionSets.isProtected(input.key)
+    ) {
+      return protectedPermissionSet(context, key);
+    }
+    return context.json({
+      data: await authorization.permissionSets.update(key, input),
+    });
+  });
+  routes.delete('/permission-sets/:key', async (context) => {
+    await admin(context, 'permission-sets', 'delete');
+    const key = context.req.param('key');
+    if (protectedPermissionSets.isProtected(key)) {
+      return protectedPermissionSet(context, key);
+    }
+    await authorization.permissionSets.delete(key);
+    return context.body(null, 204);
+  });
+  routes.post('/permission-sets/:key/assignments', async (context) => {
+    await admin(context, 'permission-sets', 'create');
+    const key = context.req.param('key');
+    // Preserve the existing administrator workflow: new System Administrators
+    // may be added, while revoking them and changing the required grants stays
+    // protected by the dedicated routes above.
+    if (
+      key !== 'system-administrator' &&
+      protectedPermissionSets.isProtected(key)
+    ) {
+      return protectedPermissionSet(context, key);
+    }
+    const input = object(await context.req.json(), 'Permission Set assignment');
+    const subject = object(input.subject, 'Permission Set subject');
+    return context.json(
+      {
+        data: await authorization.permissionSets.assign({
+          subject: {
+            type: string(subject.type, 'Permission Set subject type'),
+            id: string(subject.id, 'Permission Set subject id'),
+          },
+          permissionSet: key,
+        }),
+      },
+      201,
+    );
+  });
   routes.on(
-    ['GET', 'POST', 'PUT', 'DELETE'],
+    ['GET', 'DELETE'],
     ['/permission-sets', '/permission-sets/*'],
     (context) =>
       authorization.permissionSets.handler({
@@ -210,14 +290,16 @@ export function createAuthorizationRoutes(
   return routes;
 }
 
-function protectedSystemAdministrator(context: {
-  json(value: { code: string; message: string }, status: 403): Response;
-}): Response {
+function protectedPermissionSet(
+  context: {
+    json(value: { code: string; message: string }, status: 403): Response;
+  },
+  key: string,
+): Response {
   return context.json(
     {
       code: 'PROTECTED_PERMISSION_SET',
-      message:
-        'The System Administrator Permission Set and its assignments are protected.',
+      message: `The ${key} Permission Set and its assignments are protected.`,
     },
     403,
   );

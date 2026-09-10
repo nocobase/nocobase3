@@ -39,12 +39,17 @@ describe('AI Employee client routes', () => {
       throw new Error('Missing AI Employee Dev Route contribution.');
     }
     const [demoGroup] = devContribution.routes;
-    if (!demoGroup || !('children' in demoGroup)) {
+    if (!demoGroup?.children) {
       throw new Error('Missing grouped AI Employee demo routes.');
     }
 
     const loadedPages = await Promise.all(
-      demoGroup.children.map((route) => route.componentLoader()),
+      demoGroup.children.map((route) => {
+        if (!route.componentLoader) {
+          throw new Error(`Missing demo page loader: ${route.name}`);
+        }
+        return route.componentLoader();
+      }),
     );
     expect(loadedPages).toHaveLength(expectedDemoRoutes.length);
     for (const page of loadedPages) {

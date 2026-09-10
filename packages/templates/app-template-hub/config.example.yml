@@ -15,6 +15,7 @@ auth:
   emailAndPassword:
     enabled: true
     autoSignIn: false
+    disableSignUp: true
   session:
     storeSessionInDatabase: true
 

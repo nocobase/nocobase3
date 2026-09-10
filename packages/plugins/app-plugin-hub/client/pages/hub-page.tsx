@@ -1,5 +1,10 @@
 import { LoaderCircle } from 'lucide-react';
-import { apiClientToken, useService } from '@nocobase/app-client';
+import {
+  ApiClientError,
+  apiClientToken,
+  useService,
+} from '@nocobase/app-client';
+import { authorizationClientToken } from '@nocobase/app-plugin-authorization/client';
 import { Button } from '../components/ui/button.js';
 import {
   useCallback,
@@ -26,9 +31,18 @@ import { Detail, RemoveApplicationDialog } from './hub/detail.js';
 import { DeploymentDialog } from './hub/configuration.js';
 import { UploadReleaseDialog } from './hub/releases.js';
 import { uploadArtifact, readError } from './hub/utils.js';
+import {
+  emptyHubCapabilities,
+  loadHubCapabilities,
+  resolveHubDetailTab,
+  type HubCapabilities,
+} from '../permissions.js';
 
 export default function HubPage(): ReactElement {
   const client = useService(apiClientToken);
+  const authorization = useService(authorizationClientToken);
+  const [capabilities, setCapabilities] =
+    useState<HubCapabilities>(emptyHubCapabilities);
   const [apps, setApps] = useState<readonly AppSummary[]>([]);
   const [detail, setDetail] = useState<AppOverview>();
   const [releases, setReleases] = useState<readonly ReleaseRecord[]>([]);
@@ -73,6 +87,36 @@ export default function HubPage(): ReactElement {
   const [refreshingApps, setRefreshingApps] = useState(false);
   const [error, setError] = useState<string>();
 
+  const loadCapabilities = useCallback(async (): Promise<void> => {
+    setCapabilities(await loadHubCapabilities(authorization));
+  }, [authorization]);
+  const reportError = useCallback(
+    (reason: unknown): void => {
+      if (reason instanceof ApiClientError && reason.status === 403) {
+        authorization.invalidatePermissions();
+      }
+      setError(readError(reason));
+    },
+    [authorization],
+  );
+
+  useEffect(() => {
+    const reportPermissionError = (reason: unknown): void => {
+      setError(readError(reason));
+    };
+    const timer = window.setTimeout(
+      () => void loadCapabilities().catch(reportPermissionError),
+      0,
+    );
+    const unsubscribe = authorization.onPermissionsInvalidated(() => {
+      void loadCapabilities().catch(reportPermissionError);
+    });
+    return () => {
+      window.clearTimeout(timer);
+      unsubscribe();
+    };
+  }, [authorization, loadCapabilities]);
+
   const selected = useMemo(
     () =>
       detail && detail.app.id === selectedId
@@ -85,6 +129,16 @@ export default function HubPage(): ReactElement {
     selected?.deployment.desiredReleaseId ??
     selected?.releases[0]?.id;
   const release = selected?.releases.find((entry) => entry.id === releaseId);
+  const effectiveTab = selected
+    ? resolveHubDetailTab(
+        tab,
+        {
+          hasReleases: selected.hasReleases,
+          deployed: Boolean(selected.app.currentDeploymentId),
+        },
+        capabilities,
+      )
+    : tab;
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return needle
@@ -119,12 +173,12 @@ export default function HubPage(): ReactElement {
         if (!cancelled) setDetail(response.data);
       })
       .catch((reason: unknown) => {
-        if (!cancelled) setError(readError(reason));
+        if (!cancelled) reportError(reason);
       });
     return () => {
       cancelled = true;
     };
-  }, [client, selectedId]);
+  }, [client, reportError, selectedId]);
   const loadConfig = useCallback(
     async (appId: string): Promise<ConfigResponse> => {
       const response = await client.request<ApiResponse<ConfigResponse>>({
@@ -153,9 +207,9 @@ export default function HubPage(): ReactElement {
     // Load the catalog only while it is visible.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadApps()
-      .catch((reason: unknown) => setError(readError(reason)))
+      .catch(reportError)
       .finally(() => setLoading(false));
-  }, [loadApps, selectedId]);
+  }, [loadApps, reportError, selectedId]);
   useEffect(() => {
     if (!selectedId) return;
     const pending =
@@ -164,18 +218,20 @@ export default function HubPage(): ReactElement {
     const timer = window.setTimeout(() => {
       void loadDetail()
         .then(() => {
-          if (tab === 'deployments') setRefreshVersion((value) => value + 1);
+          if (effectiveTab === 'deployments') {
+            setRefreshVersion((value) => value + 1);
+          }
         })
-        .catch((reason: unknown) => setError(readError(reason)));
+        .catch(reportError);
     }, 1_500);
     return () => window.clearTimeout(timer);
-  }, [selected, selectedId, loadDetail, tab]);
+  }, [effectiveTab, selected, selectedId, loadDetail, reportError]);
   useEffect(() => {
     if (!selectedAppId) return;
     let cancelled = false;
-    const key = `${selectedAppId}:${tab}`;
+    const key = `${selectedAppId}:${effectiveTab}`;
     const load = async (): Promise<void> => {
-      if (tab === 'deployments') {
+      if (effectiveTab === 'deployments') {
         setDeploymentsLoading(true);
         try {
           const response = await client.request<
@@ -200,12 +256,15 @@ export default function HubPage(): ReactElement {
         } finally {
           if (!cancelled) setDeploymentsLoading(false);
         }
-      } else if (tab === 'releases') {
+      } else if (effectiveTab === 'releases') {
         const response = await client.request<
           ApiResponse<readonly ReleaseRecord[]>
         >({ path: `hub/apps/${selectedAppId}/releases` });
         if (!cancelled) setReleases(response.data);
-      } else if (tab === 'configuration' || tab === 'resources') {
+      } else if (
+        effectiveTab === 'configuration' ||
+        effectiveTab === 'resources'
+      ) {
         const response = await client.request<ApiResponse<ConfigResponse>>({
           path: `hub/apps/${selectedAppId}/config`,
         });
@@ -217,18 +276,19 @@ export default function HubPage(): ReactElement {
       if (!cancelled) setPanelKey(key);
     };
     void load().catch((reason: unknown) => {
-      if (!cancelled) setError(readError(reason));
+      if (!cancelled) reportError(reason);
     });
     return () => {
       cancelled = true;
     };
   }, [
     client,
-    tab,
+    effectiveTab,
     selectedAppId,
     selectedCurrentDeploymentId,
     refreshVersion,
     deploymentPage,
+    reportError,
   ]);
 
   const perform = async (
@@ -242,7 +302,7 @@ export default function HubPage(): ReactElement {
       if (refreshDetail && selectedId) await loadDetail();
       setRefreshVersion((value) => value + 1);
     } catch (reason) {
-      setError(readError(reason));
+      reportError(reason);
     } finally {
       setBusy(false);
     }
@@ -290,11 +350,12 @@ export default function HubPage(): ReactElement {
             total={apps.length}
             loading={loading}
             refreshing={refreshingApps}
+            canCreate={capabilities.create}
             onRefresh={() => {
               setRefreshingApps(true);
               setError(undefined);
               void loadApps()
-                .catch((reason: unknown) => setError(readError(reason)))
+                .catch(reportError)
                 .finally(() => setRefreshingApps(false));
             }}
             query={query}
@@ -307,8 +368,9 @@ export default function HubPage(): ReactElement {
         ) : (
           <Detail
             app={selected}
-            panelLoading={panelKey !== `${selectedAppId}:${tab}`}
-            tab={tab}
+            capabilities={capabilities}
+            panelLoading={panelKey !== `${selectedAppId}:${effectiveTab}`}
+            tab={effectiveTab}
             release={release}
             configMode={configMode}
             configContent={configContent}
@@ -375,7 +437,7 @@ export default function HubPage(): ReactElement {
                   setRollbackDeploymentId(undefined);
                   setDeployOpen(true);
                 })
-                .catch((reason: unknown) => setError(readError(reason)))
+                .catch(reportError)
                 .finally(() => setBusy(false));
             }}
             onRollback={(deploymentId) => {
@@ -401,14 +463,14 @@ export default function HubPage(): ReactElement {
                   setRollbackDeploymentId(deploymentId);
                   setDeployOpen(true);
                 })
-                .catch((reason: unknown) => setError(readError(reason)))
+                .catch(reportError)
                 .finally(() => setBusy(false));
             }}
             onUpload={() => setUploadOpen(true)}
           />
         )}
       </div>
-      {createOpen ? (
+      {createOpen && capabilities.create ? (
         <CreateDialog
           busy={busy}
           appId={newAppId}
@@ -431,7 +493,7 @@ export default function HubPage(): ReactElement {
           }
         />
       ) : null}
-      {lifecycleAction && selected ? (
+      {lifecycleAction && selected && capabilities[lifecycleAction] ? (
         <AppDialog
           title={`${lifecycleAction === 'start' ? 'Start' : lifecycleAction === 'stop' ? 'Stop' : 'Restart'} ${selected.app.name}?`}
           description={
@@ -476,7 +538,9 @@ export default function HubPage(): ReactElement {
           </div>
         </AppDialog>
       ) : null}
-      {deployOpen && selected ? (
+      {deployOpen &&
+      selected &&
+      capabilities[rollbackDeploymentId ? 'rollback' : 'deploy'] ? (
         <DeploymentDialog
           app={selected}
           releaseId={deploymentReleaseId}
@@ -519,7 +583,7 @@ export default function HubPage(): ReactElement {
           }
         />
       ) : null}
-      {uploadOpen && selected ? (
+      {uploadOpen && selected && capabilities['upload-release'] ? (
         <UploadReleaseDialog
           artifact={artifact}
           busy={busy}
@@ -536,7 +600,7 @@ export default function HubPage(): ReactElement {
           }
         />
       ) : null}
-      {removeOpen && selected ? (
+      {removeOpen && selected && capabilities.remove ? (
         <RemoveApplicationDialog
           app={selected}
           busy={busy}

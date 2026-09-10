@@ -19,23 +19,17 @@ describe('Server inspection', () => {
       order: 1,
       packageName: '@nocobase/app-plugin-authentication',
     });
-    expect(
-      inspection.plugins.find(
-        ({ packageName }) =>
-          packageName === '@nocobase/app-plugin-queue-example',
-      ),
-    ).toMatchObject({ contributions: { jobLocations: 1 } });
+    expect(inspection.plugins.map(({ packageName }) => packageName)).toEqual([
+      '@nocobase/app-plugin-authentication',
+      '@nocobase/app-plugin-authorization',
+      '@nocobase/app-plugin-users',
+      '@nocobase/app-plugin-i18n',
+      '@nocobase/app-plugin-install',
+      '@nocobase/app-plugin-hub',
+    ]);
     expect(inspection.routes.map(({ order }) => order)).toEqual(
       inspection.routes.map((_route, index) => index + 1),
     );
-    expect(
-      inspection.routes
-        .filter(
-          ({ packageName }) =>
-            packageName === '@nocobase/app-plugin-routes-example',
-        )
-        .map(({ scope }) => scope),
-    ).toEqual(['root', 'api']);
     expect(
       inspection.routes.some(
         ({ packageName, scope }) =>

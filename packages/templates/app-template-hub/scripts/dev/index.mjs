@@ -176,13 +176,6 @@ const healthUrl = `${appServerUrl}/${[appBasePath, 'api/healthz']
   .filter(Boolean)
   .join('/')}`;
 const viteUrl = `${nextEnv.APP_VITE_DEV_URL}/${appBasePath ? `${appBasePath}/` : ''}`;
-const workflowBuild = spawn.sync('pnpm', ['nocobase', 'workflow', 'build'], {
-  cwd: rootDir,
-  env: nextEnv,
-  stdio: 'inherit',
-});
-if (workflowBuild.error) throw workflowBuild.error;
-if (workflowBuild.status !== 0) process.exit(workflowBuild.status ?? 1);
 const pluginWatchIncludes = resolvePluginWatchIncludes(rootDir);
 
 console.log(`\n  Starting app dev server...`);

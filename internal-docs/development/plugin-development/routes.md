@@ -22,6 +22,8 @@ Route 是一个跨 Client 和 Server 的能力专题。NocoBase v3 提供五种 
 | `defineRootRoutes()`、`defineApiRoutes()`                          | [Server Route 最佳实践示例](./server-routes-examples.md) |
 | `defineAppRoutes()`、`defineSettingsRoutes()`、`defineDevRoutes()` | [Client Route 最佳实践示例](./client-routes-examples.md) |
 
+页面子路由、递归导航分组和手动 `Outlet` 的开发方式见[页面子路由与导航](client-child-routes.md)。
+
 ## Server 和 Client 的边界
 
 Server Route 看 `scope`：`root` 或 `api`。Client Route 看 `parent`：`app`、`settings` 或 `dev`。

@@ -1,7 +1,7 @@
 {
   "name": "@nocobase/app-template-examples",
   "displayName": "NocoBase Examples",
-  "version": "0.0.2-beta.0",
+  "version": "0.1.0-beta.1",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -10,7 +10,7 @@
   "packageManager": "pnpm@11.7.0",
   "nocobase": {
     "templateKind": "app",
-    "defaultTemplateVersion": "0.0.2-beta.0"
+    "defaultTemplateVersion": "0.1.0-beta.1"
   },
   "devDependencies": {
     "@ai-sdk/react": "2.0.0",
@@ -184,7 +184,6 @@
   },
   "dependencies": {
     "@nocobase/app-plugin-ai-employee": "workspace:^",
-    "@nocobase/app-plugin-ai-knowledge-base": "workspace:^",
     "@nocobase/app-plugin-authentication": "workspace:^",
     "@nocobase/app-plugin-authorization": "workspace:^",
     "@nocobase/app-plugin-cli-example": "workspace:^",

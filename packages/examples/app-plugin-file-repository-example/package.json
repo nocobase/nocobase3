@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-file-repository-example",
   "displayName": "File Repository Example App Plugin",
   "description": "Attachments collection, API routes, and an upload page demonstrating File Repository.",
-  "version": "0.0.2-beta.0",
+  "version": "0.0.2-beta.1",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "sideEffects": false,
