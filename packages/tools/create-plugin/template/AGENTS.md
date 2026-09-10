@@ -39,7 +39,25 @@ Before adding a client package, check whether `packages/templates/app-template-d
 
 `@nocobase/app-server`, `@nocobase/app-client`, `@nocobase/db`, `@nocobase/i18n`, `@nocobase/service-provider`, `@nocobase/queue`, and every other `@nocobase/app-plugin-*` carry process-wide state — service tokens compared by object identity, React contexts, a job registry. A second copy splits that state, and nothing warns: the install succeeds, the build succeeds, and at runtime a demonstrably registered service reports `Service "..." is not registered`.
 
-Declare each as a `peerDependency` (the published contract: "provide this, and provide exactly one") paired with a `devDependency` (which pins this repository's copy for development, where the wide peer range should not float). `pnpm peers:check` enforces this. The generator already emits this shape for the capabilities you selected.
+Declare each as a `peerDependency` — the published contract: "provide this, and provide exactly one". One declaration is enough; pnpm installs a peer and links it into this package's own `node_modules`, so lint, tests, and the build resolve it without a second entry to keep in step. `pnpm peers:check` enforces this. The generator already emits this shape for the capabilities you selected.
+
+## Contributing CLI commands
+
+A plugin can add commands to an application's `pnpm nocobase`, and can ask an application to run a command during its `pnpm build` or `pnpm dev`. Both are declared in `cli/index.ts` through `defineCliPlugin`, and the `cli` capability generates that entry with one example command.
+
+Commands here are static tooling: they read and write files and packages. They never start the application, so nothing in one may resolve a service or query the database — anything needing the running application is a server route or a job.
+
+Build and dev hooks are for a plugin that has to produce something before the application can run. Declaring the step here rather than in each application's build script is what keeps it correct: it appears only where this plugin is registered, and disappears with it.
+
+```ts
+buildHooks: {
+  afterServerBuild: [{ label: 'Build artifacts', command: ['pnpm', 'nocobase', '<topic>', 'build'] }],
+},
+```
+
+A hook command is any executable with its arguments, already split — no shell, so no quoting to get right, and no `&&` or pipes. The stage names say what exists when the hook runs: `beforeBuild` (empty `dist`), `afterClientBuild` (`dist/client`), `afterServerBuild` (`+ dist/server`), `afterBuild` (the installed deployment tree), and `beforeDev` for `pnpm dev`.
+
+Read `internal-docs/development/plugin-development/cli.md` before adding either.
 
 ## Before you finish
 

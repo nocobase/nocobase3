@@ -18,6 +18,31 @@ const cliPlugin: AppCliPlugin = defineCliPlugin({
     greet: CliExampleGreet,
     'artifact:build': CliExampleArtifactBuild,
   },
+  /**
+   * A plugin may also ask an application to run a command during `pnpm build` or `pnpm dev`, which is how a plugin
+   * that has to produce something before the application starts avoids writing that step into every application's
+   * build script.
+   *
+   * A hook command is any executable with its arguments, already split — not necessarily one of this plugin's own
+   * commands, and not a string a shell would parse. So there is no quoting to get right, and no `&&` or pipes: a
+   * sequence is several hooks, which run in the order they are declared.
+   *
+   * The stage names say what exists when the hook runs. `beforeBuild` has an empty `dist`, `afterClientBuild` has
+   * `dist/client`, `afterServerBuild` adds `dist/server`, and `afterBuild` sees the installed deployment tree.
+   * `beforeDev` is the only dev stage, because `pnpm dev` starts concurrent processes rather than finishing steps.
+   */
+  buildHooks: {
+    beforeBuild: [
+      {
+        label: 'Announce the example build hook',
+        command: [
+          'node',
+          '-e',
+          "console.log('cli-example: beforeBuild hook ran')",
+        ],
+      },
+    ],
+  },
 });
 
 export default cliPlugin;
