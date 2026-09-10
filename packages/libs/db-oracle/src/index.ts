@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module';
 import type {
   ConnectionConfig,
+  DatabaseCapabilities,
   DatabaseDriverDefinition,
   OracleConnectionConfig,
 } from '@nocobase/db';
@@ -18,6 +19,14 @@ export const oracleDriver: DatabaseDriverDefinition<'oracle'> = {
   packageName: '@nocobase/db-oracle',
   nativeDriver: 'oracledb',
   knexClient: 'oracledb',
+  capabilities: {
+    schemas: true,
+    materializedViews: true,
+    refreshMaterializedViews: true,
+    deferrableConstraints: true,
+    nativeTypes: true,
+    comments: true,
+  } satisfies Partial<DatabaseCapabilities>,
   createKnexClient: () =>
     // Oracle's integer codecs are installed by the shared Knex helper.
     preciseIntegerClient(Oracledb),

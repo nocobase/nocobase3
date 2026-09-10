@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module';
 import type {
   ConnectionConfig,
+  DatabaseCapabilities,
   DatabaseDriverDefinition,
   PostgresConnectionConfig,
 } from '@nocobase/db';
@@ -21,6 +22,15 @@ export const postgresDriver: DatabaseDriverDefinition<'postgres'> = {
   packageName: '@nocobase/db-postgres',
   nativeDriver: 'pg',
   knexClient: 'pg',
+  capabilities: {
+    schemas: true,
+    materializedViews: true,
+    refreshMaterializedViews: true,
+    deferrableConstraints: true,
+    partialIndexes: true,
+    nativeTypes: true,
+    comments: true,
+  } satisfies Partial<DatabaseCapabilities>,
   createKnexClient: (_config, baseClient) => {
     if (!baseClient) return 'pg';
     class PostgresClientWithQueryStream extends baseClient {

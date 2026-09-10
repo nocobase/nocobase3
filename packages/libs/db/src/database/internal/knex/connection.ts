@@ -77,10 +77,10 @@ export class KnexDatabaseConnection implements DatabaseConnection {
     this.driver = this.config.driver;
     this.dialect = this.config.dialect;
     this.schemaManagement = this.config.schemaManagement;
-    this.capabilities = resolveDatabaseCapabilities(
-      this.dialect,
-      this.config.capabilities,
-    );
+    this.capabilities = resolveDatabaseCapabilities({
+      ...dialectDriver?.capabilities,
+      ...this.config.capabilities,
+    });
     if (!dialectDriver?.createSchemaInspector) {
       throw new Error(
         `Database driver for dialect "${this.dialect}" must create a schema inspector.`,

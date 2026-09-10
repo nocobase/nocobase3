@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module';
 import type {
   ConnectionConfig,
+  DatabaseCapabilities,
   DatabaseDriverDefinition,
   SqliteConnectionConfig,
 } from '@nocobase/db';
@@ -19,6 +20,9 @@ export const sqliteDriver: DatabaseDriverDefinition<'sqlite'> = {
   packageName: '@nocobase/db-sqlite',
   nativeDriver: 'better-sqlite3',
   knexClient: 'better-sqlite3',
+  capabilities: {
+    partialIndexes: true,
+  } satisfies Partial<DatabaseCapabilities>,
   createKnexClient: () => preciseIntegerClient(BetterSqlite3),
   resolveConnection: (source: ConnectionConfig) => {
     const config = source as SqliteConnectionConfig;

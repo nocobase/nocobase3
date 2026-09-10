@@ -23,6 +23,8 @@ export interface DatabaseDriverDefinition<TDialect extends string = string> {
   /** Native driver package name owned by the dialect package. */
   readonly nativeDriver?: string;
   readonly knexClient?: string;
+  /** Capabilities supplied by the dialect package for this connection. */
+  readonly capabilities?: Partial<DatabaseCapabilities>;
   readonly createKnexClient?: (
     config: unknown,
     baseClient?: typeof Knex.Client,

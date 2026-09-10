@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module';
 import type {
   ConnectionConfig,
+  DatabaseCapabilities,
   DatabaseDriverDefinition,
   MssqlConnectionConfig,
 } from '@nocobase/db';
@@ -17,6 +18,12 @@ export const mssqlDriver: DatabaseDriverDefinition<'mssql'> = {
   packageName: '@nocobase/db-mssql',
   nativeDriver: 'tedious',
   knexClient: 'mssql',
+  capabilities: {
+    schemas: true,
+    partialIndexes: true,
+    nativeTypes: true,
+    comments: true,
+  } satisfies Partial<DatabaseCapabilities>,
   createKnexClient: (_config, baseClient) => {
     if (!baseClient) return 'mssql';
     class MssqlClientWithDriver extends baseClient {

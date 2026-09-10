@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module';
 import type {
   ConnectionConfig,
+  DatabaseCapabilities,
   DatabaseDriverDefinition,
   MysqlConnectionConfig,
 } from '@nocobase/db';
@@ -17,6 +18,10 @@ export const mysqlDriver: DatabaseDriverDefinition<'mysql'> = {
   packageName: '@nocobase/db-mysql',
   nativeDriver: 'mysql2',
   knexClient: 'mysql2',
+  capabilities: {
+    comments: true,
+    nativeTypes: true,
+  } satisfies Partial<DatabaseCapabilities>,
   createKnexClient: (_config, baseClient) => {
     if (!baseClient) return 'mysql2';
     class MysqlClientWithDriver extends baseClient {

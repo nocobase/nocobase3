@@ -1053,8 +1053,10 @@ describe('DatabaseManager', () => {
     });
   });
 
-  it('normalizes capabilities for supported dialects and overrides', () => {
-    expect(resolveDatabaseCapabilities('postgres')).toMatchObject({
+  it('normalizes registered driver capabilities and overrides', () => {
+    expect(
+      resolveDatabaseCapabilities(postgres.driver.capabilities),
+    ).toMatchObject({
       schemas: true,
       materializedViews: true,
       refreshMaterializedViews: true,
@@ -1063,7 +1065,9 @@ describe('DatabaseManager', () => {
       nativeTypes: true,
       comments: true,
     });
-    expect(resolveDatabaseCapabilities('mssql')).toMatchObject({
+    expect(
+      resolveDatabaseCapabilities(mssql.driver.capabilities),
+    ).toMatchObject({
       schemas: true,
       views: true,
       replaceView: true,
@@ -1072,20 +1076,27 @@ describe('DatabaseManager', () => {
       nativeTypes: true,
       comments: true,
     });
-    expect(resolveDatabaseCapabilities('mysql')).toMatchObject({
+    expect(
+      resolveDatabaseCapabilities(mysql.driver.capabilities),
+    ).toMatchObject({
       comments: true,
       nativeTypes: true,
       materializedViews: false,
     });
-    expect(resolveDatabaseCapabilities('sqlite')).toMatchObject({
+    expect(
+      resolveDatabaseCapabilities(sqlite.driver.capabilities),
+    ).toMatchObject({
       partialIndexes: true,
       nativeTypes: false,
     });
     expect(
-      resolveDatabaseCapabilities('custom', { views: false }),
+      resolveDatabaseCapabilities({
+        ...postgres.driver.capabilities,
+        views: false,
+      }),
     ).toMatchObject({
       views: false,
-      schemas: false,
+      schemas: true,
     });
   });
 });
