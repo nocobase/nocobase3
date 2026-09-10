@@ -51,7 +51,8 @@ keywords: 'NocoBase 3,主题,外观,深色模式,Coding Agent'
 
 Coding Agent 会完成主题创建、加入可选列表和名称配置。新增主题后，可以在「外观」面板中选择它。
 
-<!-- 需要一张新增「森林」后「外观」面板的截图，并配一组实际业务页面的浅色、深色效果图 -->
+![20260910110253](https://static-docs.nocobase.com/20260910110253.png)
+![20260910110728](https://static-docs.nocobase.com/20260910110728.png)
 
 ## 删除一个主题
 
