@@ -39,6 +39,48 @@ const llmProvider = {
 } as any;
 
 describe('fixed AgentService contracts', () => {
+  it('owns response metadata lifecycle inside each AgentService stream execution', () => {
+    const types = read('agent/types.ts');
+    const service = read('agent/agent-service.ts');
+    const chatContext = read('agent/chat-context.ts');
+    const employeeProviders = read('agent/ai-employee/providers.ts');
+
+    const resolvedLLM = types.slice(
+      types.indexOf('export interface ResolvedAgentLLM'),
+      types.indexOf('export type AgentMessageConversionContext'),
+    );
+    const chatContextProvider = types.slice(
+      types.indexOf('export interface ChatContextProvider'),
+      types.indexOf('export interface AgentProviders'),
+    );
+
+    expect(resolvedLLM).not.toMatch(/takeResponseMetadata|dispose/);
+    expect(chatContextProvider).not.toContain('getExecutionConfig');
+    expect(chatContext).not.toMatch(/executionConfig|getExecutionConfig/);
+    expect(employeeProviders).not.toMatch(
+      /ExecutionResponseMetadata|ResponseMetadataCollector|responseMetadataCollector/,
+    );
+
+    expect(service).toContain('class ExecutionResponseMetadata');
+    expect(service).toContain('class ResponseMetadataCollector');
+    expect(service).toContain('llm.provider, responseMetadata');
+    expect(service).toContain('responseMetadata.take(');
+    expect(service).toContain('responseMetadata?.dispose()');
+    expect(service).not.toMatch(
+      /class AgentService[\s\S]*private readonly responseMetadata/,
+    );
+
+    const llmProviderContract = fs.readFileSync(
+      path.resolve(
+        import.meta.dirname,
+        '../../../libs/ai-employee/src/llm-providers/provider.ts',
+      ),
+      'utf8',
+    );
+    expect(llmProviderContract).toContain('parseResponseMetadata(');
+    expect(types).toContain('updateAssistantResponseMetadata(');
+  });
+
   it('keeps transactions and arbitrary middleware out of public providers', () => {
     const source = read('agent/types.ts');
     expect(source).not.toMatch(
