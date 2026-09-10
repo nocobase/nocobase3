@@ -2861,9 +2861,15 @@ importers:
       '@nocobase/app-server':
         specifier: workspace:^
         version: link:../../app/app-server
+      '@nocobase/db':
+        specifier: workspace:^
+        version: link:../../libs/db
       '@nocobase/nb3-cli':
         specifier: workspace:^
         version: link:../../tools/cli
+      '@nocobase/service-provider':
+        specifier: workspace:^
+        version: link:../../libs/service-provider
       '@oclif/core':
         specifier: 'catalog:'
         version: 4.14.0
@@ -2910,9 +2916,6 @@ importers:
       '@nocobase/cron':
         specifier: workspace:^
         version: link:../../libs/cron
-      '@nocobase/db':
-        specifier: workspace:^
-        version: link:../../libs/db
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
@@ -2928,9 +2931,6 @@ importers:
       '@nocobase/queue':
         specifier: workspace:^
         version: link:../../libs/queue
-      '@nocobase/service-provider':
-        specifier: workspace:^
-        version: link:../../libs/service-provider
       '@nocobase/session':
         specifier: workspace:^
         version: link:../../libs/session
@@ -3532,6 +3532,9 @@ importers:
       '@nocobase/nb3-cli':
         specifier: workspace:^
         version: link:../../tools/cli
+      '@nocobase/service-provider':
+        specifier: workspace:^
+        version: link:../../libs/service-provider
       '@oclif/core':
         specifier: 'catalog:'
         version: 4.14.0
@@ -3596,9 +3599,6 @@ importers:
       '@nocobase/queue':
         specifier: workspace:^
         version: link:../../libs/queue
-      '@nocobase/service-provider':
-        specifier: workspace:^
-        version: link:../../libs/service-provider
       '@nocobase/session':
         specifier: workspace:^
         version: link:../../libs/session
