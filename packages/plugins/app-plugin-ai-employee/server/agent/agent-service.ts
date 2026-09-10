@@ -449,6 +449,7 @@ export class AgentService {
     let prepared: PreparedAgentContext | undefined;
     let activeProvider: LLMProvider | undefined;
     let llm: ResolvedAgentLLM | undefined;
+    let responseMetadata: ExecutionResponseMetadata | undefined;
     await conversation.streamCache.clear();
     await conversation.beforeExecution('streaming');
     const stopReasoning = function* (
@@ -461,7 +462,7 @@ export class AgentService {
     try {
       llm = await this.resolveLLM(request);
       activeProvider = llm.provider;
-      const responseMetadata = new ExecutionResponseMetadata();
+      responseMetadata = new ExecutionResponseMetadata();
       const responseMetadataCollector = new ResponseMetadataCollector(
         llm.provider,
         responseMetadata,
@@ -573,7 +574,7 @@ export class AgentService {
               messageIds.set(current.sessionId, chunks.body.messageId);
             await conversation.streamCache.skipped();
             const metadata = chunks.body?.id
-              ? prepared.llm?.takeResponseMetadata?.(chunks.body.id)
+              ? responseMetadata.take(chunks.body.id)
               : undefined;
             if (metadata && chunks.body?.messageId)
               await conversation.updateAssistantResponseMetadata(
