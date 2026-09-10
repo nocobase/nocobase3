@@ -12,6 +12,19 @@ afterEach(async () => {
 it('binds its driver', () =>
   expect(sqlite().databaseDriver).toBe(sqlite.driver));
 
+it('normalizes driver options without undefined values', () => {
+  expect(
+    sqlite.driver.resolveConnection?.({
+      dialect: 'sqlite',
+      filename: ':memory:',
+      driverOptions: { verbose: true },
+    }),
+  ).toEqual({
+    connection: { verbose: true, filename: ':memory:' },
+    useNullAsDefault: true,
+  });
+});
+
 it('creates a working sqlite connection through the factory', async () => {
   const manager = createDatabaseManager({
     connections: { main: sqlite() },

@@ -14,8 +14,25 @@ export const mssqlDriver: DatabaseDriverDefinition<'mssql'> = {
   knexClient: 'mssql',
   resolveConnection: (source: ConnectionConfig) => {
     const config = source as MssqlConnectionConfig;
+    assertDriverOptions(config.driverOptions, [
+      'host',
+      'server',
+      'port',
+      'database',
+      'user',
+      'userName',
+      'username',
+      'password',
+      'encrypt',
+      'trustServerCertificate',
+      'options',
+      'pool',
+      'url',
+      'connectionString',
+      'uri',
+    ]);
     return {
-      connection: {
+      connection: compactObject({
         ...config.driverOptions,
         server: config.host ?? '127.0.0.1',
         port: config.port ?? 1433,
@@ -27,7 +44,7 @@ export const mssqlDriver: DatabaseDriverDefinition<'mssql'> = {
           lowerCaseGuids: true,
           trustServerCertificate: config.trustServerCertificate ?? false,
         },
-      },
+      }),
     };
   },
   createSchemaInspector: (context) =>
@@ -54,3 +71,26 @@ export const mssql: MssqlFactory = Object.assign(
   { dialect: 'mssql' as const, driver: mssqlDriver },
 );
 export default mssql;
+
+function assertDriverOptions(
+  driverOptions: Record<string, unknown> | undefined,
+  reservedKeys: readonly string[],
+): void {
+  if (!driverOptions) return;
+  const reserved = reservedKeys.filter(
+    (key) => driverOptions[key] !== undefined,
+  );
+  if (reserved.length > 0) {
+    throw new Error(
+      `Database driverOptions cannot include ${reserved.join(', ')}. Use flattened connection parameters.`,
+    );
+  }
+}
+
+function compactObject(
+  input: Record<string, unknown>,
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(input).filter(([, value]) => value !== undefined),
+  );
+}

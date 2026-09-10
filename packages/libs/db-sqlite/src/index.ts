@@ -18,8 +18,18 @@ export const sqliteDriver: DatabaseDriverDefinition<'sqlite'> = {
   knexClient: 'better-sqlite3',
   resolveConnection: (source: ConnectionConfig) => {
     const config = source as SqliteConnectionConfig;
+    assertDriverOptions(config.driverOptions, [
+      'filename',
+      'pool',
+      'url',
+      'connectionString',
+      'uri',
+    ]);
     return {
-      connection: { ...config.driverOptions, filename: config.filename },
+      connection: compactObject({
+        ...config.driverOptions,
+        filename: config.filename,
+      }),
       useNullAsDefault: true,
     };
   },
@@ -72,3 +82,26 @@ export const sqlite: SqliteFactory = Object.assign(
   { dialect: 'sqlite' as const, driver: sqliteDriver },
 );
 export default sqlite;
+
+function assertDriverOptions(
+  driverOptions: Record<string, unknown> | undefined,
+  reservedKeys: readonly string[],
+): void {
+  if (!driverOptions) return;
+  const reserved = reservedKeys.filter(
+    (key) => driverOptions[key] !== undefined,
+  );
+  if (reserved.length > 0) {
+    throw new Error(
+      `Database driverOptions cannot include ${reserved.join(', ')}. Use flattened connection parameters.`,
+    );
+  }
+}
+
+function compactObject(
+  input: Record<string, unknown>,
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(input).filter(([, value]) => value !== undefined),
+  );
+}

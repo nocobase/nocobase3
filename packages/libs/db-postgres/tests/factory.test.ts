@@ -10,4 +10,24 @@ describe('postgres factory', () => {
       host: 'localhost',
     });
   });
+
+  it('normalizes flattened connection options', () => {
+    expect(
+      postgres.driver.resolveConnection?.({
+        dialect: 'postgres',
+        host: 'localhost',
+        database: 'app',
+        username: 'app',
+        driverOptions: { application_name: 'nocobase' },
+      }),
+    ).toEqual({
+      connection: {
+        application_name: 'nocobase',
+        host: 'localhost',
+        database: 'app',
+        user: 'app',
+      },
+      searchPath: undefined,
+    });
+  });
 });

@@ -14,13 +14,33 @@ export const oracleDriver: DatabaseDriverDefinition<'oracle'> = {
   knexClient: 'oracledb',
   resolveConnection: (source: ConnectionConfig) => {
     const config = source as OracleConnectionConfig;
+    assertDriverOptions(config.driverOptions, [
+      'host',
+      'port',
+      'database',
+      'serviceName',
+      'user',
+      'username',
+      'password',
+      'connectString',
+      'externalAuth',
+      'pool',
+      'url',
+      'connectionString',
+      'uri',
+    ]);
+    if (config.serviceName.trim() === '') {
+      throw new Error(
+        'Oracle database serviceName must be a non-empty string.',
+      );
+    }
     return {
-      connection: {
+      connection: compactObject({
         ...config.driverOptions,
         user: config.username,
         password: config.password,
         connectString: `${config.host ?? '127.0.0.1'}:${config.port ?? 1521}/${config.serviceName}`,
-      },
+      }),
     };
   },
   createSchemaInspector: (context) =>
@@ -81,3 +101,26 @@ export const oracle: OracleFactory = Object.assign(
   { dialect: 'oracle' as const, driver: oracleDriver },
 );
 export default oracle;
+
+function assertDriverOptions(
+  driverOptions: Record<string, unknown> | undefined,
+  reservedKeys: readonly string[],
+): void {
+  if (!driverOptions) return;
+  const reserved = reservedKeys.filter(
+    (key) => driverOptions[key] !== undefined,
+  );
+  if (reserved.length > 0) {
+    throw new Error(
+      `Database driverOptions cannot include ${reserved.join(', ')}. Use flattened connection parameters.`,
+    );
+  }
+}
+
+function compactObject(
+  input: Record<string, unknown>,
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(input).filter(([, value]) => value !== undefined),
+  );
+}

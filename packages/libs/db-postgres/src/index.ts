@@ -22,8 +22,21 @@ export const postgresDriver: DatabaseDriverDefinition<'postgres'> = {
     useNullAsDefault?: boolean;
   } => {
     const config = source as PostgresConnectionConfig;
+    assertDriverOptions(config.driverOptions, [
+      'host',
+      'port',
+      'database',
+      'user',
+      'username',
+      'password',
+      'ssl',
+      'pool',
+      'url',
+      'connectionString',
+      'uri',
+    ]);
     return {
-      connection: {
+      connection: compactObject({
         ...config.driverOptions,
         host: config.host,
         port: config.port,
@@ -31,7 +44,7 @@ export const postgresDriver: DatabaseDriverDefinition<'postgres'> = {
         user: config.username,
         password: config.password,
         ssl: config.ssl,
-      },
+      }),
       searchPath:
         config.schema === undefined
           ? undefined
@@ -79,3 +92,26 @@ export const postgres: PostgresFactory = Object.assign(
 );
 
 export default postgres;
+
+function assertDriverOptions(
+  driverOptions: Record<string, unknown> | undefined,
+  reservedKeys: readonly string[],
+): void {
+  if (!driverOptions) return;
+  const reserved = reservedKeys.filter(
+    (key) => driverOptions[key] !== undefined,
+  );
+  if (reserved.length > 0) {
+    throw new Error(
+      `Database driverOptions cannot include ${reserved.join(', ')}. Use flattened connection parameters.`,
+    );
+  }
+}
+
+function compactObject(
+  input: Record<string, unknown>,
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(input).filter(([, value]) => value !== undefined),
+  );
+}

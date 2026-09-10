@@ -14,9 +14,29 @@ export const mysqlDriver: DatabaseDriverDefinition<'mysql'> = {
   knexClient: 'mysql2',
   resolveConnection: (source: ConnectionConfig) => {
     const config = source as MysqlConnectionConfig;
+    assertSocketPathExclusive(config, ['host', 'port']);
+    assertDriverOptions(config.driverOptions, [
+      'host',
+      'port',
+      'database',
+      'user',
+      'username',
+      'password',
+      'charset',
+      'timezone',
+      'socketPath',
+      'ssl',
+      'pool',
+      'url',
+      'connectionString',
+      'uri',
+    ]);
     return {
-      connection: {
+      connection: compactObject({
         ...config.driverOptions,
+        supportBigNumbers: true,
+        bigNumberStrings: true,
+        decimalNumbers: false,
         host: config.host,
         port: config.port,
         database: config.database,
@@ -25,8 +45,8 @@ export const mysqlDriver: DatabaseDriverDefinition<'mysql'> = {
         charset: config.charset,
         timezone: config.timezone,
         socketPath: config.socketPath,
-        ssl: config.ssl === true ? {} : config.ssl,
-      },
+        ssl: normalizeMysqlSsl(config.ssl),
+      }),
     };
   },
   createSchemaInspector: (context) =>
@@ -53,3 +73,47 @@ export const mysql: MysqlFactory = Object.assign(
   { dialect: 'mysql' as const, driver: mysqlDriver },
 );
 export default mysql;
+
+function assertSocketPathExclusive(
+  config: { socketPath?: string },
+  fields: readonly string[],
+): void {
+  if (!config.socketPath) return;
+  const conflicts = fields.filter(
+    (field) => (config as Record<string, unknown>)[field] !== undefined,
+  );
+  if (conflicts.length > 0) {
+    throw new Error(
+      `Database connection socketPath cannot be combined with ${conflicts.join(', ')}.`,
+    );
+  }
+}
+
+function assertDriverOptions(
+  driverOptions: Record<string, unknown> | undefined,
+  reservedKeys: readonly string[],
+): void {
+  if (!driverOptions) return;
+  const reserved = reservedKeys.filter(
+    (key) => driverOptions[key] !== undefined,
+  );
+  if (reserved.length > 0) {
+    throw new Error(
+      `Database driverOptions cannot include ${reserved.join(', ')}. Use flattened connection parameters.`,
+    );
+  }
+}
+
+function normalizeMysqlSsl(
+  ssl: MysqlConnectionConfig['ssl'],
+): boolean | Record<string, unknown> | undefined {
+  return ssl === true ? {} : ssl;
+}
+
+function compactObject(
+  input: Record<string, unknown>,
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(input).filter(([, value]) => value !== undefined),
+  );
+}
