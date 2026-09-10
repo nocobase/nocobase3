@@ -81,7 +81,9 @@ export function OrderSummary({ order }: OrderSummaryProps): ReactElement {
 
 ## 图标
 
-图标库是 `lucide-react`。尺寸用 `size-4` 这一档刻度，不要写固定像素，这样图标会跟着旁边的文字缩放。
+图标库是 `lucide-react`。尺寸走 `size-*` 这档刻度，按旁边文字的大小选：正文旁边的图标通常是 `size-4`，更紧凑的地方用 `size-3` 或 `size-3.5`，需要更醒目就用 `size-5`。这些值都基于主题的间距刻度，会跟着主题一起变，所以不要写 `size={16}` 或 `w-[16px] h-[16px]` 这类固定像素。
+
+`size-4` 不是唯一选择，只是最常用的默认值。shadcn 的基础组件里，没有显式指定尺寸的图标也默认落在这一档。
 
 ## 加载、空和错误状态
 
