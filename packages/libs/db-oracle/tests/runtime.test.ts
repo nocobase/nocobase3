@@ -1,0 +1,206 @@
+import { createRequire } from 'node:module';
+import knex from 'knex';
+import { describe, expect, it, vi } from 'vitest';
+import oracle from '../src/index.js';
+
+const require = createRequire(import.meta.url);
+const oracledb = require('oracledb') as {
+  CLOB: object;
+  BLOB: object;
+  OUT_FORMAT_OBJECT: number;
+  DB_TYPE_NUMBER: object;
+  STRING: object;
+};
+
+function createRuntime() {
+  const client = knex({ client: 'oracledb' });
+  const runtime = oracle.driver.createRuntime!({
+    dialect: 'oracle',
+    sourceConfig: {} as never,
+    config: {} as never,
+    capabilities: oracle.driver.capabilities as never,
+    getClient: () => client,
+    resolveClient: async () => client,
+  });
+  return { client, runtime };
+}
+
+describe('oracle runtime strategy', () => {
+  it('owns Oracle schema restrictions, types and foreign-key actions', async () => {
+    const { client, runtime } = createRuntime();
+    const schema = runtime.schema!;
+    expect(() =>
+      schema.assertExecutable!([
+        {
+          type: 'createTable',
+          table: {
+            name: 'events',
+            columns: [
+              { name: 'occurred_at', type: 'datetimeTz', primaryKey: true },
+            ],
+            constraints: [],
+          },
+        } as never,
+      ]),
+    ).toThrow('cannot be primary or unique keys');
+    expect(
+      schema.columnType!({
+        column: { type: 'datetimeTz' } as never,
+        tablePrimaryKey: false,
+      }),
+    ).toBe('timestamp(3) with time zone');
+    expect(
+      schema.columnType!({
+        column: { type: 'bigInt' } as never,
+        tablePrimaryKey: false,
+      }),
+    ).toBe('number(18, 0)');
+    expect(schema.dropIndexOperation!(new Error('ORA-02429'))).toBe(true);
+
+    const foreign = {
+      onDelete: vi.fn(),
+    };
+    schema.configureForeignKey!({
+      foreign,
+      constraint: { type: 'foreignKey', onDelete: 'cascade' } as never,
+    });
+    expect(foreign.onDelete).toHaveBeenCalledWith('CASCADE');
+
+    const normalizeClient = {
+      raw: vi.fn().mockResolvedValue([{ NULLABLE: 'Y' }]),
+    };
+    const operation = await schema.normalizeOperation!(
+      {
+        type: 'alterTable',
+        tableName: 'events',
+        operations: [
+          {
+            type: 'alterColumn',
+            column: 'name',
+            changes: { type: 'char', nullable: true },
+          },
+        ],
+      } as never,
+      normalizeClient as never,
+    );
+    expect(operation).toMatchObject({
+      operations: [{ changes: { type: 'char' } }],
+    });
+    expect(client).toBeDefined();
+  });
+
+  it('owns Oracle stream decoding, empty inserts and aggregate result handling', async () => {
+    const { client, runtime } = createRuntime();
+    const repository = runtime.repository!;
+    expect(repository.streamOptions!(client)).toEqual({
+      outFormat: oracledb.OUT_FORMAT_OBJECT,
+    });
+    const clob = {
+      type: oracledb.CLOB,
+      async *[Symbol.asyncIterator]() {
+        yield Buffer.from('hello ');
+        yield Buffer.from('oracle');
+      },
+    };
+    const blob = {
+      type: oracledb.BLOB,
+      async *[Symbol.asyncIterator]() {
+        yield Buffer.from([1, 2]);
+      },
+    };
+    const row = { title: clob, data: blob };
+    await repository.decodeStreamRow!(row);
+    expect(row).toEqual({ title: 'hello oracle', data: Buffer.from([1, 2]) });
+    expect(
+      repository.createManyFallback!({
+        fields: [{ type: 'datetime' }],
+      } as never),
+    ).toBe(true);
+    expect(
+      repository.createManyFallback!({
+        fields: [{ type: 'string' }],
+      } as never),
+    ).toBe(false);
+    const empty = repository.emptyInsertValue!({
+      client,
+      collection: { fields: [{ name: 'id', type: 'integer' }] },
+    } as never);
+    expect(empty?.id.toQuery()).toContain('default');
+    expect(repository.collectionAliasKeyword).toBe(' ');
+    expect(repository.reloadReturnedDecimal).toBe(true);
+
+    const query = { options: vi.fn() };
+    runtime.query!.configureAggregateResults!({
+      query: query as never,
+      aliases: new Set(['total']),
+    });
+    expect(query.options).toHaveBeenCalledOnce();
+    const handler = query.options.mock.calls[0][0].fetchTypeHandler;
+    expect(handler({ name: 'total', dbType: oracledb.DB_TYPE_NUMBER })).toEqual(
+      {
+        type: oracledb.STRING,
+      },
+    );
+    expect(
+      handler({ name: 'other', dbType: oracledb.DB_TYPE_NUMBER }),
+    ).toBeUndefined();
+  });
+
+  it('owns Oracle temporal rules, defaults and connection identity', () => {
+    const { client, runtime } = createRuntime();
+    const repository = runtime.repository!;
+    expect(
+      repository.encodeBoolean!(
+        { db: { nativeType: 'boolean' } } as never,
+        true,
+      ),
+    ).toBe(true);
+    expect(
+      repository.encodeBoolean!(
+        { db: { nativeType: 'number' } } as never,
+        true,
+      ),
+    ).toBe(1);
+    const binding = repository.temporalBinding!({
+      client,
+      field: { type: 'date' } as never,
+      value: '2026-09-06',
+    });
+    expect(
+      binding && typeof binding !== 'string' ? binding.toQuery() : binding,
+    ).toContain('to_date');
+    expect(
+      repository.temporalProjection!({
+        client,
+        field: { type: 'datetimeTz' } as never,
+        reference: 'occurred_at',
+      }).toQuery(),
+    ).toContain('sys_extract_utc');
+    expect(
+      oracle.driver.normalizeConnection?.(
+        { dialect: 'oracle', serviceName: 'FREEPDB1' } as never,
+        {},
+      ),
+    ).toMatchObject({
+      host: '127.0.0.1',
+      port: 1521,
+      username: 'nocobase',
+    });
+    expect(
+      oracle.driver.resolveOwnershipTarget?.({
+        dialect: 'oracle',
+        host: 'db.example.test',
+        port: 1521,
+        serviceName: 'FREEPDB1',
+        username: 'app',
+      }),
+    ).toEqual([
+      'oracle',
+      'db.example.test',
+      1521,
+      undefined,
+      'FREEPDB1',
+      'app',
+    ]);
+  });
+});
