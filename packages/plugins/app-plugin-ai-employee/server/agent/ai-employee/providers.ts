@@ -1,5 +1,3 @@
-import { BaseCallbackHandler } from '@langchain/core/callbacks/base';
-import type { LLMResult } from '@langchain/core/outputs';
 import type {
   AgentAbortHandle,
   AgentProviders,
@@ -15,7 +13,6 @@ import { createAIChatConversation } from './ai-chat-conversation.js';
 import type {
   AIEmployee as AIEmployeeType,
   AIMessageInput,
-  LLMProvider,
   SkillsEntity,
   ToolsEntity,
   ToolsFilter,
@@ -55,51 +52,6 @@ import {
   prepareToolsForFrontendConversation,
   shouldAutoExecuteFrontendTool,
 } from './frontend-tools.js';
-
-class ExecutionResponseMetadata {
-  private readonly metadata = new Map<string, Record<string, unknown>>();
-  private disposed = false;
-
-  public collect(id: unknown, data: unknown): void {
-    if (this.disposed || !id || !data || typeof data !== 'object') {
-      return;
-    }
-    this.metadata.set(String(id), data as Record<string, unknown>);
-  }
-
-  public take(id: string): Record<string, unknown> | undefined {
-    const data = this.metadata.get(id);
-    this.metadata.delete(id);
-    return data;
-  }
-
-  public dispose(): void {
-    this.disposed = true;
-    this.metadata.clear();
-  }
-}
-
-class ResponseMetadataCollector extends BaseCallbackHandler {
-  public name = 'ResponseMetadataCollector';
-
-  public constructor(
-    private readonly provider: LLMProvider,
-    private readonly metadata: ExecutionResponseMetadata,
-  ) {
-    super();
-  }
-
-  public handleLLMEnd(output: LLMResult): void {
-    const [id, data] = this.provider.parseResponseMetadata(output);
-    this.metadata.collect(id, data);
-  }
-}
-
-const responseMetadataCollector = Symbol('responseMetadataCollector');
-
-type AIEmployeeResolvedAgentLLM = ResolvedAgentLLM & {
-  readonly [responseMetadataCollector]: ResponseMetadataCollector;
-};
 
 export function createConversationProvider(
   options: AIEmployeeAgentOptions,
@@ -256,20 +208,12 @@ export class AIEmployeeChatContextProvider implements ChatContextProvider {
   public async resolveLLM(_request: AgentRequest): Promise<ResolvedAgentLLM> {
     if (!this.model) throw new Error('AI employee model is required');
     const resolved = await this.llmProviderManager.getLLMService(this.model);
-    const metadata = new ExecutionResponseMetadata();
-    const collector = new ResponseMetadataCollector(
-      resolved.provider,
-      metadata,
-    );
     return {
       providerName: resolved.service.provider,
       llmService: resolved.service.name,
       model: resolved.model,
       provider: resolved.provider,
-      takeResponseMetadata: (id: string) => metadata.take(id),
-      dispose: () => metadata.dispose(),
-      [responseMetadataCollector]: collector,
-    } as AIEmployeeResolvedAgentLLM;
+    };
   }
 
   public async getSystemPrompt(
@@ -404,16 +348,6 @@ If information is missing, clearly state it in the summary.</Important>`;
       this.getActivatedSkillToolNames(),
     ]);
     return new Set([...baseToolNames, ...activatedSkillToolNames]);
-  }
-
-  public getExecutionConfig(
-    _request: AgentRequest,
-    llm: ResolvedAgentLLM,
-  ): Promise<Record<string, unknown>> {
-    const collector = (llm as Partial<AIEmployeeResolvedAgentLLM>)[
-      responseMetadataCollector
-    ];
-    return Promise.resolve(collector ? { callbacks: [collector] } : {});
   }
 
   private get chatSettings(): {

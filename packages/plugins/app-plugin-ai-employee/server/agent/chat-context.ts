@@ -16,10 +16,6 @@ export interface FixedChatContextProviderOptions {
   readonly model?: string;
   readonly tools?: readonly ToolsEntity[];
   readonly systemPrompt?: string;
-  readonly executionConfig?: (
-    request: AgentRequest,
-    llm: ResolvedAgentLLM,
-  ) => Promise<Record<string, unknown>>;
 }
 
 export class FixedChatContextProvider implements ChatContextProvider {
@@ -58,13 +54,6 @@ export class FixedChatContextProvider implements ChatContextProvider {
   ): Promise<ReadonlySet<string>> {
     const tools = await this.discoveredTools(request);
     return new Set(tools.map((tool) => tool.definition.name));
-  }
-
-  public getExecutionConfig(
-    request: AgentRequest,
-    llm: ResolvedAgentLLM,
-  ): Promise<Record<string, unknown>> {
-    return this.options.executionConfig?.(request, llm) ?? Promise.resolve({});
   }
 
   public shouldInterruptToolCall(): boolean {

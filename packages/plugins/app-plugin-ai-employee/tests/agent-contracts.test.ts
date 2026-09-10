@@ -63,7 +63,9 @@ describe('fixed AgentService contracts', () => {
 
     expect(service).toContain('class ExecutionResponseMetadata');
     expect(service).toContain('class ResponseMetadataCollector');
-    expect(service).toContain('llm.provider, responseMetadata');
+    expect(service).toMatch(
+      /new ResponseMetadataCollector\(\s*llm\.provider,\s*responseMetadata,?\s*\)/,
+    );
     expect(service).toContain('responseMetadata.take(');
     expect(service).toContain('responseMetadata?.dispose()');
     expect(service).not.toMatch(

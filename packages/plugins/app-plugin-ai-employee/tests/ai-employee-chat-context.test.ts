@@ -71,28 +71,6 @@ describe('AIEmployeeChatContextProvider', () => {
     expect(await none.context.getSystemPrompt([], {}, noneLLM)).toBe('');
   });
 
-  it('isolates, consumes, and disposes response metadata per resolution', async () => {
-    const { context } = createFixture();
-    const first = await context.resolveLLM({});
-    const second = await context.resolveLLM({});
-    const firstConfig = await context.getExecutionConfig({}, first);
-    const secondConfig = await context.getExecutionConfig({}, second);
-    const firstCollector = (firstConfig.callbacks as any[])[0];
-    const secondCollector = (secondConfig.callbacks as any[])[0];
-
-    firstCollector.handleLLMEnd({ id: 'first', metadata: { run: 1 } });
-    secondCollector.handleLLMEnd({ id: 'second', metadata: { run: 2 } });
-
-    expect(first.takeResponseMetadata?.('first')).toEqual({ run: 1 });
-    expect(first.takeResponseMetadata?.('first')).toBeUndefined();
-    expect(first.takeResponseMetadata?.('second')).toBeUndefined();
-    expect(second.takeResponseMetadata?.('second')).toEqual({ run: 2 });
-
-    firstCollector.handleLLMEnd({ id: 'disposed', metadata: { run: 3 } });
-    await first.dispose?.();
-    expect(first.takeResponseMetadata?.('disposed')).toBeUndefined();
-  });
-
   it('re-reads activated skill tools on every activeTools query', async () => {
     const { context, toolContext } = createFixture();
     toolContext.getAgentTools.mockResolvedValue({
