@@ -275,3 +275,10 @@ run('Verify server dependencies', 'node', [
 console.log(
   '\nBuild complete: dist/client, dist/server, dist/cli, dist/.env, and dist/package.json',
 );
+
+// Opt-in, because the archive is only wanted when the build is being shipped somewhere, and packing several hundred
+// megabytes is a minute nobody building to run locally should pay. Matched exactly so it cannot be confused with
+// `--target`, which selects the platform the binaries are built for and is a different question entirely.
+if (process.argv.slice(2).includes('--tar')) {
+  run('Pack deployment archive', 'node', ['./scripts/utils/pack-dist.mjs']);
+}

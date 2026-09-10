@@ -97,6 +97,7 @@
     "sonner": "^2.0.3",
     "tailwind-merge": "catalog:",
     "tailwindcss": "catalog:",
+    "tar": "^7.5.22",
     "tsc-alias": "^1.9.2",
     "tsx": "catalog:",
     "tw-animate-css": "catalog:",
