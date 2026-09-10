@@ -1,5 +1,49 @@
 # @nocobase/app-template-examples
 
+## 0.1.0-beta.2
+
+### Minor Changes
+
+- c3e02bf: Support client.app.defaultLocale, defaultColorScheme, and defaultTheme configuration while preserving saved user preferences and ignoring unsupported defaults.
+
+### Patch Changes
+
+- 1d042c0: Align the Examples template with nested routes and route-owned navigation.
+- f79ab75: Remove type declarations, third-party source maps, and third-party documentation from the deployment build, cutting the archive an application deploys from by roughly 30%
+- f5b066d: Add `pnpm build --tar`, which packs the deployment build and `config.example.yml` into `storage/dist.tar.gz`
+- 1d042c0: Only display navigation icons when explicitly configured.
+- 741d0eb: Remove the commercial AI Knowledge Base plugin dependency and default runtime composition from the open-source application templates.
+- 1d042c0: Reset page loading and error state when navigating to another route.
+- 0a3fa83: Always show the notification test action, use user-facing delivery method labels, and enforce its permission only when a test message is submitted.
+- f5b066d: Document `pnpm build --tar` in the template README
+- 5a891d7: Replace the File plugin's legacy backend and client protocol with File Repository services, multipart uploads, and configurable content routes. Preserve its editable Registry components and adapt them to ClientFileRepository and contentUrl. Remove the separate File Repository package, rename its example to app-plugin-file-example, and update application registration and Agent integration guidance.
+
+  This is a breaking replacement of the old File API: access-token routes, inventory settings, FilesClient, and runtime component exports are removed. Applications own file collections and route security; metadata deletion retains storage objects. The example migration remains unchanged.
+
+  Keep the File core in Default and the core plus app-plugin-file-example in Examples. Preserve Hub without a default File registration.
+
+  Require the unified API version for Registry components, preserve PDF previews across cross-origin storage redirects, and normalize database file sizes to safe numeric values without treating custom record or records fields as response envelopes.
+
+- Updated dependencies [e3fa827]
+- Updated dependencies [0a3fa83]
+- Updated dependencies [0a3fa83]
+- Updated dependencies [0a3fa83]
+- Updated dependencies [1d042c0]
+- Updated dependencies [0a3fa83]
+- Updated dependencies [eb3bc38]
+- Updated dependencies [5a891d7]
+  - @nocobase/app-server@1.0.0-beta.9
+  - @nocobase/app-plugin-authentication@0.1.0-beta.10
+  - @nocobase/app-plugin-authorization@0.2.0-beta.9
+  - @nocobase/app-plugin-notification@0.1.0-beta.6
+  - @nocobase/app-plugin-notification-in-app@0.2.0-beta.7
+  - @nocobase/app-plugin-notification-providers@0.2.0-beta.4
+  - @nocobase/db@1.0.0-beta.4
+  - @nocobase/app-plugin-repository-example@0.1.0-beta.3
+  - @nocobase/app-plugin-workflow@0.1.0-beta.12
+  - @nocobase/app-plugin-file@0.1.0-beta.9
+  - @nocobase/app-plugin-file-example@0.0.2-beta.2
+
 ## 0.1.0-beta.1
 
 ### Minor Changes
