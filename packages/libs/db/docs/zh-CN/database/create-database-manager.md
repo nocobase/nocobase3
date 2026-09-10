@@ -23,11 +23,37 @@ const db = createDatabaseManager({
 });
 ```
 
+## Dialect 包
+
+生产应用建议显式使用对应的 dialect 包。下面两种写法等价：
+
+```ts
+import postgres from '@nocobase/db-postgres';
+import { createDatabaseManager } from '@nocobase/db';
+
+const registered = createDatabaseManager({
+  drivers: { postgres },
+  connections: {
+    main: { dialect: 'postgres', host: '127.0.0.1', database: 'app' },
+  },
+});
+
+const factory = createDatabaseManager({
+  connections: {
+    main: postgres({ host: '127.0.0.1', database: 'app' }),
+  },
+});
+```
+
+注册表适合多个同方言连接或由配置文件生成连接；工厂适合在代码中创建
+自描述连接。两个入口都会使用同一个 dialect driver descriptor。
+
 ## DatabaseConfig
 
 ```ts
 interface DatabaseConfig {
   default?: string;
+  drivers?: Record<string, DatabaseDriverRegistration>;
   connections: Record<string, ConnectionConfig>;
   metadataStore?: CollectionMetadataStore;
 }

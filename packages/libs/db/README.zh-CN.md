@@ -16,6 +16,43 @@
 
 ## 创建数据库入口
 
+推荐在应用边界显式安装并注册所需的 dialect 包：
+
+```ts
+import postgres from '@nocobase/db-postgres';
+import { createDatabaseManager } from '@nocobase/db';
+
+const db = createDatabaseManager({
+  drivers: { postgres },
+  connections: {
+    main: {
+      dialect: 'postgres',
+      host: process.env.DB_HOST,
+      database: process.env.DB_NAME,
+    },
+  },
+});
+```
+
+也可以直接使用 dialect 工厂。工厂会把 `dialect`、native `driver` 和
+`databaseDriver` descriptor 一起绑定到连接：
+
+```ts
+const db = createDatabaseManager({
+  connections: {
+    main: postgres({
+      host: process.env.DB_HOST,
+      database: process.env.DB_NAME,
+    }),
+  },
+});
+```
+
+SQLite、MySQL、Oracle 和 SQL Server 分别从
+`@nocobase/db-sqlite`、`@nocobase/db-mysql`、`@nocobase/db-oracle` 和
+`@nocobase/db-mssql` 引入。`@nocobase/db` 继续保留没有注册 dialect 包时的
+兼容解析路径。
+
 ```ts
 import { createDatabaseManager } from '@nocobase/db';
 

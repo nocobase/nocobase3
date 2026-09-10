@@ -15,4 +15,20 @@ const database = createDatabaseManager({
 });
 ```
 
-The factory also exposes `postgres.driver` for declarative configurations.
+For declarative configurations, register the same factory:
+
+```ts
+const database = createDatabaseManager({
+  drivers: { postgres },
+  connections: {
+    main: {
+      dialect: 'postgres',
+      host: process.env.DB_HOST,
+      database: process.env.DB_NAME,
+    },
+  },
+});
+```
+
+The factory also exposes `postgres.driver` for code that wants to register the
+descriptor directly.
