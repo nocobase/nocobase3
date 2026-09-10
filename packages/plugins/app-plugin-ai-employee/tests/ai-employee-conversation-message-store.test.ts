@@ -14,6 +14,7 @@ function createFixture() {
     addMessages: vi.fn(),
     getMessage: vi.fn(async () => null),
     removeMessages: vi.fn(async () => undefined),
+    updateThread: vi.fn(async () => undefined),
   };
   const conversation = {
     withTransaction: vi.fn(async (callback) => callback(target, transaction)),
@@ -26,9 +27,14 @@ function createFixture() {
     create: vi.fn(async ({ values }) => values),
     update: vi.fn(async () => 1),
   };
-  const conversations = {
-    findOne: vi.fn(async () => ({ sessionId: 'session-1', thread: 0 })),
+  const messages = {
+    create: vi.fn(async ({ values }) => values),
     update: vi.fn(async () => 1),
+    findOne: vi.fn(async () => null),
+    find: vi.fn(async () => []),
+  };
+  const database = {
+    transaction: vi.fn(async (callback) => callback(transaction)),
   };
   const toolCallPolicy = {
     getToolsMap: vi.fn(
@@ -45,7 +51,8 @@ function createFixture() {
   const store = new DefaultConversationMessageStore({
     sessionId: 'session-1',
     conversation,
-    conversations,
+    database,
+    messages,
     toolMessages,
     snowflake: { generate: vi.fn(() => 101) },
     toolCallPolicy,
@@ -55,7 +62,8 @@ function createFixture() {
     target,
     conversation,
     toolMessages,
-    conversations,
+    messages,
+    database,
     toolCallPolicy,
     store,
   };
@@ -80,7 +88,8 @@ describe('AI employee conversation message persistence boundary', () => {
     expect(source).not.toContain('LCCheckpointBlobRepository');
     expect(source).not.toContain('LCCheckpointWriteRepository');
     expect(source).not.toContain('NativeCollectionSaver');
-    expect(source).toContain('checkpointer: BaseCheckpointSaver');
+    expect(source).not.toContain('BaseCheckpointSaver');
+    expect(source).not.toContain('createAgent');
   });
 
   it('owns tool-message confirmation in the same message store transaction', () => {

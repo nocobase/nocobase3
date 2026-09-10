@@ -17,9 +17,8 @@ import {
   type AgentInterruptAction,
   type AgentProviders,
   type AgentThread,
-  type ConversationMessageStore,
   type ConversationProvider,
-  type ToolCallHandler,
+  type ConversationMessageStore,
   type CreateAgentProvidersOptions,
   type SavedAssistantMessage,
 } from './types.js';
@@ -127,6 +126,7 @@ class MemoryConversationMessageStore implements ConversationMessageStore {
           .map(clone)
       : this.state.messages.map(clone);
   }
+
   public async saveUserMessages(
     values: AIMessageInput[],
     messageId?: string,
@@ -194,31 +194,7 @@ class MemoryConversationMessageStore implements ConversationMessageStore {
     return this.thread();
   }
 
-  public async forkThread(
-    _provider: Parameters<ConversationMessageStore['forkThread']>[0],
-    _checkpointer: Parameters<ConversationMessageStore['forkThread']>[1],
-  ): Promise<AgentThread> {
-    this.state.thread += 1;
-    return this.thread();
-  }
-
-  public async updateThread(value: AgentThread): Promise<void> {
-    this.state.thread = Math.max(this.state.thread, value.thread);
-  }
-
-  private thread(): AgentThread {
-    return {
-      sessionId: this.state.sessionId,
-      thread: this.state.thread,
-      threadId: `${this.state.sessionId}:${this.state.thread}`,
-    };
-  }
-}
-
-class MemoryToolCallHandler implements ToolCallHandler {
-  public constructor(private readonly state: MemoryConversationState) {}
-
-  public async markInterrupted(
+  public async updateToolInterrupted(
     _sessionId: string,
     messageId: string,
     toolCallId: string,
@@ -232,7 +208,7 @@ class MemoryToolCallHandler implements ToolCallHandler {
     } as Partial<AIToolMessage>);
   }
 
-  public async markPending(
+  public async updateToolPending(
     messageId: string,
     toolCallId: string,
   ): Promise<number> {
@@ -242,7 +218,7 @@ class MemoryToolCallHandler implements ToolCallHandler {
     });
   }
 
-  public async markDone(
+  public async updateToolDone(
     messageId: string,
     toolCallId: string,
     result: unknown,
@@ -259,31 +235,29 @@ class MemoryToolCallHandler implements ToolCallHandler {
     });
   }
 
-  public async markError(
+  public updateToolError(
     messageId: string,
     toolCallId: string,
     error: unknown,
   ): Promise<number> {
-    return this.state.updateTool(messageId, toolCallId, {
-      invokeStatus: 'done',
-      invokeEndTime: new Date(),
+    return this.updateToolDone(messageId, toolCallId, {
       status: 'error',
       content: error instanceof Error ? error.message : error,
     });
   }
 
-  public async cancel(): Promise<AIMessageInput[] | undefined> {
+  public async cancelToolCall(): Promise<AIMessageInput[] | undefined> {
     return undefined;
   }
 
-  public async get(
+  public getToolCallResult(
     messageId: string,
     toolCallId: string,
   ): Promise<AIToolMessage | null> {
-    return this.state.getTool(messageId, toolCallId);
+    return Promise.resolve(this.state.getTool(messageId, toolCallId));
   }
 
-  public async getMany(
+  public async listToolCallResult(
     messageId: string,
     ids: string[],
   ): Promise<Map<string, AIToolMessage>> {
@@ -293,6 +267,14 @@ class MemoryToolCallHandler implements ToolCallHandler {
         return value ? [[id, value] as const] : [];
       }),
     );
+  }
+
+  private thread(): AgentThread {
+    return {
+      sessionId: this.state.sessionId,
+      thread: this.state.thread,
+      threadId: `${this.state.sessionId}:${this.state.thread}`,
+    };
   }
 }
 
@@ -305,14 +287,12 @@ const memoryStreamManager = {
 class MemoryConversationProvider implements ConversationProvider {
   public readonly identity: ConversationProvider['identity'];
   public readonly messages: ConversationMessageStore;
-  public readonly toolCalls: ToolCallHandler;
   public readonly streamCache: LLMStreamCached;
 
   public constructor(options: MemoryConversationOptions) {
     const state = new MemoryConversationState(options);
     this.identity = options.identity ?? { sessionId: state.sessionId };
     this.messages = new MemoryConversationMessageStore(state);
-    this.toolCalls = new MemoryToolCallHandler(state);
     this.streamCache = new LLMStreamCached(
       state.sessionId,
       memoryStreamManager,

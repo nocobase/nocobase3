@@ -133,12 +133,14 @@ describe('fixed AgentService contracts', () => {
       'agent/direct.ts',
       'agent/agent-service.ts',
       'agent/ai-employee/providers.ts',
-      'agent/ai-employee/tool-call-handler.ts',
+      'agent/ai-employee/conversation-message-store.ts',
       'agent/middleware/pipeline.ts',
     ]
       .map(read)
       .join('\n');
-    const toolCallHandler = read('agent/ai-employee/tool-call-handler.ts');
+    const toolCallStore = read(
+      'agent/ai-employee/conversation-message-store.ts',
+    );
     expect(production).not.toMatch(/\bToolProvider\b/);
     expect(production).not.toContain('createDefaultToolProvider');
     expect(production).not.toContain('createAIEmployeeToolProvider');
@@ -146,11 +148,11 @@ describe('fixed AgentService contracts', () => {
     expect(production).not.toContain('providers.llmIdentity');
     expect(production).not.toContain('providers.tools');
     expect(production).not.toContain('DirectChatContextProvider');
-    expect(toolCallHandler).not.toMatch(
+    expect(toolCallStore).not.toMatch(
       /getSystemPrompt|getAgentTools|getAvailableSkills/,
     );
-    expect(toolCallHandler).not.toMatch(/getActivatedSkillToolNames/);
-    expect(toolCallHandler).not.toMatch(
+    expect(toolCallStore).not.toMatch(/getActivatedSkillToolNames/);
+    expect(toolCallStore).not.toMatch(
       /public\s+(?:async\s+)?(?:getToolsMap|shouldInterruptToolCall|isAutoCall)\s*\(/,
     );
     expect(read('agent/ai-employee/providers.ts')).not.toMatch(
@@ -175,7 +177,9 @@ describe('fixed AgentService contracts', () => {
     const factory = read('agent/ai-employee/index.ts');
     const types = read('agent/types.ts');
 
-    expect(service).toContain('this.providers.conversation.toolCalls.cancel()');
+    expect(service).toContain(
+      'this.providers.conversation.messages.cancelToolCall()',
+    );
     expect(providers).not.toContain(['AIEmployeeAgent', 'Facade'].join(''));
     expect(providers).not.toContain('AIEmployeeAgentProvidersResult');
     expect(providers).not.toContain(['getToolCall', 'Handler'].join(''));
@@ -183,38 +187,42 @@ describe('fixed AgentService contracts', () => {
     expect(factory).not.toContain('interface AIEmployeeAgentService');
     expect(factory).not.toContain('facade');
     expect(factory).toContain('Promise<AgentService>');
-    expect(types).toContain('export interface ToolCallHandler');
+    expect(types).not.toContain('export interface ToolCallHandler');
     expect(types).not.toContain('ConversationToolCallStore');
+    expect(types).toContain('updateToolInterrupted(');
+    expect(types).toContain('updateToolPending(');
+    expect(types).toContain('updateToolDone(');
+    expect(types).toContain('updateToolError(');
+    expect(types).toContain('cancelToolCall()');
+    expect(types).toContain('getToolCallResult(');
+    expect(types).toContain('listToolCallResult(');
     expect(providers).not.toContain('async function initializeToolCalls');
     expect(providers).not.toMatch(/runtime\.(initToolCall|confirmToolCall)/);
     expect(types).not.toMatch(/initialize\([^)]*transaction/);
     expect(fs.existsSync(path.join(src, 'agent/ai-employee/runtime.ts'))).toBe(
       false,
     );
-    const handler = read('agent/ai-employee/tool-call-handler.ts');
-    expect(handler).toContain('implements ToolCallHandler');
-    expect(handler).not.toContain('RepositoryFactory');
-    expect(handler).not.toMatch(/\binitialize(?:InTransaction)?\s*\(/);
-    expect(handler).not.toMatch(/\bconfirm(?:InTransaction)?\s*\(/);
-    expect(handler).not.toMatch(/\breject\s*\(/);
+    const messageStore = read(
+      'agent/ai-employee/conversation-message-store.ts',
+    );
+    expect(messageStore).toContain('implements ConversationMessageStore');
+    expect(
+      fs.existsSync(path.join(src, 'agent/ai-employee/tool-call-handler.ts')),
+    ).toBe(false);
+    expect(messageStore).not.toContain('RepositoryFactory');
+    expect(messageStore).not.toMatch(/\breject\s*\(/);
     expect(types).not.toMatch(/\breject\s*\(/);
-    expect(handler).not.toContain('ToolCallPolicy');
-    expect(handler).not.toContain('llmProviderManager');
-    expect(handler).toContain('messages: AIMessageRepository');
-    expect(handler).toContain('toolMessages: AIToolMessageRepository');
+    expect(messageStore).not.toContain('llmProviderManager');
+    expect(messageStore).toContain('messages: AIMessageRepository');
+    expect(messageStore).toContain('toolMessages: AIToolMessageRepository');
     expect(
       fs.existsSync(
         path.join(src, 'agent/ai-employee/tool-call-cancellation.ts'),
       ),
     ).toBe(false);
-    expect(providers).toContain(
-      'const toolCalls = new DefaultToolCallHandler(',
-    );
+    expect(providers).not.toContain('DefaultToolCallHandler');
     expect(providers).toMatch(
       /createConversationProvider\(\s*options: AIEmployeeAgentOptions,\s*toolCallPolicy: ToolCallPolicy,?\s*\)/,
-    );
-    expect(providers).not.toMatch(
-      /createAIEmployeeAgentProviders[\s\S]*const toolCalls = new DefaultToolCallHandler/,
     );
     const options = read('agent/ai-employee/options.ts');
     expect(options).not.toContain('RepositoryFactory');
@@ -222,7 +230,7 @@ describe('fixed AgentService contracts', () => {
     expect(options).toContain('aiMessages: AIMessageRepository');
     expect(options).toContain('aiToolMessages: AIToolMessageRepository');
     expect(options).toContain('aiConversations: AIConversationRepository');
-    expect(handler).toContain('class DefaultToolCallHandler');
+    expect(messageStore).toContain('class DefaultConversationMessageStore');
     expect(providers).toContain('new DefaultChatMessageConverters(options)');
     expect(read('agent/chat-message-converters.ts')).toContain(
       'export class DefaultChatMessageConverters',
@@ -236,7 +244,7 @@ describe('fixed AgentService contracts', () => {
     expect(
       fs.existsSync(path.join(src, 'agent/ai-employee/message-converters.ts')),
     ).toBe(false);
-    expect(handler).not.toContain('private readonly options:');
+    expect(messageStore).not.toContain('private readonly options:');
     expect(providers).not.toMatch(/markPending:\s*\(|markDone:\s*\(/);
     expect(types).not.toMatch(/confirm\([^)]*DatabaseConnection/);
     const chatContext = read('agent/ai-employee/providers.ts');
@@ -272,10 +280,26 @@ describe('fixed AgentService contracts', () => {
     );
     expect(types).toMatch(/loadMessages\(messageId\?: string\)/);
     expect(types).toMatch(/currentThread\(\)/);
-    expect(types).toMatch(
-      /forkThread\(\s*provider: LLMProvider,\s*checkpointer: BaseCheckpointSaver,?\s*\)/,
+    expect(types).not.toMatch(/forkThread\(/);
+    const service = read('agent/agent-service.ts');
+    const messageStore = read(
+      'agent/ai-employee/conversation-message-store.ts',
     );
-    expect(types).toMatch(/updateThread\(thread: AgentThread\)/);
+    expect(service).toMatch(/private async forkThread\(/);
+    expect(service).toContain('const agent = createAgent({');
+    expect(service).toContain('this.providers.checkpointer');
+    expect(messageStore).not.toContain('createAgent');
+    expect(messageStore).not.toContain('forkThread');
+    expect(types).not.toMatch(/updateThread\(thread: AgentThread\)/);
+    expect(read('agent/ai-employee/conversation-message-store.ts')).toContain(
+      'target.updateThread(thread.thread)',
+    );
+    expect(
+      read('agent/ai-employee/conversation-message-store.ts'),
+    ).not.toContain('AIConversationRepository');
+    expect(
+      read('agent/ai-employee/conversation-message-store.ts'),
+    ).not.toContain('updateThreadWithConnection');
     expect(types).not.toContain('ConversationThreadStore');
     expect(types).not.toMatch(/\bthreads:\s*ConversationThreadStore/);
     expect(types).not.toMatch(/\binitialize\(|\bconfirm\(/);
@@ -291,10 +315,11 @@ describe('fixed AgentService contracts', () => {
   it('owns the only standard middleware builder and preserves its order', () => {
     const service = read('agent/agent-service.ts');
     const pipeline = read('agent/middleware/pipeline.ts');
-    const handler = read('agent/ai-employee/tool-call-handler.ts');
+    const messageStore = read(
+      'agent/ai-employee/conversation-message-store.ts',
+    );
     expect(service).toContain('buildStandardAgentMiddleware');
-    expect(handler).not.toContain('getMiddleware(');
-    expect(handler).not.toContain('createAgent(');
+    expect(messageStore).not.toContain('getMiddleware(');
     const positions = STANDARD_AGENT_MIDDLEWARE_ORDER.map((name) =>
       pipeline.indexOf(`'${name}'`),
     );
@@ -314,7 +339,7 @@ describe('fixed AgentService contracts', () => {
     const agentSource = [
       'agent/agent-service.ts',
       'agent/ai-employee/options.ts',
-      'agent/ai-employee/tool-call-handler.ts',
+      'agent/ai-employee/conversation-message-store.ts',
       'agent/ai-employee/providers.ts',
       'agent/types.ts',
     ]
@@ -346,7 +371,7 @@ describe('fixed AgentService contracts', () => {
     const types = read('agent/types.ts');
     expect(source).toContain('class MemoryConversationProvider');
     expect(source).toContain('class MemoryConversationMessageStore');
-    expect(source).toContain('class MemoryToolCallHandler');
+    expect(source).not.toContain('class MemoryToolCallHandler');
     expect(source).toContain('new LLMStreamCached(');
     expect(source).toContain('class DefaultAgentProviders');
     expect(source).not.toMatch(/export\s+class\s+(?:Memory|DefaultAgent)/);
@@ -413,26 +438,10 @@ describe('fixed AgentService contracts', () => {
       thread: 0,
       threadId: 'memory:0',
     });
-    expect(
-      await conversation.messages.forkThread({} as never, {} as never),
-    ).toMatchObject({
-      sessionId: 'memory',
-      thread: 1,
-      threadId: 'memory:1',
-    });
-    await conversation.messages.updateThread({
-      sessionId: 'memory',
-      thread: 3,
-      threadId: 'memory:3',
-    });
-    expect(await conversation.messages.currentThread()).toMatchObject({
-      thread: 3,
-      threadId: 'memory:3',
-    });
 
     expect(saved.initializedToolCalls).toHaveLength(1);
     expect(
-      await conversation.toolCalls.get(
+      await conversation.messages.getToolCallResult(
         String(saved.message.messageId),
         'call-1',
       ),
@@ -450,7 +459,7 @@ describe('fixed AgentService contracts', () => {
     );
 
     expect(
-      await conversation.toolCalls.get(
+      await conversation.messages.getToolCallResult(
         String(saved.message.messageId),
         'call-1',
       ),

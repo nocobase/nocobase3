@@ -6,10 +6,10 @@ import { createMemoryConversationProvider } from '../server/agent/providers.js';
 import type { AgentProviders } from '../server/agent/types.js';
 
 const createProviders = (
-  cancel: AgentProviders['conversation']['toolCalls']['cancel'],
+  cancel: AgentProviders['conversation']['messages']['cancelToolCall'],
 ) => {
   const conversation = createMemoryConversationProvider();
-  conversation.toolCalls.cancel = cancel;
+  conversation.messages.cancelToolCall = cancel;
   const lifecycle = {
     beforeExecution: vi.spyOn(conversation, 'beforeExecution'),
     afterExecution: vi.spyOn(conversation, 'afterExecution'),

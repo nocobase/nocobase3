@@ -10,12 +10,14 @@ import type { LLMProvider } from '@nocobase/ai-employee';
 import type { ToolsEntity } from '@nocobase/ai-employee';
 import type { Logger } from '@nocobase/logging';
 import type {
+  AgentThread,
   AIMessage,
   AIMessageInput,
   AIToolCall,
   AIToolMessage,
   UserDecision,
 } from '@nocobase/ai-employee';
+export type { AgentThread } from '@nocobase/ai-employee';
 import type { LLMStreamCached } from '../manager/llm-stream-cached-manager.js';
 
 export type AgentExecutionSource = 'main-agent' | 'sub-agent' | (string & {});
@@ -39,12 +41,6 @@ export interface AgentRequest {
   context?: Record<string, unknown>;
   writer?: (chunk: unknown) => void;
   signal?: AbortSignal;
-}
-
-export interface AgentThread {
-  sessionId: string;
-  thread: number;
-  threadId: string;
 }
 
 export interface AgentMessageIndex {
@@ -270,35 +266,30 @@ export interface ConversationMessageStore {
     messages: AIMessageInput[],
   ): Promise<void>;
   currentThread(): Promise<AgentThread | undefined>;
-  forkThread(
-    provider: LLMProvider,
-    checkpointer: BaseCheckpointSaver,
-  ): Promise<AgentThread | undefined>;
-  updateThread(thread: AgentThread): Promise<void>;
-}
-
-export interface ToolCallHandler {
-  markInterrupted(
+  updateToolInterrupted(
     sessionId: string,
     messageId: string,
     toolCallId: string,
     interruptId: string,
     interruptAction: AgentInterruptAction,
   ): Promise<number>;
-  markPending(messageId: string, toolCallId: string): Promise<number>;
-  markDone(
+  updateToolPending(messageId: string, toolCallId: string): Promise<number>;
+  updateToolDone(
     messageId: string,
     toolCallId: string,
     result: unknown,
   ): Promise<number>;
-  markError(
+  updateToolError(
     messageId: string,
     toolCallId: string,
     error: unknown,
   ): Promise<number>;
-  cancel(): Promise<AIMessageInput[] | undefined>;
-  get(messageId: string, toolCallId: string): Promise<AIToolMessage | null>;
-  getMany(
+  cancelToolCall(): Promise<AIMessageInput[] | undefined>;
+  getToolCallResult(
+    messageId: string,
+    toolCallId: string,
+  ): Promise<AIToolMessage | null>;
+  listToolCallResult(
     messageId: string,
     toolCallIds: string[],
   ): Promise<Map<string, AIToolMessage>>;
@@ -307,7 +298,6 @@ export interface ToolCallHandler {
 export interface ConversationProvider {
   identity: AgentConversationIdentity;
   messages: ConversationMessageStore;
-  toolCalls: ToolCallHandler;
   streamCache: LLMStreamCached;
   beforeExecution(mode: AgentExecutionMode): Promise<void>;
   afterExecution(

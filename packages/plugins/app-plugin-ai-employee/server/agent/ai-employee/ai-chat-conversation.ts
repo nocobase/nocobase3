@@ -7,12 +7,14 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { AIMessageRepository } from '../../repository/index.js';
+import type {
+  AIConversationRepository,
+  AIMessageRepository,
+} from '../../repository/index.js';
 import _ from 'lodash';
 import {
-  AIChatContext,
-  AIChatContextOptions,
   AIChatConversation,
+  AgentThread,
   AIMessage,
   AIMessageInput,
   AIMessageQuery,
@@ -24,16 +26,24 @@ import type { CollectionFilter } from '@nocobase/ai-employee';
 import { recordAIUsageEventsForMessages } from './ai-usage-events.js';
 export const createAIChatConversation = ({
   messages,
+  conversations,
   database,
   snowflake,
   sessionId,
 }: {
   messages: AIMessageRepository;
+  conversations: AIConversationRepository;
   database: DatabaseConnection;
   snowflake: IdGeneratorService;
   sessionId: string;
 }): AIChatConversation => {
-  return new AIChatConversationImpl(messages, database, snowflake, sessionId);
+  return new AIChatConversationImpl(
+    messages,
+    database,
+    snowflake,
+    sessionId,
+    conversations,
+  );
 };
 class AIChatConversationImpl implements AIChatConversation {
   private transaction?: DatabaseConnection;
@@ -42,6 +52,7 @@ class AIChatConversationImpl implements AIChatConversation {
     private readonly database: DatabaseConnection,
     private readonly idGenerator: IdGeneratorService,
     private readonly sessionId: string,
+    private readonly conversations: AIConversationRepository,
   ) {}
   async withTransaction<T>(
     runnable: (
@@ -63,6 +74,30 @@ class AIChatConversationImpl implements AIChatConversation {
 
   getSessionId(): string {
     return this.sessionId;
+  }
+
+  async currentThread(): Promise<AgentThread> {
+    const conversation = await this.conversations.findOne(
+      { filter: { sessionId: this.sessionId } },
+      { connection: this.transaction },
+    );
+    if (!conversation) throw new Error('Conversation not existed');
+    const thread = conversation.thread ?? 0;
+    return {
+      sessionId: this.sessionId,
+      thread,
+      threadId: `${this.sessionId}:${thread}`,
+    };
+  }
+
+  async updateThread(thread: number): Promise<void> {
+    await this.conversations.update(
+      {
+        values: { thread },
+        filter: { sessionId: this.sessionId, thread: { $lt: thread } },
+      },
+      { connection: this.transaction },
+    );
   }
 
   async addMessages(messages: AIMessageInput): Promise<AIMessage>;
@@ -134,57 +169,13 @@ class AIChatConversationImpl implements AIChatConversation {
     return messages.reverse(); // 反转回正序
   }
 
-  async lastUserMessage(): Promise<AIMessage> {
-    const filter: CollectionFilter<AIMessage> = {
-      sessionId: this.sessionId,
-      role: 'user',
-    };
-    const message = await this.aiMessagesRepo.findOne({
-      sort: ['-messageId'],
-      filter,
-    });
-    if (!message) throw new Error('User message not found');
-    return message;
-  }
-
-  async getChatContext(options?: AIChatContextOptions): Promise<AIChatContext> {
-    const {
-      userMessages,
-      userDecisions: decisions,
-      tools,
-      middleware,
-      getSystemPrompt,
-      formatMessages,
-    } = options ?? {};
-    let messages = userMessages
-      ? ((await formatMessages?.(userMessages)) ?? [])
-      : undefined;
-    const additionSystemPrompt = messages
-      ?.filter((it) => it.role === 'system')
-      .map((it) => it.content)
-      .filter(Boolean)
-      .join('\n');
-    messages = messages?.filter((it) => it.role !== 'system');
-    const baseSystemPrompt = await getSystemPrompt?.(userMessages ?? []);
-    const systemPrompt =
-      [baseSystemPrompt, additionSystemPrompt].filter(Boolean).join('\n\n') ||
-      undefined;
-    const chatContext: AIChatContext = {
-      systemPrompt,
-      messages,
-      decisions,
-      tools,
-      middleware,
-    };
-    return chatContext;
-  }
-
   private clone(): AIChatConversationImpl {
     return new AIChatConversationImpl(
       this.messages,
       this.database,
       this.idGenerator,
       this.sessionId,
+      this.conversations,
     );
   }
 

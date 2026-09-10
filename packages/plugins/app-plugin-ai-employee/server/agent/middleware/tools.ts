@@ -47,7 +47,7 @@ export const toolCallStatusMiddleware = (
   conversation: ConversationProvider,
   logger: Logger,
 ): ReturnType<typeof createMiddleware> => {
-  const store = conversation.toolCalls;
+  const store = conversation.messages;
   return createMiddleware({
     name: 'ToolCallStatusMiddleware',
     stateSchema: z.object({ messageId: z.coerce.string().optional() }),
@@ -63,7 +63,7 @@ export const toolCallStatusMiddleware = (
         throw new Error('Tool call id is required');
       }
       const currentConversation = conversation.identity;
-      const existing = await store.get(messageId, toolCallId);
+      const existing = await store.getToolCallResult(messageId, toolCallId);
       if (!existing)
         throw new Error(
           `Tool call result not found for messageId=${messageId}, toolCallId=${toolCallId}`,
@@ -81,7 +81,7 @@ export const toolCallStatusMiddleware = (
           metadata: { messageId },
         });
       }
-      await store.markPending(messageId, toolCallId);
+      await store.updateToolPending(messageId, toolCallId);
       runtime.writer?.({
         action: 'beforeToolCall',
         body: { toolCall },
@@ -109,7 +109,7 @@ export const toolCallStatusMiddleware = (
         }
         logger.error(error);
         result = { status: 'error', content: error?.message };
-        await store.markError(messageId, toolCallId, error);
+        await store.updateToolError(messageId, toolCallId, error);
         runtime.writer?.({
           action: 'afterToolCallError',
           body: { toolCall, error },
@@ -124,8 +124,11 @@ export const toolCallStatusMiddleware = (
       } finally {
         if (!interrupted) {
           if (result?.status !== 'error')
-            await store.markDone(messageId, toolCallId, result);
-          const toolCallResult = await store.get(messageId, toolCallId);
+            await store.updateToolDone(messageId, toolCallId, result);
+          const toolCallResult = await store.getToolCallResult(
+            messageId,
+            toolCallId,
+          );
           runtime.writer?.({
             action: 'afterToolCall',
             body: { toolCall, toolCallResult },

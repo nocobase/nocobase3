@@ -1,28 +1,61 @@
-import type { BaseCheckpointSaver } from '@langchain/langgraph';
-import { createAgent } from 'langchain';
 import type {
   AIChatConversation,
   AIMessage,
   AIMessageInput,
   AIToolMessage,
-  LLMProvider,
 } from '@nocobase/ai-employee';
 import type { DatabaseConnection } from '@nocobase/db';
 import type { IdGeneratorService } from '@nocobase/snowflake';
 import type {
-  AIConversationRepository,
+  AIMessageRepository,
+  AIToolMessageEntity,
   AIToolMessageRepository,
 } from '../../repository/index.js';
 import type {
+  AgentInterruptAction,
   AgentThread,
   ConversationMessageStore,
   SavedAssistantMessage,
   ToolCallPolicy,
 } from '../types.js';
+
+type NormalizedToolCallResult = {
+  status: string;
+  content: unknown;
+};
+
+type SourceMessageMetadata = {
+  model?: unknown;
+  provider?: unknown;
+  llmService?: unknown;
+};
+
+function normalizeToolCallResult(result: unknown): NormalizedToolCallResult {
+  if (typeof result !== 'object' || result === null) {
+    return { status: 'success', content: result };
+  }
+  const value = result as Record<string, unknown>;
+  return {
+    status: typeof value.status === 'string' ? value.status : 'success',
+    content: value.content ?? result,
+  };
+}
+
+function sourceMessageMetadata(metadata: unknown): SourceMessageMetadata {
+  if (typeof metadata !== 'object' || metadata === null) return {};
+  const value = metadata as Record<string, unknown>;
+  return {
+    model: value.model,
+    provider: value.provider,
+    llmService: value.llmService,
+  };
+}
+
 export interface DefaultConversationMessageStoreOptions {
   readonly sessionId: string;
   readonly conversation: AIChatConversation;
-  readonly conversations: AIConversationRepository;
+  readonly database: DatabaseConnection;
+  readonly messages: AIMessageRepository;
   readonly toolMessages: AIToolMessageRepository;
   readonly snowflake: IdGeneratorService;
   readonly toolCallPolicy: ToolCallPolicy;
@@ -31,7 +64,8 @@ export interface DefaultConversationMessageStoreOptions {
 export class DefaultConversationMessageStore implements ConversationMessageStore {
   private readonly sessionId: string;
   private readonly conversation: AIChatConversation;
-  private readonly conversations: AIConversationRepository;
+  private readonly database: DatabaseConnection;
+  private readonly messages: AIMessageRepository;
   private readonly toolMessages: AIToolMessageRepository;
   private readonly snowflake: IdGeneratorService;
   private readonly toolCallPolicy: ToolCallPolicy;
@@ -39,7 +73,8 @@ export class DefaultConversationMessageStore implements ConversationMessageStore
   public constructor(options: DefaultConversationMessageStoreOptions) {
     this.sessionId = options.sessionId;
     this.conversation = options.conversation;
-    this.conversations = options.conversations;
+    this.database = options.database;
+    this.messages = options.messages;
     this.toolMessages = options.toolMessages;
     this.snowflake = options.snowflake;
     this.toolCallPolicy = options.toolCallPolicy;
@@ -48,13 +83,14 @@ export class DefaultConversationMessageStore implements ConversationMessageStore
   public loadMessages(messageId?: string): Promise<AIMessage[]> {
     return this.conversation.listMessages({ messageId });
   }
+
   public saveUserMessages(
     messages: AIMessageInput[],
     messageId?: string,
     thread?: AgentThread,
   ): Promise<void> {
-    return this.conversation.withTransaction(async (target, transaction) => {
-      if (thread) await this.updateThreadWithConnection(thread, transaction);
+    return this.conversation.withTransaction(async (target) => {
+      if (thread) await target.updateThread(thread.thread);
       if (messageId && (await target.getMessage(messageId))) {
         await target.removeMessages({ messageId });
       }
@@ -134,63 +170,196 @@ export class DefaultConversationMessageStore implements ConversationMessageStore
     });
   }
 
-  public async currentThread(): Promise<AgentThread> {
-    const target = await this.conversations.findOne({
-      filter: { sessionId: this.sessionId },
-    });
-    if (!target) throw new Error('Conversation not existed');
-    const thread = target.thread ?? 0;
-    return {
-      sessionId: this.sessionId,
-      thread,
-      threadId: `${this.sessionId}:${thread}`,
-    };
+  public currentThread(): Promise<AgentThread> {
+    return this.conversation.currentThread();
   }
 
-  public async forkThread(
-    llmProvider: LLMProvider,
-    checkpointer: BaseCheckpointSaver,
-  ): Promise<AgentThread | undefined> {
-    const current = await this.currentThread();
-    for (let attempt = 0; attempt < 4; attempt++) {
-      const thread = current.thread + attempt + 1;
-      const candidate = {
-        sessionId: this.sessionId,
-        thread,
-        threadId: `${this.sessionId}:${thread}`,
-      };
-      const agent = createAgent({
-        model: llmProvider.createModel() as any,
-        tools: [],
-        checkpointer: checkpointer as any,
-      });
-      const snapshot = await agent.graph.getState({
-        configurable: { thread_id: candidate.threadId },
-      });
-      if (!snapshot.config.configurable?.checkpoint_id) return candidate;
-    }
-    throw new Error('Fail to create new agent thread');
-  }
-
-  public updateThread(thread: AgentThread): Promise<void> {
-    return this.updateThreadWithConnection(thread);
-  }
-
-  private updateThreadWithConnection(
-    thread: AgentThread,
-    connection?: DatabaseConnection,
-  ): Promise<void> {
-    return this.conversations
-      .update(
+  public updateToolInterrupted(
+    sessionId: string,
+    messageId: string,
+    toolCallId: string,
+    interruptId: string,
+    interruptAction: AgentInterruptAction,
+  ): Promise<number> {
+    return this.database.transaction(async (transaction) => {
+      const updated = await this.toolMessages.update(
         {
-          values: { thread: thread.thread },
-          filter: {
-            sessionId: thread.sessionId,
-            thread: { $lt: thread.thread },
+          values: {
+            invokeStatus: 'interrupted',
+            interruptActionOrder: interruptAction.order,
+            interruptAction,
           },
+          filter: { sessionId, messageId, toolCallId, invokeStatus: 'init' },
         },
-        connection ? { connection } : undefined,
-      )
-      .then(() => undefined);
+        { connection: transaction },
+      );
+      if (!updated) return updated;
+
+      const message = await this.messages.findOne(
+        { filter: { messageId, sessionId } },
+        { connection: transaction },
+      );
+      if (!message) return updated;
+
+      await this.messages.update(
+        {
+          values: { metadata: { ...(message.metadata ?? {}), interruptId } },
+          filter: { messageId, sessionId },
+        },
+        { connection: transaction },
+      );
+      return updated;
+    });
+  }
+
+  public updateToolPending(
+    messageId: string,
+    toolCallId: string,
+  ): Promise<number> {
+    return this.toolMessages.update({
+      values: { invokeStatus: 'pending', invokeStartTime: new Date() },
+      filter: {
+        sessionId: this.sessionId,
+        messageId,
+        toolCallId,
+        invokeStatus: { $in: ['init', 'waiting'] },
+      },
+    });
+  }
+
+  public updateToolDone(
+    messageId: string,
+    toolCallId: string,
+    result: unknown,
+  ): Promise<number> {
+    const normalized = normalizeToolCallResult(result);
+    return this.toolMessages.update({
+      values: {
+        invokeStatus: 'done',
+        invokeEndTime: new Date(),
+        status: normalized.status,
+        content: normalized.content,
+      },
+      filter: {
+        sessionId: this.sessionId,
+        messageId,
+        toolCallId,
+        invokeStatus: 'pending',
+      },
+    });
+  }
+
+  public updateToolError(
+    messageId: string,
+    toolCallId: string,
+    error: unknown,
+  ): Promise<number> {
+    return this.updateToolDone(messageId, toolCallId, {
+      status: 'error',
+      content: error instanceof Error ? error.message : error,
+    });
+  }
+
+  public cancelToolCall(): Promise<AIMessageInput[] | undefined> {
+    return this.cancelPendingToolCalls();
+  }
+
+  public getToolCallResult(
+    messageId: string,
+    toolCallId: string,
+  ): Promise<AIToolMessage | null> {
+    return this.toolMessages.findOne({
+      filter: { sessionId: this.sessionId, messageId, toolCallId },
+    });
+  }
+
+  public async listToolCallResult(
+    messageId: string,
+    toolCallIds: string[],
+  ): Promise<Map<string, AIToolMessage>> {
+    const list: AIToolMessageEntity[] = await this.toolMessages.find({
+      filter: {
+        sessionId: this.sessionId,
+        messageId,
+        toolCallId: { $in: toolCallIds },
+      },
+    });
+    const result = new Map<string, AIToolMessage>();
+    for (const item of list) {
+      if (item.toolCallId) result.set(item.toolCallId, item);
+    }
+    return result;
+  }
+
+  private async cancelPendingToolCalls(): Promise<
+    AIMessageInput[] | undefined
+  > {
+    const reason =
+      'The user ignored the application for tools usage and will continued to ask questions';
+    const historyMessages = await this.messages.find({
+      filter: { sessionId: this.sessionId },
+      sort: ['-messageId'],
+    });
+    const [sourceMessage] = historyMessages;
+    if (!sourceMessage?.toolCalls?.length) return undefined;
+
+    const messageId = sourceMessage.messageId;
+    const toolMessages = await this.toolMessages.find({
+      filter: {
+        sessionId: this.sessionId,
+        messageId,
+        invokeStatus: { $ne: 'confirmed' },
+      },
+    });
+    if (!toolMessages.length) return undefined;
+
+    const toolCallMap = new Map(
+      sourceMessage.toolCalls.map((toolCall) => [toolCall.id, toolCall]),
+    );
+    const metadata = sourceMessageMetadata(sourceMessage.metadata);
+    const now = new Date();
+    return this.database.transaction(async (transaction) => {
+      for (const toolMessage of toolMessages) {
+        await this.toolMessages.update(
+          {
+            values: {
+              invokeStatus: 'confirmed',
+              status: 'success',
+              content: reason,
+              invokeStartTime: toolMessage.invokeStartTime ?? now,
+              invokeEndTime: toolMessage.invokeEndTime ?? now,
+            },
+            filter: {
+              id: toolMessage.id,
+              sessionId: this.sessionId,
+              invokeStatus: toolMessage.invokeStatus,
+            },
+          },
+          { connection: transaction },
+        );
+      }
+      return this.messages.create(
+        {
+          values: toolMessages.map((toolMessage) => ({
+            messageId: String(this.snowflake.generate()),
+            sessionId: this.sessionId,
+            role: 'tool',
+            content: { type: 'text', content: reason },
+            metadata: {
+              model: metadata.model,
+              provider: metadata.provider,
+              llmService: metadata.llmService,
+              toolCall: toolMessage.toolCallId
+                ? toolCallMap.get(toolMessage.toolCallId)
+                : undefined,
+              toolCallId: toolMessage.toolCallId,
+              sourceMessageId: messageId,
+              autoCall: toolMessage.auto,
+            },
+          })),
+        },
+        { connection: transaction },
+      );
+    });
   }
 }

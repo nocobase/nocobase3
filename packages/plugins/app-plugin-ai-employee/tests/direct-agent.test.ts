@@ -58,7 +58,7 @@ describe('direct AgentService', () => {
     });
     expect(load).toHaveBeenCalledWith('2');
     expect(typeof conversation.messages.saveAssistantMessage).toBe('function');
-    expect(typeof conversation.toolCalls.markPending).toBe('function');
+    expect(typeof conversation.messages.updateToolPending).toBe('function');
   });
 
   it('reuses one service across sequential and concurrent executions', async () => {

@@ -36,7 +36,6 @@ import type {
   UserAIEmployeeRepository,
 } from '../../repository/index.js';
 import type { AIEmployeeRepository } from '@nocobase/ai-employee';
-import { DefaultToolCallHandler } from './tool-call-handler.js';
 import { DefaultConversationMessageStore } from './conversation-message-store.js';
 import { getSystemPrompt } from './prompts.js';
 import {
@@ -108,15 +107,9 @@ export function createConversationProvider(
 ): ConversationProvider {
   const database = options.database;
   const sessionId = options.sessionId;
-  const toolCalls = new DefaultToolCallHandler(
-    sessionId,
-    database,
-    options.aiMessages,
-    options.aiToolMessages,
-    options.snowflake,
-  );
   const chatConversation = createAIChatConversation({
     messages: options.aiMessages,
+    conversations: options.aiConversations,
     database,
     snowflake: options.snowflake,
     sessionId,
@@ -127,14 +120,14 @@ export function createConversationProvider(
   const messageStore = new DefaultConversationMessageStore({
     sessionId,
     conversation: chatConversation,
-    conversations: options.aiConversations,
+    database,
+    messages: options.aiMessages,
     toolMessages: options.aiToolMessages,
     snowflake: options.snowflake,
     toolCallPolicy,
   });
   const conversation: ConversationProvider = {
     identity: { sessionId, from, username, metadata: { kind: 'ai-employee' } },
-    toolCalls,
     messages: messageStore,
     beforeExecution: async (mode) => {
       await options.aiConversations.update({

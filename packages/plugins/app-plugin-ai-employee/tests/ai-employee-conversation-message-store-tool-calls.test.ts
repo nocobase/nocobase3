@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { DefaultToolCallHandler } from '../server/agent/ai-employee/tool-call-handler.js';
+import { DefaultConversationMessageStore } from '../server/agent/ai-employee/conversation-message-store.js';
 
 function createFixture(overrides: Record<string, unknown> = {}) {
   const transaction = { id: 'transaction-1' };
@@ -26,31 +26,35 @@ function createFixture(overrides: Record<string, unknown> = {}) {
   const database = {
     transaction: vi.fn(async (callback) => callback(transaction)),
   };
-  const handler = new DefaultToolCallHandler(
-    (overrides.sessionId as string | undefined) ?? 'session-1',
-    (overrides.database as typeof database | undefined) ?? database,
-    (overrides.messages as typeof aiMessages | undefined) ?? aiMessages,
-    (overrides.toolMessages as typeof aiToolMessages | undefined) ??
+  const store = new DefaultConversationMessageStore({
+    sessionId: (overrides.sessionId as string | undefined) ?? 'session-1',
+    conversation: {},
+    database: (overrides.database as typeof database | undefined) ?? database,
+    messages:
+      (overrides.messages as typeof aiMessages | undefined) ?? aiMessages,
+    toolMessages:
+      (overrides.toolMessages as typeof aiToolMessages | undefined) ??
       aiToolMessages,
-    (overrides.snowflake as { generate(): number } | undefined) ?? {
+    snowflake: (overrides.snowflake as { generate(): number } | undefined) ?? {
       generate: vi.fn(() => 101),
     },
-  );
+    toolCallPolicy: {},
+  } as never);
   return {
     transaction,
     aiToolMessages,
     aiMessages,
     database,
-    handler,
+    store,
   };
 }
 
-describe('DefaultToolCallHandler', () => {
+describe('DefaultConversationMessageStore tool calls', () => {
   it('moves init or waiting calls to pending within the current session', async () => {
     const fixture = createFixture();
 
     await expect(
-      fixture.handler.markPending('message-1', 'call-1'),
+      fixture.store.updateToolPending('message-1', 'call-1'),
     ).resolves.toBe(1);
 
     expect(fixture.aiToolMessages.update).toHaveBeenCalledWith({
@@ -70,11 +74,15 @@ describe('DefaultToolCallHandler', () => {
   it('normalizes success and error results while preserving the pending CAS', async () => {
     const fixture = createFixture();
 
-    await fixture.handler.markDone('message-1', 'call-1', {
+    await fixture.store.updateToolDone('message-1', 'call-1', {
       status: 'warning',
       content: { value: 1 },
     });
-    await fixture.handler.markError('message-1', 'call-2', new Error('failed'));
+    await fixture.store.updateToolError(
+      'message-1',
+      'call-2',
+      new Error('failed'),
+    );
 
     expect(fixture.aiToolMessages.update).toHaveBeenNthCalledWith(
       1,
@@ -110,7 +118,7 @@ describe('DefaultToolCallHandler', () => {
     });
 
     await expect(
-      fixture.handler.markInterrupted(
+      fixture.store.updateToolInterrupted(
         'sub-session',
         'message-1',
         'call-1',
@@ -141,7 +149,7 @@ describe('DefaultToolCallHandler', () => {
     fixture.aiToolMessages.update.mockResolvedValueOnce(0);
     fixture.aiMessages.update.mockClear();
     await expect(
-      fixture.handler.markInterrupted(
+      fixture.store.updateToolInterrupted(
         'sub-session',
         'message-1',
         'call-1',
@@ -164,8 +172,8 @@ describe('DefaultToolCallHandler', () => {
       { content: 'invalid' },
     ]);
 
-    await fixture.handler.get('message-1', 'call-1');
-    const result = await fixture.handler.getMany('message-1', [
+    await fixture.store.getToolCallResult('message-1', 'call-1');
+    const result = await fixture.store.listToolCallResult('message-1', [
       'call-1',
       'call-2',
     ]);
@@ -226,7 +234,7 @@ describe('DefaultToolCallHandler', () => {
     fixture.aiToolMessages.find.mockResolvedValue([pendingToolMessage]);
     fixture.aiMessages.create.mockResolvedValue(createdMessages);
 
-    await expect(fixture.handler.cancel()).resolves.toBe(createdMessages);
+    await expect(fixture.store.cancelToolCall()).resolves.toBe(createdMessages);
 
     expect(fixture.aiMessages.find).toHaveBeenCalledWith({
       filter: { sessionId: 'session-1' },
@@ -281,7 +289,7 @@ describe('DefaultToolCallHandler', () => {
       },
     ]);
 
-    await expect(fixture.handler.cancel()).resolves.toBeUndefined();
+    await expect(fixture.store.cancelToolCall()).resolves.toBeUndefined();
 
     expect(fixture.database.transaction).not.toHaveBeenCalled();
     expect(fixture.aiMessages.create).not.toHaveBeenCalled();

@@ -11,6 +11,7 @@ import type {
 } from '@nocobase/ai-employee';
 import type {
   AgentGraphState,
+  AgentThread,
   AgentInterruptAction,
   AgentOperation,
   AgentProviders,
@@ -117,7 +118,7 @@ export class AgentService {
 
   /** Resolves pending persisted tool calls before starting a new user turn. */
   cancelToolCall(): Promise<AIMessageInput[] | undefined> {
-    return this.providers.conversation.toolCalls.cancel();
+    return this.providers.conversation.messages.cancelToolCall();
   }
 
   stream(
@@ -166,6 +167,32 @@ export class AgentService {
     request: AgentRequest,
   ): boolean {
     return operation === 'fork' || Boolean(request.messageId);
+  }
+
+  private async forkThread(
+    current: AgentThread | undefined,
+    llmProvider: LLMProvider,
+  ): Promise<AgentThread | undefined> {
+    if (!current) return undefined;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const thread = current.thread + attempt + 1;
+      const candidate: AgentThread = {
+        sessionId: current.sessionId,
+        thread,
+        threadId: `${current.sessionId}:${thread}`,
+      };
+      if (!this.providers.checkpointer) return candidate;
+      const agent = createAgent({
+        model: llmProvider.createModel() as any,
+        tools: [],
+        checkpointer: this.providers.checkpointer as BaseCheckpointSaver,
+      });
+      const snapshot = await agent.graph.getState({
+        configurable: { thread_id: candidate.threadId },
+      });
+      if (!snapshot.config.configurable?.checkpoint_id) return candidate;
+    }
+    throw new Error('Fail to create new agent thread');
   }
 
   private buildInitialState(messages: AIMessage[]): AgentGraphState {
@@ -239,10 +266,7 @@ export class AgentService {
     const resolvedTools = llm.provider.resolveTools(sourceTools.map(buildTool));
     let thread = await conversation.messages.currentThread();
     if (this.shouldFork(operation, request)) {
-      thread = await conversation.messages.forkThread(
-        llm.provider,
-        this.providers.checkpointer as BaseCheckpointSaver,
-      );
+      thread = await this.forkThread(thread, llm.provider);
     }
     const state = shouldLoadHistory
       ? this.buildInitialState(history)
@@ -469,7 +493,7 @@ export class AgentService {
                 action.currentConversation.sessionId,
               );
               if (!messageId) continue;
-              await conversation.toolCalls.markInterrupted(
+              await conversation.messages.updateToolInterrupted(
                 action.currentConversation.sessionId,
                 messageId,
                 action.toolCall.id,
@@ -547,7 +571,7 @@ export class AgentService {
             };
           } else if (chunks?.action === 'beforeSendToolMessage') {
             const { messageId, messages = [] } = chunks.body ?? {};
-            const results = await conversation.toolCalls.getMany(
+            const results = await conversation.messages.listToolCallResult(
               messageId,
               messages.map(
                 (item: { metadata: { toolCallId: string } }) =>

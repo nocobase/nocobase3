@@ -9,15 +9,21 @@
 
 import { AIMessage, AIToolCall, UserDecision } from './ai-message.type.js';
 
+export interface AgentThread {
+  sessionId: string;
+  thread: number;
+  threadId: string;
+}
+
 export interface AIChatConversation extends TransactionSupported<AIChatConversation> {
   getSessionId(): string;
+  currentThread(): Promise<AgentThread>;
+  updateThread(thread: number): Promise<void>;
   addMessages(messages: AIMessageInput): Promise<AIMessage>;
   addMessages(messages: AIMessageInput[]): Promise<AIMessage[]>;
   removeMessages(options: AIMessageRemoveOptions): Promise<void>;
   getMessage(messageId: string): Promise<AIMessage | null>;
   listMessages(query?: AIMessageQuery): Promise<AIMessage[]>;
-  lastUserMessage(): Promise<AIMessage>;
-  getChatContext(options?: AIChatContextOptions): Promise<AIChatContext>;
 }
 
 export interface TransactionSupported<T> {
