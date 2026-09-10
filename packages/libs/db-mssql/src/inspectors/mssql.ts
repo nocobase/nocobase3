@@ -9,6 +9,9 @@ import {
   parseColumnDefault,
   temporalFractionalSecondsPrecision,
   numericCapabilities,
+  NumericCapabilityStrategy,
+  PhysicalTypeNormalizationStrategy,
+  PhysicalDataType,
 } from '@nocobase/db';
 import type {
   DecodedPhysicalCollectionCursor,
@@ -24,8 +27,8 @@ import type {
   PhysicalUniqueConstraintSchema,
 } from '@nocobase/db';
 
-export const mssqlTypes = {
-  temporal: (type: string) =>
+export const mssqlTypes: PhysicalTypeNormalizationStrategy = {
+  temporal: (type: string): PhysicalDataType | undefined =>
     type === 'date'
       ? 'date'
       : type === 'datetimeoffset'
@@ -37,7 +40,7 @@ export const mssqlTypes = {
           : type === 'time'
             ? 'time'
             : undefined,
-  special: (type: string, base: string) =>
+  special: (type: string, base: string): PhysicalDataType | undefined =>
     /^(n?varchar)\(max\)$/.test(type) || base === 'ntext'
       ? 'text'
       : base === 'bit'
@@ -53,7 +56,10 @@ export const mssqlTypes = {
                   ? 'float'
                   : 'double'
                 : undefined,
-  temporalPrecision: (type: string, temporal: string | undefined) =>
+  temporalPrecision: (
+    type: string,
+    temporal: string | undefined,
+  ): number | undefined =>
     temporal
       ? type === 'smalldatetime'
         ? 0
@@ -64,9 +70,12 @@ export const mssqlTypes = {
             : 7
       : undefined,
 };
-export const mssqlNumeric = {
-  unsigned: (_type: string, base: string) => base === 'tinyint',
-  special: (type: string, base: string) =>
+export const mssqlNumeric: NumericCapabilityStrategy = {
+  unsigned: (_type: string, base: string): boolean => base === 'tinyint',
+  special: (
+    type: string,
+    base: string,
+  ): { binaryPrecision: number } | undefined =>
     base === 'float'
       ? {
           binaryPrecision:

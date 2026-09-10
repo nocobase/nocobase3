@@ -8,7 +8,6 @@ export { defineDatabase } from './database/config.js';
 export { SchemaManagementNotAllowedError } from './database/schema-management.js';
 export type {
   ConnectionConfig,
-  GenericConnectionConfig,
   DatabaseConfig,
   DatabaseDialect,
   DatabaseDriverDefinition,
@@ -135,6 +134,7 @@ export {
 export type { DecodedPhysicalCollectionCursor } from './schema/inspector/shared/cursor.js';
 export type {
   PhysicalCheckConstraintSchema,
+  PhysicalDataType,
   PhysicalCollectionIdentifier,
   PhysicalCollectionKind,
   PhysicalCollectionSchema,

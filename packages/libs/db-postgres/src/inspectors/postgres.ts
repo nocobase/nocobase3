@@ -9,6 +9,9 @@ import {
   parseColumnDefault,
   temporalFractionalSecondsPrecision,
   numericCapabilities,
+  PhysicalTypeNormalizationStrategy,
+  PhysicalDataType,
+  NumericCapabilityStrategy,
 } from '@nocobase/db';
 import type {
   DecodedPhysicalCollectionCursor,
@@ -25,8 +28,8 @@ import type {
   PhysicalUniqueConstraintSchema,
 } from '@nocobase/db';
 
-export const postgresTypes = {
-  temporal: (type: string) =>
+export const postgresTypes: PhysicalTypeNormalizationStrategy = {
+  temporal: (type: string): PhysicalDataType | undefined =>
     type === 'timestamptz' || type === 'timestamp with time zone'
       ? 'datetimeTz'
       : type === 'timestamp' || type === 'timestamp without time zone'
@@ -36,21 +39,27 @@ export const postgresTypes = {
           : type === 'date'
             ? 'date'
             : undefined,
-  special: (type: string, base: string) =>
+  special: (type: string, base: string): PhysicalDataType | undefined =>
     base === 'bpchar'
       ? 'char'
       : type === 'char' || type === '"char"'
         ? 'native'
         : undefined,
-  temporalPrecision: (type: string, temporal: string | undefined) => {
+  temporalPrecision: (
+    type: string,
+    temporal: string | undefined,
+  ): number | undefined => {
     const explicit = type.match(/\((\d+)\)/)?.[1];
     if (/^(timetz|time(?:\(\d+\))? with time zone)$/.test(type))
       return explicit ? Number(explicit) : 6;
     return temporal ? (explicit ? Number(explicit) : 6) : undefined;
   },
-};
-export const postgresNumeric = {
-  special: (type: string, base: string) =>
+} satisfies PhysicalTypeNormalizationStrategy;
+export const postgresNumeric: NumericCapabilityStrategy = {
+  special: (
+    type: string,
+    base: string,
+  ): { binaryPrecision: number } | undefined =>
     base === 'float'
       ? { binaryPrecision: Number(type.match(/\((\d+)\)/)?.[1] ?? 126) }
       : undefined,

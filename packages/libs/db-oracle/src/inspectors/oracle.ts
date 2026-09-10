@@ -24,10 +24,13 @@ import type {
   PhysicalSchemaInfo,
   PhysicalUniqueConstraintSchema,
   SchemaInspectionWarning,
+  PhysicalTypeNormalizationStrategy,
+  PhysicalDataType,
+  NumericCapabilityStrategy,
 } from '@nocobase/db';
 
-export const oracleTypes = {
-  temporal: (type: string) =>
+export const oracleTypes: PhysicalTypeNormalizationStrategy = {
+  temporal: (type: string): PhysicalDataType | undefined =>
     type === 'date'
       ? 'datetime'
       : type === 'timestamp with time zone' ||
@@ -36,9 +39,12 @@ export const oracleTypes = {
         : type === 'timestamp'
           ? 'datetime'
           : undefined,
-  special: (_type: string, base: string) =>
+  special: (_type: string, base: string): PhysicalDataType | undefined =>
     base === 'float' ? 'decimal' : undefined,
-  temporalPrecision: (type: string, temporal: string | undefined) =>
+  temporalPrecision: (
+    type: string,
+    temporal: string | undefined,
+  ): number | undefined =>
     temporal
       ? type === 'date'
         ? 0
@@ -47,8 +53,11 @@ export const oracleTypes = {
           : 6
       : undefined,
 };
-export const oracleNumeric = {
-  special: (_type: string, base: string) =>
+export const oracleNumeric: NumericCapabilityStrategy = {
+  special: (
+    _type: string,
+    base: string,
+  ): { binaryPrecision: number } | undefined =>
     base === 'binary_float'
       ? { binaryPrecision: 24 }
       : base === 'binary_double'

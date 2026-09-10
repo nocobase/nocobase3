@@ -21,12 +21,14 @@ import type {
   PhysicalSchemaInfo,
   PhysicalUniqueConstraintSchema,
   SchemaInspectionWarning,
+  PhysicalTypeNormalizationStrategy,
+  PhysicalDataType,
 } from '@nocobase/db';
 
-export const sqliteTypes = {
-  special: (_type: string, base: string) =>
+export const sqliteTypes: PhysicalTypeNormalizationStrategy = {
+  special: (_type: string, base: string): PhysicalDataType | undefined =>
     base === 'float' ? 'float' : undefined,
-  temporal: (type: string) =>
+  temporal: (type: string): PhysicalDataType | undefined =>
     type === 'date'
       ? 'date'
       : type === 'time'
@@ -34,7 +36,10 @@ export const sqliteTypes = {
         : type === 'datetime' || type === 'timestamp'
           ? 'datetime'
           : undefined,
-  temporalPrecision: (type: string, temporal: string | undefined) =>
+  temporalPrecision: (
+    type: string,
+    temporal: string | undefined,
+  ): number | undefined =>
     temporal
       ? type.match(/\((\d+)\)/)?.[1]
         ? Number(type.match(/\((\d+)\)/)![1])

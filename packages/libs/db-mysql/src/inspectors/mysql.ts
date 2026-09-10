@@ -23,12 +23,15 @@ import type {
   PhysicalSchemaInfo,
   PhysicalUniqueConstraintSchema,
   SchemaInspectionWarning,
+  PhysicalTypeNormalizationStrategy,
+  PhysicalDataType,
+  NumericCapabilityStrategy,
 } from '@nocobase/db';
 
-export const mysqlTypes = {
-  special: (_type: string, base: string) =>
+export const mysqlTypes: PhysicalTypeNormalizationStrategy = {
+  special: (_type: string, base: string): PhysicalDataType | undefined =>
     base === 'float' ? 'float' : undefined,
-  temporal: (type: string) =>
+  temporal: (type: string): PhysicalDataType | undefined =>
     type === 'timestamp'
       ? 'datetimeTz'
       : type === 'datetime'
@@ -38,16 +41,22 @@ export const mysqlTypes = {
           : type === 'date'
             ? 'date'
             : undefined,
-  temporalPrecision: (type: string, temporal: string | undefined) =>
+  temporalPrecision: (
+    type: string,
+    temporal: string | undefined,
+  ): number | undefined =>
     temporal
       ? type.match(/\((\d+)\)/)?.[1]
         ? Number(type.match(/\((\d+)\)/)![1])
         : 0
       : undefined,
 };
-export const mysqlNumeric = {
-  unsigned: (type: string) => /\bunsigned\b/.test(type),
-  special: (type: string, base: string) =>
+export const mysqlNumeric: NumericCapabilityStrategy = {
+  unsigned: (type: string): boolean => /\bunsigned\b/.test(type),
+  special: (
+    _type: string,
+    base: string,
+  ): { binaryPrecision: number } | undefined =>
     base === 'float' ? { binaryPrecision: 24 } : undefined,
 };
 
