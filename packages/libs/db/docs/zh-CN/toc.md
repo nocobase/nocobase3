@@ -195,6 +195,7 @@ Collection-aware 记录和关系访问请优先阅读下一节 Repository；本�
 > Repository 已实现，使用上述正式文档。以下链接保留设计过程和候选方案，其中部分内容已实现、部分仍未支持，不能整体当作当前 API 契约。
 
 - [设计提案与演进记录入口](./proposals/README.md)：了解 Proposal 与当前 API 的边界。
+- [数据库 Dialect 拆分推进路线](./proposals/dialect-split-roadmap.md)：跟踪 Dialect package 拆分、core SQL strategy 和 app-server driver registry 的未完成工作。
 - [Repository 提案](./proposals/repository/overview.md)：Collection-aware 查询与写入层的设计记录；当前用法见正式文档。
 - [Filter Builder 提案](./proposals/repository/filter-builder.md)：候选的可组合筛选 DSL。
 - [Filter AST 提案](./proposals/repository/filter-ast.md)：候选的筛选条件序列化模型。
