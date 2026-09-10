@@ -6,7 +6,7 @@ keywords: 'NocoBase,组件,样式,shadcn,主题变量,深色模式,Tailwind'
 
 # 界面和样式
 
-应用的界面由 shadcn/ui 的基础组件拼出来，样式走语义化的主题变量——`bg-background`、`text-muted-foreground`、`border-border` 这类。这些变量在每套主题的浅色和深色规则里都定义了一份，所以用对它，深色模式和换主题都是自动生效的。
+应用的界面由 shadcn/ui 的基础组件拼出来，样式走语义化的主题变量，比如 `bg-background`、`text-muted-foreground`、`border-border` 这类。这些变量在每套主题的浅色和深色规则里都定义了一份，所以用对它，深色模式和换主题都是自动生效的。
 
 ## 组件从哪来
 
@@ -49,7 +49,7 @@ export function OrderSummary({ order }: OrderSummaryProps): ReactElement {
 }
 ```
 
-`@/` 指向 `client/`。不要重新实现基础组件的行为——焦点管理、键盘操作和 ARIA 属性在 shadcn 组件里已经是对的，手写很容易写坏。
+`@/` 指向 `client/`。不要重新实现基础组件的行为。焦点管理、键盘操作和 ARIA 属性在 shadcn 组件里已经是对的，手写很容易写坏。
 
 ## 用主题变量，不要写死颜色
 
@@ -61,9 +61,9 @@ export function OrderSummary({ order }: OrderSummaryProps): ReactElement {
 | `bg-primary`、`text-primary-foreground`    | `bg-blue-600`、`text-white`   |
 | `bg-destructive`、`text-destructive`       | `bg-red-500`                  |
 
-变量定义在 `client/theme/themes/*.css` 里，每套主题各定义一份。写死的颜色在你当时看的那套主题下没问题，换一套主题就坏了——这是这套代码里最常见的样式问题。完整的变量清单见[主题变量](../reference/theme-tokens)。
+变量定义在 `client/theme/themes/*.css` 里，每套主题各定义一份。写死的颜色在你当时看的那套主题下没问题，换一套主题就坏了。这是这套代码里最常见的样式问题。完整的变量清单见[主题变量](../reference/theme-tokens)。
 
-字体和尺寸也走同一套约定。正文用 `font-sans text-base`，语义化的 h1–h6 用 `font-heading`，code、pre、kbd、samp 用 `font-mono`——标题如果渲染成了别的元素，需要自己补 `font-heading`。间距、尺寸和圆角用 `text-sm`、`p-4`、`gap-2`、`h-8`、`rounded-lg`、`shadow-md` 这些标准值，不要写成等价的任意值。
+字体和尺寸也走同一套约定。正文用 `font-sans text-base`，语义化的 h1 到 h6 用 `font-heading`，code、pre、kbd、samp 用 `font-mono`。标题如果渲染成了别的元素，需要自己补 `font-heading`。间距、尺寸和圆角用 `text-sm`、`p-4`、`gap-2`、`h-8`、`rounded-lg`、`shadow-md` 这些标准值，不要写成等价的任意值。
 
 确实需要固定尺寸的地方要保留，比如图片尺寸、视口限制、圆形图标。但要确认这些固定值、显式行高和阴影颜色没有覆盖掉主题想要的效果。
 
@@ -71,7 +71,7 @@ export function OrderSummary({ order }: OrderSummaryProps): ReactElement {
 
 两套主题用的是同一组变量，所以用对变量，深色模式就已经能正常工作了。`client/theme/` 里有主题 provider 和「浅色 / 深色 / 跟随系统」的切换入口。
 
-改完要两套主题都看一下。`dark:` 变体只留给变量表达不了的情况——如果你经常需要它，通常说明某处混进了一个写死的颜色。
+改完要两套主题都看一下。`dark:` 变体只留给变量表达不了的情况。如果你经常需要它，通常说明某处混进了一个写死的颜色。
 
 :::tip 提示
 
@@ -111,7 +111,7 @@ export function OrderSummary({ order }: OrderSummaryProps): ReactElement {
 
 ## 相关链接
 
-- [主题变量](../reference/theme-tokens) — 颜色、字体、字号、间距、圆角和阴影的完整清单。
-- [页面和菜单](./pages-and-routes) — 页面路由、菜单和访问控制怎么声明。
-- [多语言](./i18n) — 界面上的文字怎么走翻译。
-- [主题](../capabilities/theme) — 新增、修改和删除主题预设。
+- [主题变量](../reference/theme-tokens)：颜色、字体、字号、间距、圆角和阴影的完整清单。
+- [页面和菜单](./pages-and-routes)：页面路由、菜单和访问控制怎么声明。
+- [多语言](./i18n)：界面上的文字怎么走翻译。
+- [主题](../capabilities/theme)：新增、修改和删除主题预设。

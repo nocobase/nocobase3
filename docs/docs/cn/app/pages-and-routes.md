@@ -6,7 +6,7 @@ keywords: 'NocoBase,页面,路由,菜单,导航,访问控制,设置页'
 
 # 页面和菜单
 
-在 NocoBase 3 的应用里，加一个页面只做两件事：在 `client/routes.ts` 里声明路由，在 `client/pages/` 里写页面组件。菜单也不是单独注册的——路由上的 `navigation` 决定它出现在侧边栏的什么位置。
+在 NocoBase 3 的应用里，加一个页面只做两件事：在 `client/routes.ts` 里声明路由，在 `client/pages/` 里写页面组件。菜单也不用单独注册，路由上的 `navigation` 决定它出现在侧边栏的什么位置。
 
 这些代码都在你应用的 `client/` 目录里，直接改就行，不需要做成插件。
 
@@ -58,7 +58,7 @@ import 路径写成 `.js`，即使文件其实是 `.tsx`。这是这个项目的
 
 ### 路由路径是应用内部路径
 
-不要把部署前缀写进路由。应用会被挂载到某个路径下——默认是 `/main`——运行时负责把这个前缀还原回来。路由里写 `/orders`，浏览器里打开的地址是 `/main/orders`。
+不要把部署前缀写进路由。应用会被挂载到某个路径下（默认是 `/main`），运行时负责把这个前缀还原回来。路由里写 `/orders`，浏览器里打开的地址是 `/main/orders`。
 
 ## 把页面放进侧边栏
 
@@ -122,7 +122,7 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
 
 子路由继承父级的 `auth`，不能改成别的值。设置页和开发页统一要求登录。
 
-`auth` 只管浏览器里的导航。它不是服务端的安全边界——页面里调用的接口必须在自己的服务端路由中独立校验身份和权限，见[接口](./server-routes)。
+`auth` 只管浏览器里的导航。它不是服务端的安全边界。页面里调用的接口必须在自己的服务端路由中独立校验身份和权限，见[接口](./server-routes)。
 
 除了 `auth`，普通 App 页面默认还会做一次权限检查：`resource` 用路由的 `name`，`action` 是 `access`。不通过时页面打不开，也会从菜单里消失。子页面只有在显式声明 `access` 时才额外检查。这套 resource 和 action 怎么配，见[权限](../capabilities/authorization)。
 
@@ -150,7 +150,7 @@ const settingsRoutes: AppClientRouteContribution = defineSettingsRoutes([
 
 开发页用 `defineDevRoutes()` 声明，挂在 `/dev` 下，路径同样不重复写 `/dev`。它和设置页的写法完全一样，只有一点不同：**生产构建里这组页面根本不存在**，页面组件以及只被它们 import 的模块都不会进入打包产物。
 
-开发页适合放调试面板、内部数据查看器、mock 开关这类不该出现在线上的东西。它是打包边界，不是权限边界——需要在生产环境按角色控制的页面，仍然应该做成带 `access` 的设置页，并由服务端强制执行。
+开发页适合放调试面板、内部数据查看器、mock 开关这类不该出现在线上的东西。它是打包边界，不是权限边界。需要在生产环境按角色控制的页面，仍然应该做成带 `access` 的设置页，并由服务端强制执行。
 
 :::warning 注意
 
@@ -211,10 +211,10 @@ override 只替换 `componentLoader`，路由的身份、路径、`auth` 和归�
 
 ## 相关链接
 
-- [总览](./overview) — 这套代码分几部分，各管什么。
-- [界面和样式](./components-and-styling) — 页面里的组件怎么选、样式怎么走主题变量。
-- [接口](./server-routes) — 页面调用的服务端接口，以及它自己的安全边界。
-- [多语言](./i18n) — 菜单标题和页面文案怎么加翻译。
-- [路由类型对照](../reference/routes) — 五种路由分别挂在什么路径下。
-- [主题变量](../reference/theme-tokens) — 颜色、字体、字号、间距这些变量可以用哪些。
-- [权限](../capabilities/authorization) — 角色、菜单权限和数据权限。
+- [总览](./overview)：这套代码分几部分，各管什么。
+- [界面和样式](./components-and-styling)：页面里的组件怎么选、样式怎么走主题变量。
+- [接口](./server-routes)：页面调用的服务端接口，以及它自己的安全边界。
+- [多语言](./i18n)：菜单标题和页面文案怎么加翻译。
+- [路由类型对照](../reference/routes)：五种路由分别挂在什么路径下。
+- [主题变量](../reference/theme-tokens)：颜色、字体、字号、间距这些变量可以用哪些。
+- [权限](../capabilities/authorization)：角色、菜单权限和数据权限。

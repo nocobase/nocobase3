@@ -35,12 +35,12 @@ keywords: 'NocoBase,主题变量,颜色变量,字体,字号,间距,圆角,阴影
 
 ## 字体
 
-| 变量             | 默认值或含义                             | 对应工具类                          |
-| ---------------- | ---------------------------------------- | ----------------------------------- |
-| `--font-sans`    | 带中日韩回退的系统无衬线字体栈，正文字体 | `font-sans`、body                   |
-| `--font-serif`   | 带中日韩回退的系统衬线字体栈             | `font-serif`                        |
-| `--font-mono`    | 系统等宽字体栈                           | `font-mono`、code/pre/kbd/samp      |
-| `--font-heading` | `var(--font-sans)`，可以换成独立的字体栈 | `font-heading`、h1–h6、PopoverTitle |
+| 变量             | 默认值或含义                             | 对应工具类                             |
+| ---------------- | ---------------------------------------- | -------------------------------------- |
+| `--font-sans`    | 带中日韩回退的系统无衬线字体栈，正文字体 | `font-sans`、body                      |
+| `--font-serif`   | 带中日韩回退的系统衬线字体栈             | `font-serif`                           |
+| `--font-mono`    | 系统等宽字体栈                           | `font-mono`、code/pre/kbd/samp         |
+| `--font-heading` | `var(--font-sans)`，可以换成独立的字体栈 | `font-heading`、h1 到 h6、PopoverTitle |
 
 取值是合法的 CSS font-family 列表，不是字号，也不是字体 URL。主题选择器要就地定义 heading 别名，包括预览，让它解析到当前预设的正文字体。
 
@@ -127,5 +127,5 @@ keywords: 'NocoBase,主题变量,颜色变量,字体,字号,间距,圆角,阴影
 
 ## 相关链接
 
-- [界面和样式](../app/components-and-styling) — 组件怎么选、样式怎么写。
-- [主题](../capabilities/theme) — 新增、修改和删除主题预设。
+- [界面和样式](../app/components-and-styling)：组件怎么选、样式怎么写。
+- [主题](../capabilities/theme)：新增、修改和删除主题预设。

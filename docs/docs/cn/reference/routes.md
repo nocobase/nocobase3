@@ -69,6 +69,6 @@ keywords: 'NocoBase,路由,defineRootRoutes,defineApiRoutes,defineAppRoutes,defi
 
 ## 相关链接
 
-- [页面和菜单](../app/pages-and-routes) — 应用里怎么声明页面、配菜单和控制访问。
-- [接口](../app/server-routes) — 服务端路由怎么写，以及它自己的安全边界。
-- [名词解释](./glossary) — App、Hub、插件、迁移这些词是什么意思。
+- [页面和菜单](../app/pages-and-routes)：应用里怎么声明页面、配菜单和控制访问。
+- [接口](../app/server-routes)：服务端路由怎么写，以及它自己的安全边界。
+- [名词解释](./glossary)：App、Hub、插件、迁移这些词是什么意思。
