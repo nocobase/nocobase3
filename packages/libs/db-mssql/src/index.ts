@@ -47,9 +47,9 @@ export interface MssqlFactory {
 }
 export const mssql: MssqlFactory = Object.assign(
   (options: MssqlOptions = {}) => ({
+    ...options,
     dialect: 'mssql' as const,
     databaseDriver: mssqlDriver,
-    ...options,
   }),
   { dialect: 'mssql' as const, driver: mssqlDriver },
 );

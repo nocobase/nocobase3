@@ -68,9 +68,9 @@ export interface PostgresFactory {
 
 export const postgres: PostgresFactory = Object.assign(
   (options: PostgresOptions = {}) => ({
+    ...options,
     dialect: 'postgres' as const,
     databaseDriver: postgresDriver,
-    ...options,
   }),
   {
     dialect: 'postgres' as const,

@@ -46,9 +46,9 @@ export interface MysqlFactory {
 }
 export const mysql: MysqlFactory = Object.assign(
   (options: MysqlOptions = {}) => ({
+    ...options,
     dialect: 'mysql' as const,
     databaseDriver: mysqlDriver,
-    ...options,
   }),
   { dialect: 'mysql' as const, driver: mysqlDriver },
 );
