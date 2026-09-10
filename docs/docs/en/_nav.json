@@ -1,22 +1,22 @@
 [
   {
-    "text": "Getting Started",
+    "text": "Get Started",
     "link": "/get-started/"
   },
   {
-    "text": "Working with AI",
+    "text": "AI",
     "link": "/ai/"
   },
   {
-    "text": "Tutorial",
+    "text": "Tutorials",
     "link": "/tutorials/"
   },
   {
-    "text": "Application development",
+    "text": "Development",
     "link": "/app/"
   },
   {
-    "text": "Built-in capabilities",
+    "text": "Capabilities",
     "link": "/capabilities/"
   },
   {
@@ -28,11 +28,11 @@
     "link": "/reference/"
   },
   {
-    "text": "Plugin development",
+    "text": "Plugins",
     "link": "/plugin-development/"
   },
   {
-    "text": "Website",
+    "text": "Home",
     "link": "https://www.nocobase.com/"
   }
 ]
