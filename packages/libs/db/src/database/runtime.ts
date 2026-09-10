@@ -3,6 +3,15 @@ import type { DatabaseCapabilities } from '../schema/adapter.js';
 import type { ConnectionConfig } from './config.js';
 import type { KnexConnectionConfig } from './internal/knex/config.js';
 import type { FieldDefinition } from '../collection/types.js';
+import type {
+  AnyFieldDefinition,
+  CollectionDefinition,
+} from '../collection/types.js';
+import type {
+  FilterConditionNode,
+  FilterValue,
+  RepositoryRecord,
+} from '../repository/types.js';
 
 export type RuntimeNumericAggregate = 'count' | 'sum' | 'avg' | 'min' | 'max';
 
@@ -56,6 +65,72 @@ export interface DatabaseQueryRuntimeStrategy {
 }
 
 export interface DatabaseRepositoryRuntimeStrategy {
+  readonly streamOptions?: (client: Knex) => object;
+  readonly decodeStreamRow?: (
+    row: RepositoryRecord,
+  ) => Promise<RepositoryRecord> | RepositoryRecord;
+  readonly groupAggregateOrder?: (context: {
+    client: Knex;
+    value: string | Knex.Raw;
+    aggregate: string | undefined;
+  }) => string | Knex.Raw;
+  readonly createManyFallback?: (collection: CollectionDefinition) => boolean;
+  readonly emptyInsertValue?: (context: {
+    client: Knex;
+    collection: CollectionDefinition;
+  }) => Record<string, Knex.Raw> | undefined;
+  readonly reloadReturnedDecimal?: boolean;
+  readonly enumGroupKey?: (context: {
+    client: Knex;
+    field: string;
+  }) => Knex.Raw;
+  readonly numericMutation?: (context: {
+    client: Knex;
+    field: AnyFieldDefinition | undefined;
+    name: string;
+    operation: string;
+    operand: unknown;
+  }) => Knex.Raw | undefined;
+  readonly compileFilterCondition?: (context: {
+    query: Knex.QueryBuilder;
+    collection: CollectionDefinition;
+    node: FilterConditionNode;
+    field: FieldDefinition | undefined;
+    name: string;
+    client: Knex | undefined;
+    boolean: 'and' | 'or';
+  }) => { handled: boolean; node?: FilterConditionNode };
+  readonly escapeLikePattern?: (value: string) => string;
+  readonly bindValue?: (context: {
+    client: Knex;
+    collection: CollectionDefinition;
+    field: FieldDefinition;
+    value: FilterValue;
+  }) => unknown;
+  readonly collectionAliasKeyword?: string;
+  readonly limitLockedQuery?: (query: Knex.QueryBuilder, client: Knex) => void;
+  readonly relationAggregateProjection?: (context: {
+    client: Knex;
+    value: Knex.Raw;
+    aggregate: string;
+  }) => Knex.Raw;
+  readonly binaryExpression?: (context: {
+    client: Knex;
+    field: FieldDefinition | undefined;
+    value: unknown;
+  }) => Knex.Raw | undefined;
+  readonly binaryComparison?: (context: {
+    client: Knex;
+    field: FieldDefinition | undefined;
+    name: string;
+    operator: string;
+    value: unknown;
+  }) => Knex.Raw | undefined;
+  readonly encodeBoolean?: (
+    field: FieldDefinition,
+    value: unknown,
+  ) => boolean | number | null;
+  readonly encodeBlobNull?: (client: Knex) => Knex.Raw | undefined;
   readonly [key: string]: unknown;
 }
 

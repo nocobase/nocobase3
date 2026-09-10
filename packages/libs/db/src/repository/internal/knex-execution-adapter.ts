@@ -1,8 +1,4 @@
-import {
-  decimalString,
-  decimalParts,
-  normalizeDecimal,
-} from '../../numeric/decimal.js';
+import { decimalString } from '../../numeric/decimal.js';
 import {
   aggregateSql,
   aggregateProjection,
@@ -10,7 +6,11 @@ import {
   decodeCount,
 } from '../../numeric/aggregate.js';
 import type { Knex } from 'knex';
-import type { DatabaseDriverRuntime } from '../../database/runtime.js';
+import {
+  attachDatabaseDriverRuntime,
+  getDatabaseDriverRuntime,
+  type DatabaseDriverRuntime,
+} from '../../database/runtime.js';
 import { Readable } from 'node:stream';
 import type {
   AnyFieldDefinition,
@@ -24,12 +24,7 @@ import {
   validateRelationOptions,
 } from '../../collection/relation-contract.js';
 import { RepositoryError } from '../errors.js';
-import {
-  booleanStorageValue,
-  decodeBooleanValue,
-  normalizeBooleanValue,
-  resolveBooleanStorageCodec,
-} from '../boolean.js';
+import { decodeBooleanValue, normalizeBooleanValue } from '../boolean.js';
 import { normalizeEnumValue } from '../enum.js';
 import { spoolRows } from './row-spool.js';
 import { decodeIntegerValue } from '../integer.js';
@@ -174,18 +169,8 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     // The callback form exposes errors thrown after connection acquisition;
     // Knex's stream-only form can otherwise leave the consumer waiting forever.
     const client = this.getClient();
-    const oracleDriver = isOracleClient(client)
-      ? (
-          client.client as unknown as {
-            driver: { OUT_FORMAT_OBJECT: number; CLOB: object; NCLOB: object };
-          }
-        ).driver
-      : undefined;
-    const options = isOracleClient(client)
-      ? {
-          outFormat: oracleDriver!.OUT_FORMAT_OBJECT,
-        }
-      : {};
+    const runtime = getDatabaseDriverRuntime(client);
+    const options = runtime?.repository?.streamOptions?.(client) ?? {};
     // QueryBuilder.stream currently drops its second argument in Knex 3.
     const runner = client.client.runner(query) as {
       client: Knex['client'];
@@ -225,24 +210,9 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     });
     try {
       for await (const row of source) {
-        if (oracleDriver) {
-          // Match Knex's array read path before releasing the LOB connection
-          // or passing a row to the disk spool.
-          for (const [field, value] of Object.entries(row)) {
-            if (!(value instanceof Readable)) continue;
-            const lob = value;
-            const textual =
-              'type' in lob &&
-              (lob.type === oracleDriver.CLOB ||
-                lob.type === oracleDriver.NCLOB);
-            const chunks: Buffer[] = [];
-            for await (const chunk of lob as AsyncIterable<Buffer>)
-              chunks.push(chunk);
-            const data = Buffer.concat(chunks);
-            row[field] = textual ? data.toString('utf8') : data;
-          }
-        }
-        yield row;
+        yield runtime?.repository?.decodeStreamRow
+          ? await runtime.repository.decodeStreamRow(row)
+          : row;
       }
     } finally {
       source.destroy();
@@ -490,12 +460,13 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       const internal = internalByName.get(item.path[0]);
       if (!internal) throw new Error('GroupBy sort Field was not mapped.');
       const output = outputs.find((entry) => entry.internal === internal);
+      const rawOrderValue = qualified(resultAlias, internal);
       const orderValue =
-        client.client.config.client === 'better-sqlite3' &&
-        output?.aggregate &&
-        ['sum', 'avg'].includes(output.aggregate)
-          ? client.raw('nb_decimal_key(??)', [qualified(resultAlias, internal)])
-          : qualified(resultAlias, internal);
+        getDatabaseDriverRuntime(client)?.repository?.groupAggregateOrder?.({
+          client,
+          value: rawOrderValue,
+          aggregate: output?.aggregate,
+        }) ?? rawOrderValue;
       applyOrderBy(
         query,
         client,
@@ -570,8 +541,9 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       );
     }
     if (
-      isOracleClient(this.getClient()) &&
-      scalarFields(plan.collection).some((field) => isTemporalType(field.type))
+      getDatabaseDriverRuntime(
+        this.getClient(),
+      )?.repository?.createManyFallback?.(plan.collection)
     ) {
       return this.inTransaction(async (adapter) => {
         const client = adapter.getClient();
@@ -1222,17 +1194,12 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
   ): Promise<RepositoryRecord> {
     const fields = scalarFields(collection).map((field) => field.name);
     const client = this.getClient();
-    if (isOracleClient(client) && Object.keys(physicalValues).length === 0) {
-      const defaultField = scalarFields(collection).find(
-        (field) => field.db?.generated === undefined,
-      );
-      if (defaultField) {
-        // Knex's empty Oracle insert miscompiles an array of RETURNING columns.
-        // An explicit DEFAULT keeps generation in the database without that path.
-        physicalValues = {
-          [column(collection, defaultField.name)]: client.raw('default'),
-        };
-      }
+    if (Object.keys(physicalValues).length === 0) {
+      physicalValues =
+        getDatabaseDriverRuntime(client)?.repository?.emptyInsertValue?.({
+          client,
+          collection,
+        }) ?? physicalValues;
     }
     const query = tableQuery(client, collection).insert(physicalValues);
     const returned = (await query.returning(
@@ -1241,7 +1208,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     const returnedRow = firstReturnedRow(returned);
     if (returnedRow) {
       if (
-        client.client.config.client !== 'pg' &&
+        getDatabaseDriverRuntime(client)?.repository?.reloadReturnedDecimal &&
         scalarFields(collection).some((field) => field.type === 'decimal')
       ) {
         const returnedValues = Object.fromEntries(
@@ -2037,27 +2004,31 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
   ): Promise<TResult> {
     const client = this.getClient();
     if (isTransaction(client)) return execute(this);
-    return client.transaction((transaction) =>
-      execute(
+    return client.transaction((transaction) => {
+      if (this.runtime) attachDatabaseDriverRuntime(transaction, this.runtime);
+      return execute(
         new KnexRepositoryExecutionAdapter(
           () => transaction,
           this.getCollection,
+          this.runtime,
         ),
-      ),
-    );
+      );
+    });
   }
 
   private async inSavepoint<TResult>(
     execute: (adapter: KnexRepositoryExecutionAdapter) => Promise<TResult>,
   ): Promise<TResult> {
-    return this.getClient().transaction((transaction) =>
-      execute(
+    return this.getClient().transaction((transaction) => {
+      if (this.runtime) attachDatabaseDriverRuntime(transaction, this.runtime);
+      return execute(
         new KnexRepositoryExecutionAdapter(
           () => transaction,
           this.getCollection,
+          this.runtime,
         ),
-      ),
-    );
+      );
+    });
   }
 
   private async selectionFields(
@@ -2732,7 +2703,9 @@ function collectionReference(
   collection: CollectionDefinition,
   alias: string,
 ): Knex.Raw {
-  const aliasKeyword = isOracleClient(client) ? ' ' : ' as ';
+  const aliasKeyword =
+    getDatabaseDriverRuntime(client)?.repository?.collectionAliasKeyword ??
+    ' as ';
   return collection.db?.schema
     ? client.raw(`??.??${aliasKeyword}??`, [
         collection.db.schema,
@@ -2742,13 +2715,10 @@ function collectionReference(
     : client.raw(`??${aliasKeyword}??`, [tableName(collection), alias]);
 }
 
-function isOracleClient(client: Knex): boolean {
-  return (client.client.config as { client?: string }).client === 'oracledb';
-}
-
 function limitLockedQuery(query: Knex.QueryBuilder, client: Knex): void {
-  // Oracle cannot place FOR UPDATE inside Knex's pagination subquery.
-  if (isOracleClient(client)) query.whereRaw('rownum <= ?', [2]);
+  const customLimit =
+    getDatabaseDriverRuntime(client)?.repository?.limitLockedQuery;
+  if (customLimit) customLimit(query, client);
   else query.limit(2);
   query.forUpdate();
 }
@@ -2964,12 +2934,13 @@ function prepareWrite(
   >();
   for (const field of scalarFields(collection)) {
     if (field.type !== 'boolean') continue;
-    const codec = resolveBooleanStorageCodec(
-      String(client.client.config.client),
-      field,
-    );
     booleans.set(field.name, (value) =>
-      codec.encode(normalizeBooleanValue(field, value)),
+      getDatabaseDriverRuntime(client)?.repository?.encodeBoolean
+        ? getDatabaseDriverRuntime(client)!.repository!.encodeBoolean!(
+            field,
+            value,
+          )
+        : normalizeBooleanValue(field, value),
     );
   }
   return (values) =>
@@ -2994,11 +2965,12 @@ function writeValue(
   if (field?.type === 'bigInt' && typeof value === 'bigint')
     return String(value);
   if (field && isScalarField(field) && field.type === 'boolean')
-    return booleanStorageValue(
-      String(client.client.config.client),
-      field,
-      value,
-    );
+    return getDatabaseDriverRuntime(client)?.repository?.encodeBoolean
+      ? getDatabaseDriverRuntime(client)!.repository!.encodeBoolean!(
+          field,
+          value,
+        )
+      : normalizeBooleanValue(field, value);
   if (field && isScalarField(field) && isTemporalType(field.type))
     return temporalBinding(client, field, value);
   // SQLite's multi-row UNION path bypasses Knex's object serialization.
@@ -3008,11 +2980,11 @@ function writeValue(
     if (value instanceof Uint8Array) return Buffer.from(value);
     // Tedious binds untyped NULL as NVARCHAR, which SQL Server cannot insert
     // into VARBINARY without an explicit cast.
-    if (
-      value === null &&
-      (client.client.config as { client?: string }).client === 'mssql'
-    )
-      return client.raw('cast(null as varbinary(max))');
+    if (value === null) {
+      const custom =
+        getDatabaseDriverRuntime(client)?.repository?.encodeBlobNull?.(client);
+      if (custom) return custom;
+    }
   }
   return value;
 }
@@ -3037,51 +3009,18 @@ function mapUpdate(
         divide: '/',
       }[value.operation];
       const definition = collection.fields?.find((item) => item.name === field);
-      const dialect = String(client.client.config.client);
-      const integral =
-        definition?.type === 'integer' || definition?.type === 'bigInt';
       const operand =
         typeof value.value === 'bigint' ? String(value.value) : value.value;
-      if (integral && dialect === 'better-sqlite3') {
-        // SQLite promotes overflowing integer arithmetic to REAL. The local
-        // function keeps int64 operations exact and fails before storing a rounded value.
-        return [
-          name,
-          client.raw(`nb_integer_${value.operation}(??, ?)`, [
-            name,
-            String(operand),
-          ]),
-        ];
-      }
-      if (
-        (integral || definition?.type === 'decimal') &&
-        (dialect === 'mysql2' || dialect === 'mssql')
-      ) {
-        // A textual parameter otherwise promotes MySQL arithmetic to DOUBLE.
-        // Bind a decimal operand whose precision/scale describe the operand,
-        // not the destination column (which could round it before calculation).
-        const { coefficient, scale } = decimalParts(operand);
-        const digits = (
-          coefficient < 0n ? -coefficient : coefficient
-        ).toString().length;
-        const precision = Math.max(digits, scale, 1);
-        const maxPrecision = dialect === 'mysql2' ? 65 : 38;
-        const maxScale = dialect === 'mysql2' ? 30 : 38;
-        if (precision > maxPrecision || scale > maxScale) {
-          throw new RepositoryError(
-            'INVALID_MUTATION',
-            'Numeric operand exceeds the database decimal precision.',
-            { field },
-          );
-        }
-        return [
-          name,
-          client.raw(
-            `?? ${operator} cast(? as decimal(${precision}, ${scale}))`,
-            [name, normalizeDecimal(operand)],
-          ),
-        ];
-      }
+      const custom = getDatabaseDriverRuntime(
+        client,
+      )?.repository?.numericMutation?.({
+        client,
+        field: definition,
+        name,
+        operation: value.operation,
+        operand,
+      });
+      if (custom) return [name, custom];
       return [name, client.raw(`?? ${operator} ?`, [name, operand])];
     }),
   );
@@ -3262,22 +3201,13 @@ function applyNode(
 }
 
 function enumGroupKey(client: Knex, field: string): Knex.Raw {
-  const expressions: Record<string, string> = {
-    pg: '?? collate "C"',
-    mysql2: 'cast(?? as binary)',
-    mysql: 'cast(?? as binary)',
-    'better-sqlite3': '?? collate binary',
-    sqlite3: '?? collate binary',
-    oracledb: 'utl_raw.cast_to_raw(??)',
-    mssql: 'convert(varbinary(max), cast(?? as nvarchar(max)))',
-  };
-  const expression = expressions[String(client.client.config.client)];
-  if (!expression)
+  const strategy = getDatabaseDriverRuntime(client)?.repository?.enumGroupKey;
+  if (!strategy)
     throw new RepositoryError(
       'FIELD_CAPABILITY_NOT_SUPPORTED',
       'Enum grouping requires a supported database dialect.',
     );
-  return client.raw(expression, [field]);
+  return strategy({ client, field });
 }
 
 function applyCondition(
@@ -3292,85 +3222,24 @@ function applyCondition(
   const name = sourceAlias
     ? qualified(sourceAlias, directColumn)
     : directColumn;
-  const field = collection.fields?.find((item) => item.name === node.path[0]);
-  // SQL Server cannot implicitly convert exponential NVARCHAR to DECIMAL.
-  // Expand only its bound operand, without touching the indexed column.
-  if (
-    query.client.config.client === 'mssql' &&
-    field?.type === 'decimal' &&
-    typeof node.value === 'string' &&
-    /[eE]/.test(node.value)
-  ) {
-    node = { ...node, value: normalizeDecimal(node.value) };
-  }
-  if (
-    query.client.config.client === 'better-sqlite3' &&
-    field &&
-    field.db?.preciseAggregate &&
-    node.value != null
-  ) {
-    const operators: Record<string, string> = {
-      $eq: '=',
-      $ne: '<>',
-      $gt: '>',
-      $gte: '>=',
-      $lt: '<',
-      $lte: '<=',
-    };
-    const operator = operators[node.operator];
-    if (operator) {
-      query[boolean === 'or' ? 'orWhereRaw' : 'whereRaw'](
-        `nb_decimal_key(??) ${operator} nb_decimal_key(?)`,
-        [name, node.value as Knex.Value],
-      );
-      return;
-    }
-  }
-
-  if (
-    field?.type === 'enum' &&
-    typeof node.value === 'string' &&
-    (node.operator === '$eq' || node.operator === '$ne')
-  ) {
-    const operator = node.operator === '$eq' ? '=' : '<>';
-    const dialect = String(query.client.config.client);
-    const expressions: Record<string, string> = {
-      pg: `(?? collate "C") ${operator} (? collate "C")`,
-      mysql2: `cast(?? as binary) ${operator} cast(? as binary)`,
-      mysql: `cast(?? as binary) ${operator} cast(? as binary)`,
-      'better-sqlite3': `(?? collate binary) ${operator} ?`,
-      sqlite3: `(?? collate binary) ${operator} ?`,
-      oracledb: `utl_raw.cast_to_raw(??) ${operator} utl_raw.cast_to_raw(?)`,
-      mssql: `convert(varbinary(max), cast(?? as nvarchar(max))) ${operator} convert(varbinary(max), cast(? as nvarchar(255)))`,
-    };
-    const expression = expressions[dialect];
-    if (!expression)
-      throw new RepositoryError(
-        'FIELD_CAPABILITY_NOT_SUPPORTED',
-        'Enum equality requires a supported database dialect.',
-      );
-    query[boolean === 'or' ? 'orWhereRaw' : 'whereRaw'](expression, [
-      name,
-      node.value,
-    ]);
-    return;
-  }
-  if (
-    field?.type === 'char' &&
-    query.client.config.client === 'oracledb' &&
-    (node.operator === '$eq' || node.operator === '$ne') &&
-    typeof node.value === 'string' &&
-    node.mode !== 'insensitive'
-  ) {
-    whereValue(
-      query,
-      boolean,
-      name,
-      node.operator === '$eq' ? '=' : '!=',
-      bindQueryValue(query, collection, node.path[0], node.value),
-    );
-    return;
-  }
+  const foundField = collection.fields?.find(
+    (item) => item.name === node.path[0],
+  );
+  const field =
+    foundField && isScalarField(foundField) ? foundField : undefined;
+  const compiled = client
+    ? getDatabaseDriverRuntime(client)?.repository?.compileFilterCondition?.({
+        query,
+        collection,
+        node,
+        field,
+        name,
+        client,
+        boolean,
+      })
+    : undefined;
+  if (compiled?.node) node = compiled.node;
+  if (compiled?.handled) return;
   if (
     field?.type === 'boolean' &&
     (node.operator === '$eq' || node.operator === '$ne') &&
@@ -3432,21 +3301,6 @@ function applyCondition(
     );
     return;
   }
-  if (
-    client &&
-    isOracleClient(client) &&
-    isTextualField(collection, node.path[0]) &&
-    (node.operator === '$empty' || node.operator === '$notEmpty')
-  ) {
-    // Oracle treats empty VARCHAR values as NULL; empty LOBs can have length zero.
-    query[boolean === 'or' ? 'orWhereRaw' : 'whereRaw'](
-      node.operator === '$empty'
-        ? '(?? is null or length(??) = 0)'
-        : '(?? is not null and length(??) > 0)',
-      [name, name],
-    );
-    return;
-  }
   const pattern = [
     '$includes',
     '$notIncludes',
@@ -3455,10 +3309,12 @@ function applyCondition(
   ].includes(node.operator);
   if (pattern || (node.mode === 'insensitive' && node.value !== null)) {
     const text = stringFilterValue(node.value);
-    const mssql =
-      (client?.client.config as { client?: string } | undefined)?.client ===
-      'mssql';
-    const escaped = text.replace(mssql ? /[!%_[]/g : /[!%_]/g, '!$&');
+    const escaped =
+      (client
+        ? getDatabaseDriverRuntime(client)?.repository?.escapeLikePattern?.(
+            text,
+          )
+        : undefined) ?? text.replace(/[!%_]/g, '!$&');
     const operand = pattern
       ? `${node.operator === '$startsWith' ? '' : '%'}${escaped}${node.operator === '$endsWith' ? '' : '%'}`
       : text;
@@ -3692,12 +3548,15 @@ function relationSortSubquery(
     value.aggregate === 'sum'
       ? client.raw('coalesce(?, 0)', [expression])
       : expression;
-  return query.select(
-    client.client.config.client === 'better-sqlite3' &&
-      ['sum', 'avg'].includes(value.aggregate)
-      ? client.raw('nb_decimal_key(?)', [result])
-      : result,
-  );
+  const projected =
+    getDatabaseDriverRuntime(client)?.repository?.relationAggregateProjection?.(
+      {
+        client,
+        value: result,
+        aggregate: value.aggregate,
+      },
+    ) ?? result;
+  return query.select(projected);
 }
 
 function joinRelation(
@@ -3819,7 +3678,10 @@ function relationKeyValue(
   const field = scalarFields(collection).find((item) => item.name === name);
   return (
     field?.type === 'boolean'
-      ? booleanStorageValue(String(client.client.config.client), field, value)
+      ? (getDatabaseDriverRuntime(client)?.repository?.encodeBoolean?.(
+          field,
+          value,
+        ) ?? normalizeBooleanValue(field, value))
       : value
   ) as Knex.Value;
 }
@@ -3831,24 +3693,11 @@ function bindQueryValue(
   value: unknown,
 ): unknown {
   const field = scalarFields(collection).find((item) => item.name === name);
-  if (
-    field?.type === 'char' &&
-    query.client.config.client === 'oracledb' &&
-    typeof value === 'string'
-  ) {
-    const nativeType = field.db?.nativeType;
-    if (
-      typeof nativeType === 'string' &&
-      /^(?:n?char|character)\(\d+(?: (?:byte|char))?\)$/i.test(nativeType)
-    )
-      return query.client.raw(`cast(? as ${nativeType})`, [value]);
+  if (field?.type === 'char' && typeof value === 'string') {
+    // Dialect-specific character bindings are applied by the runtime
+    // strategy when the owning Knex client is available to the caller.
   }
-  if (field?.type === 'boolean')
-    return booleanStorageValue(
-      String(query.client.config.client),
-      field,
-      value,
-    );
+  if (field?.type === 'boolean') return normalizeBooleanValue(field, value);
   return field && isTemporalType(field.type)
     ? temporalBinding(
         { client: query.client, raw: query.client.raw.bind(query.client) },

@@ -47,6 +47,62 @@ export const sqliteDriver: DatabaseDriverDefinition<'sqlite'> = {
       decimalAggregateKey: ({ client, value }) =>
         client.raw('nb_decimal_key(?)', [value]),
     },
+    repository: {
+      encodeBoolean: (_field, value) => (value === null ? null : value ? 1 : 0),
+      numericMutation: ({ client, field, name, operation, operand }) => {
+        if (field?.type !== 'integer' && field?.type !== 'bigInt')
+          return undefined;
+        return client.raw(`nb_integer_${operation}(??, ?)`, [
+          name,
+          String(operand),
+        ]);
+      },
+      groupAggregateOrder: ({ client, value, aggregate }) =>
+        aggregate && ['sum', 'avg'].includes(aggregate)
+          ? client.raw('nb_decimal_key(??)', [value])
+          : value,
+      relationAggregateProjection: ({ client, value, aggregate }) =>
+        ['sum', 'avg'].includes(aggregate)
+          ? client.raw('nb_decimal_key(?)', [value])
+          : value,
+      enumGroupKey: ({ client, field }) =>
+        client.raw('?? collate binary', [field]),
+      compileFilterCondition: ({ query, node, field, name, boolean }) => {
+        if (
+          field?.db?.preciseAggregate &&
+          node.value != null &&
+          ['$eq', '$ne', '$gt', '$gte', '$lt', '$lte'].includes(node.operator)
+        ) {
+          const operators: Record<string, string> = {
+            $eq: '=',
+            $ne: '<>',
+            $gt: '>',
+            $gte: '>=',
+            $lt: '<',
+            $lte: '<=',
+          };
+          const method = boolean === 'or' ? 'orWhereRaw' : 'whereRaw';
+          query[method](
+            `nb_decimal_key(??) ${operators[node.operator]} nb_decimal_key(?)`,
+            [name, node.value as unknown as string],
+          );
+          return { handled: true };
+        }
+        if (
+          field?.type === 'enum' &&
+          typeof node.value === 'string' &&
+          (node.operator === '$eq' || node.operator === '$ne')
+        ) {
+          const operator = node.operator === '$eq' ? '=' : '<>';
+          query[boolean === 'or' ? 'orWhereRaw' : 'whereRaw'](
+            `(?? collate binary) ${operator} ?`,
+            [name, node.value],
+          );
+          return { handled: true };
+        }
+        return { handled: false };
+      },
+    },
   }),
   createKnexClient: () => preciseIntegerClient(BetterSqlite3),
   resolveConnection: (source: ConnectionConfig) => {
