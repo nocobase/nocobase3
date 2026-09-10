@@ -1,3 +1,4 @@
+import sqlite from '@nocobase/db-sqlite';
 import {
   createDatabaseManager,
   InMemoryCollectionMetadataStore,
@@ -30,6 +31,7 @@ describe('knowledge base manifest persistence migration', () => {
   beforeEach(() => {
     metadataStore = new InMemoryCollectionMetadataStore();
     database = createDatabaseManager({
+      drivers: { sqlite },
       default: 'main',
       metadataStore,
       connections: { main: { dialect: 'sqlite', filename: ':memory:' } },

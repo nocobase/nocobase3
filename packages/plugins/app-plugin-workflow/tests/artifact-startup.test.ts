@@ -1,4 +1,5 @@
 // @vitest-environment node
+import sqlite from '@nocobase/db-sqlite';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -60,6 +61,7 @@ async function fixture(): Promise<{
   );
   roots.push(root);
   const database = createDatabaseManager({
+    drivers: { sqlite },
     connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
   });
   databases.push(database);

@@ -1,3 +1,4 @@
+import sqlite from '@nocobase/db-sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   createDatabaseManager,
@@ -25,6 +26,7 @@ const metadataStores = new WeakMap<
 async function createDatabase(): Promise<DatabaseManager> {
   const metadataStore = new InMemoryCollectionMetadataStore();
   const database = createDatabaseManager({
+    drivers: { sqlite },
     default: 'main',
     metadataStore,
     connections: { main: { dialect: 'sqlite', filename: ':memory:' } },

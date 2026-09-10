@@ -1,3 +1,4 @@
+import sqlite from '@nocobase/db-sqlite';
 /* eslint-disable @eslint-react/naming-convention-context-name -- Hono request contexts are not React contexts. */
 import { createDatabaseManager, type DatabaseManager } from '@nocobase/db';
 import { Hono, type Context } from 'hono';
@@ -16,6 +17,7 @@ describe('database file store', () => {
 
   beforeEach(async () => {
     database = createDatabaseManager({
+      drivers: { sqlite },
       default: 'main',
       connections: {
         main: {

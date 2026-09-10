@@ -1,3 +1,4 @@
+import sqlite from '@nocobase/db-sqlite';
 import {
   authenticationToken,
   type Auth,
@@ -30,6 +31,7 @@ describe('file inventory routes', () => {
 
   beforeEach(async () => {
     database = createDatabaseManager({
+      drivers: { sqlite },
       default: 'main',
       connections: {
         main: { dialect: 'sqlite', filename: ':memory:' },

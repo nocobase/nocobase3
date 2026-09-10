@@ -1,3 +1,4 @@
+import sqlite from '@nocobase/db-sqlite';
 import { createDatabaseManager, type DatabaseManager } from '@nocobase/db';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -12,6 +13,7 @@ describe('file inventory query', () => {
 
   beforeEach(async () => {
     database = createDatabaseManager({
+      drivers: { sqlite },
       default: 'main',
       connections: {
         main: { dialect: 'sqlite', filename: ':memory:' },

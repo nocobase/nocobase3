@@ -1,5 +1,6 @@
 // @vitest-environment node
 
+import sqlite from '@nocobase/db-sqlite';
 import { fileURLToPath } from 'node:url';
 
 import {
@@ -45,6 +46,7 @@ async function seedAuthentication(
 
 describe('Authentication', () => {
   const database = createDatabaseManager({
+    drivers: { sqlite },
     default: 'main',
     connections: {
       main: {
@@ -239,6 +241,7 @@ describe('Authentication', () => {
 describe('Authentication naming strategy', () => {
   it('supports underscored: false', async () => {
     const database = createDatabaseManager({
+      drivers: { sqlite },
       default: 'main',
       connections: {
         main: {
@@ -309,6 +312,7 @@ describe('Authentication naming strategy', () => {
 describe('Authentication seed', () => {
   it('creates the default admin with working hashed credentials', async () => {
     const database = createDatabaseManager({
+      drivers: { sqlite },
       default: 'main',
       connections: {
         main: {
@@ -381,6 +385,7 @@ describe('Authentication seed', () => {
 
   it('does not add a default credential to an existing installation', async () => {
     const database = createDatabaseManager({
+      drivers: { sqlite },
       default: 'main',
       connections: {
         main: {

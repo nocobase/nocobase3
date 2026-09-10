@@ -1,3 +1,4 @@
+import sqlite from '@nocobase/db-sqlite';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
@@ -262,6 +263,7 @@ export async function createRuntimeFixture(
 ): Promise<RuntimeFixture> {
   await fs.mkdir(path.dirname(dbPath), { recursive: true });
   const database = createDatabaseManager({
+    drivers: { sqlite },
     connections: { main: { dialect: 'sqlite', filename: dbPath } },
   });
   await database.builder().createCollections(
@@ -483,6 +485,7 @@ export async function openRuntimeFixture(
   dbPath: string,
 ): Promise<RuntimeFixture> {
   const database = createDatabaseManager({
+    drivers: { sqlite },
     connections: { main: { dialect: 'sqlite', filename: dbPath } },
   });
   return { dbPath, database, workflowIds: {}, runIds: {} };

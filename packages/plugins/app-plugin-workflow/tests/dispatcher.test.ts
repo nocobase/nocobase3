@@ -1,3 +1,4 @@
+import sqlite from '@nocobase/db-sqlite';
 import {
   createDatabaseManager,
   type DatabaseManager,
@@ -39,6 +40,7 @@ describe('workflow dispatcher and processor', () => {
 
   beforeEach(async () => {
     database = createDatabaseManager({
+      drivers: { sqlite },
       connections: {
         main: {
           dialect: 'sqlite',

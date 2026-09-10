@@ -1,3 +1,4 @@
+import sqlite from '@nocobase/db-sqlite';
 import { createHash } from 'node:crypto';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -816,6 +817,7 @@ function createBootstrapper(
 
 async function createHarness() {
   const database = createDatabaseManager({
+    drivers: { sqlite },
     default: 'main',
     metadataStore: new InMemoryCollectionMetadataStore(),
     connections: { main: { dialect: 'sqlite', filename: ':memory:' } },

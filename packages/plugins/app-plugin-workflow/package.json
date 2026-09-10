@@ -119,6 +119,7 @@
     }
   },
   "devDependencies": {
+    "@nocobase/db-sqlite": "workspace:*",
     "@boringnode/queue": "^0.7.1",
     "@nocobase/dev-config": "workspace:*",
     "@testing-library/react": "catalog:",

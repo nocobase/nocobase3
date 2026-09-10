@@ -1,3 +1,4 @@
+import sqlite from '@nocobase/db-sqlite';
 import path from 'node:path';
 import { mkdtemp, rm, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -30,6 +31,7 @@ async function fixture(overrides: Partial<FileRepositoryApiExposure> = {}) {
   const root = await mkdtemp(path.join(tmpdir(), 'file-repository-'));
   cleanup.push(() => rm(root, { recursive: true, force: true }));
   const db = createDatabaseManager({
+    drivers: { sqlite },
     connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
   });
   cleanup.push(() => db.destroy());
