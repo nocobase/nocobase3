@@ -8,7 +8,7 @@ import {
   createDatabaseManager,
   type DatabaseManager,
   ModuleCollectionMetadataStore,
-} from '../../../src/index.js';
+} from '@nocobase/db';
 import {
   externalCrmMetadataDocuments,
   externalCrmMetadataSource,
