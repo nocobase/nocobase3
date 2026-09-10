@@ -215,6 +215,141 @@ describe('AgentService response metadata', () => {
     expect(fixture.updateAssistantResponseMetadata).not.toHaveBeenCalled();
   });
 
+  it('isolates concurrent streams that use the same response id', async () => {
+    const fixture = createFixture([]);
+    let ready = 0;
+    let release: () => void = () => undefined;
+    const bothReady = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const configureStream = (
+      stream: ReturnType<typeof vi.fn>,
+      messageId: string,
+      tokens: number,
+    ) =>
+      stream.mockImplementationOnce(
+        async (_input: unknown, config: Record<string, any>) => {
+          config.callbacks[0].handleLLMEnd({
+            id: 'shared-response',
+            metadata: { tokens },
+          });
+          ready++;
+          if (ready === 2) release();
+          await bothReady;
+          return toStream([
+            [
+              'custom',
+              {
+                action: 'AfterAIMessageSaved',
+                body: { id: 'shared-response', messageId },
+              },
+            ],
+            contentChunk,
+          ]);
+        },
+      );
+    const firstStream = vi.fn();
+    const secondStream = vi.fn();
+    configureStream(firstStream, 'message-first', 11);
+    configureStream(secondStream, 'message-second', 22);
+    langchainMocks.createAgent
+      .mockReset()
+      .mockReturnValueOnce({ stream: firstStream, invoke: fixture.invoke })
+      .mockReturnValueOnce({ stream: secondStream, invoke: fixture.invoke });
+
+    await Promise.all([
+      collect(fixture.service.stream()),
+      collect(fixture.service.stream()),
+    ]);
+
+    expect(fixture.updateAssistantResponseMetadata).toHaveBeenCalledTimes(2);
+    expect(fixture.updateAssistantResponseMetadata.mock.calls).toEqual(
+      expect.arrayContaining([
+        ['message-first', { tokens: 11 }],
+        ['message-second', { tokens: 22 }],
+      ]),
+    );
+  });
+
+  it('ignores a callback that arrives after normal stream disposal', async () => {
+    const fixture = createFixture([]);
+    let lateCallback: { handleLLMEnd(output: unknown): void } | undefined;
+    const firstStream = vi.fn(
+      async (_input: unknown, config: Record<string, any>) => {
+        lateCallback = config.callbacks[0];
+        return toStream([contentChunk]);
+      },
+    );
+    const secondStream = vi.fn(async () =>
+      toStream([
+        [
+          'custom',
+          {
+            action: 'AfterAIMessageSaved',
+            body: { id: 'late-response', messageId: 'late-message' },
+          },
+        ],
+        contentChunk,
+      ]),
+    );
+    langchainMocks.createAgent
+      .mockReset()
+      .mockReturnValueOnce({ stream: firstStream, invoke: fixture.invoke })
+      .mockReturnValueOnce({ stream: secondStream, invoke: fixture.invoke });
+
+    await collect(fixture.service.stream());
+    lateCallback?.handleLLMEnd({
+      id: 'late-response',
+      metadata: { tokens: 99 },
+    });
+    await collect(fixture.service.stream());
+
+    expect(fixture.updateAssistantResponseMetadata).not.toHaveBeenCalled();
+  });
+
+  it('ignores a callback that arrives after aborted stream disposal', async () => {
+    const fixture = createFixture([]);
+    let lateCallback: { handleLLMEnd(output: unknown): void } | undefined;
+    const abortedStream = vi.fn(
+      async (_input: unknown, config: Record<string, any>) => {
+        lateCallback = config.callbacks[0];
+        fixture.service.abort('stop');
+        return {
+          async *[Symbol.asyncIterator](): AsyncGenerator<StreamChunk> {
+            throw new Error('provider aborted');
+          },
+        };
+      },
+    );
+    const nextStream = vi.fn(async () =>
+      toStream([
+        [
+          'custom',
+          {
+            action: 'AfterAIMessageSaved',
+            body: { id: 'late-response', messageId: 'late-message' },
+          },
+        ],
+        contentChunk,
+      ]),
+    );
+    langchainMocks.createAgent
+      .mockReset()
+      .mockReturnValueOnce({ stream: abortedStream, invoke: fixture.invoke })
+      .mockReturnValueOnce({ stream: nextStream, invoke: fixture.invoke });
+
+    await expect(collect(fixture.service.stream())).rejects.toMatchObject({
+      code: 'ABORTED',
+    });
+    lateCallback?.handleLLMEnd({
+      id: 'late-response',
+      metadata: { tokens: 99 },
+    });
+    await collect(fixture.service.stream());
+
+    expect(fixture.updateAssistantResponseMetadata).not.toHaveBeenCalled();
+  });
+
   it('does not inject a response metadata collector for invoke', async () => {
     const fixture = createFixture([]);
 
