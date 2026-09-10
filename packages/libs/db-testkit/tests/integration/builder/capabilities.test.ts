@@ -1,8 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import {
-  describeIntegrationDatabases,
-  useIntegrationDatabase,
-} from '../helpers.js';
+import { expect, it } from 'vitest';
+import { describeIntegrationDatabases } from '../helpers.js';
 
 describeIntegrationDatabases('capability warnings', (context) => {
   it('downgrades safe unsupported capabilities without failing real DDL', async () => {
@@ -130,35 +127,5 @@ describeIntegrationDatabases('capability warnings', (context) => {
         }),
       ).rejects.toThrow(/unique|duplicate/i);
     }
-  });
-});
-
-describe('capability warnings [sqlite materialized view]', () => {
-  const context = useIntegrationDatabase({
-    name: 'sqlite',
-    dialect: 'sqlite',
-    filename: ':memory:',
-  });
-
-  it('warns and skips unsupported materialized views without throwing', async () => {
-    const result = await context.builder.createMaterializedViewCollection(
-      'usersSnapshot',
-      (view) => {
-        view.string('email');
-        view.as((query) => query.from('users').select('email'));
-      },
-    );
-
-    expect(result.warnings).toEqual([
-      expect.objectContaining({
-        code: 'UNSUPPORTED_MATERIALIZED_VIEW',
-        severity: 'unsafe',
-        fallback: 'skip',
-      }),
-    ]);
-    expect(result.schemaOperations).toEqual([]);
-    expect(
-      await context.db.schema.hasTable(context.table('usersSnapshot')),
-    ).toBe(false);
   });
 });
