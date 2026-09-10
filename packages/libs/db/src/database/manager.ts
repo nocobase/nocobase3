@@ -184,7 +184,8 @@ function resolveConnectionDriver(
   name: string,
 ): ConnectionConfig {
   const supplied = connection.databaseDriver;
-  const registered = drivers?.[connection.dialect];
+  const registeredValue = drivers?.[connection.dialect];
+  const registered = resolveDriverDefinition(registeredValue);
   if (supplied && supplied.dialect !== connection.dialect) {
     throw new Error(
       `Database connection "${name}" uses dialect "${connection.dialect}" but its driver is for "${supplied.dialect}".`,
@@ -197,4 +198,14 @@ function resolveConnectionDriver(
   }
   const driver = supplied ?? registered;
   return driver ? { ...connection, databaseDriver: driver } : connection;
+}
+
+function resolveDriverDefinition(
+  value: DatabaseDriverDefinition | undefined,
+): DatabaseDriverDefinition | undefined {
+  if (!value) return undefined;
+  const factory = value as DatabaseDriverDefinition & {
+    driver?: DatabaseDriverDefinition;
+  };
+  return typeof factory.driver === 'object' ? factory.driver : value;
 }

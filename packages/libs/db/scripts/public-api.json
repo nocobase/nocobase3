@@ -33,8 +33,10 @@
         "defineMigration",
         "defineSeed",
         "extractLegacyCollectionMetadata",
+        "installDecimalAggregates",
         "loadMigrations",
         "loadSeeds",
+        "preciseIntegerClient",
         "validateCollectionMetadataDocument",
         "validateMigrations",
         "validateSeeds"

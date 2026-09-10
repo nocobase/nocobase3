@@ -106,6 +106,8 @@ export { MysqlSchemaInspector } from './schema/internal/knex/inspectors/mysql.js
 export { SqliteSchemaInspector } from './schema/internal/knex/inspectors/sqlite.js';
 export { OracleSchemaInspector } from './schema/internal/knex/inspectors/oracle.js';
 export { MssqlSchemaInspector } from './schema/internal/knex/inspectors/mssql.js';
+export { preciseIntegerClient } from './database/internal/knex/precise-integers.js';
+export { installDecimalAggregates } from './numeric/sqlite.js';
 
 export { UnsupportedCapabilityError } from './schema/capabilities.js';
 
