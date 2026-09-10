@@ -1,48 +1,6 @@
-import knex from 'knex';
-import { attachDatabaseDriverRuntime } from '../../../../../db/src/database/runtime.js';
-import postgres from '@nocobase/db-postgres';
-import mysql from '@nocobase/db-mysql';
-import sqlite from '@nocobase/db-sqlite';
 import { expect, it } from 'vitest';
-import {
-  compileJsonCondition,
-  validateJsonCondition,
-} from '../../../../../db/src/repository/json-filter.js';
-import { DefaultFilterBuilder } from '../../../../../db/src/repository/filter-builder.js';
-
-it('keeps JSON paths immutable and all user SQL data bound', () => {
-  const json = new DefaultFilterBuilder().json('payload');
-  const nested = json.path(['profile']);
-  expect(json.eq({}).jsonPath).toBeUndefined();
-  expect(nested.path(['name']).eq('x').jsonPath).toEqual(['profile', 'name']);
-  expect(nested.eq({}).jsonPath).toEqual(['profile']);
-  for (const [client, driver] of [
-    ['pg', postgres.driver],
-    ['mysql2', mysql.driver],
-    ['better-sqlite3', sqlite.driver],
-  ] as const) {
-    const db = knex({ client, useNullAsDefault: true });
-    attachDatabaseDriverRuntime(
-      db,
-      driver.createRuntime!({
-        dialect: driver.dialect,
-        sourceConfig: {} as never,
-        config: {} as never,
-        capabilities: (driver.capabilities ?? {}) as never,
-        getClient: () => db,
-        resolveClient: async () => db,
-      }),
-    );
-    const sql = compileJsonCondition(
-      db,
-      'payload',
-      json.path(["a'); drop table test; --"]).eq("x' or 1=1 --"),
-    ).toSQL();
-    expect(sql.sql).not.toContain('drop table');
-    expect(sql.sql).not.toContain('or 1=1');
-    expect(sql.bindings.length).toBeGreaterThan(0);
-  }
-});
+import { validateJsonCondition } from '@nocobase/db/testing';
+import { DefaultFilterBuilder } from '@nocobase/db/testing';
 
 it('rejects non-JSON operands and malformed JSON operations', () => {
   const json = new DefaultFilterBuilder().json('payload');

@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import sqlite from '@nocobase/db-sqlite';
+import sqlite from '../src/index.js';
 import {
   createDatabaseManager,
   createMigrator,
   ModuleCollectionMetadataStore,
   SchemaManagementNotAllowedError,
-} from '../../../../db/src/index.js';
+} from '@nocobase/db';
 
 describe('Migrator schema management', () => {
   it('rejects latest, upTo, and rollback for external connections before loading migrations', async () => {

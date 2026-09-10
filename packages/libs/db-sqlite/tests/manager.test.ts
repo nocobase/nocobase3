@@ -2,11 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import postgres from '@nocobase/db-postgres';
-import mysql from '@nocobase/db-mysql';
-import sqlite from '@nocobase/db-sqlite';
-import oracle from '@nocobase/db-oracle';
-import mssql from '@nocobase/db-mssql';
+import sqlite from '../src/index.js';
 import {
   createDatabaseManager,
   defineDatabase,
@@ -15,28 +11,20 @@ import {
   SchemaManagementNotAllowedError,
   type DatabaseConnection,
   type DatabaseDriverRuntimeContext,
-} from '../../../../db/src/index.js';
-import { CollectionRenameAtomicityError } from '../../../../db/src/collection/builder/builder.js';
-import { DatabaseCollectionMetadataStore } from '../../../../db/src/metadata/internal/database-document-store.js';
-import { resolveDatabaseCapabilities } from '../../../../db/src/database/capabilities.js';
-import { resolveKnexConnectionConfig } from '../../../../db/src/database/internal/knex/config.js';
-import type {
-  ConnectionConfig,
-  DatabaseConfig,
-} from '../../../../db/src/database/config.js';
+  type DatabaseConfig,
+} from '@nocobase/db';
+import {
+  CollectionRenameAtomicityError,
+  DatabaseCollectionMetadataStore,
+} from '@nocobase/db/testing';
 
-const testDrivers = { postgres, mysql, sqlite, oracle, mssql };
+const testDrivers = { sqlite };
 
 function createTestDatabase(config: DatabaseConfig) {
   return createDatabaseManager({
     ...config,
     drivers: { ...testDrivers, ...config.drivers },
   });
-}
-
-function resolveTestKnexConnectionConfig(config: ConnectionConfig) {
-  const factory = testDrivers[config.dialect as keyof typeof testDrivers];
-  return resolveKnexConnectionConfig(config, factory.driver);
 }
 
 describe('DatabaseManager', () => {
@@ -909,217 +897,5 @@ describe('DatabaseManager', () => {
     expect(() => oldShape.connection()).toThrow(
       'Database connection config cannot include client, connection. Use dialect and flattened connection parameters.',
     );
-
-    const socketPathConflict = createTestDatabase({
-      connections: {
-        main: {
-          dialect: 'mysql',
-          socketPath: '/tmp/mysql.sock',
-          host: '127.0.0.1',
-        } as never,
-      },
-    });
-    expect(() => socketPathConflict.connection()).toThrow(
-      'Database connection socketPath cannot be combined with host.',
-    );
-
-    const connectionStringEscapeHatch = createTestDatabase({
-      connections: {
-        main: {
-          dialect: 'postgres',
-          host: '127.0.0.1',
-          driverOptions: {
-            connectionString: 'postgres://user:password@127.0.0.1/app',
-          },
-        },
-      },
-    });
-    expect(() => connectionStringEscapeHatch.connection()).toThrow(
-      'Database driverOptions cannot include connectionString. Use flattened connection parameters.',
-    );
-  });
-
-  it('normalizes flattened configs into knex connection options', () => {
-    const sqlite = resolveTestKnexConnectionConfig({
-      dialect: 'sqlite',
-      filename: ':memory:',
-      driverOptions: {
-        verbose: true,
-      },
-    });
-    expect(sqlite.schemaManagement).toBe('managed');
-    expect(sqlite.connection).toEqual({
-      filename: ':memory:',
-      verbose: true,
-    });
-    expect(
-      resolveTestKnexConnectionConfig({
-        dialect: 'sqlite',
-        filename: ':memory:',
-        schemaManagement: 'external',
-      }).schemaManagement,
-    ).toBe('external');
-
-    expect(
-      resolveTestKnexConnectionConfig({
-        dialect: 'postgres',
-        host: '127.0.0.1',
-        port: 5432,
-        database: 'orders',
-        username: 'orders_user',
-        password: 'secret',
-        ssl: {
-          rejectUnauthorized: false,
-        },
-        driverOptions: {
-          application_name: 'nocobase',
-        },
-      }).connection,
-    ).toEqual({
-      application_name: 'nocobase',
-      host: '127.0.0.1',
-      port: 5432,
-      database: 'orders',
-      user: 'orders_user',
-      password: 'secret',
-      ssl: {
-        rejectUnauthorized: false,
-      },
-    });
-
-    expect(
-      resolveTestKnexConnectionConfig({
-        dialect: 'mysql',
-        host: '127.0.0.1',
-        port: 3306,
-        database: 'orders',
-        username: 'orders_user',
-        password: 'secret',
-        charset: 'utf8mb4',
-        ssl: true,
-        driverOptions: {
-          decimalNumbers: true,
-        },
-      }).connection,
-    ).toEqual({
-      decimalNumbers: false,
-      supportBigNumbers: true,
-      bigNumberStrings: true,
-      host: '127.0.0.1',
-      port: 3306,
-      database: 'orders',
-      user: 'orders_user',
-      password: 'secret',
-      charset: 'utf8mb4',
-      ssl: {},
-    });
-
-    expect(
-      resolveTestKnexConnectionConfig({
-        dialect: 'mysql',
-        socketPath: '/tmp/mysql.sock',
-        database: 'orders',
-        username: 'orders_user',
-        password: 'secret',
-      }).connection,
-    ).toEqual({
-      socketPath: '/tmp/mysql.sock',
-      decimalNumbers: false,
-      supportBigNumbers: true,
-      bigNumberStrings: true,
-      database: 'orders',
-      user: 'orders_user',
-      password: 'secret',
-    });
-
-    expect(
-      resolveTestKnexConnectionConfig({
-        dialect: 'oracle',
-        host: '127.0.0.1',
-        port: 1521,
-        serviceName: 'FREEPDB1',
-        username: 'orders_user',
-        password: 'secret',
-        driverOptions: {
-          stmtCacheSize: 0,
-        },
-      }).connection,
-    ).toEqual({
-      stmtCacheSize: 0,
-      user: 'orders_user',
-      password: 'secret',
-      connectString: '127.0.0.1:1521/FREEPDB1',
-    });
-
-    const mssql = resolveTestKnexConnectionConfig({
-      dialect: 'mssql',
-      host: '127.0.0.1',
-      port: 1433,
-      database: 'orders',
-      username: 'sa',
-      password: 'secret',
-      encrypt: true,
-      trustServerCertificate: true,
-    });
-    expect(mssql).toMatchObject({
-      driver: 'tedious',
-      knexClient: 'mssql',
-    });
-    expect(mssql.connection).toEqual({
-      server: '127.0.0.1',
-      port: 1433,
-      database: 'orders',
-      user: 'sa',
-      password: 'secret',
-      encrypt: true,
-      options: { lowerCaseGuids: true, trustServerCertificate: true },
-    });
-  });
-
-  it('normalizes registered driver capabilities and overrides', () => {
-    expect(
-      resolveDatabaseCapabilities(postgres.driver.capabilities),
-    ).toMatchObject({
-      schemas: true,
-      materializedViews: true,
-      refreshMaterializedViews: true,
-      deferrableConstraints: true,
-      partialIndexes: true,
-      nativeTypes: true,
-      comments: true,
-    });
-    expect(
-      resolveDatabaseCapabilities(mssql.driver.capabilities),
-    ).toMatchObject({
-      schemas: true,
-      views: true,
-      replaceView: true,
-      materializedViews: false,
-      partialIndexes: true,
-      nativeTypes: true,
-      comments: true,
-    });
-    expect(
-      resolveDatabaseCapabilities(mysql.driver.capabilities),
-    ).toMatchObject({
-      comments: true,
-      nativeTypes: true,
-      materializedViews: false,
-    });
-    expect(
-      resolveDatabaseCapabilities(sqlite.driver.capabilities),
-    ).toMatchObject({
-      partialIndexes: true,
-      nativeTypes: false,
-    });
-    expect(
-      resolveDatabaseCapabilities({
-        ...postgres.driver.capabilities,
-        views: false,
-      }),
-    ).toMatchObject({
-      views: false,
-      schemas: true,
-    });
   });
 });

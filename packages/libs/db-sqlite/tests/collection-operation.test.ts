@@ -1,5 +1,5 @@
 import { createDatabaseManager, type CollectionOperation } from '@nocobase/db';
-import sqlite from '@nocobase/db-sqlite';
+import sqlite from '../src/index.js';
 import { describe, expect, it } from 'vitest';
 
 const operations = [
