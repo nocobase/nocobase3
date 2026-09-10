@@ -1,11 +1,34 @@
 import type { NamingOptions } from '../collection/types.js';
 import type { CollectionMetadataStore } from '../metadata/document-store.js';
 import type { DatabaseCapabilities } from '../schema/adapter.js';
+import type { Knex } from 'knex';
 
 export interface DatabaseConfig {
   default?: string;
+  /** Database drivers available to connections that use declarative configs. */
+  drivers?: Record<string, DatabaseDriverDefinition>;
   connections: Record<string, ConnectionConfig>;
   metadataStore?: CollectionMetadataStore;
+}
+
+/**
+ * A dialect package's public driver descriptor.  The implementation is
+ * intentionally small in the first iteration; dialect-specific Knex hooks
+ * can be added without changing the manager configuration shape.
+ */
+export interface DatabaseDriverDefinition<TDialect extends string = string> {
+  readonly dialect: TDialect;
+  readonly packageName?: string;
+  readonly knexClient?: string;
+  readonly resolveConnection?: (config: ConnectionConfig) => {
+    connection: unknown;
+    searchPath?: string[];
+    useNullAsDefault?: boolean;
+  };
+  readonly configurePool?: (
+    config: ConnectionConfig,
+    pool: Knex.PoolConfig,
+  ) => Knex.PoolConfig;
 }
 
 export type DatabaseDialect =
@@ -22,6 +45,8 @@ export interface BaseConnectionConfig {
   debug?: boolean;
   pool?: unknown;
   driverOptions?: Record<string, unknown>;
+  /** Driver supplied by a dialect factory (for example postgres({...})). */
+  databaseDriver?: DatabaseDriverDefinition;
 }
 
 export interface SqliteConnectionConfig extends BaseConnectionConfig {

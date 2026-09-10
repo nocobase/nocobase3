@@ -31,6 +31,7 @@ import type {
   ConnectionConfig,
   DatabaseDialect,
   DatabaseDriver,
+  DatabaseDriverDefinition,
   SchemaManagementMode,
 } from '../../config.js';
 import type { DatabaseConnection } from '../../connection.js';
@@ -64,9 +65,11 @@ export class KnexDatabaseConnection implements DatabaseConnection {
     metadataStore?: CollectionMetadataStore,
     knexInstance?: Knex,
     transactionInvalidations?: TransactionInvalidationCollector,
+    private readonly dialectDriver:
+      DatabaseDriverDefinition | undefined = undefined,
   ) {
     this.knexInstance = knexInstance;
-    this.config = resolveKnexConnectionConfig(sourceConfig);
+    this.config = resolveKnexConnectionConfig(sourceConfig, dialectDriver);
     this.metadataStore =
       metadataStore ??
       new DatabaseCollectionMetadataStore({
@@ -212,6 +215,7 @@ export class KnexDatabaseConnection implements DatabaseConnection {
           metadataStore,
           trx,
           invalidations,
+          this.dialectDriver,
         );
         const transactionResult = await fn(connection);
         await invalidations.validateRelations(connection.collections);

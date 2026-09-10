@@ -9,6 +9,7 @@ import type {
   PostgresConnectionConfig,
   SchemaManagementMode,
   SqliteConnectionConfig,
+  DatabaseDriverDefinition,
 } from '../../config.js';
 
 export interface KnexConnectionConfig extends BaseConnectionConfig {
@@ -41,13 +42,14 @@ const KNEX_CLIENT_BY_DIALECT = {
 
 export function resolveKnexConnectionConfig(
   config: ConnectionConfig,
+  dialectDriver?: DatabaseDriverDefinition,
 ): KnexConnectionConfig {
   assertNoUnsupportedConnectionConfigFields(config);
-  const driver = resolveDatabaseDriver(config);
+  const defaultDriver = resolveDatabaseDriver(config);
 
-  return {
+  const resolved = {
     ...config,
-    driver,
+    driver: defaultDriver,
     schemaManagement: config.schemaManagement ?? 'managed',
     knexClient: KNEX_CLIENT_BY_DIALECT[config.dialect],
     connection: resolveKnexConnection(config),
@@ -57,6 +59,17 @@ export function resolveKnexConnectionConfig(
         ? normalizeSearchPath(config.schema)
         : undefined,
   };
+  if (dialectDriver?.resolveConnection) {
+    const dialectConnection = dialectDriver.resolveConnection(config);
+    return {
+      ...resolved,
+      ...dialectConnection,
+      knexClient:
+        (dialectDriver.knexClient as KnexClientName | undefined) ??
+        resolved.knexClient,
+    };
+  }
+  return resolved;
 }
 
 export function resolveDatabaseDriver(

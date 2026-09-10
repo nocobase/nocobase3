@@ -6,6 +6,7 @@ import type { Repository, RepositoryRecord } from '../repository/types.js';
 import { createSeeder, type Seeder } from '../seed/seeder.js';
 import type { DatabaseSeederOptions } from '../seed/types.js';
 import type { DatabaseConfig } from './config.js';
+import type { DatabaseDriverDefinition, ConnectionConfig } from './config.js';
 import type { DatabaseConnection } from './connection.js';
 import { DefaultConnectionFactory, type ConnectionFactory } from './factory.js';
 import { KnexConnectionAdapter } from './internal/knex/adapter.js';
@@ -80,14 +81,22 @@ export class DefaultDatabaseManager implements DatabaseManager {
       throw new Error(`Database connection "${name}" is not configured.`);
     }
 
+    const resolvedConnectionConfig = resolveConnectionDriver(
+      connectionConfig,
+      this.config.drivers,
+      name,
+    );
     const metadataStore =
-      connectionConfig.metadataStore ?? this.config.metadataStore;
-    if (connectionConfig.schemaManagement === 'external' && !metadataStore) {
+      resolvedConnectionConfig.metadataStore ?? this.config.metadataStore;
+    if (
+      resolvedConnectionConfig.schemaManagement === 'external' &&
+      !metadataStore
+    ) {
       throw new CollectionMetadataStoreRequiredError(name);
     }
     const connection = this.factory.create({
       name,
-      config: connectionConfig,
+      config: resolvedConnectionConfig,
       metadataStore,
     });
     this.connections.set(name, connection);
@@ -167,4 +176,25 @@ export class DefaultDatabaseManager implements DatabaseManager {
     }
     return name;
   }
+}
+
+function resolveConnectionDriver(
+  connection: ConnectionConfig,
+  drivers: Record<string, DatabaseDriverDefinition> | undefined,
+  name: string,
+): ConnectionConfig {
+  const supplied = connection.databaseDriver;
+  const registered = drivers?.[connection.dialect];
+  if (supplied && supplied.dialect !== connection.dialect) {
+    throw new Error(
+      `Database connection "${name}" uses dialect "${connection.dialect}" but its driver is for "${supplied.dialect}".`,
+    );
+  }
+  if (supplied && registered && supplied !== registered) {
+    throw new Error(
+      `Database connection "${name}" provides a driver that conflicts with the registered "${connection.dialect}" driver.`,
+    );
+  }
+  const driver = supplied ?? registered;
+  return driver ? { ...connection, databaseDriver: driver } : connection;
 }

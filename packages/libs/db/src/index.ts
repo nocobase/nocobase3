@@ -10,6 +10,7 @@ export type {
   ConnectionConfig,
   DatabaseConfig,
   DatabaseDialect,
+  DatabaseDriverDefinition,
   DatabaseDriver,
   MssqlConnectionConfig,
   MysqlConnectionConfig,
