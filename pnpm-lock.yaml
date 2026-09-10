@@ -1451,6 +1451,10 @@ importers:
         version: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@30.0.1(@noble/hashes@2.3.0))(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(sass-embedded@1.103.1)(sass@1.103.1)(tsx@4.23.12)(yaml@2.9.0))
 
   packages/libs/db-mssql:
+    dependencies:
+      tedious:
+        specifier: 'catalog:'
+        version: 20.0.0
     devDependencies:
       '@nocobase/db':
         specifier: workspace:*
@@ -1472,6 +1476,10 @@ importers:
         version: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@30.0.1(@noble/hashes@2.3.0))(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(sass-embedded@1.103.1)(sass@1.103.1)(tsx@4.23.12)(yaml@2.9.0))
 
   packages/libs/db-mysql:
+    dependencies:
+      mysql2:
+        specifier: ^3.23.3
+        version: 3.23.3(@types/node@24.13.3)
     devDependencies:
       '@nocobase/db':
         specifier: workspace:*
@@ -1493,6 +1501,10 @@ importers:
         version: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@30.0.1(@noble/hashes@2.3.0))(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(sass-embedded@1.103.1)(sass@1.103.1)(tsx@4.23.12)(yaml@2.9.0))
 
   packages/libs/db-oracle:
+    dependencies:
+      oracledb:
+        specifier: 'catalog:'
+        version: 6.10.0
     devDependencies:
       '@nocobase/db':
         specifier: workspace:*
@@ -1518,6 +1530,9 @@ importers:
       pg:
         specifier: ^8.23.0
         version: 8.23.0
+      pg-query-stream:
+        specifier: ^4.14.0
+        version: 4.17.0(pg@8.23.0)
     devDependencies:
       '@nocobase/db':
         specifier: workspace:*
@@ -1539,6 +1554,10 @@ importers:
         version: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@30.0.1(@noble/hashes@2.3.0))(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(sass-embedded@1.103.1)(sass@1.103.1)(tsx@4.23.12)(yaml@2.9.0))
 
   packages/libs/db-sqlite:
+    dependencies:
+      better-sqlite3:
+        specifier: 'catalog:'
+        version: 12.11.1
     devDependencies:
       '@nocobase/db':
         specifier: workspace:*
