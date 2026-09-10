@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { DatabaseManager } from '@nocobase/db';
+import type { Knex } from 'knex';
+import type {
+  CollectionBuilder,
+  DatabaseConnection,
+  DatabaseManager,
+  InMemoryCollectionMetadataStore,
+} from '@nocobase/db';
 
 /**
  * The smallest context a shared database contract needs.
@@ -17,6 +23,30 @@ export interface DatabaseContractContext {
 
 export type DatabaseContractFactory<TContext extends DatabaseContractContext> =
   () => TContext | Promise<TContext>;
+
+/**
+ * Runtime context supplied by one dialect package to shared integration
+ * contracts. The context deliberately exposes portable database operations
+ * and leaves connection setup, catalog inspection, and cleanup to the
+ * dialect-owned adapter.
+ */
+export interface DatabaseIntegrationContext extends DatabaseContractContext {
+  connection: DatabaseConnection;
+  db: Knex;
+  builder: CollectionBuilder;
+  metadataStore: InMemoryCollectionMetadataStore;
+  prefix: string;
+  indexName(collection: string, columns: string[]): string;
+}
+
+export interface DatabaseIntegrationAdapter<
+  TContext extends DatabaseIntegrationContext = DatabaseIntegrationContext,
+> {
+  readonly name: string;
+  createContext(): TContext;
+  setupContext?(context: TContext): Promise<void>;
+  cleanupContext?(context: TContext): Promise<void>;
+}
 
 export type { DatabaseDialectTestAdapter } from './contracts.js';
 export { asDatabaseContractAdapter } from './contracts.js';
@@ -45,6 +75,78 @@ export function defineDatabaseContractSuite<
     define ?? ((factory) => defaultDatabaseContract(factory, options.title));
   defineContract(options.createContext);
 }
+
+/**
+ * Register an integration contract against a dialect-owned adapter.
+ *
+ * The adapter owns all connection details and physical cleanup. A shared
+ * contract only receives a ready context and never selects a dialect.
+ */
+export function defineDatabaseIntegrationSuite<
+  TContext extends DatabaseIntegrationContext,
+>(
+  adapter: DatabaseIntegrationAdapter<TContext>,
+  define: (context: TContext) => void,
+  title = 'database integration contract',
+): void {
+  describe(`${title} [${adapter.name}]`, () => {
+    const context = adapter.createContext();
+
+    beforeEach(async () => {
+      await adapter.setupContext?.(context);
+    });
+
+    afterEach(async () => {
+      if (adapter.cleanupContext) await adapter.cleanupContext(context);
+      else await context.cleanup();
+    });
+
+    defineContextSuite(define, () => context);
+  });
+}
+
+/**
+ * Creates the small lifecycle wrapper used by the dialect packages' adapter
+ * implementations. The returned factory keeps the shared context shape
+ * independent from any particular native driver.
+ */
+export function createIntegrationContext(
+  input: DatabaseIntegrationContext,
+): DatabaseIntegrationContext {
+  return input;
+}
+
+export function createTestPrefix(): string {
+  const random = Math.random().toString(36).slice(2, 8);
+  return `cbt_${process.pid}_${random}`;
+}
+
+export function snakeCase(value: string): string {
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .replace(/[-\s]+/g, '_')
+    .toLowerCase();
+}
+
+export function truncateIdentifier(identifier: string, maxLength = 63): string {
+  if (identifier.length <= maxLength) return identifier;
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < identifier.length; index += 1) {
+    hash ^= identifier.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  const suffix = (hash >>> 0).toString(36);
+  return `${identifier.slice(0, maxLength - suffix.length - 1)}_${suffix}`;
+}
+
+function defineContextSuite<TContext>(
+  define: (context: TContext) => void,
+  getContext: () => TContext,
+): void {
+  define(getContext());
+}
+
+export { definePortableIntegrationContracts } from './integration-contracts.js';
 
 function defaultDatabaseContract<TContext extends DatabaseContractContext>(
   createContext: DatabaseContractFactory<TContext>,

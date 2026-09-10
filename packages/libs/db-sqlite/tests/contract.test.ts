@@ -1,7 +1,13 @@
 import type { Knex } from 'knex';
 import { createDatabaseManager } from '@nocobase/db';
-import { defineDatabaseContractSuite } from '@nocobase/db-testkit';
+import {
+  defineDatabaseContractSuite,
+  definePortableIntegrationContracts,
+} from '@nocobase/db-testkit';
 import sqlite from '../src/index.js';
+import { sqliteIntegrationAdapter } from './integration/adapter.js';
+
+definePortableIntegrationContracts(sqliteIntegrationAdapter);
 
 defineDatabaseContractSuite({
   title: 'sqlite database contract',
