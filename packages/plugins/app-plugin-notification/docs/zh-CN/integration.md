@@ -71,7 +71,7 @@ export const notificationConfig: NotificationConfig = {
 };
 ```
 
-Provider 的 `name` 和 `type` 会写入 Delivery。应用重启或更新配置后，应保持这两个字段稳定。
+Provider 的 `type` 是实现类型，用于匹配已注册的 Provider definition；`name` 是当前 Channel 内这条 Provider 配置的唯一名称，发送路由通过它选择 Provider。两者都会写入 Delivery，应用重启或更新配置后应保持稳定。Webhook Provider 不需要额外的 `target` 或业务收件人；发送时省略 `to` 即可把消息交给选中的 Provider。
 
 ## 第三步：创建运行时并注册 definitions
 

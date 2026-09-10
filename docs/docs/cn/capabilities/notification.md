@@ -145,7 +145,6 @@ notification:
       providers:
         - type: feishu-webhook
           name: feishu
-          target: default
           webhookUrl: https://open.feishu.cn/open-apis/bot/v2/hook/replace-me
           secret: replace-with-the-feishu-secret
 ```
@@ -160,12 +159,11 @@ notification:
       providers:
         - type: dingtalk-webhook
           name: dingtalk
-          target: default
           webhookUrl: https://oapi.dingtalk.com/robot/send?access_token=replace-me
           secret: replace-with-the-dingtalk-secret
 ```
 
-`target` 是业务使用的逻辑目标 ID。同一个逻辑目标可以配置多个服务商，发送时再决定使用其中一个，或者全部发送。飞书 Webhook 只接受 `open.feishu.cn` 和 `open.larksuite.com` 的 HTTPS 地址，钉钉 Webhook 只接受 `oapi.dingtalk.com` 的 HTTPS 地址，内置服务商会拒绝重定向。
+飞书和钉钉 Webhook Provider 自身就是发送目的地，发送 IM 消息时可以省略 `to`。同一个 `im` Channel 可以配置多个 Provider，发送时通过 Provider 的 `name` 选择一个，或使用 `strategy: 'all'` 同时发送到多个 Provider。
 
 :::warning 注意
 
@@ -223,8 +221,7 @@ await notification.send({
 
 ```ts
 await notification.send({
-  idempotencyKey: `deployment:${deployment.id}:ops:feishu`,
-  to: { type: 'target', id: 'default' },
+  idempotencyKey: `deployment:${deployment.id}:im:feishu`,
   channels: ['im'],
   routing: {
     im: {
@@ -258,7 +255,7 @@ await notification.send({
 
 - 站内信测试可以填写接收用户 ID；留空时发送给当前登录用户
 - 邮件测试必须填写接收邮箱
-- 即时通讯测试会发送到所选服务商配置的 `target`
+- 即时通讯测试会直接发送到所选服务商对应的 Webhook
 - 测试发送会走正式的通知管理器（Notification Manager），并写入通知日志
 
 日志页面需要 `page:notification.logs` 的 `access` 权限。提交测试消息时还需要 `notification:test` 的 `send` 权限。测试消息是真实的外部发送，生产环境只在确认接收范围后使用。

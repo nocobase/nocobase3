@@ -30,7 +30,6 @@ export interface ImProviderConfig {
   readonly type: string;
   readonly name: string;
   readonly enabled?: boolean;
-  readonly target?: string;
 }
 
 export interface ImChannelConfig {
@@ -88,29 +87,23 @@ export function createImChannelDefinition(
           maxLength: 2000,
         },
       ],
-      toSendInput({ values, providerConfig }) {
+      toSendInput({ values }) {
         const title = values.title?.trim();
         const body = values.body?.trim();
         if (!title || !body) throw new Error('Title and Message are required.');
         return {
-          to: { type: 'target', id: normalizeTarget(providerConfig.target) },
           content: { title, body },
         };
       },
     },
-    async createChannel(_context, config) {
-      const providerTargets = new Map(
-        config.providers.map((provider) => [
-          providerKey(provider),
-          normalizeTarget(provider.target),
-        ]),
-      );
+    async createChannel() {
       return {
         type: 'im',
         async resolveRecipient(input: {
-          readonly recipient: NotificationRecipient;
+          readonly recipient?: NotificationRecipient;
           readonly provider: NotificationProviderIdentity;
         }): Promise<ImRecipient | undefined> {
+          if (!input.recipient) return { provider: input.provider };
           if (input.recipient.type === 'user') {
             const resolved = await options.resolveUserTarget?.(
               input.recipient.id,
@@ -120,12 +113,6 @@ export function createImChannelDefinition(
               ? resolved
               : undefined;
           }
-          if (
-            input.recipient.type === 'target' &&
-            providerTargets.get(providerKey(input.provider)) ===
-              input.recipient.id
-          )
-            return { provider: input.provider };
           return undefined;
         },
         render(input: {
@@ -168,12 +155,4 @@ function sameProvider(
   right: NotificationProviderIdentity,
 ): boolean {
   return left?.name === right.name && left.type === right.type;
-}
-
-function providerKey(provider: NotificationProviderIdentity): string {
-  return `${provider.name}\0${provider.type}`;
-}
-
-function normalizeTarget(target: string | undefined): string {
-  return target?.trim() || 'default';
 }

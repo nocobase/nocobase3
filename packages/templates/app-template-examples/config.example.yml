@@ -59,13 +59,11 @@ notification:
     #   providers:
     #     - type: feishu-webhook
     #       name: feishu
-    #       target: default
     #       webhookUrl: https://open.feishu.cn/open-apis/bot/v2/hook/replace-me
     #       secret: replace-with-the-feishu-secret
     #
     #     - type: dingtalk-webhook
     #       name: dingtalk
-    #       target: default
     #       webhookUrl: https://oapi.dingtalk.com/robot/send?access_token=replace-me
     #       secret: replace-with-the-dingtalk-secret
 
