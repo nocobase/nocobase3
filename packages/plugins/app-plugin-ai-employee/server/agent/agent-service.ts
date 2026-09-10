@@ -406,9 +406,8 @@ export class AgentService {
     const { conversation } = this.providers;
     const { controller, signal, token } = this.begin(request);
     await conversation.beforeExecution('invoking');
-    let llm: ResolvedAgentLLM | undefined;
     try {
-      llm = await this.resolveLLM(request);
+      const llm = await this.resolveLLM(request);
       const prepared = await this.prepare(
         operation,
         { ...request, signal },
@@ -433,7 +432,6 @@ export class AgentService {
       await conversation.afterExecution('invoking', {
         aborted: signal.aborted,
       });
-      await llm?.dispose?.();
     }
   }
 
@@ -451,10 +449,8 @@ export class AgentService {
     let sent = 0;
     let prepared: PreparedAgentContext | undefined;
     let activeProvider: LLMProvider | undefined;
-    let llm: ResolvedAgentLLM | undefined;
     let responseMetadata: ExecutionResponseMetadata | undefined;
-    await conversation.streamCache.clear();
-    await conversation.beforeExecution('streaming');
+    let executionStarted = false;
     const stopReasoning = function* (
       target: typeof identity,
     ): Generator<AgentStreamEvent> {
@@ -463,7 +459,10 @@ export class AgentService {
         yield { type: 'reasoning', conversation: target, action: 'stop' };
     };
     try {
-      llm = await this.resolveLLM(request);
+      await conversation.streamCache.clear();
+      await conversation.beforeExecution('streaming');
+      executionStarted = true;
+      const llm = await this.resolveLLM(request);
       activeProvider = llm.provider;
       responseMetadata = new ExecutionResponseMetadata();
       const responseMetadataCollector = new ResponseMetadataCollector(
@@ -699,12 +698,23 @@ export class AgentService {
         activeProvider?.parseResponseError(error),
       );
     } finally {
-      this.end(token, controller);
-      await conversation.afterExecution('streaming', {
-        aborted: signal.aborted,
-      });
-      await conversation.streamCache.clear();
-      await llm?.dispose?.();
+      try {
+        this.end(token, controller);
+      } finally {
+        try {
+          if (executionStarted) {
+            await conversation.afterExecution('streaming', {
+              aborted: signal.aborted,
+            });
+          }
+        } finally {
+          try {
+            await conversation.streamCache.clear();
+          } finally {
+            responseMetadata?.dispose();
+          }
+        }
+      }
     }
   }
 }

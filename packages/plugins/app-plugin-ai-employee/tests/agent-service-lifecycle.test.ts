@@ -74,7 +74,7 @@ const createProviders = (
 
 describe('AgentService execution-local LLM lifecycle', () => {
   it.each(['success', 'failure', 'abort', 'interrupt'] as const)(
-    'disposes an invoke LLM on the %s path',
+    'does not depend on an invoke LLM dispose hook on the %s path',
     async (mode) => {
       const dispose = vi.fn();
       const controller = new AbortController();
@@ -95,15 +95,28 @@ describe('AgentService execution-local LLM lifecycle', () => {
           name: 'GraphInterrupt',
         });
       else await expect(execution).rejects.toThrow('Agent execution failed');
-      expect(dispose).toHaveBeenCalledOnce();
+      expect(dispose).not.toHaveBeenCalled();
     },
   );
 
-  it('disposes a resolved LLM when stream preparation fails', async () => {
+  it('cleans up every stream resource when preparation fails', async () => {
     const dispose = vi.fn();
-    const service = new AgentService(createProviders(dispose, 'failure'));
+    const providers = createProviders(dispose, 'failure');
+    const unregisterAbortHandle = vi.spyOn(
+      providers.conversation,
+      'unregisterAbortHandle',
+    );
+    const afterExecution = vi.spyOn(providers.conversation, 'afterExecution');
+    const clearStreamCache = vi.spyOn(
+      providers.conversation.streamCache,
+      'clear',
+    );
+    const service = new AgentService(providers);
     const stream = service.stream();
     await expect(stream.next()).rejects.toThrow('prepare failed');
-    expect(dispose).toHaveBeenCalledOnce();
+    expect(unregisterAbortHandle).toHaveBeenCalledOnce();
+    expect(afterExecution).toHaveBeenCalledOnce();
+    expect(clearStreamCache).toHaveBeenCalledTimes(2);
+    expect(dispose).not.toHaveBeenCalled();
   });
 });
