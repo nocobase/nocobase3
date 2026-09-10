@@ -1598,6 +1598,9 @@ importers:
       '@nocobase/db':
         specifier: workspace:*
         version: link:../db
+      '@nocobase/db-testkit':
+        specifier: workspace:*
+        version: link:../db-testkit
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config

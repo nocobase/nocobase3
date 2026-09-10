@@ -36,6 +36,7 @@
   },
   "devDependencies": {
     "@nocobase/db": "workspace:*",
+    "@nocobase/db-testkit": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@types/node": "catalog:",
     "eslint": "catalog:",

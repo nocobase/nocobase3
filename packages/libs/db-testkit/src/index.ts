@@ -1,3 +1,4 @@
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { DatabaseManager } from '@nocobase/db';
 
 /**
@@ -9,6 +10,9 @@ export interface DatabaseContractContext {
   table(name: string): string;
   identifier(name: string): string;
   cleanup(): Promise<void>;
+  createTable(name: string): Promise<void>;
+  insert(table: string, values: Record<string, unknown>): Promise<void>;
+  select(table: string): Promise<Array<Record<string, unknown>>>;
 }
 
 export type DatabaseContractFactory<TContext extends DatabaseContractContext> =
@@ -32,7 +36,35 @@ export function defineDatabaseContractSuite<
   TContext extends DatabaseContractContext,
 >(
   options: DatabaseContractSuiteOptions<TContext>,
-  define: (createContext: DatabaseContractFactory<TContext>) => void,
+  define?: (createContext: DatabaseContractFactory<TContext>) => void,
 ): void {
-  define(options.createContext);
+  const defineContract =
+    define ?? ((factory) => defaultDatabaseContract(factory, options.title));
+  defineContract(options.createContext);
+}
+
+function defaultDatabaseContract<TContext extends DatabaseContractContext>(
+  createContext: DatabaseContractFactory<TContext>,
+  title = 'database contract',
+): void {
+  describe(title, () => {
+    let context: TContext;
+
+    beforeEach(async () => {
+      context = await createContext();
+    });
+
+    afterEach(async () => {
+      await context.cleanup();
+    });
+
+    it('creates a table and reads inserted rows', async () => {
+      const table = context.table('contract_items');
+      await context.createTable('contract_items');
+      await context.insert(table, { name: 'first' });
+      await expect(context.select(table)).resolves.toEqual([
+        expect.objectContaining({ name: 'first' }),
+      ]);
+    });
+  });
 }
