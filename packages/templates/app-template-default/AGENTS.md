@@ -277,3 +277,5 @@ Add tests for what you changed: a route's authenticated, unauthenticated, and un
 For creating or editing theme presets, read `skills/nocobase-app-development/references/themes.md` (from the application root).
 
 For UI styling, use the shared color, font, size, spacing, radius and shadow contract in `skills/nocobase-app-development/references/theme-tokens.md` (from the application root). Prefer its Tailwind utilities so components respond to theme changes; keep deliberate fixed-size exceptions explicit.
+
+Application startup defaults belong in `config.yml` under `client.app`: `defaultLocale`, `defaultColorScheme`, and `defaultTheme`. Valid browser-local choices take precedence. See the i18n and themes references for fallback behavior.

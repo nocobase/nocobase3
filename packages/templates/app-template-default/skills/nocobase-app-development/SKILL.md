@@ -132,3 +132,5 @@ pnpm build
 ```
 
 Verify observable behavior, not just that the commands passed. [Testing and verification](references/testing.md) lists what to check for each kind of change.
+
+Application startup defaults belong in `config.yml` under `client.app`: `defaultLocale`, `defaultColorScheme`, and `defaultTheme`. Valid browser-local choices take precedence. See the i18n and themes references for fallback behavior.
