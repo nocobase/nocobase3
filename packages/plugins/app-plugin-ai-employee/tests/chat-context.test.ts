@@ -26,22 +26,34 @@ describe('FixedChatContextProvider', () => {
       llmService: 'service',
       model: 'fixed-model',
     });
-    expect(await context.getSystemPrompt([], {}, llm)).toBe('Direct prompt');
-    expect(await context.activeTools({})).toEqual(new Set(['one', 'two']));
-    expect(await context.getToolsMap({})).toEqual(
+    expect(await context.getSystemPrompt([])).toBe('Direct prompt');
+    const discovered = await context.discoveredTools();
+    expect(await context.activeTools()).toEqual(new Set(['one', 'two']));
+    expect(discovered).toEqual(
       new Map([
         ['one', expect.objectContaining({ definition: { name: 'one' } })],
         ['two', expect.objectContaining({ definition: { name: 'two' } })],
       ]),
     );
-    expect(context.shouldInterruptToolCall()).toBe(false);
-    expect(context.isAutoCall(undefined, undefined)).toBe(false);
-    expect(await context.getToolsMap()).toEqual(
-      new Map([
-        ['one', expect.objectContaining({ definition: { name: 'one' } })],
-        ['two', expect.objectContaining({ definition: { name: 'two' } })],
-      ]),
-    );
+  });
+
+  it('uses deterministic map keys without deriving direct-agent policy', async () => {
+    const first = tool('duplicate');
+    const second = tool('duplicate');
+    const context = new FixedChatContextProvider({
+      provider,
+      tools: [first, second],
+    });
+
+    const discovered = await context.discoveredTools();
+    expect(discovered.size).toBe(1);
+    expect(discovered.get('duplicate')).toBe(second);
+    expect(discovered.get('duplicate')?.auto).toBeUndefined();
+    expect(await context.activeTools()).toEqual(new Set(['duplicate']));
+
+    const empty = new FixedChatContextProvider({ provider });
+    expect(await empty.discoveredTools()).toEqual(new Map());
+    expect(await empty.activeTools()).toEqual(new Set());
   });
 
   it('returns independent resolved contexts through concurrent calls', async () => {

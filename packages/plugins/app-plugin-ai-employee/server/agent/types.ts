@@ -79,7 +79,7 @@ export interface PreparedAgentContext extends AgentMessageConversionContext {
   input: PreparedAgentInput;
   systemPrompt?: CreateAgentParams['systemPrompt'];
   tools: CreateAgentParams['tools'];
-  sourceTools: readonly ToolsEntity[];
+  toolMap: ReadonlyMap<string, ToolsEntity>;
   baseToolNames: Set<string>;
   initialActiveToolNames?: ReadonlySet<string>;
   llm?: ResolvedAgentLLM;
@@ -258,7 +258,10 @@ export interface ConversationMessageStore {
     messageId?: string,
     thread?: AgentThread,
   ): Promise<void>;
-  saveAssistantMessage(message: AIMessageInput): Promise<SavedAssistantMessage>;
+  saveAssistantMessage(
+    message: AIMessageInput,
+    toolMap: ReadonlyMap<string, ToolsEntity>,
+  ): Promise<SavedAssistantMessage>;
   saveToolMessages(
     sourceMessageId: string,
     messages: AIMessageInput[],
@@ -314,25 +317,10 @@ export interface ChatContextProvider {
   resolveLLM(request: AgentRequest): Promise<ResolvedAgentLLM>;
   getSystemPrompt(
     messages: readonly AIMessageInput[],
-    request: AgentRequest,
-    llm: ResolvedAgentLLM,
   ): Promise<string | undefined>;
-  discoveredTools(request: AgentRequest): Promise<readonly ToolsEntity[]>;
-  activeTools(request: AgentRequest): Promise<ReadonlySet<string>>;
-  shouldInterruptToolCall(tool?: ToolsEntity): boolean;
-  isAutoCall(
-    tool: ToolsEntity | undefined,
-    args: unknown,
-  ): boolean | Promise<boolean>;
-  getToolsMap(
-    request?: AgentRequest,
-  ): Promise<ReadonlyMap<string, ToolsEntity>>;
+  discoveredTools(): Promise<ReadonlyMap<string, ToolsEntity>>;
+  activeTools(): Promise<ReadonlySet<string>>;
 }
-
-export type ToolCallPolicy = Pick<
-  ChatContextProvider,
-  'getToolsMap' | 'isAutoCall' | 'shouldInterruptToolCall'
->;
 
 export interface ChatMessageConverter<TSource, TResult> {
   convert(

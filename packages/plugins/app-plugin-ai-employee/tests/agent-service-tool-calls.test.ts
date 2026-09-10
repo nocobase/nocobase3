@@ -21,8 +21,6 @@ const createProviders = (
     getSystemPrompt: vi.fn(),
     discoveredTools: vi.fn(),
     activeTools: vi.fn(),
-    shouldInterruptToolCall: vi.fn(),
-    getToolsMap: vi.fn(),
   };
   const providers: AgentProviders = {
     conversation,

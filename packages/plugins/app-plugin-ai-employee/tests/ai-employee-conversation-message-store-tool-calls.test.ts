@@ -38,7 +38,9 @@ function createFixture(overrides: Record<string, unknown> = {}) {
     snowflake: (overrides.snowflake as { generate(): number } | undefined) ?? {
       generate: vi.fn(() => 101),
     },
-    toolCallPolicy: {},
+    getCurrentFrontendTools:
+      (overrides.getCurrentFrontendTools as
+        (() => Promise<never[]>) | undefined) ?? vi.fn(async () => []),
   } as never);
   return {
     transaction,

@@ -3,6 +3,7 @@ import type {
   AIMessage,
   AIMessageInput,
   AIToolMessage,
+  ToolsEntity,
 } from '@nocobase/ai-employee';
 import type { DatabaseConnection } from '@nocobase/db';
 import type { IdGeneratorService } from '@nocobase/snowflake';
@@ -16,9 +17,12 @@ import type {
   AgentThread,
   ConversationMessageStore,
   SavedAssistantMessage,
-  ToolCallPolicy,
 } from '../types.js';
 
+import {
+  EXECUTE_FRONTEND_TOOL_NAME,
+  type FrontendToolManifest,
+} from './common/frontend-tools.js';
 type NormalizedToolCallResult = {
   status: string;
   content: unknown;
@@ -30,6 +34,8 @@ type SourceMessageMetadata = {
   llmService?: unknown;
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
 function normalizeToolCallResult(result: unknown): NormalizedToolCallResult {
   if (typeof result !== 'object' || result === null) {
     return { status: 'success', content: result };
@@ -58,7 +64,9 @@ export interface DefaultConversationMessageStoreOptions {
   readonly messages: AIMessageRepository;
   readonly toolMessages: AIToolMessageRepository;
   readonly snowflake: IdGeneratorService;
-  readonly toolCallPolicy: ToolCallPolicy;
+  readonly getCurrentFrontendTools: () => Promise<
+    readonly FrontendToolManifest[]
+  >;
 }
 
 export class DefaultConversationMessageStore implements ConversationMessageStore {
@@ -68,7 +76,9 @@ export class DefaultConversationMessageStore implements ConversationMessageStore
   private readonly messages: AIMessageRepository;
   private readonly toolMessages: AIToolMessageRepository;
   private readonly snowflake: IdGeneratorService;
-  private readonly toolCallPolicy: ToolCallPolicy;
+  private readonly getCurrentFrontendTools: () => Promise<
+    readonly FrontendToolManifest[]
+  >;
 
   public constructor(options: DefaultConversationMessageStoreOptions) {
     this.sessionId = options.sessionId;
@@ -77,7 +87,7 @@ export class DefaultConversationMessageStore implements ConversationMessageStore
     this.messages = options.messages;
     this.toolMessages = options.toolMessages;
     this.snowflake = options.snowflake;
-    this.toolCallPolicy = options.toolCallPolicy;
+    this.getCurrentFrontendTools = options.getCurrentFrontendTools;
   }
 
   public loadMessages(messageId?: string): Promise<AIMessage[]> {
@@ -100,6 +110,7 @@ export class DefaultConversationMessageStore implements ConversationMessageStore
 
   public saveAssistantMessage(
     message: AIMessageInput,
+    toolMap: ReadonlyMap<string, ToolsEntity>,
   ): Promise<SavedAssistantMessage> {
     return this.conversation.withTransaction(async (target, transaction) => {
       const saved = await target.addMessages(message);
@@ -109,12 +120,30 @@ export class DefaultConversationMessageStore implements ConversationMessageStore
       }
 
       const now = new Date();
-      const toolsMap = await this.toolCallPolicy.getToolsMap();
+      let frontendToolsPromise:
+        Promise<readonly FrontendToolManifest[]> | undefined;
+      const getFrontendTools = () =>
+        (frontendToolsPromise ??= this.getCurrentFrontendTools());
+      const resolveAuto = async (
+        tool: ToolsEntity | undefined,
+        args: unknown,
+      ): Promise<boolean> => {
+        if (!tool) return false;
+        if (tool.definition.name !== EXECUTE_FRONTEND_TOOL_NAME) {
+          return tool.auto === true;
+        }
+        if (!isRecord(args) || typeof args.toolId !== 'string') return false;
+        const frontendTools = await getFrontendTools();
+        return (
+          frontendTools.find((item) => item.id === args.toolId)?.permission ===
+          'ALLOW'
+        );
+      };
       const initializedToolCalls = (await this.toolMessages.create(
         {
           values: await Promise.all(
             toolCalls.map(async (toolCall) => {
-              const tool = toolsMap.get(toolCall.name);
+              const tool = toolMap.get(toolCall.name);
               const exists = Boolean(tool);
               return {
                 id: this.snowflake.generate(),
@@ -127,7 +156,7 @@ export class DefaultConversationMessageStore implements ConversationMessageStore
                 invokeStatus: exists ? 'init' : 'done',
                 invokeStartTime: exists ? null : now,
                 invokeEndTime: exists ? null : now,
-                auto: await this.toolCallPolicy.isAutoCall(tool, toolCall.args),
+                auto: await resolveAuto(tool, toolCall.args),
                 execution: tool?.execution ?? 'backend',
               };
             }),

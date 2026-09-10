@@ -2,6 +2,7 @@ import type {
   AIMessage as StoredMessage,
   AIMessageInput,
   AIToolMessage,
+  ToolsEntity,
 } from '@nocobase/ai-employee';
 import type { Logger } from '@nocobase/logging';
 import {
@@ -146,6 +147,7 @@ class MemoryConversationMessageStore implements ConversationMessageStore {
 
   public async saveAssistantMessage(
     message: AIMessageInput,
+    _toolMap: ReadonlyMap<string, ToolsEntity>,
   ): Promise<SavedAssistantMessage> {
     const saved = this.state.add(message);
     const initializedToolCalls = (saved.toolCalls ?? []).map((call) => {

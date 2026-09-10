@@ -36,18 +36,18 @@ function createFixture() {
   const database = {
     transaction: vi.fn(async (callback) => callback(transaction)),
   };
-  const toolCallPolicy = {
-    getToolsMap: vi.fn(
-      async () =>
-        new Map([
-          [
-            'knownTool',
-            { definition: { name: 'knownTool' }, execution: 'frontend' },
-          ],
-        ]),
-    ),
-    isAutoCall: vi.fn(async () => true),
-  };
+  const getCurrentFrontendTools = vi.fn(async () => []);
+  const toolMap = new Map([
+    [
+      'knownTool',
+      {
+        scope: 'GENERAL',
+        definition: { name: 'knownTool' },
+        execution: 'frontend',
+        auto: true,
+      },
+    ],
+  ]);
   const store = new DefaultConversationMessageStore({
     sessionId: 'session-1',
     conversation,
@@ -55,7 +55,7 @@ function createFixture() {
     messages,
     toolMessages,
     snowflake: { generate: vi.fn(() => 101) },
-    toolCallPolicy,
+    getCurrentFrontendTools,
   } as never);
   return {
     transaction,
@@ -64,7 +64,8 @@ function createFixture() {
     toolMessages,
     messages,
     database,
-    toolCallPolicy,
+    getCurrentFrontendTools,
+    toolMap,
     store,
   };
 }
@@ -113,11 +114,14 @@ describe('AI employee conversation message persistence boundary', () => {
       ],
     });
 
-    const result = await fixture.store.saveAssistantMessage({
-      role: 'dara',
-      content: { type: 'text', content: 'answer' },
-      toolCalls: [{ id: 'input-call', name: 'ignoredTool', args: {} }],
-    });
+    const result = await fixture.store.saveAssistantMessage(
+      {
+        role: 'dara',
+        content: { type: 'text', content: 'answer' },
+        toolCalls: [{ id: 'input-call', name: 'ignoredTool', args: {} }],
+      },
+      fixture.toolMap,
+    );
 
     expect(fixture.toolMessages.create).toHaveBeenCalledWith(
       {
@@ -151,6 +155,153 @@ describe('AI employee conversation message persistence boundary', () => {
     );
   });
 
+  it('resolves frontend auto per tool call and loads manifests once', async () => {
+    const fixture = createFixture();
+    fixture.getCurrentFrontendTools.mockResolvedValue([
+      { id: 'block:allow', permission: 'ALLOW' },
+      { id: 'block:ask', permission: 'ASK' },
+    ]);
+    fixture.target.addMessages.mockResolvedValue({
+      messageId: 'persisted-message',
+      sessionId: 'session-1',
+      toolCalls: [
+        {
+          id: 'call-1',
+          name: 'executeFrontendTool',
+          args: { toolId: 'block:allow' },
+        },
+        {
+          id: 'call-2',
+          name: 'executeFrontendTool',
+          args: { toolId: 'block:ask' },
+        },
+        {
+          id: 'call-3',
+          name: 'executeFrontendTool',
+          args: { toolId: 'missing' },
+        },
+      ],
+    });
+    const frontendTool = {
+      scope: 'GENERAL',
+      execution: 'frontend',
+      definition: { name: 'executeFrontendTool' },
+    };
+
+    const result = await fixture.store.saveAssistantMessage(
+      { role: 'dara', content: { type: 'text', content: '' } },
+      new Map([['executeFrontendTool', frontendTool]]),
+    );
+
+    expect(result.initializedToolCalls.map((item) => item.auto)).toEqual([
+      true,
+      false,
+      false,
+    ]);
+    expect(fixture.getCurrentFrontendTools).toHaveBeenCalledOnce();
+  });
+
+  it('does not load frontend manifests for ordinary tools', async () => {
+    const fixture = createFixture();
+    fixture.target.addMessages.mockResolvedValue({
+      messageId: 'persisted-message',
+      sessionId: 'session-1',
+      toolCalls: [{ id: 'call-1', name: 'knownTool', args: {} }],
+    });
+
+    const result = await fixture.store.saveAssistantMessage(
+      { role: 'dara', content: { type: 'text', content: '' } },
+      fixture.toolMap,
+    );
+
+    expect(result.initializedToolCalls[0]?.auto).toBe(true);
+    expect(fixture.getCurrentFrontendTools).not.toHaveBeenCalled();
+  });
+
+  it('persists false for unresolved ordinary and malformed frontend policy', async () => {
+    const fixture = createFixture();
+    fixture.target.addMessages.mockResolvedValue({
+      messageId: 'persisted-message',
+      sessionId: 'session-1',
+      toolCalls: [
+        { id: 'call-1', name: 'ordinaryFalse', args: {} },
+        { id: 'call-2', name: 'ordinaryUndefined', args: {} },
+        { id: 'call-3', name: 'executeFrontendTool', args: null },
+        { id: 'call-4', name: 'executeFrontendTool', args: {} },
+      ],
+    });
+    const toolMap = new Map([
+      [
+        'ordinaryFalse',
+        {
+          scope: 'GENERAL',
+          auto: false,
+          definition: { name: 'ordinaryFalse' },
+        },
+      ],
+      [
+        'ordinaryUndefined',
+        { scope: 'GENERAL', definition: { name: 'ordinaryUndefined' } },
+      ],
+      [
+        'executeFrontendTool',
+        {
+          scope: 'GENERAL',
+          execution: 'frontend',
+          definition: { name: 'executeFrontendTool' },
+        },
+      ],
+    ]);
+
+    const result = await fixture.store.saveAssistantMessage(
+      { role: 'dara', content: { type: 'text', content: '' } },
+      toolMap,
+    );
+
+    expect(result.initializedToolCalls.map((item) => item.auto)).toEqual([
+      false,
+      false,
+      false,
+      false,
+    ]);
+    expect(fixture.getCurrentFrontendTools).not.toHaveBeenCalled();
+  });
+
+  it('propagates frontend manifest failures through the persistence transaction', async () => {
+    const fixture = createFixture();
+    fixture.getCurrentFrontendTools.mockRejectedValue(
+      new Error('manifest failed'),
+    );
+    fixture.target.addMessages.mockResolvedValue({
+      messageId: 'persisted-message',
+      sessionId: 'session-1',
+      toolCalls: [
+        {
+          id: 'call-1',
+          name: 'executeFrontendTool',
+          args: { toolId: 'block:tool' },
+        },
+      ],
+    });
+
+    await expect(
+      fixture.store.saveAssistantMessage(
+        { role: 'dara', content: { type: 'text', content: '' } },
+        new Map([
+          [
+            'executeFrontendTool',
+            {
+              scope: 'GENERAL',
+              execution: 'frontend',
+              definition: { name: 'executeFrontendTool' },
+            },
+          ],
+        ]),
+      ),
+    ).rejects.toThrow('manifest failed');
+    expect(fixture.conversation.withTransaction).toHaveBeenCalledOnce();
+    expect(fixture.toolMessages.create).not.toHaveBeenCalled();
+  });
   it('does not access the tool-message repository without persisted tool calls', async () => {
     const fixture = createFixture();
     fixture.target.addMessages.mockResolvedValue({
@@ -161,13 +312,16 @@ describe('AI employee conversation message persistence boundary', () => {
     });
 
     await expect(
-      fixture.store.saveAssistantMessage({
-        role: 'dara',
-        content: { type: 'text', content: 'answer' },
-      }),
+      fixture.store.saveAssistantMessage(
+        {
+          role: 'dara',
+          content: { type: 'text', content: 'answer' },
+        },
+        fixture.toolMap,
+      ),
     ).resolves.toMatchObject({ initializedToolCalls: [] });
     expect(fixture.toolMessages.create).not.toHaveBeenCalled();
-    expect(fixture.toolCallPolicy.getToolsMap).not.toHaveBeenCalled();
+    expect(fixture.getCurrentFrontendTools).not.toHaveBeenCalled();
   });
 
   it('propagates initialization failures from the message transaction', async () => {
@@ -182,10 +336,13 @@ describe('AI employee conversation message persistence boundary', () => {
     );
 
     await expect(
-      fixture.store.saveAssistantMessage({
-        role: 'dara',
-        content: { type: 'text', content: 'answer' },
-      }),
+      fixture.store.saveAssistantMessage(
+        {
+          role: 'dara',
+          content: { type: 'text', content: 'answer' },
+        },
+        fixture.toolMap,
+      ),
     ).rejects.toThrow('initialize failed');
     expect(fixture.conversation.withTransaction).toHaveBeenCalledOnce();
   });

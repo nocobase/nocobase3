@@ -11,22 +11,26 @@ import {
 } from 'langchain';
 import z from 'zod';
 import _ from 'lodash';
-import type { ChatContextProvider, ConversationProvider } from '../types.js';
+import type { ConversationProvider } from '../types.js';
+import type { ToolsEntity } from '@nocobase/ai-employee';
+
+export function willInterruptToolCall(tool?: ToolsEntity): boolean {
+  return Boolean(
+    tool && (tool.execution === 'frontend' || tool.auto === false),
+  );
+}
 import type { Logger } from '@nocobase/logging';
 
 export const toolInteractionMiddleware = (
   conversation: ConversationProvider,
-  chatContext: Pick<ChatContextProvider, 'shouldInterruptToolCall'>,
-  tools: readonly import('@nocobase/ai-employee').ToolsEntity[],
+  toolMap: ReadonlyMap<string, ToolsEntity>,
 ): ReturnType<typeof createMiddleware> => {
   const interruptOn: Parameters<
     typeof humanInTheLoopMiddleware
   >[0]['interruptOn'] = {};
   const identity = conversation.identity;
-  for (const tool of tools) {
-    interruptOn[tool.definition.name] = chatContext.shouldInterruptToolCall(
-      tool,
-    )
+  for (const tool of toolMap.values()) {
+    interruptOn[tool.definition.name] = willInterruptToolCall(tool)
       ? {
           allowedDecisions: ['approve', 'reject', 'edit'],
           description: (toolCall) =>

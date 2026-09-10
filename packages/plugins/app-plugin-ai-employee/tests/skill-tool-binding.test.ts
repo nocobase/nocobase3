@@ -18,7 +18,7 @@ describe('SkillToolBindingMiddleware', () => {
       .mockResolvedValueOnce(new Set(['getSkill']));
     const middleware = skillToolBindingMiddleware(
       { activeTools },
-      { request: {}, initialActiveToolNames: ['getSkill'] },
+      { initialActiveToolNames: ['getSkill'] },
     ) as any;
     const wrapModelCall = hook<any>(middleware, 'wrapModelCall');
     const wrapToolCall = hook<any>(middleware, 'wrapToolCall');

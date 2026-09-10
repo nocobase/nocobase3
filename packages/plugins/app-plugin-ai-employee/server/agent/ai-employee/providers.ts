@@ -5,7 +5,6 @@ import type {
   ChatContextProvider,
   ConversationProvider,
   ResolvedAgentLLM,
-  ToolCallPolicy,
 } from '../types.js';
 import { DefaultChatMessageConverters } from '../chat-message-converters.js';
 import { NativeCollectionSaver } from '../../agent/ai-employee/checkpoints/index.js';
@@ -50,12 +49,11 @@ import {
 import {
   listCurrentFrontendTools,
   prepareToolsForFrontendConversation,
-  shouldAutoExecuteFrontendTool,
 } from './frontend-tools.js';
+import { markToolMapBaseNames } from '../tool-snapshot.js';
 
 export function createConversationProvider(
   options: AIEmployeeAgentOptions,
-  toolCallPolicy: ToolCallPolicy,
 ): ConversationProvider {
   const database = options.database;
   const sessionId = options.sessionId;
@@ -76,7 +74,11 @@ export function createConversationProvider(
     messages: options.aiMessages,
     toolMessages: options.aiToolMessages,
     snowflake: options.snowflake,
-    toolCallPolicy,
+    getCurrentFrontendTools: () =>
+      listCurrentFrontendTools(options.aiConversations, {
+        ...(options.execution ?? {}),
+        sessionId,
+      }),
   });
   const conversation: ConversationProvider = {
     identity: { sessionId, from, username, metadata: { kind: 'ai-employee' } },
@@ -218,8 +220,6 @@ export class AIEmployeeChatContextProvider implements ChatContextProvider {
 
   public async getSystemPrompt(
     userMessages: readonly AIMessageInput[],
-    _request: AgentRequest,
-    _llm: ResolvedAgentLLM,
   ): Promise<string | undefined> {
     const employee = this.employee;
     const promptMode =
@@ -334,20 +334,13 @@ If information is missing, clearly state it in the summary.</Important>`;
     return systemPrompt;
   }
 
-  public async discoveredTools(
-    _request: AgentRequest,
-  ): Promise<readonly import('@nocobase/ai-employee').ToolsEntity[]> {
-    return (await this.getAgentTools()).tools;
+  public async discoveredTools(): Promise<ReadonlyMap<string, ToolsEntity>> {
+    const { tools, baseToolNames } = await this.getAgentTools();
+    return markToolMapBaseNames(tools, baseToolNames);
   }
 
-  public async activeTools(
-    _request: AgentRequest,
-  ): Promise<ReadonlySet<string>> {
-    const [{ baseToolNames }, activatedSkillToolNames] = await Promise.all([
-      this.getAgentTools(),
-      this.getActivatedSkillToolNames(),
-    ]);
-    return new Set([...baseToolNames, ...activatedSkillToolNames]);
+  public activeTools(): Promise<ReadonlySet<string>> {
+    return this.getActivatedSkillToolNames();
   }
 
   private get chatSettings(): {
@@ -385,7 +378,31 @@ If information is missing, clearly state it in the summary.</Important>`;
     });
   }
 
-  private async getAIEmployeeTools(): Promise<ToolsEntity[]> {
+  private async listToolMap(): Promise<Map<string, ToolsEntity>> {
+    const tools = await this.listTools({ sessionId: this.sessionId });
+    return new Map(tools.map((tool) => [tool.definition.name, tool]));
+  }
+
+  private resolveToolAuto(tool: ToolsEntity): boolean {
+    const fallback = tool.defaultPermission === 'ALLOW';
+    if (tool.scope !== 'CUSTOM') return fallback;
+    const preset = this.employee.skillSettings?.tools?.find(
+      (setting: { name: string }) => setting.name === tool.definition.name,
+    );
+    return preset ? preset.autoCall === true : fallback;
+  }
+
+  private resolveTool(tool: ToolsEntity): ToolsEntity {
+    return {
+      ...tool,
+      definition: { ...tool.definition },
+      auto: this.resolveToolAuto(tool),
+    };
+  }
+
+  private async getAIEmployeeTools(
+    discoveredToolMap?: ReadonlyMap<string, ToolsEntity>,
+  ): Promise<ToolsEntity[]> {
     if (this.chatSettings.enableTools === false) return [];
     const currentFrontendTools = await listCurrentFrontendTools(
       this.conversations,
@@ -409,7 +426,7 @@ If information is missing, clearly state it in the summary.</Important>`;
       if (webSearch) tools.push(webSearch);
     }
     const generalNames = new Set(tools.map((tool) => tool.definition.name));
-    const toolMap = await this.getToolsMap();
+    const toolMap = discoveredToolMap ?? (await this.listToolMap());
     const configured = [
       ...(this.employee.skillSettings?.tools ?? []),
       ...(this.tools ?? []),
@@ -456,16 +473,19 @@ If information is missing, clearly state it in the summary.</Important>`;
     return prepareToolsForFrontendConversation(tools, currentFrontendTools);
   }
 
-  public async getAvailableSkills(): Promise<SkillsEntity[]> {
+  private async getAvailableSkillsForTools(
+    tools: readonly ToolsEntity[],
+  ): Promise<SkillsEntity[]> {
     if (this.chatSettings.enableSkills === false) return [];
-    const skillsManager = this.skillsManager;
-    const getSkill = (await this.getAIEmployeeTools()).find(
+    const getSkill = tools.find(
       (tool) => tool.definition.name === SYSTEM_TOOLS.GET_SKILL,
     );
     if (!getSkill) return [];
-    const general = await skillsManager.listSkills({ scope: 'GENERAL' });
+    const general = await this.skillsManager.listSkills({ scope: 'GENERAL' });
     const names = this.employee.skillSettings?.skills ?? [];
-    const specified = names.length ? await skillsManager.getSkills(names) : [];
+    const specified = names.length
+      ? await this.skillsManager.getSkills(names)
+      : [];
     const merged = _.uniqBy([...(specified || []), ...(general || [])], 'name');
     const settings = this.skillSettings;
     if (!settings) return merged;
@@ -480,17 +500,25 @@ If information is missing, clearly state it in the summary.</Important>`;
       : merged;
   }
 
+  public async getAvailableSkills(): Promise<SkillsEntity[]> {
+    return this.getAvailableSkillsForTools(await this.getAIEmployeeTools());
+  }
+
   public async getAgentTools(): Promise<{
-    tools: ToolsEntity[];
+    tools: ReadonlyMap<string, ToolsEntity>;
     baseToolNames: Set<string>;
   }> {
-    if (this.chatSettings.enableTools === false)
-      return { tools: [], baseToolNames: new Set() };
-    const baseTools = await this.getAIEmployeeTools();
-    const toolMap = new Map(await this.getToolsMap());
+    if (this.chatSettings.enableTools === false) {
+      return { tools: new Map(), baseToolNames: new Set() };
+    }
+    const discoveredToolMap = await this.listToolMap();
+    const baseTools = await this.getAIEmployeeTools(discoveredToolMap);
+    const toolMap = new Map(discoveredToolMap);
     for (const tool of baseTools) toolMap.set(tool.definition.name, tool);
     const skillToolNames = new Set(
-      (await this.getAvailableSkills()).flatMap((skill) => skill.tools ?? []),
+      (await this.getAvailableSkillsForTools(baseTools)).flatMap(
+        (skill) => skill.tools ?? [],
+      ),
     );
     const baseToolNames = new Set(
       baseTools
@@ -500,7 +528,12 @@ If information is missing, clearly state it in the summary.</Important>`;
             name === SYSTEM_TOOLS.GET_SKILL || !skillToolNames.has(name),
         ),
     );
-    return { tools: Array.from(toolMap.values()), baseToolNames };
+    return {
+      tools: new Map(
+        [...toolMap].map(([name, tool]) => [name, this.resolveTool(tool)]),
+      ),
+      baseToolNames,
+    };
   }
 
   private async getLoadedSkillNames(): Promise<string[]> {
@@ -536,9 +569,9 @@ If information is missing, clearly state it in the summary.</Important>`;
     const loaded = await this.skillsManager.getSkills(names);
     const normalized = Array.isArray(loaded) ? loaded : [loaded];
     const skills = new Map(
-      [...(await this.getAvailableSkills()), ...normalized.filter(Boolean)].map(
-        (skill) => [skill.name, skill],
-      ),
+      normalized
+        .filter((skill): skill is SkillsEntity => Boolean(skill))
+        .map((skill) => [skill.name, skill]),
     );
     return new Set(names.flatMap((name) => skills.get(name)?.tools ?? []));
   }
@@ -565,37 +598,6 @@ If information is missing, clearly state it in the summary.</Important>`;
         }),
       )
       .filter((employee) => employee.username !== this.employee.username);
-  }
-
-  public async getToolsMap(): Promise<ReadonlyMap<string, ToolsEntity>> {
-    const tools = await this.listTools({
-      sessionId: this.sessionId,
-    });
-    return new Map(tools.map((tool) => [tool.definition.name, tool]));
-  }
-
-  public shouldInterruptToolCall(tool?: ToolsEntity): boolean {
-    return tool?.execution === 'frontend' || !this.isAutoCall(tool, undefined);
-  }
-
-  public async isAutoCall(
-    tool: ToolsEntity | undefined,
-    args: unknown,
-  ): Promise<boolean> {
-    if (tool?.definition.name === EXECUTE_FRONTEND_TOOL_NAME) {
-      const frontendTools = await listCurrentFrontendTools(this.conversations, {
-        ...(this.execution ?? {}),
-        sessionId: this.sessionId,
-      });
-      return shouldAutoExecuteFrontendTool(frontendTools, args);
-    }
-    if (!tool) return false;
-    const fallback = tool.defaultPermission === 'ALLOW';
-    if (tool.scope !== 'CUSTOM') return fallback;
-    const preset = this.employee.skillSettings?.tools?.find(
-      (setting: { name: string }) => setting.name === tool.definition.name,
-    );
-    return preset ? preset.autoCall === true : fallback;
   }
 }
 
@@ -631,7 +633,7 @@ export async function createAIEmployeeAgentProviders(
   options: AIEmployeeAgentOptions,
 ): Promise<AgentProviders> {
   const chatContext = createAIEmployeeChatContextProvider(options);
-  const conversation = createConversationProvider(options, chatContext);
+  const conversation = createConversationProvider(options);
   return createAgentProviders({
     conversation,
     chatContext,

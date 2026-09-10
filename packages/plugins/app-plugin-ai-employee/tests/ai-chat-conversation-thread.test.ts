@@ -116,7 +116,7 @@ describe('AIChatConversation thread persistence', () => {
       conversation,
       toolMessages: {},
       snowflake: {},
-      toolCallPolicy: {},
+      getCurrentFrontendTools: vi.fn(async () => []),
     } as never);
     await expect(store.currentThread()).resolves.toEqual({
       sessionId: 'session-1',

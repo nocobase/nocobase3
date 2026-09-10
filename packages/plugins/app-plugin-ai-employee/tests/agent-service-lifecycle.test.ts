@@ -46,10 +46,8 @@ const createProviders = (
         }
         return undefined;
       }),
-      discoveredTools: vi.fn(async () => []),
+      discoveredTools: vi.fn(async () => new Map()),
       activeTools: vi.fn(async () => new Set()),
-      shouldInterruptToolCall: vi.fn(() => false),
-      getToolsMap: vi.fn(async () => new Map()),
     },
     chatMessageConverters: {
       formatMessages: vi.fn(async (messages) => messages),
@@ -77,9 +75,14 @@ describe('AgentService execution-local LLM lifecycle', () => {
     async (mode) => {
       const dispose = vi.fn();
       const controller = new AbortController();
-      const service = new AgentService(
-        createProviders(dispose, mode, () => controller.abort()),
+      const providers = createProviders(dispose, mode, () =>
+        controller.abort(),
       );
+      const saveAssistantMessage = vi.spyOn(
+        providers.conversation.messages,
+        'saveAssistantMessage',
+      );
+      const service = new AgentService(providers);
       const execution = service.invoke({
         signal: controller.signal,
         userMessages: [
@@ -95,6 +98,9 @@ describe('AgentService execution-local LLM lifecycle', () => {
         });
       else await expect(execution).rejects.toThrow('Agent execution failed');
       expect(dispose).not.toHaveBeenCalled();
+      if (mode === 'abort') {
+        expect(saveAssistantMessage).not.toHaveBeenCalled();
+      }
     },
   );
 

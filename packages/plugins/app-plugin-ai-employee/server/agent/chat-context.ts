@@ -37,40 +37,19 @@ export class FixedChatContextProvider implements ChatContextProvider {
 
   public getSystemPrompt(
     _messages: readonly AIMessageInput[],
-    _request: AgentRequest,
-    _llm: ResolvedAgentLLM,
   ): Promise<string | undefined> {
     return Promise.resolve(this.options.systemPrompt);
   }
 
-  public discoveredTools(
-    _request: AgentRequest,
-  ): Promise<readonly ToolsEntity[]> {
-    return Promise.resolve(this.options.tools ?? []);
+  public discoveredTools(): Promise<ReadonlyMap<string, ToolsEntity>> {
+    return Promise.resolve(
+      new Map(
+        (this.options.tools ?? []).map((tool) => [tool.definition.name, tool]),
+      ),
+    );
   }
 
-  public async activeTools(
-    request: AgentRequest,
-  ): Promise<ReadonlySet<string>> {
-    const tools = await this.discoveredTools(request);
-    return new Set(tools.map((tool) => tool.definition.name));
-  }
-
-  public shouldInterruptToolCall(): boolean {
-    return false;
-  }
-
-  public isAutoCall(
-    _tool: ToolsEntity | undefined,
-    _args: unknown,
-  ): boolean | Promise<boolean> {
-    return false;
-  }
-
-  public async getToolsMap(
-    request: AgentRequest = {},
-  ): Promise<ReadonlyMap<string, ToolsEntity>> {
-    const tools = await this.discoveredTools(request);
-    return new Map(tools.map((tool) => [tool.definition.name, tool]));
+  public async activeTools(): Promise<ReadonlySet<string>> {
+    return new Set((await this.discoveredTools()).keys());
   }
 }

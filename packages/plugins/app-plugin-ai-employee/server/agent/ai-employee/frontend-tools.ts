@@ -149,16 +149,6 @@ export const findCurrentFrontendTool = async (
   return tools.find((tool) => tool.id === toolId);
 };
 
-export const shouldAutoExecuteFrontendTool = (
-  tools: FrontendToolManifest[],
-  args: unknown,
-): boolean => {
-  if (!isRecord(args) || typeof args.toolId !== 'string') {
-    return false;
-  }
-  return tools.find((tool) => tool.id === args.toolId)?.permission === 'ALLOW';
-};
-
 export const prepareToolsForFrontendConversation = <
   T extends { definition: { name: string; description: string } },
 >(

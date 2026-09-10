@@ -28,20 +28,19 @@ import type {
 } from '@nocobase/ai-employee';
 import type { ToolsEntity } from '@nocobase/ai-employee';
 
+import { willInterruptToolCall } from './tools.js';
 import type { Logger } from '@nocobase/logging';
 export const conversationMiddleware = (
-  providers: Pick<
-    AgentProviders,
-    'conversation' | 'chatContext' | 'chatMessageConverters'
-  >,
+  providers: Pick<AgentProviders, 'conversation' | 'chatMessageConverters'>,
   options: AgentMessageConversionContext & {
     messageId?: string;
     agentThread?: AgentThread;
+    toolMap: ReadonlyMap<string, ToolsEntity>;
   },
   logger: Logger,
 ) => {
-  const { conversation, chatContext, chatMessageConverters } = providers;
-  const { messageId, agentThread } = options;
+  const { conversation, chatMessageConverters } = providers;
+  const { messageId, agentThread, toolMap } = options;
   const identity = conversation.identity;
   const convertAssistantMessage = (message: AIMessage) =>
     chatMessageConverters.assistant.convert(message, options);
@@ -71,7 +70,7 @@ export const conversationMiddleware = (
       toolCall.invokeEndTime = initialized?.invokeEndTime;
       toolCall.auto = initialized?.auto;
       toolCall.execution = initialized?.execution;
-      toolCall.willInterrupt = chatContext.shouldInterruptToolCall(tool);
+      toolCall.willInterrupt = willInterruptToolCall(tool);
       toolCall.defaultPermission = tool?.defaultPermission;
     }
   };
@@ -173,15 +172,16 @@ export const conversationMiddleware = (
         const aiMessage = lastMessage as AIMessage;
         const values = await convertAssistantMessage(aiMessage);
         if (!values) return nextState;
-        const saved = await conversation.messages.saveAssistantMessage(values);
+        const saved = await conversation.messages.saveAssistantMessage(
+          values,
+          toolMap,
+        );
         nextState.messageId = saved.message.messageId;
         const toolCalls = saved.message.toolCalls ?? [];
         if (toolCalls.length) {
           fillToolCalls(
             saved.message,
-            await chatContext.getToolsMap(
-              (runtime.context?.agentRequest ?? {}) as never,
-            ),
+            toolMap,
             saved.initializedToolCalls,
             toolCalls,
           );

@@ -10,6 +10,7 @@ import type {
   AIMessage,
   AIMessageInput,
   LLMProvider,
+  ToolsEntity,
 } from '@nocobase/ai-employee';
 import type {
   AgentGraphState,
@@ -26,6 +27,7 @@ import { AgentServiceError } from './types.js';
 import { normalizeAgentError } from './errors.js';
 import { buildStandardAgentMiddleware } from './middleware/pipeline.js';
 
+import { getToolMapBaseNames } from './tool-snapshot.js';
 const mergeSignals = (
   internal: AbortSignal,
   external?: AbortSignal,
@@ -292,20 +294,21 @@ export class AgentService {
       (message: any) => message?.role !== 'system',
     );
     const systemPrompt = features.contextEnrichment
-      ? [
-          await chatContext.getSystemPrompt(allMessages, request, llm),
-          formattedSystemPrompt,
-        ]
+      ? [await chatContext.getSystemPrompt(allMessages), formattedSystemPrompt]
           .filter(Boolean)
           .join('\n\n') || undefined
       : formattedSystemPrompt || undefined;
-    const sourceTools = features.tools
-      ? await chatContext.discoveredTools(request)
-      : [];
+    const discoveredToolMap = features.tools
+      ? await chatContext.discoveredTools()
+      : new Map<string, ToolsEntity>();
+    const toolMap = new Map(discoveredToolMap);
+    const baseToolNames = new Set(getToolMapBaseNames(discoveredToolMap));
     const initialActiveToolNames = features.skills
-      ? await chatContext.activeTools(request)
-      : new Set(sourceTools.map((tool) => tool.definition.name));
-    const resolvedTools = llm.provider.resolveTools(sourceTools.map(buildTool));
+      ? new Set([...baseToolNames, ...(await chatContext.activeTools())])
+      : new Set(toolMap.keys());
+    const resolvedTools = llm.provider.resolveTools(
+      [...toolMap.values()].map(buildTool),
+    );
     let thread = await conversation.messages.currentThread();
     if (this.shouldFork(operation, request)) {
       thread = await this.forkThread(thread, llm.provider);
@@ -350,8 +353,8 @@ export class AgentService {
       input,
       systemPrompt,
       tools: resolvedTools,
-      sourceTools,
-      baseToolNames: new Set(initialActiveToolNames),
+      toolMap,
+      baseToolNames,
       initialActiveToolNames,
       llm,
       config,
@@ -685,7 +688,10 @@ export class AgentService {
               ...(value.metadata ?? {}),
               interrupted: true,
             } as any;
-            await conversation.messages.saveAssistantMessage(value);
+            await conversation.messages.saveAssistantMessage(
+              value,
+              prepared.toolMap,
+            );
           }
         }
         throw new AgentServiceError('ABORTED', 'Agent execution aborted', {

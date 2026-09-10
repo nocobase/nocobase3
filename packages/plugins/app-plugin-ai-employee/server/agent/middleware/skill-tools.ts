@@ -8,24 +8,20 @@
  */
 
 import { createMiddleware, ToolMessage } from 'langchain';
-import type { AgentRequest, ChatContextProvider } from '../types.js';
+import type { ChatContextProvider } from '../types.js';
 
 export type SkillToolBindingProvider = Pick<ChatContextProvider, 'activeTools'>;
 
 export const skillToolBindingMiddleware = (
   chatContext: SkillToolBindingProvider,
   options: {
-    request: AgentRequest;
     initialActiveToolNames: readonly string[];
   },
 ) => {
   const initialActiveToolNames = new Set(options.initialActiveToolNames ?? []);
 
   const getAllowedToolNames = async () =>
-    new Set([
-      ...initialActiveToolNames,
-      ...(await chatContext.activeTools(options.request)),
-    ]);
+    new Set([...initialActiveToolNames, ...(await chatContext.activeTools())]);
 
   const getToolName = (tool: any) => {
     if (!tool || typeof tool !== 'object') {

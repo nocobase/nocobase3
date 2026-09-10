@@ -125,6 +125,13 @@ describe('fixed AgentService contracts', () => {
       .join('\n');
     expect(providerSources).not.toContain('getExecutionContext');
     expect(providerSources).not.toContain('getUserMessageCount');
+    const types = read('agent/types.ts');
+    expect(types).toMatch(
+      /getSystemPrompt\(\s*messages: readonly AIMessageInput\[\],?\s*\): Promise<string \| undefined>/,
+    );
+    expect(read('agent/agent-service.ts')).toContain(
+      'chatContext.getSystemPrompt(allMessages)',
+    );
     expect(read('agent/agent-service.ts')).toContain(
       '...(request.context ?? {})',
     );
@@ -210,7 +217,8 @@ describe('fixed AgentService contracts', () => {
       "from './ai-employee/options.js'",
     );
     const skillMiddleware = read('agent/middleware/skill-tools.ts');
-    expect(skillMiddleware).toContain('activeTools(options.request)');
+    expect(skillMiddleware).toContain('activeTools()');
+    expect(skillMiddleware).not.toContain('options.request');
     expect(skillMiddleware).toContain('wrapModelCall');
     expect(skillMiddleware).toContain('wrapToolCall');
   });
@@ -266,8 +274,9 @@ describe('fixed AgentService contracts', () => {
     ).toBe(false);
     expect(providers).not.toContain('DefaultToolCallHandler');
     expect(providers).toMatch(
-      /createConversationProvider\(\s*options: AIEmployeeAgentOptions,\s*toolCallPolicy: ToolCallPolicy,?\s*\)/,
+      /createConversationProvider\(\s*options: AIEmployeeAgentOptions,?\s*\)/,
     );
+    expect(providers).not.toContain('ToolCallPolicy');
     const options = read('agent/ai-employee/options.ts');
     expect(options).not.toContain('RepositoryFactory');
     expect(options).not.toMatch(/\brepositories\s*:/);
@@ -300,10 +309,8 @@ describe('fixed AgentService contracts', () => {
     expect(chatContext).toContain('private readonly employees:');
     expect(chatContext).toContain('private readonly toolMessages:');
     expect(chatContext).toContain('private readonly usersAiEmployees:');
-    expect(types).toContain('export type ToolCallPolicy = Pick<');
-    expect(types).toContain(
-      "'getToolsMap' | 'isAutoCall' | 'shouldInterruptToolCall'",
-    );
+    expect(types).not.toContain('ToolCallPolicy');
+    expect(types).not.toMatch(/getToolsMap|isAutoCall|shouldInterruptToolCall/);
     expect(
       fs.existsSync(path.join(src, 'agent/ai-employee/tool-call-policy.ts')),
     ).toBe(false);
@@ -317,7 +324,7 @@ describe('fixed AgentService contracts', () => {
     const middleware = read('agent/middleware/conversation.ts');
 
     expect(types).toMatch(
-      /saveAssistantMessage\(\s*message: AIMessageInput,?\s*\)/,
+      /saveAssistantMessage\(\s*message: AIMessageInput,\s*toolMap: ReadonlyMap<string, ToolsEntity>,?\s*\)/,
     );
     expect(types).toMatch(
       /saveToolMessages\(\s*sourceMessageId: string,\s*messages: AIMessageInput\[\],?\s*\)/,
@@ -461,20 +468,21 @@ describe('fixed AgentService contracts', () => {
     expect(providers.chatContext).toBe(chatContext);
     expect(providers.chatMessageConverters).toBe(chatMessageConverters);
     expect(providers.features).toEqual(DEFAULT_AGENT_FEATURES);
-    expect(await providers.chatContext.getSystemPrompt([], {}, llm)).toBe(
-      'base',
-    );
+    expect(await providers.chatContext.getSystemPrompt([])).toBe('base');
   });
 
   it('keeps memory message and tool-call state behind the same contract', async () => {
     const conversation = createMemoryConversationProvider({
       sessionId: 'memory',
     });
-    const saved = await conversation.messages.saveAssistantMessage({
-      role: 'assistant',
-      content: { type: 'text', content: 'answer' },
-      toolCalls: [{ id: 'call-1', name: 'search', args: {} }],
-    });
+    const saved = await conversation.messages.saveAssistantMessage(
+      {
+        role: 'assistant',
+        content: { type: 'text', content: 'answer' },
+        toolCalls: [{ id: 'call-1', name: 'search', args: {} }],
+      },
+      new Map(),
+    );
 
     expect(await conversation.messages.loadMessages()).toHaveLength(1);
     expect(await conversation.messages.currentThread()).toMatchObject({

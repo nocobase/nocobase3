@@ -39,16 +39,13 @@ describe('conversationMiddleware', () => {
       providerName: 'test-provider',
       model: 'test-model',
       provider: {},
+      toolMap: new Map(),
     };
     const middleware = conversationMiddleware(
       {
         conversation: {
           identity: { sessionId: 'sub-session' },
           messages: { saveToolMessages, saveUserMessages },
-        },
-        chatContext: {
-          getToolsMap: vi.fn(async () => new Map()),
-          shouldInterruptToolCall: vi.fn(() => false),
         },
         chatMessageConverters: {
           formatMessages,
@@ -92,5 +89,79 @@ describe('conversationMiddleware', () => {
     expect(request.messages).toEqual([toolMessage, formattedMessage]);
     expect(request.runtime.context).not.toHaveProperty('appendMessages');
     expect(handler).toHaveBeenCalledWith(request);
+  });
+
+  it('uses the provided tool snapshot for persistence and event policy', async () => {
+    const tool = {
+      scope: 'GENERAL',
+      execution: 'backend',
+      auto: false,
+      defaultPermission: 'ASK',
+      definition: { name: 'reviewTool' },
+    };
+    const toolMap = new Map([['reviewTool', tool]]);
+    const persisted = {
+      messageId: 'message-1',
+      sessionId: 'session-1',
+      role: 'assistant',
+      content: { type: 'text', content: '' },
+      toolCalls: [{ id: 'call-1', name: 'reviewTool', args: {} }],
+    };
+    const initialized = {
+      toolCallId: 'call-1',
+      auto: false,
+      execution: 'backend',
+      invokeStatus: 'init',
+    };
+    const saveAssistantMessage = vi.fn(async () => ({
+      message: persisted,
+      initializedToolCalls: [initialized],
+    }));
+    const writer = vi.fn();
+    const middleware = conversationMiddleware(
+      {
+        conversation: {
+          identity: { sessionId: 'session-1' },
+          messages: { saveAssistantMessage },
+        },
+        chatMessageConverters: {
+          assistant: { convert: vi.fn(async () => ({ role: 'assistant' })) },
+        },
+      } as never,
+      { providerName: 'test', model: 'test', provider: {}, toolMap } as never,
+      { error: vi.fn() } as never,
+    );
+    const afterModel = getMiddlewareHook<any>(middleware.afterModel);
+    const aiMessage = { type: 'ai', id: 'ai-1' };
+
+    await afterModel(
+      {
+        messageId: undefined,
+        messages: [aiMessage],
+        lastMessageIndex: {
+          lastHumanMessageIndex: 0,
+          lastAIMessageIndex: 0,
+          lastToolMessageIndex: 0,
+          lastMessageIndex: 0,
+        },
+      },
+      { writer },
+    );
+
+    expect(saveAssistantMessage).toHaveBeenCalledWith(
+      { role: 'assistant' },
+      toolMap,
+    );
+    expect(persisted.toolCalls[0]).toMatchObject({
+      auto: false,
+      willInterrupt: true,
+      defaultPermission: 'ASK',
+    });
+    expect(writer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'initToolCalls',
+        body: { toolCalls: persisted.toolCalls },
+      }),
+    );
   });
 });
