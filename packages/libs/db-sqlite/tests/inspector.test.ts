@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import knex from 'knex';
 import sqlite from '../src/index.js';
 import { SqliteSchemaInspector } from '../src/inspectors/sqlite.js';
 import { sqliteTypes } from '../src/inspectors/sqlite.js';
@@ -24,6 +25,49 @@ describe('sqlite schema inspector', () => {
     await expect(inspector.listSchemas()).resolves.toEqual([
       { name: 'main', default: true },
     ]);
+  });
+
+  it('reads a real SQLite table through the dialect inspector', async () => {
+    const client = knex({
+      client: 'better-sqlite3',
+      connection: { filename: ':memory:' },
+      useNullAsDefault: true,
+    });
+    try {
+      await client.schema.createTable('items', (table) => {
+        table.increments('id');
+        table.string('name').notNullable();
+        table.unique(['name']);
+      });
+      const inspector = new SqliteSchemaInspector({
+        connectionName: 'main',
+        resolveClient: async () => client,
+      });
+
+      const collection = await inspector.getPhysicalCollection({
+        tableName: 'items',
+      });
+      expect(collection).toMatchObject({
+        schema: 'main',
+        tableName: 'items',
+        kind: 'table',
+        primaryKey: { columns: ['id'] },
+      });
+      expect(collection?.columns.map((column) => column.columnName)).toEqual([
+        'id',
+        'name',
+      ]);
+      expect(collection?.uniqueConstraints).toEqual([]);
+      expect(collection?.indexes).toEqual([
+        {
+          name: 'items_name_unique',
+          keys: [{ columnName: 'name', order: 'asc' }],
+          unique: true,
+        },
+      ]);
+    } finally {
+      await client.destroy();
+    }
   });
 
   it('rejects schemas other than main before querying the database', async () => {
