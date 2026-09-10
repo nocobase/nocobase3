@@ -16,10 +16,7 @@ describe('SkillToolBindingMiddleware', () => {
       .mockResolvedValueOnce(new Set(['getSkill']))
       .mockResolvedValueOnce(new Set(['getSkill', 'skillTool']))
       .mockResolvedValueOnce(new Set(['getSkill']));
-    const middleware = skillToolBindingMiddleware(
-      { activeTools },
-      { initialActiveToolNames: ['getSkill'] },
-    ) as any;
+    const middleware = skillToolBindingMiddleware({ activeTools }) as any;
     const wrapModelCall = hook<any>(middleware, 'wrapModelCall');
     const wrapToolCall = hook<any>(middleware, 'wrapToolCall');
     const modelHandler = vi.fn(async (request) => request.tools);

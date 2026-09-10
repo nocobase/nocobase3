@@ -18,7 +18,6 @@ vi.mock('../server/agent/middleware/pipeline.js', () => ({
 import { AgentService } from '../server/agent/agent-service.js';
 import { createMemoryConversationProvider } from '../server/agent/providers.js';
 import { DEFAULT_AGENT_FEATURES } from '../server/agent/types.js';
-import { markToolMapBaseNames } from '../server/agent/tool-snapshot.js';
 
 const tool = (name: string, auto: boolean): ToolsEntity =>
   ({
@@ -34,7 +33,7 @@ function createFixture(toolMaps: ReadonlyMap<string, ToolsEntity>[]) {
   const discoveredTools = vi.fn(async () => {
     const next = toolMaps.shift();
     if (!next) throw new Error('missing tool fixture');
-    return next;
+    return { tools: next, activeTools };
   });
   const activeTools = vi.fn(async () => new Set<string>());
   const conversation = createMemoryConversationProvider({
@@ -58,7 +57,6 @@ function createFixture(toolMaps: ReadonlyMap<string, ToolsEntity>[]) {
       })),
       getSystemPrompt: vi.fn(async () => undefined),
       discoveredTools,
-      activeTools,
     },
     chatMessageConverters: {
       formatMessages: vi.fn(async (messages) => messages),
@@ -78,7 +76,7 @@ function createFixture(toolMaps: ReadonlyMap<string, ToolsEntity>[]) {
 }
 
 describe('AgentService tool snapshots', () => {
-  it('discovers once and passes one cloned map through each execution', async () => {
+  it('discovers once and passes the same result through each execution', async () => {
     const firstSource = new Map([['first', tool('first', true)]]);
     const secondSource = new Map([['second', tool('second', false)]]);
     const fixture = createFixture([firstSource, secondSource]);
@@ -90,10 +88,6 @@ describe('AgentService tool snapshots', () => {
 
     const first = fixture.service.invoke();
     await vi.waitFor(() => expect(releases).toHaveLength(1));
-    firstSource.set(
-      'changed-mid-execution',
-      tool('changed-mid-execution', false),
-    );
     const second = fixture.service.invoke();
     await vi.waitFor(() => expect(releases).toHaveLength(2));
     releases.splice(0).forEach((release) => release());
@@ -103,10 +97,15 @@ describe('AgentService tool snapshots', () => {
     const firstPrepared = mocks.buildStandardAgentMiddleware.mock.calls[0]?.[1];
     const secondPrepared =
       mocks.buildStandardAgentMiddleware.mock.calls[1]?.[1];
-    expect(firstPrepared.toolMap).not.toBe(firstSource);
-    expect([...firstPrepared.toolMap.keys()]).toEqual(['first']);
-    expect([...secondPrepared.toolMap.keys()]).toEqual(['second']);
-    expect(firstPrepared.toolMap).not.toBe(secondPrepared.toolMap);
+    expect(firstPrepared.discoveredTools.tools).toBe(firstSource);
+    expect([...firstPrepared.discoveredTools.tools.keys()]).toEqual(['first']);
+    expect(firstPrepared.discoveredTools.activeTools).toBe(fixture.activeTools);
+    expect([...secondPrepared.discoveredTools.tools.keys()]).toEqual([
+      'second',
+    ]);
+    expect(firstPrepared.discoveredTools.tools).not.toBe(
+      secondPrepared.discoveredTools.tools,
+    );
     expect(fixture.resolveTools).toHaveBeenNthCalledWith(
       1,
       expect.arrayContaining([expect.objectContaining({ name: 'first' })]),
@@ -154,7 +153,7 @@ describe('AgentService tool snapshots', () => {
       expect.objectContaining({
         metadata: expect.objectContaining({ interrupted: true }),
       }),
-      prepared.toolMap,
+      prepared.discoveredTools.tools,
     );
   });
 
@@ -188,21 +187,20 @@ describe('AgentService tool snapshots', () => {
     expect(fixture.discoveredTools).toHaveBeenCalledTimes(6);
     const preparedMaps = mocks.buildStandardAgentMiddleware.mock.calls
       .slice(-6)
-      .map((call) => call[1].toolMap);
+      .map((call) => call[1].discoveredTools.tools);
     expect(preparedMaps.map((map) => [...map.keys()])).toEqual(
       maps.map((map) => [...map.keys()]),
     );
     expect(new Set(preparedMaps).size).toBe(6);
   });
 
-  it('keeps snapshot base tools while dynamically adding activated skill tools', async () => {
+  it('keeps one dynamic active-tool resolver on the execution snapshot', async () => {
     const source = new Map([
       ['base', tool('base', true)],
       ['skillTool', tool('skillTool', true)],
     ]);
-    markToolMapBaseNames(source, new Set(['base']));
     const fixture = createFixture([source]);
-    fixture.activeTools.mockResolvedValue(new Set(['skillTool']));
+    fixture.activeTools.mockResolvedValue(new Set(['base', 'skillTool']));
     mocks.createAgent.mockReset().mockReturnValue({
       invoke: vi.fn(async () => ({ ok: true })),
     });
@@ -210,10 +208,10 @@ describe('AgentService tool snapshots', () => {
     await fixture.service.invoke();
 
     const prepared = mocks.buildStandardAgentMiddleware.mock.calls.at(-1)?.[1];
-    expect(prepared.baseToolNames).toEqual(new Set(['base']));
-    expect(prepared.initialActiveToolNames).toEqual(
+    expect(await prepared.discoveredTools.activeTools()).toEqual(
       new Set(['base', 'skillTool']),
     );
+    expect(fixture.activeTools).toHaveBeenCalledOnce();
   });
   it('uses empty snapshots without discovering when tools are disabled', async () => {
     const fixture = createFixture([]);
@@ -226,6 +224,7 @@ describe('AgentService tool snapshots', () => {
 
     expect(fixture.discoveredTools).not.toHaveBeenCalled();
     const prepared = mocks.buildStandardAgentMiddleware.mock.calls.at(-1)?.[1];
-    expect(prepared.toolMap).toEqual(new Map());
+    expect(prepared.discoveredTools.tools).toEqual(new Map());
+    expect(await prepared.discoveredTools.activeTools()).toEqual(new Set());
   });
 });

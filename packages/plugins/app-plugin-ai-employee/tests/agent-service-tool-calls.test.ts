@@ -20,7 +20,6 @@ const createProviders = (
     resolveLLM: vi.fn(),
     getSystemPrompt: vi.fn(),
     discoveredTools: vi.fn(),
-    activeTools: vi.fn(),
   };
   const providers: AgentProviders = {
     conversation,
@@ -54,7 +53,6 @@ const expectNoExecutionLifecycle = (
   expect(chatContext.resolveLLM).not.toHaveBeenCalled();
   expect(chatContext.getSystemPrompt).not.toHaveBeenCalled();
   expect(chatContext.discoveredTools).not.toHaveBeenCalled();
-  expect(chatContext.activeTools).not.toHaveBeenCalled();
   expect(lifecycle.beforeExecution).not.toHaveBeenCalled();
   expect(lifecycle.afterExecution).not.toHaveBeenCalled();
   expect(lifecycle.registerAbortHandle).not.toHaveBeenCalled();

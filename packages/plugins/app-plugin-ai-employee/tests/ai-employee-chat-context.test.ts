@@ -80,11 +80,13 @@ describe('AIEmployeeChatContextProvider', () => {
     });
     toolContext.getActivatedSkillToolNames
       .mockResolvedValueOnce(new Set())
-      .mockResolvedValueOnce(new Set(['skillTool']));
-
-    expect(await context.activeTools()).toEqual(new Set());
-    expect(await context.activeTools()).toEqual(new Set(['skillTool']));
-    expect(toolContext.getAgentTools).not.toHaveBeenCalled();
+      .mockResolvedValueOnce(new Set(['skillTool', 'notRegistered']));
+    const discovered = await context.discoveredTools();
+    expect(await discovered.activeTools()).toEqual(new Set(['getSkill']));
+    expect(await discovered.activeTools()).toEqual(
+      new Set(['getSkill', 'skillTool']),
+    );
+    expect(toolContext.getAgentTools).toHaveBeenCalledOnce();
     expect(toolContext.getActivatedSkillToolNames).toHaveBeenCalledTimes(2);
   });
 
@@ -149,7 +151,9 @@ describe('AIEmployeeChatContextProvider', () => {
 
     const discovered = await context.discoveredTools();
 
-    expect([...discovered].map(([name, tool]) => [name, tool.auto])).toEqual([
+    expect(
+      [...discovered.tools].map(([name, tool]) => [name, tool.auto]),
+    ).toEqual([
       ['generalAllow', true],
       ['generalAsk', false],
       ['customEnabled', true],
@@ -159,10 +163,10 @@ describe('AIEmployeeChatContextProvider', () => {
     ]);
     for (const original of tools) {
       expect(original).not.toHaveProperty('auto');
-      expect(discovered.get(original.definition.name)).not.toBe(original);
-      expect(discovered.get(original.definition.name)?.definition).not.toBe(
-        original.definition,
-      );
+      expect(discovered.tools.get(original.definition.name)).not.toBe(original);
+      expect(
+        discovered.tools.get(original.definition.name)?.definition,
+      ).not.toBe(original.definition);
     }
   });
 });

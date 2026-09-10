@@ -6,6 +6,7 @@ import type {
 import type {
   AgentRequest,
   ChatContextProvider,
+  DiscoveredTools,
   ResolvedAgentLLM,
 } from './types.js';
 
@@ -41,15 +42,13 @@ export class FixedChatContextProvider implements ChatContextProvider {
     return Promise.resolve(this.options.systemPrompt);
   }
 
-  public discoveredTools(): Promise<ReadonlyMap<string, ToolsEntity>> {
-    return Promise.resolve(
-      new Map(
-        (this.options.tools ?? []).map((tool) => [tool.definition.name, tool]),
-      ),
+  public discoveredTools(): Promise<DiscoveredTools> {
+    const tools = new Map(
+      (this.options.tools ?? []).map((tool) => [tool.definition.name, tool]),
     );
-  }
-
-  public async activeTools(): Promise<ReadonlySet<string>> {
-    return new Set((await this.discoveredTools()).keys());
+    return Promise.resolve({
+      tools,
+      activeTools: () => Promise.resolve(new Set(tools.keys())),
+    });
   }
 }

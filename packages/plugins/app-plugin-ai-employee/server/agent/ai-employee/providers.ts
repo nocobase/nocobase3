@@ -4,6 +4,7 @@ import type {
   AgentRequest,
   ChatContextProvider,
   ConversationProvider,
+  DiscoveredTools,
   ResolvedAgentLLM,
 } from '../types.js';
 import { DefaultChatMessageConverters } from '../chat-message-converters.js';
@@ -50,7 +51,6 @@ import {
   listCurrentFrontendTools,
   prepareToolsForFrontendConversation,
 } from './frontend-tools.js';
-import { markToolMapBaseNames } from '../tool-snapshot.js';
 
 export function createConversationProvider(
   options: AIEmployeeAgentOptions,
@@ -334,13 +334,18 @@ If information is missing, clearly state it in the summary.</Important>`;
     return systemPrompt;
   }
 
-  public async discoveredTools(): Promise<ReadonlyMap<string, ToolsEntity>> {
+  public async discoveredTools(): Promise<DiscoveredTools> {
     const { tools, baseToolNames } = await this.getAgentTools();
-    return markToolMapBaseNames(tools, baseToolNames);
-  }
-
-  public activeTools(): Promise<ReadonlySet<string>> {
-    return this.getActivatedSkillToolNames();
+    return {
+      tools,
+      activeTools: async () => {
+        const activeToolNames = new Set([
+          ...baseToolNames,
+          ...(await this.getActivatedSkillToolNames()),
+        ]);
+        return new Set([...activeToolNames].filter((name) => tools.has(name)));
+      },
+    };
   }
 
   private get chatSettings(): {

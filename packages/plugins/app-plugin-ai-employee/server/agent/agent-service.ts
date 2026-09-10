@@ -27,7 +27,6 @@ import { AgentServiceError } from './types.js';
 import { normalizeAgentError } from './errors.js';
 import { buildStandardAgentMiddleware } from './middleware/pipeline.js';
 
-import { getToolMapBaseNames } from './tool-snapshot.js';
 const mergeSignals = (
   internal: AbortSignal,
   external?: AbortSignal,
@@ -298,16 +297,14 @@ export class AgentService {
           .filter(Boolean)
           .join('\n\n') || undefined
       : formattedSystemPrompt || undefined;
-    const discoveredToolMap = features.tools
+    const discoveredTools = features.tools
       ? await chatContext.discoveredTools()
-      : new Map<string, ToolsEntity>();
-    const toolMap = new Map(discoveredToolMap);
-    const baseToolNames = new Set(getToolMapBaseNames(discoveredToolMap));
-    const initialActiveToolNames = features.skills
-      ? new Set([...baseToolNames, ...(await chatContext.activeTools())])
-      : new Set(toolMap.keys());
+      : {
+          tools: new Map<string, ToolsEntity>(),
+          activeTools: () => Promise.resolve(new Set<string>()),
+        };
     const resolvedTools = llm.provider.resolveTools(
-      [...toolMap.values()].map(buildTool),
+      [...discoveredTools.tools.values()].map(buildTool),
     );
     let thread = await conversation.messages.currentThread();
     if (this.shouldFork(operation, request)) {
@@ -353,9 +350,7 @@ export class AgentService {
       input,
       systemPrompt,
       tools: resolvedTools,
-      toolMap,
-      baseToolNames,
-      initialActiveToolNames,
+      discoveredTools,
       llm,
       config,
       state,
@@ -690,7 +685,7 @@ export class AgentService {
             } as any;
             await conversation.messages.saveAssistantMessage(
               value,
-              prepared.toolMap,
+              prepared.discoveredTools.tools,
             );
           }
         }

@@ -216,8 +216,14 @@ describe('fixed AgentService contracts', () => {
     expect(read('agent/chat-message-converters.ts')).toContain(
       "from './ai-employee/options.js'",
     );
+    const types = read('agent/types.ts');
+    expect(types).toContain('export interface DiscoveredTools');
+    expect(types).toContain('readonly tools: ReadonlyMap<string, ToolsEntity>');
+    expect(types).toContain('activeTools(): Promise<ReadonlySet<string>>');
+    expect(types).not.toContain('initialActiveToolNames');
+    expect(types).not.toContain('baseToolNames');
     const skillMiddleware = read('agent/middleware/skill-tools.ts');
-    expect(skillMiddleware).toContain('activeTools()');
+    expect(skillMiddleware).toContain('discoveredTools.activeTools()');
     expect(skillMiddleware).not.toContain('options.request');
     expect(skillMiddleware).toContain('wrapModelCall');
     expect(skillMiddleware).toContain('wrapToolCall');

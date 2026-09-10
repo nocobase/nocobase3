@@ -28,8 +28,8 @@ describe('FixedChatContextProvider', () => {
     });
     expect(await context.getSystemPrompt([])).toBe('Direct prompt');
     const discovered = await context.discoveredTools();
-    expect(await context.activeTools()).toEqual(new Set(['one', 'two']));
-    expect(discovered).toEqual(
+    expect(await discovered.activeTools()).toEqual(new Set(['one', 'two']));
+    expect(discovered.tools).toEqual(
       new Map([
         ['one', expect.objectContaining({ definition: { name: 'one' } })],
         ['two', expect.objectContaining({ definition: { name: 'two' } })],
@@ -46,13 +46,14 @@ describe('FixedChatContextProvider', () => {
     });
 
     const discovered = await context.discoveredTools();
-    expect(discovered.size).toBe(1);
-    expect(discovered.get('duplicate')).toBe(second);
-    expect(discovered.get('duplicate')?.auto).toBeUndefined();
-    expect(await context.activeTools()).toEqual(new Set(['duplicate']));
+    expect(discovered.tools.size).toBe(1);
+    expect(discovered.tools.get('duplicate')).toBe(second);
+    expect(discovered.tools.get('duplicate')?.auto).toBeUndefined();
+    expect(await discovered.activeTools()).toEqual(new Set(['duplicate']));
 
-    const empty = new FixedChatContextProvider({ provider });
-    expect(await empty.discoveredTools()).toEqual(new Map());
+    const emptyContext = new FixedChatContextProvider({ provider });
+    const empty = await emptyContext.discoveredTools();
+    expect(empty.tools).toEqual(new Map());
     expect(await empty.activeTools()).toEqual(new Set());
   });
 

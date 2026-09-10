@@ -69,8 +69,10 @@ const createFixture = (chunks: StreamChunk[]): Fixture => {
         provider,
       })),
       getSystemPrompt: vi.fn(async () => undefined),
-      discoveredTools: vi.fn(async () => new Map()),
-      activeTools: vi.fn(async () => new Set()),
+      discoveredTools: vi.fn(async () => ({
+        tools: new Map(),
+        activeTools: async () => new Set(),
+      })),
     },
     chatMessageConverters: {
       formatMessages: vi.fn(async (messages) => messages),

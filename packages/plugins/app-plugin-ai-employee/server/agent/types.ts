@@ -66,6 +66,11 @@ export interface ResolvedAgentLLM {
   readonly provider: LLMProvider;
 }
 
+export interface DiscoveredTools {
+  readonly tools: ReadonlyMap<string, ToolsEntity>;
+  activeTools(): Promise<ReadonlySet<string>>;
+}
+
 export type AgentMessageConversionContext = Pick<
   ResolvedAgentLLM,
   'providerName' | 'llmService' | 'model' | 'provider'
@@ -79,9 +84,7 @@ export interface PreparedAgentContext extends AgentMessageConversionContext {
   input: PreparedAgentInput;
   systemPrompt?: CreateAgentParams['systemPrompt'];
   tools: CreateAgentParams['tools'];
-  toolMap: ReadonlyMap<string, ToolsEntity>;
-  baseToolNames: Set<string>;
-  initialActiveToolNames?: ReadonlySet<string>;
+  discoveredTools: DiscoveredTools;
   llm?: ResolvedAgentLLM;
   config: Record<string, any>;
   state?: AgentGraphState;
@@ -318,8 +321,7 @@ export interface ChatContextProvider {
   getSystemPrompt(
     messages: readonly AIMessageInput[],
   ): Promise<string | undefined>;
-  discoveredTools(): Promise<ReadonlyMap<string, ToolsEntity>>;
-  activeTools(): Promise<ReadonlySet<string>>;
+  discoveredTools(): Promise<DiscoveredTools>;
 }
 
 export interface ChatMessageConverter<TSource, TResult> {
