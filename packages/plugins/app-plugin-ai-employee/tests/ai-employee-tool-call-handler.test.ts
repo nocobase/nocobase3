@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { AIEmployeeToolCallHandler } from '../server/agent/ai-employee/tool-call-handler.js';
+import { DefaultToolCallHandler } from '../server/agent/ai-employee/tool-call-handler.js';
 
 function createFixture(overrides: Record<string, unknown> = {}) {
   const transaction = { id: 'transaction-1' };
@@ -26,14 +26,16 @@ function createFixture(overrides: Record<string, unknown> = {}) {
   const database = {
     transaction: vi.fn(async (callback) => callback(transaction)),
   };
-  const handler = new AIEmployeeToolCallHandler({
-    sessionId: 'session-1',
-    database,
-    messages: aiMessages,
-    toolMessages: aiToolMessages,
-    snowflake: { generate: vi.fn(() => 101) },
-    ...overrides,
-  } as never);
+  const handler = new DefaultToolCallHandler(
+    (overrides.sessionId as string | undefined) ?? 'session-1',
+    (overrides.database as typeof database | undefined) ?? database,
+    (overrides.messages as typeof aiMessages | undefined) ?? aiMessages,
+    (overrides.toolMessages as typeof aiToolMessages | undefined) ??
+      aiToolMessages,
+    (overrides.snowflake as { generate(): number } | undefined) ?? {
+      generate: vi.fn(() => 101),
+    },
+  );
   return {
     transaction,
     aiToolMessages,
@@ -43,7 +45,7 @@ function createFixture(overrides: Record<string, unknown> = {}) {
   };
 }
 
-describe('AIEmployeeToolCallHandler', () => {
+describe('DefaultToolCallHandler', () => {
   it('moves init or waiting calls to pending within the current session', async () => {
     const fixture = createFixture();
 

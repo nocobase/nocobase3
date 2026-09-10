@@ -36,8 +36,8 @@ import type {
   UserAIEmployeeRepository,
 } from '../../repository/index.js';
 import type { AIEmployeeRepository } from '@nocobase/ai-employee';
-import { AIEmployeeToolCallHandler } from './tool-call-handler.js';
-import { AIEmployeeConversationMessageStore } from './conversation-message-store.js';
+import { DefaultToolCallHandler } from './tool-call-handler.js';
+import { DefaultConversationMessageStore } from './conversation-message-store.js';
 import { getSystemPrompt } from './prompts.js';
 import {
   getKnowledgeBaseBackgroundPrompt,
@@ -102,21 +102,21 @@ type AIEmployeeResolvedAgentLLM = ResolvedAgentLLM & {
   readonly [responseMetadataCollector]: ResponseMetadataCollector;
 };
 
-export function createAIEmployeeConversationProvider(
+export function createConversationProvider(
   options: AIEmployeeAgentOptions,
   toolCallPolicy: ToolCallPolicy,
 ): ConversationProvider {
   const database = options.database;
   const sessionId = options.sessionId;
-  const toolCalls = new AIEmployeeToolCallHandler({
+  const toolCalls = new DefaultToolCallHandler(
     sessionId,
     database,
-    messages: options.repositories.aiMessages,
-    toolMessages: options.repositories.aiToolMessages,
-    snowflake: options.snowflake,
-  });
+    options.aiMessages,
+    options.aiToolMessages,
+    options.snowflake,
+  );
   const chatConversation = createAIChatConversation({
-    repositories: options.repositories,
+    messages: options.aiMessages,
     database,
     snowflake: options.snowflake,
     sessionId,
@@ -124,29 +124,26 @@ export function createAIEmployeeConversationProvider(
   const from = options.from ?? 'main-agent';
   const username = String(options.employee.username ?? '');
   const cache = options.llmStreamCachedManager.getCached(sessionId);
-  const messageStore = new AIEmployeeConversationMessageStore({
+  const messageStore = new DefaultConversationMessageStore({
     sessionId,
     conversation: chatConversation,
-    conversations: options.repositories.aiConversations,
-    toolMessages: options.repositories.aiToolMessages,
+    conversations: options.aiConversations,
+    toolMessages: options.aiToolMessages,
     snowflake: options.snowflake,
     toolCallPolicy,
-    checkpoints: options.repositories.lcCheckpoints,
-    checkpointBlobs: options.repositories.lcCheckpointBlobs,
-    checkpointWrites: options.repositories.lcCheckpointWrites,
   });
   const conversation: ConversationProvider = {
     identity: { sessionId, from, username, metadata: { kind: 'ai-employee' } },
     toolCalls,
     messages: messageStore,
     beforeExecution: async (mode) => {
-      await options.repositories.aiConversations.update({
+      await options.aiConversations.update({
         values: { llmActiveState: mode },
         filter: { sessionId },
       });
     },
     afterExecution: async (mode, result) => {
-      await options.repositories.aiConversations.update({
+      await options.aiConversations.update({
         values: {
           llmActiveState: 'idle',
           ...(mode === 'streaming'
@@ -166,11 +163,11 @@ export function createAIEmployeeConversationProvider(
       options.aiEmployeesManager.unregisterAgentAbortHandle(sessionId, token),
     streamCache: cache,
     updateAssistantResponseMetadata: async (messageId, metadata) => {
-      const message = await options.repositories.aiMessages.findOne({
+      const message = await options.aiMessages.findOne({
         filter: { sessionId, messageId },
       });
       if (message) {
-        await options.repositories.aiMessages.update({
+        await options.aiMessages.update({
           values: {
             metadata: {
               ...(message.metadata ?? {}),
@@ -690,10 +687,10 @@ export function createAIEmployeeChatContextProvider(
     skillsManager: options.agentContext.ai.skillsManager,
     builtInManager: options.builtInManager,
     knowledgeBaseManager: options.knowledgeBaseManager,
-    conversations: options.repositories.aiConversations,
-    employees: options.repositories.aiEmployees,
-    toolMessages: options.repositories.aiToolMessages,
-    usersAiEmployees: options.repositories.usersAiEmployees,
+    conversations: options.aiConversations,
+    employees: options.aiEmployees,
+    toolMessages: options.aiToolMessages,
+    usersAiEmployees: options.usersAiEmployees,
     execution: options.execution,
     getHeader: options.getHeader,
     systemMessage: options.systemMessage,
@@ -707,10 +704,7 @@ export async function createAIEmployeeAgentProviders(
   options: AIEmployeeAgentOptions,
 ): Promise<AgentProviders> {
   const chatContext = createAIEmployeeChatContextProvider(options);
-  const conversation = createAIEmployeeConversationProvider(
-    options,
-    chatContext,
-  );
+  const conversation = createConversationProvider(options, chatContext);
   return createAgentProviders({
     conversation,
     chatContext,
@@ -720,9 +714,9 @@ export async function createAIEmployeeAgentProviders(
       options.from === 'sub-agent'
         ? undefined
         : new NativeCollectionSaver({
-            checkpoints: options.repositories.lcCheckpoints,
-            blobs: options.repositories.lcCheckpointBlobs,
-            writes: options.repositories.lcCheckpointWrites,
+            checkpoints: options.lcCheckpoints,
+            blobs: options.lcCheckpointBlobs,
+            writes: options.lcCheckpointWrites,
           }),
   });
 }

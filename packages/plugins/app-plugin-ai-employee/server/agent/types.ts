@@ -270,11 +270,14 @@ export interface ConversationMessageStore {
     messages: AIMessageInput[],
   ): Promise<void>;
   currentThread(): Promise<AgentThread | undefined>;
-  forkThread(provider: LLMProvider): Promise<AgentThread | undefined>;
+  forkThread(
+    provider: LLMProvider,
+    checkpointer: BaseCheckpointSaver,
+  ): Promise<AgentThread | undefined>;
   updateThread(thread: AgentThread): Promise<void>;
 }
 
-export interface ConversationToolCallStore {
+export interface ToolCallHandler {
   markInterrupted(
     sessionId: string,
     messageId: string,
@@ -304,7 +307,7 @@ export interface ConversationToolCallStore {
 export interface ConversationProvider {
   identity: AgentConversationIdentity;
   messages: ConversationMessageStore;
-  toolCalls: ConversationToolCallStore;
+  toolCalls: ToolCallHandler;
   streamCache: LLMStreamCached;
   beforeExecution(mode: AgentExecutionMode): Promise<void>;
   afterExecution(

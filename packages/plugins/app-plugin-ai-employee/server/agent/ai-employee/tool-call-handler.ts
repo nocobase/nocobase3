@@ -7,18 +7,7 @@ import type {
   AIToolMessageEntity,
   AIToolMessageRepository,
 } from '../../repository/index.js';
-import type {
-  AgentInterruptAction,
-  ConversationToolCallStore,
-} from '../types.js';
-
-export interface AIEmployeeToolCallHandlerOptions {
-  sessionId: string;
-  database: DatabaseConnection;
-  messages: AIMessageRepository;
-  toolMessages: AIToolMessageRepository;
-  snowflake: IdGeneratorService;
-}
+import type { AgentInterruptAction, ToolCallHandler } from '../types.js';
 
 type NormalizedToolCallResult = {
   status: string;
@@ -52,11 +41,14 @@ function sourceMessageMetadata(metadata: unknown): SourceMessageMetadata {
   };
 }
 
-export class AIEmployeeToolCallHandler implements ConversationToolCallStore {
+export class DefaultToolCallHandler implements ToolCallHandler {
   public constructor(
-    private readonly options: AIEmployeeToolCallHandlerOptions,
+    private readonly sessionId: string,
+    private readonly database: DatabaseConnection,
+    private readonly messages: AIMessageRepository,
+    private readonly toolMessages: AIToolMessageRepository,
+    private readonly snowflake: IdGeneratorService,
   ) {}
-
   public markInterrupted(
     sessionId: string,
     messageId: string,
@@ -64,8 +56,8 @@ export class AIEmployeeToolCallHandler implements ConversationToolCallStore {
     interruptId: string,
     interruptAction: AgentInterruptAction,
   ): Promise<number> {
-    return this.options.database.transaction(async (transaction) => {
-      const updated = await this.options.toolMessages.update(
+    return this.database.transaction(async (transaction) => {
+      const updated = await this.toolMessages.update(
         {
           values: {
             invokeStatus: 'interrupted',
@@ -78,13 +70,13 @@ export class AIEmployeeToolCallHandler implements ConversationToolCallStore {
       );
       if (!updated) return updated;
 
-      const message = await this.options.messages.findOne(
+      const message = await this.messages.findOne(
         { filter: { messageId, sessionId } },
         { connection: transaction },
       );
       if (!message) return updated;
 
-      await this.options.messages.update(
+      await this.messages.update(
         {
           values: { metadata: { ...(message.metadata ?? {}), interruptId } },
           filter: { messageId, sessionId },
@@ -96,10 +88,10 @@ export class AIEmployeeToolCallHandler implements ConversationToolCallStore {
   }
 
   public markPending(messageId: string, toolCallId: string): Promise<number> {
-    return this.options.toolMessages.update({
+    return this.toolMessages.update({
       values: { invokeStatus: 'pending', invokeStartTime: new Date() },
       filter: {
-        sessionId: this.options.sessionId,
+        sessionId: this.sessionId,
         messageId,
         toolCallId,
         invokeStatus: { $in: ['init', 'waiting'] },
@@ -113,7 +105,7 @@ export class AIEmployeeToolCallHandler implements ConversationToolCallStore {
     result: unknown,
   ): Promise<number> {
     const normalized = normalizeToolCallResult(result);
-    return this.options.toolMessages.update({
+    return this.toolMessages.update({
       values: {
         invokeStatus: 'done',
         invokeEndTime: new Date(),
@@ -121,7 +113,7 @@ export class AIEmployeeToolCallHandler implements ConversationToolCallStore {
         content: normalized.content,
       },
       filter: {
-        sessionId: this.options.sessionId,
+        sessionId: this.sessionId,
         messageId,
         toolCallId,
         invokeStatus: 'pending',
@@ -148,8 +140,8 @@ export class AIEmployeeToolCallHandler implements ConversationToolCallStore {
     messageId: string,
     toolCallId: string,
   ): Promise<AIToolMessage | null> {
-    return this.options.toolMessages.findOne({
-      filter: { sessionId: this.options.sessionId, messageId, toolCallId },
+    return this.toolMessages.findOne({
+      filter: { sessionId: this.sessionId, messageId, toolCallId },
     });
   }
 
@@ -157,9 +149,9 @@ export class AIEmployeeToolCallHandler implements ConversationToolCallStore {
     messageId: string,
     toolCallIds: string[],
   ): Promise<Map<string, AIToolMessage>> {
-    const list: AIToolMessageEntity[] = await this.options.toolMessages.find({
+    const list: AIToolMessageEntity[] = await this.toolMessages.find({
       filter: {
-        sessionId: this.options.sessionId,
+        sessionId: this.sessionId,
         messageId,
         toolCallId: { $in: toolCallIds },
       },
@@ -176,17 +168,17 @@ export class AIEmployeeToolCallHandler implements ConversationToolCallStore {
   > {
     const reason =
       'The user ignored the application for tools usage and will continued to ask questions';
-    const historyMessages = await this.options.messages.find({
-      filter: { sessionId: this.options.sessionId },
+    const historyMessages = await this.messages.find({
+      filter: { sessionId: this.sessionId },
       sort: ['-messageId'],
     });
     const [sourceMessage] = historyMessages;
     if (!sourceMessage?.toolCalls?.length) return undefined;
 
     const messageId = sourceMessage.messageId;
-    const toolMessages = await this.options.toolMessages.find({
+    const toolMessages = await this.toolMessages.find({
       filter: {
-        sessionId: this.options.sessionId,
+        sessionId: this.sessionId,
         messageId,
         invokeStatus: { $ne: 'confirmed' },
       },
@@ -198,9 +190,9 @@ export class AIEmployeeToolCallHandler implements ConversationToolCallStore {
     );
     const metadata = sourceMessageMetadata(sourceMessage.metadata);
     const now = new Date();
-    return this.options.database.transaction(async (transaction) => {
+    return this.database.transaction(async (transaction) => {
       for (const toolMessage of toolMessages) {
-        await this.options.toolMessages.update(
+        await this.toolMessages.update(
           {
             values: {
               invokeStatus: 'confirmed',
@@ -211,18 +203,18 @@ export class AIEmployeeToolCallHandler implements ConversationToolCallStore {
             },
             filter: {
               id: toolMessage.id,
-              sessionId: this.options.sessionId,
+              sessionId: this.sessionId,
               invokeStatus: toolMessage.invokeStatus,
             },
           },
           { connection: transaction },
         );
       }
-      return this.options.messages.create(
+      return this.messages.create(
         {
           values: toolMessages.map((toolMessage) => ({
-            messageId: String(this.options.snowflake.generate()),
-            sessionId: this.options.sessionId,
+            messageId: String(this.snowflake.generate()),
+            sessionId: this.sessionId,
             role: 'tool',
             content: { type: 'text', content: reason },
             metadata: {

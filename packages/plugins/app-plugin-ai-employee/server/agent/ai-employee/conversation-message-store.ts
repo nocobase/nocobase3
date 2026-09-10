@@ -1,3 +1,4 @@
+import type { BaseCheckpointSaver } from '@langchain/langgraph';
 import { createAgent } from 'langchain';
 import type {
   AIChatConversation,
@@ -11,9 +12,6 @@ import type { IdGeneratorService } from '@nocobase/snowflake';
 import type {
   AIConversationRepository,
   AIToolMessageRepository,
-  LCCheckpointBlobRepository,
-  LCCheckpointRepository,
-  LCCheckpointWriteRepository,
 } from '../../repository/index.js';
 import type {
   AgentThread,
@@ -21,41 +19,30 @@ import type {
   SavedAssistantMessage,
   ToolCallPolicy,
 } from '../types.js';
-import { NativeCollectionSaver } from './checkpoints/index.js';
-
-export interface AIEmployeeConversationMessageStoreOptions {
+export interface DefaultConversationMessageStoreOptions {
   readonly sessionId: string;
   readonly conversation: AIChatConversation;
   readonly conversations: AIConversationRepository;
   readonly toolMessages: AIToolMessageRepository;
   readonly snowflake: IdGeneratorService;
   readonly toolCallPolicy: ToolCallPolicy;
-  readonly checkpoints: LCCheckpointRepository;
-  readonly checkpointBlobs: LCCheckpointBlobRepository;
-  readonly checkpointWrites: LCCheckpointWriteRepository;
 }
 
-export class AIEmployeeConversationMessageStore implements ConversationMessageStore {
+export class DefaultConversationMessageStore implements ConversationMessageStore {
   private readonly sessionId: string;
   private readonly conversation: AIChatConversation;
   private readonly conversations: AIConversationRepository;
   private readonly toolMessages: AIToolMessageRepository;
   private readonly snowflake: IdGeneratorService;
   private readonly toolCallPolicy: ToolCallPolicy;
-  private readonly checkpoints: LCCheckpointRepository;
-  private readonly checkpointBlobs: LCCheckpointBlobRepository;
-  private readonly checkpointWrites: LCCheckpointWriteRepository;
 
-  public constructor(options: AIEmployeeConversationMessageStoreOptions) {
+  public constructor(options: DefaultConversationMessageStoreOptions) {
     this.sessionId = options.sessionId;
     this.conversation = options.conversation;
     this.conversations = options.conversations;
     this.toolMessages = options.toolMessages;
     this.snowflake = options.snowflake;
     this.toolCallPolicy = options.toolCallPolicy;
-    this.checkpoints = options.checkpoints;
-    this.checkpointBlobs = options.checkpointBlobs;
-    this.checkpointWrites = options.checkpointWrites;
   }
 
   public loadMessages(messageId?: string): Promise<AIMessage[]> {
@@ -162,6 +149,7 @@ export class AIEmployeeConversationMessageStore implements ConversationMessageSt
 
   public async forkThread(
     llmProvider: LLMProvider,
+    checkpointer: BaseCheckpointSaver,
   ): Promise<AgentThread | undefined> {
     const current = await this.currentThread();
     for (let attempt = 0; attempt < 4; attempt++) {
@@ -171,15 +159,10 @@ export class AIEmployeeConversationMessageStore implements ConversationMessageSt
         thread,
         threadId: `${this.sessionId}:${thread}`,
       };
-      const saver = new NativeCollectionSaver({
-        checkpoints: this.checkpoints,
-        blobs: this.checkpointBlobs,
-        writes: this.checkpointWrites,
-      });
       const agent = createAgent({
         model: llmProvider.createModel() as any,
         tools: [],
-        checkpointer: saver as any,
+        checkpointer: checkpointer as any,
       });
       const snapshot = await agent.graph.getState({
         configurable: { thread_id: candidate.threadId },

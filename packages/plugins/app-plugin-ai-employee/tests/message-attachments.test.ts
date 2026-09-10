@@ -17,7 +17,7 @@ function createOptions(records: Record<string, unknown>[]) {
     caching: {},
     fileStorage: {},
     snowflake: {},
-    repositories: { collectionRepository },
+    collectionRepository,
     aiEmployeesManager: {},
     builtInManager: { setupBuiltInInfo: vi.fn() },
     llmStreamCachedManager: {},

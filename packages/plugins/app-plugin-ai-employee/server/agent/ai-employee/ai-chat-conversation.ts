@@ -7,7 +7,7 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { RepositoryFactory } from '../../factory/repository-factory.js';
+import type { AIMessageRepository } from '../../repository/index.js';
 import _ from 'lodash';
 import {
   AIChatContext,
@@ -23,46 +23,26 @@ import type { IdGeneratorService } from '@nocobase/snowflake';
 import type { CollectionFilter } from '@nocobase/ai-employee';
 import { recordAIUsageEventsForMessages } from './ai-usage-events.js';
 export const createAIChatConversation = ({
-  repositories,
+  messages,
   database,
   snowflake,
   sessionId,
 }: {
-  repositories: RepositoryFactory;
+  messages: AIMessageRepository;
   database: DatabaseConnection;
   snowflake: IdGeneratorService;
   sessionId: string;
 }): AIChatConversation => {
-  return new AIChatConversationImpl({
-    repositories,
-    database,
-    snowflake,
-    sessionId,
-  });
+  return new AIChatConversationImpl(messages, database, snowflake, sessionId);
 };
 class AIChatConversationImpl implements AIChatConversation {
   private transaction?: DatabaseConnection;
-  public constructor({
-    repositories,
-    database,
-    snowflake,
-    sessionId,
-  }: {
-    repositories: RepositoryFactory;
-    database: DatabaseConnection;
-    snowflake: IdGeneratorService;
-    sessionId: string;
-  }) {
-    this.repositories = repositories;
-    this.database = database;
-    this.idGenerator = snowflake;
-    this.sessionId = sessionId;
-  }
-
-  private readonly repositories: RepositoryFactory;
-  private readonly database: DatabaseConnection;
-  private readonly idGenerator: IdGeneratorService;
-  private readonly sessionId: string;
+  public constructor(
+    private readonly messages: AIMessageRepository,
+    private readonly database: DatabaseConnection,
+    private readonly idGenerator: IdGeneratorService,
+    private readonly sessionId: string,
+  ) {}
   async withTransaction<T>(
     runnable: (
       instance: AIChatConversationImpl,
@@ -200,19 +180,19 @@ class AIChatConversationImpl implements AIChatConversation {
   }
 
   private clone(): AIChatConversationImpl {
-    return new AIChatConversationImpl({
-      repositories: this.repositories,
-      database: this.database,
-      snowflake: this.idGenerator,
-      sessionId: this.sessionId,
-    });
+    return new AIChatConversationImpl(
+      this.messages,
+      this.database,
+      this.idGenerator,
+      this.sessionId,
+    );
   }
 
   private snowflake(): string | number {
     return this.idGenerator.generate();
   }
 
-  private get aiMessagesRepo() {
-    return this.repositories.aiMessages;
+  private get aiMessagesRepo(): AIMessageRepository {
+    return this.messages;
   }
 }

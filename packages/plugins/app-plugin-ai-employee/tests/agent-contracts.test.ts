@@ -88,12 +88,16 @@ describe('fixed AgentService contracts', () => {
 
   it('keeps AI chat conversation ownership in the conversation provider', () => {
     const providers = read('agent/ai-employee/providers.ts');
+    const chatConversation = read('agent/ai-employee/ai-chat-conversation.ts');
     expect(fs.existsSync(path.join(src, 'agent/ai-employee/runtime.ts'))).toBe(
       false,
     );
     expect(providers).toContain(
       'const chatConversation = createAIChatConversation({',
     );
+    expect(chatConversation).toContain('messages: AIMessageRepository');
+    expect(chatConversation).not.toContain('RepositoryFactory');
+    expect(chatConversation).not.toContain('repositories');
   });
 
   it('removes the empty message normalization contract and middleware stage', () => {
@@ -179,7 +183,8 @@ describe('fixed AgentService contracts', () => {
     expect(factory).not.toContain('interface AIEmployeeAgentService');
     expect(factory).not.toContain('facade');
     expect(factory).toContain('Promise<AgentService>');
-    expect(types).not.toContain('ToolCallHandler');
+    expect(types).toContain('export interface ToolCallHandler');
+    expect(types).not.toContain('ConversationToolCallStore');
     expect(providers).not.toContain('async function initializeToolCalls');
     expect(providers).not.toMatch(/runtime\.(initToolCall|confirmToolCall)/);
     expect(types).not.toMatch(/initialize\([^)]*transaction/);
@@ -187,7 +192,7 @@ describe('fixed AgentService contracts', () => {
       false,
     );
     const handler = read('agent/ai-employee/tool-call-handler.ts');
-    expect(handler).toContain('implements ConversationToolCallStore');
+    expect(handler).toContain('implements ToolCallHandler');
     expect(handler).not.toContain('RepositoryFactory');
     expect(handler).not.toMatch(/\binitialize(?:InTransaction)?\s*\(/);
     expect(handler).not.toMatch(/\bconfirm(?:InTransaction)?\s*\(/);
@@ -203,14 +208,22 @@ describe('fixed AgentService contracts', () => {
       ),
     ).toBe(false);
     expect(providers).toContain(
-      'const toolCalls = new AIEmployeeToolCallHandler({',
+      'const toolCalls = new DefaultToolCallHandler(',
     );
     expect(providers).toMatch(
-      /createAIEmployeeConversationProvider\(\s*options: AIEmployeeAgentOptions,\s*toolCallPolicy: ToolCallPolicy,?\s*\)/,
+      /createConversationProvider\(\s*options: AIEmployeeAgentOptions,\s*toolCallPolicy: ToolCallPolicy,?\s*\)/,
     );
     expect(providers).not.toMatch(
-      /createAIEmployeeAgentProviders[\s\S]*const toolCalls = new AIEmployeeToolCallHandler/,
+      /createAIEmployeeAgentProviders[\s\S]*const toolCalls = new DefaultToolCallHandler/,
     );
+    const options = read('agent/ai-employee/options.ts');
+    expect(options).not.toContain('RepositoryFactory');
+    expect(options).not.toMatch(/\brepositories\s*:/);
+    expect(options).toContain('aiMessages: AIMessageRepository');
+    expect(options).toContain('aiToolMessages: AIToolMessageRepository');
+    expect(options).toContain('aiConversations: AIConversationRepository');
+    expect(handler).toContain('class DefaultToolCallHandler');
+    expect(handler).not.toContain('private readonly options:');
     expect(providers).not.toMatch(/markPending:\s*\(|markDone:\s*\(/);
     expect(types).not.toMatch(/confirm\([^)]*DatabaseConnection/);
     const chatContext = read('agent/ai-employee/providers.ts');
@@ -246,7 +259,9 @@ describe('fixed AgentService contracts', () => {
     );
     expect(types).toMatch(/loadMessages\(messageId\?: string\)/);
     expect(types).toMatch(/currentThread\(\)/);
-    expect(types).toMatch(/forkThread\(provider: LLMProvider\)/);
+    expect(types).toMatch(
+      /forkThread\(\s*provider: LLMProvider,\s*checkpointer: BaseCheckpointSaver,?\s*\)/,
+    );
     expect(types).toMatch(/updateThread\(thread: AgentThread\)/);
     expect(types).not.toContain('ConversationThreadStore');
     expect(types).not.toMatch(/\bthreads:\s*ConversationThreadStore/);
@@ -318,7 +333,7 @@ describe('fixed AgentService contracts', () => {
     const types = read('agent/types.ts');
     expect(source).toContain('class MemoryConversationProvider');
     expect(source).toContain('class MemoryConversationMessageStore');
-    expect(source).toContain('class MemoryConversationToolCallStore');
+    expect(source).toContain('class MemoryToolCallHandler');
     expect(source).toContain('new LLMStreamCached(');
     expect(source).toContain('class DefaultAgentProviders');
     expect(source).not.toMatch(/export\s+class\s+(?:Memory|DefaultAgent)/);
@@ -385,7 +400,9 @@ describe('fixed AgentService contracts', () => {
       thread: 0,
       threadId: 'memory:0',
     });
-    expect(await conversation.messages.forkThread({} as never)).toMatchObject({
+    expect(
+      await conversation.messages.forkThread({} as never, {} as never),
+    ).toMatchObject({
       sessionId: 'memory',
       thread: 1,
       threadId: 'memory:1',

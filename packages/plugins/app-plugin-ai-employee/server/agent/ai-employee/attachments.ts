@@ -8,7 +8,11 @@
  */
 
 import type { AIFileAttachment, AIMessageInput } from '@nocobase/ai-employee';
-import type { RepositoryFactory } from '../../factory/repository-factory.js';
+import type { CollectionRepository } from '@nocobase/ai-employee';
+
+export type CollectionRepositoryResolver = <T extends object>(
+  name: string,
+) => CollectionRepository<T>;
 
 export type AttachmentId = string | number;
 
@@ -107,7 +111,7 @@ function isValidFileCollectionSource(lookup: AttachmentLookup): boolean {
 
 async function findSourceAttachments(
   actorId: string | number | undefined,
-  repositories: RepositoryFactory,
+  collectionRepository: CollectionRepositoryResolver,
   lookups: AttachmentLookup[],
 ): Promise<Map<string, AIFileAttachment>> {
   const attachmentsByLookup = new Map<string, AIFileAttachment>();
@@ -138,9 +142,9 @@ async function findSourceAttachments(
       filter.createdById = actorId;
     }
 
-    const records = await repositories
-      .collectionRepository<AIFileAttachment>(collectionName)
-      .find({ filter });
+    const records = await collectionRepository<AIFileAttachment>(
+      collectionName,
+    ).find({ filter });
     for (const attachment of records) {
       attachmentsByLookup.set(`${collectionName}:${attachment.id}`, attachment);
     }
@@ -151,11 +155,11 @@ async function findSourceAttachments(
 
 export async function findMessageAttachments({
   actorId,
-  repositories,
+  collectionRepository,
   attachments,
 }: {
   actorId: string | number | undefined;
-  repositories: RepositoryFactory;
+  collectionRepository: CollectionRepositoryResolver;
   attachments: readonly unknown[];
 }): Promise<Map<string, AIFileAttachment>> {
   const lookups: AttachmentLookup[] = [];
@@ -174,16 +178,16 @@ export async function findMessageAttachments({
     });
   }
 
-  return findSourceAttachments(actorId, repositories, lookups);
+  return findSourceAttachments(actorId, collectionRepository, lookups);
 }
 
 export async function resolveMessageAttachments({
   actorId,
-  repositories,
+  collectionRepository,
   messages,
 }: {
   actorId: string | number | undefined;
-  repositories: RepositoryFactory;
+  collectionRepository: CollectionRepositoryResolver;
   messages: AIMessageInput[];
 }): Promise<AIMessageInput[]> {
   const attachments = messages.flatMap((message) =>
@@ -196,7 +200,7 @@ export async function resolveMessageAttachments({
 
   const attachmentsByLookup = await findMessageAttachments({
     actorId,
-    repositories,
+    collectionRepository,
     attachments,
   });
 

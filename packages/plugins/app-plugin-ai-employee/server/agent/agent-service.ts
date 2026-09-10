@@ -1,6 +1,7 @@
 import { concat } from '@langchain/core/utils/stream';
 import { Command } from '@langchain/langgraph';
 import { createAgent } from 'langchain';
+import type { BaseCheckpointSaver } from '@langchain/langgraph';
 import { buildTool } from '@nocobase/ai-employee';
 import type {
   AgentContext,
@@ -238,7 +239,10 @@ export class AgentService {
     const resolvedTools = llm.provider.resolveTools(sourceTools.map(buildTool));
     let thread = await conversation.messages.currentThread();
     if (this.shouldFork(operation, request)) {
-      thread = await conversation.messages.forkThread(llm.provider);
+      thread = await conversation.messages.forkThread(
+        llm.provider,
+        this.providers.checkpointer as BaseCheckpointSaver,
+      );
     }
     const state = shouldLoadHistory
       ? this.buildInitialState(history)

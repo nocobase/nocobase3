@@ -19,7 +19,7 @@ import {
   type AgentThread,
   type ConversationMessageStore,
   type ConversationProvider,
-  type ConversationToolCallStore,
+  type ToolCallHandler,
   type CreateAgentProvidersOptions,
   type SavedAssistantMessage,
 } from './types.js';
@@ -194,7 +194,10 @@ class MemoryConversationMessageStore implements ConversationMessageStore {
     return this.thread();
   }
 
-  public async forkThread(): Promise<AgentThread> {
+  public async forkThread(
+    _provider: Parameters<ConversationMessageStore['forkThread']>[0],
+    _checkpointer: Parameters<ConversationMessageStore['forkThread']>[1],
+  ): Promise<AgentThread> {
     this.state.thread += 1;
     return this.thread();
   }
@@ -212,7 +215,7 @@ class MemoryConversationMessageStore implements ConversationMessageStore {
   }
 }
 
-class MemoryConversationToolCallStore implements ConversationToolCallStore {
+class MemoryToolCallHandler implements ToolCallHandler {
   public constructor(private readonly state: MemoryConversationState) {}
 
   public async markInterrupted(
@@ -302,14 +305,14 @@ const memoryStreamManager = {
 class MemoryConversationProvider implements ConversationProvider {
   public readonly identity: ConversationProvider['identity'];
   public readonly messages: ConversationMessageStore;
-  public readonly toolCalls: ConversationToolCallStore;
+  public readonly toolCalls: ToolCallHandler;
   public readonly streamCache: LLMStreamCached;
 
   public constructor(options: MemoryConversationOptions) {
     const state = new MemoryConversationState(options);
     this.identity = options.identity ?? { sessionId: state.sessionId };
     this.messages = new MemoryConversationMessageStore(state);
-    this.toolCalls = new MemoryConversationToolCallStore(state);
+    this.toolCalls = new MemoryToolCallHandler(state);
     this.streamCache = new LLMStreamCached(
       state.sessionId,
       memoryStreamManager,

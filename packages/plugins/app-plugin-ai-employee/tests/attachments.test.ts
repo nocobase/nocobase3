@@ -13,15 +13,13 @@ function createContext(
   records: Record<string, unknown>[],
   calls: FindCall[] = [],
 ) {
-  const repositories = {
-    collectionRepository: (collectionName: string) => ({
-      find: async ({ filter }: { filter: Record<string, unknown> }) => {
-        calls.push({ collectionName, filter });
-        return records;
-      },
-    }),
-  };
-  return { actorId: 7, repositories } as const;
+  const collectionRepository = (collectionName: string) => ({
+    find: async ({ filter }: { filter: Record<string, unknown> }) => {
+      calls.push({ collectionName, filter });
+      return records;
+    },
+  });
+  return { actorId: 7, collectionRepository } as const;
 }
 
 function expectLookupKey(attachment: unknown, expected: string) {

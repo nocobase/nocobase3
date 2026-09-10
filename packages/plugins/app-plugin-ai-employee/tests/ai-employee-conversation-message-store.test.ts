@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
-import { AIEmployeeConversationMessageStore } from '../server/agent/ai-employee/conversation-message-store.js';
+import { DefaultConversationMessageStore } from '../server/agent/ai-employee/conversation-message-store.js';
 
 const serverRoot = path.resolve(import.meta.dirname, '../server');
 const read = (relative: string): string =>
@@ -42,16 +42,13 @@ function createFixture() {
     ),
     isAutoCall: vi.fn(async () => true),
   };
-  const store = new AIEmployeeConversationMessageStore({
+  const store = new DefaultConversationMessageStore({
     sessionId: 'session-1',
     conversation,
     conversations,
     toolMessages,
     snowflake: { generate: vi.fn(() => 101) },
     toolCallPolicy,
-    checkpoints: {},
-    checkpointBlobs: {},
-    checkpointWrites: {},
   } as never);
   return {
     transaction,
@@ -68,7 +65,7 @@ describe('AI employee conversation message persistence boundary', () => {
   it('owns assistant tool-call initialization in a dedicated message store', () => {
     const source = read('agent/ai-employee/conversation-message-store.ts');
 
-    expect(source).toContain('class AIEmployeeConversationMessageStore');
+    expect(source).toContain('class DefaultConversationMessageStore');
     expect(source).toContain(
       'private readonly conversation: AIChatConversation',
     );
@@ -79,6 +76,11 @@ describe('AI employee conversation message persistence boundary', () => {
     expect(source).not.toContain('this.options.');
     expect(source).toContain('saved.toolCalls ?? []');
     expect(source).toContain('{ connection: transaction }');
+    expect(source).not.toContain('LCCheckpointRepository');
+    expect(source).not.toContain('LCCheckpointBlobRepository');
+    expect(source).not.toContain('LCCheckpointWriteRepository');
+    expect(source).not.toContain('NativeCollectionSaver');
+    expect(source).toContain('checkpointer: BaseCheckpointSaver');
   });
 
   it('owns tool-message confirmation in the same message store transaction', () => {

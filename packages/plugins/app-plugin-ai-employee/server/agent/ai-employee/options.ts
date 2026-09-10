@@ -7,7 +7,17 @@ import type { Caching } from '@nocobase/caching';
 import type { DatabaseConnection } from '@nocobase/db';
 import type { IdGeneratorService } from '@nocobase/snowflake';
 
-import type { RepositoryFactory } from '../../factory/repository-factory.js';
+import type { AIEmployeeRepository } from '@nocobase/ai-employee';
+import type { CollectionRepositoryResolver } from './attachments.js';
+import type {
+  AIConversationRepository,
+  AIMessageRepository,
+  AIToolMessageRepository,
+  LCCheckpointBlobRepository,
+  LCCheckpointRepository,
+  LCCheckpointWriteRepository,
+  UserAIEmployeeRepository,
+} from '../../repository/index.js';
 import type { AIFileEntity } from '../../repository/ai-file.js';
 import type { AIFileMetadataCreateContext } from '../../repository/file-storage/ai-file-metadata-repository.js';
 import type { AIEmployeesManager } from '../../manager/ai-employees-manager.js';
@@ -34,7 +44,15 @@ export interface AIEmployeeAgentOptions {
   snowflake: IdGeneratorService;
   execution?: ConversationExecution;
   getHeader?: (name: string) => string | undefined;
-  repositories: RepositoryFactory;
+  collectionRepository: CollectionRepositoryResolver;
+  aiConversations: AIConversationRepository;
+  aiEmployees: AIEmployeeRepository;
+  aiMessages: AIMessageRepository;
+  aiToolMessages: AIToolMessageRepository;
+  usersAiEmployees: UserAIEmployeeRepository;
+  lcCheckpoints: LCCheckpointRepository;
+  lcCheckpointBlobs: LCCheckpointBlobRepository;
+  lcCheckpointWrites: LCCheckpointWriteRepository;
   aiEmployeesManager: AIEmployeesManager;
   builtInManager: BuiltInManager;
   llmStreamCachedManager: LLMStreamCachedManager;

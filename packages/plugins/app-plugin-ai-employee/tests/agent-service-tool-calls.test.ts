@@ -113,11 +113,15 @@ describe('AgentService tool-call cancellation', () => {
       agentContext: { logger: {}, ai: {} },
       builtInManager: { setupBuiltInInfo: vi.fn() },
       database: {},
-      repositories: {
-        lcCheckpoints: {},
-        lcCheckpointBlobs: {},
-        lcCheckpointWrites: {},
-      },
+      collectionRepository: vi.fn(),
+      aiConversations: { update: vi.fn() },
+      aiEmployees: {},
+      aiMessages: {},
+      aiToolMessages: {},
+      usersAiEmployees: {},
+      lcCheckpoints: {},
+      lcCheckpointBlobs: {},
+      lcCheckpointWrites: {},
       snowflake: {},
       llmStreamCachedManager: {
         getCached: () => ({

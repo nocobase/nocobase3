@@ -246,7 +246,7 @@ export class AIEmployeeChatMessageConverters extends BaseChatMessageConverters {
     const formattedMessages: BaseMessageLike[] = [];
     const resolvedMessages = await resolveMessageAttachments({
       actorId: this.aiOptions.agentContext.actor.id,
-      repositories: this.aiOptions.repositories,
+      collectionRepository: this.aiOptions.collectionRepository,
       messages: [...messages],
     });
     const truncate = (text: string, maxLen = 50000): string =>
