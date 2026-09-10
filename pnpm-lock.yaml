@@ -1443,6 +1443,9 @@ importers:
       '@nocobase/db-sqlite':
         specifier: workspace:*
         version: link:../db-sqlite
+      '@nocobase/db-testkit':
+        specifier: workspace:*
+        version: link:../db-testkit
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config

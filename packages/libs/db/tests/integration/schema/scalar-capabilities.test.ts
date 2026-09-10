@@ -4,22 +4,31 @@ import { describeIntegrationDatabases } from '../helpers.js';
 describeIntegrationDatabases('Physical scalar capabilities', (context) => {
   it('preserves char semantics, numeric capacity and boolean identity', async () => {
     const dialect = context.spec.dialect;
-    const native = {
-      postgres: ['char(8)', 'varchar(16)', 'integer', 'real', 'boolean'],
-      mysql: ['char(8)', 'varchar(16)', 'int unsigned', 'float', 'tinyint(1)'],
-      sqlite: ['CHAR(8)', 'VARCHAR(16)', 'INTEGER', 'REAL', 'BOOLEAN'],
-      oracle: [
-        'CHAR(8 CHAR)',
-        'VARCHAR2(16 BYTE)',
-        'NUMBER(10,0)',
-        'BINARY_FLOAT',
-        'NUMBER(1,0)',
-      ],
-      mssql: ['nchar(8)', 'nvarchar(16)', 'tinyint', 'real', 'bit'],
-    }[dialect];
+    const native = (
+      {
+        postgres: ['char(8)', 'varchar(16)', 'integer', 'real', 'boolean'],
+        mysql: [
+          'char(8)',
+          'varchar(16)',
+          'int unsigned',
+          'float',
+          'tinyint(1)',
+        ],
+        sqlite: ['CHAR(8)', 'VARCHAR(16)', 'INTEGER', 'REAL', 'BOOLEAN'],
+        oracle: [
+          'CHAR(8 CHAR)',
+          'VARCHAR2(16 BYTE)',
+          'NUMBER(10,0)',
+          'BINARY_FLOAT',
+          'NUMBER(1,0)',
+        ],
+        mssql: ['nchar(8)', 'nvarchar(16)', 'tinyint', 'real', 'bit'],
+      } as Record<string, string[]>
+    )[dialect];
     await context.db.schema.createTable(context.table('scalars'), (table) => {
       ['fixed', 'label', 'quantity', 'ratio', 'enabled'].forEach(
-        (name, index) => table.specificType(name, native[index]).nullable(),
+        (name, index) =>
+          table.specificType(name, native?.[index] ?? '').nullable(),
       );
     });
     const connection = context.database.connection(context.spec.name);

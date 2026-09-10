@@ -178,7 +178,7 @@ describeIntegrationDatabases('Repository temporal contract', (context) => {
       mysql: 'datetime(6)',
       oracle: 'timestamp(6) with time zone',
       mssql: 'datetimeoffset(6)',
-    };
+    } as Record<string, string>;
     await context.db.schema.createTable(context.table('preciseEvents'), (t) => {
       t.string('code').primary();
       t.specificType('instant', types[context.spec.dialect]);

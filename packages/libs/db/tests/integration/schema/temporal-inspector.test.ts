@@ -3,27 +3,29 @@ import { describeIntegrationDatabases } from '../helpers.js';
 
 describeIntegrationDatabases('Temporal physical inspection', (context) => {
   it('retains native type and separates fractional seconds from numeric modifiers', async () => {
-    const nativeTypes = {
-      postgres: [
-        'date',
-        'time(3)',
-        'timestamp(3) without time zone',
-        'timestamp(6) with time zone',
-      ],
-      mysql: ['date', 'time(3)', 'datetime(3)', 'timestamp(6)'],
-      sqlite: ['DATE', 'TIME(3)', 'DATETIME(3)', 'TEXT'],
-      oracle: [
-        'DATE',
-        'VARCHAR2(18)',
-        'TIMESTAMP(3)',
-        'TIMESTAMP(6) WITH TIME ZONE',
-      ],
-      mssql: ['date', 'time(3)', 'datetime2(3)', 'datetimeoffset(6)'],
-    }[context.spec.dialect];
+    const nativeTypes = (
+      {
+        postgres: [
+          'date',
+          'time(3)',
+          'timestamp(3) without time zone',
+          'timestamp(6) with time zone',
+        ],
+        mysql: ['date', 'time(3)', 'datetime(3)', 'timestamp(6)'],
+        sqlite: ['DATE', 'TIME(3)', 'DATETIME(3)', 'TEXT'],
+        oracle: [
+          'DATE',
+          'VARCHAR2(18)',
+          'TIMESTAMP(3)',
+          'TIMESTAMP(6) WITH TIME ZONE',
+        ],
+        mssql: ['date', 'time(3)', 'datetime2(3)', 'datetimeoffset(6)'],
+      } as Record<string, string[]>
+    )[context.spec.dialect];
     const names = ['day', 'clock', 'local', 'instant'];
     await context.db.schema.createTable(context.table('temporal'), (table) => {
       names.forEach((name, index) =>
-        table.specificType(name, nativeTypes[index]).nullable(),
+        table.specificType(name, nativeTypes?.[index] ?? '').nullable(),
       );
     });
     const schema = await context.database

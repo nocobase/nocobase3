@@ -39,6 +39,57 @@ export interface DatabaseIntegrationContext extends DatabaseContractContext {
   indexName(collection: string, columns: string[]): string;
 }
 
+export interface DatabaseDialectIntegrationSpec {
+  readonly name: string;
+  readonly dialect: string;
+  readonly driver?: string;
+  readonly [key: string]: unknown;
+}
+
+export interface DatabaseDialectIntegrationContext extends DatabaseIntegrationContext {
+  spec: DatabaseDialectIntegrationSpec;
+}
+
+export interface DatabaseDialectIntegrationAdapter extends DatabaseIntegrationAdapter<DatabaseDialectIntegrationContext> {
+  readonly spec: DatabaseDialectIntegrationSpec;
+  listIndexes(
+    context: DatabaseDialectIntegrationContext,
+    tableName: string,
+  ): Promise<Array<Record<string, unknown>>>;
+  listForeignKeys(
+    context: DatabaseDialectIntegrationContext,
+    tableName: string,
+  ): Promise<Array<Record<string, unknown>>>;
+  listColumns(
+    context: DatabaseDialectIntegrationContext,
+    tableName: string,
+  ): Promise<Array<Record<string, unknown>>>;
+  listObjects(
+    context: DatabaseDialectIntegrationContext,
+    objectType: 'table' | 'view',
+  ): Promise<string[]>;
+  quoteIdentifier(identifier: string): string;
+  cleanupObjects?(context: DatabaseDialectIntegrationContext): Promise<void>;
+}
+
+export interface DatabaseDialectIntegrationAdapterOptions extends Omit<
+  DatabaseIntegrationAdapterOptions,
+  'setup' | 'cleanup'
+> {
+  readonly spec: DatabaseDialectIntegrationSpec;
+  readonly setup?: (
+    context: DatabaseDialectIntegrationContext,
+  ) => Promise<void>;
+  readonly cleanup?: (
+    context: DatabaseDialectIntegrationContext,
+  ) => Promise<void>;
+  readonly listIndexes: DatabaseDialectIntegrationAdapter['listIndexes'];
+  readonly listForeignKeys: DatabaseDialectIntegrationAdapter['listForeignKeys'];
+  readonly listColumns: DatabaseDialectIntegrationAdapter['listColumns'];
+  readonly listObjects: DatabaseDialectIntegrationAdapter['listObjects'];
+  readonly quoteIdentifier: (identifier: string) => string;
+}
+
 export interface DatabaseIntegrationAdapter<
   TContext extends DatabaseIntegrationContext = DatabaseIntegrationContext,
 > {
@@ -116,6 +167,32 @@ export function createDatabaseIntegrationAdapter(
         await context.database.destroy();
       }
     },
+  };
+}
+
+export function createDatabaseDialectIntegrationAdapter(
+  options: DatabaseDialectIntegrationAdapterOptions,
+): DatabaseDialectIntegrationAdapter {
+  const base = createDatabaseIntegrationAdapter({
+    name: options.name,
+    createDatabase: options.createDatabase,
+    setup: options.setup as DatabaseIntegrationAdapterOptions['setup'],
+    cleanup: options.cleanup as DatabaseIntegrationAdapterOptions['cleanup'],
+  });
+  return {
+    ...base,
+    spec: options.spec,
+    createContext: () => {
+      const context = base.createContext() as DatabaseDialectIntegrationContext;
+      Object.assign(context, { spec: options.spec });
+      return context;
+    },
+    listIndexes: options.listIndexes,
+    listForeignKeys: options.listForeignKeys,
+    listColumns: options.listColumns,
+    listObjects: options.listObjects,
+    quoteIdentifier: options.quoteIdentifier,
+    cleanupObjects: options.cleanup,
   };
 }
 
@@ -237,6 +314,22 @@ function defineContextSuite<TContext>(
 }
 
 export { definePortableIntegrationContracts } from './integration-contracts.js';
+export {
+  describeIntegrationDatabases,
+  expectForeignKeyViolation,
+  expectUniqueViolation,
+  getColumnType,
+  getDatabaseIntegrationAdapter,
+  installDatabaseIntegrationAdapter,
+  listColumns,
+  listForeignKeys,
+  listIndexes,
+  useIntegrationDatabase,
+} from './integration.js';
+export type {
+  IntegrationDatabaseSpec,
+  IntegrationTestContext,
+} from './integration.js';
 
 function defaultDatabaseContract<TContext extends DatabaseContractContext>(
   createContext: DatabaseContractFactory<TContext>,
