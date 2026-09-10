@@ -1,0 +1,45 @@
+{
+  "name": "@nocobase/db-testkit",
+  "version": "0.0.1",
+  "description": "Shared test contracts for @nocobase/db dialects.",
+  "type": "module",
+  "prettier": "@nocobase/dev-config/prettier",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/src/index.d.ts",
+        "import": "./dist/src/index.js"
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint . --max-warnings 0",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "@nocobase/db": "workspace:^"
+  },
+  "devDependencies": {
+    "@nocobase/db": "workspace:*",
+    "@nocobase/dev-config": "workspace:*",
+    "@types/node": "catalog:",
+    "eslint": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}
