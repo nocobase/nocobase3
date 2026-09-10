@@ -28,12 +28,7 @@ export function createKnexClient(config: KnexConnectionConfig): Knex {
 }
 
 function resolveKnexDialectClient(clientName: string): typeof Knex.Client {
-  const dialect =
-    clientName === 'pg'
-      ? 'postgres'
-      : clientName === 'mysql2'
-        ? 'mysql'
-        : clientName;
+  const dialect = clientName === 'pg' ? 'postgres' : clientName;
   return require(`knex/lib/dialects/${dialect}/index.js`) as typeof Knex.Client;
 }
 
