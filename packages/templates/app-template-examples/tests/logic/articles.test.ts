@@ -1,6 +1,7 @@
 // @vitest-environment node
 import path from 'node:path';
 import { createDatabaseManager, databaseManagerToken } from '@nocobase/db';
+import sqlite from '@nocobase/db-sqlite';
 import {
   createAppAuthorization,
   authorizationToken,
@@ -19,6 +20,7 @@ import { articlesRoutes } from '../../server/routes/articles.ts';
 const database = () =>
   createDatabaseManager({
     default: 'main',
+    drivers: { sqlite },
     connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
   });
 let db: ReturnType<typeof database>;

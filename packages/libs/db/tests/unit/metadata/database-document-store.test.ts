@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { Knex } from 'knex';
+import sqlite from '@nocobase/db-sqlite';
 import { DatabaseCollectionMetadataStore } from '../../../src/metadata/internal/database-document-store.js';
 import { createKnexClient } from '../../../src/database/internal/knex/client.js';
 import { resolveKnexConnectionConfig } from '../../../src/database/internal/knex/config.js';
@@ -134,10 +135,14 @@ describe('DatabaseCollectionMetadataStore', () => {
     store: DatabaseCollectionMetadataStore;
   } {
     const client = createKnexClient(
-      resolveKnexConnectionConfig({
-        dialect: 'sqlite',
-        filename: ':memory:',
-      }),
+      resolveKnexConnectionConfig(
+        {
+          dialect: 'sqlite',
+          filename: ':memory:',
+          databaseDriver: sqlite.driver,
+        },
+        sqlite.driver,
+      ),
     );
     clients.push(client);
     return {

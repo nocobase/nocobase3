@@ -4,7 +4,8 @@ import type {
   DatabaseDriverDefinition,
   SqliteConnectionConfig,
 } from '@nocobase/db';
-import { installDecimalAggregates, preciseIntegerClient } from '@nocobase/db';
+import { installDecimalAggregates } from './numeric.js';
+import { preciseIntegerClient } from './precise-integers.js';
 import { SqliteSchemaInspector } from './inspectors/sqlite.js';
 
 const require = createRequire(import.meta.url);
@@ -16,9 +17,9 @@ export type SqliteOptions = Omit<
 export const sqliteDriver: DatabaseDriverDefinition<'sqlite'> = {
   dialect: 'sqlite',
   packageName: '@nocobase/db-sqlite',
+  nativeDriver: 'better-sqlite3',
   knexClient: 'better-sqlite3',
-  createKnexClient: () =>
-    preciseIntegerClient('sqlite', 'better-sqlite3', BetterSqlite3),
+  createKnexClient: () => preciseIntegerClient(BetterSqlite3),
   resolveConnection: (source: ConnectionConfig) => {
     const config = source as SqliteConnectionConfig;
     assertDriverOptions(config.driverOptions, [

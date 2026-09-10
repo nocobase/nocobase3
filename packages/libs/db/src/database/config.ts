@@ -20,6 +20,8 @@ export interface DatabaseConfig {
 export interface DatabaseDriverDefinition<TDialect extends string = string> {
   readonly dialect: TDialect;
   readonly packageName?: string;
+  /** Native driver package name owned by the dialect package. */
+  readonly nativeDriver?: string;
   readonly knexClient?: string;
   readonly createKnexClient?: (
     config: unknown,
@@ -48,7 +50,7 @@ export interface DatabaseDriverDefinition<TDialect extends string = string> {
  */
 export interface DatabaseDriverFactory<
   TDialect extends string = string,
-  TOptions extends object = Record<string, unknown>,
+  TOptions extends object = any,
 > {
   (options?: TOptions): BaseConnectionConfig & {
     dialect: TDialect;
@@ -81,20 +83,20 @@ export interface BaseConnectionConfig {
 
 export interface SqliteConnectionConfig extends BaseConnectionConfig {
   dialect: 'sqlite';
-  driver?: 'better-sqlite3';
+  driver?: string;
   filename: string;
 }
 
 export type PostgresConnectionConfig = BaseConnectionConfig & {
   dialect: 'postgres';
-  driver?: 'pg';
+  driver?: string;
   schema?: string | readonly string[];
   ssl?: boolean | Record<string, unknown>;
 } & HostConnectionConfig;
 
 export type MysqlConnectionConfig = BaseConnectionConfig & {
   dialect: 'mysql';
-  driver?: 'mysql2';
+  driver?: string;
   charset?: string;
   timezone?: string;
   ssl?: boolean | Record<string, unknown>;
@@ -102,7 +104,7 @@ export type MysqlConnectionConfig = BaseConnectionConfig & {
 
 export type OracleConnectionConfig = BaseConnectionConfig & {
   dialect: 'oracle';
-  driver?: 'oracledb';
+  driver?: string;
   serviceName: string;
   host?: string;
   port?: number;
@@ -112,7 +114,7 @@ export type OracleConnectionConfig = BaseConnectionConfig & {
 
 export type MssqlConnectionConfig = BaseConnectionConfig & {
   dialect: 'mssql';
-  driver?: 'tedious';
+  driver?: string;
   host?: string;
   port?: number;
   database?: string;
@@ -129,7 +131,8 @@ export type ConnectionConfig =
   | OracleConnectionConfig
   | MssqlConnectionConfig;
 
-export type DatabaseDriver = NonNullable<ConnectionConfig['driver']>;
+/** Native driver identifier supplied by a dialect package. */
+export type DatabaseDriver = string;
 
 type MysqlConnectionTargetConfig =
   (HostConnectionConfig & { socketPath?: never }) | SocketConnectionConfig;

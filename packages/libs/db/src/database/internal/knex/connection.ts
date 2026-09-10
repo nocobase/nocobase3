@@ -41,7 +41,6 @@ import {
   resolveKnexConnectionConfig,
   type KnexConnectionConfig,
 } from './config.js';
-import { resolveKnexDatabaseDialectAdapter } from './dialect-adapters.js';
 
 export class KnexDatabaseConnection implements DatabaseConnection {
   readonly driver: DatabaseDriver;
@@ -82,17 +81,16 @@ export class KnexDatabaseConnection implements DatabaseConnection {
       this.dialect,
       this.config.capabilities,
     );
-    this.schemaInspector = dialectDriver?.createSchemaInspector
-      ? dialectDriver.createSchemaInspector({
-          connectionName: this.name,
-          config: this.config,
-          resolveClient: () => this.resolveClient(),
-        })
-      : resolveKnexDatabaseDialectAdapter(this.dialect).createSchemaInspector({
-          connectionName: this.name,
-          config: this.config,
-          resolveClient: () => this.resolveClient(),
-        });
+    if (!dialectDriver?.createSchemaInspector) {
+      throw new Error(
+        `Database driver for dialect "${this.dialect}" must create a schema inspector.`,
+      );
+    }
+    this.schemaInspector = dialectDriver.createSchemaInspector({
+      connectionName: this.name,
+      config: this.config,
+      resolveClient: () => this.resolveClient(),
+    });
     this.schema = new SchemaManagementSchemaAdapter(
       new LazySchemaAdapter(
         () => this.resolveClient(),

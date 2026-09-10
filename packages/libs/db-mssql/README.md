@@ -17,3 +17,14 @@ const database = createDatabaseManager({
   },
 });
 ```
+
+For declarative configurations, register `mssql` in `drivers`:
+
+```ts
+const database = createDatabaseManager({
+  drivers: { mssql },
+  connections: {
+    main: { dialect: 'mssql', host: process.env.DB_HOST },
+  },
+});
+```

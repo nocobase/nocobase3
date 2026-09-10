@@ -19,6 +19,7 @@ export type PostgresOptions = Omit<
 export const postgresDriver: DatabaseDriverDefinition<'postgres'> = {
   dialect: 'postgres',
   packageName: '@nocobase/db-postgres',
+  nativeDriver: 'pg',
   knexClient: 'pg',
   createKnexClient: (_config, baseClient) => {
     if (!baseClient) return 'pg';

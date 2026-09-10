@@ -2,6 +2,11 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
+import postgres from '@nocobase/db-postgres';
+import mysql from '@nocobase/db-mysql';
+import sqlite from '@nocobase/db-sqlite';
+import oracle from '@nocobase/db-oracle';
+import mssql from '@nocobase/db-mssql';
 import {
   createDatabaseManager,
   defineDatabase,
@@ -14,10 +19,41 @@ import { CollectionRenameAtomicityError } from '../../../src/collection/builder/
 import { DatabaseCollectionMetadataStore } from '../../../src/metadata/internal/database-document-store.js';
 import { resolveDatabaseCapabilities } from '../../../src/database/capabilities.js';
 import { resolveKnexConnectionConfig } from '../../../src/database/internal/knex/config.js';
+import type {
+  ConnectionConfig,
+  DatabaseConfig,
+  DatabaseDialect,
+} from '../../../src/database/config.js';
+
+const testDrivers = { postgres, mysql, sqlite, oracle, mssql };
+
+function createTestDatabase(config: DatabaseConfig) {
+  return createDatabaseManager({
+    ...config,
+    drivers: { ...testDrivers, ...config.drivers },
+  });
+}
+
+function resolveTestKnexConnectionConfig(config: ConnectionConfig) {
+  const factory = testDrivers[config.dialect as DatabaseDialect];
+  return resolveKnexConnectionConfig(config, factory.driver);
+}
 
 describe('DatabaseManager', () => {
+  it('requires an explicitly registered dialect package', () => {
+    const db = createDatabaseManager({
+      connections: {
+        main: { dialect: 'sqlite', filename: ':memory:' },
+      },
+    });
+
+    expect(() => db.connection()).toThrow(
+      'Database dialect "sqlite" is not registered. Install and register the corresponding @nocobase/db-sqlite package.',
+    );
+  });
+
   it('returns lazy builder, query, and connection handles for the default connection', async () => {
-    const db = createDatabaseManager(
+    const db = createTestDatabase(
       defineDatabase({
         default: 'main',
         connections: {
@@ -56,7 +92,7 @@ describe('DatabaseManager', () => {
 
   it('resolves Collections and updates supplemental Metadata through Connection entry points', async () => {
     const metadataStore = new InMemoryCollectionMetadataStore();
-    const db = createDatabaseManager({
+    const db = createTestDatabase({
       metadataStore,
       connections: {
         sqlite: { dialect: 'sqlite', filename: ':memory:' },
@@ -152,7 +188,7 @@ describe('DatabaseManager', () => {
   it('uses persistent Database Metadata by default and hides its internal table', async () => {
     const directory = mkdtempSync(path.join(tmpdir(), 'nocobase-db-metadata-'));
     const filename = path.join(directory, 'database.sqlite');
-    const db = createDatabaseManager({
+    const db = createTestDatabase({
       connections: {
         sqlite: { dialect: 'sqlite', filename },
       },
@@ -190,7 +226,7 @@ describe('DatabaseManager', () => {
   });
 
   it('blocks schema changes but allows record mutations for external connections', async () => {
-    const db = createDatabaseManager({
+    const db = createTestDatabase({
       connections: {
         external: {
           dialect: 'sqlite',
@@ -247,7 +283,7 @@ describe('DatabaseManager', () => {
   });
 
   it('requires an explicit persistent or read-only Metadata Store for external connections', () => {
-    const db = createDatabaseManager({
+    const db = createTestDatabase({
       connections: {
         external: {
           dialect: 'sqlite',
@@ -263,7 +299,7 @@ describe('DatabaseManager', () => {
   });
 
   it('resolves named connections independently', async () => {
-    const db = createDatabaseManager({
+    const db = createTestDatabase({
       default: 'main',
       connections: {
         main: {
@@ -292,7 +328,7 @@ describe('DatabaseManager', () => {
   });
 
   it('accepts explicit drivers that match the dialect', async () => {
-    const db = createDatabaseManager({
+    const db = createTestDatabase({
       connections: {
         sqlite: {
           dialect: 'sqlite',
@@ -310,22 +346,19 @@ describe('DatabaseManager', () => {
   });
 
   it('accepts a dialect factory in the declarative driver registry', () => {
-    const driver = {
-      dialect: 'sqlite' as const,
-    };
-    const sqlite = Object.assign(
+    const factory = Object.assign(
       (options: { filename?: string } = {}) => ({
         ...options,
         dialect: 'sqlite' as const,
-        databaseDriver: driver,
+        databaseDriver: sqlite.driver,
       }),
       {
         dialect: 'sqlite' as const,
-        driver,
+        driver: sqlite.driver,
       },
     );
-    const db = createDatabaseManager({
-      drivers: { sqlite },
+    const db = createTestDatabase({
+      drivers: { sqlite: factory },
       connections: {
         main: {
           dialect: 'sqlite',
@@ -338,7 +371,7 @@ describe('DatabaseManager', () => {
   });
 
   it('rejects inconsistent dialect registrations before creating a connection', () => {
-    const db = createDatabaseManager({
+    const db = createTestDatabase({
       drivers: {
         sqlite: {
           dialect: 'postgres',
@@ -358,7 +391,7 @@ describe('DatabaseManager', () => {
   });
 
   it('executes query adapter operations against the selected connection', async () => {
-    const db = createDatabaseManager({
+    const db = createTestDatabase({
       connections: {
         sqlite: {
           dialect: 'sqlite',
@@ -392,7 +425,7 @@ describe('DatabaseManager', () => {
   });
 
   it('passes connection naming options to builders', async () => {
-    const db = createDatabaseManager({
+    const db = createTestDatabase({
       connections: {
         sqlite: {
           dialect: 'sqlite',
@@ -421,7 +454,7 @@ describe('DatabaseManager', () => {
   });
 
   it('passes underscored: false to builders and queries', async () => {
-    const db = createDatabaseManager({
+    const db = createTestDatabase({
       connections: {
         sqlite: {
           dialect: 'sqlite',
@@ -470,7 +503,7 @@ describe('DatabaseManager', () => {
   });
 
   it('uses each connection table prefix without adding a separator', async () => {
-    const db = createDatabaseManager({
+    const db = createTestDatabase({
       default: 'main',
       connections: {
         main: {
@@ -516,7 +549,7 @@ describe('DatabaseManager', () => {
   });
 
   it('runs builder and query operations inside one transaction connection', async () => {
-    const db = createDatabaseManager({
+    const db = createTestDatabase({
       connections: {
         sqlite: {
           dialect: 'sqlite',
@@ -547,7 +580,7 @@ describe('DatabaseManager', () => {
 
   it('publishes transactional Metadata and Registry invalidation only after commit', async () => {
     const metadataStore = new InMemoryCollectionMetadataStore();
-    const db = createDatabaseManager({
+    const db = createTestDatabase({
       metadataStore,
       connections: {
         sqlite: { dialect: 'sqlite', filename: ':memory:' },
@@ -618,7 +651,7 @@ describe('DatabaseManager', () => {
     const metadataStore = new DatabaseCollectionMetadataStore({
       resolveClient: async () => state.connection!.client(),
     });
-    const db = createDatabaseManager({
+    const db = createTestDatabase({
       metadataStore,
       connections: {
         sqlite: { dialect: 'sqlite', filename: ':memory:' },
@@ -666,7 +699,7 @@ describe('DatabaseManager', () => {
 
   it('rejects a non-atomic rename before DDL when supplemental Metadata exists', async () => {
     const metadataStore = new InMemoryCollectionMetadataStore();
-    const db = createDatabaseManager({
+    const db = createTestDatabase({
       metadataStore,
       connections: {
         sqlite: { dialect: 'sqlite', filename: ':memory:' },
@@ -697,7 +730,7 @@ describe('DatabaseManager', () => {
 
   it('renames a deterministically named Collection when no Metadata document exists', async () => {
     const metadataStore = new InMemoryCollectionMetadataStore();
-    const db = createDatabaseManager({
+    const db = createTestDatabase({
       metadataStore,
       connections: {
         sqlite: { dialect: 'sqlite', filename: ':memory:' },
@@ -731,7 +764,7 @@ describe('DatabaseManager', () => {
   });
 
   it('rejects supplemental writes to a read-only Store before DDL', async () => {
-    const db = createDatabaseManager({
+    const db = createTestDatabase({
       metadataStore: new ModuleCollectionMetadataStore({
         documents: [],
         source: 'src/collection-metadata.ts',
@@ -760,7 +793,7 @@ describe('DatabaseManager', () => {
   });
 
   it('disconnects and reconnects connections', async () => {
-    const db = createDatabaseManager({
+    const db = createTestDatabase({
       connections: {
         sqlite: {
           dialect: 'sqlite',
@@ -783,14 +816,14 @@ describe('DatabaseManager', () => {
   });
 
   it('reports configuration errors for missing connections and invalid database settings', () => {
-    const empty = createDatabaseManager({
+    const empty = createTestDatabase({
       connections: {},
     });
     expect(() => empty.connection()).toThrow(
       'No database connections configured.',
     );
 
-    const missing = createDatabaseManager({
+    const missing = createTestDatabase({
       connections: {
         main: {
           dialect: 'sqlite',
@@ -802,7 +835,7 @@ describe('DatabaseManager', () => {
       'Database connection "analytics" is not configured.',
     );
 
-    const invalidDriver = createDatabaseManager({
+    const invalidDriver = createTestDatabase({
       connections: {
         main: {
           dialect: 'sqlite',
@@ -815,7 +848,7 @@ describe('DatabaseManager', () => {
       'Invalid database driver "pg" for dialect "sqlite". Expected "better-sqlite3".',
     );
 
-    const invalidDialect = createDatabaseManager({
+    const invalidDialect = createTestDatabase({
       connections: {
         main: {
           dialect: 'custom',
@@ -824,10 +857,10 @@ describe('DatabaseManager', () => {
       },
     });
     expect(() => invalidDialect.connection()).toThrow(
-      'Invalid database dialect "custom". Expected "sqlite", "postgres", "mysql", "oracle", or "mssql".',
+      'Database dialect "custom" is not registered. Install and register the corresponding @nocobase/db-custom package.',
     );
 
-    const unsupportedUrl = createDatabaseManager({
+    const unsupportedUrl = createTestDatabase({
       connections: {
         main: {
           dialect: 'postgres',
@@ -839,7 +872,7 @@ describe('DatabaseManager', () => {
       'Database connection config cannot include url. Use dialect and flattened connection parameters.',
     );
 
-    const oldShape = createDatabaseManager({
+    const oldShape = createTestDatabase({
       connections: {
         main: {
           dialect: 'postgres',
@@ -854,7 +887,7 @@ describe('DatabaseManager', () => {
       'Database connection config cannot include client, connection. Use dialect and flattened connection parameters.',
     );
 
-    const socketPathConflict = createDatabaseManager({
+    const socketPathConflict = createTestDatabase({
       connections: {
         main: {
           dialect: 'mysql',
@@ -867,7 +900,7 @@ describe('DatabaseManager', () => {
       'Database connection socketPath cannot be combined with host.',
     );
 
-    const connectionStringEscapeHatch = createDatabaseManager({
+    const connectionStringEscapeHatch = createTestDatabase({
       connections: {
         main: {
           dialect: 'postgres',
@@ -884,7 +917,7 @@ describe('DatabaseManager', () => {
   });
 
   it('normalizes flattened configs into knex connection options', () => {
-    const sqlite = resolveKnexConnectionConfig({
+    const sqlite = resolveTestKnexConnectionConfig({
       dialect: 'sqlite',
       filename: ':memory:',
       driverOptions: {
@@ -897,7 +930,7 @@ describe('DatabaseManager', () => {
       verbose: true,
     });
     expect(
-      resolveKnexConnectionConfig({
+      resolveTestKnexConnectionConfig({
         dialect: 'sqlite',
         filename: ':memory:',
         schemaManagement: 'external',
@@ -905,7 +938,7 @@ describe('DatabaseManager', () => {
     ).toBe('external');
 
     expect(
-      resolveKnexConnectionConfig({
+      resolveTestKnexConnectionConfig({
         dialect: 'postgres',
         host: '127.0.0.1',
         port: 5432,
@@ -932,7 +965,7 @@ describe('DatabaseManager', () => {
     });
 
     expect(
-      resolveKnexConnectionConfig({
+      resolveTestKnexConnectionConfig({
         dialect: 'mysql',
         host: '127.0.0.1',
         port: 3306,
@@ -959,7 +992,7 @@ describe('DatabaseManager', () => {
     });
 
     expect(
-      resolveKnexConnectionConfig({
+      resolveTestKnexConnectionConfig({
         dialect: 'mysql',
         socketPath: '/tmp/mysql.sock',
         database: 'orders',
@@ -977,7 +1010,7 @@ describe('DatabaseManager', () => {
     });
 
     expect(
-      resolveKnexConnectionConfig({
+      resolveTestKnexConnectionConfig({
         dialect: 'oracle',
         host: '127.0.0.1',
         port: 1521,
@@ -995,7 +1028,7 @@ describe('DatabaseManager', () => {
       connectString: '127.0.0.1:1521/FREEPDB1',
     });
 
-    const mssql = resolveKnexConnectionConfig({
+    const mssql = resolveTestKnexConnectionConfig({
       dialect: 'mssql',
       host: '127.0.0.1',
       port: 1433,

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import sqlite from '@nocobase/db-sqlite';
 import {
   createDatabaseManager,
   createMigrator,
@@ -9,6 +10,7 @@ import {
 describe('Migrator schema management', () => {
   it('rejects latest, upTo, and rollback for external connections before loading migrations', async () => {
     const database = createDatabaseManager({
+      drivers: { sqlite },
       connections: {
         external: {
           dialect: 'sqlite',

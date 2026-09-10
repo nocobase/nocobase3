@@ -65,47 +65,18 @@
     "knex": "catalog:",
     "@nocobase/repository-input": "workspace:^"
   },
-  "peerDependencies": {
-    "better-sqlite3": "^12.11.1",
-    "mysql2": "^3.23.3",
-    "oracledb": "^6.10.0",
-    "pg": "^8.23.0",
-    "pg-query-stream": "^4.14.0",
-    "tedious": "^20.0.0"
-  },
-  "peerDependenciesMeta": {
-    "better-sqlite3": {
-      "optional": true
-    },
-    "mysql2": {
-      "optional": true
-    },
-    "oracledb": {
-      "optional": true
-    },
-    "pg": {
-      "optional": true
-    },
-    "pg-query-stream": {
-      "optional": true
-    },
-    "tedious": {
-      "optional": true
-    }
-  },
   "devDependencies": {
     "@hono/node-server": "catalog:",
+    "@nocobase/db-mssql": "workspace:*",
+    "@nocobase/db-mysql": "workspace:*",
+    "@nocobase/db-oracle": "workspace:*",
+    "@nocobase/db-postgres": "workspace:*",
+    "@nocobase/db-sqlite": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@types/node": "catalog:",
     "@vitest/coverage-v8": "catalog:",
-    "better-sqlite3": "catalog:",
     "eslint": "catalog:",
     "hono": "catalog:",
-    "mysql2": "^3.23.3",
-    "oracledb": "catalog:",
-    "pg": "^8.23.0",
-    "pg-query-stream": "^4.14.0",
-    "tedious": "catalog:",
     "tsx": "catalog:",
     "prettier": "catalog:",
     "typescript": "catalog:",

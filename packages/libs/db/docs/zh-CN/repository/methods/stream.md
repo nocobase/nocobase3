@@ -76,7 +76,9 @@ Structural validation happens before records are emitted. An execution failure m
 
 ## Driver setup and verification
 
-PostgreSQL requires pg and pg-query-stream resolvable by Knex. This package includes them as development dependencies for integration testing, not as automatically installed application drivers.
+PostgreSQL requires `pg` and `pg-query-stream` resolvable by Knex. Install
+`@nocobase/db-postgres`; that dialect package owns both native dependencies and
+installs the Knex stream hook.
 
 SQLite, PostgreSQL and MySQL have been exercised for both consumption modes, including relations and lifecycle behavior. Oracle and MSSQL are not claimed as verified by this pass.
 

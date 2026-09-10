@@ -1,6 +1,7 @@
 // @vitest-environment node
 import path from 'node:path';
 import { createDatabaseManager, databaseManagerToken } from '@nocobase/db';
+import sqlite from '@nocobase/db-sqlite';
 import { Auth, authenticationToken } from '@nocobase/app-plugin-authentication';
 import type { Application } from '@nocobase/app-server/application';
 import { ServiceContainer } from '@nocobase/service-provider';
@@ -11,6 +12,7 @@ import { analyticsRoutes } from '../../server/routes/analytics.js';
 const createDatabase = () =>
   createDatabaseManager({
     default: 'main',
+    drivers: { sqlite },
     connections: {
       main: { dialect: 'sqlite', filename: ':memory:' },
       analytics: { dialect: 'sqlite', filename: ':memory:' },

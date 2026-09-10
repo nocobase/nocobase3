@@ -48,15 +48,13 @@ const db = createDatabaseManager({
 ## 创建最小配置
 
 ```ts
+import sqlite from '@nocobase/db-sqlite';
 import { createDatabaseManager } from '@nocobase/db';
 
 const db = createDatabaseManager({
   default: 'main',
   connections: {
-    main: {
-      dialect: 'sqlite',
-      filename: ':memory:',
-    },
+    main: sqlite({ filename: ':memory:' }),
   },
 });
 ```
@@ -105,16 +103,14 @@ import {
   createDatabaseManager,
   InMemoryCollectionMetadataStore,
 } from '@nocobase/db';
+import sqlite from '@nocobase/db-sqlite';
 
 const metadataStore = new InMemoryCollectionMetadataStore();
 
 const db = createDatabaseManager({
   metadataStore,
   connections: {
-    main: {
-      dialect: 'sqlite',
-      filename: ':memory:',
-    },
+    main: sqlite({ filename: ':memory:' }),
   },
 });
 ```
@@ -131,11 +127,13 @@ Store 的选择和读写边界见 [Collection Metadata](../collection-metadata/o
 
 ```ts
 import { createDatabaseManager, defineDatabase } from '@nocobase/db';
+import sqlite from '@nocobase/db-sqlite';
 
 const config = defineDatabase({
   default: 'main',
+  drivers: { sqlite },
   connections: {
-    main: { dialect: 'sqlite', filename: ':memory:' },
+    main: sqlite({ filename: ':memory:' }),
   },
 });
 

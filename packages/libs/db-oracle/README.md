@@ -17,3 +17,14 @@ const database = createDatabaseManager({
   },
 });
 ```
+
+For declarative configurations, register `oracle` in `drivers`:
+
+```ts
+const database = createDatabaseManager({
+  drivers: { oracle },
+  connections: {
+    main: { dialect: 'oracle', serviceName: 'FREEPDB1' },
+  },
+});
+```

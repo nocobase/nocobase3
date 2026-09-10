@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import knex, { type Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import sqlite from '@nocobase/db-sqlite';
 import {
   createDatabaseManager,
   type DatabaseManager,
@@ -45,6 +46,7 @@ describe('external Collection resolution with Module Metadata', () => {
 
     database = createDatabaseManager({
       default: 'externalCrm',
+      drivers: { sqlite },
       connections: {
         externalCrm: {
           dialect: 'sqlite',

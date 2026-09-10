@@ -12,3 +12,14 @@ const database = createDatabaseManager({
   },
 });
 ```
+
+For declarative configurations, register `sqlite` in `drivers`:
+
+```ts
+const database = createDatabaseManager({
+  drivers: { sqlite },
+  connections: {
+    main: { dialect: 'sqlite', filename: './data.sqlite' },
+  },
+});
+```

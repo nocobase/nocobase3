@@ -8,6 +8,11 @@ import {
   createDatabaseManager,
   InMemoryCollectionMetadataStore,
 } from '../../src/index.js';
+import postgres from '@nocobase/db-postgres';
+import mysql from '@nocobase/db-mysql';
+import sqlite from '@nocobase/db-sqlite';
+import oracle from '@nocobase/db-oracle';
+import mssql from '@nocobase/db-mssql';
 import type { DatabaseDialect } from '../../src/index.js';
 import type { Knex } from 'knex';
 import { connectionConfig, dialects } from './config.js';
@@ -42,6 +47,7 @@ const selected =
   requested === 'all' ? dialects : (requested.split(',') as DatabaseDialect[]);
 if (selected.some((d) => !dialects.includes(d)))
   throw new Error('Unsupported database; use --help.');
+const drivers = { postgres, mysql, sqlite, oracle, mssql };
 const sizes = numbers('rows', '10000,100000');
 const writes = numbers('writes', '100,1000');
 const match = options.has('match')
@@ -56,7 +62,6 @@ const output = resolve(
 await mkdir(output, { recursive: true });
 const sourceFiles = [
   'src/numeric/aggregate.ts',
-  'src/numeric/sqlite.ts',
   'src/numeric/decimal.ts',
   'src/query/internal/knex/adapter.ts',
   'src/repository/internal/knex-execution-adapter.ts',
@@ -73,12 +78,10 @@ const sourceHashes = Object.fromEntries(
 );
 const require = createRequire(import.meta.url);
 const packageVersions = Object.fromEntries(
-  ['knex', 'better-sqlite3', 'pg', 'mysql2', 'oracledb', 'tedious'].map(
-    (name) => [
-      name,
-      (require(`${name}/package.json`) as { version: string }).version,
-    ],
-  ),
+  ['knex'].map((name) => [
+    name,
+    (require(`${name}/package.json`) as { version: string }).version,
+  ]),
 );
 const environment = {
   packageVersions,
@@ -153,6 +156,7 @@ try {
       const prefix = `nbp_${randomBytes(4).toString('hex')}_`;
       const db = createDatabaseManager({
         default: dialect,
+        drivers,
         metadataStore: new InMemoryCollectionMetadataStore(),
         connections: {
           [dialect]: {

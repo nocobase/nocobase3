@@ -4,7 +4,7 @@ import type {
   DatabaseDriverDefinition,
   OracleConnectionConfig,
 } from '@nocobase/db';
-import { preciseIntegerClient } from '@nocobase/db';
+import { preciseIntegerClient } from './precise-integers.js';
 import { OracleSchemaInspector } from './inspectors/oracle.js';
 
 const require = createRequire(import.meta.url);
@@ -16,10 +16,11 @@ export type OracleOptions = Omit<
 export const oracleDriver: DatabaseDriverDefinition<'oracle'> = {
   dialect: 'oracle',
   packageName: '@nocobase/db-oracle',
+  nativeDriver: 'oracledb',
   knexClient: 'oracledb',
   createKnexClient: () =>
     // Oracle's integer codecs are installed by the shared Knex helper.
-    preciseIntegerClient('oracle', 'oracledb', Oracledb),
+    preciseIntegerClient(Oracledb),
   resolveConnection: (source: ConnectionConfig) => {
     const config = source as OracleConnectionConfig;
     assertDriverOptions(config.driverOptions, [

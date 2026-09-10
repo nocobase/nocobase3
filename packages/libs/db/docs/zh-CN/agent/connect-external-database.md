@@ -14,13 +14,14 @@ import {
   createDatabaseManager,
   ModuleCollectionMetadataStore,
 } from '@nocobase/db';
+import postgres from '@nocobase/db-postgres';
 import { externalMetadataDocuments } from './metadata.js';
 
 const db = createDatabaseManager({
   default: 'external',
+  drivers: { postgres },
   connections: {
-    external: {
-      dialect: 'postgres',
+    external: postgres({
       host: '127.0.0.1',
       port: 5432,
       database: 'crm',
@@ -32,7 +33,7 @@ const db = createDatabaseManager({
         documents: externalMetadataDocuments,
         source: 'database/metadata.ts',
       }),
-    },
+    }),
   },
 });
 ```

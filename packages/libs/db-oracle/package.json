@@ -44,6 +44,7 @@
     "vitest": "catalog:"
   },
   "dependencies": {
-    "oracledb": "catalog:"
+    "oracledb": "catalog:",
+    "knex": "catalog:"
   }
 }

@@ -15,6 +15,7 @@ export type MysqlOptions = Omit<
 export const mysqlDriver: DatabaseDriverDefinition<'mysql'> = {
   dialect: 'mysql',
   packageName: '@nocobase/db-mysql',
+  nativeDriver: 'mysql2',
   knexClient: 'mysql2',
   createKnexClient: (_config, baseClient) => {
     if (!baseClient) return 'mysql2';

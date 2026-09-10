@@ -1,4 +1,9 @@
 import type { Knex } from 'knex';
+import postgres from '@nocobase/db-postgres';
+import mysql from '@nocobase/db-mysql';
+import sqlite from '@nocobase/db-sqlite';
+import oracle from '@nocobase/db-oracle';
+import mssql from '@nocobase/db-mssql';
 import { afterEach, beforeEach, describe, expect } from 'vitest';
 import type { ConnectionConfig } from '../../src/index.js';
 import { CollectionBuilder } from '../../src/collection/builder/builder.js';
@@ -12,6 +17,8 @@ import { snakeCase, truncateIdentifier } from '../../src/naming/utils.js';
 
 export type IntegrationDialect =
   'sqlite' | 'postgres' | 'mysql' | 'oracle' | 'mssql';
+
+const integrationDrivers = { postgres, mysql, sqlite, oracle, mssql };
 
 export interface IntegrationDatabaseSpec {
   name: string;
@@ -72,6 +79,7 @@ export function useIntegrationDatabase(
     context.metadataStore = new InMemoryCollectionMetadataStore();
     context.database = createDatabaseManager({
       default: spec.name,
+      drivers: integrationDrivers,
       metadataStore: context.metadataStore,
       connections: {
         [spec.name]: {

@@ -27,6 +27,7 @@
     "@nocobase/app-websocket": "workspace:^",
     "@nocobase/caching": "workspace:^",
     "@nocobase/cron": "workspace:^",
+    "@nocobase/db-sqlite": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@nocobase/drive": "workspace:^",
     "@nocobase/i18n": "workspace:^",

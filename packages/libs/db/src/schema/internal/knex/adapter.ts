@@ -368,20 +368,7 @@ export class KnexSchemaAdapter implements SchemaAdapter {
             oracle: instant ? 'timestamp(3) with time zone' : 'timestamp(3)',
             mssql: instant ? 'datetimeoffset(3)' : 'datetime2(3)',
           };
-          const clientDialect = String(this.knex.client.config.client);
-          const dialect =
-            this.dialect ??
-            (
-              {
-                pg: 'postgres',
-                mysql2: 'mysql',
-                'better-sqlite3': 'sqlite',
-                sqlite3: 'sqlite',
-                oracledb: 'oracle',
-                mssql: 'mssql',
-              } as Record<string, string>
-            )[clientDialect];
-          const type = dialect && temporalTypes[dialect];
+          const type = this.dialect && temporalTypes[this.dialect];
           if (!type)
             throw new Error(
               'Temporal fields require a supported database dialect.',

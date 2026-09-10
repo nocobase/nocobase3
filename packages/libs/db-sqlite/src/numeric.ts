@@ -23,11 +23,47 @@ interface SqliteFunctions {
   function(
     name: string,
     options: { deterministic: boolean; safeIntegers: boolean },
-    fn: (value: unknown) => string | null,
+    fn: (...values: unknown[]) => string | bigint | null,
   ): void;
 }
 
 export function installDecimalAggregates(connection: SqliteFunctions): void {
+  for (const operation of [
+    'increment',
+    'decrement',
+    'multiply',
+    'divide',
+  ] as const) {
+    connection.function(
+      `nb_integer_${operation}`,
+      { deterministic: true, safeIntegers: true },
+      (value, operand) => {
+        if (value === null) return null;
+        if (typeof value !== 'bigint' || typeof operand !== 'string') {
+          throw new TypeError(
+            'Integer arithmetic requires an INTEGER column value and an exact operand.',
+          );
+        }
+        const left = value;
+        const right = BigInt(operand);
+        const result =
+          operation === 'increment'
+            ? left + right
+            : operation === 'decrement'
+              ? left - right
+              : operation === 'multiply'
+                ? left * right
+                : left / right;
+        if (result < -9223372036854775808n || result > 9223372036854775807n) {
+          throw new RangeError(
+            'Integer arithmetic exceeds the signed 64-bit range.',
+          );
+        }
+        return result;
+      },
+    );
+  }
+
   const step = (state: Accumulator, value: unknown): Accumulator => {
     if (value === null) return state;
     const next = decimalParts(value);

@@ -1,8 +1,6 @@
 import { createRequire } from 'node:module';
-import { installDecimalAggregates } from '../../../numeric/sqlite.js';
 import knex, { type Knex } from 'knex';
 import type { KnexConnectionConfig } from './config.js';
-import { preciseIntegerClient } from './precise-integers.js';
 
 const require = createRequire(import.meta.url);
 
@@ -12,8 +10,7 @@ export function createKnexClient(config: KnexConnectionConfig): Knex {
     resolveKnexDialectClient(config.knexClient),
   );
   const client = knex({
-    client:
-      dialectClient ?? preciseIntegerClient(config.dialect, config.knexClient),
+    client: dialectClient ?? config.knexClient,
     connection: config.connection as Knex.StaticConnectionConfig,
     pool: config.databaseDriver?.configurePool
       ? config.databaseDriver.configurePool(config, config.pool ?? {})
@@ -33,51 +30,5 @@ function resolveKnexDialectClient(clientName: string): typeof Knex.Client {
 }
 
 function resolvePoolConfig(config: KnexConnectionConfig): Knex.PoolConfig {
-  const pool = (config.pool ?? {}) as Knex.PoolConfig;
-  if (config.dialect === 'sqlite') {
-    const afterCreate = pool.afterCreate;
-    return {
-      ...pool,
-      afterCreate: (
-        connection: Parameters<typeof installDecimalAggregates>[0],
-        done: (error: unknown, connection?: unknown) => void,
-      ) => {
-        try {
-          installDecimalAggregates(connection);
-          if (afterCreate) afterCreate(connection, done);
-          else done(null, connection);
-        } catch (error) {
-          done(error);
-        }
-      },
-    };
-  }
-  if (config.dialect !== 'oracle') return pool;
-  const configuredAfterCreate = pool.afterCreate;
-  return {
-    ...pool,
-    afterCreate: (connection: OracleSessionConnection, done: PoolDone) => {
-      configureOracleSession(connection)
-        .then(() => {
-          if (configuredAfterCreate) configuredAfterCreate(connection, done);
-          else done(null, connection);
-        })
-        .catch((error: unknown) => done(error));
-    },
-  };
-}
-
-interface OracleSessionConnection {
-  execute(sql: string): Promise<unknown>;
-}
-type PoolDone = (error: unknown, connection?: OracleSessionConnection) => void;
-async function configureOracleSession(
-  connection: OracleSessionConnection,
-): Promise<void> {
-  await connection.execute(
-    `alter session set nls_date_format = 'YYYY-MM-DD HH24:MI:SS'`,
-  );
-  await connection.execute(
-    `alter session set nls_timestamp_format = 'YYYY-MM-DD HH24:MI:SS'`,
-  );
+  return config.pool ?? {};
 }

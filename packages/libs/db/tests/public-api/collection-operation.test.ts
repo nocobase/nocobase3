@@ -1,4 +1,5 @@
 import { createDatabaseManager, type CollectionOperation } from '@nocobase/db';
+import sqlite from '@nocobase/db-sqlite';
 import { describe, expect, it } from 'vitest';
 
 const operations = [
@@ -15,6 +16,7 @@ describe('@nocobase/db public CollectionOperation type', () => {
   it('types a reusable plan accepted by CollectionBuilder.apply()', async () => {
     const database = createDatabaseManager({
       default: 'main',
+      drivers: { sqlite },
       connections: {
         main: { dialect: 'sqlite', filename: ':memory:' },
       },

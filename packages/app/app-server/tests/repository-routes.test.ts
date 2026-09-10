@@ -12,6 +12,7 @@ import {
   RepositoryError,
   type RepositoryQuery,
 } from '@nocobase/db';
+import sqlite from '@nocobase/db-sqlite';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -54,6 +55,7 @@ describe('Repository API routes', () => {
 
   beforeEach(async () => {
     database = createDatabaseManager({
+      drivers: { sqlite },
       connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
     });
     container = new ServiceContainer();

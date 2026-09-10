@@ -6,6 +6,7 @@ import {
   type DatabaseManager,
   ModuleCollectionMetadataStore,
 } from '@nocobase/db';
+import sqlite from '@nocobase/db-sqlite';
 import type { RunExampleOptions } from '../shared/types.js';
 import { createExampleTempDirectory } from '../shared/temp-directory.js';
 import {
@@ -63,6 +64,7 @@ export async function runExternalModuleMetadata(
 
     database = createDatabaseManager({
       default: 'externalExample',
+      drivers: { sqlite },
       connections: {
         externalExample: {
           dialect: 'sqlite',

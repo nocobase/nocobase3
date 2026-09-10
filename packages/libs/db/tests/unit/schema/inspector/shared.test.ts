@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 import knex from 'knex';
-import { MssqlSchemaInspector } from '../../../../src/schema/internal/knex/inspectors/mssql.js';
 import { BaseSchemaInspector } from '../../../../src/schema/inspector/base.js';
 import {
   decodePhysicalCollectionCursor,
@@ -85,6 +84,34 @@ class DeadlockingMssqlSchemaInspector extends BaseSchemaInspector {
   protected async inspectCollection(
     _identifier: PhysicalCollectionIdentifier,
   ): Promise<PhysicalCollectionSchema | undefined> {
+    return undefined;
+  }
+
+  protected async inspectCollectionSummaries(): Promise<
+    PhysicalCollectionSummary[]
+  > {
+    return [];
+  }
+}
+
+class RawMssqlSchemaInspector extends BaseSchemaInspector {
+  constructor(private readonly resolveClient: () => Promise<knex.Knex>) {
+    super('mssql', 'mssql');
+  }
+
+  protected async inspectSchemas(): Promise<PhysicalSchemaInfo[]> {
+    await (await this.resolveClient()).raw('select 1');
+    return [];
+  }
+
+  protected override async canRetryDeadlock(): Promise<boolean> {
+    return !(await this.resolveClient()).isTransaction;
+  }
+
+  protected async inspectCollection(
+    _identifier: PhysicalCollectionIdentifier,
+  ): Promise<PhysicalCollectionSchema | undefined> {
+    await (await this.resolveClient()).raw('select 1');
     return undefined;
   }
 
@@ -226,10 +253,7 @@ describe('BaseSchemaInspector error normalization', () => {
       throw failure;
     });
     Object.defineProperty(client, 'isTransaction', { value: true });
-    const inspector = new MssqlSchemaInspector({
-      connectionName: 'mssql',
-      resolveClient: async () => client,
-    });
+    const inspector = new RawMssqlSchemaInspector(async () => client);
     try {
       await expect(
         inspector.getPhysicalCollection({ tableName: 'just_created' }),

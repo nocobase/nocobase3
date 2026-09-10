@@ -50,19 +50,17 @@ const db = createDatabaseManager({
 
 SQLite、MySQL、Oracle 和 SQL Server 分别从
 `@nocobase/db-sqlite`、`@nocobase/db-mysql`、`@nocobase/db-oracle` 和
-`@nocobase/db-mssql` 引入。`@nocobase/db` 继续保留没有注册 dialect 包时的
-兼容解析路径。
+`@nocobase/db-mssql` 引入。`@nocobase/db` 不包含任何具体 dialect 的连接、
+Inspector 或 native driver 实现；使用某个方言前必须安装对应的包。
 
 ```ts
+import sqlite from '@nocobase/db-sqlite';
 import { createDatabaseManager } from '@nocobase/db';
 
 const db = createDatabaseManager({
   default: 'main',
   connections: {
-    main: {
-      dialect: 'sqlite',
-      filename: ':memory:',
-    },
+    main: sqlite({ filename: ':memory:' }),
   },
 });
 

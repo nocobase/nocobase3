@@ -15,6 +15,7 @@ export type MssqlOptions = Omit<
 export const mssqlDriver: DatabaseDriverDefinition<'mssql'> = {
   dialect: 'mssql',
   packageName: '@nocobase/db-mssql',
+  nativeDriver: 'tedious',
   knexClient: 'mssql',
   createKnexClient: (_config, baseClient) => {
     if (!baseClient) return 'mssql';

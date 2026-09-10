@@ -17,3 +17,14 @@ const database = createDatabaseManager({
   },
 });
 ```
+
+For declarative configurations, register `mysql` in `drivers`:
+
+```ts
+const database = createDatabaseManager({
+  drivers: { mysql },
+  connections: {
+    main: { dialect: 'mysql', host: process.env.DB_HOST },
+  },
+});
+```

@@ -12,13 +12,13 @@ description: 配置 SQLite、PostgreSQL、MySQL、Oracle 和 SQL Server Connecti
 ## SQLite
 
 ```ts
+import sqlite from '@nocobase/db-sqlite';
+import { createDatabaseManager } from '@nocobase/db';
+
 const db = createDatabaseManager({
   default: 'main',
   connections: {
-    main: {
-      dialect: 'sqlite',
-      filename: ':memory:',
-    },
+    main: sqlite({ filename: ':memory:' }),
   },
 });
 ```
@@ -26,17 +26,19 @@ const db = createDatabaseManager({
 ## PostgreSQL
 
 ```ts
+import postgres from '@nocobase/db-postgres';
+import { createDatabaseManager } from '@nocobase/db';
+
 const db = createDatabaseManager({
   default: 'main',
   connections: {
-    main: {
-      dialect: 'postgres',
+    main: postgres({
       host: '127.0.0.1',
       port: 15432,
       username: 'nocobase',
       password: 'nocobase',
       database: 'nocobase_collection_builder',
-    },
+    }),
   },
 });
 ```
@@ -44,17 +46,19 @@ const db = createDatabaseManager({
 ## MySQL
 
 ```ts
+import mysql from '@nocobase/db-mysql';
+import { createDatabaseManager } from '@nocobase/db';
+
 const db = createDatabaseManager({
   default: 'main',
   connections: {
-    main: {
-      dialect: 'mysql',
+    main: mysql({
       host: '127.0.0.1',
       port: 13306,
       username: 'nocobase',
       password: 'nocobase',
       database: 'nocobase_collection_builder',
-    },
+    }),
   },
 });
 ```
@@ -62,17 +66,19 @@ const db = createDatabaseManager({
 ## Oracle
 
 ```ts
+import oracle from '@nocobase/db-oracle';
+import { createDatabaseManager } from '@nocobase/db';
+
 const db = createDatabaseManager({
   default: 'main',
   connections: {
-    main: {
-      dialect: 'oracle',
+    main: oracle({
       host: '127.0.0.1',
       port: 11521,
       serviceName: 'FREEPDB1',
       username: 'nocobase',
       password: 'nocobase',
-    },
+    }),
   },
 });
 ```
@@ -82,11 +88,13 @@ const db = createDatabaseManager({
 ## SQL Server
 
 ```ts
+import mssql from '@nocobase/db-mssql';
+import { createDatabaseManager } from '@nocobase/db';
+
 const db = createDatabaseManager({
   default: 'main',
   connections: {
-    main: {
-      dialect: 'mssql',
+    main: mssql({
       host: '127.0.0.1',
       port: 1433,
       database: 'nocobase',
@@ -94,7 +102,7 @@ const db = createDatabaseManager({
       password: process.env.DB_PASSWORD,
       encrypt: true,
       trustServerCertificate: false,
-    },
+    }),
   },
 });
 ```
@@ -104,17 +112,15 @@ const db = createDatabaseManager({
 ## 多连接
 
 ```ts
+import sqlite from '@nocobase/db-sqlite';
+import { createDatabaseManager } from '@nocobase/db';
+
 const db = createDatabaseManager({
   default: 'main',
+  drivers: { sqlite },
   connections: {
-    main: {
-      dialect: 'sqlite',
-      filename: ':memory:',
-    },
-    analytics: {
-      dialect: 'sqlite',
-      filename: ':memory:',
-    },
+    main: sqlite({ filename: ':memory:' }),
+    analytics: sqlite({ filename: ':memory:' }),
   },
 });
 
@@ -128,11 +134,13 @@ await db.builder('analytics').createCollection('events', (collection) => {
 `naming` 是 connection 级配置，Builder 会用它把 Collection 逻辑名推导为数据库物理名：
 
 ```ts
+import postgres from '@nocobase/db-postgres';
+import { createDatabaseManager } from '@nocobase/db';
+
 const db = createDatabaseManager({
   default: 'main',
   connections: {
-    main: {
-      dialect: 'postgres',
+    main: postgres({
       host: '127.0.0.1',
       port: 15432,
       username: 'nocobase',
@@ -142,7 +150,7 @@ const db = createDatabaseManager({
         underscored: true,
         tablePrefix: 'tbl_',
       },
-    },
+    }),
   },
 });
 ```
@@ -163,13 +171,14 @@ Collection 可以用 `collection.naming({ underscored, tablePrefix })` 覆盖 Co
 `defineDatabase()` 是一个类型辅助函数：
 
 ```ts
+import sqlite from '@nocobase/db-sqlite';
+import { createDatabaseManager, defineDatabase } from '@nocobase/db';
+
 const config = defineDatabase({
   default: 'main',
+  drivers: { sqlite },
   connections: {
-    main: {
-      dialect: 'sqlite',
-      filename: ':memory:',
-    },
+    main: sqlite({ filename: ':memory:' }),
   },
 });
 
@@ -180,7 +189,7 @@ const db = createDatabaseManager(config);
 
 - `createDatabaseManager()` 是运行时入口。
 - `defineDatabase()` 只帮助定义配置，不创建 manager。
-- 用户配置必须写 `dialect`，`driver` 只在需要覆盖默认数据库驱动时填写。
+- 使用 dialect 工厂时不需要手动填写 `driver`；它会绑定由方言包拥有的 native driver。
 - 不在用户配置中写 `adapter`、`client` 或 `connection`。
 - 当前不提供连接 URL 配置方式，不写 `url`、`connectionString` 或 `uri`。
 - MySQL 的 `socketPath` 可以和 `database`、`username`、`password` 一起使用，但不要和 `host`、`port` 混用。

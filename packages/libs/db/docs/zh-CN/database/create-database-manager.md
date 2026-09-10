@@ -10,15 +10,13 @@ description: 配置默认连接、命名连接、数据库方言、命名和 Met
 ## 最小配置
 
 ```ts
+import sqlite from '@nocobase/db-sqlite';
 import { createDatabaseManager } from '@nocobase/db';
 
 const db = createDatabaseManager({
   default: 'main',
   connections: {
-    main: {
-      dialect: 'sqlite',
-      filename: ':memory:',
-    },
+    main: sqlite({ filename: ':memory:' }),
   },
 });
 ```
@@ -66,20 +64,20 @@ interface DatabaseConfig {
 ## 多连接
 
 ```ts
+import postgres from '@nocobase/db-postgres';
+import sqlite from '@nocobase/db-sqlite';
+
 const db = createDatabaseManager({
   default: 'main',
+  drivers: { postgres, sqlite },
   connections: {
-    main: {
-      dialect: 'postgres',
+    main: postgres({
       host: '127.0.0.1',
       database: 'app',
       username: 'app',
       password: process.env.APP_DATABASE_PASSWORD,
-    },
-    analytics: {
-      dialect: 'sqlite',
-      filename: 'analytics.sqlite',
-    },
+    }),
+    analytics: sqlite({ filename: 'analytics.sqlite' }),
   },
 });
 
@@ -100,9 +98,12 @@ await db.destroy();
 ## `defineDatabase()` 的区别
 
 ```ts
+import sqlite from '@nocobase/db-sqlite';
+
 const config = defineDatabase({
+  drivers: { sqlite },
   connections: {
-    main: { dialect: 'sqlite', filename: ':memory:' },
+    main: sqlite({ filename: ':memory:' }),
   },
 });
 
