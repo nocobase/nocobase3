@@ -10,7 +10,7 @@ export function createKnexClient(config: KnexConnectionConfig): Knex {
       preciseIntegerClient(config.dialect, config.knexClient),
     connection: config.connection as Knex.StaticConnectionConfig,
     pool: config.databaseDriver?.configurePool
-      ? config.databaseDriver.configurePool(config, resolvePoolConfig(config))
+      ? config.databaseDriver.configurePool(config, config.pool ?? {})
       : resolvePoolConfig(config),
     useNullAsDefault: config.useNullAsDefault,
     searchPath: config.searchPath,
@@ -41,21 +41,15 @@ function resolvePoolConfig(config: KnexConnectionConfig): Knex.PoolConfig {
       },
     };
   }
-  if (config.dialect !== 'oracle') {
-    return pool;
-  }
-
+  if (config.dialect !== 'oracle') return pool;
   const configuredAfterCreate = pool.afterCreate;
   return {
     ...pool,
     afterCreate: (connection: OracleSessionConnection, done: PoolDone) => {
       configureOracleSession(connection)
         .then(() => {
-          if (configuredAfterCreate) {
-            configuredAfterCreate(connection, done);
-            return;
-          }
-          done(null, connection);
+          if (configuredAfterCreate) configuredAfterCreate(connection, done);
+          else done(null, connection);
         })
         .catch((error: unknown) => done(error));
     },
@@ -65,9 +59,7 @@ function resolvePoolConfig(config: KnexConnectionConfig): Knex.PoolConfig {
 interface OracleSessionConnection {
   execute(sql: string): Promise<unknown>;
 }
-
 type PoolDone = (error: unknown, connection?: OracleSessionConnection) => void;
-
 async function configureOracleSession(
   connection: OracleSessionConnection,
 ): Promise<void> {
