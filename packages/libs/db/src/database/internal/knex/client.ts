@@ -5,9 +5,13 @@ import { preciseIntegerClient } from './precise-integers.js';
 
 export function createKnexClient(config: KnexConnectionConfig): Knex {
   const client = knex({
-    client: preciseIntegerClient(config.dialect, config.knexClient),
+    client:
+      config.databaseDriver?.createKnexClient?.(config) ??
+      preciseIntegerClient(config.dialect, config.knexClient),
     connection: config.connection as Knex.StaticConnectionConfig,
-    pool: resolvePoolConfig(config),
+    pool: config.databaseDriver?.configurePool
+      ? config.databaseDriver.configurePool(config, resolvePoolConfig(config))
+      : resolvePoolConfig(config),
     useNullAsDefault: config.useNullAsDefault,
     searchPath: config.searchPath,
     debug: config.debug,

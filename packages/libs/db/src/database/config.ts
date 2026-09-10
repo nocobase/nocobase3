@@ -20,13 +20,14 @@ export interface DatabaseDriverDefinition<TDialect extends string = string> {
   readonly dialect: TDialect;
   readonly packageName?: string;
   readonly knexClient?: string;
+  readonly createKnexClient?: (config: unknown) => string | typeof Knex.Client;
   readonly resolveConnection?: (config: ConnectionConfig) => {
     connection: unknown;
     searchPath?: string[];
     useNullAsDefault?: boolean;
   };
   readonly configurePool?: (
-    config: ConnectionConfig,
+    config: unknown,
     pool: Knex.PoolConfig,
   ) => Knex.PoolConfig;
 }
