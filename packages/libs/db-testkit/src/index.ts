@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Knex } from 'knex';
+import { InMemoryCollectionMetadataStore } from '@nocobase/db';
 import type {
   CollectionBuilder,
   DatabaseConnection,
   DatabaseManager,
-  InMemoryCollectionMetadataStore,
 } from '@nocobase/db';
 
 /**
@@ -46,6 +46,77 @@ export interface DatabaseIntegrationAdapter<
   createContext(): TContext;
   setupContext?(context: TContext): Promise<void>;
   cleanupContext?(context: TContext): Promise<void>;
+}
+
+export interface DatabaseIntegrationAdapterOptions {
+  readonly name: string;
+  readonly createDatabase: (
+    prefix: string,
+    metadataStore: InMemoryCollectionMetadataStore,
+  ) => DatabaseManager;
+  readonly setup?: (context: DatabaseIntegrationContext) => Promise<void>;
+  readonly cleanup?: (context: DatabaseIntegrationContext) => Promise<void>;
+}
+
+/**
+ * Builds the common lifecycle for a dialect package's integration adapter.
+ * The dialect still supplies the manager configuration and any physical
+ * cleanup required by its database.
+ */
+export function createDatabaseIntegrationAdapter(
+  options: DatabaseIntegrationAdapterOptions,
+): DatabaseIntegrationAdapter {
+  return {
+    name: options.name,
+    createContext: () => {
+      const context = {
+        database: undefined as unknown as DatabaseManager,
+        connection: undefined as unknown as DatabaseConnection,
+        db: undefined as unknown as Knex,
+        builder: undefined as unknown as CollectionBuilder,
+        metadataStore: undefined as unknown as InMemoryCollectionMetadataStore,
+        prefix: '',
+        table: (name: string) => context.identifier(name),
+        identifier: (name: string) =>
+          truncateIdentifier(`${context.prefix}_${snakeCase(name)}`),
+        indexName: (collection: string, columns: string[]) =>
+          truncateIdentifier(
+            `idx_${context.identifier(collection)}_${columns.join('_')}`,
+          ),
+        createTable: async (name: string) => {
+          await context.db.schema.createTable(name, (tableBuilder) => {
+            tableBuilder.increments('id');
+            tableBuilder.string('name');
+          });
+        },
+        insert: async (table: string, values: Record<string, unknown>) => {
+          await context.db(table).insert(values);
+        },
+        select: (table: string) => context.db(table).select(),
+        cleanup: async () => undefined,
+      } as DatabaseIntegrationContext;
+      return context;
+    },
+    setupContext: async (context) => {
+      context.prefix = createTestPrefix();
+      context.metadataStore = new InMemoryCollectionMetadataStore();
+      context.database = options.createDatabase(
+        context.prefix,
+        context.metadataStore,
+      );
+      context.connection = context.database.connection();
+      context.builder = context.connection.builder;
+      context.db = await context.connection.client<Knex>();
+      await options.setup?.(context);
+    },
+    cleanupContext: async (context) => {
+      try {
+        await options.cleanup?.(context);
+      } finally {
+        await context.database.destroy();
+      }
+    },
+  };
 }
 
 export type { DatabaseDialectTestAdapter } from './contracts.js';
@@ -114,6 +185,25 @@ export function createIntegrationContext(
   input: DatabaseIntegrationContext,
 ): DatabaseIntegrationContext {
   return input;
+}
+
+export async function dropPortableIntegrationObjects(
+  context: DatabaseIntegrationContext,
+  names: readonly string[],
+): Promise<void> {
+  for (const name of [...names].reverse()) {
+    const identifier = context.table(name);
+    try {
+      await context.db.schema.dropViewIfExists(identifier);
+    } catch {
+      // Some Knex clients do not implement dropViewIfExists consistently.
+    }
+    try {
+      await context.db.schema.dropTableIfExists(identifier);
+    } catch {
+      // Cleanup must not hide the test failure that caused it to run.
+    }
+  }
 }
 
 export function createTestPrefix(): string {

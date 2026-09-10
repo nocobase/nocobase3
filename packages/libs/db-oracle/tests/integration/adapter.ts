@@ -4,27 +4,27 @@ import {
   dropPortableIntegrationObjects,
   type DatabaseIntegrationAdapter,
 } from '@nocobase/db-testkit';
-import sqlite from '../../src/index.js';
+import oracle from '../../src/index.js';
 
-export const sqliteIntegrationAdapter: DatabaseIntegrationAdapter =
+export const oracleIntegrationAdapter: DatabaseIntegrationAdapter =
   createDatabaseIntegrationAdapter({
-    name: 'sqlite',
+    name: 'oracle',
     createDatabase: (prefix, metadataStore) =>
       createDatabaseManager({
         default: 'main',
         metadataStore,
         connections: {
-          main: sqlite({
-            filename: ':memory:',
+          main: oracle({
+            host: process.env.ORACLE_HOST ?? '127.0.0.1',
+            port: Number(process.env.ORACLE_PORT ?? 11521),
+            username: process.env.ORACLE_USER ?? 'nocobase',
+            password: process.env.ORACLE_PASSWORD ?? 'nocobase',
+            serviceName: process.env.ORACLE_SERVICE_NAME ?? 'FREEPDB1',
             naming: { tablePrefix: `${prefix}_` },
           }),
         },
       }),
-    setup: async (context) => {
-      await context.db.raw('PRAGMA foreign_keys = ON');
-    },
     cleanup: async (context) => {
-      await context.db.raw('PRAGMA foreign_keys = OFF');
       await dropPortableIntegrationObjects(context, [
         'orderItems',
         'dryRunItems',
@@ -32,6 +32,5 @@ export const sqliteIntegrationAdapter: DatabaseIntegrationAdapter =
         'viewRows',
         'keyless',
       ]);
-      await context.db.raw('PRAGMA foreign_keys = ON');
     },
   });

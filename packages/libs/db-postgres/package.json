@@ -29,7 +29,7 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint . --max-warnings 0",
-    "test": "vitest run",
+    "test": "vitest run tests --exclude **/tests/integration/**",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "test:integration": "vitest run tests/integration"
   },
@@ -42,6 +42,7 @@
   },
   "devDependencies": {
     "@nocobase/db": "workspace:*",
+    "@nocobase/db-testkit": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@types/node": "catalog:",
     "eslint": "catalog:",

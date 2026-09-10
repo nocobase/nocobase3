@@ -4,27 +4,30 @@ import {
   dropPortableIntegrationObjects,
   type DatabaseIntegrationAdapter,
 } from '@nocobase/db-testkit';
-import sqlite from '../../src/index.js';
+import mssql from '../../src/index.js';
 
-export const sqliteIntegrationAdapter: DatabaseIntegrationAdapter =
+export const mssqlIntegrationAdapter: DatabaseIntegrationAdapter =
   createDatabaseIntegrationAdapter({
-    name: 'sqlite',
+    name: 'mssql',
     createDatabase: (prefix, metadataStore) =>
       createDatabaseManager({
         default: 'main',
         metadataStore,
         connections: {
-          main: sqlite({
-            filename: ':memory:',
+          main: mssql({
+            host: process.env.MSSQL_HOST ?? '127.0.0.1',
+            port: Number(process.env.MSSQL_PORT ?? 11433),
+            username: process.env.MSSQL_USER ?? 'sa',
+            password: process.env.MSSQL_PASSWORD ?? 'NocoBase_Mssql_2026',
+            database:
+              process.env.MSSQL_DATABASE ?? 'nocobase_collection_builder',
+            encrypt: false,
+            trustServerCertificate: true,
             naming: { tablePrefix: `${prefix}_` },
           }),
         },
       }),
-    setup: async (context) => {
-      await context.db.raw('PRAGMA foreign_keys = ON');
-    },
     cleanup: async (context) => {
-      await context.db.raw('PRAGMA foreign_keys = OFF');
       await dropPortableIntegrationObjects(context, [
         'orderItems',
         'dryRunItems',
@@ -32,6 +35,5 @@ export const sqliteIntegrationAdapter: DatabaseIntegrationAdapter =
         'viewRows',
         'keyless',
       ]);
-      await context.db.raw('PRAGMA foreign_keys = ON');
     },
   });
