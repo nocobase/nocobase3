@@ -39,6 +39,16 @@ export const postgresDriver: DatabaseDriverDefinition<'postgres'> = {
       hasNativeResults: true,
       aggregateProjection: ({ expression }) => expression,
     },
+    schema: {
+      columnType: ({ column }) =>
+        column.type === 'datetimeTz'
+          ? 'timestamp(3) with time zone'
+          : column.type === 'datetime'
+            ? 'timestamp(3) without time zone'
+            : column.type === 'time'
+              ? 'time(3)'
+              : undefined,
+    },
     repository: {
       compileJsonCondition: ({ client, column, node }) =>
         compilePostgresJsonCondition(client, column, node),

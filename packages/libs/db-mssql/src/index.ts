@@ -49,6 +49,45 @@ export const mssqlDriver: DatabaseDriverDefinition<'mssql'> = {
       aggregateProjection: ({ client, expression }) =>
         client.raw('cast(? as varchar(max))', [expression]),
     },
+    schema: {
+      columnType: ({ column }) => {
+        if (column.type === 'enum') return `nvarchar(${column.length ?? 255})`;
+        if (column.type === 'char') return `nchar(${column.length ?? 255})`;
+        if (column.type === 'datetime') return 'datetime2(3)';
+        if (column.type === 'datetimeTz') return 'datetimeoffset(3)';
+        if (column.type === 'time') return 'time(3)';
+        return undefined;
+      },
+      configureForeignKey: ({ foreign, constraint }) => {
+        const builder = foreign as {
+          onDelete(action: string): unknown;
+          onUpdate(action: string): unknown;
+        };
+        if (constraint.onDelete)
+          builder.onDelete(
+            constraint.onDelete === 'restrict'
+              ? 'NO ACTION'
+              : constraint.onDelete.toUpperCase(),
+          );
+        if (constraint.onUpdate)
+          builder.onUpdate(constraint.onUpdate.toUpperCase());
+      },
+      buildPredicate: ({ client, predicate }) => {
+        const query = client.queryBuilder();
+        for (const [field, expression] of Object.entries(predicate)) {
+          const identifier = client.ref(field).toQuery();
+          if (
+            expression &&
+            typeof expression === 'object' &&
+            !Array.isArray(expression)
+          ) {
+            for (const [operator, value] of Object.entries(expression))
+              query.whereRaw(mssqlPredicate(identifier, operator, value));
+          } else query.whereRaw(mssqlPredicate(identifier, '$eq', expression));
+        }
+        return query;
+      },
+    },
     repository: {
       encodeBoolean: (_field, value) =>
         value === null ? null : Boolean(value),
@@ -235,5 +274,44 @@ function compactObject(
 ): Record<string, unknown> {
   return Object.fromEntries(
     Object.entries(input).filter(([, value]) => value !== undefined),
+  );
+}
+
+function mssqlPredicate(
+  identifier: string,
+  operator: string,
+  value: unknown,
+): string {
+  switch (operator) {
+    case '$gt':
+      return `${identifier} > ${mssqlLiteral(value)}`;
+    case '$gte':
+      return `${identifier} >= ${mssqlLiteral(value)}`;
+    case '$lt':
+      return `${identifier} < ${mssqlLiteral(value)}`;
+    case '$lte':
+      return `${identifier} <= ${mssqlLiteral(value)}`;
+    case '$ne':
+      return value === null
+        ? `${identifier} is not null`
+        : `${identifier} <> ${mssqlLiteral(value)}`;
+    case '$notNull':
+      return `${identifier} is not null`;
+    default:
+      return value === null
+        ? `${identifier} is null`
+        : `${identifier} = ${mssqlLiteral(value)}`;
+  }
+}
+function mssqlLiteral(value: unknown): string {
+  if (value === null) return 'null';
+  if (typeof value === 'boolean') return value ? '1' : '0';
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  if (typeof value === 'bigint') return String(value);
+  if (value instanceof Date)
+    return `N'${value.toISOString().replaceAll("'", "''")}'`;
+  if (typeof value === 'string') return `N'${value.replaceAll("'", "''")}'`;
+  throw new Error(
+    `MSSQL filtered index predicate value must be a scalar, received ${typeof value}.`,
   );
 }

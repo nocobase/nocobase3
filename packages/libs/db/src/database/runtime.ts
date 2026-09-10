@@ -4,6 +4,12 @@ import type { ConnectionConfig } from './config.js';
 import type { KnexConnectionConfig } from './internal/knex/config.js';
 import type { FieldDefinition } from '../collection/types.js';
 import type {
+  ColumnSchemaDefinition,
+  FilterExpression,
+  PhysicalConstraintDefinition,
+  SchemaOperation,
+} from '../collection/types.js';
+import type {
   AnyFieldDefinition,
   CollectionDefinition,
 } from '../collection/types.js';
@@ -150,6 +156,24 @@ export interface DatabaseRepositoryRuntimeStrategy {
 }
 
 export interface DatabaseSchemaRuntimeStrategy {
+  readonly assertExecutable?: (operations: readonly SchemaOperation[]) => void;
+  readonly normalizeOperation?: (
+    operation: SchemaOperation,
+    client: Knex,
+  ) => Promise<SchemaOperation> | SchemaOperation;
+  readonly dropIndexOperation?: (error: unknown) => boolean;
+  readonly columnType?: (context: {
+    column: ColumnSchemaDefinition;
+    tablePrimaryKey: boolean;
+  }) => string | undefined;
+  readonly configureForeignKey?: (context: {
+    foreign: any;
+    constraint: PhysicalConstraintDefinition & { type: 'foreignKey' };
+  }) => void;
+  readonly buildPredicate?: (context: {
+    client: Knex;
+    predicate: FilterExpression;
+  }) => Knex.QueryBuilder | undefined;
   readonly [key: string]: unknown;
 }
 

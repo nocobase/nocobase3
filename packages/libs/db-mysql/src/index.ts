@@ -31,6 +31,14 @@ export const mysqlDriver: DatabaseDriverDefinition<'mysql'> = {
       hasNativeResults: true,
       aggregateProjection: ({ expression }) => expression,
     },
+    schema: {
+      columnType: ({ column }) =>
+        column.type === 'datetime' || column.type === 'datetimeTz'
+          ? 'datetime(3)'
+          : column.type === 'time'
+            ? 'time(3)'
+            : undefined,
+    },
     repository: {
       compileJsonCondition: ({ client, column, node }) =>
         compileMysqlJsonCondition(client, column, node),

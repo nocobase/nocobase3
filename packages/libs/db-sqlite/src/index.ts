@@ -48,6 +48,12 @@ export const sqliteDriver: DatabaseDriverDefinition<'sqlite'> = {
       decimalAggregateKey: ({ client, value }) =>
         client.raw('nb_decimal_key(?)', [value]),
     },
+    schema: {
+      columnType: ({ column }) =>
+        ['date', 'time', 'datetime', 'datetimeTz'].includes(column.type)
+          ? 'text'
+          : undefined,
+    },
     repository: {
       compileJsonCondition: ({ client, column, node }) =>
         compileSqliteJsonCondition(client, column, node),
