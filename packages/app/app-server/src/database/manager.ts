@@ -2,20 +2,32 @@ import {
   createDatabaseManager,
   defineDatabase,
   type ConnectionConfig,
+  type DatabaseDriverRegistration,
   type DatabaseManager,
 } from '@nocobase/db';
-import postgres from '@nocobase/db-postgres';
-import mysql from '@nocobase/db-mysql';
-import sqlite from '@nocobase/db-sqlite';
-import oracle from '@nocobase/db-oracle';
-import mssql from '@nocobase/db-mssql';
 
 import type { ConfigPaths } from '../config/index.js';
 import type { AppDatabaseConfig } from './types.js';
 
+const registeredDrivers: Record<string, DatabaseDriverRegistration> = {};
+
+/**
+ * Registers the dialect packages owned by the application composition root.
+ *
+ * The app-server package deliberately does not depend on any concrete
+ * database driver. Applications can register exactly the packages they
+ * install, while tests and command entry points can share the same registry.
+ */
+export function registerAppDatabaseDrivers(
+  drivers: Record<string, DatabaseDriverRegistration>,
+): void {
+  Object.assign(registeredDrivers, drivers);
+}
+
 export function createAppDatabaseManager(
   config: AppDatabaseConfig,
   paths?: ConfigPaths,
+  drivers?: Record<string, DatabaseDriverRegistration>,
 ): DatabaseManager | undefined {
   if (config.default === 'none') {
     return undefined;
@@ -24,7 +36,11 @@ export function createAppDatabaseManager(
   return createDatabaseManager(
     defineDatabase({
       default: config.default,
-      drivers: { postgres, mysql, sqlite, oracle, mssql },
+      drivers: {
+        ...registeredDrivers,
+        ...config.drivers,
+        ...drivers,
+      },
       connections: resolveConnections(config.connections, paths),
       metadataStore: config.metadataStore,
     }),

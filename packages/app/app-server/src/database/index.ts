@@ -1,4 +1,7 @@
-export { createAppDatabaseManager } from './manager.js';
+export {
+  createAppDatabaseManager,
+  registerAppDatabaseDrivers,
+} from './manager.js';
 export {
   DatabaseProvider,
   type DatabaseProviderApplication,

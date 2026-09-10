@@ -187,11 +187,6 @@
     "@hono/node-server": "catalog:",
     "@nocobase/app-websocket": "workspace:^",
     "@nocobase/db": "workspace:^",
-    "@nocobase/db-postgres": "workspace:^",
-    "@nocobase/db-mysql": "workspace:^",
-    "@nocobase/db-sqlite": "workspace:^",
-    "@nocobase/db-oracle": "workspace:^",
-    "@nocobase/db-mssql": "workspace:^",
     "@nocobase/i18n": "workspace:^",
     "@nocobase/caching": "workspace:^",
     "@nocobase/config": "workspace:^",
@@ -207,6 +202,11 @@
     "hono": "catalog:"
   },
   "devDependencies": {
+    "@nocobase/db-mysql": "workspace:*",
+    "@nocobase/db-mssql": "workspace:*",
+    "@nocobase/db-oracle": "workspace:*",
+    "@nocobase/db-postgres": "workspace:*",
+    "@nocobase/db-sqlite": "workspace:*",
     "@nocobase/api-client": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@types/node": "catalog:",

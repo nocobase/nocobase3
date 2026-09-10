@@ -19,12 +19,14 @@ import {
 import { healthCheckApiRoutes } from '@nocobase/app-server/router';
 import type { ResolvedAppRuntime } from '@nocobase/app-server/runtime';
 import { spaRootRoutes } from '@nocobase/app-server/spa';
+import { databaseDrivers } from './database-drivers.js';
 
 export function createApp(runtime: ResolvedAppRuntime): Application {
   const app = new Application<ApplicationConfig>({
     config: runtime.appConfig,
     mode: runtime.mode,
     paths: runtime.configPaths,
+    databaseDrivers,
   });
   app.addServiceProvider(DatabaseProvider);
   app.addServiceProvider(I18nProvider);

@@ -199,6 +199,7 @@
     "@nocobase/app-plugin-skills-example": "workspace:^",
     "@nocobase/app-plugin-workflow": "workspace:^",
     "@nocobase/app-server": "workspace:^",
+    "@nocobase/db-sqlite": "workspace:^",
     "@nocobase/nb3-cli": "workspace:^",
     "@oclif/core": "catalog:",
     "hono": "catalog:"

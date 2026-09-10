@@ -108,7 +108,7 @@ export async function runAppDatabaseTasks(
 ): Promise<AppDatabaseTasksResult> {
   const plan = planAppDatabaseTasks(config, paths, [selection.kind], selection);
   if (!plan.length) return { ok: true, status: 'not-configured', results: [] };
-  const database = createAppDatabaseManager(config, paths);
+  const database = createAppDatabaseManager(config, paths, config.drivers);
   if (!database) return { ok: true, status: 'not-configured', results: [] };
   try {
     return await executeAppDatabasePlan(database, config, paths, plan);

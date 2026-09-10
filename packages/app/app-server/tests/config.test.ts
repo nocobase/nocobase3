@@ -6,6 +6,11 @@ import {
   InMemoryCollectionMetadataStore,
   type DatabaseManager,
 } from '@nocobase/db';
+import postgres from '@nocobase/db-postgres';
+import mysql from '@nocobase/db-mysql';
+import sqlite from '@nocobase/db-sqlite';
+import oracle from '@nocobase/db-oracle';
+import mssql from '@nocobase/db-mssql';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const createDatabaseMigratorMock = vi.hoisted(() => vi.fn());
@@ -30,6 +35,9 @@ import {
   prepareAppDatabaseStorage,
   type AppDatabaseConfig,
 } from '../src/index.js';
+import { registerAppDatabaseDrivers } from '../src/database/index.js';
+
+registerAppDatabaseDrivers({ postgres, mysql, sqlite, oracle, mssql });
 
 beforeEach(() => {
   createDatabaseMigratorMock.mockReset();

@@ -12,16 +12,24 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { Knex } from 'knex';
 import ts from 'typescript';
 import { objectProvider } from '@nocobase/config/providers/object';
+import postgres from '@nocobase/db-postgres';
+import mysql from '@nocobase/db-mysql';
+import sqlite from '@nocobase/db-sqlite';
+import oracle from '@nocobase/db-oracle';
+import mssql from '@nocobase/db-mssql';
 import { AppConfig, createConfigPaths } from '../src/config/index.js';
 import {
   createAppDatabaseManager,
   databaseConfig,
+  registerAppDatabaseDrivers,
   planAppDatabaseTasks,
   runAppDatabaseTasks,
   type AppDatabaseConfig,
 } from '../src/database/index.js';
 import { executeAppDatabasePlan } from '../src/database/tasks.js';
 import { createAppPluginDatabaseConfig } from '../src/plugins/resolve.js';
+
+registerAppDatabaseDrivers({ postgres, mysql, sqlite, oracle, mssql });
 
 const roots: string[] = [];
 afterEach(() => {

@@ -15,6 +15,7 @@ export interface DatabaseProviderApplication {
   readonly config: AppConfigAccessor;
   readonly container: ServiceContainer;
   readonly paths: ConfigPaths;
+  readonly databaseDrivers?: AppDatabaseConfig['drivers'];
 }
 
 export class DatabaseProvider extends ServiceProvider<DatabaseProviderApplication> {
@@ -27,7 +28,11 @@ export class DatabaseProvider extends ServiceProvider<DatabaseProviderApplicatio
     }
 
     this.app.container.singleton(databaseManagerToken, () => {
-      const database = createAppDatabaseManager(config, this.app.paths);
+      const database = createAppDatabaseManager(
+        config,
+        this.app.paths,
+        this.app.databaseDrivers,
+      );
       if (!database) {
         throw new Error('Database is not configured.');
       }

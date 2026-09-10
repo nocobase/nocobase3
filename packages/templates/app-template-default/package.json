@@ -192,6 +192,7 @@
     "@nocobase/app-plugin-notification-providers": "workspace:^",
     "@nocobase/app-plugin-workflow": "workspace:^",
     "@nocobase/app-server": "workspace:^",
+    "@nocobase/db-sqlite": "workspace:^",
     "@nocobase/nb3-cli": "workspace:^",
     "@oclif/core": "catalog:"
   }

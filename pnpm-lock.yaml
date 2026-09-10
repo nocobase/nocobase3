@@ -551,21 +551,6 @@ importers:
       '@nocobase/db':
         specifier: workspace:^
         version: link:../../libs/db
-      '@nocobase/db-mssql':
-        specifier: workspace:^
-        version: link:../../libs/db-mssql
-      '@nocobase/db-mysql':
-        specifier: workspace:^
-        version: link:../../libs/db-mysql
-      '@nocobase/db-oracle':
-        specifier: workspace:^
-        version: link:../../libs/db-oracle
-      '@nocobase/db-postgres':
-        specifier: workspace:^
-        version: link:../../libs/db-postgres
-      '@nocobase/db-sqlite':
-        specifier: workspace:^
-        version: link:../../libs/db-sqlite
       '@nocobase/drive':
         specifier: workspace:^
         version: link:../../libs/drive
@@ -603,6 +588,21 @@ importers:
       '@nocobase/api-client':
         specifier: workspace:*
         version: link:../../libs/api-client
+      '@nocobase/db-mssql':
+        specifier: workspace:*
+        version: link:../../libs/db-mssql
+      '@nocobase/db-mysql':
+        specifier: workspace:*
+        version: link:../../libs/db-mysql
+      '@nocobase/db-oracle':
+        specifier: workspace:*
+        version: link:../../libs/db-oracle
+      '@nocobase/db-postgres':
+        specifier: workspace:*
+        version: link:../../libs/db-postgres
+      '@nocobase/db-sqlite':
+        specifier: workspace:*
+        version: link:../../libs/db-sqlite
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
@@ -3156,6 +3156,9 @@ importers:
       '@nocobase/app-server':
         specifier: workspace:^
         version: link:../../app/app-server
+      '@nocobase/db-sqlite':
+        specifier: workspace:^
+        version: link:../../libs/db-sqlite
       '@nocobase/nb3-cli':
         specifier: workspace:^
         version: link:../../tools/cli
@@ -3508,6 +3511,9 @@ importers:
       '@nocobase/db':
         specifier: workspace:^
         version: link:../../libs/db
+      '@nocobase/db-sqlite':
+        specifier: workspace:^
+        version: link:../../libs/db-sqlite
       '@nocobase/nb3-cli':
         specifier: workspace:^
         version: link:../../tools/cli
@@ -3566,9 +3572,6 @@ importers:
       '@nocobase/cron':
         specifier: workspace:^
         version: link:../../libs/cron
-      '@nocobase/db-sqlite':
-        specifier: workspace:*
-        version: link:../../libs/db-sqlite
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
@@ -3857,6 +3860,9 @@ importers:
       '@nocobase/app-server':
         specifier: workspace:^
         version: link:../../app/app-server
+      '@nocobase/db-sqlite':
+        specifier: workspace:^
+        version: link:../../libs/db-sqlite
       '@nocobase/nb3-cli':
         specifier: workspace:^
         version: link:../../tools/cli

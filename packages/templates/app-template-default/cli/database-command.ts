@@ -9,6 +9,7 @@ import type {
   AppConfigAccessor,
   ConfigPaths,
 } from '@nocobase/app-server/config';
+import '../server/database-drivers.js';
 
 /** Keep single-connection JSON fields compatible while exposing per-connection bulk results. */
 export async function runDatabaseCommand(
