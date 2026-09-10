@@ -45,11 +45,13 @@ export function resolveKnexConnectionConfig(
   dialectDriver?: DatabaseDriverDefinition,
 ): KnexConnectionConfig {
   assertNoUnsupportedConnectionConfigFields(config);
-  const defaultDriver = resolveDatabaseDriver(config);
+  const defaultDriver = dialectDriver?.knexClient
+    ? dialectDriver.knexClient
+    : resolveDatabaseDriver(config);
 
   const resolved = {
     ...config,
-    driver: defaultDriver,
+    driver: defaultDriver as DatabaseDriver,
     schemaManagement: config.schemaManagement ?? 'managed',
     knexClient: KNEX_CLIENT_BY_DIALECT[config.dialect],
     connection: resolveKnexConnection(config),
