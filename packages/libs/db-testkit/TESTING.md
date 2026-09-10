@@ -9,7 +9,12 @@ The shared package must not import a concrete dialect or inspect a dialect
 name. Catalog queries such as `PRAGMA`, `information_schema`, `user_*`, and
 `sys.*` belong to the dialect package that owns the database.
 
-Tests that exercise the `@nocobase/db` manager, AST, or lifecycle remain in the
-core package. Tests that exercise SQL compilation, native types, or a native
-driver belong to the matching dialect package. A contract may be run by many
-dialect packages through their adapters.
+The shared integration suite lives in this package under `tests/integration`.
+It exercises the `@nocobase/db` manager, builder, repository, query, metadata,
+migration, seed, and schema contracts without choosing a database. Each
+dialect package loads the same suite through its own adapter, so adding a new
+dialect does not require changing the core package or copying the suite.
+
+Dialect-specific SQL, catalog inspection, native types, and driver behavior
+remain in the matching `@nocobase/db-<dialect>` package. A shared contract may
+be run by many dialect packages through their adapters.

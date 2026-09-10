@@ -11,10 +11,10 @@ declare global {
 }
 
 installDatabaseIntegrationAdapter(mssqlDialectIntegrationAdapter);
-process.chdir(new URL('../../../db/', import.meta.url).pathname);
+process.chdir(new URL('../../../db-testkit/', import.meta.url).pathname);
 
 const loadTests = import.meta.glob(
-  '../../../db/tests/integration/**/*.test.ts',
+  '../../../db-testkit/tests/integration/**/*.test.ts',
   {
     eager: false,
   },
