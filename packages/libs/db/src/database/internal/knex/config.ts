@@ -49,25 +49,28 @@ export function resolveKnexConnectionConfig(
     ? dialectDriver.knexClient
     : resolveDatabaseDriver(config);
 
+  const externalConnection = dialectDriver?.resolveConnection?.(config);
   const resolved = {
     ...config,
     driver: defaultDriver as DatabaseDriver,
     schemaManagement: config.schemaManagement ?? 'managed',
-    knexClient: KNEX_CLIENT_BY_DIALECT[config.dialect],
-    connection: resolveKnexConnection(config),
+    knexClient:
+      (dialectDriver?.knexClient as KnexClientName | undefined) ??
+      KNEX_CLIENT_BY_DIALECT[config.dialect],
+    connection: externalConnection?.connection ?? resolveKnexConnection(config),
     useNullAsDefault: config.dialect === 'sqlite' ? true : undefined,
     searchPath:
       config.dialect === 'postgres'
         ? normalizeSearchPath(config.schema)
         : undefined,
   };
-  if (dialectDriver?.resolveConnection) {
-    const dialectConnection = dialectDriver.resolveConnection(config);
+  if (externalConnection) {
+    const dialectConnection = externalConnection;
     return {
       ...resolved,
       ...dialectConnection,
       knexClient:
-        (dialectDriver.knexClient as KnexClientName | undefined) ??
+        (dialectDriver?.knexClient as KnexClientName | undefined) ??
         resolved.knexClient,
     };
   }
