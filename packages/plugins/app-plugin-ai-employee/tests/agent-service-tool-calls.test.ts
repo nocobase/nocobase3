@@ -21,7 +21,6 @@ const createProviders = (
     getSystemPrompt: vi.fn(),
     discoveredTools: vi.fn(),
     activeTools: vi.fn(),
-    getExecutionConfig: vi.fn(),
     shouldInterruptToolCall: vi.fn(),
     getToolsMap: vi.fn(),
   };
@@ -58,7 +57,6 @@ const expectNoExecutionLifecycle = (
   expect(chatContext.getSystemPrompt).not.toHaveBeenCalled();
   expect(chatContext.discoveredTools).not.toHaveBeenCalled();
   expect(chatContext.activeTools).not.toHaveBeenCalled();
-  expect(chatContext.getExecutionConfig).not.toHaveBeenCalled();
   expect(lifecycle.beforeExecution).not.toHaveBeenCalled();
   expect(lifecycle.afterExecution).not.toHaveBeenCalled();
   expect(lifecycle.registerAbortHandle).not.toHaveBeenCalled();

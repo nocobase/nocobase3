@@ -48,7 +48,6 @@ const createProviders = (
       }),
       discoveredTools: vi.fn(async () => []),
       activeTools: vi.fn(async () => new Set()),
-      getExecutionConfig: vi.fn(async () => ({})),
       shouldInterruptToolCall: vi.fn(() => false),
       getToolsMap: vi.fn(async () => new Map()),
     },
