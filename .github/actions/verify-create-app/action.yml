@@ -69,23 +69,28 @@ runs:
         fi
         echo "::add-mask::$TOKEN"
 
-        # actions/setup-node writes its own .npmrc and points NPM_CONFIG_USERCONFIG at it, so the credential has to go
-        # into that file rather than into ~/.npmrc, which npm would then never read. Either way it stays outside the
-        # repository, which is mid-release and about to have its whole working tree committed.
-        NPMRC="${NPM_CONFIG_USERCONFIG:-$HOME/.npmrc}"
-        echo "npmrc=$NPMRC" >> "$GITHUB_ENV"
+        # A separate file, used only by the steps below through a step-level NPM_CONFIG_USERCONFIG. The npm
+        # configuration the rest of the release reads is never modified, so no amount of forgetting to clean up can
+        # redirect the real publish.
+        #
+        # An earlier version wrote into that shared file and removed the token again afterwards. It missed the
+        # scoped-registry line it had also added, and `changeset publish` then looked for every package on a registry
+        # whose container had already been destroyed. Cleaning up correctly is a thing to get right every time;
+        # not writing there at all is a thing to get right once.
+        SMOKE_NPMRC="$RUNNER_TEMP/smoke-npmrc"
+        cp "${NPM_CONFIG_USERCONFIG:-$HOME/.npmrc}" "$SMOKE_NPMRC" 2>/dev/null || : > "$SMOKE_NPMRC"
+        echo "smoke_npmrc=$SMOKE_NPMRC" >> "$GITHUB_ENV"
 
         # `npm config set` rather than appending with `>>`. setup-node writes its file without a trailing newline, so
         # an appended line joins the last one — `always-auth=false//localhost:4873/:_authToken=...` parses as a value
-        # for always-auth and the credential silently does not exist. That is what produced E401 against a registry
-        # the run had otherwise reached correctly. npm parses and rewrites the whole file, so the newline is its
-        # problem rather than ours.
-        npm config set "//localhost:$PORT/:_authToken=$TOKEN"
+        # for always-auth and the credential silently does not exist. npm parses and rewrites the whole file, so the
+        # newline is its problem rather than ours.
+        NPM_CONFIG_USERCONFIG="$SMOKE_NPMRC" npm config set "//localhost:$PORT/:_authToken=$TOKEN"
 
-        # A scoped registry outranks the global one, and `pnpm config get registry` does not show it — so a stale or
-        # inherited @nocobase:registry would send the publish to the real registry while every check here passed.
-        # Pointing the scope at the throwaway registry explicitly removes that possibility rather than detecting it.
-        npm config set "@nocobase:registry=http://localhost:$PORT/"
+        # A scoped registry outranks the global one and does not appear in `config get registry`, so an inherited
+        # @nocobase:registry would send this publish to the real registry with every check here passing. Setting it
+        # in the isolated file removes that possibility for the smoke test without touching what follows it.
+        NPM_CONFIG_USERCONFIG="$SMOKE_NPMRC" npm config set "@nocobase:registry=http://localhost:$PORT/"
 
     # Environment variables rather than an .npmrc edit: the repository is mid-release and its whole working tree is
     # about to be committed, so nothing tracked can be touched, and a variable that only exists for this step cannot
@@ -107,6 +112,7 @@ runs:
         set -euo pipefail
         LOCAL="http://localhost:$PORT/"
 
+        export NPM_CONFIG_USERCONFIG="$smoke_npmrc"
         export PNPM_CONFIG_REGISTRY="$LOCAL"
         export npm_config_registry="$LOCAL"
         export NPM_CONFIG_REGISTRY="$LOCAL"
@@ -136,6 +142,8 @@ runs:
         TIMEOUT: ${{ inputs.timeout }}
       run: |
         set -euo pipefail
+        export NPM_CONFIG_USERCONFIG="$smoke_npmrc"
+
         CREATE_APP_VERSION=$(node -p "require('./packages/tools/create-app/package.json').version")
         TEMPLATE_VERSION=$(node -p "require('./packages/templates/app-template-default/package.json').version")
 
@@ -160,9 +168,16 @@ runs:
           docker logs release-verdaccio || true
         fi
         docker rm -f release-verdaccio > /dev/null 2>&1 || true
-        # The token is worthless once the container is gone, but leaving it behind would point later steps at a
-        # registry that no longer answers.
-        if [ -n "${npmrc:-}" ] && [ -f "$npmrc" ]; then
-          grep -v "//localhost:$PORT/:_authToken=" "$npmrc" > "$npmrc.tmp" || true
-          mv "$npmrc.tmp" "$npmrc"
+
+        # One file to remove, rather than specific lines to remember to remove from a file the release still needs.
+        rm -f "${smoke_npmrc:-}"
+
+        # The release publishes for real after this action returns, so prove the configuration it will read carries
+        # nothing pointing at a registry that no longer exists. This is the failure that reached a release once: a
+        # leftover @nocobase:registry sent `changeset publish` to a destroyed container.
+        SHARED="${NPM_CONFIG_USERCONFIG:-$HOME/.npmrc}"
+        if [ -f "$SHARED" ] && grep -q "localhost:$PORT" "$SHARED"; then
+          echo "::error::$SHARED still refers to the throwaway registry. The publish that follows would fail or reach the wrong registry."
+          grep -n "localhost:$PORT" "$SHARED" | sed 's/_authToken=.*/_authToken=<redacted>/'
+          exit 1
         fi
