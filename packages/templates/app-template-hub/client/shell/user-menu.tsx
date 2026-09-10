@@ -1,7 +1,7 @@
 import { useTranslation } from '@nocobase/i18n/client';
-import { useGetIdentity, useLogout } from '@refinedev/core';
+import { useAuthentication } from '@nocobase/app-plugin-authentication/client';
 import { LogOut, UserRound } from 'lucide-react';
-import type { ReactElement } from 'react';
+import { useState, type ReactElement } from 'react';
 
 import {
   DropdownMenu,
@@ -13,16 +13,22 @@ import {
 
 import { LanguageSwitcher } from './language-switcher.js';
 
-interface AppIdentity {
-  readonly avatar?: string;
-  readonly email?: string;
-  readonly fullName?: string;
-  readonly id: string | number;
-}
-
 export function UserMenu(): ReactElement {
-  const { data: identity, isLoading } = useGetIdentity<AppIdentity>();
-  const { mutate: logout, isPending: isLoggingOut } = useLogout();
+  const {
+    client,
+    session,
+    isPending: isLoading,
+    refresh,
+  } = useAuthentication();
+  const identity = session?.user
+    ? {
+        id: session.user.id,
+        fullName: session.user.name,
+        email: session.user.email,
+        avatar: session.user.image ?? undefined,
+      }
+    : null;
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const { t } = useTranslation();
 
   const name =
@@ -66,7 +72,17 @@ export function UserMenu(): ReactElement {
         <DropdownMenuSeparator />
         <DropdownMenuItem
           disabled={isLoggingOut}
-          onClick={() => logout()}
+          onClick={() => {
+            void (async () => {
+              setIsLoggingOut(true);
+              try {
+                await client.signOut();
+                await refresh();
+              } finally {
+                setIsLoggingOut(false);
+              }
+            })();
+          }}
           className='gap-2'
         >
           <LogOut className='size-4' />

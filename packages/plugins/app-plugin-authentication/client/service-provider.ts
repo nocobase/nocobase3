@@ -1,6 +1,6 @@
 import { ServiceProvider } from '@nocobase/service-provider';
 import type { ClientApplication } from '@nocobase/app-client';
-import { resolveAppUrl, realtimeClientToken } from '@nocobase/app-client';
+import { resolveAppUrl } from '@nocobase/app-client';
 import type { ClientServiceProviderConstructor } from '@nocobase/app-client/plugins';
 
 import {
@@ -8,7 +8,7 @@ import {
   type AuthConfig,
   type AuthClient,
 } from './auth-client.js';
-import { createAuthProvider } from './auth-provider.js';
+import { authenticationClientToken } from './tokens.js';
 import type { AuthenticationClientOptions } from './plugin.js';
 
 export class AuthenticationServiceProvider extends ServiceProvider<ClientApplication> {
@@ -24,11 +24,9 @@ export class AuthenticationServiceProvider extends ServiceProvider<ClientApplica
       ).href,
       ...this.app.config.get<AuthConfig>('auth'),
     });
-    this.app.refine.setAuthProvider(
-      createAuthProvider(
-        authClient as AuthClient,
-        this.app.container.resolve(realtimeClientToken),
-      ),
+    this.app.container.singleton(
+      authenticationClientToken,
+      () => authClient as AuthClient,
     );
     return Promise.resolve();
   }

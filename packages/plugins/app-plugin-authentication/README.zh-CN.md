@@ -2,7 +2,7 @@
 
 `@nocobase/app-plugin-authentication` 是 NocoBase 应用的认证基础包。它将 Better Auth
 接入 NocoBase Database 和 Caching，提供 Hono 中间件、浏览器客户端以及
-Refine `AuthProvider` 适配器。
+基于 Better Auth 的认证客户端、React 上下文和路由守卫。
 
 当前内置的默认认证方式是邮箱或用户名加密码。应用可以继续通过 Better Auth
 配置和插件扩展认证能力。
@@ -21,14 +21,14 @@ Refine `AuthProvider` 适配器。
 
 ## 包入口
 
-| 入口                                                 | 用途                                              |
-| ---------------------------------------------------- | ------------------------------------------------- |
-| `@nocobase/app-plugin-authentication`                | 服务端认证、存储适配、数据库适配和 migration      |
-| `@nocobase/app-plugin-authentication/server`         | 显式的服务端入口，与根入口导出相同                |
-| `@nocobase/app-plugin-authentication/client`         | 浏览器 `AuthClient` 和 Refine `AuthProvider` 适配 |
-| `@nocobase/app-plugin-authentication/client/routes`  | 按需加载默认密码认证页面的插件入口                |
-| `@nocobase/app-plugin-authentication/client/actions` | 无页面依赖的认证动作 hooks                        |
-| `@nocobase/app-plugin-authentication/client/ui`      | 认证路由链接 `AuthLink`                           |
+| 入口                                                 | 用途                                         |
+| ---------------------------------------------------- | -------------------------------------------- |
+| `@nocobase/app-plugin-authentication`                | 服务端认证、存储适配、数据库适配和 migration |
+| `@nocobase/app-plugin-authentication/server`         | 显式的服务端入口，与根入口导出相同           |
+| `@nocobase/app-plugin-authentication/client`         | 浏览器 `AuthClient`、认证上下文和路由守卫    |
+| `@nocobase/app-plugin-authentication/client/routes`  | 按需加载默认密码认证页面的插件入口           |
+| `@nocobase/app-plugin-authentication/client/actions` | 无页面依赖的认证动作 hooks                   |
+| `@nocobase/app-plugin-authentication/client/ui`      | 认证路由链接 `AuthLink`                      |
 
 插件还在 `registry/auth-ui` 发布官方认证 UI 配方。Template 可以将它物化到
 `client/extensions/nocobase-auth-ui`；安装后的副本属于应用，可以直接修改，不是插件

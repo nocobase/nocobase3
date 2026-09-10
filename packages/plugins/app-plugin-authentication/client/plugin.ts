@@ -7,6 +7,7 @@ import {
 import { AUTHENTICATION_ROUTE_IDS } from './route-contracts.js';
 import routes from './routes.js';
 import serviceProviders from './service-provider.js';
+import reactProviders from './react-provider.js';
 
 export interface AuthenticationClientOptions {
   readonly loginPage?: AppClientRouteComponentLoader;
@@ -17,6 +18,7 @@ const authentication: AppClientPluginFactory<AuthenticationClientOptions> =
   defineClientPlugin({
     packageName: '@nocobase/app-plugin-authentication',
     serviceProviders,
+    reactProviders,
     routes,
     routeComponentOverrides: (options) => [
       ...(options.loginPage

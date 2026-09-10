@@ -1,5 +1,4 @@
 import { resolveAppUrl } from '@nocobase/app-client';
-import { useGo } from '@refinedev/core';
 import type { MouseEvent, PropsWithChildren, ReactElement } from 'react';
 
 export interface AuthLinkProps extends PropsWithChildren {
@@ -12,8 +11,6 @@ export function AuthLink({
   className,
   to,
 }: AuthLinkProps): ReactElement {
-  const go = useGo();
-
   const handleClick = (event: MouseEvent<HTMLAnchorElement>): void => {
     if (
       event.button !== 0 ||
@@ -23,8 +20,6 @@ export function AuthLink({
       event.altKey
     )
       return;
-    event.preventDefault();
-    go({ to, type: 'push' });
   };
 
   return (
