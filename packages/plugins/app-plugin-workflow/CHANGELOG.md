@@ -1,5 +1,19 @@
 # @nocobase/app-plugin-workflow
 
+## 0.1.0-beta.12
+
+### Patch Changes
+
+- eb3bc38: Align catalog-managed peer dependency ranges with the workspace catalog.
+- Updated dependencies [e3fa827]
+- Updated dependencies [c3e02bf]
+- Updated dependencies [0a3fa83]
+- Updated dependencies [1d042c0]
+  - @nocobase/app-server@1.0.0-beta.9
+  - @nocobase/app-plugin-authentication@0.1.0-beta.10
+  - @nocobase/app-client@1.0.0-beta.12
+  - @nocobase/db@1.0.0-beta.4
+
 ## 0.1.0-beta.11
 
 ### Patch Changes

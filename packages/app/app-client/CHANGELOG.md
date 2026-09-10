@@ -1,5 +1,12 @@
 # @nocobase/app-client
 
+## 1.0.0-beta.12
+
+### Minor Changes
+
+- c3e02bf: Support client.app.defaultLocale, defaultColorScheme, and defaultTheme configuration while preserving saved user preferences and ignoring unsupported defaults.
+- 1d042c0: Support recursive page routes and navigation groups across App, Settings, and Dev. Render application menus from route navigation instead of Refine resources, preserve parent access checks, and migrate template and example navigation. Refine resources remain available for CRUD integration.
+
 ## 1.0.0-beta.11
 
 ### Patch Changes
