@@ -171,6 +171,7 @@ Email accepts a direct email recipient:
 
 ```ts
 await notification.send({
+  idempotencyKey: 'approval:42:alice:email',
   to: { type: 'email', address: 'alice@example.com' },
   channels: ['email'],
   content: { title: 'Approval complete', body: 'Review the result.' },
@@ -182,6 +183,7 @@ target to each configured Webhook Provider:
 
 ```ts
 await notification.send({
+  idempotencyKey: 'deployment:42:ops-alerts:im',
   to: { type: 'target', id: 'ops-alerts' },
   channels: ['im'],
   content: { title: 'Deployment complete', body: 'Production is ready.' },
@@ -193,6 +195,7 @@ set its channel-unique name; `strategy: 'single'` can be omitted:
 
 ```ts
 await notification.send({
+  idempotencyKey: 'deployment:42:ops-alerts:feishu',
   to: { type: 'target', id: 'ops-alerts' },
   channels: ['im'],
   routing: {
@@ -212,6 +215,7 @@ Channel configuration. To send to every enabled IM Provider, use
 
 ```ts
 await notification.send({
+  idempotencyKey: 'deployment:42:ops-alerts:all-im',
   to: { type: 'target', id: 'ops-alerts' },
   channels: ['im'],
   routing: { im: { providers: { strategy: 'all' } } },
