@@ -12,7 +12,7 @@ import {
   defineServerPlugins,
   type AppServerPlugins,
 } from '@nocobase/app-server/plugins';
-import fileRepository from '@nocobase/app-plugin-file-repository/server';
+import file from '@nocobase/app-plugin-file/server';
 
 const serverPlugins: AppServerPlugins = defineServerPlugins([
   authentication,
@@ -25,7 +25,7 @@ const serverPlugins: AppServerPlugins = defineServerPlugins([
   notificationInApp,
   notificationProviders,
   workflow,
-  fileRepository,
+  file,
 ]);
 
 export default serverPlugins;

@@ -1,11 +1,10 @@
 import { useState, type ReactElement } from 'react';
-import type { FilePreviewFieldProps } from '@nocobase/app-plugin-file/client/types';
+import type { FilePreviewFieldProps } from '../types';
 import { Button } from '@/components/ui/button';
 import { FilePreviewDialog } from './file-preview-dialog';
 import { FileThumbnail } from './file-thumbnail';
 
 export function FilePreviewField({
-  client,
   files,
   labels,
   emptyState,
@@ -43,7 +42,6 @@ export function FilePreviewField({
         ))}
       </div>
       <FilePreviewDialog
-        client={client}
         files={files}
         initialIndex={initialIndex}
         open={open}

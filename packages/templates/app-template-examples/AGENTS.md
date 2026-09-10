@@ -194,14 +194,14 @@ To customize a plugin's page, pass an option on its registration, add a source e
 
 **You are not starting from scratch.** This application ships with plugins that already solve whole categories of requirement, and each one publishes a Skill explaining how to use it. Registration copies those Skills into `.agents/skills/`. Before implementing a feature, check whether a plugin already covers it:
 
-| The requirement sounds like                                                                       | Read the Skill for                     |
-| ------------------------------------------------------------------------------------------------- | -------------------------------------- |
-| Approvals, multi-step processes, "when X happens then Y", business rules that outlive one request | `@nocobase/app-plugin-workflow`        |
-| Email, IM, or in-app messages; notifying someone that something happened                          | `@nocobase/app-plugin-notification`    |
-| Roles, permissions, "user A may only see their own records", field-level or row-level access      | `@nocobase/app-plugin-authorization`   |
-| Sign-in, registration, sessions, password reset                                                   | `@nocobase/app-plugin-authentication`  |
-| File upload and metadata through Repository                                                       | `@nocobase/app-plugin-file-repository` |
-| Translated text and language switching                                                            | `@nocobase/app-plugin-i18n`            |
+| The requirement sounds like                                                                       | Read the Skill for                    |
+| ------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| Approvals, multi-step processes, "when X happens then Y", business rules that outlive one request | `@nocobase/app-plugin-workflow`       |
+| Email, IM, or in-app messages; notifying someone that something happened                          | `@nocobase/app-plugin-notification`   |
+| Roles, permissions, "user A may only see their own records", field-level or row-level access      | `@nocobase/app-plugin-authorization`  |
+| Sign-in, registration, sessions, password reset                                                   | `@nocobase/app-plugin-authentication` |
+| File upload and metadata through Repository                                                       | `@nocobase/app-plugin-file`           |
+| Translated text and language switching                                                            | `@nocobase/app-plugin-i18n`           |
 
 Run `pnpm plugin:skills:sync` if `.agents/skills/` is missing or looks out of date, then read the Skill for the plugin you need. It documents that plugin's public entries, the ownership boundary, and how to verify the result — which is faster and more correct than inferring an API from its source.
 

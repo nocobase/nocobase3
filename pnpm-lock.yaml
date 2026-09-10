@@ -694,36 +694,32 @@ importers:
         specifier: 'catalog:'
         version: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@30.0.1(@noble/hashes@2.3.0))(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(sass-embedded@1.103.1)(sass@1.103.1)(tsx@4.23.12)(yaml@2.9.0))
 
-  packages/examples/app-plugin-file-repository-example:
-    dependencies:
+  packages/examples/app-plugin-file-example:
+    devDependencies:
       '@nocobase/app-client':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../app/app-client
-      '@nocobase/app-plugin-file-repository':
-        specifier: workspace:^
-        version: link:../../plugins/app-plugin-file-repository
+      '@nocobase/app-plugin-file':
+        specifier: workspace:*
+        version: link:../../plugins/app-plugin-file
       '@nocobase/app-server':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../app/app-server
       '@nocobase/db':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../libs/db
-      '@nocobase/i18n':
-        specifier: workspace:^
-        version: link:../../libs/i18n
-      '@nocobase/service-provider':
-        specifier: workspace:^
-        version: link:../../libs/service-provider
-      react:
-        specifier: ^19.0.0
-        version: 19.2.8
-    devDependencies:
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
       '@nocobase/drive':
         specifier: workspace:*
         version: link:../../libs/drive
+      '@nocobase/i18n':
+        specifier: workspace:*
+        version: link:../../libs/i18n
+      '@nocobase/service-provider':
+        specifier: workspace:*
+        version: link:../../libs/service-provider
       '@testing-library/jest-dom':
         specifier: 'catalog:'
         version: 7.0.1(@testing-library/dom@10.4.1)(vitest@4.1.10)
@@ -754,6 +750,9 @@ importers:
       prettier:
         specifier: 'catalog:'
         version: 3.9.6
+      react:
+        specifier: 'catalog:'
+        version: 19.2.8
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -2039,58 +2038,28 @@ importers:
 
   packages/plugins/app-plugin-file:
     dependencies:
-      '@base-ui/react':
-        specifier: 'catalog:'
-        version: 1.7.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      '@nocobase/app-client':
-        specifier: workspace:^
-        version: link:../../app/app-client
-      '@nocobase/app-plugin-authentication':
-        specifier: workspace:^
-        version: link:../app-plugin-authentication
-      '@nocobase/app-plugin-authorization':
-        specifier: workspace:^
-        version: link:../app-plugin-authorization
-      '@nocobase/app-server':
-        specifier: workspace:^
-        version: link:../../app/app-server
-      '@nocobase/db':
-        specifier: workspace:^
-        version: link:../../libs/db
-      '@nocobase/drive':
-        specifier: workspace:^
-        version: link:../../libs/drive
-      '@nocobase/i18n':
-        specifier: workspace:^
-        version: link:../../libs/i18n
-      clsx:
-        specifier: 'catalog:'
-        version: 2.1.1
       hono:
         specifier: 'catalog:'
         version: 4.13.2
-      lucide-react:
-        specifier: 'catalog:'
-        version: 0.487.0(react@19.2.8)
-      react:
-        specifier: ^19.0.0
-        version: 19.2.8
-      react-dom:
-        specifier: ^19.0.0
-        version: 19.2.8(react@19.2.8)
-      react-markdown:
-        specifier: 'catalog:'
-        version: 10.1.0(@types/react@19.2.18)(react@19.2.8)
-      remark-gfm:
-        specifier: 'catalog:'
-        version: 4.0.1
-      tailwind-merge:
-        specifier: 'catalog:'
-        version: 3.6.0
     devDependencies:
+      '@nocobase/api-client':
+        specifier: workspace:*
+        version: link:../../libs/api-client
+      '@nocobase/app-client':
+        specifier: workspace:*
+        version: link:../../app/app-client
+      '@nocobase/app-server':
+        specifier: workspace:*
+        version: link:../../app/app-server
+      '@nocobase/db':
+        specifier: workspace:*
+        version: link:../../libs/db
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
+      '@nocobase/drive':
+        specifier: workspace:*
+        version: link:../../libs/drive
       '@nocobase/service-provider':
         specifier: workspace:*
         version: link:../../libs/service-provider
@@ -2112,73 +2081,33 @@ importers:
       '@types/react-dom':
         specifier: 'catalog:'
         version: 19.2.4(@types/react@19.2.18)
-      eslint:
-        specifier: 'catalog:'
-        version: 10.8.1(jiti@2.7.0)
-      jsdom:
-        specifier: 'catalog:'
-        version: 30.0.1(@noble/hashes@2.3.0)
-      prettier:
-        specifier: 'catalog:'
-        version: 3.9.6
-      shadcn:
-        specifier: 'catalog:'
-        version: 4.18.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(typescript@6.0.3)
-      tailwindcss:
-        specifier: 'catalog:'
-        version: 4.3.3
-      tw-animate-css:
-        specifier: 'catalog:'
-        version: 1.4.0
-      typescript:
-        specifier: 'catalog:'
-        version: 6.0.3
-      vitest:
-        specifier: 'catalog:'
-        version: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@30.0.1(@noble/hashes@2.3.0))(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(sass-embedded@1.103.1)(sass@1.103.1)(tsx@4.23.12)(yaml@2.9.0))
-
-  packages/plugins/app-plugin-file-repository:
-    dependencies:
-      '@nocobase/app-client':
-        specifier: workspace:^
-        version: link:../../app/app-client
-      '@nocobase/app-server':
-        specifier: workspace:^
-        version: link:../../app/app-server
-      '@nocobase/db':
-        specifier: workspace:^
-        version: link:../../libs/db
-      '@nocobase/service-provider':
-        specifier: workspace:^
-        version: link:../../libs/service-provider
-      hono:
-        specifier: 'catalog:'
-        version: 4.13.2
-    devDependencies:
-      '@nocobase/api-client':
-        specifier: workspace:*
-        version: link:../../libs/api-client
-      '@nocobase/dev-config':
-        specifier: workspace:*
-        version: link:../../tools/dev-config
-      '@nocobase/drive':
-        specifier: workspace:*
-        version: link:../../libs/drive
-      '@types/node':
-        specifier: 'catalog:'
-        version: 24.13.3
-      '@types/react':
-        specifier: 'catalog:'
-        version: 19.2.18
       better-sqlite3:
         specifier: 'catalog:'
         version: 12.11.1
       eslint:
         specifier: 'catalog:'
         version: 10.8.1(jiti@2.7.0)
+      jsdom:
+        specifier: 'catalog:'
+        version: 30.0.1(@noble/hashes@2.3.0)
+      lucide-react:
+        specifier: 'catalog:'
+        version: 0.487.0(react@19.2.8)
       prettier:
         specifier: 'catalog:'
         version: 3.9.6
+      react:
+        specifier: 'catalog:'
+        version: 19.2.8
+      react-dom:
+        specifier: 'catalog:'
+        version: 19.2.8(react@19.2.8)
+      react-markdown:
+        specifier: 'catalog:'
+        version: 10.1.0(@types/react@19.2.18)(react@19.2.8)
+      remark-gfm:
+        specifier: 'catalog:'
+        version: 4.0.1
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -2905,9 +2834,9 @@ importers:
       '@nocobase/app-plugin-authorization':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-authorization
-      '@nocobase/app-plugin-file-repository':
+      '@nocobase/app-plugin-file':
         specifier: workspace:^
-        version: link:../../plugins/app-plugin-file-repository
+        version: link:../../plugins/app-plugin-file
       '@nocobase/app-plugin-i18n':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-i18n
@@ -3230,12 +3159,12 @@ importers:
       '@nocobase/app-plugin-database-example':
         specifier: workspace:^
         version: link:../../examples/app-plugin-database-example
-      '@nocobase/app-plugin-file-repository':
+      '@nocobase/app-plugin-file':
         specifier: workspace:^
-        version: link:../../plugins/app-plugin-file-repository
-      '@nocobase/app-plugin-file-repository-example':
+        version: link:../../plugins/app-plugin-file
+      '@nocobase/app-plugin-file-example':
         specifier: workspace:^
-        version: link:../../examples/app-plugin-file-repository-example
+        version: link:../../examples/app-plugin-file-example
       '@nocobase/app-plugin-i18n':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-i18n
@@ -14498,7 +14427,7 @@ snapshots:
       '@alicloud/endpoint-util': 0.0.1
       '@alicloud/openapi-client': 0.4.15
       '@alicloud/openapi-util': 0.3.3
-      '@alicloud/tea-typescript': 1.8.0
+      '@alicloud/tea-typescript': 1.8.0(supports-color@8.1.1)
       '@alicloud/tea-util': 1.4.11(supports-color@8.1.1)
     transitivePeerDependencies:
       - bufferutil
@@ -14507,8 +14436,8 @@ snapshots:
 
   '@alicloud/credentials@2.4.7':
     dependencies:
-      '@alicloud/tea-typescript': 1.8.0
-      httpx: 2.3.3
+      '@alicloud/tea-typescript': 1.8.0(supports-color@8.1.1)
+      httpx: 2.3.3(supports-color@8.1.1)
       ini: 1.3.8
       kitx: 2.2.0
     transitivePeerDependencies:
@@ -14516,7 +14445,7 @@ snapshots:
 
   '@alicloud/endpoint-util@0.0.1':
     dependencies:
-      '@alicloud/tea-typescript': 1.8.0
+      '@alicloud/tea-typescript': 1.8.0(supports-color@8.1.1)
       kitx: 2.2.0
     transitivePeerDependencies:
       - supports-color
@@ -14524,7 +14453,7 @@ snapshots:
   '@alicloud/gateway-spi@0.0.8':
     dependencies:
       '@alicloud/credentials': 2.4.7
-      '@alicloud/tea-typescript': 1.8.0
+      '@alicloud/tea-typescript': 1.8.0(supports-color@8.1.1)
     transitivePeerDependencies:
       - supports-color
 
@@ -14533,7 +14462,7 @@ snapshots:
       '@alicloud/credentials': 2.4.7
       '@alicloud/gateway-spi': 0.0.8
       '@alicloud/openapi-util': 0.3.3
-      '@alicloud/tea-typescript': 1.8.0
+      '@alicloud/tea-typescript': 1.8.0(supports-color@8.1.1)
       '@alicloud/tea-util': 1.4.9
       '@alicloud/tea-xml': 0.0.3
     transitivePeerDependencies:
@@ -14543,7 +14472,7 @@ snapshots:
 
   '@alicloud/openapi-util@0.3.3':
     dependencies:
-      '@alicloud/tea-typescript': 1.8.0
+      '@alicloud/tea-typescript': 1.8.0(supports-color@8.1.1)
       '@alicloud/tea-util': 1.4.11(supports-color@8.1.1)
       kitx: 2.2.0
       sm3: 1.0.3
@@ -14552,16 +14481,16 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@alicloud/tea-typescript@1.8.0':
+  '@alicloud/tea-typescript@1.8.0(supports-color@8.1.1)':
     dependencies:
       '@types/node': 12.20.55
-      httpx: 2.3.3
+      httpx: 2.3.3(supports-color@8.1.1)
     transitivePeerDependencies:
       - supports-color
 
   '@alicloud/tea-util@1.4.11(supports-color@8.1.1)':
     dependencies:
-      '@alicloud/tea-typescript': 1.8.0
+      '@alicloud/tea-typescript': 1.8.0(supports-color@8.1.1)
       '@darabonba/typescript': 1.0.5(supports-color@8.1.1)
       kitx: 2.2.0
     transitivePeerDependencies:
@@ -14571,14 +14500,14 @@ snapshots:
 
   '@alicloud/tea-util@1.4.9':
     dependencies:
-      '@alicloud/tea-typescript': 1.8.0
+      '@alicloud/tea-typescript': 1.8.0(supports-color@8.1.1)
       kitx: 2.2.0
     transitivePeerDependencies:
       - supports-color
 
   '@alicloud/tea-xml@0.0.3':
     dependencies:
-      '@alicloud/tea-typescript': 1.8.0
+      '@alicloud/tea-typescript': 1.8.0(supports-color@8.1.1)
       '@types/xml2js': 0.4.14
       xml2js: 0.6.2
     transitivePeerDependencies:
@@ -15597,10 +15526,10 @@ snapshots:
 
   '@darabonba/typescript@1.0.5(supports-color@8.1.1)':
     dependencies:
-      '@alicloud/tea-typescript': 1.8.0
+      '@alicloud/tea-typescript': 1.8.0(supports-color@8.1.1)
       http-proxy-agent: 5.0.0(supports-color@8.1.1)
       https-proxy-agent: 5.0.1
-      httpx: 2.3.3
+      httpx: 2.3.3(supports-color@8.1.1)
       lodash: 4.18.1
       moment: 2.30.1
       moment-timezone: 0.5.48
@@ -21244,7 +21173,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  httpx@2.3.3:
+  httpx@2.3.3(supports-color@8.1.1):
     dependencies:
       '@types/node': 20.19.43
       debug: 4.4.3(supports-color@8.1.1)

@@ -2,14 +2,9 @@ import {
   defineClientPlugin,
   type AppClientPluginFactory,
 } from '@nocobase/app-client/plugins';
-
-import locales from './locales/index.js';
-import settingsRoutes from './settings/routes.js';
-
-const file: AppClientPluginFactory = defineClientPlugin({
+import serviceProviders from './providers/index.js';
+const plugin: AppClientPluginFactory = defineClientPlugin({
   packageName: '@nocobase/app-plugin-file',
-  locales,
-  routes: settingsRoutes,
+  serviceProviders,
 });
-
-export default file;
+export default plugin;
