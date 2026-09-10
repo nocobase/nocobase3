@@ -31,9 +31,9 @@ export interface ExtensibleDatabaseConfig<
 }
 
 /**
- * A dialect package's public driver descriptor.  The implementation is
- * intentionally small in the first iteration; dialect-specific Knex hooks
- * can be added without changing the manager configuration shape.
+ * A Dialect package's public driver descriptor. Core owns orchestration while
+ * the descriptor owns native-driver, Knex, SQL, value, Inspector, and
+ * application-composition behavior for one Dialect.
  */
 export interface DatabaseDriverDefinition<TDialect extends string = string> {
   readonly dialect: TDialect;
