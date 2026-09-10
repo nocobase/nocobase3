@@ -77,11 +77,12 @@ The three files named `runtime.ts`, `plugins.ts`, and `routes.ts` are compositio
 
 ### Everyday development
 
-| Script       | What it does                                      |
-| ------------ | ------------------------------------------------- |
-| `pnpm dev`   | Start the API server and client with hot reload   |
-| `pnpm build` | Build the client and server into `dist/`          |
-| `pnpm start` | Run the built server; requires `pnpm build` first |
+| Script             | What it does                                                                 |
+| ------------------ | ---------------------------------------------------------------------------- |
+| `pnpm dev`         | Start the API server and client with hot reload                              |
+| `pnpm build`       | Build the client and server into `dist/`                                     |
+| `pnpm start`       | Run the built server; requires `pnpm build` first                            |
+| `pnpm build --tar` | Build, then pack `dist/` and `config.example.yml` into `storage/dist.tar.gz` |
 
 ### Database
 
@@ -154,6 +155,32 @@ A `.node` binary is compiled for one platform, architecture, C library, and Node
 Every build prints the platform it produced and records it in `dist/package.json` under `nocobase.buildTarget`, so a `dist/` built for the wrong machine can be identified rather than guessed at.
 
 If your application has no native modules — `pg`, `mysql2`, and `tedious` are all plain JavaScript — none of this applies and `dist/` is portable as built.
+
+#### Packing the build
+
+`pnpm build --tar` writes `storage/dist.tar.gz` once the build finishes. Without the flag no archive is produced, which is what you want while you are only running the build locally.
+
+```text
+dist.tar.gz
+├── config.example.yml
+└── dist/
+    ├── cli/
+    ├── client/
+    ├── node_modules/
+    ├── server/
+    ├── package.json
+    └── pnpm-workspace.yaml
+```
+
+`database/` joins them once your application owns migrations or seeds.
+
+`dist/` is inside the archive as a directory, so extracting it anywhere gives you a `dist/` next to `config.example.yml` rather than scattering `server/`, `client/`, and `node_modules/` across whatever directory you unpacked in. `config.example.yml` comes along because a server has to write a `config.yml` before it can start, and the example is the only statement of what may go in that file.
+
+Combine it with `--target` when the archive is for another machine:
+
+```bash
+pnpm build --target linux-x64 --tar
+```
 
 #### Adding a dependency
 
