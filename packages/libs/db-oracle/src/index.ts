@@ -1,3 +1,4 @@
+import { createRequire } from 'node:module';
 import type {
   ConnectionConfig,
   DatabaseDriverDefinition,
@@ -5,6 +6,9 @@ import type {
 } from '@nocobase/db';
 import { preciseIntegerClient } from '@nocobase/db';
 import { OracleSchemaInspector } from './inspectors/oracle.js';
+
+const require = createRequire(import.meta.url);
+const Oracledb: unknown = require('oracledb') as unknown;
 export type OracleOptions = Omit<
   OracleConnectionConfig,
   'dialect' | 'driver' | 'databaseDriver'
@@ -13,6 +17,9 @@ export const oracleDriver: DatabaseDriverDefinition<'oracle'> = {
   dialect: 'oracle',
   packageName: '@nocobase/db-oracle',
   knexClient: 'oracledb',
+  createKnexClient: () =>
+    // Oracle's integer codecs are installed by the shared Knex helper.
+    preciseIntegerClient('oracle', 'oracledb', Oracledb),
   resolveConnection: (source: ConnectionConfig) => {
     const config = source as OracleConnectionConfig;
     assertDriverOptions(config.driverOptions, [
@@ -49,10 +56,6 @@ export const oracleDriver: DatabaseDriverDefinition<'oracle'> = {
       connectionName: context.connectionName,
       resolveClient: context.resolveClient,
     }),
-  createKnexClient: () =>
-    // Oracle's integer codecs are installed by the shared Knex helper.
-    // The package owns the hook, so core no longer needs an oracle branch.
-    preciseIntegerClient('oracle', 'oracledb'),
   configurePool: (_config, pool) => {
     const configuredAfterCreate = pool.afterCreate;
     return {

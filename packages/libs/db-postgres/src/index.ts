@@ -7,6 +7,7 @@ import type {
 import { PostgresSchemaInspector } from './inspectors/postgres.js';
 
 const require = createRequire(import.meta.url);
+const Pg: unknown = require('pg') as unknown;
 const PgQueryStream =
   require('pg-query-stream') as typeof import('pg-query-stream');
 
@@ -22,6 +23,10 @@ export const postgresDriver: DatabaseDriverDefinition<'postgres'> = {
   createKnexClient: (_config, baseClient) => {
     if (!baseClient) return 'pg';
     class PostgresClientWithQueryStream extends baseClient {
+      _driver(): unknown {
+        return Pg;
+      }
+
       _stream(
         connection: {
           query(query: unknown): NodeJS.ReadableStream;

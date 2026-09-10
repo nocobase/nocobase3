@@ -63,6 +63,7 @@ interface OracleQuery {
 export function preciseIntegerClient(
   dialect: DatabaseDialect,
   fallback: string,
+  nativeDriver?: unknown,
 ): string | typeof Knex.Client {
   if (dialect !== 'sqlite' && dialect !== 'oracle') return fallback;
   const Base = require(
@@ -71,6 +72,13 @@ export function preciseIntegerClient(
   // Knex transactions construct clients from constructor.prototype, so codecs
   // must live on a local subclass rather than only on the initial instance.
   class PreciseIntegerClient extends Base {}
+  if (nativeDriver !== undefined) {
+    (
+      PreciseIntegerClient.prototype as Knex.Client & {
+        _driver: () => unknown;
+      }
+    )._driver = () => nativeDriver;
+  }
   if (dialect === 'sqlite') {
     const prototype = PreciseIntegerClient.prototype as Knex.Client & {
       _query(

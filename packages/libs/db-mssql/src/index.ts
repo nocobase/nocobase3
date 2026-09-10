@@ -1,9 +1,13 @@
+import { createRequire } from 'node:module';
 import type {
   ConnectionConfig,
   DatabaseDriverDefinition,
   MssqlConnectionConfig,
 } from '@nocobase/db';
 import { MssqlSchemaInspector } from './inspectors/mssql.js';
+
+const require = createRequire(import.meta.url);
+const Tedious: unknown = require('tedious') as unknown;
 export type MssqlOptions = Omit<
   MssqlConnectionConfig,
   'dialect' | 'driver' | 'databaseDriver'
@@ -12,6 +16,15 @@ export const mssqlDriver: DatabaseDriverDefinition<'mssql'> = {
   dialect: 'mssql',
   packageName: '@nocobase/db-mssql',
   knexClient: 'mssql',
+  createKnexClient: (_config, baseClient) => {
+    if (!baseClient) return 'mssql';
+    class MssqlClientWithDriver extends baseClient {
+      _driver(): unknown {
+        return Tedious;
+      }
+    }
+    return MssqlClientWithDriver;
+  },
   resolveConnection: (source: ConnectionConfig) => {
     const config = source as MssqlConnectionConfig;
     assertDriverOptions(config.driverOptions, [

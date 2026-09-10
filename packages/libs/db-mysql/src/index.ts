@@ -1,9 +1,13 @@
+import { createRequire } from 'node:module';
 import type {
   ConnectionConfig,
   DatabaseDriverDefinition,
   MysqlConnectionConfig,
 } from '@nocobase/db';
 import { MysqlSchemaInspector } from './inspectors/mysql.js';
+
+const require = createRequire(import.meta.url);
+const Mysql2: unknown = require('mysql2') as unknown;
 export type MysqlOptions = Omit<
   MysqlConnectionConfig,
   'dialect' | 'driver' | 'databaseDriver'
@@ -12,6 +16,15 @@ export const mysqlDriver: DatabaseDriverDefinition<'mysql'> = {
   dialect: 'mysql',
   packageName: '@nocobase/db-mysql',
   knexClient: 'mysql2',
+  createKnexClient: (_config, baseClient) => {
+    if (!baseClient) return 'mysql2';
+    class MysqlClientWithDriver extends baseClient {
+      _driver(): unknown {
+        return Mysql2;
+      }
+    }
+    return MysqlClientWithDriver;
+  },
   resolveConnection: (source: ConnectionConfig) => {
     const config = source as MysqlConnectionConfig;
     assertSocketPathExclusive(config, ['host', 'port']);
