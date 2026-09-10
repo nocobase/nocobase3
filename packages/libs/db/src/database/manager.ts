@@ -5,7 +5,11 @@ import type { QueryAdapter } from '../query/types.js';
 import type { Repository, RepositoryRecord } from '../repository/types.js';
 import { createSeeder, type Seeder } from '../seed/seeder.js';
 import type { DatabaseSeederOptions } from '../seed/types.js';
-import type { DatabaseConfig } from './config.js';
+import type {
+  BaseConnectionConfig,
+  DatabaseConfig,
+  ExtensibleDatabaseConfig,
+} from './config.js';
 import type {
   ConnectionConfig,
   DatabaseDriverDefinition,
@@ -55,9 +59,15 @@ export class CollectionMetadataStoreRequiredError extends Error {
   }
 }
 
-export function createDatabaseManager(config: DatabaseConfig): DatabaseManager {
+export function createDatabaseManager(config: DatabaseConfig): DatabaseManager;
+export function createDatabaseManager<
+  TConnection extends BaseConnectionConfig & { dialect: string },
+>(config: ExtensibleDatabaseConfig<TConnection>): DatabaseManager;
+export function createDatabaseManager(
+  config: DatabaseConfig | ExtensibleDatabaseConfig<any>,
+): DatabaseManager {
   return new DefaultDatabaseManager(
-    config,
+    config as DatabaseConfig,
     new DefaultConnectionFactory({
       knex: new KnexConnectionAdapter(),
     }),

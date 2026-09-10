@@ -4,6 +4,7 @@ import path from 'node:path';
 import { validateDatabaseOwnership } from './ownership.js';
 
 import type { ConfigPaths } from '../config/index.js';
+import type { DatabaseDriverRegistration } from '@nocobase/db';
 import type { AppDatabaseConfig, AppDatabaseMigrationConfig } from './types.js';
 
 export type AppDatabaseTaskKind = 'migrations' | 'seeds';
@@ -33,6 +34,7 @@ export function planAppDatabaseTasks(
   paths: ConfigPaths | undefined,
   kinds: readonly AppDatabaseTaskKind[],
   selection: AppDatabaseTaskSelection = {},
+  drivers?: Record<string, DatabaseDriverRegistration>,
 ): AppDatabaseTask[] {
   if (selection.connection !== undefined && selection.all) {
     throw new Error('--connection and --all are mutually exclusive.');
@@ -46,7 +48,7 @@ export function planAppDatabaseTasks(
   if (!Object.hasOwn(config.connections, primary)) {
     throw new Error(`Unknown default database connection "${primary}".`);
   }
-  validateDatabaseOwnership(config, paths);
+  validateDatabaseOwnership(config, paths, drivers);
   const names =
     selection.all || selection.autoRun
       ? Object.keys(config.connections).sort((a, b) =>

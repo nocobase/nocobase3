@@ -144,6 +144,28 @@ export const mysqlDriver: DatabaseDriverDefinition<'mysql'> = {
       connectionName: context.connectionName,
       resolveClient: context.resolveClient,
     }),
+  normalizeConnection: (source) => {
+    const config = source as MysqlConnectionConfig;
+    return {
+      ...(config.socketPath ? {} : { host: '127.0.0.1', port: 3306 }),
+      database: 'app',
+      username: 'root',
+      password: '',
+      charset: 'utf8mb4',
+      ...config,
+    };
+  },
+  resolveOwnershipTarget: (source) => {
+    const config = source as MysqlConnectionConfig;
+    return [
+      'mysql',
+      config.host,
+      config.port,
+      config.socketPath,
+      config.database,
+      undefined,
+    ];
+  },
 };
 export type MysqlConnection = MysqlOptions & {
   dialect: 'mysql';

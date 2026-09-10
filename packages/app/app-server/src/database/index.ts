@@ -1,6 +1,7 @@
 export {
   createAppDatabaseManager,
   registerAppDatabaseDrivers,
+  resolveAppDatabaseDriver,
 } from './manager.js';
 export {
   DatabaseProvider,

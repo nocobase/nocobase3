@@ -1,4 +1,4 @@
-import type { DatabaseManager } from '@nocobase/db';
+import type { DatabaseDriverRegistration, DatabaseManager } from '@nocobase/db';
 
 import type { ConfigPaths } from '../config/index.js';
 import { createAppDatabaseManager } from './manager.js';
@@ -50,6 +50,7 @@ export async function executeAppDatabasePlan(
   config: AppDatabaseConfig,
   paths: ConfigPaths | undefined,
   plan: readonly AppDatabaseTask[],
+  drivers?: Record<string, DatabaseDriverRegistration>,
 ): Promise<AppDatabaseTasksResult> {
   const result: AppDatabaseTasksResult = {
     ok: true,
@@ -67,7 +68,12 @@ export async function executeAppDatabasePlan(
       continue;
     }
     try {
-      await prepareAppDatabaseStorage(config, paths, [task.connection]);
+      await prepareAppDatabaseStorage(
+        config,
+        paths,
+        [task.connection],
+        drivers,
+      );
       const options = {
         database,
         connection: task.connection,
@@ -105,13 +111,23 @@ export async function runAppDatabaseTasks(
   config: AppDatabaseConfig,
   paths: ConfigPaths | undefined,
   selection: AppDatabaseTaskSelection & { kind: AppDatabaseTaskKind },
+  drivers?: Record<string, DatabaseDriverRegistration>,
 ): Promise<AppDatabaseTasksResult> {
-  const plan = planAppDatabaseTasks(config, paths, [selection.kind], selection);
+  const plan = planAppDatabaseTasks(
+    config,
+    paths,
+    [selection.kind],
+    selection,
+    drivers,
+  );
   if (!plan.length) return { ok: true, status: 'not-configured', results: [] };
-  const database = createAppDatabaseManager(config, paths, config.drivers);
+  const database = createAppDatabaseManager(config, paths, {
+    ...config.drivers,
+    ...drivers,
+  });
   if (!database) return { ok: true, status: 'not-configured', results: [] };
   try {
-    return await executeAppDatabasePlan(database, config, paths, plan);
+    return await executeAppDatabasePlan(database, config, paths, plan, drivers);
   } finally {
     await database.destroy();
   }
@@ -120,10 +136,14 @@ export async function runAppDatabaseTasks(
 export async function runAppMigrations(
   config: AppDatabaseConfig,
   paths?: ConfigPaths,
+  drivers?: Record<string, DatabaseDriverRegistration>,
 ): Promise<AppMigrationRunResult | undefined> {
-  const result = await runAppDatabaseTasks(config, paths, {
-    kind: 'migrations',
-  });
+  const result = await runAppDatabaseTasks(
+    config,
+    paths,
+    { kind: 'migrations' },
+    drivers,
+  );
   const first = result.results[0];
   return (
     first && {
@@ -139,8 +159,14 @@ export async function runAppMigrations(
 export async function runAppSeeds(
   config: AppDatabaseConfig,
   paths?: ConfigPaths,
+  drivers?: Record<string, DatabaseDriverRegistration>,
 ): Promise<AppSeedRunResult | undefined> {
-  const result = await runAppDatabaseTasks(config, paths, { kind: 'seeds' });
+  const result = await runAppDatabaseTasks(
+    config,
+    paths,
+    { kind: 'seeds' },
+    drivers,
+  );
   const first = result.results[0];
   return (
     first && {

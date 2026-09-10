@@ -14,6 +14,23 @@ export interface DatabaseConfig {
 }
 
 /**
+ * Configuration shape for a database that contributes a dialect unknown to
+ * this package. The connection type is inferred from the caller, so a new
+ * dialect package can add its own options without extending this union.
+ */
+export interface ExtensibleDatabaseConfig<
+  TConnection extends BaseConnectionConfig & { dialect: string } =
+    BaseConnectionConfig & {
+      dialect: string;
+    },
+> {
+  default?: string;
+  drivers?: Record<string, DatabaseDriverRegistration>;
+  connections: Record<string, TConnection>;
+  metadataStore?: CollectionMetadataStore;
+}
+
+/**
  * A dialect package's public driver descriptor.  The implementation is
  * intentionally small in the first iteration; dialect-specific Knex hooks
  * can be added without changing the manager configuration shape.
@@ -44,6 +61,36 @@ export interface DatabaseDriverDefinition<TDialect extends string = string> {
     config: unknown;
     resolveClient: () => Promise<Knex>;
   }) => SchemaInspector;
+  /**
+   * Applies application-level defaults and path normalization owned by the
+   * dialect package. The core database manager only consumes the resulting
+   * connection and never needs to know dialect-specific defaults.
+   */
+  readonly normalizeConnection?: (
+    config: unknown,
+    context: {
+      resolveStoragePath?: (filename: string) => string;
+    },
+  ) => unknown;
+  /**
+   * Returns a stable identity for managed-database ownership checks. Drivers
+   * may return `undefined` for connections that do not have a local target
+   * (for example an in-memory database).
+   */
+  readonly resolveOwnershipTarget?: (
+    config: unknown,
+  ) => readonly unknown[] | undefined;
+  /**
+   * Prepares any local storage required before a connection is opened.
+   * Application hosts provide the filesystem operation; drivers own the
+   * decision about whether it is needed.
+   */
+  readonly prepareStorage?: (
+    config: unknown,
+    context: {
+      ensureDirectory: (directory: string) => Promise<void>;
+    },
+  ) => void | Promise<void>;
   readonly configurePool?: (
     config: unknown,
     pool: Knex.PoolConfig,
@@ -70,8 +117,12 @@ export interface DatabaseDriverFactory<
 export type DatabaseDriverRegistration<TDialect extends string = string> =
   DatabaseDriverDefinition<TDialect> | DatabaseDriverFactory<TDialect>;
 
-export type DatabaseDialect =
-  'sqlite' | 'postgres' | 'mysql' | 'oracle' | 'mssql';
+/**
+ * Dialect identifiers are open ended. Built-in connection config aliases below
+ * provide strict fields for the shipped drivers, while new driver packages can
+ * contribute their own dialect literal without changing this package.
+ */
+export type DatabaseDialect = string;
 
 export type SchemaManagementMode = 'managed' | 'external';
 
@@ -161,6 +212,8 @@ interface SocketConnectionConfig {
   password?: string;
 }
 
-export function defineDatabase<T extends DatabaseConfig>(config: T): T {
+export function defineDatabase<
+  T extends DatabaseConfig | ExtensibleDatabaseConfig<any>,
+>(config: T): T {
   return config;
 }

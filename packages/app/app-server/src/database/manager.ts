@@ -2,6 +2,7 @@ import {
   createDatabaseManager,
   defineDatabase,
   type ConnectionConfig,
+  type DatabaseDriverDefinition,
   type DatabaseDriverRegistration,
   type DatabaseManager,
 } from '@nocobase/db';
@@ -41,7 +42,10 @@ export function createAppDatabaseManager(
         ...config.drivers,
         ...drivers,
       },
-      connections: resolveConnections(config.connections, paths),
+      connections: resolveConnections(config.connections, paths, {
+        ...config.drivers,
+        ...drivers,
+      }),
       metadataStore: config.metadataStore,
     }),
   );
@@ -50,11 +54,12 @@ export function createAppDatabaseManager(
 export function resolveConnections(
   connections: AppDatabaseConfig['connections'],
   paths: ConfigPaths | undefined,
+  drivers?: Record<string, DatabaseDriverRegistration>,
 ): Record<string, ConnectionConfig> {
   return Object.fromEntries(
     Object.entries(connections).map(([name, config]) => {
       const { migrations: _migrations, seeds: _seeds, ...connection } = config;
-      return [name, normalizeConnection(connection, paths)];
+      return [name, normalizeConnection(connection, paths, drivers)];
     }),
   );
 }
@@ -62,59 +67,28 @@ export function resolveConnections(
 function normalizeConnection(
   connection: ConnectionConfig,
   paths: ConfigPaths | undefined,
+  drivers?: Record<string, DatabaseDriverRegistration>,
 ): ConnectionConfig {
-  switch (connection.dialect) {
-    case 'mysql':
-      return {
-        ...(connection.socketPath ? {} : { host: '127.0.0.1', port: 3306 }),
-        database: 'app',
-        username: 'root',
-        password: '',
-        charset: 'utf8mb4',
-        ...connection,
-      } as ConnectionConfig;
-    case 'postgres':
-      return {
-        host: '127.0.0.1',
-        port: 5432,
-        database: 'app',
-        username: 'postgres',
-        password: '',
-        ssl: false,
-        schema: ['public'],
-        ...connection,
-      };
-    case 'oracle':
-      return {
-        ...connection,
-        host: connection.host ?? '127.0.0.1',
-        port: connection.port ?? 1521,
-        serviceName: connection.serviceName || 'FREEPDB1',
-        username: connection.username ?? 'nocobase',
-        password: connection.password ?? '',
-      };
-    case 'mssql':
-      return {
-        host: '127.0.0.1',
-        port: 1433,
-        database: 'app',
-        username: 'sa',
-        password: '',
-        encrypt: false,
-        trustServerCertificate: false,
-        ...connection,
-      };
-    case 'sqlite': {
-      const database = (connection as ConnectionConfig & { database?: string })
-        .database;
-      const filename = database ?? connection.filename;
-      return {
-        ...connection,
-        filename:
-          filename && filename !== ':memory:' && paths
-            ? paths.storage(filename)
-            : filename,
-      };
-    }
+  const driver = resolveAppDatabaseDriver(connection.dialect, drivers);
+  if (!driver?.normalizeConnection) return connection;
+  return driver.normalizeConnection(connection, {
+    resolveStoragePath: paths
+      ? (filename) => paths.storage(filename)
+      : undefined,
+  }) as ConnectionConfig;
+}
+
+export function resolveAppDatabaseDriver(
+  dialect: string,
+  drivers?: Record<string, DatabaseDriverRegistration>,
+): DatabaseDriverDefinition | undefined {
+  const value = { ...registeredDrivers, ...drivers }[dialect];
+  if (!value) return undefined;
+  const candidate = value as DatabaseDriverRegistration & {
+    driver?: DatabaseDriverDefinition;
+  };
+  if (typeof candidate === 'function') {
+    return candidate.driver;
   }
+  return candidate;
 }

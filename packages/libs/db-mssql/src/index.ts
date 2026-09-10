@@ -235,6 +235,27 @@ export const mssqlDriver: DatabaseDriverDefinition<'mssql'> = {
       connectionName: context.connectionName,
       resolveClient: context.resolveClient,
     }),
+  normalizeConnection: (source) => ({
+    host: '127.0.0.1',
+    port: 1433,
+    database: 'app',
+    username: 'sa',
+    password: '',
+    encrypt: false,
+    trustServerCertificate: false,
+    ...(source as MssqlConnectionConfig),
+  }),
+  resolveOwnershipTarget: (source) => {
+    const config = source as MssqlConnectionConfig;
+    return [
+      'mssql',
+      config.host,
+      config.port,
+      undefined,
+      config.database,
+      'dbo',
+    ];
+  },
 };
 export type MssqlConnection = MssqlOptions & {
   dialect: 'mssql';

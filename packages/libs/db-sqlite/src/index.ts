@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module';
+import path from 'node:path';
 import type {
   ConnectionConfig,
   DatabaseCapabilities,
@@ -138,6 +139,29 @@ export const sqliteDriver: DatabaseDriverDefinition<'sqlite'> = {
       connectionName: context.connectionName,
       resolveClient: context.resolveClient,
     }),
+  normalizeConnection: (source, context) => {
+    const config = source as SqliteConnectionConfig & {
+      database?: string;
+    };
+    const filename = config.database ?? config.filename;
+    return {
+      ...config,
+      filename:
+        filename && filename !== ':memory:' && context.resolveStoragePath
+          ? context.resolveStoragePath(filename)
+          : filename,
+    };
+  },
+  resolveOwnershipTarget: (source) => {
+    const config = source as SqliteConnectionConfig;
+    if (!config.filename || config.filename === ':memory:') return undefined;
+    return ['sqlite', path.resolve(config.filename)];
+  },
+  prepareStorage: async (source, context) => {
+    const config = source as SqliteConnectionConfig;
+    if (!config.filename || config.filename === ':memory:') return;
+    await context.ensureDirectory(path.dirname(config.filename));
+  },
   configurePool: (_config, pool) => {
     const afterCreate = pool.afterCreate;
     return {

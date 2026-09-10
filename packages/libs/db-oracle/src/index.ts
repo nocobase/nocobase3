@@ -300,6 +300,28 @@ export const oracleDriver: DatabaseDriverDefinition<'oracle'> = {
       },
     };
   },
+  normalizeConnection: (source) => {
+    const config = source as OracleConnectionConfig;
+    return {
+      ...config,
+      host: config.host ?? '127.0.0.1',
+      port: config.port ?? 1521,
+      serviceName: config.serviceName || 'FREEPDB1',
+      username: config.username ?? 'nocobase',
+      password: config.password ?? '',
+    };
+  },
+  resolveOwnershipTarget: (source) => {
+    const config = source as OracleConnectionConfig;
+    return [
+      'oracle',
+      config.host,
+      config.port,
+      undefined,
+      config.serviceName,
+      config.username,
+    ];
+  },
 };
 export type OracleConnection = OracleOptions & {
   dialect: 'oracle';

@@ -162,6 +162,31 @@ export const postgresDriver: DatabaseDriverDefinition<'postgres'> = {
       resolveClient: context.resolveClient,
     });
   },
+  normalizeConnection: (source) => ({
+    host: '127.0.0.1',
+    port: 5432,
+    database: 'app',
+    username: 'postgres',
+    password: '',
+    ssl: false,
+    schema: ['public'],
+    ...(source as PostgresConnectionConfig),
+  }),
+  resolveOwnershipTarget: (source) => {
+    const config = source as PostgresConnectionConfig;
+    const schema =
+      typeof config.schema === 'string'
+        ? config.schema
+        : (config.schema?.[0] ?? 'public');
+    return [
+      'postgres',
+      config.host,
+      config.port,
+      undefined,
+      config.database,
+      schema,
+    ];
+  },
 } satisfies DatabaseDriverDefinition<'postgres'>;
 
 export type PostgresConnection = PostgresOptions & {
