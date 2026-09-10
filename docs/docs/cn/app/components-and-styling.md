@@ -1,12 +1,12 @@
 ---
 title: '界面和样式'
-description: '用 shadcn/ui 组件拼界面，用语义化的主题变量写样式，让浅色深色和换主题都自动跟着走。'
-keywords: 'NocoBase,组件,样式,shadcn,主题变量,深色模式,Tailwind'
+description: '用 shadcn/ui 组件拼界面，用语义化的主题变量写样式，让浅色深色和换主题都自动适配。'
+keywords: 'NocoBase,组件,样式,shadcn,主题变量,深色模式,图标'
 ---
 
 # 界面和样式
 
-应用的界面由 shadcn/ui 的基础组件拼出来，样式走语义化的主题变量，比如 `bg-background`、`text-muted-foreground`、`border-border` 这类。这些变量在每套主题的浅色和深色规则里都定义了一份，所以用对它，深色模式和换主题都是自动生效的。
+界面由 shadcn/ui 的基础组件拼出来，样式统一走语义化的主题变量。变量在每套主题的浅色和深色规则里各定义了一份，所以样式写对了，深色模式和换主题都不用额外处理。
 
 ## 组件从哪来
 
@@ -51,7 +51,9 @@ export function OrderSummary({ order }: OrderSummaryProps): ReactElement {
 
 `@/` 指向 `client/`。不要重新实现基础组件的行为。焦点管理、键盘操作和 ARIA 属性在 shadcn 组件里已经是对的，手写很容易写坏。
 
-## 用主题变量，不要写死颜色
+## 如何编写样式
+
+颜色、字体、字号、间距、圆角和阴影都通过主题变量表达，常用的对应关系如下：
 
 | 该用                                       | 不要用                        |
 | ------------------------------------------ | ----------------------------- |
@@ -61,17 +63,43 @@ export function OrderSummary({ order }: OrderSummaryProps): ReactElement {
 | `bg-primary`、`text-primary-foreground`    | `bg-blue-600`、`text-white`   |
 | `bg-destructive`、`text-destructive`       | `bg-red-500`                  |
 
-变量定义在 `client/theme/themes/*.css` 里，每套主题各定义一份。写死的颜色在你当时看的那套主题下没问题，换一套主题就坏了。这是这套代码里最常见的样式问题。完整的变量清单见[主题变量](../reference/theme-tokens)。
+用主题变量的直接好处是深色模式自动适配。每套主题都分别定义了浅色和深色两份变量，你写 `bg-card`，深色下取到的就是深色的 `--card`，不需要为深色单独写一套样式。
+
+前提是别写死颜色。下面这个表单区块用到的都是主题变量：
+
+```tsx
+// client/components/order-form.tsx
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+
+export function OrderForm(): ReactElement {
+  return (
+    <form className='space-y-4 rounded-lg border border-border bg-card p-6 text-card-foreground shadow-sm'>
+      <h2 className='font-heading text-lg'>新建订单</h2>
+      <div className='space-y-2'>
+        <Label htmlFor='reference'>订单编号</Label>
+        <Input id='reference' placeholder='ORD-0001' />
+        <p className='text-sm text-muted-foreground'>编号创建后不能修改。</p>
+      </div>
+      <div className='flex gap-2'>
+        <Button type='submit'>保存</Button>
+        <Button type='button' variant='secondary'>
+          取消
+        </Button>
+      </div>
+    </form>
+  );
+}
+```
+
+把 `bg-card` 换成 `bg-white`、`text-muted-foreground` 换成 `text-gray-500`，浅色下几乎看不出区别，深色下就是白底浅灰字。这是这套代码里最常见的样式问题。
 
 字体和尺寸也走同一套约定。正文用 `font-sans text-base`，语义化的 h1 到 h6 用 `font-heading`，code、pre、kbd、samp 用 `font-mono`。标题如果渲染成了别的元素，需要自己补 `font-heading`。间距、尺寸和圆角用 `text-sm`、`p-4`、`gap-2`、`h-8`、`rounded-lg`、`shadow-md` 这些标准值，不要写成等价的任意值。
 
 确实需要固定尺寸的地方要保留，比如图片尺寸、视口限制、圆形图标。但要确认这些固定值、显式行高和阴影颜色没有覆盖掉主题想要的效果。
 
-## 深色模式
-
-两套主题用的是同一组变量，所以用对变量，深色模式就已经能正常工作了。`client/theme/` 里有主题 provider 和「浅色 / 深色 / 跟随系统」的切换入口。
-
-改完要两套主题都看一下。`dark:` 变体只留给变量表达不了的情况。如果你经常需要它，通常说明某处混进了一个写死的颜色。
+`dark:` 变体只留给变量表达不了的情况。如果你经常需要它，通常说明某处混进了一个写死的颜色。
 
 :::tip 提示
 
@@ -81,35 +109,73 @@ export function OrderSummary({ order }: OrderSummaryProps): ReactElement {
 
 ## 图标
 
-图标库是 `lucide-react`。尺寸走 `size-*` 这档刻度，按旁边文字的大小选：正文旁边的图标通常是 `size-4`，更紧凑的地方用 `size-3` 或 `size-3.5`，需要更醒目就用 `size-5`。这些值都基于主题的间距刻度，会跟着主题一起变，所以不要写 `size={16}` 或 `w-[16px] h-[16px]` 这类固定像素。
+图标库是 `lucide-react`。尺寸用 `size-*` 这档刻度，按旁边文字的大小选，不要写固定像素：
 
-`size-4` 不是唯一选择，只是最常用的默认值。shadcn 的基础组件里，没有显式指定尺寸的图标也默认落在这一档。
+```tsx
+// 正文旁的图标通常是 size-4，需要更醒目就用 size-5
+<Settings className='size-4' aria-hidden='true' />
+```
 
 ## 加载、空和错误状态
 
-每个要取数据的界面都需要这三种状态。`client/components/loading.tsx` 是共享的加载指示器。
+每个要取数据的界面都需要这三种状态。`client/components/loading.tsx` 是共享的加载指示器：
+
+```tsx
+// client/pages/orders.tsx
+import { apiClientToken, useService } from '@nocobase/app-client';
+import { useEffect, useState, type ReactElement } from 'react';
+
+import { Loading } from '@/components/loading';
+
+interface Order {
+  readonly id: string;
+  readonly reference: string;
+}
+
+export default function OrdersPage(): ReactElement {
+  const api = useService(apiClientToken);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string>();
+
+  useEffect(() => {
+    void api
+      .request<{ data: Order[] }>({ path: 'orders' })
+      .then((response) => setOrders(response.data))
+      .catch((cause: unknown) =>
+        setError(cause instanceof Error ? cause.message : '订单加载失败'),
+      )
+      .finally(() => setIsLoading(false));
+  }, [api]);
+
+  if (isLoading) {
+    return <Loading label='正在加载订单' />;
+  }
+
+  if (error) {
+    return <p className='p-6 text-sm text-destructive'>{error}</p>;
+  }
+
+  if (orders.length === 0) {
+    return <p className='p-6 text-sm text-muted-foreground'>还没有订单。</p>;
+  }
+
+  return (
+    <ul className='space-y-2 p-6'>
+      {orders.map((order) => (
+        <li
+          key={order.id}
+          className='rounded-lg border border-border bg-card p-4 text-card-foreground'
+        >
+          {order.reference}
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
 
 加载反馈要放在正在加载的那块界面里面。给对话框内容渲染一个页面级 spinner，它会出现在对话框背后，而不是对话框里。
-
-## 一致性是整个应用的事
-
-**应用看起来要像一个产品。** 动手写一个组件之前，先看附近页面是怎么处理同样的问题的：间距用了几档、标题多大、用卡片还是普通区块、操作按钮放在哪。照着来。
-
-**如果确实需要换个样子，就整体一起换。** 改 `client/theme/themes/*.css` 里的变量，或者改每个页面都在用的那个共享组件，让整个应用一起动。
-
-**不要只给自己这一页换一套。** 单独一套间距、单独一种按钮样式、单独一份配色，都是缺陷。如果你认为应用的样式该变，说出来并全局改掉，不要给某一页开小灶。
-
-## Tailwind 扫描范围
-
-`tailwind.config.mjs` 会扫描应用的 client 源码，以及已安装的 `@nocobase` 包里的 client 目录。在 `client/` 下新增的组件会自动被扫到，不需要往配置里登记。
-
-## 改完怎么验证
-
-- 浅色和深色两套主题都显示正常。
-- 页面的间距、字体和组件跟旁边的页面是一套。
-- 普通颜色、字体、间距、圆角和阴影都由主题变量控制，有意保留的固定值说得清原因。
-- 改动过的字体、字号、间距、阴影在中英文长文案、窄屏和弹层里都正常，键盘焦点仍然可见。
-- 加载、空和错误状态都能渲染出来。
 
 ## 相关链接
 
