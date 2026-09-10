@@ -18,6 +18,9 @@ export interface DatabaseContractContext {
 export type DatabaseContractFactory<TContext extends DatabaseContractContext> =
   () => TContext | Promise<TContext>;
 
+export type { DatabaseDialectTestAdapter } from './contracts.js';
+export { asDatabaseContractAdapter } from './contracts.js';
+
 export interface DatabaseContractSuiteOptions<
   TContext extends DatabaseContractContext,
 > {
