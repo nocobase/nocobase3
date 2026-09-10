@@ -3,7 +3,7 @@ import type {
   DatabaseDriverDefinition,
   OracleConnectionConfig,
 } from '@nocobase/db';
-import { OracleSchemaInspector } from '@nocobase/db';
+import { OracleSchemaInspector, preciseIntegerClient } from '@nocobase/db';
 export type OracleOptions = Omit<
   OracleConnectionConfig,
   'dialect' | 'driver' | 'databaseDriver'
@@ -28,6 +28,40 @@ export const oracleDriver: DatabaseDriverDefinition<'oracle'> = {
       connectionName: context.connectionName,
       resolveClient: context.resolveClient,
     }),
+  createKnexClient: () =>
+    // Oracle's integer codecs are installed by the shared Knex helper.
+    // The package owns the hook, so core no longer needs an oracle branch.
+    preciseIntegerClient('oracle', 'oracledb'),
+  configurePool: (_config, pool) => {
+    const configuredAfterCreate = pool.afterCreate;
+    return {
+      ...pool,
+      afterCreate: (
+        connection: { execute(sql: string): Promise<unknown> },
+        done: (error: unknown, connection?: unknown) => void,
+      ) => {
+        Promise.all([
+          connection.execute(
+            `alter session set nls_date_format = 'YYYY-MM-DD HH24:MI:SS'`,
+          ),
+          connection.execute(
+            `alter session set nls_timestamp_format = 'YYYY-MM-DD HH24:MI:SS'`,
+          ),
+        ])
+          .then(() => {
+            if (configuredAfterCreate) {
+              (
+                configuredAfterCreate as unknown as (
+                  connection: unknown,
+                  done: (error: unknown, connection?: unknown) => void,
+                ) => void
+              )(connection, done);
+            } else done(null, connection);
+          })
+          .catch((error: unknown) => done(error));
+      },
+    };
+  },
 };
 export type OracleConnection = OracleOptions & {
   dialect: 'oracle';
