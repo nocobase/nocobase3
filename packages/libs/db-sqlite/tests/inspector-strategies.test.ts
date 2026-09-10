@@ -1,19 +1,27 @@
 import { describe, expect, it } from 'vitest';
-import { normalizePhysicalDataType, sqliteAffinity } from '@nocobase/db';
+import {
+  normalizePhysicalDataType,
+  numericCapabilities,
+  sqliteAffinity,
+  temporalFractionalSecondsPrecision,
+} from '@nocobase/db';
 import { sqliteTypes } from '../src/inspectors/sqlite.js';
 
 describe('SQLite inspector type strategy', () => {
-  it.each(['float', 'FLOAT(12)', ' float '])(
+  it.each(['float', 'FLOAT(12)', ' float '] as const)(
     'recognizes FLOAT storage %s',
     (nativeType) => {
       expect(normalizePhysicalDataType(sqliteTypes, nativeType)).toBe('float');
     },
   );
 
-  it('keeps unknown declarations native', () => {
-    expect(normalizePhysicalDataType(sqliteTypes, 'unrecognized')).toBe(
-      'native',
-    );
+  it.each([
+    ['DATETIME', 'datetime'],
+    ['TIMESTAMP(3)', 'datetime'],
+    ['TEXT', 'text'],
+    ['unrecognized', 'native'],
+  ] as const)('classifies portable type %s', (nativeType, expected) => {
+    expect(normalizePhysicalDataType(sqliteTypes, nativeType)).toBe(expected);
   });
 
   it.each([
@@ -30,12 +38,20 @@ describe('SQLite inspector type strategy', () => {
     expect(sqliteAffinity(declaration)).toBe(affinity);
   });
 
-  it.each(['DATETIME', 'TIMESTAMP(3)', 'TEXT'] as const)(
-    'classifies portable SQLite type %s',
+  it('does not report numeric capacity for SQLite affinity types', () => {
+    expect(numericCapabilities({ ignore: () => true }, 'INTEGER')).toEqual({});
+  });
+
+  it.each(['decimal(18,4)', 'varchar(64)'] as const)(
+    'does not infer temporal precision from %s',
     (nativeType) => {
-      expect(normalizePhysicalDataType(sqliteTypes, nativeType)).toBe(
-        nativeType === 'TEXT' ? 'text' : 'datetime',
-      );
+      expect(
+        temporalFractionalSecondsPrecision(sqliteTypes, nativeType),
+      ).toBeUndefined();
     },
   );
+
+  it('keeps date as date', () => {
+    expect(normalizePhysicalDataType(sqliteTypes, 'date')).toBe('date');
+  });
 });

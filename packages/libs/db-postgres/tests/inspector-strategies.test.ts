@@ -1,36 +1,67 @@
 import { describe, expect, it } from 'vitest';
-import { normalizePhysicalDataType, numericCapabilities } from '@nocobase/db';
+import {
+  normalizePhysicalDataType,
+  numericCapabilities,
+  temporalFractionalSecondsPrecision,
+} from '@nocobase/db';
 import { postgresTypes, postgresNumeric } from '../src/inspectors/postgres.js';
 
 describe('PostgreSQL inspector type strategy', () => {
-  it('classifies floating and temporal declarations', () => {
-    expect(normalizePhysicalDataType(postgresTypes, 'float')).toBe('native');
-    expect(normalizePhysicalDataType(postgresTypes, 'double precision')).toBe(
-      'double',
-    );
-    expect(normalizePhysicalDataType(postgresTypes, 'timestamptz')).toBe(
-      'datetimeTz',
-    );
-    expect(
-      normalizePhysicalDataType(postgresTypes, 'time without time zone'),
-    ).toBe('time');
-    expect(normalizePhysicalDataType(postgresTypes, 'jsonb')).toBe('json');
-    expect(normalizePhysicalDataType(postgresTypes, 'inet')).toBe('native');
+  it.each([
+    ['float', 'native'],
+    ['double precision', 'double'],
+    ['jsonb', 'json'],
+    ['inet', 'native'],
+    ['bpchar', 'char'],
+    ['character(8)', 'char'],
+    ['char', 'native'],
+    ['"char"', 'native'],
+    ['varchar(8)', 'string'],
+    ['citext', 'text'],
+    ['bit(1)', 'native'],
+    ['varchar_custom', 'native'],
+  ] as const)('classifies %s as %s', (nativeType, expected) => {
+    expect(normalizePhysicalDataType(postgresTypes, nativeType)).toBe(expected);
   });
 
-  it('classifies PostgreSQL scalar declarations and numeric capacity', () => {
-    expect(normalizePhysicalDataType(postgresTypes, 'bpchar')).toBe('char');
-    expect(normalizePhysicalDataType(postgresTypes, 'character(8)')).toBe(
-      'char',
-    );
-    expect(normalizePhysicalDataType(postgresTypes, 'varchar(8)')).toBe(
-      'string',
-    );
-    expect(normalizePhysicalDataType(postgresTypes, 'citext')).toBe('text');
-    expect(normalizePhysicalDataType(postgresTypes, 'bit(1)')).toBe('native');
+  it.each([
+    ['timestamp(3) with time zone', 'datetimeTz', 3],
+    ['timestamp without time zone', 'datetime', 6],
+    ['timestamptz', 'datetimeTz', 6],
+    ['time(4) with time zone', 'native', 4],
+    ['timetz', 'native', 6],
+    ['time(0) without time zone', 'time', 0],
+    ['interval', 'native', undefined],
+    ['timestamp_custom', 'native', undefined],
+  ] as const)(
+    'classifies temporal declaration %s',
+    (nativeType, expected, precision) => {
+      expect(normalizePhysicalDataType(postgresTypes, nativeType)).toBe(
+        expected,
+      );
+      expect(
+        temporalFractionalSecondsPrecision(postgresTypes, nativeType),
+      ).toBe(precision);
+    },
+  );
+
+  it('reports integer capacity', () => {
     expect(numericCapabilities(postgresNumeric, 'int2')).toEqual({
       integerBits: 16,
       unsigned: false,
     });
+  });
+
+  it.each(['decimal(18,4)', 'varchar(64)'] as const)(
+    'does not infer temporal precision from %s',
+    (nativeType) => {
+      expect(
+        temporalFractionalSecondsPrecision(postgresTypes, nativeType),
+      ).toBeUndefined();
+    },
+  );
+
+  it('keeps date as date', () => {
+    expect(normalizePhysicalDataType(postgresTypes, 'date')).toBe('date');
   });
 });

@@ -1,20 +1,37 @@
 import { describe, expect, it } from 'vitest';
-import { normalizePhysicalDataType, numericCapabilities } from '@nocobase/db';
+import {
+  normalizePhysicalDataType,
+  numericCapabilities,
+  temporalFractionalSecondsPrecision,
+} from '@nocobase/db';
 import { mysqlTypes, mysqlNumeric } from '../src/inspectors/mysql.js';
 
 describe('MySQL inspector type strategy', () => {
-  it('classifies floating, temporal, and scalar declarations', () => {
-    expect(normalizePhysicalDataType(mysqlTypes, 'float')).toBe('float');
-    expect(normalizePhysicalDataType(mysqlTypes, 'timestamp(6)')).toBe(
-      'datetimeTz',
-    );
-    expect(normalizePhysicalDataType(mysqlTypes, 'datetime')).toBe('datetime');
-    expect(normalizePhysicalDataType(mysqlTypes, 'time(3)')).toBe('time');
-    expect(normalizePhysicalDataType(mysqlTypes, 'char(8)')).toBe('char');
-    expect(normalizePhysicalDataType(mysqlTypes, 'tinyint(1)')).toBe('integer');
+  it.each([
+    ['float', 'float'],
+    ['char(8)', 'char'],
+    ['tinyint(1)', 'integer'],
+    ['bigint unsigned', 'bigInt'],
+    ['year', 'native'],
+  ] as const)('classifies %s as %s', (nativeType, expected) => {
+    expect(normalizePhysicalDataType(mysqlTypes, nativeType)).toBe(expected);
   });
 
-  it('reports MySQL numeric capacity without guessing logical types', () => {
+  it.each([
+    ['timestamp(6)', 'datetimeTz', 6],
+    ['datetime', 'datetime', 0],
+    ['time(3)', 'time', 3],
+  ] as const)(
+    'classifies temporal declaration %s',
+    (nativeType, expected, precision) => {
+      expect(normalizePhysicalDataType(mysqlTypes, nativeType)).toBe(expected);
+      expect(temporalFractionalSecondsPrecision(mysqlTypes, nativeType)).toBe(
+        precision,
+      );
+    },
+  );
+
+  it('reports integer capacity and unsignedness', () => {
     expect(numericCapabilities(mysqlNumeric, 'int(11) unsigned')).toEqual({
       integerBits: 32,
       unsigned: true,
@@ -23,5 +40,18 @@ describe('MySQL inspector type strategy', () => {
       integerBits: 24,
       unsigned: false,
     });
+  });
+
+  it.each(['decimal(18,4)', 'varchar(64)'] as const)(
+    'does not infer temporal precision from %s',
+    (nativeType) => {
+      expect(
+        temporalFractionalSecondsPrecision(mysqlTypes, nativeType),
+      ).toBeUndefined();
+    },
+  );
+
+  it('keeps date as date', () => {
+    expect(normalizePhysicalDataType(mysqlTypes, 'date')).toBe('date');
   });
 });
