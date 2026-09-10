@@ -5,7 +5,7 @@ import {
   createMigrator,
   ModuleCollectionMetadataStore,
   SchemaManagementNotAllowedError,
-} from '../../../src/index.js';
+} from '../../../../db/src/index.js';
 
 describe('Migrator schema management', () => {
   it('rejects latest, upTo, and rollback for external connections before loading migrations', async () => {

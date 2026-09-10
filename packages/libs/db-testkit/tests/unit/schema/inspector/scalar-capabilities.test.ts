@@ -7,8 +7,8 @@ import { describe, expect, it } from 'vitest';
 import {
   numericCapabilities,
   sqliteAffinity,
-} from '../../../../src/schema/inspector/shared/column-capabilities.js';
-import { normalizePhysicalDataType } from '../../../../src/schema/inspector/shared/type-normalization.js';
+} from '../../../../../db/src/schema/inspector/shared/column-capabilities.js';
+import { normalizePhysicalDataType } from '../../../../../db/src/schema/inspector/shared/type-normalization.js';
 
 describe('Physical scalar capabilities', () => {
   it.each([

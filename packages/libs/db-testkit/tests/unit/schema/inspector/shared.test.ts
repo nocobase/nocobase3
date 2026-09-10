@@ -12,24 +12,24 @@ const typeStrategies = {
 } as const;
 import { describe, expect, it, vi } from 'vitest';
 import knex from 'knex';
-import { BaseSchemaInspector } from '../../../../src/schema/inspector/base.js';
+import { BaseSchemaInspector } from '../../../../../db/src/schema/inspector/base.js';
 import {
   decodePhysicalCollectionCursor,
   encodePhysicalCollectionCursor,
   sameCursorFilter,
-} from '../../../../src/schema/inspector/shared/cursor.js';
+} from '../../../../../db/src/schema/inspector/shared/cursor.js';
 import {
   normalizePhysicalDataType,
   normalizeReferentialAction,
   parseColumnDefault,
-} from '../../../../src/schema/inspector/shared/type-normalization.js';
+} from '../../../../../db/src/schema/inspector/shared/type-normalization.js';
 import type {
   ListPhysicalCollectionsOptions,
   PhysicalCollectionIdentifier,
   PhysicalCollectionSchema,
   PhysicalCollectionSummary,
   PhysicalSchemaInfo,
-} from '../../../../src/schema/inspector/types.js';
+} from '../../../../../db/src/schema/inspector/types.js';
 
 class TestSchemaInspector extends BaseSchemaInspector {
   readonly calls: Array<{ limit: number }> = [];

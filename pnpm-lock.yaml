@@ -1428,18 +1428,6 @@ importers:
       '@hono/node-server':
         specifier: 'catalog:'
         version: 2.1.1(hono@4.13.2)
-      '@nocobase/db-mssql':
-        specifier: workspace:*
-        version: link:../db-mssql
-      '@nocobase/db-mysql':
-        specifier: workspace:*
-        version: link:../db-mysql
-      '@nocobase/db-oracle':
-        specifier: workspace:*
-        version: link:../db-oracle
-      '@nocobase/db-postgres':
-        specifier: workspace:*
-        version: link:../db-postgres
       '@nocobase/db-sqlite':
         specifier: workspace:*
         version: link:../db-sqlite
@@ -1637,6 +1625,21 @@ importers:
       '@nocobase/db':
         specifier: workspace:*
         version: link:../db
+      '@nocobase/db-mssql':
+        specifier: workspace:*
+        version: link:../db-mssql
+      '@nocobase/db-mysql':
+        specifier: workspace:*
+        version: link:../db-mysql
+      '@nocobase/db-oracle':
+        specifier: workspace:*
+        version: link:../db-oracle
+      '@nocobase/db-postgres':
+        specifier: workspace:*
+        version: link:../db-postgres
+      '@nocobase/db-sqlite':
+        specifier: workspace:*
+        version: link:../db-sqlite
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config

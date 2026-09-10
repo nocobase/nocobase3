@@ -15,15 +15,15 @@ import {
   SchemaManagementNotAllowedError,
   type DatabaseConnection,
   type DatabaseDriverRuntimeContext,
-} from '../../../src/index.js';
-import { CollectionRenameAtomicityError } from '../../../src/collection/builder/builder.js';
-import { DatabaseCollectionMetadataStore } from '../../../src/metadata/internal/database-document-store.js';
-import { resolveDatabaseCapabilities } from '../../../src/database/capabilities.js';
-import { resolveKnexConnectionConfig } from '../../../src/database/internal/knex/config.js';
+} from '../../../../db/src/index.js';
+import { CollectionRenameAtomicityError } from '../../../../db/src/collection/builder/builder.js';
+import { DatabaseCollectionMetadataStore } from '../../../../db/src/metadata/internal/database-document-store.js';
+import { resolveDatabaseCapabilities } from '../../../../db/src/database/capabilities.js';
+import { resolveKnexConnectionConfig } from '../../../../db/src/database/internal/knex/config.js';
 import type {
   ConnectionConfig,
   DatabaseConfig,
-} from '../../../src/database/config.js';
+} from '../../../../db/src/database/config.js';
 
 const testDrivers = { postgres, mysql, sqlite, oracle, mssql };
 

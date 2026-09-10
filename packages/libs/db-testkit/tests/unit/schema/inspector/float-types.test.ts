@@ -4,7 +4,7 @@ import { sqliteTypes } from '@nocobase/db-sqlite';
 import { oracleTypes } from '@nocobase/db-oracle';
 import { mssqlTypes } from '@nocobase/db-mssql';
 import { expect, it } from 'vitest';
-import { normalizePhysicalDataType } from '../../../../src/schema/inspector/shared/type-normalization.js';
+import { normalizePhysicalDataType } from '../../../../../db/src/schema/inspector/shared/type-normalization.js';
 
 it.each(['float', 'FLOAT(12)', ' float '])(
   'recognizes SQLite FLOAT storage %s',

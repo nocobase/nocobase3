@@ -67,10 +67,6 @@
   },
   "devDependencies": {
     "@hono/node-server": "catalog:",
-    "@nocobase/db-mssql": "workspace:*",
-    "@nocobase/db-mysql": "workspace:*",
-    "@nocobase/db-oracle": "workspace:*",
-    "@nocobase/db-postgres": "workspace:*",
     "@nocobase/db-sqlite": "workspace:*",
     "@nocobase/db-testkit": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
@@ -78,8 +74,8 @@
     "@vitest/coverage-v8": "catalog:",
     "eslint": "catalog:",
     "hono": "catalog:",
-    "tsx": "catalog:",
     "prettier": "catalog:",
+    "tsx": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

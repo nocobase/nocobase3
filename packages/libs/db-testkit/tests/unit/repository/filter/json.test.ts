@@ -1,5 +1,5 @@
 import knex from 'knex';
-import { attachDatabaseDriverRuntime } from '../../../../src/database/runtime.js';
+import { attachDatabaseDriverRuntime } from '../../../../../db/src/database/runtime.js';
 import postgres from '@nocobase/db-postgres';
 import mysql from '@nocobase/db-mysql';
 import sqlite from '@nocobase/db-sqlite';
@@ -7,8 +7,8 @@ import { expect, it } from 'vitest';
 import {
   compileJsonCondition,
   validateJsonCondition,
-} from '../../../../src/repository/json-filter.js';
-import { DefaultFilterBuilder } from '../../../../src/repository/filter-builder.js';
+} from '../../../../../db/src/repository/json-filter.js';
+import { DefaultFilterBuilder } from '../../../../../db/src/repository/filter-builder.js';
 
 it('keeps JSON paths immutable and all user SQL data bound', () => {
   const json = new DefaultFilterBuilder().json('payload');

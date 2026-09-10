@@ -30,13 +30,19 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint . --max-warnings 0",
     "test": "vitest run tests --exclude **/tests/integration/**",
-    "typecheck:integration": "tsc -p tsconfig.integration.json --noEmit"
+    "typecheck:integration": "tsc -p tsconfig.integration.json --noEmit",
+    "typecheck:unit": "tsc -p tsconfig.unit.json --noEmit"
   },
   "peerDependencies": {
     "@nocobase/db": "workspace:^"
   },
   "devDependencies": {
     "@nocobase/db": "workspace:*",
+    "@nocobase/db-mssql": "workspace:*",
+    "@nocobase/db-mysql": "workspace:*",
+    "@nocobase/db-oracle": "workspace:*",
+    "@nocobase/db-postgres": "workspace:*",
+    "@nocobase/db-sqlite": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@types/node": "catalog:",
     "eslint": "catalog:",

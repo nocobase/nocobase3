@@ -14,7 +14,7 @@ import { describe, expect, it } from 'vitest';
 import {
   normalizePhysicalDataType,
   temporalFractionalSecondsPrecision,
-} from '../../../../src/schema/inspector/shared/type-normalization.js';
+} from '../../../../../db/src/schema/inspector/shared/type-normalization.js';
 
 describe('Temporal physical type classification', () => {
   it.each([

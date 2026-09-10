@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { Knex } from 'knex';
 import sqlite from '@nocobase/db-sqlite';
-import { DatabaseCollectionMetadataStore } from '../../../src/metadata/internal/database-document-store.js';
-import { createKnexClient } from '../../../src/database/internal/knex/client.js';
-import { resolveKnexConnectionConfig } from '../../../src/database/internal/knex/config.js';
+import { DatabaseCollectionMetadataStore } from '../../../../db/src/metadata/internal/database-document-store.js';
+import { createKnexClient } from '../../../../db/src/database/internal/knex/client.js';
+import { resolveKnexConnectionConfig } from '../../../../db/src/database/internal/knex/config.js';
 
 describe('DatabaseCollectionMetadataStore', () => {
   const clients: Knex[] = [];

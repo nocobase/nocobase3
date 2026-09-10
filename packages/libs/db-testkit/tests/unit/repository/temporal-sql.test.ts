@@ -1,12 +1,12 @@
 import knex from 'knex';
-import { attachDatabaseDriverRuntime } from '../../../src/database/runtime.js';
+import { attachDatabaseDriverRuntime } from '../../../../db/src/database/runtime.js';
 import mssql from '@nocobase/db-mssql';
 import oracle from '@nocobase/db-oracle';
 import { describe, expect, it } from 'vitest';
 import {
   temporalBinding,
   temporalProjection,
-} from '../../../src/repository/internal/temporal-sql.js';
+} from '../../../../db/src/repository/internal/temporal-sql.js';
 
 describe('native temporal SQL boundaries', () => {
   it('rejects legacy SQL Server range and precision loss', () => {

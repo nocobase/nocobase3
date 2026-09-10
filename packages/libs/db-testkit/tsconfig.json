@@ -7,5 +7,5 @@
     "sourceMap": false
   },
   "include": ["src/**/*.ts", "tests/**/*.ts"],
-  "exclude": ["tests/integration", "tests/fixtures"]
+  "exclude": ["tests/integration", "tests/fixtures", "tests/unit"]
 }
