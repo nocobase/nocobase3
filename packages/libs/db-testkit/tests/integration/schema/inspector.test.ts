@@ -318,6 +318,28 @@ describeIntegrationDatabases('schema inspector', (context) => {
           `comment on column "${tableName}"."email" is 'Original email'`,
         );
         break;
+      case 'dameng':
+        await context.db.raw(`
+          create table "${tableName}" (
+            "id" integer identity(1,1) primary key,
+            "flag" number(1, 0) not null,
+            "amount" decimal(18, 0),
+            "email" varchar(255),
+            "created_at" date,
+            check ("flag" >= 0)
+          )
+        `);
+        await context.db.raw(`
+          create index "${indexName}"
+          on "${tableName}" ("email")
+        `);
+        await context.db.raw(
+          `comment on table "${tableName}" is 'Advanced schema rows'`,
+        );
+        await context.db.raw(
+          `comment on column "${tableName}"."email" is 'Original email'`,
+        );
+        break;
       case 'mssql':
         await context.db.raw(`
           create table [${tableName}] (
@@ -488,6 +510,25 @@ describeIntegrationDatabases('schema inspector', (context) => {
           .find((index) => index.name === indexName)
           ?.keys[0]?.expression?.toLowerCase(),
       ).toContain('lower');
+      expect(result?.checkConstraints).not.toHaveLength(0);
+    } else if (context.spec.dialect === 'dameng') {
+      expect(result?.comment).toBe('Advanced schema rows');
+      expect(
+        result?.columns.find((column) => column.columnName === 'email')
+          ?.comment,
+      ).toBe('Original email');
+      expect(
+        result?.columns.find((column) => column.columnName === 'id'),
+      ).toMatchObject({
+        dataType: 'integer',
+        autoIncrement: true,
+      });
+      expect(
+        result?.columns.find((column) => column.columnName === 'flag'),
+      ).toMatchObject({
+        dataType: 'decimal',
+        nativeType: 'NUMBER(1,0)',
+      });
       expect(result?.checkConstraints).not.toHaveLength(0);
       expect(result?.inspection.aspects.comments).toBe('complete');
     } else {

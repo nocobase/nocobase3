@@ -22,6 +22,7 @@ describeIntegrationDatabases('Physical scalar capabilities', (context) => {
           'BINARY_FLOAT',
           'NUMBER(1,0)',
         ],
+        dameng: ['CHAR(8)', 'VARCHAR(16)', 'INTEGER', 'REAL', 'NUMBER(1,0)'],
         mssql: ['nchar(8)', 'nvarchar(16)', 'tinyint', 'real', 'bit'],
       } as Record<string, string[]>
     )[dialect];
@@ -53,11 +54,11 @@ describeIntegrationDatabases('Physical scalar capabilities', (context) => {
       expect(columns.get('label')?.lengthUnit).toBe(
         dialect === 'mssql'
           ? 'utf16CodeUnits'
-          : dialect === 'oracle'
+          : dialect === 'oracle' || dialect === 'dameng'
             ? 'bytes'
             : 'characters',
       );
-      if (dialect !== 'oracle')
+      if (dialect !== 'oracle' && dialect !== 'dameng')
         expect(columns.get('label')?.collation).toBeTruthy();
       if (dialect === 'mysql' || dialect === 'postgres')
         expect(columns.get('label')?.characterSet).toBeTruthy();
@@ -70,6 +71,12 @@ describeIntegrationDatabases('Physical scalar capabilities', (context) => {
         precision: 10,
         scale: 0,
       });
+    }
+    if (dialect === 'dameng') {
+      expect(columns.get('quantity')).toMatchObject({
+        dataType: 'integer',
+      });
+      expect(columns.get('ratio')).toMatchObject({ dataType: 'float' });
     }
     if (dialect === 'mysql')
       expect(columns.get('quantity')).toMatchObject({
@@ -84,7 +91,7 @@ describeIntegrationDatabases('Physical scalar capabilities', (context) => {
     expect(columns.get('enabled')?.dataType).toBe(
       dialect === 'mysql'
         ? 'integer'
-        : dialect === 'oracle'
+        : dialect === 'oracle' || dialect === 'dameng'
           ? 'decimal'
           : 'boolean',
     );

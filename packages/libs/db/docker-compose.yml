@@ -83,3 +83,22 @@ services:
         /opt/mssql-tools18/bin/sqlcmd
         -S mssql -U sa -P "$$MSSQL_SA_PASSWORD" -C
         -Q "IF DB_ID(N'nocobase_collection_builder') IS NULL CREATE DATABASE nocobase_collection_builder"
+
+  dameng:
+    image: xuxuclassmate/dameng:latest
+    platform: linux/amd64
+    ports:
+      - '15236:5236'
+    environment:
+      INSTANCE_NAME: instance
+      SYSDBA_PWD: SYSDBA001
+      PAGE_SIZE: '8'
+      CASE_SENSITIVE: '1'
+      UNICODE_FLAG: '0'
+      LENGTH_IN_CHAR: '0'
+    healthcheck:
+      test: ['CMD-SHELL', 'bash -c "</dev/tcp/127.0.0.1/5236"']
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s

@@ -19,6 +19,12 @@ describeIntegrationDatabases('Temporal physical inspection', (context) => {
           'TIMESTAMP(3)',
           'TIMESTAMP(6) WITH TIME ZONE',
         ],
+        dameng: [
+          'DATE',
+          'TIME(3)',
+          'TIMESTAMP(3)',
+          'TIMESTAMP(6) WITH TIME ZONE',
+        ],
         mssql: ['date', 'time(3)', 'datetime2(3)', 'datetimeoffset(6)'],
       } as Record<string, string[]>
     )[context.spec.dialect];
@@ -38,9 +44,10 @@ describeIntegrationDatabases('Temporal physical inspection', (context) => {
       schema?.columns.map((column) => [column.columnName, column]),
     );
     const oracle = context.spec.dialect === 'oracle';
+    const dameng = context.spec.dialect === 'dameng';
     const sqlite = context.spec.dialect === 'sqlite';
     expect(columns.get('day')).toMatchObject({
-      dataType: oracle ? 'datetime' : 'date',
+      dataType: oracle || dameng ? 'datetime' : 'date',
     });
     expect(columns.get('clock')).toMatchObject({
       dataType: oracle ? 'string' : 'time',
