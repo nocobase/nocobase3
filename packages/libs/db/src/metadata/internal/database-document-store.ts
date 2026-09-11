@@ -87,6 +87,11 @@ export class DatabaseCollectionMetadataStore implements CollectionMetadataStore 
     await this.initializationPromise;
   }
 
+  async reinitialize(): Promise<void> {
+    this.initializationPromise = undefined;
+    await this.initialize();
+  }
+
   async get(name: string): Promise<StoredCollectionMetadata | undefined> {
     validateCollectionMetadataStoreName(name);
     await this.initialize();

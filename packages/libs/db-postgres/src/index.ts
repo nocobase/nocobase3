@@ -5,6 +5,7 @@ import type {
   DatabaseDriverDefinition,
   PostgresConnectionConfig,
 } from '@nocobase/db';
+import { rawRows } from '@nocobase/db';
 import { PostgresSchemaInspector } from './inspectors/postgres.js';
 import { compilePostgresJsonCondition } from './json.js';
 
@@ -203,6 +204,38 @@ export const postgresDriver: DatabaseDriverDefinition<'postgres'> = {
       schema,
     ];
   },
+  resetManagedSchema: async (context) => {
+    const config = context.config as PostgresConnectionConfig;
+    const schema =
+      typeof config.schema === 'string'
+        ? config.schema
+        : (config.schema?.[0] ?? 'public');
+    const client = await context.resolveClient();
+    const objects = rawRows<{ name: string; kind: string }>(
+      await client.raw(
+        `select c.relname as name, c.relkind as kind
+         from pg_catalog.pg_class c
+         join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+         where n.nspname = ?
+           and c.relkind in ('m', 'v', 'r', 'p', 'S')
+         order by case c.relkind when 'm' then 0 when 'v' then 1 when 'r' then 2 when 'p' then 2 else 3 end, c.relname`,
+        [schema],
+      ),
+    );
+    for (const object of objects) {
+      const kind =
+        object.kind === 'm'
+          ? 'materialized view'
+          : object.kind === 'v'
+            ? 'view'
+            : object.kind === 'S'
+              ? 'sequence'
+              : 'table';
+      await client.raw(
+        `drop ${kind} if exists ${quotePostgres(schema)}.${quotePostgres(object.name)} cascade`,
+      );
+    }
+  },
 } satisfies DatabaseDriverDefinition<'postgres'>;
 
 export type PostgresConnection = PostgresOptions & {
@@ -230,6 +263,10 @@ export const postgres: PostgresFactory = Object.assign(
 );
 
 export default postgres;
+
+function quotePostgres(identifier: string): string {
+  return `"${identifier.replaceAll('"', '""')}"`;
+}
 
 type PgQueryStreamConfig = {
   batchSize?: number;

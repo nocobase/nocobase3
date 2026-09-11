@@ -102,3 +102,32 @@ services:
       timeout: 5s
       retries: 30
       start_period: 30s
+
+  dameng-init:
+    image: xuxuclassmate/dameng:latest
+    platform: linux/amd64
+    depends_on:
+      dameng:
+        condition: service_healthy
+    environment:
+      SYSDBA_PWD: SYSDBA001
+      NOCOBASE_PWD: NocoBase_Dameng_2026
+    entrypoint:
+      - /bin/bash
+      - -c
+    command:
+      - >-
+        set -eu;
+        export LD_LIBRARY_PATH=/opt/dmdbms/bin;
+        /opt/dmdbms/bin/disql -L -S
+        "SYSDBA/$${SYSDBA_PWD}@dameng:5236"
+        -e "select 1" >/dev/null;
+        if ! /opt/dmdbms/bin/disql -L -S
+        "SYSDBA/$${SYSDBA_PWD}@dameng:5236"
+        -e "select username from dba_users where username = 'NOCOBASE'"
+        | grep -q NOCOBASE; then
+        printf "create user NOCOBASE identified by %s;\ngrant RESOURCE to NOCOBASE;\n"
+        "$${NOCOBASE_PWD}" |
+        /opt/dmdbms/bin/disql -L -S
+        "SYSDBA/$${SYSDBA_PWD}@dameng:5236";
+        fi

@@ -5,6 +5,7 @@ import type {
   DatabaseCapabilities,
   DatabaseDriverDefinition,
 } from '@nocobase/db';
+import { rawRows } from '@nocobase/db';
 import type { Knex } from 'knex';
 import { DamengSchemaInspector } from './inspectors/dameng.js';
 
@@ -432,6 +433,30 @@ export const damengDriver: DatabaseDriverDefinition<'dameng'> = {
       config.username,
     ];
   },
+  resetManagedSchema: async (context) => {
+    const client = await context.resolveClient();
+    const views = rawRows<{ name: string }>(
+      await client.raw('select view_name as "name" from user_views'),
+    );
+    const tables = rawRows<{ name: string }>(
+      await client.raw(
+        `select table_name as "name"
+         from user_tables
+         where table_name not like '##%'`,
+      ),
+    );
+    const sequences = rawRows<{ name: string }>(
+      await client.raw('select sequence_name as "name" from user_sequences'),
+    );
+    for (const view of views)
+      await client.raw(`drop view ${quoteDameng(view.name)}`);
+    for (const table of tables)
+      await client.raw(
+        `drop table ${quoteDameng(table.name)} cascade constraints`,
+      );
+    for (const sequence of sequences)
+      await client.raw(`drop sequence ${quoteDameng(sequence.name)}`);
+  },
 };
 
 export interface DamengConnection extends DamengOptions {
@@ -456,6 +481,10 @@ export const dameng: DamengFactory = Object.assign(
 );
 
 export default dameng;
+
+function quoteDameng(identifier: string): string {
+  return `"${identifier.replaceAll('"', '""')}"`;
+}
 
 function assertDriverOptions(
   driverOptions: Record<string, unknown> | undefined,

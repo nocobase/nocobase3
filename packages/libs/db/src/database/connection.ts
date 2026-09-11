@@ -43,6 +43,8 @@ export interface DatabaseConnection {
   connect(): Promise<this>;
   disconnect(): Promise<void>;
   reconnect(): Promise<this>;
+  /** Destructively clears the objects owned by this managed connection. */
+  resetManagedSchema(): Promise<void>;
 
   transaction<T>(
     fn: (connection: DatabaseConnection) => Promise<T>,

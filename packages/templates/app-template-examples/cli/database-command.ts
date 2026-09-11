@@ -5,11 +5,13 @@ import {
   type AppDatabaseTaskKind,
   type AppDatabaseTasksResult,
 } from '@nocobase/app-server/database';
+import type { AppDatabaseTask } from '@nocobase/app-server/database';
 import type {
   AppConfigAccessor,
   ConfigPaths,
 } from '@nocobase/app-server/config';
 import '../server/database-drivers.js';
+import { createInterface } from 'node:readline/promises';
 
 /** Keep single-connection JSON fields compatible while exposing per-connection bulk results. */
 export async function runDatabaseCommand(
@@ -19,19 +21,54 @@ export async function runDatabaseCommand(
     exit(code: number): never;
   },
   kind: AppDatabaseTaskKind,
-  flags: { json: boolean; all: boolean; connection?: string },
+  flags: {
+    json: boolean;
+    all: boolean;
+    connection?: string;
+    fresh?: boolean;
+    force?: boolean;
+  },
   resolveRuntime: () => Promise<{
     appConfig: AppConfigAccessor;
     configPaths: ConfigPaths;
   }>,
 ): Promise<void> {
+  if (flags.force && !flags.fresh) {
+    command.log('--force can only be used together with --fresh.');
+    command.exit(1);
+    return;
+  }
+  if (
+    flags.fresh &&
+    !flags.force &&
+    (Boolean(process.env.CI) || !process.stdin.isTTY || !process.stdout.isTTY)
+  ) {
+    command.log(
+      '--fresh requires --force in CI or a non-interactive terminal.',
+    );
+    command.exit(1);
+    return;
+  }
   let result: AppDatabaseTasksResult;
   try {
     const runtime = await resolveRuntime();
     result = await runAppDatabaseTasks(
       runtime.appConfig.get(databaseConfig),
       runtime.configPaths,
-      { kind, ...flags },
+      {
+        kind,
+        all: flags.all,
+        connection: flags.connection,
+        ...(flags.fresh
+          ? {
+              fresh: true,
+              confirmFresh: flags.force
+                ? undefined
+                : (plan: readonly AppDatabaseTask[]) =>
+                    confirmFresh(command, plan),
+            }
+          : {}),
+      },
     );
   } catch (error) {
     if (!(error instanceof AppDatabaseTaskError)) {
@@ -64,6 +101,7 @@ export async function runDatabaseCommand(
               ...(kind === 'migrations' ? { batch: entry.batch ?? 0 } : {}),
               executed: entry.executed ?? [],
               skipped: entry.skipped ?? [],
+              ...(entry.fresh ? { fresh: true } : {}),
             }
           : {}),
       });
@@ -79,7 +117,41 @@ export async function runDatabaseCommand(
         command.log(`Executed: ${entry.executed.join(', ') || 'none'}`);
       if (entry.skipped)
         command.log(`Skipped: ${entry.skipped.join(', ') || 'none'}`);
+      if (entry.fresh) command.log('Fresh: true');
     }
   }
   if (!result.ok) command.exit(1);
+}
+
+async function confirmFresh(
+  command: { log(message: string): void },
+  plan: readonly AppDatabaseTask[],
+): Promise<boolean> {
+  if (process.env.CI || !process.stdin.isTTY || !process.stdout.isTTY) {
+    throw new Error(
+      '--fresh requires --force in CI or a non-interactive terminal.',
+    );
+  }
+  const targets = plan
+    .filter((task) => !task.skipReason)
+    .map((task) => task.connection);
+  const skipped = plan
+    .filter((task) => task.skipReason)
+    .map((task) => `${task.connection} (${task.skipReason})`);
+  command.log(
+    `WARNING: --fresh will delete all managed schema objects for: ${targets.join(', ') || 'none'}.`,
+  );
+  if (skipped.length) command.log(`Skipped: ${skipped.join(', ')}.`);
+  const prompt = createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+  try {
+    const answer = (await prompt.question('Type "yes" to continue: '))
+      .trim()
+      .toLowerCase();
+    return answer === 'y' || answer === 'yes';
+  } finally {
+    prompt.close();
+  }
 }

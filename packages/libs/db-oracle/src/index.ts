@@ -5,6 +5,7 @@ import type {
   DatabaseDriverDefinition,
   OracleConnectionConfig,
 } from '@nocobase/db';
+import { rawRows } from '@nocobase/db';
 import { preciseIntegerClient } from './precise-integers.js';
 import { OracleSchemaInspector } from './inspectors/oracle.js';
 
@@ -380,6 +381,37 @@ export const oracleDriver: DatabaseDriverDefinition<'oracle'> = {
       config.username,
     ];
   },
+  resetManagedSchema: async (context) => {
+    const client = await context.resolveClient();
+    const materializedViews = rawRows<{ name: string }>(
+      await client.raw('select mview_name as "name" from user_mviews'),
+    );
+    const views = rawRows<{ name: string }>(
+      await client.raw('select view_name as "name" from user_views'),
+    );
+    const tables = rawRows<{ name: string }>(
+      await client.raw(
+        `select t.table_name as "name"
+         from user_tables t
+         where not exists (
+           select 1 from user_mviews m where m.mview_name = t.table_name
+         )`,
+      ),
+    );
+    const sequences = rawRows<{ name: string }>(
+      await client.raw('select sequence_name as "name" from user_sequences'),
+    );
+    for (const view of materializedViews)
+      await client.raw(`drop materialized view ${quoteOracle(view.name)}`);
+    for (const view of views)
+      await client.raw(`drop view ${quoteOracle(view.name)}`);
+    for (const table of tables)
+      await client.raw(
+        `drop table ${quoteOracle(table.name)} cascade constraints purge`,
+      );
+    for (const sequence of sequences)
+      await client.raw(`drop sequence ${quoteOracle(sequence.name)}`);
+  },
 };
 export type OracleConnection = OracleOptions & {
   dialect: 'oracle';
@@ -400,6 +432,10 @@ export const oracle: OracleFactory = Object.assign(
   { dialect: 'oracle' as const, driver: oracleDriver },
 );
 export default oracle;
+
+function quoteOracle(identifier: string): string {
+  return `"${identifier.replaceAll('"', '""')}"`;
+}
 
 function assertDriverOptions(
   driverOptions: Record<string, unknown> | undefined,

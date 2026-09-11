@@ -1430,6 +1430,9 @@ importers:
       '@hono/node-server':
         specifier: 'catalog:'
         version: 2.1.1(hono@4.13.2)
+      '@nocobase/db-dameng':
+        specifier: workspace:*
+        version: link:../db-dameng
       '@nocobase/db-sqlite':
         specifier: workspace:*
         version: link:../db-sqlite
@@ -1468,7 +1471,7 @@ importers:
     dependencies:
       knex-dm:
         specifier: ^1.0.52452
-        version: 1.0.52452(knex@3.3.0(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0))
+        version: 1.0.52452(knex@3.3.0(better-sqlite3@12.11.1)(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(tedious@20.0.0))
     devDependencies:
       '@nocobase/db':
         specifier: workspace:*
@@ -3477,6 +3480,9 @@ importers:
       '@nocobase/db':
         specifier: workspace:^
         version: link:../../libs/db
+      '@nocobase/db-dameng':
+        specifier: workspace:^
+        version: link:../../libs/db-dameng
       '@nocobase/db-sqlite':
         specifier: workspace:^
         version: link:../../libs/db-sqlite
@@ -22069,7 +22075,7 @@ snapshots:
 
   kleur@4.1.5: {}
 
-  knex-dm@1.0.52452(knex@3.3.0(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)):
+  knex-dm@1.0.52452(knex@3.3.0(better-sqlite3@12.11.1)(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(tedious@20.0.0)):
     dependencies:
       dmdb: 1.0.52452
       knex: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(tedious@20.0.0)

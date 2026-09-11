@@ -224,6 +224,30 @@ export class KnexDatabaseConnection implements DatabaseConnection {
     return this;
   }
 
+  async resetManagedSchema(): Promise<void> {
+    if (this.schemaManagement === 'external') {
+      throw new Error(
+        `Connection "${this.name}" uses external schema management and cannot be reset.`,
+      );
+    }
+    if (!this.dialectDriver?.resetManagedSchema) {
+      throw new Error(
+        `Database driver for dialect "${this.dialect}" does not support managed schema reset.`,
+      );
+    }
+    await this.dialectDriver.resetManagedSchema({
+      connectionName: this.name,
+      config: this.sourceConfig,
+      resolveClient: () => this.resolveClient(),
+    });
+    if (this.metadataStore instanceof DatabaseCollectionMetadataStore) {
+      await this.metadataStore.reinitialize();
+    } else {
+      await this.metadataStore.initialize();
+    }
+    this.collections.invalidate();
+  }
+
   async transaction<T>(
     fn: (connection: DatabaseConnection) => Promise<T>,
   ): Promise<T> {

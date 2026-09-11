@@ -173,6 +173,55 @@ describe('DatabaseManager', () => {
     }
   });
 
+  it('rejects managed schema reset for external connections', async () => {
+    const db = createTestDatabase({
+      connections: {
+        external: {
+          dialect: 'sqlite',
+          filename: ':memory:',
+          schemaManagement: 'external',
+          metadataStore: new InMemoryCollectionMetadataStore({ documents: [] }),
+        },
+      },
+    });
+
+    try {
+      await expect(
+        db.connection('external').resetManagedSchema(),
+      ).rejects.toThrow('external schema management');
+    } finally {
+      await db.destroy();
+    }
+  });
+
+  it('invalidates collection definitions after resetting a managed schema', async () => {
+    const db = createTestDatabase({
+      connections: {
+        sqlite: { dialect: 'sqlite', filename: ':memory:' },
+      },
+    });
+
+    try {
+      const connection = db.connection();
+      await connection.builder.createCollection('orders', (collection) => {
+        collection.increments('id');
+      });
+      await expect(connection.collections.get('orders')).resolves.toMatchObject(
+        {
+          name: 'orders',
+        },
+      );
+
+      await connection.resetManagedSchema();
+
+      await expect(
+        connection.collections.get('orders'),
+      ).resolves.toBeUndefined();
+    } finally {
+      await db.destroy();
+    }
+  });
+
   it('uses persistent Database Metadata by default and hides its internal table', async () => {
     const directory = mkdtempSync(path.join(tmpdir(), 'nocobase-db-metadata-'));
     const filename = path.join(directory, 'database.sqlite');

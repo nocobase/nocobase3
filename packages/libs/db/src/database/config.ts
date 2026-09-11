@@ -81,6 +81,16 @@ export interface DatabaseDriverDefinition<TDialect extends string = string> {
     config: unknown,
   ) => readonly unknown[] | undefined;
   /**
+   * Clears the objects owned by a managed connection while preserving the
+   * database and its target schema. Used by the explicit destructive
+   * migration reset command.
+   */
+  readonly resetManagedSchema?: (context: {
+    connectionName: string;
+    config: unknown;
+    resolveClient: () => Promise<Knex>;
+  }) => void | Promise<void>;
+  /**
    * Prepares any local storage required before a connection is opened.
    * Application hosts provide the filesystem operation; drivers own the
    * decision about whether it is needed.

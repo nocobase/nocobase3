@@ -6,6 +6,7 @@ import type {
   DatabaseDriverDefinition,
   MysqlConnectionConfig,
 } from '@nocobase/db';
+import { rawRows } from '@nocobase/db';
 import { MysqlSchemaInspector } from './inspectors/mysql.js';
 import { compileMysqlJsonCondition } from './json.js';
 
@@ -212,6 +213,51 @@ export const mysqlDriver: DatabaseDriverDefinition<'mysql'> = {
       undefined,
     ];
   },
+  resetManagedSchema: async (context) => {
+    const config = context.config as MysqlConnectionConfig;
+    const client = await context.resolveClient();
+    const database =
+      config.database ??
+      rawRows<{ database: string }>(
+        await client.raw('select database() as database'),
+      )[0]?.database;
+    if (!database)
+      throw new Error('MySQL connection has no selected database.');
+    const rows = rawRows<{
+      table_name?: string;
+      table_type?: string;
+      TABLE_NAME?: string;
+      TABLE_TYPE?: string;
+    }>(
+      await client.raw(
+        `select table_name, table_type
+         from information_schema.tables
+         where table_schema = ?
+         order by case table_type when 'VIEW' then 0 else 1 end, table_name`,
+        [database],
+      ),
+    );
+    const foreignKeyChecks = rawRows<{ value: number | string }>(
+      await client.raw('select @@session.foreign_key_checks as value'),
+    )[0]?.value;
+    if (foreignKeyChecks === undefined) {
+      throw new Error('MySQL connection did not return foreign_key_checks.');
+    }
+    await client.raw('set foreign_key_checks = 0');
+    try {
+      for (const row of rows) {
+        const tableName = row.table_name ?? row.TABLE_NAME;
+        const tableType = row.table_type ?? row.TABLE_TYPE;
+        if (!tableName) continue;
+        const kind = tableType === 'VIEW' ? 'view' : 'table';
+        await client.raw(`drop ${kind} if exists ${quoteMysql(tableName)}`);
+      }
+    } finally {
+      await client.raw(
+        `set foreign_key_checks = ${Number(foreignKeyChecks) === 0 ? 0 : 1}`,
+      );
+    }
+  },
 };
 export type MysqlConnection = MysqlOptions & {
   dialect: 'mysql';
@@ -232,6 +278,10 @@ export const mysql: MysqlFactory = Object.assign(
   { dialect: 'mysql' as const, driver: mysqlDriver },
 );
 export default mysql;
+
+function quoteMysql(identifier: string): string {
+  return `\`${identifier.replaceAll('`', '``')}\``;
+}
 
 function assertSocketPathExclusive(
   config: { socketPath?: string },

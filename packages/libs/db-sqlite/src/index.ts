@@ -6,6 +6,7 @@ import type {
   DatabaseDriverDefinition,
   SqliteConnectionConfig,
 } from '@nocobase/db';
+import { rawRows } from '@nocobase/db';
 import { installDecimalAggregates } from './numeric.js';
 import { preciseIntegerClient } from './precise-integers.js';
 import { SqliteSchemaInspector } from './inspectors/sqlite.js';
@@ -162,6 +163,22 @@ export const sqliteDriver: DatabaseDriverDefinition<'sqlite'> = {
     if (!config.filename || config.filename === ':memory:') return;
     await context.ensureDirectory(path.dirname(config.filename));
   },
+  resetManagedSchema: async (context) => {
+    const client = await context.resolveClient();
+    const rows = rawRows<{ name: string; type: 'table' | 'view' }>(
+      await client.raw(
+        "select name, type from sqlite_schema where type in ('view', 'table') and name not like 'sqlite_%' order by case type when 'view' then 0 else 1 end, name",
+      ),
+    );
+    await client.raw('pragma foreign_keys = off');
+    try {
+      for (const row of rows) {
+        await client.raw(`drop ${row.type} if exists ${quoteSqlite(row.name)}`);
+      }
+    } finally {
+      await client.raw('pragma foreign_keys = on');
+    }
+  },
   configurePool: (_config, pool) => {
     const afterCreate = pool.afterCreate;
     return {
@@ -206,6 +223,10 @@ export const sqlite: SqliteFactory = Object.assign(
   { dialect: 'sqlite' as const, driver: sqliteDriver },
 );
 export default sqlite;
+
+function quoteSqlite(identifier: string): string {
+  return `"${identifier.replaceAll('"', '""')}"`;
+}
 
 function assertDriverOptions(
   driverOptions: Record<string, unknown> | undefined,

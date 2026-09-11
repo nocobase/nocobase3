@@ -13,6 +13,8 @@ export interface AppDatabaseTaskSelection {
   connection?: string;
   all?: boolean;
   autoRun?: boolean;
+  fresh?: boolean;
+  confirmFresh?: (plan: readonly AppDatabaseTask[]) => Promise<boolean>;
 }
 
 export interface AppDatabaseTask {

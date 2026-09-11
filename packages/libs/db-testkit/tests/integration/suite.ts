@@ -26,6 +26,7 @@ import './decimal/reads.test.js';
 import './metadata/database-store.test.js';
 import './metadata/transactions.test.js';
 import './migration/migrator.test.js';
+import './reset-managed-schema.test.js';
 import './query/aggregates.test.js';
 import './query/compile.test.js';
 import './query/joins.test.js';

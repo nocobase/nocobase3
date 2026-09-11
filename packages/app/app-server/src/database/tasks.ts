@@ -1,7 +1,10 @@
 import type { DatabaseDriverRegistration, DatabaseManager } from '@nocobase/db';
 
 import type { ConfigPaths } from '../config/index.js';
-import { createAppDatabaseManager } from './manager.js';
+import {
+  createAppDatabaseManager,
+  resolveAppDatabaseDriver,
+} from './manager.js';
 import { createAppMigrator, type AppMigrationRunResult } from './migrator.js';
 import { createAppSeeder, type AppSeedRunResult } from './seeder.js';
 import { prepareAppDatabaseStorage } from './storage.js';
@@ -22,6 +25,7 @@ export interface AppDatabaseTaskResult {
   batch?: number;
   executed?: string[];
   skipped?: string[];
+  fresh?: boolean;
 }
 
 export interface AppDatabaseTasksResult {
@@ -51,7 +55,11 @@ export async function executeAppDatabasePlan(
   paths: ConfigPaths | undefined,
   plan: readonly AppDatabaseTask[],
   drivers?: Record<string, DatabaseDriverRegistration>,
+  fresh = false,
 ): Promise<AppDatabaseTasksResult> {
+  if (fresh && plan.some((task) => task.kind !== 'migrations')) {
+    throw new Error('--fresh is only supported for migrations.');
+  }
   const result: AppDatabaseTasksResult = {
     ok: true,
     status: 'completed',
@@ -82,9 +90,15 @@ export async function executeAppDatabasePlan(
       };
       const completed =
         task.kind === 'migrations'
-          ? await createAppMigrator(options).latest()
+          ? await (fresh
+              ? createAppMigrator(options).fresh()
+              : createAppMigrator(options).latest())
           : await createAppSeeder(options).run();
-      result.results.push({ ...identity, ...completed });
+      result.results.push({
+        ...identity,
+        ...completed,
+        ...(fresh ? { fresh: true } : {}),
+      });
     } catch (error) {
       result.ok = false;
       result.status = 'failed';
@@ -113,6 +127,9 @@ export async function runAppDatabaseTasks(
   selection: AppDatabaseTaskSelection & { kind: AppDatabaseTaskKind },
   drivers?: Record<string, DatabaseDriverRegistration>,
 ): Promise<AppDatabaseTasksResult> {
+  if (selection.fresh && selection.kind !== 'migrations') {
+    throw new Error('--fresh is only supported for migrations.');
+  }
   const plan = planAppDatabaseTasks(
     config,
     paths,
@@ -121,13 +138,40 @@ export async function runAppDatabaseTasks(
     drivers,
   );
   if (!plan.length) return { ok: true, status: 'not-configured', results: [] };
+  if (selection.fresh) {
+    for (const task of plan) {
+      if (task.skipReason) continue;
+      const connection = config.connections[task.connection];
+      const driver =
+        connection?.databaseDriver ??
+        resolveAppDatabaseDriver(connection?.dialect ?? '', {
+          ...config.drivers,
+          ...drivers,
+        });
+      if (!driver?.resetManagedSchema) {
+        throw new Error(
+          `Database driver for connection "${task.connection}" does not support managed schema reset.`,
+        );
+      }
+    }
+    if (selection.confirmFresh && !(await selection.confirmFresh(plan))) {
+      throw new Error('Fresh migration cancelled.');
+    }
+  }
   const database = createAppDatabaseManager(config, paths, {
     ...config.drivers,
     ...drivers,
   });
   if (!database) return { ok: true, status: 'not-configured', results: [] };
   try {
-    return await executeAppDatabasePlan(database, config, paths, plan, drivers);
+    return await executeAppDatabasePlan(
+      database,
+      config,
+      paths,
+      plan,
+      drivers,
+      selection.fresh,
+    );
   } finally {
     await database.destroy();
   }

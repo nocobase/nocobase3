@@ -6,6 +6,7 @@ import type {
   DatabaseDriverDefinition,
   MssqlConnectionConfig,
 } from '@nocobase/db';
+import { rawRows } from '@nocobase/db';
 import { MssqlSchemaInspector } from './inspectors/mssql.js';
 
 const require = createRequire(import.meta.url);
@@ -306,6 +307,77 @@ export const mssqlDriver: DatabaseDriverDefinition<'mssql'> = {
       'dbo',
     ];
   },
+  resetManagedSchema: async (context) => {
+    const client = await context.resolveClient();
+    const schema = 'dbo';
+    const constraints = rawRows<{
+      schema_name: string;
+      table_name: string;
+      constraint_name: string;
+    }>(
+      await client.raw(
+        `select s.name as schema_name, t.name as table_name, fk.name as constraint_name
+         from sys.foreign_keys fk
+         join sys.tables t on t.object_id = fk.parent_object_id
+         join sys.schemas s on s.schema_id = t.schema_id
+         where s.name = ?`,
+        [schema],
+      ),
+    );
+    for (const constraint of constraints) {
+      await client.raw(
+        `alter table ${quoteMssql(schema)}.${quoteMssql(constraint.table_name)}
+         drop constraint ${quoteMssql(constraint.constraint_name)}`,
+      );
+    }
+    const views = rawRows<{ name?: string; NAME?: string }>(
+      await client.raw(
+        `select v.name
+         from sys.views v
+         join sys.schemas s on s.schema_id = v.schema_id
+         where s.name = ? and v.is_ms_shipped = 0
+         order by v.name`,
+        [schema],
+      ),
+    );
+    const tables = rawRows<{ name?: string; NAME?: string }>(
+      await client.raw(
+        `select t.name
+         from sys.tables t
+         join sys.schemas s on s.schema_id = t.schema_id
+         where s.name = ? and t.is_ms_shipped = 0
+         order by t.name`,
+        [schema],
+      ),
+    );
+    const sequences = rawRows<{ name?: string; NAME?: string }>(
+      await client.raw(
+        `select seq.name
+         from sys.sequences seq
+         join sys.schemas s on s.schema_id = seq.schema_id
+         where s.name = ?
+         order by seq.name`,
+        [schema],
+      ),
+    );
+    for (const object of views) {
+      const name = object.name ?? object.NAME;
+      if (!name) continue;
+      await client.raw(`drop view ${quoteMssql(schema)}.${quoteMssql(name)}`);
+    }
+    for (const object of tables) {
+      const name = object.name ?? object.NAME;
+      if (!name) continue;
+      await client.raw(`drop table ${quoteMssql(schema)}.${quoteMssql(name)}`);
+    }
+    for (const object of sequences) {
+      const name = object.name ?? object.NAME;
+      if (!name) continue;
+      await client.raw(
+        `drop sequence ${quoteMssql(schema)}.${quoteMssql(name)}`,
+      );
+    }
+  },
 };
 export type MssqlConnection = MssqlOptions & {
   dialect: 'mssql';
@@ -326,6 +398,10 @@ export const mssql: MssqlFactory = Object.assign(
   { dialect: 'mssql' as const, driver: mssqlDriver },
 );
 export default mssql;
+
+function quoteMssql(identifier: string): string {
+  return `[${identifier.replaceAll(']', ']]')}]`;
+}
 
 function assertDriverOptions(
   driverOptions: Record<string, unknown> | undefined,

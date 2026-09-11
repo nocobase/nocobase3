@@ -11,6 +11,7 @@ import type { AppDatabaseConfig } from '@nocobase/app-server/database';
 
 const roots: string[] = [];
 afterEach(() => {
+  vi.unstubAllEnvs();
   for (const root of roots.splice(0))
     rmSync(root, { recursive: true, force: true });
 });
@@ -146,4 +147,21 @@ it('reports invalid selection as JSON and exits nonzero', async () => {
       error: expect.stringContaining('Unknown'),
     }),
   );
+});
+
+it('requires force for fresh migrations in CI', async () => {
+  const { runtime, command } = fixture();
+  vi.stubEnv('CI', '1');
+  await expect(
+    runDatabaseCommand(
+      command,
+      'migrations',
+      { json: true, all: false, fresh: true },
+      runtime,
+    ),
+  ).rejects.toThrow('exit 1');
+  expect(command.log).toHaveBeenCalledWith(
+    '--fresh requires --force in CI or a non-interactive terminal.',
+  );
+  expect(command.logJson).not.toHaveBeenCalled();
 });
