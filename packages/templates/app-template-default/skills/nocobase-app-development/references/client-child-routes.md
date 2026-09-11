@@ -161,17 +161,37 @@ The route renderer supplies outlets for pure groups. Business pages place their 
 Use `RouteDialog` from `@/components/route-dialog` or `RouteDrawer` from `@/components/route-drawer` when a child page should open as an overlay. The page that owns the `children` route must render `<Outlet />`; otherwise the overlay child has nowhere to render. The overlay page renders the wrapper. Both wrappers automatically render their next child outlet outside the panel, within the underlying dialog context, so overlay pages do not add another outlet themselves.
 
 ```ts
-// Inside a parent page route in client/routes.ts:
-children: [{
-  name: 'orderEditor',
-  path: ':orderId/edit',
-  componentLoader: () => import('./pages/order-editor.js'),
-  children: [{
-    name: 'orderDetails',
-    path: 'details',
-    componentLoader: () => import('./pages/order-details.js'),
-  }],
-}],
+// client/routes.ts
+import {
+  defineAppRoutes,
+  type AppClientRouteContribution,
+} from '@nocobase/app-client/plugins';
+
+const appRoutes: AppClientRouteContribution = defineAppRoutes([
+  {
+    auth: 'required',
+    componentLoader: () => import('./pages/orders.js'),
+    name: 'orders',
+    navigation: { title: 'navigation.orders' },
+    path: '/orders',
+    children: [
+      {
+        name: 'orderEditor',
+        path: ':orderId/edit',
+        componentLoader: () => import('./pages/order-editor.js'),
+        children: [
+          {
+            name: 'orderDetails',
+            path: 'details',
+            componentLoader: () => import('./pages/order-details.js'),
+          },
+        ],
+      },
+    ],
+  },
+]);
+
+export default [appRoutes];
 ```
 
 ```tsx
