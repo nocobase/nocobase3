@@ -80,7 +80,7 @@ Only declared POST `/api/<name>:<action>` operations are exposed. Ordinary actio
 
 Content is GET `<accessPath>/<uuid>.<ext>` outside `/api`, omitting the dot when extensionless. Stream returns full bytes as an attachment; redirect returns a public storage URL or a five-minute signed URL. A disk without URL support requires stream mode; there is no automatic fallback.
 
-These are public routes. For restricted files, wrap both API and root contributions with App-owned authentication and authorization before mounting them. Check the operation and record/parent-record access; a login page, private disk, Client filter or writePolicy is not authorization. If the generic routes cannot express the policy, write business routes using the public Server manager. Never trust browser-supplied ownership.
+These are public routes. For restricted files, register App-owned authentication and authorization on the paths each contribution owns before mounting it — `/<name>:<action>` per exposed API action, `<accessPath>/*` for content. Never `router.use('*', ...)` in a contribution router: contributions share the mounted router, so it also guards the SPA and every contribution mounted after yours. Check the operation and record/parent-record access; a login page, private disk, Client filter or writePolicy is not authorization. If the generic routes cannot express the policy, write business routes using the public Server manager. Never trust browser-supplied ownership.
 
 ## Server and Client services
 
