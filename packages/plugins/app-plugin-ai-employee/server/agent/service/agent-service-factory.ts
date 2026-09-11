@@ -8,7 +8,7 @@ import { databaseManagerToken } from '@nocobase/db';
 import { idGeneratorToken } from '@nocobase/app-server/id-generator';
 import { loggingToken } from '@nocobase/app-server/logging';
 import { cachingToken } from '@nocobase/app-server/caching';
-import type { AIManager } from '@nocobase/ai-employee';
+import type { AIManager, ToolsEntity } from '@nocobase/ai-employee';
 import { createAgentService, type AgentService } from './agent-service.js';
 import { createAIEmployeeAgentContextProvider } from '../context/ai-employee/context.js';
 import type { AIEmployeeSkillSettings } from '../context/ai-employee/options.js';
@@ -57,6 +57,7 @@ export interface CreateAgentOptions {
   readonly model?: ModelRef;
   readonly systemPrompt?: string;
   readonly tools?: readonly string[];
+  readonly skills?: readonly string[];
   readonly persistence?: ConversationPersistence;
   readonly context?: AgentContextProvider;
   readonly providers?: AgentProviders;
@@ -181,6 +182,30 @@ export class AgentServiceFactory {
       });
     const model = await this.ai.llmProviderManager.resolveModel(options.model);
     const resolved = await this.ai.llmProviderManager.getLLMService(model);
+    const configuredToolNames = new Set(options.tools ?? []);
+    const tools = new Map<string, ToolsEntity>();
+    if (options.tools?.length) {
+      const configuredTools = await Promise.all(
+        options.tools.map((name) => this.ai.toolsManager.getTools(name)),
+      );
+      for (const tool of configuredTools) {
+        if (tool) tools.set(tool.definition.name, tool);
+      }
+    }
+    if (options.skills?.length) {
+      const skills = await this.ai.skillsManager.getSkills([...options.skills]);
+      for (const skill of skills) {
+        for (const name of skill.tools ?? []) configuredToolNames.add(name);
+      }
+      const skillTools = await Promise.all(
+        [...configuredToolNames].map((name) =>
+          this.ai.toolsManager.getTools(name),
+        ),
+      );
+      for (const tool of skillTools) {
+        if (tool) tools.set(tool.definition.name, tool);
+      }
+    }
     const context =
       options.context ??
       new FixedAgentContextProvider({
@@ -190,8 +215,19 @@ export class AgentServiceFactory {
         provider: resolved.provider,
         providerName: resolved.service.provider,
         llmService: resolved.service.name,
+        resolveLLM: async (requestModel) => {
+          const requestResolved =
+            await this.ai.llmProviderManager.getLLMService(requestModel);
+          return {
+            providerName: requestResolved.service.provider,
+            llmService: requestResolved.service.name,
+            model: requestResolved.model,
+            provider: requestResolved.provider,
+          };
+        },
         systemPrompt: options.systemPrompt,
-        tools: new Map(),
+        tools,
+        activeTools: configuredToolNames,
       });
     const conversation = new ConversationProvider({
       sessionId,

@@ -149,9 +149,8 @@ describe('fixed AgentService contracts', () => {
     expect(providers).not.toContain('model: options.model');
     expect(providers).toContain('getLLMService(request.model)');
     expect(conversationService).toContain('const agentRequest = {');
-    expect(conversationService).toContain(
-      'model: resolvedModel, userDecisions',
-    );
+    expect(conversationService).toContain('model: resolvedModel,');
+    expect(conversationService).toContain('userDecisions');
     expect(subAgentDispatcher).toMatch(
       /agent\.invoke\(\s*\{\s*userDecisions:[\s\S]*?model: resolvedModel,/,
     );

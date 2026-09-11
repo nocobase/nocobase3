@@ -20,6 +20,7 @@ export interface FixedAgentContextOptions {
   readonly provider?: LLMProvider;
   readonly providerName?: string;
   readonly llmService?: string;
+  readonly resolveLLM?: (model: ModelRef) => Promise<ResolvedAgentLLM>;
   readonly systemPrompt?: string;
   readonly tools?: ReadonlyMap<string, ToolsEntity>;
   readonly activeTools?: ReadonlySet<string>;
@@ -31,10 +32,12 @@ export class FixedAgentContextProvider implements AgentContextProvider {
   private readonly provider?: LLMProvider;
   private readonly providerName?: string;
   private readonly llmService?: string;
+  private readonly resolveModel?: (
+    model: ModelRef,
+  ) => Promise<ResolvedAgentLLM>;
   private readonly prompt?: string;
   private readonly tools: ReadonlyMap<string, ToolsEntity>;
   private readonly activeToolNames: ReadonlySet<string>;
-
   public constructor(options: FixedAgentContextOptions) {
     this.conversation = {
       sessionId: options.sessionId,
@@ -45,6 +48,7 @@ export class FixedAgentContextProvider implements AgentContextProvider {
     this.provider = options.provider;
     this.providerName = options.providerName;
     this.llmService = options.llmService;
+    this.resolveModel = options.resolveLLM;
     this.prompt = options.systemPrompt;
     this.tools = options.tools ?? new Map();
     this.activeToolNames = options.activeTools ?? new Set(this.tools.keys());
@@ -56,7 +60,10 @@ export class FixedAgentContextProvider implements AgentContextProvider {
 
   public async resolveLLM(request: AgentRequest): Promise<ResolvedAgentLLM> {
     const model = request.model ?? this.model;
-    if (!model || !this.provider)
+    if (!model) throw new Error('Fixed agent model is required');
+    if (request.model && this.resolveModel)
+      return this.resolveModel(request.model);
+    if (!this.provider)
       throw new Error('Fixed agent model provider is required');
     return {
       providerName: this.providerName ?? '',
