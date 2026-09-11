@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { LLMProvider } from '@nocobase/ai-employee';
-import { AIEmployeeChatContextProvider } from '../server/agent/ai-employee/providers.js';
+import { AIEmployeeAgentContextProvider } from '../server/agent/context/ai-employee/context.js';
 
 const createFixture = (promptMode: 'default' | 'raw' | 'none' = 'default') => {
   const provider = {
@@ -42,7 +42,7 @@ const createFixture = (promptMode: 'default' | 'raw' | 'none' = 'default') => {
     builtInManager: { setupBuiltInInfo: vi.fn() },
     execution: {},
   } as any;
-  const context = new AIEmployeeChatContextProvider(options);
+  const context = new AIEmployeeAgentContextProvider(options);
   const toolContext = {
     getAvailableSkills: vi
       .spyOn(context, 'getAvailableSkills')
@@ -60,7 +60,7 @@ const createFixture = (promptMode: 'default' | 'raw' | 'none' = 'default') => {
   return { provider, context, toolContext, llmProviderManager };
 };
 
-describe('AIEmployeeChatContextProvider', () => {
+describe('AIEmployeeAgentContextProvider', () => {
   it('keeps raw and none prompt modes at the context boundary', async () => {
     const raw = createFixture('raw');
     const none = createFixture('none');

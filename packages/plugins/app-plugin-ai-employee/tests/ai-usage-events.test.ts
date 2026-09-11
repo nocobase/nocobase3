@@ -12,8 +12,8 @@ import {
   buildAIUsageEventValues,
   normalizeUsageMetadata,
   recordAIUsageEventsForMessages,
-} from '../server/agent/ai-employee/ai-usage-events.js';
-import { createAIChatConversation } from '../server/agent/ai-employee/ai-chat-conversation.js';
+} from '../server/agent/conversation/persistence/usage-events.js';
+import { createAIChatConversation } from '../server/agent/conversation/persistence/ai-chat-conversation.js';
 import { RepositoryFactory } from '../server/factory/repository-factory.js';
 import { DatabaseAIUsageEventRepository } from '../server/repository/database/ai-usage-event.js';
 

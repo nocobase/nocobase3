@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { DefaultConversationMessageStore } from '../server/agent/ai-employee/conversation-message-store.js';
+import { DefaultConversationMessageStore } from '../server/agent/conversation/message-store.js';
 
 function createFixture(overrides: Record<string, unknown> = {}) {
   const transaction = { id: 'transaction-1' };

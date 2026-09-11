@@ -16,7 +16,7 @@ vi.mock('langchain', async (importOriginal) => {
   return { ...actual, createAgent: langchainMocks.createAgent };
 });
 
-import { AgentService } from '../server/agent/agent-service.js';
+import { AgentService } from '../server/agent/service/agent-service.js';
 
 type StreamChunk = [string, unknown];
 

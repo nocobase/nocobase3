@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AIMessageInput } from '@nocobase/ai-employee';
-import { AgentService } from '../server/agent/agent-service.js';
-import { createAIEmployeeAgentService } from '../server/agent/ai-employee/index.js';
+import { AgentService } from '../server/agent/service/agent-service.js';
+import { createAIEmployee } from '../server/agent/context/ai-employee/index.js';
 import { createTestConversationProvider } from './test-conversation-provider.js';
 import type { AgentProviders } from '../server/agent/types.js';
 
@@ -130,7 +130,7 @@ describe('AgentService tool-call cancellation', () => {
       },
     } as any;
 
-    const agent = await createAIEmployeeAgentService(options);
+    const agent = await createAIEmployee(options);
 
     expect(agent).toBeInstanceOf(AgentService);
     expect(typeof agent.invoke).toBe('function');

@@ -333,8 +333,6 @@ export interface AgentContextProvider {
   discoveredTools(): Promise<DiscoveredTools>;
 }
 
-export type ChatContextProvider = AgentContextProvider;
-
 export interface ChatMessageConverter<TSource, TResult> {
   convert(
     source: TSource,

@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest';
 import {
   isReasoningFinishChunk,
   ReasoningStreamState,
-} from '../../server/agent/ai-employee/reasoning-stream-state.js';
+} from '../../server/agent/execution/reasoning-stream-state.js';
 
 const mainConversation = {
   sessionId: 'main',

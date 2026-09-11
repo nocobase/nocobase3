@@ -24,7 +24,7 @@ import {
   createConversationProvider,
   createAgentProviders,
 } from '../../providers.js';
-import type { AIEmployeeAgentOptions } from './options.js';
+import type { AIEmployeeContextOptions } from './options.js';
 import type { AIEmployeeSkillSettings } from './options.js';
 import type { AppAgentContext } from '../../context.js';
 import type { ConversationExecution } from '../../contracts.js';
@@ -533,10 +533,8 @@ If information is missing, clearly state it in the summary.</Important>`;
   }
 }
 
-export { AIEmployeeAgentContextProvider as AIEmployeeChatContextProvider };
-
 export function createAIEmployeeAgentContextProvider(
-  options: AIEmployeeAgentOptions,
+  options: AIEmployeeContextOptions,
 ): AIEmployeeAgentContextProvider {
   return new AIEmployeeAgentContextProvider({
     employee: options.employee as AIEmployeeType,
@@ -569,7 +567,7 @@ export function createAIEmployeeAgentContextProvider(
 }
 
 export async function createAIEmployeeAgentProviders(
-  options: AIEmployeeAgentOptions,
+  options: AIEmployeeContextOptions,
 ): Promise<AgentProviders> {
   const context = createAIEmployeeAgentContextProvider(options);
   const conversation = createConversationProvider(options);
@@ -581,7 +579,7 @@ export async function createAIEmployeeAgentProviders(
       employee: options.employee,
       skillSettings: options.skillSettings,
       logger: options.agentContext.logger,
-      actorId: options.agentContext.actor.id,
+      actorId: options.agentContext.actor?.id ?? 0,
       collectionRepository: options.collectionRepository,
       workContextHandler: options.workContextHandler,
       fileStorage: options.fileStorage,

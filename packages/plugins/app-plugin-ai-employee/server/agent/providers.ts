@@ -2,11 +2,11 @@ import type { AIConversationRepository } from '../repository/ai-conversation.js'
 import type { AIEmployeesManager } from '../manager/ai-employees-manager.js';
 import { LLMStreamCached } from '../manager/llm-stream-cached-manager.js';
 import type { Logger } from '@nocobase/logging';
-import { DefaultChatMessageConverters } from './converters.js';
-import { createAIChatConversation } from './ai-employee/ai-chat-conversation.js';
-import { DefaultConversationMessageStore } from './ai-employee/conversation-message-store.js';
-import { listCurrentFrontendTools } from './ai-employee/frontend-tools.js';
-import type { AIEmployeeAgentOptions } from './ai-employee/options.js';
+import { DefaultChatMessageConverters } from './message/converters.js';
+import { createAIChatConversation } from './conversation/persistence/ai-chat-conversation.js';
+import { DefaultConversationMessageStore } from './conversation/message-store.js';
+import { listCurrentFrontendTools } from './context/ai-employee/frontend-tools.js';
+import type { AIEmployeeContextOptions } from './context/ai-employee/options.js';
 import {
   DEFAULT_AGENT_FEATURES,
   type AgentAbortController,
@@ -97,7 +97,7 @@ export class DefaultConversationProvider implements ConversationProvider {
 }
 
 export function createConversationProvider(
-  options: AIEmployeeAgentOptions,
+  options: AIEmployeeContextOptions,
 ): ConversationProvider {
   const database = options.database;
   const sessionId = options.sessionId;
@@ -133,7 +133,8 @@ export function createConversationProvider(
 
 class DefaultAgentProviders implements AgentProviders {
   public readonly conversation: ConversationProvider;
-  public readonly chatContext: AgentProviders['chatContext'];
+  public readonly context: AgentProviders['context'];
+  public readonly chatContext: AgentProviders['context'];
   public readonly converters: AgentProviders['converters'];
   public readonly logger: Logger;
   public readonly features: AgentFeatureOptions;
@@ -141,7 +142,8 @@ class DefaultAgentProviders implements AgentProviders {
 
   public constructor(options: CreateAgentProvidersOptions) {
     this.conversation = options.conversation;
-    this.chatContext = options.chatContext;
+    this.context = options.context ?? options.chatContext;
+    this.chatContext = this.context;
     this.logger = options.logger ?? noopLogger;
     this.converters = options.converters ?? new DefaultChatMessageConverters();
     this.features = {

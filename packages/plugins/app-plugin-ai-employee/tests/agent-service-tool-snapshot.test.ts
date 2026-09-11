@@ -15,7 +15,7 @@ vi.mock('../server/agent/middleware/pipeline.js', () => ({
   buildStandardAgentMiddleware: mocks.buildStandardAgentMiddleware,
 }));
 
-import { AgentService } from '../server/agent/agent-service.js';
+import { AgentService } from '../server/agent/service/agent-service.js';
 import { createTestConversationProvider } from './test-conversation-provider.js';
 import { DEFAULT_AGENT_FEATURES } from '../server/agent/types.js';
 

@@ -1,8 +1,8 @@
 import type { AIMessageInput, LLMProvider } from '@nocobase/ai-employee';
 import { describe, expect, it, vi } from 'vitest';
 
-import { DefaultChatMessageConverters } from '../server/agent/converters.js';
-import type { AIEmployeeAgentOptions } from '../server/agent/ai-employee/options.js';
+import { DefaultChatMessageConverters } from '../server/agent/message/converters.js';
+import type { AIEmployeeAgentOptions } from '../server/agent/context/ai-employee/options.js';
 
 function createOptions(records: Record<string, unknown>[]) {
   const find = vi.fn(async () => records);

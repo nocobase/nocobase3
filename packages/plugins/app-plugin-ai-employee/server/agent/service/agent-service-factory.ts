@@ -6,7 +6,7 @@ import type { ServiceResolver } from '@nocobase/service-provider';
 import type { AgentContextProvider, AgentProviders } from '../types.js';
 import { createAgentService, type AgentService } from './agent-service.js';
 import { createAIEmployeeAgentProviders } from '../context/ai-employee/context.js';
-import type { AIEmployeeAgentOptions } from '../context/ai-employee/options.js';
+import type { AIEmployeeContextOptions } from '../context/ai-employee/options.js';
 import type { ConversationPersistence } from '../contracts/persistence.js';
 
 export const agentServiceFactoryToken: ServiceToken<AgentServiceFactory> =
@@ -14,7 +14,7 @@ export const agentServiceFactoryToken: ServiceToken<AgentServiceFactory> =
     '@nocobase/app-plugin-ai-employee/agent-service-factory',
   );
 
-export interface CreateEmployeeOptions extends AIEmployeeAgentOptions {}
+export interface CreateEmployeeOptions extends AIEmployeeContextOptions {}
 export interface CreateAgentOptions {
   readonly context?: AgentContextProvider;
   readonly providers?: AgentProviders;

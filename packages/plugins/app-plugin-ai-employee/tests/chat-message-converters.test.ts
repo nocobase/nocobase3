@@ -2,7 +2,7 @@ import { AIMessage, HumanMessage, ToolMessage } from '@langchain/core/messages';
 import { describe, expect, it, vi } from 'vitest';
 import type { LLMProvider } from '@nocobase/ai-employee';
 
-import { DefaultChatMessageConverters } from '../server/agent/converters.js';
+import { DefaultChatMessageConverters } from '../server/agent/message/converters.js';
 const prepareStoredAssistantAdditionalKwargs = vi.fn((value) => value);
 const context = {
   providerName: 'test-provider',
@@ -92,7 +92,13 @@ describe('DefaultChatMessageConverters', () => {
   it('stores assistant tool calls on the complete message input', async () => {
     const converters = new DefaultChatMessageConverters({
       employee: { username: 'dara' },
-      agentContext: { logger: {} },
+      logger: {},
+      actorId: 1,
+      collectionRepository: vi.fn(),
+      workContextHandler: { resolve: vi.fn(async () => []) },
+      fileStorage: {},
+      documentLoaders: { cached: {} },
+      caching: {},
       skillSettings: {},
     } as never);
     const stored = await converters.assistant.convert(

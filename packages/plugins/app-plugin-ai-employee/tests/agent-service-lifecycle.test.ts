@@ -2,7 +2,7 @@ import { AIMessage } from '@langchain/core/messages';
 import { FakeListChatModel } from '@langchain/core/utils/testing';
 import { describe, expect, it, vi } from 'vitest';
 import type { LLMProvider } from '@nocobase/ai-employee';
-import { AgentService } from '../server/agent/agent-service.js';
+import { AgentService } from '../server/agent/service/agent-service.js';
 import { createTestConversationProvider } from './test-conversation-provider.js';
 import type {
   AgentProviders,

@@ -6,7 +6,7 @@ import {
   DEFAULT_AGENT_FEATURES,
   STANDARD_AGENT_MIDDLEWARE_ORDER,
   type AgentStreamEvent,
-  type ChatContextProvider,
+  type AgentContextProvider,
   type CurrentConversation,
   type DiscoveredTools,
   type ResolvedAgentLLM,
@@ -14,11 +14,11 @@ import {
 import { AIEmployeesManager } from '../server/manager/ai-employees-manager.js';
 import { createAgentProviders } from '../server/agent/providers.js';
 import { createTestConversationProvider } from './test-conversation-provider.js';
-import { DefaultChatMessageConverters } from '../server/agent/converters.js';
+import { DefaultChatMessageConverters } from '../server/agent/message/converters.js';
 import {
   encodeAgentEventSSE,
   toLegacyAgentEventPayload,
-} from '../server/agent/sse.js';
+} from '../server/agent/transport/sse.js';
 
 const src = path.resolve(import.meta.dirname, '../server');
 const read = (relative: string) =>
@@ -42,15 +42,15 @@ const llmProvider = {
 describe('fixed AgentService contracts', () => {
   it('owns response metadata lifecycle inside each AgentService stream execution', () => {
     const types = read('agent/types.ts');
-    const service = read('agent/agent-service.ts');
-    const employeeProviders = read('agent/ai-employee/providers.ts');
+    const service = read('agent/service/agent-service.ts');
+    const employeeProviders = read('agent/context/ai-employee/context.ts');
 
     const resolvedLLM = types.slice(
       types.indexOf('export interface ResolvedAgentLLM'),
       types.indexOf('export type AgentMessageConversionContext'),
     );
     const chatContextProvider = types.slice(
-      types.indexOf('export interface ChatContextProvider'),
+      types.indexOf('export interface AgentContextProvider'),
       types.indexOf('export interface AgentProviders'),
     );
 
@@ -96,10 +96,10 @@ describe('fixed AgentService contracts', () => {
 
   it('keeps thread execution policy private to AgentService', () => {
     const types = read('agent/types.ts');
-    const service = read('agent/agent-service.ts');
+    const service = read('agent/service/agent-service.ts');
     const providerSources = [
       'agent/providers.ts',
-      'agent/ai-employee/providers.ts',
+      'agent/context/ai-employee/context.ts',
     ]
       .map(read)
       .join('\n');
@@ -117,7 +117,7 @@ describe('fixed AgentService contracts', () => {
   it('keeps request-derived execution details out of chat context providers', () => {
     const providerSources = [
       'agent/providers.ts',
-      'agent/ai-employee/providers.ts',
+      'agent/context/ai-employee/context.ts',
       'agent/types.ts',
     ]
       .map(read)
@@ -128,18 +128,18 @@ describe('fixed AgentService contracts', () => {
     expect(types).toMatch(
       /getSystemPrompt\(\s*messages: readonly AIMessageInput\[\],?\s*\): Promise<string \| undefined>/,
     );
-    expect(read('agent/agent-service.ts')).toContain(
-      'chatContext.getSystemPrompt(allMessages)',
+    expect(read('agent/service/agent-service.ts')).toContain(
+      'context.getSystemPrompt(allMessages)',
     );
-    expect(read('agent/agent-service.ts')).toContain(
+    expect(read('agent/service/agent-service.ts')).toContain(
       '...(request.context ?? {})',
     );
   });
 
   it('resolves the AI employee model from each AgentRequest', () => {
     const types = read('agent/types.ts');
-    const options = read('agent/ai-employee/options.ts');
-    const providers = read('agent/ai-employee/providers.ts');
+    const options = read('agent/context/ai-employee/options.ts');
+    const providers = read('agent/context/ai-employee/context.ts');
     const conversationService = read('service/ai-conversation-service.ts');
     const subAgentDispatcher = read('manager/sub-agents/dispatcher.ts');
 
@@ -161,10 +161,12 @@ describe('fixed AgentService contracts', () => {
 
   it('keeps AI chat conversation ownership in the conversation provider', () => {
     const providers = read('agent/providers.ts');
-    const chatConversation = read('agent/ai-employee/ai-chat-conversation.ts');
-    expect(fs.existsSync(path.join(src, 'agent/ai-employee/runtime.ts'))).toBe(
-      false,
+    const chatConversation = read(
+      'agent/conversation/persistence/ai-chat-conversation.ts',
     );
+    expect(
+      fs.existsSync(path.join(src, 'agent/context/ai-employee/runtime.ts')),
+    ).toBe(false);
     expect(providers).toContain(
       'const chatConversation = createAIChatConversation({',
     );
@@ -175,10 +177,10 @@ describe('fixed AgentService contracts', () => {
 
   it('removes the empty message normalization contract and middleware stage', () => {
     const types = read('agent/types.ts');
-    const service = read('agent/agent-service.ts');
+    const service = read('agent/service/agent-service.ts');
     const providerSources = [
       'agent/providers.ts',
-      'agent/ai-employee/providers.ts',
+      'agent/context/ai-employee/context.ts',
     ]
       .map(read)
       .join('\n');
@@ -201,16 +203,14 @@ describe('fixed AgentService contracts', () => {
     const production = [
       'agent/types.ts',
       'agent/providers.ts',
-      'agent/agent-service.ts',
-      'agent/ai-employee/providers.ts',
-      'agent/ai-employee/conversation-message-store.ts',
+      'agent/service/agent-service.ts',
+      'agent/context/ai-employee/context.ts',
+      'agent/conversation/message-store.ts',
       'agent/middleware/pipeline.ts',
     ]
       .map(read)
       .join('\n');
-    const toolCallStore = read(
-      'agent/ai-employee/conversation-message-store.ts',
-    );
+    const toolCallStore = read('agent/conversation/message-store.ts');
     expect(production).not.toMatch(/\bToolProvider\b/);
     expect(production).not.toContain('createDefaultToolProvider');
     expect(production).not.toContain('createAIEmployeeToolProvider');
@@ -225,15 +225,15 @@ describe('fixed AgentService contracts', () => {
     expect(toolCallStore).not.toMatch(
       /public\s+(?:async\s+)?(?:getToolsMap|shouldInterruptToolCall|isAutoCall)\s*\(/,
     );
-    expect(read('agent/ai-employee/providers.ts')).not.toMatch(
+    expect(read('agent/context/ai-employee/context.ts')).not.toMatch(
       /activeProvider|activeIdentity/,
     );
     expect(production).not.toMatch(
       /Object\.assign\([^)]*(chatContext|converter)/,
     );
     expect(production).not.toMatch(/\.\.\.(options\.)?chatContext/);
-    expect(read('agent/converters.ts')).toContain(
-      "from './ai-employee/options.js'",
+    expect(read('agent/message/converters.ts')).toContain(
+      'AIEmployeeMessageConverterOptions',
     );
     const types = read('agent/types.ts');
     expect(types).toContain('export interface DiscoveredTools');
@@ -249,9 +249,9 @@ describe('fixed AgentService contracts', () => {
   });
 
   it('keeps tool-call cancellation behind the unified AgentService contract', () => {
-    const service = read('agent/agent-service.ts');
-    const providers = read('agent/ai-employee/providers.ts');
-    const factory = read('agent/ai-employee/index.ts');
+    const service = read('agent/service/agent-service.ts');
+    const providers = read('agent/context/ai-employee/context.ts');
+    const factory = read('agent/context/ai-employee/index.ts');
     const agentProviders = read('agent/providers.ts');
     const types = read('agent/types.ts');
 
@@ -277,15 +277,15 @@ describe('fixed AgentService contracts', () => {
     expect(providers).not.toContain('async function initializeToolCalls');
     expect(providers).not.toMatch(/runtime\.(initToolCall|confirmToolCall)/);
     expect(types).not.toMatch(/initialize\([^)]*transaction/);
-    expect(fs.existsSync(path.join(src, 'agent/ai-employee/runtime.ts'))).toBe(
-      false,
-    );
-    const messageStore = read(
-      'agent/ai-employee/conversation-message-store.ts',
-    );
+    expect(
+      fs.existsSync(path.join(src, 'agent/context/ai-employee/runtime.ts')),
+    ).toBe(false);
+    const messageStore = read('agent/conversation/message-store.ts');
     expect(messageStore).toContain('implements ConversationMessageStore');
     expect(
-      fs.existsSync(path.join(src, 'agent/ai-employee/tool-call-handler.ts')),
+      fs.existsSync(
+        path.join(src, 'agent/context/ai-employee/tool-call-handler.ts'),
+      ),
     ).toBe(false);
     expect(messageStore).not.toContain('RepositoryFactory');
     expect(messageStore).not.toMatch(/\breject\s*\(/);
@@ -295,15 +295,15 @@ describe('fixed AgentService contracts', () => {
     expect(messageStore).toContain('toolMessages: AIToolMessageRepository');
     expect(
       fs.existsSync(
-        path.join(src, 'agent/ai-employee/tool-call-cancellation.ts'),
+        path.join(src, 'agent/context/ai-employee/tool-call-cancellation.ts'),
       ),
     ).toBe(false);
     expect(agentProviders).not.toContain('DefaultToolCallHandler');
     expect(agentProviders).toMatch(
-      /createConversationProvider\(\s*options: AIEmployeeAgentOptions,?\s*\)/,
+      /createConversationProvider\(\s*options: AIEmployeeContextOptions,?\s*\)/,
     );
     expect(providers).not.toContain('ToolCallPolicy');
-    const options = read('agent/ai-employee/options.ts');
+    const options = read('agent/context/ai-employee/options.ts');
     expect(options).not.toContain('RepositoryFactory');
     expect(options).not.toMatch(/\brepositories\s*:/);
     expect(options).toContain('aiMessages: AIMessageRepository');
@@ -311,23 +311,25 @@ describe('fixed AgentService contracts', () => {
     expect(options).toContain('aiUsageEvents: AIUsageEventRepository');
     expect(options).toContain('aiConversations: AIConversationRepository');
     expect(messageStore).toContain('class DefaultConversationMessageStore');
-    expect(providers).toContain('new DefaultChatMessageConverters(options)');
-    expect(read('agent/converters.ts')).toContain(
+    expect(providers).toContain('new DefaultChatMessageConverters({');
+    expect(read('agent/message/converters.ts')).toContain(
       'export class DefaultChatMessageConverters',
     );
-    expect(read('agent/converters.ts')).not.toContain(
+    expect(read('agent/message/converters.ts')).not.toContain(
       'export class BaseChatMessageConverters',
     );
-    expect(read('agent/converters.ts')).toContain(
+    expect(read('agent/message/converters.ts')).toContain(
       'export class DefaultChatMessageConverters',
     );
     expect(
-      fs.existsSync(path.join(src, 'agent/ai-employee/message-converters.ts')),
+      fs.existsSync(
+        path.join(src, 'agent/context/ai-employee/message-converters.ts'),
+      ),
     ).toBe(false);
     expect(messageStore).not.toContain('private readonly options:');
     expect(providers).not.toMatch(/markPending:\s*\(|markDone:\s*\(/);
     expect(types).not.toMatch(/confirm\([^)]*DatabaseConnection/);
-    const chatContext = read('agent/ai-employee/providers.ts');
+    const chatContext = read('agent/context/ai-employee/context.ts');
     expect(chatContext).not.toContain('implements ToolCallPolicy');
     expect(chatContext).not.toContain('AIEmployeeToolContext');
     expect(chatContext).not.toContain('private readonly aiEmployeeOptions');
@@ -339,10 +341,14 @@ describe('fixed AgentService contracts', () => {
     expect(types).not.toContain('ToolCallPolicy');
     expect(types).not.toMatch(/getToolsMap|isAutoCall|shouldInterruptToolCall/);
     expect(
-      fs.existsSync(path.join(src, 'agent/ai-employee/tool-call-policy.ts')),
+      fs.existsSync(
+        path.join(src, 'agent/context/ai-employee/tool-call-policy.ts'),
+      ),
     ).toBe(false);
     expect(
-      fs.existsSync(path.join(src, 'agent/ai-employee/tool-context.ts')),
+      fs.existsSync(
+        path.join(src, 'agent/context/ai-employee/tool-context.ts'),
+      ),
     ).toBe(false);
   });
 
@@ -359,25 +365,23 @@ describe('fixed AgentService contracts', () => {
     expect(types).toMatch(/loadMessages\(messageId\?: string\)/);
     expect(types).toMatch(/currentThread\(\)/);
     expect(types).not.toMatch(/forkThread\(/);
-    const service = read('agent/agent-service.ts');
-    const messageStore = read(
-      'agent/ai-employee/conversation-message-store.ts',
-    );
+    const service = read('agent/service/agent-service.ts');
+    const messageStore = read('agent/conversation/message-store.ts');
     expect(service).toMatch(/private async forkThread\(/);
     expect(service).toContain('const agent = createAgent({');
     expect(service).toContain('this.providers.checkpointer');
     expect(messageStore).not.toContain('createAgent');
     expect(messageStore).not.toContain('forkThread');
     expect(types).not.toMatch(/updateThread\(thread: AgentThread\)/);
-    expect(read('agent/ai-employee/conversation-message-store.ts')).toContain(
+    expect(read('agent/conversation/message-store.ts')).toContain(
       'target.updateThread(thread.thread)',
     );
-    expect(
-      read('agent/ai-employee/conversation-message-store.ts'),
-    ).not.toContain('AIConversationRepository');
-    expect(
-      read('agent/ai-employee/conversation-message-store.ts'),
-    ).not.toContain('updateThreadWithConnection');
+    expect(read('agent/conversation/message-store.ts')).not.toContain(
+      'AIConversationRepository',
+    );
+    expect(read('agent/conversation/message-store.ts')).not.toContain(
+      'updateThreadWithConnection',
+    );
     expect(types).not.toContain('ConversationThreadStore');
     expect(types).not.toMatch(/\bthreads:\s*ConversationThreadStore/);
     expect(types).not.toMatch(/\binitialize\(|\bconfirm\(/);
@@ -391,11 +395,9 @@ describe('fixed AgentService contracts', () => {
     );
   });
   it('owns the only standard middleware builder and preserves its order', () => {
-    const service = read('agent/agent-service.ts');
+    const service = read('agent/service/agent-service.ts');
     const pipeline = read('agent/middleware/pipeline.ts');
-    const messageStore = read(
-      'agent/ai-employee/conversation-message-store.ts',
-    );
+    const messageStore = read('agent/conversation/message-store.ts');
     expect(service).toContain('buildStandardAgentMiddleware');
     expect(messageStore).not.toContain('getMiddleware(');
     const positions = STANDARD_AGENT_MIDDLEWARE_ORDER.map((name) =>
@@ -415,10 +417,10 @@ describe('fixed AgentService contracts', () => {
 
   it('removes data source context from the new AgentService path', () => {
     const agentSource = [
-      'agent/agent-service.ts',
-      'agent/ai-employee/options.ts',
-      'agent/ai-employee/conversation-message-store.ts',
-      'agent/ai-employee/providers.ts',
+      'agent/service/agent-service.ts',
+      'agent/context/ai-employee/options.ts',
+      'agent/conversation/message-store.ts',
+      'agent/context/ai-employee/context.ts',
       'agent/types.ts',
     ]
       .map(read)
@@ -436,8 +438,8 @@ describe('fixed AgentService contracts', () => {
     expect(aiToolSources).not.toMatch(/ctx\.auth/);
     expect(aiToolSources).not.toMatch(/ctx\.aiConversationsManager/);
     expect(aiToolSources).not.toMatch(/ctx\.subAgentsDispatcher/);
-    const service = read('agent/agent-service.ts');
-    const providers = read('agent/ai-employee/providers.ts');
+    const service = read('agent/service/agent-service.ts');
+    const providers = read('agent/context/ai-employee/context.ts');
     expect(service).toContain('agentContext');
     expect(service).not.toContain('context.ctx');
     expect(providers).not.toContain('ctx: options.ctx');
@@ -467,7 +469,7 @@ describe('fixed AgentService contracts', () => {
   });
 
   it('uses explicit provider instances and default features', async () => {
-    class Context implements ChatContextProvider {
+    class Context implements AgentContextProvider {
       readonly marker = 'base';
       currentConversation(): CurrentConversation {
         return { sessionId: 'contract' };
@@ -500,12 +502,12 @@ describe('fixed AgentService contracts', () => {
       converters,
     });
 
-    const llm = await providers.chatContext.resolveLLM({});
+    const llm = await providers.context.resolveLLM({});
     expect(providers.conversation).toBe(conversation);
-    expect(providers.chatContext).toBe(chatContext);
+    expect(providers.context).toBe(chatContext);
     expect(providers.converters).toBe(converters);
     expect(providers.features).toEqual(DEFAULT_AGENT_FEATURES);
-    expect(await providers.chatContext.getSystemPrompt([])).toBe('base');
+    expect(await providers.context.getSystemPrompt([])).toBe('base');
   });
 
   it('keeps test message and tool-call state behind the same contract', async () => {

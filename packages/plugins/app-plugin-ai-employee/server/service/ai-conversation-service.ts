@@ -24,15 +24,15 @@ import type {
   AIMessageEntity,
   AIToolMessageEntity,
 } from '../repository/index.js';
-import { AgentSSEAdapter } from '../agent/sse.js';
+import { AgentSSEAdapter } from '../agent/transport/sse.js';
 import { createAIEmployee } from '../agent/service/agent-service-factory.js';
 import {
   createAgentContext,
   type AppAgentContext,
   type CreateAgentContextOptions,
 } from '../agent/context.js';
-import { EXECUTE_FRONTEND_TOOL_NAME } from '../agent/ai-employee/common/frontend-tools.js';
-import { findCurrentFrontendTool } from '../agent/ai-employee/frontend-tools.js';
+import { EXECUTE_FRONTEND_TOOL_NAME } from '../agent/context/ai-employee/common-frontend-tools.js';
+import { findCurrentFrontendTool } from '../agent/context/ai-employee/frontend-tools.js';
 import type { RepositoryFactory } from '../factory/repository-factory.js';
 import type { DocumentLoaders } from '@nocobase/ai-employee';
 import type { AIEmployeesManager } from '../manager/ai-employees-manager.js';

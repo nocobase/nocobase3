@@ -36,7 +36,7 @@ export interface AIEmployeeSkillSettings {
   skillsVersion?: string | number;
 }
 
-export interface AIEmployeeAgentOptions {
+export interface AIEmployeeContextOptions {
   agentContext: AppAgentContext;
   database: DatabaseConnection;
   caching: Caching;

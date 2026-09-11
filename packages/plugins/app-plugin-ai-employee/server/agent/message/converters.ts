@@ -436,6 +436,18 @@ class DefaultMessageConverters implements ChatMessageConverters {
   }
 }
 
+interface LegacyAIEmployeeMessageConverterOptions {
+  readonly employee: { username?: string; get?: (name: string) => unknown };
+  readonly skillSettings?: Record<string, any>;
+  readonly agentContext?: { actor?: { id?: string | number }; logger?: Logger };
+  readonly collectionRepository?: CollectionRepositoryResolver;
+  readonly workContextHandler?: WorkContextHandler;
+  readonly fileStorage?: FileStorage<any, any>;
+  readonly documentLoaders?: DocumentLoaders;
+  readonly caching?: Caching;
+  readonly logger?: Logger;
+}
+
 export interface AIEmployeeMessageConverterOptions {
   readonly employee: { username?: string; get?: (name: string) => unknown };
   readonly skillSettings?: Record<string, any>;
@@ -449,10 +461,16 @@ export interface AIEmployeeMessageConverterOptions {
   readonly getHeader?: (name: string) => string | undefined;
 }
 
-function isAIEmployeeAgentOptions(
-  options: ChatMessageConvertersOptions | AIEmployeeMessageConverterOptions,
-): options is AIEmployeeMessageConverterOptions {
-  return 'employee' in options && 'actorId' in options;
+function isAIEmployeeContextOptions(
+  options:
+    | ChatMessageConvertersOptions
+    | AIEmployeeMessageConverterOptions
+    | LegacyAIEmployeeMessageConverterOptions,
+): options is
+  AIEmployeeMessageConverterOptions | LegacyAIEmployeeMessageConverterOptions {
+  return (
+    'employee' in options && ('actorId' in options || 'agentContext' in options)
+  );
 }
 
 export class DefaultChatMessageConverters implements ChatMessageConverters {
@@ -465,11 +483,30 @@ export class DefaultChatMessageConverters implements ChatMessageConverters {
 
   public constructor(
     options:
-      ChatMessageConvertersOptions | AIEmployeeMessageConverterOptions = {},
+      | ChatMessageConvertersOptions
+      | AIEmployeeMessageConverterOptions
+      | LegacyAIEmployeeMessageConverterOptions = {},
   ) {
-    if (isAIEmployeeAgentOptions(options)) {
+    if (isAIEmployeeContextOptions(options)) {
       this.options = {};
-      this.aiEmployeeConverters = new DefaultMessageConverters(options);
+      const normalized: AIEmployeeMessageConverterOptions =
+        'actorId' in options
+          ? options
+          : ({
+              ...options,
+              actorId: options.agentContext?.actor?.id ?? 0,
+              collectionRepository:
+                options.collectionRepository ??
+                (() => ({ find: async () => [] })),
+              workContextHandler: options.workContextHandler ?? {
+                resolve: async () => [],
+              },
+              fileStorage: options.fileStorage ?? {},
+              documentLoaders: options.documentLoaders ?? { cached: {} },
+              caching: options.caching ?? {},
+              logger: options.logger ?? options.agentContext?.logger,
+            } as AIEmployeeMessageConverterOptions);
+      this.aiEmployeeConverters = new DefaultMessageConverters(normalized);
       this.assistant = this.aiEmployeeConverters.assistant;
       this.human = this.aiEmployeeConverters.human;
       this.tool = this.aiEmployeeConverters.tool;

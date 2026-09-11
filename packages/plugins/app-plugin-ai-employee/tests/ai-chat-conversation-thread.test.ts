@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AIConversationEntity } from '@nocobase/ai-employee';
-import { createAIChatConversation } from '../server/agent/ai-employee/ai-chat-conversation.js';
-import { DefaultConversationMessageStore } from '../server/agent/ai-employee/conversation-message-store.js';
+import { createAIChatConversation } from '../server/agent/conversation/persistence/ai-chat-conversation.js';
+import { DefaultConversationMessageStore } from '../server/agent/conversation/message-store.js';
 
 function fixture() {
   const connection = { id: 'transaction' };
