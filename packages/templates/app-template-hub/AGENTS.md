@@ -21,6 +21,8 @@ Do not create a plugin to add a feature. Plugins are separately published packag
 
 Read the one page your task needs, not the whole directory.
 
+`skills/nocobase-app-upgrade/` is a separate Skill for a separate job: merging a newer release of the template this hub was generated from. Read it when the task is upgrading the template rather than building a feature, and read it before touching anything — an upgrade done by copying the newest template over this hub destroys the work that made it this hub.
+
 ## Where things go
 
 Business code goes in these places. This is where you work, and where you should stay unless the task genuinely requires otherwise:
