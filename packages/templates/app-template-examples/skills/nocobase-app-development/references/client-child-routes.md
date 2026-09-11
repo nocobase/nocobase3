@@ -158,7 +158,7 @@ The route renderer supplies outlets for pure groups. Business pages place their 
 
 ## Route dialogs and drawers
 
-Use `RouteDialog` from `@/components/route-dialog` or `RouteDrawer` from `@/components/route-drawer` when a child page should open as an overlay. The parent page renders `<Outlet />`; the child renders the wrapper. Both wrappers automatically render their next child outlet outside the panel, within the underlying dialog context. Do not add another outlet inside them.
+Use `RouteDialog` from `@/components/route-dialog` or `RouteDrawer` from `@/components/route-drawer` when a child page should open as an overlay. The page that owns the `children` route must render `<Outlet />`; otherwise the overlay child has nowhere to render. The overlay page renders the wrapper. Both wrappers automatically render their next child outlet outside the panel, within the underlying dialog context, so overlay pages do not add another outlet themselves.
 
 ```ts
 // Inside a parent page route in client/routes.ts:
@@ -172,6 +172,21 @@ children: [{
     componentLoader: () => import('./pages/order-details.js'),
   }],
 }],
+```
+
+```tsx
+// client/pages/orders.tsx — the page that owns the overlay children
+import { Outlet } from 'react-router';
+
+export default function Orders() {
+  return (
+    <main>
+      {/* The order list stays mounted while an overlay child is open. */}
+      <h1>Orders</h1>
+      <Outlet />
+    </main>
+  );
+}
 ```
 
 ```tsx
@@ -202,7 +217,22 @@ export default function OrderEditor() {
 }
 ```
 
-Default-export a page rendering `RouteDrawer` from `order-details.tsx` to open a drawer above the dialog. Add the example's business translation keys to every supported locale. Opening a child URL directly also renders its ancestors. Parent page and form state stay mounted when child overlays open; only the top layer responds to Escape or its backdrop.
+```tsx
+// client/pages/order-details.tsx
+import { useTranslation } from '@nocobase/i18n/client';
+import { RouteDrawer } from '@/components/route-drawer';
+
+export default function OrderDetails() {
+  const { t } = useTranslation();
+  return (
+    <RouteDrawer title={t('orders.details')}>
+      <p>{t('orders.detailsDescription')}</p>
+    </RouteDrawer>
+  );
+}
+```
+
+In this example, only `orders.tsx` places an explicit `<Outlet />`. `order-editor.tsx` renders the dialog, and `order-details.tsx` renders the drawer; neither adds an outlet because `RouteDialog` and `RouteDrawer` render their next child outlet internally. Add the example's business translation keys to every supported locale. Opening a child URL directly also renders its ancestors. Parent page and form state stay mounted when child overlays open; only the top layer responds to Escape or its backdrop.
 
 Both wrappers accept `title` (required accessible name), `description`, `children`, `footer`, `closeTo`, `beforeClose`, and `className`. `className` styles the panel, including its width. Dialogs are centered; drawers enter from the right. The header and optional footer stay visible while the body scrolls. There are no default business buttons or controlled `open` props: route matching determines whether the overlay exists.
 
