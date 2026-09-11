@@ -151,7 +151,13 @@ describe('CollectionBuilder alterCollection', () => {
       ],
     });
     expect(dropConstraint.schemaOperations?.[0]).toMatchObject({
-      operations: [{ type: 'dropConstraint', name: 'uk_orders_paid_at' }],
+      operations: [
+        {
+          type: 'dropConstraint',
+          name: 'uk_orders_paid_at',
+          constraintType: undefined,
+        },
+      ],
     });
   });
 

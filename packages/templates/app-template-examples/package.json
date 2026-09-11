@@ -1,7 +1,7 @@
 {
   "name": "@nocobase/app-template-examples",
   "displayName": "NocoBase Examples",
-  "version": "0.1.0-beta.1",
+  "version": "0.1.0-beta.3",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -10,7 +10,7 @@
   "packageManager": "pnpm@11.7.0",
   "nocobase": {
     "templateKind": "app",
-    "defaultTemplateVersion": "0.1.0-beta.1"
+    "defaultTemplateVersion": "0.1.0-beta.3"
   },
   "devDependencies": {
     "@ai-sdk/react": "2.0.0",
@@ -99,6 +99,7 @@
     "sonner": "^2.0.3",
     "tailwind-merge": "catalog:",
     "tailwindcss": "catalog:",
+    "tar": "^7.5.22",
     "tsc-alias": "^1.9.2",
     "tsx": "catalog:",
     "tw-animate-css": "catalog:",
@@ -184,13 +185,12 @@
   },
   "dependencies": {
     "@nocobase/app-plugin-ai-employee": "workspace:^",
-    "@nocobase/app-plugin-ai-knowledge-base": "workspace:^",
     "@nocobase/app-plugin-authentication": "workspace:^",
     "@nocobase/app-plugin-authorization": "workspace:^",
     "@nocobase/app-plugin-cli-example": "workspace:^",
     "@nocobase/app-plugin-database-example": "workspace:^",
-    "@nocobase/app-plugin-file-repository": "workspace:^",
-    "@nocobase/app-plugin-file-repository-example": "workspace:^",
+    "@nocobase/app-plugin-file": "workspace:^",
+    "@nocobase/app-plugin-file-example": "workspace:^",
     "@nocobase/app-plugin-i18n": "workspace:^",
     "@nocobase/app-plugin-install": "workspace:^",
     "@nocobase/app-plugin-notification": "workspace:^",

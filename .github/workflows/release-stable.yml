@@ -35,6 +35,10 @@ on:
         description: 'Dry run: compute versions and run checks without publishing or pushing'
         type: boolean
         default: false
+      skip_smoke_test:
+        description: 'Skip the create-app smoke test (use only when the smoke test itself is broken)'
+        type: boolean
+        default: false
 
 concurrency:
   group: release-write
@@ -48,7 +52,7 @@ jobs:
   release:
     name: Publish from main
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     outputs:
       # 场景 A 的 tag 是转正时打的，场景 B 是这次新建的。
       tag: ${{ steps.batch.outputs.name }}
@@ -234,6 +238,22 @@ jobs:
         run: |
           pnpm build
           pnpm -r --if-present test
+
+      # A generated application is the only thing that exercises what this release actually publishes. Everything
+      # above resolves through the workspace, where `workspace:` links every package to a directory on disk; an
+      # installed application resolves through published manifests instead, so a dependency declared in the wrong
+      # place builds and tests cleanly here and fails on first boot there.
+      #
+      # It runs on a dry run too. That is the only way to exercise this without publishing anything, and a dry run is
+      # already the rehearsal step.
+      - name: Verify create-app against this release
+        if: '!inputs.skip_smoke_test'
+        uses: ./.github/actions/verify-create-app
+
+      - name: Note the skipped smoke test
+        if: inputs.skip_smoke_test
+        run: |
+          echo "::warning::The create-app smoke test was skipped for this release."
 
       - name: Stop here on dry run
         if: inputs.dry_run

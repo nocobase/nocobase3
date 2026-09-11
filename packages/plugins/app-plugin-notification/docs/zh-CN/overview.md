@@ -16,7 +16,7 @@ NocoBase 通知用于向用户发送站内信、邮件或 IM Webhook 消息，�
 
 ## 一条通知是怎样发送的
 
-一次 `send()` 调用会创建一条 Notification。每个收件人使用的每个 Channel 和 Provider 组合，都会生成一条独立的 Delivery。
+一个新的 `idempotencyKey` 会创建一条 Notification；使用同一键重复提交等价请求时返回原 Notification，不会重复创建。每个收件人使用的每个 Channel 和 Provider 组合，都会生成一条独立的 Delivery。
 
 ```text
 Notification

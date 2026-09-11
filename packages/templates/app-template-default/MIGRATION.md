@@ -34,6 +34,15 @@ Previously created article and plugin records remain in the existing database; t
 
 Remove `nocobase.plugins` from the application manifest after upgrading the CLI and template scripts together. Keep `templateKind` and `defaultTemplateVersion`. Client, Server, and CLI composition roots now determine registered plugins for bulk Skills synchronization and updates. Development watches read Server registrations; deployment packaging follows server imports. Registration still copies plugin Skills, and unregistration cleans up legacy metadata when present.
 
+## Show application roles in User management
+
+Register the application-owned `UserRolesProvider` after upgrading the Users
+and Authorization plugins. It exposes direct, non-default Permission Sets in
+the Users page, supports assigning custom roles, and displays the protected
+System administrator assignment without allowing that assignment to be changed
+through User management. Permission Sets assigned to `authenticated:*` remain
+default access for every signed-in user and are not shown as direct roles.
+
 ## Upgrade checklist
 
 1. Commit or back up application-owned changes.

@@ -1,4 +1,5 @@
 import {
+  ALL_PLUGIN_CAPABILITIES,
   isPluginCapability,
   PLUGIN_CAPABILITIES,
   type PluginCapability,
@@ -63,9 +64,20 @@ export function parseCreatePluginArgs(
       if (value === undefined || value.startsWith('-')) {
         throw new Error('--with requires a capability value.');
       }
+      // `all` selects everything rather than naming one capability, so it expands here instead of being carried
+      // through as a value nothing downstream would recognize.
+      if (value === ALL_PLUGIN_CAPABILITIES) {
+        for (const capability of PLUGIN_CAPABILITIES) {
+          if (!capabilities.includes(capability)) {
+            capabilities.push(capability);
+          }
+        }
+        index += 1;
+        continue;
+      }
       if (!isPluginCapability(value)) {
         throw new Error(
-          `Unknown plugin capability: ${value}. Supported capabilities: ${PLUGIN_CAPABILITIES.join(', ')}.`,
+          `Unknown plugin capability: ${value}. Supported capabilities: ${ALL_PLUGIN_CAPABILITIES}, ${PLUGIN_CAPABILITIES.join(', ')}.`,
         );
       }
       if (!capabilities.includes(value)) {
@@ -142,6 +154,7 @@ export function formatHelp(binary: string): string {
     '',
     'OPTIONS',
     '  --with <capability>          Add a capability; may be repeated',
+    `                               ${ALL_PLUGIN_CAPABILITIES} selects every one of:`,
     `                               ${PLUGIN_CAPABILITIES.join(', ')}`,
     '  --empty                      Create only the package foundation',
     '  --display-name <name>        Human-readable package display name',

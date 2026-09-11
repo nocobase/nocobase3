@@ -34,6 +34,8 @@ Register `@nocobase/app-plugin-notification-in-app/client` in the application Cl
 
 The authenticated inbox API is rooted at `notifications/in-app` relative to the injected `ApiClient` API base. Reads include list and unread-count. Writes include read/unread/delete and read-all, each preceded by an authenticated CSRF-token request.
 
+For a custom host, register the exported `IN_APP_NOTIFICATION_NAMESPACE` and `inAppNotificationServerLocales` with its `I18nRuntime`, initialize the runtime, then mount its request i18n middleware before the inbox router. Notification-owned failures return a stable `error.code/message/ns/key/params` envelope; branch on `code`, display `message`, and use `ns`, `key`, and `params` only when the Client needs to retranslate it. Authentication middleware retains its owning plugin's error contract.
+
 The WebSocket topic is user-scoped by the Server. An `inbox.changed` event does not carry authoritative inbox contents; it tells the UI to refetch HTTP state. The UI also refetches when the realtime connection opens so events missed during disconnection are recovered. Window focus is a fallback invalidation.
 
 When an application configures `api.baseURL` or `api.realtimeURL`, both transports must use those injected client settings. Never derive the HTTP endpoint from `window.location`, a Portal base, or the WebSocket URL.

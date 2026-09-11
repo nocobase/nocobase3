@@ -1,8 +1,12 @@
+import { resolve } from 'node:path';
+
 import sqlite from '@nocobase/db-sqlite';
 import {
   createDatabaseManager,
   InMemoryCollectionMetadataStore,
+  validateMigrations,
   type DatabaseManager,
+  type Row,
 } from '@nocobase/db';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -13,8 +17,11 @@ interface SqliteClient {
     hasTable(name: string): Promise<boolean>;
     hasColumn(table: string, column: string): Promise<boolean>;
   };
-  raw(sql: string): Promise<readonly { readonly name: string }[]>;
+  raw<T extends Row = Row>(sql: string): Promise<readonly T[]>;
 }
+
+const MIGRATIONS_DIRECTORY = resolve(process.cwd(), 'database/migrations');
+const MIGRATION_NAME = '202608190002_create_notification_in_app_items' as const;
 
 describe('in-app notification database migration', () => {
   let database: DatabaseManager;
@@ -110,6 +117,60 @@ describe('in-app notification database migration', () => {
     await expect(
       database.connection().collections.get('notificationInAppItems'),
     ).resolves.toBeUndefined();
+  });
+
+  it('runs through the migration runner and records stable history', async () => {
+    const historyTable = 'notification_in_app_test_migrations';
+    const lockTable = 'notification_in_app_test_migration_lock';
+    const migrator = database.createMigrator({
+      directory: MIGRATIONS_DIRECTORY,
+      packageName: '@nocobase/app-plugin-notification-in-app',
+      tableName: historyTable,
+      lockTableName: lockTable,
+    });
+    const loaded = await validateMigrations({
+      directory: MIGRATIONS_DIRECTORY,
+      packageName: '@nocobase/app-plugin-notification-in-app',
+    });
+
+    expect(loaded.map(({ name }) => name)).toEqual([MIGRATION_NAME]);
+    expect(loaded.map(({ checksum }) => checksum)).toEqual([
+      expect.stringMatching(/^[a-f0-9]{64}$/),
+    ]);
+    await expect(migrator.latest()).resolves.toEqual({
+      batch: 1,
+      executed: [MIGRATION_NAME],
+      skipped: [],
+    });
+    await expect(migrator.latest()).resolves.toEqual({
+      batch: 1,
+      executed: [],
+      skipped: [MIGRATION_NAME],
+    });
+
+    const client = await database.connection().client<SqliteClient>();
+    await expect(
+      client.raw(
+        `select package_name as packageName, name, batch, checksum from ${historyTable} order by id`,
+      ),
+    ).resolves.toEqual([
+      {
+        packageName: '@nocobase/app-plugin-notification-in-app',
+        name: MIGRATION_NAME,
+        batch: 1,
+        checksum: loaded[0]?.checksum,
+      },
+    ]);
+    await expect(migrator.rollback()).resolves.toEqual({
+      batch: 1,
+      rolledBack: [MIGRATION_NAME],
+    });
+    await expect(
+      client.schema.hasTable('notification_in_app_items'),
+    ).resolves.toBe(false);
+    await expect(
+      client.raw(`select name from ${historyTable} order by id`),
+    ).resolves.toEqual([]);
   });
 });
 

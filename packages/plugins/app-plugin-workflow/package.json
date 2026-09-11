@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-workflow",
   "displayName": "Workflow App Plugin",
   "description": "Adds workflow runtime, persistence, and HTTP APIs to a NocoBase app.",
-  "version": "0.1.0-beta.11",
+  "version": "0.1.0-beta.12",
   "type": "module",
   "sideEffects": [
     "**/*.css"
@@ -104,14 +104,14 @@
     "@nocobase/nb3-cli": "workspace:^",
     "@nocobase/queue": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
-    "@oclif/core": "^4.14.0",
-    "@refinedev/core": "^5.0.0",
+    "@oclif/core": "catalog:",
+    "@refinedev/core": "catalog:",
     "@xyflow/react": "^12.11.3",
     "elkjs": "^0.10.2",
     "lucide-react": "catalog:",
-    "react": "^19.0.0",
-    "react-router": "^7.0.2",
-    "typescript": "^6.0.3"
+    "react": "catalog:",
+    "react-router": "catalog:",
+    "typescript": "catalog:"
   },
   "peerDependenciesMeta": {
     "typescript": {
@@ -119,8 +119,8 @@
     }
   },
   "devDependencies": {
+    "@boringnode/queue": "catalog:",
     "@nocobase/db-sqlite": "workspace:*",
-    "@boringnode/queue": "^0.7.1",
     "@nocobase/dev-config": "workspace:*",
     "@testing-library/react": "catalog:",
     "@types/node": "catalog:",
@@ -133,6 +133,6 @@
     "react-dom": "catalog:",
     "tsx": "catalog:",
     "vitest": "catalog:",
-    "yaml": "^2.8.1"
+    "yaml": "catalog:"
   }
 }
