@@ -1,5 +1,13 @@
 # @nocobase/create-plugin
 
+## 0.1.0-beta.6
+
+### Minor Changes
+
+- e9f796d: Add a `cli` capability and a `--with all` shorthand
+
+  `pnpm plugin:create <name> --with cli` scaffolds a `cli/` entry with one example command, the `./cli` export, and the peer dependencies an application resolves it through. `--with all` selects every capability, so a plugin that needs most of them no longer means naming each one.
+
 ## 0.1.0-beta.5
 
 ### Patch Changes

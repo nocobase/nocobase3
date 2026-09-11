@@ -65,6 +65,7 @@ export interface ApplicationRuntimeContributions<
   readonly plugins: ResolvedAppServerPlugins;
   readonly serviceProviders: readonly ApplicationServiceProviderConstructor<TConfig>[];
   readonly routes: readonly AppRouteContribution<Application<TConfig>>[];
+  readonly locales?: AppServerPluginLocalesLoader;
 }
 
 /**
@@ -109,6 +110,7 @@ export class Application<
     packageName: string;
     load: AppServerPluginLocalesLoader;
   }[] = [];
+  private applicationLocales: AppServerPluginLocalesLoader | undefined;
 
   public constructor(options: ApplicationOptions<TConfig>) {
     this.config = options.config;
@@ -177,10 +179,23 @@ export class Application<
     runtime: ApplicationRuntimeContributions<TConfig>,
   ): void {
     this.addServerPlugins(runtime.plugins);
+    if (runtime.locales) {
+      this.addApplicationLocales(runtime.locales);
+    }
     this.addServiceProviders(runtime.serviceProviders);
     for (const routes of runtime.routes) {
       this.addRoutes(routes);
     }
+  }
+
+  /**
+   * Registers the application's own `server/locales/index.ts`.
+   *
+   * It is what decides which languages the server offers, so it is kept apart from the plugin contributions, which
+   * only supply translations for languages the application already declares.
+   */
+  public addApplicationLocales(load: AppServerPluginLocalesLoader): void {
+    this.applicationLocales = load;
   }
 
   public addRoutes(routes: AppRouteContribution<Application<TConfig>>): void {
@@ -240,13 +255,25 @@ export class Application<
     }
 
     const runtime = this.container.resolve(i18nToken);
+    const applicationPackageName = this.appPackageName ?? '';
+    const sources = [
+      ...(this.applicationLocales
+        ? [
+            {
+              packageName: applicationPackageName,
+              load: this.applicationLocales,
+            },
+          ]
+        : []),
+      ...this.localeContributions,
+    ];
     const contributions = await Promise.all(
-      this.localeContributions.map(async (contribution) => ({
+      sources.map(async (contribution) => ({
         packageName: contribution.packageName,
         locales: await contribution.load(),
       })),
     );
-    await registerAppLocales(runtime, this.appPackageName ?? '', contributions);
+    await registerAppLocales(runtime, applicationPackageName, contributions);
   }
 
   private async registerRoutes(): Promise<void> {

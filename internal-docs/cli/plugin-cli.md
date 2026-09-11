@@ -208,7 +208,7 @@ const devCommands: AppCliCommands = runningFromSource
 
 ## 构建钩子
 
-插件除了贡献命令，还可以要求 App 在 `pnpm build` 或 `pnpm dev` 的某个时点跑一条命令。这是给那种"必须先产出点什么，App 才能跑起来"的插件准备的——典型的是源码态工作流：`server/workflows/` 里的 `.ts` 要先编译成 Artifact，服务端才加载得了。
+插件除了贡献命令，还可以要求 App 在 `pnpm build` 或 `pnpm dev` 的某个时点跑一条命令。这是给那种"必须先产出点什么，App 才能跑起来"的插件准备的——典型的是源码态工作流：`server/workflows/` 里的 `.ts` 要先编译成 Artifact，部署的服务端才加载得了。
 
 以前这一步是直接写死在模板的 `scripts/build.mjs` 里的。问题很直接：这行命令属于 workflow 插件，却躺在每个 App 的构建脚本里。装了插件的 App 要自己去加，卸载了也不会自动消失，三个模板还各存一份、各自漂移。写成钩子之后，这一步跟着插件走——插件在哪个 App 里注册了，哪个 App 的构建就有这步。
 
@@ -232,13 +232,20 @@ const cliPlugin: AppCliPlugin = defineCliPlugin({
       },
     ],
   },
-  devHooks: {
-    beforeDev: [
-      { label: 'Build workflow artifacts', command: ['pnpm', 'nocobase', 'workflow', 'build'] },
-    ],
-  },
 });
 ```
+
+workflow 插件只声明了 `buildHooks`。dev 阶段的钩子写法一样：
+
+```ts
+  devHooks: {
+    beforeDev: [
+      { label: 'Prepare demo artifacts', command: ['pnpm', 'nocobase', 'demo', 'build'] },
+    ],
+  },
+```
+
+workflow 不挂这个，是因为非生产运行时下 loader 会按需编译 `server/workflows`，产出的 digest 跟构建产出的一致——再加一次预编译只会给每次 `pnpm dev` 启动加上几秒，不会让任何原本看不见的东西变得可见。
 
 `command` 是拆好的数组，不是字符串。不过 shell，所以带空格的参数不用管引号，跨平台行为也一致；反过来说 `&&`、管道、重定向、`FOO=1` 前缀都不成立——顺序执行靠多个钩子，别的自己包一条命令。数组第 0 位是任意可执行文件，不限于 `pnpm`：直接跑 `['node', './scripts/x.mjs']` 也可以，不必为了用钩子而先包一条 oclif 命令。
 

@@ -233,6 +233,26 @@ describe('client inspection', () => {
         id: '@nocobase/app-plugin-repository-example:products-detail',
         path: '/repository-example/orders/products/details/:recordId',
       },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-file-example:file-repository',
+        path: '/',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-file-example:file-repository-attachments',
+        path: '/file-repository',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-file-example:file-repository-profile-avatars',
+        path: '/file-repository/profile-avatars',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-file-example:file-repository-order-attachments',
+        path: '/file-repository/order-attachments',
+      },
     ]);
     expect(
       inspection.reactProviders.map(({ id, order }) => ({ id, order })),

@@ -184,7 +184,7 @@ export class NotificationManager<
       : undefined;
     return this.send({
       idempotencyKey: `notification-test:${randomUUID()}`,
-      to: converted.to,
+      ...(converted.to === undefined ? {} : { to: converted.to }),
       channels: [channel],
       routing,
       content: converted.content,
@@ -350,9 +350,13 @@ export class NotificationManager<
         deliveries: snapshot.deliveries,
       };
     }
-    const recipients: readonly NotificationRecipient[] =
-      'type' in input.to ? [input.to] : input.to;
-    if (recipients.length === 0)
+    const recipients: readonly (NotificationRecipient | undefined)[] =
+      input.to === undefined
+        ? [undefined]
+        : 'type' in input.to
+          ? [input.to]
+          : input.to;
+    if (input.to !== undefined && recipients.length === 0)
       throw new Error('At least one notification recipient is required.');
     const channels = [...new Set(input.channels)];
     if (channels.length === 0)
@@ -401,15 +405,13 @@ export class NotificationManager<
               break;
             }
           } else if (fanout) {
-            targets.push(
-              unsupportedRecipientTarget(channel, provider, recipient),
-            );
+            targets.push(unsupportedRecipient(channel, provider, recipient));
           }
         }
         if (fanout) continue;
         targets.push(
           resolvedTarget ??
-            unsupportedRecipientTarget(channel, fallbackProvider, recipient),
+            unsupportedRecipient(channel, fallbackProvider, recipient),
         );
       }
       expandedRecipients.push({ channels: targets });
@@ -467,7 +469,9 @@ export class NotificationManager<
       }
     }
     if (deliveries.length === 0)
-      throw new Error('At least one notification Channel target is required.');
+      throw new Error(
+        'At least one notification Channel delivery is required.',
+      );
     const log: NotificationLogRecord = {
       id: notificationId,
       idempotencyKey: input.idempotencyKey,
@@ -1058,19 +1062,22 @@ export class NotificationManager<
   }
 }
 
-function unsupportedRecipientTarget(
+function unsupportedRecipient(
   channel: string,
   provider: NotificationProviderIdentity,
-  recipient: NotificationRecipient,
+  recipient: NotificationRecipient | undefined,
 ): ExpandedRecipientTarget {
   return {
     channel,
     provider,
-    recipient,
+    recipient: recipient ?? {},
     error: {
       code: 'RECIPIENT_UNSUPPORTED',
       category: 'recipient',
-      message: `Notification Channel "${channel}" does not support recipient type "${recipient.type}".`,
+      message:
+        recipient === undefined
+          ? `Notification Channel "${channel}" requires a recipient.`
+          : `Notification Channel "${channel}" does not support recipient type "${recipient.type}".`,
     },
   };
 }

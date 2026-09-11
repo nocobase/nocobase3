@@ -6,7 +6,7 @@ Business server code resolves `notificationServiceToken` from the application's 
 
 ## Build the input
 
-Every send needs at least one recipient, one Channel, and the required `body` field. Validate Channel-specific non-empty content rules before sending. Add a stable business source when later correlation matters:
+Every send needs one Channel and the required `body` field. A recipient is required only by Channels that address a recipient; IM Webhook can omit `to`. Validate Channel-specific non-empty content rules before sending. Add a stable business source when later correlation matters:
 
 ```ts
 const notification = app.container.resolve(notificationServiceToken);
@@ -31,10 +31,10 @@ Use the most direct supported identity:
 
 - Personal inbox: `{ type: 'user', id: userId }` with `in-app`.
 - Direct Email: `{ type: 'email', address }` with `email`.
-- Webhook group: `{ type: 'target', id: configuredTarget }` with `im`.
+- Webhook Provider: omit `to` with `im`; the selected Provider's Webhook is the destination.
 - User-to-Email/IM sends require resolver functions registered in those Channel definitions.
 
-For multiple recipients and Channels, the manager expands the Cartesian product. Confirm the expected Delivery count before a large send. If one Channel cannot resolve all recipients, split the send or accept explicit failed Deliveries for unsupported combinations.
+For multiple recipients and Channels, the manager expands the Cartesian product. A recipientless Channel contributes one recipientless combination per selected Provider. Confirm the expected Delivery count before a large send. If one Channel cannot resolve all recipients, split the send or accept explicit failed Deliveries for unsupported combinations.
 
 ## Select Providers deliberately
 
@@ -83,7 +83,7 @@ For an operator task, use bounded polling when a process-local listener cannot c
 
 ## Idempotency and retries
 
-`idempotencyKey` is required. Build it from the stable business event, recipient scope, Channel, and—when one event intentionally targets more than one Provider—the Provider scope. A retry or recovery must reuse exactly the same key. The server stores a `requestFingerprint`; the same key and equivalent input return the original Notification with `deduplicated: true`, while the same key with different input raises `IDEMPOTENCY_KEY_CONFLICT`. There is no expiry field in this contract.
+`idempotencyKey` is required. Build it from the stable business event, recipient scope (or Channel scope when `to` is omitted), and—when one event intentionally selects more than one Provider—the Provider scope. A retry or recovery must reuse exactly the same key. The server stores a `requestFingerprint`; the same key and equivalent input return the original Notification with `deduplicated: true`, while the same key with different input raises `IDEMPOTENCY_KEY_CONFLICT`. There is no expiry field in this contract.
 
 The runtime retries only failures whose Provider returns `disposition: 'same_provider'`, bounded by manager retry settings. It never switches Providers automatically. A `submission_unknown` outcome is terminal `unknown` and is not retried automatically.
 

@@ -6,7 +6,7 @@ keywords: 'NocoBase,NotificationManager,通知接入,站内信,SMTP,Resend,飞�
 
 # 手动接入通知
 
-通知包通过插件的 `ServiceProvider` 接入 NocoBase Application。启用插件后，Provider 从共享容器解析数据库、队列和日志服务，创建 `NotificationManager`，并负责启动与关闭。默认模板同时注册内置 Email 与 IM Provider，通常只需要参考[配置通知 Provider](../../../app-plugin-notification-providers/docs/zh-CN/configuration.md)填写环境变量；自定义宿主仍可按本文后半部分手动组合这些能力。
+`@nocobase/app-plugin-notification` 通过插件的 `ServiceProvider` 接入 NocoBase Application。启用插件后，Provider 从共享容器解析数据库、队列和日志服务，创建并激活 `NotificationManager`，注册队列任务和 reconciliation，并负责关闭运行时。Channel runtime 默认在首次使用时按需创建。默认模板同时注册内置 Email 与 IM Provider，通常只需要参考[配置通知 Provider](../../../app-plugin-notification-providers/docs/zh-CN/configuration.md)填写环境变量；自定义宿主仍可按本文后半部分手动组合这些能力。
 
 这套方式会让宿主明确决定启用哪些通知能力。只需要邮件时，不必创建站内信 store 和 router。
 
@@ -71,7 +71,7 @@ export const notificationConfig: NotificationConfig = {
 };
 ```
 
-Provider 的 `name` 和 `type` 会写入 Delivery。应用重启或更新配置后，应保持这两个字段稳定。
+Provider 的 `type` 是实现类型，用于匹配已注册的 Provider definition；`name` 是当前 Channel 内这条 Provider 配置的唯一名称，发送路由通过它选择 Provider。两者都会写入 Delivery，应用重启或更新配置后应保持稳定。Webhook Provider 不需要业务收件人；发送时省略 `to` 即可把消息交给选中的 Provider。
 
 ## 第三步：创建运行时并注册 definitions
 

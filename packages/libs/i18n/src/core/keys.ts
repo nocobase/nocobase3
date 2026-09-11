@@ -1,3 +1,5 @@
+import type { TranslationOverrides } from './types.js';
+
 /**
  * Translation values are leaves; anything else is a nested group of keys.
  */
@@ -21,11 +23,19 @@ type TranslationLeaf = string | number | boolean;
  *
  * Leaves widen to `string`, so a translation is not forced to repeat the English wording as a literal type, and each
  * level is readonly, which keeps a resource from being mutated after it is registered.
+ *
+ * The top level also accepts `overrides`, the block an application uses to reword a plugin's copy. It is not part of
+ * the source resource — the application never declares it in `en-US` — so deriving the shape strictly would reject the
+ * one key a locale file is allowed to add.
  */
-export type LocaleResource<TSource> = TSource extends TranslationLeaf
+export type LocaleResource<TSource> = LocaleResourceShape<TSource> & {
+  readonly overrides?: TranslationOverrides;
+};
+
+type LocaleResourceShape<TSource> = TSource extends TranslationLeaf
   ? string
   : {
-      readonly [Key in keyof TSource]: LocaleResource<TSource[Key]>;
+      readonly [Key in keyof TSource]: LocaleResourceShape<TSource[Key]>;
     };
 
 /**
@@ -34,10 +44,17 @@ export type LocaleResource<TSource> = TSource extends TranslationLeaf
  * A missing key falls back rather than breaking, so a package may ship a translation before it is complete. Prefer
  * `LocaleResource` where a locale is meant to be exhaustive: it reports the omission instead of silently falling back.
  */
-export type PartialLocaleResource<TSource> = TSource extends TranslationLeaf
+export type PartialLocaleResource<TSource> =
+  PartialLocaleResourceShape<TSource> & {
+    readonly overrides?: TranslationOverrides;
+  };
+
+type PartialLocaleResourceShape<TSource> = TSource extends TranslationLeaf
   ? string
   : {
-      readonly [Key in keyof TSource]?: PartialLocaleResource<TSource[Key]>;
+      readonly [Key in keyof TSource]?: PartialLocaleResourceShape<
+        TSource[Key]
+      >;
     };
 
 /**

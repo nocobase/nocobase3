@@ -12,20 +12,20 @@ keywords: 'NocoBase,通知日志,Delivery,Attempt,Provider'
 
 Notification 汇总状态包括：
 
-| 状态         | 含义                                         |
-| ------------ | -------------------------------------------- |
-| `pending`    | 所有 Delivery 仍在等待执行。                 |
-| `processing` | 至少一条 Delivery 正在准备、提交或等待重试。 |
-| `completed`  | 所有 Delivery 都已被 Provider 接受。         |
-| `partial`    | 已结束的 Delivery 中同时存在成功和失败。     |
-| `failed`     | 所有 Delivery 都已失败，并且没有等待重试。   |
-| `unknown`    | 至少一次 Provider 提交的结果无法确认。       |
+| 状态         | 含义                                                             |
+| ------------ | ---------------------------------------------------------------- |
+| `pending`    | 所有 Delivery 仍在等待执行。                                     |
+| `processing` | 至少一条 Delivery 已开始处理，或正在等待执行、准备、提交或重试。 |
+| `completed`  | 所有 Delivery 都已被 Provider 接受。                             |
+| `partial`    | 已结束的 Delivery 中同时存在成功和失败。                         |
+| `failed`     | 所有 Delivery 都已失败，并且没有等待重试。                       |
+| `unknown`    | 至少一次 Provider 提交的结果无法确认。                           |
 
 Delivery 还会出现 `preparing`、`submitting` 和 `accepted`。其中：
 
 - `preparing`——正在校验接收人并生成 Provider 消息
 - `submitting`——正在调用 Provider
-- `accepted`——Provider 已接受本次提交
+- `accepted`——Provider 已接受提交请求
 - `failed`——投递失败；如果存在 `nextRunAt`，会在该时间后重试
 - `unknown`——消息可能已经被 Provider 接受，不会自动重试
 
