@@ -125,7 +125,8 @@ describeIntegrationDatabases(
           });
           if (
             context.spec.dialect === 'oracle' ||
-            context.spec.dialect === 'mssql'
+            context.spec.dialect === 'mssql' ||
+            context.spec.dialect === 'dameng'
           )
             await expect(query).rejects.toMatchObject({
               code: 'FIELD_CAPABILITY_NOT_SUPPORTED',
@@ -150,7 +151,8 @@ describeIntegrationDatabases(
       });
       if (
         context.spec.dialect === 'oracle' ||
-        context.spec.dialect === 'mssql'
+        context.spec.dialect === 'mssql' ||
+        context.spec.dialect === 'dameng'
       ) {
         await expect(write).rejects.toMatchObject({
           code: 'FIELD_CAPABILITY_NOT_SUPPORTED',

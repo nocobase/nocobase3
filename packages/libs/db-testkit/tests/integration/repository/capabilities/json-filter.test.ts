@@ -44,7 +44,11 @@ describeIntegrationDatabases('Repository JSON filters', (context) => {
           sort: (s) => [s.field('id').asc()],
         })
       ).map((row) => String(row.id));
-    if (context.spec.dialect === 'oracle' || context.spec.dialect === 'mssql') {
+    if (
+      context.spec.dialect === 'oracle' ||
+      context.spec.dialect === 'mssql' ||
+      context.spec.dialect === 'dameng'
+    ) {
       await expect(ids((f) => f.json('payload').has(1))).rejects.toMatchObject({
         code: 'FIELD_CAPABILITY_NOT_SUPPORTED',
       });

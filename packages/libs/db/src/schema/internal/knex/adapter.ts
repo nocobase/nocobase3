@@ -64,6 +64,7 @@ export class KnexSchemaAdapter implements SchemaAdapter {
   }
 
   private async executeOperation(operation: SchemaOperation): Promise<void> {
+    operation = await this.normalizeOracleAlter(operation);
     if (
       operation.type === 'alterTable' &&
       operation.operations.length > 0 &&
@@ -96,7 +97,7 @@ export class KnexSchemaAdapter implements SchemaAdapter {
       );
       return;
     }
-    await this.toKnexBuilder(await this.normalizeOracleAlter(operation));
+    await this.toKnexBuilder(operation);
   }
 
   private async normalizeOracleAlter(

@@ -103,7 +103,11 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
 
   async findMany(plan: RepositoryReadPlan): Promise<RepositoryRecord[]> {
     this.assertReadable();
-    const decodeRow = prepareScalarRowDecoder(plan.collection, plan.fields);
+    const decodeRow = prepareScalarRowDecoder(
+      plan.collection,
+      plan.fields,
+      this.runtime?.repository?.trimCharResults,
+    );
     const { query } = await this.buildRead(plan);
     const rows = (await query) as RepositoryRecord[];
     if (plan.direction === 'backward') rows.reverse();
@@ -117,7 +121,11 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
 
   async *stream(plan: RepositoryReadPlan): AsyncIterable<RepositoryRecord> {
     this.assertReadable();
-    const decodeRow = prepareScalarRowDecoder(plan.collection, plan.fields);
+    const decodeRow = prepareScalarRowDecoder(
+      plan.collection,
+      plan.fields,
+      this.runtime?.repository?.trimCharResults,
+    );
     const includes = plan.select?.root.includes?.length;
     const source = this.streamRoots(plan);
     const roots =
@@ -1208,9 +1216,15 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     )) as unknown;
     const returnedRow = firstReturnedRow(returned);
     if (returnedRow) {
+      const repositoryRuntime = getDatabaseDriverRuntime(client)?.repository;
       if (
-        getDatabaseDriverRuntime(client)?.repository?.reloadReturnedDecimal &&
-        scalarFields(collection).some((field) => field.type === 'decimal')
+        (repositoryRuntime?.reloadReturnedDecimal ||
+          repositoryRuntime?.reloadReturnedExactNumeric) &&
+        scalarFields(collection).some((field) =>
+          repositoryRuntime?.reloadReturnedExactNumeric
+            ? ['bigInt', 'decimal'].includes(field.type)
+            : field.type === 'decimal',
+        )
       ) {
         const returnedValues = Object.fromEntries(
           fields.map((field) => [
@@ -2403,7 +2417,11 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     if (node.select.includes?.length) {
       await this.loadRelations(resolved.target, selectedTargets, node.select);
     }
-    const decodeRow = prepareScalarRowDecoder(resolved.target, requested);
+    const decodeRow = prepareScalarRowDecoder(
+      resolved.target,
+      requested,
+      this.runtime?.repository?.trimCharResults,
+    );
     for (const parent of parents) {
       const group =
         grouped.get(associationKey(parent[relationHelper(node.relation)])) ??
@@ -2610,7 +2628,8 @@ function selectColumn(
     alias ? qualified(alias, selection.column) : selection.column,
   );
   return client.raw('? as ??', [
-    field?.type === 'decimal' && resultBoundary
+    field &&
+    (field.type === 'bigInt' || (field.type === 'decimal' && resultBoundary))
       ? aggregateProjection(client, expression)
       : expression,
     selection.alias,
@@ -2917,10 +2936,12 @@ function mapWrite(
   values: RepositoryRecord,
 ): PhysicalWriteRecord {
   return Object.fromEntries(
-    Object.entries(values).map(([field, value]) => [
-      column(collection, field),
-      writeValue(client, collection, field, value),
-    ]),
+    Object.entries(values)
+      .filter(([, value]) => value !== undefined)
+      .map(([field, value]) => [
+        column(collection, field),
+        writeValue(client, collection, field, value),
+      ]),
   );
 }
 
@@ -2959,7 +2980,7 @@ function prepareWrite(
 function writeValue(
   client: Knex,
   collection: CollectionDefinition,
-  name: string,
+  name: string | Knex.Raw,
   value: RepositoryRecord[string],
 ): RepositoryRecord[string] | Knex.Raw {
   const field = collection.fields?.find((item) => item.name === name);
@@ -3275,13 +3296,19 @@ function applyCondition(
         $dateNotBefore: '>=',
         $dateNotAfter: '<=',
       };
+    const reference = name;
     const operand = (value: FilterValue): Knex.Raw | string | null =>
       temporalBinding(client, field, value);
     if (node.operator === '$dateBetween') {
       const [start, end] = node.value as readonly FilterValue[];
       whereCallback(query, boolean, function datetimeRange(): void {
-        this.where(name, '>=', operand(start)).andWhere(
-          name,
+        (this.where as (...args: unknown[]) => unknown)(
+          reference,
+          '>=',
+          operand(start),
+        );
+        (this.andWhere as (...args: unknown[]) => unknown)(
+          reference,
           '<',
           operand(end),
         );
@@ -3290,7 +3317,7 @@ function applyCondition(
     }
     const operator = operators[node.operator];
     if (operator) {
-      whereValue(query, boolean, name, operator, operand(node.value));
+      whereValue(query, boolean, reference, operator, operand(node.value));
       return;
     }
   }
@@ -3694,7 +3721,7 @@ function relationKeyValue(
 function bindQueryValue(
   query: Knex.QueryBuilder,
   collection: CollectionDefinition,
-  name: string,
+  name: string | Knex.Raw,
   value: unknown,
 ): unknown {
   const field = scalarFields(collection).find((item) => item.name === name);
@@ -3746,9 +3773,9 @@ function whereValue(
   value: unknown,
 ): void {
   if (boolean === 'or') {
-    query.orWhere(name, operator, value as Knex.Value);
+    (query.orWhere as (...args: unknown[]) => unknown)(name, operator, value);
   } else {
-    query.where(name, operator, value as Knex.Value);
+    (query.where as (...args: unknown[]) => unknown)(name, operator, value);
   }
 }
 

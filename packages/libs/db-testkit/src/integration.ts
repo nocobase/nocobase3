@@ -103,12 +103,12 @@ export async function expectForeignKeyViolation(
   action: Promise<unknown>,
 ): Promise<void> {
   await expect(action).rejects.toThrow(
-    /foreign key|integrity constraint|ORA-02291/i,
+    /foreign key|integrity constraint|ORA-02291|违反.*引用约束/i,
   );
 }
 
 export async function expectUniqueViolation(
   action: Promise<unknown>,
 ): Promise<void> {
-  await expect(action).rejects.toThrow(/unique|duplicate/i);
+  await expect(action).rejects.toThrow(/unique|duplicate|违反.*唯一性约束/i);
 }

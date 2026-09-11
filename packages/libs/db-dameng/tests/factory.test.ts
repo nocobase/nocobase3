@@ -20,7 +20,8 @@ it('resolves a host/port connection string', () => {
       user: 'app',
       password: 'secret',
       schema: 'APP',
-      fetchAsString: ['NUMBER'],
+      fetchAsString: ['CLOB'],
+      fetchAsBuffer: ['BLOB'],
     },
   });
 });

@@ -58,6 +58,10 @@ export interface DatabaseQueryRuntimeStrategy {
     query: Knex.QueryBuilder;
     aliases: ReadonlySet<string>;
   }) => void;
+  readonly decodeScalarResult?: (context: {
+    field: FieldDefinition;
+    value: unknown;
+  }) => unknown;
   readonly wrapAggregateOrdering?: (context: {
     client: Knex;
     ordering: Knex.Raw;
@@ -75,6 +79,7 @@ export interface DatabaseRepositoryRuntimeStrategy {
   readonly decodeStreamRow?: (
     row: RepositoryRecord,
   ) => Promise<RepositoryRecord> | RepositoryRecord;
+  readonly trimCharResults?: boolean;
   readonly groupAggregateOrder?: (context: {
     client: Knex;
     value: string | Knex.Raw;
@@ -87,6 +92,7 @@ export interface DatabaseRepositoryRuntimeStrategy {
     column: (field: string) => string;
   }) => Record<string, Knex.Raw> | undefined;
   readonly reloadReturnedDecimal?: boolean;
+  readonly reloadReturnedExactNumeric?: boolean;
   readonly enumGroupKey?: (context: {
     client: Knex;
     field: string;

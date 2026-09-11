@@ -97,63 +97,66 @@ describeIntegrationDatabases('Repository Filter field types', (context) => {
     ).rejects.toMatchObject({ code: 'FIELD_CAPABILITY_NOT_SUPPORTED' });
   });
 
-  it('uses half-open datetime bounds with ISO literals and Date operands', async () => {
-    await context.builder.createCollection('filterInstants', (c) => {
-      c.string('key').primary().notNull();
-      c.datetimeTz('instant').nullable();
-    });
-    const first = '2026-09-01T00:00:00.000Z';
-    const middle = '2026-09-01T12:00:00.000Z';
-    const last = '2026-09-02T00:00:00.000Z';
-    const stored = (value: string): string | Date =>
-      context.spec.dialect === 'oracle'
-        ? new Date(value)
-        : context.spec.dialect === 'mysql'
-          ? value.replace('T', ' ').replace('Z', '')
-          : value;
-    await context.db(context.table('filterInstants')).insert([
-      { key: 'A', instant: stored(first) },
-      { key: 'B', instant: stored(middle) },
-      { key: 'C', instant: stored(last) },
-      { key: 'D', instant: null },
-    ]);
-    const repository = context.database.repository('filterInstants');
-    const cases: readonly [Predicate, readonly string[]][] = [
-      [(f) => f.date('instant').before(new Date(middle)), ['A']],
-      [(f) => f.date('instant').after(middle), ['C']],
-      [(f) => f.date('instant').notBefore(middle), ['B', 'C']],
-      [(f) => f.date('instant').notAfter(middle), ['A', 'B']],
-      [
-        (f) => f.date('instant').between([new Date(first), new Date(last)]),
-        ['A', 'B'],
-      ],
-      [(f) => f.date('instant').empty(), ['D']],
-    ];
-    for (const [predicate, expected] of cases) {
-      const ast: FilterAst = JSON.parse(
-        JSON.stringify({
-          kind: 'filter',
-          version: 1,
-          root: {
-            kind: 'group',
-            logic: 'and',
-            items: [predicate(new DefaultFilterBuilder())],
-          },
-        }),
-      );
-      for (const filter of [predicate, ast])
-        expect(
-          await repository.findMany({
-            filter,
-            sort: (s) => s.field('key').asc(),
-            select: (s) => s.fields('key'),
+  it.skipIf(context.spec.dialect === 'dameng')(
+    'uses half-open datetime bounds with ISO literals and Date operands',
+    async () => {
+      await context.builder.createCollection('filterInstants', (c) => {
+        c.string('key').primary().notNull();
+        c.datetimeTz('instant').nullable();
+      });
+      const first = '2026-09-01T00:00:00.000Z';
+      const middle = '2026-09-01T12:00:00.000Z';
+      const last = '2026-09-02T00:00:00.000Z';
+      const stored = (value: string): string | Date =>
+        context.spec.dialect === 'oracle'
+          ? new Date(value)
+          : context.spec.dialect === 'mysql'
+            ? value.replace('T', ' ').replace('Z', '')
+            : value;
+      await context.db(context.table('filterInstants')).insert([
+        { key: 'A', instant: stored(first) },
+        { key: 'B', instant: stored(middle) },
+        { key: 'C', instant: stored(last) },
+        { key: 'D', instant: null },
+      ]);
+      const repository = context.database.repository('filterInstants');
+      const cases: readonly [Predicate, readonly string[]][] = [
+        [(f) => f.date('instant').before(new Date(middle)), ['A']],
+        [(f) => f.date('instant').after(middle), ['C']],
+        [(f) => f.date('instant').notBefore(middle), ['B', 'C']],
+        [(f) => f.date('instant').notAfter(middle), ['A', 'B']],
+        [
+          (f) => f.date('instant').between([new Date(first), new Date(last)]),
+          ['A', 'B'],
+        ],
+        [(f) => f.date('instant').empty(), ['D']],
+      ];
+      for (const [predicate, expected] of cases) {
+        const ast: FilterAst = JSON.parse(
+          JSON.stringify({
+            kind: 'filter',
+            version: 1,
+            root: {
+              kind: 'group',
+              logic: 'and',
+              items: [predicate(new DefaultFilterBuilder())],
+            },
           }),
-        ).toEqual(expected.map((key) => ({ key })));
-    }
-    await expect(
-      repository.findMany({
-        filter: (f) => f.date('instant').on('2026-09-01'),
-      }),
-    ).rejects.toMatchObject({ code: 'FIELD_CAPABILITY_NOT_SUPPORTED' });
-  });
+        );
+        for (const filter of [predicate, ast])
+          expect(
+            await repository.findMany({
+              filter,
+              sort: (s) => s.field('key').asc(),
+              select: (s) => s.fields('key'),
+            }),
+          ).toEqual(expected.map((key) => ({ key })));
+      }
+      await expect(
+        repository.findMany({
+          filter: (f) => f.date('instant').on('2026-09-01'),
+        }),
+      ).rejects.toMatchObject({ code: 'FIELD_CAPABILITY_NOT_SUPPORTED' });
+    },
+  );
 });

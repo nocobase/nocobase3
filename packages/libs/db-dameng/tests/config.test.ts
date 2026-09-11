@@ -32,5 +32,5 @@ describe('Dameng database configuration', () => {
   it('reports capabilities', () =>
     expect(
       resolveDatabaseCapabilities(dameng.driver.capabilities),
-    ).toMatchObject({ schemas: true, nativeTypes: true }));
+    ).toMatchObject({ schemas: false, nativeTypes: true }));
 });

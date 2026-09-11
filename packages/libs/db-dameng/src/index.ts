@@ -10,6 +10,7 @@ import { DamengSchemaInspector } from './inspectors/dameng.js';
 
 const require = createRequire(import.meta.url);
 const DamengClient = require('knex-dm') as typeof Knex.Client;
+const dmdb = require('dmdb') as { OUT_FORMAT_OBJECT: number };
 
 export interface DamengConnectionConfig extends BaseConnectionConfig {
   dialect: 'dameng';
@@ -21,6 +22,7 @@ export interface DamengConnectionConfig extends BaseConnectionConfig {
   username?: string;
   password?: string;
   fetchAsString?: string[];
+  fetchAsBuffer?: string[];
   compatible?: 'oracle' | 'mysql';
   parseJson?: boolean;
   sqlTransformer?: (sql: string) => string;
@@ -31,6 +33,17 @@ export type DamengOptions = Omit<
   'dialect' | 'driver' | 'databaseDriver'
 >;
 
+/**
+ * dmdb binds JavaScript strings as VARCHAR, so a canonical ISO-8601 instant
+ * reaches DM as text and implicit conversion to `timestamp` fails with
+ * "illegal date/time type data" (`-6118`). Convert the instant to a `Date`
+ * here so the driver binds it as a native DATETIME. Canonical values that the
+ * Repository wraps in `to_timestamp(...)` never end in `Z`, so they are left
+ * untouched.
+ */
+const ISO_INSTANT_PATTERN =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/;
+
 export const damengDriver: DatabaseDriverDefinition<'dameng'> = {
   dialect: 'dameng',
   packageName: '@nocobase/db-dameng',
@@ -39,14 +52,48 @@ export const damengDriver: DatabaseDriverDefinition<'dameng'> = {
   resolveKnexClient: () => DamengClient,
   createKnexClient: (_config, baseClient) => {
     if (!baseClient) return DamengClient;
+    const BaseClient = baseClient;
 
-    class NocobaseDamengClient extends baseClient {
+    class NocobaseDamengClient extends BaseClient {
+      prepBindings(bindings: readonly unknown[]): unknown[] {
+        const prepared = super.prepBindings(
+          bindings as Parameters<typeof BaseClient.prototype.prepBindings>[0],
+        ) as unknown[];
+        return prepared.map((value: unknown) =>
+          typeof value === 'string' && ISO_INSTANT_PATTERN.test(value)
+            ? new Date(value)
+            : value,
+        );
+      }
+
+      _stream(
+        connection: unknown,
+        obj: { sql?: string; bindings?: unknown[] },
+        stream: NodeJS.WritableStream,
+        options: Record<string, unknown>,
+      ): Promise<void> {
+        return (
+          BaseClient.prototype as unknown as {
+            _stream(
+              connection: unknown,
+              obj: { sql?: string; bindings?: unknown[] },
+              stream: NodeJS.WritableStream,
+              options: Record<string, unknown>,
+            ): Promise<void>;
+          }
+        )._stream.call(this, connection, obj, stream, {
+          ...options,
+          outFormat: dmdb.OUT_FORMAT_OBJECT,
+        });
+      }
+
       _driver(): unknown {
         const connection = this.config.connection;
         if (connection && typeof connection === 'object') {
           const options = connection as Record<string, unknown>;
           for (const key of [
             'fetchAsString',
+            'fetchAsBuffer',
             'compatible',
             'parseJson',
             'sqlTransformer',
@@ -67,7 +114,7 @@ export const damengDriver: DatabaseDriverDefinition<'dameng'> = {
     return NocobaseDamengClient;
   },
   capabilities: {
-    schemas: true,
+    schemas: false,
     views: true,
     replaceView: true,
     nativeTypes: true,
@@ -83,7 +130,33 @@ export const damengDriver: DatabaseDriverDefinition<'dameng'> = {
     capabilities,
     numeric: {
       hasNativeResults: false,
-      aggregateProjection: ({ expression }) => expression,
+      aggregateSql: ({ client, kind, field, distinct, source }) => {
+        const operand = field === '*' ? client.raw('*') : client.ref(field);
+        const prefix = distinct ? 'distinct ' : '';
+        if (kind === 'count') return client.raw(`count(${prefix}?)`, [operand]);
+        if (
+          source &&
+          ['bigInt', 'integer', 'increments'].includes(source.type) &&
+          (kind === 'sum' || kind === 'avg')
+        ) {
+          return client.raw(`${kind}(${prefix}cast(? as decimal(38, 0)))`, [
+            operand,
+          ]);
+        }
+        return client.raw(`${kind}(${prefix}?)`, [operand]);
+      },
+      aggregateProjection: ({ client, expression }) =>
+        client.raw('cast(? as varchar(100))', [expression]),
+    },
+    query: {
+      decodeScalarResult: ({ field, value }) => {
+        if (value === null) return null;
+        if (field.type === 'integer' || field.type === 'increments')
+          return Number(value);
+        if (field.type === 'float' || field.type === 'double')
+          return Number(value);
+        return value;
+      },
     },
     schema: {
       normalizeOperation: (operation) => {
@@ -167,29 +240,59 @@ export const damengDriver: DatabaseDriverDefinition<'dameng'> = {
       },
     },
     repository: {
-      emptyInsertValue: ({ client, collection }) => {
+      emptyInsertValue: ({ client, collection, column }) => {
         const field = (collection.fields ?? []).find(
           (item) =>
+            !item.autoIncrement &&
+            item.db?.generated === undefined &&
             !['increments', 'bigInt'].includes(item.type) &&
             item.type !== 'id' &&
             item.name !== 'createdAt' &&
             item.name !== 'updatedAt',
         );
-        return field ? { [field.name]: client.raw('?', [null]) } : undefined;
+        if (!field) return undefined;
+        return {
+          [column(field.name)]: client.raw('?', [
+            (field.defaultValue === undefined ? null : field.defaultValue) as
+              string | number | boolean | null,
+          ]),
+        };
+      },
+      reloadReturnedExactNumeric: true,
+      trimCharResults: true,
+      decodeStreamRow: async (row) => {
+        for (const [field, value] of Object.entries(row)) {
+          if (
+            !value ||
+            typeof value !== 'object' ||
+            typeof (value as { getData?: unknown }).getData !== 'function'
+          ) {
+            continue;
+          }
+          const lob = value as {
+            type?: number;
+            getData: () => Promise<string | Buffer>;
+            close?: () => Promise<void>;
+          };
+          row[field] = await lob.getData();
+          if (lob.close) await lob.close();
+        }
+        return row;
       },
       encodeBoolean: (_field, value) => (value === null ? null : value ? 1 : 0),
       temporalBinding: ({ client, field, value }) => {
-        const normalized = String(value);
+        const normalized =
+          value instanceof Date ? value.toISOString() : String(value);
         if (field.type === 'date') {
           return client.raw("to_date(?, 'YYYY-MM-DD')", [normalized]);
         }
         if (field.type === 'time') {
-          return client.raw("to_time(?, 'HH24:MI:SS.FF3')", [normalized]);
+          return normalized;
         }
         if (field.type === 'datetimeTz') {
+          const instant = normalized.replace(/Z$/u, '+00:00');
           return client.raw(
-            'to_timestamp_tz(?, \'YYYY-MM-DD"T"HH24:MI:SS.FF3TZH:TZM\')',
-            [normalized.replace(/Z$/u, '+00:00')],
+            `to_timestamp_tz('${instant.replace(/'/g, "''")}', 'YYYY-MM-DD"T"HH24:MI:SS.FF3TZH:TZM')`,
           );
         }
         return client.raw('to_timestamp(?, \'YYYY-MM-DD"T"HH24:MI:SS.FF3\')', [
@@ -208,7 +311,10 @@ export const damengDriver: DatabaseDriverDefinition<'dameng'> = {
             : field.type === 'time'
               ? 'HH24:MI:SS.FF3'
               : 'YYYY-MM-DD"T"HH24:MI:SS.FF3';
-        return client.raw('to_char(??, ?)', [reference, format]);
+        if (field.type === 'datetimeTz') {
+          return client.raw(`to_char(??, '${format}TZH:TZM')`, [reference]);
+        }
+        return client.raw(`to_char(??, '${format}')`, [reference]);
       },
       numericMutation: ({ client, field, name, operation, operand }) => {
         if (
@@ -238,14 +344,29 @@ export const damengDriver: DatabaseDriverDefinition<'dameng'> = {
           String(operand),
         ]);
       },
+      enumGroupKey: ({ client, field }) =>
+        client.raw('utl_raw.cast_to_raw(??)', [field]),
       compileFilterCondition: ({ query, node, field, name, boolean }) => {
+        if (
+          field?.type === 'text' &&
+          (node.operator === '$empty' || node.operator === '$notEmpty')
+        ) {
+          const method = boolean === 'or' ? 'orWhereRaw' : 'whereRaw';
+          query[method](
+            node.operator === '$empty'
+              ? '(?? is null or dbms_lob.getlength(??) = 0)'
+              : '(?? is not null and dbms_lob.getlength(??) > 0)',
+            [name, name],
+          );
+          return { handled: true };
+        }
         if (
           field?.type === 'enum' &&
           typeof node.value === 'string' &&
           (node.operator === '$eq' || node.operator === '$ne')
         ) {
           query[boolean === 'or' ? 'orWhereRaw' : 'whereRaw'](
-            `?? ${node.operator === '$eq' ? '=' : '<>'} ?`,
+            `utl_raw.cast_to_raw(??) ${node.operator === '$eq' ? '=' : '<>'} utl_raw.cast_to_raw(?)`,
             [name, node.value],
           );
           return { handled: true };
@@ -267,6 +388,7 @@ export const damengDriver: DatabaseDriverDefinition<'dameng'> = {
       'username',
       'password',
       'fetchAsString',
+      'fetchAsBuffer',
       'compatible',
       'parseJson',
       'sqlTransformer',
@@ -281,7 +403,8 @@ export const damengDriver: DatabaseDriverDefinition<'dameng'> = {
         user: config.username,
         password: config.password,
         schema: config.schema,
-        fetchAsString: config.fetchAsString ?? ['NUMBER'],
+        fetchAsString: config.fetchAsString ?? ['CLOB'],
+        fetchAsBuffer: config.fetchAsBuffer ?? ['BLOB'],
         compatible: config.compatible,
         parseJson: config.parseJson,
         sqlTransformer: config.sqlTransformer,

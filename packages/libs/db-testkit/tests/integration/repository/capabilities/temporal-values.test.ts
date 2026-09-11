@@ -91,6 +91,39 @@ describeIntegrationDatabases('Repository temporal contract', (context) => {
     ).toEqual({ instant: '2040-01-01T00:00:00.000Z' });
   });
 
+  it('accepts Date values for datetimeTz mutations and date filters', async () => {
+    const repo = await setup();
+    const createdInstant = new Date('2026-09-06T01:30:00.000Z');
+
+    await repo.createOne({
+      values: {
+        code: 'DATE',
+        instant: createdInstant,
+      },
+    });
+
+    expect(
+      await repo.findOne({
+        filter: (f) => f.date('instant').notAfter(createdInstant),
+        select: (s) => s.fields('code', 'instant'),
+      }),
+    ).toEqual({
+      code: 'DATE',
+      instant: '2026-09-06T01:30:00.000Z',
+    });
+
+    const updated = await repo.updateOne({
+      filter: { code: 'DATE' },
+      values: {
+        instant: new Date('2040-01-01T00:00:00.000Z'),
+      },
+      select: (s) => s.fields('instant'),
+    });
+    expect(updated.record).toEqual({
+      instant: '2040-01-01T00:00:00.000Z',
+    });
+  });
+
   it('rejects invalid literals and variables without writing', async () => {
     const repo = await setup();
     for (const value of [
@@ -178,6 +211,7 @@ describeIntegrationDatabases('Repository temporal contract', (context) => {
       mysql: 'datetime(6)',
       oracle: 'timestamp(6) with time zone',
       mssql: 'datetimeoffset(6)',
+      dameng: 'timestamp(6) with time zone',
     } as Record<string, string>;
     await context.db.schema.createTable(context.table('preciseEvents'), (t) => {
       t.string('code').primary();

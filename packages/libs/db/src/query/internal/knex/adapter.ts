@@ -1099,8 +1099,14 @@ class KnexSubqueryBuilder<
       parent,
     );
     const first = this.state.selections[0];
-    if (first?.type !== 'selection' || typeof first.selection === 'string')
-      return undefined;
+    if (first?.type !== 'selection') return undefined;
+    if (typeof first.selection === 'string') {
+      return numericSource(
+        parseAliasedIdentifier(first.selection).identifier,
+        scope,
+      );
+    }
+    if (typeof first.selection === 'string') return undefined;
     let node = getExpressionNode(first.selection);
     if (node.type === 'aliasedExpression') node = node.expression;
     if (node.type === 'subquery') return node.query.resultSource(scope);
@@ -1362,6 +1368,7 @@ interface ResultMap {
   hidden?: Set<string>;
   explicit: Map<string, string>;
   mapUnmatchedColumns: boolean;
+  scalarDecoders?: Map<string, (value: unknown) => unknown>;
 }
 
 const expressionNodeSymbol = Symbol('NocoBaseQueryExpressionNode');
@@ -1653,6 +1660,7 @@ function applySelections(
   const resultMap: ResultMap = {
     explicit: new Map(),
     mapUnmatchedColumns: selections.length === 0,
+    scalarDecoders: new Map(),
   };
 
   if (selections.length === 0) {
@@ -1698,6 +1706,14 @@ function applySelectionExpression(
     if (mapped.result) {
       resultMap.explicit.set(mapped.result.physical, mapped.result.logical);
     }
+    if (mapped.result) {
+      addScalarDecoder(
+        resultMap,
+        context,
+        mapped.result.physical,
+        mapped.result.reference,
+      );
+    }
     query.select(mapped.selection as any);
     return;
   }
@@ -1711,6 +1727,19 @@ function applySelectionExpression(
   const logicalAlias = node.alias;
   const physicalAlias = mapIdentifier(logicalAlias, context.naming);
   resultMap.explicit.set(physicalAlias, logicalAlias);
+  const source =
+    node.expression.type === 'ref'
+      ? node.expression.reference
+      : node.expression.type === 'subquery'
+        ? node.expression.query.resultSource(context.tableScope)
+        : undefined;
+  addScalarDecoder(
+    resultMap,
+    context,
+    physicalAlias,
+    typeof source === 'string' ? source : undefined,
+    typeof source === 'string' ? undefined : source,
+  );
   query.select(
     expressionNodeToSelectRaw(context, node.expression, physicalAlias) as any,
   );
@@ -2566,7 +2595,7 @@ function mapStringSelection(
   tableScope: TableScope,
 ): {
   selection: unknown;
-  result?: { physical: string; logical: string };
+  result?: { physical: string; logical: string; reference: string };
   mapUnmatchedColumns?: boolean;
 } {
   if (selection === '*') {
@@ -2594,6 +2623,7 @@ function mapStringSelection(
     result: {
       physical: physicalAlias,
       logical: logicalAlias,
+      reference: parsed.identifier,
     },
   };
 }
@@ -2755,9 +2785,51 @@ function mapResultRow(
       .map(([key, value]) => [
         resultMap.explicit.get(key) ??
           (shouldCamelCaseUnmatched ? camelCase(key) : key),
-        value,
+        resultMap.scalarDecoders?.get(key)?.(value) ?? value,
       ]),
   );
+}
+
+function addScalarDecoder(
+  resultMap: ResultMap,
+  context: ExpressionCompileContext,
+  physicalKey: string,
+  reference: string | undefined,
+  source?: FieldDefinition,
+): void {
+  const field =
+    source ??
+    (reference
+      ? (numericSource(reference, context.tableScope) ??
+        scalarSource(reference, context.tableScope))
+      : undefined);
+  const decoder = getDatabaseDriverRuntime(context.client)?.query
+    ?.decodeScalarResult;
+  if (!field || !decoder) return;
+  resultMap.scalarDecoders?.set(physicalKey, (value) =>
+    decoder({ field, value }),
+  );
+}
+
+function scalarSource(
+  reference: string,
+  scope: TableScope,
+): FieldDefinition | undefined {
+  const parts = reference.split('.');
+  const name = parts.pop();
+  const qualifier = parts.join('.');
+  for (const table of scope.tables ?? []) {
+    const parsed = parseAliasedIdentifier(table);
+    if (qualifier && qualifier !== (parsed.alias ?? parsed.identifier))
+      continue;
+    const collection = scope.numericCollections?.get(parsed.identifier);
+    const field = collection?.fields?.find(
+      (candidate) => candidate.name === name && !('target' in candidate),
+    );
+    if (field) return field as FieldDefinition;
+    if (qualifier) return undefined;
+  }
+  return scope.parent ? scalarSource(reference, scope.parent) : undefined;
 }
 
 function normalizeRows(rows: unknown): Row[] {
@@ -3009,7 +3081,7 @@ async function decimalField(
       continue;
     const collection = await lookup(parsed.identifier);
     const field = collection?.fields?.find((field) => field.name === name);
-    if (field) return field.type === 'decimal';
+    if (field) return ['bigInt', 'decimal'].includes(field.type);
   }
   return false;
 }
@@ -3077,7 +3149,18 @@ async function prepareDecimalSelections(
     for (const table of matching) {
       const parsed = parseAliasedIdentifier(table);
       const collection = await lookup(parsed.identifier);
-      if (!collection?.fields?.some((field) => field.type === 'decimal')) {
+      if (
+        !collection?.fields?.some((field) =>
+          [
+            'integer',
+            'increments',
+            'bigInt',
+            'decimal',
+            'float',
+            'double',
+          ].includes(field.type),
+        )
+      ) {
         expanded.push({
           type: 'all',
           table: parsed.alias ?? parsed.identifier,

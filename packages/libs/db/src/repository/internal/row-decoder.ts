@@ -30,6 +30,8 @@ const scalarDecoders: ReadonlyMap<string, ScalarDecoder> = new Map([
   ['increments', decodeIntegerValue],
   ['bigInt', decodeIntegerValue],
   ['decimal', (_field, value) => decimalString(value)],
+  ['float', (_field, value) => (value === null ? null : Number(value))],
+  ['double', (_field, value) => (value === null ? null : Number(value))],
   [
     'enum',
     (field, value) =>
@@ -56,6 +58,7 @@ const scalarDecoders: ReadonlyMap<string, ScalarDecoder> = new Map([
 export function prepareScalarRowDecoder(
   collection: CollectionDefinition,
   selectedFields?: readonly string[],
+  trimCharResults = false,
 ): RowDecoder {
   const selected = selectedFields && new Set(selectedFields);
   const entries: {
@@ -65,7 +68,11 @@ export function prepareScalarRowDecoder(
   for (const field of collection.fields ?? []) {
     if ('target' in field) continue;
     if (selected && !selected.has(field.name)) continue;
-    const decode = scalarDecoders.get(field.type);
+    const decode =
+      field.type === 'char' && trimCharResults
+        ? (_: FieldDefinition, value: unknown) =>
+            value === null ? null : (value as string).replace(/\s+$/u, '')
+        : scalarDecoders.get(field.type);
     if (decode) {
       entries.push({
         name: field.name,
