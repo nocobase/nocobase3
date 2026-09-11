@@ -290,8 +290,10 @@ describe('fixed AgentService contracts', () => {
     expect(messageStore).not.toMatch(/\breject\s*\(/);
     expect(types).not.toMatch(/\breject\s*\(/);
     expect(messageStore).not.toContain('llmProviderManager');
-    expect(messageStore).toContain('messages: AIMessageRepository');
-    expect(messageStore).toContain('toolMessages: AIToolMessageRepository');
+    expect(messageStore).toContain('persistence: ConversationPersistence');
+    expect(messageStore).toContain(
+      'private readonly persistence: ConversationPersistence',
+    );
     expect(
       fs.existsSync(
         path.join(src, 'agent/context/ai-employee/tool-call-cancellation.ts'),
@@ -307,7 +309,7 @@ describe('fixed AgentService contracts', () => {
     expect(options).toContain('aiToolMessages: AIToolMessageRepository');
     expect(options).toContain('aiUsageEvents: AIUsageEventRepository');
     expect(options).toContain('aiConversations: AIConversationRepository');
-    expect(messageStore).toContain('class DefaultConversationMessageStore');
+    expect(messageStore).toContain('class ConversationMessageStoreImpl');
     expect(factory).toContain('new DefaultChatMessageConverters({');
     expect(read('agent/message/converters.ts')).toContain(
       'export class DefaultChatMessageConverters',

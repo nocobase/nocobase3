@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
-import { DefaultConversationMessageStore } from '../server/agent/conversation/message-store.js';
+import { ConversationMessageStoreImpl } from '../server/agent/conversation/message-store.js';
 
 const serverRoot = path.resolve(import.meta.dirname, '../server');
 const read = (relative: string): string =>
@@ -48,13 +48,10 @@ function createFixture() {
       },
     ],
   ]);
-  const store = new DefaultConversationMessageStore({
+  const store = new ConversationMessageStoreImpl({
     sessionId: 'session-1',
     conversation,
-    database,
-    messages,
-    toolMessages,
-    snowflake: { generate: vi.fn(() => 101) },
+    persistence: { messages, toolMessages } as never,
     getCurrentFrontendTools,
   } as never);
   return {
@@ -74,12 +71,12 @@ describe('AI employee conversation message persistence boundary', () => {
   it('owns assistant tool-call initialization in a dedicated message store', () => {
     const source = read('agent/conversation/message-store.ts');
 
-    expect(source).toContain('class DefaultConversationMessageStore');
+    expect(source).toContain('class ConversationMessageStoreImpl');
     expect(source).toContain(
       'private readonly conversation: AIChatConversation',
     );
     expect(source).toContain(
-      'private readonly toolMessages: AIToolMessageRepository',
+      'private readonly persistence: ConversationPersistence',
     );
     expect(source).not.toContain('private readonly options:');
     expect(source).not.toContain('this.options.');

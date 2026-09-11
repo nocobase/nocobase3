@@ -1,8 +1,6 @@
 import type { Logger } from '@nocobase/logging';
-import type { DatabaseConnection } from '@nocobase/db';
-import type { IdGeneratorService } from '@nocobase/snowflake';
-import type { AIEmployeesManager } from '../../manager/ai-employees-manager.js';
 import type { LLMStreamCachedManager } from '../../manager/llm-stream-cached-manager.js';
+import type { AIEmployeesManager } from '../../manager/ai-employees-manager.js';
 import type {
   AgentAbortController,
   AgentEventHandler,
@@ -19,8 +17,6 @@ export interface ConversationProviderOptions {
   readonly persistence: ConversationPersistence;
   readonly streamCache: LLMStreamCachedManager;
   readonly employeesManager: AIEmployeesManager;
-  readonly database: DatabaseConnection;
-  readonly snowflake: IdGeneratorService;
   readonly logger?: Logger;
   readonly getCurrentFrontendTools?: () => Promise<
     readonly FrontendToolManifest[]
@@ -41,9 +37,7 @@ export class ConversationProvider implements ConversationProviderContract {
     this.messages = new ConversationMessageStoreImpl({
       sessionId: options.sessionId,
       conversation,
-      database: options.database,
-      messages: options.persistence.messages,
-      toolMessages: options.persistence.toolMessages,
+      persistence: options.persistence,
       getCurrentFrontendTools:
         options.getCurrentFrontendTools ?? (async () => []),
     });

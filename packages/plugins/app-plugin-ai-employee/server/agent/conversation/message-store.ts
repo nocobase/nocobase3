@@ -5,18 +5,13 @@ import type {
   AIToolMessage,
   ToolsEntity,
 } from '@nocobase/ai-employee';
-import type { DatabaseConnection } from '@nocobase/db';
-import type {
-  AIMessageRepository,
-  AIToolMessageEntity,
-  AIToolMessageRepository,
-} from '../../repository/index.js';
 import type {
   AgentInterruptAction,
   AgentThread,
   ConversationMessageStore,
   SavedAssistantMessage,
 } from '../types.js';
+import type { ConversationPersistence } from '../contracts/persistence.js';
 import { randomUUID } from 'node:crypto';
 import {
   EXECUTE_FRONTEND_TOOL_NAME,
@@ -57,46 +52,41 @@ function sourceMessageMetadata(metadata: unknown): SourceMessageMetadata {
 export interface ConversationMessageStoreOptions {
   readonly sessionId: string;
   readonly conversation: AIChatConversation;
-  readonly database: DatabaseConnection;
-  readonly messages: AIMessageRepository;
-  readonly toolMessages: AIToolMessageRepository;
+  readonly persistence: ConversationPersistence;
   readonly getCurrentFrontendTools: () => Promise<
     readonly FrontendToolManifest[]
   >;
 }
 
-// class DefaultConversationMessageStore is retained as a migration marker until downstream tests move.
 export class ConversationMessageStoreImpl implements ConversationMessageStore {
   private readonly sessionId: string;
   private readonly conversation: AIChatConversation;
-  private readonly messages: AIMessageRepository;
-  private readonly toolMessages: AIToolMessageRepository;
+  private readonly persistence: ConversationPersistence;
   private readonly getCurrentFrontendTools: () => Promise<
     readonly FrontendToolManifest[]
   >;
-  private readonly database: DatabaseConnection;
-
   public constructor(options: ConversationMessageStoreOptions) {
     this.sessionId = options.sessionId;
     this.conversation = options.conversation;
-    this.messages = options.messages;
-    this.database = options.database;
-    this.toolMessages = options.toolMessages;
+    this.persistence = options.persistence;
     this.getCurrentFrontendTools = options.getCurrentFrontendTools;
   }
 
   private withTransaction<T>(
     callback: (
       target: AIChatConversation,
-      transaction?: DatabaseConnection,
+      transaction?: Parameters<AIChatConversation['withTransaction']>[1],
     ) => Promise<T>,
   ): Promise<T> {
-    if (typeof this.conversation.withTransaction === 'function') {
-      return this.conversation.withTransaction(callback);
-    }
-    return this.database.transaction((transaction) =>
-      callback(this.conversation, transaction),
-    );
+    return this.conversation.withTransaction(callback);
+  }
+
+  private get messages(): ConversationPersistence['messages'] {
+    return this.persistence.messages;
+  }
+
+  private get toolMessages(): ConversationPersistence['toolMessages'] {
+    return this.persistence.toolMessages;
   }
 
   public loadMessages(messageId?: string): Promise<AIMessage[]> {
@@ -352,7 +342,7 @@ export class ConversationMessageStoreImpl implements ConversationMessageStore {
     messageId: string,
     toolCallIds: string[],
   ): Promise<Map<string, AIToolMessage>> {
-    const list: AIToolMessageEntity[] = await this.toolMessages.find({
+    const list: AIToolMessage[] = await this.toolMessages.find({
       filter: {
         sessionId: this.sessionId,
         messageId,

@@ -140,8 +140,6 @@ export class AgentServiceFactory {
       persistence,
       streamCache: managers.llmStreamCachedManager,
       employeesManager: managers.aiEmployeesManager,
-      database: contextOptions.database,
-      snowflake: contextOptions.snowflake,
       logger: this.logger,
     });
     return createAgentService(
@@ -209,8 +207,6 @@ export class AgentServiceFactory {
       persistence,
       streamCache: managers.llmStreamCachedManager,
       employeesManager: managers.aiEmployeesManager,
-      database: this.database,
-      snowflake: this.container.resolve(idGeneratorToken),
       logger: this.logger,
     });
     return createAgentService(

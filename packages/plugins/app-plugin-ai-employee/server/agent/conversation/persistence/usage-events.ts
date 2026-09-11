@@ -1,10 +1,6 @@
 import type { AIMessage } from '@nocobase/ai-employee';
 import type { DatabaseConnection } from '@nocobase/db';
-
-import type {
-  AIConversationRepository,
-  AIUsageEventRepository,
-} from '../../../repository/index.js';
+import type { ConversationPersistence } from '../../contracts/persistence.js';
 
 const SKIPPED_MESSAGE_ROLES = new Set(['user', 'tool', 'system']);
 
@@ -44,11 +40,6 @@ export type AIUsageEventValues = {
   rawUsageMetadata: Record<string, unknown>;
   rawResponseMetadata?: Record<string, unknown>;
 };
-
-export interface AIUsageEventRepositories {
-  conversations: AIConversationRepository;
-  usageEvents: AIUsageEventRepository;
-}
 
 export function normalizeUsageMetadata(
   usageMetadata: Record<string, unknown>,
@@ -159,25 +150,25 @@ export function buildAIUsageEventValues(
 export async function recordAIUsageEventsForMessages(
   sessionId: string,
   messages: AIMessage[],
-  repositories: AIUsageEventRepositories,
+  persistence: Pick<ConversationPersistence, 'conversations' | 'usageEvents'>,
   transaction?: DatabaseConnection,
 ): Promise<void> {
   const recordableMessages = messages.filter(isRecordableLLMMessage);
   if (recordableMessages.length === 0) return;
 
   const repositoryOptions = { connection: transaction };
-  const conversation = await repositories.conversations.findOne(
+  const conversation = await persistence.conversations.findOne(
     { filter: { sessionId } },
     repositoryOptions,
   );
   if (!conversation) return;
 
-  const usageEvents = recordableMessages
+  const events = recordableMessages
     .map((message) => buildAIUsageEventValues(sessionId, message, conversation))
     .filter(isUsageEventValues);
 
-  for (const values of usageEvents) {
-    await repositories.usageEvents.upsert(values, repositoryOptions);
+  for (const values of events) {
+    await persistence.usageEvents.upsert(values, repositoryOptions);
   }
 }
 

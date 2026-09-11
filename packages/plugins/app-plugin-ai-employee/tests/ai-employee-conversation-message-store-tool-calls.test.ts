@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { DefaultConversationMessageStore } from '../server/agent/conversation/message-store.js';
+import { ConversationMessageStoreImpl } from '../server/agent/conversation/message-store.js';
 
 function createFixture(overrides: Record<string, unknown> = {}) {
   const transaction = { id: 'transaction-1' };
@@ -26,18 +26,18 @@ function createFixture(overrides: Record<string, unknown> = {}) {
   const database = {
     transaction: vi.fn(async (callback) => callback(transaction)),
   };
-  const store = new DefaultConversationMessageStore({
+  const store = new ConversationMessageStoreImpl({
     sessionId: (overrides.sessionId as string | undefined) ?? 'session-1',
-    conversation: {},
-    database: (overrides.database as typeof database | undefined) ?? database,
-    messages:
-      (overrides.messages as typeof aiMessages | undefined) ?? aiMessages,
-    toolMessages:
-      (overrides.toolMessages as typeof aiToolMessages | undefined) ??
-      aiToolMessages,
-    snowflake: (overrides.snowflake as { generate(): number } | undefined) ?? {
-      generate: vi.fn(() => 101),
+    conversation: {
+      withTransaction: vi.fn(async (callback) => callback({}, transaction)),
     },
+    persistence: {
+      messages:
+        (overrides.messages as typeof aiMessages | undefined) ?? aiMessages,
+      toolMessages:
+        (overrides.toolMessages as typeof aiToolMessages | undefined) ??
+        aiToolMessages,
+    } as never,
     getCurrentFrontendTools:
       (overrides.getCurrentFrontendTools as
         (() => Promise<never[]>) | undefined) ?? vi.fn(async () => []),

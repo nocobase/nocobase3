@@ -1,8 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AIConversationEntity } from '@nocobase/ai-employee';
 import { createAIChatConversation } from '../server/agent/conversation/persistence/ai-chat-conversation.js';
-import { DefaultConversationMessageStore } from '../server/agent/conversation/message-store.js';
-
+import { ConversationMessageStoreImpl } from '../server/agent/conversation/message-store.js';
 function fixture() {
   const connection = { id: 'transaction' };
   const conversations = {
@@ -113,13 +112,12 @@ describe('AIChatConversation thread persistence', () => {
       })),
       withTransaction: vi.fn(async (callback) => callback(target)),
     };
-    const store = new DefaultConversationMessageStore({
+    const store = new ConversationMessageStoreImpl({
       sessionId: 'session-1',
       conversation,
-      toolMessages: {},
-      snowflake: {},
+      persistence: { messages: {}, toolMessages: {} } as never,
       getCurrentFrontendTools: vi.fn(async () => []),
-    } as never);
+    });
     await expect(store.currentThread()).resolves.toEqual({
       sessionId: 'session-1',
       thread: 3,

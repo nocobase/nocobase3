@@ -32,8 +32,6 @@ function createProvider(
     persistence,
     streamCache: streamCacheManager as never,
     employeesManager: manager as never,
-    database: { transaction: vi.fn() } as never,
-    snowflake: {} as never,
   });
 }
 
