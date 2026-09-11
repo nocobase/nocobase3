@@ -82,7 +82,7 @@ export const damengDriver: DatabaseDriverDefinition<'dameng'> = {
     dialect,
     capabilities,
     numeric: {
-      hasNativeResults: true,
+      hasNativeResults: false,
       aggregateProjection: ({ expression }) => expression,
     },
     schema: {
@@ -148,6 +148,16 @@ export const damengDriver: DatabaseDriverDefinition<'dameng'> = {
       },
     },
     repository: {
+      emptyInsertValue: ({ client, collection }) => {
+        const field = (collection.fields ?? []).find(
+          (item) =>
+            !['increments', 'bigInt'].includes(item.type) &&
+            item.type !== 'id' &&
+            item.name !== 'createdAt' &&
+            item.name !== 'updatedAt',
+        );
+        return field ? { [field.name]: client.raw('?', [null]) } : undefined;
+      },
       encodeBoolean: (_field, value) => (value === null ? null : value ? 1 : 0),
       temporalBinding: ({ client, field, value }) => {
         const normalized = String(value);
