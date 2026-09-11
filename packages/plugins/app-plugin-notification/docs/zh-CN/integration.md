@@ -6,7 +6,7 @@ keywords: 'NocoBase,NotificationManager,通知接入,站内信,SMTP,Resend,飞�
 
 # 手动接入通知
 
-通知包通过插件的 `ServiceProvider` 接入 NocoBase Application。启用插件后，Provider 从共享容器解析数据库、队列和日志服务，创建 `NotificationManager`，并负责启动与关闭。默认模板同时注册内置 Email 与 IM Provider，通常只需要参考[配置通知 Provider](../../../app-plugin-notification-providers/docs/zh-CN/configuration.md)填写环境变量；自定义宿主仍可按本文后半部分手动组合这些能力。
+`@nocobase/app-plugin-notification` 通过插件的 `ServiceProvider` 接入 NocoBase Application。启用插件后，Provider 从共享容器解析数据库、队列和日志服务，创建并激活 `NotificationManager`，注册队列任务和 reconciliation，并负责关闭运行时。Channel runtime 默认在首次使用时按需创建。默认模板同时注册内置 Email 与 IM Provider，通常只需要参考[配置通知 Provider](../../../app-plugin-notification-providers/docs/zh-CN/configuration.md)填写环境变量；自定义宿主仍可按本文后半部分手动组合这些能力。
 
 这套方式会让宿主明确决定启用哪些通知能力。只需要邮件时，不必创建站内信 store 和 router。
 
