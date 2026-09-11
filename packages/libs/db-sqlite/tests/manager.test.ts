@@ -180,7 +180,7 @@ describe('DatabaseManager', () => {
           dialect: 'sqlite',
           filename: ':memory:',
           schemaManagement: 'external',
-          metadataStore: new InMemoryCollectionMetadataStore({ documents: [] }),
+          metadataStore: new InMemoryCollectionMetadataStore(),
         },
       },
     });
