@@ -22,15 +22,19 @@ import i18n from '@nocobase/app-plugin-i18n/server';
 defineServerPlugins([i18n]);
 ```
 
-The available languages come from the application's own configuration rather than from the plugin:
+The available languages come from the application rather than from the plugin, and they are not configured: an application offers whichever languages its own `client/locales/index.ts` and `server/locales/index.ts` declare loaders for. Adding a language means adding its file.
 
-```ts
-// server/config/i18n.ts
-export default defineConfig(({ env }) => ({
-  defaultLocale: env.string('APP_DEFAULT_LOCALE', 'en-US'),
-  locales: env.string('APP_LOCALES', 'en-US,zh-CN').split(','),
-}));
+A plugin's locale file supplies translations for those languages; it never adds one. A plugin shipping `ja-JP` to an application that does not offer Japanese contributes nothing a visitor can select — which is what keeps an installed plugin from putting an unexpected language in the picker.
+
+Configuration names only which of them the application starts in:
+
+```yaml
+# config.yml
+i18n:
+  defaultLocale: zh-CN
 ```
+
+It defaults to `en-US`, and `APP_DEFAULT_LOCALE` overrides it. A default the application does not translate is ignored rather than offered.
 
 ## Building a picker
 
@@ -80,6 +84,6 @@ GET  /api/i18n/locales   → { defaultLocale, locales: [{ locale, label, directi
 POST /api/i18n/locale    { locale } → stores it on the session
 ```
 
-Both sit under the application's base path, so an application served from `/main` answers at `/main/api/i18n/locale`. `POST` rejects a language the application does not offer, since the value arrives from the browser.
+Both sit under the application's base path, so an application served from `/main` answers at `/main/api/i18n/locale`. `POST` rejects a language the application does not offer, since the value arrives from the browser. What the server offers follows from the application's `server/locales/`, so a language present in `client/locales/` alone is rejected here — keep the two in step.
 
 **A known limit:** the language is stored on the session, so tabs sharing an account overwrite each other. Tab A switching to Chinese means tab B's requests also come back in Chinese while its interface is still English. Error payloads carry `ns`, `key`, and `params` alongside the translated `message`, so a frontend can render errors in its own interface language regardless of what the session says.

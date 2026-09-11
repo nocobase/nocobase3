@@ -135,6 +135,8 @@ Database tasks support `--connection <name>` and `--all`; no argument targets `d
 | `pnpm fix`           | Fix lint problems, then format                               |
 | `pnpm check`         | Everything above plus a build; what to run before committing |
 
+`pnpm nocobase app i18n:check` reports a language declared in `client/locales/` but not `server/locales/`, or the reverse. The browser builds its language picker from one and the server decides what it answers in from the other, so a language on only one side is one the interface offers and the server then rejects.
+
 ### Plugins
 
 Plugins add features to your application. Let these commands edit `package.json`, `client/plugins.ts`, and `server/plugins.ts` for you rather than editing those files by hand.

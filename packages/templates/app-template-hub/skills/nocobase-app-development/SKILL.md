@@ -128,4 +128,6 @@ pnpm build
 
 Verify observable behavior, not just that the commands passed. [Testing and verification](references/testing.md) lists what to check for each kind of change.
 
-Application startup defaults belong in `config.yml` under `client.app`: `defaultLocale`, `defaultColorScheme`, and `defaultTheme`. Valid browser-local choices take precedence. See the i18n and themes references for fallback behavior.
+After touching `client/locales/` or `server/locales/`, run `pnpm nocobase app i18n:check`. It reports a language declared on one side alone, which the interface offers and the server then rejects.
+
+Application startup defaults belong in `config.yml`: `i18n.defaultLocale` for the language, and `client.app.defaultColorScheme` and `client.app.defaultTheme` for appearance. Valid browser-local choices take precedence. Which languages the application offers is not configured — its own `client/locales/` and `server/locales/` are that list. See the i18n and themes references.
