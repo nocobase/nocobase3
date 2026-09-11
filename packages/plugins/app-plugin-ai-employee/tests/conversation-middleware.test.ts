@@ -49,7 +49,7 @@ describe('conversationMiddleware', () => {
         chatContext: {
           currentConversation: () => ({ sessionId: 'sub-session' }),
         },
-        chatMessageConverters: {
+        converters: {
           formatMessages,
           tool: { convert: convertToolMessage },
         },
@@ -128,7 +128,7 @@ describe('conversationMiddleware', () => {
         chatContext: {
           currentConversation: () => ({ sessionId: 'session-1' }),
         },
-        chatMessageConverters: {
+        converters: {
           assistant: { convert: vi.fn(async () => ({ role: 'assistant' })) },
         },
       } as never,

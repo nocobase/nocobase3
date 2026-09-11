@@ -33,7 +33,7 @@ import type { Logger } from '@nocobase/logging';
 export const conversationMiddleware = (
   providers: Pick<
     AgentProviders,
-    'conversation' | 'chatContext' | 'chatMessageConverters'
+    'conversation' | 'chatContext' | 'converters'
   >,
   options: AgentMessageConversionContext & {
     messageId?: string;
@@ -42,15 +42,15 @@ export const conversationMiddleware = (
   },
   logger: Logger,
 ) => {
-  const { conversation, chatMessageConverters } = providers;
+  const { conversation, converters } = providers;
   const { messageId, agentThread, toolMap } = options;
   const identity = providers.chatContext.currentConversation();
   const convertAssistantMessage = (message: AIMessage) =>
-    chatMessageConverters.assistant.convert(message, options);
+    converters.assistant.convert(message, options);
   const convertHumanMessage = (message: HumanMessage) =>
-    chatMessageConverters.human.convert(message, options);
+    converters.human.convert(message, options);
   const convertToolMessage = (message: ToolMessage) =>
-    chatMessageConverters.tool.convert(message, options);
+    converters.tool.convert(message, options);
 
   const fillToolCalls = (
     message: AIConversationMessage,
@@ -207,7 +207,7 @@ export const conversationMiddleware = (
     wrapModelCall: async (request, handler) => {
       const appendMessages = request.runtime.context?.appendMessages;
       if (Array.isArray(appendMessages) && appendMessages.length) {
-        const formattedMessages = await chatMessageConverters.formatMessages(
+        const formattedMessages = await converters.formatMessages(
           appendMessages,
           options,
         );

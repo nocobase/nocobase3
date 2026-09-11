@@ -1,7 +1,4 @@
 import type {
-  AgentAbortController,
-  AgentAbortHandle,
-  AgentEventHandler,
   AgentProviders,
   AgentRequest,
   ChatContextProvider,
@@ -25,11 +22,13 @@ import type {
 } from '@nocobase/ai-employee';
 import { listSystemTools, SYSTEM_TOOLS } from '@nocobase/ai-employee';
 import _ from 'lodash';
-import { createAgentProviders } from '../providers.js';
+import {
+  createAgentProviders,
+  DefaultAgentAbortController,
+  DefaultAgentEventHandler,
+  DefaultConversationProvider,
+} from '../providers.js';
 import type { AIEmployeeAgentOptions } from './options.js';
-import type { AIEmployeesManager } from '../../manager/ai-employees-manager.js';
-import type { LLMStreamCached } from '../../manager/llm-stream-cached-manager.js';
-import type { ConversationMessageStore } from '../types.js';
 import type { AIEmployeeSkillSettings } from './options.js';
 import type { AppAgentContext } from '../context.js';
 import type { ConversationExecution } from '../contracts.js';
@@ -60,59 +59,6 @@ import {
   listCurrentFrontendTools,
   prepareToolsForFrontendConversation,
 } from './frontend-tools.js';
-
-class DefaultAgentEventHandler implements AgentEventHandler {
-  public constructor(
-    private readonly conversations: AIConversationRepository,
-    private readonly sessionId: string,
-  ) {}
-
-  public async beforeExecution(mode: 'streaming' | 'invoking'): Promise<void> {
-    await this.conversations.update({
-      values: { llmActiveState: mode },
-      filter: { sessionId: this.sessionId },
-    });
-  }
-
-  public async afterExecution(
-    mode: 'streaming' | 'invoking',
-    result?: { aborted?: boolean },
-  ): Promise<void> {
-    await this.conversations.update({
-      values: {
-        llmActiveState: 'idle',
-        ...(mode === 'streaming'
-          ? { read: result?.aborted ? true : false }
-          : {}),
-      },
-      filter: { sessionId: this.sessionId },
-    });
-  }
-}
-
-class DefaultAgentAbortController implements AgentAbortController {
-  public constructor(
-    private readonly manager: AIEmployeesManager,
-    private readonly sessionId: string,
-  ) {}
-
-  public registerAbortHandle(token: symbol, handle: AgentAbortHandle): void {
-    this.manager.registerAgentAbortHandle(this.sessionId, token, handle);
-  }
-
-  public unregisterAbortHandle(token: symbol): void {
-    this.manager.unregisterAgentAbortHandle(this.sessionId, token);
-  }
-}
-
-class DefaultConversationProvider implements ConversationProvider {
-  public constructor(
-    public readonly messages: ConversationMessageStore,
-    public readonly streamCache: LLMStreamCached,
-    public readonly event: AgentEventHandler,
-    public readonly abort: AgentAbortController,
-  ) {}
-}
 
 export function createConversationProvider(
   options: AIEmployeeAgentOptions,
@@ -668,7 +614,7 @@ export async function createAIEmployeeAgentProviders(
     conversation,
     chatContext,
     logger: options.agentContext.logger,
-    chatMessageConverters: new DefaultChatMessageConverters(options),
+    converters: new DefaultChatMessageConverters(options),
     checkpointer:
       options.from === 'sub-agent'
         ? undefined

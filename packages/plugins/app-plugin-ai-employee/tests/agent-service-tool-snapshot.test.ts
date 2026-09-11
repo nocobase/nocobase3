@@ -59,7 +59,7 @@ function createFixture(toolMaps: ReadonlyMap<string, ToolsEntity>[]) {
       currentConversation: vi.fn(() => ({ sessionId: 'snapshot' })),
       discoveredTools,
     },
-    chatMessageConverters: {
+    converters: {
       formatMessages: vi.fn(async (messages) => messages),
       assistant: { convert: vi.fn() },
       human: { convert: vi.fn() },
@@ -124,7 +124,7 @@ describe('AgentService tool snapshots', () => {
       (fixture.providers as any).conversation.messages,
       'saveAssistantMessage',
     );
-    (fixture.providers as any).chatMessageConverters.assistant.convert = vi.fn(
+    (fixture.providers as any).converters.assistant.convert = vi.fn(
       async () => ({
         role: 'assistant',
         content: { type: 'text', content: '' },

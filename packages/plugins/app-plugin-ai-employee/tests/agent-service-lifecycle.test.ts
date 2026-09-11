@@ -52,7 +52,7 @@ const createProviders = (
         activeTools: async () => new Set(),
       })),
     },
-    chatMessageConverters: {
+    converters: {
       formatMessages: vi.fn(async (messages) => messages),
       assistant: { convert: vi.fn() },
       human: { convert: vi.fn() },

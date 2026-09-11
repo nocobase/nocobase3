@@ -361,7 +361,7 @@ export interface AgentAbortHandle {
 export interface AgentProviders {
   conversation: ConversationProvider;
   chatContext: ChatContextProvider;
-  chatMessageConverters: ChatMessageConverters;
+  converters: ChatMessageConverters;
   checkpointer?: BaseCheckpointSaver | boolean;
   logger: Logger;
   features: AgentFeatureOptions;
@@ -370,7 +370,7 @@ export interface AgentProviders {
 export interface CreateAgentProvidersOptions {
   conversation: ConversationProvider;
   chatContext: ChatContextProvider;
-  chatMessageConverters?: ChatMessageConverters;
+  converters?: ChatMessageConverters;
   logger?: Logger;
   features?: Partial<AgentFeatureOptions>;
   checkpointer?: BaseCheckpointSaver | boolean;

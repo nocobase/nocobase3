@@ -281,7 +281,7 @@ export class AgentService {
       ? await conversation.messages.loadMessages(request.messageId)
       : [];
     const allMessages = [...history, ...(request.userMessages ?? [])];
-    const formatted = await this.providers.chatMessageConverters.formatMessages(
+    const formatted = await this.providers.converters.formatMessages(
       allMessages,
       llm,
     );
@@ -673,11 +673,10 @@ export class AgentService {
       }
       if (signal.aborted) {
         if (gathered && prepared) {
-          const value =
-            await this.providers.chatMessageConverters.assistant.convert(
-              gathered,
-              prepared,
-            );
+          const value = await this.providers.converters.assistant.convert(
+            gathered,
+            prepared,
+          );
           if (value) {
             value.metadata = {
               ...(value.metadata ?? {}),

@@ -29,7 +29,7 @@ const createProviders = (
     conversation,
     logger: { warn: vi.fn(), error: vi.fn() } as never,
     chatContext,
-    chatMessageConverters: {
+    converters: {
       formatMessages: vi.fn(),
       assistant: { convert: vi.fn() },
       human: { convert: vi.fn() },

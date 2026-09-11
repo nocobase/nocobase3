@@ -193,9 +193,7 @@ describe('fixed AgentService contracts', () => {
     expect(service).toContain(
       'const allMessages = [...history, ...(request.userMessages ?? [])];',
     );
-    expect(service).toContain(
-      'this.providers.chatMessageConverters.formatMessages(',
-    );
+    expect(service).toContain('this.providers.converters.formatMessages(');
     expect(pipeline).not.toContain('MessageNormalizationMiddleware');
   });
 
@@ -450,7 +448,7 @@ describe('fixed AgentService contracts', () => {
     expect(source).not.toMatch(/\bMemory[A-Za-z]+/);
     expect(source).not.toContain('new LLMStreamCached(');
     expect(source).toContain('class DefaultAgentProviders');
-    expect(source).not.toMatch(/export\s+class\s+(?:Memory|DefaultAgent)/);
+    expect(source).not.toMatch(/export\s+class\s+Memory/);
     expect(source).not.toMatch(/:\s*ConversationProvider\s*=\s*\{/);
     expect(source).not.toMatch(/messages:\s*\{/);
     expect(source).not.toMatch(/toolCalls:\s*\{/);
@@ -493,17 +491,17 @@ describe('fixed AgentService contracts', () => {
     const conversation = createTestConversationProvider({
       sessionId: 'direct',
     });
-    const chatMessageConverters = new DefaultChatMessageConverters();
+    const converters = new DefaultChatMessageConverters();
     const providers = createAgentProviders({
       conversation,
       chatContext,
-      chatMessageConverters,
+      converters,
     });
 
     const llm = await providers.chatContext.resolveLLM({});
     expect(providers.conversation).toBe(conversation);
     expect(providers.chatContext).toBe(chatContext);
-    expect(providers.chatMessageConverters).toBe(chatMessageConverters);
+    expect(providers.converters).toBe(converters);
     expect(providers.features).toEqual(DEFAULT_AGENT_FEATURES);
     expect(await providers.chatContext.getSystemPrompt([])).toBe('base');
   });

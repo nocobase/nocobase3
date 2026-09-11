@@ -1,9 +1,16 @@
+import type { AIConversationRepository } from '../repository/ai-conversation.js';
+import type { AIEmployeesManager } from '../manager/ai-employees-manager.js';
+import { LLMStreamCached } from '../manager/llm-stream-cached-manager.js';
 import type { Logger } from '@nocobase/logging';
 import { DefaultChatMessageConverters } from './chat-message-converters.js';
 import {
   DEFAULT_AGENT_FEATURES,
+  type AgentAbortController,
+  type AgentAbortHandle,
+  type AgentEventHandler,
   type AgentFeatureOptions,
   type AgentProviders,
+  type ConversationMessageStore,
   type ConversationProvider,
   type CreateAgentProvidersOptions,
 } from './types.js';
@@ -32,10 +39,63 @@ class NoopLogger {
 
 const noopLogger = new NoopLogger() as unknown as Logger;
 
+export class DefaultAgentEventHandler implements AgentEventHandler {
+  public constructor(
+    private readonly conversations: AIConversationRepository,
+    private readonly sessionId: string,
+  ) {}
+
+  public async beforeExecution(mode: 'streaming' | 'invoking'): Promise<void> {
+    await this.conversations.update({
+      values: { llmActiveState: mode },
+      filter: { sessionId: this.sessionId },
+    });
+  }
+
+  public async afterExecution(
+    mode: 'streaming' | 'invoking',
+    result?: { aborted?: boolean },
+  ): Promise<void> {
+    await this.conversations.update({
+      values: {
+        llmActiveState: 'idle',
+        ...(mode === 'streaming'
+          ? { read: result?.aborted ? true : false }
+          : {}),
+      },
+      filter: { sessionId: this.sessionId },
+    });
+  }
+}
+
+export class DefaultAgentAbortController implements AgentAbortController {
+  public constructor(
+    private readonly manager: AIEmployeesManager,
+    private readonly sessionId: string,
+  ) {}
+
+  public registerAbortHandle(token: symbol, handle: AgentAbortHandle): void {
+    this.manager.registerAgentAbortHandle(this.sessionId, token, handle);
+  }
+
+  public unregisterAbortHandle(token: symbol): void {
+    this.manager.unregisterAgentAbortHandle(this.sessionId, token);
+  }
+}
+
+export class DefaultConversationProvider implements ConversationProvider {
+  public constructor(
+    public readonly messages: ConversationMessageStore,
+    public readonly streamCache: LLMStreamCached,
+    public readonly event: AgentEventHandler,
+    public readonly abort: AgentAbortController,
+  ) {}
+}
+
 class DefaultAgentProviders implements AgentProviders {
   public readonly conversation: ConversationProvider;
   public readonly chatContext: AgentProviders['chatContext'];
-  public readonly chatMessageConverters: AgentProviders['chatMessageConverters'];
+  public readonly converters: AgentProviders['converters'];
   public readonly logger: Logger;
   public readonly features: AgentFeatureOptions;
   public readonly checkpointer: AgentProviders['checkpointer'];
@@ -44,8 +104,7 @@ class DefaultAgentProviders implements AgentProviders {
     this.conversation = options.conversation;
     this.chatContext = options.chatContext;
     this.logger = options.logger ?? noopLogger;
-    this.chatMessageConverters =
-      options.chatMessageConverters ?? new DefaultChatMessageConverters();
+    this.converters = options.converters ?? new DefaultChatMessageConverters();
     this.features = {
       ...DEFAULT_AGENT_FEATURES,
       ...(options.features ?? {}),
@@ -53,10 +112,6 @@ class DefaultAgentProviders implements AgentProviders {
     this.checkpointer = options.checkpointer;
   }
 }
-
-/** @deprecated Construct a DefaultChatMessageConverters directly. */
-export const createDefaultChatMessageConverters =
-  (): DefaultChatMessageConverters => new DefaultChatMessageConverters();
 
 export function createAgentProviders(
   options: CreateAgentProvidersOptions,
