@@ -162,7 +162,7 @@ describe('scaffoldFromTemplate', () => {
   });
 
   /** The field is added beside what the template already declares rather than replacing the block. */
-  it('keeps the template\'s own nocobase metadata', async () => {
+  it("keeps the template's own nocobase metadata", async () => {
     const templateDirectory = await createTemplate();
 
     await writeFile(
