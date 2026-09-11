@@ -5,7 +5,7 @@ import type {
   AgentProviders,
   AgentStreamEvent,
 } from '../server/agent/types.js';
-import { createMemoryConversationProvider } from '../server/agent/providers.js';
+import { createTestConversationProvider } from './test-conversation-provider.js';
 
 const langchainMocks = vi.hoisted(() => ({
   createAgent: vi.fn(),
@@ -53,7 +53,7 @@ const createFixture = (chunks: StreamChunk[]): Fixture => {
     parseResponseChunk: vi.fn((content: unknown) => content),
     parseWebSearchAction: vi.fn(() => null),
   } as unknown as LLMProvider;
-  const conversation = createMemoryConversationProvider({
+  const conversation = createTestConversationProvider({
     currentConversation: { sessionId: 'session-1', username: 'dara' },
   });
   const updateMessage = vi.fn(async () => undefined);

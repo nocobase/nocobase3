@@ -3,7 +3,7 @@ import { FakeListChatModel } from '@langchain/core/utils/testing';
 import { describe, expect, it, vi } from 'vitest';
 import type { LLMProvider } from '@nocobase/ai-employee';
 import { AgentService } from '../server/agent/agent-service.js';
-import { createMemoryConversationProvider } from '../server/agent/providers.js';
+import { createTestConversationProvider } from './test-conversation-provider.js';
 import type {
   AgentProviders,
   ResolvedAgentLLM,
@@ -29,7 +29,7 @@ const createProviders = (
     dispose,
   };
   return {
-    conversation: createMemoryConversationProvider(),
+    conversation: createTestConversationProvider(),
     logger: { warn: vi.fn(), error: vi.fn() } as never,
     chatContext: {
       currentConversation: vi.fn(() => ({ sessionId: 'test-session' })),

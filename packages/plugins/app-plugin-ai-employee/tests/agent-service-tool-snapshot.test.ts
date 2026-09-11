@@ -16,7 +16,7 @@ vi.mock('../server/agent/middleware/pipeline.js', () => ({
 }));
 
 import { AgentService } from '../server/agent/agent-service.js';
-import { createMemoryConversationProvider } from '../server/agent/providers.js';
+import { createTestConversationProvider } from './test-conversation-provider.js';
 import { DEFAULT_AGENT_FEATURES } from '../server/agent/types.js';
 
 const tool = (name: string, auto: boolean): ToolsEntity =>
@@ -36,7 +36,7 @@ function createFixture(toolMaps: ReadonlyMap<string, ToolsEntity>[]) {
     return { tools: next, activeTools };
   });
   const activeTools = vi.fn(async () => new Set<string>());
-  const conversation = createMemoryConversationProvider({
+  const conversation = createTestConversationProvider({
     sessionId: 'snapshot',
   });
   const providers = {

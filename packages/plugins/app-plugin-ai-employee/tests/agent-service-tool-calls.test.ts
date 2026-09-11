@@ -2,13 +2,13 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AIMessageInput } from '@nocobase/ai-employee';
 import { AgentService } from '../server/agent/agent-service.js';
 import { createAIEmployeeAgentService } from '../server/agent/ai-employee/index.js';
-import { createMemoryConversationProvider } from '../server/agent/providers.js';
+import { createTestConversationProvider } from './test-conversation-provider.js';
 import type { AgentProviders } from '../server/agent/types.js';
 
 const createProviders = (
   cancel: AgentProviders['conversation']['messages']['cancelToolCall'],
 ) => {
-  const conversation = createMemoryConversationProvider();
+  const conversation = createTestConversationProvider();
   conversation.messages.cancelToolCall = cancel;
   const lifecycle = {
     beforeExecution: vi.spyOn(conversation.event, 'beforeExecution'),

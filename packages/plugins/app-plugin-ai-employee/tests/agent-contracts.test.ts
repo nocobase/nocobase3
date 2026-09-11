@@ -12,10 +12,8 @@ import {
   type ResolvedAgentLLM,
 } from '../server/agent/types.js';
 import { AIEmployeesManager } from '../server/manager/ai-employees-manager.js';
-import {
-  createAgentProviders,
-  createMemoryConversationProvider,
-} from '../server/agent/providers.js';
+import { createAgentProviders } from '../server/agent/providers.js';
+import { createTestConversationProvider } from './test-conversation-provider.js';
 import { DefaultChatMessageConverters } from '../server/agent/chat-message-converters.js';
 import {
   encodeAgentEventSSE,
@@ -445,14 +443,12 @@ describe('fixed AgentService contracts', () => {
     expect(providers).not.toContain('ctx: options.ctx');
   });
 
-  it('implements memory providers as private classes instead of inline objects', () => {
+  it('keeps provider composition explicit', () => {
     const source = read('agent/providers.ts');
 
     const types = read('agent/types.ts');
-    expect(source).toContain('class MemoryConversationProvider');
-    expect(source).toContain('class MemoryConversationMessageStore');
-    expect(source).not.toContain('class MemoryToolCallHandler');
-    expect(source).toContain('new LLMStreamCached(');
+    expect(source).not.toMatch(/\bMemory[A-Za-z]+/);
+    expect(source).not.toContain('new LLMStreamCached(');
     expect(source).toContain('class DefaultAgentProviders');
     expect(source).not.toMatch(/export\s+class\s+(?:Memory|DefaultAgent)/);
     expect(source).not.toMatch(/:\s*ConversationProvider\s*=\s*\{/);
@@ -494,7 +490,7 @@ describe('fixed AgentService contracts', () => {
       }
     }
     const chatContext = new Context();
-    const conversation = createMemoryConversationProvider({
+    const conversation = createTestConversationProvider({
       sessionId: 'direct',
     });
     const chatMessageConverters = new DefaultChatMessageConverters();
@@ -512,9 +508,9 @@ describe('fixed AgentService contracts', () => {
     expect(await providers.chatContext.getSystemPrompt([])).toBe('base');
   });
 
-  it('keeps memory message and tool-call state behind the same contract', async () => {
-    const conversation = createMemoryConversationProvider({
-      sessionId: 'memory',
+  it('keeps test message and tool-call state behind the same contract', async () => {
+    const conversation = createTestConversationProvider({
+      sessionId: 'test',
     });
     const saved = await conversation.messages.saveAssistantMessage(
       {
@@ -527,9 +523,9 @@ describe('fixed AgentService contracts', () => {
 
     expect(await conversation.messages.loadMessages()).toHaveLength(1);
     expect(await conversation.messages.currentThread()).toMatchObject({
-      sessionId: 'memory',
+      sessionId: 'test',
       thread: 0,
-      threadId: 'memory:0',
+      threadId: 'test:0',
     });
 
     expect(saved.initializedToolCalls).toHaveLength(1);
