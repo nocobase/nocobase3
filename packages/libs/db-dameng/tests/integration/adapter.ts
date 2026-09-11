@@ -35,10 +35,15 @@ export const damengDialectIntegrationAdapter: DatabaseDialectIntegrationAdapter 
     listIndexes: async (context, tableName) =>
       rows(
         await context.db.raw(
-          'select index_name as "name" from user_indexes where table_name = ?',
+          `select i.index_name as "name",
+                  coalesce(c.constraint_name, i.index_name) as "logicalName"
+           from user_indexes i
+           left join user_constraints c
+             on c.index_name = i.index_name and c.table_name = i.table_name
+           where i.table_name = ?`,
           [tableName],
         ),
-      ),
+      ).map((row) => ({ ...row, name: row.logicalName ?? row.name })),
     listForeignKeys: async (context, tableName) =>
       rows(
         await context.db.raw(
