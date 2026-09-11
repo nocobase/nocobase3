@@ -2,7 +2,7 @@ import type { AIMessageInput, LLMProvider } from '@nocobase/ai-employee';
 import { describe, expect, it, vi } from 'vitest';
 
 import { DefaultChatMessageConverters } from '../server/agent/message/converters.js';
-import type { AIEmployeeAgentOptions } from '../server/agent/context/ai-employee/options.js';
+import type { AIEmployeeContextOptions } from '../server/agent/context/ai-employee/options.js';
 
 function createOptions(records: Record<string, unknown>[]) {
   const find = vi.fn(async () => records);
@@ -26,7 +26,7 @@ function createOptions(records: Record<string, unknown>[]) {
     documentLoaders: { cached: {} },
     employee: { username: 'tester' },
     sessionId: 'session-1',
-  } as unknown as AIEmployeeAgentOptions;
+  } as unknown as AIEmployeeContextOptions;
   return { options, find, collectionRepository };
 }
 
