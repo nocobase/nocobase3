@@ -154,6 +154,7 @@ describe('oracle runtime strategy', () => {
     const empty = repository.emptyInsertValue!({
       client,
       collection: { fields: [{ name: 'id', type: 'integer' }] },
+      column: (field: string) => field,
     } as never);
     expect(empty?.id.toQuery()).toContain('default');
     expect(repository.collectionAliasKeyword).toBe(' ');

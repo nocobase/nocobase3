@@ -84,6 +84,7 @@ export interface DatabaseRepositoryRuntimeStrategy {
   readonly emptyInsertValue?: (context: {
     client: Knex;
     collection: CollectionDefinition;
+    column: (field: string) => string;
   }) => Record<string, Knex.Raw> | undefined;
   readonly reloadReturnedDecimal?: boolean;
   readonly enumGroupKey?: (context: {

@@ -137,20 +137,50 @@ export const oracleDriver: DatabaseDriverDefinition<'oracle'> = {
         client.raw('utl_raw.cast_to_raw(??)', [field]),
       compileFilterCondition: ({ query, node, field, name, boolean }) => {
         if (
-          (field?.type === 'enum' || field?.type === 'char') &&
+          (field?.type === 'text' || field?.type === 'string') &&
+          node.operator === '$empty'
+        ) {
+          query[boolean === 'or' ? 'orWhereNull' : 'whereNull'](name);
+          return { handled: true };
+        }
+        if (
+          (field?.type === 'text' || field?.type === 'string') &&
+          node.operator === '$notEmpty'
+        ) {
+          query[boolean === 'or' ? 'orWhereNotNull' : 'whereNotNull'](name);
+          return { handled: true };
+        }
+        if (
+          field?.type === 'text' &&
           typeof node.value === 'string' &&
           (node.operator === '$eq' || node.operator === '$ne')
         ) {
           query[boolean === 'or' ? 'orWhereRaw' : 'whereRaw'](
-            `utl_raw.cast_to_raw(??) ${node.operator === '$eq' ? '=' : '<>'} utl_raw.cast_to_raw(?)`,
+            `dbms_lob.compare(??, to_clob(?)) ${node.operator === '$eq' ? '=' : '<>'} 0`,
             [name, node.value],
           );
+          return { handled: true };
+        }
+        if (
+          (field?.type === 'enum' || field?.type === 'char') &&
+          typeof node.value === 'string' &&
+          (node.operator === '$eq' || node.operator === '$ne')
+        ) {
+          const expression =
+            field.type === 'char'
+              ? `rtrim(??) ${node.operator === '$eq' ? '=' : '<>'} rtrim(?)`
+              : `utl_raw.cast_to_raw(??) ${node.operator === '$eq' ? '=' : '<>'} utl_raw.cast_to_raw(?)`;
+          query[boolean === 'or' ? 'orWhereRaw' : 'whereRaw'](expression, [
+            name,
+            node.value,
+          ]);
           return { handled: true };
         }
         return { handled: false };
       },
       bindValue: ({ client, field, value }) => {
-        if (field.type !== 'char' || typeof value !== 'string') return value;
+        if (field.type !== 'char' || typeof value !== 'string')
+          return undefined;
         return client.raw(`cast(? as char(${field.length ?? 1}))`, [value]);
       },
       streamOptions: () => ({
@@ -182,11 +212,15 @@ export const oracleDriver: DatabaseDriverDefinition<'oracle'> = {
             !('target' in field) &&
             ['date', 'time', 'datetime', 'datetimeTz'].includes(field.type),
         ) ?? false,
-      emptyInsertValue: ({ client, collection }) => {
+      emptyInsertValue: ({ client, collection, column }) => {
         const field = collection.fields?.find(
           (item) => !('target' in item) && item.db?.generated === undefined,
         );
-        return field ? { [field.name]: client.raw('default') } : undefined;
+        return field
+          ? {
+              [column(field.name)]: client.raw('default'),
+            }
+          : undefined;
       },
       reloadReturnedDecimal: true,
       collectionAliasKeyword: ' ',

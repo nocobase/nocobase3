@@ -1199,6 +1199,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
         getDatabaseDriverRuntime(client)?.repository?.emptyInsertValue?.({
           client,
           collection,
+          column: (field) => column(collection, field),
         }) ?? physicalValues;
     }
     const query = tableQuery(client, collection).insert(physicalValues);
