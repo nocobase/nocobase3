@@ -12,140 +12,126 @@ metadata:
 
 # Upgrading the application template
 
-This application was generated from a published template package by `pnpm create @nocobase/app`. The source was copied into the user's hands at that moment and has been theirs ever since — there is no live link back to the template, so a newer template release reaches this application only by someone merging it in. That someone is you.
+`pnpm create @nocobase/app` copied a template into the user's hands and left no link back to it, so a newer template release arrives only by someone merging it in.
 
-The whole difficulty is telling the template's changes apart from the user's. A file that differs from the latest template may have been changed by the template, by the user, or by both, and the three need opposite treatment. Comparing the application against the latest template cannot distinguish them, and an upgrade built on that comparison silently reverts the user's work.
-
-So this Skill compares the two template releases against each other — the baseline the application already carries and the target it is moving to. That comparison is **information, not a patch**. You read it to learn what the template changed and why, then decide file by file how each change lands in this application, and make every edit yourself.
-
-## Do not apply the diff as a patch
-
-`git apply`, `patch`, and three-way merge tools match text. They know nothing about this application. That makes them wrong for this job in both directions:
-
-**They report conflicts that are not conflicts.** A hunk rejects because the user added a line nearby. Nothing is actually in conflict; the tool simply lost its context.
-
-**They stay silent on the damage that matters.** The template deletes `client/shell/navigation.ts` because a new mechanism replaced it. A user component imports `HOME_NAVIGATION_ITEM` from it. `git apply` deletes the file, reports success, exits `0` — and the application no longer compiles. The user's file was never examined, because no hunk touched it.
-
-That second case is the one this Skill exists to prevent, and it is exactly what a clean patch run hides. **A tool reporting no conflicts is not evidence that the upgrade is safe.** Treat silence from any text-merge tool as meaningless here.
-
-So: read the diff, understand each change, and write each edit with Edit. Never run `git apply`, `patch`, or `git merge` against the user's tree to perform the upgrade.
-
-## The three trees
+The difficulty is telling the template's changes from the user's. Comparing the application against the latest template cannot: a file that differs may have been changed by either side, or both. So compare the two template _releases_ instead — the baseline already merged and the target — and decide file by file how each of their differences lands here.
 
 ```text
-BASE      the template release this application already carries
-          = nocobase.defaultTemplateVersion in package.json
+BASE     nocobase.defaultTemplateVersion — the release already merged in
+TARGET   the release being moved to
+PROJECT  the application as the user has it now
 
-TARGET    the template release being moved to
-          = a published version of nocobase.templatePackage
-
-PROJECT   this application, as the user has it now
+BASE → TARGET    what the template changed — the work to bring in
+BASE → PROJECT   what the user changed — the work that must survive
 ```
 
-`BASE → TARGET` is what the template changed — the work to be brought in. `BASE → PROJECT` is what the user changed — the work that must survive. Every decision below comes from holding those two next to each other.
+`defaultTemplateVersion` is not the application's `version`. It records how far template source has been merged, and moves only after a merge actually happens.
 
-`nocobase.defaultTemplateVersion` is not the application's `version`. The application's version is the user's to set and means nothing here. `defaultTemplateVersion` means exactly one thing: the template release whose source has already been merged in. It moves only after the merge is actually done.
+The diff is information. Decide each file yourself and write every edit by hand — a text-merge tool applied to the project would reconcile only what its hunks happen to touch, leaving the user's own files unexamined and step 5 undone.
 
-## Never do these
+Never: overwrite the application with a fresh template copy; bump `defaultTemplateVersion` without merging the source; resolve a conflict by discarding the user's side; run `git checkout --`, `git restore`, `git reset --hard`, `git stash`, `git clean`, or `rm -rf` against the working tree; regenerate with `create-app` and copy the user's code across.
 
-- **Never overwrite the application with a fresh template copy.** Not a directory, not a file "the user surely has not touched". Every file in this application is the user's.
-- **Never run `git apply`, `patch`, or a merge tool against the project.** See above.
-- **Never bump `defaultTemplateVersion` without merging the corresponding source.** The field then lies, and the next upgrade computes its delta from a baseline that was never applied — silently skipping every change in between.
-- **Never resolve a conflict by discarding the user's side.** Stop and ask.
-- **Never run `git checkout --`, `git restore`, `git reset --hard`, `git stash`, `git clean`, or `rm -rf` against the working tree.** They discard uncommitted work indiscriminately.
-- **Never regenerate the project with `pnpm create @nocobase/app` and copy the user's code across.** That inverts ownership: it makes the template authoritative and the user's application the thing being patched in.
+## 1. Secure a way back
 
-## The upgrade
+Git project: require a clean tree (ask the user to commit anything outstanding — do not stash or commit it for them), record `git rev-parse HEAD`, then `git checkout -b template-upgrade-<target>`. Editing the project directly is safe on a branch, and it is what lets `typecheck`/`test`/`build` actually run.
 
-### 1. Establish the workspace and the way back
+Not a Git project: do not touch it. Offer `git init` plus a commit, or a full copy in a scratch directory to upgrade and verify before moving back. Never proceed with no way back.
 
-Nothing else happens until the user's current state can be restored.
-
-**If this is a Git repository:** require a clean working tree. If there is uncommitted work, ask the user to commit it — do not stash it, and do not commit it for them without being asked. Then work on a branch of its own:
-
-```bash
-git status --short                       # must be empty
-git rev-parse HEAD                       # the rollback point; record it
-git checkout -b template-upgrade-<target>
-```
-
-The branch is what makes it safe to edit the project directly: the upgrade is isolated, `git diff` shows exactly what the upgrade did, and abandoning it is `git checkout -` plus deleting the branch.
-
-**If this is not a Git repository:** there is no way back, so do not touch the project. Offer the user the two options and let them choose:
-
-- Run `git init` and commit the current state first, then proceed as above. This is the better answer and takes seconds.
-- Work in a copy: copy the whole project to a scratch directory, upgrade and verify there, and move it back only once it passes. Slower — the copy needs its own `pnpm install` before anything can be verified — but it leaves the original untouched throughout.
-
-Do not proceed on an unversioned project with no backup, whatever the user says about the changes being small.
-
-### 2. Read where the application stands
+## 2. Identify the source
 
 ```bash
 node -p "JSON.stringify(require('./package.json').nocobase, null, 2)"
 ```
 
-```json
-{
-  "templateKind": "hub",
-  "templatePackage": "@nocobase/app-template-hub",
-  "defaultTemplateVersion": "1.0.0-beta.21"
-}
-```
+`templatePackage` names the template; `defaultTemplateVersion` is BASE. If `templatePackage` is missing the application predates the field: a hub declares `templateKind: "hub"`, which identifies it outright — `@nocobase/app-template-hub` is the source. The published version lines usually settle it (`npm view <pkg> versions --registry=https://npm.nocobase.ai`), and Examples is recognizable by its `app-plugin-*-example` registrations. If `defaultTemplateVersion` itself is missing or was bumped without a merge, the baseline is unknown — work it out with the user from Git history rather than guessing, since too old a baseline replays changes already present and too new a one skips changes never applied.
 
-`templatePackage` names the template to compare. If it is absent — the application predates the field — do not guess. See [identifying the source template](references/identify-source.md).
-
-### 3. Fetch both releases and read what changed
-
-See [reading the template delta](references/compute-delta.md). In outline: `npm pack` both versions from the registry, extract them side by side, and read the differences.
-
-Two things come out of this step, and the upgrade is planned from both:
-
-- **What the template changed**, file by file, and why.
-- **Which of those files the user also changed** — `diff BASE/<file> <file>` for each. This is what separates a mechanical edit from a judgement call.
-
-Read the target's `MIGRATION.md` in the same step. It carries the instructions the template author wrote for exactly this merge, including steps no diff can show.
-
-### 4. Plan, and get it approved
-
-Present to the user: the version range, every file the template changed and which of them the user also touched, anything `MIGRATION.md` requires by hand, the removals that put existing code at risk (step 6), and the rollback. Do not edit the application until they agree.
-
-### 5. Work through the files
-
-Go file by file. For each one, read three things — the file in BASE, the same file in TARGET, and the application's current version — then write the result with Edit. See [deciding each file](references/apply-and-resolve.md) for how to classify a file and what each class needs.
-
-Do not batch-copy files, even ones that appear untouched. Verifying a file is unmodified takes one `diff`, but deciding to take the template's version is still a decision — a file identical to BASE can still be one the target release changes in a way that breaks the user's code elsewhere.
-
-### 6. Check what no diff can show
-
-The template's changes reach beyond the files it touches. A removed export, a renamed module, a changed signature — the template's own files are consistent afterwards, and the user's are not. Nothing in the diff points at the user's file, so this check is the only thing between a "clean" upgrade and a broken application.
-
-See [deciding each file](references/apply-and-resolve.md#what-the-diff-cannot-show) for the checks. Run them before declaring the merge done.
-
-### 7. Reconcile what is not source
-
-`package.json`, `.env`, and the plugin composition roots follow their own rules. See [the manifest, config, and plugin roots](references/manifest-and-config.md).
-
-### 8. Finish
-
-Set `defaultTemplateVersion` to the target — now, after the source is merged, and not before. Then:
+## 3. Fetch both releases
 
 ```bash
-pnpm install
-pnpm plugin:skills:sync
-pnpm typecheck
-pnpm test
-pnpm lint
-pnpm build
+REGISTRY=https://npm.nocobase.ai
+TEMPLATE=$(node -p "require('./package.json').nocobase.templatePackage")
+BASE=$(node -p "require('./package.json').nocobase.defaultTemplateVersion")
+TARGET=<target version>
+WORK=$(mktemp -d)
+
+for VERSION in "$BASE" "$TARGET"; do
+  npm pack "$TEMPLATE@$VERSION" --registry="$REGISTRY" --pack-destination "$WORK" >/dev/null
+  mkdir -p "$WORK/$VERSION"
+  tar -xzf "$WORK"/*"-$VERSION.tgz" -C "$WORK/$VERSION" --strip-components=1
+done
 ```
 
-`pnpm typecheck` is doing real work here, not ceremony: it is what catches the broken import left by a removal the diff never mentioned. Treat a failure as an unfinished upgrade rather than a problem to work around.
+These are published tarballs, not Git checkouts — they carry only what `files` publishes, and npm never publishes `.gitignore`. That is fine: both sides are missing the same things.
 
-A hub is built before it runs, so `pnpm build` then `pnpm start` is the real check rather than a dev server. Verify what the delta touched: sign-in, the proxy to the upstream NocoBase API, the pages the user owns, navigation, locale switching, and the applications served from `app-dist/`. Passing commands are not evidence the hub still behaves.
+Do not read the `beta` dist-tag as "newest". While every release is a prerelease, changesets tags each one `latest` and leaves `beta` on the first version ever published.
 
-Report the version range merged, the files changed and how each was decided, every judgement call and its reasoning, the manual steps `MIGRATION.md` required, and how to roll back.
+## 4. Read what changed, and who else changed it
 
-## Crossing several releases at once
+```bash
+diff -rq "$WORK/$BASE" "$WORK/$TARGET"
+```
 
-Go to the newest release directly. `BASE → TARGET` across a range is a single comparison, and stepping through releases one at a time means deciding the same file repeatedly as successive versions rewrite it.
+`Files ... differ` is modified, `Only in TARGET` added, `Only in BASE` removed. Read the substantive ones with `diff -u`, and read the target's `MIGRATION.md` — it carries steps no diff can show.
 
-Read `MIGRATION.md` for the whole range, though. Every section between the two versions applies, and a section describing a manual step appears in no diff at all.
+Then ask the project which of those files it has also touched:
+
+```bash
+diff -rq "$WORK/$BASE" "$WORK/$TARGET" \
+  | sed -n "s|^Files $WORK/$BASE/\(.*\) and .* differ$|\1|p" \
+  | while read -r file; do
+      if [ ! -f "$file" ]; then echo "gone:      $file"
+      elif diff -q "$WORK/$BASE/$file" "$file" >/dev/null; then echo "untouched: $file"
+      else echo "modified:  $file"; fi
+    done
+```
+
+Show the user this listing, the version range, whatever `MIGRATION.md` requires by hand, the removals from step 5, and the rollback. Get agreement before editing.
+
+## 5. Check what the diff cannot show
+
+Do this before editing, so its findings are in the plan. The template's files are consistent with each other after a change; the user's are not, and no diff points at them.
+
+```bash
+# For each `Only in BASE` file, and each export that vanished from a surviving file:
+grep -hE '^export ' "$WORK/$BASE/<removed-file>"
+diff -u "$WORK/$BASE/<file>" "$WORK/$TARGET/<file>" | grep -E '^-\s*export '
+
+# Then search the user's own code for every name found:
+grep -rn "<name>" client server cli database tests --include='*.ts' --include='*.tsx'
+```
+
+A hit outside the template's own files is a decision: migrate to the replacement the target added, agree with the user on what replaces a capability deliberately removed, or keep the file as application-owned code and say the template no longer maintains it. Changed signatures are the same class of problem — `pnpm typecheck` in step 8 is what catches those.
+
+## 6. Work through the files
+
+For each file read three versions — `$WORK/$BASE/<file>`, `$WORK/$TARGET/<file>`, and the project's — then write the result with Edit.
+
+- **Untouched by the user** — take the template's version. Most of the list; fast, but still a decision, and `client/components/ui/` shadcn primitives belong here.
+- **Both changed it** — express what the template was trying to achieve inside the user's version. Their code exists for a reason, so this is a merge of two intents, not a choice between them. If the template's change makes their customization unnecessary, say so rather than deleting it.
+- **Template added a file** — copy it in; if something already exists at that path, reconcile rather than overwrite.
+- **Template removed a file** — only after step 5.
+
+Three files legitimately differ from both releases because the generator rewrote the template's package name into them: `client/runtime.ts`, `client/service-provider.ts`, `server/providers/app-example.ts`. Keep the application's name when taking a change there — copying verbatim splits the i18n namespace and fails `pnpm client:inspect`.
+
+When the right answer is unclear, stop and ask. The user is the only one who knows why their code is the way it is.
+
+## 7. Reconcile what is not ordinary source
+
+`package.json`, `config.yml` and `.env`, and the plugin composition roots have their own rules — see [edge cases](references/edge-cases.md).
+
+## 8. Finish
+
+Set `defaultTemplateVersion` to the target, now that the source is actually merged.
+
+```bash
+pnpm install && pnpm plugin:skills:sync
+pnpm typecheck && pnpm test && pnpm lint && pnpm build
+```
+
+`typecheck` is doing real work here — it catches the broken import a removal left behind. Then run the hub and check what the delta touched: sign-in, the user's pages, navigation, locale switching, any new migration. Passing commands are not evidence the hub still behaves.
+
+Report the range merged, how each contested file was decided, the manual steps `MIGRATION.md` required, and how to roll back.
+
+## Crossing several releases
+
+Go to the newest directly — stepping one release at a time means deciding the same file repeatedly. But read `MIGRATION.md` for the whole range: every section between the two versions applies, and manual steps appear in no diff.
