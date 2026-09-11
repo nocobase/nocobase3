@@ -43,10 +43,12 @@ export function previewKind(file: FileRecord): FilePreviewKind {
   return 'unsupported';
 }
 
-export function formatBytes(size: number): string {
-  if (size < 1024) return `${size} B`;
+export function formatBytes(size: string | number): string {
+  const bytes = typeof size === 'number' ? size : Number(size);
+  if (!Number.isFinite(bytes) || bytes < 0) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
   const units = ['KB', 'MB', 'GB'];
-  let value = size / 1024;
+  let value = bytes / 1024;
   let unit = 0;
   while (value >= 1024 && unit < units.length - 1) {
     value /= 1024;
