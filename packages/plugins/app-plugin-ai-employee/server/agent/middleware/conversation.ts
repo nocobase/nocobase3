@@ -33,7 +33,7 @@ import type { Logger } from '@nocobase/logging';
 export const conversationMiddleware = (
   providers: Pick<
     AgentProviders,
-    'conversation' | 'chatContext' | 'converters'
+    'conversation' | 'context' | 'chatContext' | 'converters'
   >,
   options: AgentMessageConversionContext & {
     messageId?: string;
@@ -44,7 +44,9 @@ export const conversationMiddleware = (
 ) => {
   const { conversation, converters } = providers;
   const { messageId, agentThread, toolMap } = options;
-  const identity = providers.chatContext.currentConversation();
+  const identity = (
+    providers.context ?? providers.chatContext!
+  ).currentConversation();
   const convertAssistantMessage = (message: AIMessage) =>
     converters.assistant.convert(message, options);
   const convertHumanMessage = (message: HumanMessage) =>

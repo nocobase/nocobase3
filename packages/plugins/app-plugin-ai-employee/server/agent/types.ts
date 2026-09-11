@@ -324,7 +324,7 @@ export interface ConversationProvider {
   abort: AgentAbortController;
 }
 
-export interface ChatContextProvider {
+export interface AgentContextProvider {
   currentConversation(): CurrentConversation;
   resolveLLM(request: AgentRequest): Promise<ResolvedAgentLLM>;
   getSystemPrompt(
@@ -332,6 +332,8 @@ export interface ChatContextProvider {
   ): Promise<string | undefined>;
   discoveredTools(): Promise<DiscoveredTools>;
 }
+
+export type ChatContextProvider = AgentContextProvider;
 
 export interface ChatMessageConverter<TSource, TResult> {
   convert(
@@ -360,7 +362,8 @@ export interface AgentAbortHandle {
 
 export interface AgentProviders {
   conversation: ConversationProvider;
-  chatContext: ChatContextProvider;
+  context?: AgentContextProvider;
+  chatContext?: AgentContextProvider;
   converters: ChatMessageConverters;
   checkpointer?: BaseCheckpointSaver | boolean;
   logger: Logger;
@@ -369,7 +372,8 @@ export interface AgentProviders {
 
 export interface CreateAgentProvidersOptions {
   conversation: ConversationProvider;
-  chatContext: ChatContextProvider;
+  context?: AgentContextProvider;
+  chatContext?: AgentContextProvider;
   converters?: ChatMessageConverters;
   logger?: Logger;
   features?: Partial<AgentFeatureOptions>;

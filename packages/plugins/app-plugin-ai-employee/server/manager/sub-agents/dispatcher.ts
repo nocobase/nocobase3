@@ -27,7 +27,7 @@ import type { WorkContextHandler } from '../work-context/index.js';
 import type { AIEmployeeEntity } from '@nocobase/ai-employee';
 import type { AIMessageEntity } from '../../repository/index.js';
 import type { ModelRef } from '../../types.js';
-import { createAIEmployeeAgentService } from '../../agent/ai-employee/index.js';
+import { createAIEmployeeAgentService } from '../../agent/context/ai-employee/index.js';
 import { createAgentContext } from '../../agent/context.js';
 import type {
   SubAgentConversationMetadata,

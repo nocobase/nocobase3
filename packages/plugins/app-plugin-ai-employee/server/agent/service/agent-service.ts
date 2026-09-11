@@ -22,10 +22,10 @@ import type {
   AgentStreamEvent,
   PreparedAgentContext,
   ResolvedAgentLLM,
-} from './types.js';
-import { AgentServiceError } from './types.js';
-import { normalizeAgentError } from './errors.js';
-import { buildStandardAgentMiddleware } from './middleware/pipeline.js';
+} from '../types.js';
+import { AgentServiceError } from '../types.js';
+import { normalizeAgentError } from '../errors.js';
+import { buildStandardAgentMiddleware } from '../middleware/pipeline.js';
 
 const mergeSignals = (
   internal: AbortSignal,
@@ -201,7 +201,9 @@ export class AgentService {
   }
 
   private resolveLLM(request: AgentRequest): Promise<ResolvedAgentLLM> {
-    return this.providers.chatContext!.resolveLLM(request);
+    return (this.providers.context ?? this.providers.chatContext!).resolveLLM(
+      request,
+    );
   }
 
   private shouldFork(
@@ -238,8 +240,9 @@ export class AgentService {
   }
 
   private buildInitialState(messages: AIMessage[]): AgentGraphState {
-    const assistantRole =
-      this.providers.chatContext!.currentConversation().username;
+    const assistantRole = (
+      this.providers.context ?? this.providers.chatContext!
+    ).currentConversation().username;
     const toolMessage = messages
       .slice()
       .reverse()
@@ -275,12 +278,8 @@ export class AgentService {
     agentContext?: AgentContext,
     responseMetadataCollector?: BaseCallbackHandler,
   ): Promise<PreparedAgentContext> {
-    const {
-      conversation,
-      chatContext: rawChatContext,
-      features,
-    } = this.providers;
-    const chatContext = rawChatContext ?? this.providers.context!;
+    const { conversation, features } = this.providers;
+    const context = this.providers.context ?? this.providers.chatContext!;
     const shouldLoadHistory = Boolean(request.messageId);
     const history = shouldLoadHistory
       ? await conversation.messages.loadMessages(request.messageId)
@@ -299,12 +298,12 @@ export class AgentService {
       (message: any) => message?.role !== 'system',
     );
     const systemPrompt = features.contextEnrichment
-      ? [await chatContext.getSystemPrompt(allMessages), formattedSystemPrompt]
+      ? [await context.getSystemPrompt(allMessages), formattedSystemPrompt]
           .filter(Boolean)
           .join('\n\n') || undefined
       : formattedSystemPrompt || undefined;
     const discoveredTools = features.tools
-      ? await chatContext.discoveredTools()
+      ? await context.discoveredTools()
       : {
           tools: new Map<string, ToolsEntity>(),
           activeTools: () => Promise.resolve(new Set<string>()),
@@ -349,7 +348,7 @@ export class AgentService {
       ...(responseMetadataCollector
         ? { callbacks: [responseMetadataCollector] }
         : {}),
-      metadata: { currentConversation: chatContext.currentConversation() },
+      metadata: { currentConversation: context.currentConversation() },
     };
     if (!config.configurable) delete config.configurable;
     return {
@@ -365,7 +364,7 @@ export class AgentService {
         ? this.providers.checkpointer
         : undefined,
       metadata: {
-        currentConversation: chatContext.currentConversation(),
+        currentConversation: context.currentConversation(),
         messageId: request.messageId,
       },
       providerName: llm.providerName,
@@ -444,9 +443,9 @@ export class AgentService {
     request: AgentRequest,
     agentContext?: AgentContext,
   ): AsyncGenerator<AgentStreamEvent> {
-    const { conversation, chatContext: rawChatContext } = this.providers;
-    const chatContext = rawChatContext ?? this.providers.context!;
-    const identity = chatContext.currentConversation();
+    const { conversation, context: providerContext } = this.providers;
+    const context = providerContext ?? this.providers.chatContext!;
+    const identity = context.currentConversation();
     const { controller, signal, token } = this.begin(request);
     const reasoning = new Set<string>();
     const messageIds = new Map<string, string>();
