@@ -11,6 +11,19 @@ import {
 import { MemoryInAppStore } from '../server/store.js';
 
 describe('In-app Channel common input', () => {
+  it('describes its test target without exposing storage terminology', () => {
+    const store = new MemoryInAppStore();
+
+    expect(createInAppChannelDefinition().test?.label).toMatchObject({
+      key: 'test.channels.inApp',
+      defaultValue: 'In-app',
+    });
+    expect(createDatabaseProviderDefinition({ store }).label).toMatchObject({
+      key: 'test.providers.builtIn',
+      defaultValue: 'Built-in',
+    });
+  });
+
   it('defaults test delivery to the authenticated user', () => {
     const adapter = createInAppChannelDefinition().test;
     expect(
@@ -22,7 +35,7 @@ describe('In-app Channel common input', () => {
           enabled: true,
           providers: [],
         },
-        providerConfig: { type: 'database', name: 'primary' },
+        providerConfig: { type: 'database', name: 'default' },
       }),
     ).toEqual({
       to: { type: 'user', id: 'user-1' },
@@ -36,7 +49,7 @@ describe('In-app Channel common input', () => {
       { logger: {} } as NotificationChannelContext,
       { type: 'in-app', enabled: true, providers: [] },
     );
-    const provider = { name: 'primary', type: 'database' };
+    const provider = { name: 'default', type: 'database' };
 
     expect(
       channel.resolveRecipient?.({
@@ -80,9 +93,12 @@ describe('In-app Channel common input', () => {
           return '2026-08-27T00:00:00.000Z';
         },
       },
-      { type: 'database', name: 'primary' },
+      { type: 'database', name: 'default' },
     );
 
+    expect(provider.capabilities).toEqual({
+      idempotency: { supported: true },
+    });
     await expect(
       provider.send({
         notificationId: 'notification-1',

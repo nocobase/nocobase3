@@ -21,6 +21,15 @@ Provider directly, because that bypasses persistence, retry, and logs.
 Extension plugins resolve `notificationExtensionRegistryToken` instead; the
 manager lifecycle and test-route surface are internal to the core plugin.
 
+Every public `send()` requires a stable caller-owned `idempotencyKey`. Reusing
+the key with equivalent input returns the original Notification; reusing it
+with different input is rejected. Consumers can query current state with
+`getByIdempotencyKey()` or `getNotification()`, use `onStatusChanged()` as a
+non-blocking process-local convenience, and call `retryDelivery()` for terminal
+failures or unknown submissions. Every manual retry requires a reason. Provider
+capabilities determine whether an unknown retry is internally audited as safely
+idempotent or as accepting possible duplication.
+
 ## Runtime requirements
 
 Register both the Client and Server entries in the target App. The Server
@@ -41,18 +50,19 @@ stable while work is outstanding. Credentials, recipient snapshots, message
 bodies, and lease tokens must not be written to logs.
 
 The notification log API requires authentication and the
-`page:notification.logs` `access` permission. The separate test API is enabled
-only by `notification.test.enabled`, requires the
-`notification:test` `send` permission and the
-`x-nocobase-notification-test: 1` anti-CSRF header, and exposes only safe
-Channel/Provider labels and test-field metadata. Provider deployment
-configuration and credentials remain server-only. Keep testing disabled in
-production unless a controlled verification explicitly needs a real send.
+`page:notification.logs` `access` permission. The separate test API requires
+the `x-nocobase-notification-test: 1` anti-CSRF header and exposes only safe
+Channel/Provider labels and test-field metadata. The
+`notification:test` `send` permission is checked only when a test message is
+submitted. Provider deployment configuration and credentials remain
+server-only.
 
 The core test endpoints are `GET /api/notifications/test/targets`,
 `POST /api/notifications/test/send`, and
 `GET /api/notifications/test/:id/status`. Status is visible only to the user
-who created that test.
+who created that test. The settings-page button remains visible when no
+Provider is enabled or target loading fails, so the dialog can explain the
+problem instead of hiding the entry point.
 
 ## Client UI and Registry
 

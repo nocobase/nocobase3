@@ -37,7 +37,25 @@ describe('@nocobase/app-plugin-notification routes', () => {
     });
   });
 
-  it('lists only safe targets with the separate test permission', async () => {
+  it('returns a stable localized error when log access is denied', async () => {
+    const { router } = await createRouter({ allowed: false });
+
+    const response = await router.request('/notifications/logs', {
+      headers: { 'accept-language': 'zh-CN' },
+    });
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: 'NOTIFICATION_LOGS_FORBIDDEN',
+        message: '需要通知日志访问权限。',
+        ns: NOTIFICATION_NAMESPACE,
+        key: 'errors.logsForbidden',
+      },
+    });
+  });
+
+  it('lists only safe targets without requiring send permission', async () => {
     const targets = [
       {
         channel: {
@@ -58,7 +76,10 @@ describe('@nocobase/app-plugin-notification routes', () => {
         ],
       },
     ] as const;
-    const { router, can, listTestTargets } = await createRouter({ targets });
+    const { router, can, listTestTargets } = await createRouter({
+      allowed: false,
+      targets,
+    });
 
     const response = await router.request('/notifications/test/targets', {
       headers: { 'x-nocobase-notification-test': '1' },
@@ -75,10 +96,7 @@ describe('@nocobase/app-plugin-notification routes', () => {
       ],
     });
     expect(listTestTargets).toHaveBeenCalledOnce();
-    expect(can).toHaveBeenCalledWith({
-      resource: { type: 'notification', id: 'test' },
-      action: 'send',
-    });
+    expect(can).not.toHaveBeenCalled();
   });
 
   it('sends through the core manager with the authenticated actor', async () => {
@@ -144,7 +162,7 @@ describe('@nocobase/app-plugin-notification routes', () => {
     });
   });
 
-  it('requires the feature flag, anti-CSRF header, and test permission', async () => {
+  it('requires authentication and the anti-CSRF header, with permission checked only when sending', async () => {
     const anonymous = await createRouter({ authenticated: false });
     expect(
       (
@@ -154,15 +172,6 @@ describe('@nocobase/app-plugin-notification routes', () => {
       ).status,
     ).toBe(401);
 
-    const disabled = await createRouter({ testEnabled: false });
-    expect(
-      (
-        await disabled.router.request('/notifications/test/targets', {
-          headers: { 'x-nocobase-notification-test': '1' },
-        })
-      ).status,
-    ).toBe(404);
-
     const enabled = await createRouter();
     expect(
       (await enabled.router.request('/notifications/test/targets')).status,
@@ -171,11 +180,18 @@ describe('@nocobase/app-plugin-notification routes', () => {
     const denied = await createRouter({ allowed: false });
     await expect(
       (
-        await denied.router.request('/notifications/test/targets', {
+        await denied.router.request('/notifications/test/send', {
+          method: 'POST',
           headers: {
             'accept-language': 'zh-CN',
+            'content-type': 'application/json',
             'x-nocobase-notification-test': '1',
           },
+          body: JSON.stringify({
+            channel: 'email',
+            provider: { name: 'primary', type: 'smtp' },
+            values: { recipient: 'test@example.com' },
+          }),
         })
       ).json(),
     ).resolves.toEqual({
@@ -189,8 +205,17 @@ describe('@nocobase/app-plugin-notification routes', () => {
 
     expect(
       (
-        await denied.router.request('/notifications/test/targets', {
-          headers: { 'x-nocobase-notification-test': '1' },
+        await denied.router.request('/notifications/test/send', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'x-nocobase-notification-test': '1',
+          },
+          body: JSON.stringify({
+            channel: 'email',
+            provider: { name: 'primary', type: 'smtp' },
+            values: { recipient: 'test@example.com' },
+          }),
         })
       ).status,
     ).toBe(403);
@@ -201,7 +226,6 @@ interface RouterOptions {
   readonly allowed?: boolean;
   readonly authenticated?: boolean;
   readonly targets?: ReturnType<NotificationRuntime['listTestTargets']>;
-  readonly testEnabled?: boolean;
 }
 
 async function createRouter(options: RouterOptions = {}): Promise<{
@@ -216,6 +240,8 @@ async function createRouter(options: RouterOptions = {}): Promise<{
   const listTestTargets = vi.fn(() => options.targets ?? []);
   const sendTest = vi.fn(async () => ({
     notificationId: 'test-1',
+    idempotencyKey: 'notification-test:test-1',
+    deduplicated: false,
     status: 'pending' as const,
     deliveries: [],
   }));
@@ -253,7 +279,6 @@ async function createRouter(options: RouterOptions = {}): Promise<{
     config: {
       get: () => ({
         channels: [],
-        test: { enabled: options.testEnabled ?? true },
       }),
     },
     paths: {} as never,

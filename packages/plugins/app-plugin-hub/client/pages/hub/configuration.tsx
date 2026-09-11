@@ -86,11 +86,13 @@ export function Configuration({
   mode,
   content,
   busy,
+  canUpdate,
   onSave,
 }: {
   readonly mode: ConfigMode;
   readonly content: string;
   readonly busy: boolean;
+  readonly canUpdate: boolean;
   readonly onSave: (content: string) => void;
 }): ReactElement {
   const source = CONFIG_MODES.find((item) => item.value === mode);
@@ -120,22 +122,30 @@ export function Configuration({
               </span>
             </div>
             <Suspense fallback={<ConfigEditorFallback />}>
-              <ConfigEditor value={draft} onChange={setDraft} />
+              <ConfigEditor
+                value={draft}
+                readOnly={!canUpdate}
+                onChange={canUpdate ? setDraft : undefined}
+              />
             </Suspense>
           </div>
           <ConfigStatus
             error={validationError}
             summary={summarizeConfigChanges('file', 'file', content, draft)}
           />
-          <ConfigReloadNotice />
-          <div className='flex justify-end'>
-            <Button
-              disabled={busy || !changed || validationError !== null}
-              onClick={() => setReviewOpen(true)}
-            >
-              {busy ? 'Publishing…' : 'Save and publish'}
-            </Button>
-          </div>
+          {canUpdate ? (
+            <>
+              <ConfigReloadNotice />
+              <div className='flex justify-end'>
+                <Button
+                  disabled={busy || !changed || validationError !== null}
+                  onClick={() => setReviewOpen(true)}
+                >
+                  {busy ? 'Publishing…' : 'Save and publish'}
+                </Button>
+              </div>
+            </>
+          ) : null}
         </div>
       ) : null}
       {mode === 'external' ? (
@@ -148,7 +158,7 @@ export function Configuration({
           </AlertDescription>
         </Alert>
       ) : null}
-      {reviewOpen ? (
+      {reviewOpen && canUpdate ? (
         <AppDialog
           wide
           title='Review configuration changes'

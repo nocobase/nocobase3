@@ -246,7 +246,23 @@ export class KnexSchemaAdapter implements SchemaAdapter {
         this.buildConstraint(table, operation.constraint);
         break;
       case 'dropConstraint':
-        table.dropForeign([], operation.name);
+        switch (operation.constraintType) {
+          case 'primary':
+            table.dropPrimary(operation.name);
+            break;
+          case 'unique':
+            table.dropUnique([], operation.name);
+            break;
+          case 'check':
+            table.dropChecks(operation.name);
+            break;
+          case 'foreignKey':
+          case undefined:
+            table.dropForeign([], operation.name);
+            break;
+          default:
+            assertNever(operation.constraintType);
+        }
         break;
       default:
         assertNever(operation);

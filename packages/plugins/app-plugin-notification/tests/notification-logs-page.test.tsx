@@ -29,8 +29,63 @@ describe('NotificationLogsPage', () => {
     expect(await screen.findByText('No deliveries yet')).toBeInTheDocument();
     expect(screen.getByText('Notification logs')).toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: 'Send test notification' }),
-    ).not.toBeInTheDocument();
+      screen.getByRole('button', { name: 'Send test notification' }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Send test notification' }),
+    );
+    expect(
+      await screen.findByText('No enabled Providers are configured.'),
+    ).toBeInTheDocument();
+  });
+
+  it('keeps the send button visible when test targets cannot be loaded', async () => {
+    notification.listLogs.mockResolvedValue([]);
+    notification.listTestTargets.mockRejectedValue(
+      new Error('Notification test send permission is required.'),
+    );
+
+    render(<NotificationLogsPage />);
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Send test notification' }),
+    );
+
+    expect(
+      await screen.findByText('Notification test send permission is required.'),
+    ).toBeInTheDocument();
+  });
+
+  it('presents a single Provider as a user-facing delivery method', async () => {
+    notification.listLogs.mockResolvedValue([]);
+    notification.listTestTargets.mockResolvedValue([
+      {
+        channel: { type: 'in-app', label: 'In-app' },
+        provider: {
+          name: 'default',
+          type: 'database',
+          label: 'Built-in',
+        },
+        fields: [],
+      },
+    ]);
+
+    render(<NotificationLogsPage />);
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Send test notification' }),
+    );
+    const methodSelect = await screen.findByRole('combobox', {
+      name: 'Delivery method',
+    });
+    fireEvent.change(methodSelect, {
+      target: { value: 'in-app:default:database' },
+    });
+
+    expect(methodSelect).toHaveDisplayValue('In-app (Built-in)');
+    expect(screen.queryByText(/default/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Database/)).not.toBeInTheDocument();
   });
 
   it('expands provider attempts for a delivery', async () => {
@@ -85,6 +140,67 @@ describe('NotificationLogsPage', () => {
     ).toHaveTextContent('1');
   });
 
+  it('shows user-facing labels for a single Provider in recent notifications', async () => {
+    notification.listTestTargets.mockResolvedValue([
+      {
+        channel: { type: 'in-app', label: 'In-app' },
+        provider: {
+          name: 'default',
+          type: 'database',
+          label: 'Built-in',
+        },
+        fields: [],
+      },
+    ]);
+    notification.listLogs.mockResolvedValue([
+      {
+        log: {
+          id: 'notification-1',
+          sourceType: 'notification-test',
+          status: 'completed',
+          createdAt: '2026-08-28T07:00:00.000Z',
+          updatedAt: '2026-08-28T07:00:01.000Z',
+        },
+        deliveries: [
+          {
+            delivery: {
+              id: 'delivery-1',
+              channel: 'in-app',
+              providerName: 'default',
+              providerType: 'database',
+              attemptCount: 1,
+              status: 'completed',
+              createdAt: '2026-08-28T07:00:00.000Z',
+              updatedAt: '2026-08-28T07:00:01.000Z',
+            },
+            attempts: [
+              {
+                id: 'attempt-1',
+                sequence: 1,
+                providerName: 'default',
+                providerType: 'database',
+                status: 'completed',
+                startedAt: '2026-08-28T07:00:00.000Z',
+              },
+            ],
+            retryAudits: [],
+          },
+        ],
+      },
+    ]);
+
+    render(<NotificationLogsPage />);
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Expand notification' }),
+    );
+
+    expect(await screen.findByText('In-app')).toBeInTheDocument();
+    expect(screen.getAllByText('Built-in')).toHaveLength(2);
+    expect(screen.queryByText('default')).not.toBeInTheDocument();
+    expect(screen.queryByText('database')).not.toBeInTheDocument();
+  });
+
   it('sends a test notification through a selected Provider and refreshes logs', async () => {
     notification.listLogs.mockResolvedValue([]);
     notification.listTestTargets.mockResolvedValue([
@@ -127,15 +243,15 @@ describe('NotificationLogsPage', () => {
       await screen.findByRole('button', { name: 'Send test notification' }),
     );
     const providerSelect = await screen.findByRole('combobox', {
-      name: 'Channel and Provider',
+      name: 'Delivery method',
     });
-    expect(providerSelect).toHaveDisplayValue('Select a Channel and Provider');
+    expect(providerSelect).toHaveDisplayValue('Select a delivery method');
     expect(screen.getByRole('group', { name: 'Email' })).toBeInTheDocument();
     fireEvent.change(providerSelect, { target: { value: 'email:smtp:smtp' } });
     expect(
       providerSelect.compareDocumentPosition(screen.getByLabelText('Title')),
     ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-    expect(providerSelect).toHaveDisplayValue('smtp (SMTP)');
+    expect(providerSelect).toHaveDisplayValue('Email (SMTP)');
     expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
     fireEvent.change(screen.getByRole('textbox', { name: 'Recipient' }), {
       target: { value: 'recipient@example.com' },

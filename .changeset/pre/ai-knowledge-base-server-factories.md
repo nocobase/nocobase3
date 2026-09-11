@@ -1,5 +1,4 @@
 ---
-'@nocobase/app-plugin-ai-knowledge-base': patch
 '@nocobase/app-template-default': patch
 ---
 

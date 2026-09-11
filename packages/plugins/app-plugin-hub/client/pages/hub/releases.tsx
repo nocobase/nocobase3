@@ -10,11 +10,13 @@ import { formatDate, formatBytes } from './utils.js';
 export function Releases({
   app,
   selected,
+  canUpload,
   onSelect,
   onUpload,
 }: {
   readonly app: AppDetail;
   readonly selected: string | undefined;
+  readonly canUpload: boolean;
   readonly onSelect: (id: string) => void;
   readonly onUpload: () => void;
 }): ReactElement {
@@ -27,11 +29,13 @@ export function Releases({
             Upload and inspect immutable release artifacts for this application.
           </p>
         </div>
-        <div className='flex gap-2'>
-          <Button onClick={onUpload} variant='outline'>
-            <CloudUpload className='size-4' /> Upload release
-          </Button>
-        </div>
+        {canUpload ? (
+          <div className='flex gap-2'>
+            <Button onClick={onUpload} variant='outline'>
+              <CloudUpload className='size-4' /> Upload release
+            </Button>
+          </div>
+        ) : null}
       </div>
       <div className='overflow-hidden rounded-xl border'>
         {app.releases.length ? (

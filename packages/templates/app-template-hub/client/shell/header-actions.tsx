@@ -1,4 +1,4 @@
-import { MonitorCog, Settings } from 'lucide-react';
+import { MonitorCog } from 'lucide-react';
 import type { ReactElement } from 'react';
 import { Link } from 'react-router';
 
@@ -24,8 +24,8 @@ export function HeaderActions({
 }: HeaderActionsProps): ReactElement {
   return (
     <div className='flex shrink-0 items-center gap-2'>
-      {/* The dev entry sits left of settings and exists only while developing: a production build evaluates this to
-          false and drops the link along with the whole dev surface it points at. */}
+      {/* The dev entry exists only while developing: a production build evaluates this to false and drops the link
+          along with the whole dev surface it points at. */}
       {import.meta.env.DEV && surface !== 'dev' ? (
         <Link
           aria-label='Dev tools'
@@ -34,16 +34,6 @@ export function HeaderActions({
           to='/dev'
         >
           <MonitorCog className='size-5' />
-        </Link>
-      ) : null}
-      {surface !== 'settings' ? (
-        <Link
-          aria-label='Settings'
-          className={ACTION_LINK_CLASS}
-          title='Settings'
-          to='/settings'
-        >
-          <Settings className='size-5' />
         </Link>
       ) : null}
       <ThemeSettings />

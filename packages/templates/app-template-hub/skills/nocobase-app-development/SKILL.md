@@ -39,15 +39,14 @@ Build the feature in the application. Do not run a plugin generator, create a `p
 
 This application ships with plugins that already implement whole categories of requirement, each publishing its own Skill under `.agents/skills/` (run `pnpm plugin:skills:sync` if that directory is missing or stale):
 
-| The requirement sounds like                              | Read the Skill for                    |
-| -------------------------------------------------------- | ------------------------------------- |
-| Approvals, multi-step processes, "when X happens then Y" | `@nocobase/app-plugin-workflow`       |
-| Email, IM, or in-app messages                            | `@nocobase/app-plugin-notification`   |
-| Roles, permissions, per-user or per-record access        | `@nocobase/app-plugin-authorization`  |
-| Sign-in, registration, sessions                          | `@nocobase/app-plugin-authentication` |
-| Translated text and language switching                   | `@nocobase/app-plugin-i18n`           |
+| The requirement sounds like                               | Read the Skill for                    |
+| --------------------------------------------------------- | ------------------------------------- |
+| Roles, permissions, per-user or per-record access         | `@nocobase/app-plugin-authorization`  |
+| Sign-in, registration, sessions                           | `@nocobase/app-plugin-authentication` |
+| User administration and application-owned role assignment | `@nocobase/app-plugin-users`          |
+| Translated text and language switching                    | `@nocobase/app-plugin-i18n`           |
 
-Read the relevant Skill before writing the feature. Implementing a permission system, a notification sender, or a scheduler by hand when a registered plugin provides one is the most expensive mistake available here.
+Read the relevant Skill before writing the feature. Implementing a capability by hand when a registered plugin provides one is the most expensive mistake available here. Workflow and end-user notification plugins are intentionally not registered in the Hub template.
 
 Bulk plugin Skills synchronization reads the explicit `client/plugins.ts`, `server/plugins.ts`, and `cli/plugins.ts` registrations. A package used only through imported components can have its Skills synchronized explicitly with the CLI plugin option.
 
@@ -128,3 +127,5 @@ pnpm build
 ```
 
 Verify observable behavior, not just that the commands passed. [Testing and verification](references/testing.md) lists what to check for each kind of change.
+
+Application startup defaults belong in `config.yml` under `client.app`: `defaultLocale`, `defaultColorScheme`, and `defaultTheme`. Valid browser-local choices take precedence. See the i18n and themes references for fallback behavior.

@@ -12,8 +12,26 @@ Deploy and rollback requests persist a queued operation and return HTTP 202. The
 
 During Hub startup, only managed Host availability is awaited. Restoring the complete deployment set runs in the background, so eager App activation does not delay Hub readiness. App Host currently reconciles that startup set through its existing serial operation queue; this bounds startup load and preserves deployment revision ordering.
 
-The management API is restricted to system administrators. The browser page is available at `/hub`.
-The Hub template redirects its root route to `/hub` and uses Applications as its primary navigation entry. The plugin declares that entry, including its translated title and icon, in `client/routes.ts`; it does not register a menu ServiceProvider.
+The Client plugin defaults to its compatible `/hub` page. Applications can
+configure the Client factory with `applicationsPath` and `rolesPath` to expose
+a control-plane console. The Hub template uses
+`/apps`, `/users`, and `/roles`; the roles page is a read-only product view of
+the Hub-owned grants rather than the generic Permission Set editor.
+
+Hub owns three protected Permission Sets: `hub-administrator`, `hub-operator`, and `hub-viewer`. Every management API
+checks a `hub.app`, `hub.host`, or `user` resource action on the server rather
+than checking a role name. Administrators manage applications and users,
+Operators manage application releases and runtime operations, and Viewers have
+read-only access without raw configuration or configuration templates. Existing
+System Administrators receive the Hub Administrator role during upgrade, but
+the two roles do not implicitly inherit from one another at runtime.
+The Hub template redirects its root and legacy `/hub` route to `/apps` and uses
+Applications, User management, and Roles & permissions as its primary
+navigation. These entries are declared on their owning routes and do not use
+Refine resources as menu metadata. The template
+does not expose the ordinary App Settings centre, notification centre,
+workflows, or example plugins. The notification provider remains available for
+in-page operation feedback.
 
 This version uses an in-process deployment runner rather than a separate durable queue worker. If Hub restarts during an operation, the persisted queued/deploying record is marked failed and can be retried manually. It does not yet provide remote Hosts, multiple Hosts or environments, configuration publications, external provider integration, or database migration rollback. Start-first replacement is not a strict zero-downtime guarantee for long-lived connections or incompatible database migrations. Database migration and seed behavior remains part of App startup.
 
@@ -65,7 +83,7 @@ loads only its overview. Releases and deployment history load when their tabs
 are selected; deployment rows include the release version and checksum without
 requiring the Releases tab's dataset. Configuration loads only for Configuration,
 Resources, or deployment dialogs. Deployment polling refreshes the overview and
-the visible deployment history, not inactive tabs. Histories remain unpaginated.
+the visible deployment history, not inactive tabs.
 
 ```bash
 pnpm --filter @nocobase/app-plugin-hub lint

@@ -42,6 +42,7 @@ export function Catalog({
   view,
   onQuery,
   onView,
+  canCreate,
   onCreate,
   onSelect,
 }: {
@@ -54,6 +55,7 @@ export function Catalog({
   readonly view: ViewMode;
   readonly onQuery: (value: string) => void;
   readonly onView: (value: ViewMode) => void;
+  readonly canCreate: boolean;
   readonly onCreate: () => void;
   readonly onSelect: (id: string) => void;
 }): ReactElement {
@@ -106,9 +108,11 @@ export function Catalog({
             <RefreshCw className={refreshing ? 'animate-spin' : undefined} />
             Refresh
           </Button>
-          <Button className='h-10' onClick={onCreate}>
-            <Plus className='size-4' /> New application
-          </Button>
+          {canCreate ? (
+            <Button className='h-10' onClick={onCreate}>
+              <Plus className='size-4' /> New application
+            </Button>
+          ) : null}
         </div>
       </div>
       {loading ? (
@@ -162,7 +166,7 @@ export function Catalog({
               : 'Create an application and upload its first release.'
           }
           action={
-            total ? undefined : (
+            total || !canCreate ? undefined : (
               <Button className='mt-5' onClick={onCreate}>
                 <Plus className='size-4' /> New application
               </Button>

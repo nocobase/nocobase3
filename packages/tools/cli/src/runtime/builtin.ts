@@ -2,6 +2,7 @@
 //
 // They are imported rather than discovered from the directory tree because the assembled CLI merges them with app and
 // plugin commands into one map before oclif sees any of them.
+import PluginCliHooks from '../commands/plugin/cli-hooks.ts';
 import PluginInspect from '../commands/plugin/inspect.ts';
 import PluginRegister from '../commands/plugin/register.ts';
 import PluginSkillsSync from '../commands/plugin/skills/sync.ts';
@@ -12,6 +13,7 @@ import { PLUGIN_TOPIC } from './assemble.ts';
 
 export const builtinCommands: Readonly<Record<string, AppCliCommand>> =
   Object.freeze({
+    'plugin:cli-hooks': PluginCliHooks,
     'plugin:inspect': PluginInspect,
     'plugin:register': PluginRegister,
     'plugin:skills:sync': PluginSkillsSync,

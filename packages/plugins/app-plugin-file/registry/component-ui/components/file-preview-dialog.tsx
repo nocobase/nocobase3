@@ -4,24 +4,18 @@ import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import type {
   FilePreviewDialogProps,
   FileRecord,
-  FilesClient,
   FileUiLabels,
-} from '@nocobase/app-plugin-file/client/types';
+} from '../types';
 import {
   resolveFilePreviewKind,
   type FilePreviewKind,
-} from '@nocobase/app-plugin-file/client';
+} from '../lib/file-preview';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import {
-  fileUrlCredentials,
-  publicDownloadUrl,
-  resolveSafeFileUrl,
-} from '../lib/file-url';
+import { fileUrlCredentials, resolveSafeFileUrl } from '../lib/file-url';
 import { FilePreviewContent } from './previewers/file-preview-content';
 
 export function FilePreviewDialog({
-  client,
   files,
   initialIndex = 0,
   open,
@@ -35,7 +29,6 @@ export function FilePreviewDialog({
   return (
     <OpenFilePreviewDialog
       key={`${normalizedIndex}:${files.map((file) => file.id).join(':')}`}
-      client={client}
       files={files}
       initialIndex={normalizedIndex}
       onOpenChange={onOpenChange}
@@ -47,7 +40,6 @@ export function FilePreviewDialog({
 }
 
 interface OpenFilePreviewDialogProps {
-  readonly client: FilesClient;
   readonly files: readonly FileRecord[];
   readonly initialIndex: number;
   readonly onOpenChange: (open: boolean) => void;
@@ -57,7 +49,6 @@ interface OpenFilePreviewDialogProps {
 }
 
 function OpenFilePreviewDialog({
-  client,
   files,
   initialIndex,
   onOpenChange,
@@ -78,9 +69,7 @@ function OpenFilePreviewDialog({
         <div className='flex items-center justify-between gap-3 pr-10'>
           <div className='min-w-0'>
             <DialogTitle className='truncate'>{file.filename}</DialogTitle>
-            <p className='text-sm text-muted-foreground'>
-              {file.public ? 'Public' : 'Private'} · {file.mimeType}
-            </p>
+            <p className='text-sm text-muted-foreground'>{file.mimeType}</p>
           </div>
           <div className='flex gap-1'>
             {files.length > 1 ? (
@@ -118,7 +107,7 @@ function OpenFilePreviewDialog({
                 variant='ghost'
                 aria-label={`${downloadLabel}: ${file.filename}`}
                 onClick={() =>
-                  void downloadFile(client, file).catch((error: unknown) =>
+                  void downloadFile(file).catch((error: unknown) =>
                     reportDownloadError(onError, error),
                   )
                 }
@@ -129,13 +118,12 @@ function OpenFilePreviewDialog({
           </div>
         </div>
         <PreviewBody
-          key={`${file.id}:${file.updatedAt}:${file.contentUrl}:${file.public}`}
-          client={client}
+          key={`${file.id}:${file.updatedAt}:${file.contentUrl}`}
           file={file}
           onDownload={
             allowDownload
               ? () =>
-                  void downloadFile(client, file).catch((error: unknown) =>
+                  void downloadFile(file).catch((error: unknown) =>
                     reportDownloadError(onError, error),
                   )
               : undefined
@@ -146,13 +134,8 @@ function OpenFilePreviewDialog({
   );
 }
 
-async function downloadFile(
-  client: FilePreviewDialogProps['client'],
-  file: FileRecord,
-): Promise<void> {
-  const raw = file.public
-    ? publicDownloadUrl(file.contentUrl)
-    : (await client.createAccessUrl(file.id)).url;
+async function downloadFile(file: FileRecord): Promise<void> {
+  const raw = file.contentUrl;
   const url = raw ? resolveSafeFileUrl(raw) : undefined;
   if (!url) throw new Error('File URL is not allowed.');
   const link = document.createElement('a');
@@ -172,49 +155,52 @@ function reportDownloadError(
 }
 
 function PreviewBody({
-  client,
   file,
   onDownload,
 }: {
-  client: FilePreviewDialogProps['client'];
   file: FileRecord;
   onDownload?: () => void;
 }): ReactElement {
-  const initialUrl = file.public
-    ? resolveSafeFileUrl(file.contentUrl)
-    : undefined;
-  const [url, setUrl] = useState<string | undefined>(() => initialUrl);
+  const sourceUrl = resolveSafeFileUrl(file.contentUrl ?? '');
   const [text, setText] = useState<string>();
+  const [blobUrl, setBlobUrl] = useState<string>();
   const [error, setError] = useState<string | undefined>(() =>
-    file.public && !initialUrl ? 'File URL is not allowed.' : undefined,
+    !sourceUrl ? 'File URL is missing or not allowed.' : undefined,
   );
   const kind: FilePreviewKind = useMemo(
     () => resolveFilePreviewKind(file),
     [file],
   );
+  // The content route downloads PDFs as attachments; a local blob can be embedded.
   useEffect(() => {
-    if (file.public) return undefined;
-    let active = true;
-    void client
-      .createAccessUrl(file.id)
-      .then((access) => {
-        if (!active) return;
-        const accessUrl = resolveSafeFileUrl(access.url);
-        if (accessUrl) setUrl(accessUrl);
-        else setError('File URL is not allowed.');
+    if (!sourceUrl || kind !== 'pdf') return undefined;
+    const controller = new AbortController();
+    let objectUrl: string | undefined;
+    void fetch(sourceUrl, {
+      credentials: fileUrlCredentials(sourceUrl),
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Unable to load the PDF preview.');
+        const blob = await response.blob();
+        if (controller.signal.aborted) return;
+        objectUrl = URL.createObjectURL(blob);
+        setBlobUrl(objectUrl);
       })
       .catch((cause: unknown) => {
-        if (active)
+        if (!controller.signal.aborted)
           setError(
             cause instanceof Error
               ? cause.message
-              : 'Unable to create a file access URL.',
+              : 'Unable to load the PDF preview.',
           );
       });
     return () => {
-      active = false;
+      controller.abort();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [client, file]);
+  }, [sourceUrl, kind]);
+  const url = kind === 'pdf' ? blobUrl : sourceUrl;
   useEffect(() => {
     if (!url || !['text', 'markdown'].includes(kind)) return undefined;
     const controller = new AbortController();

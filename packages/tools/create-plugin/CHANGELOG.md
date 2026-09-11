@@ -1,5 +1,11 @@
 # @nocobase/create-plugin
 
+## 0.1.0-beta.5
+
+### Patch Changes
+
+- 1d042c0: Support recursive page routes and navigation groups across App, Settings, and Dev. Render application menus from route navigation instead of Refine resources, preserve parent access checks, and migrate template and example navigation. Refine resources remain available for CRUD integration.
+
 ## 0.1.0-beta.4
 
 ### Patch Changes

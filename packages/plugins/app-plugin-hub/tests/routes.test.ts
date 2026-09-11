@@ -7,6 +7,7 @@ import {
   type AppAuthorization,
 } from '@nocobase/app-plugin-authorization';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
+import { AuthorizationDeniedError } from '@nocobase/authorization/core';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -49,7 +50,7 @@ describe('@nocobase/app-plugin-hub API routes', () => {
     expect(listApps).not.toHaveBeenCalled();
   });
 
-  it('rejects authenticated users without system administrator access', async () => {
+  it('rejects authenticated users without Hub access', async () => {
     const listApps = vi.fn<HubService['listApps']>();
     const router = await apiRoutes.createRouter(
       createApplication('member', listApps),
@@ -61,7 +62,7 @@ describe('@nocobase/app-plugin-hub API routes', () => {
     expect(listApps).not.toHaveBeenCalled();
   });
 
-  it('serves Hub data to system administrators', async () => {
+  it('serves Hub data to Hub administrators', async () => {
     const listApps = vi.fn<HubService['listApps']>().mockResolvedValue([]);
     const router = await apiRoutes.createRouter(
       createApplication('administrator', listApps),
@@ -72,6 +73,83 @@ describe('@nocobase/app-plugin-hub API routes', () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ data: [] });
     expect(listApps).toHaveBeenCalledOnce();
+  });
+
+  it('returns only the protected Hub role definitions to user administrators', async () => {
+    const router = await apiRoutes.createRouter(
+      createApplication(
+        'administrator',
+        vi.fn<HubService['listApps']>().mockResolvedValue([]),
+        [
+          {
+            key: 'hub-administrator',
+            title: 'Hub administrator',
+            grants: [
+              {
+                resource: { type: 'user', id: '*' },
+                actions: [{ action: 'read' }, { action: 'create' }],
+              },
+            ],
+          },
+          {
+            key: 'unrelated-role',
+            title: 'Unrelated',
+            grants: [],
+          },
+          {
+            key: 'hub-viewer',
+            title: 'Hub viewer',
+            grants: [
+              {
+                resource: { type: 'hub.app', id: '*' },
+                actions: [{ action: 'read' }],
+              },
+            ],
+          },
+        ],
+      ),
+    );
+
+    const response = await router.request('/hub/roles');
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      data: [
+        {
+          key: 'hub-administrator',
+          title: 'Hub administrator',
+          grants: [
+            {
+              resource: { type: 'user', id: '*' },
+              actions: ['read', 'create'],
+            },
+          ],
+        },
+        {
+          key: 'hub-viewer',
+          title: 'Hub viewer',
+          grants: [
+            {
+              resource: { type: 'hub.app', id: '*' },
+              actions: ['read'],
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  it('rejects the Hub role matrix for users without user-read access', async () => {
+    const router = await apiRoutes.createRouter(
+      createApplication(
+        'member',
+        vi.fn<HubService['listApps']>().mockResolvedValue([]),
+      ),
+    );
+
+    const response = await router.request('/hub/roles');
+
+    expect(response.status).toBe(403);
   });
 
   it('keeps the Release config example out of lists and reads it on demand', async () => {
@@ -316,6 +394,14 @@ function createApplication(
   service:
     | HubService['listApps']
     | (Partial<HubService> & Pick<HubService, 'listApps'>),
+  permissionSets: readonly {
+    readonly key: string;
+    readonly title?: string;
+    readonly grants: readonly {
+      readonly resource: { readonly type: string; readonly id: string };
+      readonly actions: readonly { readonly action: string }[];
+    }[];
+  }[] = [],
 ): AppPluginApplication {
   const container = new ServiceContainer();
   container.instance(authenticationToken, {
@@ -327,15 +413,25 @@ function createApplication(
     },
   } as Auth);
   container.instance(authorizationToken, {
+    permissionSets: { list: async () => permissionSets },
     middleware: () => async (context, next) => {
       context.set('authz', {
         identity: { principal: { type: 'user', id: role } },
+        require: async () => {
+          if (role !== 'administrator') {
+            throw new AuthorizationDeniedError({
+              effect: 'deny',
+              reasons: [
+                {
+                  code: 'HUB_ACCESS_DENIED',
+                  message: 'Hub access is not allowed',
+                },
+              ],
+            });
+          }
+        },
       });
       await next();
-    },
-    permissionSets: {
-      getEffective: async () =>
-        role === 'administrator' ? [{ key: 'system-administrator' }] : [],
     },
   } as AppAuthorization);
   container.instance(

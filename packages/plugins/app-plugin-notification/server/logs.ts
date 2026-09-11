@@ -2,8 +2,10 @@ import type {
   NotificationAttemptRecord,
   NotificationDeliveryRecord,
   NotificationLogRecord,
+  NotificationRetryAuditRecord,
   NotificationStore,
 } from './store.js';
+import { summarizeNotificationDeliveries } from './store.js';
 
 export interface NotificationLogDetails {
   readonly log: Omit<NotificationLogRecord, 'messageSnapshot'>;
@@ -13,6 +15,7 @@ export interface NotificationLogDetails {
       'recipientSnapshot' | 'messageSnapshot' | 'leaseToken' | 'leaseExpiresAt'
     >;
     readonly attempts: readonly NotificationAttemptRecord[];
+    readonly retryAudits: readonly NotificationRetryAuditRecord[];
   }[];
 }
 
@@ -45,13 +48,29 @@ export class NotificationLogs {
       deliveryRecords.map(
         async (
           delivery,
-        ): Promise<NotificationLogDetails['deliveries'][number]> => ({
-          delivery: redactDelivery(delivery),
-          attempts: await this.store.listAttempts(delivery.id),
-        }),
+        ): Promise<NotificationLogDetails['deliveries'][number]> => {
+          const [attempts, retryAudits] = await Promise.all([
+            this.store.listAttempts(delivery.id),
+            this.store.listRetryAudits(delivery.id),
+          ]);
+          return {
+            delivery: redactDelivery(delivery),
+            attempts,
+            retryAudits,
+          };
+        },
       ),
     );
-    return { log: redactLog(log), deliveries };
+    const currentLog = {
+      ...log,
+      status: summarizeNotificationDeliveries(deliveryRecords),
+      updatedAt: deliveryRecords.reduce(
+        (latest, delivery) =>
+          delivery.updatedAt > latest ? delivery.updatedAt : latest,
+        log.updatedAt,
+      ),
+    };
+    return { log: redactLog(currentLog), deliveries };
   }
 }
 

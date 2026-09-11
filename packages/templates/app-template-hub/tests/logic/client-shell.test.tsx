@@ -1,10 +1,15 @@
 import type { AppClientRegisteredRoute } from '@nocobase/app-client/plugins';
-import { Refine, type AuthProvider } from '@refinedev/core';
-import { fireEvent, render, screen } from '@testing-library/react';
+import {
+  Refine,
+  type AccessControlProvider,
+  type AuthProvider,
+} from '@refinedev/core';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ComponentType, ReactElement } from 'react';
 import { Outlet, MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import applicationRoutes from '../../client/routes.ts';
 import { AppRouter } from '../../client/routing/app-router.tsx';
 import { AppThemeProvider } from '../../client/theme/index.ts';
 
@@ -43,9 +48,12 @@ describe('application shell', () => {
       await screen.findByRole('button', { name: 'Open account menu' }),
     ).toHaveAttribute('title', 'Alice');
     expect(screen.getByRole('button', { name: 'Appearance' })).toBeVisible();
-    expect(screen.getByRole('link', { name: 'Settings' })).toBeVisible();
+    expect(
+      screen.queryByRole('link', { name: 'Settings' }),
+    ).not.toBeInTheDocument();
     expect(screen.getByText('AI builds freely.')).toBeVisible();
-    expect(screen.getByText('Hub Template v0.0.0')).toBeVisible();
+    expect(screen.getByText('NocoBase Hub v0.0.0')).toBeVisible();
+    expect(screen.getByText('Hub console')).toBeVisible();
     expect(
       screen.getByRole('heading', { name: 'App client is ready' }),
     ).toBeVisible();
@@ -158,21 +166,182 @@ describe('application shell', () => {
     ).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Appearance' })).toBeVisible();
   });
+
+  it('redirects ordinary App settings paths into the Hub console', async () => {
+    renderApplication('/settings/users', createAuthProvider(true), [
+      createRoute('apps', '/apps', 'required', ApplicationsPage),
+    ]);
+
+    expect(
+      await screen.findByRole('heading', { name: 'Applications page' }),
+    ).toBeVisible();
+  });
+
+  it('redirects the authorized Hub root through the Hub access rule', async () => {
+    const can = vi.fn().mockResolvedValue({ can: true });
+    const rootDefinition = applicationRoutes[0].routes[0];
+    renderApplication(
+      '/',
+      createAuthProvider(true),
+      [
+        {
+          ...rootDefinition,
+          auth: rootDefinition.auth ?? 'required',
+          id: '@nocobase/app-template-hub:applications-root',
+          packageName: '@nocobase/app-template-hub',
+          source: 'application',
+        },
+        {
+          ...createRoute('apps', '/apps', 'required', ApplicationsPage),
+          access: { resource: 'hub', action: 'access' },
+        },
+      ],
+      { accessControlProvider: { can } },
+    );
+
+    expect(
+      await screen.findByRole('heading', { name: 'Applications page' }),
+    ).toBeVisible();
+    expect(can).toHaveBeenCalledWith(
+      expect.objectContaining({ resource: 'hub', action: 'access' }),
+    );
+    expect(can).not.toHaveBeenCalledWith(
+      expect.objectContaining({ resource: 'applications-root' }),
+    );
+  });
+
+  it('shows a protected navigation entry as selected when access is allowed', async () => {
+    renderApplication(
+      '/users',
+      createAuthProvider(true),
+      [
+        createRoute(
+          'users',
+          '/users',
+          'required',
+          UsersPage,
+          'plugin',
+          'User management',
+          true,
+        ),
+      ],
+      {
+        accessControlProvider: {
+          can: vi.fn().mockResolvedValue({ can: true }),
+        },
+      },
+    );
+
+    expect(
+      await screen.findByRole('link', { name: 'User management' }),
+    ).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByText('Users page')).toBeVisible();
+  });
+
+  it('never discloses a protected navigation entry when access is denied', async () => {
+    const can = vi.fn().mockResolvedValue({ can: false });
+    renderApplication(
+      '/users',
+      createAuthProvider(true),
+      [
+        createRoute(
+          'users',
+          '/users',
+          'required',
+          UsersPage,
+          'plugin',
+          'User management',
+          true,
+        ),
+      ],
+      {
+        accessControlProvider: { can },
+      },
+    );
+
+    expect(
+      screen.queryByRole('link', { name: 'User management' }),
+    ).not.toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Access denied' }),
+    ).toBeVisible();
+    expect(can).toHaveBeenCalledWith(
+      expect.objectContaining({ resource: 'users', action: 'access' }),
+    );
+    expect(
+      screen.queryByRole('link', { name: 'User management' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('orders Hub navigation and puts users before roles', async () => {
+    renderApplication(
+      '/users',
+      createAuthProvider(true),
+      [
+        createRoute(
+          'roles',
+          '/roles',
+          'required',
+          RolesPage,
+          'plugin',
+          'Roles & permissions',
+        ),
+        createRoute(
+          'applications',
+          '/apps',
+          'required',
+          ApplicationsPage,
+          'plugin',
+          'Applications',
+        ),
+        createRoute(
+          'users',
+          '/users',
+          'required',
+          UsersPage,
+          'plugin',
+          'User management',
+        ),
+      ],
+      {
+        accessControlProvider: {
+          can: vi.fn().mockResolvedValue({ can: true }),
+        },
+      },
+    );
+
+    const navigation = await screen.findByRole('navigation', {
+      name: 'Application navigation',
+    });
+    await waitFor(() =>
+      expect(
+        Array.from(navigation.querySelectorAll('a')).map((link) =>
+          link.textContent?.trim(),
+        ),
+      ).toEqual(['Applications', 'User management', 'Roles & permissions']),
+    );
+  });
 });
 
 function renderApplication(
   initialEntry: string,
   authProvider: AuthProvider,
   routes: readonly AppClientRegisteredRoute[] = [],
+  options: {
+    readonly accessControlProvider?: AccessControlProvider;
+  } = {},
 ): void {
-  const clientRoutes = [
-    createRoute('home', '/', 'required', HomePage, 'application'),
-    ...routes,
-  ];
+  const clientRoutes = routes.some(({ path }) => path === '/')
+    ? [...routes]
+    : [
+        createRoute('home', '/', 'required', HomePage, 'application'),
+        ...routes,
+      ];
   render(
     <MemoryRouter initialEntries={[initialEntry]}>
       <AppThemeProvider>
         <Refine
+          accessControlProvider={options.accessControlProvider}
           authProvider={authProvider}
           dataProvider={{
             getList: vi.fn(),
@@ -223,6 +392,8 @@ function createRoute(
   auth: AppClientRegisteredRoute['auth'],
   Component: ComponentType,
   source: AppClientRegisteredRoute['source'] = 'plugin',
+  navigationTitle?: string,
+  protectedRoute: boolean = false,
 ): AppClientRegisteredRoute {
   const packageName =
     source === 'application'
@@ -236,6 +407,8 @@ function createRoute(
     packageName,
     path,
     source,
+    ...(navigationTitle ? { navigation: { title: navigationTitle } } : {}),
+    ...(protectedRoute ? { access: { resource: name, action: 'access' } } : {}),
   };
 }
 
@@ -245,4 +418,16 @@ function HomePage(): ReactElement {
 
 function GuestPage(): ReactElement {
   return <div>Guest login page</div>;
+}
+
+function UsersPage(): ReactElement {
+  return <div>Users page</div>;
+}
+
+function ApplicationsPage(): ReactElement {
+  return <h2>Applications page</h2>;
+}
+
+function RolesPage(): ReactElement {
+  return <h2>Roles page</h2>;
 }

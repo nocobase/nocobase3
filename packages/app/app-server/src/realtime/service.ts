@@ -66,6 +66,19 @@ export function createRealtimeService(
       connections.delete(stored.id);
     },
 
+    disconnectUser(userId) {
+      let disconnected = 0;
+      for (const connection of Array.from(connections.values())) {
+        if (connection.principal?.userId !== userId) continue;
+        if (connection.ws.readyState === WEB_SOCKET_OPEN) {
+          connection.ws.close(CLOSE_GOING_AWAY, 'account session revoked');
+        }
+        service.disconnect(connection);
+        disconnected += 1;
+      }
+      return disconnected;
+    },
+
     subscribe(connection, topic) {
       validateRealtimeTopic(topic);
 

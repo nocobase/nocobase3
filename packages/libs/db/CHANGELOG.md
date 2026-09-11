@@ -1,5 +1,11 @@
 # @nocobase/db
 
+## 1.0.0-beta.4
+
+### Patch Changes
+
+- 0a3fa83: Compile constraint removal according to the stored constraint type so unique, primary, check, and foreign-key constraints use the correct dialect operation.
+
 ## 1.0.0-beta.3
 
 ### Major Changes

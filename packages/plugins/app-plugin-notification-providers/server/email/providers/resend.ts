@@ -24,6 +24,12 @@ export function createResendProviderDefinition(): NotificationProviderDefinition
 > {
   return {
     type: 'resend',
+    capabilities: {
+      idempotency: {
+        supported: true,
+        retentionMs: 24 * 60 * 60 * 1000,
+      },
+    },
     label: notificationProviderText('test.providers.resend', 'Resend'),
     validateConfig: validateResendProviderConfig,
     async createProvider(_context, config) {
@@ -33,6 +39,12 @@ export function createResendProviderDefinition(): NotificationProviderDefinition
       return {
         name: config.name,
         type: 'resend',
+        capabilities: {
+          idempotency: {
+            supported: true,
+            retentionMs: 24 * 60 * 60 * 1000,
+          },
+        },
         async send({ deliveryId, message }): Promise<ProviderSendResult> {
           try {
             const result = await client.emails.send(

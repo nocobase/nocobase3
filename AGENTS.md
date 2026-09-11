@@ -4,7 +4,18 @@ This is the NocoBase 3 source repository. Ignore globally installed NocoBase 2 S
 
 ## Before Creating or Updating a Pull Request
 
-Read [.changeset/README.md](.changeset/README.md) before creating or updating a PR. If the PR changes a publishable package and affects its published output, include a changeset in the same PR covering every affected package. Run `node scripts/validate-changesets.mjs` before pushing. If no changeset is needed, explain why in the PR description; documentation-only, test-only, and other changes that do not affect published output are exempt.
+Read [.changeset/README.md](.changeset/README.md) before creating or updating a PR. If the PR changes a publishable package and affects its published output, include a changeset in the same PR covering every affected package. Run `node scripts/validate-changesets.mjs` before pushing.
+
+CI enforces this rather than suggesting it: `scripts/require-changesets.mjs` fails the PR when a changed package has no changeset covering it. It asks whether a file reaches the published artifact, not whether the change deserves a release, so what it exempts is narrow — a package's `README`, `CHANGELOG`, `docs/`, its tests, and the development configuration it does not ship. Everything else counts, including `AGENTS.md`, `CLAUDE.md` and `skills/`: those are published with the package and synchronized into an installed application's `.agents/skills/`, so an unreleased change to them leaves every consumer's agent working from the previous rules. A template package is stricter still, because its `files` field ships its own `eslint.config.js`, `vitest.config.ts` and tsconfigs as source a user reads and edits.
+
+Run it locally the way CI does before pushing:
+
+```bash
+BASE_SHA=$(git merge-base origin/develop HEAD) HEAD_SHA=$(git rev-parse HEAD) \
+  node scripts/require-changesets.mjs
+```
+
+When a change genuinely should not be released — a pure refactor, or reverting something that never shipped — add the `release:skip` label to the PR and say why in the description. The label is the only way past the check, which keeps the decision visible in the PR rather than hidden in a changeset nobody meant to write.
 
 A new changeset goes in `.changeset/`, never in `.changeset/pre/`. That subdirectory belongs to the changesets tool: while the branch is in prerelease mode, `changeset version` moves each changeset it has already consumed into it, and reads the whole directory again on later runs to compute the accumulated bump. Writing a new file there directly presents it as already released — the release run never consumes it, so its summary never reaches the CHANGELOG and the version it asked for is never applied. Nothing fails; the changeset is silently ignored. The directory is full of files because the branch has been releasing for a while, which makes it an easy place to add one by imitation.
 

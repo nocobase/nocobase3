@@ -80,6 +80,8 @@ export interface RealtimeService {
     context?: RealtimeConnectionContext,
   ): RealtimeConnection;
   disconnect(connection: RealtimeConnection): void;
+  /** Closes every active connection authenticated as the given user. */
+  disconnectUser(userId: string): number;
   subscribe(
     connection: RealtimeConnection,
     topic: string,

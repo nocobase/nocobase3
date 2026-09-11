@@ -4,7 +4,7 @@
     "link": "/get-started/"
   },
   {
-    "text": "和 AI 协作",
+    "text": "AI",
     "link": "/ai/"
   },
   {
@@ -12,11 +12,11 @@
     "link": "/tutorials/"
   },
   {
-    "text": "应用开发",
+    "text": "开发",
     "link": "/app/"
   },
   {
-    "text": "内置能力",
+    "text": "能力",
     "link": "/capabilities/"
   },
   {
@@ -28,11 +28,11 @@
     "link": "/reference/"
   },
   {
-    "text": "插件开发",
+    "text": "插件",
     "link": "/plugin-development/"
   },
   {
-    "text": "官网",
+    "text": "首页",
     "link": "https://www.nocobase.com/cn/"
   }
 ]

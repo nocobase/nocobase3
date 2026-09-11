@@ -32,6 +32,12 @@ describe('Resend Provider', () => {
     });
     const provider = await createProvider();
 
+    expect(provider.capabilities).toEqual({
+      idempotency: {
+        supported: true,
+        retentionMs: 86_400_000,
+      },
+    });
     await expect(provider.send(sendInput())).resolves.toEqual({
       status: 'accepted',
       providerMessageId: 'resend-message-1',

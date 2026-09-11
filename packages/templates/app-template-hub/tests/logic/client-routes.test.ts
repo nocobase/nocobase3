@@ -37,15 +37,22 @@ describe('app client routes', () => {
     expect(routeComponentOverrides).toEqual([]);
   });
 
-  it('declares application and settings route contributions', async () => {
+  it('redirects the root and legacy Hub path to Applications', async () => {
     expect(applicationRoutes).toHaveLength(2);
     expect(applicationRoutes[0]).toMatchObject({
       parent: 'app',
       routes: [
         {
+          access: { resource: 'hub', action: 'access' },
           auth: 'required',
           name: 'applications-root',
           path: '/',
+        },
+        {
+          access: { resource: 'hub', action: 'access' },
+          auth: 'required',
+          name: 'applications-legacy',
+          path: '/hub',
         },
       ],
     });

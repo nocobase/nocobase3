@@ -518,7 +518,13 @@ export class CollectionCompiler {
     }
 
     for (const constraint of changes.dropConstraints ?? []) {
-      operations.push({ type: 'dropConstraint', name: constraint });
+      operations.push({
+        type: 'dropConstraint',
+        name: constraint,
+        constraintType: current?.constraints?.find(
+          (candidate) => candidate.name === constraint,
+        )?.type,
+      });
     }
 
     return { type: 'alterTable', tableName, operations };

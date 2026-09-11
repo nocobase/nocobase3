@@ -1,18 +1,55 @@
 import {
   defineAppRoutes,
   type AppClientAppRoutesContribution,
+  type AppClientRouteDefinition,
 } from '@nocobase/app-client/plugins';
+import { Boxes, ShieldCheck } from 'lucide-react';
 
-import { Boxes } from 'lucide-react';
+import type { HubClientOptions } from './plugin.js';
 
-const routes: AppClientAppRoutesContribution = defineAppRoutes([
-  {
-    name: 'hub',
-    path: '/hub',
-    auth: 'required',
-    navigation: { title: 'navigation.applications', icon: Boxes },
-    componentLoader: () => import('./pages/hub-page.js'),
-  },
-]);
+export const HUB_APPLICATIONS_ACCESS = {
+  resource: 'hub',
+  action: 'access',
+} as const;
+export const HUB_USER_ACCESS = {
+  resource: 'users',
+  action: 'access',
+} as const;
 
-export default routes;
+export function createHubRoutes(
+  options: HubClientOptions = {},
+): AppClientAppRoutesContribution {
+  const routes: AppClientRouteDefinition[] = [
+    {
+      name: 'hub',
+      path: normalizeHubRoutePath(options.applicationsPath ?? '/hub'),
+      auth: 'required',
+      access: HUB_APPLICATIONS_ACCESS,
+      navigation: { title: 'navigation.applications', icon: Boxes },
+      componentLoader: () => import('./pages/hub-page.js'),
+    },
+  ];
+  if (options.rolesPath) {
+    routes.push({
+      name: 'hub-roles',
+      path: normalizeHubRoutePath(options.rolesPath),
+      auth: 'required',
+      access: HUB_USER_ACCESS,
+      navigation: { title: 'navigation.roles', icon: ShieldCheck },
+      componentLoader: () => import('./pages/roles-page.js'),
+    });
+  }
+  return defineAppRoutes(routes);
+}
+
+function normalizeHubRoutePath(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === '/') {
+    throw new TypeError('Hub route path must contain a path segment');
+  }
+  return `/${trimmed.replace(/^\/+|\/+$/g, '')}`;
+}
+
+const defaultRoutes: AppClientAppRoutesContribution = createHubRoutes();
+
+export default defaultRoutes;
