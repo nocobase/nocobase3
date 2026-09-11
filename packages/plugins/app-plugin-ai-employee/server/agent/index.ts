@@ -1,7 +1,7 @@
 export * from './types.js';
 export * from './agent-service.js';
 export * from './providers.js';
-export * from './chat-message-converters.js';
+export * from './converters.js';
 export { buildStandardAgentMiddleware } from './middleware/pipeline.js';
 export * from './errors.js';
 export * from './sse.js';

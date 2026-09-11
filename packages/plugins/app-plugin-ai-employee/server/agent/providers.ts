@@ -2,7 +2,7 @@ import type { AIConversationRepository } from '../repository/ai-conversation.js'
 import type { AIEmployeesManager } from '../manager/ai-employees-manager.js';
 import { LLMStreamCached } from '../manager/llm-stream-cached-manager.js';
 import type { Logger } from '@nocobase/logging';
-import { DefaultChatMessageConverters } from './chat-message-converters.js';
+import { DefaultChatMessageConverters } from './converters.js';
 import { createAIChatConversation } from './ai-employee/ai-chat-conversation.js';
 import { DefaultConversationMessageStore } from './ai-employee/conversation-message-store.js';
 import { listCurrentFrontendTools } from './ai-employee/frontend-tools.js';

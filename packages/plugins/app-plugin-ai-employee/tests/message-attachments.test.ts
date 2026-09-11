@@ -1,7 +1,7 @@
 import type { AIMessageInput, LLMProvider } from '@nocobase/ai-employee';
 import { describe, expect, it, vi } from 'vitest';
 
-import { DefaultChatMessageConverters } from '../server/agent/chat-message-converters.js';
+import { DefaultChatMessageConverters } from '../server/agent/converters.js';
 import type { AIEmployeeAgentOptions } from '../server/agent/ai-employee/options.js';
 
 function createOptions(records: Record<string, unknown>[]) {

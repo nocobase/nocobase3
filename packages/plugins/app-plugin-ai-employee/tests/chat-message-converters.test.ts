@@ -2,7 +2,7 @@ import { AIMessage, HumanMessage, ToolMessage } from '@langchain/core/messages';
 import { describe, expect, it, vi } from 'vitest';
 import type { LLMProvider } from '@nocobase/ai-employee';
 
-import { DefaultChatMessageConverters } from '../server/agent/chat-message-converters.js';
+import { DefaultChatMessageConverters } from '../server/agent/converters.js';
 const prepareStoredAssistantAdditionalKwargs = vi.fn((value) => value);
 const context = {
   providerName: 'test-provider',

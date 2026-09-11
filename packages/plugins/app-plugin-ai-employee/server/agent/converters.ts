@@ -115,7 +115,7 @@ class StoredToolMessageConverter implements ChatMessageConverter<
   }
 }
 
-class AIEmployeeAssistantChatMessageConverter implements ChatMessageConverter<
+class DefaultAssistantChatMessageConverter implements ChatMessageConverter<
   LangChainAIMessage,
   AIMessageInput | null
 > {
@@ -240,7 +240,7 @@ class AIEmployeeAssistantChatMessageConverter implements ChatMessageConverter<
   }
 }
 
-class AIEmployeeHumanChatMessageConverter implements ChatMessageConverter<
+class DefaultHumanChatMessageConverter implements ChatMessageConverter<
   LangChainHumanMessage,
   AIMessageInput | null
 > {
@@ -271,7 +271,7 @@ class AIEmployeeHumanChatMessageConverter implements ChatMessageConverter<
   }
 }
 
-class AIEmployeeToolMessageConverter implements ChatMessageConverter<
+class DefaultToolMessageConverter implements ChatMessageConverter<
   LangChainToolMessage,
   AIMessageInput
 > {
@@ -300,19 +300,19 @@ class AIEmployeeToolMessageConverter implements ChatMessageConverter<
   }
 }
 
-class AIEmployeeMessageConverters implements ChatMessageConverters {
+class DefaultMessageConverters implements ChatMessageConverters {
   public readonly assistant: ChatMessageConverters['assistant'];
   public readonly human: ChatMessageConverters['human'];
   public readonly tool: ChatMessageConverters['tool'];
 
   public constructor(private readonly aiOptions: AIEmployeeAgentOptions) {
-    this.assistant = new AIEmployeeAssistantChatMessageConverter({
+    this.assistant = new DefaultAssistantChatMessageConverter({
       employee: aiOptions.employee,
       skillSettings: aiOptions.skillSettings,
       logger: aiOptions.agentContext.logger,
     });
-    this.human = new AIEmployeeHumanChatMessageConverter();
-    this.tool = new AIEmployeeToolMessageConverter();
+    this.human = new DefaultHumanChatMessageConverter();
+    this.tool = new DefaultToolMessageConverter();
   }
 
   public async formatMessages(
@@ -441,14 +441,14 @@ export class DefaultChatMessageConverters implements ChatMessageConverters {
   public readonly tool: ChatMessageConverters['tool'];
 
   private readonly options: ChatMessageConvertersOptions;
-  private readonly aiEmployeeConverters?: AIEmployeeMessageConverters;
+  private readonly aiEmployeeConverters?: DefaultMessageConverters;
 
   public constructor(
     options: ChatMessageConvertersOptions | AIEmployeeAgentOptions = {},
   ) {
     if (isAIEmployeeAgentOptions(options)) {
       this.options = {};
-      this.aiEmployeeConverters = new AIEmployeeMessageConverters(options);
+      this.aiEmployeeConverters = new DefaultMessageConverters(options);
       this.assistant = this.aiEmployeeConverters.assistant;
       this.human = this.aiEmployeeConverters.human;
       this.tool = this.aiEmployeeConverters.tool;

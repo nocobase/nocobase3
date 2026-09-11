@@ -6,7 +6,7 @@ import type {
   DiscoveredTools,
   ResolvedAgentLLM,
 } from '../types.js';
-import { DefaultChatMessageConverters } from '../chat-message-converters.js';
+import { DefaultChatMessageConverters } from '../converters.js';
 import { NativeCollectionSaver } from '../checkpoints/index.js';
 import type {
   AIEmployee as AIEmployeeType,

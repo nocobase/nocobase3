@@ -14,7 +14,7 @@ import {
 import { AIEmployeesManager } from '../server/manager/ai-employees-manager.js';
 import { createAgentProviders } from '../server/agent/providers.js';
 import { createTestConversationProvider } from './test-conversation-provider.js';
-import { DefaultChatMessageConverters } from '../server/agent/chat-message-converters.js';
+import { DefaultChatMessageConverters } from '../server/agent/converters.js';
 import {
   encodeAgentEventSSE,
   toLegacyAgentEventPayload,
@@ -232,7 +232,7 @@ describe('fixed AgentService contracts', () => {
       /Object\.assign\([^)]*(chatContext|converter)/,
     );
     expect(production).not.toMatch(/\.\.\.(options\.)?chatContext/);
-    expect(read('agent/chat-message-converters.ts')).toContain(
+    expect(read('agent/converters.ts')).toContain(
       "from './ai-employee/options.js'",
     );
     const types = read('agent/types.ts');
@@ -311,13 +311,13 @@ describe('fixed AgentService contracts', () => {
     expect(options).toContain('aiConversations: AIConversationRepository');
     expect(messageStore).toContain('class DefaultConversationMessageStore');
     expect(providers).toContain('new DefaultChatMessageConverters(options)');
-    expect(read('agent/chat-message-converters.ts')).toContain(
+    expect(read('agent/converters.ts')).toContain(
       'export class DefaultChatMessageConverters',
     );
-    expect(read('agent/chat-message-converters.ts')).not.toContain(
+    expect(read('agent/converters.ts')).not.toContain(
       'export class BaseChatMessageConverters',
     );
-    expect(read('agent/chat-message-converters.ts')).toContain(
+    expect(read('agent/converters.ts')).toContain(
       'export class DefaultChatMessageConverters',
     );
     expect(
