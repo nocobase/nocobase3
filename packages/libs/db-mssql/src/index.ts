@@ -91,16 +91,66 @@ export const mssqlDriver: DatabaseDriverDefinition<'mssql'> = {
       },
     },
     repository: {
+      enumGroupKey: ({ client, field }) =>
+        client.raw('cast(?? as varbinary(max))', [field]),
+      compileFilterCondition: ({ query, node, field, name, boolean }) => {
+        const method = boolean === 'or' ? 'orWhereRaw' : 'whereRaw';
+        if (
+          field?.type === 'enum' &&
+          typeof node.value === 'string' &&
+          (node.operator === '$eq' || node.operator === '$ne')
+        ) {
+          query[method](
+            `cast(?? as varbinary(max)) ${node.operator === '$eq' ? '=' : '<>'} cast(? as varbinary(max))`,
+            [name, node.value],
+          );
+          return { handled: true };
+        }
+        if (
+          field &&
+          ['integer', 'bigInt', 'decimal'].includes(field.type) &&
+          node.value !== null &&
+          node.value !== undefined &&
+          (typeof node.value === 'string' ||
+            typeof node.value === 'number' ||
+            typeof node.value === 'bigint') &&
+          ['$eq', '$ne', '$gt', '$gte', '$lt', '$lte'].includes(node.operator)
+        ) {
+          const operator = (
+            {
+              $eq: '=',
+              $ne: '<>',
+              $gt: '>',
+              $gte: '>=',
+              $lt: '<',
+              $lte: '<=',
+            } as Record<string, string>
+          )[node.operator];
+          const type =
+            field.type === 'bigInt'
+              ? 'bigint'
+              : field.type === 'integer'
+                ? 'int'
+                : `decimal(${field.precision ?? 38}, ${field.scale ?? 0})`;
+          query[method](`?? ${operator} cast(? as ${type})`, [
+            name,
+            decimalLiteral(String(node.value)),
+          ]);
+          return { handled: true };
+        }
+        return { handled: false };
+      },
       encodeBoolean: (_field, value) =>
         value === null ? null : Boolean(value),
       reloadReturnedDecimal: true,
       encodeBlobNull: (client) => client.raw('cast(null as varbinary(max))'),
       escapeLikePattern: (value) =>
-        value.replace(/[%_[]/g, (char) => `\\${char}`),
+        value.replace(/[\\%_[]/g, (char) => `\\${char}`),
+      likeEscapeCharacter: '\\',
       numericMutation: ({ client, field, name, operation, operand }) => {
         const integral = field?.type === 'integer' || field?.type === 'bigInt';
         if (!integral && field?.type !== 'decimal') return undefined;
-        const text = String(operand);
+        const text = decimalLiteral(String(operand));
         const match = text.match(/^([+-]?)(\d*)(?:\.(\d*))?(?:e([+-]?\d+))?$/i);
         if (!match || !(match[2] || match[3])) return undefined;
         const scale = Math.max(
@@ -337,6 +387,22 @@ function mssqlLiteral(value: unknown): string {
   throw new Error(
     `MSSQL filtered index predicate value must be a scalar, received ${typeof value}.`,
   );
+}
+
+/** SQL Server's numeric casts do not accept scientific notation consistently. */
+function decimalLiteral(value: string): string {
+  const match = value.match(/^([+-]?)(\d*)(?:\.(\d*))?(?:e([+-]?\d+))?$/i);
+  if (!match || !(match[2] || match[3])) return value;
+  const sign = match[1] === '-' ? '-' : '';
+  const whole = match[2] ?? '';
+  const fraction = match[3] ?? '';
+  const exponent = Number(match[4] ?? 0);
+  const digits = `${whole}${fraction}`.replace(/^0+(?=\d)/, '') || '0';
+  const point = whole.length + exponent;
+  if (point <= 0) return `${sign}0.${'0'.repeat(-point)}${digits}`;
+  if (point >= digits.length)
+    return `${sign}${digits}${'0'.repeat(point - digits.length)}`;
+  return `${sign}${digits.slice(0, point)}.${digits.slice(point)}`;
 }
 
 export { mssqlTypes, mssqlNumeric } from './inspectors/mssql.js';

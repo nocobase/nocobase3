@@ -42,6 +42,21 @@ export const mysqlDriver: DatabaseDriverDefinition<'mysql'> = {
             : undefined,
     },
     repository: {
+      enumGroupKey: ({ client, field }) => client.raw('binary ??', [field]),
+      compileFilterCondition: ({ query, node, field, name, boolean }) => {
+        if (
+          field?.type === 'enum' &&
+          typeof node.value === 'string' &&
+          (node.operator === '$eq' || node.operator === '$ne')
+        ) {
+          query[boolean === 'or' ? 'orWhereRaw' : 'whereRaw'](
+            `binary ?? ${node.operator === '$eq' ? '=' : '<>'} binary ?`,
+            [name, node.value],
+          );
+          return { handled: true };
+        }
+        return { handled: false };
+      },
       compileJsonCondition: ({ client, column, node }) =>
         compileMysqlJsonCondition(client, column, node),
       encodeBoolean: (_field, value) => (value === null ? null : value ? 1 : 0),
@@ -66,6 +81,37 @@ export const mysqlDriver: DatabaseDriverDefinition<'mysql'> = {
           ]);
         }
         return physical;
+      },
+      numericMutation: ({ client, field, name, operation, operand }) => {
+        if (
+          field?.type !== 'integer' &&
+          field?.type !== 'bigInt' &&
+          field?.type !== 'decimal'
+        )
+          return undefined;
+        const text = String(operand);
+        const operator = (
+          {
+            increment: '+',
+            decrement: '-',
+            multiply: '*',
+            divide: '/',
+          } as Record<string, string>
+        )[operation];
+        if (!operator) return undefined;
+        if (field.type === 'bigInt' || field.type === 'integer')
+          return client.raw(`?? ${operator} cast(? as signed)`, [name, text]);
+        const precision = field.precision ?? 65;
+        const scale = field.scale ?? 30;
+        if (precision > 65 || scale > 30 || scale > precision)
+          throw new RepositoryError(
+            'INVALID_MUTATION',
+            'Numeric operand exceeds the database decimal precision.',
+          );
+        return client.raw(
+          `?? ${operator} cast(? as decimal(${precision}, ${scale}))`,
+          [name, text],
+        );
       },
       temporalProjection: ({ client, field, reference }) => {
         if (!field)

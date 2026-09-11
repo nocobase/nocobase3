@@ -107,6 +107,12 @@ export interface DatabaseRepositoryRuntimeStrategy {
     boolean: 'and' | 'or';
   }) => { handled: boolean; node?: FilterConditionNode };
   readonly escapeLikePattern?: (value: string) => string;
+  /**
+   * Escape marker used together with SQL LIKE.  Most engines use `!` in the
+   * portable repository compiler; dialects whose native syntax requires a
+   * different marker (SQL Server uses `\`) declare it here.
+   */
+  readonly likeEscapeCharacter?: string;
   readonly bindValue?: (context: {
     client: Knex;
     collection: CollectionDefinition;
@@ -213,6 +219,17 @@ export function attachDatabaseDriverRuntime(
   runtime: DatabaseDriverRuntime,
 ): void {
   runtimeByClient.set(client, runtime);
+  // Knex query builders expose their internal Client instance as
+  // `query.client`, while the public database handle is the callable Knex
+  // function.  Keep both identities associated with the dialect runtime so
+  // value binding strategies also apply inside `where()` callbacks and
+  // unique-selector reloads.
+  const internalClient = (client as Knex & { client?: object }).client;
+  if (internalClient) {
+    runtimeByClient.set(internalClient, runtime);
+    const config = (internalClient as { config?: object }).config;
+    if (config) runtimeByClient.set(config, runtime);
+  }
 }
 
 export function getDatabaseDriverRuntime(

@@ -313,7 +313,11 @@ export class KnexSchemaAdapter implements SchemaAdapter {
     if (column.defaultValue !== undefined) {
       builder.defaultTo(column.defaultValue as any);
     }
-    if (column.primaryKey && !tablePrimaryKey && !column.autoIncrement) {
+    if (
+      column.primaryKey &&
+      !tablePrimaryKey &&
+      (runtimeType !== undefined || !column.autoIncrement)
+    ) {
       builder.primary();
     }
     if (column.db?.comment && 'comment' in builder) {

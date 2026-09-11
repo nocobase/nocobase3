@@ -3315,6 +3315,10 @@ function applyCondition(
             text,
           )
         : undefined) ?? text.replace(/[!%_]/g, '!$&');
+    const likeEscapeCharacter = client
+      ? (getDatabaseDriverRuntime(client)?.repository?.likeEscapeCharacter ??
+        '!')
+      : '!';
     const operand = pattern
       ? `${node.operator === '$startsWith' ? '' : '%'}${escaped}${node.operator === '$endsWith' ? '' : '%'}`
       : text;
@@ -3330,7 +3334,7 @@ function applyCondition(
         ? `lower(??) ${operator} lower(?)`
         : `?? ${operator} ?`;
     query[boolean === 'or' ? 'orWhereRaw' : 'whereRaw'](
-      `${expression}${pattern ? " escape '!'" : ''}`,
+      `${expression}${pattern ? ` escape '${likeEscapeCharacter}'` : ''}`,
       [name, operand],
     );
     return;
@@ -3693,18 +3697,30 @@ function bindQueryValue(
   value: unknown,
 ): unknown {
   const field = scalarFields(collection).find((item) => item.name === name);
+  const runtimeClient = query.client as unknown as Knex;
+  const custom = field
+    ? getDatabaseDriverRuntime(runtimeClient)?.repository?.bindValue?.({
+        client: runtimeClient,
+        collection,
+        field,
+        value: value as FilterValue,
+      })
+    : undefined;
+  if (custom !== undefined) return custom;
   if (field?.type === 'char' && typeof value === 'string') {
     // Dialect-specific character bindings are applied by the runtime
     // strategy when the owning Knex client is available to the caller.
   }
   if (field?.type === 'boolean') return normalizeBooleanValue(field, value);
-  return field && isTemporalType(field.type)
-    ? temporalBinding(
-        { client: query.client, raw: query.client.raw.bind(query.client) },
-        field,
-        value,
-      )
-    : value;
+  if (field && isTemporalType(field.type)) {
+    const temporal = temporalBinding(
+      { client: query.client, raw: query.client.raw.bind(query.client) },
+      field,
+      value,
+    );
+    return temporal;
+  }
+  return value;
 }
 
 function applySelectors(

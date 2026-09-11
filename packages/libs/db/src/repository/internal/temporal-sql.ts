@@ -10,7 +10,10 @@ export interface TemporalSqlClient {
 }
 
 function assertPrecision(field: FieldDefinition): void {
-  if ((field.fractionalSecondsPrecision ?? 3) > 3)
+  // DATE has no fractional-second component.  Some catalogs expose a
+  // precision inherited from the database's temporal family, but that value
+  // must not make ordinary date reads unusable.
+  if (field.type !== 'date' && (field.fractionalSecondsPrecision ?? 3) > 3)
     throw new RepositoryError(
       'FIELD_CAPABILITY_NOT_SUPPORTED',
       `Field "${field.name}" exceeds V1 millisecond precision.`,
@@ -34,8 +37,12 @@ export function temporalBinding(
       `Value exceeds Field "${field.name}" fractional-second precision.`,
       { field: field.name },
     );
-  const strategy = getDatabaseDriverRuntime(client as Knex)?.repository
-    ?.temporalBinding;
+  const strategy =
+    getDatabaseDriverRuntime(client as unknown as Knex)?.repository
+      ?.temporalBinding ??
+    getDatabaseDriverRuntime(
+      (client as unknown as { client?: Knex }).client as Knex,
+    )?.repository?.temporalBinding;
   if (strategy)
     return strategy({ client: client as Knex, field, value: normalized });
   return normalized;

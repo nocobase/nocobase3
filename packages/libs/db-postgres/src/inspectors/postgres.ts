@@ -49,6 +49,7 @@ export const postgresTypes: PhysicalTypeNormalizationStrategy = {
     type: string,
     temporal: string | undefined,
   ): number | undefined => {
+    if (temporal === 'date') return 0;
     const explicit = type.match(/\((\d+)\)/)?.[1];
     if (/^(timetz|time(?:\(\d+\))? with time zone)$/.test(type))
       return explicit ? Number(explicit) : 6;

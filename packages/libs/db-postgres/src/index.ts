@@ -52,6 +52,22 @@ export const postgresDriver: DatabaseDriverDefinition<'postgres'> = {
               : undefined,
     },
     repository: {
+      enumGroupKey: ({ client, field }) =>
+        client.raw('convert_to(??, ?)', [field, 'UTF8']),
+      compileFilterCondition: ({ query, node, field, name, boolean }) => {
+        if (
+          field?.type === 'enum' &&
+          typeof node.value === 'string' &&
+          (node.operator === '$eq' || node.operator === '$ne')
+        ) {
+          query[boolean === 'or' ? 'orWhereRaw' : 'whereRaw'](
+            `convert_to(??, ?) ${node.operator === '$eq' ? '=' : '<>'} convert_to(?, ?)`,
+            [name, 'UTF8', node.value, 'UTF8'],
+          );
+          return { handled: true };
+        }
+        return { handled: false };
+      },
       compileJsonCondition: ({ client, column, node }) =>
         compilePostgresJsonCondition(client, column, node),
       temporalBinding: ({ value }) => String(value),

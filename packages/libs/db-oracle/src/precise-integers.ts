@@ -31,6 +31,10 @@ export function preciseIntegerClient(
     )._driver = () => nativeDriver;
   }
   const prototype = PreciseIntegerClient.prototype as Knex.Client & {
+    config: { fetchAsString?: string[] };
+    fetchAsString?: unknown[];
+    driver: unknown;
+    _driver: (this: Knex.Client) => unknown;
     _query: (
       this: Knex.Client,
       connection: unknown,
@@ -71,6 +75,29 @@ export function preciseIntegerClient(
     });
   };
   const stream = prototype._stream;
+  // Knex normally initializes this array in its own `_driver()` method.  The
+  // dialect package replaces that method to inject its resolved native
+  // driver, so it must preserve the initialization itself.  Assigning
+  // `undefined` to oracledb.fetchAsString causes NJS-004 before the first
+  // connection is opened.
+  prototype._driver = function () {
+    const client = this as unknown as {
+      config: { fetchAsString?: string[] };
+      fetchAsString: unknown[];
+    };
+    const driver = nativeDriver as Record<string, unknown>;
+    client.fetchAsString = [];
+    for (const type of client.config.fetchAsString ?? []) {
+      const key = type.toUpperCase();
+      if (
+        ['NUMBER', 'DATE', 'CLOB', 'BUFFER'].includes(key) &&
+        driver[key] !== undefined
+      ) {
+        client.fetchAsString.push(driver[key]);
+      }
+    }
+    return nativeDriver;
+  };
   prototype._stream = function (connection, obj, output, options) {
     const driver = this.driver as unknown as {
       DB_TYPE_NUMBER: unknown;

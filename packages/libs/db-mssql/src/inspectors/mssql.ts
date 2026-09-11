@@ -61,13 +61,15 @@ export const mssqlTypes: PhysicalTypeNormalizationStrategy = {
     temporal: string | undefined,
   ): number | undefined =>
     temporal
-      ? type === 'smalldatetime'
+      ? temporal === 'date'
         ? 0
-        : type === 'datetime'
-          ? undefined
-          : type.match(/\((\d+)\)/)?.[1]
-            ? Number(type.match(/\((\d+)\)/)![1])
-            : 7
+        : type === 'smalldatetime'
+          ? 0
+          : type === 'datetime'
+            ? undefined
+            : type.match(/\((\d+)\)/)?.[1]
+              ? Number(type.match(/\((\d+)\)/)![1])
+              : 7
       : undefined,
 };
 export const mssqlNumeric: NumericCapabilityStrategy = {
