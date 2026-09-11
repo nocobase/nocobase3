@@ -13,7 +13,7 @@ The application owns which packages are installed, plugin ordering, configuratio
 
 ## Delivery model
 
-One new `idempotencyKey` creates one Notification. Repeating an equivalent `send()` with that key returns the same Notification. Each resolved recipient/Channel/Provider target creates an independent Delivery. Each actual Provider submission creates an Attempt.
+One new `idempotencyKey` creates one Notification. Repeating an equivalent `send()` with that key returns the same Notification. Each resolved recipient/Channel/Provider combination creates an independent Delivery; a recipientless Channel uses the Channel/Provider combination directly. Each actual Provider submission creates an Attempt.
 
 ```text
 Notification
@@ -29,10 +29,10 @@ The Channel owns recipient resolution, common-content rendering, and preparation
 
 - `in-app` accepts `{ type: 'user', id }`.
 - `email` accepts `{ type: 'email', address }`; it can accept `user` only when the Channel definition has a user-to-email resolver.
-- `im` accepts `{ type: 'target', id }`; it can accept `user` only when the Channel definition has a user-to-target resolver.
+- `im` Webhook accepts an omitted recipient and sends directly to the selected Provider; it can accept `user` only when the Channel definition has a user-to-address resolver.
 - `phone` is part of the core recipient union but no built-in Channel currently consumes it.
 
-An unsupported recipient creates a failed Delivery for that recipient/Channel target; compatible targets in the same Notification may continue.
+An unsupported recipient, or a missing recipient for a recipient-bearing Channel, creates a failed Delivery; compatible combinations in the same Notification may continue.
 
 ## Provider routing
 

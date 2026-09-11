@@ -14,6 +14,15 @@ import type {
 export const BASE_NAMESPACE: Namespace = '@nocobase/i18n';
 
 /**
+ * The language every package is expected to ship, and so the last resort of any fallback.
+ *
+ * It is where a lookup lands when neither the current language nor the application's default turned up a translation —
+ * an application defaulting to Chinese that adds Spanish leaves a plugin translated in neither, and English is the one
+ * language that plugin almost certainly has.
+ */
+export const BASE_LOCALE: Locale = 'en-US';
+
+/**
  * Stands for whichever namespace belongs to the application, resolved when a translation runs.
  *
  * A plugin cannot name the application's namespace directly: it is the user's own package name, chosen long after the
@@ -139,6 +148,17 @@ export class I18nRegistry {
 
   public hasNamespace(namespace: Namespace): boolean {
     return this.namespaces.has(namespace);
+  }
+
+  /**
+   * The locales one namespace declares loaders for, in declaration order.
+   *
+   * This is what lets the runtime offer exactly the languages the application's own locale files provide, rather than
+   * every language some installed plugin happens to translate. An unregistered namespace declares nothing.
+   */
+  public getNamespaceLocales(namespace: Namespace): readonly Locale[] {
+    const entry = this.namespaces.get(namespace);
+    return entry ? Object.keys(entry.loaders) : [];
   }
 
   /**

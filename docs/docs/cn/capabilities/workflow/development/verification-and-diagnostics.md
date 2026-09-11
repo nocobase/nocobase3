@@ -26,6 +26,12 @@ pnpm exec workflow check server/workflows/<workflow-directory>
 
 它不会加载 Run 模块，也不会写数据库。出现问题时按阶段从前往后修复，不要跳过错误继续发布。
 
+加 `--ir` 可以直接打印编译后的扁平 IR，也就是 Artifact 中 `workflow.json` 承载的那份定义：
+
+```bash
+pnpm exec workflow check server/workflows/<workflow-directory> --ir
+```
+
 ## 检查运行模块和应用集成
 
 Run 模块由应用的普通服务端构建处理，因此还要运行应用要求的验证：
@@ -50,6 +56,16 @@ pnpm exec workflow build
 默认应用的正常 `pnpm build` 也包含此步骤。开发 Artifact 保留包内 `.ts` 资源，生产 Artifact 收集应用服务端构建在相同相对路径输出的 `.js` 资源，并根据确定性内容生成摘要。
 
 不要把输出目录指向源码或无关目录。Artifact 构建不会自动启用定义，也不能替代应用编译。
+
+## 开发环境不需要构建
+
+`pnpm dev` 启动的服务端不读取 `dist/server/workflows`，而是按需编译工作流源码根目录。修改 `workflow.ts` 保存后，它会作为一个新版本直接出现在管理界面，既不需要执行命令，也不需要重启进程；源码没有变化时不会重复编译。
+
+这条路径产出的定义与构建产出的完全一致：同样的 schema 校验、语义校验、扁平 IR 编译、资源收集和内容摘要。省掉的只有 `ts.createProgram` 类型检查（应用自身的 `pnpm typecheck` 已经覆盖）和一次性求值子进程（开发服务端本身就跑在 TypeScript loader 下）。因为摘要一致，开发环境启用的版本就是构建之后生产环境拿到的版本。
+
+开发环境按运行时实际注册的 Instruction 集合校验，因此插件在运行时注册的 Instruction 无需额外配置构建入口即可通过。只存在于 `dist/server/workflows` 的 key 仍会被列出；同一个 key 同时存在时，以源码为准。
+
+所以在开发环境执行构建的理由只有两个：产出可部署的 Artifact，或验证部署将拿到什么。仅仅为了查看或试跑一个定义，不需要构建。
 
 ## 发布和启用新版本
 

@@ -125,7 +125,7 @@ export type NotificationTestSendInput = Pick<
   NotificationSendInput<NotificationChannelMap>,
   'content'
 > & {
-  readonly to: NotificationRecipient;
+  readonly to?: NotificationRecipient;
   readonly channelOverride?: object;
 };
 
@@ -145,8 +145,7 @@ export interface NotificationTestAdapter<
 export type NotificationRecipient =
   | { readonly type: 'user'; readonly id: string }
   | { readonly type: 'email'; readonly address: string }
-  | { readonly type: 'phone'; readonly number: string }
-  | { readonly type: 'target'; readonly id: string };
+  | { readonly type: 'phone'; readonly number: string };
 
 export type NotificationProviderRouting =
   | {
@@ -170,7 +169,7 @@ export interface NotificationSendInput<
     readonly type: string;
     readonly referenceId?: string;
   };
-  readonly to: NotificationRecipient | readonly NotificationRecipient[];
+  readonly to?: NotificationRecipient | readonly NotificationRecipient[];
   readonly channels: readonly (keyof TChannels & string)[];
   readonly routing?: Partial<{
     readonly [TType in keyof TChannels & string]: NotificationChannelRouting;
@@ -378,7 +377,7 @@ export interface NotificationChannel<
 > {
   readonly type: string;
   resolveRecipient?(input: {
-    readonly recipient: NotificationRecipient;
+    readonly recipient?: NotificationRecipient;
     readonly provider: NotificationProviderIdentity;
   }): TRecipient | undefined | Promise<TRecipient | undefined>;
   render?(input: {

@@ -74,7 +74,7 @@ The core package exposes `GET /api/notifications/test/targets`, `POST /api/notif
 
 Targets are the intersection of registered definitions and enabled configured instances. Their public descriptors contain only Channel/Provider identities, labels, and safe form-field metadata. Configuration, Webhook URLs, API keys, and secrets stay on the server. Channel definitions convert test fields into the same normal `send()` inputs; each test creates persistent logs, and status is visible only to its creating user.
 
-A production test is a real external send and requires explicit scope, recipient, Provider, permission, and follow-up verification.
+A production test is a real external send and requires explicit scope, the recipient or recipientless mode, Provider, permission, and follow-up verification.
 
 ## Configuration verification
 

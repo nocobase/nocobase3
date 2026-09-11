@@ -13,6 +13,8 @@ const appRuntime: AppRuntimeDefinition = defineAppRuntime({
   plugins,
   serviceProviders,
   routes,
+  // The application's own server locale files, which are what decides the languages the server offers.
+  locales: () => import('./locales/index.js'),
 });
 
 export default appRuntime;

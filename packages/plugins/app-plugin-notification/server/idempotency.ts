@@ -20,9 +20,10 @@ export function validateNotificationIdempotencyKey(value: string): void {
 export function notificationRequestFingerprint<
   TChannels extends NotificationChannelMap,
 >(input: NotificationSendInput<TChannels>): string {
-  const recipients = ('type' in input.to ? [input.to] : input.to).map(
-    normalizeValue,
-  );
+  const recipients =
+    input.to === undefined
+      ? undefined
+      : ('type' in input.to ? [input.to] : input.to).map(normalizeValue);
   const channels = [...new Set(input.channels)].sort();
   const routing = Object.fromEntries(
     channels
@@ -49,7 +50,7 @@ export function notificationRequestFingerprint<
       type: input.source?.type ?? 'application',
       referenceId: input.source?.referenceId,
     },
-    recipients: sorted(recipients),
+    ...(recipients === undefined ? {} : { recipients: sorted(recipients) }),
     channels,
     routing,
     content: input.content,
