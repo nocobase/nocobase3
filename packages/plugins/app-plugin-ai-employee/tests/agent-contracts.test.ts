@@ -6,13 +6,16 @@ import {
   DEFAULT_AGENT_FEATURES,
   STANDARD_AGENT_MIDDLEWARE_ORDER,
   type AgentStreamEvent,
+  type ChatContextProvider,
+  type CurrentConversation,
+  type DiscoveredTools,
+  type ResolvedAgentLLM,
 } from '../server/agent/types.js';
 import { AIEmployeesManager } from '../server/manager/ai-employees-manager.js';
 import {
   createAgentProviders,
   createMemoryConversationProvider,
 } from '../server/agent/providers.js';
-import { FixedChatContextProvider } from '../server/agent/chat-context.js';
 import { DefaultChatMessageConverters } from '../server/agent/chat-message-converters.js';
 import {
   encodeAgentEventSSE,
@@ -42,7 +45,6 @@ describe('fixed AgentService contracts', () => {
   it('owns response metadata lifecycle inside each AgentService stream execution', () => {
     const types = read('agent/types.ts');
     const service = read('agent/agent-service.ts');
-    const chatContext = read('agent/chat-context.ts');
     const employeeProviders = read('agent/ai-employee/providers.ts');
 
     const resolvedLLM = types.slice(
@@ -56,7 +58,6 @@ describe('fixed AgentService contracts', () => {
 
     expect(resolvedLLM).not.toMatch(/takeResponseMetadata|dispose/);
     expect(chatContextProvider).not.toContain('getExecutionConfig');
-    expect(chatContext).not.toMatch(/executionConfig|getExecutionConfig/);
     expect(employeeProviders).not.toMatch(
       /ExecutionResponseMetadata|ResponseMetadataCollector|responseMetadataCollector/,
     );
@@ -204,7 +205,6 @@ describe('fixed AgentService contracts', () => {
     const production = [
       'agent/types.ts',
       'agent/providers.ts',
-      'agent/direct.ts',
       'agent/agent-service.ts',
       'agent/ai-employee/providers.ts',
       'agent/ai-employee/conversation-message-store.ts',
@@ -471,17 +471,29 @@ describe('fixed AgentService contracts', () => {
   });
 
   it('uses explicit provider instances and default features', async () => {
-    class Context extends FixedChatContextProvider {
+    class Context implements ChatContextProvider {
       readonly marker = 'base';
-      override async getSystemPrompt(): Promise<string> {
+      currentConversation(): CurrentConversation {
+        return { sessionId: 'contract' };
+      }
+      resolveLLM(): Promise<ResolvedAgentLLM> {
+        return Promise.resolve({
+          providerName: 'test',
+          model: 'test',
+          provider: llmProvider,
+        });
+      }
+      async getSystemPrompt(): Promise<string> {
         return this.marker;
       }
+      discoveredTools(): Promise<DiscoveredTools> {
+        return Promise.resolve({
+          tools: new Map(),
+          activeTools: async () => new Set(),
+        });
+      }
     }
-    const chatContext = new Context({
-      provider: llmProvider,
-      providerName: 'test',
-      model: 'test',
-    });
+    const chatContext = new Context();
     const conversation = createMemoryConversationProvider({
       sessionId: 'direct',
     });
