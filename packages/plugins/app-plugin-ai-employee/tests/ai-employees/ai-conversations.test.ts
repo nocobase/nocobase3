@@ -50,6 +50,8 @@ describe('AIConversationsManager', () => {
       userId: 'user-1',
       aiEmployee: { username: 'atlas' },
     });
+
+    await manager.create({ userId: 'user-1' });
     await expect(
       manager.getConversation({
         sessionId: 'historical-task',

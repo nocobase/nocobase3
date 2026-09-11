@@ -18,6 +18,7 @@ This reference records the parameter shapes an App code agent normally needs whe
 - [Chat UI components](#chat-ui-components)
 - [Tool renderers](#tool-renderers)
 - [Settings tabs](#settings-tabs)
+- [Server container and AgentService](#server-container-and-agentservice)
 
 ## Employee resources
 
@@ -460,6 +461,12 @@ type AIToolRendererMap = Record<string, AIToolRendererEntry>;
 ```
 
 The renderer map key is the exact tool name. `handlesApproval: true` means the renderer presents approval controls itself. `standalone: true` means it is rendered outside the normal generic card layout. A renderer must call the supplied callbacks rather than mutating persisted tool state directly.
+
+## Server container and AgentService
+
+For direct server-side execution, resolve `aiConversationsManagerToken` and `agentServiceFactoryToken` from `@nocobase/app-plugin-ai-employee/server`. Create a conversation first, then pass its `sessionId` to `createAIEmployee()` or `createAgent()`. The complete contracts, execution methods, context-provider contract, persistence contract, and security invariants are in [agent-service.md](agent-service.md).
+
+These APIs are for App-owned server services, routes, workflow/job adapters, and similar trusted integrations. They are not client/browser APIs, and they do not replace the installed AI chat transport.
 
 ## Settings tabs
 

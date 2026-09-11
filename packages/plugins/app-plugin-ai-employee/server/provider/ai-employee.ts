@@ -26,6 +26,7 @@ import {
   AgentServiceFactory,
   agentServiceFactoryToken,
 } from '../agent/service/agent-service-factory.js';
+import { aiConversationsManagerToken } from '../manager/ai-conversations-manager.js';
 import {
   ServiceFactory,
   serviceFactoryToken,
@@ -55,6 +56,11 @@ export class AIEmployeeProvider extends ServiceProvider<AppPluginApplication> {
     this.app.container.singleton(
       managerFactoryToken,
       (resolver) => new ManagerFactory({ container: resolver }),
+    );
+    this.app.container.singleton(
+      aiConversationsManagerToken,
+      (resolver) =>
+        resolver.resolve(managerFactoryToken).aiConversationsManager,
     );
     this.app.container.singleton(
       serviceFactoryToken,

@@ -4,7 +4,7 @@ description: Use when code agents develop a CLI-created NocoBase App and need to
 argument-hint: '[area: resources|frontend|api|settings|runtime] [task: inspect|implement|extend|verify]'
 allowed-tools: Bash, Read, Write, Grep, Glob
 owner: platform-tools
-version: 1.3.0
+version: 1.4.0
 last-reviewed: 2026-04-09
 risk-level: low
 ---
@@ -32,7 +32,7 @@ Use these layers in order:
 4. **AI frontend extension** — use the App-owned `client/extensions/nocobase-ai` source for chat, context, forms, and browser tools.
 5. **Framework internals** — never deep-import or modify internal dependency/plugin source to complete an App feature.
 
-`@nocobase/ai-employee` provides contracts, resource definitions/loaders/managers, LLM providers, repositories, and helpers. It does **not** provide the React chat UI, authenticated `/api/ai` routes, database-backed conversations, or a public `AgentService` API.
+`@nocobase/ai-employee` provides contracts, resource definitions/loaders/managers, LLM providers, repositories, and helpers. The enabled `@nocobase/app-plugin-ai-employee` additionally provides authenticated `/api/ai`, database-backed conversations, and a public server-container integration surface: `AIConversationsManager` and `AgentServiceFactory`.
 
 # Scope
 
@@ -42,6 +42,7 @@ Use these layers in order:
 - Consume `/api/ai` through the existing `NocoBaseAIService` and chat transport.
 - Add a page to the shared `/settings/ai` tabs from an App plugin.
 - Use `createAIManager()` only for isolated server code that deliberately does not need the plugin's App runtime.
+- For trusted App server integrations, resolve `aiConversationsManagerToken` and `agentServiceFactoryToken` from the public plugin server entry; create a conversation first, then call `createAIEmployee()` or `createAgent`.
 
 # Non-Goals
 
@@ -49,7 +50,7 @@ Use these layers in order:
 - Do not copy built-in employees/tools into `ai/`.
 - Do not import private plugin server/agent paths.
 - Do not rebuild chat streaming, conversation storage, tool approval, or frontend-tool protocol.
-- Do not present plugin-internal `AgentService` as a stable App API.
+- Do not present `AgentService` as a browser/client API; direct use belongs to an App-owned server integration and must use the public server container tokens.
 
 # Input Contract
 
@@ -73,6 +74,9 @@ Resolve whether the target belongs in:
 - For tools, confirm execution location (`backend` or `frontend`) and permission (`ASK` or `ALLOW`).
 - For frontend actions, confirm whether they change only local UI or persist business data.
 - For server integrations, confirm whether existing `/api/ai` behavior is sufficient before proposing direct manager access.
+- If required input is missing or ambiguous, stop before any mutation and ask the user; never guess a target, permission, execution location, or persistence behavior.
+
+Clarification bounds: max clarification rounds = 2; max questions per round = 3. If the user says “you decide”, use the safest defaults: normal `/api/ai` transport for UI, `SPECIFIED` + backend + `ASK` for application tools, and conversation-first creation with the default database persistence for direct server agents.
 
 # Workflow
 
@@ -81,18 +85,18 @@ Resolve whether the target belongs in:
 3. Load [Exact contracts](references/contracts.md). If installed declarations are available, compare them before coding; otherwise treat the documented shapes as authoritative and never guess a field name, enum, nullability, default, request body, or return shape.
 4. Choose an App-owned extension point; never start by editing a dependency.
 5. Implement the smallest App change and add tests in the App's existing test layout.
-6. Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build` when available.
-7. Report App files changed, public APIs consumed, and any missing framework capability separately.
+6. Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build` when available; every write path requires immediate readback of the changed file or a focused check that proves the intended content is present.
+7. For direct AgentService integrations, verify conversation-first creation, session id continuity, authorization, persistence, and failure/abort behavior separately from ordinary UI checks.
+8. Report App files changed, public APIs consumed, and any missing framework capability separately.
 
 # Reference Loading Map
 
-| Reference                                         | Use When                                              | Notes                                                                |
-| ------------------------------------------------- | ----------------------------------------------------- | -------------------------------------------------------------------- |
-| [App source map](references/source-map.md)        | starting every task                                   | Choose App-local paths and public package boundaries.                |
-| [Frontend guide](references/frontend-registry.md) | building App UI                                       | Chat, context, forms, tasks, browser tools, and settings.            |
-| [API guide](references/api-reference.md)          | integrating backend actions                           | Prefer existing service/transport over handwritten requests.         |
-| [Runtime boundaries](references/agent-service.md) | considering direct server agents                      | Distinguish public core managers from private AgentService.          |
-| [Exact contracts](references/contracts.md)        | implementing any AI integration without source access | Copy parameter names, optionality, enums, and return shapes exactly. |
+| Reference                                         | Use When                                | Notes                                                                                                       |
+| ------------------------------------------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| [App source map](references/source-map.md)        | starting every task                     | Choose App-local paths and public package boundaries.                                                       |
+| [Frontend guide](references/frontend-registry.md) | building App UI                         | Chat, context, forms, tasks, browser tools, and settings.                                                   |
+| [API guide](references/api-reference.md)          | integrating backend actions             | Prefer existing service/transport over handwritten requests.                                                |
+| [Runtime boundaries](references/agent-service.md) | direct server AgentService integrations | Container tokens, conversation-first creation, `createAIEmployee`, `createAgent`, context, and persistence. |
 
 # App AI Resources
 
@@ -231,9 +235,16 @@ await ai.employeeManager.registerEmployee(employeeDefinition);
 await ai.toolsManager.registerTools(toolDefinition);
 ```
 
-The default manager uses in-memory repositories. Do not create a competing manager in normal App startup.
+For an App-owned server integration that needs the plugin's persisted conversation and configured runtime, do not use a separate manager. Resolve `aiConversationsManagerToken` and `agentServiceFactoryToken` from `@nocobase/app-plugin-ai-employee/server`; read `references/agent-service.md` for the complete contracts and creation order.
 
-`AgentService` is currently private to the AI Employee plugin implementation and is not exported by `@nocobase/ai-employee`. Never deep-import it. If resources, public managers, and `/api/ai` cannot express the feature, report a missing public capability instead of coupling the App to internals.
+The direct `AgentService` API is server-only. It is intentionally not a client/browser resource API.
+`AgentService` is available only through the AI Employee plugin's public server-container factory integration described in `references/agent-service.md`; it is not exported by `@nocobase/ai-employee` and is not a browser/client API. Do not deep-import plugin server/agent files.
+
+# Rollback and Recovery for high-impact actions
+
+- If a direct agent integration creates a conversation but agent creation fails, do not retry blindly; record the session id, inspect the conversation state, and use an App-owned cleanup/archive path if the product requires one.
+- If streaming disconnects, do not create a second conversation or send the mutation again automatically. Read the existing conversation and resume only when the operation and message state prove it is safe.
+- If a custom `ConversationPersistence` violates transaction or message-id invariants, disable that integration and return to the plugin's default database persistence before investigating further.
 
 # Safety Gate
 
@@ -264,6 +275,11 @@ The default manager uses in-memory repositories. Do not create a competing manag
 5. Execute an `ASK` frontend tool through approval and resume.
 6. Add a `/settings/ai` tab from an App plugin.
 7. Verify App code has no private dependency/plugin imports.
+8. Create a persisted conversation, create an AI Employee agent with its session id, and verify invoke/stream uses the same session (success path).
+9. Create a conversation without `aiEmployee`, create a fixed `AgentService` with `createAgent`, and verify direct model execution (success path).
+10. Verify a custom context provider resolves model/prompt/tools without directly loading or saving conversation messages; a missing model must produce a clear error (failure path).
+11. Verify a custom persistence implementation keeps assistant messages and usage events atomic and preserves tool status transitions; a usage write error must roll back the message (failure path).
+12. Verify unauthorized user/session access is denied and disconnect recovery does not duplicate a mutation (permission/recovery path).
 
 # Output Contract
 
@@ -282,4 +298,4 @@ Final response must include:
 - [API guide](references/api-reference.md): use for `/api/ai` behavior and service mapping.
 - [Runtime boundaries](references/agent-service.md): use before direct manager or custom agent work.
 - [Exact contracts](references/contracts.md): use before writing resource definitions, React props, settings tabs, tool schemas, or request bodies.
-- [NocoBase App quickstart](../../../../docs/quickstart.md): use when App creation or local development workflow is unclear.
+- [NocoBase App quickstart](../../../../../docs/docs/en/plugin-development/quick-start.md): use when App creation or local development workflow is unclear.
