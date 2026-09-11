@@ -2,14 +2,12 @@ import type {
   AgentProviders,
   AgentRequest,
   ChatContextProvider,
-  ConversationProvider,
   CurrentConversation,
   DiscoveredTools,
   ResolvedAgentLLM,
 } from '../types.js';
 import { DefaultChatMessageConverters } from '../chat-message-converters.js';
 import { NativeCollectionSaver } from '../../agent/ai-employee/checkpoints/index.js';
-import { createAIChatConversation } from './ai-chat-conversation.js';
 import type {
   AIEmployee as AIEmployeeType,
   AIMessageInput,
@@ -23,10 +21,8 @@ import type {
 import { listSystemTools, SYSTEM_TOOLS } from '@nocobase/ai-employee';
 import _ from 'lodash';
 import {
+  createConversationProvider,
   createAgentProviders,
-  DefaultAgentAbortController,
-  DefaultAgentEventHandler,
-  DefaultConversationProvider,
 } from '../providers.js';
 import type { AIEmployeeAgentOptions } from './options.js';
 import type { AIEmployeeSkillSettings } from './options.js';
@@ -41,7 +37,6 @@ import type {
   UserAIEmployeeRepository,
 } from '../../repository/index.js';
 import type { AIEmployeeRepository } from '@nocobase/ai-employee';
-import { DefaultConversationMessageStore } from './conversation-message-store.js';
 import { getSystemPrompt } from './prompts.js';
 import {
   getKnowledgeBaseBackgroundPrompt,
@@ -59,40 +54,6 @@ import {
   listCurrentFrontendTools,
   prepareToolsForFrontendConversation,
 } from './frontend-tools.js';
-
-export function createConversationProvider(
-  options: AIEmployeeAgentOptions,
-): ConversationProvider {
-  const database = options.database;
-  const sessionId = options.sessionId;
-  const chatConversation = createAIChatConversation({
-    messages: options.aiMessages,
-    conversations: options.aiConversations,
-    database,
-    snowflake: options.snowflake,
-    sessionId,
-  });
-  const cache = options.llmStreamCachedManager.getCached(sessionId);
-  const messageStore = new DefaultConversationMessageStore({
-    sessionId,
-    conversation: chatConversation,
-    database,
-    messages: options.aiMessages,
-    toolMessages: options.aiToolMessages,
-    snowflake: options.snowflake,
-    getCurrentFrontendTools: () =>
-      listCurrentFrontendTools(options.aiConversations, {
-        ...(options.execution ?? {}),
-        sessionId,
-      }),
-  });
-  return new DefaultConversationProvider(
-    messageStore,
-    cache,
-    new DefaultAgentEventHandler(options.aiConversations, sessionId),
-    new DefaultAgentAbortController(options.aiEmployeesManager, sessionId),
-  );
-}
 
 export interface AIEmployeeChatContextProviderOptions {
   readonly employee: AIEmployeeType;

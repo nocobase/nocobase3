@@ -3,6 +3,10 @@ import type { AIEmployeesManager } from '../manager/ai-employees-manager.js';
 import { LLMStreamCached } from '../manager/llm-stream-cached-manager.js';
 import type { Logger } from '@nocobase/logging';
 import { DefaultChatMessageConverters } from './chat-message-converters.js';
+import { createAIChatConversation } from './ai-employee/ai-chat-conversation.js';
+import { DefaultConversationMessageStore } from './ai-employee/conversation-message-store.js';
+import { listCurrentFrontendTools } from './ai-employee/frontend-tools.js';
+import type { AIEmployeeAgentOptions } from './ai-employee/options.js';
 import {
   DEFAULT_AGENT_FEATURES,
   type AgentAbortController,
@@ -90,6 +94,40 @@ export class DefaultConversationProvider implements ConversationProvider {
     public readonly event: AgentEventHandler,
     public readonly abort: AgentAbortController,
   ) {}
+}
+
+export function createConversationProvider(
+  options: AIEmployeeAgentOptions,
+): ConversationProvider {
+  const database = options.database;
+  const sessionId = options.sessionId;
+  const chatConversation = createAIChatConversation({
+    messages: options.aiMessages,
+    conversations: options.aiConversations,
+    database,
+    snowflake: options.snowflake,
+    sessionId,
+  });
+  const cache = options.llmStreamCachedManager.getCached(sessionId);
+  const messageStore = new DefaultConversationMessageStore({
+    sessionId,
+    conversation: chatConversation,
+    database,
+    messages: options.aiMessages,
+    toolMessages: options.aiToolMessages,
+    snowflake: options.snowflake,
+    getCurrentFrontendTools: () =>
+      listCurrentFrontendTools(options.aiConversations, {
+        ...(options.execution ?? {}),
+        sessionId,
+      }),
+  });
+  return new DefaultConversationProvider(
+    messageStore,
+    cache,
+    new DefaultAgentEventHandler(options.aiConversations, sessionId),
+    new DefaultAgentAbortController(options.aiEmployeesManager, sessionId),
+  );
 }
 
 class DefaultAgentProviders implements AgentProviders {

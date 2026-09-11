@@ -160,7 +160,7 @@ describe('fixed AgentService contracts', () => {
   });
 
   it('keeps AI chat conversation ownership in the conversation provider', () => {
-    const providers = read('agent/ai-employee/providers.ts');
+    const providers = read('agent/providers.ts');
     const chatConversation = read('agent/ai-employee/ai-chat-conversation.ts');
     expect(fs.existsSync(path.join(src, 'agent/ai-employee/runtime.ts'))).toBe(
       false,
@@ -252,6 +252,7 @@ describe('fixed AgentService contracts', () => {
     const service = read('agent/agent-service.ts');
     const providers = read('agent/ai-employee/providers.ts');
     const factory = read('agent/ai-employee/index.ts');
+    const agentProviders = read('agent/providers.ts');
     const types = read('agent/types.ts');
 
     expect(service).toContain(
@@ -297,8 +298,8 @@ describe('fixed AgentService contracts', () => {
         path.join(src, 'agent/ai-employee/tool-call-cancellation.ts'),
       ),
     ).toBe(false);
-    expect(providers).not.toContain('DefaultToolCallHandler');
-    expect(providers).toMatch(
+    expect(agentProviders).not.toContain('DefaultToolCallHandler');
+    expect(agentProviders).toMatch(
       /createConversationProvider\(\s*options: AIEmployeeAgentOptions,?\s*\)/,
     );
     expect(providers).not.toContain('ToolCallPolicy');
