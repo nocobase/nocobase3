@@ -25,26 +25,26 @@ export const i18nToken: ServiceToken<I18nRuntime> =
 
 export interface AppI18nConfig {
   readonly defaultLocale: Locale;
-  readonly locales: readonly Locale[];
 }
 
+/**
+ * Which language the application answers in when nothing else decides.
+ *
+ * There is deliberately no list of supported languages here: the application's own `locales/` files are that list, so
+ * adding a language means adding its file rather than editing configuration in a second place. A plugin's locale file
+ * supplies translations for a language the application already offers; it never adds one.
+ */
 export const i18nConfig: AppConfigDefinition<AppI18nConfig> = defineAppConfig({
   namespace: 'i18n',
-  schema: Type.Object({
-    defaultLocale: Type.String(),
-    locales: Type.Array(Type.String()),
-  }),
-  defaults: { defaultLocale: 'en-US', locales: ['en-US', 'zh-CN'] },
+  schema: Type.Object(
+    {
+      defaultLocale: Type.String(),
+    },
+    { additionalProperties: false },
+  ),
+  defaults: { defaultLocale: 'en-US' },
   envMappings: {
     APP_DEFAULT_LOCALE: envString('defaultLocale'),
-    APP_LOCALES: {
-      path: 'locales',
-      parse: (value: string): string[] =>
-        value
-          .split(',')
-          .map((locale) => locale.trim())
-          .filter(Boolean),
-    },
   },
 });
 
@@ -71,12 +71,11 @@ export class I18nProvider<
 
   public override register(): void {
     const config = this.app.config.get(i18nConfig);
+    // Only the default locale is known here. The languages on offer follow from the application's own locale files,
+    // which are registered later in the boot sequence by `registerAppLocales`.
     this.app.container.instance(
       i18nToken,
-      new I18nRuntime({
-        defaultLocale: config.defaultLocale,
-        locales: config.locales,
-      }),
+      new I18nRuntime({ defaultLocale: config.defaultLocale }),
     );
   }
 }

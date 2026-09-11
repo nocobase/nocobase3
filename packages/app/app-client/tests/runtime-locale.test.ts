@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createAppClientConfig } from '../src/config.js';
 import { createAppI18nRuntime } from '../src/i18n.js';
-import { defineClientPlugins } from '../src/plugins.js';
+import { defineClientPlugins, defineClientPlugin } from '../src/plugins.js';
 import { defineAppRuntime, resolveAppRuntime } from '../src/runtime/index.js';
 
 const definition = defineAppRuntime({
@@ -15,34 +15,42 @@ const definition = defineAppRuntime({
   },
 });
 
+/** A plugin translating a language the application itself does not offer. */
+const japanesePlugin = defineClientPlugin({
+  packageName: '@example/plugin',
+  locales: {
+    'en-US': async () => ({ plugin: 'Plugin' }),
+    'ja-JP': async () => ({ plugin: 'プラグイン' }),
+  },
+});
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
 describe('runtime default locale', () => {
   it.each([
-    [undefined, undefined, 'zh-CN', 'zh-CN'],
-    [undefined, undefined, 'fr-FR', 'en-US'],
-    [undefined, 'zh-CN', 'en-US', 'zh-CN'],
-    ['en-US', 'zh-CN', 'zh-CN', 'en-US'],
-    ['invalid', 'zh-CN', 'en-US', 'zh-CN'],
-    ['invalid', 'invalid', 'zh-CN', 'zh-CN'],
-    [undefined, 12, 'zh-CN', 'zh-CN'],
-    [undefined, 'fr-FR', 'en-US', 'en-US'],
-    [undefined, 'zh', 'en-US', 'zh-CN'],
-    ['zh-Hans-CN', 'en-US', 'en-US', 'zh-CN'],
+    [undefined, undefined, 'en-US'],
+    [undefined, 'zh-CN', 'zh-CN'],
+    ['en-US', 'zh-CN', 'en-US'],
+    ['zh-CN', undefined, 'zh-CN'],
+    ['invalid', 'zh-CN', 'zh-CN'],
+    ['invalid', 'invalid', 'en-US'],
+    [undefined, 12, 'en-US'],
+    [undefined, 'fr-FR', 'en-US'],
+    [undefined, 'zh', 'zh-CN'],
+    ['zh-Hans-CN', 'en-US', 'zh-CN'],
   ])(
-    'resolves stored %s, configured %s, browser %s to %s',
-    async (stored, configured, browser, expected) => {
+    'resolves stored %s and configured %s to %s',
+    async (stored, configured, expected) => {
       const setItem = vi.fn();
       vi.stubGlobal('localStorage', { getItem: () => stored ?? null, setItem });
-      vi.stubGlobal('navigator', { language: browser });
 
       const runtime = await resolveAppRuntime(definition, {
         rawConfig:
           configured === undefined
             ? {}
-            : { app: { defaultLocale: configured } },
+            : { i18n: { defaultLocale: configured } },
       });
 
       expect(runtime.i18n.getLocale()).toBe(expected);
@@ -54,15 +62,63 @@ describe('runtime default locale', () => {
     },
   );
 
+  it('ignores the browser language entirely', async () => {
+    vi.stubGlobal('localStorage', { getItem: () => null });
+    vi.stubGlobal('navigator', { language: 'zh-CN' });
+
+    const runtime = await resolveAppRuntime(definition, { rawConfig: {} });
+
+    expect(runtime.i18n.getLocale()).toBe('en-US');
+  });
+
+  it('offers only the languages the application itself declares', async () => {
+    vi.stubGlobal('localStorage', { getItem: () => null });
+    const withPlugin = defineAppRuntime({
+      ...definition,
+      plugins: defineClientPlugins([japanesePlugin()]),
+    });
+
+    const runtime = await resolveAppRuntime(withPlugin, { rawConfig: {} });
+
+    expect(runtime.i18n.getLocales()).toEqual(['en-US', 'zh-CN']);
+    // The plugin's translations still reach the languages the application does offer.
+    expect(runtime.i18n.getFixedT('@example/plugin')('plugin')).toBe('Plugin');
+  });
+
+  it('refuses a configured default the application does not translate', async () => {
+    vi.stubGlobal('localStorage', { getItem: () => null });
+    const withPlugin = defineAppRuntime({
+      ...definition,
+      plugins: defineClientPlugins([japanesePlugin()]),
+    });
+
+    const runtime = await resolveAppRuntime(withPlugin, {
+      rawConfig: { i18n: { defaultLocale: 'ja-JP' } },
+    });
+
+    expect(runtime.i18n.getDefaultLocale()).toBe('en-US');
+    expect(runtime.i18n.getLocales()).toEqual(['en-US', 'zh-CN']);
+  });
+
+  it('keeps the default locale in the list even with no application locales', async () => {
+    vi.stubGlobal('localStorage', { getItem: () => null });
+    const runtime = await createAppI18nRuntime({
+      contributions: [],
+      defaultLocale: 'fr-FR',
+    });
+
+    expect(runtime.getLocales()).toEqual(['fr-FR']);
+    expect(runtime.getDefaultLocale()).toBe('fr-FR');
+  });
+
   it('uses the configured default when storage is unavailable and still switches languages', async () => {
     vi.stubGlobal('localStorage', {
       getItem: () => {
         throw new Error('denied');
       },
     });
-    vi.stubGlobal('navigator', { language: 'en-US' });
     const runtime = await resolveAppRuntime(definition, {
-      rawConfig: { app: { defaultLocale: 'zh-CN' } },
+      rawConfig: { i18n: { defaultLocale: 'zh-CN' } },
     });
     expect(runtime.i18n.getLocale()).toBe('zh-CN');
     await runtime.i18n.changeLanguage('en-US');
