@@ -156,9 +156,10 @@ class AIChatConversationImpl implements AIChatConversation {
     );
   }
   async getMessage(messageId: string): Promise<AIMessage | null> {
-    return await this.aiMessagesRepo.findOne({
-      filter: { sessionId: this.sessionId, messageId },
-    });
+    return await this.aiMessagesRepo.findOne(
+      { filter: { sessionId: this.sessionId, messageId } },
+      { connection: this.transaction },
+    );
   }
 
   async listMessages(query: AIMessageQuery): Promise<AIMessage[]> {

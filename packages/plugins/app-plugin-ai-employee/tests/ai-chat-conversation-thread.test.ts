@@ -10,7 +10,10 @@ function fixture() {
     })),
     update: vi.fn(async () => 1),
   };
-  const messages = { destroy: vi.fn(async () => 1) };
+  const messages = {
+    destroy: vi.fn(async () => 1),
+    findOne: vi.fn(async () => ({ messageId: 'message-1' })),
+  };
   const usageEvents = {};
   const database = {
     transaction: vi.fn(async (callback) => callback(connection)),
@@ -54,11 +57,16 @@ describe('AIChatConversation thread persistence', () => {
     const f = fixture();
     await f.conversation.withTransaction(async (target) => {
       await target.currentThread();
+      await target.getMessage('message-1');
       await target.updateThread(4);
       await target.removeMessages({ messageId: 'message-1' });
     });
     expect(f.conversations.findOne).toHaveBeenCalledWith(
       { filter: { sessionId: 'session-1' } },
+      { connection: f.connection },
+    );
+    expect(f.messages.findOne).toHaveBeenCalledWith(
+      { filter: { sessionId: 'session-1', messageId: 'message-1' } },
       { connection: f.connection },
     );
     expect(f.conversations.update).toHaveBeenCalledWith(
