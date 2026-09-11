@@ -104,6 +104,7 @@ export function createConversationProvider(
   const chatConversation = createAIChatConversation({
     messages: options.aiMessages,
     conversations: options.aiConversations,
+    usageEvents: options.aiUsageEvents,
     database,
     snowflake: options.snowflake,
     sessionId,

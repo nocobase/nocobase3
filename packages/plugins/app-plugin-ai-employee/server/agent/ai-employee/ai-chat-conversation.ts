@@ -10,6 +10,7 @@
 import type {
   AIConversationRepository,
   AIMessageRepository,
+  AIUsageEventRepository,
 } from '../../repository/index.js';
 import _ from 'lodash';
 import {
@@ -27,12 +28,14 @@ import { recordAIUsageEventsForMessages } from './ai-usage-events.js';
 export const createAIChatConversation = ({
   messages,
   conversations,
+  usageEvents,
   database,
   snowflake,
   sessionId,
 }: {
   messages: AIMessageRepository;
   conversations: AIConversationRepository;
+  usageEvents: AIUsageEventRepository;
   database: DatabaseConnection;
   snowflake: IdGeneratorService;
   sessionId: string;
@@ -43,6 +46,7 @@ export const createAIChatConversation = ({
     snowflake,
     sessionId,
     conversations,
+    usageEvents,
   );
 };
 class AIChatConversationImpl implements AIChatConversation {
@@ -53,6 +57,7 @@ class AIChatConversationImpl implements AIChatConversation {
     private readonly idGenerator: IdGeneratorService,
     private readonly sessionId: string,
     private readonly conversations: AIConversationRepository,
+    private readonly usageEvents: AIUsageEventRepository,
   ) {}
   async withTransaction<T>(
     runnable: (
@@ -128,6 +133,10 @@ class AIChatConversationImpl implements AIChatConversation {
     await recordAIUsageEventsForMessages(
       this.sessionId,
       instances,
+      {
+        conversations: this.conversations,
+        usageEvents: this.usageEvents,
+      },
       this.transaction,
     );
     return isArray ? instances : instances[0];
@@ -176,6 +185,7 @@ class AIChatConversationImpl implements AIChatConversation {
       this.idGenerator,
       this.sessionId,
       this.conversations,
+      this.usageEvents,
     );
   }
 

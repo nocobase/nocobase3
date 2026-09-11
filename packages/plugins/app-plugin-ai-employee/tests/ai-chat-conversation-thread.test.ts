@@ -12,12 +12,14 @@ function fixture() {
     update: vi.fn(async () => 1),
   };
   const messages = { destroy: vi.fn(async () => 1) };
+  const usageEvents = {};
   const database = {
     transaction: vi.fn(async (callback) => callback(connection)),
   };
   const conversation = createAIChatConversation({
     conversations,
     messages,
+    usageEvents,
     database,
     sessionId: 'session-1',
     snowflake: {},

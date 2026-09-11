@@ -308,6 +308,7 @@ describe('fixed AgentService contracts', () => {
     expect(options).not.toMatch(/\brepositories\s*:/);
     expect(options).toContain('aiMessages: AIMessageRepository');
     expect(options).toContain('aiToolMessages: AIToolMessageRepository');
+    expect(options).toContain('aiUsageEvents: AIUsageEventRepository');
     expect(options).toContain('aiConversations: AIConversationRepository');
     expect(messageStore).toContain('class DefaultConversationMessageStore');
     expect(providers).toContain('new DefaultChatMessageConverters(options)');

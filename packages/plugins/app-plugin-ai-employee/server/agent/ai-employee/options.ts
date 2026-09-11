@@ -13,6 +13,7 @@ import type {
   AIConversationRepository,
   AIMessageRepository,
   AIToolMessageRepository,
+  AIUsageEventRepository,
   LCCheckpointBlobRepository,
   LCCheckpointRepository,
   LCCheckpointWriteRepository,
@@ -48,6 +49,7 @@ export interface AIEmployeeAgentOptions {
   aiEmployees: AIEmployeeRepository;
   aiMessages: AIMessageRepository;
   aiToolMessages: AIToolMessageRepository;
+  aiUsageEvents: AIUsageEventRepository;
   usersAiEmployees: UserAIEmployeeRepository;
   lcCheckpoints: LCCheckpointRepository;
   lcCheckpointBlobs: LCCheckpointBlobRepository;

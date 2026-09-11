@@ -279,6 +279,7 @@ export class SubAgentsDispatcher {
       aiEmployees: this.repositories.aiEmployees,
       aiMessages: this.repositories.aiMessages,
       aiToolMessages: this.repositories.aiToolMessages,
+      aiUsageEvents: this.repositories.aiUsageEvents,
       usersAiEmployees: this.repositories.usersAiEmployees,
       lcCheckpoints: this.repositories.lcCheckpoints,
       lcCheckpointBlobs: this.repositories.lcCheckpointBlobs,
