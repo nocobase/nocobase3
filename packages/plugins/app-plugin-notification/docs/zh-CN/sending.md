@@ -16,7 +16,6 @@ keywords: 'NocoBase,NotificationManager,发送通知,站内信,邮件,飞书,钉
 | --------- | ------------------------------------------------- | ---------------------------------------------------------- |
 | `user`    | `{ type: 'user', id: 'user-1' }`                  | 通过用户 ID 发送。Channel 需要提供对应的用户地址解析能力。 |
 | `email`   | `{ type: 'email', address: 'alice@example.com' }` | 直接向邮箱地址发送。                                       |
-| `phone`   | `{ type: 'phone', number: '13800000000' }`        | 表示电话号码。当前没有内置 Channel 消费这种收件人。        |
 
 Provider 路由中的 `provider` 是 Provider 名称。`routing.im.providers.provider: 'feishu'` 表示选择名为 `feishu` 的 Webhook Provider；也可以使用 `strategy: 'all'` 同时选择多个 Provider。
 

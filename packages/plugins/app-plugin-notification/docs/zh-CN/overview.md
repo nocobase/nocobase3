@@ -52,7 +52,7 @@ Delivery 保存接收人、消息以及选中的 Provider。真正调用 Provide
 
 `name` 和 `type` 不是同一个字段：`name` 是配置实例名称，`type` 是实现类型。`type` 不参与业务代码的 Provider 选择，但应用启动时会用它匹配并创建 Provider definition，Delivery 重试时也会用它校验 Provider 身份。发送时只需要通过 `name` 路由，不需要把 `type` 传给 `send()`；不过 `name` 和 `type` 都会写入 Delivery，配置更新和应用重启后应保持稳定。
 
-飞书、钉钉 Webhook Provider 本身已经代表一个外部群机器人，不需要额外的业务收件人或 `target` 配置。可以配置多个 Provider，通过 Provider 的 `name` 路由到其中一个，或使用 `strategy: 'all'` 同时发送到多个 Provider。若自定义 IM Channel 支持用户收件人，也可以通过 resolver 把 `{ type: 'user', id: '...' }` 解析为外部地址。
+飞书、钉钉 Webhook Provider 本身已经代表一个外部群机器人，不需要业务收件人。可以配置多个 Provider，通过 Provider 的 `name` 路由到其中一个，或使用 `strategy: 'all'` 同时发送到多个 Provider。若自定义 IM Channel 支持用户收件人，也可以通过 resolver 把 `{ type: 'user', id: '...' }` 解析为外部地址。
 
 ## Provider 选择
 
