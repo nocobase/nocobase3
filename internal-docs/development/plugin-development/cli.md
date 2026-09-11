@@ -96,13 +96,20 @@ const cliPlugin: AppCliPlugin = defineCliPlugin({
       },
     ],
   },
-  devHooks: {
-    beforeDev: [
-      { label: 'Build workflow artifacts', command: ['pnpm', 'nocobase', 'workflow', 'build'] },
-    ],
-  },
 });
 ```
+
+workflow 插件只声明了 `buildHooks`。dev 阶段的钩子写法一样：
+
+```ts
+  devHooks: {
+    beforeDev: [
+      { label: 'Prepare demo artifacts', command: ['pnpm', 'nocobase', 'demo', 'build'] },
+    ],
+  },
+```
+
+workflow 不挂这个，是因为非生产运行时下 loader 会按需编译 `server/workflows`，产出的 digest 跟构建产出的一致——再加一次预编译只会给每次 `pnpm dev` 启动加上几秒，不会让任何原本看不见的东西变得可见。
 
 `command` 是拆好的数组。不过 shell，所以带空格的参数不用管引号，跨平台行为也一致；反过来 `&&`、管道、重定向、`FOO=1` 前缀都不成立——要顺序执行就声明多个钩子，别的自己包一条命令。数组第 0 位是任意可执行文件，不限于 `pnpm`：`['node', './scripts/x.mjs']` 也行，不必为了用钩子而先包一条 oclif 命令。
 

@@ -32,6 +32,31 @@ describe('workflow CLI contribution', () => {
     });
   });
 
+  /**
+   * The build stage reads the compiled `.js` a deployment runs, so it has to follow `tsc`. There is no dev
+   * counterpart: outside production the loader compiles `server/workflows` on demand and produces the digest a build
+   * would produce, so a preflight build would put seconds back on every `pnpm dev` start and reintroduce the
+   * rebuild-and-restart loop it replaced, without making anything visible that is not already visible.
+   */
+  it('builds artifacts after the server build and never before a dev run', () => {
+    expect(cliPlugin.buildHooks).toEqual({
+      afterServerBuild: [
+        {
+          label: 'Build workflow artifacts',
+          command: [
+            'pnpm',
+            'nocobase',
+            'workflow',
+            'build',
+            '--resource-root',
+            './dist/server/workflows',
+          ],
+        },
+      ],
+    });
+    expect(cliPlugin.devHooks).toEqual({});
+  });
+
   it('exposes the cli entry and shares the app oclif runtime', () => {
     expect(packageMetadata.exports['./cli']).toBeDefined();
     expect(packageMetadata.publishConfig.exports['./cli']).toBeDefined();

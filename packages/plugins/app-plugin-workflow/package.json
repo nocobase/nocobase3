@@ -127,7 +127,7 @@
     "better-sqlite3": "^13.0.3",
     "eslint": "catalog:",
     "jsdom": "catalog:",
-    "knex": "^3.1.0",
+    "knex": "catalog:",
     "prettier": "catalog:",
     "react-dom": "catalog:",
     "tsx": "catalog:",
