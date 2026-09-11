@@ -12,7 +12,9 @@ import {
 import { DefaultChatMessageConverters } from './chat-message-converters.js';
 import {
   DEFAULT_AGENT_FEATURES,
+  type AgentAbortController,
   type AgentAbortHandle,
+  type AgentEventHandler,
   type AgentExecutionMode,
   type AgentFeatureOptions,
   type AgentInterruptAction,
@@ -21,6 +23,7 @@ import {
   type ConversationProvider,
   type ConversationMessageStore,
   type CreateAgentProvidersOptions,
+  type CurrentConversation,
   type SavedAssistantMessage,
 } from './types.js';
 
@@ -52,7 +55,7 @@ const clone = <T extends object>(value: T): T => ({ ...value });
 
 interface MemoryConversationOptions {
   sessionId?: string;
-  identity?: ConversationProvider['identity'];
+  currentConversation?: CurrentConversation;
   initialMessages?: AIMessageInput[];
 }
 
@@ -65,7 +68,7 @@ class MemoryConversationState {
 
   public constructor(options: MemoryConversationOptions) {
     this.sessionId =
-      options.identity?.sessionId ??
+      options.currentConversation?.sessionId ??
       options.sessionId ??
       `agent-${crypto.randomUUID()}`;
     for (const message of options.initialMessages ?? []) {
@@ -106,6 +109,20 @@ class MemoryConversationState {
     if (!current) return 0;
     Object.assign(current, values);
     return 1;
+  }
+
+  public updateMessage(
+    messageId: string,
+    patch: Partial<AIMessageInput>,
+  ): void {
+    const message = this.messages.find(
+      (item) => String(item.messageId) === String(messageId),
+    );
+    if (!message) return;
+    const metadata = patch.metadata
+      ? { ...message.metadata, ...patch.metadata }
+      : message.metadata;
+    Object.assign(message, patch, { metadata });
   }
 
   private convert(message: AIMessageInput): StoredMessage {
@@ -190,6 +207,13 @@ class MemoryConversationMessageStore implements ConversationMessageStore {
         invokeStatus: 'confirmed',
       });
     }
+  }
+
+  public async updateMessage(
+    messageId: string,
+    patch: Partial<AIMessageInput>,
+  ): Promise<void> {
+    this.state.updateMessage(messageId, patch);
   }
 
   public async currentThread(): Promise<AgentThread> {
@@ -286,32 +310,34 @@ const memoryStreamManager = {
   async *stream(): AsyncGenerator<string, void, void> {},
 } as unknown as LLMStreamCachedManager;
 
+class MemoryAgentEventHandler implements AgentEventHandler {
+  public async beforeExecution(_mode: AgentExecutionMode): Promise<void> {}
+  public async afterExecution(
+    _mode: AgentExecutionMode,
+    _options?: { aborted?: boolean },
+  ): Promise<void> {}
+}
+
+class MemoryAgentAbortController implements AgentAbortController {
+  public registerAbortHandle(_token: symbol, _handle: AgentAbortHandle): void {}
+  public unregisterAbortHandle(_token: symbol): void {}
+}
 class MemoryConversationProvider implements ConversationProvider {
-  public readonly identity: ConversationProvider['identity'];
   public readonly messages: ConversationMessageStore;
   public readonly streamCache: LLMStreamCached;
+  public readonly event: AgentEventHandler;
+  public readonly abort: AgentAbortController;
 
   public constructor(options: MemoryConversationOptions) {
     const state = new MemoryConversationState(options);
-    this.identity = options.identity ?? { sessionId: state.sessionId };
+    this.event = new MemoryAgentEventHandler();
+    this.abort = new MemoryAgentAbortController();
     this.messages = new MemoryConversationMessageStore(state);
     this.streamCache = new LLMStreamCached(
       state.sessionId,
       memoryStreamManager,
     );
   }
-
-  public async beforeExecution(_mode: AgentExecutionMode): Promise<void> {}
-  public async afterExecution(
-    _mode: AgentExecutionMode,
-    _options?: { aborted?: boolean },
-  ): Promise<void> {}
-  public registerAbortHandle(_token: symbol, _handle: AgentAbortHandle): void {}
-  public unregisterAbortHandle(_token: symbol): void {}
-  public async updateAssistantResponseMetadata(
-    _messageId: string,
-    _metadata: Record<string, unknown>,
-  ): Promise<void> {}
 }
 
 class DefaultAgentProviders implements AgentProviders {

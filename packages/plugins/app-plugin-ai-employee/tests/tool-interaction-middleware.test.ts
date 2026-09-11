@@ -46,9 +46,7 @@ describe('toolInteractionMiddleware', () => {
     ]);
 
     toolInteractionMiddleware(
-      {
-        identity: { sessionId: 'session-1', username: 'dara' },
-      } as never,
+      { sessionId: 'session-1', username: 'dara' },
       toolMap,
     );
 

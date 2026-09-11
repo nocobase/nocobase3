@@ -3,4 +3,4 @@
 '@nocobase/app-plugin-ai-employee': patch
 ---
 
-Refactor AI employee tool discovery around an execution-scoped `DiscoveredTools` result that owns the registered tool map and dynamic active-tool whitelist, and simplify chat context system prompt resolution to accept only conversation messages.
+Refactor AI employee execution around an execution-scoped `DiscoveredTools` result, request-selected LLM models, and a simplified system prompt contract.

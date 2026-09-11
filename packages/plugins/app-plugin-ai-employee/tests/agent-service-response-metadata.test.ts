@@ -23,7 +23,7 @@ type StreamChunk = [string, unknown];
 type Fixture = {
   service: AgentService;
   provider: LLMProvider;
-  updateAssistantResponseMetadata: ReturnType<typeof vi.fn>;
+  updateMessage: ReturnType<typeof vi.fn>;
   stream: ReturnType<typeof vi.fn>;
   invoke: ReturnType<typeof vi.fn>;
   getCallback: () => { handleLLMEnd(output: unknown): void } | undefined;
@@ -54,11 +54,10 @@ const createFixture = (chunks: StreamChunk[]): Fixture => {
     parseWebSearchAction: vi.fn(() => null),
   } as unknown as LLMProvider;
   const conversation = createMemoryConversationProvider({
-    identity: { sessionId: 'session-1', username: 'dara' },
+    currentConversation: { sessionId: 'session-1', username: 'dara' },
   });
-  const updateAssistantResponseMetadata = vi.fn(async () => undefined);
-  conversation.updateAssistantResponseMetadata =
-    updateAssistantResponseMetadata;
+  const updateMessage = vi.fn(async () => undefined);
+  conversation.messages.updateMessage = updateMessage;
   const providers: AgentProviders = {
     conversation,
     logger: { warn: vi.fn(), error: vi.fn() } as never,
@@ -69,6 +68,10 @@ const createFixture = (chunks: StreamChunk[]): Fixture => {
         provider,
       })),
       getSystemPrompt: vi.fn(async () => undefined),
+      currentConversation: vi.fn(() => ({
+        sessionId: 'session-1',
+        username: 'dara',
+      })),
       discoveredTools: vi.fn(async () => ({
         tools: new Map(),
         activeTools: async () => new Set(),
@@ -85,7 +88,7 @@ const createFixture = (chunks: StreamChunk[]): Fixture => {
   return {
     service: new AgentService(providers),
     provider,
-    updateAssistantResponseMetadata,
+    updateMessage,
     stream,
     invoke,
     getCallback: () => callback,
@@ -167,11 +170,10 @@ describe('AgentService response metadata', () => {
 
     await collect(fixture.service.stream());
 
-    expect(fixture.updateAssistantResponseMetadata).toHaveBeenCalledOnce();
-    expect(fixture.updateAssistantResponseMetadata).toHaveBeenCalledWith(
-      'message-1',
-      { tokens: 42 },
-    );
+    expect(fixture.updateMessage).toHaveBeenCalledOnce();
+    expect(fixture.updateMessage).toHaveBeenCalledWith('message-1', {
+      metadata: { response_metadata: { tokens: 42 } },
+    });
     expect(fixture.provider.parseResponseMetadata).toHaveBeenCalledTimes(3);
   });
 
@@ -195,7 +197,7 @@ describe('AgentService response metadata', () => {
 
     await collect(fixture.service.stream());
 
-    expect(fixture.updateAssistantResponseMetadata).not.toHaveBeenCalled();
+    expect(fixture.updateMessage).not.toHaveBeenCalled();
   });
 
   it('disposes stream metadata and ignores a late callback write', async () => {
@@ -211,7 +213,7 @@ describe('AgentService response metadata', () => {
         metadata: { tokens: 99 },
       }),
     ).not.toThrow();
-    expect(fixture.updateAssistantResponseMetadata).not.toHaveBeenCalled();
+    expect(fixture.updateMessage).not.toHaveBeenCalled();
   });
 
   it('isolates concurrent streams that use the same response id', async () => {
@@ -261,11 +263,11 @@ describe('AgentService response metadata', () => {
       collect(fixture.service.stream()),
     ]);
 
-    expect(fixture.updateAssistantResponseMetadata).toHaveBeenCalledTimes(2);
-    expect(fixture.updateAssistantResponseMetadata.mock.calls).toEqual(
+    expect(fixture.updateMessage).toHaveBeenCalledTimes(2);
+    expect(fixture.updateMessage.mock.calls).toEqual(
       expect.arrayContaining([
-        ['message-first', { tokens: 11 }],
-        ['message-second', { tokens: 22 }],
+        ['message-first', { metadata: { response_metadata: { tokens: 11 } } }],
+        ['message-second', { metadata: { response_metadata: { tokens: 22 } } }],
       ]),
     );
   });
@@ -303,7 +305,7 @@ describe('AgentService response metadata', () => {
     });
     await collect(fixture.service.stream());
 
-    expect(fixture.updateAssistantResponseMetadata).not.toHaveBeenCalled();
+    expect(fixture.updateMessage).not.toHaveBeenCalled();
   });
 
   it('ignores a callback that arrives after aborted stream disposal', async () => {
@@ -346,7 +348,7 @@ describe('AgentService response metadata', () => {
     });
     await collect(fixture.service.stream());
 
-    expect(fixture.updateAssistantResponseMetadata).not.toHaveBeenCalled();
+    expect(fixture.updateMessage).not.toHaveBeenCalled();
   });
 
   it('does not inject a response metadata collector for invoke', async () => {

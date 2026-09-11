@@ -11,14 +11,18 @@ const createProviders = (
   const conversation = createMemoryConversationProvider();
   conversation.messages.cancelToolCall = cancel;
   const lifecycle = {
-    beforeExecution: vi.spyOn(conversation, 'beforeExecution'),
-    afterExecution: vi.spyOn(conversation, 'afterExecution'),
-    registerAbortHandle: vi.spyOn(conversation, 'registerAbortHandle'),
-    unregisterAbortHandle: vi.spyOn(conversation, 'unregisterAbortHandle'),
+    beforeExecution: vi.spyOn(conversation.event, 'beforeExecution'),
+    afterExecution: vi.spyOn(conversation.event, 'afterExecution'),
+    registerAbortHandle: vi.spyOn(conversation.abort, 'registerAbortHandle'),
+    unregisterAbortHandle: vi.spyOn(
+      conversation.abort,
+      'unregisterAbortHandle',
+    ),
   };
   const chatContext = {
     resolveLLM: vi.fn(),
     getSystemPrompt: vi.fn(),
+    currentConversation: vi.fn(() => ({ sessionId: 'test-session' })),
     discoveredTools: vi.fn(),
   };
   const providers: AgentProviders = {

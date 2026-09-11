@@ -6,11 +6,13 @@ import type {
 import type {
   AgentRequest,
   ChatContextProvider,
+  CurrentConversation,
   DiscoveredTools,
   ResolvedAgentLLM,
 } from './types.js';
 
 export interface FixedChatContextProviderOptions {
+  readonly currentConversation?: CurrentConversation;
   readonly provider: LLMProvider;
   readonly providerName?: string;
   readonly llmService?: string;
@@ -20,9 +22,19 @@ export interface FixedChatContextProviderOptions {
 }
 
 export class FixedChatContextProvider implements ChatContextProvider {
+  private readonly conversation: CurrentConversation;
+
   public constructor(
     private readonly options: FixedChatContextProviderOptions,
-  ) {}
+  ) {
+    this.conversation = options.currentConversation ?? {
+      sessionId: `agent-${crypto.randomUUID()}`,
+    };
+  }
+
+  public currentConversation(): CurrentConversation {
+    return this.conversation;
+  }
 
   public resolveLLM(_request: AgentRequest): Promise<ResolvedAgentLLM> {
     return Promise.resolve({

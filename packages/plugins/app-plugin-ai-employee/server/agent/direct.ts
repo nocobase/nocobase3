@@ -1,6 +1,6 @@
 import type { AIMessageInput } from '@nocobase/ai-employee';
 import type { ToolsEntity } from '@nocobase/ai-employee';
-import type { ConversationProvider } from './types.js';
+import type { ConversationProvider, CurrentConversation } from './types.js';
 import type { LLMProvider } from '@nocobase/ai-employee';
 import { createAgentService, type AgentService } from './agent-service.js';
 import {
@@ -19,16 +19,24 @@ export interface CreateDirectAgentServiceOptions {
   messages?: AIMessageInput[];
   tools?: ToolsEntity[];
   conversation?: ConversationProvider;
+  currentConversation?: CurrentConversation;
 }
 
 export function createDirectAgentService(
   options: CreateDirectAgentServiceOptions,
 ): AgentService {
+  const currentConversation = options.currentConversation ?? {
+    sessionId: `agent-${crypto.randomUUID()}`,
+  };
   const conversation =
     options.conversation ??
-    createMemoryConversationProvider({ initialMessages: options.messages });
+    createMemoryConversationProvider({
+      currentConversation,
+      initialMessages: options.messages,
+    });
   const chatMessageConverters = new DefaultChatMessageConverters();
   const chatContext = new FixedChatContextProvider({
+    currentConversation,
     provider: options.llmProvider,
     providerName: options.providerName,
     llmService: options.llmService,

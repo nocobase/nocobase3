@@ -748,13 +748,13 @@ export class AIConversationService {
           ? conversation.options.tools
           : undefined,
         webSearch,
-        model: resolvedModel,
       };
       if (conversation.category !== 'chat') {
         throw new ResourceActionError(404, 'conversation not found');
       }
       const agent = await createAIEmployeeAgentService(agentOptions);
       const runStream = async (request: any) => {
+        const agentRequest = { ...request, model: resolvedModel };
         const adapter = new AgentSSEAdapter(
           (chunk) => streamTarget(execution).write(chunk),
           (chunk) =>
@@ -762,16 +762,17 @@ export class AIConversationService {
         );
         await adapter.consume(
           request?.messageId
-            ? agent.forkStream(request, agentContext)
-            : agent.stream(request, agentContext),
+            ? agent.forkStream(agentRequest, agentContext)
+            : agent.stream(agentRequest, agentContext),
         );
         streamTarget(execution).end();
         return true;
       };
       const runInvoke = (request: any) => {
+        const agentRequest = { ...request, model: resolvedModel };
         return request?.messageId
-          ? agent.forkInvoke(request, agentContext)
-          : agent.invoke(request, agentContext);
+          ? agent.forkInvoke(agentRequest, agentContext)
+          : agent.invoke(agentRequest, agentContext);
       };
       const cancelToolCall = () => {
         return agent.cancelToolCall();
@@ -1073,7 +1074,6 @@ export class AIConversationService {
           ? conversation.options.tools
           : undefined,
         webSearch,
-        model: resolvedModel,
       };
       if (conversation.category !== 'chat') {
         throw new ResourceActionError(404, 'conversation not found');
@@ -1089,6 +1089,7 @@ export class AIConversationService {
             service.forkStream(
               {
                 messageId,
+                model: resolvedModel,
                 userMessages: resendMessages.length
                   ? resendMessages
                   : undefined,
@@ -1103,6 +1104,7 @@ export class AIConversationService {
         return service.forkInvoke(
           {
             messageId,
+            model: resolvedModel,
             userMessages: resendMessages.length ? resendMessages : undefined,
           },
           agentContext,
@@ -1377,7 +1379,6 @@ export class AIConversationService {
           ? conversation.options.tools
           : undefined,
         webSearch,
-        model: resolvedModel,
       };
       const userDecisions = await this.aiConversationsManager.getUserDecisions(
         message.messageId,
@@ -1391,7 +1392,12 @@ export class AIConversationService {
           (chunk) => streamTarget(execution).write(chunk),
           (chunk) =>
             this.llmStreamCachedManager.getCached(sessionId).append(chunk),
-        ).consume(service.resumeStream({ userDecisions }, agentContext));
+        ).consume(
+          service.resumeStream(
+            { model: resolvedModel, userDecisions },
+            agentContext,
+          ),
+        );
         streamTarget(execution).end();
       }
     } catch (err: any) {

@@ -19,12 +19,12 @@ import type {
 } from '@nocobase/ai-employee';
 export type { AgentThread } from '@nocobase/ai-employee';
 import type { LLMStreamCached } from '../manager/llm-stream-cached-manager.js';
-
+import type { ModelRef } from '../types.js';
 export type AgentExecutionSource = 'main-agent' | 'sub-agent' | (string & {});
 export type AgentExecutionMode = 'streaming' | 'invoking';
 export type AgentOperation = 'stream' | 'invoke' | 'resume' | 'fork';
 
-export interface AgentConversationIdentity {
+export interface CurrentConversation {
   sessionId: string;
   username?: string;
   from?: AgentExecutionSource;
@@ -32,6 +32,7 @@ export interface AgentConversationIdentity {
 }
 
 export interface AgentRequest {
+  model?: ModelRef;
   messageId?: string;
   userMessages?: AIMessageInput[];
   userDecisions?: {
@@ -91,7 +92,7 @@ export interface PreparedAgentContext extends AgentMessageConversionContext {
   thread?: AgentThread;
   checkpointer?: BaseCheckpointSaver | boolean;
   metadata: {
-    currentConversation: AgentConversationIdentity;
+    currentConversation: CurrentConversation;
     [key: string]: unknown;
   };
 }
@@ -148,59 +149,59 @@ export interface AgentToolCallStatus {
 }
 
 export type AgentStreamEvent =
-  | { type: 'stream_start'; conversation: AgentConversationIdentity }
-  | { type: 'stream_end'; conversation: AgentConversationIdentity }
+  | { type: 'stream_start'; conversation: CurrentConversation }
+  | { type: 'stream_end'; conversation: CurrentConversation }
   | {
       type: 'content';
-      conversation: AgentConversationIdentity;
+      conversation: CurrentConversation;
       content: unknown;
     }
   | {
       type: 'reasoning';
-      conversation: AgentConversationIdentity;
+      conversation: CurrentConversation;
       action: 'start' | 'content' | 'stop';
       content?: unknown;
     }
   | {
       type: 'web_search';
-      conversation: AgentConversationIdentity;
+      conversation: CurrentConversation;
       body: unknown;
     }
   | {
       type: 'tool_call_chunks';
-      conversation: AgentConversationIdentity;
+      conversation: CurrentConversation;
       chunks: unknown[];
     }
   | {
       type: 'tool_calls';
-      conversation: AgentConversationIdentity;
+      conversation: CurrentConversation;
       toolCalls: AIToolCall[];
     }
   | {
       type: 'tool_call_status';
-      conversation: AgentConversationIdentity;
+      conversation: CurrentConversation;
       status: AgentToolCallStatus;
     }
   | {
       type: 'interrupt_requested';
-      conversation: AgentConversationIdentity;
+      conversation: CurrentConversation;
       interruptId: string;
       actions: AgentInterruptAction[];
     }
   | {
       type: 'interrupt_resolved';
-      conversation: AgentConversationIdentity;
+      conversation: CurrentConversation;
       interruptId?: string;
     }
   | {
       type: 'message_persisted';
-      conversation: AgentConversationIdentity;
+      conversation: CurrentConversation;
       messageId?: string;
       role: string;
     }
-  | { type: 'new_message'; conversation: AgentConversationIdentity }
-  | { type: 'sub_agent_started'; conversation: AgentConversationIdentity }
-  | { type: 'sub_agent_completed'; conversation: AgentConversationIdentity };
+  | { type: 'new_message'; conversation: CurrentConversation }
+  | { type: 'sub_agent_started'; conversation: CurrentConversation }
+  | { type: 'sub_agent_completed'; conversation: CurrentConversation };
 
 export type AgentServiceErrorCode =
   | 'MODEL_RESPONSE_ERROR'
@@ -246,7 +247,7 @@ export interface AgentInterruptAction {
   description?: string;
   allowedDecisions?: string[];
   toolCall?: { id: string; name: string };
-  currentConversation?: AgentConversationIdentity;
+  currentConversation?: CurrentConversation;
 }
 
 export interface SavedAssistantMessage {
@@ -268,6 +269,10 @@ export interface ConversationMessageStore {
   saveToolMessages(
     sourceMessageId: string,
     messages: AIMessageInput[],
+  ): Promise<void>;
+  updateMessage(
+    messageId: string,
+    patch: Partial<AIMessageInput>,
   ): Promise<void>;
   currentThread(): Promise<AgentThread | undefined>;
   updateToolInterrupted(
@@ -299,24 +304,28 @@ export interface ConversationMessageStore {
   ): Promise<Map<string, AIToolMessage>>;
 }
 
-export interface ConversationProvider {
-  identity: AgentConversationIdentity;
-  messages: ConversationMessageStore;
-  streamCache: LLMStreamCached;
+export interface AgentEventHandler {
   beforeExecution(mode: AgentExecutionMode): Promise<void>;
   afterExecution(
     mode: AgentExecutionMode,
     options?: { aborted?: boolean },
   ): Promise<void>;
+}
+
+export interface AgentAbortController {
   registerAbortHandle(token: symbol, handle: AgentAbortHandle): void;
   unregisterAbortHandle(token: symbol): void;
-  updateAssistantResponseMetadata(
-    messageId: string,
-    metadata: Record<string, unknown>,
-  ): Promise<void>;
+}
+
+export interface ConversationProvider {
+  messages: ConversationMessageStore;
+  streamCache: LLMStreamCached;
+  event: AgentEventHandler;
+  abort: AgentAbortController;
 }
 
 export interface ChatContextProvider {
+  currentConversation(): CurrentConversation;
   resolveLLM(request: AgentRequest): Promise<ResolvedAgentLLM>;
   getSystemPrompt(
     messages: readonly AIMessageInput[],
@@ -381,7 +390,7 @@ export type CreateAIEmployeeProviders = (
 ) => Promise<AgentProviders> | AgentProviders;
 
 /** Compatibility names for the agent-internal implementation modules. */
-export type AgentConversation = AgentConversationIdentity;
+export type AgentConversation = CurrentConversation;
 export type AgentExecutionRequest = AgentRequest & {
   executionMode?: 'stream' | 'invoke';
 };

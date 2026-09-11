@@ -238,7 +238,8 @@ export class AgentService {
   }
 
   private buildInitialState(messages: AIMessage[]): AgentGraphState {
-    const assistantRole = this.providers.conversation.identity.username;
+    const assistantRole =
+      this.providers.chatContext.currentConversation().username;
     const toolMessage = messages
       .slice()
       .reverse()
@@ -343,7 +344,7 @@ export class AgentService {
       ...(responseMetadataCollector
         ? { callbacks: [responseMetadataCollector] }
         : {}),
-      metadata: { currentConversation: conversation.identity },
+      metadata: { currentConversation: chatContext.currentConversation() },
     };
     if (!config.configurable) delete config.configurable;
     return {
@@ -359,7 +360,7 @@ export class AgentService {
         ? this.providers.checkpointer
         : undefined,
       metadata: {
-        currentConversation: conversation.identity,
+        currentConversation: chatContext.currentConversation(),
         messageId: request.messageId,
       },
       providerName: llm.providerName,
@@ -384,7 +385,7 @@ export class AgentService {
     const signal = mergeSignals(controller.signal, request.signal);
     const token = Symbol('agent-execution');
     this.activeController = controller;
-    this.providers.conversation.registerAbortHandle(token, {
+    this.providers.conversation.abort.registerAbortHandle(token, {
       signal,
       abort: (reason) => controller.abort(reason),
     });
@@ -392,7 +393,7 @@ export class AgentService {
   }
 
   private end(token: symbol, controller: AbortController): void {
-    this.providers.conversation.unregisterAbortHandle(token);
+    this.providers.conversation.abort.unregisterAbortHandle(token);
     if (this.activeController === controller) this.activeController = undefined;
   }
 
@@ -403,7 +404,7 @@ export class AgentService {
   ): Promise<unknown> {
     const { conversation } = this.providers;
     const { controller, signal, token } = this.begin(request);
-    await conversation.beforeExecution('invoking');
+    await conversation.event.beforeExecution('invoking');
     try {
       const llm = await this.resolveLLM(request);
       const prepared = await this.prepare(
@@ -427,7 +428,7 @@ export class AgentService {
       throw normalizeAgentError(error, 'Agent execution failed');
     } finally {
       this.end(token, controller);
-      await conversation.afterExecution('invoking', {
+      await conversation.event.afterExecution('invoking', {
         aborted: signal.aborted,
       });
     }
@@ -438,8 +439,8 @@ export class AgentService {
     request: AgentRequest,
     agentContext?: AgentContext,
   ): AsyncGenerator<AgentStreamEvent> {
-    const { conversation } = this.providers;
-    const identity = conversation.identity;
+    const { conversation, chatContext } = this.providers;
+    const identity = chatContext.currentConversation();
     const { controller, signal, token } = this.begin(request);
     const reasoning = new Set<string>();
     const messageIds = new Map<string, string>();
@@ -458,7 +459,7 @@ export class AgentService {
     };
     try {
       await conversation.streamCache.clear();
-      await conversation.beforeExecution('streaming');
+      await conversation.event.beforeExecution('streaming');
       executionStarted = true;
       const llm = await this.resolveLLM(request);
       activeProvider = llm.provider;
@@ -577,10 +578,9 @@ export class AgentService {
               ? responseMetadata.take(chunks.body.id)
               : undefined;
             if (metadata && chunks.body?.messageId)
-              await conversation.updateAssistantResponseMetadata(
-                chunks.body.messageId,
-                metadata,
-              );
+              await conversation.messages.updateMessage(chunks.body.messageId, {
+                metadata: { response_metadata: metadata },
+              });
             yield {
               type: 'message_persisted',
               conversation: current,
@@ -704,7 +704,7 @@ export class AgentService {
       } finally {
         try {
           if (executionStarted) {
-            await conversation.afterExecution('streaming', {
+            await conversation.event.afterExecution('streaming', {
               aborted: signal.aborted,
             });
           }

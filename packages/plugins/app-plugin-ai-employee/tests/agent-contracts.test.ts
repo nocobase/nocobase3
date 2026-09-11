@@ -80,7 +80,7 @@ describe('fixed AgentService contracts', () => {
       'utf8',
     );
     expect(llmProviderContract).toContain('parseResponseMetadata(');
-    expect(types).toContain('updateAssistantResponseMetadata(');
+    expect(types).toContain('updateMessage(');
   });
 
   it('keeps transactions and arbitrary middleware out of public providers', () => {
@@ -134,6 +134,29 @@ describe('fixed AgentService contracts', () => {
     );
     expect(read('agent/agent-service.ts')).toContain(
       '...(request.context ?? {})',
+    );
+  });
+
+  it('resolves the AI employee model from each AgentRequest', () => {
+    const types = read('agent/types.ts');
+    const options = read('agent/ai-employee/options.ts');
+    const providers = read('agent/ai-employee/providers.ts');
+    const conversationService = read('service/ai-conversation-service.ts');
+    const subAgentDispatcher = read('manager/sub-agents/dispatcher.ts');
+
+    expect(types).toContain('model?: ModelRef');
+    expect(options).not.toContain('model?: ModelRef');
+    expect(providers).not.toContain('private readonly model');
+    expect(providers).not.toContain('model: options.model');
+    expect(providers).toContain('getLLMService(request.model)');
+    expect(conversationService).toContain(
+      'const agentRequest = { ...request, model: resolvedModel }',
+    );
+    expect(conversationService).toContain(
+      '{ model: resolvedModel, userDecisions }',
+    );
+    expect(subAgentDispatcher).toMatch(
+      /agent\.invoke\(\s*\{\s*userDecisions:[\s\S]*?model: resolvedModel,/,
     );
   });
 

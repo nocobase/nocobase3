@@ -11,7 +11,7 @@ import {
 } from 'langchain';
 import z from 'zod';
 import _ from 'lodash';
-import type { ConversationProvider } from '../types.js';
+import type { ConversationProvider, CurrentConversation } from '../types.js';
 import type { ToolsEntity } from '@nocobase/ai-employee';
 
 export function willInterruptToolCall(tool?: ToolsEntity): boolean {
@@ -22,13 +22,13 @@ export function willInterruptToolCall(tool?: ToolsEntity): boolean {
 import type { Logger } from '@nocobase/logging';
 
 export const toolInteractionMiddleware = (
-  conversation: ConversationProvider,
+  currentConversation: CurrentConversation,
   toolMap: ReadonlyMap<string, ToolsEntity>,
 ): ReturnType<typeof createMiddleware> => {
   const interruptOn: Parameters<
     typeof humanInTheLoopMiddleware
   >[0]['interruptOn'] = {};
-  const identity = conversation.identity;
+  const identity = currentConversation;
   for (const tool of toolMap.values()) {
     interruptOn[tool.definition.name] = willInterruptToolCall(tool)
       ? {
@@ -48,7 +48,8 @@ export const toolInteractionMiddleware = (
 };
 
 export const toolCallStatusMiddleware = (
-  conversation: ConversationProvider,
+  conversation: Pick<ConversationProvider, 'messages'>,
+  currentConversation: CurrentConversation,
   logger: Logger,
 ): ReturnType<typeof createMiddleware> => {
   const store = conversation.messages;
@@ -66,7 +67,6 @@ export const toolCallStatusMiddleware = (
       if (typeof toolCallId !== 'string') {
         throw new Error('Tool call id is required');
       }
-      const currentConversation = conversation.identity;
       const existing = await store.getToolCallResult(messageId, toolCallId);
       if (!existing)
         throw new Error(

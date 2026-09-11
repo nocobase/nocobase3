@@ -31,7 +31,10 @@ import type { ToolsEntity } from '@nocobase/ai-employee';
 import { willInterruptToolCall } from './tools.js';
 import type { Logger } from '@nocobase/logging';
 export const conversationMiddleware = (
-  providers: Pick<AgentProviders, 'conversation' | 'chatMessageConverters'>,
+  providers: Pick<
+    AgentProviders,
+    'conversation' | 'chatContext' | 'chatMessageConverters'
+  >,
   options: AgentMessageConversionContext & {
     messageId?: string;
     agentThread?: AgentThread;
@@ -41,7 +44,7 @@ export const conversationMiddleware = (
 ) => {
   const { conversation, chatMessageConverters } = providers;
   const { messageId, agentThread, toolMap } = options;
-  const identity = conversation.identity;
+  const identity = providers.chatContext.currentConversation();
   const convertAssistantMessage = (message: AIMessage) =>
     chatMessageConverters.assistant.convert(message, options);
   const convertHumanMessage = (message: HumanMessage) =>

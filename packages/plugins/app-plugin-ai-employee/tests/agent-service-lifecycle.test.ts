@@ -32,6 +32,7 @@ const createProviders = (
     conversation: createMemoryConversationProvider(),
     logger: { warn: vi.fn(), error: vi.fn() } as never,
     chatContext: {
+      currentConversation: vi.fn(() => ({ sessionId: 'test-session' })),
       resolveLLM: vi.fn(async () => llm),
       getSystemPrompt: vi.fn(async () => {
         if (mode === 'failure') throw new Error('prepare failed');
@@ -110,10 +111,13 @@ describe('AgentService execution-local LLM lifecycle', () => {
     const dispose = vi.fn();
     const providers = createProviders(dispose, 'failure');
     const unregisterAbortHandle = vi.spyOn(
-      providers.conversation,
+      providers.conversation.abort,
       'unregisterAbortHandle',
     );
-    const afterExecution = vi.spyOn(providers.conversation, 'afterExecution');
+    const afterExecution = vi.spyOn(
+      providers.conversation.event,
+      'afterExecution',
+    );
     const clearStreamCache = vi.spyOn(
       providers.conversation.streamCache,
       'clear',

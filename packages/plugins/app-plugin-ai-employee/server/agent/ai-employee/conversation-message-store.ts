@@ -199,6 +199,43 @@ export class DefaultConversationMessageStore implements ConversationMessageStore
     });
   }
 
+  public async updateMessage(
+    messageId: string,
+    patch: Partial<AIMessageInput>,
+  ): Promise<void> {
+    const message = await this.messages.findOne({
+      filter: { sessionId: this.sessionId, messageId },
+    });
+    if (!message) return;
+    const metadataPatch = patch.metadata;
+    const currentResponseMetadata = isRecord(
+      message.metadata?.response_metadata,
+    )
+      ? message.metadata.response_metadata
+      : {};
+    const responseMetadataPatch = isRecord(metadataPatch?.response_metadata)
+      ? metadataPatch.response_metadata
+      : undefined;
+    const metadata = metadataPatch
+      ? {
+          ...message.metadata,
+          ...metadataPatch,
+          ...(responseMetadataPatch
+            ? {
+                response_metadata: {
+                  ...currentResponseMetadata,
+                  ...responseMetadataPatch,
+                },
+              }
+            : {}),
+        }
+      : undefined;
+    await this.messages.update({
+      values: { ...patch, ...(metadata ? { metadata } : {}) },
+      filter: { sessionId: this.sessionId, messageId },
+    });
+  }
+
   public currentThread(): Promise<AgentThread> {
     return this.conversation.currentThread();
   }

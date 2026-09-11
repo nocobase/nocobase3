@@ -293,7 +293,6 @@ export class SubAgentsDispatcher {
       sessionId,
       skillSettings,
       webSearch,
-      model: resolvedModel,
       from: 'sub-agent',
     });
     const lastMessage = await this.repositories.aiMessages.findOne({
@@ -323,6 +322,7 @@ export class SubAgentsDispatcher {
     const result = await agent.invoke(
       {
         userDecisions: decisions ?? undefined,
+        model: resolvedModel,
         userMessages: decisions
           ? undefined
           : [

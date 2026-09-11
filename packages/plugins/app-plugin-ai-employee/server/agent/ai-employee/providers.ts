@@ -1,9 +1,12 @@
 import type {
+  AgentAbortController,
   AgentAbortHandle,
+  AgentEventHandler,
   AgentProviders,
   AgentRequest,
   ChatContextProvider,
   ConversationProvider,
+  CurrentConversation,
   DiscoveredTools,
   ResolvedAgentLLM,
 } from '../types.js';
@@ -13,18 +16,24 @@ import { createAIChatConversation } from './ai-chat-conversation.js';
 import type {
   AIEmployee as AIEmployeeType,
   AIMessageInput,
+  LLMProviderManager,
   SkillsEntity,
+  SkillsManager,
   ToolsEntity,
   ToolsFilter,
+  ToolsManager,
 } from '@nocobase/ai-employee';
 import { listSystemTools, SYSTEM_TOOLS } from '@nocobase/ai-employee';
 import _ from 'lodash';
 import { createAgentProviders } from '../providers.js';
 import type { AIEmployeeAgentOptions } from './options.js';
+import type { AIEmployeesManager } from '../../manager/ai-employees-manager.js';
+import type { LLMStreamCached } from '../../manager/llm-stream-cached-manager.js';
+import type { ConversationMessageStore } from '../types.js';
 import type { AIEmployeeSkillSettings } from './options.js';
 import type { AppAgentContext } from '../context.js';
 import type { ConversationExecution } from '../contracts.js';
-import type { Actor, ModelRef, Translate } from '../../types.js';
+import type { Actor, Translate } from '../../types.js';
 import type { BuiltInManager } from '../../manager/built-in-manager.js';
 import type { KnowledgeBaseManager } from '../../manager/knowledge-base-manager.js';
 import type {
@@ -52,6 +61,59 @@ import {
   prepareToolsForFrontendConversation,
 } from './frontend-tools.js';
 
+class DefaultAgentEventHandler implements AgentEventHandler {
+  public constructor(
+    private readonly conversations: AIConversationRepository,
+    private readonly sessionId: string,
+  ) {}
+
+  public async beforeExecution(mode: 'streaming' | 'invoking'): Promise<void> {
+    await this.conversations.update({
+      values: { llmActiveState: mode },
+      filter: { sessionId: this.sessionId },
+    });
+  }
+
+  public async afterExecution(
+    mode: 'streaming' | 'invoking',
+    result?: { aborted?: boolean },
+  ): Promise<void> {
+    await this.conversations.update({
+      values: {
+        llmActiveState: 'idle',
+        ...(mode === 'streaming'
+          ? { read: result?.aborted ? true : false }
+          : {}),
+      },
+      filter: { sessionId: this.sessionId },
+    });
+  }
+}
+
+class DefaultAgentAbortController implements AgentAbortController {
+  public constructor(
+    private readonly manager: AIEmployeesManager,
+    private readonly sessionId: string,
+  ) {}
+
+  public registerAbortHandle(token: symbol, handle: AgentAbortHandle): void {
+    this.manager.registerAgentAbortHandle(this.sessionId, token, handle);
+  }
+
+  public unregisterAbortHandle(token: symbol): void {
+    this.manager.unregisterAgentAbortHandle(this.sessionId, token);
+  }
+}
+
+class DefaultConversationProvider implements ConversationProvider {
+  public constructor(
+    public readonly messages: ConversationMessageStore,
+    public readonly streamCache: LLMStreamCached,
+    public readonly event: AgentEventHandler,
+    public readonly abort: AgentAbortController,
+  ) {}
+}
+
 export function createConversationProvider(
   options: AIEmployeeAgentOptions,
 ): ConversationProvider {
@@ -64,8 +126,6 @@ export function createConversationProvider(
     snowflake: options.snowflake,
     sessionId,
   });
-  const from = options.from ?? 'main-agent';
-  const username = String(options.employee.username ?? '');
   const cache = options.llmStreamCachedManager.getCached(sessionId);
   const messageStore = new DefaultConversationMessageStore({
     sessionId,
@@ -80,68 +140,24 @@ export function createConversationProvider(
         sessionId,
       }),
   });
-  const conversation: ConversationProvider = {
-    identity: { sessionId, from, username, metadata: { kind: 'ai-employee' } },
-    messages: messageStore,
-    beforeExecution: async (mode) => {
-      await options.aiConversations.update({
-        values: { llmActiveState: mode },
-        filter: { sessionId },
-      });
-    },
-    afterExecution: async (mode, result) => {
-      await options.aiConversations.update({
-        values: {
-          llmActiveState: 'idle',
-          ...(mode === 'streaming'
-            ? { read: result?.aborted ? true : false }
-            : {}),
-        },
-        filter: { sessionId },
-      });
-    },
-    registerAbortHandle: (token: symbol, handle: AgentAbortHandle) =>
-      options.aiEmployeesManager.registerAgentAbortHandle(
-        sessionId,
-        token,
-        handle,
-      ),
-    unregisterAbortHandle: (token: symbol) =>
-      options.aiEmployeesManager.unregisterAgentAbortHandle(sessionId, token),
-    streamCache: cache,
-    updateAssistantResponseMetadata: async (messageId, metadata) => {
-      const message = await options.aiMessages.findOne({
-        filter: { sessionId, messageId },
-      });
-      if (message) {
-        await options.aiMessages.update({
-          values: {
-            metadata: {
-              ...(message.metadata ?? {}),
-              response_metadata: {
-                ...(message.metadata?.response_metadata ?? {}),
-                ...metadata,
-              },
-            },
-          },
-          filter: { sessionId, messageId },
-        });
-      }
-    },
-  };
-  return conversation;
+  return new DefaultConversationProvider(
+    messageStore,
+    cache,
+    new DefaultAgentEventHandler(options.aiConversations, sessionId),
+    new DefaultAgentAbortController(options.aiEmployeesManager, sessionId),
+  );
 }
 
 export interface AIEmployeeChatContextProviderOptions {
   readonly employee: AIEmployeeType;
   readonly sessionId: string;
-  readonly model?: ModelRef;
+  readonly currentConversation: CurrentConversation;
   readonly actor: Actor;
   readonly translate?: Translate;
   readonly toolRuntimeContext: AppAgentContext;
-  readonly llmProviderManager: AppAgentContext['ai']['llmProviderManager'];
-  readonly toolsManager: AppAgentContext['ai']['toolsManager'];
-  readonly skillsManager: AppAgentContext['ai']['skillsManager'];
+  readonly llmProviderManager: LLMProviderManager;
+  readonly toolsManager: ToolsManager;
+  readonly skillsManager: SkillsManager;
   readonly builtInManager: BuiltInManager;
   readonly knowledgeBaseManager: KnowledgeBaseManager;
   readonly conversations: AIConversationRepository;
@@ -159,13 +175,13 @@ export interface AIEmployeeChatContextProviderOptions {
 export class AIEmployeeChatContextProvider implements ChatContextProvider {
   private readonly employee: AIEmployeeType;
   private readonly sessionId: string;
-  private readonly model?: ModelRef;
+  private readonly conversation: CurrentConversation;
   private readonly actor: Actor;
   private readonly translate?: Translate;
   private readonly toolRuntimeContext: AppAgentContext;
-  private readonly llmProviderManager: AppAgentContext['ai']['llmProviderManager'];
-  private readonly toolsManager: AppAgentContext['ai']['toolsManager'];
-  private readonly skillsManager: AppAgentContext['ai']['skillsManager'];
+  private readonly llmProviderManager: LLMProviderManager;
+  private readonly toolsManager: ToolsManager;
+  private readonly skillsManager: SkillsManager;
   private readonly builtInManager: BuiltInManager;
   private readonly knowledgeBaseManager: KnowledgeBaseManager;
   private readonly conversations: AIConversationRepository;
@@ -182,7 +198,7 @@ export class AIEmployeeChatContextProvider implements ChatContextProvider {
   public constructor(options: AIEmployeeChatContextProviderOptions) {
     this.employee = options.employee;
     this.sessionId = options.sessionId;
-    this.model = options.model;
+    this.conversation = options.currentConversation;
     this.actor = options.actor;
     this.translate = options.translate;
     this.toolRuntimeContext = options.toolRuntimeContext;
@@ -207,9 +223,13 @@ export class AIEmployeeChatContextProvider implements ChatContextProvider {
     });
   }
 
-  public async resolveLLM(_request: AgentRequest): Promise<ResolvedAgentLLM> {
-    if (!this.model) throw new Error('AI employee model is required');
-    const resolved = await this.llmProviderManager.getLLMService(this.model);
+  public currentConversation(): CurrentConversation {
+    return this.conversation;
+  }
+
+  public async resolveLLM(request: AgentRequest): Promise<ResolvedAgentLLM> {
+    if (!request.model) throw new Error('AI employee model is required');
+    const resolved = await this.llmProviderManager.getLLMService(request.model);
     return {
       providerName: resolved.service.provider,
       llmService: resolved.service.name,
@@ -612,7 +632,12 @@ export function createAIEmployeeChatContextProvider(
   return new AIEmployeeChatContextProvider({
     employee: options.employee as AIEmployeeType,
     sessionId: options.sessionId,
-    model: options.model,
+    currentConversation: {
+      sessionId: options.sessionId,
+      from: options.from ?? 'main-agent',
+      username: String(options.employee.username ?? ''),
+      metadata: { kind: 'ai-employee' },
+    },
     actor: options.agentContext.actor,
     translate: options.agentContext.translate,
     toolRuntimeContext: options.agentContext,
@@ -656,7 +681,7 @@ export async function createAIEmployeeAgentProviders(
 }
 
 function getCurrentTimezone(
-  execution: NonNullable<AIEmployeeAgentOptions['execution']>,
+  execution: ConversationExecution,
   getHeader: (name: string) => string | undefined,
 ): string | undefined {
   return execution.timezone || getHeader('x-timezone') || undefined;

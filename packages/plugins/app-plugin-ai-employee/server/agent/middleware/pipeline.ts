@@ -24,12 +24,16 @@ export function buildStandardAgentMiddleware(
       : namedNoopMiddleware('SkillToolBindingMiddleware'),
     features.tools && features.toolInteraction
       ? toolInteractionMiddleware(
-          providers.conversation,
+          providers.chatContext.currentConversation(),
           prepared.discoveredTools.tools,
         )
       : namedNoopMiddleware('ToolInteractionMiddleware'),
     features.tools && features.toolCallStatus
-      ? toolCallStatusMiddleware(providers.conversation, providers.logger)
+      ? toolCallStatusMiddleware(
+          providers.conversation,
+          providers.chatContext.currentConversation(),
+          providers.logger,
+        )
       : namedNoopMiddleware('ToolCallStatusMiddleware'),
     features.conversationPersistence
       ? conversationMiddleware(

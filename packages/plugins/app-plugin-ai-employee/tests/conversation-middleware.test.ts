@@ -44,8 +44,10 @@ describe('conversationMiddleware', () => {
     const middleware = conversationMiddleware(
       {
         conversation: {
-          identity: { sessionId: 'sub-session' },
           messages: { saveToolMessages, saveUserMessages },
+        },
+        chatContext: {
+          currentConversation: () => ({ sessionId: 'sub-session' }),
         },
         chatMessageConverters: {
           formatMessages,
@@ -121,8 +123,10 @@ describe('conversationMiddleware', () => {
     const middleware = conversationMiddleware(
       {
         conversation: {
-          identity: { sessionId: 'session-1' },
           messages: { saveAssistantMessage },
+        },
+        chatContext: {
+          currentConversation: () => ({ sessionId: 'session-1' }),
         },
         chatMessageConverters: {
           assistant: { convert: vi.fn(async () => ({ role: 'assistant' })) },
