@@ -1,5 +1,5 @@
 ---
-"@nocobase/app-plugin-workflow": minor
+'@nocobase/app-plugin-workflow': minor
 ---
 
 Load workflow definitions from source in development instead of from built Artifacts.
