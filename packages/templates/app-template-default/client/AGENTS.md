@@ -15,7 +15,7 @@ This directory is the application's browser client. Read the application's root 
 
 - Keep every page behind a lazy `componentLoader()`, default-exporting its component. Route metadata stays synchronous.
 - All three route surfaces define sidebar entries with `navigation` on routes. Refine resources serve CRUD, not menus. Recursive groups organize navigation; page children require a manually placed `Outlet`. Read `skills/nocobase-app-development/references/client-child-routes.md` from the application root.
-- For child pages presented as overlays, use `RouteDialog` / `RouteDrawer` from `components/` and `useRouteOverlay()` for closing. The parent page places an `Outlet`; the wrappers provide their own child outlet. See the child-routes guide for close targets, guards and nesting.
+- For child pages presented as overlays, use `RouteDialog` / `RouteDrawer` from `components/` and `useRouteOverlay()` for closing. Every page that owns child routes places its own `Outlet`, overlays included; the wrappers insert none. See the child-routes guide for outlet placement, close targets, guards and nesting.
 - Never write the deployment base path such as `/main` into a route path. The runtime restores it.
 - `auth` on a route controls browser navigation only. The endpoint it calls enforces its own authentication.
 - Pages declared with `defineDevRoutes()` mount under `/dev` and are absent from a production build. That is a build boundary, not a permission boundary.

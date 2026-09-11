@@ -1,6 +1,6 @@
 import { useTranslation } from '@nocobase/i18n/client';
 import { useId, useState } from 'react';
-import { Link, useLocation } from 'react-router';
+import { Link, Outlet, useLocation } from 'react-router';
 import { RouteDialog } from '@/components/route-dialog';
 import { RouteDrawer } from '@/components/route-drawer';
 import { useRouteOverlay } from '@/components/use-route-overlay';
@@ -82,6 +82,8 @@ export function RouteOverlayExample({
         <p className='text-sm text-muted-foreground'>
           {t('routeOverlays.historyHint')}
         </p>
+        {/* This page owns its child route, so it places the outlet itself. */}
+        {!nested && <Outlet />}
       </div>
     </Overlay>
   );

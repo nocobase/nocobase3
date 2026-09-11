@@ -52,6 +52,8 @@ function setup(
               >
                 <input aria-label='Name' defaultValue='Original' />
                 <Link to='details'>Open details</Link>
+                {/* A page places the outlet wherever its next child belongs. */}
+                <Outlet />
               </RouteDialog>
             ),
             children: [

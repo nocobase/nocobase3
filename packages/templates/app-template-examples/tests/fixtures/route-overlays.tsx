@@ -56,6 +56,8 @@ function Layer({
             closing another layer. 中文内容与 English text.
           </p>
         ))}
+        {/* This layer owns its child route, so it places the outlet itself. */}
+        {!child && <Outlet />}
       </div>
     </Overlay>
   );

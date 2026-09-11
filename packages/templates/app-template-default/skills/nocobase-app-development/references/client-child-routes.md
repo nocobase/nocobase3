@@ -154,11 +154,11 @@ A group has `navigation` and `children`, with no component loader. Its `path` is
 
 Omit `navigation` for details, Tab content, or another page that should not appear in the sidebar. A descendant can have navigation even when an ancestor omits it. Dynamic and wildcard paths are not concrete menu targets, so leave their navigation unset. Paths, route IDs, and component exports must resolve correctly; URL spelling is not otherwise prescribed by this guide.
 
-The route renderer supplies outlets for pure groups. Business pages place their own outlet; no outlet is inserted automatically into a page. Put it where the next page belongs. Route overlays use the wrappers described below, which provide their own nested outlet.
+The route renderer supplies outlets for pure groups. Business pages place their own outlet; no outlet is inserted automatically into a page, and the route overlay wrappers below insert none either. Put it where the next page belongs.
 
 ## Route dialogs and drawers
 
-Use `RouteDialog` from `@/components/route-dialog` or `RouteDrawer` from `@/components/route-drawer` when a child page should open as an overlay. The page that owns the `children` route must render `<Outlet />`; otherwise the overlay child has nowhere to render. The overlay page renders the wrapper. Both wrappers automatically render their next child outlet outside the panel, within the underlying dialog context, so overlay pages do not add another outlet themselves.
+Use `RouteDialog` from `@/components/route-dialog` or `RouteDrawer` from `@/components/route-drawer` when a child page should open as an overlay. The page that owns the `children` route must render `<Outlet />`; otherwise the overlay child has nowhere to render. Neither wrapper inserts an outlet, so an overlay page that has children of its own places one as well.
 
 ```ts
 // client/routes.ts
@@ -212,7 +212,7 @@ export default function Orders() {
 ```tsx
 // client/pages/order-editor.tsx
 import { useTranslation } from '@nocobase/i18n/client';
-import { Link } from 'react-router';
+import { Link, Outlet } from 'react-router';
 import { RouteDialog } from '@/components/route-dialog';
 import { useRouteOverlay } from '@/components/use-route-overlay';
 import { Button } from '@/components/ui/button';
@@ -232,6 +232,8 @@ export default function OrderEditor() {
   return (
     <RouteDialog title={t('orders.edit')} footer={<EditorActions />}>
       <Link to='details'>{t('orders.details')}</Link>
+      {/* This page owns `details` too, so the drawer opens here. */}
+      <Outlet />
     </RouteDialog>
   );
 }
@@ -252,7 +254,7 @@ export default function OrderDetails() {
 }
 ```
 
-In this example, only `orders.tsx` places an explicit `<Outlet />`. `order-editor.tsx` renders the dialog, and `order-details.tsx` renders the drawer; neither adds an outlet because `RouteDialog` and `RouteDrawer` render their next child outlet internally. Add the example's business translation keys to every supported locale. Opening a child URL directly also renders its ancestors. Parent page and form state stay mounted when child overlays open; only the top layer responds to Escape or its backdrop.
+In this example, `orders.tsx` places an explicit `<Outlet />`, and `order-editor.tsx` places one too because the drawer is its child. `order-details.tsx` has no child route, so it places none. Put the outlet where the next page belongs: an overlay child rendered inside the panel nests there, and one rendered outside it opens as a separate layer instead of nesting. Add the example's business translation keys to every supported locale. Opening a child URL directly also renders its ancestors. Parent page and form state stay mounted when child overlays open; only the top layer responds to Escape or its backdrop.
 
 Both wrappers accept `title` (required accessible name), `description`, `children`, `footer`, `closeTo`, `beforeClose`, and `className`. `className` styles the panel, including its width. Dialogs are centered; drawers enter from the right. The header and optional footer stay visible while the body scrolls. There are no default business buttons or controlled `open` props: route matching determines whether the overlay exists.
 

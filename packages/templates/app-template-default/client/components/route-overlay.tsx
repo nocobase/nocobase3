@@ -9,7 +9,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { Outlet, useLocation, useNavigate, type To } from 'react-router';
+import { useLocation, useNavigate, type To } from 'react-router';
 import {
   Dialog,
   DialogOverlay,
@@ -35,7 +35,10 @@ export interface RouteOverlayProps {
   className?: string;
 }
 
-// Private focus fallback for direct nested URLs that have no trigger element.
+// Lets an overlay rendered through another overlay's outlet return focus into
+// the enclosing panel. Two overlays reached by one URL mount in the same
+// commit, so the nested one never observes the parent panel taking focus and
+// would otherwise fall back to `document.body`.
 const ParentPopupContext =
   createContext<RefObject<HTMLDivElement | null> | null>(null);
 
@@ -106,70 +109,72 @@ export function RouteOverlay({
 
   return (
     <RouteOverlayContext.Provider value={value}>
-      <Dialog
-        open
-        onOpenChange={(open) => {
-          if (!open)
-            void close().catch((error: unknown) => {
-              console.error('Failed to close route overlay', error);
-            });
-        }}
-      >
-        <DialogPortal>
-          {/* Each nested panel needs its own backdrop above its parent panel. */}
-          <DialogOverlay forceRender />
-          <DialogPrimitive.Popup
-            ref={popupRef}
-            finalFocus={() => {
-              const previous = previousFocusRef.current;
-              if (parentPopup?.current) {
-                return previous?.isConnected &&
-                  parentPopup.current.contains(previous)
-                  ? previous
-                  : parentPopup.current;
-              }
-              return true;
-            }}
-            className={cn(
-              'fixed top-1/2 left-1/2 z-50 w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl bg-popover text-popover-foreground shadow-lg outline-none duration-150 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95',
-              'flex max-h-[calc(100svh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl',
-              // The viewport constraints are deliberate; all ordinary styling uses theme tokens.
-              drawer &&
-                'top-0 right-0 left-auto h-svh max-h-svh w-full max-w-full translate-x-0 translate-y-0 rounded-none sm:max-w-xl data-open:slide-in-from-right data-open:zoom-in-100',
-              className,
-            )}
-          >
-            <header className='shrink-0 space-y-2 border-b p-4 pr-12'>
-              <DialogTitle>{title}</DialogTitle>
-              {description != null && (
-                <DialogDescription>{description}</DialogDescription>
+      {/* Covers the panel body too, so an overlay placed at this page's outlet
+          finds the enclosing panel without knowing where the outlet lives. */}
+      <ParentPopupContext.Provider value={popupRef}>
+        <Dialog
+          open
+          onOpenChange={(open) => {
+            if (!open)
+              void close().catch((error: unknown) => {
+                console.error('Failed to close route overlay', error);
+              });
+          }}
+        >
+          <DialogPortal>
+            {/* Each nested panel needs its own backdrop above its parent panel. */}
+            <DialogOverlay forceRender />
+            <DialogPrimitive.Popup
+              ref={popupRef}
+              finalFocus={() => {
+                const previous = previousFocusRef.current;
+                if (parentPopup?.current) {
+                  return previous?.isConnected &&
+                    parentPopup.current.contains(previous)
+                    ? previous
+                    : parentPopup.current;
+                }
+                return true;
+              }}
+              className={cn(
+                'fixed top-1/2 left-1/2 z-50 w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl bg-popover text-popover-foreground shadow-lg outline-none duration-150 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95',
+                'flex max-h-[calc(100svh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl',
+                // The viewport constraints are deliberate; all ordinary styling uses theme tokens.
+                drawer &&
+                  'top-0 right-0 left-auto h-svh max-h-svh w-full max-w-full translate-x-0 translate-y-0 rounded-none sm:max-w-xl data-open:slide-in-from-right data-open:zoom-in-100',
+                className,
               )}
-            </header>
-            <div className='min-h-0 flex-1 overflow-y-auto p-4'>{children}</div>
-            {footer != null && (
-              <footer className='flex shrink-0 flex-wrap justify-end gap-2 border-t p-4'>
-                {footer}
-              </footer>
-            )}
-            <DialogClose
-              render={
-                <Button
-                  variant='ghost'
-                  size='icon-sm'
-                  className='absolute top-2 right-2'
-                />
-              }
             >
-              <XIcon />
-              <span className='sr-only'>{t('actions.close')}</span>
-            </DialogClose>
-          </DialogPrimitive.Popup>
-          {/* Keep nested roots in the primitive's context, outside the parent's popup. */}
-          <ParentPopupContext.Provider value={popupRef}>
-            <Outlet />
-          </ParentPopupContext.Provider>
-        </DialogPortal>
-      </Dialog>
+              <header className='shrink-0 space-y-2 border-b p-4 pr-12'>
+                <DialogTitle>{title}</DialogTitle>
+                {description != null && (
+                  <DialogDescription>{description}</DialogDescription>
+                )}
+              </header>
+              <div className='min-h-0 flex-1 overflow-y-auto p-4'>
+                {children}
+              </div>
+              {footer != null && (
+                <footer className='flex shrink-0 flex-wrap justify-end gap-2 border-t p-4'>
+                  {footer}
+                </footer>
+              )}
+              <DialogClose
+                render={
+                  <Button
+                    variant='ghost'
+                    size='icon-sm'
+                    className='absolute top-2 right-2'
+                  />
+                }
+              >
+                <XIcon />
+                <span className='sr-only'>{t('actions.close')}</span>
+              </DialogClose>
+            </DialogPrimitive.Popup>
+          </DialogPortal>
+        </Dialog>
+      </ParentPopupContext.Provider>
     </RouteOverlayContext.Provider>
   );
 }
