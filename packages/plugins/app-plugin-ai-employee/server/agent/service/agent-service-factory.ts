@@ -11,10 +11,7 @@ import { cachingToken } from '@nocobase/app-server/caching';
 import type { AIManager } from '@nocobase/ai-employee';
 import { createAgentService, type AgentService } from './agent-service.js';
 import { createAIEmployeeAgentContextProvider } from '../context/ai-employee/context.js';
-import type {
-  AIEmployeeContextOptions,
-  AIEmployeeSkillSettings,
-} from '../context/ai-employee/options.js';
+import type { AIEmployeeSkillSettings } from '../context/ai-employee/options.js';
 import { FixedAgentContextProvider } from '../context/fixed/context.js';
 import { createAgentProviders } from '../providers.js';
 import type { AgentProviders, AgentContextProvider } from '../types.js';
@@ -25,7 +22,6 @@ import { DatabaseConversationPersistence } from '../conversation/persistence/dat
 import { ConversationProvider } from '../conversation/conversation-provider.js';
 import { createAgentContext, type AppAgentContext } from '../context.js';
 import type { Actor, ModelRef, Translate } from '../../types.js';
-import type { ConversationExecution } from '../contracts.js';
 import {
   repositoryFactoryToken,
   type RepositoryFactory,
@@ -46,7 +42,8 @@ export interface CreateEmployeeOptions {
   readonly sessionId?: string;
   readonly systemPrompt?: string;
   readonly actor?: Actor;
-  readonly execution?: ConversationExecution;
+  readonly frontendTools?: readonly unknown[];
+  readonly from?: 'main-agent' | 'sub-agent';
   readonly translate?: Translate;
   readonly getHeader?: (name: string) => string | undefined;
   readonly skillSettings?: AIEmployeeSkillSettings;
@@ -79,13 +76,10 @@ export class AgentServiceFactory {
   ): Promise<AgentService> {
     const repositories = this.repositories;
     const managers = this.managers;
-    const sessionId =
-      options.sessionId ?? options.execution?.sessionId ?? randomUUID();
+    const sessionId = options.sessionId ?? randomUUID();
     const actor = options.actor ?? { id: 0, roles: [], isRoot: true };
-    const execution = options.execution ?? { sessionId };
     const agentContext = this.createContext(
       actor,
-      execution,
       options.translate,
       options.getHeader,
     );
@@ -94,33 +88,29 @@ export class AgentServiceFactory {
     );
     if (!employee)
       throw new Error(`AI employee "${options.username}" not found`);
-    const contextOptions: AIEmployeeContextOptions = {
-      agentContext,
-      database: this.database,
-      caching: this.container.resolve(cachingToken),
-      fileStorage: managers.fileStorage,
-      snowflake: this.container.resolve(idGeneratorToken),
-      execution,
-      getHeader: options.getHeader,
-      collectionRepository:
-        repositories.collectionRepository.bind(repositories),
-      aiConversations: repositories.aiConversations,
-      aiEmployees: repositories.aiEmployees,
-      aiMessages: repositories.aiMessages,
-      aiToolMessages: repositories.aiToolMessages,
-      aiUsageEvents: repositories.aiUsageEvents,
-      usersAiEmployees: repositories.usersAiEmployees,
-      lcCheckpoints: repositories.lcCheckpoints,
-      lcCheckpointBlobs: repositories.lcCheckpointBlobs,
-      lcCheckpointWrites: repositories.lcCheckpointWrites,
-      aiEmployeesManager: managers.aiEmployeesManager,
-      builtInManager: managers.builtInManager,
-      llmStreamCachedManager: managers.llmStreamCachedManager,
-      knowledgeBaseManager: managers.knowledgeBaseManager,
-      workContextHandler: managers.workContextHandler,
-      documentLoaders: managers.documentLoaders,
+    const contextOptions = {
       employee,
       sessionId,
+      currentConversation: {
+        sessionId,
+        from: options.from ?? 'main-agent',
+        username: String(employee.username ?? ''),
+        metadata: { kind: 'ai-employee' },
+      },
+      actor,
+      translate: options.translate,
+      toolRuntimeContext: agentContext,
+      llmProviderManager: this.ai.llmProviderManager,
+      toolsManager: this.ai.toolsManager,
+      skillsManager: this.ai.skillsManager,
+      builtInManager: managers.builtInManager,
+      knowledgeBaseManager: managers.knowledgeBaseManager,
+      conversations: repositories.aiConversations,
+      employees: repositories.aiEmployees,
+      toolMessages: repositories.aiToolMessages,
+      usersAiEmployees: repositories.usersAiEmployees,
+      frontendTools: options.frontendTools,
+      getHeader: options.getHeader,
       systemMessage: options.systemPrompt,
       skillSettings: options.skillSettings,
       webSearch: options.webSearch,
@@ -128,12 +118,12 @@ export class AgentServiceFactory {
     };
     const context = createAIEmployeeAgentContextProvider(contextOptions);
     const persistence = new DatabaseConversationPersistence({
-      database: contextOptions.database,
-      snowflake: contextOptions.snowflake,
-      conversations: contextOptions.aiConversations,
-      messages: contextOptions.aiMessages,
-      toolMessages: contextOptions.aiToolMessages,
-      usageEvents: contextOptions.aiUsageEvents,
+      database: this.database,
+      snowflake: this.container.resolve(idGeneratorToken),
+      conversations: repositories.aiConversations,
+      messages: repositories.aiMessages,
+      toolMessages: repositories.aiToolMessages,
+      usageEvents: repositories.aiUsageEvents,
     });
     const conversation = new ConversationProvider({
       sessionId,
@@ -152,20 +142,21 @@ export class AgentServiceFactory {
           skillSettings: contextOptions.skillSettings,
           logger: this.logger,
           actorId: actor.id,
-          collectionRepository: contextOptions.collectionRepository,
-          workContextHandler: contextOptions.workContextHandler,
-          fileStorage: contextOptions.fileStorage,
-          documentLoaders: contextOptions.documentLoaders,
-          caching: contextOptions.caching,
+          collectionRepository:
+            repositories.collectionRepository.bind(repositories),
+          workContextHandler: managers.workContextHandler,
+          fileStorage: managers.fileStorage,
+          documentLoaders: managers.documentLoaders,
+          caching: this.container.resolve(cachingToken),
           getHeader: options.getHeader,
         }),
         checkpointer:
-          contextOptions.from === 'sub-agent'
+          options.from === 'sub-agent'
             ? undefined
             : new NativeCollectionSaver({
-                checkpoints: contextOptions.lcCheckpoints,
-                blobs: contextOptions.lcCheckpointBlobs,
-                writes: contextOptions.lcCheckpointWrites,
+                checkpoints: repositories.lcCheckpoints,
+                blobs: repositories.lcCheckpointBlobs,
+                writes: repositories.lcCheckpointWrites,
               }),
       }),
     );
@@ -221,14 +212,12 @@ export class AgentServiceFactory {
 
   private createContext(
     actor: Actor,
-    execution: ConversationExecution,
     translate?: Translate,
     getHeader?: (name: string) => string | undefined,
   ): AppAgentContext {
     const managers = this.managers;
     return createAgentContext({
       actor,
-      execution,
       ai: this.ai,
       database: this.container.resolve(databaseManagerToken),
       logger: this.logger,

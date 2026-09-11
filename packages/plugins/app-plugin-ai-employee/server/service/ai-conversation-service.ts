@@ -273,8 +273,22 @@ export class AIConversationService {
   }): AppAgentContext {
     return createAgentContext({
       actor,
-      execution,
-      state,
+      state: {
+        sessionId: execution?.sessionId,
+        messageId: execution?.messageId,
+        messages: execution?.messages ? [...execution.messages] : undefined,
+        model: execution?.model ? { ...execution.model } : undefined,
+        webSearch: execution?.webSearch,
+        important: execution?.important,
+        frontendTools: execution?.frontendTools
+          ? [...execution.frontendTools]
+          : undefined,
+        toolCallResults: execution?.toolCallResults
+          ? [...execution.toolCallResults]
+          : undefined,
+        timezone: execution?.timezone,
+        ...state,
+      },
       ai: this.ai,
       database: this.databaseManager,
       logger: this.logger,
@@ -697,17 +711,19 @@ export class AIConversationService {
       );
       const agentContext = this.createAgentContext({
         actor,
-        execution,
         translate,
         getHeader,
       });
       const agentOptions = {
         username: employee.username,
         actor,
-        execution,
         translate,
         getHeader,
         sessionId,
+        frontendTools: execution.frontendTools,
+        from: (execution.sessionId === sessionId
+          ? 'main-agent'
+          : 'sub-agent') as 'main-agent' | 'sub-agent',
         systemPrompt:
           typeof conversation.options?.systemMessage === 'string'
             ? conversation.options.systemMessage
@@ -726,7 +742,16 @@ export class AIConversationService {
       const agent =
         await this.agentServiceFactory.createAIEmployee(agentOptions);
       const runStream = async (request: any) => {
-        const agentRequest = { ...request, model: resolvedModel };
+        const agentRequest = {
+          ...request,
+          model: resolvedModel,
+          context: {
+            ...(request.context ?? {}),
+            agentContext,
+            important: execution.important,
+            timezone: execution.timezone,
+          },
+        };
         const adapter = new AgentSSEAdapter(
           (chunk) => streamTarget(execution).write(chunk),
           (chunk) =>
@@ -734,17 +759,26 @@ export class AIConversationService {
         );
         await adapter.consume(
           request?.messageId
-            ? agent.forkStream(agentRequest, agentContext)
-            : agent.stream(agentRequest, agentContext),
+            ? agent.forkStream(agentRequest)
+            : agent.stream(agentRequest),
         );
         streamTarget(execution).end();
         return true;
       };
       const runInvoke = (request: any) => {
-        const agentRequest = { ...request, model: resolvedModel };
+        const agentRequest = {
+          ...request,
+          model: resolvedModel,
+          context: {
+            ...(request.context ?? {}),
+            agentContext,
+            important: execution.important,
+            timezone: execution.timezone,
+          },
+        };
         return request?.messageId
-          ? agent.forkInvoke(agentRequest, agentContext)
-          : agent.invoke(agentRequest, agentContext);
+          ? agent.forkInvoke(agentRequest)
+          : agent.invoke(agentRequest);
       };
       const cancelToolCall = () => {
         return agent.cancelToolCall();
@@ -1004,17 +1038,19 @@ export class AIConversationService {
       );
       const agentContext = this.createAgentContext({
         actor,
-        execution,
         translate,
         getHeader,
       });
       const agentOptions = {
         username: employee.username,
         actor,
-        execution,
         translate,
         getHeader,
         sessionId,
+        frontendTools: execution.frontendTools,
+        from: (execution.sessionId === sessionId
+          ? 'main-agent'
+          : 'sub-agent') as 'main-agent' | 'sub-agent',
         systemPrompt:
           typeof conversation.options?.systemMessage === 'string'
             ? conversation.options.systemMessage
@@ -1039,30 +1075,32 @@ export class AIConversationService {
             (chunk) =>
               this.llmStreamCachedManager.getCached(sessionId).append(chunk),
           ).consume(
-            service.forkStream(
-              {
-                messageId,
-                model: resolvedModel,
-                userMessages: resendMessages.length
-                  ? resendMessages
-                  : undefined,
+            service.forkStream({
+              messageId,
+              model: resolvedModel,
+              userMessages: resendMessages.length ? resendMessages : undefined,
+              context: {
+                agentContext,
+                important: execution.important,
+                timezone: execution.timezone,
               },
-              agentContext,
-            ),
+            }),
           );
           streamTarget(execution).end();
         }
       } else {
         const service =
           await this.agentServiceFactory.createAIEmployee(agentOptions);
-        return service.forkInvoke(
-          {
-            messageId,
-            model: resolvedModel,
-            userMessages: resendMessages.length ? resendMessages : undefined,
+        return service.forkInvoke({
+          messageId,
+          model: resolvedModel,
+          userMessages: resendMessages.length ? resendMessages : undefined,
+          context: {
+            agentContext,
+            important: execution.important,
+            timezone: execution.timezone,
           },
-          agentContext,
-        );
+        });
       }
       return undefined;
     } catch (err: any) {
@@ -1291,17 +1329,19 @@ export class AIConversationService {
       );
       const agentContext = this.createAgentContext({
         actor,
-        execution,
         translate,
         getHeader,
       });
       const agentOptions = {
         username: employee.username,
         actor,
-        execution,
         translate,
         getHeader,
         sessionId,
+        frontendTools: execution.frontendTools,
+        from: (execution.sessionId === sessionId
+          ? 'main-agent'
+          : 'sub-agent') as 'main-agent' | 'sub-agent',
         systemPrompt:
           typeof conversation.options?.systemMessage === 'string'
             ? conversation.options.systemMessage
@@ -1328,10 +1368,11 @@ export class AIConversationService {
           (chunk) =>
             this.llmStreamCachedManager.getCached(sessionId).append(chunk),
         ).consume(
-          service.resumeStream(
-            { model: resolvedModel, userDecisions },
-            agentContext,
-          ),
+          service.resumeStream({
+            model: resolvedModel,
+            userDecisions,
+            context: { agentContext },
+          }),
         );
         streamTarget(execution).end();
       }

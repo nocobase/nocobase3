@@ -428,5 +428,3 @@ export class ConversationMessageStoreImpl implements ConversationMessageStore {
     });
   }
 }
-
-export const DefaultConversationMessageStore = ConversationMessageStoreImpl;

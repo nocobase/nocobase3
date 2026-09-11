@@ -7,7 +7,6 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { ConversationExecution } from '../../contracts.js';
 import { z } from 'zod';
 import type { AIConversationRepository } from '../../../repository/index.js';
 import {
@@ -17,6 +16,13 @@ import {
   isFrontendToolManifest,
 } from './common/frontend-tool-contracts.js';
 import type { WorkContext } from '@nocobase/ai-employee';
+
+interface FrontendToolRequest {
+  sessionId?: string;
+  messages?: readonly unknown[];
+  frontendTools?: readonly unknown[];
+  toolCallResults?: readonly { id: string; result: unknown }[];
+}
 
 type MessageLike = {
   role?: string;
@@ -73,16 +79,16 @@ export const extractFrontendToolManifests = (
 };
 
 const findRequestFrontendTools = (
-  execution?: ConversationExecution,
+  request?: FrontendToolRequest,
 ): FrontendToolManifest[] => {
   const explicitlyProvided = normalizeFrontendToolManifests(
-    execution?.frontendTools,
+    request?.frontendTools,
   );
   if (explicitlyProvided.length) {
     return explicitlyProvided;
   }
-  const messages = Array.isArray(execution?.messages)
-    ? execution.messages.filter(isMessageLike)
+  const messages = Array.isArray(request?.messages)
+    ? request.messages.filter(isMessageLike)
     : [];
   for (const message of messages) {
     if (message.role !== 'user') {
@@ -100,12 +106,12 @@ const findRequestFrontendTools = (
 
 export const listCurrentFrontendTools = async (
   conversations: AIConversationRepository,
-  execution: ConversationExecution = {},
+  request: FrontendToolRequest = {},
 ): Promise<FrontendToolManifest[]> => {
   const currentSessionId =
-    typeof execution.sessionId === 'string' ? execution.sessionId : '';
+    typeof request.sessionId === 'string' ? request.sessionId : '';
   if (!currentSessionId) {
-    return findRequestFrontendTools(execution);
+    return findRequestFrontendTools(request);
   }
 
   const conversation = (await conversations.findOne({
@@ -121,7 +127,7 @@ export const listCurrentFrontendTools = async (
     return boundTools;
   }
 
-  const frontendTools = findRequestFrontendTools(execution);
+  const frontendTools = findRequestFrontendTools(request);
   if (!frontendTools.length || !conversation) {
     return frontendTools;
   }
@@ -143,9 +149,9 @@ export const listCurrentFrontendTools = async (
 export const findCurrentFrontendTool = async (
   conversations: AIConversationRepository,
   toolId: string,
-  execution: ConversationExecution = {},
+  request: FrontendToolRequest = {},
 ): Promise<FrontendToolManifest | undefined> => {
-  const tools = await listCurrentFrontendTools(conversations, execution);
+  const tools = await listCurrentFrontendTools(conversations, request);
   return tools.find((tool) => tool.id === toolId);
 };
 
@@ -200,10 +206,10 @@ export const prepareToolsForFrontendConversation = <
 };
 
 export const readFrontendToolResult = (
-  execution: ConversationExecution,
+  request: FrontendToolRequest,
   toolCallId: string,
 ): { provided: true; value: unknown } | undefined => {
-  const result = execution.toolCallResults?.find(
+  const result = request.toolCallResults?.find(
     (item) => item.id === toolCallId,
   );
   return result ? { provided: true, value: result.result } : undefined;

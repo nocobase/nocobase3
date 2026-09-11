@@ -148,11 +148,9 @@ describe('fixed AgentService contracts', () => {
     expect(providers).not.toContain('private readonly model');
     expect(providers).not.toContain('model: options.model');
     expect(providers).toContain('getLLMService(request.model)');
+    expect(conversationService).toContain('const agentRequest = {');
     expect(conversationService).toContain(
-      'const agentRequest = { ...request, model: resolvedModel }',
-    );
-    expect(conversationService).toContain(
-      '{ model: resolvedModel, userDecisions }',
+      'model: resolvedModel, userDecisions',
     );
     expect(subAgentDispatcher).toMatch(
       /agent\.invoke\(\s*\{\s*userDecisions:[\s\S]*?model: resolvedModel,/,
@@ -305,10 +303,10 @@ describe('fixed AgentService contracts', () => {
     const options = read('agent/context/ai-employee/options.ts');
     expect(options).not.toContain('RepositoryFactory');
     expect(options).not.toMatch(/\brepositories\s*:/);
-    expect(options).toContain('aiMessages: AIMessageRepository');
-    expect(options).toContain('aiToolMessages: AIToolMessageRepository');
-    expect(options).toContain('aiUsageEvents: AIUsageEventRepository');
-    expect(options).toContain('aiConversations: AIConversationRepository');
+    expect(options).not.toContain('AIMessageRepository');
+    expect(options).not.toContain('AIToolMessageRepository');
+    expect(options).not.toContain('AIUsageEventRepository');
+    expect(options).not.toContain('AIConversationRepository');
     expect(messageStore).toContain('class ConversationMessageStoreImpl');
     expect(factory).toContain('new DefaultChatMessageConverters({');
     expect(read('agent/message/converters.ts')).toContain(
@@ -329,6 +327,7 @@ describe('fixed AgentService contracts', () => {
     expect(providers).not.toMatch(/markPending:\s*\(|markDone:\s*\(/);
     expect(types).not.toMatch(/confirm\([^)]*DatabaseConnection/);
     const context = read('agent/context/ai-employee/context.ts');
+    expect(context).not.toContain('ConversationExecution');
     expect(context).not.toContain('implements ToolCallPolicy');
     expect(context).not.toContain('AIEmployeeToolContext');
     expect(context).not.toContain('private readonly aiEmployeeOptions');

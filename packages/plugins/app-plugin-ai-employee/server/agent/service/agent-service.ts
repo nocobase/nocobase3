@@ -6,7 +6,6 @@ import { createAgent } from 'langchain';
 import type { BaseCheckpointSaver } from '@langchain/langgraph';
 import { buildTool } from '@nocobase/ai-employee';
 import type {
-  AgentContext,
   AIMessage,
   AIMessageInput,
   LLMProvider,
@@ -167,41 +166,23 @@ export class AgentService {
     return this.providers.conversation.messages.cancelToolCall();
   }
 
-  stream(
-    request: AgentRequest = {},
-    agentContext?: AgentContext,
-  ): AsyncGenerator<AgentStreamEvent> {
-    return this.executeStream('stream', request, agentContext);
+  stream(request: AgentRequest = {}): AsyncGenerator<AgentStreamEvent> {
+    return this.executeStream('stream', request);
   }
-  resumeStream(
-    request: AgentRequest,
-    agentContext?: AgentContext,
-  ): AsyncGenerator<AgentStreamEvent> {
-    return this.executeStream('resume', request, agentContext);
+  resumeStream(request: AgentRequest): AsyncGenerator<AgentStreamEvent> {
+    return this.executeStream('resume', request);
   }
-  forkStream(
-    request: AgentRequest,
-    agentContext?: AgentContext,
-  ): AsyncGenerator<AgentStreamEvent> {
-    return this.executeStream('fork', request, agentContext);
+  forkStream(request: AgentRequest): AsyncGenerator<AgentStreamEvent> {
+    return this.executeStream('fork', request);
   }
-  invoke(
-    request: AgentRequest = {},
-    agentContext?: AgentContext,
-  ): Promise<unknown> {
-    return this.executeInvoke('invoke', request, agentContext);
+  invoke(request: AgentRequest = {}): Promise<unknown> {
+    return this.executeInvoke('invoke', request);
   }
-  resumeInvoke(
-    request: AgentRequest,
-    agentContext?: AgentContext,
-  ): Promise<unknown> {
-    return this.executeInvoke('resume', request, agentContext);
+  resumeInvoke(request: AgentRequest): Promise<unknown> {
+    return this.executeInvoke('resume', request);
   }
-  forkInvoke(
-    request: AgentRequest,
-    agentContext?: AgentContext,
-  ): Promise<unknown> {
-    return this.executeInvoke('fork', request, agentContext);
+  forkInvoke(request: AgentRequest): Promise<unknown> {
+    return this.executeInvoke('fork', request);
   }
 
   private resolveLLM(request: AgentRequest): Promise<ResolvedAgentLLM> {
@@ -275,7 +256,6 @@ export class AgentService {
     operation: AgentOperation,
     request: AgentRequest,
     llm: ResolvedAgentLLM,
-    agentContext?: AgentContext,
     responseMetadataCollector?: BaseCallbackHandler,
   ): Promise<PreparedAgentContext> {
     const { conversation, features } = this.providers;
@@ -297,11 +277,20 @@ export class AgentService {
     const messages = formatted.filter(
       (message: any) => message?.role !== 'system',
     );
+    const importantPrompt =
+      request.context?.important === 'GraphRecursionError'
+        ? `<Important>You have already called tools multiple times and gathered sufficient information.\nFirst, provide a summary based on the existing information. Do not call additional tools.\nIf information is missing, clearly state it in the summary.</Important>`
+        : undefined;
     const systemPrompt = features.contextEnrichment
-      ? [await context.getSystemPrompt(allMessages), formattedSystemPrompt]
+      ? [
+          await context.getSystemPrompt(allMessages),
+          importantPrompt,
+          formattedSystemPrompt,
+        ]
           .filter(Boolean)
           .join('\n\n') || undefined
-      : formattedSystemPrompt || undefined;
+      : [importantPrompt, formattedSystemPrompt].filter(Boolean).join('\n\n') ||
+        undefined;
     const discoveredTools = features.tools
       ? await context.discoveredTools()
       : {
@@ -334,7 +323,6 @@ export class AgentService {
     const config = {
       context: {
         ...(request.context ?? {}),
-        agentContext,
         agentRequest: request,
         decisions: request.userDecisions,
       },
@@ -404,7 +392,6 @@ export class AgentService {
   private async executeInvoke(
     operation: AgentOperation,
     request: AgentRequest,
-    agentContext?: AgentContext,
   ): Promise<unknown> {
     const { conversation } = this.providers;
     const { controller, signal, token } = this.begin(request);
@@ -415,7 +402,6 @@ export class AgentService {
         operation,
         { ...request, signal },
         llm,
-        agentContext,
       );
       const result = await this.create(prepared).invoke(
         prepared.input as any,
@@ -441,10 +427,9 @@ export class AgentService {
   private async *executeStream(
     operation: AgentOperation,
     request: AgentRequest,
-    agentContext?: AgentContext,
   ): AsyncGenerator<AgentStreamEvent> {
-    const { conversation, context: providerContext } = this.providers;
-    const context = providerContext ?? this.agentContext;
+    const { conversation } = this.providers;
+    const context = this.agentContext;
     const identity = context.currentConversation();
     const { controller, signal, token } = this.begin(request);
     const reasoning = new Set<string>();
@@ -477,7 +462,6 @@ export class AgentService {
         operation,
         { ...request, signal },
         llm,
-        agentContext,
         responseMetadataCollector,
       );
       const stream = await this.create(prepared).stream(

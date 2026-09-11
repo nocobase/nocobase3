@@ -2,31 +2,20 @@ import type { AIMessageInput, LLMProvider } from '@nocobase/ai-employee';
 import { describe, expect, it, vi } from 'vitest';
 
 import { DefaultChatMessageConverters } from '../server/agent/message/converters.js';
-import type { AIEmployeeContextOptions } from '../server/agent/context/ai-employee/options.js';
+import type { AIEmployeeMessageConverterOptions } from '../server/agent/message/converters.js';
 
 function createOptions(records: Record<string, unknown>[]) {
   const find = vi.fn(async () => records);
   const collectionRepository = vi.fn(() => ({ find }));
   const options = {
-    agentContext: {
-      actor: { id: 7, roles: [] },
-      logger: { warn: vi.fn() },
-      translate: (value: string) => value,
-    },
-    database: {},
-    caching: {},
-    fileStorage: {},
-    snowflake: {},
-    collectionRepository,
-    aiEmployeesManager: {},
-    builtInManager: { setupBuiltInInfo: vi.fn() },
-    llmStreamCachedManager: {},
-    knowledgeBaseManager: {},
-    workContextHandler: { resolve: vi.fn(async () => []) },
-    documentLoaders: { cached: {} },
     employee: { username: 'tester' },
-    sessionId: 'session-1',
-  } as unknown as AIEmployeeContextOptions;
+    actorId: 7,
+    collectionRepository,
+    workContextHandler: { resolve: vi.fn(async () => []) },
+    fileStorage: {},
+    documentLoaders: { cached: {} },
+    caching: {},
+  } as unknown as AIEmployeeMessageConverterOptions;
   return { options, find, collectionRepository };
 }
 

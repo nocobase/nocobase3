@@ -95,8 +95,22 @@ export function createTestAgentContext({
   const fixture = createTestAIEmployeeFixture();
   return createAgentContext({
     actor,
-    execution,
-    state,
+    state: {
+      sessionId: execution.sessionId,
+      messageId: execution.messageId,
+      messages: execution.messages ? [...execution.messages] : undefined,
+      model: execution.model ? { ...execution.model } : undefined,
+      webSearch: execution.webSearch,
+      important: execution.important,
+      frontendTools: execution.frontendTools
+        ? [...execution.frontendTools]
+        : undefined,
+      toolCallResults: execution.toolCallResults
+        ? [...execution.toolCallResults]
+        : undefined,
+      timezone: execution.timezone,
+      ...state,
+    },
     ai: fixture.deps.ai,
     database: fixture.deps.database,
     logger: fixture.deps.logging.getLogger('ai-employee-test'),

@@ -265,7 +265,7 @@ export class SubAgentsDispatcher {
     const agent = await agentServiceFactory.createAIEmployee({
       username: employee.username,
       actor: options.actor,
-      execution: options.execution,
+      from: 'sub-agent',
       translate: options.translate,
       getHeader: options.getHeader,
       sessionId,

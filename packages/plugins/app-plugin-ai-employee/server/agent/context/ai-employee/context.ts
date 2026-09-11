@@ -17,12 +17,8 @@ import type {
 } from '@nocobase/ai-employee';
 import { listSystemTools, SYSTEM_TOOLS } from '@nocobase/ai-employee';
 import _ from 'lodash';
-import type {
-  AIEmployeeContextOptions,
-  AIEmployeeSkillSettings,
-} from './options.js';
+import type { AIEmployeeSkillSettings } from './options.js';
 import type { AppAgentContext } from '../../context.js';
-import type { ConversationExecution } from '../../contracts.js';
 import type { Actor, Translate } from '../../../types.js';
 import type { BuiltInManager } from '../../../manager/built-in-manager.js';
 import type { KnowledgeBaseManager } from '../../../manager/knowledge-base-manager.js';
@@ -66,7 +62,7 @@ export interface AIEmployeeAgentContextProviderOptions {
   readonly employees: AIEmployeeRepository;
   readonly toolMessages: AIToolMessageRepository;
   readonly usersAiEmployees: UserAIEmployeeRepository;
-  readonly execution?: ConversationExecution;
+  readonly frontendTools?: readonly unknown[];
   readonly getHeader?: (name: string) => string | undefined;
   readonly systemMessage?: string;
   readonly skillSettings?: AIEmployeeSkillSettings;
@@ -90,7 +86,7 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
   private readonly employees: AIEmployeeRepository;
   private readonly toolMessages: AIToolMessageRepository;
   private readonly usersAiEmployees: UserAIEmployeeRepository;
-  private readonly execution: ConversationExecution;
+  private readonly frontendTools: readonly unknown[];
   private readonly getHeader: (name: string) => string | undefined;
   private readonly systemMessage: string;
   private readonly skillSettings?: AIEmployeeSkillSettings;
@@ -113,7 +109,7 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
     this.employees = options.employees;
     this.toolMessages = options.toolMessages;
     this.usersAiEmployees = options.usersAiEmployees;
-    this.execution = options.execution ?? {};
+    this.frontendTools = options.frontendTools ?? [];
     this.getHeader = options.getHeader ?? (() => undefined);
     this.systemMessage = options.systemMessage ?? '';
     this.skillSettings = options.skillSettings;
@@ -225,10 +221,7 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
 
     const availableSkills = await this.getAvailableSkills();
     const availableAIEmployees = await this.getAvailableAIEmployees();
-    const timezone = getCurrentTimezone(
-      this.execution ?? {},
-      this.getHeader ?? (() => undefined),
-    );
+    const timezone = this.getHeader('x-timezone') ?? undefined;
     const systemPrompt = getSystemPrompt({
       aiEmployee: {
         nickname: employee.nickname ?? employee.username,
@@ -247,12 +240,6 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
       webSearch: this.webSearch,
     });
 
-    if (this.execution?.important === 'GraphRecursionError') {
-      const importantPrompt = `<Important>You have already called tools multiple times and gathered sufficient information.
-First, provide a summary based on the existing information. Do not call additional tools.
-If information is missing, clearly state it in the summary.</Important>`;
-      return `${importantPrompt}\n\n${systemPrompt}`;
-    }
     return systemPrompt;
   }
 
@@ -333,10 +320,7 @@ If information is missing, clearly state it in the summary.</Important>`;
     if (this.chatSettings.enableTools === false) return [];
     const currentFrontendTools = await listCurrentFrontendTools(
       this.conversations,
-      {
-        ...(this.execution ?? {}),
-        sessionId: this.sessionId,
-      },
+      { sessionId: this.sessionId, frontendTools: this.frontendTools },
     );
     const tools = await this.listTools({ scope: 'GENERAL' });
     const getSkill = await this.toolsManager.getTools(SYSTEM_TOOLS.GET_SKILL, {
@@ -529,43 +513,9 @@ If information is missing, clearly state it in the summary.</Important>`;
 }
 
 export function createAIEmployeeAgentContextProvider(
-  options: AIEmployeeContextOptions,
+  options: AIEmployeeAgentContextProviderOptions,
 ): AIEmployeeAgentContextProvider {
-  return new AIEmployeeAgentContextProvider({
-    employee: options.employee as AIEmployeeType,
-    sessionId: options.sessionId,
-    currentConversation: {
-      sessionId: options.sessionId,
-      from: options.from ?? 'main-agent',
-      username: String(options.employee.username ?? ''),
-      metadata: { kind: 'ai-employee' },
-    },
-    actor: options.agentContext.actor,
-    translate: options.agentContext.translate,
-    toolRuntimeContext: options.agentContext,
-    llmProviderManager: options.agentContext.ai.llmProviderManager,
-    toolsManager: options.agentContext.ai.toolsManager,
-    skillsManager: options.agentContext.ai.skillsManager,
-    builtInManager: options.builtInManager,
-    knowledgeBaseManager: options.knowledgeBaseManager,
-    conversations: options.aiConversations,
-    employees: options.aiEmployees,
-    toolMessages: options.aiToolMessages,
-    usersAiEmployees: options.usersAiEmployees,
-    execution: options.execution,
-    getHeader: options.getHeader,
-    systemMessage: options.systemMessage,
-    skillSettings: options.skillSettings,
-    webSearch: options.webSearch,
-    tools: options.tools,
-  });
-}
-
-function getCurrentTimezone(
-  execution: ConversationExecution,
-  getHeader: (name: string) => string | undefined,
-): string | undefined {
-  return execution.timezone || getHeader('x-timezone') || undefined;
+  return new AIEmployeeAgentContextProvider(options);
 }
 
 function getCurrentDateTimeForPrompt(

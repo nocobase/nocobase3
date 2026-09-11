@@ -51,7 +51,7 @@ function createFixture(overrides: Record<string, unknown> = {}) {
   };
 }
 
-describe('DefaultConversationMessageStore tool calls', () => {
+describe('ConversationMessageStore tool calls', () => {
   it('moves init or waiting calls to pending within the current session', async () => {
     const fixture = createFixture();
 

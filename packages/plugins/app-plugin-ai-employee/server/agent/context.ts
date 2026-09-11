@@ -25,7 +25,7 @@ import {
   findCurrentFrontendTool,
   readFrontendToolResult,
 } from './context/ai-employee/frontend-tools.js';
-import type { AppAgentServices, ConversationExecution } from './contracts.js';
+import type { AppAgentServices } from './contracts.js';
 import type { Actor, Translate } from '../types.js';
 
 export interface AppAgentRepositories {
@@ -46,7 +46,6 @@ export type AppAgentContext = AgentContext<
 
 export interface CreateAgentContextOptions {
   readonly actor: Actor;
-  readonly execution?: ConversationExecution;
   readonly state?: Partial<AgentState>;
   readonly ai: AIManager;
   readonly database: DatabaseManager;
@@ -63,7 +62,6 @@ export interface CreateAgentContextOptions {
 
 export function createAgentContext({
   actor,
-  execution = {},
   state: stateOverrides,
   ai,
   database,
@@ -78,19 +76,6 @@ export function createAgentContext({
   getHeader,
 }: CreateAgentContextOptions): AppAgentContext {
   const state: AgentState = {
-    sessionId: execution.sessionId,
-    messageId: execution.messageId,
-    messages: execution.messages ? [...execution.messages] : undefined,
-    model: execution.model ? { ...execution.model } : undefined,
-    webSearch: execution.webSearch,
-    important: execution.important,
-    frontendTools: execution.frontendTools
-      ? [...execution.frontendTools]
-      : undefined,
-    toolCallResults: execution.toolCallResults
-      ? [...execution.toolCallResults]
-      : undefined,
-    timezone: execution.timezone,
     ...stateOverrides,
   };
   const services: AppAgentServices = {
@@ -121,19 +106,31 @@ export function createAgentContext({
       run: (task) =>
         subAgentsDispatcher.run(task, {
           actor,
-          execution,
+          execution: {
+            sessionId: state.sessionId,
+            messages: state.messages,
+            frontendTools: state.frontendTools,
+            toolCallResults: state.toolCallResults,
+            timezone: state.timezone,
+            important: state.important,
+          },
           translate,
           getHeader,
         }),
     },
     frontendTools: {
       find: (toolId) =>
-        findCurrentFrontendTool(
-          repositories.aiConversations,
-          toolId,
-          execution,
+        findCurrentFrontendTool(repositories.aiConversations, toolId, {
+          sessionId: state.sessionId,
+          messages: state.messages,
+          frontendTools: state.frontendTools,
+          toolCallResults: state.toolCallResults,
+        }),
+      readResult: (toolCallId) =>
+        readFrontendToolResult(
+          { toolCallResults: state.toolCallResults },
+          toolCallId,
         ),
-      readResult: (toolCallId) => readFrontendToolResult(execution, toolCallId),
     },
   };
 
