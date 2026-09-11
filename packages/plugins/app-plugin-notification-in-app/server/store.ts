@@ -200,7 +200,7 @@ export class DatabaseInAppStore implements InAppStore {
     const rows = await this.database
       .query()
       .selectFrom<ItemRow>('notificationInAppItems')
-      .select(({ fn }) => fn.countAll<number>().as('count'))
+      .select(({ fn }) => [fn.countAll<number>().as('count')])
       .where('userId', '=', userId)
       .where('readAt', 'is', null)
       .executeTakeFirst<{ count: number | string }>();
