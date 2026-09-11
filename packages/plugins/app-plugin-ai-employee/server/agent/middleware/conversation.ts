@@ -16,7 +16,6 @@ import {
 } from 'langchain';
 import z from 'zod';
 import type {
-  AgentContextProvider,
   AgentMessageConversionContext,
   AgentProviders,
   AgentThread,
@@ -42,10 +41,7 @@ export const conversationMiddleware = (
 ) => {
   const { conversation, converters } = providers;
   const { messageId, agentThread, toolMap } = options;
-  const identity = (
-    providers.context ??
-    (providers as { chatContext?: AgentContextProvider }).chatContext!
-  ).currentConversation();
+  const identity = providers.context.currentConversation();
   const convertAssistantMessage = (message: AIMessage) =>
     converters.assistant.convert(message, options);
   const convertHumanMessage = (message: HumanMessage) =>

@@ -18,7 +18,7 @@ const createProviders = (
       'unregisterAbortHandle',
     ),
   };
-  const chatContext = {
+  const context = {
     resolveLLM: vi.fn(),
     getSystemPrompt: vi.fn(),
     currentConversation: vi.fn(() => ({ sessionId: 'test-session' })),
@@ -27,7 +27,7 @@ const createProviders = (
   const providers: AgentProviders = {
     conversation,
     logger: { warn: vi.fn(), error: vi.fn() } as never,
-    chatContext,
+    context,
     converters: {
       formatMessages: vi.fn(),
       assistant: { convert: vi.fn() },
@@ -46,16 +46,16 @@ const createProviders = (
       subAgents: true,
     },
   };
-  return { providers, chatContext, lifecycle };
+  return { providers, context, lifecycle };
 };
 
 const expectNoExecutionLifecycle = (
-  chatContext: ReturnType<typeof createProviders>['chatContext'],
+  context: ReturnType<typeof createProviders>['context'],
   lifecycle: ReturnType<typeof createProviders>['lifecycle'],
 ) => {
-  expect(chatContext.resolveLLM).not.toHaveBeenCalled();
-  expect(chatContext.getSystemPrompt).not.toHaveBeenCalled();
-  expect(chatContext.discoveredTools).not.toHaveBeenCalled();
+  expect(context.resolveLLM).not.toHaveBeenCalled();
+  expect(context.getSystemPrompt).not.toHaveBeenCalled();
+  expect(context.discoveredTools).not.toHaveBeenCalled();
   expect(lifecycle.beforeExecution).not.toHaveBeenCalled();
   expect(lifecycle.afterExecution).not.toHaveBeenCalled();
   expect(lifecycle.registerAbortHandle).not.toHaveBeenCalled();
@@ -72,22 +72,22 @@ describe('AgentService tool-call cancellation', () => {
       },
     ];
     const cancel = vi.fn(async () => cancelledMessages);
-    const { providers, chatContext, lifecycle } = createProviders(cancel);
+    const { providers, context, lifecycle } = createProviders(cancel);
     const service = new AgentService(providers);
 
     await expect(service.cancelToolCall()).resolves.toBe(cancelledMessages);
     expect(cancel).toHaveBeenCalledOnce();
-    expectNoExecutionLifecycle(chatContext, lifecycle);
+    expectNoExecutionLifecycle(context, lifecycle);
   });
 
   it('preserves an undefined provider result', async () => {
     const cancel = vi.fn(async () => undefined);
-    const { providers, chatContext, lifecycle } = createProviders(cancel);
+    const { providers, context, lifecycle } = createProviders(cancel);
     const service = new AgentService(providers);
 
     await expect(service.cancelToolCall()).resolves.toBeUndefined();
     expect(cancel).toHaveBeenCalledOnce();
-    expectNoExecutionLifecycle(chatContext, lifecycle);
+    expectNoExecutionLifecycle(context, lifecycle);
   });
 
   it('propagates provider errors without wrapping them', async () => {
@@ -95,11 +95,11 @@ describe('AgentService tool-call cancellation', () => {
     const cancel = vi.fn(async () => {
       throw error;
     });
-    const { providers, chatContext, lifecycle } = createProviders(cancel);
+    const { providers, context, lifecycle } = createProviders(cancel);
     const service = new AgentService(providers);
 
     await expect(service.cancelToolCall()).rejects.toBe(error);
     expect(cancel).toHaveBeenCalledOnce();
-    expectNoExecutionLifecycle(chatContext, lifecycle);
+    expectNoExecutionLifecycle(context, lifecycle);
   });
 });

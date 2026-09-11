@@ -23,6 +23,7 @@ import {
   AgentServiceFactory,
   agentServiceFactoryToken,
 } from '../server/agent/service/agent-service-factory.js';
+import type { AgentProviders } from '../server/agent/types.js';
 import { createTestAppDeps } from './app/test-app-deps.js';
 
 import {
@@ -105,6 +106,25 @@ describe('AI employee container-scoped factories', () => {
     } as never);
     const agent = await factory.createAgent({ sessionId: 'factory-session' });
     expect(agent).toBeInstanceOf(AgentService);
+    const second = await factory.createAgent({
+      sessionId: 'factory-session-2',
+    });
+    const firstProviders = (agent as unknown as { providers: AgentProviders })
+      .providers;
+    const secondProviders = (second as unknown as { providers: AgentProviders })
+      .providers;
+    expect(firstProviders.conversation.messages).not.toBe(
+      secondProviders.conversation.messages,
+    );
+    expect(firstProviders.conversation.streamCache).not.toBe(
+      secondProviders.conversation.streamCache,
+    );
+    expect(firstProviders.conversation.event).not.toBe(
+      secondProviders.conversation.event,
+    );
+    expect(firstProviders.conversation.abort).not.toBe(
+      secondProviders.conversation.abort,
+    );
   });
 
   it('isolates repositories, services, readiness and mutable managers by container', async () => {

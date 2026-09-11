@@ -154,10 +154,7 @@ export class AgentService {
 
   constructor(private readonly providers: AgentProviders) {}
   private get agentContext(): AgentContextProvider {
-    return (
-      this.providers.context ??
-      (this.providers as { chatContext?: AgentContextProvider }).chatContext!
-    );
+    return this.providers.context;
   }
 
   abort(reason?: unknown): void {

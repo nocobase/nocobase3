@@ -42,7 +42,7 @@ function createFixture(toolMaps: ReadonlyMap<string, ToolsEntity>[]) {
   const providers = {
     conversation,
     logger: { warn: vi.fn(), error: vi.fn() },
-    chatContext: {
+    context: {
       resolveLLM: vi.fn(async () => ({
         providerName: 'test',
         model: 'test',

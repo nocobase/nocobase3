@@ -3,9 +3,6 @@ import { DefaultChatMessageConverters } from './message/converters.js';
 import type { AgentProviders, CreateAgentProvidersOptions } from './types.js';
 import { DEFAULT_AGENT_FEATURES } from './types.js';
 
-// Conversation assembly is implemented by conversation/conversation-provider.ts.
-// const chatConversation = createAIChatConversation({
-// createConversationProvider(options: AIEmployeeContextOptions) remains a migration marker.
 class NoopLogger {
   public readonly level = 'silent';
   public fatal(): void {}
@@ -39,7 +36,7 @@ class DefaultAgentProviders implements AgentProviders {
 
   public constructor(options: CreateAgentProvidersOptions) {
     this.conversation = options.conversation;
-    this.context = options.context ?? options.chatContext!;
+    this.context = options.context;
     this.logger = options.logger ?? noopLogger;
     this.converters = options.converters ?? new DefaultChatMessageConverters();
     this.features = { ...DEFAULT_AGENT_FEATURES, ...(options.features ?? {}) };

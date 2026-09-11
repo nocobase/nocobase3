@@ -31,7 +31,7 @@ const createProviders = (
   return {
     conversation: createTestConversationProvider(),
     logger: { warn: vi.fn(), error: vi.fn() } as never,
-    chatContext: {
+    context: {
       currentConversation: vi.fn(() => ({ sessionId: 'test-session' })),
       resolveLLM: vi.fn(async () => llm),
       getSystemPrompt: vi.fn(async () => {

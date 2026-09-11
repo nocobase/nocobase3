@@ -46,7 +46,7 @@ describe('conversationMiddleware', () => {
         conversation: {
           messages: { saveToolMessages, saveUserMessages },
         },
-        chatContext: {
+        context: {
           currentConversation: () => ({ sessionId: 'sub-session' }),
         },
         converters: {
@@ -125,7 +125,7 @@ describe('conversationMiddleware', () => {
         conversation: {
           messages: { saveAssistantMessage },
         },
-        chatContext: {
+        context: {
           currentConversation: () => ({ sessionId: 'session-1' }),
         },
         converters: {

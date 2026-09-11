@@ -369,8 +369,7 @@ export interface AgentProviders {
 
 export interface CreateAgentProvidersOptions {
   conversation: ConversationProvider;
-  context?: AgentContextProvider;
-  readonly chatContext?: AgentContextProvider;
+  context: AgentContextProvider;
   converters?: ChatMessageConverters;
   logger?: Logger;
   features?: Partial<AgentFeatureOptions>;

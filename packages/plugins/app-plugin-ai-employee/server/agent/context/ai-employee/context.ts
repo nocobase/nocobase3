@@ -1,13 +1,10 @@
 import type {
-  AgentProviders,
   AgentRequest,
   AgentContextProvider,
   CurrentConversation,
   DiscoveredTools,
   ResolvedAgentLLM,
 } from '../../types.js';
-import { DefaultChatMessageConverters } from '../../message/converters.js';
-import { NativeCollectionSaver } from '../../checkpoint/index.js';
 import type {
   AIEmployee as AIEmployeeType,
   AIMessageInput,
@@ -20,11 +17,10 @@ import type {
 } from '@nocobase/ai-employee';
 import { listSystemTools, SYSTEM_TOOLS } from '@nocobase/ai-employee';
 import _ from 'lodash';
-import { createAgentProviders } from '../../providers.js';
-import { DefaultConversationProvider } from '../../conversation/conversation-provider.js';
-import { DatabaseConversationPersistence } from '../../conversation/persistence/database.js';
-import type { AIEmployeeContextOptions } from './options.js';
-import type { AIEmployeeSkillSettings } from './options.js';
+import type {
+  AIEmployeeContextOptions,
+  AIEmployeeSkillSettings,
+} from './options.js';
 import type { AppAgentContext } from '../../context.js';
 import type { ConversationExecution } from '../../contracts.js';
 import type { Actor, Translate } from '../../../types.js';
@@ -562,54 +558,6 @@ export function createAIEmployeeAgentContextProvider(
     skillSettings: options.skillSettings,
     webSearch: options.webSearch,
     tools: options.tools,
-  });
-}
-
-export async function createAIEmployeeAgentProviders(
-  options: AIEmployeeContextOptions,
-): Promise<AgentProviders> {
-  const context = createAIEmployeeAgentContextProvider(options);
-  const persistence = new DatabaseConversationPersistence({
-    database: options.database,
-    snowflake: options.snowflake,
-    conversations: options.aiConversations,
-    messages: options.aiMessages,
-    toolMessages: options.aiToolMessages,
-    usageEvents: options.aiUsageEvents,
-  });
-  const conversation = new DefaultConversationProvider({
-    sessionId: options.sessionId,
-    persistence,
-    streamCache: options.llmStreamCachedManager,
-    employeesManager: options.aiEmployeesManager,
-    database: options.database,
-    snowflake: options.snowflake,
-    logger: options.agentContext.logger,
-  });
-  return createAgentProviders({
-    conversation,
-    context,
-    logger: options.agentContext.logger,
-    converters: new DefaultChatMessageConverters({
-      employee: options.employee,
-      skillSettings: options.skillSettings,
-      logger: options.agentContext.logger,
-      actorId: options.agentContext.actor?.id ?? 0,
-      collectionRepository: options.collectionRepository,
-      workContextHandler: options.workContextHandler,
-      fileStorage: options.fileStorage,
-      documentLoaders: options.documentLoaders,
-      caching: options.caching,
-      getHeader: options.getHeader,
-    }),
-    checkpointer:
-      options.from === 'sub-agent'
-        ? undefined
-        : new NativeCollectionSaver({
-            checkpoints: options.lcCheckpoints,
-            blobs: options.lcCheckpointBlobs,
-            writes: options.lcCheckpointWrites,
-          }),
   });
 }
 

@@ -6,7 +6,7 @@ import type { LLMStreamCachedManager } from '../../manager/llm-stream-cached-man
 import type {
   AgentAbortController,
   AgentEventHandler,
-  ConversationProvider,
+  ConversationProvider as ConversationProviderContract,
 } from '../types.js';
 import { ConversationMessageStoreImpl } from './message-store.js';
 import { ConversationAbortController } from './abort-controller.js';
@@ -27,7 +27,7 @@ export interface ConversationProviderOptions {
   >;
 }
 
-export class DefaultConversationProvider implements ConversationProvider {
+export class ConversationProvider implements ConversationProviderContract {
   public readonly messages;
   public readonly streamCache;
   public readonly event: AgentEventHandler;

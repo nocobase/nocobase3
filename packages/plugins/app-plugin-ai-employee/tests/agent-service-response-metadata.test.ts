@@ -61,7 +61,7 @@ const createFixture = (chunks: StreamChunk[]): Fixture => {
   const providers: AgentProviders = {
     conversation,
     logger: { warn: vi.fn(), error: vi.fn() } as never,
-    chatContext: {
+    context: {
       resolveLLM: vi.fn(async () => ({
         providerName: 'test',
         model: 'test-model',

@@ -10,7 +10,7 @@ import { loggingToken } from '@nocobase/app-server/logging';
 import { cachingToken } from '@nocobase/app-server/caching';
 import type { AIManager } from '@nocobase/ai-employee';
 import { createAgentService, type AgentService } from './agent-service.js';
-import { createAIEmployeeAgentProviders } from '../context/ai-employee/context.js';
+import { createAIEmployeeAgentContextProvider } from '../context/ai-employee/context.js';
 import type {
   AIEmployeeContextOptions,
   AIEmployeeSkillSettings,
@@ -18,9 +18,11 @@ import type {
 import { FixedAgentContextProvider } from '../context/fixed/context.js';
 import { createAgentProviders } from '../providers.js';
 import type { AgentProviders, AgentContextProvider } from '../types.js';
+import { DefaultChatMessageConverters } from '../message/converters.js';
+import { NativeCollectionSaver } from '../checkpoint/index.js';
 import type { ConversationPersistence } from '../contracts/persistence.js';
 import { DatabaseConversationPersistence } from '../conversation/persistence/database.js';
-import { DefaultConversationProvider } from '../conversation/conversation-provider.js';
+import { ConversationProvider } from '../conversation/conversation-provider.js';
 import { createAgentContext, type AppAgentContext } from '../context.js';
 import type { Actor, ModelRef, Translate } from '../../types.js';
 import type { ConversationExecution } from '../contracts.js';
@@ -124,8 +126,50 @@ export class AgentServiceFactory {
       webSearch: options.webSearch,
       tools: options.tools,
     };
+    const context = createAIEmployeeAgentContextProvider(contextOptions);
+    const persistence = new DatabaseConversationPersistence({
+      database: contextOptions.database,
+      snowflake: contextOptions.snowflake,
+      conversations: contextOptions.aiConversations,
+      messages: contextOptions.aiMessages,
+      toolMessages: contextOptions.aiToolMessages,
+      usageEvents: contextOptions.aiUsageEvents,
+    });
+    const conversation = new ConversationProvider({
+      sessionId,
+      persistence,
+      streamCache: managers.llmStreamCachedManager,
+      employeesManager: managers.aiEmployeesManager,
+      database: contextOptions.database,
+      snowflake: contextOptions.snowflake,
+      logger: this.logger,
+    });
     return createAgentService(
-      await createAIEmployeeAgentProviders(contextOptions),
+      createAgentProviders({
+        conversation,
+        context,
+        logger: this.logger,
+        converters: new DefaultChatMessageConverters({
+          employee: contextOptions.employee,
+          skillSettings: contextOptions.skillSettings,
+          logger: this.logger,
+          actorId: actor.id,
+          collectionRepository: contextOptions.collectionRepository,
+          workContextHandler: contextOptions.workContextHandler,
+          fileStorage: contextOptions.fileStorage,
+          documentLoaders: contextOptions.documentLoaders,
+          caching: contextOptions.caching,
+          getHeader: options.getHeader,
+        }),
+        checkpointer:
+          contextOptions.from === 'sub-agent'
+            ? undefined
+            : new NativeCollectionSaver({
+                checkpoints: contextOptions.lcCheckpoints,
+                blobs: contextOptions.lcCheckpointBlobs,
+                writes: contextOptions.lcCheckpointWrites,
+              }),
+      }),
     );
   }
 
@@ -160,7 +204,7 @@ export class AgentServiceFactory {
         systemPrompt: options.systemPrompt,
         tools: new Map(),
       });
-    const conversation = new DefaultConversationProvider({
+    const conversation = new ConversationProvider({
       sessionId,
       persistence,
       streamCache: managers.llmStreamCachedManager,
