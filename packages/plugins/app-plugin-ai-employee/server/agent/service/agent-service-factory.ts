@@ -4,17 +4,23 @@ import {
   type ServiceResolver,
   type ServiceToken,
 } from '@nocobase/service-provider';
-import { databaseManagerToken } from '@nocobase/db';
+import {
+  databaseManagerToken,
+  type DatabaseManager,
+  type DatabaseConnection,
+} from '@nocobase/db';
 import { idGeneratorToken } from '@nocobase/app-server/id-generator';
 import { loggingToken } from '@nocobase/app-server/logging';
 import { cachingToken } from '@nocobase/app-server/caching';
 import type { AIManager, ToolsEntity } from '@nocobase/ai-employee';
+import type { Caching } from '@nocobase/caching';
+import type { Logger } from '@nocobase/logging';
+import type { IdGeneratorService } from '@nocobase/snowflake';
 import { createAgentService, type AgentService } from './agent-service.js';
 import { createAIEmployeeAgentContextProvider } from '../context/ai-employee/context.js';
 import type { AIEmployeeSkillSettings } from '../context/ai-employee/options.js';
 import { FixedAgentContextProvider } from '../context/fixed/context.js';
 import { createAgentProviders } from '../providers.js';
-import type { AgentProviders, AgentContextProvider } from '../types.js';
 import { DefaultChatMessageConverters } from '../message/converters.js';
 import { NativeCollectionSaver } from '../checkpoint/index.js';
 import type { ConversationPersistence } from '../contracts/persistence.js';
@@ -59,24 +65,40 @@ export interface CreateAgentOptions {
   readonly tools?: readonly string[];
   readonly skills?: readonly string[];
   readonly persistence?: ConversationPersistence;
-  readonly context?: AgentContextProvider;
-  readonly providers?: AgentProviders;
 }
 
 export class AgentServiceFactory {
   private readonly container: ServiceResolver;
+  private readonly aiManager: AIManager;
+  private readonly repositoryFactory: RepositoryFactory;
+  private readonly managerFactory: ManagerFactory;
+  private readonly databaseManager: DatabaseManager;
+  private readonly databaseConnection: DatabaseConnection;
+  private readonly loggerService: Logger;
+  private readonly cachingService: Caching;
+  private readonly idGenerator: IdGeneratorService;
 
   public constructor(
     container: ServiceResolver | { container: ServiceResolver },
   ) {
     this.container = 'container' in container ? container.container : container;
+    this.aiManager = this.container.resolve(aiManagerToken);
+    this.repositoryFactory = this.container.resolve(repositoryFactoryToken);
+    this.managerFactory = this.container.resolve(managerFactoryToken);
+    this.databaseManager = this.container.resolve(databaseManagerToken);
+    this.databaseConnection = this.databaseManager.connection();
+    this.loggerService = this.container
+      .resolve(loggingToken)
+      .getLogger('ai-employee');
+    this.cachingService = this.container.resolve(cachingToken);
+    this.idGenerator = this.container.resolve(idGeneratorToken);
   }
 
   public async createAIEmployee(
     options: CreateEmployeeOptions,
   ): Promise<AgentService> {
-    const repositories = this.repositories;
-    const managers = this.managers;
+    const repositories = this.repositoryFactory;
+    const managers = this.managerFactory;
     const sessionId = options.sessionId ?? randomUUID();
     const actor = options.actor ?? { id: 0, roles: [], isRoot: true };
     const agentContext = this.createContext(
@@ -101,9 +123,9 @@ export class AgentServiceFactory {
       actor,
       translate: options.translate,
       toolRuntimeContext: agentContext,
-      llmProviderManager: this.ai.llmProviderManager,
-      toolsManager: this.ai.toolsManager,
-      skillsManager: this.ai.skillsManager,
+      llmProviderManager: this.aiManager.llmProviderManager,
+      toolsManager: this.aiManager.toolsManager,
+      skillsManager: this.aiManager.skillsManager,
       builtInManager: managers.builtInManager,
       knowledgeBaseManager: managers.knowledgeBaseManager,
       conversations: repositories.aiConversations,
@@ -119,8 +141,8 @@ export class AgentServiceFactory {
     };
     const context = createAIEmployeeAgentContextProvider(contextOptions);
     const persistence = new DatabaseConversationPersistence({
-      database: this.database,
-      snowflake: this.container.resolve(idGeneratorToken),
+      database: this.databaseConnection,
+      snowflake: this.idGenerator,
       conversations: repositories.aiConversations,
       messages: repositories.aiMessages,
       toolMessages: repositories.aiToolMessages,
@@ -131,24 +153,24 @@ export class AgentServiceFactory {
       persistence,
       streamCache: managers.llmStreamCachedManager,
       employeesManager: managers.aiEmployeesManager,
-      logger: this.logger,
+      logger: this.loggerService,
     });
     return createAgentService(
       createAgentProviders({
         conversation,
         context,
-        logger: this.logger,
+        logger: this.loggerService,
         converters: new DefaultChatMessageConverters({
           employee: contextOptions.employee,
           skillSettings: contextOptions.skillSettings,
-          logger: this.logger,
+          logger: this.loggerService,
           actorId: actor.id,
           collectionRepository:
             repositories.collectionRepository.bind(repositories),
           workContextHandler: managers.workContextHandler,
           fileStorage: managers.fileStorage,
           documentLoaders: managers.documentLoaders,
-          caching: this.container.resolve(cachingToken),
+          caching: this.cachingService,
           getHeader: options.getHeader,
         }),
         checkpointer:
@@ -166,81 +188,83 @@ export class AgentServiceFactory {
   public async createAgent(
     options: CreateAgentOptions = {},
   ): Promise<AgentService> {
-    if (options.providers) return createAgentService(options.providers);
-    const repositories = this.repositories;
-    const managers = this.managers;
+    const repositories = this.repositoryFactory;
+    const managers = this.managerFactory;
     const sessionId = options.sessionId ?? randomUUID();
     const persistence =
       options.persistence ??
       new DatabaseConversationPersistence({
-        database: this.database,
-        snowflake: this.container.resolve(idGeneratorToken),
+        database: this.databaseConnection,
+        snowflake: this.idGenerator,
         conversations: repositories.aiConversations,
         messages: repositories.aiMessages,
         toolMessages: repositories.aiToolMessages,
         usageEvents: repositories.aiUsageEvents,
       });
-    const model = await this.ai.llmProviderManager.resolveModel(options.model);
-    const resolved = await this.ai.llmProviderManager.getLLMService(model);
+    const model = await this.aiManager.llmProviderManager.resolveModel(
+      options.model,
+    );
+    const resolved =
+      await this.aiManager.llmProviderManager.getLLMService(model);
     const configuredToolNames = new Set(options.tools ?? []);
     const tools = new Map<string, ToolsEntity>();
     if (options.tools?.length) {
       const configuredTools = await Promise.all(
-        options.tools.map((name) => this.ai.toolsManager.getTools(name)),
+        options.tools.map((name) => this.aiManager.toolsManager.getTools(name)),
       );
       for (const tool of configuredTools) {
         if (tool) tools.set(tool.definition.name, tool);
       }
     }
     if (options.skills?.length) {
-      const skills = await this.ai.skillsManager.getSkills([...options.skills]);
+      const skills = await this.aiManager.skillsManager.getSkills([
+        ...options.skills,
+      ]);
       for (const skill of skills) {
         for (const name of skill.tools ?? []) configuredToolNames.add(name);
       }
       const skillTools = await Promise.all(
         [...configuredToolNames].map((name) =>
-          this.ai.toolsManager.getTools(name),
+          this.aiManager.toolsManager.getTools(name),
         ),
       );
       for (const tool of skillTools) {
         if (tool) tools.set(tool.definition.name, tool);
       }
     }
-    const context =
-      options.context ??
-      new FixedAgentContextProvider({
-        sessionId,
-        username: options.username,
-        model,
-        provider: resolved.provider,
-        providerName: resolved.service.provider,
-        llmService: resolved.service.name,
-        resolveLLM: async (requestModel) => {
-          const requestResolved =
-            await this.ai.llmProviderManager.getLLMService(requestModel);
-          return {
-            providerName: requestResolved.service.provider,
-            llmService: requestResolved.service.name,
-            model: requestResolved.model,
-            provider: requestResolved.provider,
-          };
-        },
-        systemPrompt: options.systemPrompt,
-        tools,
-        activeTools: configuredToolNames,
-      });
+    const context = new FixedAgentContextProvider({
+      sessionId,
+      username: options.username,
+      model,
+      provider: resolved.provider,
+      providerName: resolved.service.provider,
+      llmService: resolved.service.name,
+      resolveLLM: async (requestModel) => {
+        const requestResolved =
+          await this.aiManager.llmProviderManager.getLLMService(requestModel);
+        return {
+          providerName: requestResolved.service.provider,
+          llmService: requestResolved.service.name,
+          model: requestResolved.model,
+          provider: requestResolved.provider,
+        };
+      },
+      systemPrompt: options.systemPrompt,
+      tools,
+      activeTools: configuredToolNames,
+    });
     const conversation = new ConversationProvider({
       sessionId,
       persistence,
       streamCache: managers.llmStreamCachedManager,
       employeesManager: managers.aiEmployeesManager,
-      logger: this.logger,
+      logger: this.loggerService,
     });
     return createAgentService(
       createAgentProviders({
         conversation,
         context,
-        logger: this.logger,
+        logger: this.loggerService,
         converters: undefined,
       }),
     );
@@ -251,13 +275,13 @@ export class AgentServiceFactory {
     translate?: Translate,
     getHeader?: (name: string) => string | undefined,
   ): AppAgentContext {
-    const managers = this.managers;
+    const managers = this.managerFactory;
     return createAgentContext({
       actor,
-      ai: this.ai,
-      database: this.container.resolve(databaseManagerToken),
-      logger: this.logger,
-      repositories: this.repositories,
+      ai: this.aiManager,
+      database: this.databaseManager,
+      logger: this.loggerService,
+      repositories: this.repositoryFactory,
       aiEmployeesManager: managers.aiEmployeesManager,
       aiConversationsManager: managers.aiConversationsManager,
       builtInManager: managers.builtInManager,
@@ -266,20 +290,5 @@ export class AgentServiceFactory {
       translate,
       getHeader,
     });
-  }
-  private get ai(): AIManager {
-    return this.container.resolve(aiManagerToken);
-  }
-  private get repositories(): RepositoryFactory {
-    return this.container.resolve(repositoryFactoryToken);
-  }
-  private get managers(): ManagerFactory {
-    return this.container.resolve(managerFactoryToken);
-  }
-  private get database() {
-    return this.container.resolve(databaseManagerToken).connection();
-  }
-  private get logger() {
-    return this.container.resolve(loggingToken).getLogger('ai-employee');
   }
 }
