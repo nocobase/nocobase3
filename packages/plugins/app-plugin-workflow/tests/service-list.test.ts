@@ -5,12 +5,13 @@ import { WorkflowRepository } from '../server/repositories/workflow-repository.j
 import { WorkflowRunRepository } from '../server/repositories/workflow-run-repository.js';
 import type { WorkflowServiceApi } from '../server/service.js';
 import type { WorkflowDistArtifact } from '../server/loader/index.js';
+import { asId, asIdFilter, serializeJson } from '../server/engine/utils.js';
 import {
   createTestDatabase,
   createTestWorkflow,
   insertTestRun,
+  testStore,
 } from './helpers.js';
-import { WORKFLOW_COLLECTIONS } from '../server/collections/names.js';
 import { parseWorkflowIdentifier } from '../server/repositories/mappers.js';
 
 describe('workflow repositories', () => {
@@ -105,11 +106,9 @@ describe('workflow repositories', () => {
       key: 'detail-stats',
       nodes: [],
     });
-    await database
-      .query()
-      .insertInto(WORKFLOW_COLLECTIONS.stats)
-      .values({ key: workflow.key, executed: 7 })
-      .execute();
+    await testStore(database).stats.createOne({
+      values: { key: workflow.key, executed: 7 },
+    });
     await insertTestRun(database, {
       workflowId: workflow.id,
       workflowKey: workflow.key,
@@ -206,16 +205,14 @@ describe('workflow repositories', () => {
     const currentHash = '1'.repeat(64);
     const pending = createArtifact('deployed-update');
     pending.workflow.title = 'Pending title';
-    await database
-      .query()
-      .updateTable(WORKFLOW_COLLECTIONS.workflows)
-      .set({
+    await testStore(database).workflows.updateMany({
+      filter: { id: asIdFilter(current.id) },
+      values: {
         title: 'Current title',
         version: 'version-1',
         hash: currentHash,
-      })
-      .where('id', '=', current.id)
-      .execute();
+      },
+    });
     const service: WorkflowServiceApi = {
       trigger: async () => ({ status: 'accepted', eventKey: 'test-event' }),
       triggerRevision: async () => ({
@@ -302,12 +299,10 @@ describe('workflow repositories', () => {
       key: 'versioned-run',
       nodes: [],
     });
-    await database
-      .query()
-      .updateTable(WORKFLOW_COLLECTIONS.workflows)
-      .set({ title: 'Versioned run', version: 'version-3' })
-      .where('id', '=', workflow.id)
-      .execute();
+    await testStore(database).workflows.updateMany({
+      filter: { id: asIdFilter(workflow.id) },
+      values: { title: 'Versioned run', version: 'version-3' },
+    });
     const run = await insertTestRun(database, {
       workflowId: workflow.id,
       workflowKey: workflow.key,
@@ -327,45 +322,42 @@ describe('workflow repositories', () => {
       enabled: true,
       nodes: [],
     });
-    await database
-      .query()
-      .updateTable(WORKFLOW_COLLECTIONS.workflows)
-      .set({ current: null })
-      .where('id', '=', first.id)
-      .execute();
-    await database
-      .query()
-      .insertInto(WORKFLOW_COLLECTIONS.workflows)
-      .values({
+    await testStore(database).workflows.updateMany({
+      filter: { id: asIdFilter(first.id) },
+      values: { current: null },
+    });
+    const second = await testStore(database).workflows.createOne({
+      values: {
         key: 'versioned',
         title: 'versioned v2',
         enabled: false,
         current: true,
-        inputSchema: JSON.stringify({ type: 'object' }),
-        parametersSchema: JSON.stringify({}),
-        parameterValues: JSON.stringify({}),
-        options: JSON.stringify({}),
-      })
-      .execute();
-    const second = await database
-      .query()
-      .selectFrom(WORKFLOW_COLLECTIONS.workflows)
-      .where('key', '=', 'versioned')
-      .where('current', '=', true)
-      .executeTakeFirstOrThrow();
+        inputSchema: serializeJson({ type: 'object' }),
+        parametersSchema: serializeJson({}),
+        parameterValues: serializeJson({}),
+        options: serializeJson({}),
+      },
+      select: (select) => select.fields('id'),
+    });
 
-    await workflows.setStatus(second.id, true);
+    await workflows.setStatus(asId(second.record.id), true);
 
-    const revisions = await database
-      .query()
-      .selectFrom(WORKFLOW_COLLECTIONS.workflows)
-      .select(['id', 'current', 'enabled'])
-      .where('key', '=', 'versioned')
-      .orderBy('id')
-      .execute();
+    const revisions = await testStore(database).workflows.findMany({
+      filter: { key: 'versioned' },
+      select: (select) => select.fields('id', 'current', 'enabled'),
+      sort: (sort) => sort.field('id').asc(),
+    });
     expect(revisions).toEqual([
-      expect.objectContaining({ id: first.id, current: null, enabled: 0 }),
-      expect.objectContaining({ id: second.id, current: 1, enabled: 1 }),
+      expect.objectContaining({
+        id: first.id,
+        current: null,
+        enabled: false,
+      }),
+      expect.objectContaining({
+        id: second.record.id,
+        current: true,
+        enabled: true,
+      }),
     ]);
   });
 });

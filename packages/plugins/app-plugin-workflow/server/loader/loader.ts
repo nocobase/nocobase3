@@ -1,5 +1,7 @@
 import type { DatabaseManager } from '@nocobase/db';
-import type { WorkflowId } from '../engine/index.js';
+import { asId, type WorkflowId } from '../engine/index.js';
+
+import { workflowStore, type WorkflowStore } from '../collections/store.js';
 
 import type { WorkflowArtifactStore } from './artifact-store.js';
 import {
@@ -26,6 +28,10 @@ export class WorkflowLoader {
     });
   }
 
+  private get store(): WorkflowStore {
+    return workflowStore(this.options.database);
+  }
+
   discover(): Promise<readonly WorkflowDistArtifact[]> {
     this.discovered ??= discoverWorkflowDistArtifacts(this.options.distRoot);
     return this.discovered;
@@ -37,13 +43,14 @@ export class WorkflowLoader {
     );
     if (!artifact) return undefined;
     return this.withKeyLock(artifact.key, async () => {
-      let registered = await this.options.database
-        .query()
-        .selectFrom('workflows')
-        .select('id')
-        .where('key', '=', artifact.key)
-        .where('hash', '=', artifact.digest)
-        .executeTakeFirst<{ id: WorkflowId }>();
+      const store = this.store;
+      const found = await store.workflows.findOne({
+        filter: { key: artifact.key, hash: artifact.digest },
+        select: (select) => select.fields('id'),
+      });
+      let registered: WorkflowId | undefined = found
+        ? asId(found.id)
+        : undefined;
       const stored = await this.options.artifactStore.has(
         artifact.key,
         artifact.digest,
@@ -54,19 +61,16 @@ export class WorkflowLoader {
           artifact.digest,
           artifact.directory,
         );
-      if (!registered) {
+      if (registered === undefined) {
         const result = await this.publisher.registerArtifact(artifact);
-        registered = { id: result.workflowId };
+        registered = result.workflowId;
       }
-      const current = await this.options.database
-        .query()
-        .selectFrom('workflows')
-        .select('id')
-        .where('key', '=', artifact.key)
-        .where('current', '=', true)
-        .executeTakeFirst();
-      if (!current) await this.publisher.activate(registered.id);
-      return registered.id;
+      const current = await store.workflows.findOne({
+        filter: { key: artifact.key, current: true },
+        select: (select) => select.fields('id'),
+      });
+      if (!current) await this.publisher.activate(registered);
+      return registered;
     });
   }
 

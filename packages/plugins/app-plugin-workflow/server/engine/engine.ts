@@ -9,7 +9,7 @@ import {
   type WorkflowQueueAdapter,
 } from '../queue.js';
 import { createTimeoutReaper, type TimeoutReaper } from './timeout-reaper.js';
-import { WORKFLOW_COLLECTIONS } from '../collections/names.js';
+import { workflowStore, type WorkflowStore } from '../collections/store.js';
 import type {
   JsonObject,
   WorkflowDefinition,
@@ -20,7 +20,7 @@ import type {
   WorkflowEngineOptions,
 } from './types.js';
 import { noopWorkflowLogger } from './utils.js';
-import { loadNodeRun, serializeJson } from './utils.js';
+import { asIdFilter, loadNodeRun, serializeJson } from './utils.js';
 
 /**
  * The assembly layer.
@@ -95,6 +95,10 @@ export default class WorkflowEngine {
               ? {}
               : { batchSize: options.timeoutReaperBatchSize }),
           });
+  }
+
+  private get store(): WorkflowStore {
+    return workflowStore(this.database, this.options.connectionName);
   }
 
   /** `true` once every task the dispatcher accepted has settled. */
@@ -187,20 +191,16 @@ export default class WorkflowEngine {
     nodeRunId: import('./types.js').WorkflowId,
     result: unknown,
   ): Promise<void> {
-    const nodeRun = await loadNodeRun(
-      this.database.query(this.options.connectionName),
-      nodeRunId,
-    );
+    const store = this.store;
+    const nodeRun = await loadNodeRun(store, nodeRunId);
     if (!nodeRun || String(nodeRun.workflowRunId) !== String(runId))
       throw new Error(
         `Node run "${String(nodeRunId)}" does not belong to run "${String(runId)}"`,
       );
-    await this.database
-      .query(this.options.connectionName)
-      .updateTable(WORKFLOW_COLLECTIONS.nodeRuns)
-      .set({ result: serializeJson(result) })
-      .where('id', '=', nodeRunId)
-      .execute();
+    await store.nodeRuns.updateMany({
+      filter: { id: asIdFilter(nodeRunId) },
+      values: { result: serializeJson(result) },
+    });
     await this.dispatcher.dispatch({ executionId: runId, nodeRunId });
   }
 }

@@ -10,6 +10,7 @@ import {
 import {
   WorkflowEngine,
   assertInputSize,
+  asIdFilter,
   loadRun,
   loadWorkflow,
   type JsonObject,
@@ -22,7 +23,8 @@ import {
   validateInputValue,
 } from './engine/index.js';
 import type { FsDriveDiskConfig } from '@nocobase/drive';
-import { WORKFLOW_COLLECTIONS } from './collections/names.js';
+import { anyOfIds } from './collections/filters.js';
+import { workflowStore, type WorkflowStore } from './collections/store.js';
 import { createWorkflowRunServices } from './engine/run-services.js';
 
 export interface WorkflowServiceOptions {
@@ -67,6 +69,11 @@ export class WorkflowService {
     });
   }
 
+  /** The workflow collections. `store` here is already the Artifact store. */
+  private get collections(): WorkflowStore {
+    return workflowStore(this.database);
+  }
+
   registerInstruction(instruction: WorkflowInstructionClass): void {
     this.engine.registerInstruction(instruction);
   }
@@ -76,13 +83,10 @@ export class WorkflowService {
     input: JsonObject,
     triggerOptions: WorkflowEventOptions = {},
   ): Promise<WorkflowTriggerReceipt> {
-    const row = await this.database
-      .query()
-      .selectFrom(WORKFLOW_COLLECTIONS.workflows)
-      .select(['id', 'enabled', 'hash'])
-      .where('key', '=', workflowKey)
-      .where('current', '=', true)
-      .executeTakeFirst();
+    const row = await this.collections.workflows.findOne({
+      filter: { key: workflowKey, current: true },
+      select: (select) => select.fields('id', 'enabled', 'hash'),
+    });
     if (!row) return { status: 'skipped', reason: 'not-found' };
     if (!triggerOptions.force && !triggerOptions.manually && !row.enabled)
       return { status: 'skipped', reason: 'disabled' };
@@ -90,7 +94,7 @@ export class WorkflowService {
       await this.loader.ensureMaterialized(row.hash);
 
     const workflow = await loadWorkflow(
-      this.database.query(),
+      this.collections,
       row.id as string | number,
     );
     if (!workflow)
@@ -107,7 +111,7 @@ export class WorkflowService {
     input: JsonObject,
     triggerOptions: WorkflowEventOptions = {},
   ): Promise<WorkflowTriggerReceipt> {
-    const workflow = await loadWorkflow(this.database.query(), revisionId);
+    const workflow = await loadWorkflow(this.collections, revisionId);
     if (!workflow)
       throw new WorkflowInvocationError(
         'WORKFLOW_NOT_FOUND',
@@ -171,7 +175,7 @@ export class WorkflowService {
     let stack = triggerOptions.stack ? [...triggerOptions.stack] : undefined;
     if (stack === undefined && triggerOptions.parentRunId !== undefined) {
       const parent = await loadRun(
-        this.database.query(),
+        this.collections,
         triggerOptions.parentRunId,
       );
       if (!parent)
@@ -182,15 +186,15 @@ export class WorkflowService {
       stack = [...parent.stack, parent.id];
     }
     if (stack?.length) {
-      const repeats = await this.database
-        .query()
-        .selectFrom(WORKFLOW_COLLECTIONS.runs)
-        .select(({ fn }) => [fn.countAll().as('count')])
-        .where('workflowId', '=', workflow.id)
-        .where('id', 'in', stack)
-        .executeTakeFirst<{ count: number | string }>();
+      const repeats = await this.collections.runs.count({
+        filter: (filter) =>
+          filter.and([
+            filter.number('workflowId').eq(asIdFilter(workflow.id)),
+            anyOfIds(filter, 'id', stack),
+          ]),
+      });
       const limit = Number(workflow.options.stackLimit ?? 1);
-      if (Number(repeats?.count ?? 0) >= limit)
+      if (repeats >= limit)
         throw new WorkflowInvocationError(
           'STACK_LIMIT_EXCEEDED',
           `Workflow "${workflow.key}" stack limit ${limit} was exceeded`,

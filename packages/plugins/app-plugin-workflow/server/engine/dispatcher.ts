@@ -1,8 +1,13 @@
 import { randomUUID } from 'node:crypto';
 
-import type { DatabaseManager, QueryAdapter, Row } from '@nocobase/db';
+import type { DatabaseManager } from '@nocobase/db';
 
-import { WORKFLOW_COLLECTIONS } from '../collections/names.js';
+import { anyOfIds } from '../collections/filters.js';
+import {
+  workflowStore,
+  workflowStoreOf,
+  type WorkflowStore,
+} from '../collections/store.js';
 import { EXECUTION_STATUS } from './constants.js';
 import Processor from './processor.js';
 import type {
@@ -19,11 +24,13 @@ import type {
   WorkflowNodeRun,
 } from './types.js';
 import {
+  asIdFilter,
   hydrateRun,
   loadNodeRun,
   loadRun,
   loadWorkflow,
   noopWorkflowLogger,
+  nowInstant,
   serializeJson,
 } from './utils.js';
 import {
@@ -68,6 +75,10 @@ export default class Dispatcher {
 
   constructor(private readonly options: DispatcherOptions) {}
 
+  private get store(): WorkflowStore {
+    return workflowStore(this.options.database, this.options.connectionName);
+  }
+
   get idle(): boolean {
     return this.inFlight.size === 0 && this.pendingEventKeys.size === 0;
   }
@@ -105,13 +116,7 @@ export default class Dispatcher {
       logger.warn(`Duplicate workflow event "${eventKey}" ignored`);
       return;
     }
-    if (
-      await this.options.database
-        .query(this.options.connectionName)
-        .selectFrom(WORKFLOW_COLLECTIONS.runs)
-        .where('eventKey', '=', eventKey)
-        .exists()
-    ) {
+    if (await this.store.runs.exists({ filter: { eventKey } })) {
       logger.warn(
         `Persisted workflow event "${eventKey}" already exists; event ignored`,
       );
@@ -146,26 +151,26 @@ export default class Dispatcher {
   }
 
   async recover(options: { gracePeriod?: number } = {}): Promise<number> {
-    const query = this.options.database.query(this.options.connectionName);
-    let selection = query
-      .selectFrom(WORKFLOW_COLLECTIONS.runs)
-      .selectAll()
-      .where('dispatched', '=', false)
-      .where('status', 'is', null)
-      .orderBy('id')
-      .limit(RECOVERY_BATCH_SIZE);
-    if ((options.gracePeriod ?? 0) > 0) {
-      selection = selection.where(
-        'createdAt',
-        '<',
-        new Date(Date.now() - (options.gracePeriod ?? 0)).toISOString(),
-      );
-    }
-    const rows = await selection.execute<Row>();
+    const store = this.store;
+    const gracePeriod = options.gracePeriod ?? 0;
+    const createdBefore =
+      gracePeriod > 0 ? new Date(Date.now() - gracePeriod).toISOString() : null;
+    const rows = await store.runs.findMany({
+      filter: (filter) =>
+        filter.and([
+          filter.boolean('dispatched').isFalse(),
+          filter.number('status').empty(),
+          ...(createdBefore
+            ? [filter.date('createdAt').before(createdBefore)]
+            : []),
+        ]),
+      sort: (sort) => sort.field('id').asc(),
+      limit: RECOVERY_BATCH_SIZE,
+    });
     let recovered = 0;
     for (const row of rows) {
       const execution = hydrateRun(row);
-      const workflow = await loadWorkflow(query, execution.workflowId);
+      const workflow = await loadWorkflow(store, execution.workflowId);
       if (!workflow?.enabled) {
         continue;
       }
@@ -190,8 +195,8 @@ export default class Dispatcher {
   private async resolveAndProcessTask(
     task: WorkflowExecutionQueueTask,
   ): Promise<Processor | null> {
-    const query = this.options.database.query(this.options.connectionName);
-    const execution = await loadRun(query, task.executionId);
+    const store = this.store;
+    const execution = await loadRun(store, task.executionId);
     if (!execution) {
       this.getLogger('dispatcher').warn(
         `Execution "${task.executionId}" was not found; queue task ignored`,
@@ -210,7 +215,7 @@ export default class Dispatcher {
       return null;
     }
 
-    const workflow = await loadWorkflow(query, execution.workflowId);
+    const workflow = await loadWorkflow(store, execution.workflowId);
     if (!workflow) {
       this.getLogger(execution.workflowId).warn(
         `Workflow "${execution.workflowId}" was not found`,
@@ -220,7 +225,7 @@ export default class Dispatcher {
 
     let nodeRun: WorkflowNodeRun | undefined;
     if (task.nodeRunId != null) {
-      nodeRun = (await loadNodeRun(query, task.nodeRunId)) ?? undefined;
+      nodeRun = (await loadNodeRun(store, task.nodeRunId)) ?? undefined;
       if (!nodeRun || String(nodeRun.workflowRunId) !== String(execution.id)) {
         this.getLogger(execution.workflowId).warn(
           `Node run "${task.nodeRunId}" does not belong to execution "${execution.id}"`,
@@ -253,9 +258,9 @@ export default class Dispatcher {
       }
 
       return await this.options.database.transaction(async (connection) => {
-        const query = connection.query;
+        const store = workflowStoreOf(connection);
         const eventKey = options.eventKey ?? randomUUID();
-        const createdAt = new Date().toISOString();
+        const createdAt = nowInstant();
         const parameters = resolveWorkflowParameters(
           workflow.parametersSchema,
           options.parameterValues
@@ -265,10 +270,9 @@ export default class Dispatcher {
               )
             : workflow.parameterValues,
         );
-        await query
-          .insertInto(WORKFLOW_COLLECTIONS.runs)
-          .values({
-            workflowId: workflow.id,
+        const created = await store.runs.createOne({
+          values: {
+            workflowId: asIdFilter(workflow.id),
             workflowKey: workflow.key,
             hash: workflow.hash,
             eventKey,
@@ -278,7 +282,10 @@ export default class Dispatcher {
               ? EXECUTION_STATUS.STARTED
               : EXECUTION_STATUS.QUEUEING,
             dispatched: options.deferred ?? false,
-            parentRunId: options.parentRunId ?? null,
+            parentRunId:
+              options.parentRunId == null
+                ? null
+                : asIdFilter(options.parentRunId),
             stack: serializeJson(stack),
             output: serializeJson(null),
             startedAt: options.deferred ? createdAt : null,
@@ -289,15 +296,10 @@ export default class Dispatcher {
             createdAt,
             manually: options.manually ?? false,
             reason: null,
-          })
-          .execute();
-        const row = await query
-          .selectFrom(WORKFLOW_COLLECTIONS.runs)
-          .selectAll()
-          .where('eventKey', '=', eventKey)
-          .executeTakeFirstOrThrow<Row>();
-        await this.incrementStats(query, workflow);
-        const execution = hydrateRun(row);
+          },
+        });
+        await this.incrementStats(store, workflow);
+        const execution = hydrateRun(created.record);
         execution.workflow = workflow;
         return execution;
       }, this.options.connectionName);
@@ -323,25 +325,29 @@ export default class Dispatcher {
       return null;
     }
 
-    const startedAt = new Date().toISOString();
-    const query = this.options.database.query(this.options.connectionName);
-    const result = await query
-      .updateTable(WORKFLOW_COLLECTIONS.runs)
-      .set({
+    const startedAt = nowInstant();
+    const store = this.store;
+    // The filter is the claim: whoever flips `dispatched` first owns this run,
+    // and a second dispatcher updates nothing and backs out.
+    const result = await store.runs.updateMany({
+      filter: (filter) =>
+        filter.and([
+          filter.number('id').eq(asIdFilter(execution.id)),
+          filter.boolean('dispatched').isFalse(),
+          filter.number('status').empty(),
+        ]),
+      values: {
         dispatched: true,
         status: EXECUTION_STATUS.STARTED,
         startedAt,
         finishedAt: null,
         expiresAt: this.getExpiresAt(workflow, startedAt),
-      })
-      .where('id', '=', execution.id)
-      .where('dispatched', '=', false)
-      .where('status', 'is', null)
-      .execute();
-    if ((result.updatedCount ?? 0) === 0) {
+      },
+    });
+    if (result.updatedCount === 0) {
       return null;
     }
-    const entered = await loadRun(query, execution.id);
+    const entered = await loadRun(store, execution.id);
     if (entered) {
       entered.workflow = workflow;
     }
@@ -393,15 +399,15 @@ export default class Dispatcher {
   ): Promise<boolean> {
     const stack = options.stack ?? [];
     if (stack.length) {
-      const countRow = await this.options.database
-        .query(this.options.connectionName)
-        .selectFrom(WORKFLOW_COLLECTIONS.runs)
-        .select(({ fn }) => [fn.countAll().as('count')])
-        .where('workflowId', '=', workflow.id)
-        .where('id', 'in', stack)
-        .executeTakeFirst<{ count: number | string }>();
+      const repeats = await this.store.runs.count({
+        filter: (filter) =>
+          filter.and([
+            filter.number('workflowId').eq(asIdFilter(workflow.id)),
+            anyOfIds(filter, 'id', stack),
+          ]),
+      });
       const limit = Number(workflow.options.stackLimit ?? 1);
-      if (Number(countRow?.count ?? 0) >= limit) {
+      if (repeats >= limit) {
         return false;
       }
     }
@@ -418,52 +424,31 @@ export default class Dispatcher {
     if (parentRunId == null) {
       return [];
     }
-    const parent = await loadRun(
-      this.options.database.query(this.options.connectionName),
-      parentRunId,
-    );
+    const parent = await loadRun(this.store, parentRunId);
     return parent ? [...parent.stack, parent.id] : [];
   }
 
+  /**
+   * Both counters are upserts with a database-side increment rather than the
+   * read-then-write they used to be: the Repository locks the row by its unique
+   * selector, so two concurrent triggers of the same workflow can no longer
+   * read the same count and each write it back plus one.
+   */
   private async incrementStats(
-    query: QueryAdapter,
+    store: WorkflowStore,
     workflow: WorkflowDefinition,
   ): Promise<void> {
-    const workflowStats = await query
-      .selectFrom(WORKFLOW_COLLECTIONS.stats)
-      .selectAll()
-      .where('key', '=', workflow.key)
-      .executeTakeFirst<Row>();
-    if (workflowStats) {
-      await query
-        .updateTable(WORKFLOW_COLLECTIONS.stats)
-        .set({ executed: Number(workflowStats.executed ?? 0) + 1 })
-        .where('key', '=', workflow.key)
-        .execute();
-    } else {
-      await query
-        .insertInto(WORKFLOW_COLLECTIONS.stats)
-        .values({ key: workflow.key, executed: 1 })
-        .execute();
-    }
-
-    const versionStats = await query
-      .selectFrom(WORKFLOW_COLLECTIONS.versionStats)
-      .selectAll()
-      .where('id', '=', workflow.id)
-      .executeTakeFirst<Row>();
-    if (versionStats) {
-      await query
-        .updateTable(WORKFLOW_COLLECTIONS.versionStats)
-        .set({ executed: Number(versionStats.executed ?? 0) + 1 })
-        .where('id', '=', workflow.id)
-        .execute();
-    } else {
-      await query
-        .insertInto(WORKFLOW_COLLECTIONS.versionStats)
-        .values({ id: workflow.id, executed: 1 })
-        .execute();
-    }
+    await store.stats.upsertOne({
+      filter: { key: workflow.key },
+      create: { key: workflow.key, executed: 1 },
+      update: { executed: (value) => value.increment(1) },
+    });
+    const workflowId = asIdFilter(workflow.id);
+    await store.versionStats.upsertOne({
+      filter: { id: workflowId },
+      create: { id: workflowId, executed: 1 },
+      update: { executed: (value) => value.increment(1) },
+    });
   }
 
   private getExpiresAt(
