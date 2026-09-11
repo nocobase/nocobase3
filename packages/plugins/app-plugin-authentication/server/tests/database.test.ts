@@ -1,5 +1,6 @@
 // @vitest-environment node
 
+import sqlite from '@nocobase/db-sqlite';
 import { createDatabaseManager } from '@nocobase/db';
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -23,6 +24,7 @@ describe('@nocobase/app-plugin-authentication database migrations', () => {
 
   it('adds and removes the user disabledAt field', async () => {
     const database = createDatabaseManager({
+      drivers: { sqlite },
       default: 'main',
       connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
     });
