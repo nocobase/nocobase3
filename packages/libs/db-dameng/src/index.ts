@@ -86,6 +86,25 @@ export const damengDriver: DatabaseDriverDefinition<'dameng'> = {
       aggregateProjection: ({ expression }) => expression,
     },
     schema: {
+      normalizeOperation: (operation) => {
+        if (operation.type === 'createTable') {
+          return {
+            ...operation,
+            table: {
+              ...operation.table,
+              columns: operation.table.columns.map((column) =>
+                typeof column.defaultValue === 'boolean'
+                  ? {
+                      ...column,
+                      defaultValue: column.defaultValue ? 1 : 0,
+                    }
+                  : column,
+              ),
+            },
+          };
+        }
+        return operation;
+      },
       columnType: ({ column }) => {
         if (column.autoIncrement || column.type === 'increments')
           return undefined;
