@@ -88,10 +88,11 @@ export function createEmailChannelDefinition(
       return {
         type: 'email',
         async resolveRecipient(input: {
-          readonly recipient: NotificationRecipient;
+          readonly recipient?: NotificationRecipient;
           readonly provider: NotificationProviderIdentity;
         }): Promise<EmailRecipient | undefined> {
           const { recipient } = input;
+          if (!recipient) return undefined;
           if (recipient.type === 'user') {
             const address = await options.resolveUserEmail?.(
               recipient.id,
