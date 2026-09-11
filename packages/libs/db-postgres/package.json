@@ -37,6 +37,7 @@
     "@nocobase/db": "workspace:^"
   },
   "dependencies": {
+    "knex": "catalog:",
     "pg": "^8.23.0",
     "pg-query-stream": "^4.14.0"
   },
@@ -46,7 +47,6 @@
     "@nocobase/dev-config": "workspace:*",
     "@types/node": "catalog:",
     "eslint": "catalog:",
-    "knex": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

@@ -51,7 +51,9 @@
     "@types/node": "catalog:",
     "eslint": "catalog:",
     "knex": "catalog:",
-    "typescript": "catalog:",
+    "typescript": "catalog:"
+  },
+  "dependencies": {
     "vitest": "catalog:"
   }
 }

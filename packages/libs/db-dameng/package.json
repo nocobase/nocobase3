@@ -37,6 +37,7 @@
     "@nocobase/db": "workspace:^"
   },
   "dependencies": {
+    "dmdb": "^1.0.52452",
     "knex-dm": "^1.0.52452"
   },
   "devDependencies": {
