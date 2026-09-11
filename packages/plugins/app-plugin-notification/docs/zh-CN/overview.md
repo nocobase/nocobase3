@@ -8,7 +8,7 @@ keywords: 'NocoBase,通知,站内信,邮件,飞书,钉钉,Notification'
 
 NocoBase 通知用于向用户发送站内信、邮件或 IM Webhook 消息，并记录每次投递的状态。通知包提供运行时和扩展点。默认模板通过核心插件 bootstrap 创建 `NotificationManager`，再由 Provider 插件 bootstrap 注册内置的 Email 和 IM definitions；其他宿主也可以手动完成相同的接入。
 
-当前提供三个 Channel 实现：
+当前由相关通知插件提供三个内置 Channel 实现：
 
 - `in-app`——把消息写入用户的站内信收件箱
 - `email`——通过 SMTP 或 Resend 发送邮件

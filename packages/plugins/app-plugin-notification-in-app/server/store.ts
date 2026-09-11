@@ -200,11 +200,11 @@ export class DatabaseInAppStore implements InAppStore {
     const rows = await this.database
       .query()
       .selectFrom<ItemRow>('notificationInAppItems')
-      .selectAll()
+      .select(({ fn }) => fn.countAll<number>().as('count'))
       .where('userId', '=', userId)
       .where('readAt', 'is', null)
-      .execute<ItemRow>();
-    return rows.length;
+      .executeTakeFirst<{ count: number | string }>();
+    return Number(rows?.count ?? 0);
   }
   async update(input: {
     readonly id: string;
