@@ -1,6 +1,6 @@
 ---
 name: nocobase-app-plugin-mail
-description: Integrate and operate NocoBase Mail accounts, OAuth authorization, idempotent sending, and resumable mailbox synchronization. Use when an App needs Gmail or Microsoft 365 mail behavior. Do not use for generic notifications or direct access to the plugin's internal tables.
+description: Integrate and operate NocoBase Mail accounts, OAuth or credential authorization, idempotent sending, and resumable mailbox synchronization. Use when an App needs Gmail, Microsoft 365, or generic IMAP/SMTP mail behavior. Do not use for generic notifications or direct access to the plugin's internal tables.
 ---
 
 # NocoBase Mail
@@ -15,14 +15,14 @@ Use the Mail plugin's public Client, Server, and HTTP contracts. The plugin owns
   `MailWorkspacePage` and template helpers from
   `@nocobase/app-plugin-mail/client`.
 - Require an authenticated identity with `page:mail.workspace/access` for personal Mail APIs and `page:mail.admin/access` for cross-user administration APIs.
-- Configure concrete Providers through the Gmail and Microsoft Provider plugins; do not instantiate their adapters from App code.
+- Configure concrete Providers through the Gmail, Microsoft, or IMAP/SMTP Provider plugins; do not instantiate their adapters from App code.
 
 ## Configure and connect an account
 
-1. Add an enabled `mail.providers` entry with a stable `type` and `name` plus the Provider OAuth client configuration.
-2. Register the matching Gmail or Microsoft Server Provider plugin.
+1. Add an enabled `mail.providers` entry with a stable `type` and `name` plus the Provider OAuth client or IMAP/SMTP endpoint configuration.
+2. Register the matching Gmail, Microsoft, or IMAP/SMTP Server Provider plugin.
 3. Grant intended users access to `mail.workspace`; grant only administrators access to `mail.admin`.
-4. Open `/settings/mail/my-accounts`, select the mail account type, and complete its OAuth redirect.
+4. Open `/settings/mail/my-accounts`, select the mail account type, and complete its OAuth redirect or enter the IMAP/SMTP mailbox credentials.
 5. Verify that the account appears without credential references or token material in the API response.
 
 For push synchronization, set `MAIL_PUSH_WEBHOOK_URL` to the public Mail
@@ -43,6 +43,13 @@ Open `/mail` to filter, refresh, and inspect the authenticated user's synchroniz
 Do not group unrelated messages by normalized subject. Gmail `threadId` and Microsoft Graph `conversationId` are normalized to `conversationId`; messages without one remain standalone. Folder filtering uses the indexed message-folder relation rather than scanning the JSON projection stored on each message.
 
 OAuth callback state is short-lived and single-use. Never bypass it, persist raw tokens in App collections, or expose the Mail Core tables directly.
+
+The generic `imap-smtp` Provider verifies both endpoints before storing the
+username and password in Mail's credential vault. It uses periodic sync and
+does not provide push notifications, labels, drafts, aliases, or move-to-folder
+operations in the MVP. Its incremental cursor discovers new IMAP UID ranges;
+external flag, deletion, and move reconciliation, plus provider-side Sent
+append, are not guaranteed by this MVP.
 
 ## Send mail
 

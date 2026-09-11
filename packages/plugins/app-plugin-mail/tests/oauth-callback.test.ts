@@ -91,6 +91,9 @@ function service(overrides: Partial<MailService> = {}): MailService {
       authorizationUrl: 'https://example.com/authorize',
       state: 'state-1',
     }),
+    connectAccount: async () => {
+      throw new Error('Not implemented.');
+    },
     completeAuthorization: async () => {
       throw new Error('Not implemented.');
     },

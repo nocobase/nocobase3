@@ -141,14 +141,14 @@ const enUS = {
     providers: {
       title: 'Add mail account',
       description:
-        'Choose an account type, then continue to its secure authorization page.',
+        'Choose an account type, then authorize it or enter its mailbox credentials.',
       accountType: 'Mail account type',
       chooseAccountType: 'Select an account type',
       emptyTitle: 'No mail Providers configured',
       emptyDescription:
-        'Add a Gmail or Microsoft Provider to the server mail configuration.',
+        'Add a Gmail, Microsoft, or IMAP/SMTP Provider to the server mail configuration.',
       connect: 'Connect account',
-      connecting: 'Opening authorization…',
+      connecting: 'Connecting…',
       connected: '{{count}} connected',
     },
     accounts: {
@@ -249,7 +249,7 @@ const enUS = {
     accountsTitle: 'Mail accounts',
     accountsCategory: 'Account access',
     accountsDescription:
-      'Connect Gmail or Microsoft accounts, configure initial sync limits, and synchronize current-user mailboxes.',
+      'Connect Gmail, Microsoft, or IMAP/SMTP accounts, configure initial sync limits, and synchronize current-user mailboxes.',
     connectedAccountsTitle: 'Connected accounts',
     connectedAccountsDescription:
       'Manage and synchronize the mail accounts connected by the current user.',

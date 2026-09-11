@@ -13,6 +13,7 @@ NocoBase v3 的**邮件插件（Mail）**负责连接用户自己的邮箱账户
 - `@nocobase/app-plugin-mail`——账户、邮件、同步、发送、草稿、附件和管理界面
 - `@nocobase/app-plugin-mail-provider-gmail`——Gmail OAuth 与 Gmail API 适配
 - `@nocobase/app-plugin-mail-provider-microsoft`——Microsoft OAuth 与 Microsoft Graph 适配
+- `@nocobase/app-plugin-mail-provider-imap-smtp`——标准 IMAP/SMTP 凭据接入（MVP）
 
 状态说明：
 
@@ -24,7 +25,7 @@ NocoBase v3 的**邮件插件（Mail）**负责连接用户自己的邮箱账户
 
 以下能力不计入 v3 邮件插件的待办清单：
 
-- 通用 IMAP / SMTP、JMAP 和 POP3 Provider
+- JMAP 和 POP3 Provider
 - 在设置界面管理 Provider Client ID、Client Secret 等部署配置
 - 跨账户统一收件箱和跨账户全局搜索
 - 邮件规则、自动分类、垃圾邮件和钓鱼邮件举报
@@ -49,6 +50,15 @@ NocoBase v3 的**邮件插件（Mail）**负责连接用户自己的邮箱账户
   - [x] Microsoft Graph 收信、发信与增量同步
   - [x] Microsoft folder、conversation、draft 和 identity 适配
   - [x] Microsoft Graph change notification
+- [x] 通用 IMAP / SMTP Provider（MVP）
+  - [x] 配置独立的 IMAP 与 SMTP endpoint、TLS 和常用文件夹名称
+  - [x] 用户输入邮箱地址、用户名和密码，连接时同时验证 IMAP 与 SMTP
+  - [x] 通过 IMAP 发现文件夹并导入邮件
+  - [x] 使用 IMAP UIDVALIDITY 与 UIDNEXT 执行可恢复的定时增量同步
+  - [x] 通过 SMTP 发送纯文本、HTML、回复和附件
+  - [x] 标记已读、星标、附件下载和服务端永久删除
+  - [ ] Push、label、草稿、别名和移动到文件夹
+  - [ ] 外部旗标、删除和移动的完整变化对账
 - [x] 一个 NocoBase 用户连接多个邮箱账户
 - [x] 同一邮箱账户只能归属于一个 NocoBase 用户
 - [x] 设置默认邮箱账户
@@ -85,8 +95,9 @@ NocoBase v3 的**邮件插件（Mail）**负责连接用户自己的邮箱账户
 - [x] 增量同步
   - [x] Gmail History 增量同步
   - [x] Microsoft Graph 按文件夹 delta 同步
+  - [x] IMAP 按 UIDVALIDITY / UIDNEXT 发现新邮件
   - [x] Gmail History 暂时不可用时按时间扫描恢复
-  - [x] 同步邮件新增、更新、文件夹移除和删除状态
+  - [x] 同步 Provider 返回的邮件新增、更新、文件夹移除和删除状态
 - [x] 文件夹和 label 发现
   - [x] 分页发现大规模文件夹层级
   - [x] 新增和移除文件夹的 reconciliation
@@ -279,21 +290,21 @@ v3 只使用 Gmail `threadId` 或 Microsoft Graph `conversationId` 归并会话�
 - [ ] Provider 兼容性测试套件
 - [ ] 第三方 Provider 开发指南和示例插件
 
-## Gmail 与 Microsoft 365 的差异
+## Provider 能力对比
 
-| 能力                 | Gmail                       | Microsoft 365                                     |
-| -------------------- | --------------------------- | ------------------------------------------------- |
-| OAuth 授权           | 已实现                      | 已实现                                            |
-| 收信和发信           | 已实现                      | 已实现                                            |
-| 首次同步             | Gmail message 分页          | Graph folder message 分页                         |
-| 增量同步             | Gmail History               | Graph per-folder delta                            |
-| Push                 | Gmail watch + Pub/Sub       | Graph subscription + webhook                      |
-| 邮件组织             | label                       | folder                                            |
-| 原生会话             | `threadId`                  | `conversationId`                                  |
-| 草稿                 | Gmail Draft API             | Graph Message Draft API                           |
-| 发件身份             | Gmail send-as               | Graph mailbox identities                          |
-| 大附件               | Gmail MIME，受 25 MB 总限制 | 3 MB 以下直接添加，3 MB 及以上使用 upload session |
-| 移动后的 Provider ID | 通常保持稳定                | Graph 可能返回新的 message ID                     |
+| 能力       | Gmail                       | Microsoft 365                                     | IMAP/SMTP MVP                           |
+| ---------- | --------------------------- | ------------------------------------------------- | --------------------------------------- |
+| 授权方式   | OAuth 2.0 + PKCE            | OAuth 2.0 + PKCE                                  | 用户名和密码                            |
+| 收信和发信 | 已实现                      | 已实现                                            | IMAP + SMTP 已实现                      |
+| 首次同步   | Gmail message 分页          | Graph folder message 分页                         | IMAP 文件夹分页                         |
+| 增量同步   | Gmail History               | Graph per-folder delta                            | UIDVALIDITY / UIDNEXT，主要发现新增邮件 |
+| Push       | Gmail watch + Pub/Sub       | Graph subscription + webhook                      | 不支持                                  |
+| 邮件组织   | label                       | folder                                            | folder，仅支持基础文件夹                |
+| 原生会话   | `threadId`                  | `conversationId`                                  | 不提供，邮件按独立消息处理              |
+| 草稿       | Gmail Draft API             | Graph Message Draft API                           | 不支持                                  |
+| 发件身份   | Gmail send-as               | Graph mailbox identities                          | 连接邮箱主身份                          |
+| 大附件     | Gmail MIME，受 25 MB 总限制 | 3 MB 以下直接添加，3 MB 及以上使用 upload session | 由 SMTP 服务商限制                      |
+| 移动和删除 | 支持移动、软删除和永久删除  | 支持移动、软删除和永久删除                        | 仅支持永久删除                          |
 
 ## 与 NocoBase v2 邮件管理插件对照
 

@@ -36,6 +36,7 @@ import {
   type MailTemplate,
 } from '../mail-client.js';
 import { getMailClient } from '../runtime.js';
+import { MAIL_PLUGIN_NS } from '../namespace.js';
 
 interface ComposerState {
   readonly mode: 'new' | 'reply' | 'forward' | 'edit';
@@ -84,7 +85,7 @@ const AUTO_SAVE_DELAY_MS = 1_000;
 export default function MailWorkspacePage({
   templateVariables = {},
 }: MailWorkspacePageProps = {}): ReactElement {
-  const { t } = useTranslation();
+  const { t } = useTranslation(MAIL_PLUGIN_NS);
   const [mail] = useState(getMailClient);
   const [accounts, setAccounts] = useState<readonly MailAccountView[]>([]);
   const [accountId, setAccountId] = useState('');

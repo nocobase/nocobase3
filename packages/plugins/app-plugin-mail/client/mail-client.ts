@@ -2,6 +2,7 @@ import type { ApiClient } from '@nocobase/app-client';
 import type {
   MailAccountView,
   MailAuthorizationStartResult,
+  MailConnectAccountInput,
   MailComposeInput,
   MailBulkComposeInput,
   MailFolder,
@@ -34,6 +35,7 @@ export type {
   MailAccountView,
   MailAddress,
   MailAuthorizationStartResult,
+  MailConnectAccountInput,
   MailComposeInput,
   MailBulkComposeInput,
   MailFolder,
@@ -70,6 +72,14 @@ export interface MailAuthorizationRequest {
   readonly name: string;
   readonly scopes?: readonly string[];
 }
+
+export type MailConnectAccountRequest = Omit<
+  MailConnectAccountInput,
+  'provider'
+> & {
+  readonly type: string;
+  readonly name: string;
+};
 
 export interface MailMessagesQuery extends Pick<
   MailListMessagesInput,
@@ -149,6 +159,17 @@ export class MailClient {
       'mail/authorizations',
       input,
     );
+  }
+
+  public connectAccount(
+    input: MailConnectAccountRequest,
+  ): Promise<MailAccountView> {
+    const { type, name, ...json } = input;
+    return this.post<MailAccountView>('mail/accounts/connect', {
+      type,
+      name,
+      ...json,
+    });
   }
 
   public listIdentities(accountId: string): Promise<readonly MailIdentity[]> {

@@ -137,13 +137,14 @@ const zhCN: MailResource = {
     },
     providers: {
       title: '添加邮件账户',
-      description: '先选择邮件账户类型，再前往对应服务商的安全授权页面。',
+      description: '先选择邮件账户类型，再完成授权或填写邮箱凭据。',
       accountType: '邮件账户类型',
       chooseAccountType: '请选择账户类型',
       emptyTitle: '未配置邮件服务商',
-      emptyDescription: '请在服务端邮件配置中添加 Gmail 或 Microsoft 服务商。',
+      emptyDescription:
+        '请在服务端邮件配置中添加 Gmail、Microsoft 或 IMAP/SMTP 服务商。',
       connect: '连接账户',
-      connecting: '正在打开授权页…',
+      connecting: '正在连接…',
       connected: '已连接 {{count}} 个',
     },
     accounts: {
@@ -241,7 +242,7 @@ const zhCN: MailResource = {
     accountsTitle: '邮件账户',
     accountsCategory: '账户接入',
     accountsDescription:
-      '接入 Gmail 或 Microsoft 账户，配置首次同步限制并同步当前用户邮箱。',
+      '接入 Gmail、Microsoft 或 IMAP/SMTP 账户，配置首次同步限制并同步当前用户邮箱。',
     connectedAccountsTitle: '已接入账户',
     connectedAccountsDescription: '管理和同步当前用户接入的邮件账户。',
     connectedAccountsEmptyDescription:

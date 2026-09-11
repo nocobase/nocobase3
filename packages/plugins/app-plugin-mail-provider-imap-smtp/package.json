@@ -1,7 +1,7 @@
 {
-  "name": "@nocobase/app-plugin-mail-provider-microsoft",
-  "displayName": "Microsoft Mail Provider",
-  "description": "Adds Microsoft identity OAuth and Graph mail operations to the Mail plugin.",
+  "name": "@nocobase/app-plugin-mail-provider-imap-smtp",
+  "displayName": "IMAP SMTP Mail Provider",
+  "description": "Adds generic IMAP mailbox synchronization and SMTP sending to the Mail plugin.",
   "version": "0.0.1",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
@@ -47,15 +47,20 @@
     "@nocobase/app-server": "workspace:^",
     "@nocobase/service-provider": "workspace:^"
   },
-  "dependencies": {
-    "@sinclair/typebox": "catalog:"
-  },
   "devDependencies": {
     "@nocobase/dev-config": "workspace:*",
+    "@types/mailparser": "^3.4.6",
     "@types/node": "catalog:",
+    "@types/nodemailer": "^8.0.1",
     "eslint": "catalog:",
     "prettier": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
+  },
+  "dependencies": {
+    "@sinclair/typebox": "catalog:",
+    "imapflow": "^2.0.0",
+    "mailparser": "^3.9.24",
+    "nodemailer": "^9.0.5"
   }
 }

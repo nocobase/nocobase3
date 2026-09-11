@@ -15,7 +15,9 @@ describe('@nocobase/app-plugin-mail', () => {
       'root',
       'api',
     ]);
-    expect(plugin.queue).toBeUndefined();
+    expect(plugin.queue).toEqual({
+      jobs: ['./server/jobs'],
+    });
     expect(plugin.database).toEqual({
       migrations: './database/migrations',
     });

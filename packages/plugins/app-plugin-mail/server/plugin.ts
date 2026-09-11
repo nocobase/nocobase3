@@ -13,6 +13,9 @@ const mailPlugin: AppServerPlugin = defineServerPlugin({
   locales: () => import('./locales/index.js'),
   serviceProviders,
   routes,
+  queue: {
+    jobs: ['./server/jobs'],
+  },
   database: {
     migrations: './database/migrations',
   },

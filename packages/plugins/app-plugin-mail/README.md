@@ -63,12 +63,17 @@ The first runnable vertical slice provides:
 - Provider contracts, registry, adapter resolver, database storage, and an
   explicit migration.
 
-The current implementation does not yet provide generic IMAP/SMTP/JMAP
-Providers. Gmail and Microsoft implementations live in
-separate Provider plugins; Mail Core owns OAuth transactions and a default
-plain-JSON credential store, while Provider plugins own protocol calls and
-token refresh behavior. Another plugin can register `mailCredentialVaultToken`
-before Mail Core to replace the default credential store.
+Gmail, Microsoft, and generic IMAP/SMTP implementations live in separate
+Provider plugins. Mail Core owns OAuth and credential-connection account
+lifecycle, plus a default plain-JSON credential store, while Provider plugins
+own protocol calls and token refresh behavior. The generic IMAP/SMTP MVP uses
+periodic sync, discovers new UID ranges, and intentionally leaves push
+notifications, labels, drafts, aliases, move-to-folder, and complete external
+flag/deletion reconciliation disabled. SMTP providers that do not automatically
+copy submitted messages to Sent will not get a local Sent copy until the
+mailbox exposes one through IMAP. Another plugin can register
+`mailCredentialVaultToken` before Mail Core to replace the default credential
+store.
 
 ## Documentation
 
@@ -169,6 +174,7 @@ POST /api/mail/templates
 PATCH /api/mail/templates/:templateId
 DELETE /api/mail/templates/:templateId
 POST /api/mail/authorizations
+POST /api/mail/accounts/connect
 GET  /api/mail/accounts/:accountId/identities
 PATCH /api/mail/accounts/:accountId/identities/:identityId
 GET  /api/mail/accounts/:accountId/identities/:identityId/signatures

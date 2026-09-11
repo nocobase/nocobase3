@@ -191,6 +191,7 @@
     "@nocobase/app-plugin-install": "workspace:^",
     "@nocobase/app-plugin-mail": "workspace:^",
     "@nocobase/app-plugin-mail-provider-gmail": "workspace:^",
+    "@nocobase/app-plugin-mail-provider-imap-smtp": "workspace:^",
     "@nocobase/app-plugin-mail-provider-microsoft": "workspace:^",
     "@nocobase/app-plugin-notification": "workspace:^",
     "@nocobase/app-plugin-notification-in-app": "workspace:^",

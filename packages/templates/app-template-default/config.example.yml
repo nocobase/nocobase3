@@ -34,6 +34,19 @@ auth:
 #       tenant: common
 #       clientId: replace-with-microsoft-entra-client-id
 #       clientSecret: replace-with-microsoft-entra-client-secret
+#     other-mailbox:
+#       type: imap-smtp
+#       imap:
+#         host: imap.example.com
+#         port: 993
+#         secure: true
+#       smtp:
+#         host: smtp.example.com
+#         port: 465
+#         secure: true
+#       # sentFolder: Sent
+#       # trashFolder: Trash
+#       # draftsFolder: Drafts
 
 notification:
   channels:

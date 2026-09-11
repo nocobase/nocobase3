@@ -69,6 +69,64 @@ describe('Mail client components', () => {
     expect(onConnect).toHaveBeenCalledWith(providers[1]);
   });
 
+  it('collects credentials for a credential-based Provider', () => {
+    const onConnectCredentials = vi.fn();
+    const provider: MailProviderView = {
+      type: 'imap-smtp',
+      name: 'other-mailbox',
+      label: 'Other mailbox',
+      connection: 'credentials',
+      capabilities,
+    };
+    render(
+      <MailAccountConnector
+        connectedAccountCount={() => 0}
+        labels={{
+          accountType: 'Mail account type',
+          chooseAccountType: 'Select an account type',
+          connect: 'Connect account',
+          connecting: 'Connecting',
+          connectedAccounts: (count) => `${count} connected`,
+          capability: (capability) => capability,
+          emailAddress: 'Email address',
+          username: 'Username',
+          password: 'Password',
+          displayName: 'Display name',
+        }}
+        onConnect={vi.fn()}
+        onConnectCredentials={onConnectCredentials}
+        providers={[provider]}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText('Mail account type'), {
+      target: { value: 'imap-smtp:other-mailbox' },
+    });
+    const connect = screen.getByRole('button', { name: 'Connect account' });
+    expect(connect).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Email address'), {
+      target: { value: 'user@example.com' },
+    });
+    fireEvent.change(screen.getByLabelText('Username'), {
+      target: { value: 'user@example.com' },
+    });
+    fireEvent.change(screen.getByLabelText('Password'), {
+      target: { value: 'secret' },
+    });
+    fireEvent.change(screen.getByLabelText('Display name'), {
+      target: { value: 'Mailbox user' },
+    });
+    expect(connect).toBeEnabled();
+    fireEvent.click(connect);
+
+    expect(onConnectCredentials).toHaveBeenCalledWith(provider, {
+      address: 'user@example.com',
+      username: 'user@example.com',
+      password: 'secret',
+      displayName: 'Mailbox user',
+    });
+  });
+
   it('renders Provider capabilities and starts authorization', () => {
     const onConnect = vi.fn();
     const provider: MailProviderView = {

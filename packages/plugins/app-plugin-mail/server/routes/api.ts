@@ -201,6 +201,22 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
         }),
       });
     });
+    routes.post('/accounts/connect', async (context) => {
+      const value = await readObject(context.req.raw);
+      const address = requiredString(value.address, 'address');
+      return context.json({
+        data: await mail.connectAccount(operationContext(context), {
+          provider: {
+            type: requiredString(value.type, 'type'),
+            name: requiredString(value.name, 'name'),
+          },
+          address,
+          displayName: optionalString(value.displayName, 'displayName'),
+          username: optionalString(value.username, 'username') ?? address,
+          password: requiredString(value.password, 'password'),
+        }),
+      });
+    });
     routes.get('/accounts/:accountId/identities', async (context) =>
       context.json({
         data: await mail.listIdentities(

@@ -339,6 +339,14 @@ export interface MailStartAuthorizationInput {
   readonly scopes?: readonly string[];
 }
 
+export interface MailConnectAccountInput {
+  readonly provider: MailProviderIdentity;
+  readonly address: string;
+  readonly displayName?: string;
+  readonly username: string;
+  readonly password: string;
+}
+
 export interface MailCompleteAuthorizationInput {
   readonly state: string;
   readonly code?: string;
@@ -533,6 +541,10 @@ export interface MailService {
     context: MailOperationContext,
     input: MailStartAuthorizationInput,
   ): Promise<MailAuthorizationStartResult>;
+  connectAccount(
+    context: MailOperationContext,
+    input: MailConnectAccountInput,
+  ): Promise<MailAccountView>;
   completeAuthorization(
     input: MailCompleteAuthorizationInput,
   ): Promise<MailAccountView>;
@@ -735,6 +747,14 @@ export interface MailProviderAuthorizationCallbackInput {
   readonly code: string;
   readonly codeVerifier: string;
   readonly scopes: readonly string[];
+  readonly signal?: AbortSignal;
+}
+
+export interface MailProviderConnectInput {
+  readonly address: string;
+  readonly displayName?: string;
+  readonly username: string;
+  readonly password: string;
   readonly signal?: AbortSignal;
 }
 
@@ -1066,6 +1086,16 @@ export interface MailProviderAuthorization<
   ): Promise<MailProviderResult<MailAuthorizedAccount>>;
 }
 
+export interface MailProviderConnection<
+  TConfig extends MailProviderConfig = MailProviderConfig,
+> {
+  connect(
+    context: MailProviderContext,
+    config: TConfig,
+    input: MailProviderConnectInput,
+  ): Promise<MailProviderResult<MailAuthorizedAccount>>;
+}
+
 export interface MailProviderDefinition<
   TConfig extends MailProviderConfig = MailProviderConfig,
 > {
@@ -1074,6 +1104,7 @@ export interface MailProviderDefinition<
   readonly capabilities: MailProviderCapabilities;
   validateConfig?(config: TConfig): void;
   readonly authorization?: MailProviderAuthorization<TConfig>;
+  readonly connection?: MailProviderConnection<TConfig>;
   readonly push?: MailProviderPushNotifications;
   createAdapter(
     context: MailProviderContext,
@@ -1093,6 +1124,7 @@ export interface MailProviderView {
   readonly name: string;
   readonly label: string;
   readonly capabilities: MailProviderCapabilities;
+  readonly connection?: 'oauth' | 'credentials';
 }
 
 export interface MailAuthorizationTransaction {

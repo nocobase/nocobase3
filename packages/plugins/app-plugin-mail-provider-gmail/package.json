@@ -51,10 +51,7 @@
     "@sinclair/typebox": "catalog:"
   },
   "devDependencies": {
-    "@nocobase/app-plugin-mail": "workspace:*",
-    "@nocobase/app-server": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
-    "@nocobase/service-provider": "workspace:*",
     "@types/node": "catalog:",
     "eslint": "catalog:",
     "prettier": "catalog:",

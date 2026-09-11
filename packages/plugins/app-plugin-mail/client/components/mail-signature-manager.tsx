@@ -6,6 +6,7 @@ import { useTranslation } from '@nocobase/i18n/client';
 import type { MailIdentity, MailSignature } from '../mail-client.js';
 import { mailErrorMessage } from '../mail-client.js';
 import { getMailClient } from '../runtime.js';
+import { MAIL_PLUGIN_NS } from '../namespace.js';
 import { Button } from './ui/button.js';
 import { Input } from './ui/input.js';
 import { Textarea } from './ui/textarea.js';
@@ -19,7 +20,7 @@ export function MailSignatureManager({
   identity,
   onError,
 }: MailSignatureManagerProps): ReactElement {
-  const { t } = useTranslation();
+  const { t } = useTranslation(MAIL_PLUGIN_NS);
   const [signatures, setSignatures] = useState<readonly MailSignature[]>([]);
   const [name, setName] = useState('');
   const [text, setText] = useState('');

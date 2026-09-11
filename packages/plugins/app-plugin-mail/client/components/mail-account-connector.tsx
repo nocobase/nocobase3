@@ -4,6 +4,7 @@ import type { ReactElement } from 'react';
 
 import type { MailProviderView } from '../mail-client.js';
 import { Button } from './ui/button.js';
+import { Input } from './ui/input.js';
 import { NativeSelect } from './ui/native-select.js';
 
 export interface MailAccountConnectorLabels {
@@ -13,6 +14,17 @@ export interface MailAccountConnectorLabels {
   readonly connecting: string;
   readonly connectedAccounts: (count: number) => string;
   readonly capability: (capability: string) => string;
+  readonly emailAddress?: string;
+  readonly username?: string;
+  readonly password?: string;
+  readonly displayName?: string;
+}
+
+export interface MailAccountCredentials {
+  readonly address: string;
+  readonly username: string;
+  readonly password: string;
+  readonly displayName?: string;
 }
 
 export interface MailAccountConnectorProps {
@@ -21,6 +33,10 @@ export interface MailAccountConnectorProps {
   readonly connectingProviderName?: string;
   readonly labels: MailAccountConnectorLabels;
   readonly onConnect: (provider: MailProviderView) => void;
+  readonly onConnectCredentials?: (
+    provider: MailProviderView,
+    credentials: MailAccountCredentials,
+  ) => void;
 }
 
 export function MailAccountConnector({
@@ -29,8 +45,13 @@ export function MailAccountConnector({
   connectingProviderName,
   labels,
   onConnect,
+  onConnectCredentials,
 }: MailAccountConnectorProps): ReactElement {
   const [selectedKey, setSelectedKey] = useState('');
+  const [address, setAddress] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [displayName, setDisplayName] = useState('');
   const selectedProvider = useMemo(
     () => providers.find((provider) => providerKey(provider) === selectedKey),
     [providers, selectedKey],
@@ -43,6 +64,12 @@ export function MailAccountConnector({
         .filter(([, enabled]) => enabled)
         .map(([name]) => name)
     : [];
+  const usesCredentials = selectedProvider?.connection === 'credentials';
+  const credentialsReady =
+    address.trim().length > 0 &&
+    username.trim().length > 0 &&
+    password.length > 0 &&
+    onConnectCredentials !== undefined;
 
   return (
     <div className='space-y-4'>
@@ -50,7 +77,13 @@ export function MailAccountConnector({
         <label className='space-y-1.5 text-sm font-medium'>
           <span>{labels.accountType}</span>
           <NativeSelect
-            onChange={(event) => setSelectedKey(event.target.value)}
+            onChange={(event) => {
+              setSelectedKey(event.target.value);
+              setAddress('');
+              setUsername('');
+              setPassword('');
+              setDisplayName('');
+            }}
             value={selectedKey}
           >
             <option value=''>{labels.chooseAccountType}</option>
@@ -63,15 +96,67 @@ export function MailAccountConnector({
           </NativeSelect>
         </label>
         <Button
-          disabled={!selectedProvider || connecting}
+          disabled={
+            !selectedProvider ||
+            connecting ||
+            (usesCredentials && !credentialsReady)
+          }
           onClick={() => {
-            if (selectedProvider) onConnect(selectedProvider);
+            if (!selectedProvider) return;
+            if (usesCredentials) {
+              onConnectCredentials?.(selectedProvider, {
+                address: address.trim(),
+                username: username.trim(),
+                password,
+                displayName: displayName.trim() || undefined,
+              });
+            } else {
+              onConnect(selectedProvider);
+            }
           }}
         >
           <Link2 aria-hidden='true' className='size-4' />
           {connecting ? labels.connecting : labels.connect}
         </Button>
       </div>
+
+      {usesCredentials ? (
+        <div className='grid gap-3 sm:grid-cols-2'>
+          <label className='space-y-1.5 text-sm font-medium'>
+            <span>{labels.emailAddress ?? 'Email address'}</span>
+            <Input
+              autoComplete='email'
+              onChange={(event) => setAddress(event.target.value)}
+              value={address}
+            />
+          </label>
+          <label className='space-y-1.5 text-sm font-medium'>
+            <span>{labels.username ?? 'Username'}</span>
+            <Input
+              autoComplete='username'
+              onChange={(event) => setUsername(event.target.value)}
+              value={username}
+            />
+          </label>
+          <label className='space-y-1.5 text-sm font-medium'>
+            <span>{labels.password ?? 'Password'}</span>
+            <Input
+              autoComplete='current-password'
+              onChange={(event) => setPassword(event.target.value)}
+              type='password'
+              value={password}
+            />
+          </label>
+          <label className='space-y-1.5 text-sm font-medium'>
+            <span>{labels.displayName ?? 'Display name'}</span>
+            <Input
+              autoComplete='name'
+              onChange={(event) => setDisplayName(event.target.value)}
+              value={displayName}
+            />
+          </label>
+        </div>
+      ) : null}
 
       {selectedProvider ? (
         <div className='rounded-lg border bg-muted/20 p-4'>

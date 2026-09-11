@@ -5,6 +5,7 @@ import i18n from '@nocobase/app-plugin-i18n/server';
 import install from '@nocobase/app-plugin-install/server';
 import mail from '@nocobase/app-plugin-mail/server';
 import mailProviderGmail from '@nocobase/app-plugin-mail-provider-gmail/server';
+import mailProviderImapSmtp from '@nocobase/app-plugin-mail-provider-imap-smtp/server';
 import mailProviderMicrosoft from '@nocobase/app-plugin-mail-provider-microsoft/server';
 import notification from '@nocobase/app-plugin-notification/server';
 import notificationInApp from '@nocobase/app-plugin-notification-in-app/server';
@@ -29,6 +30,7 @@ const serverPlugins: AppServerPlugins = defineServerPlugins([
   install,
   mail,
   mailProviderGmail,
+  mailProviderImapSmtp,
   mailProviderMicrosoft,
   notification,
   notificationInApp,

@@ -95,7 +95,16 @@ describe('app client runtime', () => {
     });
     expect(app.refineConfig.authProvider).toBeDefined();
     expect(app.refineConfig.notificationProvider).toBeDefined();
-    expect(app.refineConfig.resources ?? []).toEqual([]);
+    expect(app.refineConfig.resources ?? []).toEqual([
+      expect.objectContaining({
+        list: '/mail',
+        meta: expect.objectContaining({
+          i18nNs: '@nocobase/app-plugin-mail',
+          label: 'nav.mail',
+        }),
+        name: 'mail',
+      }),
+    ]);
     await app.shutdown();
   });
 

@@ -33,6 +33,26 @@ describe('MailClient', () => {
       method: 'POST',
       json: { type: 'gmail', name: 'google' },
     });
+    await client.connectAccount({
+      type: 'imap-smtp',
+      name: 'company-mail',
+      address: 'user@example.com',
+      username: 'user@example.com',
+      password: 'secret',
+      displayName: 'User',
+    });
+    expect(request).toHaveBeenLastCalledWith({
+      path: 'mail/accounts/connect',
+      method: 'POST',
+      json: {
+        type: 'imap-smtp',
+        name: 'company-mail',
+        address: 'user@example.com',
+        username: 'user@example.com',
+        password: 'secret',
+        displayName: 'User',
+      },
+    });
   });
 
   it('encodes message queries and bounded sync requests', async () => {

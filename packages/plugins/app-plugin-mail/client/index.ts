@@ -5,3 +5,4 @@ export * from './components/index.js';
 export * from './lib/mail-template.js';
 export { default as MailWorkspacePage } from './pages/mail-workspace-page.js';
 export type { MailWorkspacePageProps } from './pages/mail-workspace-page.js';
+export { MAIL_PLUGIN_NS } from './namespace.js';

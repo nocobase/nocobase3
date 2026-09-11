@@ -5,6 +5,7 @@ import type {
   MailAccount,
   MailAttachmentContent,
   MailAuthorizationStartResult,
+  MailConnectAccountInput,
   MailCompleteAuthorizationInput,
   MailListMessagesInput,
   MailListConversationMessagesInput,
@@ -85,12 +86,46 @@ export class DefaultMailService implements MailService {
               name: config.name,
               label: definition.label,
               capabilities: definition.capabilities,
+              ...(definition.connection
+                ? { connection: 'credentials' as const }
+                : {}),
             },
           ];
         } catch {
           return [];
         }
       }),
+    );
+  }
+
+  public async connectAccount(
+    context: MailOperationContext,
+    input: MailConnectAccountInput,
+  ): Promise<MailAccountView> {
+    const { registry, resolveProviderConfig, providerContext } =
+      this.authorizationDependencies();
+    const definition = registry.definition(input.provider.type);
+    if (!definition?.connection) {
+      throw new Error('Mail Provider credential connection is not available.');
+    }
+    const config = resolveProviderConfig(input.provider);
+    definition.validateConfig?.(config);
+    const result = await definition.connection.connect(
+      providerContext,
+      config,
+      {
+        address: input.address,
+        displayName: input.displayName,
+        username: input.username,
+        password: input.password,
+        signal: context.signal,
+      },
+    );
+    if (!result.ok) throw new Error(result.error.message);
+    return this.persistAuthorizedAccount(
+      context.actorId,
+      input.provider,
+      result.value,
     );
   }
 
@@ -181,102 +216,11 @@ export class DefaultMailService implements MailService {
         },
       );
       if (!result.ok) throw new Error(result.error.message);
-      let account: MailAccount;
-      let previousCredentialReference: string | undefined;
-      try {
-        const existing =
-          await this.dependencies.store.findAccountByProviderIdentity(
-            transaction.provider,
-            result.value.address,
-            result.value.authorizationSubject,
-          );
-        if (existing && existing.userId !== transaction.userId) {
-          throw new Error('Mail account is already connected to another user.');
-        }
-        const accounts = await this.dependencies.store.listAccounts(
-          transaction.userId,
-        );
-        account = {
-          id: existing?.id ?? randomUUID(),
-          userId: transaction.userId,
-          provider: transaction.provider,
-          address: normalizeAddress(result.value.address),
-          displayName: result.value.displayName,
-          credentialReference: result.value.credentialReference,
-          authorizationSubject: result.value.authorizationSubject,
-          scopes: result.value.scopes,
-          status: 'active',
-          isDefault: existing?.isDefault ?? accounts.length === 0,
-        };
-        const previousIdentities = existing
-          ? await this.dependencies.store.listIdentities(existing.id)
-          : [];
-        const previousByAddress = new Map(
-          previousIdentities.map((identity) => [
-            identity.address.toLowerCase(),
-            identity,
-          ]),
-        );
-        const authorizedIdentities = result.value.identities ?? [
-          {
-            address: account.address,
-            displayName: account.displayName,
-            isPrimary: true,
-            canSend: true,
-          },
-        ];
-        const identities = authorizedIdentities.map((authorized) => {
-          const previous = previousByAddress.get(
-            authorized.address.toLowerCase(),
-          );
-          return {
-            id: previous?.id ?? randomUUID(),
-            accountId: account.id,
-            address: normalizeAddress(authorized.address),
-            displayName: authorized.displayName,
-            isPrimary: authorized.isPrimary,
-            canSend: authorized.canSend,
-          };
-        });
-        const signatures: MailSignature[] = [];
-        for (const [index, authorized] of authorizedIdentities.entries()) {
-          if (!authorized.signatureText && !authorized.signatureHtml) continue;
-          const identity = identities[index];
-          const existingSignatures = previousByAddress.has(
-            authorized.address.toLowerCase(),
-          )
-            ? await this.dependencies.store.listSignatures(identity.id)
-            : [];
-          if (existingSignatures.length > 0) continue;
-          const now = new Date().toISOString();
-          signatures.push({
-            id: randomUUID(),
-            identityId: identity.id,
-            name: 'Provider signature',
-            text: authorized.signatureText ?? '',
-            html: authorized.signatureHtml,
-            isDefault: true,
-            createdAt: now,
-            updatedAt: now,
-          });
-        }
-        await this.dependencies.store.saveAuthorizedAccount(
-          account,
-          identities,
-          signatures,
-        );
-        previousCredentialReference = existing?.credentialReference;
-      } catch (error) {
-        await credentials.delete(result.value.credentialReference);
-        throw error;
-      }
-      if (
-        previousCredentialReference &&
-        previousCredentialReference !== result.value.credentialReference
-      ) {
-        await credentials.delete(previousCredentialReference);
-      }
-      return toMailAccountView(account);
+      return this.persistAuthorizedAccount(
+        transaction.userId,
+        transaction.provider,
+        result.value,
+      );
     } finally {
       await credentials.delete(transaction.verifierCredentialReference);
     }
@@ -1178,6 +1122,106 @@ export class DefaultMailService implements MailService {
       throw new Error('Mail authorization runtime is not configured.');
     }
     return { registry, providerContext, credentials, resolveProviderConfig };
+  }
+
+  private async persistAuthorizedAccount(
+    userId: string,
+    provider: import('./types.js').MailProviderIdentity,
+    authorized: import('./types.js').MailAuthorizedAccount,
+  ): Promise<MailAccountView> {
+    const { credentials } = this.authorizationDependencies();
+    let account: MailAccount;
+    let previousCredentialReference: string | undefined;
+    try {
+      const existing =
+        await this.dependencies.store.findAccountByProviderIdentity(
+          provider,
+          authorized.address,
+          authorized.authorizationSubject,
+        );
+      if (existing && existing.userId !== userId) {
+        throw new Error('Mail account is already connected to another user.');
+      }
+      const accounts = await this.dependencies.store.listAccounts(userId);
+      account = {
+        id: existing?.id ?? randomUUID(),
+        userId,
+        provider,
+        address: normalizeAddress(authorized.address),
+        displayName: authorized.displayName,
+        credentialReference: authorized.credentialReference,
+        authorizationSubject: authorized.authorizationSubject,
+        scopes: authorized.scopes,
+        status: 'active',
+        isDefault: existing?.isDefault ?? accounts.length === 0,
+      };
+      const previousIdentities = existing
+        ? await this.dependencies.store.listIdentities(existing.id)
+        : [];
+      const previousByAddress = new Map(
+        previousIdentities.map((identity) => [
+          identity.address.toLowerCase(),
+          identity,
+        ]),
+      );
+      const authorizedIdentities = authorized.identities ?? [
+        {
+          address: account.address,
+          displayName: account.displayName,
+          isPrimary: true,
+          canSend: true,
+        },
+      ];
+      const identities = authorizedIdentities.map((item) => {
+        const previous = previousByAddress.get(item.address.toLowerCase());
+        return {
+          id: previous?.id ?? randomUUID(),
+          accountId: account.id,
+          address: normalizeAddress(item.address),
+          displayName: item.displayName,
+          isPrimary: item.isPrimary,
+          canSend: item.canSend,
+        };
+      });
+      const signatures: MailSignature[] = [];
+      for (const [index, item] of authorizedIdentities.entries()) {
+        if (!item.signatureText && !item.signatureHtml) continue;
+        const identity = identities[index];
+        const existingSignatures = previousByAddress.has(
+          item.address.toLowerCase(),
+        )
+          ? await this.dependencies.store.listSignatures(identity.id)
+          : [];
+        if (existingSignatures.length > 0) continue;
+        const now = new Date().toISOString();
+        signatures.push({
+          id: randomUUID(),
+          identityId: identity.id,
+          name: 'Provider signature',
+          text: item.signatureText ?? '',
+          html: item.signatureHtml,
+          isDefault: true,
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+      await this.dependencies.store.saveAuthorizedAccount(
+        account,
+        identities,
+        signatures,
+      );
+      previousCredentialReference = existing?.credentialReference;
+    } catch (error) {
+      await credentials.delete(authorized.credentialReference);
+      throw error;
+    }
+    if (
+      previousCredentialReference &&
+      previousCredentialReference !== authorized.credentialReference
+    ) {
+      await credentials.delete(previousCredentialReference);
+    }
+    return toMailAccountView(account);
   }
 
   private async requireActiveAccount(

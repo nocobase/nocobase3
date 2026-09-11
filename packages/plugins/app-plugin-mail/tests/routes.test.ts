@@ -323,6 +323,42 @@ describe('mail API routes', () => {
     );
   });
 
+  it('connects a credential-based Provider account', async () => {
+    const connectAccount = vi.fn<MailService['connectAccount']>(
+      async (_context, input) => ({
+        id: 'account-1',
+        userId: 'user-1',
+        provider: input.provider,
+        address: input.address,
+        scopes: [],
+        status: 'active',
+        isDefault: true,
+      }),
+    );
+    const router = await createRouter(true, service({ connectAccount }));
+    const response = await router.request('/api/mail/accounts/connect', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        type: 'imap-smtp',
+        name: 'company-mail',
+        address: 'user@example.com',
+        password: 'secret',
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(connectAccount).toHaveBeenCalledWith(
+      { actorId: 'user-1' },
+      {
+        provider: { type: 'imap-smtp', name: 'company-mail' },
+        address: 'user@example.com',
+        username: 'user@example.com',
+        password: 'secret',
+      },
+    );
+  });
+
   it('maps mailbox folders, filters, and conversations onto the Mail service', async () => {
     const listFolders = vi.fn<MailService['listFolders']>(async () => []);
     const listMessages = vi.fn<MailService['listMessages']>(async () => ({
@@ -702,6 +738,15 @@ function service(overrides: Partial<MailService> = {}): MailService {
     startAuthorization: async (_context, input) => ({
       authorizationUrl: `https://example.com/authorize/${input.provider.type}`,
       state: 'state-1',
+    }),
+    connectAccount: async () => ({
+      id: 'account-1',
+      userId: 'user-1',
+      provider: { type: 'test', name: 'test' },
+      address: 'user@example.com',
+      scopes: [],
+      status: 'active',
+      isDefault: true,
     }),
     completeAuthorization: async () => ({
       id: 'account-1',

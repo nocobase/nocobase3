@@ -11,6 +11,7 @@ import {
   MailSignatureManager,
   type MailSyncPolicyValue,
   type MailStatusTone,
+  type MailAccountCredentials,
 } from '../components/index.js';
 import { Button } from '../components/ui/button.js';
 import { Card } from '../components/ui/card.js';
@@ -166,6 +167,35 @@ export default function MailAccountsDevPage(): ReactElement {
       });
   };
 
+  const connectWithCredentials = (
+    provider: MailProviderView,
+    credentials: MailAccountCredentials,
+  ): void => {
+    setConnectingProviderName(provider.name);
+    setError(undefined);
+    void mail
+      .connectAccount({
+        type: provider.type,
+        name: provider.name,
+        ...credentials,
+      })
+      .then(() => {
+        setConnectingProviderName(undefined);
+        refresh();
+      })
+      .catch((cause: unknown) => {
+        setError(
+          mailErrorMessage(
+            cause,
+            t('errors.authorizationFailed', {
+              defaultValue: 'Could not connect the mail account.',
+            }),
+          ),
+        );
+        setConnectingProviderName(undefined);
+      });
+  };
+
   const startSync = (account: MailAccountView): void => {
     setSyncing(account.id);
     setError(undefined);
@@ -245,7 +275,7 @@ export default function MailAccountsDevPage(): ReactElement {
       })}
       description={t('dev.accountsDescription', {
         defaultValue:
-          'Connect Gmail or Microsoft accounts, configure initial sync limits, and synchronize current-user mailboxes.',
+          'Connect Gmail, Microsoft, or IMAP/SMTP accounts, configure initial sync limits, and synchronize current-user mailboxes.',
       })}
       title={t('dev.accountsTitle', { defaultValue: 'Mail accounts' })}
     >
@@ -325,7 +355,7 @@ export default function MailAccountsDevPage(): ReactElement {
               <p className='mt-1 text-sm leading-6 text-muted-foreground'>
                 {t('settings.providers.description', {
                   defaultValue:
-                    'Choose an account type, then continue to its secure authorization page.',
+                    'Choose an account type, then authorize it or enter its mailbox credentials.',
                 })}
               </p>
             </div>
@@ -341,7 +371,7 @@ export default function MailAccountsDevPage(): ReactElement {
                 <EmptyState
                   description={t('settings.providers.emptyDescription', {
                     defaultValue:
-                      'Add a Gmail or Microsoft Provider to the server mail configuration.',
+                      'Add a Gmail, Microsoft, or IMAP/SMTP Provider to the server mail configuration.',
                   })}
                   title={t('settings.providers.emptyTitle', {
                     defaultValue: 'No mail Providers configured',
@@ -380,8 +410,21 @@ export default function MailAccountsDevPage(): ReactElement {
                       t(`capabilities.${capability}`, {
                         defaultValue: capability,
                       }),
+                    emailAddress: t('settings.providers.emailAddress', {
+                      defaultValue: 'Email address',
+                    }),
+                    username: t('settings.providers.username', {
+                      defaultValue: 'Username',
+                    }),
+                    password: t('settings.providers.password', {
+                      defaultValue: 'Password',
+                    }),
+                    displayName: t('settings.providers.displayName', {
+                      defaultValue: 'Display name',
+                    }),
                   }}
                   onConnect={connect}
+                  onConnectCredentials={connectWithCredentials}
                   providers={providers}
                 />
               )}

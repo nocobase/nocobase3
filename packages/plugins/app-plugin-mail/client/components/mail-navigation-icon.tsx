@@ -4,6 +4,7 @@ import type { ReactElement } from 'react';
 import { useTranslation } from '@nocobase/i18n/client';
 
 import { getMailClient } from '../runtime.js';
+import { MAIL_PLUGIN_NS } from '../namespace.js';
 
 const REFRESH_INTERVAL_MS = 60_000;
 export const MAIL_UNREAD_COUNT_CHANGED_EVENT =
@@ -11,7 +12,7 @@ export const MAIL_UNREAD_COUNT_CHANGED_EVENT =
 
 /** App-navigation icon with a current-user unread badge. */
 export function MailNavigationIcon(): ReactElement {
-  const { t } = useTranslation();
+  const { t } = useTranslation(MAIL_PLUGIN_NS);
   const [unread, setUnread] = useState(0);
 
   useEffect(() => {
