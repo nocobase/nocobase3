@@ -203,6 +203,20 @@ export async function scaffoldFromTemplate(
 
   manifest.name = name;
 
+  // Records which template this application was generated from, because nothing else left in the manifest can say.
+  // `name` has just become the application's own, and `nocobase.templateKind` is `app` for both Default and Examples,
+  // so an upgrade that has to diff two releases of the originating template would have nothing to resolve. Written
+  // under `nocobase` beside `defaultTemplateVersion`, which records how far that source has been merged.
+  if (templateName !== '') {
+    const nocobase =
+      typeof manifest.nocobase === 'object' && manifest.nocobase !== null
+        ? (manifest.nocobase as Record<string, unknown>)
+        : {};
+
+    nocobase.templatePackage = templateName;
+    manifest.nocobase = nocobase;
+  }
+
   // `displayName` is what the client shell renders in its sidebar footer, through the `__PORTAL_TEMPLATE_NAME__`
   // constant `vite.config.ts` defines from it. Deleting it left that constant `undefined`, so a generated app fell
   // back to the literal "Default Template" baked into the shell — the template's label, on every app built from it.

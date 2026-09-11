@@ -137,6 +137,68 @@ describe('scaffoldFromTemplate', () => {
   });
 
   /**
+   * A template upgrade diffs two releases of the template the application came from, so it has to know which one that
+   * was. `name` has become the application's own by then, and `templateKind` is `app` for both Default and Examples,
+   * which leaves nothing to resolve without this field.
+   */
+  it('records the template package the app was generated from', async () => {
+    const templateDirectory = await createTemplate();
+    const parent = await createTempDirectory();
+    const targetDirectory = path.join(parent, 'crm');
+
+    await scaffoldFromTemplate({
+      name: 'crm',
+      targetDirectory,
+      templateDirectory,
+    });
+
+    const manifest = JSON.parse(
+      await readFile(path.join(targetDirectory, 'package.json'), 'utf8'),
+    );
+
+    expect(manifest.nocobase.templatePackage).toBe(
+      '@nocobase/app-template-default',
+    );
+  });
+
+  /** The field is added beside what the template already declares rather than replacing the block. */
+  it('keeps the template\'s own nocobase metadata', async () => {
+    const templateDirectory = await createTemplate();
+
+    await writeFile(
+      path.join(templateDirectory, 'package.json'),
+      JSON.stringify({
+        name: '@nocobase/app-template-default',
+        version: '1.0.0-beta.21',
+        nocobase: {
+          templateKind: 'app',
+          defaultTemplateVersion: '1.0.0-beta.21',
+        },
+      }),
+      'utf8',
+    );
+
+    const parent = await createTempDirectory();
+    const targetDirectory = path.join(parent, 'crm');
+
+    await scaffoldFromTemplate({
+      name: 'crm',
+      targetDirectory,
+      templateDirectory,
+    });
+
+    const manifest = JSON.parse(
+      await readFile(path.join(targetDirectory, 'package.json'), 'utf8'),
+    );
+
+    expect(manifest.nocobase).toEqual({
+      templateKind: 'app',
+      defaultTemplateVersion: '1.0.0-beta.21',
+      templatePackage: '@nocobase/app-template-default',
+    });
+  });
+
+  /**
    * The client reads its i18n namespace from `client/runtime.ts` while the server reads the same namespace from
    * `package.json`, so a name left behind in the source splits `APP_NS` in half. It also fails `client:inspect`,
    * which compares the two and refuses to run when they disagree.
