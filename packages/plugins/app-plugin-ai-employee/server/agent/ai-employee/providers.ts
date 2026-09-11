@@ -7,7 +7,7 @@ import type {
   ResolvedAgentLLM,
 } from '../types.js';
 import { DefaultChatMessageConverters } from '../chat-message-converters.js';
-import { NativeCollectionSaver } from '../../agent/ai-employee/checkpoints/index.js';
+import { NativeCollectionSaver } from '../checkpoints/index.js';
 import type {
   AIEmployee as AIEmployeeType,
   AIMessageInput,

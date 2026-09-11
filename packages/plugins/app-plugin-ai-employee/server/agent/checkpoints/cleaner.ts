@@ -3,7 +3,7 @@ import type { BaseCheckpointSaver } from '@langchain/langgraph-checkpoint';
 import type {
   AIConversationRepository,
   AIMessageRepository,
-} from '../../../repository/index.js';
+} from '../../repository/index.js';
 
 export type AIConversationsType = {
   sessionId: string;
