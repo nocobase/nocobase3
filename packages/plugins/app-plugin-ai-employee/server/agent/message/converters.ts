@@ -10,6 +10,10 @@ import type {
   AIToolCall,
 } from '@nocobase/ai-employee';
 import type { Logger } from '@nocobase/logging';
+import type { Caching } from '@nocobase/caching';
+import type { DocumentLoaders, FileStorage } from '@nocobase/ai-employee';
+import type { CollectionRepositoryResolver } from '../context/ai-employee/attachments.js';
+import type { WorkContextHandler } from '../../manager/work-context/index.js';
 import type {
   AIMessage as LangChainAIMessage,
   HumanMessage as LangChainHumanMessage,
@@ -22,7 +26,6 @@ import type {
 } from '../types.js';
 import { resolveMessageAttachments } from '../context/ai-employee/attachments.js';
 import { sanitizeAdditionalKwargsForToolCalls } from '../context/ai-employee/tool-call-sanitizer.js';
-import type { AIEmployeeAgentOptions } from '../context/ai-employee/options.js';
 
 export interface ChatMessageConvertersOptions {
   readonly assistantRole?: string;
@@ -305,11 +308,13 @@ class DefaultMessageConverters implements ChatMessageConverters {
   public readonly human: ChatMessageConverters['human'];
   public readonly tool: ChatMessageConverters['tool'];
 
-  public constructor(private readonly aiOptions: AIEmployeeAgentOptions) {
+  public constructor(
+    private readonly employeeOptions: AIEmployeeMessageConverterOptions,
+  ) {
     this.assistant = new DefaultAssistantChatMessageConverter({
-      employee: aiOptions.employee,
-      skillSettings: aiOptions.skillSettings,
-      logger: aiOptions.agentContext.logger,
+      employee: employeeOptions.employee,
+      skillSettings: employeeOptions.skillSettings,
+      logger: employeeOptions.logger,
     });
     this.human = new DefaultHumanChatMessageConverter();
     this.tool = new DefaultToolMessageConverter();
@@ -321,8 +326,8 @@ class DefaultMessageConverters implements ChatMessageConverters {
   ): Promise<readonly BaseMessageLike[]> {
     const formattedMessages: BaseMessageLike[] = [];
     const resolvedMessages = await resolveMessageAttachments({
-      actorId: this.aiOptions.agentContext.actor.id,
-      collectionRepository: this.aiOptions.collectionRepository,
+      actorId: this.employeeOptions.actorId,
+      collectionRepository: this.employeeOptions.collectionRepository,
       messages: [...messages],
     });
     const truncate = (text: string, maxLen = 50000): string =>
@@ -349,7 +354,9 @@ class DefaultMessageConverters implements ChatMessageConverters {
           content = `<user_query>${content}</user_query>`;
           if (workContext?.length) {
             const resolved =
-              await this.aiOptions.workContextHandler.resolve(workContext);
+              await this.employeeOptions.workContextHandler.resolve(
+                workContext,
+              );
             content = `${resolved.map((value) => `<work_context>${value}</work_context>`).join('\n')}\n${content}`;
           }
         }
@@ -358,10 +365,10 @@ class DefaultMessageConverters implements ChatMessageConverters {
           const parsed = await context.provider.parseAttachment(
             attachment as any,
             {
-              fileStorage: this.aiOptions.fileStorage,
-              documentLoader: this.aiOptions.documentLoaders.cached,
-              caching: this.aiOptions.caching,
-              getHeader: this.aiOptions.getHeader ?? (() => undefined),
+              fileStorage: this.employeeOptions.fileStorage,
+              documentLoader: this.employeeOptions.documentLoaders.cached,
+              caching: this.employeeOptions.caching,
+              getHeader: this.employeeOptions.getHeader ?? (() => undefined),
             },
           );
           if (parsed.placement === 'system') {
@@ -404,7 +411,7 @@ class DefaultMessageConverters implements ChatMessageConverters {
         message.toolCalls,
         {
           onDiscard: (info) =>
-            this.aiOptions.agentContext.logger.warn(
+            this.employeeOptions.logger?.warn(
               {
                 phase: 'formatMessages',
                 messageId: message.metadata?.id,
@@ -429,10 +436,23 @@ class DefaultMessageConverters implements ChatMessageConverters {
   }
 }
 
+export interface AIEmployeeMessageConverterOptions {
+  readonly employee: { username?: string; get?: (name: string) => unknown };
+  readonly skillSettings?: Record<string, any>;
+  readonly logger?: Logger;
+  readonly actorId: string | number;
+  readonly collectionRepository: CollectionRepositoryResolver;
+  readonly workContextHandler: WorkContextHandler;
+  readonly fileStorage: FileStorage<any, any>;
+  readonly documentLoaders: DocumentLoaders;
+  readonly caching: Caching;
+  readonly getHeader?: (name: string) => string | undefined;
+}
+
 function isAIEmployeeAgentOptions(
-  options: ChatMessageConvertersOptions | AIEmployeeAgentOptions,
-): options is AIEmployeeAgentOptions {
-  return 'employee' in options && 'agentContext' in options;
+  options: ChatMessageConvertersOptions | AIEmployeeMessageConverterOptions,
+): options is AIEmployeeMessageConverterOptions {
+  return 'employee' in options && 'actorId' in options;
 }
 
 export class DefaultChatMessageConverters implements ChatMessageConverters {
@@ -444,7 +464,8 @@ export class DefaultChatMessageConverters implements ChatMessageConverters {
   private readonly aiEmployeeConverters?: DefaultMessageConverters;
 
   public constructor(
-    options: ChatMessageConvertersOptions | AIEmployeeAgentOptions = {},
+    options:
+      ChatMessageConvertersOptions | AIEmployeeMessageConverterOptions = {},
   ) {
     if (isAIEmployeeAgentOptions(options)) {
       this.options = {};

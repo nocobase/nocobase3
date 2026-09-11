@@ -25,3 +25,4 @@ export {
   resolveAIKnowledgeBaseStorageDisks,
 } from './config.js';
 export { aiManagerToken } from './provider/ai-employee.js';
+export { agentServiceFactoryToken } from './agent/service/agent-service-factory.js';

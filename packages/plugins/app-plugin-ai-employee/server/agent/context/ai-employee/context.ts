@@ -533,6 +533,8 @@ If information is missing, clearly state it in the summary.</Important>`;
   }
 }
 
+export { AIEmployeeAgentContextProvider as AIEmployeeChatContextProvider };
+
 export function createAIEmployeeAgentContextProvider(
   options: AIEmployeeAgentOptions,
 ): AIEmployeeAgentContextProvider {
@@ -575,7 +577,18 @@ export async function createAIEmployeeAgentProviders(
     conversation,
     context,
     logger: options.agentContext.logger,
-    converters: new DefaultChatMessageConverters(options),
+    converters: new DefaultChatMessageConverters({
+      employee: options.employee,
+      skillSettings: options.skillSettings,
+      logger: options.agentContext.logger,
+      actorId: options.agentContext.actor.id,
+      collectionRepository: options.collectionRepository,
+      workContextHandler: options.workContextHandler,
+      fileStorage: options.fileStorage,
+      documentLoaders: options.documentLoaders,
+      caching: options.caching,
+      getHeader: options.getHeader,
+    }),
     checkpointer:
       options.from === 'sub-agent'
         ? undefined

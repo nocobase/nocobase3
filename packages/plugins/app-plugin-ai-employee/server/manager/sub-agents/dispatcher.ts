@@ -27,7 +27,7 @@ import type { WorkContextHandler } from '../work-context/index.js';
 import type { AIEmployeeEntity } from '@nocobase/ai-employee';
 import type { AIMessageEntity } from '../../repository/index.js';
 import type { ModelRef } from '../../types.js';
-import { createAIEmployeeAgentService } from '../../agent/context/ai-employee/index.js';
+import { createAIEmployee } from '../../agent/service/agent-service-factory.js';
 import { createAgentContext } from '../../agent/context.js';
 import type {
   SubAgentConversationMetadata,
@@ -264,7 +264,7 @@ export class SubAgentsDispatcher {
       getHeader: options.getHeader,
     });
 
-    const agent = await createAIEmployeeAgentService({
+    const agent = await createAIEmployee({
       agentContext,
       database: this.database,
       caching: this.caching,

@@ -25,7 +25,7 @@ import type {
   AIToolMessageEntity,
 } from '../repository/index.js';
 import { AgentSSEAdapter } from '../agent/sse.js';
-import { createAIEmployeeAgentService } from '../agent/ai-employee/index.js';
+import { createAIEmployee } from '../agent/service/agent-service-factory.js';
 import {
   createAgentContext,
   type AppAgentContext,
@@ -753,7 +753,7 @@ export class AIConversationService {
       if (conversation.category !== 'chat') {
         throw new ResourceActionError(404, 'conversation not found');
       }
-      const agent = await createAIEmployeeAgentService(agentOptions);
+      const agent = await createAIEmployee(agentOptions);
       const runStream = async (request: any) => {
         const agentRequest = { ...request, model: resolvedModel };
         const adapter = new AgentSSEAdapter(
@@ -1082,7 +1082,7 @@ export class AIConversationService {
       }
       if (shouldStream) {
         {
-          const service = await createAIEmployeeAgentService(agentOptions);
+          const service = await createAIEmployee(agentOptions);
           await new AgentSSEAdapter(
             (chunk) => streamTarget(execution).write(chunk),
             (chunk) =>
@@ -1102,7 +1102,7 @@ export class AIConversationService {
           streamTarget(execution).end();
         }
       } else {
-        const service = await createAIEmployeeAgentService(agentOptions);
+        const service = await createAIEmployee(agentOptions);
         return service.forkInvoke(
           {
             messageId,
@@ -1390,7 +1390,7 @@ export class AIConversationService {
         throw new ResourceActionError(404, 'conversation not found');
       }
       {
-        const service = await createAIEmployeeAgentService(agentOptions);
+        const service = await createAIEmployee(agentOptions);
         await new AgentSSEAdapter(
           (chunk) => streamTarget(execution).write(chunk),
           (chunk) =>
