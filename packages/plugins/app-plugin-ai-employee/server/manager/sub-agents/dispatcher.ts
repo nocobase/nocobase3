@@ -27,8 +27,8 @@ import type { WorkContextHandler } from '../work-context/index.js';
 import type { AIEmployeeEntity } from '@nocobase/ai-employee';
 import type { AIMessageEntity } from '../../repository/index.js';
 import type { ModelRef } from '../../types.js';
-import { createAIEmployee } from '../../agent/service/agent-service-factory.js';
-import { createAgentContext } from '../../agent/context.js';
+import { agentServiceFactoryToken } from '../../agent/service/agent-service-factory.js';
+import type { ServiceResolver } from '@nocobase/service-provider';
 import type {
   SubAgentConversationMetadata,
   AIMessageInput,
@@ -71,7 +71,7 @@ export class SubAgentsDispatcher {
   private readonly knowledgeBaseManager: KnowledgeBaseManager;
   private readonly workContextHandler: WorkContextHandler;
   private readonly documentLoaders: DocumentLoaders;
-
+  private readonly container?: ServiceResolver;
   public constructor({
     ai,
     database,
@@ -88,6 +88,7 @@ export class SubAgentsDispatcher {
     knowledgeBaseManager,
     workContextHandler,
     documentLoaders,
+    container,
   }: {
     ai: AIManager;
     database: DatabaseConnection;
@@ -104,6 +105,7 @@ export class SubAgentsDispatcher {
     knowledgeBaseManager: KnowledgeBaseManager;
     workContextHandler: WorkContextHandler;
     documentLoaders: DocumentLoaders;
+    container: ServiceResolver;
   }) {
     this.ai = ai;
     this.database = database;
@@ -120,6 +122,19 @@ export class SubAgentsDispatcher {
     this.knowledgeBaseManager = knowledgeBaseManager;
     this.workContextHandler = workContextHandler;
     this.documentLoaders = documentLoaders;
+    void this.ai;
+    void this.database;
+    void this.databaseManager;
+    void this.logger;
+    void this.caching;
+    void this.fileStorage;
+    void this.snowflake;
+    void this.builtInManager;
+    void this.llmStreamCachedManager;
+    void this.knowledgeBaseManager;
+    void this.workContextHandler;
+    void this.documentLoaders;
+    this.container = container;
   }
   private extractTextContent(content: unknown): string {
     if (typeof content === 'string') {
@@ -241,60 +256,22 @@ export class SubAgentsDispatcher {
       employee,
       model,
     );
-
-    const agentContext = createAgentContext({
+    if (!this.container) {
+      throw new Error('SubAgentsDispatcher requires an App container');
+    }
+    const agentServiceFactory = this.container.resolve(
+      agentServiceFactoryToken,
+    );
+    const agent = await agentServiceFactory.createAIEmployee({
+      username: employee.username,
       actor: options.actor,
       execution: options.execution,
-      state: {
-        sessionId,
-        model: { ...resolvedModel },
-        webSearch,
-        messages,
-      },
-      ai: this.ai,
-      database: this.databaseManager,
-      logger: this.logger,
-      repositories: this.repositories,
-      aiEmployeesManager: this.aiEmployeesManager,
-      aiConversationsManager: this.aiConversationsManager,
-      builtInManager: this.builtInManager,
-      knowledgeBaseManager: this.knowledgeBaseManager,
-      subAgentsDispatcher: this,
       translate: options.translate,
       getHeader: options.getHeader,
-    });
-
-    const agent = await createAIEmployee({
-      agentContext,
-      database: this.database,
-      caching: this.caching,
-      fileStorage: this.fileStorage,
-      snowflake: this.snowflake,
-      execution: options.execution,
-      getHeader: options.getHeader,
-      collectionRepository: this.repositories.collectionRepository.bind(
-        this.repositories,
-      ),
-      aiConversations: this.repositories.aiConversations,
-      aiEmployees: this.repositories.aiEmployees,
-      aiMessages: this.repositories.aiMessages,
-      aiToolMessages: this.repositories.aiToolMessages,
-      aiUsageEvents: this.repositories.aiUsageEvents,
-      usersAiEmployees: this.repositories.usersAiEmployees,
-      lcCheckpoints: this.repositories.lcCheckpoints,
-      lcCheckpointBlobs: this.repositories.lcCheckpointBlobs,
-      lcCheckpointWrites: this.repositories.lcCheckpointWrites,
-      aiEmployeesManager: this.aiEmployeesManager,
-      builtInManager: this.builtInManager,
-      llmStreamCachedManager: this.llmStreamCachedManager,
-      knowledgeBaseManager: this.knowledgeBaseManager,
-      workContextHandler: this.workContextHandler,
-      documentLoaders: this.documentLoaders,
-      employee,
       sessionId,
       skillSettings,
       webSearch,
-      from: 'sub-agent',
+      tools: undefined,
     });
     const lastMessage = await this.repositories.aiMessages.findOne({
       filter: {
@@ -320,26 +297,23 @@ export class SubAgentsDispatcher {
       };
     }
 
-    const result = await agent.invoke(
-      {
-        userDecisions: decisions ?? undefined,
-        model: resolvedModel,
-        userMessages: decisions
-          ? undefined
-          : [
-              {
-                role: 'user',
-                content: {
-                  type: 'text',
-                  content: question,
-                },
+    const result = await agent.invoke({
+      userDecisions: decisions ?? undefined,
+      model: resolvedModel,
+      userMessages: decisions
+        ? undefined
+        : [
+            {
+              role: 'user',
+              content: {
+                type: 'text',
+                content: question,
               },
-            ],
-        writer,
-        context,
-      },
-      agentContext,
-    );
+            },
+          ],
+      writer,
+      context,
+    });
 
     writer?.({
       action: 'afterSubAgentInvoke',

@@ -24,6 +24,10 @@ import {
   serviceFactoryToken,
 } from '../../server/factory/service-factory.js';
 import { aiManagerToken } from '../../server/provider/ai-employee.js';
+import {
+  AgentServiceFactory,
+  agentServiceFactoryToken,
+} from '../../server/agent/service/agent-service-factory.js';
 import { createTestAppDeps } from './test-app-deps.js';
 
 export function createTestActor(overrides: Partial<Actor> = {}): Actor {
@@ -61,6 +65,10 @@ export function createTestAIEmployeeFixture() {
   container.singleton(
     serviceFactoryToken,
     () => new ServiceFactory({ container }),
+  );
+  container.singleton(
+    agentServiceFactoryToken,
+    (resolver) => new AgentServiceFactory({ container: resolver }),
   );
   const services = container.resolve(serviceFactoryToken);
   container.resolve(managerFactoryToken).configure({

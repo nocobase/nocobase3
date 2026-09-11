@@ -18,7 +18,7 @@ import {
   UserDecision,
 } from '@nocobase/ai-employee';
 import { parseResponseMessage } from '@nocobase/ai-employee';
-import type { FrontendToolManifest } from '../agent/context/ai-employee/common-frontend-tools.js';
+import type { FrontendToolManifest } from '../agent/context/ai-employee/common/frontend-tool-contracts.js';
 
 export type AIConversationsOptions = {
   systemMessage?: unknown;

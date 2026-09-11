@@ -15,7 +15,7 @@ import {
   LOAD_FRONTEND_TOOL_NAME,
   type FrontendToolManifest,
   isFrontendToolManifest,
-} from './common-frontend-tools.js';
+} from './common/frontend-tool-contracts.js';
 import type { WorkContext } from '@nocobase/ai-employee';
 
 type MessageLike = {

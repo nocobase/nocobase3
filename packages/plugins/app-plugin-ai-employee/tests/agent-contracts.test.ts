@@ -251,7 +251,7 @@ describe('fixed AgentService contracts', () => {
   it('keeps tool-call cancellation behind the unified AgentService contract', () => {
     const service = read('agent/service/agent-service.ts');
     const providers = read('agent/context/ai-employee/context.ts');
-    const factory = read('agent/context/ai-employee/index.ts');
+    const factory = read('agent/service/agent-service-factory.ts');
     const agentProviders = read('agent/providers.ts');
     const types = read('agent/types.ts');
 

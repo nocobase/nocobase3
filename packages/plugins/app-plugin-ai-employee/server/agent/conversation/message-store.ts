@@ -6,7 +6,6 @@ import type {
   ToolsEntity,
 } from '@nocobase/ai-employee';
 import type { DatabaseConnection } from '@nocobase/db';
-import type { IdGeneratorService } from '@nocobase/snowflake';
 import type {
   AIMessageRepository,
   AIToolMessageEntity,
@@ -18,16 +17,15 @@ import type {
   ConversationMessageStore,
   SavedAssistantMessage,
 } from '../types.js';
-
+import { randomUUID } from 'node:crypto';
 import {
   EXECUTE_FRONTEND_TOOL_NAME,
   type FrontendToolManifest,
-} from '../context/ai-employee/common-frontend-tools.js';
+} from '../context/ai-employee/common/frontend-tool-contracts.js';
 type NormalizedToolCallResult = {
   status: string;
   content: unknown;
 };
-
 type SourceMessageMetadata = {
   model?: unknown;
   provider?: unknown;
@@ -46,7 +44,6 @@ function normalizeToolCallResult(result: unknown): NormalizedToolCallResult {
     content: value.content ?? result,
   };
 }
-
 function sourceMessageMetadata(metadata: unknown): SourceMessageMetadata {
   if (typeof metadata !== 'object' || metadata === null) return {};
   const value = metadata as Record<string, unknown>;
@@ -57,37 +54,49 @@ function sourceMessageMetadata(metadata: unknown): SourceMessageMetadata {
   };
 }
 
-export interface DefaultConversationMessageStoreOptions {
+export interface ConversationMessageStoreOptions {
   readonly sessionId: string;
   readonly conversation: AIChatConversation;
   readonly database: DatabaseConnection;
   readonly messages: AIMessageRepository;
   readonly toolMessages: AIToolMessageRepository;
-  readonly snowflake: IdGeneratorService;
   readonly getCurrentFrontendTools: () => Promise<
     readonly FrontendToolManifest[]
   >;
 }
 
-export class DefaultConversationMessageStore implements ConversationMessageStore {
+// class DefaultConversationMessageStore is retained as a migration marker until downstream tests move.
+export class ConversationMessageStoreImpl implements ConversationMessageStore {
   private readonly sessionId: string;
   private readonly conversation: AIChatConversation;
-  private readonly database: DatabaseConnection;
   private readonly messages: AIMessageRepository;
   private readonly toolMessages: AIToolMessageRepository;
-  private readonly snowflake: IdGeneratorService;
   private readonly getCurrentFrontendTools: () => Promise<
     readonly FrontendToolManifest[]
   >;
+  private readonly database: DatabaseConnection;
 
-  public constructor(options: DefaultConversationMessageStoreOptions) {
+  public constructor(options: ConversationMessageStoreOptions) {
     this.sessionId = options.sessionId;
     this.conversation = options.conversation;
-    this.database = options.database;
     this.messages = options.messages;
+    this.database = options.database;
     this.toolMessages = options.toolMessages;
-    this.snowflake = options.snowflake;
     this.getCurrentFrontendTools = options.getCurrentFrontendTools;
+  }
+
+  private withTransaction<T>(
+    callback: (
+      target: AIChatConversation,
+      transaction?: DatabaseConnection,
+    ) => Promise<T>,
+  ): Promise<T> {
+    if (typeof this.conversation.withTransaction === 'function') {
+      return this.conversation.withTransaction(callback);
+    }
+    return this.database.transaction((transaction) =>
+      callback(this.conversation, transaction),
+    );
   }
 
   public loadMessages(messageId?: string): Promise<AIMessage[]> {
@@ -99,7 +108,7 @@ export class DefaultConversationMessageStore implements ConversationMessageStore
     messageId?: string,
     thread?: AgentThread,
   ): Promise<void> {
-    return this.conversation.withTransaction(async (target) => {
+    return this.withTransaction(async (target) => {
       if (thread) await target.updateThread(thread.thread);
       if (messageId && (await target.getMessage(messageId))) {
         await target.removeMessages({ messageId });
@@ -112,7 +121,7 @@ export class DefaultConversationMessageStore implements ConversationMessageStore
     message: AIMessageInput,
     toolMap: ReadonlyMap<string, ToolsEntity>,
   ): Promise<SavedAssistantMessage> {
-    return this.conversation.withTransaction(async (target, transaction) => {
+    return this.withTransaction(async (target, transaction) => {
       const saved = await target.addMessages(message);
       const toolCalls = saved.toolCalls ?? [];
       if (!toolCalls.length) {
@@ -146,7 +155,7 @@ export class DefaultConversationMessageStore implements ConversationMessageStore
               const tool = toolMap.get(toolCall.name);
               const exists = Boolean(tool);
               return {
-                id: this.snowflake.generate(),
+                id: randomUUID(),
                 sessionId: this.sessionId,
                 messageId: saved.messageId,
                 toolCallId: toolCall.id,
@@ -183,7 +192,7 @@ export class DefaultConversationMessageStore implements ConversationMessageStore
       return toolCallId;
     });
 
-    await this.conversation.withTransaction(async (target, transaction) => {
+    await this.withTransaction(async (target, transaction) => {
       await target.addMessages(messages);
       await this.toolMessages.update(
         {
@@ -247,7 +256,7 @@ export class DefaultConversationMessageStore implements ConversationMessageStore
     interruptId: string,
     interruptAction: AgentInterruptAction,
   ): Promise<number> {
-    return this.database.transaction(async (transaction) => {
+    return this.withTransaction(async (_target, transaction) => {
       const updated = await this.toolMessages.update(
         {
           values: {
@@ -384,7 +393,7 @@ export class DefaultConversationMessageStore implements ConversationMessageStore
     );
     const metadata = sourceMessageMetadata(sourceMessage.metadata);
     const now = new Date();
-    return this.database.transaction(async (transaction) => {
+    return this.withTransaction(async (_target, transaction) => {
       for (const toolMessage of toolMessages) {
         await this.toolMessages.update(
           {
@@ -407,7 +416,7 @@ export class DefaultConversationMessageStore implements ConversationMessageStore
       return this.messages.create(
         {
           values: toolMessages.map((toolMessage) => ({
-            messageId: String(this.snowflake.generate()),
+            messageId: randomUUID(),
             sessionId: this.sessionId,
             role: 'tool',
             content: { type: 'text', content: reason },
@@ -429,3 +438,5 @@ export class DefaultConversationMessageStore implements ConversationMessageStore
     });
   }
 }
+
+export const DefaultConversationMessageStore = ConversationMessageStoreImpl;

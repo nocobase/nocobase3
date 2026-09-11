@@ -1,5 +1,3 @@
-import type { DatabaseConnection } from '@nocobase/db';
-import type { IdGeneratorService } from '@nocobase/snowflake';
 import type { AIChatConversation } from '@nocobase/ai-employee';
 import type {
   AIMessageRepository,
@@ -13,7 +11,5 @@ export interface ConversationPersistence {
   readonly messages: AIMessageRepository;
   readonly toolMessages: AIToolMessageRepository;
   readonly usageEvents: AIUsageEventRepository;
-  readonly database: DatabaseConnection;
-  readonly snowflake: IdGeneratorService;
   createChatConversation(options: { sessionId: string }): AIChatConversation;
 }

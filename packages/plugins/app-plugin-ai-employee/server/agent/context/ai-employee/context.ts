@@ -20,10 +20,9 @@ import type {
 } from '@nocobase/ai-employee';
 import { listSystemTools, SYSTEM_TOOLS } from '@nocobase/ai-employee';
 import _ from 'lodash';
-import {
-  createConversationProvider,
-  createAgentProviders,
-} from '../../providers.js';
+import { createAgentProviders } from '../../providers.js';
+import { DefaultConversationProvider } from '../../conversation/conversation-provider.js';
+import { DatabaseConversationPersistence } from '../../conversation/persistence/database.js';
 import type { AIEmployeeContextOptions } from './options.js';
 import type { AIEmployeeSkillSettings } from './options.js';
 import type { AppAgentContext } from '../../context.js';
@@ -49,7 +48,7 @@ import {
 import {
   EXECUTE_FRONTEND_TOOL_NAME,
   LOAD_FRONTEND_TOOL_NAME,
-} from './common-frontend-tools.js';
+} from './common/frontend-tool-contracts.js';
 import {
   listCurrentFrontendTools,
   prepareToolsForFrontendConversation,
@@ -570,7 +569,23 @@ export async function createAIEmployeeAgentProviders(
   options: AIEmployeeContextOptions,
 ): Promise<AgentProviders> {
   const context = createAIEmployeeAgentContextProvider(options);
-  const conversation = createConversationProvider(options);
+  const persistence = new DatabaseConversationPersistence({
+    database: options.database,
+    snowflake: options.snowflake,
+    conversations: options.aiConversations,
+    messages: options.aiMessages,
+    toolMessages: options.aiToolMessages,
+    usageEvents: options.aiUsageEvents,
+  });
+  const conversation = new DefaultConversationProvider({
+    sessionId: options.sessionId,
+    persistence,
+    streamCache: options.llmStreamCachedManager,
+    employeesManager: options.aiEmployeesManager,
+    database: options.database,
+    snowflake: options.snowflake,
+    logger: options.agentContext.logger,
+  });
   return createAgentProviders({
     conversation,
     context,

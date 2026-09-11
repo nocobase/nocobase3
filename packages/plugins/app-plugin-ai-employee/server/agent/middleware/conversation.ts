@@ -16,6 +16,7 @@ import {
 } from 'langchain';
 import z from 'zod';
 import type {
+  AgentContextProvider,
   AgentMessageConversionContext,
   AgentProviders,
   AgentThread,
@@ -31,10 +32,7 @@ import type { ToolsEntity } from '@nocobase/ai-employee';
 import { willInterruptToolCall } from './tools.js';
 import type { Logger } from '@nocobase/logging';
 export const conversationMiddleware = (
-  providers: Pick<
-    AgentProviders,
-    'conversation' | 'context' | 'chatContext' | 'converters'
-  >,
+  providers: Pick<AgentProviders, 'conversation' | 'context' | 'converters'>,
   options: AgentMessageConversionContext & {
     messageId?: string;
     agentThread?: AgentThread;
@@ -45,7 +43,8 @@ export const conversationMiddleware = (
   const { conversation, converters } = providers;
   const { messageId, agentThread, toolMap } = options;
   const identity = (
-    providers.context ?? providers.chatContext!
+    providers.context ??
+    (providers as { chatContext?: AgentContextProvider }).chatContext!
   ).currentConversation();
   const convertAssistantMessage = (message: AIMessage) =>
     converters.assistant.convert(message, options);

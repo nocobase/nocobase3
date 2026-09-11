@@ -14,6 +14,7 @@ import type {
 } from '@nocobase/ai-employee';
 import type {
   AgentGraphState,
+  AgentContextProvider,
   AgentThread,
   AgentInterruptAction,
   AgentOperation,
@@ -152,6 +153,12 @@ export class AgentService {
   private activeController?: AbortController;
 
   constructor(private readonly providers: AgentProviders) {}
+  private get agentContext(): AgentContextProvider {
+    return (
+      this.providers.context ??
+      (this.providers as { chatContext?: AgentContextProvider }).chatContext!
+    );
+  }
 
   abort(reason?: unknown): void {
     if (!this.activeController?.signal.aborted)
@@ -201,9 +208,7 @@ export class AgentService {
   }
 
   private resolveLLM(request: AgentRequest): Promise<ResolvedAgentLLM> {
-    return (this.providers.context ?? this.providers.chatContext!).resolveLLM(
-      request,
-    );
+    return this.agentContext.resolveLLM(request);
   }
 
   private shouldFork(
@@ -240,9 +245,7 @@ export class AgentService {
   }
 
   private buildInitialState(messages: AIMessage[]): AgentGraphState {
-    const assistantRole = (
-      this.providers.context ?? this.providers.chatContext!
-    ).currentConversation().username;
+    const assistantRole = this.agentContext.currentConversation().username;
     const toolMessage = messages
       .slice()
       .reverse()
@@ -279,7 +282,7 @@ export class AgentService {
     responseMetadataCollector?: BaseCallbackHandler,
   ): Promise<PreparedAgentContext> {
     const { conversation, features } = this.providers;
-    const context = this.providers.context ?? this.providers.chatContext!;
+    const context = this.agentContext;
     const shouldLoadHistory = Boolean(request.messageId);
     const history = shouldLoadHistory
       ? await conversation.messages.loadMessages(request.messageId)
@@ -444,7 +447,7 @@ export class AgentService {
     agentContext?: AgentContext,
   ): AsyncGenerator<AgentStreamEvent> {
     const { conversation, context: providerContext } = this.providers;
-    const context = providerContext ?? this.providers.chatContext!;
+    const context = providerContext ?? this.agentContext;
     const identity = context.currentConversation();
     const { controller, signal, token } = this.begin(request);
     const reasoning = new Set<string>();

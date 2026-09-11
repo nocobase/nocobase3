@@ -1,5 +1,9 @@
 import { createMiddleware } from 'langchain';
-import type { AgentProviders, PreparedAgentContext } from '../types.js';
+import type {
+  AgentContextProvider,
+  AgentProviders,
+  PreparedAgentContext,
+} from '../types.js';
 import { conversationMiddleware } from './conversation.js';
 import { skillToolBindingMiddleware } from './skill-tools.js';
 import { toolCallSanitizerMiddleware } from './tool-call-sanitizer.js';
@@ -24,14 +28,20 @@ export function buildStandardAgentMiddleware(
       : namedNoopMiddleware('SkillToolBindingMiddleware'),
     features.tools && features.toolInteraction
       ? toolInteractionMiddleware(
-          (providers.context ?? providers.chatContext!).currentConversation(),
+          (
+            providers.context ??
+            (providers as { chatContext?: AgentContextProvider }).chatContext!
+          ).currentConversation(),
           prepared.discoveredTools.tools,
         )
       : namedNoopMiddleware('ToolInteractionMiddleware'),
     features.tools && features.toolCallStatus
       ? toolCallStatusMiddleware(
           providers.conversation,
-          (providers.context ?? providers.chatContext!).currentConversation(),
+          (
+            providers.context ??
+            (providers as { chatContext?: AgentContextProvider }).chatContext!
+          ).currentConversation(),
           providers.logger,
         )
       : namedNoopMiddleware('ToolCallStatusMiddleware'),

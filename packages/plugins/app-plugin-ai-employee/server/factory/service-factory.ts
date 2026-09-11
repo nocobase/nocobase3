@@ -19,6 +19,8 @@ import { repositoryFactoryToken } from './repository-factory.js';
 import { LLMServiceConfigSynchronizer } from '../manager/llm-service-config.js';
 import { AI_API_BASE_PATH } from '../types.js';
 import { aiManagerToken } from '../provider/ai-employee.js';
+import { agentServiceFactoryToken } from '../agent/service/agent-service-factory.js';
+import { AgentServiceFactory } from '../agent/service/agent-service-factory.js';
 import { AIConversationService } from '../service/ai-conversation-service.js';
 import { AIEmployeeService } from '../service/ai-employee-service.js';
 import { AIMCPServerService } from '../service/ai-mcp-server-service.js';
@@ -154,6 +156,7 @@ export class ServiceFactory {
       knowledgeBaseManager: managers.knowledgeBaseManager,
       workContextHandler: managers.workContextHandler,
       documentLoaders: managers.documentLoaders,
+      agentServiceFactory: this.resolveAgentServiceFactory(),
     }));
   }
 
@@ -192,6 +195,9 @@ export class ServiceFactory {
       { aiDirectory: appDirectory, summary },
       'AI employee services initialized',
     );
+  }
+  private resolveAgentServiceFactory(): AgentServiceFactory {
+    return this.container.resolve(agentServiceFactoryToken);
   }
 
   private requireInitialization(): ServiceFactoryInitialization {

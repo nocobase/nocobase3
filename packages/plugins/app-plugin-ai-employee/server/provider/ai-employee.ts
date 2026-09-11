@@ -60,6 +60,7 @@ export class AIEmployeeProvider extends ServiceProvider<AppPluginApplication> {
       serviceFactoryToken,
       () => new ServiceFactory({ container: this.app.container }),
     );
+
     this.app.container.singleton(
       agentServiceFactoryToken,
       (resolver) => new AgentServiceFactory({ container: resolver }),

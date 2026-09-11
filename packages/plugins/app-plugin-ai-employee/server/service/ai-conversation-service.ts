@@ -25,13 +25,12 @@ import type {
   AIToolMessageEntity,
 } from '../repository/index.js';
 import { AgentSSEAdapter } from '../agent/transport/sse.js';
-import { createAIEmployee } from '../agent/service/agent-service-factory.js';
 import {
   createAgentContext,
   type AppAgentContext,
   type CreateAgentContextOptions,
 } from '../agent/context.js';
-import { EXECUTE_FRONTEND_TOOL_NAME } from '../agent/context/ai-employee/common-frontend-tools.js';
+import { EXECUTE_FRONTEND_TOOL_NAME } from '../agent/context/ai-employee/common/frontend-tool-contracts.js';
 import { findCurrentFrontendTool } from '../agent/context/ai-employee/frontend-tools.js';
 import type { RepositoryFactory } from '../factory/repository-factory.js';
 import type { DocumentLoaders } from '@nocobase/ai-employee';
@@ -226,6 +225,7 @@ export interface AIConversationServiceOptions {
   readonly knowledgeBaseManager: KnowledgeBaseManager;
   readonly workContextHandler: WorkContextHandler;
   readonly documentLoaders: DocumentLoaders;
+  readonly agentServiceFactory: import('../agent/service/agent-service-factory.js').AgentServiceFactory;
 }
 
 export class AIConversationService {
@@ -233,11 +233,6 @@ export class AIConversationService {
   private readonly database: DatabaseConnection;
   private readonly databaseManager: DatabaseManager;
   private readonly logger: Logger;
-  private readonly caching: Caching;
-  private readonly fileStorage: FileStorage<
-    AIFileEntity,
-    AIFileMetadataCreateContext
-  >;
   private readonly snowflake: IdGeneratorService;
   private readonly repositories: RepositoryFactory;
   private readonly aiEmployeesManager: AIEmployeesManager;
@@ -246,16 +241,13 @@ export class AIConversationService {
   private readonly llmStreamCachedManager: LLMStreamCachedManager;
   private readonly subAgentsDispatcher: SubAgentsDispatcher;
   private readonly knowledgeBaseManager: KnowledgeBaseManager;
-  private readonly workContextHandler: WorkContextHandler;
-  private readonly documentLoaders: DocumentLoaders;
+  private readonly agentServiceFactory: import('../agent/service/agent-service-factory.js').AgentServiceFactory;
 
   public constructor(options: AIConversationServiceOptions) {
     this.ai = options.ai;
     this.database = options.database;
     this.databaseManager = options.databaseManager;
     this.logger = options.logger;
-    this.caching = options.caching;
-    this.fileStorage = options.fileStorage;
     this.snowflake = options.snowflake;
     this.repositories = options.repositories;
     this.aiEmployeesManager = options.aiEmployeesManager;
@@ -264,8 +256,7 @@ export class AIConversationService {
     this.llmStreamCachedManager = options.llmStreamCachedManager;
     this.subAgentsDispatcher = options.subAgentsDispatcher;
     this.knowledgeBaseManager = options.knowledgeBaseManager;
-    this.workContextHandler = options.workContextHandler;
-    this.documentLoaders = options.documentLoaders;
+    this.agentServiceFactory = options.agentServiceFactory;
   }
   private createAgentContext({
     actor,
@@ -711,34 +702,13 @@ export class AIConversationService {
         getHeader,
       });
       const agentOptions = {
-        agentContext,
-        database: this.database,
-        caching: this.caching,
-        fileStorage: this.fileStorage,
-        snowflake: this.snowflake,
+        username: employee.username,
+        actor,
         execution,
+        translate,
         getHeader,
-        collectionRepository: this.repositories.collectionRepository.bind(
-          this.repositories,
-        ),
-        aiConversations: this.repositories.aiConversations,
-        aiEmployees: this.repositories.aiEmployees,
-        aiMessages: this.repositories.aiMessages,
-        aiToolMessages: this.repositories.aiToolMessages,
-        aiUsageEvents: this.repositories.aiUsageEvents,
-        usersAiEmployees: this.repositories.usersAiEmployees,
-        lcCheckpoints: this.repositories.lcCheckpoints,
-        lcCheckpointBlobs: this.repositories.lcCheckpointBlobs,
-        lcCheckpointWrites: this.repositories.lcCheckpointWrites,
-        aiEmployeesManager: this.aiEmployeesManager,
-        builtInManager: this.builtInManager,
-        llmStreamCachedManager: this.llmStreamCachedManager,
-        knowledgeBaseManager: this.knowledgeBaseManager,
-        workContextHandler: this.workContextHandler,
-        documentLoaders: this.documentLoaders,
-        employee,
         sessionId,
-        systemMessage:
+        systemPrompt:
           typeof conversation.options?.systemMessage === 'string'
             ? conversation.options.systemMessage
             : undefined,
@@ -753,7 +723,8 @@ export class AIConversationService {
       if (conversation.category !== 'chat') {
         throw new ResourceActionError(404, 'conversation not found');
       }
-      const agent = await createAIEmployee(agentOptions);
+      const agent =
+        await this.agentServiceFactory.createAIEmployee(agentOptions);
       const runStream = async (request: any) => {
         const agentRequest = { ...request, model: resolvedModel };
         const adapter = new AgentSSEAdapter(
@@ -1038,34 +1009,13 @@ export class AIConversationService {
         getHeader,
       });
       const agentOptions = {
-        agentContext,
-        database: this.database,
-        caching: this.caching,
-        fileStorage: this.fileStorage,
-        snowflake: this.snowflake,
+        username: employee.username,
+        actor,
         execution,
+        translate,
         getHeader,
-        collectionRepository: this.repositories.collectionRepository.bind(
-          this.repositories,
-        ),
-        aiConversations: this.repositories.aiConversations,
-        aiEmployees: this.repositories.aiEmployees,
-        aiMessages: this.repositories.aiMessages,
-        aiToolMessages: this.repositories.aiToolMessages,
-        aiUsageEvents: this.repositories.aiUsageEvents,
-        usersAiEmployees: this.repositories.usersAiEmployees,
-        lcCheckpoints: this.repositories.lcCheckpoints,
-        lcCheckpointBlobs: this.repositories.lcCheckpointBlobs,
-        lcCheckpointWrites: this.repositories.lcCheckpointWrites,
-        aiEmployeesManager: this.aiEmployeesManager,
-        builtInManager: this.builtInManager,
-        llmStreamCachedManager: this.llmStreamCachedManager,
-        knowledgeBaseManager: this.knowledgeBaseManager,
-        workContextHandler: this.workContextHandler,
-        documentLoaders: this.documentLoaders,
-        employee,
         sessionId,
-        systemMessage:
+        systemPrompt:
           typeof conversation.options?.systemMessage === 'string'
             ? conversation.options.systemMessage
             : undefined,
@@ -1082,7 +1032,8 @@ export class AIConversationService {
       }
       if (shouldStream) {
         {
-          const service = await createAIEmployee(agentOptions);
+          const service =
+            await this.agentServiceFactory.createAIEmployee(agentOptions);
           await new AgentSSEAdapter(
             (chunk) => streamTarget(execution).write(chunk),
             (chunk) =>
@@ -1102,7 +1053,8 @@ export class AIConversationService {
           streamTarget(execution).end();
         }
       } else {
-        const service = await createAIEmployee(agentOptions);
+        const service =
+          await this.agentServiceFactory.createAIEmployee(agentOptions);
         return service.forkInvoke(
           {
             messageId,
@@ -1344,34 +1296,13 @@ export class AIConversationService {
         getHeader,
       });
       const agentOptions = {
-        agentContext,
-        database: this.database,
-        caching: this.caching,
-        fileStorage: this.fileStorage,
-        snowflake: this.snowflake,
+        username: employee.username,
+        actor,
         execution,
+        translate,
         getHeader,
-        collectionRepository: this.repositories.collectionRepository.bind(
-          this.repositories,
-        ),
-        aiConversations: this.repositories.aiConversations,
-        aiEmployees: this.repositories.aiEmployees,
-        aiMessages: this.repositories.aiMessages,
-        aiToolMessages: this.repositories.aiToolMessages,
-        aiUsageEvents: this.repositories.aiUsageEvents,
-        usersAiEmployees: this.repositories.usersAiEmployees,
-        lcCheckpoints: this.repositories.lcCheckpoints,
-        lcCheckpointBlobs: this.repositories.lcCheckpointBlobs,
-        lcCheckpointWrites: this.repositories.lcCheckpointWrites,
-        aiEmployeesManager: this.aiEmployeesManager,
-        builtInManager: this.builtInManager,
-        llmStreamCachedManager: this.llmStreamCachedManager,
-        knowledgeBaseManager: this.knowledgeBaseManager,
-        workContextHandler: this.workContextHandler,
-        documentLoaders: this.documentLoaders,
-        employee,
         sessionId,
-        systemMessage:
+        systemPrompt:
           typeof conversation.options?.systemMessage === 'string'
             ? conversation.options.systemMessage
             : undefined,
@@ -1390,7 +1321,8 @@ export class AIConversationService {
         throw new ResourceActionError(404, 'conversation not found');
       }
       {
-        const service = await createAIEmployee(agentOptions);
+        const service =
+          await this.agentServiceFactory.createAIEmployee(agentOptions);
         await new AgentSSEAdapter(
           (chunk) => streamTarget(execution).write(chunk),
           (chunk) =>

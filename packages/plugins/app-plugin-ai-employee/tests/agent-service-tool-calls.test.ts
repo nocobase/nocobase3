@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AIMessageInput } from '@nocobase/ai-employee';
 import { AgentService } from '../server/agent/service/agent-service.js';
-import { createAIEmployee } from '../server/agent/context/ai-employee/index.js';
 import { createTestConversationProvider } from './test-conversation-provider.js';
 import type { AgentProviders } from '../server/agent/types.js';
 
@@ -102,41 +101,5 @@ describe('AgentService tool-call cancellation', () => {
     await expect(service.cancelToolCall()).rejects.toBe(error);
     expect(cancel).toHaveBeenCalledOnce();
     expectNoExecutionLifecycle(chatContext, lifecycle);
-  });
-
-  it('returns one AgentService from the AI employee factory', async () => {
-    const options = {
-      sessionId: 'session-1',
-      employee: { username: 'dara' },
-      agentContext: { logger: {}, ai: {} },
-      builtInManager: { setupBuiltInInfo: vi.fn() },
-      database: {},
-      collectionRepository: vi.fn(),
-      aiConversations: { update: vi.fn() },
-      aiEmployees: {},
-      aiMessages: {},
-      aiToolMessages: {},
-      usersAiEmployees: {},
-      lcCheckpoints: {},
-      lcCheckpointBlobs: {},
-      lcCheckpointWrites: {},
-      snowflake: {},
-      llmStreamCachedManager: {
-        getCached: () => ({
-          append: vi.fn(),
-          clear: vi.fn(),
-          skipped: vi.fn(),
-        }),
-      },
-    } as any;
-
-    const agent = await createAIEmployee(options);
-
-    expect(agent).toBeInstanceOf(AgentService);
-    expect(typeof agent.invoke).toBe('function');
-    expect(typeof agent.stream).toBe('function');
-    expect(typeof agent.cancelToolCall).toBe('function');
-    expect(agent).not.toHaveProperty('service');
-    expect(agent).not.toHaveProperty('facade');
   });
 });

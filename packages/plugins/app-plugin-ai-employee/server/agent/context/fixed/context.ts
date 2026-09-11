@@ -59,7 +59,7 @@ export class FixedAgentContextProvider implements AgentContextProvider {
     if (!model || !this.provider)
       throw new Error('Fixed agent model provider is required');
     return {
-      providerName: this.providerName ?? this.providerName ?? '',
+      providerName: this.providerName ?? '',
       llmService: this.llmService ?? model.llmService,
       model: model.model,
       provider: this.provider,

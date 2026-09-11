@@ -10,12 +10,12 @@ import type { DatabaseConnection } from '@nocobase/db';
 import type { IdGeneratorService } from '@nocobase/snowflake';
 
 export class DatabaseConversationPersistence implements ConversationPersistence {
-  public readonly database: DatabaseConnection;
-  public readonly snowflake: IdGeneratorService;
+  private readonly database: DatabaseConnection;
+  private readonly snowflake: IdGeneratorService;
+  public readonly usageEvents: AIUsageEventRepository;
   public readonly conversations: AIConversationRepository;
   public readonly messages: AIMessageRepository;
   public readonly toolMessages: AIToolMessageRepository;
-  public readonly usageEvents: AIUsageEventRepository;
   public constructor(options: {
     database: DatabaseConnection;
     snowflake: IdGeneratorService;
@@ -32,6 +32,13 @@ export class DatabaseConversationPersistence implements ConversationPersistence 
     this.usageEvents = options.usageEvents;
   }
   public createChatConversation(options: { sessionId: string }) {
-    return createAIChatConversation({ ...this, sessionId: options.sessionId });
+    return createAIChatConversation({
+      messages: this.messages,
+      conversations: this.conversations,
+      usageEvents: this.usageEvents,
+      database: this.database,
+      snowflake: this.snowflake,
+      sessionId: options.sessionId,
+    });
   }
 }
