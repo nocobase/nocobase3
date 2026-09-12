@@ -51,7 +51,7 @@ describe('oracle runtime strategy', () => {
       "alter session set nls_date_format = 'YYYY-MM-DD HH24:MI:SS'",
     );
     expect(connection.execute).toHaveBeenCalledWith(
-      "alter session set nls_timestamp_format = 'YYYY-MM-DD HH24:MI:SS'",
+      'alter session set nls_timestamp_format = \'YYYY-MM-DD"T"HH24:MI:SS.FF3\'',
     );
     expect(configuredAfterCreate).toHaveBeenCalledWith(connection, done);
   });
@@ -79,6 +79,12 @@ describe('oracle runtime strategy', () => {
         tablePrimaryKey: false,
       }),
     ).toBe('timestamp(3) with time zone');
+    expect(
+      schema.columnType!({
+        column: { type: 'integer' } as never,
+        tablePrimaryKey: false,
+      }),
+    ).toBe('number(10, 0)');
     expect(
       schema.columnType!({
         column: { type: 'bigInt' } as never,
@@ -133,6 +139,23 @@ describe('oracle runtime strategy', () => {
     );
     expect(operation).toMatchObject({
       operations: [{ changes: { type: 'char' } }],
+    });
+    const datetimeOperation = await schema.normalizeOperation!(
+      {
+        type: 'alterTable',
+        tableName: 'workflow_runs',
+        operations: [
+          {
+            type: 'alterColumn',
+            column: 'started_at',
+            changes: { type: 'datetimeTz', nullable: true },
+          },
+        ],
+      } as never,
+      normalizeClient as never,
+    );
+    expect(datetimeOperation).toMatchObject({
+      operations: [{ changes: { type: 'datetimeTz' } }],
     });
     expect(client).toBeDefined();
   });
