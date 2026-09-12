@@ -22,6 +22,10 @@ import {
   encodeJsonValue,
   type JsonValue,
 } from '../../../json.js';
+import {
+  decodeBooleanValue,
+  normalizeBooleanValue,
+} from '../../../repository/boolean.js';
 import type {
   AggregateExpression,
   AliasedExpression,
@@ -710,8 +714,8 @@ class KnexInsertQuery<
 
   async execute(): Promise<InsertResult> {
     const data = this.requireValues();
-    const jsonFields = await resolveJsonFields(this.lookup, this.tableName);
-    const result = await this.buildQuery(data, jsonFields);
+    const fields = await resolveWriteFields(this.lookup, this.tableName);
+    const result = await this.buildQuery(data, fields);
     return normalizeInsertResult(result, data);
   }
 
@@ -725,11 +729,11 @@ class KnexInsertQuery<
 
   private buildQuery(
     data: TRecord | readonly TRecord[],
-    jsonFields: ReadonlySet<string> = emptyStringSet,
+    fields: WriteFields = emptyWriteFields,
   ): Knex.QueryBuilder {
     return this.getClient()(
       mapTableSourceExpression(this.tableName, this.naming),
-    ).insert(mapData(data, this.naming, jsonFields) as any);
+    ).insert(mapData(data, this.naming, fields, this.getClient()) as any);
   }
 
   private requireValues(): TRecord | readonly TRecord[] {
@@ -809,8 +813,8 @@ class KnexUpdateQuery<
   }
 
   async execute(): Promise<UpdateResult> {
-    const jsonFields = await resolveJsonFields(this.lookup, this.tableName);
-    const result = await this.buildQuery(jsonFields);
+    const fields = await resolveWriteFields(this.lookup, this.tableName);
+    const result = await this.buildQuery(fields);
     return normalizeUpdateResult(result);
   }
 
@@ -837,7 +841,7 @@ class KnexUpdateQuery<
   }
 
   private buildQuery(
-    jsonFields: ReadonlySet<string> = emptyStringSet,
+    fields: WriteFields = emptyWriteFields,
   ): Knex.QueryBuilder {
     const client = this.getClient();
     const tableScope = createTableScope([this.tableName], this.naming);
@@ -845,7 +849,7 @@ class KnexUpdateQuery<
     this.assertWhereSafety('updateTable().execute()');
     const query = client(
       mapTableSourceExpression(this.tableName, this.naming),
-    ).update(mapData(data, this.naming, jsonFields) as any);
+    ).update(mapData(data, this.naming, fields, this.getClient()) as any);
     applyWhereExpressions(query, this.state.where, {
       client,
       naming: this.naming,
@@ -1976,7 +1980,28 @@ function applyBinaryExpression(
     return;
   }
 
-  callValueComparison(query, context, bool, lhs, op, rhs.value);
+  callValueComparison(
+    query,
+    context,
+    bool,
+    lhs,
+    op,
+    normalizeQueryBooleanValue(context, expression.lhs, rhs.value),
+  );
+}
+
+function normalizeQueryBooleanValue(
+  context: ExpressionCompileContext,
+  operand: OperandNode,
+  value: unknown,
+): unknown {
+  if (operand.type !== 'ref') return value;
+  const field = scalarSource(operand.reference, context.tableScope);
+  if (!field || field.type !== 'boolean') return value;
+  if (Array.isArray(value)) {
+    return value.map((item) => encodeQueryBoolean(context.client, field, item));
+  }
+  return encodeQueryBoolean(context.client, field, value);
 }
 
 function applyBetweenExpression(
@@ -2775,18 +2800,31 @@ function mapIdentifier(identifier: string, naming: NamingStrategy): string {
   return naming.fieldToColumnName(identifier);
 }
 
+interface WriteFields {
+  readonly json: ReadonlySet<string>;
+  readonly boolean: ReadonlyMap<string, FieldDefinition>;
+}
+
+const emptyWriteFields: WriteFields = {
+  json: emptyStringSet,
+  boolean: new Map(),
+};
+
 function mapData(
   data: Row | readonly Row[],
   naming: NamingStrategy,
-  jsonFields: ReadonlySet<string> = emptyStringSet,
+  fields: WriteFields = emptyWriteFields,
+  client?: Knex,
 ): Row | Row[] {
   if (Array.isArray(data)) {
-    return data.map((item) => mapData(item, naming, jsonFields) as Row);
+    return data.map((item) => mapData(item, naming, fields, client) as Row);
   }
   return Object.fromEntries(
     Object.entries(data).map(([key, value]) => {
-      const encoded =
-        jsonFields.has(key) && value !== null
+      const booleanField = fields.boolean.get(key);
+      const encoded = booleanField
+        ? encodeQueryBoolean(client, booleanField, value)
+        : fields.json.has(key) && value !== null
           ? encodeJsonValue(value as JsonValue)
           : value;
       return [mapIdentifier(key, naming), encoded];
@@ -2794,20 +2832,33 @@ function mapData(
   );
 }
 
-async function resolveJsonFields(
+function encodeQueryBoolean(
+  client: Knex | undefined,
+  field: FieldDefinition,
+  value: unknown,
+): unknown {
+  const encodeBoolean = client
+    ? getDatabaseDriverRuntime(client)?.repository?.encodeBoolean
+    : undefined;
+  return encodeBoolean
+    ? encodeBoolean(field, value)
+    : normalizeBooleanValue(field, value);
+}
+
+async function resolveWriteFields(
   lookup: CollectionLookup | undefined,
   tableName: string,
-): Promise<ReadonlySet<string>> {
-  if (!lookup) return emptyStringSet;
+): Promise<WriteFields> {
+  if (!lookup) return emptyWriteFields;
   const collection = await lookup(parseAliasedIdentifier(tableName).identifier);
-  return new Set(
-    collection?.fields
-      ?.filter(
-        (field): field is FieldDefinition =>
-          !('target' in field) && field.type === 'json',
-      )
-      .map((field) => field.name) ?? [],
-  );
+  const json = new Set<string>();
+  const boolean = new Map<string, FieldDefinition>();
+  for (const field of collection?.fields ?? []) {
+    if ('target' in field) continue;
+    if (field.type === 'json') json.add(field.name);
+    if (field.type === 'boolean') boolean.set(field.name, field);
+  }
+  return { json, boolean };
 }
 
 function parseAliasedIdentifier(value: string): {
@@ -2862,6 +2913,12 @@ function addScalarDecoder(
   if (!field) return;
   if (field.type === 'json') {
     resultMap.scalarDecoders?.set(physicalKey, decodeJsonValue);
+    return;
+  }
+  if (field.type === 'boolean') {
+    resultMap.scalarDecoders?.set(physicalKey, (value) =>
+      decodeBooleanValue(field, value),
+    );
     return;
   }
   if (!decoder) return;
