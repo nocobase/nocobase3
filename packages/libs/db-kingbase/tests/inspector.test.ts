@@ -1,27 +1,27 @@
 import { describe, expect, it, vi } from 'vitest';
 import { normalizePhysicalDataType } from '@nocobase/db';
-import kingbasePostgres from '../src/index.js';
+import kingbase from '../src/index.js';
 import {
-  KingbasePostgresSchemaInspector,
-  kingbasePostgresTypes,
-} from '../src/inspectors/kingbase-postgres.js';
+  KingbaseSchemaInspector,
+  kingbaseTypes,
+} from '../src/inspectors/kingbase.js';
 
-describe('kingbasePostgres schema inspector', () => {
+describe('kingbase schema inspector', () => {
   it('is wired into the public driver descriptor', () => {
     expect(
-      kingbasePostgres.driver.createSchemaInspector?.({
+      kingbase.driver.createSchemaInspector?.({
         connectionName: 'main',
         config: { schema: ['tenant'] },
         resolveClient: async () => ({}) as never,
       } as never),
-    ).toBeInstanceOf(KingbasePostgresSchemaInspector);
+    ).toBeInstanceOf(KingbaseSchemaInspector);
   });
 
   it('uses the configured search path to mark the default schema', async () => {
     const raw = vi
       .fn()
       .mockResolvedValue([{ name: 'public' }, { name: 'tenant' }]);
-    const inspector = new KingbasePostgresSchemaInspector({
+    const inspector = new KingbaseSchemaInspector({
       connectionName: 'main',
       searchPath: ['tenant', 'public'],
       resolveClient: async () => ({ raw }) as never,
@@ -36,16 +36,11 @@ describe('kingbasePostgres schema inspector', () => {
 
   it('normalizes KingbaseES PostgreSQL temporal and character types', () => {
     expect(
-      normalizePhysicalDataType(
-        kingbasePostgresTypes,
-        'timestamp(3) with time zone',
-      ),
+      normalizePhysicalDataType(kingbaseTypes, 'timestamp(3) with time zone'),
     ).toBe('datetimeTz');
-    expect(normalizePhysicalDataType(kingbasePostgresTypes, 'bpchar')).toBe(
-      'char',
+    expect(normalizePhysicalDataType(kingbaseTypes, 'bpchar')).toBe('char');
+    expect(normalizePhysicalDataType(kingbaseTypes, 'double precision')).toBe(
+      'double',
     );
-    expect(
-      normalizePhysicalDataType(kingbasePostgresTypes, 'double precision'),
-    ).toBe('double');
   });
 });

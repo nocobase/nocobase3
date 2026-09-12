@@ -2,26 +2,26 @@ import { EventEmitter } from 'node:events';
 import { PassThrough, Readable } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
 import { createDatabaseManager } from '@nocobase/db';
-import kingbasePostgres from '../src/index.js';
+import kingbase from '../src/index.js';
 
-describe('kingbasePostgres factory', () => {
+describe('kingbase factory', () => {
   it('binds the dialect driver to the connection', () => {
-    const connection = kingbasePostgres({
+    const connection = kingbase({
       host: 'localhost',
       driver: 'mysql2',
     } as never);
     expect(connection).toMatchObject({
-      dialect: 'kingbase-postgres',
+      dialect: 'kingbase',
       driver: 'pg',
-      databaseDriver: kingbasePostgres.driver,
+      databaseDriver: kingbase.driver,
       host: 'localhost',
     });
   });
 
   it('normalizes flattened connection options', () => {
     expect(
-      kingbasePostgres.driver.resolveConnection?.({
-        dialect: 'kingbase-postgres',
+      kingbase.driver.resolveConnection?.({
+        dialect: 'kingbase',
         host: 'localhost',
         database: 'app',
         username: 'app',
@@ -39,9 +39,9 @@ describe('kingbasePostgres factory', () => {
   });
 
   it('uses Kingbase server_version for Knex version detection', async () => {
-    const clientClass = kingbasePostgres.driver.createKnexClient?.(
+    const clientClass = kingbase.driver.createKnexClient?.(
       {},
-      kingbasePostgres.driver.resolveKnexClient?.(),
+      kingbase.driver.resolveKnexClient?.(),
     );
     expect(typeof clientClass).toBe('function');
 
@@ -71,7 +71,7 @@ describe('kingbasePostgres factory', () => {
   it('loads pg-query-stream from the dialect package', async () => {
     const manager = createDatabaseManager({
       connections: {
-        main: kingbasePostgres({ host: 'localhost', database: 'app' }),
+        main: kingbase({ host: 'localhost', database: 'app' }),
       },
     });
     try {
@@ -100,7 +100,7 @@ describe('kingbasePostgres factory', () => {
   it('propagates query-stream failures to the promise and output stream', async () => {
     const manager = createDatabaseManager({
       connections: {
-        main: kingbasePostgres({ host: 'localhost', database: 'app' }),
+        main: kingbase({ host: 'localhost', database: 'app' }),
       },
     });
     try {

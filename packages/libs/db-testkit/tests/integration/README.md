@@ -88,7 +88,7 @@ pnpm --filter @nocobase/db-dameng test:integration
 Start and test KingbaseES in PostgreSQL-compatible mode:
 
 ```bash
-pnpm --filter @nocobase/db-kingbase-postgres test:integration
+pnpm --filter @nocobase/db-kingbase test:integration
 ```
 
 Run the complete database matrix through the owning package entrypoints:

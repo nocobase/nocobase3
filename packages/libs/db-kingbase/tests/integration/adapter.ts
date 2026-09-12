@@ -5,9 +5,9 @@ import {
   type DatabaseIntegrationAdapter,
   type DatabaseIntegrationProfile,
 } from '@nocobase/db-testkit';
-import kingbasePostgres from '../../src/index.js';
+import kingbase from '../../src/index.js';
 
-export const kingbasePostgresIntegrationProfile: DatabaseIntegrationProfile = {
+export const kingbaseIntegrationProfile: DatabaseIntegrationProfile = {
   numeric: {
     nativeResults: true,
     integerResults: 'number',
@@ -68,35 +68,29 @@ export const kingbasePostgresIntegrationProfile: DatabaseIntegrationProfile = {
   },
 } satisfies DatabaseIntegrationProfile;
 
-export const kingbasePostgresIntegrationAdapter: DatabaseIntegrationAdapter =
+export const kingbaseIntegrationAdapter: DatabaseIntegrationAdapter =
   createDatabaseIntegrationAdapter({
-    name: 'kingbase-postgres',
-    profile: kingbasePostgresIntegrationProfile,
+    name: 'kingbase',
+    profile: kingbaseIntegrationProfile,
     createDatabase: (prefix, metadataStore) =>
       createDatabaseManager({
         default: 'main',
         metadataStore,
         connections: {
-          main: kingbasePostgres({
+          main: kingbase({
             host:
-              process.env.KINGBASE_POSTGRES_HOST ??
-              process.env.PGHOST ??
-              '127.0.0.1',
+              process.env.KINGBASE_HOST ?? process.env.PGHOST ?? '127.0.0.1',
             port: Number(
-              process.env.KINGBASE_POSTGRES_PORT ?? process.env.PGPORT ?? 54321,
+              process.env.KINGBASE_PORT ?? process.env.PGPORT ?? 54321,
             ),
             username:
-              process.env.KINGBASE_POSTGRES_USER ??
-              process.env.PGUSER ??
-              'nocobase',
+              process.env.KINGBASE_USER ?? process.env.PGUSER ?? 'nocobase',
             password:
-              process.env.KINGBASE_POSTGRES_PASSWORD ??
+              process.env.KINGBASE_PASSWORD ??
               process.env.PGPASSWORD ??
               'nocobase',
             database:
-              process.env.KINGBASE_POSTGRES_DATABASE ??
-              process.env.PGDATABASE ??
-              'test',
+              process.env.KINGBASE_DATABASE ?? process.env.PGDATABASE ?? 'test',
             naming: { tablePrefix: `${prefix}_` },
           }),
         },

@@ -1,21 +1,21 @@
 import knex from 'knex';
 import { describe, expect, it } from 'vitest';
-import kingbasePostgres from '../src/index.js';
+import kingbase from '../src/index.js';
 
 function createRuntime() {
   const client = knex({ client: 'pg' });
-  const runtime = kingbasePostgres.driver.createRuntime!({
-    dialect: 'kingbase-postgres',
+  const runtime = kingbase.driver.createRuntime!({
+    dialect: 'kingbase',
     sourceConfig: {} as never,
     config: {} as never,
-    capabilities: kingbasePostgres.driver.capabilities as never,
+    capabilities: kingbase.driver.capabilities as never,
     getClient: () => client,
     resolveClient: async () => client,
   });
   return { client, runtime };
 }
 
-describe('kingbasePostgres runtime strategy', () => {
+describe('kingbase runtime strategy', () => {
   it('exposes KingbaseES PostgreSQL capabilities and native temporal SQL', () => {
     const { client, runtime } = createRuntime();
     expect(runtime.capabilities.schemas).toBe(true);
@@ -61,8 +61,8 @@ describe('kingbasePostgres runtime strategy', () => {
 
   it('owns KingbaseES PostgreSQL defaults and schema-scoped ownership identity', () => {
     expect(
-      kingbasePostgres.driver.normalizeConnection?.(
-        { dialect: 'kingbase-postgres', database: 'app' } as never,
+      kingbase.driver.normalizeConnection?.(
+        { dialect: 'kingbase', database: 'app' } as never,
         {},
       ),
     ).toMatchObject({
@@ -73,15 +73,15 @@ describe('kingbasePostgres runtime strategy', () => {
       schema: ['public'],
     });
     expect(
-      kingbasePostgres.driver.resolveOwnershipTarget?.({
-        dialect: 'kingbase-postgres',
+      kingbase.driver.resolveOwnershipTarget?.({
+        dialect: 'kingbase',
         host: 'db.example.test',
         port: 54321,
         database: 'app',
         schema: ['tenant_a', 'public'],
       }),
     ).toEqual([
-      'kingbase-postgres',
+      'kingbase',
       'db.example.test',
       54321,
       undefined,

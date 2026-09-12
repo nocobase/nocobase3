@@ -1,5 +1,5 @@
 {
-  "name": "@nocobase/db-kingbase-postgres",
+  "name": "@nocobase/db-kingbase",
   "version": "0.0.1",
   "description": "KingbaseES PostgreSQL-compatible dialect for @nocobase/db.",
   "type": "module",

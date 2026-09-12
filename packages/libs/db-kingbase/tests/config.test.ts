@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import kingbasePostgres from '../src/index.js';
+import kingbase from '../src/index.js';
 import {
   resolveDatabaseCapabilities,
   resolveKnexConnectionConfig,
@@ -10,7 +10,7 @@ describe('KingbaseES PostgreSQL database configuration', () => {
     expect(
       resolveKnexConnectionConfig(
         {
-          dialect: 'kingbase-postgres',
+          dialect: 'kingbase',
           host: '127.0.0.1',
           port: 54321,
           database: 'orders',
@@ -19,7 +19,7 @@ describe('KingbaseES PostgreSQL database configuration', () => {
           ssl: { rejectUnauthorized: false },
           driverOptions: { application_name: 'nocobase' },
         } as never,
-        kingbasePostgres.driver,
+        kingbase.driver,
       ).connection,
     ).toEqual({
       application_name: 'nocobase',
@@ -34,7 +34,7 @@ describe('KingbaseES PostgreSQL database configuration', () => {
 
   it('reports KingbaseES PostgreSQL capabilities', () => {
     expect(
-      resolveDatabaseCapabilities(kingbasePostgres.driver.capabilities),
+      resolveDatabaseCapabilities(kingbase.driver.capabilities),
     ).toMatchObject({
       schemas: true,
       materializedViews: true,

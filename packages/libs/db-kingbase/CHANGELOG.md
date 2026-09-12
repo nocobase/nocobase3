@@ -1,4 +1,4 @@
-# @nocobase/db-kingbase-postgres
+# @nocobase/db-kingbase
 
 ## 0.0.1
 

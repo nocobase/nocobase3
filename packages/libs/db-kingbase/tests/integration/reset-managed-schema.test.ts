@@ -3,9 +3,9 @@ import {
   describeIntegrationDatabases,
   installDatabaseIntegrationAdapter,
 } from '@nocobase/db-testkit';
-import { kingbasePostgresDialectIntegrationAdapter } from './legacy-adapter.js';
+import { kingbaseDialectIntegrationAdapter } from './legacy-adapter.js';
 
-installDatabaseIntegrationAdapter(kingbasePostgresDialectIntegrationAdapter);
+installDatabaseIntegrationAdapter(kingbaseDialectIntegrationAdapter);
 
 describeIntegrationDatabases('KingbaseES managed schema reset', (context) => {
   it('drops materialized views and sequences', async () => {

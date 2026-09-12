@@ -1,7 +1,7 @@
 import type { Knex } from 'knex';
 import type { FilterConditionNode, FilterLiteral } from '@nocobase/db';
 
-export function compileKingbasePostgresJsonCondition(
+export function compileKingbaseJsonCondition(
   client: Knex,
   column: string,
   node: FilterConditionNode,

@@ -4,10 +4,7 @@ import {
   numericCapabilities,
   temporalFractionalSecondsPrecision,
 } from '@nocobase/db';
-import {
-  kingbasePostgresTypes,
-  kingbasePostgresNumeric,
-} from '../src/inspectors/kingbase-postgres.js';
+import { kingbaseTypes, kingbaseNumeric } from '../src/inspectors/kingbase.js';
 
 describe('KingbaseES PostgreSQL inspector type strategy', () => {
   it.each([
@@ -24,9 +21,7 @@ describe('KingbaseES PostgreSQL inspector type strategy', () => {
     ['bit(1)', 'native'],
     ['varchar_custom', 'native'],
   ] as const)('classifies %s as %s', (nativeType, expected) => {
-    expect(normalizePhysicalDataType(kingbasePostgresTypes, nativeType)).toBe(
-      expected,
-    );
+    expect(normalizePhysicalDataType(kingbaseTypes, nativeType)).toBe(expected);
   });
 
   it.each([
@@ -41,17 +36,17 @@ describe('KingbaseES PostgreSQL inspector type strategy', () => {
   ] as const)(
     'classifies temporal declaration %s',
     (nativeType, expected, precision) => {
-      expect(normalizePhysicalDataType(kingbasePostgresTypes, nativeType)).toBe(
+      expect(normalizePhysicalDataType(kingbaseTypes, nativeType)).toBe(
         expected,
       );
       expect(
-        temporalFractionalSecondsPrecision(kingbasePostgresTypes, nativeType),
+        temporalFractionalSecondsPrecision(kingbaseTypes, nativeType),
       ).toBe(precision);
     },
   );
 
   it('reports integer capacity', () => {
-    expect(numericCapabilities(kingbasePostgresNumeric, 'int2')).toEqual({
+    expect(numericCapabilities(kingbaseNumeric, 'int2')).toEqual({
       integerBits: 16,
       unsigned: false,
     });
@@ -61,14 +56,12 @@ describe('KingbaseES PostgreSQL inspector type strategy', () => {
     'does not infer temporal precision from %s',
     (nativeType) => {
       expect(
-        temporalFractionalSecondsPrecision(kingbasePostgresTypes, nativeType),
+        temporalFractionalSecondsPrecision(kingbaseTypes, nativeType),
       ).toBeUndefined();
     },
   );
 
   it('keeps date as date', () => {
-    expect(normalizePhysicalDataType(kingbasePostgresTypes, 'date')).toBe(
-      'date',
-    );
+    expect(normalizePhysicalDataType(kingbaseTypes, 'date')).toBe('date');
   });
 });

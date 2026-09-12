@@ -28,7 +28,7 @@ import type {
   PhysicalUniqueConstraintSchema,
 } from '@nocobase/db';
 
-export const kingbasePostgresTypes: PhysicalTypeNormalizationStrategy = {
+export const kingbaseTypes: PhysicalTypeNormalizationStrategy = {
   temporal: (type: string): PhysicalDataType | undefined =>
     type === 'timestamptz' || type === 'timestamp with time zone'
       ? 'datetimeTz'
@@ -56,7 +56,7 @@ export const kingbasePostgresTypes: PhysicalTypeNormalizationStrategy = {
     return temporal ? (explicit ? Number(explicit) : 6) : undefined;
   },
 } satisfies PhysicalTypeNormalizationStrategy;
-export const kingbasePostgresNumeric: NumericCapabilityStrategy = {
+export const kingbaseNumeric: NumericCapabilityStrategy = {
   special: (
     type: string,
     base: string,
@@ -66,7 +66,7 @@ export const kingbasePostgresNumeric: NumericCapabilityStrategy = {
       : undefined,
 };
 
-interface KingbasePostgresCollectionRow {
+interface KingbaseCollectionRow {
   readonly oid: string | number;
   readonly schema: string;
   readonly table_name: string;
@@ -75,7 +75,7 @@ interface KingbasePostgresCollectionRow {
   readonly view_definition: string | null;
 }
 
-interface KingbasePostgresColumnRow {
+interface KingbaseColumnRow {
   readonly collation: string | null;
   readonly collation_schema: string | null;
   readonly character_set: string | null;
@@ -91,7 +91,7 @@ interface KingbasePostgresColumnRow {
   readonly comment: string | null;
 }
 
-interface KingbasePostgresConstraintRow {
+interface KingbaseConstraintRow {
   readonly constraint_name: string;
   readonly constraint_type: 'p' | 'u' | 'f' | 'c';
   readonly columns: string[];
@@ -105,7 +105,7 @@ interface KingbasePostgresConstraintRow {
   readonly check_expression: string | null;
 }
 
-interface KingbasePostgresIndexRow {
+interface KingbaseIndexRow {
   readonly index_oid: string | number;
   readonly index_name: string;
   readonly unique: boolean;
@@ -120,17 +120,15 @@ interface KingbasePostgresIndexRow {
   readonly constraint_type: 'p' | 'u' | null;
 }
 
-export interface KingbasePostgresSchemaInspectorOptions {
+export interface KingbaseSchemaInspectorOptions {
   readonly connectionName: string;
   readonly searchPath?: readonly string[];
   resolveClient(): Promise<Knex>;
 }
 
-export class KingbasePostgresSchemaInspector extends BaseSchemaInspector {
-  constructor(
-    private readonly options: KingbasePostgresSchemaInspectorOptions,
-  ) {
-    super(options.connectionName, 'kingbase-postgres');
+export class KingbaseSchemaInspector extends BaseSchemaInspector {
+  constructor(private readonly options: KingbaseSchemaInspectorOptions) {
+    super(options.connectionName, 'kingbase');
   }
 
   protected async inspectSchemas(): Promise<PhysicalSchemaInfo[]> {
@@ -165,7 +163,7 @@ export class KingbasePostgresSchemaInspector extends BaseSchemaInspector {
       return undefined;
     }
 
-    const rawColumns = rawRows<KingbasePostgresColumnRow>(
+    const rawColumns = rawRows<KingbaseColumnRow>(
       await knex.raw(
         `
           select
@@ -206,7 +204,7 @@ export class KingbasePostgresSchemaInspector extends BaseSchemaInspector {
     return {
       schema: collection.schema,
       tableName: collection.table_name,
-      kind: kingbasePostgresKind(collection.relkind),
+      kind: kingbaseKind(collection.relkind),
       comment: optionalString(collection.comment),
       viewDefinition: optionalString(collection.view_definition),
       columns: rawColumns.map((column) => {
@@ -219,15 +217,12 @@ export class KingbasePostgresSchemaInspector extends BaseSchemaInspector {
           columnName: column.column_name,
           ordinalPosition: column.attnum,
           dataType: normalizePhysicalDataType(
-            kingbasePostgresTypes,
+            kingbaseTypes,
             column.native_type_name,
           ),
           nativeType: column.native_type,
           nativeTypeSchema: column.native_type_schema,
-          ...numericCapabilities(
-            kingbasePostgresNumeric,
-            column.native_type_name,
-          ),
+          ...numericCapabilities(kingbaseNumeric, column.native_type_name),
           lengthUnit:
             modifiers.length !== undefined &&
             ['bpchar', 'varchar'].includes(column.native_type_name)
@@ -245,7 +240,7 @@ export class KingbasePostgresSchemaInspector extends BaseSchemaInspector {
           precision: modifiers.precision,
           scale: modifiers.scale,
           fractionalSecondsPrecision: temporalFractionalSecondsPrecision(
-            kingbasePostgresTypes,
+            kingbaseTypes,
             column.native_type,
           ),
           comment: optionalString(column.comment),
@@ -266,14 +261,14 @@ export class KingbasePostgresSchemaInspector extends BaseSchemaInspector {
         : undefined,
       uniqueConstraints: constraints
         .filter((constraint) => constraint.constraint_type === 'u')
-        .map(kingbasePostgresUniqueConstraint),
+        .map(kingbaseUniqueConstraint),
       indexes,
       foreignKeys: constraints
         .filter((constraint) => constraint.constraint_type === 'f')
-        .map(kingbasePostgresForeignKey),
+        .map(kingbaseForeignKey),
       checkConstraints: constraints
         .filter((constraint) => constraint.constraint_type === 'c')
-        .flatMap(kingbasePostgresCheckConstraint),
+        .flatMap(kingbaseCheckConstraint),
       inspection: {
         aspects: {
           columns: 'complete',
@@ -303,7 +298,7 @@ export class KingbasePostgresSchemaInspector extends BaseSchemaInspector {
       await this.assertSchema(knex, schema);
     }
     const relkinds = options.kinds
-      ? options.kinds.flatMap(kingbasePostgresRelkinds)
+      ? options.kinds.flatMap(kingbaseRelkinds)
       : ['r', 'p', 'f', 'v', 'm'];
     if (schemas.length === 0 || relkinds.length === 0) {
       return [];
@@ -336,12 +331,12 @@ export class KingbasePostgresSchemaInspector extends BaseSchemaInspector {
         });
       });
     }
-    applyKingbasePostgresPrefixes(query, options.tableNamePrefixes);
-    const rows = (await query) as KingbasePostgresCollectionRow[];
+    applyKingbasePrefixes(query, options.tableNamePrefixes);
+    const rows = (await query) as KingbaseCollectionRow[];
     return rows.map((row) => ({
       schema: row.schema,
       tableName: row.table_name,
-      kind: kingbasePostgresKind(row.relkind),
+      kind: kingbaseKind(row.relkind),
       comment: optionalString(row.comment),
     }));
   }
@@ -353,7 +348,7 @@ export class KingbasePostgresSchemaInspector extends BaseSchemaInspector {
     const rows = rawRows<{ schemas: unknown }>(
       await knex.raw('select current_schemas(false)::text[] as schemas'),
     );
-    return parseKingbasePostgresStringArray(rows[0]?.schemas);
+    return parseKingbaseStringArray(rows[0]?.schemas);
   }
 
   private async assertSchema(knex: Knex, schema: string): Promise<void> {
@@ -383,14 +378,14 @@ export class KingbasePostgresSchemaInspector extends BaseSchemaInspector {
   private async findCollection(
     knex: Knex,
     identifier: PhysicalCollectionIdentifier,
-  ): Promise<KingbasePostgresCollectionRow | undefined> {
+  ): Promise<KingbaseCollectionRow | undefined> {
     const bindings: string[] = [identifier.tableName];
     let schemaPredicate = 'pg_catalog.pg_table_is_visible(c.oid)';
     if (identifier.schema) {
       schemaPredicate = 'n.nspname = ?';
       bindings.push(identifier.schema);
     }
-    return rawRows<KingbasePostgresCollectionRow>(
+    return rawRows<KingbaseCollectionRow>(
       await knex.raw(
         `
           select
@@ -421,8 +416,8 @@ export class KingbasePostgresSchemaInspector extends BaseSchemaInspector {
   private async readConstraints(
     knex: Knex,
     collectionOid: string | number,
-  ): Promise<KingbasePostgresConstraintRow[]> {
-    const rows = rawRows<KingbasePostgresConstraintRow>(
+  ): Promise<KingbaseConstraintRow[]> {
+    const rows = rawRows<KingbaseConstraintRow>(
       await knex.raw(
         `
           select
@@ -464,20 +459,20 @@ export class KingbasePostgresSchemaInspector extends BaseSchemaInspector {
     );
     return rows.map((row) => ({
       ...row,
-      columns: parseKingbasePostgresStringArray(row.columns),
+      columns: parseKingbaseStringArray(row.columns),
       referenced_columns:
         row.referenced_columns === null
           ? null
-          : parseKingbasePostgresStringArray(row.referenced_columns),
+          : parseKingbaseStringArray(row.referenced_columns),
     }));
   }
 
   private async readIndexes(
     knex: Knex,
     collectionOid: string | number,
-    columns: readonly KingbasePostgresColumnRow[],
+    columns: readonly KingbaseColumnRow[],
   ): Promise<PhysicalIndexSchema[]> {
-    const rows = rawRows<KingbasePostgresIndexRow>(
+    const rows = rawRows<KingbaseIndexRow>(
       await knex.raw(
         `
           select
@@ -508,10 +503,8 @@ export class KingbasePostgresSchemaInspector extends BaseSchemaInspector {
     );
     const indexes: PhysicalIndexSchema[] = [];
     for (const row of rows) {
-      const attributeNumbers = parseKingbasePostgresVector(
-        row.attribute_numbers,
-      );
-      const indexOptions = parseKingbasePostgresVector(row.options);
+      const attributeNumbers = parseKingbaseVector(row.attribute_numbers);
+      const indexOptions = parseKingbaseVector(row.options);
       const keyCount = Number(row.key_count);
       const keys: PhysicalIndexKey[] = [];
       const includeColumns: string[] = [];
@@ -543,9 +536,7 @@ export class KingbasePostgresSchemaInspector extends BaseSchemaInspector {
           ),
         )[0]?.definition;
         keys.push({
-          expression: stripKingbasePostgresIndexOrdering(
-            definition ?? '<unavailable>',
-          ),
+          expression: stripKingbaseIndexOrdering(definition ?? '<unavailable>'),
           order,
           nulls,
         });
@@ -570,7 +561,7 @@ export class KingbasePostgresSchemaInspector extends BaseSchemaInspector {
   }
 }
 
-function kingbasePostgresKind(relkind: string): PhysicalCollectionKind {
+function kingbaseKind(relkind: string): PhysicalCollectionKind {
   switch (relkind) {
     case 'r':
       return 'table';
@@ -587,7 +578,7 @@ function kingbasePostgresKind(relkind: string): PhysicalCollectionKind {
   }
 }
 
-function kingbasePostgresRelkinds(kind: PhysicalCollectionKind): string[] {
+function kingbaseRelkinds(kind: PhysicalCollectionKind): string[] {
   switch (kind) {
     case 'table':
       return ['r'];
@@ -604,8 +595,8 @@ function kingbasePostgresRelkinds(kind: PhysicalCollectionKind): string[] {
   }
 }
 
-function kingbasePostgresUniqueConstraint(
-  row: KingbasePostgresConstraintRow,
+function kingbaseUniqueConstraint(
+  row: KingbaseConstraintRow,
 ): PhysicalUniqueConstraintSchema {
   return {
     name: row.constraint_name,
@@ -615,8 +606,8 @@ function kingbasePostgresUniqueConstraint(
   };
 }
 
-function kingbasePostgresForeignKey(
-  row: KingbasePostgresConstraintRow,
+function kingbaseForeignKey(
+  row: KingbaseConstraintRow,
 ): PhysicalForeignKeySchema {
   return {
     name: row.constraint_name,
@@ -633,15 +624,15 @@ function kingbasePostgresForeignKey(
   };
 }
 
-function kingbasePostgresCheckConstraint(
-  row: KingbasePostgresConstraintRow,
+function kingbaseCheckConstraint(
+  row: KingbaseConstraintRow,
 ): PhysicalCheckConstraintSchema[] {
   return row.check_expression
     ? [{ name: row.constraint_name, expression: row.check_expression }]
     : [];
 }
 
-function applyKingbasePostgresPrefixes(
+function applyKingbasePrefixes(
   query: Knex.QueryBuilder,
   prefixes: readonly string[] | undefined,
 ): void {
@@ -655,12 +646,12 @@ function applyKingbasePostgresPrefixes(
   });
 }
 
-function parseKingbasePostgresVector(value: string): number[] {
+function parseKingbaseVector(value: string): number[] {
   const text = value.trim();
   return text === '' ? [] : text.split(/\s+/).map(Number);
 }
 
-function parseKingbasePostgresStringArray(value: unknown): string[] {
+function parseKingbaseStringArray(value: unknown): string[] {
   if (Array.isArray(value)) {
     return value.flatMap((item) => {
       const parsed = optionalString(item);
@@ -683,7 +674,7 @@ function parseKingbasePostgresStringArray(value: unknown): string[] {
     .map((item) => item.replace(/^"|"$/g, '').replaceAll('\\"', '"'));
 }
 
-function stripKingbasePostgresIndexOrdering(value: string): string {
+function stripKingbaseIndexOrdering(value: string): string {
   return value
     .replace(/\s+(ASC|DESC)\b/gi, '')
     .replace(/\s+NULLS\s+(FIRST|LAST)\b/gi, '')
@@ -697,8 +688,7 @@ function parseTypeModifiers(nativeType: string): {
 } {
   const match = nativeType.match(/\((\d+)(?:,(\d+))?\)/);
   if (
-    temporalFractionalSecondsPrecision(kingbasePostgresTypes, nativeType) !==
-    undefined
+    temporalFractionalSecondsPrecision(kingbaseTypes, nativeType) !== undefined
   )
     return {};
   if (!match) {

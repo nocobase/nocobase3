@@ -3,58 +3,44 @@ import {
   createDatabaseDialectIntegrationAdapter,
   type DatabaseDialectIntegrationAdapter,
 } from '@nocobase/db-testkit';
-import kingbasePostgres from '../../src/index.js';
-import { kingbasePostgresIntegrationProfile } from './adapter.js';
+import kingbase from '../../src/index.js';
+import { kingbaseIntegrationProfile } from './adapter.js';
 
-export const kingbasePostgresDialectIntegrationAdapter: DatabaseDialectIntegrationAdapter =
+export const kingbaseDialectIntegrationAdapter: DatabaseDialectIntegrationAdapter =
   createDatabaseDialectIntegrationAdapter({
-    name: 'kingbase-postgres',
+    name: 'kingbase',
     spec: {
-      name: 'kingbase-postgres',
-      dialect: 'kingbase-postgres',
+      name: 'kingbase',
+      dialect: 'kingbase',
       driver: 'pg',
-      profile: kingbasePostgresIntegrationProfile,
-      host:
-        process.env.KINGBASE_POSTGRES_HOST ?? process.env.PGHOST ?? '127.0.0.1',
-      port: Number(
-        process.env.KINGBASE_POSTGRES_PORT ?? process.env.PGPORT ?? 54321,
-      ),
-      username:
-        process.env.KINGBASE_POSTGRES_USER ?? process.env.PGUSER ?? 'nocobase',
+      profile: kingbaseIntegrationProfile,
+      host: process.env.KINGBASE_HOST ?? process.env.PGHOST ?? '127.0.0.1',
+      port: Number(process.env.KINGBASE_PORT ?? process.env.PGPORT ?? 54321),
+      username: process.env.KINGBASE_USER ?? process.env.PGUSER ?? 'nocobase',
       password:
-        process.env.KINGBASE_POSTGRES_PASSWORD ??
-        process.env.PGPASSWORD ??
-        'nocobase',
+        process.env.KINGBASE_PASSWORD ?? process.env.PGPASSWORD ?? 'nocobase',
       database:
-        process.env.KINGBASE_POSTGRES_DATABASE ??
-        process.env.PGDATABASE ??
-        'test',
+        process.env.KINGBASE_DATABASE ?? process.env.PGDATABASE ?? 'test',
     },
     createDatabase: (prefix, metadataStore) =>
       createDatabaseManager({
-        default: 'kingbase-postgres',
+        default: 'kingbase',
         metadataStore,
         connections: {
-          'kingbase-postgres': kingbasePostgres({
+          kingbase: kingbase({
             host:
-              process.env.KINGBASE_POSTGRES_HOST ??
-              process.env.PGHOST ??
-              '127.0.0.1',
+              process.env.KINGBASE_HOST ?? process.env.PGHOST ?? '127.0.0.1',
             port: Number(
-              process.env.KINGBASE_POSTGRES_PORT ?? process.env.PGPORT ?? 54321,
+              process.env.KINGBASE_PORT ?? process.env.PGPORT ?? 54321,
             ),
             username:
-              process.env.KINGBASE_POSTGRES_USER ??
-              process.env.PGUSER ??
-              'nocobase',
+              process.env.KINGBASE_USER ?? process.env.PGUSER ?? 'nocobase',
             password:
-              process.env.KINGBASE_POSTGRES_PASSWORD ??
+              process.env.KINGBASE_PASSWORD ??
               process.env.PGPASSWORD ??
               'nocobase',
             database:
-              process.env.KINGBASE_POSTGRES_DATABASE ??
-              process.env.PGDATABASE ??
-              'test',
+              process.env.KINGBASE_DATABASE ?? process.env.PGDATABASE ?? 'test',
             naming: { tablePrefix: `${prefix}_` },
           }),
         },
@@ -101,7 +87,7 @@ export const kingbasePostgresDialectIntegrationAdapter: DatabaseDialectIntegrati
     },
     quoteIdentifier: quote,
     cleanup: async (context) => {
-      const adapter = kingbasePostgresDialectIntegrationAdapter;
+      const adapter = kingbaseDialectIntegrationAdapter;
       for (const view of await adapter.listObjects(context, 'view'))
         await context.db.raw(`drop view if exists ${quote(view)} cascade`);
       for (const table of await adapter.listObjects(context, 'table'))
