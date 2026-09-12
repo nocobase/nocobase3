@@ -4,6 +4,7 @@ import {
   type DatabaseDialectIntegrationAdapter,
 } from '@nocobase/db-testkit';
 import oracle from '../../src/index.js';
+import { oracleIntegrationProfile } from './adapter.js';
 
 export const oracleDialectIntegrationAdapter: DatabaseDialectIntegrationAdapter =
   createDatabaseDialectIntegrationAdapter({
@@ -12,6 +13,7 @@ export const oracleDialectIntegrationAdapter: DatabaseDialectIntegrationAdapter 
       name: 'oracle',
       dialect: 'oracle',
       driver: 'oracledb',
+      profile: oracleIntegrationProfile,
       host: process.env.ORACLE_HOST ?? '127.0.0.1',
       port: Number(process.env.ORACLE_PORT ?? 11521),
       username: process.env.ORACLE_USER ?? 'nocobase',

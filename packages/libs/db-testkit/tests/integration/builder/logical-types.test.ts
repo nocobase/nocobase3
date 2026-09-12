@@ -88,7 +88,10 @@ describeIntegrationDatabases('Supplemental logical field types', (context) => {
     expect((await connection.collections.get('flags'))?.fields).toContainEqual(
       expect.objectContaining({
         name: 'value',
-        type: context.spec.dialect === 'oracle' ? 'decimal' : 'integer',
+        type:
+          context.profile.schema.integerResolution === 'decimal'
+            ? 'decimal'
+            : 'integer',
       }),
     );
   });

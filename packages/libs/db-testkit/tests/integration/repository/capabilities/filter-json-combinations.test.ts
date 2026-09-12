@@ -123,11 +123,7 @@ describeIntegrationDatabases(
             sort: (s) => s.field('key').asc(),
             select: (s) => s.fields('key'),
           });
-          if (
-            context.spec.dialect === 'oracle' ||
-            context.spec.dialect === 'mssql' ||
-            context.spec.dialect === 'dameng'
-          )
+          if (context.profile.json.filters === 'unsupported')
             await expect(query).rejects.toMatchObject({
               code: 'FIELD_CAPABILITY_NOT_SUPPORTED',
             });
@@ -149,11 +145,7 @@ describeIntegrationDatabases(
         context: { members: [1, true] },
         values: { status: 'matched' },
       });
-      if (
-        context.spec.dialect === 'oracle' ||
-        context.spec.dialect === 'mssql' ||
-        context.spec.dialect === 'dameng'
-      ) {
+      if (context.profile.json.filters === 'unsupported') {
         await expect(write).rejects.toMatchObject({
           code: 'FIELD_CAPABILITY_NOT_SUPPORTED',
         });

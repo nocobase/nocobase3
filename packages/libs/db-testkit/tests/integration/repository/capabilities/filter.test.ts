@@ -116,7 +116,7 @@ describeIntegrationDatabases('Repository capabilities/filter', (context) => {
         select: selection(['orderNo']),
       }),
     ).resolves.toEqual(
-      context.spec.dialect === 'oracle'
+      context.profile.schema.emptyStringIsNull
         ? [{ orderNo: 'SO-001' }, { orderNo: 'SO-002' }]
         : [{ orderNo: 'SO-002' }],
     );

@@ -4,6 +4,7 @@ import {
   type DatabaseDialectIntegrationAdapter,
 } from '@nocobase/db-testkit';
 import kingbasePostgres from '../../src/index.js';
+import { kingbasePostgresIntegrationProfile } from './adapter.js';
 
 export const kingbasePostgresDialectIntegrationAdapter: DatabaseDialectIntegrationAdapter =
   createDatabaseDialectIntegrationAdapter({
@@ -12,6 +13,7 @@ export const kingbasePostgresDialectIntegrationAdapter: DatabaseDialectIntegrati
       name: 'kingbase-postgres',
       dialect: 'kingbase-postgres',
       driver: 'pg',
+      profile: kingbasePostgresIntegrationProfile,
       host:
         process.env.KINGBASE_POSTGRES_HOST ?? process.env.PGHOST ?? '127.0.0.1',
       port: Number(

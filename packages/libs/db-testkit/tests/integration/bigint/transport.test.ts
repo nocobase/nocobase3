@@ -10,9 +10,9 @@ async function storedAmount(
   key: string,
 ): Promise<string | null> {
   const projection =
-    context.spec.dialect === 'oracle'
+    context.profile.numeric.exactProjection === 'toChar'
       ? 'to_char(??) as ??'
-      : context.spec.dialect === 'mysql'
+      : context.profile.numeric.exactProjection === 'castChar'
         ? 'cast(?? as char) as ??'
         : 'cast(?? as varchar(100)) as ??';
   const row = await context
@@ -135,7 +135,7 @@ describeIntegrationDatabases('BigInt precise string transport', (context) => {
           .select('key')
           .where('amount', '=', amount)
           .execute();
-      if (context.spec.dialect === 'mssql') {
+      if (context.profile.numeric.bigintBinding === 'unsupported') {
         // Knex currently binds native bigint as a string parameter without
         // converting the value, which tedious rejects before executing SQL.
         expect((await create()).record.amount).toBe(String(amount));
@@ -158,7 +158,7 @@ describeIntegrationDatabases('BigInt precise string transport', (context) => {
       const repository = context.database.repository('bigintValues');
       const create = () =>
         repository.createOne({ values: { key: 'A', amount } });
-      if (context.spec.dialect === 'oracle') {
+      if (context.profile.numeric.bigintRange === 'limited') {
         // Builder maps bigInt to NUMBER(18, 0), not the full signed 64-bit range.
         await expect(create()).rejects.toThrow(/ORA-01438/);
         expect(await repository.count()).toBe(0);

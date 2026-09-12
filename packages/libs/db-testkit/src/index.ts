@@ -6,6 +6,7 @@ import type {
   DatabaseConnection,
   DatabaseManager,
 } from '@nocobase/db';
+import type { DatabaseIntegrationProfile } from './integration-profile.js';
 
 /**
  * The smallest context a shared database contract needs.
@@ -37,17 +38,20 @@ export interface DatabaseIntegrationContext extends DatabaseContractContext {
   metadataStore: InMemoryCollectionMetadataStore;
   prefix: string;
   indexName(collection: string, columns: string[]): string;
+  profile: DatabaseIntegrationProfile;
 }
 
 export interface DatabaseDialectIntegrationSpec {
   readonly name: string;
   readonly dialect: string;
   readonly driver?: string;
+  readonly profile: DatabaseIntegrationProfile;
   readonly [key: string]: unknown;
 }
 
 export interface DatabaseDialectIntegrationContext extends DatabaseIntegrationContext {
   spec: DatabaseDialectIntegrationSpec;
+  profile: DatabaseIntegrationProfile;
 }
 
 export interface DatabaseDialectIntegrationAdapter extends DatabaseIntegrationAdapter<DatabaseDialectIntegrationContext> {
@@ -74,7 +78,7 @@ export interface DatabaseDialectIntegrationAdapter extends DatabaseIntegrationAd
 
 export interface DatabaseDialectIntegrationAdapterOptions extends Omit<
   DatabaseIntegrationAdapterOptions,
-  'setup' | 'cleanup'
+  'profile' | 'setup' | 'cleanup'
 > {
   readonly spec: DatabaseDialectIntegrationSpec;
   readonly setup?: (
@@ -101,6 +105,7 @@ export interface DatabaseIntegrationAdapter<
 
 export interface DatabaseIntegrationAdapterOptions {
   readonly name: string;
+  readonly profile: DatabaseIntegrationProfile;
   readonly createDatabase: (
     prefix: string,
     metadataStore: InMemoryCollectionMetadataStore,
@@ -127,6 +132,7 @@ export function createDatabaseIntegrationAdapter(
         builder: undefined as unknown as CollectionBuilder,
         metadataStore: undefined as unknown as InMemoryCollectionMetadataStore,
         prefix: '',
+        profile: options.profile,
         table: (name: string) => context.identifier(name),
         identifier: (name: string) =>
           truncateIdentifier(`${context.prefix}_${snakeCase(name)}`),
@@ -175,6 +181,7 @@ export function createDatabaseDialectIntegrationAdapter(
 ): DatabaseDialectIntegrationAdapter {
   const base = createDatabaseIntegrationAdapter({
     name: options.name,
+    profile: options.spec.profile,
     createDatabase: options.createDatabase,
     setup: options.setup as DatabaseIntegrationAdapterOptions['setup'],
     cleanup: options.cleanup as DatabaseIntegrationAdapterOptions['cleanup'],
@@ -184,7 +191,10 @@ export function createDatabaseDialectIntegrationAdapter(
     spec: options.spec,
     createContext: () => {
       const context = base.createContext() as DatabaseDialectIntegrationContext;
-      Object.assign(context, { spec: options.spec });
+      Object.assign(context, {
+        spec: options.spec,
+        profile: options.spec.profile,
+      });
       return context;
     },
     listIndexes: options.listIndexes,
@@ -197,6 +207,7 @@ export function createDatabaseDialectIntegrationAdapter(
 }
 
 export type { DatabaseDialectTestAdapter } from './contracts.js';
+export type { DatabaseIntegrationProfile } from './integration-profile.js';
 export { asDatabaseContractAdapter } from './contracts.js';
 export {
   runDatabaseIntegration,

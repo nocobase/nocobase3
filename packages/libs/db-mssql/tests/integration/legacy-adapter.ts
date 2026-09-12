@@ -4,6 +4,7 @@ import {
   type DatabaseDialectIntegrationAdapter,
 } from '@nocobase/db-testkit';
 import mssql from '../../src/index.js';
+import { mssqlIntegrationProfile } from './adapter.js';
 
 export const mssqlDialectIntegrationAdapter: DatabaseDialectIntegrationAdapter =
   createDatabaseDialectIntegrationAdapter({
@@ -12,6 +13,7 @@ export const mssqlDialectIntegrationAdapter: DatabaseDialectIntegrationAdapter =
       name: 'mssql',
       dialect: 'mssql',
       driver: 'tedious',
+      profile: mssqlIntegrationProfile,
       host: process.env.MSSQL_HOST ?? '127.0.0.1',
       port: Number(process.env.MSSQL_PORT ?? 11433),
       username: process.env.MSSQL_USER ?? 'sa',

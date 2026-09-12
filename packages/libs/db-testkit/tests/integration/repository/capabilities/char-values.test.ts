@@ -60,11 +60,7 @@ describeIntegrationDatabases('CHAR field contract', (context) => {
     });
     expect(row?.code).toBe('A001');
     expect(row?.label).toBe(
-      ['postgres', 'kingbase-postgres', 'oracle', 'mssql'].includes(
-        context.spec.dialect,
-      )
-        ? 'short   '
-        : 'short',
+      context.profile.character.charRead === 'padded' ? 'short   ' : 'short',
     );
     await repo.updateOne({
       filter: { code: 'A001' },

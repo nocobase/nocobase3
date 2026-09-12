@@ -388,7 +388,11 @@ describeIntegrationDatabases('Repository boolean contract', (context) => {
     const repo = connection.repository('externalFlags');
     expect(
       await repo.findMany({ select: (s) => s.fields('quantity') }),
-    ).toEqual([{ quantity: context.spec.dialect === 'oracle' ? '2' : 2 }]);
+    ).toEqual([
+      {
+        quantity: context.profile.numeric.integerResults === 'string' ? '2' : 2,
+      },
+    ]);
     await expect(
       repo.findMany({ select: (s) => s.fields('enabled') }),
     ).rejects.toMatchObject({ code: 'INVALID_STORED_VALUE' });
@@ -408,6 +412,10 @@ describeIntegrationDatabases('Repository boolean contract', (context) => {
     }
     expect(
       await repo.findMany({ select: (s) => s.fields('quantity') }),
-    ).toEqual([{ quantity: context.spec.dialect === 'oracle' ? '2' : 2 }]);
+    ).toEqual([
+      {
+        quantity: context.profile.numeric.integerResults === 'string' ? '2' : 2,
+      },
+    ]);
   });
 });

@@ -3,13 +3,17 @@ import {
   installDatabaseIntegrationAdapter,
   useIntegrationDatabase,
 } from '@nocobase/db-testkit';
-import { sqliteDialectIntegrationAdapter } from './adapter.js';
+import {
+  sqliteDialectIntegrationAdapter,
+  sqliteIntegrationProfile,
+} from './adapter.js';
 
 installDatabaseIntegrationAdapter(sqliteDialectIntegrationAdapter);
 
 const context = useIntegrationDatabase({
   name: 'sqlite',
   dialect: 'sqlite',
+  profile: sqliteIntegrationProfile,
   filename: ':memory:',
 });
 

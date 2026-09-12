@@ -14,9 +14,9 @@ describeIntegrationDatabases('Exact numeric input contract', (context) => {
   const repository = () => context.database.repository('numericInputs');
   async function stored(key: string) {
     const sql =
-      context.spec.dialect === 'oracle'
+      context.profile.numeric.exactProjection === 'toChar'
         ? 'to_char(??) as ??'
-        : context.spec.dialect === 'mysql'
+        : context.profile.numeric.exactProjection === 'castChar'
           ? 'cast(?? as char) as ??'
           : 'cast(?? as varchar(100)) as ??';
     return context
@@ -205,7 +205,7 @@ describeIntegrationDatabases('Exact numeric input contract', (context) => {
     // SQLite stores these as the same REAL; exact-decimal engines distinguish them.
     expect(
       await repository().count({ filter: { price: '1000000000000.250001' } }),
-    ).toBe(context.spec.dialect === 'sqlite' ? 1 : 0);
+    ).toBe(context.profile.numeric.storagePrecision === 'approximate' ? 1 : 0);
     expect(
       await repository().count({ filter: { price: '1000000000000.25' } }),
     ).toBe(1);

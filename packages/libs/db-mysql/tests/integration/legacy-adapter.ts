@@ -4,6 +4,7 @@ import {
   type DatabaseDialectIntegrationAdapter,
 } from '@nocobase/db-testkit';
 import mysql from '../../src/index.js';
+import { mysqlIntegrationProfile } from './adapter.js';
 
 export const mysqlDialectIntegrationAdapter: DatabaseDialectIntegrationAdapter =
   createDatabaseDialectIntegrationAdapter({
@@ -12,6 +13,7 @@ export const mysqlDialectIntegrationAdapter: DatabaseDialectIntegrationAdapter =
       name: 'mysql',
       dialect: 'mysql',
       driver: 'mysql2',
+      profile: mysqlIntegrationProfile,
       host: process.env.MYSQL_HOST ?? '127.0.0.1',
       port: Number(process.env.MYSQL_PORT ?? 13306),
       username: process.env.MYSQL_USER ?? 'nocobase',

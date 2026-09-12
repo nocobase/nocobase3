@@ -45,17 +45,17 @@ describeIntegrationDatabases('query joins', (context) => {
         .execute(),
     ).resolves.toEqual([
       {
-        order_id: context.spec.dialect === 'oracle' ? '1' : 1,
+        order_id: context.profile.numeric.integerResults === 'string' ? '1' : 1,
         order_no: 'SO-001',
         customer_name: 'Ada',
       },
       {
-        order_id: context.spec.dialect === 'oracle' ? '2' : 2,
+        order_id: context.profile.numeric.integerResults === 'string' ? '2' : 2,
         order_no: 'SO-002',
         customer_name: 'Grace',
       },
       {
-        order_id: context.spec.dialect === 'oracle' ? '3' : 3,
+        order_id: context.profile.numeric.integerResults === 'string' ? '3' : 3,
         order_no: 'SO-003',
         customer_name: null,
       },

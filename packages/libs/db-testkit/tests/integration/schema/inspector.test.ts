@@ -60,7 +60,7 @@ describeIntegrationDatabases('schema inspector', (context) => {
       nullable: false,
       length: 40,
     });
-    if (context.spec.dialect !== 'sqlite' && context.spec.dialect !== 'mssql') {
+    if (context.profile.schema.uniqueConstraints) {
       expect(result?.uniqueConstraints).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -86,19 +86,15 @@ describeIntegrationDatabases('schema inspector', (context) => {
             tableName: context.table('customers'),
           }),
           referencedColumns: ['id'],
-          onDelete:
-            context.spec.dialect === 'oracle' ||
-            context.spec.dialect === 'mssql'
-              ? 'noAction'
-              : 'restrict',
-          onUpdate: context.spec.dialect === 'oracle' ? 'noAction' : 'cascade',
+          onDelete: context.profile.schema.foreignKeyActions.onDelete,
+          onUpdate: context.profile.schema.foreignKeyActions.onUpdate,
         }),
       ]),
     );
     expect(result?.inspection.aspects.columns).toBe('complete');
     expect(result?.inspection.aspects.foreignKeys).toBe('complete');
     expect(result?.inspection.aspects.comments).toBe(
-      context.spec.dialect === 'sqlite' ? 'unsupported' : 'complete',
+      context.profile.schema.comments,
     );
   });
 

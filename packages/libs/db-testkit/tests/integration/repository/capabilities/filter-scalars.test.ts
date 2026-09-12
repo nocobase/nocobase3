@@ -117,7 +117,7 @@ describeIntegrationDatabases('Repository scalar Filter matrix', (context) => {
       ]);
       // Oracle stores empty strings as SQL NULL.
       expect(await ids((f) => predicate(f).eq(null))).toEqual(
-        context.spec.dialect === 'oracle' ? ['D', 'E'] : ['D'],
+        context.profile.schema.emptyStringIsNull ? ['D', 'E'] : ['D'],
       );
     }
   });

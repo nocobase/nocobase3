@@ -17,16 +17,16 @@ describeIntegrationDatabases(
         .values({ id: 'A', amount: '9007199254740993.250000' })
         .execute();
       // SQLite REAL cannot represent this value; use an exact, scaled fixture there.
-      if (context.spec.dialect === 'sqlite') {
+      if (context.profile.numeric.storagePrecision === 'approximate') {
         await context
           .db(context.table('nativeDecimals'))
           .update({ amount: '42.000000' });
       }
       const exact =
-        context.spec.dialect === 'sqlite' ? '42' : '9007199254740993.25';
-      const native = ['postgres', 'kingbase-postgres', 'mysql'].includes(
-        context.spec.dialect,
-      );
+        context.profile.numeric.storagePrecision === 'approximate'
+          ? '42'
+          : '9007199254740993.25';
+      const native = context.profile.numeric.nativeResults;
       const expected = native
         ? '9007199254740993.250000'
         : decimalResult(exact);
@@ -127,14 +127,12 @@ describeIntegrationDatabases(
         context.db.off('query', listener);
       }
       expect(result.record.amount).toEqual(
-        ['postgres', 'kingbase-postgres', 'mysql'].includes(
-          context.spec.dialect,
-        )
+        context.profile.numeric.nativeResults
           ? '42.000000'
           : decimalResult('42'),
       );
       expect(result.record.id).toBeDefined();
-      if (['postgres', 'kingbase-postgres'].includes(context.spec.dialect)) {
+      if (context.profile.numeric.nativeResults) {
         // The final Repository selection still reads once, just as for integer fields.
         expect(statements.filter((sql) => /^select\b/i.test(sql))).toHaveLength(
           1,

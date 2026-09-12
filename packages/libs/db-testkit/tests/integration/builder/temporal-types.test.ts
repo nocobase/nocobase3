@@ -2,17 +2,19 @@ import { expect, it } from 'vitest';
 import { describeIntegrationDatabases } from '../helpers.js';
 
 describeIntegrationDatabases('Declared temporal field types', (context) => {
-  it('rejects Oracle instant primary keys before creating a table', async () => {
-    if (context.spec.dialect !== 'oracle') return;
-    await expect(
-      context.builder.createCollection('invalidTimeKey', (c) =>
-        c.datetimeTz('instant').primary(),
-      ),
-    ).rejects.toThrow('cannot be primary or unique');
-    expect(
-      await context.db.schema.hasTable(context.table('invalidTimeKey')),
-    ).toBe(false);
-  });
+  it.skipIf(context.profile.temporal.instantPrimaryKey)(
+    'rejects unsupported instant primary keys before creating a table',
+    async () => {
+      await expect(
+        context.builder.createCollection('invalidTimeKey', (c) =>
+          c.datetimeTz('instant').primary(),
+        ),
+      ).rejects.toThrow('cannot be primary or unique');
+      expect(
+        await context.db.schema.hasTable(context.table('invalidTimeKey')),
+      ).toBe(false);
+    },
+  );
   it('persists semantic types and resolves all four physical representations', async () => {
     await context.builder.createCollection('events', (c) => {
       c.string('code').primary();
@@ -52,18 +54,14 @@ describeIntegrationDatabases('Declared temporal field types', (context) => {
     expect(
       physical?.columns.find((column) => column.columnName === 'local')
         ?.dataType,
-    ).toBe(context.spec.dialect === 'sqlite' ? 'text' : 'datetime');
+    ).toBe(context.profile.temporal.logicalTypes.local);
     const instant = physical?.columns.find(
       (column) => column.columnName === 'instant',
     );
     expect(instant?.dataType).toBe(
-      context.spec.dialect === 'sqlite'
-        ? 'text'
-        : context.spec.dialect === 'mysql'
-          ? 'datetime'
-          : 'datetimeTz',
+      context.profile.temporal.logicalTypes.instant,
     );
-    if (context.spec.dialect !== 'sqlite')
+    if (context.profile.temporal.logicalTypes.instant !== 'text')
       expect(instant?.fractionalSecondsPrecision).toBe(3);
     await expect(
       connection.collectionMetadata.updateField('events', 'code', {

@@ -205,18 +205,9 @@ describeIntegrationDatabases('Repository temporal contract', (context) => {
         select: (s) => s.fields('day', 'clock', 'local'),
       }),
     ).toEqual({ day: null, clock: null, local: null });
-    const types = {
-      sqlite: 'TIMESTAMP(6)',
-      postgres: 'timestamp(6) with time zone',
-      'kingbase-postgres': 'timestamp(6) with time zone',
-      mysql: 'datetime(6)',
-      oracle: 'timestamp(6) with time zone',
-      mssql: 'datetimeoffset(6)',
-      dameng: 'timestamp(6) with time zone',
-    } as Record<string, string>;
     await context.db.schema.createTable(context.table('preciseEvents'), (t) => {
       t.string('code').primary();
-      t.specificType('instant', types[context.spec.dialect]);
+      t.specificType('instant', context.profile.temporal.precisionProbeType);
     });
     const precise = context.database.repository('preciseEvents');
     await expect(
@@ -228,7 +219,7 @@ describeIntegrationDatabases('Repository temporal contract', (context) => {
   });
 
   it('supports temporal unique selectors and upsert returning without driver Date leakage', async () => {
-    const oracle = context.spec.dialect === 'oracle';
+    const oracle = !context.profile.temporal.instantPrimaryKey;
     await context.builder.createCollection('timeKeys', (c) => {
       if (oracle) c.datetime('instant').primary().notNull();
       else c.datetimeTz('instant').primary().notNull();
@@ -341,13 +332,13 @@ describeIntegrationDatabases('Repository temporal contract', (context) => {
         .connection(context.spec.name)
         .transaction(async (connection) => {
           const client = await connection.client<import('knex').Knex>();
-          if (['postgres', 'kingbase-postgres'].includes(context.spec.dialect))
+          if (context.profile.temporal.sessionTimezone === 'setConfig')
             await client.raw("select set_config('TimeZone', ?, true)", [
               zone === '+08:00' ? 'Asia/Shanghai' : 'America/New_York',
             ]);
-          if (context.spec.dialect === 'mysql')
+          if (context.profile.temporal.sessionTimezone === 'setTimeZone')
             await client.raw('set time_zone = ?', [zone]);
-          if (context.spec.dialect === 'oracle')
+          if (context.profile.temporal.sessionTimezone === 'alterSession')
             await client.raw(`alter session set time_zone = '${zone}'`);
           try {
             const transactional = connection.repository('events');
@@ -368,9 +359,9 @@ describeIntegrationDatabases('Repository temporal contract', (context) => {
               instant: '2026-09-06T01:30:00.000Z',
             });
           } finally {
-            if (context.spec.dialect === 'mysql')
+            if (context.profile.temporal.sessionTimezone === 'setTimeZone')
               await client.raw("set time_zone = '+00:00'");
-            if (context.spec.dialect === 'oracle')
+            if (context.profile.temporal.sessionTimezone === 'alterSession')
               await client.raw("alter session set time_zone = '+00:00'");
           }
         });
@@ -379,7 +370,7 @@ describeIntegrationDatabases('Repository temporal contract', (context) => {
   });
 
   it('handles native MySQL TIMESTAMP columns without metadata under different session zones', async () => {
-    if (context.spec.dialect !== 'mysql') return;
+    if (context.profile.temporal.sessionTimezone !== 'setTimeZone') return;
     await context.db.schema.createTable(
       context.table('nativeInstants'),
       (t) => {

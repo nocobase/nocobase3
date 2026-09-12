@@ -53,6 +53,7 @@ export function useIntegrationDatabase(
   }
   const context = adapter.createContext();
   context.spec = spec;
+  context.profile = spec.profile;
   beforeEach(async () => {
     await adapter.setupContext?.(context);
   });

@@ -57,7 +57,7 @@ describeIntegrationDatabases('collection alteration', (context) => {
       await context.db.schema.hasColumn(context.table('orders'), 'paid_at'),
     ).toBe(true);
     const indexes = await listIndexes(context, context.table('orders'));
-    if (context.spec.dialect === 'oracle') {
+    if (context.profile.schema.uniqueConstraintDropKeepsIndex) {
       expect(indexes.map((index) => index.name)).toContain(paidAtIndexName);
       const inspected = await context.database
         .connection()
@@ -88,7 +88,7 @@ describeIntegrationDatabases('collection alteration', (context) => {
     const remainingIndexNames = (
       await listIndexes(context, context.table('orders'))
     ).map((index) => index.name);
-    if (context.spec.dialect === 'oracle') {
+    if (context.profile.schema.uniqueConstraintDropKeepsIndex) {
       // Oracle can reuse an existing index to enforce a later unique
       // constraint. The logical index is removed from metadata, while the
       // physical index must remain until the constraint is dropped.

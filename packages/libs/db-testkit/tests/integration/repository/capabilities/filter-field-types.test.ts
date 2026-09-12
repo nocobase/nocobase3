@@ -97,7 +97,7 @@ describeIntegrationDatabases('Repository Filter field types', (context) => {
     ).rejects.toMatchObject({ code: 'FIELD_CAPABILITY_NOT_SUPPORTED' });
   });
 
-  it.skipIf(context.spec.dialect === 'dameng')(
+  it.skipIf(!context.profile.temporal.isoLiteralFilters)(
     'uses half-open datetime bounds with ISO literals and Date operands',
     async () => {
       await context.builder.createCollection('filterInstants', (c) => {
@@ -108,9 +108,9 @@ describeIntegrationDatabases('Repository Filter field types', (context) => {
       const middle = '2026-09-01T12:00:00.000Z';
       const last = '2026-09-02T00:00:00.000Z';
       const stored = (value: string): string | Date =>
-        context.spec.dialect === 'oracle'
+        context.profile.temporal.instantFilterInput === 'date'
           ? new Date(value)
-          : context.spec.dialect === 'mysql'
+          : context.profile.temporal.instantFilterInput === 'mysqlDateTime'
             ? value.replace('T', ' ').replace('Z', '')
             : value;
       await context.db(context.table('filterInstants')).insert([

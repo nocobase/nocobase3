@@ -6,21 +6,15 @@ describeIntegrationDatabases('capability warnings', (context) => {
     const result = await context.builder.createCollection(
       'capabilityEvents',
       (collection) => {
-        if (context.spec.dialect !== 'oracle') {
-          collection.dbSchema(
-            context.spec.dialect === 'mssql' ? 'dbo' : 'public',
-          );
+        if (context.profile.schema.declareSchema) {
+          collection.dbSchema(context.profile.schema.defaultSchema);
         }
         collection.increments('id');
-        collection.native(
-          'ipAddress',
-          context.spec.dialect === 'oracle' ? 'clob' : 'text',
-          {
-            db: {
-              comment: 'Client IP address',
-            },
+        collection.native('ipAddress', context.profile.schema.nativeTextType, {
+          db: {
+            comment: 'Client IP address',
           },
-        );
+        });
         collection.string('email');
         collection.unique('email', {
           deferrable: 'deferred',
@@ -38,13 +32,14 @@ describeIntegrationDatabases('capability warnings', (context) => {
       ),
     ).toBe(true);
 
-    if (
-      context.spec.dialect === 'postgres' ||
-      context.spec.dialect === 'kingbase-postgres' ||
-      context.spec.dialect === 'oracle'
-    ) {
+    const schemaSupported =
+      !context.profile.schema.declareSchema ||
+      context.profile.schema.supportsSchemas;
+    const deferrableSupported =
+      context.database.connection().capabilities.deferrableConstraints;
+    if (schemaSupported && deferrableSupported) {
       expect(result.warnings).toEqual([]);
-    } else if (context.spec.dialect === 'mssql') {
+    } else if (schemaSupported) {
       expect(result.warnings?.map((warning) => warning.code)).toEqual([
         'UNSUPPORTED_DEFERRABLE_CONSTRAINT',
       ]);
@@ -57,7 +52,7 @@ describeIntegrationDatabases('capability warnings', (context) => {
       );
     }
 
-    if (context.spec.dialect === 'sqlite') {
+    if (context.profile.schema.comments === 'unsupported') {
       expect(result.warnings?.map((warning) => warning.code)).toEqual(
         expect.arrayContaining([
           'UNSUPPORTED_NATIVE_TYPE',

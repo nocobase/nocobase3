@@ -4,35 +4,7 @@ import { describeIntegrationDatabases } from '../helpers.js';
 describeIntegrationDatabases('Physical scalar capabilities', (context) => {
   it('preserves char semantics, numeric capacity and boolean identity', async () => {
     const dialect = context.spec.dialect;
-    const native = (
-      {
-        postgres: ['char(8)', 'varchar(16)', 'integer', 'real', 'boolean'],
-        'kingbase-postgres': [
-          'char(8)',
-          'varchar(16)',
-          'integer',
-          'real',
-          'boolean',
-        ],
-        mysql: [
-          'char(8)',
-          'varchar(16)',
-          'int unsigned',
-          'float',
-          'tinyint(1)',
-        ],
-        sqlite: ['CHAR(8)', 'VARCHAR(16)', 'INTEGER', 'REAL', 'BOOLEAN'],
-        oracle: [
-          'CHAR(8 CHAR)',
-          'VARCHAR2(16 BYTE)',
-          'NUMBER(10,0)',
-          'BINARY_FLOAT',
-          'NUMBER(1,0)',
-        ],
-        dameng: ['CHAR(8)', 'VARCHAR(16)', 'INTEGER', 'REAL', 'NUMBER(1,0)'],
-        mssql: ['nchar(8)', 'nvarchar(16)', 'tinyint', 'real', 'bit'],
-      } as Record<string, string[]>
-    )[dialect];
+    const native = context.profile.schema.scalarTypes;
     await context.db.schema.createTable(context.table('scalars'), (table) => {
       ['fixed', 'label', 'quantity', 'ratio', 'enabled'].forEach(
         (name, index) =>
@@ -59,15 +31,13 @@ describeIntegrationDatabases('Physical scalar capabilities', (context) => {
     } else {
       expect(columns.get('ratio')?.binaryPrecision).toBe(24);
       expect(columns.get('label')?.lengthUnit).toBe(
-        dialect === 'mssql'
-          ? 'utf16CodeUnits'
-          : dialect === 'oracle' || dialect === 'dameng'
-            ? 'bytes'
-            : 'characters',
+        context.profile.character.lengthUnit === 'none'
+          ? undefined
+          : context.profile.character.lengthUnit,
       );
-      if (dialect !== 'oracle' && dialect !== 'dameng')
+      if (context.profile.character.collation)
         expect(columns.get('label')?.collation).toBeTruthy();
-      if (['mysql', 'postgres', 'kingbase-postgres'].includes(dialect))
+      if (context.profile.character.characterSet)
         expect(columns.get('label')?.characterSet).toBeTruthy();
     }
     if (dialect === 'oracle') {
@@ -96,9 +66,9 @@ describeIntegrationDatabases('Physical scalar capabilities', (context) => {
         unsigned: true,
       });
     expect(columns.get('enabled')?.dataType).toBe(
-      dialect === 'mysql'
+      context.profile.schema.booleanStorage === 'integer'
         ? 'integer'
-        : dialect === 'oracle' || dialect === 'dameng'
+        : context.profile.schema.booleanStorage === 'decimal'
           ? 'decimal'
           : 'boolean',
     );
@@ -115,13 +85,19 @@ describeIntegrationDatabases('Physical scalar capabilities', (context) => {
       .insert({ fixed: 'code', label: 'visible' });
     const records = await connection.repository('scalars').findMany({
       filter: (f) =>
-        f.string('fixed').eq(dialect === 'oracle' ? 'code    ' : 'code'),
+        f
+          .string('fixed')
+          .eq(
+            context.profile.character.charRead === 'padded'
+              ? 'code    '
+              : 'code',
+          ),
       select: (s) => s.fields('label'),
     });
     expect(records).toEqual([{ label: 'visible' }]);
   });
 
-  it.runIf(context.spec.dialect === 'sqlite')(
+  it.runIf(context.profile.schema.defaultSchema === 'main')(
     'reports STRICT independently from declaration affinity',
     async () => {
       await context.db.raw('CREATE TABLE ?? (value ANY, label TEXT) STRICT', [

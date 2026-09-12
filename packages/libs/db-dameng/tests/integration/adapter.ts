@@ -1,9 +1,70 @@
 import { createDatabaseManager } from '@nocobase/db';
 import {
   createDatabaseDialectIntegrationAdapter,
+  type DatabaseIntegrationProfile,
   type DatabaseDialectIntegrationAdapter,
 } from '@nocobase/db-testkit';
 import dameng from '../../src/index.js';
+
+export const damengIntegrationProfile: DatabaseIntegrationProfile = {
+  numeric: {
+    nativeResults: false,
+    integerResults: 'number',
+    nativeAggregates: false,
+    bigintAverage: 'fractional',
+    exactProjection: 'castVarchar',
+    bigintBinding: 'supported',
+    bigintRange: 'full',
+    storagePrecision: 'exact',
+  },
+  character: {
+    charRead: 'trimmed',
+    lengthUnit: 'bytes',
+    collation: false,
+    characterSet: false,
+  },
+  temporal: {
+    precisionProbeType: 'timestamp(6) with time zone',
+    logicalTypes: {
+      day: 'datetime',
+      time: 'time',
+      local: 'datetime',
+      instant: 'datetimeTz',
+    },
+    inspectorDataTypes: {
+      day: 'datetime',
+      clock: 'time',
+      instant: 'datetimeTz',
+    },
+    fixtureTypes: [
+      'DATE',
+      'TIME(3)',
+      'TIMESTAMP(3)',
+      'TIMESTAMP(6) WITH TIME ZONE',
+    ],
+    sessionTimezone: 'unsupported',
+    instantFilterInput: 'iso',
+    isoLiteralFilters: false,
+    instantPrimaryKey: true,
+  },
+  schema: {
+    defaultSchema: 'public',
+    declareSchema: true,
+    supportsSchemas: false,
+    uniqueConstraints: true,
+    foreignKeyActions: { onDelete: 'restrict', onUpdate: 'cascade' },
+    uniqueConstraintDropKeepsIndex: false,
+    nativeTextType: 'text',
+    comments: 'complete',
+    booleanStorage: 'decimal',
+    emptyStringIsNull: false,
+    integerResolution: 'integer',
+    scalarTypes: ['CHAR(8)', 'VARCHAR(16)', 'INTEGER', 'REAL', 'NUMBER(1,0)'],
+  },
+  json: {
+    filters: 'unsupported',
+  },
+} satisfies DatabaseIntegrationProfile;
 
 export const damengDialectIntegrationAdapter: DatabaseDialectIntegrationAdapter =
   createDatabaseDialectIntegrationAdapter({
@@ -12,6 +73,7 @@ export const damengDialectIntegrationAdapter: DatabaseDialectIntegrationAdapter 
       name: 'dameng',
       dialect: 'dameng',
       driver: 'dmdb',
+      profile: damengIntegrationProfile,
       host: process.env.DAMENG_HOST ?? '127.0.0.1',
       port: Number(process.env.DAMENG_PORT ?? 15236),
       username: process.env.DAMENG_USER ?? 'SYSDBA',

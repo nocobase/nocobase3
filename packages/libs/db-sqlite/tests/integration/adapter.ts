@@ -3,14 +3,67 @@ import {
   createDatabaseIntegrationAdapter,
   createDatabaseDialectIntegrationAdapter,
   dropPortableIntegrationObjects,
+  type DatabaseIntegrationProfile,
   type DatabaseIntegrationAdapter,
   type DatabaseDialectIntegrationAdapter,
 } from '@nocobase/db-testkit';
 import sqlite from '../../src/index.js';
 
+export const sqliteIntegrationProfile: DatabaseIntegrationProfile = {
+  numeric: {
+    nativeResults: false,
+    integerResults: 'number',
+    nativeAggregates: false,
+    bigintAverage: 'fractional',
+    exactProjection: 'castVarchar',
+    bigintBinding: 'supported',
+    bigintRange: 'full',
+    storagePrecision: 'approximate',
+  },
+  character: {
+    charRead: 'trimmed',
+    lengthUnit: 'none',
+    collation: false,
+    characterSet: false,
+  },
+  temporal: {
+    precisionProbeType: 'TIMESTAMP(6)',
+    logicalTypes: {
+      day: 'text',
+      time: 'text',
+      local: 'text',
+      instant: 'text',
+    },
+    inspectorDataTypes: { day: 'date', clock: 'time', instant: 'text' },
+    fixtureTypes: ['DATE', 'TIME(3)', 'DATETIME(3)', 'TEXT'],
+    sessionTimezone: 'unsupported',
+    instantFilterInput: 'iso',
+    isoLiteralFilters: true,
+    instantPrimaryKey: true,
+  },
+  schema: {
+    defaultSchema: 'main',
+    declareSchema: true,
+    supportsSchemas: false,
+    uniqueConstraints: false,
+    foreignKeyActions: { onDelete: 'restrict', onUpdate: 'cascade' },
+    uniqueConstraintDropKeepsIndex: false,
+    nativeTextType: 'text',
+    comments: 'unsupported',
+    booleanStorage: 'native',
+    emptyStringIsNull: false,
+    integerResolution: 'integer',
+    scalarTypes: ['CHAR(8)', 'VARCHAR(16)', 'INTEGER', 'REAL', 'BOOLEAN'],
+  },
+  json: {
+    filters: 'supported',
+  },
+} satisfies DatabaseIntegrationProfile;
+
 export const sqliteIntegrationAdapter: DatabaseIntegrationAdapter =
   createDatabaseIntegrationAdapter({
     name: 'sqlite',
+    profile: sqliteIntegrationProfile,
     createDatabase: (prefix, metadataStore) =>
       createDatabaseManager({
         default: 'sqlite',
@@ -45,6 +98,7 @@ export const sqliteDialectIntegrationAdapter: DatabaseDialectIntegrationAdapter 
       name: 'sqlite',
       dialect: 'sqlite',
       driver: 'better-sqlite3',
+      profile: sqliteIntegrationProfile,
     },
     createDatabase: (prefix, metadataStore) =>
       createDatabaseManager({

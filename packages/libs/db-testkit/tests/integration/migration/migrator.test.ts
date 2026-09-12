@@ -81,7 +81,7 @@ describeIntegrationDatabases('migration runner', (context) => {
         package_name: '@nocobase/plugin-users',
         name: '202608180001_create_migration_users',
         // Oracle INTEGER is physically NUMBER(38,0), decoded losslessly.
-        batch: context.spec.dialect === 'oracle' ? '1' : 1,
+        batch: context.profile.numeric.integerResults === 'string' ? '1' : 1,
       },
     ]);
   });

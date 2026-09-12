@@ -4,6 +4,7 @@ import {
   type DatabaseDialectIntegrationAdapter,
 } from '@nocobase/db-testkit';
 import postgres from '../../src/index.js';
+import { postgresIntegrationProfile } from './adapter.js';
 
 export const postgresDialectIntegrationAdapter: DatabaseDialectIntegrationAdapter =
   createDatabaseDialectIntegrationAdapter({
@@ -12,6 +13,7 @@ export const postgresDialectIntegrationAdapter: DatabaseDialectIntegrationAdapte
       name: 'postgres',
       dialect: 'postgres',
       driver: 'pg',
+      profile: postgresIntegrationProfile,
       host: process.env.POSTGRES_HOST ?? process.env.PGHOST ?? '127.0.0.1',
       port: Number(process.env.POSTGRES_PORT ?? process.env.PGPORT ?? 15432),
       username: process.env.POSTGRES_USER ?? process.env.PGUSER ?? 'nocobase',

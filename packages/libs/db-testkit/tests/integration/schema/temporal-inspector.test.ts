@@ -3,41 +3,11 @@ import { describeIntegrationDatabases } from '../helpers.js';
 
 describeIntegrationDatabases('Temporal physical inspection', (context) => {
   it('retains native type and separates fractional seconds from numeric modifiers', async () => {
-    const nativeTypes = (
-      {
-        postgres: [
-          'date',
-          'time(3)',
-          'timestamp(3) without time zone',
-          'timestamp(6) with time zone',
-        ],
-        'kingbase-postgres': [
-          'date',
-          'time(3)',
-          'timestamp(3) without time zone',
-          'timestamp(6) with time zone',
-        ],
-        mysql: ['date', 'time(3)', 'datetime(3)', 'timestamp(6)'],
-        sqlite: ['DATE', 'TIME(3)', 'DATETIME(3)', 'TEXT'],
-        oracle: [
-          'DATE',
-          'VARCHAR2(18)',
-          'TIMESTAMP(3)',
-          'TIMESTAMP(6) WITH TIME ZONE',
-        ],
-        dameng: [
-          'DATE',
-          'TIME(3)',
-          'TIMESTAMP(3)',
-          'TIMESTAMP(6) WITH TIME ZONE',
-        ],
-        mssql: ['date', 'time(3)', 'datetime2(3)', 'datetimeoffset(6)'],
-      } as Record<string, string[]>
-    )[context.spec.dialect];
     const names = ['day', 'clock', 'local', 'instant'];
     await context.db.schema.createTable(context.table('temporal'), (table) => {
+      const types = context.profile.temporal.fixtureTypes;
       names.forEach((name, index) =>
-        table.specificType(name, nativeTypes?.[index] ?? '').nullable(),
+        table.specificType(name, types[index]).nullable(),
       );
     });
     const schema = await context.database
@@ -49,14 +19,11 @@ describeIntegrationDatabases('Temporal physical inspection', (context) => {
     const columns = new Map(
       schema?.columns.map((column) => [column.columnName, column]),
     );
-    const oracle = context.spec.dialect === 'oracle';
-    const dameng = context.spec.dialect === 'dameng';
-    const sqlite = context.spec.dialect === 'sqlite';
     expect(columns.get('day')).toMatchObject({
-      dataType: oracle || dameng ? 'datetime' : 'date',
+      dataType: context.profile.temporal.inspectorDataTypes.day,
     });
     expect(columns.get('clock')).toMatchObject({
-      dataType: oracle ? 'string' : 'time',
+      dataType: context.profile.temporal.inspectorDataTypes.clock,
     });
     expect(columns.get('local')).toMatchObject({
       dataType: 'datetime',
@@ -65,13 +32,15 @@ describeIntegrationDatabases('Temporal physical inspection', (context) => {
     expect(columns.get('local')?.length).toBeUndefined();
     expect(columns.get('local')?.scale).toBeUndefined();
     expect(columns.get('instant')).toMatchObject({
-      dataType: sqlite ? 'text' : 'datetimeTz',
+      dataType: context.profile.temporal.inspectorDataTypes.instant,
     });
     expect(columns.get('instant')?.fractionalSecondsPrecision).toBe(
-      sqlite ? undefined : 6,
+      context.profile.temporal.inspectorDataTypes.instant === 'text'
+        ? undefined
+        : 6,
     );
     expect(columns.get('instant')?.nativeType).toBeTruthy();
-    if (!oracle)
+    if (context.profile.temporal.inspectorDataTypes.clock === 'time')
       expect(columns.get('clock')?.fractionalSecondsPrecision).toBe(3);
   });
 });
