@@ -12,7 +12,14 @@ function CloseAction() {
   const { t } = useTranslation();
   const { close, isClosing } = useRouteOverlay();
   return (
-    <Button disabled={isClosing} onClick={() => void close()}>
+    <Button
+      disabled={isClosing}
+      onClick={() => {
+        void close().catch((error: unknown) => {
+          console.error('Failed to close route overlay', error);
+        });
+      }}
+    >
       {t('actions.close')}
     </Button>
   );
