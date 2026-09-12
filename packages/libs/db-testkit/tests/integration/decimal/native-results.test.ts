@@ -108,7 +108,7 @@ describeIntegrationDatabases(
       ).toEqual({ minimum: expected, maximum: expected });
     });
 
-    it('returns decimal defaults without a PostgreSQL decimal reload', async () => {
+    it('returns decimal defaults without a second PostgreSQL SELECT', async () => {
       await context.builder.createCollection('nativeDefaults', (c) => {
         c.increments('id');
         c.decimal('amount', { precision: 20, scale: 6 }).defaultTo('42.000000');
@@ -133,9 +133,9 @@ describeIntegrationDatabases(
       );
       expect(result.record.id).toBeDefined();
       if (context.profile.numeric.nativeResults) {
-        // The final Repository selection still reads once, just as for integer fields.
+        // The INSERT ... RETURNING result is sufficient when no relations need loading.
         expect(statements.filter((sql) => /^select\b/i.test(sql))).toHaveLength(
-          1,
+          0,
         );
         expect(statements.filter((sql) => /^insert\b/i.test(sql))).toHaveLength(
           1,
