@@ -80,6 +80,11 @@ describe('client inspection', () => {
     ).toEqual([
       {
         auth: 'required',
+        id: '@nocobase/app-template-examples:home',
+        path: '/',
+      },
+      {
+        auth: 'required',
         id: '@nocobase/app-template-examples:routeOverlays',
         path: '/route-overlays',
       },
@@ -103,11 +108,7 @@ describe('client inspection', () => {
         id: '@nocobase/app-template-examples:routeDrawerDialogExample',
         path: '/route-overlays/drawer/dialog',
       },
-      {
-        auth: 'required',
-        id: '@nocobase/app-template-examples:home',
-        path: '/',
-      },
+
       {
         auth: 'required',
         id: '@nocobase/app-template-examples:articles',

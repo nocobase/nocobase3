@@ -44,6 +44,11 @@ describe('app client routes', () => {
       routes: [
         {
           auth: 'required',
+          name: 'home',
+          path: '/',
+        },
+        {
+          auth: 'required',
           name: 'routeOverlays',
           path: '/route-overlays',
           children: [
@@ -58,11 +63,6 @@ describe('app client routes', () => {
               children: [{ name: 'routeDrawerDialogExample', path: 'dialog' }],
             },
           ],
-        },
-        {
-          auth: 'required',
-          name: 'home',
-          path: '/',
         },
         { auth: 'required', name: 'articles', path: '/articles' },
       ],
