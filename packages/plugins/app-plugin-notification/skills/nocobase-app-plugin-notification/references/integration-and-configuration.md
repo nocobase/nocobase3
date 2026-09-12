@@ -1,0 +1,86 @@
+# Integration and Configuration
+
+## Prefer plugin composition
+
+For a normal NocoBase application, enable the core plugin plus the Channel packages the application needs. Their server plugins contribute migrations, Service Providers, and routes. The core Provider resolves the existing database, queue, and logger from the shared Application container and registers the narrow `notificationServiceToken` for business sending plus `notificationExtensionRegistryToken` for Channel and Provider contributions.
+
+Apply the owning application's migration command after changing enabled plugins. The core package creates Notification, Delivery, and Attempt tables; the in-app package creates the personal inbox table.
+
+Boot ordering matters:
+
+1. The core notification Provider registers the manager singleton.
+2. Channel packages register definitions during boot.
+3. The core Provider validates every enabled Channel/Provider configuration after boot, then activates queue registration and reconciliation during application start; Channel runtimes are created lazily on first use.
+4. A custom host may call `start()` after registering every definition to initialize all enabled Channel runtimes eagerly.
+5. Shutdown calls `close()` so the reconciler and Providers release resources.
+
+Install mode may activate queue registration before notification tables exist, but runtime delivery requires migrations to be complete.
+
+## Built-in configuration
+
+The application's `notification.channels` array is the source of enabled runtime configurations. A default application commonly enables the database-backed in-app Channel and conditionally adds Email or IM Providers from secrets:
+
+```ts
+const notification = {
+  channels: [
+    defineInAppChannelConfig({
+      enabled: true,
+      providers: [{ type: 'database', name: 'default' }],
+    }),
+    defineEmailChannelConfig({
+      enabled: true,
+      providers: [
+        defineSmtpProviderConfig({
+          name: 'smtp',
+          host: secrets.smtpHost,
+          port: 587,
+          secure: false,
+          auth: { user: secrets.smtpUser, pass: secrets.smtpPassword },
+          from: 'NocoBase <notifications@example.com>',
+        }),
+      ],
+    }),
+  ],
+};
+```
+
+Use `secure: true` only for immediate TLS as required by the server, commonly port 465. Port 587 commonly starts plaintext and upgrades with STARTTLS. SMTP user/password must both be present or both absent.
+
+Resend requires an API key and sender accepted by the account/domain. Feishu Webhooks must use HTTPS on `open.feishu.cn` or `open.larksuite.com`; DingTalk Webhooks must use HTTPS on `oapi.dingtalk.com`. The built-in Webhook Providers reject redirects. Prefer signature secrets when the platform supports them.
+
+Webhook URLs are credentials. Load Webhook URLs, signature secrets, SMTP passwords, and Resend API keys from the application's runtime secret source. Never commit, print, or return them.
+
+## Stable identities
+
+Each enabled Channel requires at least one enabled Provider. Provider names must be unique within the Channel. The runtime verifies that each created Provider's `name` and `type` match configuration.
+
+Persisted Deliveries record Provider name and type. Configuration changes should preserve those identities until no Delivery is pending, retrying, preparing, or submitting. If a definition disappears, the manager fails that Delivery instead of silently moving it to a different Provider.
+
+## Registration without plugin discovery
+
+Custom hosts can create a registry, register Channel and Provider definitions, create one manager with the host database/queue/logger, then mount routes and own lifecycle. Register definitions before `start()` or the first `send()` for that Channel.
+
+The core `manager.router` exposes `GET /logs` and `GET /logs/:id` without adding authentication itself. The plugin's normal route contribution mounts it at `/api/notifications` with required authentication, authorization middleware, and `page:notification.logs` `access` checks. Custom hosts must provide equivalent protection.
+
+For a custom host, register the exported `NOTIFICATION_NAMESPACE` / `notificationServerLocales` and `IN_APP_NOTIFICATION_NAMESPACE` / `inAppNotificationServerLocales` pairs with the host `I18nRuntime`, initialize it, then mount its request i18n middleware before the core logs and in-app routers. Notification-owned failures use a stable `error.code/message/ns/key/params` envelope; clients should branch on `code`, display `message`, and may retranslate with `ns`, `key`, and `params`. Authentication middleware retains its owning plugin's error contract.
+
+The in-app router must derive the current user from trusted authentication state. Never accept a client-supplied user id as the current identity. Its write endpoints use a CSRF token/cookie pair.
+
+List the current user's inbox with `GET /api/notifications/in-app`. `limit` must be an integer from 1 through 100. When the response includes `nextCursor`, pass that opaque base64url value back as `cursor`; do not parse, edit, or manufacture cursors. Write requests accept only `read`, `unread`, and `delete`, require a JSON object body, and reject malformed JSON or unknown actions.
+
+## Notification test surface
+
+The core package exposes `GET /api/notifications/test/targets`, `POST /api/notifications/test/send`, and `GET /api/notifications/test/:id/status`. All three require authentication and `x-nocobase-notification-test: 1`; only `POST /send` requires the `notification:test` `send` permission. Logs remain separately protected by `page:notification.logs` `access`.
+
+Targets are the intersection of registered definitions and enabled configured instances. Their public descriptors contain only Channel/Provider identities, labels, and safe form-field metadata. Configuration, Webhook URLs, API keys, and secrets stay on the server. Channel definitions convert test fields into the same normal `send()` inputs; each test creates persistent logs, and status is visible only to its creating user.
+
+A production test is a real external send and requires explicit scope, the recipient or recipientless mode, Provider, permission, and follow-up verification.
+
+## Configuration verification
+
+- Inspect the application's effective redacted configuration, not only environment files.
+- Confirm each configured Channel and Provider definition is registered.
+- Confirm migrations exist before starting delivery workers.
+- Confirm the queue worker and reconciler are active.
+- Confirm logs and test routes reject unauthenticated and unauthorized requests.
+- Confirm startup fails clearly for duplicate Provider names, missing definitions, or mismatched runtime identity.

@@ -1,0 +1,183 @@
+name: Verify create-app
+description: >-
+  Publishes this release to a throwaway registry, generates an application from it with create-app, and boots that
+  application. Fails the run before anything reaches the real registry.
+
+inputs:
+  port:
+    description: Port the throwaway registry listens on.
+    default: '4873'
+  dialect:
+    description: Database the generated application uses.
+    default: sqlite
+  timeout:
+    description: Seconds to wait for the generated application to become ready.
+    default: '420'
+
+runs:
+  using: composite
+  steps:
+    # The registry runs as a plain container rather than a job service so it can be handed a configuration file. A
+    # service container has no way to mount one, and the alternative — starting it with the defaults and rewriting the
+    # configuration through docker exec afterwards — keeps the settings that matter somewhere other than the file that
+    # describes them.
+    - name: Start the throwaway registry
+      shell: bash
+      env:
+        PORT: ${{ inputs.port }}
+      run: |
+        set -euo pipefail
+        docker run -d --name release-verdaccio \
+          -p "$PORT:4873" \
+          -v "$GITHUB_WORKSPACE/.github/verdaccio/config.yaml:/verdaccio/conf/config.yaml:ro" \
+          verdaccio/verdaccio:5
+
+        for _ in $(seq 1 60); do
+          if curl -fsS --max-time 5 "http://localhost:$PORT/-/ping" -o /dev/null 2>/dev/null; then
+            echo "Registry is up on port $PORT"
+            exit 0
+          fi
+          sleep 1
+        done
+
+        echo "::error::The throwaway registry did not start"
+        docker logs release-verdaccio
+        exit 1
+
+    # Registering over HTTP rather than driving `npm adduser` through expect: the endpoint returns the token directly,
+    # so nothing has to be installed on the runner and there is no interactive prompt to keep in step.
+    #
+    # Basic auth is sent along with the registration. A fresh container has no such user and returns the token from
+    # the registration itself; a container that already has one answers 409 to an anonymous request but 201 with a
+    # token when the credentials are presented. Sending them always covers both without branching on the status.
+    - name: Authenticate against the throwaway registry
+      shell: bash
+      env:
+        PORT: ${{ inputs.port }}
+      run: |
+        set -euo pipefail
+        TOKEN=$(curl -fsS -X PUT \
+          -H 'Content-Type: application/json' \
+          -u release-ci:release-ci \
+          -d '{"name":"release-ci","password":"release-ci","type":"user","roles":[]}' \
+          "http://localhost:$PORT/-/user/org.couchdb.user:release-ci" \
+          | node -e 'let s="";process.stdin.on("data",c=>s+=c).on("end",()=>process.stdout.write(JSON.parse(s).token??""))')
+
+        if [ -z "$TOKEN" ]; then
+          echo "::error::The throwaway registry issued no token"
+          exit 1
+        fi
+        echo "::add-mask::$TOKEN"
+
+        # A separate file, used only by the steps below through a step-level NPM_CONFIG_USERCONFIG. The npm
+        # configuration the rest of the release reads is never modified, so no amount of forgetting to clean up can
+        # redirect the real publish.
+        #
+        # An earlier version wrote into that shared file and removed the token again afterwards. It missed the
+        # scoped-registry line it had also added, and `changeset publish` then looked for every package on a registry
+        # whose container had already been destroyed. Cleaning up correctly is a thing to get right every time;
+        # not writing there at all is a thing to get right once.
+        SMOKE_NPMRC="$RUNNER_TEMP/smoke-npmrc"
+        cp "${NPM_CONFIG_USERCONFIG:-$HOME/.npmrc}" "$SMOKE_NPMRC" 2>/dev/null || : > "$SMOKE_NPMRC"
+        echo "smoke_npmrc=$SMOKE_NPMRC" >> "$GITHUB_ENV"
+
+        # `npm config set` rather than appending with `>>`. setup-node writes its file without a trailing newline, so
+        # an appended line joins the last one — `always-auth=false//localhost:4873/:_authToken=...` parses as a value
+        # for always-auth and the credential silently does not exist. npm parses and rewrites the whole file, so the
+        # newline is its problem rather than ours.
+        NPM_CONFIG_USERCONFIG="$SMOKE_NPMRC" npm config set "//localhost:$PORT/:_authToken=$TOKEN"
+
+        # A scoped registry outranks the global one and does not appear in `config get registry`, so an inherited
+        # @nocobase:registry would send this publish to the real registry with every check here passing. Setting it
+        # in the isolated file removes that possibility for the smoke test without touching what follows it.
+        NPM_CONFIG_USERCONFIG="$SMOKE_NPMRC" npm config set "@nocobase:registry=http://localhost:$PORT/"
+
+    # Environment variables rather than an .npmrc edit: the repository is mid-release and its whole working tree is
+    # about to be committed, so nothing tracked can be touched, and a variable that only exists for this step cannot
+    # leak into the real publish further down.
+    #
+    # Both spellings are needed, and this is the step where getting it wrong is expensive. changesets asks `npm info`
+    # whether a version is already published and then hands the publish to `pnpm publish` — and pnpm 11 does not read
+    # npm_config_* at all, it reads PNPM_CONFIG_<SETTING>. Setting only the npm form points the check at the throwaway
+    # registry while the publish goes to the real one, which is the exact accident this whole job exists to prevent.
+    # The assertion below is there because that failure would otherwise look like a successful smoke test.
+    #
+    # --no-git-tag because the tags belong to the real publish. Creating them here would leave the second publish
+    # trying to create tags that already exist.
+    - name: Publish this release to the throwaway registry
+      shell: bash
+      env:
+        PORT: ${{ inputs.port }}
+      run: |
+        set -euo pipefail
+        LOCAL="http://localhost:$PORT/"
+
+        export NPM_CONFIG_USERCONFIG="$smoke_npmrc"
+        export PNPM_CONFIG_REGISTRY="$LOCAL"
+        export npm_config_registry="$LOCAL"
+        export NPM_CONFIG_REGISTRY="$LOCAL"
+        # setup-node's .npmrc interpolates this; leaving it unset would make npm fail to read its own configuration.
+        export NODE_AUTH_TOKEN=''
+
+        # Both the global registry and the @nocobase scope, because the scope is what actually decides where these
+        # packages go and it is invisible to a check that only reads the global value.
+        for tool in pnpm npm; do
+          for setting in registry @nocobase:registry; do
+            RESOLVED="$("$tool" config get "$setting" | tr -d '\r' | tail -1)"
+            if [ "$RESOLVED" != "$LOCAL" ] && [ "$RESOLVED" != "${LOCAL%/}" ]; then
+              echo "::error::$tool resolves $setting to '$RESOLVED' instead of '$LOCAL'. Publishing now would reach the real registry."
+              exit 1
+            fi
+            echo "$tool $setting -> $RESOLVED"
+          done
+        done
+
+        pnpm changeset publish --no-git-tag
+
+    - name: Generate an application and boot it
+      shell: bash
+      env:
+        PORT: ${{ inputs.port }}
+        DIALECT: ${{ inputs.dialect }}
+        TIMEOUT: ${{ inputs.timeout }}
+      run: |
+        set -euo pipefail
+        export NPM_CONFIG_USERCONFIG="$smoke_npmrc"
+
+        CREATE_APP_VERSION=$(node -p "require('./packages/tools/create-app/package.json').version")
+        TEMPLATE_VERSION=$(node -p "require('./packages/templates/app-template-default/package.json').version")
+
+        # Outside the checkout on purpose. The generated application writes its own pnpm-workspace.yaml, which would
+        # make pnpm treat it as a workspace root nested inside this one, and the release commit stages everything in
+        # the working tree — a generated application there would be committed and published.
+        ./scripts/smoke-create-app.sh \
+          --registry "http://localhost:$PORT" \
+          --create-app-version "$CREATE_APP_VERSION" \
+          --template "@nocobase/app-template-default@$TEMPLATE_VERSION" \
+          --dialect "$DIALECT" \
+          --timeout "$TIMEOUT" \
+          --workdir "$RUNNER_TEMP/create-app-smoke"
+
+    - name: Stop the throwaway registry
+      if: always()
+      shell: bash
+      env:
+        PORT: ${{ inputs.port }}
+      run: |
+        if [ "${RUNNER_DEBUG:-}" = "1" ]; then
+          docker logs release-verdaccio || true
+        fi
+        docker rm -f release-verdaccio > /dev/null 2>&1 || true
+
+        # One file to remove, rather than specific lines to remember to remove from a file the release still needs.
+        rm -f "${smoke_npmrc:-}"
+
+        # The release publishes for real after this action returns, so prove the configuration it will read carries
+        # nothing pointing at a registry that no longer exists. This is the failure that reached a release once: a
+        # leftover @nocobase:registry sent `changeset publish` to a destroyed container.
+        SHARED="${NPM_CONFIG_USERCONFIG:-$HOME/.npmrc}"
+        if [ -f "$SHARED" ] && grep -q "localhost:$PORT" "$SHARED"; then
+          echo "::error::$SHARED still refers to the throwaway registry. The publish that follows would fail or reach the wrong registry."
+          grep -n "localhost:$PORT" "$SHARED" | sed 's/_authToken=.*/_authToken=<redacted>/'
+          exit 1
+        fi

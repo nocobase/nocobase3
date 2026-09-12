@@ -1,0 +1,78 @@
+{
+  "name": "@nocobase/nb3-cli",
+  "version": "1.0.0-beta.6",
+  "description": "NocoBase 3 command line tool.",
+  "type": "module",
+  "prettier": "@nocobase/dev-config/prettier",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "bin": {
+    "nocobase": "./bin/run.js"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "README.md"
+  ],
+  "oclif": {
+    "bin": "nocobase",
+    "topicSeparator": " "
+  },
+  "scripts": {
+    "build": "node ./scripts/build.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix --max-warnings 0",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
+    "fix": "pnpm lint:fix && pnpm format",
+    "test": "vitest run",
+    "prepack": "pnpm build",
+    "pack:check": "pnpm pack --out \"$PACK_DIR/nocobase-nb3-cli.tgz\" && pnpm exec publint ."
+  },
+  "dependencies": {
+    "@oclif/core": "catalog:"
+  },
+  "devDependencies": {
+    "@nocobase/dev-config": "workspace:*",
+    "@types/node": "catalog:",
+    "eslint": "catalog:",
+    "prettier": "catalog:",
+    "publint": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      "./plugins": {
+        "types": "./dist/plugins/index.d.ts",
+        "import": "./dist/plugins/index.js"
+      },
+      "./runtime": {
+        "types": "./dist/runtime/index.d.ts",
+        "import": "./dist/runtime/index.js"
+      },
+      "./package.json": "./package.json"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nocobase/nocobase3.git",
+    "directory": "packages/tools/cli"
+  },
+  "license": "Apache-2.0",
+  "exports": {
+    "./plugins": {
+      "types": "./src/plugins/index.ts",
+      "import": "./src/plugins/index.ts"
+    },
+    "./runtime": {
+      "types": "./src/runtime/index.ts",
+      "import": "./src/runtime/index.ts"
+    },
+    "./package.json": "./package.json"
+  }
+}

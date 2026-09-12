@@ -1,0 +1,3 @@
+dist/
+fixtures/app-dist/**/dist/
+fixtures/app-dist/main/

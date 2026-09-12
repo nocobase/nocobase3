@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>WebSocket Demo App</title>
+    <script type="module" src="/assets/ws-demo.js"></script>
+  </head>
+  <body>
+    <main>
+      <h1>WebSocket Demo App</h1>
+      <p>This fixture streams the current server time over WebSocket.</p>
+      <p><a href="/ws-demo/api/info">API info</a></p>
+      <p><a href="/ws-demo/healthz">Health</a></p>
+      <p><code id="websocket-url"></code></p>
+      <div id="now-time">Connecting...</div>
+      <output id="websocket-status">WebSocket connecting</output>
+    </main>
+  </body>
+</html>

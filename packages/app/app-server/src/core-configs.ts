@@ -1,0 +1,28 @@
+import { cachingConfig, memoryCachingConfigVariant } from './caching/index.js';
+import { appConfig, type AppConfigContribution } from './config/index.js';
+import { databaseConfig } from './database/index.js';
+import { driveConfig } from './drive/index.js';
+import { snowflakeConfig } from './id-generator/index.js';
+import { loggingConfig } from './logging/index.js';
+import { nodeServerConfig } from './node/index.js';
+import { queueConfig } from './queue/index.js';
+import type { ResolvedAppRuntimeConfigContext } from './runtime/index.js';
+import { sessionConfig } from './session/index.js';
+import { spaConfig } from './spa/index.js';
+import { i18nConfig } from './i18n/index.js';
+
+export const coreConfigs: readonly AppConfigContribution<ResolvedAppRuntimeConfigContext>[] =
+  [
+    appConfig,
+    i18nConfig,
+    cachingConfig,
+    memoryCachingConfigVariant,
+    databaseConfig,
+    driveConfig,
+    loggingConfig,
+    queueConfig,
+    sessionConfig,
+    nodeServerConfig,
+    snowflakeConfig,
+    spaConfig,
+  ];

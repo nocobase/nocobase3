@@ -1,0 +1,27 @@
+[
+  {
+    "type": "file",
+    "name": "index",
+    "label": "Deployment"
+  },
+  {
+    "type": "file",
+    "name": "configuration",
+    "label": "Production configuration"
+  },
+  {
+    "type": "file",
+    "name": "standalone",
+    "label": "Build and run"
+  },
+  {
+    "type": "file",
+    "name": "docker",
+    "label": "Deploy with Docker"
+  },
+  {
+    "type": "file",
+    "name": "hub",
+    "label": "Hub"
+  }
+]

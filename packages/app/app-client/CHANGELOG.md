@@ -1,0 +1,219 @@
+# @nocobase/app-client
+
+## 1.0.0-beta.13
+
+### Minor Changes
+
+- a009e2d: Derive the languages an application offers from its own locale files, and configure the default language in one place.
+
+  `i18n.defaultLocale` in `config.yml` now names the language the application starts in, for the browser and the server alike. The `i18n.locales` setting and its `APP_LOCALES` environment variable are removed, along with `client.app.defaultLocale`: an application offers whichever languages its own `client/locales/index.ts` and `server/locales/index.ts` declare loaders for, so adding a language means adding its file rather than editing a second list. A plugin's locale file supplies translations for those languages and no longer adds one, which keeps an installed plugin from putting an unexpected language in the picker.
+
+  The browser resolves its startup language as the visitor's stored choice, then `i18n.defaultLocale`, then `en-US`. `navigator.language` is no longer consulted. Switching language in the interface remains a user-level choice and does not change the configured default.
+
+  An untranslated key now falls back through `i18n.defaultLocale` and then `en-US`, rather than through the default alone. An application that defaults to Chinese and adds Spanish leaves its plugins translated in neither, and English is the language they are most likely to ship; the fallback languages are loaded alongside the one in use so the fallback has resources to read. `pnpm nocobase app i18n:check` reports a language declared in `client/locales/` but not `server/locales/`, or the reverse — the case where the interface offers a language the server then rejects.
+
+  `LocaleResource` and `PartialLocaleResource` now accept an `overrides` block at the top level. The shape is derived from the source locale, which never declares that key, so annotating a locale file with it and adding the block documented for rewording a plugin's copy was a compile error — the documented example did not compile.
+
+  To migrate, replace `i18n.locales` and `client.app.defaultLocale` with `i18n.defaultLocale`, and make sure every language the application offers has a file in its own `client/locales/` and `server/locales/`.
+
+### Patch Changes
+
+- Updated dependencies [a009e2d]
+  - @nocobase/i18n@1.0.0-beta.3
+
+## 1.0.0-beta.12
+
+### Minor Changes
+
+- c3e02bf: Support client.app.defaultLocale, defaultColorScheme, and defaultTheme configuration while preserving saved user preferences and ignoring unsupported defaults.
+- 1d042c0: Support recursive page routes and navigation groups across App, Settings, and Dev. Render application menus from route navigation instead of Refine resources, preserve parent access checks, and migrate template and example navigation. Refine resources remain available for CRUD integration.
+
+## 1.0.0-beta.11
+
+### Patch Changes
+
+- 9536bf5: Reach the API client through `@nocobase/app-client` instead of importing `@nocobase/api-client` directly from the example plugin's client code. The plugin value-imported `ApiClientError` and `buildFindManyOptions` from a package it declares only as a `devDependency`, which resolved solely because pnpm happened to hoist that package for another consumer. `ApiClientError` is also compared with `instanceof`, so a second copy would make the check silently return false and leave `error.code` undefined under code that looks correct. Re-export `buildFindManyOptions` alongside the existing `ApiClientError` so the plugin resolves both through the single copy the application already provides.
+
+## 1.0.0-beta.10
+
+### Major Changes
+
+- 90a4903: Extract the shared realtime wire protocol and browser WebSocket client into `@nocobase/realtime`. Replace the session-specific client reconnect method with a transport-level `reconnect()` operation, and make the application client and server consume the shared package.
+- 90a4903: Replace the composite application transport with application-owned `ApiClient` and `RealtimeClient` services. Client plugins, examples, and application templates now use object-style HTTP request options through the shared API client, while realtime subscriptions resolve their dedicated WebSocket client.
+
+### Patch Changes
+
+- 90a4903: Preserve configured API and realtime endpoints after splitting the client services. Integrate file inventory and the plugin-owned inbox with the shared API and realtime clients, including reconnection refresh and isolated event listeners.
+
+  Allow the Oracle driver install script in both templates’ standalone deployment workspace settings.
+
+  Resolve SQLite auto-incrementing bigint metadata correctly, narrow Oracle LOB values before reading their type, preserve legacy file timestamps, and rebuild the AI registry against the current API client.
+
+- 90a4903: Support asynchronous iteration of remote Repository `findMany` queries over framed NDJSON while preserving array consumption through `await`.
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+  - @nocobase/realtime@0.0.2-beta.0
+  - @nocobase/api-client@0.1.0-beta.0
+
+## 1.0.0-beta.9
+
+### Minor Changes
+
+- cee3251: Add authenticated realtime subscriptions, refresh their identity after authentication changes, and invalidate in-app notification state through user-scoped events.
+
+### Patch Changes
+
+- 43d5bf0: Publish the application-owned AI Employee frontend Registry with its chat components. Plugin-owned development showcases now live under `client/dev`, outside the materialized Registry item, and are excluded from production application builds. The Registry uses the application-scoped `@nocobase/app-client` transport for JSON, upload, and streaming requests instead of the deprecated Portal SDK client. The Default and Hub templates scan plugin Registry source for Tailwind utilities, so materialized components retain their intended responsive layout and sizing.
+- 813da59: Declare browser-only packages as devDependencies rather than dependencies, and make `react-i18next` an optional peer of `@nocobase/i18n` provided by `@nocobase/app-client`. Client code is bundled by the consuming application, so these entries did nothing for the bundle while `dist/package.json` pulled every one of them into the server deployment to be installed and never required.
+- Updated dependencies [813da59]
+  - @nocobase/i18n@1.0.0-beta.2
+
+## 1.0.0-beta.8
+
+### Major Changes
+
+- 66dba5d: Pass the complete client plugin composition to `defineAppRuntime()`.
+
+  The runtime now resolves plugin route component overrides from the same `AppClientPlugins` object as every other plugin contribution, while application route overrides remain a separate declaration.
+
+  The Client Application now validates the auth provider and guest login route required by authenticated routes internally, keeping those details out of application composition roots.
+
+## 1.0.0-beta.7
+
+### Patch Changes
+
+- 68a4e26: Support FormData requests in the v3 App client without overriding the browser's multipart boundary, and preserve actionable messages from plain-text and nested error responses.
+
+  Remove the File plugin's Portal SDK dependency and v2 authentication behavior. `createFilesClient()` now requires the owning application's v3 `AppClient`, accepts endpoints relative to the application `/api` root, and relies exclusively on Cookie authentication.
+
+## 1.0.0-beta.6
+
+### Major Changes
+
+- 174eab5: Consolidate the browser packages into `@nocobase/app-client`.
+
+  `@nocobase/app-sdk` is gone; its API client now lives in `@nocobase/app-client` and is imported from there. `@nocobase/app-portal-sdk` is deprecated and keeps only what still has consumers: `NocoBaseClient` and the runtime configuration it reads, which exist to reach a v2 NocoBase server, and the route surface containers under `/routing`. Its ACL, auth, data, extension, i18n, and system-settings modules are removed, as is the route tree that `/routing` used to export alongside the surfaces.
+
+  `@nocobase/app-client` gains `resolveAppBase()`, which reports the path the application is mounted at.
+
+  Four plugins built their API client at import time instead of resolving it from the application's service container, so they could not see `api.baseURL` from the application configuration. They now resolve it, which means an application that configures a base URL gets one client rather than two that disagree.
+
+  The injected browser global `NOCOBASE_PORTAL_BASE` is renamed to `APP_BASE_PATH`. Its value has always been the `APP_BASE_PATH` environment variable, and the old name grouped it with the settings that address a v2 NocoBase server. Those keep their names. A client and the server that serves it must be upgraded together.
+
+  `@nocobase/app-plugin-data-provider` is removed. It forwarded the Portal data provider, and applications built on the current client runtime do not use it.
+
+  The Hub template is rebuilt from the default template and now runs the same client and server stack as every other v3 application. Its `/api/apps` endpoint and its v2 API proxy are gone, so a hub's `.env` no longer configures them.
+
+  The Portal SDK's template compatibility check is removed with the rest: it had been disabled behind a constant, and its install script cost every generated project a `pnpm-workspace.yaml` `allowBuilds` entry it did not need. `createPortalViteConfig` no longer takes the plugin that injected it.
+
+### Minor Changes
+
+- ab7b341: Add `defineDevRoutes()`, for pages that exist only while developing an application.
+
+  It takes the same shape as `defineSettingsRoutes()` — pages, one level of groups, `navigation` and `access` — and mounts under `/dev` instead of `/settings`. The two are separate path spaces, so the same relative path may appear in both and resolve to `/settings/orders` and `/dev/orders`.
+
+  What makes it different is that nothing it declares reaches a production bundle. The guard lives inside `defineDevRoutes()` rather than at each call site, so a plugin author calls it unconditionally the way they call `defineSettingsRoutes()` and cannot forget it. A production build replaces `import.meta.env.PROD` with `true`, which makes the argument unreachable and lets the bundler drop the page components behind it, along with any module only those pages import. The templates guard their `/dev` route and the dev entry in the header the same way, so a production build carries no dev route, no dev layout chunk, and no dev entry point.
+
+  This draws its boundary at the build output, not at runtime permissions. A page that has to exist in production but be restricted by role is still a Settings Route with `access`, enforced by the server.
+
+  Both templates' headers offer a dev entry beside the settings gear, visible only during development. A surface withdraws its own entry: the settings centre shows the dev entry but not the gear, the dev tools show the gear but not the dev entry, and the application shell shows both.
+
+  Both templates gain a `client/layouts/` directory. The settings centre's chrome — the navigation rail, group disclosures, the mobile page select, and the per-page access filtering — is now one `SurfaceLayout` that the settings centre and the dev tools each render with their own copy, rather than a second copy of the same layout. The Hub template's settings navigation picks up the translation the default template already had.
+
+  `client:inspect` reports the resolved dev routes and accepts `--type dev-routes`.
+
+### Patch Changes
+
+- Updated dependencies [174eab5]
+  - @nocobase/i18n@1.0.0-beta.1
+
+## 1.0.0-beta.5
+
+### Minor Changes
+
+- fb1a752: Introduce the stateful ClientApplication with application-scoped services, ServiceProvider lifecycle management, static Client contributions, read-only runtime configuration, React Providers, and application-owned startup and shutdown boundaries. Keep the React DOM root in the Browser host, which renders `AppClientRoot` after application startup.
+
+  Remove the Client bootstrap and lazy contribution-loader contracts. Rename the React tree contribution to `reactProviders` and add the cross-runtime `serviceProviders` contribution.
+
+### Patch Changes
+
+- fb1a752: Transport public Client configuration through a versioned, safely escaped JSON data block in SPA HTML and read it automatically during Client runtime resolution.
+
+  Apply the same HTML transformation to production static responses and development Vite proxy responses, and document the public `config.yml` Client section in the default template.
+
+- Updated dependencies [fb1a752]
+  - @nocobase/service-provider@0.0.2-beta.1
+  - @nocobase/app-sdk@0.0.1-beta.0
+  - @nocobase/app-i18n@0.0.2-beta.0
+
+## 1.0.0-beta.4
+
+### Minor Changes
+
+- Add the shared Client Runtime definition and resolution API for composing application and plugin contributions before rendering.
+
+- 7cdffbd: Replace separate API and root route arrays with one ordered `routes` contribution array. Route factories now receive the Application, create and return their own Hono router, and are mounted automatically at `/api` or the application root according to their definition.
+
+  Standardize plugin server modules around `providers/index.ts` and `routes/index.ts` collection entries, `services/` domain implementations, and a stable `tokens.ts` public contract.
+
+  Generated plugins now declare conventional database and queue contribution directories by default. Missing optional directories are ignored until executable migrations, seeds, or jobs are added.
+
+  Generated plugins now include an App-facing starter Agent Skill under the package's `skills/` directory. Plugin registration and skill synchronization copy these package-owned Skills into registered applications' `.agents/skills/` directories.
+
+  Unify Client page contributions behind one `routes` loader. Plugins now use `defineAppRoutes()` and `defineSettingsRoutes()` to add child Routes to the application's two built-in Client Routes, mirroring how Server plugins use `defineRootRoutes()` and `defineApiRoutes()` with the built-in Hono routers.
+
+### Patch Changes
+
+- b049266: Add language switching on top of `@nocobase/app-i18n`. Applications and plugins declare their locales the same way on both sides, the browser loads only the language it is showing, and the chosen one is kept in storage and mirrored to the server session.
+- Updated dependencies [b049266]
+- Updated dependencies [b049266]
+  - @nocobase/app-i18n@0.0.2-beta.0
+  - @nocobase/app-sdk@0.0.1-beta.0
+
+## 1.0.0-beta.3
+
+### Patch Changes
+
+- Allow `AppClientPluginFactory` to omit its generic argument when a plugin
+  does not accept Client options, matching the existing
+  `defineClientPlugin<TOptions = void>` default.
+
+### Minor Changes
+
+- 062f5b1: Add `settings` to `defineClientPlugin`, a fourth contribution type alongside `bootstrap`, `routes`, and `providers`. A plugin points it at a module that default-exports an array of setting definitions, or a function of the plugin options returning one, and each entry becomes a page in the application's settings centre.
+
+  An entry is either a page — `id`, `title`, an optional `icon` and `access` rule, and a `pageLoader` — or a group that carries an icon and title once for a set of pages. Ids are single URL segments and nesting comes from the tree, so a page under a group is served at `/settings/<group>/<page>`, and a plugin contributing one page declares it without a group and gets `/settings/<id>`. Groups nest one level. Settings and routes share one path space, so a route and a page that would mount at the same address fail resolution with both identities named.
+
+  The default template renders the settings centre, reusing the application shell's chrome — brand, sidebar collapse, theme, and user menu — with `Back to app` where the workspace label sits and no gear pointing at itself. The left rail collapses by group the way the product sidebar does. A page whose `access` rule is denied is left out of the navigation and cannot be reached by its URL either, and a group whose pages are all denied disappears with them. A setting whose `access` rule is denied is left out of the navigation and cannot be reached by its URL either. Authorization's four administration pages now arrive this way, at the URLs they already had, and no longer appear in the product sidebar.
+
+  `client:inspect` gains `--type settings`, and `pnpm plugin:create` scaffolds a `client/settings.ts` entry.
+
+- c8f38c8: Register client plugins explicitly in the application's `client/plugins.ts` instead of discovering them from `nocobase.plugins` through a Vite virtual module.
+
+  Each plugin now ships a `client/plugin.ts` descriptor, exported as `./client/plugin`, that declares its bootstrap, routes, providers, and route component overrides. An application composes them with `defineClientPlugins([...])`, where array order is bootstrap order and a plugin is enabled by being present. The entry is real, type-checked application source: it can be read, diffed, and edited, and Vite reloads it like any other module.
+
+  Plugins can also accept options. `defineClientPlugin` takes an options type that reaches the bootstrap context, the routes and providers factories, and the route component overrides, so an application can pass a custom login page or a notification label at registration.
+
+  `@nocobase/app-plugin-registry-example` only drops its now-unread `nocobase.plugin.client` manifest field; it contributes no client extensions.
+
+## 1.0.0-beta.2
+
+### Patch Changes
+
+- 0465323: Introduce the plugin-based authorization core and permission management UI. Replace the previous authorization API with composable core, database, permission-set, default-access, sharing-rule, restriction-rule, and page plugins; add route access metadata to the application client; publish and enable the authorization app plugin in the default template; and correct the Hub documentation to use the v3 Portal SDK package name.
+
+## 1.0.0-beta.1
+
+### Major Changes
+
+- 509d812: Localize the shadcn UI components used by applications, plugins, and registries so they can customize their presentation independently. Remove the `@nocobase/app-client/ui` entry point and migrate its consumers to package-local components.
+
+## 0.0.1-beta.0
+
+### Patch Changes
+
+- da1b1b0: 首次发布。
+- Updated dependencies [da1b1b0]
+  - @nocobase/app-sdk@0.0.1-beta.0

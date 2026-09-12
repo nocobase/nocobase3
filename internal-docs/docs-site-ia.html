@@ -1,0 +1,565 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NocoBase 3 文档站结构</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400..700&family=JetBrains+Mono:wght@400;500&display=swap">
+
+<style>
+  :root {
+    --ground: #FBFBFD;
+    --surface: #FFFFFF;
+    --sunken: #F3F4F8;
+    --ink: #16171C;
+    --ink-soft: #4A4E5C;
+    --ink-faint: #82869A;
+    --line: #E3E4EC;
+    --line-soft: #EDEEF4;
+    --accent: #2B34E0;
+    --accent-soft: #E8E9FD;
+
+    --display: 'Instrument Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    --body: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0F1015;
+      --surface: #16171E;
+      --sunken: #1B1D26;
+      --ink: #E8E9F0;
+      --ink-soft: #A5A9BA;
+      --ink-faint: #767B8E;
+      --line: #282A36;
+      --line-soft: #21232D;
+      --accent: #838CFF;
+      --accent-soft: #1E2044;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #0F1015;
+    --surface: #16171E;
+    --sunken: #1B1D26;
+    --ink: #E8E9F0;
+    --ink-soft: #A5A9BA;
+    --ink-faint: #767B8E;
+    --line: #282A36;
+    --line-soft: #21232D;
+    --accent: #838CFF;
+    --accent-soft: #1E2044;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 16px;
+    line-height: 1.8;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 0 28px 110px;
+  }
+
+  header.top {
+    padding: 76px 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  .eyebrow {
+    font-family: var(--display);
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+
+  h1 {
+    font-family: var(--display);
+    font-size: clamp(34px, 5vw, 44px);
+    font-weight: 600;
+    letter-spacing: -0.022em;
+    line-height: 1.14;
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  .standfirst {
+    font-size: 17.5px;
+    line-height: 1.72;
+    color: var(--ink-soft);
+    margin: 0;
+  }
+
+  section { margin-top: 74px; }
+
+  h2 {
+    font-family: var(--display);
+    font-size: 25px;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  .sec-head {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    padding-bottom: 13px;
+    border-bottom: 1.5px solid var(--ink);
+    margin-bottom: 28px;
+  }
+  .sec-head .n {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-faint);
+  }
+
+  h3 {
+    font-family: var(--display);
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.008em;
+    margin: 38px 0 10px;
+  }
+
+  p { margin: 0 0 17px; }
+  p:last-child { margin-bottom: 0; }
+
+  strong { font-weight: 600; }
+  em { font-style: normal; color: var(--accent); font-weight: 500; }
+
+  code {
+    font-family: var(--mono);
+    font-size: 0.85em;
+    background: var(--sunken);
+    padding: 0.1em 0.36em;
+    border-radius: 3px;
+    color: var(--ink-soft);
+  }
+
+  ul { margin: 0 0 17px; padding-left: 20px; }
+  li { margin-bottom: 6px; }
+  li::marker { color: var(--ink-faint); }
+
+  /* 对比：两代产品 */
+  .versus {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 24px;
+  }
+  .versus > div {
+    background: var(--surface);
+    padding: 20px 22px;
+  }
+  .versus h4 {
+    font-family: var(--display);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    margin: 0 0 8px;
+    color: var(--ink-faint);
+  }
+  .versus p {
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.7;
+  }
+  .versus .hi { color: var(--accent); font-weight: 500; }
+
+  /* 模块总览 */
+  .tree {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 6px 26px;
+    margin-bottom: 8px;
+  }
+  .tree ol { list-style: none; margin: 0; padding: 0; counter-reset: m; }
+  .tree > ol > li {
+    padding: 17px 0;
+    border-bottom: 1px solid var(--line-soft);
+    display: grid;
+    grid-template-columns: 26px 175px 1fr;
+    gap: 16px;
+    align-items: baseline;
+  }
+  .tree > ol > li:last-child { border-bottom: none; }
+  .tree > ol > li::before {
+    counter-increment: m;
+    content: counter(m);
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-faint);
+  }
+  .tree .name {
+    font-family: var(--display);
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.008em;
+  }
+  .tree .who {
+    color: var(--ink-soft);
+    font-size: 15px;
+    line-height: 1.65;
+  }
+
+  /* 模块详述 */
+  .mod {
+    border-top: 1px solid var(--line);
+    padding-top: 24px;
+    margin-top: 42px;
+  }
+  .mod:first-of-type { margin-top: 28px; }
+
+  .mod-head {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+  }
+  .mod-head h3 { margin: 0; font-size: 20px; }
+  .mod-head .path {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-faint);
+  }
+
+  .mod > p.role {
+    color: var(--ink-soft);
+    margin: 0 0 20px;
+  }
+
+  .pages { margin: 0; padding: 0; list-style: none; }
+  .pages > li {
+    display: grid;
+    grid-template-columns: 190px 1fr;
+    gap: 22px;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--line-soft);
+    align-items: baseline;
+  }
+  .pages > li:last-child { border-bottom: none; }
+  .pages .pg { font-weight: 500; font-size: 15px; line-height: 1.55; }
+  .pages .desc { color: var(--ink-soft); font-size: 15px; line-height: 1.65; }
+
+  .from {
+    margin-top: 16px;
+    font-size: 13.5px;
+    color: var(--ink-faint);
+    line-height: 1.7;
+  }
+  .from b {
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    margin-right: 8px;
+  }
+  .from code { background: none; padding: 0; font-size: 12.5px; color: var(--ink-faint); }
+
+  .key {
+    background: var(--accent-soft);
+    border-left: 2px solid var(--accent);
+    padding: 14px 18px;
+    margin: 18px 0 0;
+    font-size: 15px;
+    line-height: 1.68;
+  }
+  .key p { margin: 0; }
+  .key b { color: var(--accent); font-weight: 600; }
+
+  footer {
+    margin-top: 84px;
+    padding-top: 20px;
+    border-top: 1px solid var(--line);
+    font-size: 13px;
+    color: var(--ink-faint);
+  }
+
+  @media (max-width: 680px) {
+    .wrap { padding: 0 20px 70px; }
+    header.top { padding-top: 48px; }
+    .versus { grid-template-columns: 1fr; }
+    .tree > ol > li { grid-template-columns: 22px 1fr; }
+    .tree .who { grid-column: 2; }
+    .pages > li { grid-template-columns: 1fr; gap: 4px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+<header class="top">
+  <div class="eyebrow">文档站规划</div>
+  <h1>NocoBase 3 文档站结构</h1>
+  <p class="standfirst">现在的文档站只有个空架子，点进去几乎每页都写着「编写中」。这份文档说明：打算分成哪几块、每块写哪些页、每页讲什么。</p>
+</header>
+
+<section>
+  <div class="sec-head">
+    <span class="n">01</span>
+    <h2>先想清楚：谁会来看</h2>
+  </div>
+
+  <p>NocoBase 3 和 2 是完全不同的两个东西。</p>
+
+  <div class="versus">
+    <div>
+      <h4>NocoBase 2</h4>
+      <p>装好就能用的软件。用户打开网页，<span class="hi">在界面上点点点</span>，把自己要的功能配出来。</p>
+    </div>
+    <div>
+      <h4>NocoBase 3</h4>
+      <p>敲一行命令，给你一套完整的代码，这套代码归你。然后<span class="hi">你告诉 AI 要什么，AI 来写</span>。</p>
+    </div>
+  </div>
+
+  <p>这个差别很重要——2 的文档要教人「这个功能在哪个菜单里」，3 的文档要教人「怎么跟 AI 配合把功能做出来」。所以老文档的结构不能照抄。</p>
+
+  <p>来看 3 的文档的，就一类人：<strong>拿到了这套代码，想把自己的业务做出来</strong>。他会依次遇到这些问题：</p>
+
+  <ul>
+    <li>这玩意儿是什么？怎么跑起来？真能让 AI 写吗？</li>
+    <li>怎么跟 AI 说话它才听得懂？它写完我怎么检查？</li>
+    <li>能不能带我从头到尾做一遍？</li>
+    <li>AI 写的这段代码是什么意思？我想自己改怎么改？</li>
+    <li>登录、权限、审批这些，有没有现成的？</li>
+    <li>做完了怎么发到服务器上？</li>
+    <li>那个命令叫什么来着？</li>
+  </ul>
+
+  <p>我们的模块，就是照着这些问题一个个切出来的。<strong>顺序就是他遇到问题的先后顺序</strong>，不是按我们代码的结构切的。</p>
+</section>
+
+<section>
+  <div class="sec-head">
+    <span class="n">02</span>
+    <h2>切成八块</h2>
+  </div>
+
+  <div class="tree">
+    <ol>
+      <li><span class="name">开始</span><span class="who">头十分钟。跑起来，并且亲眼看见 AI 做出一个功能。</span></li>
+      <li><span class="name">和 AI 协作</span><span class="who">怎么跟 AI 提需求，它写完了怎么检查。</span></li>
+      <li><span class="name">教程</span><span class="who">带着做一个订单系统，从建表到上线。</span></li>
+      <li><span class="name">应用开发</span><span class="who">想看懂代码、或者自己动手改，来这儿查。</span></li>
+      <li><span class="name">内置能力</span><span class="who">登录、权限、审批、通知这些现成的，怎么装、怎么用。</span></li>
+      <li><span class="name">部署</span><span class="who">怎么打包，怎么发到服务器上。</span></li>
+      <li><span class="name">参考</span><span class="who">忘了某个命令、某个名字，来这儿查。</span></li>
+      <li><span class="name">插件开发</span><span class="who">想做一个能给别人用的功能包时才看。</span></li>
+    </ol>
+  </div>
+
+  <h3>有两个地方要特别说一下</h3>
+
+  <p><strong>第一，「用现成功能」和「做功能包」要分开。</strong></p>
+
+  <p>现在文档站里只有一个「插件」入口，里面既教你怎么用审批功能，又教你怎么开发一个功能包。但这是两批完全不同的人——一百个人里有九十九个只想直接用现成的审批，只有一个想自己做一个包发出去给别人用。</p>
+
+  <p>混在一起的坏处是：那九十九个人一进来看见「插件开发」，会以为自己得先学会做插件才能用审批。所以拆开——他们看到的那块叫「内置能力」，里面写的是「工作流」「通知」这些实实在在的名字，压根不出现「插件」两个字。</p>
+
+  <p><strong>第二，「AI」这个词在两个地方出现，意思完全不一样。</strong></p>
+
+  <ul>
+    <li>「和 AI 协作」说的是 <em>AI 帮你写代码</em>，这是开发时用的工具。</li>
+    <li>「内置能力」里的 AI 员工、知识库，说的是 <em>你做出来的系统里，给你的用户用的 AI 功能</em>。</li>
+  </ul>
+
+  <p>两件事没有关系，写的时候千万别串。</p>
+</section>
+
+<section>
+  <div class="sec-head">
+    <span class="n">03</span>
+    <h2>每块具体写什么</h2>
+  </div>
+
+  <div class="mod">
+    <div class="mod-head"><h3>开始</h3><span class="path">/get-started/</span></div>
+    <p class="role">读者的头十分钟。这三页要让他明白：这东西跟他以前用过的都不一样。</p>
+    <ul class="pages">
+      <li><span class="pg">NocoBase 3 是什么</span><span class="desc">一屏说清楚：你说要什么，AI 写代码，代码归你</span></li>
+      <li><span class="pg">创建应用</span><span class="desc">敲一行命令，选个数据库，跑起来。末尾一句话说明：用 Claude Code、Codex 都一样，打开这个项目目录即可，不用额外配置</span></li>
+      <li><span class="pg">让 AI 做第一个功能</span><span class="desc">打开 Claude Code，说「加一个订单管理」，看它把表、接口、页面一起做出来。做完回头看它改了哪几个文件，顺便把项目结构讲清楚</span></li>
+    </ul>
+    <div class="key">
+      <p><b>第三页最重要，必须用真实的操作记录。</b>不要自己编一段完美的对话——AI 实际做了什么，就写什么。这一页决定了读者信不信我们说的话，编的一眼就看得出来。</p>
+    </div>
+    <p class="from"><b>素材</b><code>packages/tools/create-app/README.md</code>、<code>app-template-default/README.MD</code>、<code>internal-docs/quickstart.md</code></p>
+  </div>
+
+  <div class="mod">
+    <div class="mod-head"><h3>和 AI 协作</h3><span class="path">/ai/</span></div>
+    <p class="role">跑通一次之后，怎么真正靠 AI 把一个项目推进下去。</p>
+    <ul class="pages">
+      <li><span class="pg">怎么提需求</span><span class="desc">话怎么说 AI 才做得对，给几组好的和不好的对比</span></li>
+      <li><span class="pg">检查 AI 的产出</span><span class="desc">该看哪几个地方，跑哪几个命令</span></li>
+      <li><span class="pg">做复杂功能</span><span class="desc">一句话说不清的需求，怎么拆成几次说</span></li>
+      <li><span class="pg">加上你们团队的规矩</span><span class="desc">把自己团队的要求写进去，AI 就会照着做</span></li>
+    </ul>
+    <div class="key">
+      <p><b>只写用户看得见的部分。</b>我们让 AI 读懂代码的那套机制，是内部实现，用户不用知道。他们只要知道一件事：装上插件后，AI 自动就会用了。</p>
+    </div>
+    <p class="from"><b>素材</b><code>app-template-default/AGENTS.md</code></p>
+  </div>
+
+  <div class="mod">
+    <div class="mod-head"><h3>教程</h3><span class="path">/tutorials/</span></div>
+    <p class="role">一个订单系统，从头做到尾。跟「应用开发」的区别：那边是查资料，这边是跟着做。</p>
+    <ul class="pages">
+      <li><span class="pg">1. 建表：订单和客户</span><span class="desc">数据存成什么样</span></li>
+      <li><span class="pg">2. 做列表页和详情页</span><span class="desc">页面、菜单入口</span></li>
+      <li><span class="pg">3. 加上权限</span><span class="desc">谁能看、谁能改</span></li>
+      <li><span class="pg">4. 接一条审批流</span><span class="desc">订单要主管批准才能生效</span></li>
+      <li><span class="pg">5. 发通知</span><span class="desc">批完了通知到人</span></li>
+      <li><span class="pg">6. 上线</span><span class="desc">打包，放到服务器上跑</span></li>
+    </ul>
+    <p class="from"><b>素材</b><code>packages/examples/</code> 下八个示例，每个演示一种能力</p>
+  </div>
+
+  <div class="mod">
+    <div class="mod-head"><h3>应用开发</h3><span class="path">/app/</span></div>
+    <p class="role">页数最多的一块。想看懂 AI 写了什么、或者要自己改，来这儿查。</p>
+    <ul class="pages">
+      <li><span class="pg">总览</span><span class="desc">这套代码分几部分，各管什么</span></li>
+      <li><span class="pg">页面和菜单</span><span class="desc">加一个页面，配上菜单，控制登录才能看</span></li>
+      <li><span class="pg">界面和样式</span><span class="desc">用现成组件拼界面，保证白天黑夜模式都正常</span></li>
+      <li><span class="pg">接口</span><span class="desc">写一个接口，以及怎么控制谁能调</span></li>
+      <li><span class="pg">读写数据</span><span class="desc">查数据、存数据</span></li>
+      <li><span class="pg">改表结构</span><span class="desc">加字段、改字段，以及准备初始数据</span></li>
+      <li><span class="pg">后台任务</span><span class="desc">定时跑的活儿、耗时的活儿</span></li>
+      <li><span class="pg">配置</span><span class="desc">数据库地址、密钥这些配在哪</span></li>
+      <li><span class="pg">多语言</span><span class="desc">让界面上的字能翻译</span></li>
+      <li><span class="pg">测试</span><span class="desc">测试写在哪，改完了验什么</span></li>
+    </ul>
+    <div class="key">
+      <p><b>代码例子要给足。</b>这块本来就得靠代码讲明白，完整的例子该贴就贴。要避开的是「大清单」——比如把全部一百多个配置项抄成一张表。那种东西一旦代码改了，没人会想起来同步，就一直错下去。给常用的几个，剩下链到包里的文档。</p>
+    </div>
+    <p class="from"><b>素材</b><code>app-template-default/skills/nocobase-app-development/references/</code> 十一页，主题几乎一一对应</p>
+  </div>
+
+  <div class="mod">
+    <div class="mod-head"><h3>内置能力</h3><span class="path">/capabilities/</span></div>
+    <p class="role">登录、权限、审批这些常见需求，我们已经做好了。每块由各自的负责人写。</p>
+    <ul class="pages">
+      <li><span class="pg">总览</span><span class="desc">有哪些现成的，怎么装</span></li>
+      <li><span class="pg">登录注册</span><span class="desc">账号密码、会话</span></li>
+      <li><span class="pg">权限</span><span class="desc">角色，谁能看哪个菜单、哪条数据</span></li>
+      <li><span class="pg">工作流</span><span class="desc">审批、多步流程</span></li>
+      <li><span class="pg">通知</span><span class="desc">邮件、站内消息、飞书钉钉</span></li>
+      <li><span class="pg">文件</span><span class="desc">上传、附件</span></li>
+      <li><span class="pg">多语言</span><span class="desc">切换界面语言</span></li>
+      <li><span class="pg">主题</span><span class="desc">换配色、换字体，白天黑夜模式。注意：主题不是插件，代码就在你项目里，可以直接改，这点要在页面开头说清楚</span></li>
+      <li><span class="pg">AI 员工和知识库</span><span class="desc">给你的用户用的 AI 功能</span></li>
+    </ul>
+    <div class="key">
+      <p><b>每页都按同一个套路写，控制在一屏半以内：</b>这东西解决什么问题 → 怎么装上 → 最常用的两三种用法 → 哪些能改、哪些不能改。目标是让人知道有这个东西、装得上、跑得起来。详细手册在包里，不往这儿搬。</p>
+    </div>
+    <p class="from"><b>素材</b>各插件自己的 <code>skills/</code> 共三十五页；<code>app-plugin-authentication/docs/zh-CN/</code> 九页可以当范本；主题那页用 <code>app-template-default/skills/nocobase-app-development/references/themes.md</code></p>
+  </div>
+
+  <div class="mod">
+    <div class="mod-head"><h3>部署</h3><span class="path">/deployment/</span></div>
+    <p class="role">从自己电脑上跑，到真正放上服务器。</p>
+    <ul class="pages">
+      <li><span class="pg">线上配置</span><span class="desc">数据库地址、密钥怎么给，怎么确认生效了</span></li>
+      <li><span class="pg">打包和运行</span><span class="desc">打出来的包长什么样，服务器上怎么启动</span></li>
+      <li><span class="pg">用 Docker 部署</span><span class="desc">容器化</span></li>
+      <li><span class="pg">Hub</span><span class="desc">管理多个应用。还没做完，页面上如实写「规划中」</span></li>
+    </ul>
+    <p class="from"><b>素材</b><code>packages/app/app-host/README.md</code>、<code>app-plugin-hub/README.md</code></p>
+  </div>
+
+  <div class="mod">
+    <div class="mod-head"><h3>参考</h3><span class="path">/reference/</span></div>
+    <p class="role">忘了某个名字的时候来查。只列事实，不解释。</p>
+    <ul class="pages">
+      <li><span class="pg">命令列表</span><span class="desc">每个命令各干什么</span></li>
+      <li><span class="pg">配置项</span><span class="desc">按类别分好，写常用的</span></li>
+      <li><span class="pg">路由类型对照</span><span class="desc">五种路由分别用在什么地方</span></li>
+      <li><span class="pg">样式变量</span><span class="desc">颜色、字号、间距这些可以用哪些</span></li>
+      <li><span class="pg">包列表</span><span class="desc">哪个包管什么事，详细的链到包里</span></li>
+      <li><span class="pg">名词解释</span><span class="desc">App、Hub、插件、迁移这些词是什么意思</span></li>
+    </ul>
+    <div class="key">
+      <p><b>名词解释这页建议最先写。</b>3 里面新名词特别多，别的模块写的时候都要链过来。晚定下来，同一个东西就会出现三种叫法，后面统一起来很麻烦。</p>
+    </div>
+  </div>
+
+  <div class="mod">
+    <div class="mod-head"><h3>插件开发</h3><span class="path">/plugin-development/</span></div>
+    <p class="role">只有想做一个包发出去给别人用时才看。看的人最少，但材料已经最齐了。</p>
+    <ul class="pages">
+      <li><span class="pg">你真的需要做插件吗</span><span class="desc">第一页就劝退：自己的功能直接写在自己代码里就行</span></li>
+      <li><span class="pg">创建和接入</span><span class="desc">生成一个空壳，接到应用里</span></li>
+      <li><span class="pg">各类功能怎么写</span><span class="desc">数据库、接口、页面、后台任务分开讲</span></li>
+      <li><span class="pg">让 AI 会用你的插件</span><span class="desc">插件怎么告诉 AI 自己该怎么被使用</span></li>
+      <li><span class="pg">发布</span><span class="desc">版本号、依赖，发到 npm 上</span></li>
+    </ul>
+    <p class="from"><b>素材</b><code>internal-docs/development/plugin-development/</code> 三十五页，质量已经够用。搬的时候要把「面向 AI Agent」「当前限制」这类内部说法去掉，改成给人看的口气</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <span class="n">04</span>
+    <h2>一个常见疑问：仓库里已经有很多文档了，直接搬过去不行吗</h2>
+  </div>
+
+  <p>不行。仓库里现在有三种文档，读者不一样：</p>
+
+  <ul>
+    <li><strong>各个包里的 <code>docs/</code></strong> —— 给已经在用这个包的人查细节的，要求写全、写尽。</li>
+    <li><strong>各个包里的 <code>skills/</code></strong> —— 给 AI 看的，写成命令式，全是「不要这样」「必须那样」。</li>
+    <li><strong>文档站</strong> —— 给还不知道自己要找什么的人看的，要讲清楚为什么、以及接下来该干嘛。</li>
+  </ul>
+
+  <p>举个例子。包里有一句写给 AI 的话：「迁移文件写完就不能改」。AI 看到照做就行。但放到文档站，得展开讲：为什么不能改、改了会出什么事、什么情况下还来得及改。</p>
+
+  <p>所以关系是<strong>单向的</strong>——包里的文档贴着代码，是原料；文档站从里面挑、重新写，是成品。不是复制粘贴。</p>
+
+  <h3>文档站有三样东西是包里写不出来的</h3>
+
+  <ul>
+    <li><strong>概念</strong> —— App、Hub、插件之间是什么关系。每个包只知道自己那一小块。</li>
+    <li><strong>顺序</strong> —— 先干什么后干什么。数据库包的文档不会告诉你，表建完了接下来该写接口。</li>
+    <li><strong>串起来</strong> —— 做一个「订单」功能，要同时动数据库、接口、页面、翻译四个地方。这个「四个地方」只有文档站说得出来。</li>
+  </ul>
+
+  <div class="key">
+    <p><b>特别大的包，不整个搬过来。</b>比如数据库包有一百三十九页文档，那是底层的东西，日常开发根本不用天天查。文档站只放一页总览加个链接，全文留在仓库里。</p>
+  </div>
+</section>
+
+<footer>
+  基于 2026-09-07 的仓库状态整理
+</footer>
+
+</div>
+
+</body>
+</html>

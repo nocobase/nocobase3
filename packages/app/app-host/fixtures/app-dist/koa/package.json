@@ -1,0 +1,8 @@
+{
+  "name": "@example/koa-app",
+  "version": "0.0.1",
+  "type": "module",
+  "dependencies": {
+    "koa": "^3.2.1"
+  }
+}

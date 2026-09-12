@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "display": "NocoBase Node library",
+  "extends": "./server.json",
+  "compilerOptions": {
+    "declaration": true,
+    "declarationMap": true,
+    "isolatedDeclarations": true,
+    "isolatedModules": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true
+  }
+}

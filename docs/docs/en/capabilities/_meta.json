@@ -1,0 +1,52 @@
+[
+  {
+    "type": "file",
+    "name": "index",
+    "label": "Built-in capabilities"
+  },
+  {
+    "type": "file",
+    "name": "overview",
+    "label": "Overview"
+  },
+  {
+    "type": "file",
+    "name": "auth",
+    "label": "Authentication"
+  },
+  {
+    "type": "file",
+    "name": "authorization",
+    "label": "Permissions"
+  },
+  {
+    "type": "dir",
+    "name": "workflow",
+    "label": "Workflow"
+  },
+  {
+    "type": "file",
+    "name": "notification",
+    "label": "Notifications"
+  },
+  {
+    "type": "file",
+    "name": "file",
+    "label": "Files"
+  },
+  {
+    "type": "file",
+    "name": "i18n",
+    "label": "Language switching"
+  },
+  {
+    "type": "file",
+    "name": "theme",
+    "label": "Themes"
+  },
+  {
+    "type": "file",
+    "name": "ai-employee",
+    "label": "AI employees and knowledge base"
+  }
+]

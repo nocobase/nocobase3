@@ -1,0 +1,62 @@
+# Notification Concepts
+
+## Package ownership
+
+| Package                                       | Responsibility                                                                                                                   |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `@nocobase/app-plugin-notification`           | Manager, registry, persistent Notification/Delivery/Attempt records, queue job, reconciler, logs, and protected logs/test UI/API |
+| `@nocobase/app-plugin-notification-in-app`    | `in-app` Channel, database Provider, personal inbox store/API, and a development-only Client inbox page                          |
+| `@nocobase/app-plugin-notification-providers` | `email` and `im` Channels; SMTP, Resend, Feishu, and DingTalk Provider definitions and safe test adapters                        |
+| `@nocobase/app-plugin-notification-provider`  | Browser toast adapter for Refine; not durable server delivery                                                                    |
+
+The application owns which packages are installed, plugin ordering, configuration, secret loading, user-address resolution, and business send calls. Use the shared Application container and `notificationServiceToken`; do not create a parallel manager inside a business module.
+
+## Delivery model
+
+One new `idempotencyKey` creates one Notification. Repeating an equivalent `send()` with that key returns the same Notification. Each resolved recipient/Channel/Provider combination creates an independent Delivery; a recipientless Channel uses the Channel/Provider combination directly. Each actual Provider submission creates an Attempt.
+
+```text
+Notification
+├── Delivery: user-1 / in-app / default
+├── Delivery: alice@example.com / email / smtp
+├── Delivery: ops / im / feishu
+└── Delivery: ops / im / dingtalk
+```
+
+The Channel owns recipient resolution, common-content rendering, and preparation. The Provider owns one external submission and returns `accepted`, `failed`, or `submission_unknown`.
+
+## Recipient and Channel compatibility
+
+- `in-app` accepts `{ type: 'user', id }`.
+- `email` accepts `{ type: 'email', address }`; it can accept `user` only when the Channel definition has a user-to-email resolver.
+- `im` Webhook accepts an omitted recipient and sends directly to the selected Provider; it can accept `user` only when the Channel definition has a user-to-address resolver.
+- `phone` is part of the core recipient union but no built-in Channel currently consumes it.
+
+An unsupported recipient, or a missing recipient for a recipient-bearing Channel, creates a failed Delivery; compatible combinations in the same Notification may continue.
+
+## Provider routing
+
+Provider names are unique within a Channel. The default `single` strategy uses the first enabled Provider. A named single route selects `routing.<channel>.providers.provider`. The `all` strategy creates one Delivery for every enabled or explicitly listed Provider name.
+
+Provider failure in `single` mode does not fail over to another Provider. Names and types are persisted on Deliveries and must remain stable while work is pending.
+
+## Status model
+
+Notification status summarizes its Deliveries:
+
+| Status       | Meaning                                                                       |
+| ------------ | ----------------------------------------------------------------------------- |
+| `pending`    | All Deliveries are waiting to run                                             |
+| `processing` | At least one Delivery is preparing, submitting, pending, or waiting for retry |
+| `completed`  | Every Delivery was accepted by its Provider                                   |
+| `partial`    | Terminal Deliveries include both accepted and failed results                  |
+| `failed`     | Every Delivery failed with no scheduled retry                                 |
+| `unknown`    | At least one Provider submission may have happened but confirmation was lost  |
+
+Delivery adds `preparing`, `submitting`, and `accepted`. A failed Delivery with `nextRunAt` remains processing and is eligible for reconciliation. `accepted` means the Provider accepted submission; it does not prove final delivery or user read. `unknown` suppresses automatic retry because a retry may duplicate a message.
+
+## Persistence and recovery
+
+The manager persists work before dispatching the queue job. If queue dispatch fails, the reconciler can enqueue ready Deliveries later. Leases protect concurrent workers. An expired lease during preparation returns the Delivery to pending; an expired lease during submission becomes unknown because the external effect cannot be proven absent.
+
+Use Notification, Delivery, Retry Audit, and Attempt records as the audit trail. Every accepted manual retry request creates an immutable Retry Audit on the same Delivery, including the decision and Provider-idempotency evidence available at that time. Provider submission then creates an Attempt; a retry that stops during preparation has a Retry Audit without another Attempt. Preserve them during diagnosis and recovery.

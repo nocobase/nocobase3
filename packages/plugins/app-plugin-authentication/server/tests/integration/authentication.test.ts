@@ -1,0 +1,555 @@
+// @vitest-environment node
+
+import { fileURLToPath } from 'node:url';
+
+import {
+  createDatabaseManager,
+  createMigrator,
+  createSeeder,
+} from '@nocobase/db';
+import { createCaching } from '@nocobase/caching';
+import { Hono } from 'hono';
+import type { Knex } from 'knex';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { Auth, type AuthEnv } from '../../../index.js';
+import { createAuthStorage } from '../../auth-storage.js';
+import { databaseAdapter } from '../../better-auth/database-adapter.js';
+import { createUserAdministrationService } from '../../user-administration.js';
+
+async function migrateAuthentication(
+  database: ReturnType<typeof createDatabaseManager>,
+): Promise<void> {
+  const migrator = createMigrator({
+    database,
+    packageName: '@nocobase/app-plugin-authentication',
+    directory: fileURLToPath(
+      new URL('../../../database/migrations', import.meta.url),
+    ),
+  });
+  await migrator.latest();
+}
+
+async function seedAuthentication(
+  database: ReturnType<typeof createDatabaseManager>,
+): Promise<void> {
+  const seeder = createSeeder({
+    database,
+    sources: [
+      {
+        packageName: '@nocobase/app-plugin-authentication',
+        directory: fileURLToPath(
+          new URL('../../../database/seeds', import.meta.url),
+        ),
+      },
+    ],
+  });
+  await seeder.run();
+}
+
+describe('Authentication', () => {
+  const database = createDatabaseManager({
+    default: 'main',
+    connections: {
+      main: {
+        dialect: 'sqlite',
+        filename: ':memory:',
+      },
+    },
+  });
+  const router = new Hono<AuthEnv>();
+  const caching = createCaching();
+  const authStorage = createAuthStorage(caching);
+  let cookie = '';
+  let auth: Auth;
+
+  beforeAll(async () => {
+    const connection = database.connection();
+    await migrateAuthentication(database);
+
+    auth = new Auth({
+      connection,
+      baseURL: 'http://localhost/api/auth',
+      secret: 'development-secret-at-least-32-characters',
+      appName: 'NocoBase3',
+      advanced: {
+        cookiePrefix: 'nocobase3',
+        defaultCookieAttributes: { path: '/test-app' },
+      },
+      secondaryStorage: authStorage,
+      session: { storeSessionInDatabase: true },
+    });
+
+    router.on(['GET', 'POST'], '/api/auth/*', (context) =>
+      auth.handler(context.req.raw),
+    );
+    router.get('/api/private', auth.required(), (context) =>
+      context.json({ ok: true, auth: context.get('auth') }),
+    );
+    router.get('/api/optional', auth.optional(), (context) =>
+      context.json({ auth: context.get('auth') }),
+    );
+  });
+
+  it('requires an explicit authentication secret', () => {
+    expect(() => new Auth({ connection: database.connection() })).toThrow(
+      'Authentication secret is required',
+    );
+  });
+
+  afterAll(async () => {
+    await caching.dispose();
+    await database.destroy();
+  });
+
+  it('signs up and resolves the Better Auth session', async () => {
+    const signedUp = await router.request('/api/auth/sign-up/email', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        email: 'alice@example.com',
+        password: 'correct horse battery staple',
+        name: 'Alice',
+        username: 'Alice.Admin',
+      }),
+    });
+
+    expect(signedUp.status).toBe(200);
+    expect(await signedUp.json()).toMatchObject({
+      user: {
+        email: 'alice@example.com',
+        name: 'Alice',
+        username: 'alice.admin',
+      },
+    });
+    cookie = signedUp.headers.get('set-cookie') ?? '';
+    expect(cookie).toContain('nocobase3.session_token');
+    expect(cookie).toContain('Path=/test-app');
+
+    const session = await router.request('/api/auth/get-session', {
+      headers: { cookie },
+    });
+    expect(session.status).toBe(200);
+    expect(await session.json()).toMatchObject({
+      user: { email: 'alice@example.com' },
+    });
+  });
+
+  it('reports stable conflicts for duplicate administrator-created identities', async () => {
+    const users = createUserAdministrationService({
+      auth,
+      connection: database.connection(),
+    });
+
+    await expect(
+      users.create({
+        name: 'Duplicate email',
+        username: 'another.user',
+        email: 'ALICE@EXAMPLE.COM',
+        password: 'correct horse battery staple',
+      }),
+    ).rejects.toMatchObject({ code: 'USER_EMAIL_CONFLICT' });
+    await expect(
+      users.create({
+        name: 'Duplicate username',
+        username: 'ALICE.ADMIN',
+        email: 'another@example.com',
+        password: 'correct horse battery staple',
+      }),
+    ).rejects.toMatchObject({ code: 'USER_USERNAME_CONFLICT' });
+  });
+
+  it('signs in with a normalized username without a display username field', async () => {
+    const response = await router.request('/api/auth/sign-in/username', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        username: 'ALICE.ADMIN',
+        password: 'correct horse battery staple',
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      user: { name: 'Alice', username: 'alice.admin' },
+    });
+
+    const knex = await database.connection().client<Knex>();
+    expect(await knex.schema.hasColumn('user', 'username')).toBe(true);
+    expect(await knex.schema.hasColumn('user', 'display_username')).toBe(false);
+    expect(await knex.schema.hasColumn('user', 'displayUsername')).toBe(false);
+  });
+
+  it('keeps authentication relations free of physical foreign keys', async () => {
+    const knex = await database.connection().client<Knex>();
+    const tables = ['session', 'account'];
+    for (const table of tables) {
+      expect(await knex.raw(`PRAGMA foreign_key_list(${table})`)).toEqual([]);
+    }
+  });
+
+  it('exposes the Better Auth session to protected routes', async () => {
+    const response = await router.request('/api/private', {
+      headers: { cookie },
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      ok: true,
+      auth: {
+        user: { id: expect.any(String), email: 'alice@example.com' },
+        session: { id: expect.any(String), userId: expect.any(String) },
+      },
+    });
+  });
+
+  it('supports optional sessions', async () => {
+    const anonymous = await router.request('/api/optional');
+    expect(anonymous.status).toBe(200);
+    expect(await anonymous.json()).toEqual({ auth: null });
+
+    const authenticated = await router.request('/api/optional', {
+      headers: { cookie },
+    });
+    expect(authenticated.status).toBe(200);
+    expect(await authenticated.json()).toMatchObject({
+      auth: {
+        user: { id: expect.any(String) },
+        session: { id: expect.any(String) },
+      },
+    });
+  });
+
+  it('invalidates disabled accounts and permits login again after enabling', async () => {
+    const user = await database
+      .connection()
+      .query.selectFrom('user')
+      .select('id')
+      .where('email', '=', 'alice@example.com')
+      .executeTakeFirstOrThrow();
+    const disconnectUser = vi.fn();
+    const users = createUserAdministrationService({
+      auth,
+      connection: database.connection(),
+      realtime: { disconnectUser } as never,
+    });
+    const sessions = await database
+      .connection()
+      .query.selectFrom('session')
+      .select('token')
+      .where('userId', '=', String(user.id))
+      .execute();
+    expect(sessions.length).toBeGreaterThan(0);
+    for (const session of sessions) {
+      await expect(
+        authStorage.get(String(session.token)),
+      ).resolves.not.toBeNull();
+    }
+    await expect(
+      authStorage.get(`active-sessions-${String(user.id)}`),
+    ).resolves.not.toBeNull();
+
+    await users.disable(String(user.id));
+
+    expect(disconnectUser).toHaveBeenCalledWith(String(user.id));
+    await expect(
+      database
+        .connection()
+        .query.selectFrom('session')
+        .select('id')
+        .where('userId', '=', String(user.id))
+        .execute(),
+    ).resolves.toEqual([]);
+    for (const session of sessions) {
+      await expect(authStorage.get(String(session.token))).resolves.toBeNull();
+    }
+    await expect(
+      authStorage.get(`active-sessions-${String(user.id)}`),
+    ).resolves.toBeNull();
+    const previousSession = await router.request('/api/private', {
+      headers: { cookie },
+    });
+    expect(previousSession.status).toBe(401);
+
+    for (const [path, credentials] of [
+      [
+        '/api/auth/sign-in/email',
+        {
+          email: 'alice@example.com',
+          password: 'correct horse battery staple',
+        },
+      ],
+      [
+        '/api/auth/sign-in/username',
+        {
+          username: 'alice.admin',
+          password: 'correct horse battery staple',
+        },
+      ],
+    ] as const) {
+      const response = await router.request(path, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(credentials),
+      });
+      expect(response.status).toBe(403);
+      await expect(response.json()).resolves.toMatchObject({
+        code: 'ACCOUNT_DISABLED',
+      });
+    }
+
+    await users.enable(String(user.id));
+    const enabled = await router.request('/api/auth/sign-in/username', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        username: 'alice.admin',
+        password: 'correct horse battery staple',
+      }),
+    });
+    expect(enabled.status).toBe(200);
+    cookie = enabled.headers.get('set-cookie') ?? '';
+  });
+
+  it('matches email credentials case-insensitively', async () => {
+    const response = await router.request('/api/auth/sign-in/email', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        email: 'ALICE@EXAMPLE.COM',
+        password: 'correct horse battery staple',
+      }),
+    });
+    expect(response.status).toBe(200);
+
+    const factory = databaseAdapter(database.connection());
+    const adapter = factory({
+      database: factory,
+      secret: 'development-secret-at-least-32-characters',
+    });
+    await expect(
+      adapter.findOne({
+        model: 'user',
+        where: [
+          { field: 'email', value: 'ALICE@EXAMPLE.COM', mode: 'insensitive' },
+        ],
+      }),
+    ).resolves.toMatchObject({ email: 'alice@example.com' });
+  });
+
+  it('rejects invalid credentials', async () => {
+    const response = await router.request('/api/auth/sign-in/email', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        email: 'alice@example.com',
+        password: 'wrong-password',
+      }),
+    });
+    expect(response.status).toBe(401);
+    expect(await response.json()).toMatchObject({
+      code: 'INVALID_EMAIL_OR_PASSWORD',
+    });
+  });
+
+  it('requires a session on protected routes', async () => {
+    const response = await router.request('/api/private');
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({
+      code: 'UNAUTHORIZED',
+      message: 'Authentication required',
+    });
+  });
+});
+
+describe('Authentication naming strategy', () => {
+  it('supports underscored: false', async () => {
+    const database = createDatabaseManager({
+      default: 'main',
+      connections: {
+        main: {
+          dialect: 'sqlite',
+          filename: ':memory:',
+          naming: { underscored: false },
+        },
+      },
+    });
+
+    try {
+      const connection = database.connection();
+      await migrateAuthentication(database);
+      const auth = new Auth({
+        connection,
+        baseURL: 'http://localhost/api/auth',
+        secret: 'development-secret-at-least-32-characters',
+      });
+      const router = new Hono();
+      router.on(['GET', 'POST'], '/api/auth/*', (context) =>
+        auth.handler(context.req.raw),
+      );
+
+      const response = await router.request('/api/auth/sign-up/email', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          email: 'camel@example.com',
+          password: 'correct horse battery staple',
+          name: 'Camel Case',
+          username: 'CamelCase',
+        }),
+      });
+      expect(response.status).toBe(200);
+      await expect(
+        connection.query
+          .selectFrom('user')
+          .select(['name', 'username'])
+          .where('email', '=', 'camel@example.com')
+          .executeTakeFirst(),
+      ).resolves.toEqual({ name: 'Camel Case', username: 'camelcase' });
+      await expect(
+        connection.query
+          .selectFrom('session')
+          .select(['userId', 'expiresAt'])
+          .executeTakeFirst(),
+      ).resolves.toMatchObject({ userId: expect.any(String) });
+
+      const factory = databaseAdapter(connection);
+      const adapter = factory({
+        database: factory,
+        secret: 'development-secret-at-least-32-characters',
+      });
+      await expect(
+        adapter.findOne({
+          model: 'user',
+          where: [
+            { field: 'email', value: 'CAMEL@EXAMPLE.COM', mode: 'insensitive' },
+          ],
+        }),
+      ).resolves.toMatchObject({ email: 'camel@example.com' });
+    } finally {
+      await database.destroy();
+    }
+  });
+});
+
+describe('Authentication seed', () => {
+  it('creates the default admin with working hashed credentials', async () => {
+    const database = createDatabaseManager({
+      default: 'main',
+      connections: {
+        main: {
+          dialect: 'sqlite',
+          filename: ':memory:',
+        },
+      },
+    });
+
+    try {
+      await migrateAuthentication(database);
+      await seedAuthentication(database);
+
+      const connection = database.connection();
+      const user = await connection.query
+        .selectFrom('user')
+        .select(['id', 'name', 'username', 'email', 'emailVerified'])
+        .where('email', '=', 'admin@nocobase.com')
+        .executeTakeFirst();
+      expect(user).toMatchObject({
+        name: 'nocobase',
+        username: 'nocobase',
+        email: 'admin@nocobase.com',
+        emailVerified: 1,
+      });
+
+      const account = await connection.query
+        .selectFrom('account')
+        .select(['issuer', 'accountId', 'providerId', 'userId', 'password'])
+        .where('userId', '=', user?.id)
+        .executeTakeFirst();
+      expect(account).toMatchObject({
+        issuer: 'local:credential',
+        accountId: user?.id,
+        providerId: 'credential',
+        userId: user?.id,
+      });
+      expect(account?.password).not.toBe('admin123');
+
+      const auth = new Auth({
+        connection,
+        baseURL: 'http://localhost/api/auth',
+        secret: 'development-secret-at-least-32-characters',
+      });
+      const router = new Hono();
+      router.on(['GET', 'POST'], '/api/auth/*', (context) =>
+        auth.handler(context.req.raw),
+      );
+
+      const response = await router.request('/api/auth/sign-in/username', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          username: 'nocobase',
+          password: 'admin123',
+        }),
+      });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        user: {
+          name: 'nocobase',
+          username: 'nocobase',
+          email: 'admin@nocobase.com',
+        },
+      });
+    } finally {
+      await database.destroy();
+    }
+  });
+
+  it('does not add a default credential to an existing installation', async () => {
+    const database = createDatabaseManager({
+      default: 'main',
+      connections: {
+        main: {
+          dialect: 'sqlite',
+          filename: ':memory:',
+        },
+      },
+    });
+
+    try {
+      await migrateAuthentication(database);
+      const now = new Date();
+      await database
+        .connection()
+        .query.insertInto('user')
+        .values({
+          id: crypto.randomUUID(),
+          name: 'Existing User',
+          username: 'existing',
+          email: 'existing@example.com',
+          emailVerified: true,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .execute();
+
+      await seedAuthentication(database);
+
+      await expect(
+        database
+          .connection()
+          .query.selectFrom('user')
+          .select('id')
+          .where('email', '=', 'admin@nocobase.com')
+          .executeTakeFirst(),
+      ).resolves.toBeUndefined();
+      await expect(
+        database
+          .connection()
+          .query.selectFrom('account')
+          .select('id')
+          .execute(),
+      ).resolves.toEqual([]);
+    } finally {
+      await database.destroy();
+    }
+  });
+});

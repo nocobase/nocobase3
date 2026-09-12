@@ -1,0 +1,36 @@
+{
+  "name": "nocobase-file",
+  "homepage": "https://www.nocobase.com",
+  "items": [
+    {
+      "name": "component-ui",
+      "type": "registry:component",
+      "title": "NocoBase File Component UI",
+      "description": "Application-owned upload, list, thumbnail, and preview components for business file endpoints.",
+      "dependencies": [
+        "@nocobase/app-plugin-file@>=0.1.0-beta.9 <1.0.0",
+        "lucide-react@^0.487.0",
+        "react-markdown@^10.1.0",
+        "remark-gfm@^4.0.1",
+        "react@^19.0.0",
+        "react-dom@^19.0.0"
+      ],
+      "registryDependencies": ["button", "dialog"],
+      "docs": "Install editable file components, resolve clientFileRepositoryManagerToken from the App, and pass manager.repository(resourceName) to FileUploadField. Read components use FileRecord.contentUrl. The App owns routes, authorization and business relations. Upgrade installed source with a three-way merge.",
+      "meta": {
+        "ownership": "application",
+        "upgradePolicy": "three-way-merge",
+        "nocobase": {
+          "requiresPlugins": {
+            "@nocobase/app-plugin-file": ">=0.1.0-beta.9 <1.0.0"
+          }
+        }
+      },
+      "source": {
+        "root": "registry/component-ui",
+        "target": "client/extensions/nocobase-file-component-ui",
+        "include": ["."]
+      }
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig/server-library.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist"
+  },
+  "include": [
+    "eslint/**/*.ts",
+    "prettier/**/*.ts",
+    "vite/**/*.ts",
+    "vitest/**/*.ts"
+  ]
+}

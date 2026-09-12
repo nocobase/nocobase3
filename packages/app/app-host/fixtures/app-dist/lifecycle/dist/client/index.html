@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lifecycle Demo</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      body {
+        margin: 0;
+        padding: 24px;
+        line-height: 1.5;
+      }
+
+      main {
+        max-width: 960px;
+      }
+
+      pre {
+        padding: 16px;
+        border: 1px solid rgba(127, 127, 127, 0.35);
+        border-radius: 8px;
+        overflow: auto;
+        background: rgba(127, 127, 127, 0.08);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Lifecycle Demo</h1>
+      <p>This fixture shows how <code>onBeforeDestroy</code>, <code>registerDisposer</code>, and <code>dispose()</code> fit together.</p>
+      <p>Open <code>/lifecycle/api/lifecycle</code> to inspect the current runtime state.</p>
+      <pre id="state">Loading...</pre>
+    </main>
+    <script type="module" src="/assets/lifecycle.js"></script>
+  </body>
+</html>

@@ -1,0 +1,134 @@
+import { describe, expect, it, vi } from 'vitest';
+import { resolveAppClientContributions } from '@nocobase/app-client/plugins';
+
+import {
+  NotificationClient,
+  NotificationTestApiError,
+} from '../client/notification-client.js';
+import notificationPlugin from '../client/plugin.js';
+import routes from '../client/routes.js';
+
+describe('@nocobase/app-plugin-notification client', () => {
+  it('contributes notification logs and locale resources through the settings centre', () => {
+    const registration = notificationPlugin();
+
+    expect(registration.serviceProviders).toHaveLength(1);
+    expect(registration.routes).toEqual([routes]);
+    expect(registration.locales).toMatchObject({
+      'en-US': expect.any(Function),
+      'zh-CN': expect.any(Function),
+    });
+    expect(routes).toMatchObject({
+      parent: 'settings',
+      routes: [
+        {
+          name: 'notifications',
+          path: '/notifications',
+          children: [{ name: 'logs', path: '/logs' }],
+        },
+      ],
+    });
+    const resolved = resolveAppClientContributions([
+      { packageName: registration.packageName, routes },
+    ]);
+    expect(resolved.settingGroups).toMatchObject([
+      { id: 'notifications', title: 'nav.notifications' },
+    ]);
+    expect(resolved.settings).toMatchObject([
+      {
+        path: '/settings/notifications/logs',
+        access: { resource: 'notification.logs', action: 'access' },
+      },
+    ]);
+  });
+
+  it('loads redacted notification log details through the API client', async () => {
+    const details = [{ log: { id: 'notification-1' }, deliveries: [] }];
+    const request = vi.fn().mockResolvedValue({ data: details });
+
+    await expect(
+      new NotificationClient({ request }).listLogs(),
+    ).resolves.toEqual(details);
+    expect(request).toHaveBeenCalledWith({ path: 'notifications/logs' });
+  });
+
+  it('loads safe test targets and sends through the core test route', async () => {
+    const target = {
+      channel: { type: 'im', label: 'IM' },
+      provider: {
+        name: 'feishu',
+        type: 'feishu-webhook',
+        label: 'Feishu webhook',
+      },
+      fields: [],
+    };
+    const result = {
+      notificationId: 'notification-1',
+      idempotencyKey: 'notification-test:notification-1',
+      deduplicated: false,
+      status: 'pending',
+      deliveries: [],
+    };
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({ data: [target] })
+      .mockResolvedValueOnce({ data: result });
+    const client = new NotificationClient({ request });
+
+    await expect(client.listTestTargets()).resolves.toEqual([target]);
+    await expect(
+      client.sendTest({
+        channel: 'im',
+        provider: { name: 'feishu', type: 'feishu-webhook' },
+        values: { title: 'Test', body: 'Hello' },
+      }),
+    ).resolves.toEqual(result);
+    expect(request).toHaveBeenNthCalledWith(1, {
+      headers: { 'x-nocobase-notification-test': '1' },
+      path: 'notifications/test/targets',
+    });
+    expect(request).toHaveBeenNthCalledWith(2, {
+      headers: { 'x-nocobase-notification-test': '1' },
+      json: {
+        channel: 'im',
+        provider: { name: 'feishu', type: 'feishu-webhook' },
+        values: { title: 'Test', body: 'Hello' },
+      },
+      method: 'POST',
+      path: 'notifications/test/send',
+    });
+  });
+
+  it('surfaces the localized message from a structured test error', async () => {
+    const request = vi.fn().mockRejectedValue(
+      Object.assign(new Error('Request failed'), {
+        status: 403,
+        payload: {
+          error: {
+            code: 'NOTIFICATION_TEST_FORBIDDEN',
+            message: '需要发送通知测试的权限。',
+            ns: '@nocobase/app-plugin-notification',
+            key: 'errors.testForbidden',
+          },
+        },
+      }),
+    );
+
+    await expect(
+      new NotificationClient({ request }).sendTest({
+        channel: 'email',
+        provider: { name: 'primary', type: 'smtp' },
+        values: { recipient: 'test@example.com' },
+      }),
+    ).rejects.toEqual(
+      expect.objectContaining({
+        name: 'NotificationTestApiError',
+        code: 'NOTIFICATION_TEST_FORBIDDEN',
+        message: '需要发送通知测试的权限。',
+        status: 403,
+        ns: '@nocobase/app-plugin-notification',
+        key: 'errors.testForbidden',
+      } satisfies Partial<NotificationTestApiError>),
+    );
+  });
+});
