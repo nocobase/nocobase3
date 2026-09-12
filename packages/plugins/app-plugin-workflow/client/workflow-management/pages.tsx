@@ -589,7 +589,19 @@ function WorkflowRow({
     <>
       <li>
         <div className='workflow-row-main'>
-          <Link to={workflowPath(identifier)}>{item.title ?? item.key}</Link>
+          <div className='workflow-row-title'>
+            <Link to={workflowPath(identifier)}>{item.title ?? item.key}</Link>
+            {pendingArtifact ? (
+              <Link
+                className='workflow-pending-version-link'
+                to={workflowPath(pendingArtifact.hash)}
+              >
+                <Badge className='workflow-version-tag pending'>
+                  {t('workflows.newVersionAvailable')}
+                </Badge>
+              </Link>
+            ) : null}
+          </div>
           <span aria-hidden='true' className='workflow-row-separator'>
             ·
           </span>
@@ -608,16 +620,6 @@ function WorkflowRow({
               {t('common.runCount', { count: 0 })}
             </span>
           )}
-          {pendingArtifact ? (
-            <Link
-              className='workflow-pending-version-link'
-              to={workflowPath(pendingArtifact.hash)}
-            >
-              <Badge className='workflow-version-tag pending'>
-                {t('workflows.newVersionAvailable')}
-              </Badge>
-            </Link>
-          ) : null}
         </div>
         <div className='workflow-row-actions'>
           <label className='workflow-switch'>

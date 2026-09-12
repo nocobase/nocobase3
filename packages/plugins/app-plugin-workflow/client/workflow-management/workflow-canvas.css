@@ -523,6 +523,12 @@
   gap: 8px;
   min-width: 0;
 }
+.workflow-row-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
 .workflow-row-main .workflow-execution-link,
 .workflow-execution-count {
   color: var(--muted-foreground);
