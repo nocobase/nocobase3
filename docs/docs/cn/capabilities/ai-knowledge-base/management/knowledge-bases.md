@@ -81,4 +81,4 @@ keywords: 'AI 知识库,知识库管理,文档,分段,LOCAL,READONLY,EXTERNAL'
 
 - [快速开始](../quick-start/index.md) — 完成第一次配置、上传和命中测试
 - [向量数据库](./vector-database.md) — 配置和维护 PGVector
-- [AI 员工 RAG 检索](./agent-rag.md) — 将知识库分配给 AI 员工
+- [AI 员工 RAG 检索](../quick-start/agent-rag.md) — 将知识库分配给 AI 员工

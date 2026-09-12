@@ -97,4 +97,4 @@ LOCAL 和 READONLY 知识库会保存三项向量存储配置：
 
 - [快速开始](../quick-start/index.md) — 从 `config.yml` 配置 PGVector
 - [配置和管理知识库](./knowledge-bases.md) — 在管理页面使用向量数据库
-- [AI 员工 RAG 检索](./agent-rag.md) — 配置检索策略和阈值
+- [AI 员工 RAG 检索](../quick-start/agent-rag.md) — 配置检索策略和阈值

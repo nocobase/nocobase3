@@ -121,4 +121,4 @@ LOCAL 知识库负责保存源文件并写入向量。`READONLY` 适合读取已
 
 - [向量数据库](../management/vector-database.md) — 了解 PGVector 字段和变更影响
 - [配置和管理知识库](../management/knowledge-bases.md) — 维护知识库、文档和分段
-- [AI 员工 RAG 检索](../management/agent-rag.md) — 把知识库接入 AI 员工
+- [AI 员工 RAG 检索](./agent-rag.md) — 把知识库接入 AI 员工
