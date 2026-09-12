@@ -172,7 +172,9 @@ describe('route overlay interactions', () => {
       expect(router.state.location.pathname).toBe('/main/orders/edit/42'),
     );
     expect(parentCheck).not.toHaveBeenCalled();
-    expect(screen.getByRole('dialog', { name: 'Edit' })).toBeVisible();
+    await waitFor(() =>
+      expect(screen.getByRole('dialog', { name: 'Edit' })).toBeVisible(),
+    );
   });
 
   it('dismisses only the top layer with Escape', async () => {
