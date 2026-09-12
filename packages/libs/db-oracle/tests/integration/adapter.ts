@@ -1,4 +1,4 @@
-import { createDatabaseManager } from '@nocobase/db';
+import { createDatabaseManager, rawRows } from '@nocobase/db';
 import {
   createDatabaseIntegrationAdapter,
   dropPortableIntegrationObjects,
@@ -32,5 +32,20 @@ export const oracleIntegrationAdapter: DatabaseIntegrationAdapter =
         'viewRows',
         'keyless',
       ]);
+      const sequences = await context.db.raw(
+        `select s.sequence_name as "name"
+         from user_sequences s
+         where not exists (
+           select 1
+           from user_tab_identity_cols i
+           where i.sequence_name = s.sequence_name
+         )
+           and s.sequence_name like ?`,
+        [`${context.prefix.toUpperCase()}_%`],
+      );
+      for (const row of rawRows<{ name: string }>(sequences))
+        await context.db.raw(
+          `drop sequence "${row.name.replaceAll('"', '""')}"`,
+        );
     },
   });

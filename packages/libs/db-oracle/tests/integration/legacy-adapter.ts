@@ -107,7 +107,18 @@ async function oracleObjects(
 ): Promise<string[]> {
   return rows(
     await context.db.raw(
-      `select ${column} as "name" from ${source} where ${column} like ?`,
+      `select s.${column} as "name"
+       from ${source} s
+       where ${
+         source === 'user_sequences'
+           ? `not exists (
+               select 1
+               from user_tab_identity_cols i
+               where i.sequence_name = s.${column}
+             )
+             and `
+           : ''
+       }s.${column} like ?`,
       [`${context.prefix}_%`],
     ),
   )
