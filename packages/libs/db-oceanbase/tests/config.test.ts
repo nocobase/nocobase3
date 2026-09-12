@@ -1,16 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import oceanbaseMysql from '../src/index.js';
+import oceanbase from '../src/index.js';
 import {
   resolveDatabaseCapabilities,
   resolveKnexConnectionConfig,
 } from '@nocobase/db/testing';
 
-describe('OceanBase MySQL database configuration', () => {
+describe('OceanBase database configuration', () => {
   it('normalizes host and driver options for mysql2', () => {
     expect(
       resolveKnexConnectionConfig(
         {
-          dialect: 'oceanbase-mysql',
+          dialect: 'oceanbase',
           host: '127.0.0.1',
           port: 2881,
           database: 'orders',
@@ -20,7 +20,7 @@ describe('OceanBase MySQL database configuration', () => {
           ssl: true,
           driverOptions: { decimalNumbers: true },
         } as never,
-        oceanbaseMysql.driver,
+        oceanbase.driver,
       ).connection,
     ).toEqual({
       decimalNumbers: false,
@@ -40,13 +40,13 @@ describe('OceanBase MySQL database configuration', () => {
     expect(
       resolveKnexConnectionConfig(
         {
-          dialect: 'oceanbase-mysql',
+          dialect: 'oceanbase',
           socketPath: '/tmp/mysql.sock',
           database: 'orders',
           username: 'orders_user',
           password: 'secret',
         } as never,
-        oceanbaseMysql.driver,
+        oceanbase.driver,
       ).connection,
     ).toEqual({
       socketPath: '/tmp/mysql.sock',
@@ -59,9 +59,9 @@ describe('OceanBase MySQL database configuration', () => {
     });
   });
 
-  it('reports OceanBase MySQL capabilities', () => {
+  it('reports OceanBase capabilities', () => {
     expect(
-      resolveDatabaseCapabilities(oceanbaseMysql.driver.capabilities),
+      resolveDatabaseCapabilities(oceanbase.driver.capabilities),
     ).toMatchObject({
       comments: true,
       nativeTypes: true,

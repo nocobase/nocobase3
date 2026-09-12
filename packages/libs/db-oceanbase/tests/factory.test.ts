@@ -1,12 +1,12 @@
 import { expect, it } from 'vitest';
-import oceanbaseMysql from '../src/index.js';
+import oceanbase from '../src/index.js';
 it('binds its driver', () =>
-  expect(oceanbaseMysql().databaseDriver).toBe(oceanbaseMysql.driver));
+  expect(oceanbase().databaseDriver).toBe(oceanbase.driver));
 
 it('preserves the numeric transport contract', () => {
   expect(
-    oceanbaseMysql.driver.resolveConnection?.({
-      dialect: 'oceanbase-mysql',
+    oceanbase.driver.resolveConnection?.({
+      dialect: 'oceanbase',
       host: 'localhost',
       database: 'app',
       username: 'app',
@@ -26,8 +26,8 @@ it('preserves the numeric transport contract', () => {
 
 it('rejects socketPath combined with host', () => {
   expect(() =>
-    oceanbaseMysql.driver.resolveConnection?.({
-      dialect: 'oceanbase-mysql',
+    oceanbase.driver.resolveConnection?.({
+      dialect: 'oceanbase',
       socketPath: '/tmp/mysql.sock',
       host: 'localhost',
     } as never),

@@ -67,6 +67,12 @@ Start and test MySQL:
 pnpm --filter @nocobase/db-mysql test:integration
 ```
 
+Start and test OceanBase CE:
+
+```bash
+pnpm --filter @nocobase/db-oceanbase test:integration
+```
+
 Oracle uses the larger `gvenzl/oracle-free:23-slim-faststart` image:
 
 ```bash

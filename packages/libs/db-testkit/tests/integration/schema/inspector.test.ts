@@ -282,7 +282,7 @@ describeIntegrationDatabases('schema inspector', (context) => {
         );
         break;
       case 'mysql':
-      case 'oceanbase-mysql':
+      case 'oceanbase':
         await context.db.raw(`
           create table \`${tableName}\` (
             \`id\` bigint unsigned not null auto_increment primary key,
@@ -438,7 +438,7 @@ describeIntegrationDatabases('schema inspector', (context) => {
       );
     } else if (
       context.spec.dialect === 'mysql' ||
-      context.spec.dialect === 'oceanbase-mysql'
+      context.spec.dialect === 'oceanbase'
     ) {
       expect(result?.comment).toBe('Advanced schema rows');
       expect(

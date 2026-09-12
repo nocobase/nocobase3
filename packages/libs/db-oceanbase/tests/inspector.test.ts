@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { normalizePhysicalDataType } from '@nocobase/db';
-import oceanbaseMysql from '../src/index.js';
+import oceanbase from '../src/index.js';
 import { MysqlSchemaInspector, mysqlTypes } from '../src/inspectors/mysql.js';
 
-describe('mysql schema inspector', () => {
+describe('OceanBase schema inspector', () => {
   it('is wired into the public driver descriptor', () => {
     expect(
-      oceanbaseMysql.driver.createSchemaInspector?.({
+      oceanbase.driver.createSchemaInspector?.({
         connectionName: 'main',
         config: { database: 'app' },
         resolveClient: async () => ({}) as never,
@@ -41,7 +41,7 @@ describe('mysql schema inspector', () => {
     });
   });
 
-  it('normalizes OceanBase MySQL temporal and unsigned numeric types', () => {
+  it('normalizes OceanBase temporal and unsigned numeric types', () => {
     expect(normalizePhysicalDataType(mysqlTypes, 'timestamp(6)')).toBe(
       'datetimeTz',
     );

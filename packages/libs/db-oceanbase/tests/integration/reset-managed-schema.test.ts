@@ -3,9 +3,9 @@ import {
   describeIntegrationDatabases,
   installDatabaseIntegrationAdapter,
 } from '@nocobase/db-testkit';
-import { oceanbaseMysqlDialectIntegrationAdapter } from './legacy-adapter.js';
+import { oceanbaseDialectIntegrationAdapter } from './legacy-adapter.js';
 
-installDatabaseIntegrationAdapter(oceanbaseMysqlDialectIntegrationAdapter);
+installDatabaseIntegrationAdapter(oceanbaseDialectIntegrationAdapter);
 
 describeIntegrationDatabases(
   'OceanBase MySQL managed schema reset',

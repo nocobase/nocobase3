@@ -14,7 +14,7 @@ describeIntegrationDatabases('Physical scalar capabilities', (context) => {
           'float',
           'tinyint(1)',
         ],
-        'oceanbase-mysql': [
+        oceanbase: [
           'char(8)',
           'varchar(16)',
           'int unsigned',
@@ -69,7 +69,7 @@ describeIntegrationDatabases('Physical scalar capabilities', (context) => {
         expect(columns.get('label')?.collation).toBeTruthy();
       if (
         dialect === 'mysql' ||
-        dialect === 'oceanbase-mysql' ||
+        dialect === 'oceanbase' ||
         dialect === 'postgres'
       )
         expect(columns.get('label')?.characterSet).toBeTruthy();
@@ -89,7 +89,7 @@ describeIntegrationDatabases('Physical scalar capabilities', (context) => {
       });
       expect(columns.get('ratio')).toMatchObject({ dataType: 'float' });
     }
-    if (dialect === 'mysql' || dialect === 'oceanbase-mysql')
+    if (dialect === 'mysql' || dialect === 'oceanbase')
       expect(columns.get('quantity')).toMatchObject({
         integerBits: 32,
         unsigned: true,
@@ -100,7 +100,7 @@ describeIntegrationDatabases('Physical scalar capabilities', (context) => {
         unsigned: true,
       });
     expect(columns.get('enabled')?.dataType).toBe(
-      dialect === 'mysql' || dialect === 'oceanbase-mysql'
+      dialect === 'mysql' || dialect === 'oceanbase'
         ? 'integer'
         : dialect === 'oracle' || dialect === 'dameng'
           ? 'decimal'

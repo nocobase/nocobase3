@@ -209,7 +209,7 @@ describeIntegrationDatabases('Repository temporal contract', (context) => {
       sqlite: 'TIMESTAMP(6)',
       postgres: 'timestamp(6) with time zone',
       mysql: 'datetime(6)',
-      'oceanbase-mysql': 'datetime(6)',
+      oceanbase: 'datetime(6)',
       oracle: 'timestamp(6) with time zone',
       mssql: 'datetimeoffset(6)',
       dameng: 'timestamp(6) with time zone',
@@ -347,7 +347,7 @@ describeIntegrationDatabases('Repository temporal contract', (context) => {
             ]);
           if (
             context.spec.dialect === 'mysql' ||
-            context.spec.dialect === 'oceanbase-mysql'
+            context.spec.dialect === 'oceanbase'
           )
             await client.raw('set time_zone = ?', [zone]);
           if (context.spec.dialect === 'oracle')
@@ -373,7 +373,7 @@ describeIntegrationDatabases('Repository temporal contract', (context) => {
           } finally {
             if (
               context.spec.dialect === 'mysql' ||
-              context.spec.dialect === 'oceanbase-mysql'
+              context.spec.dialect === 'oceanbase'
             )
               await client.raw("set time_zone = '+00:00'");
             if (context.spec.dialect === 'oracle')
@@ -387,7 +387,7 @@ describeIntegrationDatabases('Repository temporal contract', (context) => {
   it('handles native MySQL TIMESTAMP columns without metadata under different session zones', async () => {
     if (
       context.spec.dialect !== 'mysql' &&
-      context.spec.dialect !== 'oceanbase-mysql'
+      context.spec.dialect !== 'oceanbase'
     )
       return;
     await context.db.schema.createTable(
@@ -397,7 +397,11 @@ describeIntegrationDatabases('Repository temporal contract', (context) => {
         t.specificType('instant', 'timestamp(3)').notNullable();
       },
     );
-    for (const zone of ['SYSTEM', '+08:00', '-05:00']) {
+    const zones =
+      context.spec.dialect === 'oceanbase'
+        ? ['+08:00', '-05:00']
+        : ['SYSTEM', '+08:00', '-05:00'];
+    for (const zone of zones) {
       await context.database
         .connection(context.spec.name)
         .transaction(async (connection) => {

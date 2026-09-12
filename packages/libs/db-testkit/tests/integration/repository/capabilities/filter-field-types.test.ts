@@ -111,7 +111,7 @@ describeIntegrationDatabases('Repository Filter field types', (context) => {
         context.spec.dialect === 'oracle'
           ? new Date(value)
           : context.spec.dialect === 'mysql' ||
-              context.spec.dialect === 'oceanbase-mysql'
+              context.spec.dialect === 'oceanbase'
             ? value.replace('T', ' ').replace('Z', '')
             : value;
       await context.db(context.table('filterInstants')).insert([

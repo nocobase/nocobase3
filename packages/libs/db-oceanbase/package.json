@@ -1,7 +1,7 @@
 {
-  "name": "@nocobase/db-oceanbase-mysql",
+  "name": "@nocobase/db-oceanbase",
   "version": "0.0.1",
-  "description": "OceanBase MySQL-compatible dialect for @nocobase/db.",
+  "description": "OceanBase CE dialect for @nocobase/db.",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "main": "dist/src/index.js",

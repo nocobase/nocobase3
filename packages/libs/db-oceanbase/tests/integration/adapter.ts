@@ -4,24 +4,23 @@ import {
   dropPortableIntegrationObjects,
   type DatabaseIntegrationAdapter,
 } from '@nocobase/db-testkit';
-import oceanbaseMysql from '../../src/index.js';
+import oceanbase from '../../src/index.js';
 
-export const oceanbaseMysqlIntegrationAdapter: DatabaseIntegrationAdapter =
+export const oceanbaseIntegrationAdapter: DatabaseIntegrationAdapter =
   createDatabaseIntegrationAdapter({
-    name: 'oceanbase-mysql',
+    name: 'oceanbase',
     createDatabase: (prefix, metadataStore) =>
       createDatabaseManager({
         default: 'main',
         metadataStore,
         connections: {
-          main: oceanbaseMysql({
-            host: process.env.OCEANBASE_MYSQL_HOST ?? '127.0.0.1',
-            port: Number(process.env.OCEANBASE_MYSQL_PORT ?? 12881),
-            username: process.env.OCEANBASE_MYSQL_USER ?? 'nocobase',
-            password: process.env.OCEANBASE_MYSQL_PASSWORD ?? 'nocobase',
+          main: oceanbase({
+            host: process.env.OCEANBASE_HOST ?? '127.0.0.1',
+            port: Number(process.env.OCEANBASE_PORT ?? 12881),
+            username: process.env.OCEANBASE_USER ?? 'root@test',
+            password: process.env.OCEANBASE_PASSWORD ?? 'ObTest_123456',
             database:
-              process.env.OCEANBASE_MYSQL_DATABASE ??
-              'nocobase_collection_builder',
+              process.env.OCEANBASE_DATABASE ?? 'nocobase_collection_builder',
             naming: { tablePrefix: `${prefix}_` },
           }),
         },

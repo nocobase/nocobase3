@@ -60,7 +60,7 @@ describeIntegrationDatabases('Declared temporal field types', (context) => {
       context.spec.dialect === 'sqlite'
         ? 'text'
         : context.spec.dialect === 'mysql' ||
-            context.spec.dialect === 'oceanbase-mysql'
+            context.spec.dialect === 'oceanbase'
           ? 'datetime'
           : 'datetimeTz',
     );

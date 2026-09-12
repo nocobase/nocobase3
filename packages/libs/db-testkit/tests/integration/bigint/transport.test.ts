@@ -12,8 +12,7 @@ async function storedAmount(
   const projection =
     context.spec.dialect === 'oracle'
       ? 'to_char(??) as ??'
-      : context.spec.dialect === 'mysql' ||
-          context.spec.dialect === 'oceanbase-mysql'
+      : context.spec.dialect === 'mysql' || context.spec.dialect === 'oceanbase'
         ? 'cast(?? as char) as ??'
         : 'cast(?? as varchar(100)) as ??';
   const row = await context

@@ -3,35 +3,33 @@ import {
   createDatabaseDialectIntegrationAdapter,
   type DatabaseDialectIntegrationAdapter,
 } from '@nocobase/db-testkit';
-import oceanbaseMysql from '../../src/index.js';
+import oceanbase from '../../src/index.js';
 
-export const oceanbaseMysqlDialectIntegrationAdapter: DatabaseDialectIntegrationAdapter =
+export const oceanbaseDialectIntegrationAdapter: DatabaseDialectIntegrationAdapter =
   createDatabaseDialectIntegrationAdapter({
-    name: 'oceanbase-mysql',
+    name: 'oceanbase',
     spec: {
-      name: 'oceanbase-mysql',
-      dialect: 'oceanbase-mysql',
+      name: 'oceanbase',
+      dialect: 'oceanbase',
       driver: 'mysql2',
-      host: process.env.OCEANBASE_MYSQL_HOST ?? '127.0.0.1',
-      port: Number(process.env.OCEANBASE_MYSQL_PORT ?? 12881),
-      username: process.env.OCEANBASE_MYSQL_USER ?? 'nocobase',
-      password: process.env.OCEANBASE_MYSQL_PASSWORD ?? 'nocobase',
-      database:
-        process.env.OCEANBASE_MYSQL_DATABASE ?? 'nocobase_collection_builder',
+      host: process.env.OCEANBASE_HOST ?? '127.0.0.1',
+      port: Number(process.env.OCEANBASE_PORT ?? 12881),
+      username: process.env.OCEANBASE_USER ?? 'root@test',
+      password: process.env.OCEANBASE_PASSWORD ?? 'ObTest_123456',
+      database: process.env.OCEANBASE_DATABASE ?? 'nocobase_collection_builder',
     },
     createDatabase: (prefix, metadataStore) =>
       createDatabaseManager({
-        default: 'oceanbaseMysql',
+        default: 'oceanbase',
         metadataStore,
         connections: {
-          oceanbaseMysql: oceanbaseMysql({
-            host: process.env.OCEANBASE_MYSQL_HOST ?? '127.0.0.1',
-            port: Number(process.env.OCEANBASE_MYSQL_PORT ?? 12881),
-            username: process.env.OCEANBASE_MYSQL_USER ?? 'nocobase',
-            password: process.env.OCEANBASE_MYSQL_PASSWORD ?? 'nocobase',
+          oceanbase: oceanbase({
+            host: process.env.OCEANBASE_HOST ?? '127.0.0.1',
+            port: Number(process.env.OCEANBASE_PORT ?? 12881),
+            username: process.env.OCEANBASE_USER ?? 'root@test',
+            password: process.env.OCEANBASE_PASSWORD ?? 'ObTest_123456',
             database:
-              process.env.OCEANBASE_MYSQL_DATABASE ??
-              'nocobase_collection_builder',
+              process.env.OCEANBASE_DATABASE ?? 'nocobase_collection_builder',
             naming: { tablePrefix: `${prefix}_` },
           }),
         },
@@ -84,7 +82,7 @@ export const oceanbaseMysqlDialectIntegrationAdapter: DatabaseDialectIntegration
     },
     quoteIdentifier: (identifier) => `\`${identifier.replace(/`/g, '``')}\``,
     cleanup: async (context) => {
-      const adapter = oceanbaseMysqlDialectIntegrationAdapter;
+      const adapter = oceanbaseDialectIntegrationAdapter;
       await context.db.raw('set foreign_key_checks = 0');
       try {
         for (const view of await adapter.listObjects(context, 'view'))

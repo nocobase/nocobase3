@@ -1,5 +1,5 @@
 import { installDatabaseIntegrationAdapter } from '@nocobase/db-testkit';
-import { oceanbaseMysqlDialectIntegrationAdapter } from './legacy-adapter.js';
+import { oceanbaseDialectIntegrationAdapter } from './legacy-adapter.js';
 
 declare global {
   interface ImportMeta {
@@ -10,7 +10,7 @@ declare global {
   }
 }
 
-installDatabaseIntegrationAdapter(oceanbaseMysqlDialectIntegrationAdapter);
+installDatabaseIntegrationAdapter(oceanbaseDialectIntegrationAdapter);
 await import('./reset-managed-schema.test.js');
 process.chdir(new URL('../../../db-testkit/', import.meta.url).pathname);
 

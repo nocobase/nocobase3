@@ -1,21 +1,21 @@
 import knex from 'knex';
 import { describe, expect, it } from 'vitest';
-import oceanbaseMysql from '../src/index.js';
+import oceanbase from '../src/index.js';
 
 function createRuntime() {
   const client = knex({ client: 'mysql2' });
-  const runtime = oceanbaseMysql.driver.createRuntime!({
-    dialect: 'oceanbase-mysql',
+  const runtime = oceanbase.driver.createRuntime!({
+    dialect: 'oceanbase',
     sourceConfig: {} as never,
     config: {} as never,
-    capabilities: oceanbaseMysql.driver.capabilities as never,
+    capabilities: oceanbase.driver.capabilities as never,
     getClient: () => client,
     resolveClient: async () => client,
   });
   return { client, runtime };
 }
 
-describe('OceanBase MySQL runtime strategy', () => {
+describe('OceanBase runtime strategy', () => {
   it('declares native numeric and temporal schema behavior', () => {
     const { client, runtime } = createRuntime();
     expect(runtime.numeric!.hasNativeResults).toBe(true);
@@ -88,8 +88,8 @@ describe('OceanBase MySQL runtime strategy', () => {
     expect(json.toQuery()).toContain('json_extract');
 
     expect(
-      oceanbaseMysql.driver.normalizeConnection?.(
-        { dialect: 'oceanbase-mysql', database: 'app' } as never,
+      oceanbase.driver.normalizeConnection?.(
+        { dialect: 'oceanbase', database: 'app' } as never,
         {},
       ),
     ).toMatchObject({
@@ -100,19 +100,19 @@ describe('OceanBase MySQL runtime strategy', () => {
       charset: 'utf8mb4',
     });
     expect(
-      oceanbaseMysql.driver.normalizeConnection?.(
-        { dialect: 'oceanbase-mysql', socketPath: '/tmp/mysql.sock' } as never,
+      oceanbase.driver.normalizeConnection?.(
+        { dialect: 'oceanbase', socketPath: '/tmp/mysql.sock' } as never,
         {},
       ),
     ).not.toHaveProperty('host');
     expect(
-      oceanbaseMysql.driver.resolveOwnershipTarget?.({
-        dialect: 'oceanbase-mysql',
+      oceanbase.driver.resolveOwnershipTarget?.({
+        dialect: 'oceanbase',
         socketPath: '/tmp/mysql.sock',
         database: 'app',
       }),
     ).toEqual([
-      'oceanbase-mysql',
+      'oceanbase',
       undefined,
       undefined,
       '/tmp/mysql.sock',

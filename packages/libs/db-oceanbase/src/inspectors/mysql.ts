@@ -121,7 +121,7 @@ export interface MysqlSchemaInspectorOptions {
 
 export class MysqlSchemaInspector extends BaseSchemaInspector {
   constructor(private readonly options: MysqlSchemaInspectorOptions) {
-    super(options.connectionName, 'oceanbase-mysql');
+    super(options.connectionName, 'oceanbase');
   }
 
   protected async inspectSchemas(): Promise<PhysicalSchemaInfo[]> {
