@@ -207,8 +207,10 @@ describe('route overlay interactions', () => {
     await waitFor(() =>
       expect(router.state.location.pathname).toBe('/main/orders/edit/42'),
     );
-    expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue(
-      'Changed',
+    await waitFor(() =>
+      expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue(
+        'Changed',
+      ),
     );
     await waitFor(() => expect(link).toHaveFocus());
   });
