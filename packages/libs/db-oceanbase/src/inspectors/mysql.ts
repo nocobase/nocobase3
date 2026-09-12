@@ -244,7 +244,8 @@ export class MysqlSchemaInspector extends BaseSchemaInspector {
       comment: optionalString(collection.table_comment),
       viewDefinition: optionalString(collection.view_definition),
       columns: columns.map((column) => {
-        const generated = column.extra.toUpperCase().includes('GENERATED');
+        const generated =
+          optionalString(column.generation_expression) !== undefined;
         return {
           columnName: column.column_name,
           ordinalPosition: Number(column.ordinal_position),
@@ -274,7 +275,7 @@ export class MysqlSchemaInspector extends BaseSchemaInspector {
           generated: generated
             ? {
                 expression: optionalString(column.generation_expression),
-                stored: column.extra.toUpperCase().includes('STORED'),
+                stored: column.extra.toUpperCase().includes('STORED GENERATED'),
               }
             : undefined,
         };

@@ -68,6 +68,7 @@ export const oceanbaseIntegrationProfile: DatabaseIntegrationProfile = {
   },
   json: {
     filters: 'supported',
+    defaults: 'unsupported',
   },
 } satisfies DatabaseIntegrationProfile;
 

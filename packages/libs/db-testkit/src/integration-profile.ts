@@ -78,5 +78,6 @@ export interface DatabaseIntegrationProfile {
   };
   readonly json: {
     readonly filters: 'supported' | 'unsupported';
+    readonly defaults?: 'supported' | 'unsupported';
   };
 }

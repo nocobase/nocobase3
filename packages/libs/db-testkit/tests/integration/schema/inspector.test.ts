@@ -699,33 +699,36 @@ describeIntegrationDatabases('schema inspector', (context) => {
    * every defaulted `json` column takes an expression default and was being
    * reported as unwritable.
    */
-  it('separates an expression default from a generated column', async () => {
-    await context.builder.createCollection('settings', (collection) => {
-      collection.increments('id');
-      collection.json('payload').notNull().defaultTo({ enabled: true });
-      collection.string('name', { length: 40 }).nullable();
-    });
-
-    const result = await context.database
-      .connection()
-      .schemaInspector.getPhysicalCollection({
-        tableName: context.table('settings'),
+  it.runIf(context.profile.json.defaults !== 'unsupported')(
+    'separates an expression default from a generated column',
+    async () => {
+      await context.builder.createCollection('settings', (collection) => {
+        collection.increments('id');
+        collection.json('payload').notNull().defaultTo({ enabled: true });
+        collection.string('name', { length: 40 }).nullable();
       });
-    const payload = result?.columns.find(
-      (column) => column.columnName === 'payload',
-    );
 
-    expect(payload?.generated).toBeUndefined();
-    expect(payload?.default).toBeDefined();
+      const result = await context.database
+        .connection()
+        .schemaInspector.getPhysicalCollection({
+          tableName: context.table('settings'),
+        });
+      const payload = result?.columns.find(
+        (column) => column.columnName === 'payload',
+      );
 
-    // And the Repository can therefore write it, which is the behaviour the
-    // misclassification actually broke.
-    const repository = context.database.repository('settings');
-    const created = await repository.createOne({
-      values: { payload: { enabled: false } },
-    });
-    const decode = (value: unknown): unknown =>
-      typeof value === 'string' ? JSON.parse(value) : value;
-    expect(decode(created.record.payload)).toEqual({ enabled: false });
-  });
+      expect(payload?.generated).toBeUndefined();
+      expect(payload?.default).toBeDefined();
+
+      // And the Repository can therefore write it, which is the behaviour the
+      // misclassification actually broke.
+      const repository = context.database.repository('settings');
+      const created = await repository.createOne({
+        values: { payload: { enabled: false } },
+      });
+      const decode = (value: unknown): unknown =>
+        typeof value === 'string' ? JSON.parse(value) : value;
+      expect(decode(created.record.payload)).toEqual({ enabled: false });
+    },
+  );
 });
