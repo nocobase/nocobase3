@@ -1,4 +1,4 @@
-import { FileText, Home, Hash } from 'lucide-react';
+import { FileText, Home, Hash, PanelsTopLeft } from 'lucide-react';
 import {
   defineAppRoutes,
   defineSettingsRoutes,
@@ -19,6 +19,41 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
     name: 'articles',
     navigation: { title: 'navigation.articles', icon: FileText },
     path: '/articles',
+  },
+  {
+    auth: 'required',
+    name: 'routeOverlays',
+    path: '/route-overlays',
+    navigation: { title: 'navigation.routeOverlays', icon: PanelsTopLeft },
+    componentLoader: () => import('./pages/route-overlays.js'),
+    children: [
+      {
+        name: 'routeDialogExample',
+        path: 'dialog',
+        componentLoader: () => import('./pages/route-dialog-example.js'),
+        children: [
+          {
+            name: 'routeDialogDrawerExample',
+            path: 'drawer',
+            componentLoader: () =>
+              import('./pages/route-drawer-child-example.js'),
+          },
+        ],
+      },
+      {
+        name: 'routeDrawerExample',
+        path: 'drawer',
+        componentLoader: () => import('./pages/route-drawer-example.js'),
+        children: [
+          {
+            name: 'routeDrawerDialogExample',
+            path: 'dialog',
+            componentLoader: () =>
+              import('./pages/route-dialog-child-example.js'),
+          },
+        ],
+      },
+    ],
   },
   {
     auth: 'required',

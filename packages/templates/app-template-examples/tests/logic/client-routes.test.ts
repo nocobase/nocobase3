@@ -47,6 +47,23 @@ describe('app client routes', () => {
           name: 'home',
           path: '/',
         },
+        {
+          auth: 'required',
+          name: 'routeOverlays',
+          path: '/route-overlays',
+          children: [
+            {
+              name: 'routeDialogExample',
+              path: 'dialog',
+              children: [{ name: 'routeDialogDrawerExample', path: 'drawer' }],
+            },
+            {
+              name: 'routeDrawerExample',
+              path: 'drawer',
+              children: [{ name: 'routeDrawerDialogExample', path: 'dialog' }],
+            },
+          ],
+        },
         { auth: 'required', name: 'articles', path: '/articles' },
         {
           auth: 'required',
@@ -61,10 +78,20 @@ describe('app client routes', () => {
     });
     expect(Object.isFrozen(applicationRoutes[0])).toBe(true);
     expect(Object.isFrozen(applicationRoutes[1])).toBe(true);
-    await expect(
-      applicationRoutes[0].routes[0].componentLoader(),
-    ).resolves.toMatchObject({
-      default: expect.any(Function),
-    });
+    const routes = applicationRoutes[0].routes;
+    const overlays = routes.find((route) => route.name === 'routeOverlays');
+    expect(overlays).toBeDefined();
+    const dialogs = overlays?.children ?? [];
+    expect(dialogs).toHaveLength(2);
+    const pages = [
+      ...routes,
+      ...dialogs,
+      ...dialogs.flatMap((route) => route.children ?? []),
+    ];
+    for (const route of pages) {
+      await expect(route.componentLoader()).resolves.toMatchObject({
+        default: expect.any(Function),
+      });
+    }
   });
 });

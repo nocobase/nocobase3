@@ -7,6 +7,7 @@ import {
   FileText,
   FolderOpen,
   ShoppingCart,
+  PanelsTopLeft,
   Users,
   Workflow,
 } from 'lucide-react';
@@ -15,6 +16,7 @@ import { Link } from 'react-router';
 import { Button } from '@/components/ui/button';
 
 const examples = [
+  { key: 'routeOverlays', path: '/route-overlays', icon: PanelsTopLeft },
   { key: 'articles', path: '/articles', icon: FileText },
   { key: 'numbers', path: '/numeric-examples', icon: Hash },
   { key: 'repository', path: '/repository-example/find-many', icon: Database },

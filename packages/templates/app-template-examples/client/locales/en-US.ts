@@ -1,6 +1,20 @@
 import type { LocaleResource } from '@nocobase/i18n';
 
 const enUS = {
+  routeOverlays: {
+    title: 'Route dialogs and drawers',
+    description:
+      'Open a dialog or drawer, then open another layer. Close the child to return to your draft. Each layer has its own URL.',
+    openDialog: 'Open dialog',
+    openDrawer: 'Open drawer',
+    dialogTitle: 'Dialog example',
+    drawerTitle: 'Drawer example',
+    hint: 'Type a draft and open a child layer to try keeping your work in place.',
+    draft: 'Draft',
+    allowClose: 'Allow closing this layer',
+    historyHint:
+      'Turn off closing to keep this layer open when you press Escape, click outside, or use Close. Browser back and forward still navigate normally.',
+  },
   numbers: {
     title: 'Numeric types',
     description:
@@ -45,6 +59,11 @@ const enUS = {
     },
   },
   examples: {
+    routeOverlays: {
+      title: 'Route dialogs and drawers',
+      description:
+        'Open a dialog or drawer, then open another layer. Close the child to return to your draft. Each layer has its own URL.',
+    },
     numbers: {
       title: 'Numeric types',
       description:
@@ -155,6 +174,7 @@ const enUS = {
   },
   navigation: {
     numbers: 'Numeric types',
+    routeOverlays: 'Route dialogs and drawers',
     articles: 'Articles',
     home: 'Home',
     open: 'Open navigation',

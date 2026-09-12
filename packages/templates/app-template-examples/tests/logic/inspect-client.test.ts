@@ -85,6 +85,32 @@ describe('client inspection', () => {
       },
       {
         auth: 'required',
+        id: '@nocobase/app-template-examples:routeOverlays',
+        path: '/route-overlays',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-template-examples:routeDialogExample',
+        path: '/route-overlays/dialog',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-template-examples:routeDialogDrawerExample',
+        path: '/route-overlays/dialog/drawer',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-template-examples:routeDrawerExample',
+        path: '/route-overlays/drawer',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-template-examples:routeDrawerDialogExample',
+        path: '/route-overlays/drawer/dialog',
+      },
+
+      {
+        auth: 'required',
         id: '@nocobase/app-template-examples:articles',
         path: '/articles',
       },
