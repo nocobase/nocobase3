@@ -58,7 +58,11 @@ describeIntegrationDatabases('native aggregate contract', (context) => {
       expect(businessSql).not.toMatch(
         /nb_decimal_(?:sum|avg)|cast\([^)]* as (?:numeric|decimal)/i,
       );
-      if (['postgres', 'mysql'].includes(context.spec.dialect))
+      if (
+        ['postgres', 'kingbase-postgres', 'mysql'].includes(
+          context.spec.dialect,
+        )
+      )
         expect(statements).toHaveLength(1);
       expect(
         await db.repository('floatChildren').groupBy({
@@ -130,7 +134,7 @@ describeIntegrationDatabases('native aggregate contract', (context) => {
       .executeTakeFirstOrThrow();
     expect(result).toEqual({
       average: decimalResult(
-        context.spec.dialect === 'postgres'
+        ['postgres', 'kingbase-postgres'].includes(context.spec.dialect)
           ? '999999999999999999'
           : '999999999999999998.5',
       ),
@@ -146,7 +150,9 @@ describeIntegrationDatabases('native aggregate contract', (context) => {
         }),
       }),
     ).toEqual(result);
-    if (['postgres', 'mysql'].includes(context.spec.dialect)) {
+    if (
+      ['postgres', 'kingbase-postgres', 'mysql'].includes(context.spec.dialect)
+    ) {
       const native = await context
         .db(context.table('nativeExact'))
         .select(

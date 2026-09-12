@@ -40,6 +40,7 @@ describeIntegrationDatabases('capability warnings', (context) => {
 
     if (
       context.spec.dialect === 'postgres' ||
+      context.spec.dialect === 'kingbase-postgres' ||
       context.spec.dialect === 'oracle'
     ) {
       expect(result.warnings).toEqual([]);

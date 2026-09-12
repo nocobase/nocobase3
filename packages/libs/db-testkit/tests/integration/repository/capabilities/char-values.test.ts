@@ -60,7 +60,9 @@ describeIntegrationDatabases('CHAR field contract', (context) => {
     });
     expect(row?.code).toBe('A001');
     expect(row?.label).toBe(
-      ['postgres', 'oracle', 'mssql'].includes(context.spec.dialect)
+      ['postgres', 'kingbase-postgres', 'oracle', 'mssql'].includes(
+        context.spec.dialect,
+      )
         ? 'short   '
         : 'short',
     );

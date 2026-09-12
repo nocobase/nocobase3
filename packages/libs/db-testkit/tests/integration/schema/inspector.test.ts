@@ -257,6 +257,7 @@ describeIntegrationDatabases('schema inspector', (context) => {
         `);
         break;
       case 'postgres':
+      case 'kingbase-postgres':
         await context.db.raw(`
           create table "${tableName}" (
             "id" bigint generated always as identity primary key,
@@ -397,7 +398,10 @@ describeIntegrationDatabases('schema inspector', (context) => {
           }),
         ]),
       );
-    } else if (context.spec.dialect === 'postgres') {
+    } else if (
+      context.spec.dialect === 'postgres' ||
+      context.spec.dialect === 'kingbase-postgres'
+    ) {
       expect(result?.comment).toBe('Advanced schema rows');
       expect(
         result?.columns.find((column) => column.columnName === 'email')
@@ -575,7 +579,10 @@ describeIntegrationDatabases('schema inspector', (context) => {
   });
 
   it('distinguishes PostgreSQL partitioned tables and materialized views', async () => {
-    if (context.spec.dialect !== 'postgres') {
+    if (
+      context.spec.dialect !== 'postgres' &&
+      context.spec.dialect !== 'kingbase-postgres'
+    ) {
       return;
     }
     const partitionedTable = context.table('partitionedEvents');

@@ -7,6 +7,13 @@ describeIntegrationDatabases('Physical scalar capabilities', (context) => {
     const native = (
       {
         postgres: ['char(8)', 'varchar(16)', 'integer', 'real', 'boolean'],
+        'kingbase-postgres': [
+          'char(8)',
+          'varchar(16)',
+          'integer',
+          'real',
+          'boolean',
+        ],
         mysql: [
           'char(8)',
           'varchar(16)',
@@ -60,7 +67,7 @@ describeIntegrationDatabases('Physical scalar capabilities', (context) => {
       );
       if (dialect !== 'oracle' && dialect !== 'dameng')
         expect(columns.get('label')?.collation).toBeTruthy();
-      if (dialect === 'mysql' || dialect === 'postgres')
+      if (['mysql', 'postgres', 'kingbase-postgres'].includes(dialect))
         expect(columns.get('label')?.characterSet).toBeTruthy();
     }
     if (dialect === 'oracle') {

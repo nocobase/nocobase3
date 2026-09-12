@@ -24,7 +24,9 @@ describeIntegrationDatabases(
       }
       const exact =
         context.spec.dialect === 'sqlite' ? '42' : '9007199254740993.25';
-      const native = ['postgres', 'mysql'].includes(context.spec.dialect);
+      const native = ['postgres', 'kingbase-postgres', 'mysql'].includes(
+        context.spec.dialect,
+      );
       const expected = native
         ? '9007199254740993.250000'
         : decimalResult(exact);
@@ -125,12 +127,14 @@ describeIntegrationDatabases(
         context.db.off('query', listener);
       }
       expect(result.record.amount).toEqual(
-        ['postgres', 'mysql'].includes(context.spec.dialect)
+        ['postgres', 'kingbase-postgres', 'mysql'].includes(
+          context.spec.dialect,
+        )
           ? '42.000000'
           : decimalResult('42'),
       );
       expect(result.record.id).toBeDefined();
-      if (context.spec.dialect === 'postgres') {
+      if (['postgres', 'kingbase-postgres'].includes(context.spec.dialect)) {
         // The final Repository selection still reads once, just as for integer fields.
         expect(statements.filter((sql) => /^select\b/i.test(sql))).toHaveLength(
           1,

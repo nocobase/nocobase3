@@ -208,6 +208,7 @@ describeIntegrationDatabases('Repository temporal contract', (context) => {
     const types = {
       sqlite: 'TIMESTAMP(6)',
       postgres: 'timestamp(6) with time zone',
+      'kingbase-postgres': 'timestamp(6) with time zone',
       mysql: 'datetime(6)',
       oracle: 'timestamp(6) with time zone',
       mssql: 'datetimeoffset(6)',
@@ -340,7 +341,7 @@ describeIntegrationDatabases('Repository temporal contract', (context) => {
         .connection(context.spec.name)
         .transaction(async (connection) => {
           const client = await connection.client<import('knex').Knex>();
-          if (context.spec.dialect === 'postgres')
+          if (['postgres', 'kingbase-postgres'].includes(context.spec.dialect))
             await client.raw("select set_config('TimeZone', ?, true)", [
               zone === '+08:00' ? 'Asia/Shanghai' : 'America/New_York',
             ]);
