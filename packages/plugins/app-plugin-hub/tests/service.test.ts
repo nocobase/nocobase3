@@ -216,6 +216,70 @@ describe('@nocobase/app-plugin-hub service', () => {
     vi.restoreAllMocks();
   });
 
+  it('paginates App summaries with search, stable ordering, and status fields', async () => {
+    await service.createApp({ id: 'customer-old', name: 'Customer Old' });
+    await service.createApp({ id: 'customer-new', name: 'Customer New' });
+    await service.createApp({ id: 'internal', name: 'Internal' });
+    await database
+      .connection()
+      .query.updateTable('hubApps')
+      .set({ createdAt: new Date('2026-01-01T00:00:00Z') })
+      .where('id', '=', 'customer-old')
+      .execute();
+    await database
+      .connection()
+      .query.updateTable('hubApps')
+      .set({ createdAt: new Date('2026-01-02T00:00:00Z') })
+      .where('id', '=', 'customer-new')
+      .execute();
+    await database
+      .connection()
+      .query.updateTable('hubApps')
+      .set({ createdAt: new Date('2026-01-03T00:00:00Z') })
+      .where('id', '=', 'internal')
+      .execute();
+
+    const first = await service.listAppsPage({
+      search: 'CUSTOMER',
+      page: 1,
+      pageSize: 1,
+    });
+    const second = await service.listAppsPage({
+      search: 'customer',
+      page: 2,
+      pageSize: 1,
+    });
+
+    expect(first).toMatchObject({
+      total: 2,
+      page: 1,
+      pageSize: 1,
+      items: [
+        {
+          app: { id: 'customer-new', name: 'Customer New' },
+          enabled: false,
+          startupMode: 'eager',
+        },
+      ],
+    });
+    expect(second.items.map(({ app }) => app.id)).toEqual(['customer-old']);
+  });
+
+  it('validates App catalog pagination and search limits', async () => {
+    for (const options of [
+      { page: 0 },
+      { page: 1.5 },
+      { page: NaN },
+      { pageSize: 0 },
+      { pageSize: 101 },
+      { search: 'x'.repeat(101) },
+    ]) {
+      await expect(service.listAppsPage(options)).rejects.toMatchObject({
+        code: options.search ? 'INVALID_SEARCH' : 'INVALID_PAGINATION',
+      });
+    }
+  });
+
   it('does not contact Host for an empty catalog', async () => {
     const status = vi.spyOn(service, 'hostStatus');
     expect(await service.listApps()).toEqual([]);
@@ -413,6 +477,23 @@ describe('@nocobase/app-plugin-hub service', () => {
     });
 
     expect(release.configTemplate).toBeNull();
+  });
+
+  it('accepts a build artifact with its manifest under dist', async () => {
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    const release = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '1.2.3', {
+        manifestPath: 'dist',
+      }),
+    });
+
+    expect(release).toMatchObject({
+      version: '1.2.3',
+      manifest: {
+        name: '@example/customer',
+        version: '1.2.3',
+      },
+    });
   });
 
   it.each(['config.example.yml', 'config.example.yaml'])(
@@ -1133,17 +1214,22 @@ async function createArtifact(
     readonly configTemplate?: string;
     readonly configTemplateName?: string;
     readonly configTemplates?: Readonly<Record<string, string>>;
+    readonly manifestPath?: 'root' | 'dist';
   } = {},
 ): Promise<Uint8Array> {
   const source = path.join(rootDir, `artifact-${version}`);
   const archive = path.join(rootDir, `artifact-${version}.tar.gz`);
   await mkdir(path.join(source, 'dist', 'server'), { recursive: true });
+  const manifestPath =
+    options.manifestPath === 'dist'
+      ? path.join('dist', 'package.json')
+      : 'package.json';
   await writeFile(
-    path.join(source, 'package.json'),
+    path.join(source, manifestPath),
     JSON.stringify({ name: '@example/customer', version }),
   );
   await writeFile(path.join(source, 'dist', 'server', 'embedded.js'), '');
-  const entries = ['package.json', 'dist/server/embedded.js'];
+  const entries = [manifestPath, 'dist/server/embedded.js'];
   if (options.configTemplate !== undefined) {
     const configTemplateName =
       options.configTemplateName ?? 'config.example.yml';

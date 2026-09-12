@@ -14,6 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from '../../components/ui/table.js';
+import { useTranslation } from '@nocobase/i18n/client';
 import { useState, type ReactElement, type ReactNode } from 'react';
 import { parse as parseYaml } from 'yaml';
 import type { ConfigMode, ResourceKind, ResourceSummary } from './types.js';
@@ -27,6 +28,7 @@ export function Resources({
   readonly mode: ConfigMode;
   readonly content: string;
 }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-hub');
   const [kind, setKind] = useState<ResourceKind>('databases');
   const groups = resourceGroups(content);
   const navigation: readonly {
@@ -34,10 +36,26 @@ export function Resources({
     readonly label: string;
     readonly icon: ReactNode;
   }[] = [
-    { value: 'databases', label: 'Databases', icon: <Database /> },
-    { value: 'drives', label: 'Drives', icon: <HardDrive /> },
-    { value: 'caching', label: 'Caching', icon: <Zap /> },
-    { value: 'llm', label: 'LLM services', icon: <Shapes /> },
+    {
+      value: 'databases',
+      label: t('resources.databases', { defaultValue: 'Databases' }),
+      icon: <Database />,
+    },
+    {
+      value: 'drives',
+      label: t('resources.drives', { defaultValue: 'Drives' }),
+      icon: <HardDrive />,
+    },
+    {
+      value: 'caching',
+      label: t('resources.caching', { defaultValue: 'Caching' }),
+      icon: <Zap />,
+    },
+    {
+      value: 'llm',
+      label: t('resources.llm', { defaultValue: 'LLM services' }),
+      icon: <Shapes />,
+    },
   ];
   return (
     <Tabs
@@ -68,7 +86,9 @@ export function Resources({
             <div className='mb-5'>
               <h2 className='font-semibold'>{item.label}</h2>
               <p className='mt-1 text-sm text-muted-foreground'>
-                {resourceDescription(item.value)}
+                {t(`resources.${resourceDescriptionKey(item.value)}`, {
+                  defaultValue: resourceDescription(item.value),
+                })}
               </p>
             </div>
             <ResourceTable
@@ -92,17 +112,30 @@ export function ResourceTable({
   readonly items: readonly ResourceSummary[];
   readonly kind: ResourceKind;
 }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-hub');
   if (items.length === 0) {
     return (
       <Empty
         icon={kind === 'llm' ? <Shapes /> : <PackageOpen />}
-        title={`No ${resourceLabel(kind)} found`}
+        title={t(`resources.${resourceTitleKey(kind)}`, {
+          resource: resourceLabel(kind, t),
+          defaultValue: `No ${resourceLabel(kind, t)} found`,
+        })}
         description={
           external
-            ? 'This application uses external configuration, so Hub cannot inspect its resource keys.'
+            ? t('resources.externalDescription', {
+                defaultValue:
+                  'This application uses external configuration, so Hub cannot inspect its resource keys.',
+              })
             : kind === 'llm'
-              ? 'LLM services are managed by the application and will appear here when the management API is connected.'
-              : 'No matching keys were found in the current config.yml.'
+              ? t('resources.llmDescription', {
+                  defaultValue:
+                    'LLM services are managed by the application and will appear here when the management API is connected.',
+                })
+              : t('resources.emptyDescription', {
+                  defaultValue:
+                    'No matching keys were found in the current config.yml.',
+                })
         }
       />
     );
@@ -112,10 +145,16 @@ export function ResourceTable({
       <Table>
         <TableHeader>
           <TableRow className='hover:bg-transparent'>
-            <TableHead>Key</TableHead>
-            <TableHead>Type</TableHead>
-            <TableHead>Details</TableHead>
-            <TableHead className='w-28'>Default</TableHead>
+            <TableHead>{t('resources.key', { defaultValue: 'Key' })}</TableHead>
+            <TableHead>
+              {t('resources.type', { defaultValue: 'Type' })}
+            </TableHead>
+            <TableHead>
+              {t('resources.details', { defaultValue: 'Details' })}
+            </TableHead>
+            <TableHead className='w-28'>
+              {t('resources.default', { defaultValue: 'Default' })}
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -124,7 +163,9 @@ export function ResourceTable({
               <TableCell className='font-mono text-xs'>{item.key}</TableCell>
               <TableCell>
                 <Badge className='bg-sky-500/10 text-sky-700'>
-                  {item.type}
+                  {item.type === 'Configured'
+                    ? t('resources.configured', { defaultValue: 'Configured' })
+                    : item.type}
                 </Badge>
               </TableCell>
               <TableCell>
@@ -136,13 +177,13 @@ export function ResourceTable({
                         key={detail.label}
                       >
                         <dt className='shrink-0 text-muted-foreground'>
-                          {detail.label}
+                          {translateResourceField(detail.label, t)}
                         </dt>
                         <dd
                           className='max-w-56 truncate font-mono text-foreground'
                           title={detail.value}
                         >
-                          {detail.value}
+                          {translateResourceValue(detail.value, t)}
                         </dd>
                       </div>
                     ))}
@@ -154,7 +195,7 @@ export function ResourceTable({
               <TableCell>
                 {item.isDefault ? (
                   <Badge className='bg-emerald-500/10 text-emerald-700'>
-                    Default
+                    {t('resources.default', { defaultValue: 'Default' })}
                   </Badge>
                 ) : (
                   '—'
@@ -321,11 +362,23 @@ function formatResourceField(value: string): string {
   return labels[value] ?? `${value[0]?.toUpperCase()}${value.slice(1)}`;
 }
 
-function resourceLabel(kind: ResourceKind): string {
-  if (kind === 'databases') return 'database connections';
-  if (kind === 'drives') return 'drives';
-  if (kind === 'caching') return 'cache providers';
-  return 'LLM services';
+function resourceLabel(
+  kind: ResourceKind,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  if (kind === 'databases') {
+    return t('resources.databaseConnections', {
+      defaultValue: 'database connections',
+    });
+  }
+  if (kind === 'drives')
+    return t('resources.drives', { defaultValue: 'drives' });
+  if (kind === 'caching') {
+    return t('resources.cacheProviders', {
+      defaultValue: 'cache providers',
+    });
+  }
+  return t('resources.llm', { defaultValue: 'LLM services' });
 }
 
 function resourceDescription(kind: ResourceKind): string {
@@ -339,4 +392,66 @@ function resourceDescription(kind: ResourceKind): string {
     return 'Cache providers discovered by key from caching.providers.';
   }
   return 'Language model services available to this application.';
+}
+
+function resourceDescriptionKey(kind: ResourceKind): string {
+  if (kind === 'databases') return 'databaseDescription';
+  if (kind === 'drives') return 'drivesDescription';
+  if (kind === 'caching') return 'cachingDescription';
+  return 'llmServicesDescription';
+}
+
+function resourceTitleKey(kind: ResourceKind): string {
+  if (kind === 'databases') return 'noDatabaseConnections';
+  if (kind === 'drives') return 'noDrives';
+  if (kind === 'caching') return 'noCacheProviders';
+  return 'noLlmServices';
+}
+
+function translateResourceField(
+  value: string,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  const keys: Readonly<Record<string, string>> = {
+    Database: 'database',
+    Driver: 'driver',
+    Provider: 'provider',
+    'Base URL': 'baseUrl',
+    Bucket: 'bucket',
+    Charset: 'charset',
+    'CDN URL': 'cdnUrl',
+    'Check interval': 'checkInterval',
+    Debug: 'debug',
+    'Default TTL': 'defaultTtl',
+    Encryption: 'encryption',
+    Endpoint: 'endpoint',
+    Filename: 'filename',
+    'Path style': 'forcePathStyle',
+    Host: 'host',
+    Location: 'location',
+    Managed: 'managed',
+    'Max size': 'maxSize',
+    'Max TTL': 'maxTtl',
+    Model: 'model',
+    Port: 'port',
+    Region: 'region',
+    Schema: 'schema',
+    Socket: 'socket',
+    'ACL support': 'aclSupport',
+    'Clone values': 'cloneValues',
+    Timezone: 'timezone',
+    URL: 'url',
+    Visibility: 'visibility',
+  };
+  const key = keys[value];
+  return key ? t(`resources.${key}`, { defaultValue: value }) : value;
+}
+
+function translateResourceValue(
+  value: string,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  if (value === 'Yes') return t('resources.yes', { defaultValue: 'Yes' });
+  if (value === 'No') return t('resources.no', { defaultValue: 'No' });
+  return value;
 }

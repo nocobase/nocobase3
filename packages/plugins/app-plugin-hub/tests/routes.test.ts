@@ -15,6 +15,32 @@ import { apiRoutes } from '../server/routes/index.js';
 import { hubServiceToken, type HubService } from '../server/tokens.js';
 
 describe('@nocobase/app-plugin-hub API routes', () => {
+  it('returns a paginated App catalog and passes query options', async () => {
+    const listAppsPage = vi
+      .fn<HubService['listAppsPage']>()
+      .mockResolvedValue({ items: [], total: 21, page: 2, pageSize: 24 });
+    const router = await apiRoutes.createRouter(
+      createApplication('administrator', {
+        listApps: vi.fn<HubService['listApps']>(),
+        listAppsPage,
+      }),
+    );
+
+    const response = await router.request(
+      '/hub/apps?search=customer&page=2&pageSize=24',
+    );
+
+    expect(response.status).toBe(200);
+    expect(listAppsPage).toHaveBeenCalledWith({
+      search: 'customer',
+      page: 2,
+      pageSize: 24,
+    });
+    await expect(response.json()).resolves.toEqual({
+      data: { items: [], total: 21, page: 2, pageSize: 24 },
+    });
+  });
+
   it('returns deployment pagination metadata and passes query options', async () => {
     const listDeployments = vi
       .fn<HubService['listDeployments']>()
@@ -39,40 +65,53 @@ describe('@nocobase/app-plugin-hub API routes', () => {
   });
 
   it('rejects anonymous requests', async () => {
-    const listApps = vi.fn<HubService['listApps']>();
+    const listAppsPage = vi.fn<HubService['listAppsPage']>();
     const router = await apiRoutes.createRouter(
-      createApplication('anonymous', listApps),
+      createApplication('anonymous', {
+        listApps: vi.fn<HubService['listApps']>(),
+        listAppsPage,
+      }),
     );
 
     const response = await router.request('/hub/apps');
 
     expect(response.status).toBe(401);
-    expect(listApps).not.toHaveBeenCalled();
+    expect(listAppsPage).not.toHaveBeenCalled();
   });
 
   it('rejects authenticated users without Hub access', async () => {
-    const listApps = vi.fn<HubService['listApps']>();
+    const listAppsPage = vi.fn<HubService['listAppsPage']>();
     const router = await apiRoutes.createRouter(
-      createApplication('member', listApps),
+      createApplication('member', {
+        listApps: vi.fn<HubService['listApps']>(),
+        listAppsPage,
+      }),
     );
 
     const response = await router.request('/hub/apps');
 
     expect(response.status).toBe(403);
-    expect(listApps).not.toHaveBeenCalled();
+    expect(listAppsPage).not.toHaveBeenCalled();
   });
 
   it('serves Hub data to Hub administrators', async () => {
-    const listApps = vi.fn<HubService['listApps']>().mockResolvedValue([]);
+    const listAppsPage = vi
+      .fn<HubService['listAppsPage']>()
+      .mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 24 });
     const router = await apiRoutes.createRouter(
-      createApplication('administrator', listApps),
+      createApplication('administrator', {
+        listApps: vi.fn<HubService['listApps']>(),
+        listAppsPage,
+      }),
     );
 
     const response = await router.request('/hub/apps');
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ data: [] });
-    expect(listApps).toHaveBeenCalledOnce();
+    await expect(response.json()).resolves.toEqual({
+      data: { items: [], total: 0, page: 1, pageSize: 24 },
+    });
+    expect(listAppsPage).toHaveBeenCalledOnce();
   });
 
   it('returns only the protected Hub role definitions to user administrators', async () => {
@@ -393,7 +432,10 @@ function createApplication(
   role: 'anonymous' | 'member' | 'administrator',
   service:
     | HubService['listApps']
-    | (Partial<HubService> & Pick<HubService, 'listApps'>),
+    | (Partial<HubService> &
+        Pick<HubService, 'listApps'> & {
+          readonly listAppsPage?: HubService['listAppsPage'];
+        }),
   permissionSets: readonly {
     readonly key: string;
     readonly title?: string;
@@ -434,12 +476,26 @@ function createApplication(
       await next();
     },
   } as AppAuthorization);
-  container.instance(
-    hubServiceToken,
-    (typeof service === 'function'
-      ? { listApps: service }
-      : service) as HubService,
-  );
+  const resolvedService =
+    typeof service === 'function'
+      ? {
+          listApps: service,
+          listAppsPage: vi
+            .fn<HubService['listAppsPage']>()
+            .mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 24 }),
+        }
+      : {
+          ...service,
+          listAppsPage:
+            service.listAppsPage ??
+            vi.fn<HubService['listAppsPage']>().mockResolvedValue({
+              items: [],
+              total: 0,
+              page: 1,
+              pageSize: 24,
+            }),
+        };
+  container.instance(hubServiceToken, resolvedService as HubService);
   return {
     appName: 'hub',
     publicBasePath: '',

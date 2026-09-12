@@ -57,9 +57,20 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
 
     routes.get('/apps', async (context) => {
       await requireHubAction(context, '*', 'read');
-      return respond(context, async () =>
-        (await hub.listApps()).map(appSummaryResponse),
-      );
+      const search = context.req.query('search');
+      const page = context.req.query('page');
+      const pageSize = context.req.query('pageSize');
+      return respond(context, async () => {
+        const result = await hub.listAppsPage({
+          ...(search === undefined ? {} : { search }),
+          ...(page === undefined ? {} : { page: Number(page) }),
+          ...(pageSize === undefined ? {} : { pageSize: Number(pageSize) }),
+        });
+        return {
+          ...result,
+          items: result.items.map(appSummaryResponse),
+        };
+      });
     });
     routes.get('/roles', async (context) => {
       await context.get('authz').require({

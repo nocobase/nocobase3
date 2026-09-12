@@ -417,6 +417,14 @@ function createHubService(): HubService {
   } as const;
   return {
     listApps: vi.fn(() => Promise.resolve([detail])),
+    listAppsPage: vi.fn(() =>
+      Promise.resolve({
+        items: [detail],
+        total: 1,
+        page: 1,
+        pageSize: 24,
+      }),
+    ),
     getApp: vi.fn(() => Promise.resolve(detail)),
     createApp: vi.fn(() => Promise.resolve(detail)),
     listReleases: vi.fn(() => Promise.resolve([release])),

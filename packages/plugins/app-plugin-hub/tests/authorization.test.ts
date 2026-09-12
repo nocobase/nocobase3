@@ -87,6 +87,32 @@ describe('Hub user role scope', () => {
     ).rejects.toMatchObject({ code: 'INVALID_ROLE_SCOPE_VALUE' });
   });
 
+  it('exposes localized labels for the Hub role scope and options', async () => {
+    const scope = createHubUserRoleScope(authorization);
+
+    await expect(scope.options()).resolves.toEqual([
+      expect.objectContaining({
+        value: 'hub-administrator',
+        labelI18nKey: 'roles.names.hub-administrator',
+        labelI18nNs: '@nocobase/app-plugin-hub',
+      }),
+      expect.objectContaining({
+        value: 'hub-operator',
+        labelI18nKey: 'roles.names.hub-operator',
+        labelI18nNs: '@nocobase/app-plugin-hub',
+      }),
+      expect.objectContaining({
+        value: 'hub-viewer',
+        labelI18nKey: 'roles.names.hub-viewer',
+        labelI18nNs: '@nocobase/app-plugin-hub',
+      }),
+    ]);
+    expect(scope).toMatchObject({
+      labelI18nKey: 'roles.scope',
+      labelI18nNs: '@nocobase/app-plugin-hub',
+    });
+  });
+
   it('loads one page of Hub roles through one batch read', async () => {
     await createUser(database, 'user-1');
     await createUser(database, 'user-2');

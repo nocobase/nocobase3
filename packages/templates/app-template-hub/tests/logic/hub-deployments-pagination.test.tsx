@@ -34,13 +34,17 @@ describe('Hub deployment pagination', () => {
         loading={false}
       />,
     );
-    expect(screen.getByLabelText('Go to previous page')).toHaveAttribute(
-      'aria-disabled',
-      'true',
-    );
-    fireEvent.click(screen.getByLabelText('Go to previous page'));
+    const getPaginationLink = (index: number): HTMLElement =>
+      screen
+        .getAllByRole('button')
+        .filter(
+          (element) => element.getAttribute('data-slot') === 'pagination-link',
+        )[index]!;
+    const previousPage = getPaginationLink(0);
+    expect(previousPage).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(previousPage);
     expect(onPage).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByLabelText('Go to next page'));
+    fireEvent.click(getPaginationLink(1));
     expect(onPage).toHaveBeenCalledWith(2);
     rerender(
       <Deployments
@@ -50,11 +54,9 @@ describe('Hub deployment pagination', () => {
       />,
     );
     expect(screen.getByText('vfixture')).toBeInTheDocument();
-    expect(screen.getByLabelText('Go to next page')).toHaveAttribute(
-      'aria-disabled',
-      'true',
-    );
-    fireEvent.click(screen.getByLabelText('Go to next page'));
+    const loadingNextPage = getPaginationLink(1);
+    expect(loadingNextPage).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(loadingNextPage);
     expect(onPage).toHaveBeenCalledTimes(1);
     rerender(
       <Deployments
@@ -66,11 +68,9 @@ describe('Hub deployment pagination', () => {
     expect(
       screen.getByText('21 deployments · Page 2 of 2'),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText('Go to next page')).toHaveAttribute(
-      'aria-disabled',
-      'true',
-    );
-    fireEvent.click(screen.getByLabelText('Go to previous page'));
+    const finalNextPage = getPaginationLink(1);
+    expect(finalNextPage).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(getPaginationLink(0));
     expect(onPage).toHaveBeenLastCalledWith(1);
   });
 });

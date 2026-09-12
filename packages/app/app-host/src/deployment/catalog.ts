@@ -201,16 +201,22 @@ export class DeploymentCatalog {
   private async readAppPackage(
     rootDir: string,
   ): Promise<AppPackageJson | null> {
-    try {
-      return JSON.parse(
-        await readFile(path.join(rootDir, 'package.json'), 'utf8'),
-      ) as AppPackageJson;
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        return null;
+    // A release uploaded from `pnpm build --tar` contains `dist/package.json`
+    // because the archive keeps the deployable tree under its `dist/` folder.
+    // Older releases put the manifest at the archive root, so keep that format
+    // as the first choice and use the nested manifest only when needed.
+    for (const manifestPath of ['package.json', 'dist/package.json']) {
+      try {
+        return JSON.parse(
+          await readFile(path.join(rootDir, manifestPath), 'utf8'),
+        ) as AppPackageJson;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+          throw error;
+        }
       }
-      throw error;
     }
+    return null;
   }
 
   private async resolveServer(

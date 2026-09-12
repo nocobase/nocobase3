@@ -2,6 +2,10 @@
 
 The first-party control plane for applications run by a managed NocoBase App Host.
 
+The application catalog is searched and paginated on the server.
+`GET /api/hub/apps?search=customer&page=1&pageSize=24` returns
+`{ data: { items, total, page, pageSize } }`; search matches App IDs and names
+case-insensitively, page size defaults to 24, and page size is limited to 100.
 Deployment history is paginated on the server. `GET /api/hub/apps/:appId/deployments?page=1&pageSize=20` returns `{ data: { items, total, page, pageSize } }`; page size defaults to 20 and is limited to 100. The workspace refreshes only the selected page and returns to the first page after submitting a deployment or rollback.
 
 The initial implementation supports a single Hub-spawned Host and in-process Apps. Its application catalog supports card and list views; each App opens into an operational detail workspace with runtime and deployment facts in the header plus Releases, Resources, post-deployment Configuration, and Settings tabs. Resources uses vertical navigation for Databases, Drives, Caching, and LLM services; safe summaries for the first three are discovered by configuration key, while LLM services remain reserved for a management API. Apps without a Release show Development first with the `create-app` bootstrap command. Release upload and deployment are separate actions; deployment uses a three-step Release, Configuration, and Review flow. Settings choose whether the App activates with Hub (`eager`, the default) or registers for activation on its first visit (`lazy`); deployments do not change this policy. The workspace also provides live Host status refresh, App access, start, stop, and removal. Runtime state always comes from App Host and is reported as unknown when Host is unavailable. Interactive operations reconcile only the selected App; complete deployment sets are reserved for Host startup recovery. Stop sets the persisted `enabled` policy to false while preserving the current deployment so Start can reactivate it. Remove permanently deletes the App record, Releases, deployment history, configuration, and App volume.
@@ -12,7 +16,10 @@ Deploy and rollback requests persist a queued operation and return HTTP 202. The
 
 During Hub startup, only managed Host availability is awaited. Restoring the complete deployment set runs in the background, so eager App activation does not delay Hub readiness. App Host currently reconciles that startup set through its existing serial operation queue; this bounds startup load and preserves deployment revision ordering.
 
-The Client plugin defaults to its compatible `/hub` page. Applications can
+The Client plugin defaults to its compatible `/hub` page. App details are
+addressable at `<applicationsPath>/:appId/<tab>`; the detail Tabs are child
+routes so direct links, refresh, and browser history preserve the selected App
+and Tab. Applications can
 configure the Client factory with `applicationsPath` and `rolesPath` to expose
 a control-plane console. The Hub template uses
 `/apps`, `/users`, and `/roles`; the roles page is a read-only product view of

@@ -103,6 +103,7 @@
     "codemirror": "^6.0.2",
     "lucide-react": "catalog:",
     "react": "^19.0.0",
+    "react-router": "catalog:",
     "tailwind-merge": "catalog:"
   },
   "devDependencies": {
@@ -116,7 +117,10 @@
     "tw-animate-css": "catalog:",
     "typescript": "catalog:",
     "@nocobase/logging": "workspace:*",
+    "@testing-library/jest-dom": "catalog:",
+    "@testing-library/react": "catalog:",
     "knex": "catalog:",
+    "jsdom": "catalog:",
     "vitest": "catalog:"
   }
 }

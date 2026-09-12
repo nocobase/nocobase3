@@ -142,6 +142,41 @@ describe('client inspection', () => {
       },
       {
         auth: 'required',
+        id: '@nocobase/app-plugin-hub:hub-app-detail',
+        path: '/apps/:appId',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-hub:hub-app-deployments',
+        path: '/apps/:appId/deployments',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-hub:hub-app-releases',
+        path: '/apps/:appId/releases',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-hub:hub-app-development',
+        path: '/apps/:appId/development',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-hub:hub-app-resources',
+        path: '/apps/:appId/resources',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-hub:hub-app-configuration',
+        path: '/apps/:appId/configuration',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-hub:hub-app-settings',
+        path: '/apps/:appId/settings',
+      },
+      {
+        auth: 'required',
         id: '@nocobase/app-plugin-hub:hub-roles',
         path: '/roles',
       },

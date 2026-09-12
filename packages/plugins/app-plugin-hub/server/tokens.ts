@@ -90,6 +90,8 @@ export interface HubAppSummary {
   readonly currentVersion: string | null;
   readonly hasReleases: boolean;
   readonly hasPendingDeployment: boolean;
+  readonly enabled: boolean;
+  readonly startupMode: 'lazy' | 'eager';
 }
 
 export interface HubAppDetail {
@@ -164,8 +166,22 @@ export interface HubDeploymentPage {
   readonly pageSize: number;
 }
 
+export interface ListHubAppsOptions {
+  readonly search?: string;
+  readonly page?: number;
+  readonly pageSize?: number;
+}
+
+export interface HubAppPage {
+  readonly items: readonly HubAppSummary[];
+  readonly total: number;
+  readonly page: number;
+  readonly pageSize: number;
+}
+
 export interface HubService {
   listApps(): Promise<readonly HubAppSummary[]>;
+  listAppsPage(options?: ListHubAppsOptions): Promise<HubAppPage>;
   getApp(appId: string): Promise<HubAppDetail>;
   createApp(input: CreateHubAppInput): Promise<HubAppDetail>;
   listReleases(appId: string): Promise<readonly HubReleaseRecord[]>;

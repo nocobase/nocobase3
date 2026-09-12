@@ -12,6 +12,15 @@ export type DetailTab =
   | 'configuration'
   | 'settings';
 
+export const DETAIL_TABS: readonly DetailTab[] = [
+  'deployments',
+  'releases',
+  'development',
+  'resources',
+  'configuration',
+  'settings',
+];
+
 export interface ReleaseRecord {
   readonly id: string;
   readonly version: string;
@@ -76,9 +85,18 @@ export interface AppSummary {
   readonly currentVersion: string | null;
   readonly hasReleases: boolean;
   readonly hasPendingDeployment: boolean;
+  readonly enabled: boolean;
+  readonly startupMode: ActivationPolicy;
 }
 
 export type AppOverview = Omit<AppDetail, 'releases' | 'deployments'>;
+
+export interface AppPageResponse {
+  readonly items: readonly AppSummary[];
+  readonly total: number;
+  readonly page: number;
+  readonly pageSize: number;
+}
 
 export interface ConfigResponse {
   readonly mode: 'file' | 'external';

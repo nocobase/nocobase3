@@ -15,6 +15,7 @@ import {
 import { Badge } from '../../components/ui/badge.js';
 import { Alert, AlertDescription } from '../../components/ui/alert.js';
 import { Button } from '../../components/ui/button.js';
+import { useTranslation } from '@nocobase/i18n/client';
 import {
   lazy,
   Suspense,
@@ -31,7 +32,7 @@ import type {
   DiffLine,
 } from './types.js';
 import { AppDialog } from './shared.js';
-import { configModeLabel, shortId, formatDate, readError } from './utils.js';
+import { shortId, formatDate, readError } from './utils.js';
 
 export const ConfigEditor: import('react').LazyExoticComponent<
   (typeof import('../../components/config-editor.js'))['ConfigEditor']
@@ -56,28 +57,28 @@ export const ConfigUnifiedDiff: import('react').LazyExoticComponent<
 
 const CONFIG_MODES: readonly {
   readonly value: ConfigMode;
-  readonly title: string;
-  readonly description: string;
+  readonly titleKey: string;
+  readonly descriptionKey: string;
   readonly icon: ReactNode;
   readonly disabled?: boolean;
 }[] = [
   {
     value: 'file',
-    title: 'Config file',
-    description: 'Maintain an editable config.yml with the application.',
+    titleKey: 'configuration.configFile',
+    descriptionKey: 'configuration.configFileDescription',
     icon: <FileCode2 />,
   },
   {
     value: 'managed',
-    title: 'Hub managed',
-    description: 'Store structured configuration and secrets in Hub.',
+    titleKey: 'configuration.hubManaged',
+    descriptionKey: 'configuration.hubManagedDescription',
     icon: <Sparkles />,
     disabled: true,
   },
   {
     value: 'external',
-    title: 'External',
-    description: 'Supply configuration through external infrastructure.',
+    titleKey: 'configuration.external',
+    descriptionKey: 'configuration.externalDescription',
     icon: <ExternalLink />,
   },
 ];
@@ -95,22 +96,37 @@ export function Configuration({
   readonly canUpdate: boolean;
   readonly onSave: (content: string) => void;
 }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-hub');
   const source = CONFIG_MODES.find((item) => item.value === mode);
   const [draft, setDraft] = useState(content);
   const [reviewOpen, setReviewOpen] = useState(false);
-  const validationError = validateConfigDocument(draft);
+  const validationError = validateConfigDocument(draft, t);
   const changed = draft !== content;
   return (
     <div className='space-y-5'>
       <div className='flex flex-wrap items-start justify-between gap-3'>
         <div>
-          <h2 className='font-semibold'>Configuration</h2>
+          <h2 className='font-semibold'>
+            {t('configuration.title', { defaultValue: 'Configuration' })}
+          </h2>
           <p className='mt-1 text-sm text-muted-foreground'>
-            Configuration source used by this application.
+            {t('configuration.description', {
+              defaultValue: 'Configuration source used by this application.',
+            })}
           </p>
         </div>
         <Badge className='gap-1.5 bg-muted text-foreground [&_svg]:size-3.5'>
-          {source?.icon} {source?.title ?? mode}
+          {source?.icon}{' '}
+          {source
+            ? t(source.titleKey, {
+                defaultValue:
+                  mode === 'file'
+                    ? 'Config file'
+                    : mode === 'managed'
+                      ? 'Hub managed'
+                      : 'External',
+              })
+            : mode}
         </Badge>
       </div>
       {mode === 'file' ? (
@@ -118,7 +134,8 @@ export function Configuration({
           <div className='overflow-hidden rounded-xl border'>
             <div className='border-b bg-muted/20 px-4 py-3'>
               <span className='flex items-center gap-2 text-sm font-medium'>
-                <FileCode2 className='size-4' /> config.yml
+                <FileCode2 className='size-4' />{' '}
+                {t('configuration.fileName', { defaultValue: 'config.yml' })}
               </span>
             </div>
             <Suspense fallback={<ConfigEditorFallback />}>
@@ -141,7 +158,13 @@ export function Configuration({
                   disabled={busy || !changed || validationError !== null}
                   onClick={() => setReviewOpen(true)}
                 >
-                  {busy ? 'Publishing…' : 'Save and publish'}
+                  {busy
+                    ? t('configuration.publishing', {
+                        defaultValue: 'Publishing…',
+                      })
+                    : t('configuration.saveAndPublish', {
+                        defaultValue: 'Save and publish',
+                      })}
                 </Button>
               </div>
             </>
@@ -152,17 +175,23 @@ export function Configuration({
         <Alert className='bg-muted/20'>
           <ExternalLink />
           <AlertDescription>
-            Configuration and secrets are supplied by the runtime environment.
-            Hub does not create, mount, or edit a configuration file for this
-            deployment.
+            {t('configuration.externalNotice', {
+              defaultValue:
+                'Configuration and secrets are supplied by the runtime environment. Hub does not create, mount, or edit a configuration file for this deployment.',
+            })}
           </AlertDescription>
         </Alert>
       ) : null}
       {reviewOpen && canUpdate ? (
         <AppDialog
           wide
-          title='Review configuration changes'
-          description='Review the current and new configuration before publishing. This reloads configuration without restarting the application.'
+          title={t('configuration.reviewTitle', {
+            defaultValue: 'Review configuration changes',
+          })}
+          description={t('configuration.reviewDescription', {
+            defaultValue:
+              'Review the current and new configuration before publishing. This reloads configuration without restarting the application.',
+          })}
           onClose={() => setReviewOpen(false)}
         >
           <ConfigChangesReview
@@ -177,7 +206,7 @@ export function Configuration({
           </div>
           <div className='mt-7 flex justify-between gap-2'>
             <Button variant='outline' onClick={() => setReviewOpen(false)}>
-              Back
+              {t('configuration.back', { defaultValue: 'Back' })}
             </Button>
             <Button
               disabled={busy || !changed || validationError !== null}
@@ -186,7 +215,9 @@ export function Configuration({
                 onSave(draft);
               }}
             >
-              Save and publish
+              {t('configuration.saveAndPublish', {
+                defaultValue: 'Save and publish',
+              })}
             </Button>
           </div>
         </AppDialog>
@@ -196,14 +227,15 @@ export function Configuration({
 }
 
 export function ConfigReloadNotice(): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-hub');
   return (
     <Alert>
       <Info />
       <AlertDescription>
-        Configuration reload does not restart the application. Services that
-        support live updates apply changes immediately. Other changes take
-        effect after the application restarts. Stopped applications load the
-        configuration on next start.
+        {t('configuration.reloadNotice', {
+          defaultValue:
+            'Configuration reload does not restart the application. Services that support live updates apply changes immediately. Other changes take effect after the application restarts. Stopped applications load the configuration on next start.',
+        })}
       </AlertDescription>
     </Alert>
   );
@@ -222,6 +254,7 @@ export function ConfigChangesReview({
   readonly validationError: string | null;
   readonly expanded?: boolean;
 }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-hub');
   return (
     <div className='space-y-4'>
       <ConfigStatus
@@ -230,7 +263,9 @@ export function ConfigChangesReview({
       />
       <details className='overflow-hidden rounded-lg border' open={expanded}>
         <summary className='cursor-pointer bg-muted/20 px-3 py-2 text-sm font-medium'>
-          Review configuration changes
+          {t('configuration.reviewChanges', {
+            defaultValue: 'Review configuration changes',
+          })}
         </summary>
         <Suspense fallback={<ConfigEditorFallback />}>
           <ConfigUnifiedDiff
@@ -277,6 +312,7 @@ export function DeploymentDialog({
   readonly onClose: () => void;
   readonly onComplete: () => void;
 }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-hub');
   const firstStep = rollback ? 1 : 0;
   const [step, setStep] = useState(firstStep);
   const [retry, setRetry] = useState(0);
@@ -301,7 +337,7 @@ export function DeploymentDialog({
         setLoadedReleaseId(releaseId);
       })
       .catch((reason: unknown) => {
-        if (!cancelled) setTemplateError(readError(reason));
+        if (!cancelled) setTemplateError(readError(reason).message);
       });
     return () => {
       cancelled = true;
@@ -325,7 +361,7 @@ export function DeploymentDialog({
   >('both');
   const release = app.releases.find((item) => item.id === releaseId);
   const validationError =
-    mode === 'file' ? validateConfigDocument(content) : null;
+    mode === 'file' ? validateConfigDocument(content, t) : null;
   const summary = summarizeConfigChanges(
     baselineMode,
     mode,
@@ -334,7 +370,15 @@ export function DeploymentDialog({
   );
   return (
     <AppDialog
-      title={rollback ? 'Roll back application' : 'Deploy application'}
+      title={
+        rollback
+          ? t('deployments.rollbackTitle', {
+              defaultValue: 'Roll back application',
+            })
+          : t('deployments.deployTitle', {
+              defaultValue: 'Deploy application',
+            })
+      }
       description={app.app.name}
       onClose={onClose}
       wide
@@ -386,7 +430,12 @@ export function DeploymentDialog({
               <Alert className='border-destructive/30 text-destructive'>
                 <AlertCircle />
                 <AlertDescription>
-                  <p>Failed to load configuration template: {templateError}</p>
+                  <p>
+                    {t('configuration.templateLoadFailed', {
+                      error: templateError,
+                      defaultValue: `Failed to load configuration template: ${templateError}`,
+                    })}
+                  </p>
                   <Button
                     variant='outline'
                     onClick={() => {
@@ -394,7 +443,7 @@ export function DeploymentDialog({
                       setRetry((value) => value + 1);
                     }}
                   >
-                    Retry
+                    {t('configuration.retry', { defaultValue: 'Retry' })}
                   </Button>
                 </AlertDescription>
               </Alert>
@@ -404,7 +453,9 @@ export function DeploymentDialog({
                 className='flex items-center justify-center gap-2 py-20 text-sm text-muted-foreground'
               >
                 <LoaderCircle className='size-4 animate-spin' />
-                Loading configuration template…
+                {t('configuration.loadingTemplate', {
+                  defaultValue: 'Loading configuration template…',
+                })}
               </div>
             )}
           </div>
@@ -412,7 +463,9 @@ export function DeploymentDialog({
           <div className='space-y-5'>
             {rollback ? (
               <div className='flex items-center justify-between rounded-lg border bg-muted/20 px-4 py-3 text-sm'>
-                <span className='text-muted-foreground'>Release</span>
+                <span className='text-muted-foreground'>
+                  {t('deployments.release', { defaultValue: 'Release' })}
+                </span>
                 <span className='font-medium'>
                   {release ? `v${release.version}` : '—'}
                 </span>
@@ -421,9 +474,13 @@ export function DeploymentDialog({
             {rollback ? (
               <div className='flex items-center justify-between rounded-lg border bg-muted/20 px-4 py-3 text-sm'>
                 <span className='text-muted-foreground'>
-                  Configuration source
+                  {t('configuration.source', {
+                    defaultValue: 'Configuration source',
+                  })}
                 </span>
-                <span className='font-medium'>{configModeLabel(mode)}</span>
+                <span className='font-medium'>
+                  {localizedConfigModeLabel(mode, t)}
+                </span>
               </div>
             ) : (
               <ConfigModePicker value={mode} onChange={onMode} />
@@ -434,9 +491,10 @@ export function DeploymentDialog({
                   <Alert className='border-blue-500/25 bg-blue-500/5'>
                     <Info className='size-4 shrink-0 text-blue-600' />
                     <AlertDescription>
-                      The Release template contains example configuration. If
-                      you use it, replace example values, credentials, and
-                      secrets with deployment-ready values.
+                      {t('configuration.templateWarning', {
+                        defaultValue:
+                          'The Release template contains example configuration. If you use it, replace example values, credentials, and secrets with deployment-ready values.',
+                      })}
                     </AlertDescription>
                   </Alert>
                 ) : null}
@@ -446,25 +504,51 @@ export function DeploymentDialog({
                       <div className='pb-3'>
                         <div className='flex items-center gap-2 text-sm font-medium'>
                           <FileCode2 className='size-4 text-primary' />
-                          Deployment configuration
+                          {t('configuration.deploymentConfiguration', {
+                            defaultValue: 'Deployment configuration',
+                          })}
                         </div>
                         <p className='mt-1 text-xs text-muted-foreground'>
-                          Apply template changes from left to right, or edit the
-                          draft. The active configuration remains unchanged
-                          until deployment.
+                          {t(
+                            'configuration.deploymentConfigurationDescription',
+                            {
+                              defaultValue:
+                                'Apply template changes from left to right, or edit the draft. The active configuration remains unchanged until deployment.',
+                            },
+                          )}
                         </p>
                       </div>
                       <div className='pb-3'>
                         <div
                           role='group'
-                          aria-label='Configuration layout'
+                          aria-label={t('configuration.layout', {
+                            defaultValue: 'Configuration layout',
+                          })}
                           className='inline-flex items-center gap-0.5 rounded-lg border bg-muted/30 p-0.5'
                         >
                           {(
                             [
-                              ['current', 'Release template only', PanelLeft],
-                              ['both', 'Side by side', Columns2],
-                              ['new', 'Deployment draft only', PanelRight],
+                              [
+                                'current',
+                                t('configuration.releaseTemplateOnly', {
+                                  defaultValue: 'Release template only',
+                                }),
+                                PanelLeft,
+                              ],
+                              [
+                                'both',
+                                t('configuration.sideBySide', {
+                                  defaultValue: 'Side by side',
+                                }),
+                                Columns2,
+                              ],
+                              [
+                                'new',
+                                t('configuration.deploymentDraftOnly', {
+                                  defaultValue: 'Deployment draft only',
+                                }),
+                                PanelRight,
+                              ],
                             ] as const
                           ).map(([value, label, Icon]) => (
                             <Button
@@ -492,12 +576,19 @@ export function DeploymentDialog({
                           className='px-4 py-2.5'
                         >
                           <p className='text-xs font-medium'>
-                            Release template
+                            {t('configuration.releaseTemplate', {
+                              defaultValue: 'Release template',
+                            })}
                           </p>
                           <p className='mt-0.5 text-xs text-muted-foreground'>
                             {release?.hasConfigTemplate
-                              ? `Release v${release.version} · Read-only`
-                              : 'No Release template'}
+                              ? t('configuration.releaseTemplateReadOnly', {
+                                  version: release.version,
+                                  defaultValue: `Release v${release.version} · Read-only`,
+                                })
+                              : t('configuration.noReleaseTemplate', {
+                                  defaultValue: 'No Release template',
+                                })}
                           </p>
                         </div>
                         <div
@@ -505,15 +596,26 @@ export function DeploymentDialog({
                           className='px-4 py-2.5'
                         >
                           <p className='text-xs font-medium'>
-                            Deployment draft
+                            {t('configuration.deploymentDraft', {
+                              defaultValue: 'Deployment draft',
+                            })}
                           </p>
                           <p className='mt-0.5 text-xs text-muted-foreground'>
                             {baselineMode === 'file' &&
                             app.app.currentDeploymentId
-                              ? `From current deployment ${shortId(app.app.currentDeploymentId)} · Editable`
+                              ? t('configuration.fromCurrentDeployment', {
+                                  id: shortId(app.app.currentDeploymentId),
+                                  defaultValue: `From current deployment ${shortId(app.app.currentDeploymentId)} · Editable`,
+                                })
                               : release?.hasConfigTemplate
-                                ? 'From Release template · Editable'
-                                : 'Empty configuration · Editable'}
+                                ? t('configuration.fromReleaseTemplate', {
+                                    defaultValue:
+                                      'From Release template · Editable',
+                                  })
+                                : t('configuration.emptyDraft', {
+                                    defaultValue:
+                                      'Empty configuration · Editable',
+                                  })}
                           </p>
                         </div>
                       </div>
@@ -534,21 +636,34 @@ export function DeploymentDialog({
               <div className='grid gap-3 sm:grid-cols-2'>
                 <div className='rounded-xl border bg-muted/20 px-4 py-3'>
                   <p className='text-xs text-muted-foreground'>
-                    Current configuration
+                    {t('configuration.currentConfiguration', {
+                      defaultValue: 'Current configuration',
+                    })}
                   </p>
                   <p className='mt-1 text-sm font-medium'>
                     {app.app.currentDeploymentId
-                      ? configModeLabel(baselineMode)
-                      : 'No active configuration'}
+                      ? localizedConfigModeLabel(baselineMode, t)
+                      : t('configuration.noActiveConfiguration', {
+                          defaultValue: 'No active configuration',
+                        })}
                   </p>
                 </div>
                 <div className='rounded-xl border border-primary/30 bg-primary/5 px-4 py-3'>
                   <p className='text-xs text-muted-foreground'>
-                    New configuration
+                    {t('configuration.newConfiguration', {
+                      defaultValue: 'New configuration',
+                    })}
                   </p>
-                  <p className='mt-1 text-sm font-medium'>External</p>
+                  <p className='mt-1 text-sm font-medium'>
+                    {t('configuration.external', {
+                      defaultValue: 'External',
+                    })}
+                  </p>
                   <p className='mt-1 text-xs text-muted-foreground'>
-                    Runtime configuration and secrets are supplied outside Hub.
+                    {t('configuration.externalRuntimeNotice', {
+                      defaultValue:
+                        'Runtime configuration and secrets are supplied outside Hub.',
+                    })}
                   </p>
                 </div>
               </div>
@@ -560,9 +675,10 @@ export function DeploymentDialog({
               <Alert className='border-amber-500/30 bg-amber-500/5 text-amber-800'>
                 <TriangleAlert className='size-4 shrink-0' />
                 <AlertDescription className='text-amber-800'>
-                  config.yml may contain secrets. Hub stores the complete file
-                  for this application, and authorized administrators can view
-                  its contents.
+                  {t('configuration.secretWarning', {
+                    defaultValue:
+                      'config.yml may contain secrets. Hub stores the complete file for this application, and authorized administrators can view its contents.',
+                  })}
                 </AlertDescription>
               </Alert>
             ) : null}
@@ -570,19 +686,29 @@ export function DeploymentDialog({
         ) : (
           <div className='overflow-hidden rounded-xl border'>
             <div className='grid grid-cols-[9rem_minmax(0,1fr)] gap-4 border-b px-4 py-3 text-sm'>
-              <span className='text-muted-foreground'>Application</span>
+              <span className='text-muted-foreground'>
+                {t('page.application', { defaultValue: 'Application' })}
+              </span>
               <span className='font-medium'>{app.app.name}</span>
             </div>
             <div className='grid grid-cols-[9rem_minmax(0,1fr)] gap-4 border-b px-4 py-3 text-sm'>
-              <span className='text-muted-foreground'>Release</span>
+              <span className='text-muted-foreground'>
+                {t('deployments.release', { defaultValue: 'Release' })}
+              </span>
               <span className='font-medium'>
                 {release ? `v${release.version}` : '—'}
               </span>
             </div>
             <div className='grid grid-cols-[9rem_minmax(0,1fr)] gap-4 border-b px-4 py-3 text-sm'>
-              <span className='text-muted-foreground'>Configuration</span>
+              <span className='text-muted-foreground'>
+                {t('configuration.title', { defaultValue: 'Configuration' })}
+              </span>
               <span className='font-medium'>
-                {mode === 'file' ? 'Config file' : 'External'}
+                {mode === 'file'
+                  ? t('configuration.configFile', {
+                      defaultValue: 'Config file',
+                    })
+                  : t('configuration.external', { defaultValue: 'External' })}
               </span>
             </div>
             {mode === 'file' ? (
@@ -590,20 +716,33 @@ export function DeploymentDialog({
                 <div className='grid gap-3 sm:grid-cols-2'>
                   <div className='rounded-lg border bg-muted/20 px-3 py-2.5'>
                     <p className='text-xs text-muted-foreground'>
-                      Current configuration
+                      {t('configuration.currentConfiguration', {
+                        defaultValue: 'Current configuration',
+                      })}
                     </p>
                     <p className='mt-1 text-sm font-medium'>
                       {app.app.currentDeploymentId
-                        ? `${configModeLabel(baselineMode)} · Deployment ${shortId(app.app.currentDeploymentId)}`
-                        : 'No active configuration'}
+                        ? t('configuration.currentDeploymentSummary', {
+                            mode: localizedConfigModeLabel(baselineMode, t),
+                            id: shortId(app.app.currentDeploymentId),
+                            defaultValue: `${localizedConfigModeLabel(baselineMode, t)} · Deployment ${shortId(app.app.currentDeploymentId)}`,
+                          })
+                        : t('configuration.noActiveConfiguration', {
+                            defaultValue: 'No active configuration',
+                          })}
                     </p>
                   </div>
                   <div className='rounded-lg border bg-primary/5 px-3 py-2.5'>
                     <p className='text-xs text-muted-foreground'>
-                      New configuration
+                      {t('configuration.newConfiguration', {
+                        defaultValue: 'New configuration',
+                      })}
                     </p>
                     <p className='mt-1 text-sm font-medium'>
-                      {`Config file · Release v${release?.version ?? '—'}`}
+                      {t('configuration.configFileRelease', {
+                        version: release?.version ?? '—',
+                        defaultValue: `Config file · Release v${release?.version ?? '—'}`,
+                      })}
                     </p>
                   </div>
                 </div>
@@ -619,8 +758,13 @@ export function DeploymentDialog({
                 <div className='flex items-center gap-2 rounded-lg border border-emerald-500/25 bg-emerald-500/5 px-3 py-2.5 text-sm text-emerald-700'>
                   <Check className='size-4 shrink-0' />
                   {summary.sourceChanged
-                    ? `Configuration source changes from ${configModeLabel(baselineMode)} to External`
-                    : 'No configuration source changes'}
+                    ? t('configuration.sourceChangedToExternal', {
+                        from: localizedConfigModeLabel(baselineMode, t),
+                        defaultValue: `Configuration source changes from ${localizedConfigModeLabel(baselineMode, t)} to External`,
+                      })
+                    : t('configuration.noSourceChanges', {
+                        defaultValue: 'No configuration source changes',
+                      })}
                 </div>
               </div>
             )}
@@ -632,7 +776,9 @@ export function DeploymentDialog({
           onClick={step === firstStep ? onClose : () => setStep(step - 1)}
           variant='outline'
         >
-          {step === firstStep ? 'Cancel' : 'Back'}
+          {step === firstStep
+            ? t('releases.cancel', { defaultValue: 'Cancel' })
+            : t('configuration.back', { defaultValue: 'Back' })}
         </Button>
         {step < 2 ? (
           <Button
@@ -649,7 +795,8 @@ export function DeploymentDialog({
               setStep(step + 1);
             }}
           >
-            Continue <ChevronRight />
+            {t('configuration.continue', { defaultValue: 'Continue' })}{' '}
+            <ChevronRight />
           </Button>
         ) : (
           <Button
@@ -664,11 +811,13 @@ export function DeploymentDialog({
           >
             {busy
               ? rollback
-                ? 'Rolling back…'
-                : 'Deploying…'
+                ? t('deployments.rollingBack', {
+                    defaultValue: 'Rolling back…',
+                  })
+                : t('deployments.deploying', { defaultValue: 'Deploying…' })
               : rollback
-                ? 'Roll back'
-                : 'Deploy'}
+                ? t('deployments.rollback', { defaultValue: 'Roll back' })
+                : t('deployments.deploy', { defaultValue: 'Deploy' })}
           </Button>
         )}
       </div>
@@ -698,6 +847,7 @@ export function ConfigStatus({
   readonly error: string | null;
   readonly summary: ConfigChangeSummary;
 }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-hub');
   if (error) {
     return (
       <div className='flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm text-destructive'>
@@ -711,34 +861,75 @@ export function ConfigStatus({
       <Check className='size-4 shrink-0' />
       <span>
         {summary.unchanged
-          ? 'Valid YAML · No configuration changes'
+          ? t('configuration.validNoChanges', {
+              defaultValue: 'Valid YAML · No configuration changes',
+            })
           : summary.sourceChanged
-            ? `Valid YAML · Configuration source changed · ${summary.added} added and ${summary.removed} removed lines`
-            : `Valid YAML · ${summary.added} added and ${summary.removed} removed lines`}
+            ? t('configuration.validSourceChanged', {
+                added: summary.added,
+                removed: summary.removed,
+                defaultValue: `Valid YAML · Configuration source changed · ${summary.added} added and ${summary.removed} removed lines`,
+              })
+            : t('configuration.validChanges', {
+                added: summary.added,
+                removed: summary.removed,
+                defaultValue: `Valid YAML · ${summary.added} added and ${summary.removed} removed lines`,
+              })}
       </span>
     </div>
   );
 }
 
 export function ConfigEditorFallback(): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-hub');
   return (
     <div
       className='h-[360px] animate-pulse bg-muted/30'
-      aria-label='Loading editor'
+      aria-label={t('configuration.loadingEditor', {
+        defaultValue: 'Loading editor',
+      })}
     />
   );
 }
 
-function validateConfigDocument(content: string): string | null {
+function validateConfigDocument(
+  content: string,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string | null {
   try {
     const value: unknown = content.trim() === '' ? {} : parseYaml(content);
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
-      return 'The YAML root must be an object.';
+      return t('configuration.invalidRoot', {
+        defaultValue: 'The YAML root must be an object.',
+      });
     }
     return null;
   } catch (error) {
-    return `Invalid config.yml: ${error instanceof Error ? error.message : String(error)}`;
+    const message = error instanceof Error ? error.message : String(error);
+    return t('configuration.invalidDocument', {
+      error: message,
+      defaultValue: `Invalid config.yml: ${message}`,
+    });
   }
+}
+
+function localizedConfigModeLabel(
+  mode: ConfigMode,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  const key =
+    mode === 'file'
+      ? 'configuration.configFile'
+      : mode === 'external'
+        ? 'configuration.external'
+        : 'configuration.hubManaged';
+  const fallback =
+    mode === 'file'
+      ? 'Config file'
+      : mode === 'external'
+        ? 'External'
+        : 'Hub managed';
+  return t(key, { defaultValue: fallback });
 }
 
 function diffLines(before: string, after: string): readonly DiffLine[] {
@@ -832,6 +1023,7 @@ export function ConfigModePicker({
   readonly value: ConfigMode;
   readonly onChange: (mode: ConfigMode) => void;
 }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-hub');
   const selected = CONFIG_MODES.find((item) => item.value === value);
   return (
     <div>
@@ -847,8 +1039,21 @@ export function ConfigModePicker({
             <span className='text-muted-foreground [&_svg]:size-4'>
               {item.icon}
             </span>
-            <span>{item.title}</span>
-            {item.disabled ? <Badge className='text-[9px]'>Soon</Badge> : null}
+            <span>
+              {t(item.titleKey, {
+                defaultValue:
+                  item.value === 'file'
+                    ? 'Config file'
+                    : item.value === 'managed'
+                      ? 'Hub managed'
+                      : 'External',
+              })}
+            </span>
+            {item.disabled ? (
+              <Badge className='text-[9px]'>
+                {t('configuration.soon', { defaultValue: 'Soon' })}
+              </Badge>
+            ) : null}
             {value === item.value ? (
               <Check className='absolute right-3 size-3.5 text-primary' />
             ) : null}
@@ -856,7 +1061,16 @@ export function ConfigModePicker({
         ))}
       </div>
       <p className='mt-2 text-xs text-muted-foreground'>
-        {selected?.description}
+        {selected
+          ? t(selected.descriptionKey, {
+              defaultValue:
+                selected.value === 'file'
+                  ? 'Maintain an editable config.yml with the application.'
+                  : selected.value === 'managed'
+                    ? 'Store structured configuration and secrets in Hub.'
+                    : 'Supply configuration through external infrastructure.',
+            })
+          : null}
       </p>
     </div>
   );
@@ -869,18 +1083,39 @@ export function DeploymentSteps({
   readonly current: number;
   readonly rollback: boolean;
 }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-hub');
   const steps = rollback
     ? [
-        { index: 1, label: 'Configuration' },
-        { index: 2, label: 'Review' },
+        {
+          index: 1,
+          label: t('configuration.title', { defaultValue: 'Configuration' }),
+        },
+        {
+          index: 2,
+          label: t('configuration.review', { defaultValue: 'Review' }),
+        },
       ]
     : [
-        { index: 0, label: 'Release' },
-        { index: 1, label: 'Configuration' },
-        { index: 2, label: 'Review' },
+        {
+          index: 0,
+          label: t('deployments.release', { defaultValue: 'Release' }),
+        },
+        {
+          index: 1,
+          label: t('configuration.title', { defaultValue: 'Configuration' }),
+        },
+        {
+          index: 2,
+          label: t('configuration.review', { defaultValue: 'Review' }),
+        },
       ];
   return (
-    <ol className='mb-6 flex items-center' aria-label='Deployment progress'>
+    <ol
+      className='mb-6 flex items-center'
+      aria-label={t('configuration.progress', {
+        defaultValue: 'Deployment progress',
+      })}
+    >
       {steps.map((item, position) => {
         const active = item.index === current;
         const complete = item.index < current;

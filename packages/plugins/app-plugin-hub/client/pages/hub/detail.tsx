@@ -5,7 +5,6 @@ import {
   ClipboardCheck,
   Code2,
   ExternalLink,
-  LoaderCircle,
   Play,
   RefreshCw,
   Trash2,
@@ -25,96 +24,57 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../../components/ui/dialog.js';
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from '../../components/ui/tabs.js';
+import { Tabs, TabsList, TabsTrigger } from '../../components/ui/tabs.js';
+import { useTranslation } from '@nocobase/i18n/client';
 import { useState, type ReactElement } from 'react';
-import type {
-  DetailTab,
-  AppDetail,
-  ReleaseRecord,
-  ConfigMode,
-  ActivationPolicy,
-} from './types.js';
+import { Outlet } from 'react-router';
+import type { DetailTab, AppDetail } from './types.js';
 import { AppMark, StatusBadge } from './shared.js';
-import { Deployments } from './deployments.js';
-import { Releases } from './releases.js';
-import { Resources } from './resources.js';
-import { Configuration } from './configuration.js';
-import { Settings } from './settings.js';
-import { applicationUrl, hasDeployment, formatDate } from './utils.js';
+import {
+  appActionState,
+  appManagementStatus,
+  applicationUrl,
+  hasDeployment,
+  formatDate,
+} from './utils.js';
 import {
   visibleHubDetailTabs,
   type HubCapabilities,
 } from '../../permissions.js';
 
 const TAB_LABELS: Readonly<Record<DetailTab, string>> = {
-  deployments: 'Deployments',
-  releases: 'Releases',
-  development: 'Development',
-  resources: 'Resources',
-  configuration: 'Configuration',
-  settings: 'Settings',
+  deployments: 'detail.tabs.deployments',
+  releases: 'detail.tabs.releases',
+  development: 'detail.tabs.development',
+  resources: 'detail.tabs.resources',
+  configuration: 'detail.tabs.configuration',
+  settings: 'detail.tabs.settings',
 };
 
 export function Detail({
-  panelLoading,
   app,
   tab,
-  release,
-  configMode,
-  configContent,
   busy,
   capabilities,
   onBack,
   onTab,
-  onRelease,
   onRefresh,
   onStart,
   onRestart,
-  onSaveSettings,
-  onSaveConfiguration,
-  onRemove,
   onStop,
-  onDeploy,
-  onRollback,
-  onUpload,
-  deploymentPagination,
-  deploymentsLoading,
-  onDeploymentPage,
 }: {
-  readonly panelLoading: boolean;
   readonly app: AppDetail;
   readonly tab: DetailTab;
-  readonly release: ReleaseRecord | undefined;
-  readonly configMode: ConfigMode;
-  readonly configContent: string;
   readonly busy: boolean;
   readonly capabilities: HubCapabilities;
   readonly onBack: () => void;
   readonly onTab: (tab: DetailTab) => void;
-  readonly onRelease: (id: string) => void;
   readonly onRefresh: () => void;
   readonly onStart: () => void;
   readonly onRestart: () => void;
-  readonly onSaveSettings: (activation: ActivationPolicy) => void;
-  readonly onSaveConfiguration: (content: string) => void;
-  readonly onRemove: () => void;
   readonly onStop: () => void;
-  readonly onDeploy: () => void;
-  readonly onRollback: (deploymentId: string) => void;
-  readonly onUpload: () => void;
-  readonly deploymentPagination: {
-    page: number;
-    pageSize: number;
-    total: number;
-  };
-  readonly deploymentsLoading: boolean;
-  readonly onDeploymentPage: (page: number) => void;
 }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-hub');
   const deployed = hasDeployment(app);
   const detailTabs = visibleHubDetailTabs(
     { hasReleases: app.hasReleases, deployed },
@@ -124,69 +84,86 @@ export function Detail({
     ? tab
     : (detailTabs[0] ?? 'deployments');
   const visitUrl = applicationUrl(app);
-  const running = app.deployment.observedState === 'running';
-  const visitAllowed =
-    app.runtime.hostAvailable &&
-    (running ||
-      (app.runtime.state === 'stopped' &&
-        app.enabled &&
-        app.deployment.activation === 'lazy'));
-  const transitioning =
-    app.hasPendingDeployment || app.runtime.state === 'pending';
+  const status = appManagementStatus(app);
+  const running = status === 'running';
+  const visitAllowed = status === 'running' || status === 'ready';
+  const visitReason = visitAllowed
+    ? undefined
+    : status === 'host-unavailable'
+      ? 'hostUnavailable'
+      : status === 'not-deployed'
+        ? 'deployReleaseFirst'
+        : 'notRunning';
+  const startState = appActionState(app, 'start', busy);
+  const restartState = appActionState(app, 'restart', busy);
+  const stopState = appActionState(app, 'stop', busy);
+  const lifecycleReason = running ? restartState.reason : startState.reason;
   return (
     <>
       <Button
-        className='mb-5 px-0 text-muted-foreground hover:bg-transparent hover:text-foreground'
+        className='mb-6 px-0 text-muted-foreground hover:bg-transparent hover:text-foreground'
         onClick={onBack}
         variant='ghost'
       >
-        <ArrowLeft className='size-4' /> All applications
+        <ArrowLeft className='size-4' />{' '}
+        {t('detail.allApplications', { defaultValue: 'All applications' })}
       </Button>
       <section className='overflow-hidden rounded-2xl border bg-card shadow-sm'>
         <Tabs
           value={activeTab}
           onValueChange={(value) => onTab(value as DetailTab)}
         >
-          <header className='border-b px-6 pt-6'>
-            <div className='flex flex-wrap items-start justify-between gap-5 pb-6'>
-              <div className='flex items-start gap-4'>
+          <header className='border-b px-5 pt-5 sm:px-8 sm:pt-8'>
+            <div className='flex flex-wrap items-start justify-between gap-7 pb-7'>
+              <div className='flex min-w-0 items-start gap-4'>
                 <AppMark name={app.app.name} />
-                <div>
-                  <div className='flex flex-wrap items-center gap-2'>
+                <div className='min-w-0'>
+                  <div className='flex flex-wrap items-center gap-x-3 gap-y-2'>
                     <h1 className='text-2xl font-semibold'>{app.app.name}</h1>
-                    <StatusBadge state={app.deployment.observedState} />
+                    <StatusBadge state={status} />
                   </div>
-                  <p className='mt-1 font-mono text-xs text-muted-foreground'>
+                  <p className='mt-2 truncate font-mono text-xs text-muted-foreground'>
                     {app.app.id} · {app.deployment.basePath}
                   </p>
-                  <div className='mt-3 flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-muted-foreground'>
+                  <div className='mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-muted-foreground'>
                     <span>
-                      Release{' '}
+                      {t('detail.release', { defaultValue: 'Release' })}{' '}
                       <strong className='font-medium text-foreground'>
                         {app.currentVersion
                           ? `v${app.currentVersion}`
-                          : 'Not deployed'}
+                          : t('detail.notDeployed', {
+                              defaultValue: 'Not deployed',
+                            })}
                       </strong>
                     </span>
                     <span>
-                      Startup{' '}
+                      {t('detail.startup', { defaultValue: 'Startup' })}{' '}
                       <strong className='font-medium text-foreground'>
                         {app.deployment.activation === 'eager'
-                          ? 'With Hub'
-                          : 'On first visit'}
+                          ? t('detail.withHub', { defaultValue: 'With Hub' })
+                          : t('detail.onFirstVisit', {
+                              defaultValue: 'On first visit',
+                            })}
                       </strong>
                     </span>
-                    <span>Updated {formatDate(app.deployment.updatedAt)}</span>
+                    <span>
+                      {t('detail.updated', {
+                        date: formatDate(app.deployment.updatedAt),
+                        defaultValue: `Updated ${formatDate(app.deployment.updatedAt)}`,
+                      })}
+                    </span>
                   </div>
                 </div>
               </div>
-              <div className='flex flex-wrap gap-2'>
+              <div className='flex max-w-full flex-wrap justify-end gap-2.5'>
                 {capabilities.refresh ? (
                   <Button disabled={busy} onClick={onRefresh} variant='outline'>
                     <RefreshCw
                       className={`size-4 ${busy ? 'animate-spin' : ''}`}
                     />{' '}
-                    Refresh status
+                    {t('detail.refreshStatus', {
+                      defaultValue: 'Refresh status',
+                    })}
                   </Button>
                 ) : null}
                 {visitUrl && visitAllowed ? (
@@ -198,122 +175,116 @@ export function Detail({
                     }
                     variant='outline'
                   >
-                    <ExternalLink className='size-4' /> Visit
+                    <ExternalLink className='size-4' />{' '}
+                    {t('detail.visit', { defaultValue: 'Visit' })}
                   </Button>
                 ) : (
-                  <Button disabled variant='outline'>
-                    <ExternalLink className='size-4' /> Visit
+                  <Button
+                    disabled
+                    title={
+                      visitReason
+                        ? t(`actions.${visitReason}`, {
+                            defaultValue: visitReason,
+                          })
+                        : undefined
+                    }
+                    aria-describedby={
+                      visitReason ? 'hub-visit-action-reason' : undefined
+                    }
+                    variant='outline'
+                  >
+                    <ExternalLink className='size-4' />{' '}
+                    {t('detail.visit', { defaultValue: 'Visit' })}
                   </Button>
                 )}
                 {capabilities[running ? 'restart' : 'start'] ? (
                   <Button
                     disabled={
-                      busy ||
                       !deployed ||
-                      !app.runtime.hostAvailable ||
-                      transitioning
+                      !(running ? restartState.enabled : startState.enabled)
                     }
                     onClick={running ? onRestart : onStart}
                     variant='outline'
+                    title={
+                      lifecycleReason
+                        ? t(`actions.${lifecycleReason}`, {
+                            defaultValue: lifecycleReason,
+                          })
+                        : undefined
+                    }
+                    aria-describedby={
+                      lifecycleReason
+                        ? 'hub-lifecycle-action-reason'
+                        : undefined
+                    }
                   >
                     {running ? (
                       <RefreshCw className='size-4' />
                     ) : (
                       <Play className='size-4' />
                     )}{' '}
-                    {running ? 'Restart' : 'Start'}
+                    {running
+                      ? t('detail.restart', { defaultValue: 'Restart' })
+                      : t('detail.start', { defaultValue: 'Start' })}
                   </Button>
                 ) : null}
                 {capabilities.stop ? (
                   <Button
-                    disabled={
-                      busy ||
-                      !running ||
-                      !app.runtime.hostAvailable ||
-                      transitioning
-                    }
+                    disabled={!stopState.enabled}
                     onClick={onStop}
                     variant='outline'
+                    title={
+                      stopState.reason
+                        ? t(`actions.${stopState.reason}`, {
+                            defaultValue: stopState.reason,
+                          })
+                        : undefined
+                    }
+                    aria-describedby={
+                      stopState.reason ? 'hub-stop-action-reason' : undefined
+                    }
                   >
-                    <CircleStop className='size-4' /> Stop
+                    <CircleStop className='size-4' />{' '}
+                    {t('detail.stop', { defaultValue: 'Stop' })}
                   </Button>
                 ) : null}
               </div>
             </div>
-            <TabsList>
+            {lifecycleReason || stopState.reason || visitReason ? (
+              <>
+                <span className='sr-only' id='hub-lifecycle-action-reason'>
+                  {lifecycleReason
+                    ? t(`actions.${lifecycleReason}`, {
+                        defaultValue: lifecycleReason,
+                      })
+                    : null}
+                </span>
+                <span className='sr-only' id='hub-stop-action-reason'>
+                  {stopState.reason
+                    ? t(`actions.${stopState.reason}`, {
+                        defaultValue: stopState.reason,
+                      })
+                    : null}
+                </span>
+                {visitReason ? (
+                  <span className='sr-only' id='hub-visit-action-reason'>
+                    {t(`actions.${visitReason}`, {
+                      defaultValue: visitReason,
+                    })}
+                  </span>
+                ) : null}
+              </>
+            ) : null}
+            <TabsList className='-mb-px gap-5 px-1'>
               {detailTabs.map((item) => (
                 <TabsTrigger key={item} value={item}>
-                  {TAB_LABELS[item]}
+                  {t(TAB_LABELS[item], { defaultValue: item })}
                 </TabsTrigger>
               ))}
             </TabsList>
           </header>
-          <div className='p-6'>
-            {panelLoading ? (
-              <div
-                role='status'
-                className='flex items-center gap-2 text-muted-foreground'
-              >
-                <LoaderCircle className='size-4 animate-spin' />
-                Loading…
-              </div>
-            ) : (
-              <>
-                <TabsContent value='deployments'>
-                  <Deployments
-                    app={app}
-                    pagination={deploymentPagination}
-                    loading={deploymentsLoading}
-                    onPage={onDeploymentPage}
-                    busy={busy || transitioning || deploymentsLoading}
-                    canDeploy={capabilities.deploy}
-                    canRollback={capabilities.rollback}
-                    onDeploy={onDeploy}
-                    onRollback={onRollback}
-                  />
-                </TabsContent>
-                <TabsContent value='releases'>
-                  <Releases
-                    app={app}
-                    selected={release?.id}
-                    canUpload={capabilities['upload-release']}
-                    onSelect={onRelease}
-                    onUpload={onUpload}
-                  />
-                </TabsContent>
-                {!app.hasReleases ? (
-                  <TabsContent value='development'>
-                    <Development appId={app.app.id} />
-                  </TabsContent>
-                ) : null}
-                <TabsContent value='resources'>
-                  <Resources mode={configMode} content={configContent} />
-                </TabsContent>
-                {deployed ? (
-                  <TabsContent value='configuration'>
-                    <Configuration
-                      key={`${app.app.id}:${app.app.currentDeploymentId}`}
-                      mode={configMode}
-                      content={configContent}
-                      busy={busy || transitioning}
-                      canUpdate={capabilities['update-config']}
-                      onSave={onSaveConfiguration}
-                    />
-                  </TabsContent>
-                ) : null}
-                <TabsContent value='settings'>
-                  <Settings
-                    key={app.deployment.activation}
-                    activation={app.deployment.activation}
-                    busy={busy}
-                    canUpdate={capabilities['update-settings']}
-                    canRemove={capabilities.remove}
-                    onSave={onSaveSettings}
-                    onRemove={onRemove}
-                  />
-                </TabsContent>
-              </>
-            )}
+          <div className='p-5 sm:px-8 sm:py-7'>
+            <Outlet />
           </div>
         </Tabs>
       </section>
@@ -332,6 +303,7 @@ export function RemoveApplicationDialog({
   readonly onClose: () => void;
   readonly onRemove: () => void;
 }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-hub');
   return (
     <UiDialog open onOpenChange={(open) => (!open ? onClose() : undefined)}>
       <DialogContent className='max-w-[30rem] overflow-hidden p-0'>
@@ -341,13 +313,16 @@ export function RemoveApplicationDialog({
               <Trash2 className='size-5' />
             </span>
             <div className='min-w-0 pt-0.5'>
-              <DialogTitle>Remove application?</DialogTitle>
+              <DialogTitle>
+                {t('detail.removeTitle', {
+                  defaultValue: 'Remove application?',
+                })}
+              </DialogTitle>
               <DialogDescription className='mt-1.5 leading-6'>
-                <span className='font-medium text-foreground'>
-                  {app.app.name}
-                </span>{' '}
-                and all of its releases, configuration, and application data
-                will be permanently deleted.
+                {t('detail.removeDescription', {
+                  name: app.app.name,
+                  defaultValue: `${app.app.name} and all of its releases, configuration, and application data will be permanently deleted.`,
+                })}
               </DialogDescription>
             </div>
           </div>
@@ -355,7 +330,11 @@ export function RemoveApplicationDialog({
         <div className='px-6 py-5'>
           <div className='flex items-center gap-2.5 rounded-lg bg-destructive/5 px-3.5 py-3 text-sm text-destructive'>
             <TriangleAlert className='size-4 shrink-0' />
-            <span>This action cannot be undone.</span>
+            <span>
+              {t('detail.removeWarning', {
+                defaultValue: 'This action cannot be undone.',
+              })}
+            </span>
           </div>
         </div>
         <div className='flex justify-end gap-2 border-t bg-muted/30 px-6 py-4'>
@@ -365,7 +344,7 @@ export function RemoveApplicationDialog({
             onClick={onClose}
             variant='outline'
           >
-            Cancel
+            {t('detail.cancel', { defaultValue: 'Cancel' })}
           </Button>
           <Button
             className='min-w-20 cursor-pointer bg-destructive text-white hover:bg-destructive/90'
@@ -373,7 +352,9 @@ export function RemoveApplicationDialog({
             onClick={onRemove}
             variant='destructive'
           >
-            {busy ? 'Removing…' : 'Remove'}
+            {busy
+              ? t('detail.removing', { defaultValue: 'Removing…' })
+              : t('detail.remove', { defaultValue: 'Remove' })}
           </Button>
         </div>
       </DialogContent>
@@ -386,6 +367,7 @@ export function Development({
 }: {
   readonly appId: string;
 }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-hub');
   const [copied, setCopied] = useState(false);
   const command = `npm_config_registry=https://npm.nocobase.ai pnpm create @nocobase/app ${appId}`;
   const copy = async (): Promise<void> => {
@@ -400,18 +382,31 @@ export function Development({
           <Code2 className='size-5' />
         </span>
         <div>
-          <h2 className='text-lg font-semibold'>Develop this application</h2>
+          <h2 className='text-lg font-semibold'>
+            {t('development.title', {
+              defaultValue: 'Develop this application',
+            })}
+          </h2>
           <p className='mt-1 text-sm leading-6 text-muted-foreground'>
-            Create a local NocoBase project using this application ID, then
-            build and upload its release from the Deploy flow.
+            {t('development.description', {
+              defaultValue:
+                'Create a local NocoBase project using this application ID, then build and upload its release from the Deploy flow.',
+            })}
           </p>
         </div>
       </div>
       <Card className='overflow-hidden'>
         <CardHeader className='border-b bg-muted/20'>
-          <p className='text-sm font-medium'>Create a new application</p>
+          <p className='text-sm font-medium'>
+            {t('development.createTitle', {
+              defaultValue: 'Create a new application',
+            })}
+          </p>
           <p className='mt-1 text-xs text-muted-foreground'>
-            Run this command in the directory where you keep source projects.
+            {t('development.createDescription', {
+              defaultValue:
+                'Run this command in the directory where you keep source projects.',
+            })}
           </p>
         </CardHeader>
         <CardContent className='p-0'>
@@ -421,7 +416,9 @@ export function Development({
               {command}
             </code>
             <Button
-              aria-label='Copy create-app command'
+              aria-label={t('development.copyCommand', {
+                defaultValue: 'Copy create-app command',
+              })}
               className='border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800'
               onClick={() => void copy()}
               size='icon'
@@ -432,10 +429,10 @@ export function Development({
           </div>
         </CardContent>
         <CardFooter className='block bg-muted/20 text-xs leading-5 text-muted-foreground'>
-          The command creates the source project locally. When it is ready,
-          return here and choose{' '}
-          <span className='font-medium text-foreground'>Deploy</span> to upload
-          the first release.
+          {t('development.footer', {
+            defaultValue:
+              'The command creates the source project locally. When it is ready, return here and choose Deploy to upload the first release.',
+          })}
         </CardFooter>
       </Card>
     </div>

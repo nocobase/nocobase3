@@ -2,6 +2,7 @@ import { Archive, CloudUpload } from 'lucide-react';
 import { Badge } from '../../components/ui/badge.js';
 import { Button } from '../../components/ui/button.js';
 import { Input } from '../../components/ui/input.js';
+import { useTranslation } from '@nocobase/i18n/client';
 import { type ChangeEvent, type ReactElement } from 'react';
 import type { AppDetail } from './types.js';
 import { Empty, AppDialog } from './shared.js';
@@ -20,19 +21,26 @@ export function Releases({
   readonly onSelect: (id: string) => void;
   readonly onUpload: () => void;
 }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-hub');
   return (
     <div>
       <div className='mb-5 flex items-center justify-between'>
         <div>
-          <h2 className='font-semibold'>Releases</h2>
+          <h2 className='font-semibold'>
+            {t('releases.title', { defaultValue: 'Releases' })}
+          </h2>
           <p className='mt-1 text-sm text-muted-foreground'>
-            Upload and inspect immutable release artifacts for this application.
+            {t('releases.description', {
+              defaultValue:
+                'Upload and inspect immutable release artifacts for this application.',
+            })}
           </p>
         </div>
         {canUpload ? (
           <div className='flex gap-2'>
             <Button onClick={onUpload} variant='outline'>
-              <CloudUpload className='size-4' /> Upload release
+              <CloudUpload className='size-4' />{' '}
+              {t('releases.upload', { defaultValue: 'Upload release' })}
             </Button>
           </div>
         ) : null}
@@ -56,7 +64,7 @@ export function Releases({
                 </span>
                 {item.id === app.deployment.observedReleaseId ? (
                   <Badge className='bg-emerald-500/10 text-emerald-700'>
-                    Active
+                    {t('releases.active', { defaultValue: 'Active' })}
                   </Badge>
                 ) : null}
               </span>
@@ -69,7 +77,12 @@ export function Releases({
             </Button>
           ))
         ) : (
-          <Empty icon={<Archive />} title='No releases uploaded' />
+          <Empty
+            icon={<Archive />}
+            title={t('releases.noReleases', {
+              defaultValue: 'No releases uploaded',
+            })}
+          />
         )}
       </div>
     </div>
@@ -89,10 +102,14 @@ export function UploadReleaseDialog({
   readonly onClose: () => void;
   readonly onUpload: () => void;
 }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-hub');
   return (
     <AppDialog
-      title='Upload release'
-      description='Upload a built application artifact. Version and config.example.yml or config.example.yaml are detected automatically.'
+      title={t('releases.uploadTitle', { defaultValue: 'Upload release' })}
+      description={t('releases.uploadDescription', {
+        defaultValue:
+          'Upload a built application artifact. Version and config.example.yml or config.example.yaml are detected automatically.',
+      })}
       onClose={onClose}
     >
       <Button
@@ -101,7 +118,12 @@ export function UploadReleaseDialog({
         variant='outline'
       >
         <CloudUpload className='size-5' />
-        <span>{artifact?.name ?? 'Choose a .tar.gz release artifact'}</span>
+        <span>
+          {artifact?.name ??
+            t('releases.chooseArtifact', {
+              defaultValue: 'Choose a .tar.gz release artifact',
+            })}
+        </span>
         <Input
           accept='.gz,.tgz,application/gzip'
           className='sr-only'
@@ -113,10 +135,12 @@ export function UploadReleaseDialog({
       </Button>
       <div className='mt-6 flex justify-end gap-2'>
         <Button onClick={onClose} variant='outline'>
-          Cancel
+          {t('releases.cancel', { defaultValue: 'Cancel' })}
         </Button>
         <Button disabled={!artifact || busy} onClick={onUpload}>
-          {busy ? 'Uploading…' : 'Upload release'}
+          {busy
+            ? t('releases.uploading', { defaultValue: 'Uploading…' })
+            : t('releases.upload', { defaultValue: 'Upload release' })}
         </Button>
       </div>
     </AppDialog>

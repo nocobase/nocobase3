@@ -100,6 +100,8 @@ export function createHubUserRoleScope(
   return {
     key: 'hub',
     label: 'Hub role',
+    labelI18nKey: 'roles.scope',
+    labelI18nNs: '@nocobase/app-plugin-hub',
     selection: 'single',
     requiredOnCreate: true,
     options: () =>
@@ -107,16 +109,22 @@ export function createHubUserRoleScope(
         {
           value: 'hub-administrator',
           label: 'Administrator',
+          labelI18nKey: 'roles.names.hub-administrator',
+          labelI18nNs: '@nocobase/app-plugin-hub',
           description: 'Manage applications, operations, users, and roles.',
         },
         {
           value: 'hub-operator',
           label: 'Operator',
+          labelI18nKey: 'roles.names.hub-operator',
+          labelI18nNs: '@nocobase/app-plugin-hub',
           description: 'Deploy and operate applications.',
         },
         {
           value: 'hub-viewer',
           label: 'Viewer',
+          labelI18nKey: 'roles.names.hub-viewer',
+          labelI18nNs: '@nocobase/app-plugin-hub',
           description: 'View application and runtime status.',
         },
       ]),
