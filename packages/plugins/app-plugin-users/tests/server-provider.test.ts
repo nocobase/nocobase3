@@ -5,6 +5,7 @@ import {
 } from '@nocobase/app-plugin-authorization';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { createDatabaseManager, type DatabaseConnection } from '@nocobase/db';
+import sqlite from '@nocobase/db-sqlite';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -24,6 +25,7 @@ describe('@nocobase/app-plugin-users service', () => {
 
   it('rolls back the created user when role assignment fails', async () => {
     const database = createDatabaseManager({
+      drivers: { sqlite },
       default: 'main',
       connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
     });
@@ -66,6 +68,7 @@ describe('@nocobase/app-plugin-users service', () => {
 
   it('notifies permission consumers only after a role transaction commits', async () => {
     const database = createDatabaseManager({
+      drivers: { sqlite },
       default: 'main',
       connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
     });
@@ -116,6 +119,7 @@ describe('@nocobase/app-plugin-users service', () => {
 
   it('rolls back a password change when Session revocation fails', async () => {
     const database = createDatabaseManager({
+      drivers: { sqlite },
       default: 'main',
       connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
     });
@@ -182,6 +186,7 @@ describe('@nocobase/app-plugin-users service', () => {
 
   it('publishes role option protections and default-access context', async () => {
     const database = createDatabaseManager({
+      drivers: { sqlite },
       default: 'main',
       connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
     });
@@ -226,6 +231,7 @@ describe('@nocobase/app-plugin-users service', () => {
 
   it('loads one page of role assignments through the scope batch API', async () => {
     const database = createDatabaseManager({
+      drivers: { sqlite },
       default: 'main',
       connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
     });
@@ -273,6 +279,7 @@ describe('@nocobase/app-plugin-users service', () => {
 
   it('rejects an empty required role and values with the wrong selection shape', async () => {
     const database = createDatabaseManager({
+      drivers: { sqlite },
       default: 'main',
       connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
     });

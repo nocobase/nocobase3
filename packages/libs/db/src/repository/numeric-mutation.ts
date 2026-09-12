@@ -7,7 +7,10 @@ import { normalizeBooleanValue } from './boolean.js';
 import { normalizeCharValue } from './char.js';
 import { normalizeEnumValue } from './enum.js';
 import { isTemporalType, normalizeTemporalValue } from './temporal.js';
-import { resolveMutationValue } from './values.js';
+import {
+  resolveMutationValue,
+  validateResolvedMutationValue,
+} from './values.js';
 import type {
   NumericMutationBuilder,
   NumericMutationOperand,
@@ -105,6 +108,14 @@ export function normalizeNumericMutation(
       input instanceof Date ||
       input instanceof Uint8Array)
   ) {
+    if (field.type === 'integer' || field.type === 'bigInt') {
+      return validateResolvedMutationValue(
+        field,
+        resolveMutationValue(input, context, path),
+        collection.name,
+        path,
+      );
+    }
     return input as RepositoryMutationScalarValue;
   }
   if (

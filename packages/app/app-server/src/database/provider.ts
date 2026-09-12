@@ -15,6 +15,7 @@ export interface DatabaseProviderApplication {
   readonly config: AppConfigAccessor;
   readonly container: ServiceContainer;
   readonly paths: ConfigPaths;
+  readonly databaseDrivers?: AppDatabaseConfig['drivers'];
 }
 
 export class DatabaseProvider extends ServiceProvider<DatabaseProviderApplication> {
@@ -27,7 +28,11 @@ export class DatabaseProvider extends ServiceProvider<DatabaseProviderApplicatio
     }
 
     this.app.container.singleton(databaseManagerToken, () => {
-      const database = createAppDatabaseManager(config, this.app.paths);
+      const database = createAppDatabaseManager(
+        config,
+        this.app.paths,
+        this.app.databaseDrivers,
+      );
       if (!database) {
         throw new Error('Database is not configured.');
       }
@@ -48,15 +53,23 @@ export class DatabaseProvider extends ServiceProvider<DatabaseProviderApplicatio
       this.app.paths,
       ['migrations', 'seeds'],
       { autoRun: true },
+      this.app.databaseDrivers,
     );
     // All SQLite connections must be usable by runtime services even without automatic tasks.
     await prepareAppDatabaseStorage(
       config,
       this.app.paths,
       Object.keys(config.connections),
+      this.app.databaseDrivers,
     );
     const database = container.resolve(databaseManagerToken);
-    await executeAppDatabasePlan(database, config, this.app.paths, plan);
+    await executeAppDatabasePlan(
+      database,
+      config,
+      this.app.paths,
+      plan,
+      this.app.databaseDrivers,
+    );
   }
 
   public override async shutdown(): Promise<void> {

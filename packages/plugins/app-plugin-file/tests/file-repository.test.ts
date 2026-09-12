@@ -4,6 +4,7 @@ import { mkdtemp, rm, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
+import sqlite from '@nocobase/db-sqlite';
 import { createDatabaseManager, databaseManagerToken } from '@nocobase/db';
 import { createDriveManager } from '@nocobase/drive';
 import { driveManagerToken } from '@nocobase/app-server/drive';
@@ -45,6 +46,7 @@ async function fixture(
   const root = await mkdtemp(path.join(tmpdir(), 'file-repository-'));
   cleanup.push(() => rm(root, { recursive: true, force: true }));
   const db = createDatabaseManager({
+    drivers: { sqlite },
     connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
   });
   cleanup.push(() => db.destroy());
@@ -166,7 +168,7 @@ describe('server repository and Client API', () => {
             .repository('attachments')
             .findOne({ filter: { id: record.id } })
         )?.size,
-      ).toBe(representation);
+      ).toBe('string');
       expect(
         (await files.uploadMany({ files: [file()] })).records[0]?.size,
       ).toBe(5);
@@ -297,12 +299,21 @@ describe('server repository and Client API', () => {
         { databaseSize: () => size },
       );
       await expect(files.uploadOne({ file: file() })).rejects.toMatchObject({
-        code: 'INVALID_FILE_METADATA',
+        code:
+          size === 'not-a-size'
+            ? 'INVALID_STORED_VALUE'
+            : 'INVALID_FILE_METADATA',
       });
-      expect(await db.repository('attachments').count()).toBe(1);
-      await expect(client.findMany()).rejects.toMatchObject({
-        code: 'INVALID_FILE_METADATA',
-      });
+      expect(await db.repository('attachments').count()).toBe(
+        size === 'not-a-size' ? 0 : 1,
+      );
+      if (size === 'not-a-size') {
+        await expect(client.findMany()).resolves.toEqual([]);
+      } else {
+        await expect(client.findMany()).rejects.toMatchObject({
+          code: 'INVALID_FILE_METADATA',
+        });
+      }
     },
   );
   it('uploads through the client, lists, streams, and deletes metadata only', async () => {

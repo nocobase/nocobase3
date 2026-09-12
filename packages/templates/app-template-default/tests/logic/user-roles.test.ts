@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url';
 
+import sqlite from '@nocobase/db-sqlite';
 import { createAppAuthorization } from '@nocobase/app-plugin-authorization';
 import {
   createDatabaseManager,
@@ -16,6 +17,7 @@ describe('default application user role scope', () => {
 
   beforeEach(async () => {
     database = createDatabaseManager({
+      drivers: { sqlite },
       default: 'main',
       connections: {
         main: { dialect: 'sqlite', filename: ':memory:' },

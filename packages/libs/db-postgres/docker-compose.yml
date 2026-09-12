@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - '0:5432'
+    environment:
+      POSTGRES_USER: nocobase
+      POSTGRES_PASSWORD: nocobase
+      POSTGRES_DB: nocobase_collection_builder
+    healthcheck:
+      test:
+        ['CMD-SHELL', 'pg_isready -U nocobase -d nocobase_collection_builder']
+      interval: 5s
+      timeout: 5s
+      retries: 20

@@ -10,24 +10,48 @@ description: 配置默认连接、命名连接、数据库方言、命名和 Met
 ## 最小配置
 
 ```ts
+import sqlite from '@nocobase/db-sqlite';
 import { createDatabaseManager } from '@nocobase/db';
 
 const db = createDatabaseManager({
   default: 'main',
   connections: {
-    main: {
-      dialect: 'sqlite',
-      filename: ':memory:',
-    },
+    main: sqlite({ filename: ':memory:' }),
   },
 });
 ```
+
+## Dialect 包
+
+生产应用建议显式使用对应的 dialect 包。下面两种写法等价：
+
+```ts
+import postgres from '@nocobase/db-postgres';
+import { createDatabaseManager } from '@nocobase/db';
+
+const registered = createDatabaseManager({
+  drivers: { postgres },
+  connections: {
+    main: { dialect: 'postgres', host: '127.0.0.1', database: 'app' },
+  },
+});
+
+const factory = createDatabaseManager({
+  connections: {
+    main: postgres({ host: '127.0.0.1', database: 'app' }),
+  },
+});
+```
+
+注册表适合多个同方言连接或由配置文件生成连接；工厂适合在代码中创建
+自描述连接。两个入口都会使用同一个 dialect driver descriptor。
 
 ## DatabaseConfig
 
 ```ts
 interface DatabaseConfig {
   default?: string;
+  drivers?: Record<string, DatabaseDriverRegistration>;
   connections: Record<string, ConnectionConfig>;
   metadataStore?: CollectionMetadataStore;
 }
@@ -40,20 +64,20 @@ interface DatabaseConfig {
 ## 多连接
 
 ```ts
+import postgres from '@nocobase/db-postgres';
+import sqlite from '@nocobase/db-sqlite';
+
 const db = createDatabaseManager({
   default: 'main',
+  drivers: { postgres, sqlite },
   connections: {
-    main: {
-      dialect: 'postgres',
+    main: postgres({
       host: '127.0.0.1',
       database: 'app',
       username: 'app',
       password: process.env.APP_DATABASE_PASSWORD,
-    },
-    analytics: {
-      dialect: 'sqlite',
-      filename: 'analytics.sqlite',
-    },
+    }),
+    analytics: sqlite({ filename: 'analytics.sqlite' }),
   },
 });
 
@@ -74,9 +98,12 @@ await db.destroy();
 ## `defineDatabase()` 的区别
 
 ```ts
+import sqlite from '@nocobase/db-sqlite';
+
 const config = defineDatabase({
+  drivers: { sqlite },
   connections: {
-    main: { dialect: 'sqlite', filename: ':memory:' },
+    main: sqlite({ filename: ':memory:' }),
   },
 });
 

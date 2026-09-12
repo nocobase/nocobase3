@@ -1,3 +1,4 @@
+import sqlite from '@nocobase/db-sqlite';
 import { fileURLToPath } from 'node:url';
 
 import {
@@ -43,6 +44,7 @@ describe('@nocobase/app-plugin-workflow database', () => {
 
   it('creates and drops the fixed workflow schema', async () => {
     const database = createDatabaseManager({
+      drivers: { sqlite },
       default: 'main',
       connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
     });

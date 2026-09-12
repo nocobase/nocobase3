@@ -202,6 +202,11 @@
     "hono": "catalog:"
   },
   "devDependencies": {
+    "@nocobase/db-mysql": "workspace:*",
+    "@nocobase/db-mssql": "workspace:*",
+    "@nocobase/db-oracle": "workspace:*",
+    "@nocobase/db-postgres": "workspace:*",
+    "@nocobase/db-sqlite": "workspace:*",
     "@nocobase/api-client": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@types/node": "catalog:",

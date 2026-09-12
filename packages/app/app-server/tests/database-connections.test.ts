@@ -12,16 +12,24 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { Knex } from 'knex';
 import ts from 'typescript';
 import { objectProvider } from '@nocobase/config/providers/object';
+import postgres from '@nocobase/db-postgres';
+import mysql from '@nocobase/db-mysql';
+import sqlite from '@nocobase/db-sqlite';
+import oracle from '@nocobase/db-oracle';
+import mssql from '@nocobase/db-mssql';
 import { AppConfig, createConfigPaths } from '../src/config/index.js';
 import {
   createAppDatabaseManager,
   databaseConfig,
+  registerAppDatabaseDrivers,
   planAppDatabaseTasks,
   runAppDatabaseTasks,
   type AppDatabaseConfig,
 } from '../src/database/index.js';
 import { executeAppDatabasePlan } from '../src/database/tasks.js';
 import { createAppPluginDatabaseConfig } from '../src/plugins/resolve.js';
+
+registerAppDatabaseDrivers({ postgres, mysql, sqlite, oracle, mssql });
 
 const roots: string[] = [];
 afterEach(() => {
@@ -252,6 +260,89 @@ describe('connection-bound application database tasks', () => {
       runAppDatabaseTasks(config, paths, {
         kind: 'migrations',
         connection: 'erp',
+      }),
+    ).rejects.toThrow('external');
+  });
+
+  it('freshly clears managed objects and reruns migrations without calling down', async () => {
+    const { config, paths } = fixture();
+    const directory = paths.database('main/migrations');
+    mkdirSync(directory, { recursive: true });
+    writeFileSync(
+      path.join(directory, '001_main.ts'),
+      `import { defineMigration } from '@nocobase/db';
+export default defineMigration({ name: '001_main', async up({ builder }) {
+  await builder.createCollection('freshRows', c => { c.increments('id'); c.string('value'); });
+}, async down() { throw new Error('down must not be called'); } });`,
+    );
+    const first = await runAppDatabaseTasks(config, paths, {
+      kind: 'migrations',
+    });
+    expect(first.results[0].executed).toEqual(['001_main']);
+    await inspect(config, 'main', async (client) => {
+      await client('fresh_rows').insert({ value: 'stale' });
+    });
+
+    const fresh = await runAppDatabaseTasks(config, paths, {
+      kind: 'migrations',
+      fresh: true,
+      confirmFresh: async () => true,
+    });
+    expect(fresh.results[0]).toMatchObject({
+      status: 'completed',
+      fresh: true,
+      executed: ['001_main'],
+    });
+    await inspect(config, 'main', async (client) => {
+      expect(await client('fresh_rows').select('value')).toEqual([]);
+    });
+  });
+
+  it('freshly skips external connections in all mode and rejects explicit external selection', async () => {
+    const { config, paths } = fixture();
+    migration(paths.database('main/migrations'), '001_main', 'mainRows');
+    migration(
+      paths.database('analytics/migrations'),
+      '001_analytics',
+      'analyticsRows',
+    );
+    config.connections.erp = {
+      dialect: 'sqlite',
+      filename: paths.storage('erp.sqlite'),
+      schemaManagement: 'external',
+    };
+    const result = await runAppDatabaseTasks(config, paths, {
+      kind: 'migrations',
+      all: true,
+      fresh: true,
+      confirmFresh: async () => true,
+    });
+    expect(
+      result.results.find((entry) => entry.connection === 'main'),
+    ).toMatchObject({
+      status: 'completed',
+      fresh: true,
+      executed: ['001_main'],
+    });
+    expect(
+      result.results.find((entry) => entry.connection === 'analytics'),
+    ).toMatchObject({
+      status: 'completed',
+      fresh: true,
+      executed: ['001_analytics'],
+    });
+    expect(
+      result.results.find((entry) => entry.connection === 'erp'),
+    ).toMatchObject({
+      status: 'skipped',
+      reason: 'external',
+    });
+    await expect(
+      runAppDatabaseTasks(config, paths, {
+        kind: 'migrations',
+        connection: 'erp',
+        fresh: true,
+        confirmFresh: async () => true,
       }),
     ).rejects.toThrow('external');
   });

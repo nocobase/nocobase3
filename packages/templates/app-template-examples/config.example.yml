@@ -100,18 +100,29 @@ database:
         autoRun: true
       seeds:
         autoRun: true
-    # Additional managed databases use database/<connectionName>/{migrations,seeds}.
-    # analytics:
-    #   dialect: postgres
-    #   host: localhost
-    #   database: analytics
-    #   username: postgres
-    #   password: ${ANALYTICS_DB_PASSWORD}
+    # Dameng example (requires the Dameng container from packages/libs/db-dameng/docker-compose.yml).
+    # main:
+    #   dialect: dameng
+    #   host: 127.0.0.1
+    #   port: 15236
+    #   username: NOCOBASE
+    #   password: NocoBase_Dameng_2026
+    #   schema: NOCOBASE
     #   schemaManagement: managed
     #   migrations:
-    #     autoRun: false
+    #     autoRun: true
     #   seeds:
-    #     autoRun: false
+    #     autoRun: true
+    # Application-owned analytics examples; also supplied as application defaults.
+    # Sources live in database/analytics/{migrations,seeds}.
+    analytics:
+      dialect: sqlite
+      database: analytics.sqlite
+      schemaManagement: managed
+      migrations:
+        autoRun: true
+      seeds:
+        autoRun: true
     # Existing external databases require a runtime metadataStore and do not run tasks.
 
 snowflake:

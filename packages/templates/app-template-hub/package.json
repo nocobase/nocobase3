@@ -190,6 +190,7 @@
     "@nocobase/app-plugin-install": "workspace:^",
     "@nocobase/app-plugin-users": "workspace:^",
     "@nocobase/app-server": "workspace:^",
+    "@nocobase/db-sqlite": "workspace:^",
     "@nocobase/nb3-cli": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
     "@oclif/core": "catalog:",

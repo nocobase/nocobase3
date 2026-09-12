@@ -73,15 +73,20 @@ Transaction Store 不把只读后端变成可写后端，其 capabilities 继承
 ## Store 选择
 
 ```ts
+import postgres from '@nocobase/db-postgres';
+import sqlite from '@nocobase/db-sqlite';
+import { createDatabaseManager } from '@nocobase/db';
+
 const db = createDatabaseManager({
   metadataStore: sharedStore,
+  drivers: { postgres, sqlite },
   connections: {
-    main: { dialect: 'sqlite', filename: 'app.sqlite' },
-    crm: {
-      dialect: 'postgres',
-      connection: process.env.CRM_DATABASE_URL,
+    main: sqlite({ filename: 'app.sqlite' }),
+    crm: postgres({
+      host: process.env.CRM_DATABASE_HOST,
+      database: process.env.CRM_DATABASE_NAME,
       metadataStore: crmModuleStore,
-    },
+    }),
   },
 });
 ```

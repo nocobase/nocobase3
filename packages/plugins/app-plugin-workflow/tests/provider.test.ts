@@ -1,3 +1,4 @@
+import sqlite from '@nocobase/db-sqlite';
 import { createDatabaseManager, databaseManagerToken } from '@nocobase/db';
 import { createLogging, createSilentLoggingConfig } from '@nocobase/logging';
 import { createQueueManager, createSyncQueueConfig } from '@nocobase/queue';
@@ -70,6 +71,7 @@ function createProviderWithDependencies(appName: string): {
 } {
   const container = new ServiceContainer();
   const database = createDatabaseManager({
+    drivers: { sqlite },
     connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
   });
   const queue = createQueueManager(createSyncQueueConfig());

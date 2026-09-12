@@ -1,3 +1,4 @@
+import sqlite from '@nocobase/db-sqlite';
 import {
   createDatabaseManager,
   InMemoryCollectionMetadataStore,
@@ -19,6 +20,7 @@ describe('workflow collections', () => {
   beforeEach(() => {
     metadataStore = new InMemoryCollectionMetadataStore();
     database = createDatabaseManager({
+      drivers: { sqlite },
       default: 'main',
       metadataStore,
       connections: {

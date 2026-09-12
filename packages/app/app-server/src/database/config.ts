@@ -47,13 +47,9 @@ export const databaseConfig: AppConfigDefinition<
           {
             migrations: Type.Optional(taskSchema),
             seeds: Type.Optional(taskSchema),
-            dialect: Type.Union([
-              Type.Literal('sqlite'),
-              Type.Literal('postgres'),
-              Type.Literal('mysql'),
-              Type.Literal('oracle'),
-              Type.Literal('mssql'),
-            ]),
+            // Dialect identifiers are open ended; concrete packages register
+            // their driver and own any additional connection fields.
+            dialect: Type.String({ minLength: 1 }),
             filename: Type.Optional(Type.String()),
             host: Type.Optional(Type.String()),
             port: Type.Optional(Type.Number()),

@@ -7,10 +7,15 @@ export { databaseManagerToken } from './database/token.js';
 export { defineDatabase } from './database/config.js';
 export { SchemaManagementNotAllowedError } from './database/schema-management.js';
 export type {
+  BaseConnectionConfig,
   ConnectionConfig,
   DatabaseConfig,
   DatabaseDialect,
+  DatabaseDriverDefinition,
+  DatabaseDriverFactory,
+  DatabaseDriverRegistration,
   DatabaseDriver,
+  ExtensibleDatabaseConfig,
   MssqlConnectionConfig,
   MysqlConnectionConfig,
   OracleConnectionConfig,
@@ -20,6 +25,15 @@ export type {
 } from './database/config.js';
 export type { DatabaseConnection } from './database/connection.js';
 export type { DatabaseManager } from './database/manager.js';
+export type {
+  DatabaseDriverRuntime,
+  DatabaseDriverRuntimeContext,
+  DatabaseDriverRuntimeFactory,
+  DatabaseNumericRuntimeStrategy,
+  DatabaseQueryRuntimeStrategy,
+  DatabaseRepositoryRuntimeStrategy,
+  DatabaseSchemaRuntimeStrategy,
+} from './database/runtime.js';
 
 export { CollectionRelationValidationError } from './collection/registry/relation-validator.js';
 export { CollectionResolutionError } from './collection/resolver/errors.js';
@@ -100,10 +114,49 @@ export type { CollectionMetadataStore } from './metadata/document-store.js';
 
 export type { DatabaseCapabilities } from './schema/adapter.js';
 export type { SchemaInspector } from './schema/inspector/types.js';
+export { BaseSchemaInspector } from './schema/inspector/base.js';
+export type { NormalizedPhysicalCollectionListOptions } from './schema/inspector/base.js';
+export {
+  numberValue,
+  optionalString,
+  rawRows,
+} from './schema/inspector/shared/result.js';
+export {
+  normalizePhysicalDataType,
+  normalizeReferentialAction,
+  parseColumnDefault,
+  temporalFractionalSecondsPrecision,
+} from './schema/inspector/shared/type-normalization.js';
+export type { PhysicalTypeNormalizationStrategy } from './schema/inspector/shared/type-normalization.js';
+export type { NumericCapabilityStrategy } from './schema/inspector/shared/column-capabilities.js';
+export {
+  numericCapabilities,
+  sqliteAffinity,
+} from './schema/inspector/shared/column-capabilities.js';
+export type { DecodedPhysicalCollectionCursor } from './schema/inspector/shared/cursor.js';
+export type {
+  PhysicalCheckConstraintSchema,
+  PhysicalDataType,
+  PhysicalCollectionIdentifier,
+  PhysicalCollectionKind,
+  PhysicalCollectionSchema,
+  PhysicalCollectionSummary,
+  PhysicalForeignKeySchema,
+  PhysicalIndexKey,
+  PhysicalIndexSchema,
+  PhysicalSchemaInfo,
+  PhysicalUniqueConstraintSchema,
+  SchemaInspectionWarning,
+} from './schema/inspector/types.js';
 
 export { UnsupportedCapabilityError } from './schema/capabilities.js';
 
 export { RepositoryError } from './repository/errors.js';
+export type { JsonValue } from './json.js';
+export {
+  isTemporalType,
+  normalizeTemporalValue,
+} from './repository/temporal.js';
 export type {
   AggregateAst,
   AggregateBuilder,

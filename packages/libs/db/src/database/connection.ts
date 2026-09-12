@@ -5,18 +5,18 @@ import type { QueryAdapter } from '../query/types.js';
 import type { Repository, RepositoryRecord } from '../repository/types.js';
 import type { DatabaseCapabilities, SchemaAdapter } from '../schema/adapter.js';
 import type { SchemaInspector } from '../schema/inspector/types.js';
-import type {
-  DatabaseDialect,
-  DatabaseDriver,
-  SchemaManagementMode,
-} from './config.js';
+import type { DatabaseDriver, SchemaManagementMode } from './config.js';
+import type { DatabaseDriverRuntime } from './runtime.js';
 
 export interface DatabaseConnection {
   name: string;
   driver: DatabaseDriver;
-  dialect: DatabaseDialect;
+  /** Dialect identifier supplied by the registered driver package. */
+  dialect: string;
   schemaManagement: SchemaManagementMode;
   capabilities: DatabaseCapabilities;
+  /** Runtime strategies supplied by the registered dialect package. */
+  runtime: DatabaseDriverRuntime;
 
   /** Collection schema and metadata builder. Uses Collection and Field logical names. */
   builder: CollectionBuilder;
@@ -43,6 +43,8 @@ export interface DatabaseConnection {
   connect(): Promise<this>;
   disconnect(): Promise<void>;
   reconnect(): Promise<this>;
+  /** Destructively clears the objects owned by this managed connection. */
+  resetManagedSchema(): Promise<void>;
 
   transaction<T>(
     fn: (connection: DatabaseConnection) => Promise<T>,

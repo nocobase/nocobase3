@@ -3,7 +3,11 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { AppConfig, createConfigPaths } from '../src/config/index.js';
-import { databaseManagerToken, type DatabaseManager } from '@nocobase/db';
+import {
+  databaseManagerToken,
+  type DatabaseDriverDefinition,
+  type DatabaseManager,
+} from '@nocobase/db';
 import {
   ServiceContainer,
   ServiceProviderRegistry,
@@ -36,6 +40,14 @@ import {
 import type { ResolvedAppRuntimeConfigContext } from '../src/runtime/index.js';
 
 const tempDirs: string[] = [];
+const sqliteStorageDriver: DatabaseDriverDefinition<'sqlite'> = {
+  dialect: 'sqlite',
+  prepareStorage: async (source, context) => {
+    const filename = (source as { filename?: string }).filename;
+    if (!filename || filename === ':memory:') return;
+    await context.ensureDirectory(path.dirname(filename));
+  },
+};
 
 beforeEach(() => {
   createDatabaseManagerMock.mockReset();
@@ -230,6 +242,7 @@ async function createProvider(database: AppDatabaseConfig): Promise<{
   const app: DatabaseProviderApplication = {
     config: appConfig,
     container,
+    databaseDrivers: { sqlite: sqliteStorageDriver },
   };
   return {
     provider: new DatabaseProvider(app),

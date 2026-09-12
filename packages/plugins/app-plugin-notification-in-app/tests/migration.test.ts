@@ -1,5 +1,6 @@
 import { resolve } from 'node:path';
 
+import sqlite from '@nocobase/db-sqlite';
 import {
   createDatabaseManager,
   InMemoryCollectionMetadataStore,
@@ -29,6 +30,7 @@ describe('in-app notification database migration', () => {
   beforeEach(() => {
     metadataStore = new InMemoryCollectionMetadataStore();
     database = createDatabaseManager({
+      drivers: { sqlite },
       default: 'main',
       metadataStore,
       connections: {

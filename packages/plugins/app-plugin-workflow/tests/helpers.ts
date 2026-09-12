@@ -1,3 +1,4 @@
+import sqlite from '@nocobase/db-sqlite';
 import {
   createDatabaseManager,
   type BuilderExecOptions,
@@ -59,6 +60,7 @@ export type TestWorkflowInput = {
 
 export async function createTestDatabase(): Promise<DatabaseManager> {
   const database = createDatabaseManager({
+    drivers: { sqlite },
     connections: {
       main: { dialect: 'sqlite', filename: ':memory:' },
     },

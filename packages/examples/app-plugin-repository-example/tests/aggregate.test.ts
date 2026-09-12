@@ -31,8 +31,8 @@ it('aggregates all rows, groups products with names, and includes zero relation 
   const result = await aggregate();
   expect(result.summary).toEqual({
     count: 8,
-    quantity: 14,
-    averagePrice: 14900,
+    quantity: '14',
+    averagePrice: '14900',
     minimumPrice: 5900,
     maximumPrice: 32900,
   });
@@ -48,8 +48,8 @@ it('aggregates all rows, groups products with names, and includes zero relation 
   ).toMatchObject({
     name: 'Mechanical Keyboard',
     count: 2,
-    quantity: 3,
-    averagePrice: 12400,
+    quantity: '3',
+    averagePrice: '12400',
   });
   expect(result.customers.map((row) => row.orders)).toEqual([2, 1, 1, 0]);
   const statusCalls = f.requests.filter(
@@ -66,7 +66,7 @@ it('applies status to all queries and HAVING only to grouped products', async ()
   const result = await aggregate({ status: 'paid', minimumQuantity: 2 });
   expect(result.summary).toMatchObject({
     count: 3,
-    quantity: 5,
+    quantity: '5',
     minimumPrice: 5900,
     maximumPrice: 18900,
   });

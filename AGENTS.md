@@ -147,6 +147,17 @@ Add a migration-level test that executes `up` and, when reversible, `down` again
 
 Before editing an existing migration, check its Git history and the status of the branch that introduced it. An existing migration may be corrected directly only while its introducing feature branch has not yet been merged. Once that branch has been merged into its target branch, never modify the migration again; implement every correction or subsequent schema change in a new migration. Do not use hard-coded previous checksum hashes to make an edited migration appear compatible.
 
+## Database Integration Test Scheduling
+
+Run dialect integration tests with the package filters described in
+[`internal-docs/development/database-integration-testing.md`](internal-docs/development/database-integration-testing.md).
+The default `@nocobase/db` integration command runs SQLite only; all other
+dialects are opt-in. SQLite, PostgreSQL, and MySQL may run concurrently when
+requested. OceanBase, Oracle, MSSQL, and Dameng must run one at a time because
+their database services and initialization steps are heavier and more sensitive
+to concurrent startup. The `@nocobase/db` `test:integration:all` script remains
+a safe, fully-serial fallback.
+
 ## Native Dependencies in Generated Applications
 
 pnpm 11 does not run a dependency's install script unless the package is listed under `allowBuilds` in `pnpm-workspace.yaml`. That file is the only place the setting is read from: the `pnpm` field in `package.json` was removed in pnpm 11, and `.npmrc` has never carried build settings. A dependency that compiles a native addon and is missing from the list installs without building, `pnpm install` still reports success, and the failure surfaces much later as a runtime error that names nothing actionable — `better-sqlite3` reports `Could not locate the bindings file`.

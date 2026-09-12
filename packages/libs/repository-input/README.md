@@ -43,3 +43,11 @@ locally. Dates become ISO strings and bigints become decimal strings.
 Use the `build*Options` helpers exported by `@nocobase/api-client` for complete
 remote Repository requests. The `internal/*` entry points exist for the
 framework's shared implementation and should not be used by application code.
+
+Numeric filter builders accept `number | string` operands. Use exact integer
+strings for BIGINT and decimal strings for DECIMAL, for example
+`f.number('balance').gte('9007199254740993.125')`. Field-aware validation runs in
+`@nocobase/db`: INTEGER/increments accept safe integer numbers, FLOAT/DOUBLE
+accept finite numbers, and BIGINT/DECIMAL also accept their respective numeric
+string syntax. Strings and context variables remain JSON-serializable; native
+JavaScript bigint is not a Filter JSON literal.

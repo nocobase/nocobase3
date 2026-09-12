@@ -36,6 +36,10 @@ const databaseRuntimeDrivers = [
   'oracledb',
   'tedious',
 ];
+const declaredDatabaseRuntimeDrivers = () =>
+  databaseRuntimeDrivers.filter((driver) =>
+    getDeclaredVersion(rootPackage, driver),
+  );
 
 const toPosix = (value) => value.split(path.sep).join('/');
 
@@ -207,7 +211,7 @@ const addPackage = (packageName) => {
   }
 
   if (packageName === '@nocobase/db') {
-    for (const driver of databaseRuntimeDrivers) {
+    for (const driver of declaredDatabaseRuntimeDrivers()) {
       addExternalPackage(driver, packageDir, packageJson);
     }
   }
@@ -226,10 +230,8 @@ const addPackage = (packageName) => {
  * app was created with, so listing the other two would make every deployment carry drivers it never loads.
  */
 const addDeclaredDatabaseDrivers = () => {
-  for (const driver of databaseRuntimeDrivers) {
-    if (getDeclaredVersion(rootPackage, driver)) {
-      addExternalPackage(driver);
-    }
+  for (const driver of declaredDatabaseRuntimeDrivers()) {
+    addExternalPackage(driver);
   }
 };
 

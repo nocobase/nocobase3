@@ -130,6 +130,7 @@
     "hono": "catalog:"
   },
   "devDependencies": {
+    "@nocobase/db-sqlite": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@types/node": "catalog:",
     "better-sqlite3": "catalog:",

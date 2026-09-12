@@ -10,6 +10,7 @@ import {
   type DatabaseManager,
   type Row,
 } from '@nocobase/db';
+import sqlite from '@nocobase/db-sqlite';
 import {
   createQueueManager,
   createSyncQueueConfig,
@@ -81,6 +82,7 @@ async function createService(
   production: boolean,
 ): Promise<WorkflowService> {
   const database = createDatabaseManager({
+    drivers: { sqlite },
     connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
   });
   databases.push(database);

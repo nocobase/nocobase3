@@ -52,6 +52,7 @@ describe('extractLegacyCollectionMetadata', () => {
         title: 'Orders',
         description: 'Customer purchase orders.',
         fields: {
+          customerId: { type: 'bigInt' },
           id: { type: 'integer' },
           amount: {
             type: 'decimal',

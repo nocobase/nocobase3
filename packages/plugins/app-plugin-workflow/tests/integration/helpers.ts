@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url';
 
 import type { Knex } from 'knex';
+import sqlite from '@nocobase/db-sqlite';
 
 import {
   createDatabaseManager,
@@ -78,6 +79,7 @@ export function createIntegrationDatabase(
   const dialect = integrationDialect();
   return createDatabaseManager({
     default: 'main',
+    ...(dialect === 'sqlite' ? { drivers: { sqlite } } : {}),
     // Collection metadata is per-manager rather than a table in the target
     // database: the stored rows are keyed by logical name, so a shared server
     // would hand one run's metadata to the next one's differently prefixed

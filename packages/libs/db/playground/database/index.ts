@@ -9,6 +9,7 @@ import {
   type DatabaseConnection,
   type DatabaseManager,
 } from '@nocobase/db';
+import sqlite from '@nocobase/db-sqlite';
 import { bootstrapExternalCrm } from './external-crm/bootstrap.js';
 import { externalCrmMetadata } from './external-crm/metadata.js';
 
@@ -43,6 +44,7 @@ export async function createPlaygroundDatabase(
 
   const manager = createDatabaseManager({
     default: 'main',
+    drivers: { sqlite },
     connections: {
       main: {
         dialect: 'sqlite',

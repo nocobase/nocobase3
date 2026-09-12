@@ -27,6 +27,7 @@ description: 面向 AI Agent 的 NocoBase v3 插件开发入口，按任务路�
 | 声明插件能力或 package contract    | [插件声明](./plugin-declaration.md)        | [公共契约](./public-contracts.md)                                       |
 | 修改数据库结构                     | [Database 模块选择](./database.md)         | [Migrations](./database-migrations.md)                                  |
 | 写入必要初始数据                   | [Database 模块选择](./database.md)         | [Seeds](./database-seeds.md)                                            |
+| 判断何时使用 Provider 并完成首次实现 | [ServiceProvider 使用指南](./service-provider-guide.md) | [生命周期与装配](./service-provider.md) |
 | 添加 Server Service                | [Server 模块选择](./server.md)             | [Services、Tokens 与 Providers](./server-services-and-providers.md)     |
 | 添加 HTTP API、callback 或 webhook | [Route 插件开发](./routes.md)              | [Server Routes 示例](./server-routes-examples.md)                       |
 | 暴露 Repository API 并从前端调用   | [Repository API 快速开始](./repository.md) | [Route 插件开发](./routes.md)                                           |
@@ -60,6 +61,7 @@ description: 面向 AI Agent 的 NocoBase v3 插件开发入口，按任务路�
 ## Server
 
 - [Server 模块选择](./server.md)
+- [ServiceProvider 使用指南](./service-provider-guide.md)：职责选择、最小实现、插件注册、依赖顺序和行为验证。
 - [Services、Tokens 与 ServiceProviders](./server-services-and-providers.md)
 - [Server Routes 示例](./server-routes-examples.md)
 - [Repository API 快速开始](./repository.md)
