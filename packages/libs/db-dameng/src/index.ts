@@ -4,6 +4,7 @@ import type {
   ConnectionConfig,
   DatabaseCapabilities,
   DatabaseDriverDefinition,
+  RepositoryRecord,
 } from '@nocobase/db';
 import { rawRows } from '@nocobase/db';
 import type { Knex } from 'knex';
@@ -33,6 +34,29 @@ export type DamengOptions = Omit<
   DamengConnectionConfig,
   'dialect' | 'driver' | 'databaseDriver'
 >;
+
+async function decodeDamengLobRow(
+  row: RepositoryRecord,
+): Promise<RepositoryRecord> {
+  for (const [field, value] of Object.entries(row)) {
+    if (
+      !value ||
+      typeof value !== 'object' ||
+      typeof (value as { getData?: unknown }).getData !== 'function'
+    )
+      continue;
+    const lob = value as {
+      getData: () => Promise<string | Buffer>;
+      close?: () => Promise<void>;
+    };
+    try {
+      row[field] = await lob.getData();
+    } finally {
+      await lob.close?.();
+    }
+  }
+  return row;
+}
 
 /**
  * dmdb binds JavaScript strings as VARCHAR, so a canonical ISO-8601 instant
@@ -262,24 +286,9 @@ export const damengDriver: DatabaseDriverDefinition<'dameng'> = {
       reloadReturnedExactNumeric: true,
       trimCharResults: true,
       decodeStreamRow: async (row) => {
-        for (const [field, value] of Object.entries(row)) {
-          if (
-            !value ||
-            typeof value !== 'object' ||
-            typeof (value as { getData?: unknown }).getData !== 'function'
-          ) {
-            continue;
-          }
-          const lob = value as {
-            type?: number;
-            getData: () => Promise<string | Buffer>;
-            close?: () => Promise<void>;
-          };
-          row[field] = await lob.getData();
-          if (lob.close) await lob.close();
-        }
-        return row;
+        return decodeDamengLobRow(row);
       },
+      decodeReturnedRow: decodeDamengLobRow,
       encodeBoolean: (_field, value) => (value === null ? null : value ? 1 : 0),
       temporalBinding: ({ client, field, value }) => {
         const normalized =

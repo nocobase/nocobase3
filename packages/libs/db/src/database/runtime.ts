@@ -79,6 +79,13 @@ export interface DatabaseRepositoryRuntimeStrategy {
   readonly decodeStreamRow?: (
     row: RepositoryRecord,
   ) => Promise<RepositoryRecord> | RepositoryRecord;
+  /**
+   * Decode a raw row returned by a mutation RETURNING clause before repository
+   * mapping, selector derivation, or any dialect-specific reload.
+   */
+  readonly decodeReturnedRow?: (
+    row: RepositoryRecord,
+  ) => Promise<RepositoryRecord> | RepositoryRecord;
   readonly trimCharResults?: boolean;
   readonly groupAggregateOrder?: (context: {
     client: Knex;

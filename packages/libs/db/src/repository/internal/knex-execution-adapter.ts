@@ -1224,6 +1224,9 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     const returnedRow = firstReturnedRow(returned);
     if (returnedRow) {
       const repositoryRuntime = getDatabaseDriverRuntime(client)?.repository;
+      const decodedReturnedRow = repositoryRuntime?.decodeReturnedRow
+        ? await repositoryRuntime.decodeReturnedRow(returnedRow)
+        : returnedRow;
       if (
         (repositoryRuntime?.reloadReturnedDecimal ||
           repositoryRuntime?.reloadReturnedExactNumeric) &&
@@ -1236,7 +1239,8 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
         const returnedValues = Object.fromEntries(
           fields.map((field) => [
             field,
-            returnedRow[column(collection, field)] ?? returnedRow[field],
+            decodedReturnedRow[column(collection, field)] ??
+              decodedReturnedRow[field],
           ]),
         );
         const selector = deriveCreatedSelector(
@@ -1248,7 +1252,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
         if (!record) throw new Error('Created record could not be reloaded.');
         return record;
       }
-      const mapped = mapRow(collection, fields, returnedRow);
+      const mapped = mapRow(collection, fields, decodedReturnedRow);
       // Supplied temporal identities are already canonical; raw RETURNING values
       // may have been converted to a host-zone Date by the driver.
       for (const field of scalarFields(collection)) {
