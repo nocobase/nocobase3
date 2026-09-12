@@ -8,6 +8,13 @@ import {
 const appRoutes: AppClientRouteContribution = defineAppRoutes([
   {
     auth: 'required',
+    componentLoader: () => import('./pages/home.js'),
+    name: 'home',
+    navigation: { title: 'navigation.home', icon: Home },
+    path: '/',
+  },
+  {
+    auth: 'required',
     name: 'routeOverlays',
     path: '/route-overlays',
     navigation: { title: 'navigation.routeOverlays', icon: PanelsTopLeft },
@@ -40,13 +47,6 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
         ],
       },
     ],
-  },
-  {
-    auth: 'required',
-    componentLoader: () => import('./pages/home.js'),
-    name: 'home',
-    navigation: { title: 'navigation.home', icon: Home },
-    path: '/',
   },
   {
     auth: 'required',
