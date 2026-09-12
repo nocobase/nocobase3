@@ -1,12 +1,14 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import type { ReactElement } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import {
   clientFileRepositoryManagerToken,
+  type ClientFileRepository,
   type ClientFileRepositoryManager,
   type FileRecord,
 } from '@nocobase/app-plugin-file/client';
 import fileRepository from '../client/index.js';
+import type { AppClientRegisteredRoute } from '@nocobase/app-client/plugins';
 
 const state = vi.hoisted(() => ({
   manager: undefined as ClientFileRepositoryManager | undefined,
@@ -27,92 +29,143 @@ vi.mock('@nocobase/i18n/client', async (importOriginal) => {
     await importOriginal<typeof import('@nocobase/i18n/client')>();
   return {
     ...original,
-    useTranslation: (namespace: string) => {
+    useTranslation: (namespace?: string) => {
       expect(namespace).toBe('@nocobase/app-plugin-file-example');
-      return { t: (key: string) => key };
+      return { t: (key: string) => key, i18n: { language: 'en-US' } };
     },
   };
 });
 
-describe('File Repository example page', () => {
-  it('loads the public dev route, uploads selected files and follows server content URLs', async () => {
+interface RouteNode {
+  readonly name: string;
+  readonly path?: string;
+  readonly children?: readonly RouteNode[];
+  readonly componentLoader?: () => Promise<{ default: () => unknown }>;
+}
+
+function findRoute(
+  nodes: readonly RouteNode[],
+  name: string,
+): RouteNode | undefined {
+  for (const node of nodes) {
+    if (node.name === name) return node;
+    const found = node.children ? findRoute(node.children, name) : undefined;
+    if (found) return found;
+  }
+  return undefined;
+}
+
+describe('File Repository example pages', () => {
+  it('registers the attachments, profile avatar and order attachment pages', () => {
+    const contribution = fileRepository().routes.find(
+      (route) => route.parent === 'app',
+    );
+    const routes = contribution?.routes as readonly RouteNode[] | undefined;
+    expect(routes?.[0]?.navigation).toMatchObject({ title: 'navGroup' });
+    for (const [name, path] of [
+      ['file-repository-attachments', '/file-repository'],
+      ['file-repository-profile-avatars', '/file-repository/profile-avatars'],
+      [
+        'file-repository-order-attachments',
+        '/file-repository/order-attachments',
+      ],
+    ] as const) {
+      const route = findRoute(routes ?? [], name);
+      expect(route?.path).toBe(path);
+      expect(typeof route?.componentLoader).toBe('function');
+    }
+  });
+
+  it('uploads through the file input and deletes metadata records', async () => {
     const records: FileRecord[] = [];
-    const create = (file: File): FileRecord => ({
-      id: `id-${records.length}`,
-      disk: 'local',
-      key: file.name,
-      filename: file.name,
-      ext: 'txt',
-      mimeType: 'text/plain',
-      size: file.size,
-      createdAt: '2026-09-07T00:00:00',
-      updatedAt: '2026-09-07T00:00:00',
-      contentUrl: `/main/uploads/attachments/${file.name}`,
-    });
+    let sequence = 0;
+    const create = (file: File): FileRecord => {
+      sequence += 1;
+      return {
+        id: `id-${sequence}`,
+        disk: 'local',
+        key: file.name,
+        filename: file.name,
+        ext: 'png',
+        mimeType: file.type,
+        size: file.size,
+        createdAt: '2026-09-11T00:00:00',
+        updatedAt: '2026-09-11T00:00:00',
+        contentUrl: `/main/uploads/attachments/${file.name}`,
+      };
+    };
     const repository = {
       findMany: vi.fn(() => Promise.resolve([...records])),
       uploadOne: vi.fn(({ file }: { file: File }) => {
-        records.push(create(file));
-        return Promise.resolve();
+        const record = create(file);
+        records.push(record);
+        return Promise.resolve({ record });
       }),
       uploadMany: vi.fn(({ files }: { files: File[] }) => {
-        files.forEach((file) => records.push(create(file)));
-        return Promise.resolve();
+        const created = files.map((file) => create(file));
+        records.push(...created);
+        return Promise.resolve({
+          records: created,
+          createdCount: created.length,
+        });
       }),
       deleteOne: vi.fn(({ filter }: { filter: { id: string } }) => {
         records.splice(
           records.findIndex((record) => record.id === filter.id),
           1,
         );
-        return Promise.resolve();
+        return Promise.resolve({ deleted: true });
       }),
-    };
-    const getRepository = vi.fn(() => repository);
+    } as unknown as ClientFileRepository;
     state.manager = {
-      repository: getRepository,
+      repository: vi.fn(() => repository),
     } as unknown as ClientFileRepositoryManager;
     const contribution = fileRepository().routes.find(
-      (route) => route.parent === 'dev',
+      (route) => route.parent === 'app',
     );
-    const route = contribution?.routes.find(
-      (entry) => entry.name === 'file-repository',
-    );
-    expect(route?.path).toBe('/file-repository');
-    if (!route || !('componentLoader' in route))
-      throw new Error('Missing example route');
-    const { default: Page } = await route.componentLoader();
-    const user = userEvent.setup();
+    const route = findRoute(
+      contribution?.routes as readonly AppClientRegisteredRoute[],
+      'file-repository-attachments',
+    ) as RouteNode;
+    const { default: Page } = (await route.componentLoader!()) as {
+      default: () => ReactElement;
+    };
     render(<Page />);
     await screen.findByText('empty');
-    expect(getRepository).toHaveBeenCalledWith('attachments');
-    expect(screen.getByRole('button', { name: 'single' })).toBeDisabled();
-    const first = new File(['one'], 'one.txt', { type: 'text/plain' });
-    const second = new File(['two'], 'two.txt', { type: 'text/plain' });
+
+    const first = new File(['one'], 'one.png', { type: 'image/png' });
     fireEvent.change(screen.getByLabelText('choose'), {
       target: { files: [first] },
     });
-    await user.click(screen.getByRole('button', { name: 'single' }));
-    await screen.findByText('one.txt');
-    expect(repository.uploadOne).toHaveBeenCalledWith({ file: first });
-    expect(screen.getByRole('link', { name: 'open' })).toHaveAttribute(
-      'href',
-      '/main/uploads/attachments/one.txt',
-    );
-    fireEvent.change(screen.getByLabelText('choose'), {
-      target: { files: [second, first] },
-    });
-    expect(screen.getByRole('button', { name: 'single' })).toBeDisabled();
-    await user.click(screen.getByRole('button', { name: 'multiple' }));
-    await screen.findByText('two.txt');
-    expect(repository.uploadMany).toHaveBeenCalledWith({
-      files: [second, first],
-    });
-    await user.click(screen.getAllByRole('button', { name: 'remove' })[0]!);
     await waitFor(() =>
-      expect(screen.getAllByRole('link', { name: 'open' })).toHaveLength(2),
+      expect(repository.uploadOne).toHaveBeenCalledWith({ file: first }),
     );
-    expect(repository.deleteOne).toHaveBeenCalledWith({
-      filter: { id: 'id-0' },
+    await screen.findByText('one.png');
+
+    const second = new File(['two'], 'two.png', { type: 'image/png' });
+    const third = new File(['three'], 'three.png', { type: 'image/png' });
+    fireEvent.change(screen.getByLabelText('choose'), {
+      target: { files: [second, third] },
     });
+    await waitFor(() =>
+      expect(repository.uploadMany).toHaveBeenCalledWith({
+        files: [second, third],
+      }),
+    );
+    await screen.findByText('two.png');
+    expect(screen.getByText('three.png')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'preview: one.png' }));
+    const dialog = document.querySelector('dialog');
+    expect(dialog).toBeTruthy();
+    expect(dialog?.querySelector('img')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'remove: one.png' }));
+    await waitFor(() =>
+      expect(repository.deleteOne).toHaveBeenCalledWith({
+        filter: { id: 'id-1' },
+      }),
+    );
+    await waitFor(() => expect(screen.queryByText('one.png')).toBeNull());
   });
 });

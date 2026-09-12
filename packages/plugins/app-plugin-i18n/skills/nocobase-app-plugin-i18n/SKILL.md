@@ -43,7 +43,7 @@ The exception is what most mistakes come from: a component a plugin exports for 
 
 1. Find the package that owns the text. Application text goes in `client/locales/`; a plugin's text goes in that plugin's `client/locales/`.
 2. Add the key to `en-US.ts`. The structure is written once: the type is derived from the value with `LocaleResource<typeof enUS>`, and other locales are annotated with it, which is what makes a typo a compile error.
-3. Add the translation to every other locale file. A missing key falls back rather than breaking, so this can lag, but `pnpm i18n:check` will report it.
+3. Add the translation to every other locale file. A missing key falls back rather than breaking, so this can lag, and `typecheck` reports it.
 4. Render it with `useTranslation` from `@nocobase/i18n/client`.
 
 ```tsx
@@ -110,7 +110,7 @@ Without `i18nNs`, the label is treated as literal text and rendered as-is.
    };
    ```
 
-3. Add the locale to the application's `server/config/i18n.ts`, or to `APP_LOCALES`. A language present in the files but absent from that list is unreachable.
+3. Add the locale to the application's own `client/locales/index.ts` and `server/locales/index.ts`. Those files are the list of languages the application offers; a plugin declaring a language the application does not is unreachable, because a plugin supplies translations rather than languages.
 
 Do this in every package that ships locales, or the new language shows a mix: packages that have it translated, and packages falling back to English.
 
@@ -142,10 +142,12 @@ Overrides apply after every namespace has registered, so the application always 
 # Verification
 
 ```bash
-pnpm i18n:check                                    # keys a locale is missing
-pnpm --filter <package> typecheck                  # a key absent from the interface
-pnpm --filter @nocobase/app-template-default test  # if application text changed
+pnpm typecheck                    # a key absent from the interface
+pnpm nocobase app i18n:check      # a language declared on only one side
+pnpm test                         # if application text changed
 ```
+
+Run these from the application. Inside this monorepo the equivalents are `pnpm --filter <package> typecheck` and `pnpm i18n:check`, which reads every `locales/` directory under `packages/`.
 
 Then switch language in the running application and confirm the new text follows. A string that does not change is still a literal somewhere.
 

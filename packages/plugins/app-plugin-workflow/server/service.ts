@@ -1,3 +1,5 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import type { DatabaseManager } from '@nocobase/db';
 import type { NocoBaseQueueManager } from '@nocobase/queue';
 import type { ServiceResolver } from '@nocobase/service-provider';
@@ -41,12 +43,18 @@ export interface WorkflowServiceOptions {
 export class WorkflowService {
   private readonly database: DatabaseManager;
   private readonly store: LocalWorkflowArtifactStore;
+  /** Set in development only, where run modules load from the source package. */
+  private readonly developmentResourceRoot: string | undefined;
   private readonly engine: WorkflowEngine;
   private readonly loader: WorkflowLoader;
   private initializationPromise: Promise<void> | undefined;
 
   constructor(options: WorkflowServiceOptions) {
     this.database = options.database;
+    this.developmentResourceRoot =
+      !options.production && options.sourceRoot
+        ? options.sourceRoot
+        : undefined;
     this.store = new LocalWorkflowArtifactStore({
       storeRoot: options.artifactDisk.location,
     });
@@ -58,14 +66,26 @@ export class WorkflowService {
         : { queueName: options.queueName }),
       services: createWorkflowRunServices(options.services),
       artifactStore: this.store,
-      ...(!options.production && options.sourceRoot
-        ? { developmentResourceRoot: options.sourceRoot }
-        : {}),
+      ...(this.developmentResourceRoot === undefined
+        ? {}
+        : { developmentResourceRoot: this.developmentResourceRoot }),
     });
     this.loader = new WorkflowLoader({
       database: options.database,
       artifactStore: this.store,
       distRoot: options.distRoot,
+      // Development reads the workflow source directly, so an edited
+      // `workflow.ts` is picked up without `nocobase workflow build` and
+      // without restarting the server.
+      ...(this.developmentResourceRoot === undefined
+        ? {}
+        : {
+            source: {
+              root: this.developmentResourceRoot,
+              instructions: (): ReadonlyMap<string, WorkflowInstructionClass> =>
+                this.engine.instructions,
+            },
+          }),
     });
   }
 
@@ -138,6 +158,35 @@ export class WorkflowService {
     await this.engine.dispose();
   }
 
+  /**
+   * Refuse to start a run whose code is not where the engine will look for it.
+   *
+   * Production resolves run modules from the Artifact store, keyed by the
+   * revision's digest. Development resolves them from the source package and
+   * never consults the store, so a definition compiled from source has nothing
+   * committed there and the store cannot be the precondition.
+   */
+  private async assertResourcesPresent(
+    workflow: WorkflowDefinition,
+  ): Promise<void> {
+    if (this.developmentResourceRoot !== undefined) {
+      const resourceRoot = path.join(
+        this.developmentResourceRoot,
+        workflow.key,
+      );
+      if (!(await isDirectory(resourceRoot)))
+        throw new Error(
+          `Workflow source package ${workflow.key} is missing at ${resourceRoot}`,
+        );
+      return;
+    }
+    const hash = workflow.hash;
+    if (!hash || !(await this.store.has(workflow.key, hash)))
+      throw new Error(
+        `Workflow Artifact ${workflow.key}/${String(hash)} is missing`,
+      );
+  }
+
   private ensureInitialized(): Promise<void> {
     if (this.initializationPromise) return this.initializationPromise;
     this.initializationPromise = this.engine
@@ -157,11 +206,7 @@ export class WorkflowService {
     if (!triggerOptions.force && !triggerOptions.manually && !workflow.enabled)
       return { status: 'skipped', reason: 'disabled' };
 
-    const hash = workflow.hash;
-    if (!hash || !(await this.store.has(workflow.key, hash)))
-      throw new Error(
-        `Workflow Artifact ${workflow.key}/${String(hash)} is missing`,
-      );
+    await this.assertResourcesPresent(workflow);
 
     assertInputSize(input);
     const validation = validateInputValue(workflow.inputSchema, input);
@@ -222,3 +267,11 @@ export type WorkflowServiceApi = Pick<
   | 'discoverArtifacts'
   | 'ensureArtifactMaterialized'
 >;
+
+async function isDirectory(target: string): Promise<boolean> {
+  try {
+    return (await fs.stat(target)).isDirectory();
+  } catch {
+    return false;
+  }
+}

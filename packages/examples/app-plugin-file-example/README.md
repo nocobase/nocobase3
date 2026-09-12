@@ -1,11 +1,11 @@
 # File Repository 示例
 
-演示如何通过 `@nocobase/app-plugin-file` 的公共接口接入文件 Repository。示例插件拥有业务配置，核心插件只提供通用能力。
+演示如何通过 `@nocobase/app-plugin-file` 的公共接口接入文件 Repository，并按真实业务方式把文件接入一对一、一对多关系。示例插件拥有业务配置，核心插件只提供通用能力。
 
 | 内容                                                            | 所属插件                  |
 | --------------------------------------------------------------- | ------------------------- |
 | Client／Server Manager、Token、Provider、上传编排、路由定义工具 | `app-plugin-file`         |
-| `attachments` 表迁移、具体资源 API、下载入口、页面和翻译        | `app-plugin-file-example` |
+| 文件表与业务表迁移、具体资源 API、下载入口、页面和翻译          | `app-plugin-file-example` |
 
 在应用中先注册核心插件，再注册示例插件：
 
@@ -21,17 +21,60 @@ import fileRepositoryExample from '@nocobase/app-plugin-file-example/server';
 defineServerPlugins([fileRepository, fileRepositoryExample]);
 ```
 
-默认应用已完成上述注册。运行应用 migration 后创建 `attachments` 表，开发页面为 `/dev/file-repository`。页面支持单文件、批量上传、列表、下载和删除记录。
+默认应用已完成上述注册。运行 migration 与 seed 后，左侧菜单「文件仓库」下有三个页面：
 
-示例 Server 通过 `defineFileRepositoryApiRoutes()` 声明 `attachments`，使用 `main` 数据库连接、`local` 盘、`stream` 模式：
+| 页面                                 | 说明                                                                                                |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------- |
+| `/file-repository`                   | 扁平文件仓库：选择或拖拽文件即上传（单文件 `uploadOne`、批量 `uploadMany`），支持预览和删除元数据。 |
+| `/file-repository/profile-avatars`   | 一对一：员工头像。上传后通过 `fileExampleProfiles.avatar` 关联，重复上传自动替换旧头像。            |
+| `/file-repository/order-attachments` | 一对多：订单附件。支持批量上传，逐个预览或从订单移除。                                              |
 
-- `POST /api/attachments:<action>`：findMany、findOne、count、exists、deleteOne、uploadOne、uploadMany。
-- `GET /uploads/attachments/<uuid>.<ext>`：下载完整文件；无扩展名省略后缀。
+## 业务表与关系
 
-内容入口属于根路由，不在 `/api` 下。部署前缀由宿主添加一次，例如 `/main/uploads/attachments/...`。页面直接使用响应中的 `contentUrl`。Client 从核心插件导入 `clientFileRepositoryManagerToken`，调用 `manager.repository('attachments')`。
+示例迁移创建四个集合：
+
+- `fileExampleProfiles`（员工）：`hasOne('avatar', 'fileExampleProfileAvatars')`，外键 `profileId` 在头像表并带唯一约束，因此一个员工最多一个头像。
+- `fileExampleProfileAvatars`（头像文件）：标准文件字段 + 可空 `profileId`。
+- `fileExampleOrders`（订单）：`hasMany('attachments', 'fileExampleOrderAttachments')`，外键 `orderId`。
+- `fileExampleOrderAttachments`（订单附件文件）：标准文件字段 + 可空 `orderId`。
+
+文件表的业务外键必须可空：上传只写入标准文件字段，业务关联是之后的另一次提交。上传与关联的固定顺序是：
+
+```ts
+const { record } = await fileRepositoryManager
+  .repository('profileAvatars')
+  .uploadOne({ file });
+await profiles.updateOne({
+  filter: { id: profileId },
+  values: { avatar: { connect: { id: record.id } } },
+});
+```
+
+关系写入由业务 Repository 的 writePolicy 授权：`fileExampleProfiles` 只允许 `avatar` 的 connect／disconnect，`fileExampleOrders` 只允许 `attachments` 的 connect／disconnect。上传成功后返回的 `record` 已带 `contentUrl`，页面直接用它预览。
+
+演示数据由 `202609110001_seed_file_example_business` 写入：3 名员工、3 个订单，初始都没有文件，方便按需上传。
+
+## 路由
+
+示例 Server 通过 `defineFileRepositoryApiRoutes()` 声明三个文件仓库，使用 `main` 数据库连接、`local` 盘、`stream` 模式：
+
+- `POST /api/attachments:<action>`、`POST /api/profileAvatars:<action>`、`POST /api/orderAttachments:<action>`：findMany、findOne、count、exists、deleteOne、uploadOne、uploadMany。
+- `GET /uploads/attachments/<uuid>.<ext>`、`GET /uploads/profile-avatars/<uuid>.<ext>`、`GET /uploads/order-attachments/<uuid>.<ext>`：下载完整文件；无扩展名省略后缀。
+
+业务仓库通过 `defineRepositoryApiRoutes()` 声明，只暴露读接口和带 writePolicy 的 `updateOne`：
+
+- `POST /api/fileExampleProfiles:<action>`、`POST /api/fileExampleOrders:<action>`。
+
+内容入口属于根路由，不在 `/api` 下。部署前缀由宿主添加一次，例如 `/main/uploads/profile-avatars/...`。页面直接使用响应中的 `contentUrl`；业务表通过 `findMany()` 读取后与文件表的 `profileId`、`orderId` 在前端分组。Client 从核心插件导入 `clientFileRepositoryManagerToken` 调用文件仓库，从 `apiClientToken` 调用业务仓库。
 
 这套表和路由仅是示例，不是核心插件的默认约定。业务应用可只启用核心插件，使用自己的 collection、disk、accessPath 和 actions。
 
-首版保持已确认范围：未接入路由认证授权；deleteOne 只删元数据；不支持 Range/206 或条件缓存。示例页面仅在开发环境出现，但 Server 示例接口没有开发环境限制。
+## 预览
+
+页面自带一个精简预览弹窗（`client/components/file-preview-dialog.tsx`）：图片、音频、视频直接使用 `contentUrl`；PDF 与文本先 `fetch` 成 blob／文本再展示，因为内容路由始终发送 `Content-Disposition: attachment`。HTML、SVG、XML 等活跃内容不内嵌预览，只提供下载。需要更完整的预览（Markdown、Office、缩略图等）时，按核心插件 Skill 的说明安装 `component-ui` Registry 组件。
+
+## 范围与限制
+
+首版保持已确认范围：Server 路由未接入认证授权；deleteOne 只删元数据；移除关系只清空外键，不删除文件；不支持 Range/206 或条件缓存。示例页面已注册为应用页面，而 Server 示例接口本就对任何请求开放，没有环境或登录限制。
 
 迁移从尚未发布的核心插件原样移动，保留名称与内容。迁移器按名称和内容校验识别既有执行记录，因此本地已执行的同一迁移不会重复建表，也无需修改附件或迁移历史。

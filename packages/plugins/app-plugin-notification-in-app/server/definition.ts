@@ -96,10 +96,10 @@ export function createInAppChannelDefinition(): NotificationChannelDefinition<
       return {
         type: 'in-app',
         resolveRecipient(input: {
-          readonly recipient: NotificationRecipient;
+          readonly recipient?: NotificationRecipient;
         }): InAppRecipient | undefined {
           const { recipient } = input;
-          return recipient.type === 'user'
+          return recipient?.type === 'user'
             ? { userId: recipient.id }
             : undefined;
         },

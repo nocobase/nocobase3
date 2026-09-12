@@ -42,6 +42,12 @@ export interface WorkflowDistArtifact {
   digest: string;
   directory: string;
   workflow: WorkflowArtifactDefinition;
+  /**
+   * Where the definition was found. `source` only occurs in development, where
+   * the loader compiles `server/workflows` directly and the directory is the
+   * source package rather than a committed Artifact.
+   */
+  origin?: 'dist' | 'source';
 }
 export interface WorkflowDeploymentSyncResult extends WorkflowPublishResult {
   imported: boolean;
@@ -227,7 +233,13 @@ export async function discoverWorkflowDistArtifacts(
       throw new Error(
         `Workflow "${keyEntry.name}" Artifact at "${directory}" bytes do not match its digest`,
       );
-    artifacts.push({ key: keyEntry.name, digest, directory, workflow });
+    artifacts.push({
+      key: keyEntry.name,
+      digest,
+      directory,
+      workflow,
+      origin: 'dist',
+    });
   }
   return artifacts;
 }
