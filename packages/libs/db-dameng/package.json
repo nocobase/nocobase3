@@ -31,7 +31,7 @@
     "lint": "eslint . --max-warnings 0",
     "test": "vitest run tests --exclude **/tests/integration/**",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
-    "test:integration": "NODE_OPTIONS=--openssl-legacy-provider vitest run tests/integration"
+    "test:integration": "node --import tsx ./scripts/test-integration.ts"
   },
   "peerDependencies": {
     "@nocobase/db": "workspace:^"
@@ -46,6 +46,7 @@
     "@nocobase/dev-config": "workspace:*",
     "@types/node": "catalog:",
     "eslint": "catalog:",
+    "tsx": "catalog:",
     "knex": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

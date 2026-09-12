@@ -10,6 +10,10 @@
     ".": {
       "types": "./src/index.ts",
       "import": "./src/index.ts"
+    },
+    "./integration-runner": {
+      "types": "./src/integration-runner.ts",
+      "import": "./src/integration-runner.ts"
     }
   },
   "files": [
@@ -22,6 +26,10 @@
       ".": {
         "types": "./dist/src/index.d.ts",
         "import": "./dist/src/index.js"
+      },
+      "./integration-runner": {
+        "types": "./dist/src/integration-runner.d.ts",
+        "import": "./dist/src/integration-runner.js"
       }
     }
   },
@@ -29,7 +37,7 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint . --max-warnings 0",
-    "test": "vitest run tests --exclude **/tests/integration/**",
+    "test": "vitest run tests/index.test.ts tests/unit",
     "typecheck:integration": "tsc -p tsconfig.integration.json --noEmit",
     "typecheck:unit": "tsc -p tsconfig.unit.json --noEmit"
   },

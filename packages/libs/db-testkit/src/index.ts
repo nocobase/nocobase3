@@ -198,6 +198,10 @@ export function createDatabaseDialectIntegrationAdapter(
 
 export type { DatabaseDialectTestAdapter } from './contracts.js';
 export { asDatabaseContractAdapter } from './contracts.js';
+export {
+  runDatabaseIntegration,
+  type DatabaseIntegrationRunnerOptions,
+} from './integration-runner.js';
 
 export interface DatabaseContractSuiteOptions<
   TContext extends DatabaseContractContext,
