@@ -154,7 +154,138 @@ A group has `navigation` and `children`, with no component loader. Its `path` is
 
 Omit `navigation` for details, Tab content, or another page that should not appear in the sidebar. A descendant can have navigation even when an ancestor omits it. Dynamic and wildcard paths are not concrete menu targets, so leave their navigation unset. Paths, route IDs, and component exports must resolve correctly; URL spelling is not otherwise prescribed by this guide.
 
-The route renderer supplies outlets for pure groups. Business pages place their own outlet; no outlet is inserted automatically into a page. Put it where the next page belongs. For future business dialog wrappers, put nested content outside the parent's dialog panel; this change does not provide `RouteDialog` or `RouteDrawer`.
+The route renderer supplies outlets for pure groups. Business pages place their own outlet; no outlet is inserted automatically into a page, and the route overlay wrappers below insert none either. Put it where the next page belongs.
+
+## Child pages shown as dialogs or drawers
+
+When a feature needs a dialog or drawer that represents a page, form, editor, details view, or another URL-addressable state, implement it as a child route. Do not use local `open` state for this case.
+
+Follow this order:
+
+1. Add the child route.
+2. Decide where the owning page renders `<Outlet />`.
+3. Render the child with `RouteDialog` or `RouteDrawer`.
+4. Use `useRouteOverlay()` to close it.
+5. Add `beforeClose` when closing needs confirmation.
+
+### 1. Add a child route
+
+Add the route in the application's `client/routes.ts`, inside the `defineAppRoutes()` contribution. Do not declare the child route in the page component file. Declare the overlay as a child of the page that should remain mounted underneath it:
+
+```ts
+{
+  name: 'orders',
+  path: '/orders',
+  componentLoader: () => import('./pages/orders.js'),
+  children: [
+    {
+      name: 'orderEdit',
+      path: ':orderId/edit',
+      componentLoader: () => import('./pages/order-edit.js'),
+    },
+  ],
+}
+```
+
+The child URL opens the overlay; the parent URL closes it. Direct links and refresh must render the same overlay. Use a child route when the state needs a URL or browser back/forward. Use local state only for a transient interaction that does not need a URL.
+
+### 2. Place the outlet
+
+The page that declares `children` must render `<Outlet />` where the child belongs:
+
+```tsx
+import { Outlet } from 'react-router';
+
+export default function OrdersPage() {
+  return (
+    <main>
+      <OrderList />
+      <Outlet />
+    </main>
+  );
+}
+```
+
+`RouteDialog` and `RouteDrawer` do not insert an outlet. Put the outlet inside an overlay when its child should stack above that overlay. Put it outside when the child should open as a separate layer. An overlay page with children of its own must render another `<Outlet />`.
+
+### 3. Choose the overlay component
+
+```tsx
+import { RouteDialog } from '@/components/route-dialog';
+import { RouteDrawer } from '@/components/route-drawer';
+```
+
+Use `RouteDialog` for focused editing, confirmation, and short forms. Use `RouteDrawer` for details, filters, inspectors, and content that benefits from a side panel. Do not create another route-overlay implementation or add a local `open` prop.
+
+```tsx
+import { Outlet } from 'react-router';
+import { RouteDialog } from '@/components/route-dialog';
+
+export default function OrderEditPage() {
+  return (
+    <RouteDialog title='Edit order'>
+      <OrderForm />
+      <Outlet />
+    </RouteDialog>
+  );
+}
+```
+
+Both components accept `title` (required), `description`, `children`, `footer`, `closeTo`, `beforeClose`, and `className`. Route matching controls whether the overlay exists.
+
+### 4. Close the overlay
+
+Use `useRouteOverlay()` inside the overlay page or its descendants:
+
+```tsx
+import { useRouteOverlay } from '@/components/use-route-overlay';
+
+function Actions() {
+  const { close, isClosing } = useRouteOverlay();
+  return (
+    <Button
+      disabled={isClosing}
+      onClick={() => {
+        void close().catch((error: unknown) => {
+          console.error('Failed to close route overlay', error);
+        });
+      }}
+    >
+      Cancel
+    </Button>
+  );
+}
+```
+
+The default close target is the parent route. It preserves the current query string and uses route-relative navigation. Use `closeTo` only for a different explicit target. Do not use `navigate(-1)` as the normal close implementation because a directly loaded child may have no meaningful history entry.
+
+### 5. Guard closing when needed
+
+Use `beforeClose` for unsaved changes or other close checks:
+
+```tsx
+<RouteDialog
+  title='Edit order'
+  beforeClose={async () => {
+    if (!hasUnsavedChanges) return true;
+    return await confirmDiscardChanges();
+  }}
+>
+  <OrderForm />
+</RouteDialog>
+```
+
+Returning `false` keeps the overlay open. The guard applies to the close button, Escape, backdrop clicks, and `close()`. Browser back and forward do not invoke it. `close()` returns `Promise<void>`; callers must handle rejection when the guard can throw. A rejected close leaves the overlay open.
+
+### Implementation checklist
+
+- Is the overlay represented by a child route?
+- Does the owning page render `<Outlet />` in the intended location?
+- If the overlay has child routes, does it render its own `<Outlet />`?
+- Is `RouteDialog` or `RouteDrawer` selected for the interaction?
+- Is `useRouteOverlay()` used for closing, with rejection handled?
+- Is `beforeClose` present when unsaved state needs protection?
+- Do direct URLs, refresh, query strings, browser back/forward, and nested overlays behave correctly?
 
 ## Settings and Dev
 
