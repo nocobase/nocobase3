@@ -11,6 +11,7 @@ describe('@nocobase/app-plugin-hub', () => {
       routes: expect.any(Array),
       database: {
         migrations: './database/migrations',
+        seeds: './database/seeds',
       },
     });
   });

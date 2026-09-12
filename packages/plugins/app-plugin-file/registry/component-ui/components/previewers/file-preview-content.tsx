@@ -1,3 +1,4 @@
+import type { FileRecord } from '../../types';
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -5,8 +6,7 @@ import remarkGfm from 'remark-gfm';
 import {
   resolveOfficeEmbedUrl,
   type FilePreviewKind,
-  type FileRecord,
-} from '@nocobase/app-plugin-file/client';
+} from '../../lib/file-preview';
 import { Button } from '@/components/ui/button';
 import { resolveSafeFileUrl } from '../../lib/file-url';
 import { FileThumbnail } from '../file-thumbnail';

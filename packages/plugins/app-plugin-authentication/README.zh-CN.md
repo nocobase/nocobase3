@@ -7,6 +7,12 @@ Refine `AuthProvider` 适配器。
 当前内置的默认认证方式是邮箱或用户名加密码。应用可以继续通过 Better Auth
 配置和插件扩展认证能力。
 
+服务端入口还提供 `userAdministrationServiceToken`。用户管理插件通过它查询、创建和
+编辑用户，启用或禁用账号，重置密码并撤销全部 Session；调用方可以把这些操作绑定到
+同一个数据库事务，但不直接访问 Authentication 的内部表。禁用账号会立即撤销缓存和
+数据库中的 Session、关闭 Realtime 连接，并在后续 HTTP 和 Realtime 身份解析中按未登录
+处理。管理员创建或编辑用户时，重复的邮箱和用户名会返回稳定的身份冲突错误。
+
 ## 文档入口
 
 - [整体概览](./docs/zh-CN/overview.md)
@@ -24,7 +30,7 @@ Refine `AuthProvider` 适配器。
 | 入口                                                 | 用途                                              |
 | ---------------------------------------------------- | ------------------------------------------------- |
 | `@nocobase/app-plugin-authentication`                | 服务端认证、存储适配、数据库适配和 migration      |
-| `@nocobase/app-plugin-authentication/server`         | 显式的服务端入口，与根入口导出相同                |
+| `@nocobase/app-plugin-authentication/server`         | 服务端入口，包括认证与统一用户管理 ServiceToken   |
 | `@nocobase/app-plugin-authentication/client`         | 浏览器 `AuthClient` 和 Refine `AuthProvider` 适配 |
 | `@nocobase/app-plugin-authentication/client/routes`  | 按需加载默认密码认证页面的插件入口                |
 | `@nocobase/app-plugin-authentication/client/actions` | 无页面依赖的认证动作 hooks                        |

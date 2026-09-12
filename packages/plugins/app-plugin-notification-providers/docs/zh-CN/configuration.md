@@ -103,7 +103,6 @@ notification:
       providers:
         - type: feishu-webhook
           name: feishu
-          target: default
           webhookUrl: https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxxxx
           secret: xxxxxxxx
 ```
@@ -122,7 +121,6 @@ notification:
       providers:
         - type: dingtalk-webhook
           name: dingtalk
-          target: default
           webhookUrl: https://oapi.dingtalk.com/robot/send?access_token=xxxxxxxx
           secret: SECxxxxxxxx
 ```
@@ -139,7 +137,7 @@ Webhook URL 自身包含访问凭据。不要提交包含真实凭据的 `config
 
 核心通知插件的日志设置页会根据受保护的 targets API 动态显示测试按钮和表单。目标列表只包含已注册定义与已启用配置实例的交集，不会返回 Webhook URL、API Key、密码或签名密钥。
 
-测试 Email 时必须填写接收邮箱；IM 测试会发送到所选 Provider 配置的逻辑目标。页面要求用户已登录、拥有 `notification:test` 的 `send` 权限，并且必须在 `config.yml` 中显式启用：
+测试 Email 时必须填写接收邮箱；IM 测试会直接发送到所选 Provider 对应的 Webhook。页面要求用户已登录、拥有 `notification:test` 的 `send` 权限，并且必须在 `config.yml` 中显式启用：
 
 ```yaml
 notification:
@@ -191,13 +189,11 @@ export const notificationConfig: NotificationConfig = {
       providers: [
         defineFeishuWebhookProviderConfig({
           name: 'feishu',
-          target: 'ops-alerts',
           webhookUrl: 'https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxxxx',
           secret: 'xxxxxxxx',
         }),
         defineDingTalkWebhookProviderConfig({
           name: 'dingtalk',
-          target: 'ops-alerts',
           webhookUrl:
             'https://oapi.dingtalk.com/robot/send?access_token=xxxxxxxx',
           secret: 'SECxxxxxxxx',
@@ -208,7 +204,7 @@ export const notificationConfig: NotificationConfig = {
 };
 ```
 
-同一个逻辑接收目标的 Provider 使用相同的 `target`，比如上面的 `ops-alerts`。省略 `target` 时默认为 `default`。同一个 Channel 内的 Provider `name` 必须唯一，发送时通过这个名称选择 Provider，不需要再传 `type`。Provider 的 `name` 和 `type` 都会写入 Delivery，配置发布和应用重启后应保持两者稳定。完整的路由写法见[发送通知](../../../app-plugin-notification/docs/zh-CN/sending.md)，definitions 注册和生命周期接入见[手动接入通知](../../../app-plugin-notification/docs/zh-CN/integration.md)。
+每个 Webhook Provider 都直接代表一个外部群机器人，因此发送 IM 消息时不需要 `to`。同一个 Channel 内的 Provider `name` 必须唯一，发送时通过这个名称选择 Provider，不需要再传 `type`；也可以使用 `strategy: 'all'` 同时发送到多个 Provider。Provider 的 `name` 和 `type` 都会写入 Delivery，配置发布和应用重启后应保持两者稳定。完整的路由写法见[发送通知](../../../app-plugin-notification/docs/zh-CN/sending.md)，definitions 注册和生命周期接入见[手动接入通知](../../../app-plugin-notification/docs/zh-CN/integration.md)。
 
 ## 相关链接
 

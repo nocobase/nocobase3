@@ -3,9 +3,12 @@ import type {
   SessionData,
   SessionEnv,
 } from '@nocobase/session';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
+import { getRequestTranslator } from '@nocobase/i18n/server';
 import { getCookie, setCookie } from 'hono/cookie';
 import type { InAppStore } from './store.js';
+import { inAppNotificationErrorBody } from './http-errors.js';
+import { IN_APP_NOTIFICATION_NAMESPACE } from './i18n.js';
 import type { InAppItem } from './types.js';
 
 const DEFAULT_PAGE_SIZE = 25;
@@ -39,7 +42,18 @@ export function createInAppRouter(
     const resolvedUserId =
       externalUserId ?? (await userId(context.var.session));
     if (!resolvedUserId)
-      return context.json({ error: 'Authentication required.' }, 401);
+      return context.json(
+        inAppNotificationErrorBody(
+          getRequestTranslator(
+            context as Context,
+            IN_APP_NOTIFICATION_NAMESPACE,
+          ),
+          'IN_APP_NOTIFICATION_AUTHENTICATION_REQUIRED',
+          'errors.authenticationRequired',
+          'Authentication required.',
+        ),
+        401,
+      );
     context.set('notificationUserId', resolvedUserId);
     await next();
   });
@@ -56,13 +70,27 @@ export function createInAppRouter(
     const limit = parseLimit(context.req.query('limit'));
     if (limit === undefined)
       return context.json(
-        { error: `limit must be an integer between 1 and ${MAX_PAGE_SIZE}.` },
+        inAppNotificationErrorBody(
+          getRequestTranslator(context, IN_APP_NOTIFICATION_NAMESPACE),
+          'IN_APP_NOTIFICATION_INVALID_LIMIT',
+          'errors.invalidLimit',
+          `limit must be an integer between 1 and ${MAX_PAGE_SIZE}.`,
+          { max: MAX_PAGE_SIZE },
+        ),
         400,
       );
     const cursorValue = context.req.query('cursor');
     const before = parseCursor(cursorValue);
     if (cursorValue && !before)
-      return context.json({ error: 'cursor is invalid.' }, 400);
+      return context.json(
+        inAppNotificationErrorBody(
+          getRequestTranslator(context, IN_APP_NOTIFICATION_NAMESPACE),
+          'IN_APP_NOTIFICATION_INVALID_CURSOR',
+          'errors.invalidCursor',
+          'cursor is invalid.',
+        ),
+        400,
+      );
     const rows = await store.list({
       userId: context.var.notificationUserId,
       unreadOnly: context.req.query('unreadOnly') === 'true',
@@ -90,7 +118,15 @@ export function createInAppRouter(
         getCookie(context, 'notification_in_app_csrf'),
       )
     )
-      return context.json({ error: 'Invalid CSRF token.' }, 403);
+      return context.json(
+        inAppNotificationErrorBody(
+          getRequestTranslator(context, IN_APP_NOTIFICATION_NAMESPACE),
+          'IN_APP_NOTIFICATION_INVALID_CSRF',
+          'errors.invalidCsrf',
+          'Invalid CSRF token.',
+        ),
+        403,
+      );
     return context.json({
       updated: await store.markAllRead(context.var.notificationUserId),
     });
@@ -102,17 +138,35 @@ export function createInAppRouter(
         getCookie(context, 'notification_in_app_csrf'),
       )
     )
-      return context.json({ error: 'Invalid CSRF token.' }, 403);
+      return context.json(
+        inAppNotificationErrorBody(
+          getRequestTranslator(context, IN_APP_NOTIFICATION_NAMESPACE),
+          'IN_APP_NOTIFICATION_INVALID_CSRF',
+          'errors.invalidCsrf',
+          'Invalid CSRF token.',
+        ),
+        403,
+      );
     const body: unknown = await context.req.json().catch(() => undefined);
     if (!isRecord(body))
       return context.json(
-        { error: 'Request body must be a JSON object.' },
+        inAppNotificationErrorBody(
+          getRequestTranslator(context, IN_APP_NOTIFICATION_NAMESPACE),
+          'IN_APP_NOTIFICATION_INVALID_BODY',
+          'errors.invalidBody',
+          'Request body must be a JSON object.',
+        ),
         400,
       );
     const action = body.action ?? 'read';
     if (!isInboxAction(action))
       return context.json(
-        { error: 'action must be read, unread, or delete.' },
+        inAppNotificationErrorBody(
+          getRequestTranslator(context, IN_APP_NOTIFICATION_NAMESPACE),
+          'IN_APP_NOTIFICATION_INVALID_ACTION',
+          'errors.invalidAction',
+          'action must be read, unread, or delete.',
+        ),
         400,
       );
     const updated = await store.update({
@@ -122,7 +176,15 @@ export function createInAppRouter(
     });
     return updated
       ? context.json({ data: updated })
-      : context.json({ error: 'Not found.' }, 404);
+      : context.json(
+          inAppNotificationErrorBody(
+            getRequestTranslator(context, IN_APP_NOTIFICATION_NAMESPACE),
+            'IN_APP_NOTIFICATION_NOT_FOUND',
+            'errors.notFound',
+            'Not found.',
+          ),
+          404,
+        );
   });
   return router;
 }

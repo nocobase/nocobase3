@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-workflow",
   "displayName": "Workflow App Plugin",
   "description": "Adds workflow runtime, persistence, and HTTP APIs to a NocoBase app.",
-  "version": "0.1.0-beta.11",
+  "version": "0.1.0-beta.13",
   "type": "module",
   "sideEffects": [
     "**/*.css"
@@ -79,6 +79,10 @@
     "build": "pnpm clean && tsc -p tsconfig.json && node ./scripts/copy-client-assets.mjs && tsc -p tsconfig.migrations.json",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.migrations.json --noEmit && tsc -p tsconfig.skill-evals.json --noEmit && tsc -p tsconfig.workflow-fixtures.json --noEmit",
     "test": "vitest run --passWithNoTests",
+    "test:integration": "pnpm test:integration:sqlite",
+    "test:integration:sqlite": "INTEGRATION_DB_CONNECTIONS=sqlite vitest run tests/integration",
+    "test:integration:postgres": "INTEGRATION_DB_CONNECTIONS=postgres vitest run tests/integration",
+    "test:integration:mysql": "INTEGRATION_DB_CONNECTIONS=mysql vitest run tests/integration",
     "eval:skill": "node --import tsx skill-evals/nocobase3-workflow-manage/runner/cli.ts",
     "eval:skill:test": "vitest run --config skill-evals/nocobase3-workflow-manage/vitest.config.ts",
     "lint": "eslint . --max-warnings 0",
@@ -127,7 +131,7 @@
     "better-sqlite3": "^13.0.3",
     "eslint": "catalog:",
     "jsdom": "catalog:",
-    "knex": "^3.1.0",
+    "knex": "catalog:",
     "prettier": "catalog:",
     "react-dom": "catalog:",
     "tsx": "catalog:",

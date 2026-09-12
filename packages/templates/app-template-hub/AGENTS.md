@@ -21,6 +21,8 @@ Do not create a plugin to add a feature. Plugins are separately published packag
 
 Read the one page your task needs, not the whole directory.
 
+`skills/nocobase-app-upgrade/` is a separate Skill for a separate job: merging a newer release of the template this hub was generated from. Read it when the task is upgrading the template rather than building a feature, and read it before touching anything — an upgrade done by copying the newest template over this hub destroys the work that made it this hub.
+
 ## Where things go
 
 Business code goes in these places. This is where you work, and where you should stay unless the task genuinely requires otherwise:
@@ -161,6 +163,8 @@ t('orders.title');
 
 To reword a plugin's string, add an `overrides` block keyed by that plugin's package name in your locale file. Do not edit the plugin.
 
+The languages the application offers are its own locale files, not a configured list, and the two sides are read separately: `client/locales/` decides what the picker shows, `server/locales/` what the server will answer in. Adding a language means adding its file to both. `pnpm nocobase app i18n:check` reports one declared on a single side.
+
 The account menu language control in `client/shell/language-switcher.tsx` uses a shadcn submenu with radio items. Render it inside `DropdownMenuContent` to preserve menu keyboard navigation and selection semantics.
 
 ## The command line
@@ -170,6 +174,7 @@ The account menu language control in `client/shell/language-switcher.tsx` uses a
 ```bash
 pnpm nocobase --help          # every topic and command
 pnpm nocobase app info        # a command this application owns
+pnpm nocobase app i18n:check  # languages declared on only one side
 ```
 
 Add a command of your own as an oclif `Command` subclass in `cli/commands/`, then list it in `cli/commands/index.ts`; the key becomes its name under `app`. These commands are static tooling — they read and write files and packages. They do not start the application, so nothing in them may resolve a service or query the database. Anything needing the running application is a server route or a job, not a command.
@@ -190,17 +195,16 @@ To customize a plugin's page, pass an option on its registration, add a source e
 
 **You are not starting from scratch.** This application ships with plugins that already solve whole categories of requirement, and each one publishes a Skill explaining how to use it. Registration copies those Skills into `.agents/skills/`. Before implementing a feature, check whether a plugin already covers it:
 
-| The requirement sounds like                                                                       | Read the Skill for                    |
-| ------------------------------------------------------------------------------------------------- | ------------------------------------- |
-| Approvals, multi-step processes, "when X happens then Y", business rules that outlive one request | `@nocobase/app-plugin-workflow`       |
-| Email, IM, or in-app messages; notifying someone that something happened                          | `@nocobase/app-plugin-notification`   |
-| Roles, permissions, "user A may only see their own records", field-level or row-level access      | `@nocobase/app-plugin-authorization`  |
-| Sign-in, registration, sessions, password reset                                                   | `@nocobase/app-plugin-authentication` |
-| Translated text and language switching                                                            | `@nocobase/app-plugin-i18n`           |
+| The requirement sounds like                                                                  | Read the Skill for                    |
+| -------------------------------------------------------------------------------------------- | ------------------------------------- |
+| Roles, permissions, "user A may only see their own records", field-level or row-level access | `@nocobase/app-plugin-authorization`  |
+| Sign-in, registration, sessions, password reset                                              | `@nocobase/app-plugin-authentication` |
+| User listing, account state, password reset, and application-owned role assignment           | `@nocobase/app-plugin-users`          |
+| Translated text and language switching                                                       | `@nocobase/app-plugin-i18n`           |
 
 Run `pnpm plugin:skills:sync` if `.agents/skills/` is missing or looks out of date, then read the Skill for the plugin you need. It documents that plugin's public entries, the ownership boundary, and how to verify the result — which is faster and more correct than inferring an API from its source.
 
-Building a permission system, a notification sender, or a job scheduler by hand when a registered plugin already provides one is the most expensive mistake available here. Prefer the plugin; write your own only when you have read its Skill and confirmed it genuinely does not fit.
+Building a capability by hand when a registered plugin already provides it is the most expensive mistake available here. Prefer the plugin; write your own only when you have read its Skill and confirmed it genuinely does not fit. Workflow and end-user notification plugins are intentionally not registered in the Hub template.
 
 `.agents/skills/` itself is generated output: gitignored, and every synchronized directory is replaced wholesale on the next sync, so never edit a file there. This application's own `skills/` directory is the opposite — committed source you should keep current.
 
@@ -236,6 +240,14 @@ await import(`${name}/index.js`); // invisible to the check
 
 Declare such a package in `dependencies` when you write the code; nothing will remind you later.
 
+### Packing the build for a deployment
+
+`pnpm build --tar` writes `storage/dist.tar.gz` after the build. The archive holds `dist/` as a directory next to `config.example.yml`, so extracting it produces exactly those two paths rather than scattering `server/` and `node_modules/` into whatever directory you unpacked in.
+
+`config.example.yml` travels with it because a deployment has to write a `config.yml` before it can start, and the example is the only statement of what may go in it. Directories of executable shims are left out: a `.bin` entry points at a path on the machine that installed it, and a dangling one makes `pnpm install` in the extracted tree report a corrupt store rather than repair it.
+
+Without `--tar` no archive is produced, which is what you want when the build is only going to be run locally.
+
 ### Building for another platform
 
 `pnpm build` targets the machine it runs on, so `pnpm build && pnpm start` works. A deployment build says where it is going: `--target linux-x64`, `--target linux-arm64`, `--target linux-x64-musl`, plus `--node-version` when the server's Node major differs. Every build prints the platform it produced and records it in `dist/package.json` under `nocobase.buildTarget`.
@@ -269,3 +281,5 @@ Add tests for what you changed: a route's authenticated, unauthenticated, and un
 For creating or editing theme presets, read `skills/nocobase-app-development/references/themes.md` (from the application root).
 
 For UI styling, use the shared color, font, size, spacing, radius and shadow contract in `skills/nocobase-app-development/references/theme-tokens.md` (from the application root). Prefer its Tailwind utilities so components respond to theme changes; keep deliberate fixed-size exceptions explicit.
+
+Application startup defaults belong in `config.yml`: `i18n.defaultLocale` for the language, and `client.app.defaultColorScheme` and `client.app.defaultTheme` for appearance. Valid browser-local choices take precedence. Which languages the application offers is not configured — its own `client/locales/` and `server/locales/` are that list. See the i18n and themes references.

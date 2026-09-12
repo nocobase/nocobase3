@@ -253,6 +253,26 @@ describe('client inspection', () => {
         id: '@nocobase/app-plugin-repository-example:products-detail',
         path: '/repository-example/orders/products/details/:recordId',
       },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-file-example:file-repository',
+        path: '/',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-file-example:file-repository-attachments',
+        path: '/file-repository',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-file-example:file-repository-profile-avatars',
+        path: '/file-repository/profile-avatars',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-file-example:file-repository-order-attachments',
+        path: '/file-repository/order-attachments',
+      },
     ]);
     expect(
       inspection.reactProviders.map(({ id, order }) => ({ id, order })),
@@ -281,7 +301,7 @@ describe('client inspection', () => {
       { packageName: '@nocobase/app-plugin-workflow', order: 6 },
       { packageName: '@nocobase/app-plugin-notification', order: 7 },
       { packageName: '@nocobase/app-plugin-repository-example', order: 8 },
-      { packageName: '@nocobase/app-plugin-file-repository', order: 9 },
+      { packageName: '@nocobase/app-plugin-file', order: 9 },
     ]);
     expect(inspection.configs[0]).toMatchObject({
       kind: 'factory',

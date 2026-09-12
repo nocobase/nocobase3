@@ -156,6 +156,7 @@ function includeTemplateFile(
   ) {
     return capabilities.registry;
   }
+  if (relativePath.startsWith('cli/')) return capabilities.cli;
   if (relativePath.startsWith('skills/')) return capabilities.skills;
   return true;
 }
@@ -191,6 +192,11 @@ function replacementEntries(
   context: PluginTemplateContext,
 ): readonly (readonly [string, string])[] {
   return [
+    [
+      '__NOCOBASE_CLI_DESCRIPTION_LITERAL__',
+      literal(`Commands contributed by ${context.packageName}.`),
+    ],
+    ['__NOCOBASE_CLI_TOPIC_LITERAL__', literal(context.shortName)],
     ['__NOCOBASE_COLLECTION_NAME_LITERAL__', literal(context.collectionName)],
     ['__NOCOBASE_DESCRIPTION__', context.description],
     ['__NOCOBASE_DISPLAY_NAME__', jsonStringContent(context.displayName)],
@@ -317,6 +323,8 @@ async function renderManifest(
       import: compiled,
     };
   };
+  if (capabilities.cli)
+    addExport('./cli', './cli/index.ts', './dist/cli/index.js');
   if (serverPlugin)
     addExport('./server', './server/index.ts', './dist/server/index.js');
   if (capabilities.server.serviceProviders)
@@ -424,9 +432,17 @@ async function renderManifest(
     addRuntimePeer('@nocobase/service-provider');
   if (capabilities.server.jobs) addRuntimePeer('@nocobase/queue');
   if (clientPlugin) addRuntimePeer('@nocobase/app-client');
+  if (capabilities.cli) {
+    addRuntimePeer('@nocobase/nb3-cli');
+    // `@oclif/core` is a peer for a related but distinct reason from module identity: one shared version, so help
+    // rendering and flag parsing behave the same in the plugin and in the application assembling its commands. The
+    // range is explicit rather than `workspace:^` because whoever installs this plugin is outside this repository.
+    peerDependencies['@oclif/core'] = '^4.14.0';
+  }
   if (react) peerDependencies.react = '^19.0.0';
 
-  if (serverPlugin || !browserCode) devDependencies['@types/node'] = 'catalog:';
+  if (serverPlugin || capabilities.cli || !browserCode)
+    devDependencies['@types/node'] = 'catalog:';
   // `@types/react` is not a peer, so it stays. `react` itself is declared once, as a peer.
   if (react) devDependencies['@types/react'] = 'catalog:';
   if (capabilities.registry) {
@@ -510,11 +526,14 @@ function renderTsconfig(capabilities: PluginCapabilities): string {
     ...(capabilities.database ? ['database/**/*.ts'] : []),
     ...(serverPlugin ? ['server/**/*.ts'] : []),
     ...(browserCode ? ['client/**/*.ts', 'client/**/*.tsx'] : []),
+    // Compiled alongside the server: `exports['./cli']` publishes `./dist/cli/index.js`, so leaving it out of the
+    // build would publish an entry that resolves to nothing.
+    ...(capabilities.cli ? ['cli/**/*.ts'] : []),
   ];
   return `${JSON.stringify(
     {
       extends:
-        browserCode && !serverPlugin
+        browserCode && !serverPlugin && !capabilities.cli
           ? '@nocobase/dev-config/tsconfig/client-library.json'
           : '@nocobase/dev-config/tsconfig/server-library.json',
       compilerOptions,
@@ -627,6 +646,7 @@ function renderReadme(
     capabilities.client.serviceProviders && 'client.service-providers',
     capabilities.client.reactProviders && 'client.react-providers',
     capabilities.client.locales && 'client.locales',
+    capabilities.cli && 'cli',
     capabilities.registry && 'registry',
     capabilities.skills && 'skills',
   ].filter(Boolean);

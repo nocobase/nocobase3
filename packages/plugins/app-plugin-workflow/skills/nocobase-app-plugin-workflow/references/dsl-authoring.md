@@ -213,7 +213,7 @@ From `packages/templates/app-template-default` (or the corresponding initialized
    pnpm nocobase workflow check server/workflows/<stable-key>
    ```
 
-   Expect `Workflow check passed: ... (<n> nodes)`. This is only the five-phase DSL/IR check described below.
+   Expect `Workflow check passed: ... (<n> nodes)`. This is only the five-phase DSL/IR check described below. Add `--ir` to print the compiled flat IR instead, which is the definition an Artifact would carry.
 
 3. Run the target application's typecheck and focused tests for every `run` module and application service. Cover representative branches, result shapes, cancellation where relevant, and business idempotency for side effects. A passing DSL check does not prove this behavior.
 4. Run the target application's normal server build, then build the complete Workflow Artifacts:
@@ -223,6 +223,8 @@ From `packages/templates/app-template-default` (or the corresponding initialized
    ```
 
    The normal `pnpm build` also invokes this step. The standalone command scans every direct Workflow package and replaces the configured Artifact output tree, so do not point `--dist-root` at source or an unrelated directory.
+
+   A running development server does not need this. It compiles the workflow source root on demand and produces the same content-addressed digest, so an edited definition is already listed and enableable there without a build and without a restart. Build to produce a deployable Artifact or to verify what a deployment will receive, not to see a change in development.
 
 5. Verify `dist/server/workflows/<stable-key>/<digest>/workflow.json` and the package-relative run modules. Development artifacts contain `.ts`; production artifacts contain the default server build's `.js` at the same relative paths. The digest is the deployed hash used by management concurrency checks.
 6. Only when runtime mutation is authorized, start an isolated application/runtime and invoke by the DSL package directory key after obtaining the bound runtime. Do not assume Artifact build itself writes database definitions.

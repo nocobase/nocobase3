@@ -51,10 +51,20 @@ describe('DatabaseNotificationStore', () => {
 
     const attempt = createAttempt();
     const started = await store.startAttempt(
-      claimed!,
+      {
+        ...claimed!,
+        providerIdempotency: {
+          startedAt: '2026-08-24T00:00:01.000Z',
+          expiresAt: '2026-08-25T00:00:01.000Z',
+        },
+      },
       attempt,
       '2026-08-24T00:01:00.000Z',
     );
+    expect(started?.providerIdempotency).toEqual({
+      startedAt: '2026-08-24T00:00:01.000Z',
+      expiresAt: '2026-08-25T00:00:01.000Z',
+    });
     expect(started).toMatchObject({ attemptCount: 1 });
     await expect(
       store.startAttempt(
@@ -96,7 +106,7 @@ describe('DatabaseNotificationStore', () => {
 
     await expect(
       store.recoverExpired('2026-08-24T00:02:00.000Z'),
-    ).resolves.toBe(1);
+    ).resolves.toMatchObject([{ id: 'delivery-1', status: 'pending' }]);
     await expect(store.getDelivery('delivery-1')).resolves.toMatchObject({
       status: 'pending',
     });
@@ -213,7 +223,7 @@ describe('DatabaseNotificationStore', () => {
 
     await expect(
       store.recoverExpired('2026-08-24T00:02:00.000Z'),
-    ).resolves.toBe(1);
+    ).resolves.toMatchObject([{ id: 'delivery-1', status: 'unknown' }]);
     await expect(store.getDelivery('delivery-1')).resolves.toMatchObject({
       status: 'unknown',
       lastError: { code: 'LEASE_EXPIRED' },
@@ -241,7 +251,174 @@ describe('DatabaseNotificationStore', () => {
       { status: 'unknown' },
     ]);
   });
+
+  it('atomically returns the original notification for the same idempotency key', async () => {
+    const first = withIdempotency(createBundle(), 'won:42:user-7', 'v1:same');
+    const repeated = withIdempotency(
+      {
+        ...createBundle(),
+        log: { ...createBundle().log, id: 'notification-2' },
+        deliveries: [
+          {
+            ...createBundle().deliveries[0]!,
+            id: 'delivery-2',
+            notificationId: 'notification-2',
+          },
+        ],
+      },
+      'won:42:user-7',
+      'v1:same',
+    );
+
+    const results = await Promise.all([
+      store.createOrGetByIdempotency(first),
+      store.createOrGetByIdempotency(repeated),
+    ]);
+    expect(results.map((result) => result.outcome).sort()).toEqual([
+      'created',
+      'existing',
+    ]);
+    expect(results[0]?.bundle.log.id).toBe(results[1]?.bundle.log.id);
+    const notificationId = results[0]!.bundle.log.id;
+    await expect(
+      store.getLogByIdempotencyKey('won:42:user-7'),
+    ).resolves.toMatchObject({ id: notificationId });
+    const unusedNotificationId =
+      notificationId === 'notification-1' ? 'notification-2' : 'notification-1';
+    await expect(store.listDeliveries(unusedNotificationId)).resolves.toEqual(
+      [],
+    );
+  });
+
+  it('reports an idempotency conflict for a different fingerprint', async () => {
+    await store.createOrGetByIdempotency(
+      withIdempotency(createBundle(), 'won:42:user-7', 'v1:first'),
+    );
+
+    await expect(
+      store.createOrGetByIdempotency(
+        withIdempotency(createBundle(), 'won:42:user-7', 'v1:different'),
+      ),
+    ).resolves.toMatchObject({ outcome: 'conflict' });
+  });
+
+  it('moves a terminal Delivery back to pending with an auditable retry resolution', async () => {
+    await store.create(createBundle());
+    const claimed = await store.claimDelivery(
+      'delivery-1',
+      'lease-1',
+      '2026-08-24T00:01:00.000Z',
+    );
+    const attempt = createAttempt();
+    const started = await store.startAttempt(
+      {
+        ...claimed!,
+        providerIdempotency: {
+          startedAt: '2026-08-24T00:00:01.000Z',
+          expiresAt: '2026-08-25T00:00:01.000Z',
+        },
+      },
+      attempt,
+      '2026-08-24T00:01:00.000Z',
+    );
+    await store.finishAttemptAndDelivery(
+      {
+        ...attempt,
+        status: 'unknown',
+        finishedAt: '2026-08-24T00:00:02.000Z',
+      },
+      started!,
+      'unknown',
+      { message: 'response lost' },
+    );
+
+    const resolution = {
+      type: 'safe_provider_idempotency' as const,
+      reason: 'Provider dashboard contains no matching request.',
+      requestedAt: '2026-08-24T00:03:00.000Z',
+    };
+    await expect(
+      store.retryDelivery('delivery-1', 'unknown', resolution),
+    ).resolves.toMatchObject({
+      status: 'pending',
+      retryResolution: { type: 'safe_provider_idempotency' },
+      lastError: undefined,
+      providerIdempotency: {
+        startedAt: '2026-08-24T00:00:01.000Z',
+        expiresAt: '2026-08-25T00:00:01.000Z',
+      },
+    });
+    await expect(store.listRetryAudits('delivery-1')).resolves.toMatchObject([
+      {
+        deliveryId: 'delivery-1',
+        resolution,
+        providerIdempotency: {
+          startedAt: '2026-08-24T00:00:01.000Z',
+          expiresAt: '2026-08-25T00:00:01.000Z',
+        },
+      },
+    ]);
+
+    const retryClaim = await store.claimDelivery(
+      'delivery-1',
+      'lease-2',
+      '2026-08-24T00:04:00.000Z',
+    );
+    const retryAttempt: NotificationAttemptRecord = {
+      ...createAttempt(),
+      id: 'attempt-2',
+      sequence: 2,
+      retryResolution: resolution,
+    };
+    const retryStarted = await store.startAttempt(
+      { ...retryClaim!, retryResolution: resolution },
+      retryAttempt,
+      '2026-08-24T00:04:00.000Z',
+    );
+    expect(retryStarted).toMatchObject({
+      status: 'submitting',
+      retryResolution: resolution,
+    });
+
+    const actualResolution = {
+      ...resolution,
+      type: 'duplicate_risk_accepted' as const,
+    };
+    await expect(
+      store.updateAttemptRetryResolution(
+        { ...retryStarted!, retryResolution: actualResolution },
+        { ...retryAttempt, retryResolution: actualResolution },
+      ),
+    ).resolves.toMatchObject({
+      status: 'submitting',
+      retryResolution: actualResolution,
+    });
+    await expect(
+      store.updateAttemptRetryResolution(
+        { ...retryStarted!, leaseToken: 'stale-lease' },
+        { ...retryAttempt, retryResolution: actualResolution },
+      ),
+    ).resolves.toBeUndefined();
+    await expect(store.listRetryAudits('delivery-1')).resolves.toMatchObject([
+      { resolution },
+    ]);
+    await expect(store.listAttempts('delivery-1')).resolves.toMatchObject([
+      { sequence: 1, retryResolution: undefined },
+      { sequence: 2, retryResolution: actualResolution },
+    ]);
+  });
 });
+
+function withIdempotency(
+  bundle: NotificationLogBundle,
+  idempotencyKey: string,
+  requestFingerprint: string,
+): NotificationLogBundle {
+  return {
+    ...bundle,
+    log: { ...bundle.log, idempotencyKey, requestFingerprint },
+  };
+}
 
 function createBundle(): NotificationLogBundle {
   const createdAt = '2026-08-24T00:00:00.000Z';

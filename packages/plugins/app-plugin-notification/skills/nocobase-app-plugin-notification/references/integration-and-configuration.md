@@ -25,7 +25,7 @@ const notification = {
   channels: [
     defineInAppChannelConfig({
       enabled: true,
-      providers: [{ type: 'database', name: 'primary' }],
+      providers: [{ type: 'database', name: 'default' }],
     }),
     defineEmailChannelConfig({
       enabled: true,
@@ -62,17 +62,19 @@ Custom hosts can create a registry, register Channel and Provider definitions, c
 
 The core `manager.router` exposes `GET /logs` and `GET /logs/:id` without adding authentication itself. The plugin's normal route contribution mounts it at `/api/notifications` with required authentication, authorization middleware, and `page:notification.logs` `access` checks. Custom hosts must provide equivalent protection.
 
+For a custom host, register the exported `NOTIFICATION_NAMESPACE` / `notificationServerLocales` and `IN_APP_NOTIFICATION_NAMESPACE` / `inAppNotificationServerLocales` pairs with the host `I18nRuntime`, initialize it, then mount its request i18n middleware before the core logs and in-app routers. Notification-owned failures use a stable `error.code/message/ns/key/params` envelope; clients should branch on `code`, display `message`, and may retranslate with `ns`, `key`, and `params`. Authentication middleware retains its owning plugin's error contract.
+
 The in-app router must derive the current user from trusted authentication state. Never accept a client-supplied user id as the current identity. Its write endpoints use a CSRF token/cookie pair.
 
 List the current user's inbox with `GET /api/notifications/in-app`. `limit` must be an integer from 1 through 100. When the response includes `nextCursor`, pass that opaque base64url value back as `cursor`; do not parse, edit, or manufacture cursors. Write requests accept only `read`, `unread`, and `delete`, require a JSON object body, and reject malformed JSON or unknown actions.
 
 ## Notification test surface
 
-The core package exposes `GET /api/notifications/test/targets`, `POST /api/notifications/test/send`, and `GET /api/notifications/test/:id/status` only when `notification.test.enabled` is true. All three require authentication, the `notification:test` `send` permission, and `x-nocobase-notification-test: 1`. Logs remain separately protected by `page:notification.logs` `access`.
+The core package exposes `GET /api/notifications/test/targets`, `POST /api/notifications/test/send`, and `GET /api/notifications/test/:id/status`. All three require authentication and `x-nocobase-notification-test: 1`; only `POST /send` requires the `notification:test` `send` permission. Logs remain separately protected by `page:notification.logs` `access`.
 
 Targets are the intersection of registered definitions and enabled configured instances. Their public descriptors contain only Channel/Provider identities, labels, and safe form-field metadata. Configuration, Webhook URLs, API keys, and secrets stay on the server. Channel definitions convert test fields into the same normal `send()` inputs; each test creates persistent logs, and status is visible only to its creating user.
 
-Keep the test surface disabled by default in production. A production test is a real external send and requires explicit scope, recipient, Provider, and follow-up verification.
+A production test is a real external send and requires explicit scope, the recipient or recipientless mode, Provider, permission, and follow-up verification.
 
 ## Configuration verification
 

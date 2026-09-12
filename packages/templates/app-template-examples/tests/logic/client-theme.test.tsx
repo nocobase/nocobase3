@@ -1,3 +1,4 @@
+import { initializeTheme } from '../../client/theme/theme-preferences';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactElement } from 'react';
@@ -45,6 +46,7 @@ describe('app client theme', () => {
   beforeEach(() => {
     vi.stubGlobal('APP_BASE_PATH', '/crm/');
     localStorage.clear();
+    document.getElementById('nocobase-runtime-config')?.remove();
     document.documentElement.removeAttribute('class');
     window.matchMedia = vi.fn().mockImplementation((query: string) => ({
       addEventListener: vi.fn(),
@@ -62,8 +64,141 @@ describe('app client theme', () => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
     localStorage.clear();
+    document.getElementById('nocobase-runtime-config')?.remove();
     document.documentElement.removeAttribute('class');
     document.documentElement.removeAttribute('style');
+  });
+
+  it.each([
+    [undefined, undefined, 'light', 'compact'],
+    ['dark', 'default', 'dark', 'default'],
+    ['system', 'removed', 'dark', 'compact'],
+    ['invalid', 'default', 'light', 'default'],
+  ])(
+    'uses configured defaults with saved mode %s and preset %s',
+    async (savedMode, savedPreset, mode, preset) => {
+      const config = document.createElement('script');
+      config.id = 'nocobase-runtime-config';
+      config.type = 'application/json';
+      config.textContent = JSON.stringify({
+        version: 1,
+        config: {
+          app: { defaultColorScheme: 'light', defaultTheme: 'compact' },
+        },
+      });
+      document.body.append(config);
+      if (savedMode)
+        localStorage.setItem('nocobase:crm:theme:color-scheme', savedMode);
+      if (savedPreset)
+        localStorage.setItem('nocobase:crm:theme:preset', savedPreset);
+      initializeTheme('/crm/', ['default', 'compact']);
+      expect(document.documentElement).toHaveClass(mode);
+      expect(document.documentElement).toHaveAttribute('data-theme', preset);
+      render(
+        <AppThemeProvider>
+          <ThemeProbe />
+        </AppThemeProvider>,
+      );
+      await waitFor(() => expect(document.documentElement).toHaveClass(mode));
+      expect(document.documentElement).toHaveAttribute('data-theme', preset);
+      if (!savedMode)
+        expect(
+          localStorage.getItem('nocobase:crm:theme:color-scheme'),
+        ).toBeNull();
+      if (!savedPreset)
+        expect(localStorage.getItem('nocobase:crm:theme:preset')).toBeNull();
+      localStorage.clear();
+      fireEvent(window, new StorageEvent('storage', { key: null }));
+      await waitFor(() =>
+        expect(document.documentElement).toHaveClass('light'),
+      );
+      expect(document.documentElement).toHaveAttribute('data-theme', 'compact');
+      expect(
+        localStorage.getItem('nocobase:crm:theme:color-scheme'),
+      ).toBeNull();
+    },
+  );
+
+  it.each([null, 'invalid'])(
+    'syncs deleted or invalid modes without writing defaults (%s)',
+    async (newValue) => {
+      const config = document.createElement('script');
+      config.id = 'nocobase-runtime-config';
+      config.type = 'application/json';
+      config.textContent = JSON.stringify({
+        version: 1,
+        config: { app: { defaultColorScheme: 'light' } },
+      });
+      document.body.append(config);
+      localStorage.setItem('nocobase:crm:theme:color-scheme', 'dark');
+      render(
+        <AppThemeProvider>
+          <ThemeProbe />
+        </AppThemeProvider>,
+      );
+      const write = vi.spyOn(Storage.prototype, 'setItem');
+      fireEvent(
+        window,
+        new StorageEvent('storage', {
+          key: 'nocobase:crm:theme:color-scheme',
+          newValue,
+        }),
+      );
+      await waitFor(() =>
+        expect(document.documentElement).toHaveClass('light'),
+      );
+      expect(write).not.toHaveBeenCalled();
+    },
+  );
+
+  it('uses configured defaults without storage and preserves explicit Provider mode', async () => {
+    const config = document.createElement('script');
+    config.id = 'nocobase-runtime-config';
+    config.type = 'application/json';
+    config.textContent = JSON.stringify({
+      version: 1,
+      config: { app: { defaultColorScheme: 'light', defaultTheme: 'compact' } },
+    });
+    document.body.append(config);
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    initializeTheme('/crm/', ['default', 'compact']);
+    expect(document.documentElement).toHaveClass('light');
+    const { unmount } = render(
+      <AppThemeProvider>
+        <ThemeProbe />
+      </AppThemeProvider>,
+    );
+    await waitFor(() => expect(document.documentElement).toHaveClass('light'));
+    expect(document.documentElement).toHaveAttribute('data-theme', 'compact');
+    unmount();
+    render(
+      <AppThemeProvider defaultTheme='dark'>
+        <ThemeProbe />
+      </AppThemeProvider>,
+    );
+    await waitFor(() => expect(document.documentElement).toHaveClass('dark'));
+  });
+
+  it.each([
+    {},
+    { defaultColorScheme: 'unknown', defaultTheme: 'removed' },
+    { defaultColorScheme: 4, defaultTheme: {} },
+  ])('ignores invalid theme defaults %s', async (app) => {
+    const config = document.createElement('script');
+    config.id = 'nocobase-runtime-config';
+    config.type = 'application/json';
+    config.textContent = JSON.stringify({ version: 1, config: { app } });
+    document.body.append(config);
+    initializeTheme('/crm/', ['default', 'compact']);
+    render(
+      <AppThemeProvider>
+        <ThemeProbe />
+      </AppThemeProvider>,
+    );
+    await waitFor(() => expect(document.documentElement).toHaveClass('dark'));
+    expect(document.documentElement).toHaveAttribute('data-theme', 'default');
   });
 
   it('follows the system theme and persists explicit changes', async () => {

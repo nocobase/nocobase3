@@ -11,7 +11,7 @@ import path from 'node:path';
 import type { AppCliCommand, AppCliPlugins } from '../plugins/types.ts';
 import { assembleCli } from './assemble.ts';
 import { builtinCommands, builtinTopics } from './builtin.ts';
-import { setResolvedCommands } from './command-store.ts';
+import { setRegisteredPlugins, setResolvedCommands } from './command-store.ts';
 
 export const CLI_BIN_NAME = 'nocobase';
 
@@ -33,6 +33,7 @@ export async function runAppCli(options: RunAppCliOptions = {}): Promise<void> {
       ...(options.plugins === undefined ? {} : { plugins: options.plugins }),
     });
     setResolvedCommands(commands);
+    setRegisteredPlugins(options.plugins);
 
     // Package root, resolved from this file: src/runtime/run.ts and dist/runtime/run.js are both two levels deep.
     const packageRoot = path.resolve(import.meta.dirname, '..', '..');

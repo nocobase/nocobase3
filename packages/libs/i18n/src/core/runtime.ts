@@ -5,7 +5,7 @@ import {
 } from 'i18next';
 
 import { describeLocale, resolveSupportedLocale } from './locales.js';
-import { BASE_NAMESPACE, I18nRegistry } from './registry.js';
+import { BASE_LOCALE, BASE_NAMESPACE, I18nRegistry } from './registry.js';
 import type {
   Locale,
   LocaleDefinition,
@@ -14,9 +14,35 @@ import type {
   TranslationResource,
 } from './types.js';
 
+/**
+ * Three things decide what language something is rendered in, and they are easy to confuse:
+ *
+ * - **`defaultLocale`** is the application's — one value from `i18n.defaultLocale` in its configuration, the same for
+ *   everyone. It decides what a visitor who has never chosen sees, and it is where a lookup falls back to when the
+ *   language in use has no translation for a key.
+ * - **The offered locales** are a list, and configuration does not state it: the application's own `locales/` files
+ *   are the list. A plugin's locale files supply translations for languages already on it and never add one, so
+ *   installing a plugin that ships Japanese does not put Japanese in the picker.
+ * - **The locale in use** is per visitor and per request, computed rather than configured — a stored choice in the
+ *   browser, or the session and `Accept-Language` on the server, each falling back to `defaultLocale`. A visitor
+ *   switching to Chinese changes this alone; the application's default is untouched.
+ *
+ * So `defaultLocale` is an input to the last of the three, never its result.
+ */
 export interface I18nRuntimeOptions {
+  /**
+   * The language to use when nothing else decides, and the first fallback for a key the language in use lacks.
+   *
+   * This is the application's default, not a visitor's current language — pass the latter to `init()` instead.
+   */
   readonly defaultLocale: Locale;
-  /** Locales the application offers. Defaults to `[defaultLocale]` when omitted. */
+  /**
+   * Locales the application offers, stated outright.
+   *
+   * Omit it and the list is derived from the application namespace's own locale files instead, which is what an
+   * application does: the languages it ships translations for are the languages it offers. Pass it only where there is
+   * no application namespace to derive from, such as a test exercising a plugin's namespace on its own.
+   */
   readonly locales?: readonly Locale[];
   /** The application's own package name, which anchors the fallback chain. */
   readonly applicationNamespace?: Namespace;
@@ -45,19 +71,37 @@ export class I18nRuntime {
   public readonly registry: I18nRegistry = new I18nRegistry();
   public readonly i18n: I18nInstance = createInstance();
 
-  private readonly locales: Locale[];
+  private readonly declaredLocales: readonly Locale[] | undefined;
+  private locales: Locale[];
   private readonly defaultLocale: Locale;
   private initialized = false;
   private readonly localeLoads = new Map<Locale, Promise<void>>();
 
   public constructor(private readonly options: I18nRuntimeOptions) {
     this.defaultLocale = options.defaultLocale;
-    this.locales = [
-      ...new Set([options.defaultLocale, ...(options.locales ?? [])]),
-    ];
+    this.declaredLocales = options.locales;
     if (options.applicationNamespace) {
       this.registry.setApplicationNamespace(options.applicationNamespace);
     }
+    this.locales = this.computeLocales();
+  }
+
+  /**
+   * The languages on offer: whichever the application's own locale files declare, plus the default.
+   *
+   * A plugin's locale file supplies translations, not languages — an installed plugin that happens to ship `ja-JP`
+   * must not put Japanese in the application's picker. The default is always present so a resolution has somewhere to
+   * land even before any namespace has registered, and it is appended rather than prepended so changing it does not
+   * reorder a language picker.
+   */
+  private computeLocales(): Locale[] {
+    const applicationNamespace = this.registry.getApplicationNamespace();
+    const declared =
+      this.declaredLocales ??
+      (applicationNamespace
+        ? this.registry.getNamespaceLocales(applicationNamespace)
+        : []);
+    return [...new Set([...declared, this.defaultLocale])];
   }
 
   public getDefaultLocale(): Locale {
@@ -101,6 +145,9 @@ export class I18nRuntime {
   ): void {
     this.registry.setApplicationNamespace(namespace);
     this.registry.registerModule(namespace, module);
+    // The application's locale files are what decides the offered languages, so the list is only correct once they are
+    // registered — which on the server happens well after the runtime is constructed.
+    this.locales = this.computeLocales();
   }
 
   /**
@@ -109,20 +156,32 @@ export class I18nRuntime {
    * Call this before translating into a locale that has not been used yet. Skipping it does not throw — translations
    * silently fall back to the key or the default language, which is hard to notice, so request handling calls it
    * automatically and code running outside a request must call it itself.
+   *
+   * The fallback languages are loaded alongside it. A namespace that has not translated the language in use is the
+   * ordinary case rather than an error, and the fallback only produces a translation if its resources are present to
+   * be read.
    */
   public async ensureLocaleLoaded(locale: Locale): Promise<void> {
     const resolved = this.resolveLocale(locale);
-    const pending = this.localeLoads.get(resolved);
+    await Promise.all(
+      [...new Set([resolved, this.defaultLocale, BASE_LOCALE])].map((entry) =>
+        this.loadOneLocale(entry),
+      ),
+    );
+  }
+
+  private async loadOneLocale(locale: Locale): Promise<void> {
+    const pending = this.localeLoads.get(locale);
     if (pending) return pending;
 
-    const request = this.loadLocaleResources(resolved);
-    this.localeLoads.set(resolved, request);
+    const request = this.loadLocaleResources(locale);
+    this.localeLoads.set(locale, request);
 
     try {
       await request;
     } catch (error) {
       // A failed load must not be cached, or the locale could never be retried.
-      this.localeLoads.delete(resolved);
+      this.localeLoads.delete(locale);
       throw error;
     }
   }
@@ -166,7 +225,10 @@ export class I18nRuntime {
 
     await this.i18n.init({
       lng: resolved,
-      fallbackLng: this.defaultLocale,
+      // A chain, not one language: the application's default first, then English. A plugin that has not translated
+      // the language in use falls back to the application's default, and to English when it lacks that one too — which
+      // is what an application defaulting to Chinese and adding Spanish leaves a plugin facing.
+      fallbackLng: [...new Set([this.defaultLocale, BASE_LOCALE])],
       defaultNS: this.registry.getApplicationNamespace() ?? BASE_NAMESPACE,
       // Keys nest, so `trigger.types.schedule` addresses a tree. Namespaces never travel inside the key: they are
       // passed through options, which keeps a colon in a key from being read as a namespace separator.

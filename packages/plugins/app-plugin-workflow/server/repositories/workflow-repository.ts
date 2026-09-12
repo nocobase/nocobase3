@@ -1,15 +1,20 @@
 import type {
   DatabaseManager,
-  Expression,
-  ExpressionBuilder,
-  QueryAdapter,
+  FilterBuilder,
+  FilterNode,
   Row,
-  SelectQuery,
-  SqlBool,
 } from '@nocobase/db';
-import { WORKFLOW_COLLECTIONS } from '../collections/index.js';
 import {
+  anyOfIds,
+  anyOfStrings,
+  workflowStore,
+  workflowStoreOf,
+  type WorkflowStore,
+} from '../collections/index.js';
+import {
+  asIdFilter,
   loadWorkflow,
+  serializeJson,
   normalizeWorkflowParameterValues,
   type WorkflowId,
   type WorkflowParameterValues,
@@ -43,6 +48,10 @@ export class WorkflowRepository {
     private readonly service: WorkflowServiceApi,
   ) {}
 
+  private get store(): WorkflowStore {
+    return workflowStore(this.database);
+  }
+
   async list(
     options: WorkflowListOptions = {},
   ): Promise<WorkflowPage<WorkflowListItem>> {
@@ -54,41 +63,34 @@ export class WorkflowRepository {
     const deployedRows =
       deployed.length === 0
         ? []
-        : await this.database
-            .query()
-            .selectFrom(WORKFLOW_COLLECTIONS.workflows)
-            .select(['id', 'key', 'hash'])
-            .where('current', '=', true)
-            .where(
-              'key',
-              'in',
-              deployed.map((artifact) => artifact.key),
-            )
-            .execute<Row>();
+        : await this.store.workflows.findMany({
+            filter: (filter) =>
+              filter.and([
+                filter.boolean('current').isTrue(),
+                anyOfStrings(
+                  filter,
+                  'key',
+                  deployed.map((artifact) => artifact.key),
+                ),
+              ]),
+            select: (select) => select.fields('id', 'key', 'hash'),
+          });
     const deployedRowByKey = new Map(
       deployedRows.map((row) => [String(row.key), row]),
     );
-    const applyFilters = (
-      query: SelectQuery<Row, Row>,
-    ): SelectQuery<Row, Row> => {
-      let filtered = query.where('current', '=', true);
-      if (options.key || options.query || options.enabled !== undefined)
-        filtered = filtered.where((eb) =>
-          eb.and(this.workflowFilterExpressions(eb, options)),
-        );
-      return filtered;
-    };
+    const listFilter = (filter: FilterBuilder): FilterNode =>
+      filter.and([
+        filter.boolean('current').isTrue(),
+        ...this.workflowFilterConditions(filter, options),
+      ]);
     const novelArtifacts = deployed.filter(
       (artifact) =>
         !deployedRowByKey.has(artifact.key) &&
         this.artifactMatchesListOptions(artifact, options),
     );
-    const countRow = await applyFilters(
-      this.database.query().selectFrom(WORKFLOW_COLLECTIONS.workflows),
-    )
-      .select(({ fn }) => [fn.countAll().as('total')])
-      .executeTakeFirst<{ total: number | string }>();
-    const databaseTotal = Number(countRow?.total ?? 0);
+    const databaseTotal = await this.store.workflows.count({
+      filter: listFilter,
+    });
     const databasePageSize = Math.max(
       0,
       Math.min(pageSize, databaseTotal - offset),
@@ -96,65 +98,63 @@ export class WorkflowRepository {
     const rows =
       databasePageSize === 0
         ? []
-        : await applyFilters(
-            this.database.query().selectFrom(WORKFLOW_COLLECTIONS.workflows),
-          )
-            .select([
-              'id',
-              'key',
-              'title',
-              'enabled',
-              'current',
-              'parametersSchema',
-              'version',
-              'hash',
-            ])
-            .orderBy('id', 'desc')
-            .limit(databasePageSize)
-            .offset(offset)
-            .execute<Row>();
+        : await this.store.workflows.findMany({
+            filter: listFilter,
+            select: (select) =>
+              select.fields(
+                'id',
+                'key',
+                'title',
+                'enabled',
+                'current',
+                'parametersSchema',
+                'version',
+                'hash',
+              ),
+            sort: (sort) => sort.field('id').desc(),
+            limit: databasePageSize,
+            offset,
+          });
     const rowKeys = rows.map((row) => String(row.key));
     const [statRows, activeRows, latestIdRows] =
       rowKeys.length === 0
         ? [[], [], []]
         : await Promise.all([
-            this.database
-              .query()
-              .selectFrom(WORKFLOW_COLLECTIONS.stats)
-              .select(['key', 'executed'])
-              .where('key', 'in', rowKeys)
-              .execute<Row>(),
-            this.database
-              .query()
-              .selectFrom(WORKFLOW_COLLECTIONS.runs)
-              .select(({ fn }) => [
-                'workflowKey',
-                fn.countAll().as('activeRunCount'),
-              ])
-              .where('workflowKey', 'in', rowKeys)
-              .where((eb) =>
-                eb.or([eb('status', 'is', null), eb('status', '=', 0)]),
-              )
-              .groupBy('workflowKey')
-              .execute<Row>(),
-            this.database
-              .query()
-              .selectFrom(WORKFLOW_COLLECTIONS.runs)
-              .select(({ fn }) => ['workflowKey', fn.max('id').as('latestId')])
-              .where('workflowKey', 'in', rowKeys)
-              .groupBy('workflowKey')
-              .execute<Row>(),
+            this.store.stats.findMany({
+              filter: (filter) => anyOfStrings(filter, 'key', rowKeys),
+              select: (select) => select.fields('key', 'executed'),
+            }),
+            this.store.runs.groupBy({
+              by: ['workflowKey'],
+              aggregate: (aggregate) => ({
+                activeRunCount: aggregate.count(),
+              }),
+              filter: (filter) =>
+                filter.and([
+                  anyOfStrings(filter, 'workflowKey', rowKeys),
+                  filter.or([
+                    filter.number('status').empty(),
+                    filter.number('status').eq(0),
+                  ]),
+                ]),
+            }),
+            this.store.runs.groupBy({
+              by: ['workflowKey'],
+              aggregate: (aggregate) => ({ latestId: aggregate.max('id') }),
+              filter: (filter) => anyOfStrings(filter, 'workflowKey', rowKeys),
+            }),
           ]);
-    const latestIds = latestIdRows.map((row) => row.latestId);
+    const latestIds = latestIdRows
+      .map((row) => row.latestId)
+      .filter((id): id is number | string => id != null);
     const latestRows =
       latestIds.length === 0
         ? []
-        : await this.database
-            .query()
-            .selectFrom(WORKFLOW_COLLECTIONS.runs)
-            .select(['id', 'workflowKey', 'status', 'createdAt'])
-            .where('id', 'in', latestIds)
-            .execute<Row>();
+        : await this.store.runs.findMany({
+            filter: (filter) => anyOfIds(filter, 'id', latestIds),
+            select: (select) =>
+              select.fields('id', 'workflowKey', 'status', 'createdAt'),
+          });
     const executedByKey = new Map(
       statRows.map((row) => [String(row.key), Number(row.executed ?? 0)]),
     );
@@ -218,21 +218,28 @@ export class WorkflowRepository {
     };
   }
 
-  private workflowFilterExpressions(
-    eb: ExpressionBuilder,
+  private workflowFilterConditions(
+    filter: FilterBuilder,
     options: WorkflowListOptions,
-  ): Expression<SqlBool>[] {
-    const expressions: Expression<SqlBool>[] = [];
-    if (options.key) expressions.push(eb('key', '=', options.key));
+  ): FilterNode[] {
+    const conditions: FilterNode[] = [];
+    if (options.key) conditions.push(filter.string('key').eq(options.key));
     if (options.query) {
-      const pattern = `%${options.query}%`;
-      expressions.push(
-        eb.or([eb('key', 'like', pattern), eb('title', 'like', pattern)]),
+      const query = options.query;
+      conditions.push(
+        filter.or([
+          filter.string('key').includes(query),
+          filter.string('title').includes(query),
+        ]),
       );
     }
     if (options.enabled !== undefined)
-      expressions.push(eb('enabled', '=', options.enabled));
-    return expressions;
+      conditions.push(
+        options.enabled
+          ? filter.boolean('enabled').isTrue()
+          : filter.boolean('enabled').isFalse(),
+      );
+    return conditions;
   }
 
   private artifactMatchesListOptions(
@@ -254,31 +261,31 @@ export class WorkflowRepository {
     const id = resolved.id;
     const workflow = await this.database.transaction(
       async (connection): Promise<WorkflowListItem> => {
-        const selected = await connection.query
-          .selectFrom(WORKFLOW_COLLECTIONS.workflows)
-          .select([
-            'id',
-            'key',
-            'title',
-            'enabled',
-            'current',
-            'parametersSchema',
-            'version',
-            'hash',
-          ])
-          .where('id', '=', id)
-          .executeTakeFirst<Row>();
+        const store = workflowStoreOf(connection);
+        const selected = await store.workflows.findOne({
+          filter: { id: asIdFilter(id) },
+          select: (select) =>
+            select.fields(
+              'id',
+              'key',
+              'title',
+              'enabled',
+              'current',
+              'parametersSchema',
+              'version',
+              'hash',
+            ),
+        });
         if (!selected)
           throw new BadRequestError(`Workflow ${String(id)} was not found.`);
-        await activateWorkflowSource(connection.query, id);
-        await connection.query
-          .updateTable(WORKFLOW_COLLECTIONS.workflows)
-          .set({ enabled: true })
-          .where('id', '=', id)
-          .execute();
+        await activateWorkflowSource(store, id);
+        await store.workflows.updateMany({
+          filter: { id: asIdFilter(id) },
+          values: { enabled: true },
+        });
         return toWorkflowListItem(
           { ...selected, enabled: true, current: true },
-          await this.getExecutedCount(String(selected.key), connection.query),
+          await this.getExecutedCount(String(selected.key), store),
         );
       },
     );
@@ -319,12 +326,10 @@ export class WorkflowRepository {
         error instanceof Error ? error.message : String(error),
       );
     }
-    await this.database
-      .query()
-      .updateTable(WORKFLOW_COLLECTIONS.workflows)
-      .set({ parameterValues: JSON.stringify(normalized) })
-      .where('id', '=', workflow.id)
-      .execute();
+    await this.store.workflows.updateMany({
+      filter: { id: asIdFilter(workflow.id) },
+      values: { parameterValues: serializeJson(normalized) },
+    });
     return {
       id: workflow.id,
       schema: workflow.parametersSchema,
@@ -336,18 +341,16 @@ export class WorkflowRepository {
     const identifier = parseWorkflowIdentifier(id);
     let workflow =
       identifier.kind === 'id'
-        ? await loadWorkflow(this.database.query(), identifier.value)
+        ? await loadWorkflow(this.store, identifier.value)
         : null;
     if (!workflow && identifier.kind === 'hash') {
-      const materialized = await this.database
-        .query()
-        .selectFrom(WORKFLOW_COLLECTIONS.workflows)
-        .select('id')
-        .where('hash', '=', identifier.value)
-        .executeTakeFirst<Row>();
+      const materialized = await this.store.workflows.findOne({
+        filter: { hash: identifier.value },
+        select: (select) => select.fields('id'),
+      });
       if (materialized)
         workflow = await loadWorkflow(
-          this.database.query(),
+          this.store,
           asWorkflowId(materialized.id),
         );
     }
@@ -382,20 +385,15 @@ export class WorkflowRepository {
 
   async revisions(id: WorkflowId): Promise<WorkflowDefinitionView[]> {
     const workflow = await this.get(id);
-    const rows = await this.database
-      .query()
-      .selectFrom(WORKFLOW_COLLECTIONS.workflows)
-      .selectAll()
-      .where('key', '=', workflow.key)
-      .orderBy('id', 'desc')
-      .execute<Row>();
+    const rows = await this.store.workflows.findMany({
+      filter: { key: workflow.key },
+      sort: (sort) => sort.field('id').desc(),
+      select: (select) => select.fields('id'),
+    });
     const result: WorkflowDefinitionView[] =
       workflow.id === null ? [workflow] : [];
     for (const row of rows) {
-      const revision = await loadWorkflow(
-        this.database.query(),
-        asWorkflowId(row.id),
-      );
+      const revision = await loadWorkflow(this.store, asWorkflowId(row.id));
       if (revision)
         result.push({
           ...toWorkflowDefinitionView(revision),
@@ -410,39 +408,39 @@ export class WorkflowRepository {
     id: WorkflowId,
     enabled: boolean,
   ): Promise<WorkflowListItem> {
-    const workflowId = parseWorkflowId(id);
-    const current = await this.database
-      .query()
-      .selectFrom(WORKFLOW_COLLECTIONS.workflows)
-      .select(['id', 'key'])
-      .where('id', '=', workflowId)
-      .where('current', '=', true)
-      .executeTakeFirst<Row>();
+    const workflowId = asIdFilter(parseWorkflowId(id));
+    const current = await this.store.workflows.findOne({
+      filter: { id: workflowId, current: true },
+      select: (select) => select.fields('id', 'key'),
+    });
     if (!current)
       throw new BadRequestError(
         `Current workflow ${String(id)} was not found.`,
       );
     await this.database.transaction(async (connection) => {
-      await connection.query
-        .updateTable(WORKFLOW_COLLECTIONS.workflows)
-        .set({ enabled: false })
-        .where('key', '=', String(current.key))
-        .execute();
+      const store = workflowStoreOf(connection);
+      await store.workflows.updateMany({
+        filter: { key: String(current.key) },
+        values: { enabled: false },
+      });
       if (enabled)
-        await connection.query
-          .updateTable(WORKFLOW_COLLECTIONS.workflows)
-          .set({ enabled: true, current: true })
-          .where('id', '=', workflowId)
-          .where('current', '=', true)
-          .execute();
+        await store.workflows.updateMany({
+          filter: { id: workflowId, current: true },
+          values: { enabled: true, current: true },
+        });
     });
-    const row = await this.database
-      .query()
-      .selectFrom(WORKFLOW_COLLECTIONS.workflows)
-      .select(['id', 'key', 'title', 'enabled', 'current', 'parametersSchema'])
-      .where('id', '=', workflowId)
-      .where('current', '=', true)
-      .executeTakeFirst<Row>();
+    const row = await this.store.workflows.findOne({
+      filter: { id: workflowId, current: true },
+      select: (select) =>
+        select.fields(
+          'id',
+          'key',
+          'title',
+          'enabled',
+          'current',
+          'parametersSchema',
+        ),
+    });
     if (!row)
       throw new BadRequestError(
         `Current workflow ${String(id)} was not found.`,
@@ -455,34 +453,25 @@ export class WorkflowRepository {
 
   async getExecutedCount(
     key: string,
-    query: QueryAdapter = this.database.query(),
+    store: WorkflowStore = this.store,
   ): Promise<number> {
-    const executed = await query
-      .selectFrom(WORKFLOW_COLLECTIONS.stats)
-      .where('key', '=', key)
-      .value('executed');
-    return Number(executed ?? 0);
+    const row = await store.stats.findOne({
+      filter: { key },
+      select: (select) => select.fields('executed'),
+    });
+    return Number(row?.executed ?? 0);
   }
 
   async findCurrentRowById(id: WorkflowId): Promise<Row | undefined> {
-    const workflowId = parseWorkflowId(id);
-    return this.database
-      .query()
-      .selectFrom(WORKFLOW_COLLECTIONS.workflows)
-      .selectAll()
-      .where('current', '=', true)
-      .where('id', '=', workflowId)
-      .executeTakeFirst<Row>();
+    return this.store.workflows.findOne({
+      filter: { id: asIdFilter(parseWorkflowId(id)), current: true },
+    });
   }
 
   async findCurrentRowByKey(key: string): Promise<Row | undefined> {
-    return this.database
-      .query()
-      .selectFrom(WORKFLOW_COLLECTIONS.workflows)
-      .selectAll()
-      .where('current', '=', true)
-      .where('key', '=', key)
-      .executeTakeFirst<Row>();
+    return this.store.workflows.findOne({
+      filter: { key, current: true },
+    });
   }
 
   async resolveRevision(
@@ -491,20 +480,14 @@ export class WorkflowRepository {
     const identifier = parseWorkflowIdentifier(idOrHash);
     let existing =
       identifier.kind === 'id'
-        ? await loadWorkflow(this.database.query(), identifier.value)
+        ? await loadWorkflow(this.store, identifier.value)
         : null;
     if (!existing && identifier.kind === 'hash') {
-      const row = await this.database
-        .query()
-        .selectFrom(WORKFLOW_COLLECTIONS.workflows)
-        .select('id')
-        .where('hash', '=', identifier.value)
-        .executeTakeFirst<Row>();
-      if (row)
-        existing = await loadWorkflow(
-          this.database.query(),
-          asWorkflowId(row.id),
-        );
+      const row = await this.store.workflows.findOne({
+        filter: { hash: identifier.value },
+        select: (select) => select.fields('id'),
+      });
+      if (row) existing = await loadWorkflow(this.store, asWorkflowId(row.id));
     }
     if (existing) {
       if (existing.hash)
@@ -522,7 +505,7 @@ export class WorkflowRepository {
       throw new BadRequestError(
         `Workflow id or hash ${String(idOrHash)} was not found.`,
       );
-    const materialized = await loadWorkflow(this.database.query(), workflowId);
+    const materialized = await loadWorkflow(this.store, workflowId);
     if (!materialized)
       throw new BadRequestError(
         `Materialized workflow ${String(workflowId)} was not found.`,
@@ -534,17 +517,14 @@ export class WorkflowRepository {
     id: WorkflowId,
   ): Promise<NonNullable<Awaited<ReturnType<typeof loadWorkflow>>>> {
     const workflowId = parseWorkflowId(id);
-    const isCurrent = await this.database
-      .query()
-      .selectFrom(WORKFLOW_COLLECTIONS.workflows)
-      .where('id', '=', workflowId)
-      .where('current', '=', true)
-      .value('id');
-    if (isCurrent == null)
+    const isCurrent = await this.store.workflows.exists({
+      filter: { id: asIdFilter(workflowId), current: true },
+    });
+    if (!isCurrent)
       throw new BadRequestError(
         `Current workflow ${String(id)} was not found.`,
       );
-    const workflow = await loadWorkflow(this.database.query(), workflowId);
+    const workflow = await loadWorkflow(this.store, workflowId);
     if (!workflow)
       throw new BadRequestError(`Workflow ${String(id)} was not found.`);
     return workflow;

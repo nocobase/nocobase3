@@ -1,5 +1,19 @@
 # @nocobase/create-plugin
 
+## 0.1.0-beta.6
+
+### Minor Changes
+
+- e9f796d: Add a `cli` capability and a `--with all` shorthand
+
+  `pnpm plugin:create <name> --with cli` scaffolds a `cli/` entry with one example command, the `./cli` export, and the peer dependencies an application resolves it through. `--with all` selects every capability, so a plugin that needs most of them no longer means naming each one.
+
+## 0.1.0-beta.5
+
+### Patch Changes
+
+- 1d042c0: Support recursive page routes and navigation groups across App, Settings, and Dev. Render application menus from route navigation instead of Refine resources, preserve parent access checks, and migrate template and example navigation. Refine resources remain available for CRUD integration.
+
 ## 0.1.0-beta.4
 
 ### Patch Changes

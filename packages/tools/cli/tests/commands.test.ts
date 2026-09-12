@@ -11,6 +11,7 @@ import { loadTestConfig, runCommand } from './helpers.ts';
  * internal-docs/cli.
  */
 const EXPECTED_IDS = [
+  'plugin:cli-hooks',
   'plugin:inspect',
   'plugin:register',
   'plugin:skills:sync',
@@ -72,17 +73,33 @@ describe('command tree', () => {
 
 describe('documented argument contract', () => {
   /**
-   * `--dir` and `--json` are the two flags every command shares: each one has to find the application it acts on, and
-   * each may be driven by an agent that needs machine-readable output. `internal-docs/cli` documents them as a table
-   * covering the whole surface, so a command that quietly dropped one would make that documentation wrong.
+   * `--dir` and `--json` are the two flags the plugin management commands share: each one has to find the application
+   * it acts on, and each may be driven by an agent that needs machine-readable output. `internal-docs/cli` documents
+   * them as a table covering that surface, so a command that quietly dropped one would make that documentation wrong.
+   *
+   * `build-hooks` is the exception, and takes `--json` alone. The others act on an application's files and can act on
+   * any directory; this one reports the plugins the running CLI actually assembled, which are the ones its own
+   * `cli/plugins.ts` imported. A `--dir` pointing elsewhere could not change that answer, so offering one would
+   * describe the command incorrectly.
    */
-  it.each(EXPECTED_IDS)('%s accepts the shared flags', (id) => {
+  it.each(EXPECTED_IDS.filter((id) => id !== 'plugin:cli-hooks'))(
+    '%s accepts the shared flags',
+    (id) => {
+      const flags = Object.keys(
+        config.findCommand(id, { must: true }).flags ?? {},
+      );
+
+      expect(flags).toContain('dir');
+      expect(flags).toContain('json');
+    },
+  );
+
+  it('reports hooks for the running application alone', () => {
     const flags = Object.keys(
-      config.findCommand(id, { must: true }).flags ?? {},
+      config.findCommand('plugin:cli-hooks', { must: true }).flags ?? {},
     );
 
-    expect(flags).toContain('dir');
-    expect(flags).toContain('json');
+    expect(flags).toEqual(['json']);
   });
 
   /**

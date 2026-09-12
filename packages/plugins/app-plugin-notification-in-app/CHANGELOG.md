@@ -1,5 +1,41 @@
 # @nocobase/app-plugin-notification-in-app
 
+## 0.2.0-beta.8
+
+### Patch Changes
+
+- adedf9c: Use a database-side count for unread in-app notifications instead of loading all matching rows.
+- 426bd48: Remove logical IM `target` recipients and make `send().to` optional so Webhook Providers can be selected directly by Provider name or fan-out strategy.
+- Updated dependencies [a009e2d]
+- Updated dependencies [426bd48]
+  - @nocobase/app-server@1.0.0-beta.10
+  - @nocobase/app-client@1.0.0-beta.13
+  - @nocobase/i18n@1.0.0-beta.3
+  - @nocobase/app-plugin-notification@0.1.0-beta.7
+
+## 0.2.0-beta.7
+
+### Minor Changes
+
+- 0a3fa83: Ship package changelogs, return stable localized error envelopes for notification-owned failures, and show user-facing Channel and Provider labels in notification logs.
+
+### Patch Changes
+
+- 0a3fa83: Require stable send idempotency keys, expose ordered notification status observation and reason-required Delivery retry APIs, persist inferred retry resolutions and Provider idempotency windows, and declare built-in Provider idempotency capabilities.
+- 0a3fa83: Always show the notification test action, use user-facing delivery method labels, and enforce its permission only when a test message is submitted.
+- Updated dependencies [e3fa827]
+- Updated dependencies [0a3fa83]
+- Updated dependencies [c3e02bf]
+- Updated dependencies [0a3fa83]
+- Updated dependencies [0a3fa83]
+- Updated dependencies [1d042c0]
+- Updated dependencies [0a3fa83]
+  - @nocobase/app-server@1.0.0-beta.9
+  - @nocobase/app-plugin-authentication@0.1.0-beta.10
+  - @nocobase/app-plugin-notification@0.1.0-beta.6
+  - @nocobase/app-client@1.0.0-beta.12
+  - @nocobase/db@1.0.0-beta.4
+
 ## 0.2.0-beta.6
 
 ### Patch Changes

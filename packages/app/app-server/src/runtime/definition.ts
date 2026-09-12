@@ -11,6 +11,7 @@ import {
 } from '../config/index.js';
 import {
   resolveAppServerPlugins,
+  type AppServerPluginLocalesLoader,
   type AppServerPlugins,
   type ResolvedAppServerPlugins,
 } from '../plugins/index.js';
@@ -50,6 +51,13 @@ export interface AppRuntimeDefinition {
   readonly plugins: AppServerPlugins;
   readonly serviceProviders: readonly ApplicationServiceProviderConstructor[];
   readonly routes: readonly AppRouteContribution<Application>[];
+  /**
+   * The application's own `server/locales/index.ts`.
+   *
+   * It declares which languages the application offers on the server, the same way `client/locales/index.ts` does in
+   * the browser. A plugin's locale file only supplies translations for those languages; it never adds one.
+   */
+  readonly locales?: AppServerPluginLocalesLoader;
 }
 
 export interface ResolvedAppRuntime extends ResolvedAppScopeRuntime {
@@ -59,6 +67,7 @@ export interface ResolvedAppRuntime extends ResolvedAppScopeRuntime {
   readonly serviceProviders: readonly ApplicationServiceProviderConstructor[];
   readonly routes: readonly AppRouteContribution<Application>[];
   readonly appConfig: AppConfig;
+  readonly locales?: AppServerPluginLocalesLoader;
 }
 
 export function defineAppRuntime(
@@ -88,6 +97,7 @@ export async function resolveAppRuntime(
     serviceProviders: definition.serviceProviders,
     routes: definition.routes,
     appConfig,
+    locales: definition.locales,
   };
 }
 

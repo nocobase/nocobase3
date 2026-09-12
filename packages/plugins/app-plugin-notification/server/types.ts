@@ -2,7 +2,7 @@ import type { Logger } from '@nocobase/logging';
 import type { DatabaseManager } from '@nocobase/db';
 import type { NocoBaseQueueManager } from '@nocobase/queue';
 import { AppI18nError } from '@nocobase/i18n/server';
-import type { NotificationStore } from './store.js';
+import type { NotificationDeliveryStatus, NotificationStore } from './store.js';
 import type { NotificationRegistry } from './registry.js';
 
 export interface NotificationChannelSchema {
@@ -16,6 +16,19 @@ export interface NotificationService {
   send(
     input: NotificationSendInput<NotificationChannelMap>,
   ): Promise<NotificationSendResult>;
+  getByIdempotencyKey(
+    idempotencyKey: string,
+  ): Promise<NotificationStatusSnapshot | undefined>;
+  getNotification(
+    notificationId: string,
+  ): Promise<NotificationStatusSnapshot | undefined>;
+  retryDelivery(
+    input: NotificationRetryDeliveryInput,
+  ): Promise<NotificationDeliveryStatusSnapshot>;
+  onStatusChanged(
+    filter: NotificationStatusChangedFilter,
+    listener: NotificationStatusChangedListener,
+  ): () => void;
 }
 
 export interface NotificationExtensionRegistry {
@@ -112,7 +125,7 @@ export type NotificationTestSendInput = Pick<
   NotificationSendInput<NotificationChannelMap>,
   'content'
 > & {
-  readonly to: NotificationRecipient;
+  readonly to?: NotificationRecipient;
   readonly channelOverride?: object;
 };
 
@@ -132,8 +145,7 @@ export interface NotificationTestAdapter<
 export type NotificationRecipient =
   | { readonly type: 'user'; readonly id: string }
   | { readonly type: 'email'; readonly address: string }
-  | { readonly type: 'phone'; readonly number: string }
-  | { readonly type: 'target'; readonly id: string };
+  | { readonly type: 'phone'; readonly number: string };
 
 export type NotificationProviderRouting =
   | {
@@ -152,11 +164,12 @@ export interface NotificationChannelRouting {
 export interface NotificationSendInput<
   TChannels extends NotificationChannelMap,
 > {
+  readonly idempotencyKey: string;
   readonly source?: {
     readonly type: string;
     readonly referenceId?: string;
   };
-  readonly to: NotificationRecipient | readonly NotificationRecipient[];
+  readonly to?: NotificationRecipient | readonly NotificationRecipient[];
   readonly channels: readonly (keyof TChannels & string)[];
   readonly routing?: Partial<{
     readonly [TType in keyof TChannels & string]: NotificationChannelRouting;
@@ -171,20 +184,81 @@ export interface NotificationSendInput<
 
 export interface NotificationSendResult {
   readonly notificationId: string;
-  readonly status:
-    'pending' | 'processing' | 'completed' | 'partial' | 'failed' | 'unknown';
-  readonly deliveries: readonly {
-    readonly id: string;
-    readonly channel: string;
-    readonly provider: NotificationProviderIdentity;
-    readonly status:
-      | 'pending'
-      | 'preparing'
-      | 'submitting'
-      | 'accepted'
-      | 'failed'
-      | 'unknown';
-  }[];
+  readonly idempotencyKey: string;
+  readonly deduplicated: boolean;
+  readonly status: NotificationStatus;
+  readonly deliveries: readonly NotificationDeliveryStatusSnapshot[];
+}
+
+export type NotificationStatus =
+  'pending' | 'processing' | 'completed' | 'partial' | 'failed' | 'unknown';
+
+export interface NotificationErrorSnapshot {
+  readonly code?: string;
+  readonly message: string;
+  readonly category?: NotificationProviderErrorCategory;
+}
+
+export interface NotificationDeliveryRetryDecision {
+  readonly allowed: boolean;
+  readonly mode:
+    | 'safe'
+    | 'automatic_retry_scheduled'
+    | 'duplicate_risk_confirmation_required'
+    | 'not_allowed';
+  readonly nextRunAt?: string;
+  readonly reason?: string;
+}
+
+export interface NotificationDeliveryStatusSnapshot {
+  readonly id: string;
+  readonly channel: string;
+  readonly provider: NotificationProviderIdentity;
+  readonly attemptCount: number;
+  readonly status: NotificationDeliveryStatus;
+  readonly nextRunAt?: string;
+  readonly error?: NotificationErrorSnapshot;
+  readonly retry: NotificationDeliveryRetryDecision;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface NotificationStatusSummary {
+  readonly total: number;
+  readonly pending: number;
+  readonly processing: number;
+  readonly accepted: number;
+  readonly failed: number;
+  readonly unknown: number;
+}
+
+export interface NotificationStatusSnapshot {
+  readonly notificationId: string;
+  readonly idempotencyKey?: string;
+  readonly status: NotificationStatus;
+  readonly terminal: boolean;
+  readonly requiresAction: boolean;
+  readonly updatedAt: string;
+  readonly summary: NotificationStatusSummary;
+  readonly deliveries: readonly NotificationDeliveryStatusSnapshot[];
+}
+
+export interface NotificationStatusChangedEvent extends NotificationStatusSnapshot {
+  readonly idempotencyKey: string;
+}
+
+export interface NotificationStatusChangedFilter {
+  readonly notificationId?: string;
+  readonly idempotencyKey?: string;
+}
+
+export type NotificationStatusChangedListener = (
+  event: NotificationStatusChangedEvent,
+) => void | Promise<void>;
+
+export interface NotificationRetryDeliveryInput {
+  readonly deliveryId: string;
+  readonly reason: string;
 }
 
 export interface NotificationProviderConfig {
@@ -201,6 +275,7 @@ export interface NotificationChannelConfig {
 
 export interface NotificationConfig {
   readonly channels: readonly NotificationChannelConfig[];
+  /** @deprecated Test sending is controlled by authorization. */
   readonly test?: {
     readonly enabled: boolean;
   };
@@ -279,10 +354,20 @@ export interface NotificationProviderSendInput<TMessage = object> {
 export interface NotificationProvider<TMessage = object> {
   readonly name: string;
   readonly type: string;
+  readonly capabilities?: NotificationProviderCapabilities;
   send(
     input: NotificationProviderSendInput<TMessage>,
   ): Promise<ProviderSendResult>;
   close?(): Promise<void>;
+}
+
+export interface NotificationProviderCapabilities {
+  readonly idempotency:
+    | { readonly supported: false }
+    | {
+        readonly supported: true;
+        readonly retentionMs?: number;
+      };
 }
 
 export interface NotificationChannel<
@@ -292,7 +377,7 @@ export interface NotificationChannel<
 > {
   readonly type: string;
   resolveRecipient?(input: {
-    readonly recipient: NotificationRecipient;
+    readonly recipient?: NotificationRecipient;
     readonly provider: NotificationProviderIdentity;
   }): TRecipient | undefined | Promise<TRecipient | undefined>;
   render?(input: {
@@ -328,6 +413,7 @@ export interface NotificationProviderDefinition<
 > {
   readonly type: TConfig['type'];
   readonly label?: string | NotificationI18nText;
+  readonly capabilities?: NotificationProviderCapabilities;
   validateConfig?(config: TConfig): void;
   createProvider(
     context: NotificationProviderContext,

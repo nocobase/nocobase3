@@ -134,6 +134,27 @@ describe('bundled capability templates', () => {
    * package left in `devDependencies`, which npm does not publish, so the installing application cannot resolve
    * it — or one declared as a `dependency`, which installs a browser package into every server deployment.
    */
+  it('emits a CLI entry and one command for the cli capability', async () => {
+    const files = await listTemplateFiles(
+      DEFAULT_TEMPLATE_DIRECTORY,
+      undefined,
+      normalizePluginCapabilities(['cli']),
+    );
+
+    expect(files).toContain('cli/index.ts');
+    expect(files).toContain('cli/info.ts');
+  });
+
+  it('omits the CLI entry when the capability is not selected', async () => {
+    const files = await listTemplateFiles(
+      DEFAULT_TEMPLATE_DIRECTORY,
+      undefined,
+      normalizePluginCapabilities(['server.routes']),
+    );
+
+    expect(files.some((file) => file.startsWith('cli/'))).toBe(false);
+  });
+
   it('always emits the agent documentation, with CLAUDE.md deferring to AGENTS.md', async () => {
     const files = await listTemplateFiles(
       DEFAULT_TEMPLATE_DIRECTORY,

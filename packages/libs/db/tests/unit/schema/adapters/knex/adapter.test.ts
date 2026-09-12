@@ -102,6 +102,36 @@ describe('KnexSchemaAdapter', () => {
     expect(sql.join('\n')).toContain('`program_id` >');
   });
 
+  it('uses the constraint-specific MySQL drop operation', async () => {
+    const adapter = new KnexSchemaAdapter(createClient('mysql2'), {
+      dialect: 'mysql',
+    });
+
+    const sql = await adapter.compile([
+      {
+        type: 'alterTable',
+        tableName: 'orders',
+        operations: [
+          {
+            type: 'dropConstraint',
+            name: 'orders_reference_unique',
+            constraintType: 'unique',
+          },
+          {
+            type: 'dropConstraint',
+            name: 'orders_customer_foreign',
+            constraintType: 'foreignKey',
+          },
+        ],
+      },
+    ]);
+
+    expect(sql).toEqual([
+      'alter table `orders` drop index `orders_reference_unique`',
+      'alter table `orders` drop foreign key `orders_customer_foreign`',
+    ]);
+  });
+
   it('compiles raw views and structured filters with supported operators', async () => {
     const adapter = new KnexSchemaAdapter(createClient());
 
