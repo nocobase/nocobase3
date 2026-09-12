@@ -90,22 +90,22 @@ describe('client inspection', () => {
       },
       {
         auth: 'guest',
-        id: '@nocobase/app-plugin-authentication:login',
+        id: '@nocobase/app-template-examples:login',
         path: '/login',
       },
       {
         auth: 'guest',
-        id: '@nocobase/app-plugin-authentication:register',
+        id: '@nocobase/app-template-examples:register',
         path: '/register',
       },
       {
         auth: 'guest',
-        id: '@nocobase/app-plugin-authentication:forgot-password',
+        id: '@nocobase/app-template-examples:forgot-password',
         path: '/forgot-password',
       },
       {
         auth: 'guest',
-        id: '@nocobase/app-plugin-authentication:reset-password',
+        id: '@nocobase/app-template-examples:reset-password',
         path: '/reset-password',
       },
       {
@@ -219,12 +219,16 @@ describe('client inspection', () => {
     ).toEqual([
       { id: '@nocobase/app-template-examples:theme', order: 1 },
       {
-        id: '@nocobase/app-plugin-notification-provider:notification-host',
+        id: '@nocobase/app-plugin-authentication:authentication',
         order: 2,
       },
       {
-        id: '@nocobase/app-plugin-routes-example:routes-example',
+        id: '@nocobase/app-plugin-notification-provider:notification-host',
         order: 3,
+      },
+      {
+        id: '@nocobase/app-plugin-routes-example:routes-example',
+        order: 4,
       },
     ]);
     expect(

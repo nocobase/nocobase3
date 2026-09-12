@@ -9,7 +9,6 @@ import {
   type AuthClient,
 } from './auth-client.js';
 import { authenticationClientToken } from './tokens.js';
-import type { AuthenticationClientOptions } from './plugin.js';
 
 export class AuthenticationServiceProvider extends ServiceProvider<ClientApplication> {
   public readonly name: string = '@nocobase/app-plugin-authentication/client';
@@ -32,7 +31,8 @@ export class AuthenticationServiceProvider extends ServiceProvider<ClientApplica
   }
 }
 
-const serviceProviders: readonly ClientServiceProviderConstructor<AuthenticationClientOptions>[] =
-  [AuthenticationServiceProvider];
+const serviceProviders: readonly ClientServiceProviderConstructor[] = [
+  AuthenticationServiceProvider,
+];
 
 export default serviceProviders;

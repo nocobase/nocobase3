@@ -8,16 +8,34 @@ import { Label } from '@/components/ui/label';
 import { FormStatus } from '../components/form-status';
 
 export interface PasswordResetFormProps {
+  readonly action?: PasswordResetAction;
+  readonly className?: string;
   readonly token: string;
+  readonly submitLabel?: string;
+  readonly pendingLabel?: string;
+}
+
+export interface PasswordResetAction {
+  readonly error?: { readonly message: string };
+  readonly isPending: boolean;
+  readonly submit: (input: {
+    readonly password: string;
+    readonly token: string;
+  }) => Promise<void>;
 }
 
 export function PasswordResetForm({
+  action: actionOverride,
+  className,
   token,
+  submitLabel = 'Reset password',
+  pendingLabel = 'Resetting…',
 }: PasswordResetFormProps): ReactElement {
   const [confirmation, setConfirmation] = useState('');
   const [password, setPassword] = useState('');
   const [validationError, setValidationError] = useState<string>();
-  const action = usePasswordReset();
+  const defaultAction = usePasswordReset();
+  const action = actionOverride ?? defaultAction;
   const errorMessage =
     validationError ??
     (!token
@@ -37,7 +55,7 @@ export function PasswordResetForm({
   };
 
   return (
-    <form className='space-y-5' onSubmit={handleSubmit}>
+    <form className={className ?? 'space-y-5'} onSubmit={handleSubmit}>
       <div className='space-y-2'>
         <Label htmlFor='new-password'>New password</Label>
         <Input
@@ -70,8 +88,19 @@ export function PasswordResetForm({
         disabled={!token || action.isPending}
         type='submit'
       >
-        {action.isPending ? 'Resetting…' : 'Reset password'}
+        {action.isPending ? pendingLabel : submitLabel}
       </Button>
+      <div className='pt-3 text-sm'>
+        <p className='text-center text-muted-foreground'>
+          Return to{' '}
+          <a
+            className='font-semibold text-foreground underline underline-offset-4'
+            href='login'
+          >
+            sign in
+          </a>
+        </p>
+      </div>
     </form>
   );
 }

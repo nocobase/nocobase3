@@ -35,7 +35,8 @@ Better Auth
 - NocoBase Database 自定义 Better Auth adapter。
 - NocoBase Caching secondary storage 和限流计数器适配。
 - Refine `AuthProvider` 适配。
-- 通过客户端插件路由按需加载登录、注册、忘记密码和重置密码页面。
+- 登录、注册、忘记密码和重置密码页面由应用的 guest 路由按需加载；插件本身不声明
+  客户端路由。
 
 ## 默认行为
 

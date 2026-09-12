@@ -6,6 +6,7 @@ describe('client ServiceProvider', () => {
   it('initializes the Better Auth client without Refine', async () => {
     const app = {
       config: { get: () => undefined },
+      container: { singleton: () => undefined },
     } as unknown as ClientApplication;
     await expect(
       new AuthenticationServiceProvider(app).boot(),

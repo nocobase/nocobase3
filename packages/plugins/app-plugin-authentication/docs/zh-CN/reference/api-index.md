@@ -150,16 +150,12 @@ await client.resetPassword({ newPassword, token });
 
 - `@nocobase/app-plugin-authentication/client` 默认导出 Client plugin factory，
   其 ServiceProvider 在 `boot()` 中注册 Refine `authProvider`；
-- `@nocobase/app-plugin-authentication/client/routes` 默认导出登录、注册、忘记密码和
-  重置密码的 guest 路由定义；
-- `@nocobase/app-plugin-authentication/client/route-contracts` 导出稳定的
-  `AUTHENTICATION_ROUTE_IDS`，应用或 Registry 用它声明 component override；
 - `@nocobase/app-plugin-authentication/client/actions` 导出密码登录、注册、请求重置和
   完成重置的 headless hooks；
-- `@nocobase/app-plugin-authentication/client/ui` 仅导出用于应用内 SPA 导航的
-  `AuthLink`。密码表单由 `auth-ui` Registry 拥有；需要自行实现表单时使用
-  `@nocobase/app-plugin-authentication/client/actions` 的 headless hooks。
+- 密码表单和页面由 UI Library Registry 拥有；需要自行实现表单时使用
+  `@nocobase/app-plugin-authentication/client/actions` 的 headless hooks。页面之间的
+  链接由应用自己的路由和页面源码负责。
 
-具体 fallback 页面通过路由的 `componentLoader` 按需加载，不从公开入口导出。默认
-表单直接持有按需生成的 shadcn 基础组件源码；品牌、营销区域和最终页面组合由宿主
-Registry 源码负责。
+插件不声明客户端路由。应用在自己的 `client/routes.ts` 中声明 `/login`、`/register`、
+`/forgot-password` 和 `/reset-password` 四条 `auth: 'guest'` 路由；页面组件通过
+`componentLoader` 按需加载，品牌、表单和最终页面组合由应用的 Registry 源码负责。

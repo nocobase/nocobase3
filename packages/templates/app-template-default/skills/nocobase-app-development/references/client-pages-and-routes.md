@@ -150,7 +150,7 @@ The sidebar renders these entries in `client/shell/app-sidebar.tsx`, alongside t
 
 ## Customizing a plugin's page
 
-Do not declare a duplicate route. Registering a second `/login` is a conflict, not a customization. Three mechanisms exist, in order of preference:
+Do not declare a duplicate route for a page a plugin owns. Registering a second `/install` is a conflict, not a customization. Three mechanisms exist, in order of preference:
 
 1. **A plugin option.** If the plugin accepts one for the page, pass it on the plugin's own registration in `client/plugins.ts`.
 2. **A source extension.** Add `client/extensions/<name>/extension.ts`; these are discovered automatically.
@@ -160,7 +160,7 @@ An override replaces only `componentLoader`. Route identity, path, auth mode, an
 
 **One route takes one override across all three mechanisms.** A second one fails with the route ID. Pick one rather than layering.
 
-Authentication UI is already materialized under `client/extensions/nocobase-auth-ui/` — edit that application-owned copy rather than adding a fourth mechanism.
+Authentication pages are application routes: `/login`, `/register`, `/forgot-password`, and `/reset-password` are declared in `client/routes.ts` and load the corresponding default-exported page from `client/pages/auth/`. Edit those application-owned pages rather than adding another mechanism.
 
 ## Where rendering lives
 

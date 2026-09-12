@@ -7,14 +7,38 @@ import { Label } from '@/components/ui/label';
 
 import { FormStatus } from '../components/form-status';
 
-export function PasswordRegistrationForm(): ReactElement {
+export interface PasswordRegistrationAction {
+  readonly error?: { readonly message: string };
+  readonly isPending: boolean;
+  readonly submit: (input: {
+    readonly email: string;
+    readonly name: string;
+    readonly password: string;
+    readonly username: string;
+  }) => Promise<void>;
+}
+
+export interface PasswordRegistrationFormProps {
+  readonly action?: PasswordRegistrationAction;
+  readonly className?: string;
+  readonly submitLabel?: string;
+  readonly pendingLabel?: string;
+}
+
+export function PasswordRegistrationForm({
+  action: actionOverride,
+  className,
+  submitLabel = 'Create account',
+  pendingLabel = 'Creating account…',
+}: PasswordRegistrationFormProps = {}): ReactElement {
   const [confirmation, setConfirmation] = useState('');
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
   const [validationError, setValidationError] = useState<string>();
-  const action = usePasswordRegistration();
+  const defaultAction = usePasswordRegistration();
+  const action = actionOverride ?? defaultAction;
   const errorMessage = validationError ?? action.error?.message;
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>): void => {
@@ -28,7 +52,7 @@ export function PasswordRegistrationForm(): ReactElement {
   };
 
   return (
-    <form className='space-y-5' onSubmit={handleSubmit}>
+    <form className={className ?? 'space-y-5'} onSubmit={handleSubmit}>
       <div className='space-y-2'>
         <Label htmlFor='name'>Name</Label>
         <Input
@@ -85,8 +109,19 @@ export function PasswordRegistrationForm(): ReactElement {
         <FormStatus type='error'>{errorMessage}</FormStatus>
       ) : null}
       <Button className='w-full' disabled={action.isPending} type='submit'>
-        {action.isPending ? 'Creating account…' : 'Create account'}
+        {action.isPending ? pendingLabel : submitLabel}
       </Button>
+      <div className='pt-3 text-sm'>
+        <p className='text-center text-muted-foreground'>
+          Already have an account?{' '}
+          <a
+            className='font-semibold text-foreground underline underline-offset-4'
+            href='login'
+          >
+            Sign in
+          </a>
+        </p>
+      </div>
     </form>
   );
 }

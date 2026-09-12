@@ -28,21 +28,9 @@
       "types": "./client/plugin.ts",
       "import": "./client/plugin.ts"
     },
-    "./client/routes": {
-      "types": "./client/routes.ts",
-      "import": "./client/routes.ts"
-    },
-    "./client/route-contracts": {
-      "types": "./client/route-contracts.ts",
-      "import": "./client/route-contracts.ts"
-    },
     "./client/actions": {
       "types": "./client/actions/index.ts",
       "import": "./client/actions/index.ts"
-    },
-    "./client/ui": {
-      "types": "./client/ui/index.ts",
-      "import": "./client/ui/index.ts"
     },
     "./package.json": "./package.json"
   },
@@ -64,39 +52,17 @@
         "types": "./dist/client/plugin.d.ts",
         "import": "./dist/client/plugin.js"
       },
-      "./client/routes": {
-        "types": "./dist/client/routes.d.ts",
-        "import": "./dist/client/routes.js"
-      },
-      "./client/route-contracts": {
-        "types": "./dist/client/route-contracts.d.ts",
-        "import": "./dist/client/route-contracts.js"
-      },
       "./client/actions": {
         "types": "./dist/client/actions/index.d.ts",
         "import": "./dist/client/actions/index.js"
-      },
-      "./client/ui": {
-        "types": "./dist/client/ui/index.d.ts",
-        "import": "./dist/client/ui/index.js"
       },
       "./package.json": "./package.json"
     },
     "access": "public"
   },
   "files": [
-    "dist",
-    "registry",
-    "registry.config.json",
-    "public/r"
+    "dist"
   ],
-  "nocobase": {
-    "registry": {
-      "items": {
-        "auth-ui": "./registry/auth-ui"
-      }
-    }
-  },
   "scripts": {
     "clean": "node ./scripts/clean-dist.mjs",
     "build": "pnpm clean && tsc -p tsconfig.json && tsc -p tsconfig.migrations.json",
