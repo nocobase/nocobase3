@@ -213,7 +213,15 @@ export class MysqlSchemaInspector extends BaseSchemaInspector {
       comment: optionalString(collection.table_comment),
       viewDefinition: optionalString(collection.view_definition),
       columns: columns.map((column) => {
-        const generated = column.extra.toUpperCase().includes('GENERATED');
+        // MySQL reports an expression DEFAULT as `EXTRA = 'DEFAULT_GENERATED'`,
+        // which is not a generated column and still has a default to read. Only
+        // `VIRTUAL GENERATED` and `STORED GENERATED` are, and only those carry a
+        // generation expression. Matching on 'GENERATED' alone swept in every
+        // column whose default has to be written as an expression — which on
+        // MySQL is every `json` column with a default, since it accepts no
+        // literal one — and the Repository then refuses to write them.
+        const generated =
+          optionalString(column.generation_expression) !== undefined;
         return {
           columnName: column.column_name,
           ordinalPosition: Number(column.ordinal_position),
@@ -243,7 +251,7 @@ export class MysqlSchemaInspector extends BaseSchemaInspector {
           generated: generated
             ? {
                 expression: optionalString(column.generation_expression),
-                stored: column.extra.toUpperCase().includes('STORED'),
+                stored: column.extra.toUpperCase().includes('STORED GENERATED'),
               }
             : undefined,
         };

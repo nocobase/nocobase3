@@ -6,6 +6,7 @@ import type {
   WorkflowId,
 } from '../engine/index.js';
 import type { WorkflowDistArtifact } from '../loader/index.js';
+import { asNullableString } from '../engine/utils.js';
 import { BadRequestError } from '../errors.js';
 import type {
   WorkflowDefinitionView,
@@ -24,7 +25,15 @@ export type ParsedWorkflowIdentifier =
 
 const WORKFLOW_ID_PATTERN = /^[1-9]\d*$/;
 const ARTIFACT_HASH_PATTERN = /^[a-f\d]{64}$/i;
-const MAX_WORKFLOW_ID = 9_223_372_036_854_775_807n;
+/**
+ * The largest id this plugin will address.
+ *
+ * The column is `bigInt`, but a Repository filter on one takes a JavaScript
+ * number, so an id beyond `Number.MAX_SAFE_INTEGER` cannot be expressed without
+ * rounding it into a different row. Refusing it here turns that into a 400 on
+ * the request that supplied it, rather than an error from deep inside a query.
+ */
+const MAX_WORKFLOW_ID = BigInt(Number.MAX_SAFE_INTEGER);
 
 export function parseWorkflowIdentifier(
   value: WorkflowId,
@@ -86,10 +95,7 @@ export function toWorkflowListItem(
       ? {
           id: String(latestRun.id),
           status: latestRun.status == null ? null : Number(latestRun.status),
-          createdAt:
-            latestRun.createdAt instanceof Date
-              ? latestRun.createdAt.toISOString()
-              : String(latestRun.createdAt ?? ''),
+          createdAt: asNullableString(latestRun.createdAt) ?? '',
         }
       : null,
     pendingArtifact: null,
@@ -171,9 +177,9 @@ export function toRunItem(
     workflowVersion,
     eventKey: String(row.eventKey ?? ''),
     status: row.status == null ? null : Number(row.status),
-    createdAt: toDateString(row.createdAt) ?? '',
-    startedAt: toDateString(row.startedAt),
-    finishedAt: toDateString(row.finishedAt),
+    createdAt: asNullableString(row.createdAt) ?? '',
+    startedAt: asNullableString(row.startedAt),
+    finishedAt: asNullableString(row.finishedAt),
   };
 }
 
@@ -184,8 +190,8 @@ export function toNodeRunSummary(row: Row): WorkflowNodeRunSummary {
     nodeId: String(asWorkflowId(row.nodeId)),
     nodeKey: String(row.nodeKey),
     status: Number(row.status),
-    startedAt: toDateString(row.startedAt) ?? '',
-    finishedAt: toDateString(row.finishedAt),
+    startedAt: asNullableString(row.startedAt) ?? '',
+    finishedAt: asNullableString(row.finishedAt),
     branchKey: null,
   };
 }
@@ -256,9 +262,4 @@ function isJsonValue(value: unknown): value is JsonValue {
   if (typeof value === 'number') return Number.isFinite(value);
   if (Array.isArray(value)) return value.every(isJsonValue);
   return isJsonObject(value);
-}
-
-function toDateString(value: unknown): string | null {
-  if (value == null) return null;
-  return value instanceof Date ? value.toISOString() : String(value);
 }

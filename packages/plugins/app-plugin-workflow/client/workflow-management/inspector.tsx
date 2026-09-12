@@ -45,8 +45,8 @@ export function WorkflowInspector({
       <ol>
         {attempts.map((attempt) => (
           <li key={attempt.id}>
-            #{attempt.id} · {attempt.startedAt} →{' '}
-            {attempt.finishedAt ?? t('inspector.stillRunning')}
+            #{attempt.id} · {formatClientTime(attempt.startedAt, t)} →{' '}
+            {formatClientTime(attempt.finishedAt, t)}
           </li>
         ))}
       </ol>
