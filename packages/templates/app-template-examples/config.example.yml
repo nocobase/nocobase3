@@ -100,7 +100,7 @@ database:
         autoRun: true
       seeds:
         autoRun: true
-    # Dameng example (requires the Dameng container from packages/libs/db/docker-compose.yml).
+    # Dameng example (requires the Dameng container from packages/libs/db-dameng/docker-compose.yml).
     # main:
     #   dialect: dameng
     #   host: 127.0.0.1

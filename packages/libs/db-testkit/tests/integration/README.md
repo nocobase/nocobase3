@@ -25,7 +25,9 @@ tests/
 
 `bigint/` groups cross-API BIGINT precision scenarios for Query, Repository,
 and database driver behavior. See its [coverage index](./bigint/README.md).
-`count/` verifies safe number results for COUNT across all five databases, including aliases, DISTINCT, nulls, empty sets, groups, transactions and scalar subqueries.
+`count/` verifies safe number results for COUNT across all supported databases,
+including aliases, DISTINCT, nulls, empty sets, groups, transactions and scalar
+subqueries.
 `builder/` covers Collection Builder DDL and metadata synchronization.
 `collection/` covers the resolved Collection API for managed and external
 Schemas. `metadata/` covers persistent Store, compare-and-swap, pagination, and
@@ -43,8 +45,11 @@ are test data, not another source of runtime Collection truth.
 
 The suite is owned by `@nocobase/db-testkit`; it does not create a connection
 on its own. Run it through a dialect package, whose adapter supplies the
-connection, native driver, and physical cleanup. By default, the SQLite
-package uses an in-memory database:
+connection, native driver, and physical cleanup. Non-SQLite dialect packages
+also own their Compose file and use the shared runner to create an isolated
+project, bind a random host port, wait for health, run the suite, and remove
+their containers, network, and volumes. By default, the SQLite package uses an
+in-memory database:
 
 ```bash
 pnpm --filter @nocobase/db-sqlite test:integration
@@ -53,63 +58,55 @@ pnpm --filter @nocobase/db-sqlite test:integration
 Start and test PostgreSQL:
 
 ```bash
-pnpm --filter @nocobase/db test:db:up:postgres
 pnpm --filter @nocobase/db-postgres test:integration
 ```
 
 Start and test MySQL:
 
 ```bash
-pnpm --filter @nocobase/db test:db:up:mysql
 pnpm --filter @nocobase/db-mysql test:integration
 ```
 
 Oracle uses the larger `gvenzl/oracle-free:23-slim-faststart` image:
 
 ```bash
-pnpm --filter @nocobase/db test:db:up:oracle
 pnpm --filter @nocobase/db-oracle test:integration
 ```
 
 Start and test SQL Server:
 
 ```bash
-pnpm --filter @nocobase/db test:db:up:mssql
 pnpm --filter @nocobase/db-mssql test:integration
 ```
 
-Start the complete Docker database matrix and run the integration suite against SQLite, PostgreSQL, MySQL, Oracle, and SQL Server:
+Start and test Dameng:
 
 ```bash
-pnpm --filter @nocobase/db test:db:up:all
-pnpm --filter @nocobase/db test:integration:all
+pnpm --filter @nocobase/db-dameng test:integration
 ```
 
-Stop and remove the test databases:
+Run the complete database matrix through the owning package entrypoints:
 
 ```bash
-pnpm --filter @nocobase/db test:db:down
+pnpm --filter @nocobase/db test:integration:all
 ```
 
 Each dialect package exposes its own `test:integration` command; use those entrypoints when selecting a single backend or the full matrix.
 
-## Five-database acceptance
+Set `KEEP_TEST_DB=1` to retain a failed run for debugging. The runner prints
+the Compose project name; remove that project manually after investigation.
+
+## Dialect acceptance
 
 DB changes must pass the complete package suite, including all integration
-tests, on SQLite, PostgreSQL, MySQL, Oracle, and SQL Server. A SQLite-only or
-Repository-only run is useful while iterating, but is not final acceptance.
+tests, on SQLite, PostgreSQL, MySQL, Oracle, SQL Server, and Dameng. A
+SQLite-only or Repository-only run is useful while iterating, but is not final
+acceptance.
 
-With all four database services available, run from this package directory
-using Node 24 or later:
+Run the matrix through the owning package entrypoints:
 
 ```bash
-INTEGRATION_DB_CONNECTIONS=all pnpm exec vitest run
-pnpm lint
-pnpm typecheck
-pnpm build
-pnpm api:check
-pnpm typecheck:examples
-pnpm typecheck:playground
+pnpm --filter @nocobase/db test:integration:all
 ```
 
 The all-database invocation runs shared unit/type-test files once and repeats
@@ -132,35 +129,7 @@ the read would incorrectly report earlier DDL as missing. The original driver
 error remains the cause of `SCHEMA_INSPECTION_FAILED`. Nontransactional catalog
 reads retain bounded retries.
 
-Use a dedicated Compose project for local validation. Stop its services after
-the run and retain volumes unless their deletion was explicitly requested.
-The `test:db:down` command above removes data volumes and is not a routine
-cleanup command for a shared or user-owned test environment.
-
-Default Docker connection settings:
-
-```text
-POSTGRES_HOST=127.0.0.1
-POSTGRES_PORT=15432
-POSTGRES_USER=nocobase
-POSTGRES_PASSWORD=nocobase
-POSTGRES_DATABASE=nocobase_collection_builder
-
-MYSQL_HOST=127.0.0.1
-MYSQL_PORT=13306
-MYSQL_USER=nocobase
-MYSQL_PASSWORD=nocobase
-MYSQL_DATABASE=nocobase_collection_builder
-
-ORACLE_HOST=127.0.0.1
-ORACLE_PORT=11521
-ORACLE_USER=nocobase
-ORACLE_PASSWORD=nocobase
-ORACLE_SERVICE_NAME=FREEPDB1
-
-MSSQL_HOST=127.0.0.1
-MSSQL_PORT=11433
-MSSQL_USER=sa
-MSSQL_PASSWORD=NocoBase_Mssql_2026
-MSSQL_DATABASE=nocobase_collection_builder
-```
+The runner injects `*_HOST=127.0.0.1` and the dynamically published `*_PORT`
+for the current Compose project. User-provided credentials and other
+database-specific environment variables continue to override the Compose
+defaults.

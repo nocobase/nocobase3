@@ -167,6 +167,7 @@ jobs:
           - mysql
           - oracle
           - mssql
+          - dameng
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -189,15 +190,8 @@ jobs:
       - name: Build shared development config
         run: pnpm dev-config:build
 
-      - name: Start ${{ matrix.database }}
-        run: pnpm --filter @nocobase/db test:db:up:${{ matrix.database }}
-
       - name: Test ${{ matrix.database }}
-        run: pnpm --filter @nocobase/db test:integration:${{ matrix.database }}
-
-      - name: Stop test databases
-        if: ${{ always() }}
-        run: pnpm --filter @nocobase/db test:db:down
+        run: pnpm --filter @nocobase/db-${{ matrix.database }} test:integration
 
   quality:
     name: quality

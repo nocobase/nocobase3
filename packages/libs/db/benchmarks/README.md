@@ -9,8 +9,9 @@ normal test suite and impose no machine-dependent CI latency threshold.
 Use Node 24 with the installed native SQLite addon. From `packages/libs/db`:
 
 ```sh
-# Start the dedicated integration services if needed. Never target production.
-docker compose -p nb-bigint-validation start --wait postgres mysql oracle mssql
+# Integration tests own their dialect-specific Compose environments. Benchmarks
+# require a separately prepared environment and explicit *_HOST/*_PORT values.
+# Never target production.
 
 # Smoke run: every scenario on all five databases.
 pnpm benchmark:numeric --databases=all --rows=1000 --writes=2 --repeats=1 --warmups=0 --output=/tmp/numeric-smoke
@@ -27,15 +28,13 @@ pnpm benchmark:numeric --rows=100000 --writes=1 --repeats=7 --match='control/|ag
 pnpm typecheck:benchmarks
 pnpm exec vitest run tests/unit/benchmarks/numeric.test.ts
 
-docker compose -p nb-bigint-validation stop postgres mysql oracle mssql
 ```
 
-For first-time Docker setup, use the package's `test:db:up:all` command or its
-Compose configuration, including `mssql-init`. `start` above assumes existing
-containers. Default ports are PostgreSQL 15432, MySQL 13306, Oracle 11521 and
-SQL Server 11433. `POSTGRES_*`, `MYSQL_*`, `ORACLE_*`, `MSSQL_*` environment
-variables override HOST/PORT/USER/PASSWORD and DATABASE (Oracle SERVICE_NAME).
-SQLite uses an isolated in-memory database. See `numeric/config.ts` for defaults.
+The integration-test Compose files use random host ports and are destroyed by
+the test runner, so they are not suitable as persistent benchmark services.
+Prepare benchmark services separately and pass `POSTGRES_*`, `MYSQL_*`,
+`ORACLE_*`, and `MSSQL_*` environment variables explicitly. SQLite uses an
+isolated in-memory database. See `numeric/config.ts` for defaults.
 No credentials or SQL binding values are written to reports. The benchmark
 preserves normal driver behavior, including MySQL warnings for unsupported
 RETURNING; their logging overhead remains part of the write timings.
