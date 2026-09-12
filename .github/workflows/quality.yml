@@ -166,6 +166,7 @@ jobs:
           - sqlite
           - postgres
           - mysql
+          - oceanbase
           - oracle
           - mssql
           - dameng

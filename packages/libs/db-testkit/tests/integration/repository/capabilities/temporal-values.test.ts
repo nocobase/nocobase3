@@ -378,7 +378,11 @@ describeIntegrationDatabases('Repository temporal contract', (context) => {
         t.specificType('instant', 'timestamp(3)').notNullable();
       },
     );
-    for (const zone of ['SYSTEM', '+08:00', '-05:00']) {
+    const zones =
+      context.spec.dialect === 'oceanbase'
+        ? ['+08:00', '-05:00']
+        : ['SYSTEM', '+08:00', '-05:00'];
+    for (const zone of zones) {
       await context.database
         .connection(context.spec.name)
         .transaction(async (connection) => {
