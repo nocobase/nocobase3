@@ -170,7 +170,7 @@ Follow this order:
 
 ### 1. Add a child route
 
-Declare the overlay as a child of the page that should remain mounted underneath it:
+Add the route in the application's `client/routes.ts`, inside the `defineAppRoutes()` contribution. Do not declare the child route in the page component file. Declare the overlay as a child of the page that should remain mounted underneath it:
 
 ```ts
 {
