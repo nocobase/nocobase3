@@ -13,6 +13,7 @@ tests/
   integration/
     bigint/
     count/
+    json/
     builder/
     collection/
     metadata/
@@ -28,6 +29,9 @@ and database driver behavior. See its [coverage index](./bigint/README.md).
 `count/` verifies safe number results for COUNT across all supported databases,
 including aliases, DISTINCT, nulls, empty sets, groups, transactions and scalar
 subqueries.
+`json/` covers portable JSON field value reads and writes. JSON filter operators
+remain under `repository/capabilities/` because filtering is a separate
+database capability.
 `builder/` covers Collection Builder DDL and metadata synchronization.
 `collection/` covers the resolved Collection API for managed and external
 Schemas. `metadata/` covers persistent Store, compare-and-swap, pagination, and

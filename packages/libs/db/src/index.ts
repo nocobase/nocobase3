@@ -152,6 +152,7 @@ export type {
 export { UnsupportedCapabilityError } from './schema/capabilities.js';
 
 export { RepositoryError } from './repository/errors.js';
+export type { JsonValue } from './json.js';
 export {
   isTemporalType,
   normalizeTemporalValue,

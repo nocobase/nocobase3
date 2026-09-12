@@ -1,5 +1,10 @@
 import { decimalString } from '../../numeric/decimal.js';
 import {
+  decodeJsonValue,
+  encodeJsonValue,
+  type JsonValue,
+} from '../../json.js';
+import {
   aggregateSql,
   aggregateProjection,
   decodeAggregate,
@@ -2669,6 +2674,8 @@ function decodeBooleanRow(
         'INVALID_STORED_VALUE',
         ['select', field.name],
       );
+    if (field.type === 'json' && Object.hasOwn(result, field.name))
+      result[field.name] = decodeJsonValue(result[field.name]);
   }
   return result;
 }
@@ -3006,9 +3013,7 @@ function writeValue(
       : normalizeBooleanValue(field, value);
   if (field && isScalarField(field) && isTemporalType(field.type))
     return temporalBinding(client, field, value);
-  // SQLite's multi-row UNION path bypasses Knex's object serialization.
-  if (field?.type === 'json' && value !== null && typeof value === 'object')
-    return JSON.stringify(value);
+  if (field?.type === 'json') return encodeJsonValue(value as JsonValue);
   if (field?.type === 'blob') {
     if (value instanceof Uint8Array) return Buffer.from(value);
     // Tedious binds untyped NULL as NVARCHAR, which SQL Server cannot insert

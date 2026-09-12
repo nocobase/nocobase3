@@ -141,6 +141,7 @@
         "GroupBySelectionResult",
         "InsertQuery",
         "JsonFilterOperators",
+        "JsonValue",
         "MigrationContext",
         "MigrationDefinition",
         "MigrationRollbackResult",

@@ -17,6 +17,11 @@ import {
   getDatabaseDriverRuntime,
   type DatabaseDriverRuntime,
 } from '../../../database/runtime.js';
+import {
+  decodeJsonValue,
+  encodeJsonValue,
+  type JsonValue,
+} from '../../../json.js';
 import type {
   AggregateExpression,
   AliasedExpression,
@@ -50,6 +55,7 @@ import type {
 type CollectionLookup = (
   name: string,
 ) => Promise<CollectionDefinition | undefined>;
+const emptyStringSet: ReadonlySet<string> = new Set();
 
 export class KnexQueryAdapter implements QueryAdapter {
   constructor(
@@ -72,11 +78,24 @@ export class KnexQueryAdapter implements QueryAdapter {
   }
 
   insertInto<TRecord extends Row = Row>(table: string): InsertQuery<TRecord> {
-    return new KnexInsertQuery<TRecord>(this.getClient, this.naming, table);
+    return new KnexInsertQuery<TRecord>(
+      this.getClient,
+      this.naming,
+      table,
+      undefined,
+      this.lookup,
+    );
   }
 
   updateTable<TRecord extends Row = Row>(table: string): UpdateQuery<TRecord> {
-    return new KnexUpdateQuery<TRecord>(this.getClient, this.naming, table);
+    return new KnexUpdateQuery<TRecord>(
+      this.getClient,
+      this.naming,
+      table,
+      undefined,
+      emptyMutationState(),
+      this.lookup,
+    );
   }
 
   deleteFrom<TRecord extends Row = Row>(table: string): DeleteQuery<TRecord> {
@@ -330,13 +349,14 @@ class KnexSelectQuery<
   }
 
   async execute<T = TResult>(): Promise<T[]> {
-    const lookup = hasNativeNumericResults(this.getClient())
+    const lookup = memoizedCollectionLookup(this.lookup);
+    const numericLookup = hasNativeNumericResults(this.getClient())
       ? undefined
-      : memoizedCollectionLookup(this.lookup);
+      : lookup;
     const selections = await prepareDecimalSelections(
       this.state.selections,
       [this.tableName, ...this.state.joins.map((join) => join.table)],
-      lookup,
+      numericLookup,
     );
     const numericCollections = lookup
       ? await collectNumericCollections(this.state, this.tableName, lookup)
@@ -348,7 +368,7 @@ class KnexSelectQuery<
     const decode = await prepareAggregateDecoder(
       selections,
       [this.tableName, ...this.state.joins.map((join) => join.table)],
-      lookup,
+      numericLookup,
     );
     const rows = await query;
     return normalizeRows(rows).map((row) =>
@@ -357,13 +377,14 @@ class KnexSelectQuery<
   }
 
   async executeTakeFirst<T = TResult>(): Promise<T | undefined> {
-    const lookup = hasNativeNumericResults(this.getClient())
+    const lookup = memoizedCollectionLookup(this.lookup);
+    const numericLookup = hasNativeNumericResults(this.getClient())
       ? undefined
-      : memoizedCollectionLookup(this.lookup);
+      : lookup;
     const selections = await prepareDecimalSelections(
       this.state.selections,
       [this.tableName, ...this.state.joins.map((join) => join.table)],
-      lookup,
+      numericLookup,
     );
     const numericCollections = lookup
       ? await collectNumericCollections(this.state, this.tableName, lookup)
@@ -375,7 +396,7 @@ class KnexSelectQuery<
     const decode = await prepareAggregateDecoder(
       selections,
       [this.tableName, ...this.state.joins.map((join) => join.table)],
-      lookup,
+      numericLookup,
     );
     const row = await query.first();
     return row === undefined
@@ -674,6 +695,7 @@ class KnexInsertQuery<
     private readonly naming: NamingStrategy,
     private readonly tableName: string,
     private readonly data?: TRecord | readonly TRecord[],
+    private readonly lookup?: CollectionLookup,
   ) {}
 
   values(data: TRecord | readonly TRecord[]): InsertQuery<TRecord> {
@@ -682,12 +704,14 @@ class KnexInsertQuery<
       this.naming,
       this.tableName,
       data,
+      this.lookup,
     );
   }
 
   async execute(): Promise<InsertResult> {
     const data = this.requireValues();
-    const result = await this.buildQuery(data);
+    const jsonFields = await resolveJsonFields(this.lookup, this.tableName);
+    const result = await this.buildQuery(data, jsonFields);
     return normalizeInsertResult(result, data);
   }
 
@@ -699,10 +723,13 @@ class KnexInsertQuery<
     };
   }
 
-  private buildQuery(data: TRecord | readonly TRecord[]): Knex.QueryBuilder {
+  private buildQuery(
+    data: TRecord | readonly TRecord[],
+    jsonFields: ReadonlySet<string> = emptyStringSet,
+  ): Knex.QueryBuilder {
     return this.getClient()(
       mapTableSourceExpression(this.tableName, this.naming),
-    ).insert(mapData(data, this.naming) as any);
+    ).insert(mapData(data, this.naming, jsonFields) as any);
   }
 
   private requireValues(): TRecord | readonly TRecord[] {
@@ -722,6 +749,7 @@ class KnexUpdateQuery<
     private readonly tableName: string,
     private readonly data?: Partial<TRecord>,
     private readonly state: MutationState = emptyMutationState(),
+    private readonly lookup?: CollectionLookup,
   ) {}
 
   set(data: Partial<TRecord>): UpdateQuery<TRecord> {
@@ -731,6 +759,7 @@ class KnexUpdateQuery<
       this.tableName,
       data,
       this.state,
+      this.lookup,
     );
   }
 
@@ -780,7 +809,8 @@ class KnexUpdateQuery<
   }
 
   async execute(): Promise<UpdateResult> {
-    const result = await this.buildQuery();
+    const jsonFields = await resolveJsonFields(this.lookup, this.tableName);
+    const result = await this.buildQuery(jsonFields);
     return normalizeUpdateResult(result);
   }
 
@@ -802,17 +832,20 @@ class KnexUpdateQuery<
         where: patch.where ?? this.state.where,
         allowAllRows: patch.allowAllRows ?? this.state.allowAllRows,
       },
+      this.lookup,
     );
   }
 
-  private buildQuery(): Knex.QueryBuilder {
+  private buildQuery(
+    jsonFields: ReadonlySet<string> = emptyStringSet,
+  ): Knex.QueryBuilder {
     const client = this.getClient();
     const tableScope = createTableScope([this.tableName], this.naming);
     const data = this.requireSetData();
     this.assertWhereSafety('updateTable().execute()');
     const query = client(
       mapTableSourceExpression(this.tableName, this.naming),
-    ).update(mapData(data, this.naming) as any);
+    ).update(mapData(data, this.naming, jsonFields) as any);
     applyWhereExpressions(query, this.state.where, {
       client,
       naming: this.naming,
@@ -1670,6 +1703,7 @@ function applySelections(
   for (const selection of selections) {
     if (selection.type === 'all') {
       resultMap.mapUnmatchedColumns = true;
+      addCollectionScalarDecoders(resultMap, context, selection.table);
       query.select(
         selection.table
           ? `${mapTableQualifier(
@@ -2744,15 +2778,35 @@ function mapIdentifier(identifier: string, naming: NamingStrategy): string {
 function mapData(
   data: Row | readonly Row[],
   naming: NamingStrategy,
+  jsonFields: ReadonlySet<string> = emptyStringSet,
 ): Row | Row[] {
   if (Array.isArray(data)) {
-    return data.map((item) => mapData(item, naming) as Row);
+    return data.map((item) => mapData(item, naming, jsonFields) as Row);
   }
   return Object.fromEntries(
-    Object.entries(data).map(([key, value]) => [
-      mapIdentifier(key, naming),
-      value,
-    ]),
+    Object.entries(data).map(([key, value]) => {
+      const encoded =
+        jsonFields.has(key) && value !== null
+          ? encodeJsonValue(value as JsonValue)
+          : value;
+      return [mapIdentifier(key, naming), encoded];
+    }),
+  );
+}
+
+async function resolveJsonFields(
+  lookup: CollectionLookup | undefined,
+  tableName: string,
+): Promise<ReadonlySet<string>> {
+  if (!lookup) return emptyStringSet;
+  const collection = await lookup(parseAliasedIdentifier(tableName).identifier);
+  return new Set(
+    collection?.fields
+      ?.filter(
+        (field): field is FieldDefinition =>
+          !('target' in field) && field.type === 'json',
+      )
+      .map((field) => field.name) ?? [],
   );
 }
 
@@ -2805,10 +2859,56 @@ function addScalarDecoder(
       : undefined);
   const decoder = getDatabaseDriverRuntime(context.client)?.query
     ?.decodeScalarResult;
-  if (!field || !decoder) return;
+  if (!field) return;
+  if (field.type === 'json') {
+    resultMap.scalarDecoders?.set(physicalKey, decodeJsonValue);
+    return;
+  }
+  if (!decoder) return;
   resultMap.scalarDecoders?.set(physicalKey, (value) =>
     decoder({ field, value }),
   );
+}
+
+function addCollectionScalarDecoders(
+  resultMap: ResultMap,
+  context: ExpressionCompileContext,
+  tableName?: string,
+): void {
+  const collection = collectionForTable(
+    context.tableScope,
+    tableName ?? context.tableScope.tables?.[0],
+  );
+  if (!collection) return;
+  for (const field of collection.fields ?? []) {
+    if ('target' in field) continue;
+    addScalarDecoder(
+      resultMap,
+      context,
+      mapIdentifier(field.name, context.naming),
+      undefined,
+      field,
+    );
+  }
+}
+
+function collectionForTable(
+  scope: TableScope,
+  tableName: string | undefined,
+): CollectionDefinition | undefined {
+  if (!tableName) return undefined;
+  const parsed = parseAliasedIdentifier(tableName);
+  const direct = scope.numericCollections?.get(parsed.identifier);
+  if (direct) return direct;
+  const matchingTable = scope.tables?.find((table) => {
+    const candidate = parseAliasedIdentifier(table);
+    return candidate.alias === parsed.identifier;
+  });
+  return matchingTable
+    ? scope.numericCollections?.get(
+        parseAliasedIdentifier(matchingTable).identifier,
+      )
+    : undefined;
 }
 
 function scalarSource(

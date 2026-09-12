@@ -1,4 +1,5 @@
 import { decimalString } from '../../numeric/decimal.js';
+import { decodeJsonValue } from '../../json.js';
 import type {
   CollectionDefinition,
   FieldDefinition,
@@ -23,7 +24,7 @@ const decodeTemporal: ScalarDecoder = (field, value) =>
     field.name,
   ]);
 
-/** Normalize logical scalar values without parsing JSON payloads. */
+/** Normalize logical scalar values, including driver-specific JSON payloads. */
 const scalarDecoders: ReadonlyMap<string, ScalarDecoder> = new Map([
   ['boolean', decodeBooleanValue],
   ['integer', decodeIntegerValue],
@@ -52,6 +53,7 @@ const scalarDecoders: ReadonlyMap<string, ScalarDecoder> = new Map([
   ['time', decodeTemporal],
   ['datetime', decodeTemporal],
   ['datetimeTz', decodeTemporal],
+  ['json', (_field, value) => decodeJsonValue(value)],
 ]);
 
 /** Prepare once per result shape; reuse synchronously for ordinary and streamed rows. */
