@@ -74,8 +74,10 @@ describe('app client routes', () => {
     expect(Object.isFrozen(applicationRoutes[0])).toBe(true);
     expect(Object.isFrozen(applicationRoutes[1])).toBe(true);
     const routes = applicationRoutes[0].routes;
-    const overlays = routes[0];
-    const dialogs = overlays.children ?? [];
+    const overlays = routes.find((route) => route.name === 'routeOverlays');
+    expect(overlays).toBeDefined();
+    const dialogs = overlays?.children ?? [];
+    expect(dialogs).toHaveLength(2);
     const pages = [
       ...routes,
       ...dialogs,
