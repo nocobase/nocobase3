@@ -7,6 +7,8 @@
 export interface DatabaseIntegrationProfile {
   readonly numeric: {
     readonly nativeResults: boolean;
+    /** Whether create mutations can return inserted rows without a reload. */
+    readonly supportsInsertReturning?: boolean;
     readonly nativeAggregates: boolean;
     readonly bigintAverage: 'rounded' | 'fractional';
     readonly exactProjection: 'toChar' | 'castChar' | 'castVarchar';

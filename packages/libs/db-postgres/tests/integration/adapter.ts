@@ -10,6 +10,7 @@ import postgres from '../../src/index.js';
 export const postgresIntegrationProfile: DatabaseIntegrationProfile = {
   numeric: {
     nativeResults: true,
+    supportsInsertReturning: true,
     integerResults: 'number',
     nativeAggregates: true,
     bigintAverage: 'rounded',

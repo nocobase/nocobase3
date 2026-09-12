@@ -132,7 +132,10 @@ describeIntegrationDatabases(
           : decimalResult('42'),
       );
       expect(result.record.id).toBeDefined();
-      if (context.profile.numeric.nativeResults) {
+      if (
+        context.profile.numeric.nativeResults &&
+        context.profile.numeric.supportsInsertReturning
+      ) {
         // The INSERT ... RETURNING result is sufficient when no relations need loading.
         expect(statements.filter((sql) => /^select\b/i.test(sql))).toHaveLength(
           0,

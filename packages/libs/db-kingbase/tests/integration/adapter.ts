@@ -10,6 +10,7 @@ import kingbase from '../../src/index.js';
 export const kingbaseIntegrationProfile: DatabaseIntegrationProfile = {
   numeric: {
     nativeResults: true,
+    supportsInsertReturning: true,
     integerResults: 'number',
     nativeAggregates: true,
     bigintAverage: 'rounded',
