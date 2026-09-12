@@ -169,6 +169,7 @@ jobs:
           - oracle
           - mssql
           - dameng
+          - kingbase
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
