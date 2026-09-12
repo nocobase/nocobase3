@@ -330,6 +330,11 @@ function defineContextSuite<TContext>(
 
 export { definePortableIntegrationContracts } from './integration-contracts.js';
 export {
+  parseDatabaseIntegrationArguments,
+  type DatabaseIntegrationTestArguments,
+} from './integration-arguments.js';
+export { loadDatabaseIntegrationTests } from './integration-loader.js';
+export {
   describeIntegrationDatabases,
   expectForeignKeyViolation,
   expectUniqueViolation,

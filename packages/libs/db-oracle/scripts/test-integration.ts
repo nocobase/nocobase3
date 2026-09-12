@@ -8,6 +8,7 @@ const exitCode = await runDatabaseIntegration({
   containerPort: 1521,
   hostEnvironmentVariable: 'ORACLE_HOST',
   portEnvironmentVariable: 'ORACLE_PORT',
+  testArguments: process.argv.slice(2),
 });
 
 process.exitCode = exitCode;

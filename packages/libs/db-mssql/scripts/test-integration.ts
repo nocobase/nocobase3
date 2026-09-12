@@ -9,6 +9,7 @@ const exitCode = await runDatabaseIntegration({
   hostEnvironmentVariable: 'MSSQL_HOST',
   portEnvironmentVariable: 'MSSQL_PORT',
   initServices: ['mssql-init'],
+  testArguments: process.argv.slice(2),
 });
 
 process.exitCode = exitCode;

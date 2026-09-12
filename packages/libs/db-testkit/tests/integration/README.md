@@ -108,6 +108,17 @@ Each dialect package exposes its own `test:integration` command; use those entry
 Set `KEEP_TEST_DB=1` to retain a failed run for debugging. The runner prints
 the Compose project name; remove that project manually after investigation.
 
+Select shared integration files with `--test-file`:
+
+```bash
+pnpm --filter @nocobase/db-postgres test:integration -- \
+  --test-file tests/integration/schema/inspector.test.ts
+```
+
+Repeat the option to load more than one file. Other options, such as `-t`, are
+passed through to Vitest. Add `--pause-on-failure` to keep the database running
+and wait for Enter after a failed run.
+
 ## Dialect acceptance
 
 DB changes must pass the complete package suite, including all integration

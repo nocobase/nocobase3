@@ -112,7 +112,8 @@ describe('runDatabaseIntegration', () => {
       'exec',
       'vitest',
       'run',
-      'tests/integration',
+      'tests/integration/core-suite.test.ts',
+      '--reporter=verbose',
     ]);
     expect(environments[0]).toMatchObject({
       MYSQL_HOST: '127.0.0.1',
@@ -173,6 +174,45 @@ describe('runDatabaseIntegration', () => {
     ]);
   });
 
+  it('forwards selected Vitest files and arguments to the integration suite', async () => {
+    spawnMock.mockImplementation((command: string, args: string[]) => {
+      if (command === 'docker' && isPortCommand(args))
+        return createFakeProcess('127.0.0.1:49155\n');
+      return createFakeProcess();
+    });
+
+    const exitCode = await runDatabaseIntegration({
+      name: 'mysql',
+      composeFile: '/tmp/mysql-compose.yml',
+      service: 'mysql',
+      containerPort: 3306,
+      hostEnvironmentVariable: 'MYSQL_HOST',
+      portEnvironmentVariable: 'MYSQL_PORT',
+      testArguments: [
+        '--test-file',
+        'tests/integration/schema/inspector.test.ts',
+        '-t',
+        'indexes',
+      ],
+    });
+
+    expect(exitCode).toBe(0);
+    expect(invocation(3).args).toEqual([
+      'exec',
+      'vitest',
+      'run',
+      'tests/integration/core-suite.test.ts',
+      '--reporter=verbose',
+      '-t',
+      'indexes',
+    ]);
+    expect(invocation(3).options.env).toMatchObject({
+      DB_TEST_FILES: JSON.stringify([
+        'tests/integration/schema/inspector.test.ts',
+      ]),
+    });
+  });
+
   it('keeps the project when requested for debugging', async () => {
     process.env.KEEP_TEST_DB = '1';
     spawnMock.mockImplementation((command: string, args: string[]) => {
@@ -196,7 +236,41 @@ describe('runDatabaseIntegration', () => {
       'exec',
       'vitest',
       'run',
-      'tests/integration',
+      'tests/integration/core-suite.test.ts',
+      '--reporter=verbose',
     ]);
+  });
+
+  it('keeps the project after a failed run with pause-on-failure', async () => {
+    spawnMock.mockImplementation((command: string, args: string[]) => {
+      if (command === 'docker' && isPortCommand(args))
+        return createFakeProcess('127.0.0.1:49156\n');
+      if (command === 'pnpm') return createFakeProcess('', 1);
+      return createFakeProcess();
+    });
+
+    const exitCode = await runDatabaseIntegration({
+      name: 'postgres',
+      composeFile: '/tmp/postgres-compose.yml',
+      service: 'postgres',
+      containerPort: 5432,
+      hostEnvironmentVariable: 'POSTGRES_HOST',
+      portEnvironmentVariable: 'POSTGRES_PORT',
+      testArguments: [
+        '--test-file',
+        'tests/integration/schema/inspector.test.ts',
+        '--pause-on-failure',
+      ],
+    });
+
+    expect(exitCode).toBe(1);
+    expect(invocation(3).args).toEqual([
+      'exec',
+      'vitest',
+      'run',
+      'tests/integration/core-suite.test.ts',
+      '--reporter=verbose',
+    ]);
+    expect(spawnMock).toHaveBeenCalledTimes(4);
   });
 });

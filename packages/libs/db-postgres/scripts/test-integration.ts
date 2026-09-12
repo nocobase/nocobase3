@@ -8,6 +8,7 @@ const exitCode = await runDatabaseIntegration({
   containerPort: 5432,
   hostEnvironmentVariable: 'POSTGRES_HOST',
   portEnvironmentVariable: 'POSTGRES_PORT',
+  testArguments: process.argv.slice(2),
 });
 
 process.exitCode = exitCode;

@@ -1,4 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process';
+import { createInterface } from 'node:readline/promises';
+import { parseDatabaseIntegrationArguments } from './integration-arguments.js';
 
 export interface DatabaseIntegrationRunnerOptions {
   readonly name: string;
@@ -25,7 +27,18 @@ export async function runDatabaseIntegration(
   options: DatabaseIntegrationRunnerOptions,
 ): Promise<number> {
   const projectName = createProjectName(options.name);
-  const keepEnvironment = process.env.KEEP_TEST_DB === '1';
+  let parsedArguments: ReturnType<typeof parseDatabaseIntegrationArguments>;
+  try {
+    parsedArguments = parseDatabaseIntegrationArguments(
+      options.testArguments ?? [],
+    );
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : error);
+    return 1;
+  }
+  const pauseOnFailure =
+    process.env.PAUSE_ON_FAILURE === '1' || parsedArguments.pauseOnFailure;
+  let keepEnvironment = process.env.KEEP_TEST_DB === '1';
   let activeProcess: ChildProcess | undefined;
   let receivedSignal: NodeJS.Signals | undefined;
 
@@ -79,7 +92,7 @@ export async function runDatabaseIntegration(
   const cleanup = async (): Promise<void> => {
     if (keepEnvironment) {
       console.error(
-        `[db-testkit] Keeping ${projectName} because KEEP_TEST_DB=1.`,
+        `[db-testkit] Keeping ${projectName} for inspection after the integration test run.`,
       );
       return;
     }
@@ -87,11 +100,17 @@ export async function runDatabaseIntegration(
   };
 
   try {
+    console.error(`[db-testkit] Starting ${options.name} integration tests.`);
     await compose(['down', '--volumes', '--remove-orphans'], false, true);
+    console.error(`[db-testkit] Starting ${options.service} database service.`);
     await compose(['up', '--detach', '--wait', options.service]);
 
-    for (const initService of options.initServices ?? [])
+    for (const initService of options.initServices ?? []) {
+      console.error(
+        `[db-testkit] Running ${initService} initialization service.`,
+      );
       await compose(['run', '--rm', initService]);
+    }
 
     const portResult = await compose(
       ['port', options.service, String(options.containerPort)],
@@ -110,13 +129,31 @@ export async function runDatabaseIntegration(
         'exec',
         'vitest',
         'run',
-        'tests/integration',
-        ...(options.testArguments ?? []),
+        'tests/integration/core-suite.test.ts',
+        ...(!parsedArguments.vitestArguments.some(
+          (argument) =>
+            argument === '--reporter' || argument.startsWith('--reporter='),
+        )
+          ? ['--reporter=verbose']
+          : []),
+        ...parsedArguments.vitestArguments,
       ],
-      testEnvironment,
+      {
+        ...testEnvironment,
+        ...(parsedArguments.testFiles.length > 0
+          ? { DB_TEST_FILES: JSON.stringify(parsedArguments.testFiles) }
+          : {}),
+      },
       false,
       true,
     );
+    console.error(
+      `[db-testkit] ${options.name} integration tests exited with ${formatExit(testResult.result)}.`,
+    );
+    if (pauseOnFailure && testResult.result.code !== 0) {
+      keepEnvironment = true;
+      await pauseForInspection(projectName);
+    }
     if (receivedSignal) return 128 + signalExitCode(receivedSignal);
     return testResult.result.code;
   } catch (error) {
@@ -195,4 +232,25 @@ function signalExitCode(signal: NodeJS.Signals): number {
   if (signal === 'SIGINT') return 2;
   if (signal === 'SIGTERM') return 15;
   return 1;
+}
+
+async function pauseForInspection(projectName: string): Promise<void> {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    console.error(
+      `[db-testkit] --pause-on-failure was requested, but no interactive terminal is available.`,
+    );
+    return;
+  }
+  console.error(
+    `[db-testkit] Test database ${projectName} is still running. Press Enter to clean it up and exit.`,
+  );
+  const readline = createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+  try {
+    await readline.question('');
+  } finally {
+    readline.close();
+  }
 }

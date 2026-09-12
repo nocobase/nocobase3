@@ -1,4 +1,7 @@
-import { installDatabaseIntegrationAdapter } from '@nocobase/db-testkit';
+import {
+  installDatabaseIntegrationAdapter,
+  loadDatabaseIntegrationTests,
+} from '@nocobase/db-testkit';
 import { damengDialectIntegrationAdapter } from './adapter.js';
 
 declare global {
@@ -21,8 +24,4 @@ const loadTests = import.meta.glob(
   },
 );
 
-for (const loadTest of Object.values(loadTests) as Array<
-  () => Promise<unknown>
->) {
-  await loadTest();
-}
+await loadDatabaseIntegrationTests(loadTests);

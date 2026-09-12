@@ -8,6 +8,7 @@ const exitCode = await runDatabaseIntegration({
   containerPort: 54321,
   hostEnvironmentVariable: 'KINGBASE_HOST',
   portEnvironmentVariable: 'KINGBASE_PORT',
+  testArguments: process.argv.slice(2),
 });
 
 process.exitCode = exitCode;

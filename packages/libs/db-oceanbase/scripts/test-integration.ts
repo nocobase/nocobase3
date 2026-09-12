@@ -8,6 +8,7 @@ const exitCode = await runDatabaseIntegration({
   containerPort: 2881,
   hostEnvironmentVariable: 'OCEANBASE_HOST',
   portEnvironmentVariable: 'OCEANBASE_PORT',
+  testArguments: process.argv.slice(2),
 });
 
 process.exitCode = exitCode;

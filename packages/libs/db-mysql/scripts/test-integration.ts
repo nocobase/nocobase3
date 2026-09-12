@@ -8,6 +8,7 @@ const exitCode = await runDatabaseIntegration({
   containerPort: 3306,
   hostEnvironmentVariable: 'MYSQL_HOST',
   portEnvironmentVariable: 'MYSQL_PORT',
+  testArguments: process.argv.slice(2),
 });
 
 process.exitCode = exitCode;

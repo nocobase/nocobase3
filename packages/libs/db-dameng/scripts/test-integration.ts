@@ -10,6 +10,7 @@ const exitCode = await runDatabaseIntegration({
   portEnvironmentVariable: 'DAMENG_PORT',
   initServices: ['dameng-init'],
   testEnvironment: { NODE_OPTIONS: '--openssl-legacy-provider' },
+  testArguments: process.argv.slice(2),
 });
 
 process.exitCode = exitCode;

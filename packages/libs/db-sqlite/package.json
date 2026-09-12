@@ -30,7 +30,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint . --max-warnings 0",
     "test": "vitest run tests --exclude **/tests/integration/**",
-    "test:integration": "vitest run tests/integration"
+    "test:integration": "node --import tsx ./scripts/test-integration.ts"
   },
   "peerDependencies": {
     "@nocobase/db": "workspace:^"
@@ -42,6 +42,7 @@
     "@types/node": "catalog:",
     "eslint": "catalog:",
     "knex": "catalog:",
+    "tsx": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
