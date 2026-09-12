@@ -1,5 +1,28 @@
 # @nocobase/app-plugin-cli-example
 
+## 0.1.0-beta.2
+
+### Minor Changes
+
+- e9f796d: Demonstrate a build hook
+
+  The plugin now registers a `beforeBuild` hook alongside its commands, showing that a hook command is any executable rather than one of the plugin's own oclif commands.
+
+### Patch Changes
+
+- Updated dependencies [e9f796d]
+  - @nocobase/nb3-cli@1.0.0-beta.6
+
+## 0.1.0-beta.1
+
+### Patch Changes
+
+- 52d1107: Declare each peer dependency once, dropping the devDependency that used to accompany it.
+
+  The pairing was required on the grounds that a peer range is wide enough for development to drift off this repository's copy. It is not: pnpm installs a peer and links it into the plugin's own `node_modules`, resolving `workspace:^` to the same package `workspace:*` would. A plugin with the devDependency removed still links, typechecks, builds, and tests against it — verified against a clean install with every plugin's `node_modules` deleted first.
+
+  What remained was a second declaration that changed nothing and had to be kept in step with the first. `pnpm peers:check` no longer asks for it, and `create-plugin` no longer emits it.
+
 ## 0.1.0-beta.0
 
 ### Minor Changes

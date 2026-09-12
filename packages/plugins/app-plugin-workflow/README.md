@@ -45,12 +45,48 @@ then retain the same relative paths with `.js` resources. The plugin owns
 workflow discovery, validation, resource collection, and Artifact emission; it
 does not compile run modules separately or maintain a module-path manifest.
 
+## Development loading
+
+A development server does not need this build at all. When the runtime is not
+production and a workflow source root is configured, the loader compiles
+`server/workflows` on demand instead of reading `dist/server/workflows`, so an
+edited `workflow.ts` appears as a new revision without running a command and
+without restarting the process. Compilation is skipped while the source tree is
+unchanged, and it costs milliseconds when it is not.
+
+The definition it produces is the one a build would produce: the same schema
+validation, semantic validation, flat IR compilation, resource collection, and
+content-addressed digest. What it drops is `ts.createProgram`, which is the
+expensive half of a build and which the application's own typecheck already
+covers, and the disposable evaluation process, which a development server that
+already runs under a TypeScript loader does not need. Because the digest matches,
+the revision a developer enables in development is the revision the build later
+produces for production.
+
+Development also validates against the instruction set the engine will execute
+with rather than the core set alone, so an instruction a plugin registers at
+runtime is understood without configuring a build entry for it. A key that
+exists only under `dist/server/workflows` is still offered, and source wins for
+a key present in both.
+
+Starting a run has a matching precondition. Production requires the revision's
+Artifact to be committed to the store, because that is where its run modules are
+resolved from; development requires the source package, because that is where the
+engine resolves them from instead.
+
+`nocobase workflow check <package> --ir` prints the same compiled flat IR for one
+package, with the full five-phase check, for reading a definition outside a
+running server.
+
 The CLI evaluates each declarative `workflow.ts` in a bounded disposable Node
 process, so it does not need a separate bundler. TypeScript is provided by the
 application's existing build toolchain for source checking. The CLI and its
 build modules remain part of the published package so applications can build
 Workflow Artifacts, but the production `./server` runtime module graph does not
-load those modules or TypeScript.
+load those modules or TypeScript. Development source loading is the one part of
+the build boundary a running server reaches, and it does so through a dynamic
+import that a production runtime never evaluates and that never loads the
+compiler.
 
 The client contributes Workflows and Workflow runs under the application's
 Automation settings group. Their record detail routes stay inside the settings

@@ -15,7 +15,11 @@ Use this Skill when building a feature in this application: a page, an endpoint,
 
 Do not use it to develop a published plugin package. Plugin development has its own protocol and lives in a separate repository.
 
-Default ships with a localized homepage, empty application-owned server route/provider lists, and no example plugins or demo data. Use `app-template-examples` to explore runnable demonstrations. `database/main/` starts empty; do not copy example history into Default.
+Do not use it to upgrade the template this application was generated from. That is `skills/nocobase-app-upgrade/`, which reconciles a newer template release against the application without reverting the user's work.
+
+For pages with Tabs, nested pages, or navigation groups, read [child routes](references/client-child-routes.md). Page-level Tabs use child routes by default, even when the user does not mention routing. Declare their content under the parent route and derive the selected Tab from the URL. Opening the parent URL redirects to the default accessible Tab with replace and preserves query parameters; explicit Tab URLs retain their selection. Follow an explicit user request for a different interaction.
+
+Default ships with a localized homepage, no application-owned routes, and no example plugins or demo data. Its built-in application provider exposes Authorization Permission Sets as direct roles in the Users page; add other application services beside it. Use `app-template-examples` to explore runnable demonstrations. `database/main/` starts empty; do not copy example history into Default.
 
 ## Before you start
 
@@ -39,14 +43,15 @@ Build the feature in the application. Do not run a plugin generator, create a `p
 
 This application ships with plugins that already implement whole categories of requirement, each publishing its own Skill under `.agents/skills/` (run `pnpm plugin:skills:sync` if that directory is missing or stale):
 
-| The requirement sounds like                              | Read the Skill for                     |
-| -------------------------------------------------------- | -------------------------------------- |
-| Approvals, multi-step processes, "when X happens then Y" | `@nocobase/app-plugin-workflow`        |
-| Email, IM, or in-app messages                            | `@nocobase/app-plugin-notification`    |
-| Roles, permissions, per-user or per-record access        | `@nocobase/app-plugin-authorization`   |
-| Sign-in, registration, sessions                          | `@nocobase/app-plugin-authentication`  |
-| File upload and metadata through Repository              | `@nocobase/app-plugin-file-repository` |
-| Translated text and language switching                   | `@nocobase/app-plugin-i18n`            |
+| The requirement sounds like                               | Read the Skill for                    |
+| --------------------------------------------------------- | ------------------------------------- |
+| Approvals, multi-step processes, "when X happens then Y"  | `@nocobase/app-plugin-workflow`       |
+| Email, IM, or in-app messages                             | `@nocobase/app-plugin-notification`   |
+| Roles, permissions, per-user or per-record access         | `@nocobase/app-plugin-authorization`  |
+| Sign-in, registration, sessions                           | `@nocobase/app-plugin-authentication` |
+| File upload and metadata through Repository               | `@nocobase/app-plugin-file`           |
+| Translated text and language switching                    | `@nocobase/app-plugin-i18n`           |
+| User administration and application-owned role assignment | `@nocobase/app-plugin-users`          |
 
 Read the relevant Skill before writing the feature. Implementing a permission system, a notification sender, or a scheduler by hand when a registered plugin provides one is the most expensive mistake available here.
 
@@ -59,6 +64,7 @@ Read the page for the task in front of you. Do not read all of them.
 | Task                                                                             | Read                                                             |
 | -------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
 | Add a page, choose an auth mode, add navigation, customize a plugin page         | [client pages and routes](references/client-pages-and-routes.md) |
+| Build a page with Tabs, add child pages or menu groups                           | [child routes and Tabs](references/client-child-routes.md)       |
 | Add or compose UI, add a shadcn primitive, style consistently, support dark mode | [components and styling](references/components-and-styling.md)   |
 | Add an API endpoint, a webhook, or a callback; authenticate and authorize it     | [server routes](references/server-routes.md)                     |
 | Query or write data, resolve the database, work with transactions                | [database and data access](references/database-and-data.md)      |
@@ -114,7 +120,7 @@ These cause real damage and appear in every reference:
 - **Every user-visible string goes through a translation key.**
 - **Visual consistency is application-wide.** Restyling only your part is a defect. Change the design tokens if a change is needed.
 - **Route paths never include the deployment base path.** The runtime restores it.
-- **A route does not create a sidebar entry.** That needs a Refine resource in `client/service-provider.ts`.
+- **Route navigation creates sidebar entries.** Declare `navigation` in `client/routes.ts`; Refine resources are for CRUD, not menus.
 - **Reach for the built-in mechanism first.** Changing framework structure is allowed when nothing else fits — comment it and update the docs.
 - **Tests live in `tests/` or `e2e/`,** never beside the source.
 
@@ -128,3 +134,7 @@ pnpm build
 ```
 
 Verify observable behavior, not just that the commands passed. [Testing and verification](references/testing.md) lists what to check for each kind of change.
+
+After touching `client/locales/` or `server/locales/`, run `pnpm nocobase app i18n:check`. It reports a language declared on one side alone, which the interface offers and the server then rejects.
+
+Application startup defaults belong in `config.yml`: `i18n.defaultLocale` for the language, and `client.app.defaultColorScheme` and `client.app.defaultTheme` for appearance. Valid browser-local choices take precedence. Which languages the application offers is not configured — its own `client/locales/` and `server/locales/` are that list. See the i18n and themes references.

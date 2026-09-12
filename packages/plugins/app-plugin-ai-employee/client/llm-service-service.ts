@@ -4,14 +4,13 @@ import { requestAIAction } from './api-client.js';
 
 export type EnabledModel = { label: string; value: string };
 export type EnabledModelsConfig = {
-  mode: 'recommended' | 'provider' | 'custom';
+  mode: 'provider' | 'custom';
   models: EnabledModel[];
 };
 export type LLMProvider = {
   name: string;
   title: string;
   supportedModel: Array<'LLM' | 'EMBEDDING'>;
-  recommendedModels: EnabledModel[];
 };
 export type LLMService = {
   name: string;
@@ -31,54 +30,52 @@ export function normalizeEnabledModels(value: unknown): EnabledModelsConfig {
   if (Array.isArray(value))
     return {
       mode: 'custom',
-      models: value.flatMap((item) => {
-        if (typeof item !== 'string' || !item.trim()) return [];
-        const model = item.trim();
-        return [{ label: model, value: model }];
-      }),
+      models: normalizeModels(value),
     };
   if (!value || typeof value !== 'object')
-    return { mode: 'recommended', models: [] };
+    return { mode: 'provider', models: [] };
   const record = value as { mode?: unknown; models?: unknown };
-  const mode =
-    record.mode === 'recommended' ||
-    record.mode === 'provider' ||
-    record.mode === 'custom'
-      ? record.mode
-      : 'recommended';
-  if (mode === 'recommended' && record.mode !== 'recommended') {
-    return { mode: 'recommended', models: [] };
+  if (record.mode !== 'provider' && record.mode !== 'custom') {
+    return { mode: 'provider', models: [] };
   }
-  const models = Array.isArray(record.models)
-    ? record.models.flatMap((item) => {
-        if (
-          !item ||
-          typeof item !== 'object' ||
-          typeof (item as { value?: unknown }).value !== 'string'
-        )
-          return [];
-        const model = item as { label?: unknown; value: string };
-        const value = model.value.trim();
-        return value
-          ? [
-              {
-                label:
-                  typeof model.label === 'string' && model.label.trim()
-                    ? model.label.trim()
-                    : value,
-                value,
-              },
-            ]
-          : [];
-      })
-    : [];
-  return { mode, models };
+  return { mode: record.mode, models: normalizeModels(record.models) };
+}
+
+function normalizeModels(value: unknown): EnabledModel[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  return value.flatMap((item) => {
+    if (typeof item === 'string') {
+      const model = item.trim();
+      if (!model || seen.has(model)) return [];
+      seen.add(model);
+      return [{ label: model, value: model }];
+    }
+    if (
+      !item ||
+      typeof item !== 'object' ||
+      typeof (item as { value?: unknown }).value !== 'string'
+    )
+      return [];
+    const model = item as { label?: unknown; value: string };
+    const normalized = model.value.trim();
+    if (!normalized || seen.has(normalized)) return [];
+    seen.add(normalized);
+    return [
+      {
+        label:
+          typeof model.label === 'string' && model.label.trim()
+            ? model.label.trim()
+            : normalized,
+        value: normalized,
+      },
+    ];
+  });
 }
 
 export function prepareEnabledModels(
   config: EnabledModelsConfig,
 ): EnabledModelsConfig {
-  if (config.mode === 'recommended') return { mode: 'recommended', models: [] };
   const seen = new Set<string>();
   const models = config.models.map((model) => {
     const value = model.value.trim();
@@ -138,10 +135,6 @@ export async function listLLMProviders(
             )
           : ['LLM'],
         title: String(provider.title ?? provider.name ?? ''),
-        recommendedModels: normalizeEnabledModels({
-          mode: 'provider',
-          models: provider.recommendedModels,
-        }).models,
       },
     ];
   });

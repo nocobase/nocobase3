@@ -100,6 +100,8 @@ Relevant public areas include:
 - LLM providers and helpers;
 - knowledge/vector feature contracts.
 
+The enabled `@nocobase/app-plugin-ai-employee` also exposes its server integration entry at `@nocobase/app-plugin-ai-employee/server`. Import only the documented `aiConversationsManagerToken` and `agentServiceFactoryToken` from that entry for trusted App server integrations; read `agent-service.md` before using them.
+
 Never import `@nocobase/ai-employee/src/...` or plugin-private server/agent paths.
 
 ## Tests and validation

@@ -1,11 +1,16 @@
 import { useSyncServerLocale } from '@nocobase/app-plugin-i18n/client';
 import { useState, type ReactElement } from 'react';
+import type { AppClientRegisteredRoute } from '@nocobase/app-client/plugins';
 import { Outlet } from 'react-router';
 
 import { AppHeader } from './app-header.js';
 import { AppSidebar } from './app-sidebar.js';
 
-export function AppShell(): ReactElement {
+export function AppShell({
+  routes,
+}: {
+  readonly routes: readonly AppClientRegisteredRoute[];
+}): ReactElement {
   // The browser decides what it renders; this tells the server the same language so its messages match.
   useSyncServerLocale();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -14,6 +19,7 @@ export function AppShell(): ReactElement {
   return (
     <div className='flex min-h-svh bg-background'>
       <AppSidebar
+        routes={routes}
         desktopCollapsed={desktopSidebarCollapsed}
         mobileOpen={mobileSidebarOpen}
         onCloseMobile={() => setMobileSidebarOpen(false)}

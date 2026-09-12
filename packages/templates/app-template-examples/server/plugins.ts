@@ -1,6 +1,5 @@
 import authentication from '@nocobase/app-plugin-authentication/server';
 import aiEmployee from '@nocobase/app-plugin-ai-employee/server/plugin';
-import aiKnowledgeBase from '@nocobase/app-plugin-ai-knowledge-base/server/plugin';
 import authorization from '@nocobase/app-plugin-authorization/server';
 import databaseExample from '@nocobase/app-plugin-database-example/server';
 import i18n from '@nocobase/app-plugin-i18n/server';
@@ -19,13 +18,12 @@ import {
   type AppServerPlugins,
 } from '@nocobase/app-server/plugins';
 import repositoryExample from '@nocobase/app-plugin-repository-example/server';
-import fileRepository from '@nocobase/app-plugin-file-repository/server';
-import fileRepositoryExample from '@nocobase/app-plugin-file-repository-example/server';
+import file from '@nocobase/app-plugin-file/server';
+import fileExample from '@nocobase/app-plugin-file-example/server';
 
 const serverPlugins: AppServerPlugins = defineServerPlugins([
   authentication,
   aiEmployee,
-  aiKnowledgeBase,
   authorization,
   databaseExample,
   i18n,
@@ -40,8 +38,8 @@ const serverPlugins: AppServerPlugins = defineServerPlugins([
   workflow,
   skillsExample,
   repositoryExample,
-  fileRepository,
-  fileRepositoryExample,
+  file,
+  fileExample,
 ]);
 
 export default serverPlugins;

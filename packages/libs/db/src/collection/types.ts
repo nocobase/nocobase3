@@ -384,7 +384,11 @@ export type TableAlterSchemaOperation =
   | { type: 'addIndex'; index: PhysicalIndexDefinition }
   | { type: 'dropIndex'; name: string }
   | { type: 'addConstraint'; constraint: PhysicalConstraintDefinition }
-  | { type: 'dropConstraint'; name: string };
+  | {
+      type: 'dropConstraint';
+      name: string;
+      constraintType?: PhysicalConstraintDefinition['type'];
+    };
 
 export interface ColumnSchemaDefinition {
   name: string;

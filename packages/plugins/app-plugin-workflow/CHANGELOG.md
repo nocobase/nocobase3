@@ -1,5 +1,75 @@
 # @nocobase/app-plugin-workflow
 
+## 0.1.0-beta.13
+
+### Minor Changes
+
+- e9f796d: Register the Artifact build as a CLI hook instead of relying on the application's build script
+
+  `pnpm build` and `pnpm dev` pick up the workflow Artifact build from this plugin, so an application gets it by installing the plugin rather than by carrying the step in its own scripts. The commands and their output are unchanged.
+
+- aa7420a: Load workflow definitions from source in development instead of from built Artifacts.
+
+  A development server previously saw only what `nocobase workflow build` had written to `dist/server/workflows`, so `pnpm dev` ran that build on every start and an edited `workflow.ts` needed a manual rebuild and a restart before it could be listed, enabled, or triggered. The loader now compiles the workflow source root on demand whenever the runtime is not production, skipping the work while the tree is unchanged, and the plugin no longer registers a `beforeDev` CLI hook, so `pnpm dev` runs no workflow build. The `afterServerBuild` hook is unchanged: a deployment still reads committed Artifacts.
+
+  The definition it produces is what a build produces: the same schema validation, semantic validation, flat IR compilation, resource collection, and content-addressed digest, so the revision enabled in development is the revision the build later ships. What it drops is `ts.createProgram`, which the application's own typecheck already covers, and the disposable evaluation process a server running under a TypeScript loader does not need — together the difference between seconds and milliseconds. Development validates against the instruction set the engine executes with rather than the core set alone, and a key that exists only under `dist/server/workflows` is still offered, with source winning for a key present in both. A production runtime is unchanged: it reads built Artifacts and never loads the compilation path.
+
+  Starting a run no longer requires an Artifact store entry in development. The engine has always resolved development run modules from the source package and never from the store, so the store was the wrong precondition there; it is now the source package that must be present, and production still requires the committed Artifact for the revision's digest.
+
+  `nocobase workflow check <package> --ir` prints the compiled flat IR, the definition an Artifact carries, for reading a workflow outside a running server.
+
+### Patch Changes
+
+- Updated dependencies [a009e2d]
+- Updated dependencies [e9f796d]
+  - @nocobase/app-server@1.0.0-beta.10
+  - @nocobase/app-client@1.0.0-beta.13
+  - @nocobase/i18n@1.0.0-beta.3
+  - @nocobase/nb3-cli@1.0.0-beta.6
+
+## 0.1.0-beta.12
+
+### Patch Changes
+
+- eb3bc38: Align catalog-managed peer dependency ranges with the workspace catalog.
+- Updated dependencies [e3fa827]
+- Updated dependencies [c3e02bf]
+- Updated dependencies [0a3fa83]
+- Updated dependencies [1d042c0]
+  - @nocobase/app-server@1.0.0-beta.9
+  - @nocobase/app-plugin-authentication@0.1.0-beta.10
+  - @nocobase/app-client@1.0.0-beta.12
+  - @nocobase/db@1.0.0-beta.4
+
+## 0.1.0-beta.11
+
+### Patch Changes
+
+- 52d1107: Resolve the shared UI packages through the workspace catalog: `@base-ui/react`, `class-variance-authority`, `clsx`, `lucide-react`, `shadcn`, `tailwind-merge`, and `tw-animate-css`.
+
+  Every package already agreed on one version for each of these — the catalog is what keeps them agreeing. A range edited in one manifest and not the others would otherwise put two copies of a UI primitive into an application's bundle, which is the kind of drift nothing reports until a component behaves differently depending on which plugin rendered it.
+
+  Peer dependencies use `catalog:` too. `pnpm pack` resolves it before publishing, so a consumer still reads an ordinary range.
+
+- 52d1107: Declare the packages each plugin's browser code imports as peer dependencies, so an application that installs the plugin can resolve them while a server deployment installs none of them.
+
+  A plugin's `client/` is not bundled by the plugin: `build` is `tsc`, so `dist/client/*.js` keeps its bare imports and the consuming application's Vite build resolves them. That application has only what the published manifest declares, and npm does not publish `devDependencies` — so a client import declared only there fails with `Could not resolve "…"`. `sonner` and `@xyflow/react` both shipped that way. Ten of these plugins appeared to work only because `app-template-default` happened to declare the same package for its own use; `@nocobase/app-plugin-hub`'s CodeMirror imports had no such coincidence and were unresolvable wherever it was installed.
+
+  Peer dependencies are what satisfy both sides. An application installs one shared copy, and a deployment — which sets `autoInstallPeers: false` — installs none, so packages a server never requires stay out of it. Each keeps a matching devDependency so the workspace still resolves it and the version used here stays pinned. None is marked `optional`: an optional peer is not auto-installed anywhere, including in the application that needs it.
+
+  `create-plugin` emits the same shape and its generated `AGENTS.md` teaches it, so a plugin created tomorrow declares its browser packages as peers rather than repeating the mistake.
+
+- 52d1107: Declare each peer dependency once, dropping the devDependency that used to accompany it.
+
+  The pairing was required on the grounds that a peer range is wide enough for development to drift off this repository's copy. It is not: pnpm installs a peer and links it into the plugin's own `node_modules`, resolving `workspace:^` to the same package `workspace:*` would. A plugin with the devDependency removed still links, typechecks, builds, and tests against it — verified against a clean install with every plugin's `node_modules` deleted first.
+
+  What remained was a second declaration that changed nothing and had to be kept in step with the first. `pnpm peers:check` no longer asks for it, and `create-plugin` no longer emits it.
+
+- Updated dependencies [52d1107]
+- Updated dependencies [52d1107]
+- Updated dependencies [52d1107]
+  - @nocobase/app-plugin-authentication@0.1.0-beta.9
+
 ## 0.1.0-beta.10
 
 ### Minor Changes

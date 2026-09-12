@@ -1,0 +1,5 @@
+[
+  { "type": "file", "name": "index", "label": "快速上手" },
+  { "type": "file", "name": "config-llm", "label": "声明模型服务" },
+  { "type": "file", "name": "create-employee", "label": "声明 AI 员工" }
+]

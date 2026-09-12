@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   createAuthorization,
   databaseAuthorization,
@@ -260,6 +260,96 @@ describe('official authorization plugins', () => {
         principal: { type: 'user', id: 'bob' },
       }),
     ).resolves.toHaveLength(0);
+  });
+
+  it('replaces only assignments in one managed scope and notifies once', async () => {
+    const changed = vi.fn();
+    const store = new MockPermissionSetStore({
+      permissionSets: [
+        { key: 'hub-administrator', grants: [] },
+        { key: 'hub-viewer', grants: [] },
+        { key: 'other-role', grants: [] },
+      ],
+      assignments: [
+        {
+          id: 'hub-admin',
+          subject: { type: 'user', id: 'alice' },
+          permissionSet: 'hub-administrator',
+        },
+        {
+          id: 'other-role',
+          subject: { type: 'user', id: 'alice' },
+          permissionSet: 'other-role',
+        },
+      ],
+    });
+    const authorization = createAuthorization({
+      plugins: [permissionSets({ store, onAssignmentsChanged: changed })],
+    });
+
+    await authorization.permissionSets.replaceSubjectAssignments({
+      subject: { type: 'user', id: 'alice' },
+      managedPermissionSets: ['hub-administrator', 'hub-viewer'],
+      permissionSets: ['hub-viewer'],
+    });
+
+    await expect(
+      authorization.permissionSets.listAssignments(),
+    ).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ permissionSet: 'hub-viewer' }),
+        expect.objectContaining({ permissionSet: 'other-role' }),
+      ]),
+    );
+    expect(changed).toHaveBeenCalledOnce();
+    expect(changed).toHaveBeenCalledWith({ type: 'user', id: 'alice' });
+
+    await authorization.permissionSets.replaceSubjectAssignments({
+      subject: { type: 'user', id: 'alice' },
+      managedPermissionSets: ['hub-administrator', 'hub-viewer'],
+      permissionSets: ['hub-viewer'],
+    });
+    expect(changed).toHaveBeenCalledOnce();
+  });
+
+  it('notifies assigned subjects when a Permission Set changes or is deleted', async () => {
+    const changed = vi.fn();
+    const store = new MockPermissionSetStore({
+      permissionSets: [{ key: 'operators', grants: [] }],
+      assignments: [
+        {
+          id: 'alice-operator',
+          subject: { type: 'user', id: 'alice' },
+          permissionSet: 'operators',
+        },
+        {
+          id: 'authenticated-operator',
+          subject: { type: 'authenticated', id: '*' },
+          permissionSet: 'operators',
+        },
+      ],
+    });
+    const authorization = createAuthorization({
+      plugins: [permissionSets({ store, onAssignmentsChanged: changed })],
+    });
+
+    await authorization.permissionSets.update('operators', {
+      key: 'renamed-operators',
+      grants: [],
+    });
+
+    expect(changed.mock.calls).toEqual([
+      [{ type: 'user', id: 'alice' }],
+      [{ type: 'authenticated', id: '*' }],
+    ]);
+
+    changed.mockClear();
+    await authorization.permissionSets.delete('renamed-operators');
+
+    expect(changed.mock.calls).toEqual([
+      [{ type: 'user', id: 'alice' }],
+      [{ type: 'authenticated', id: '*' }],
+    ]);
   });
 
   it('resolves application-owned Role assignments without putting Roles on Principal', async () => {

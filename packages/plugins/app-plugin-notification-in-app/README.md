@@ -45,6 +45,12 @@ the authoritative inbox state.
 Every operation resolves the authenticated user and constrains reads and
 writes to that user. Invalid pagination, cursor, JSON, or mutation input returns
 `400`; unauthenticated requests return `401`; invalid CSRF returns `403`.
+Notification-owned failures use a stable `error.code/message/ns/key/params`
+envelope. The normal App composition localizes `message`; custom hosts register
+the exported `IN_APP_NOTIFICATION_NAMESPACE` and
+`inAppNotificationServerLocales` with their `I18nRuntime`, then mount the
+request i18n middleware before this router. Authentication middleware keeps its
+own error contract.
 
 ## Client inbox page
 

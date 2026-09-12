@@ -22,6 +22,24 @@ The template no longer registers or directly depends on `@nocobase/app-plugin-fi
 
 Remove `nocobase.plugins` from the application manifest after upgrading the CLI and template scripts together. Keep `templateKind` and `defaultTemplateVersion`. Client, Server, and CLI composition roots now determine registered plugins for bulk Skills synchronization and updates. Development watches read Server registrations; deployment packaging follows server imports. Registration still copies plugin Skills, and unregistration cleans up legacy metadata when present.
 
+## Record the source template in the manifest
+
+`pnpm create @nocobase/app` now writes `nocobase.templatePackage` into the generated hub, naming the template package it came from. An upgrade diffs two releases of that package, and nothing else in a derived hub identifies it: `name` became the hub's own at generation, and `templateKind` alone only narrows it to a hub.
+
+Hubs generated before this field existed have to add it by hand. Confirm which template the hub came from, then add it beside the fields already there:
+
+```json
+{
+  "nocobase": {
+    "templateKind": "hub",
+    "templatePackage": "@nocobase/app-template-hub",
+    "defaultTemplateVersion": "1.0.0-beta.11"
+  }
+}
+```
+
+`defaultTemplateVersion` keeps its meaning: the template release whose source has actually been merged, moved only after the merge. `skills/nocobase-app-upgrade/` is the procedure for performing that merge.
+
 ## Upgrade checklist
 
 1. Commit or back up application-owned changes.

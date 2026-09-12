@@ -1,126 +1,120 @@
-# Copy to config.yml and change the settings for this deployment.
-# Application behavior, plugins and callbacks live in server/config/*.ts.
-
-auth:
-  secret: replace-with-a-unique-secret-at-least-32-characters
-
-session:
-  secret: replace-with-another-unique-secret-at-least-32-characters
-#   default: redis
-#   cookie:
-#     domain: .example.com
-#     secure: true
-#   stores:
-#     redis:
-#       host: session-redis.internal
-#       port: 6379
-#       password: replace-with-session-redis-password
-#       db: 0
-#       tls: true
-
-server:
-  host: 127.0.0.1
-  port: 13000
+# Copy this file to config.yml before starting the application.
 
 # app:
+#   Public origin used for callbacks and redirects in production.
 #   publicOrigin: https://apps.example.com
 
-database:
-  connections:
-    main:
-      dialect: sqlite
-      # SQLite file location.
-#       filename: /data/database.sqlite
-# For PostgreSQL, set dialect to postgres and configure the connection below.
-#       host: db.internal
-#       port: 5432
-#       database: nocobase
-#       username: nocobase
-#       password: replace-with-database-password
-#       ssl: true
-#       migrations:
-#         autoRun: false
-#       seeds:
-#         autoRun: false
+# The language the application starts in, for the browser and the server alike. Which languages it offers follows
+# from the files in client/locales and server/locales, not from configuration.
+# i18n:
+#   defaultLocale: zh-CN
 
-logging:
-  level: info
-#   pretty: false
+# Values under client are public and embedded in the SPA HTML.
+client:
+  app:
+    title: NocoBase
+    # Defaults apply only when no valid browser-local choice is saved.
+    # defaultColorScheme: system # light | dark | system
+    # defaultTheme: compact # ID from client/theme/theme-presets.ts
 
-snowflake:
-  # Assign a distinct workerId to each concurrently running instance.
-  workerId: 0
+auth:
+  # Generate a unique secret, for example with: openssl rand -hex 32
+  # secret: replace-with-a-unique-secret
+  emailAndPassword:
+    enabled: true
+    autoSignIn: false
+  session:
+    storeSessionInDatabase: true
 
-# queue:
-#   default: redis
-#   connections:
-#     redis:
-#       host: queue-redis.internal
-#       port: 6379
-#       password: replace-with-queue-redis-password
-#       db: 0
-#       tls: true
-#   worker:
-#     concurrency: 4
+# session:
+#   # Use the same generated value as auth.secret, or another unique secret.
+#   secret: replace-with-a-unique-secret
 
-# drive:
-#   default: s3
-#   disks:
-#     s3:
-#       bucket: app-files
-#       region: us-east-1
-#       endpoint: https://s3.example.com
-#       cdnUrl: https://files.example.com
-#       forcePathStyle: true
-#       credentials:
-#         accessKeyId: replace-with-access-key
-#         secretAccessKey: replace-with-secret-key
+notification:
+  channels:
+    - type: in-app
+      enabled: true
+      providers:
+        - type: database
+          name: default
 
-# caching:
-#   providers:
-#     memory:
-#       maxSize: 2000
-#       defaultTtl: 5m
+    # Uncomment and configure this channel to send email notifications.
+    # - type: email
+    #   enabled: true
+    #   providers:
+    #     - type: smtp
+    #       name: smtp
+    #       host: smtp.example.com
+    #       port: 587
+    #       secure: false
+    #       auth:
+    #         user: mailer@example.com
+    #         pass: replace-with-the-smtp-password
+    #       from: NocoBase <mailer@example.com>
+    #
+    #     - type: resend
+    #       name: resend
+    #       apiKey: replace-with-the-resend-api-key
+    #       from: NocoBase <notifications@example.com>
 
-# workflow:
-#   artifactDisk: local
+    # Uncomment and configure this channel to send IM notifications.
+    # - type: im
+    #   enabled: true
+    #   providers:
+    #     - type: feishu-webhook
+    #       name: feishu
+    #       webhookUrl: https://open.feishu.cn/open-apis/bot/v2/hook/replace-me
+    #       secret: replace-with-the-feishu-secret
+    #
+    #     - type: dingtalk-webhook
+    #       name: dingtalk
+    #       webhookUrl: https://oapi.dingtalk.com/robot/send?access_token=replace-me
+    #       secret: replace-with-the-dingtalk-secret
 
-# notification:
-#   channels:
-#     - type: email
-#       enabled: true
-#       providers:
-#         - type: smtp
-#           name: smtp
-#           host: smtp.example.com
-#           port: 587
-#           secure: false
-#           from: NocoBase <mailer@example.com>
-#           auth:
-#             user: mailer@example.com
-#             pass: replace-with-smtp-password
-#     - type: im
-#       enabled: true
-#       providers:
-#         - type: feishu-webhook
-#           name: feishu
-#           target: default
-#           webhookUrl: https://open.feishu.cn/open-apis/bot/v2/hook/replace-me
-#           secret: replace-with-webhook-secret
-
+# Declarative LLM services are loaded from application config.
+# Reload application config after editing; no process restart or AI resource rescan is required.
 # ai:
 #   llmServices:
 #     - name: openai
+#       title: OpenAI
 #       provider: openai
 #       options:
-#         apiKey: replace-with-api-key
-#   aiKnowledgeBase:
-#     vectorDatabases:
-#       - name: primary
-#         connection:
-#           host: vectors.internal
-#           port: 5432
-#           user: nocobase
-#           password: replace-with-vector-database-password
-#           database: nocobase
-#           tableName: vectors
+#         apiKey: ${OPENAI_API_KEY}
+#       enabledModels:
+#         - label: GPT-4.1
+#           value: gpt-4.1
+#       enabled: true
+#       sort: 10
+
+database:
+  default: main
+  connections:
+    main:
+      dialect: sqlite
+      database: database.sqlite
+      debug: false
+      # For Oracle, use dialect: oracle and replace database with serviceName: FREEPDB1.
+      # For SQL Server, use dialect: mssql and configure encrypt and trustServerCertificate.
+      schemaManagement: managed
+      migrations:
+        autoRun: true
+      seeds:
+        autoRun: true
+    # Additional managed databases use database/<connectionName>/{migrations,seeds}.
+    # analytics:
+    #   dialect: postgres
+    #   host: localhost
+    #   database: analytics
+    #   username: postgres
+    #   password: ${ANALYTICS_DB_PASSWORD}
+    #   schemaManagement: managed
+    #   migrations:
+    #     autoRun: false
+    #   seeds:
+    #     autoRun: false
+    # Existing external databases require a runtime metadataStore and do not run tasks.
+
+snowflake:
+  # Assign a unique worker ID to each concurrently running instance.
+  workerId: 0
+  epoch: 1605024000

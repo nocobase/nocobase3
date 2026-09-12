@@ -105,11 +105,12 @@ The three files named `runtime.ts`, `plugins.ts`, and `routes.ts` are compositio
 
 ### Everyday development
 
-| Script       | What it does                                      |
-| ------------ | ------------------------------------------------- |
-| `pnpm dev`   | Start the API server and client with hot reload   |
-| `pnpm build` | Build the client and server into `dist/`          |
-| `pnpm start` | Run the built server; requires `pnpm build` first |
+| Script             | What it does                                                                 |
+| ------------------ | ---------------------------------------------------------------------------- |
+| `pnpm dev`         | Start the API server and client with hot reload                              |
+| `pnpm build`       | Build the client and server into `dist/`                                     |
+| `pnpm start`       | Run the built server; requires `pnpm build` first                            |
+| `pnpm build --tar` | Build, then pack `dist/` and `config.example.yml` into `storage/dist.tar.gz` |
 
 ### Database
 
@@ -134,6 +135,8 @@ Database tasks support `--connection <name>` and `--all`; no argument targets `d
 | `pnpm fix`           | Fix lint problems, then format                               |
 | `pnpm check`         | Everything above plus a build; what to run before committing |
 
+`pnpm nocobase app i18n:check` reports a language declared in `client/locales/` but not `server/locales/`, or the reverse. The browser builds its language picker from one and the server decides what it answers in from the other, so a language on only one side is one the interface offers and the server then rejects.
+
 ### Plugins
 
 Plugins add features to your application. Let these commands edit `package.json`, `client/plugins.ts`, and `server/plugins.ts` for you rather than editing those files by hand.
@@ -150,12 +153,101 @@ Ordering in `client/plugins.ts` and `server/plugins.ts` is contribution order, a
 
 ### Diagnostics
 
-| Script                | What it does                                                                       |
-| --------------------- | ---------------------------------------------------------------------------------- |
-| `pnpm client:inspect` | Print the resolved client composition: routes, providers, and which file owns each |
-| `pnpm server:inspect` | Print the resolved server composition                                              |
+| Script                      | What it does                                                                                |
+| --------------------------- | ------------------------------------------------------------------------------------------- |
+| `pnpm client:inspect`       | Print the resolved client composition: routes, providers, and which file owns each          |
+| `pnpm server:inspect`       | Print the resolved server composition                                                       |
+| `pnpm server:deps:retarget` | Replace native binaries with the target platform's; part of `pnpm build`                    |
+| `pnpm server:deps:verify`   | Check that everything your server and CLI import reaches a deployment; part of `pnpm build` |
 
 These read static declarations. They report what is wired, not whether it works — a passing inspection is not a substitute for tests.
+
+#### Deploying to a different machine
+
+`pnpm build` produces `dist/`, which is the whole deployment: copy it to a server and run it. It carries its own `package.json`, and `pnpm install --prod` there installs exactly what the server needs.
+
+Client packages are not among them. Plugins declare what their browser code needs as peer dependencies, so your application installs one shared copy for its Vite build, while `dist/` opts out of peer installation entirely — `lucide-react`, `@base-ui/react`, `sonner` and the rest never reach a server that has no browser in it.
+
+**The build targets the machine you run it on**, so `pnpm build && pnpm start` works. Deploying elsewhere means saying where:
+
+```bash
+pnpm build                                        # this machine
+pnpm build --target linux-x64                     # most Linux servers
+pnpm build --target linux-arm64                   # ARM servers, Graviton
+pnpm build --target linux-x64-musl                # Alpine, and most slim container images
+pnpm build --target linux-x64 --node-version 22   # when the server runs Node 22
+```
+
+A `.node` binary is compiled for one platform, architecture, C library, and Node version at once, so a build made on a Mac installs binaries a Linux server cannot load. `--target` sets platform, architecture, and C library together, because they are chosen together: `linux-x64` and `linux-x64-musl` are different binaries, and Alpine needs the musl one. If you are unsure, `ldd --version` on the server prints `musl` for musl and `GNU libc` otherwise.
+
+`--node-version` takes the major version your server runs, separately, because the same Linux host may run any of several. Supported: 20, 22, 24, 26.
+
+Every build prints the platform it produced and records it in `dist/package.json` under `nocobase.buildTarget`, so a `dist/` built for the wrong machine can be identified rather than guessed at.
+
+If your application has no native modules — `pg`, `mysql2`, and `tedious` are all plain JavaScript — none of this applies and `dist/` is portable as built.
+
+#### Packing the build
+
+`pnpm build --tar` writes `storage/dist.tar.gz`, the artifact you upload to a Hub to deploy this application.
+
+The archive has two levels: `config.example.yml` and `dist/` sit at the root, and the build is inside `dist/`. What `dist/` holds varies with the application; this is the shape:
+
+```text
+dist.tar.gz
+├── config.example.yml
+└── dist/
+    ├── cli/
+    ├── client/
+    ├── node_modules/
+    ├── server/
+    ├── package.json
+    └── pnpm-workspace.yaml
+```
+
+Combine it with `--target` when the archive is for another machine:
+
+```bash
+pnpm build --target linux-x64 --tar
+```
+
+#### Adding a dependency
+
+Where a package goes depends on which half of your application imports it.
+
+| Imported from                     | Declare it in     |
+| --------------------------------- | ----------------- |
+| `server/`, `database/`, or `cli/` | `dependencies`    |
+| `client/`, build tooling, tests   | `devDependencies` |
+
+`dist/package.json` is generated from `dependencies` and is what a server installs, so a package in `devDependencies` is missing there however well it works locally. Client packages need nothing at runtime — Vite resolves and inlines them into `dist/client` while building.
+
+Plugins' browser packages need nothing from you: a plugin declares those as peer dependencies, so installing the plugin brings one shared copy into your application, and `dist/` never installs them.
+
+`pnpm build` verifies the server half and fails the build if something is missing, naming the package. One case it cannot check is an import whose name is assembled while the program runs:
+
+```ts
+await import(`${name}/index.js`);
+```
+
+Nothing can tell in advance which package that names, so declare it in `dependencies` when you write the code.
+
+#### When the build or the deployment goes wrong
+
+**`Cannot find module` on the server, but it runs locally.** The package is in `devDependencies`, which `dist/package.json` is not generated from. Move it to `dependencies` and rebuild.
+
+**A browser package fails to resolve while building your application.** A plugin declares it as a peer dependency and something has to provide it. Add it to your `devDependencies`.
+
+**`Error loading shared library`, `invalid ELF header`, or a bare reference to a `.node` file at startup.** The binary does not match the server. Compare what the build targeted against the server:
+
+```bash
+node -e "console.log(require('./dist/package.json').nocobase.buildTarget)"
+node -p "process.platform + '-' + process.arch"   # on the server
+node -p "process.versions.modules"                # on the server: the ABI
+```
+
+Rebuild with a matching `--target` and `--node-version`. ABI 115 is Node 20, 127 is Node 22, 137 is Node 24, 147 is Node 26.
+
+**`no prebuilt binary for <target>` during the build.** The package publishes no build for that combination. Check whether the version you depend on supports the target, and whether a musl build exists if you asked for one — musl coverage is thinner than glibc.
 
 ## Configuration
 
@@ -178,9 +270,9 @@ After signing in with the `notification:test` `send` permission, use the
 notification logs settings page to send a real message through the durable
 Notification Manager. The form is generated from safe Channel test metadata;
 Email tests require an address and IM tests use the configured logical target.
-The button is unavailable unless the protected targets endpoint is authorized,
-and testing is disabled unless `notification.test.enabled` is explicitly set
-to `true` in `config.yml`.
+The button remains visible so configuration problems are discoverable. The
+server enforces the `notification:test` `send` permission only when the message
+is submitted.
 
 ## Working with an AI agent
 

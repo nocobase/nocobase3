@@ -75,6 +75,9 @@ describe('server plugin definitions', () => {
     expect(Object.isFrozen(plugin.routes)).toBe(true);
   });
 
+  // Resolved from `app-template-examples`, which is where the example plugins are installed. They used to live in
+  // `app-template-default` and were moved out; a test naming the wrong template fails with "could not be resolved",
+  // which reads like a defect in resolution rather than a stale path.
   it('ignores configured contribution paths that do not exist', () => {
     const plugin = defineServerPlugin({
       packageName: '@nocobase/app-plugin-service-provider-example',
@@ -88,7 +91,7 @@ describe('server plugin definitions', () => {
     });
 
     const resolved = resolveAppServerPlugins(
-      path.resolve(process.cwd(), '../../templates/app-template-default'),
+      path.resolve(process.cwd(), '../../templates/app-template-examples'),
       defineServerPlugins([plugin]),
     ).plugins[0]?.metadata;
 
@@ -107,7 +110,7 @@ describe('server plugin definitions', () => {
 
     expect(() =>
       resolveAppServerPlugins(
-        path.resolve(process.cwd(), '../../templates/app-template-default'),
+        path.resolve(process.cwd(), '../../templates/app-template-examples'),
         defineServerPlugins([plugin]),
       ),
     ).toThrow(

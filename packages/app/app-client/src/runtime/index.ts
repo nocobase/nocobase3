@@ -68,6 +68,8 @@ export interface AppRuntimeContext {
   readonly serviceProviders: readonly AppClientRegisteredServiceProvider[];
   readonly reactProviders: readonly AppClientRegisteredReactProvider[];
   readonly routes: readonly AppClientRegisteredRoute[];
+  readonly settingsRouteTree: readonly AppClientRegisteredRoute[];
+  readonly devRouteTree: readonly AppClientRegisteredRoute[];
   readonly settings: readonly AppClientRegisteredSetting[];
   readonly settingGroups: readonly AppClientRegisteredSettingGroup[];
   /** Dev pages. Empty in a production build, where every dev contribution resolved to no routes. */
@@ -150,6 +152,8 @@ export async function resolveAppRuntime(
       ...(definition.routeComponentOverrides ?? []),
       ...extensionOverrides,
     ]),
+    settingsRouteTree: contributions.settingsRouteTree,
+    devRouteTree: contributions.devRouteTree,
     settings: contributions.settings,
     settingGroups: contributions.settingGroups,
     devRoutes: contributions.devRoutes,

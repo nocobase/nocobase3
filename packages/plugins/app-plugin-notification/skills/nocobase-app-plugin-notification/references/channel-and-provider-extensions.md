@@ -4,7 +4,7 @@
 
 A Channel defines the business-to-delivery adaptation:
 
-- Resolve a generic `NotificationRecipient` into a Channel recipient.
+- Resolve an optional generic `NotificationRecipient` into a Channel recipient; return a recipient directly when the Channel supports recipientless delivery.
 - Render common `NotificationContent` plus a Channel override into a Channel message.
 - Prepare a Provider-ready payload with an abort signal.
 
@@ -16,6 +16,7 @@ A Provider defines one transport implementation:
 - Submit the prepared payload before the deadline and honor cancellation.
 - Return `accepted`, known `failed`, or `submission_unknown` without throwing transport details across the contract.
 - Close network resources when the manager shuts down.
+- Declare whether repeated submission with the same `deliveryId` is idempotent and, if applicable, the retention window.
 
 Keep network I/O and credentials in the Provider. Keep user/address resolution, message rendering, and Provider-independent validation in the Channel. Keep persistence, queueing, leases, retries, and logs in the core manager.
 
@@ -54,6 +55,8 @@ Return `failed` when the service definitively rejected or did not submit the mes
 
 Return `submission_unknown` when the request may have reached the Provider but confirmation was lost. This prevents automatic duplicates.
 
+Declare Provider retry safety with `capabilities.idempotency`. Omitted capabilities are treated as `{ idempotency: { supported: false } }`. Set `{ supported: true }` only when repeated submissions with the same core-supplied `deliveryId` are idempotent; include `retentionMs` when the guarantee expires. The built-in database Provider is durable for the Delivery lifetime, Resend is bounded to its declared retention, and SMTP plus the built-in Webhook Providers omit capabilities because they do not claim idempotency.
+
 Use the core error categories: `authentication`, `channel`, `configuration`, `content`, `network`, `provider`, `rate_limit`, `recipient`, `storage`, `timeout`, or `unknown`. Error messages must be actionable and sanitized.
 
 ## Security
@@ -66,7 +69,7 @@ Use the core error categories: `authentication`, `channel`, `configuration`, `co
 
 ## Extension tests
 
-- Channel resolves each allowed recipient and rejects unsupported shapes without external I/O.
+- Channel resolves each allowed recipient, supports an omitted recipient when applicable, and rejects unsupported shapes without external I/O.
 - Renderer merges common content and overrides without mutating input.
 - Preparation validates payload and honors abort.
 - Provider returns accepted with the external id on a confirmed success.

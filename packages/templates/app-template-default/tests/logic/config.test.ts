@@ -49,7 +49,7 @@ describe('application config', () => {
     ).toEqual(
       expect.arrayContaining([
         expect.stringMatching(
-          /app-plugin-ai-knowledge-base\/server\/jobs\/\*\*\/\*\.\{ts,js,mts,mjs\}$/,
+          /app-template-default\/server\/jobs\/\*\*\/\*\.\{ts,js\}$/,
         ),
       ]),
     );

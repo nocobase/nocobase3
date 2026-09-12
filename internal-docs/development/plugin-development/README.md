@@ -7,6 +7,8 @@ description: 面向 AI Agent 的 NocoBase v3 插件开发入口，按任务路�
 
 本目录面向阅读文档并实现 NocoBase v3 插件的 AI Agent。不要顺序读取全部页面：先识别任务需要的 capability 和所有权，再读取一个模块选择页，只在复杂实现或诊断时进入深入参考。
 
+页面子路由、递归导航分组和手动 `Outlet` 的开发方式见[页面子路由与导航](client-child-routes.md)。
+
 ## Agent 阅读协议
 
 1. 新插件从[快速开始](./quick-start.md)进入；完整业务需求先读[开发工作流](./development-workflow.md)。
@@ -35,6 +37,7 @@ description: 面向 AI Agent 的 NocoBase v3 插件开发入口，按任务路�
 | 添加 Client Service 或启动初始化   | [Client 模块选择](./client.md)             | [Client ServiceProviders](./client-service-providers.md)                |
 | 添加 Client 或 Server 翻译         | [Plugin I18n](./i18n.md)                   | 页面内的 Advanced scenarios                                             |
 | 交付 App-owned 可编辑 Client 源码  | [Registry 模块选择](./registry.md)         | [编写 item](./registry-authoring.md)、[交付](./registry-delivery.md)    |
+| 贡献 CLI 命令或构建钩子            | [CLI 命令与构建钩子](./cli.md)             |
 | 描述插件提供给 App Agent 的能力    | [Plugin Skills](./skills.md)               | [测试与验证](./testing.md)                                              |
 | 验证或诊断插件                     | [测试与验证](./testing.md)                 | 对应模块的行为测试与 source of truth                                    |
 
@@ -100,6 +103,7 @@ description: 面向 AI Agent 的 NocoBase v3 插件开发入口，按任务路�
 
 ## Plugin Skills
 
+- [CLI 命令与构建钩子](./cli.md)：插件往 App 的 `pnpm nocobase` 加命令，以及注册 `pnpm build` / `pnpm dev` 要执行的命令。
 - [Plugin Skills](./skills.md)：插件声明自己提供给 App Agent 的能力和集成说明；插件 `skills/` 是源，App `.agents/skills/` 是同步结果。
 
 ## 注册深入页面

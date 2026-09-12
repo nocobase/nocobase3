@@ -1,89 +1,176 @@
 ---
 name: nocobase-app-plugin-file
-description: Integrate @nocobase/app-plugin-file into NocoBase 3 application source for file-backed business fields, tables, API routes, authorization, uploads, downloads, and previews. Use when an App Agent needs to add file behavior to an application such as app-template-default; do not create a business plugin unless the user explicitly requests a reusable published package.
-metadata:
-  short-description: Add file behavior to a NocoBase application
+description: Add file collections, uploads, downloads, business attachments, and editable Registry file components to a NocoBase 3 App using the public File Repository services.
 ---
 
-# File attachments in application source
+# Add files to an App
 
-Use the File plugin's public factories and components while keeping the actual
-business feature in the application. Read the target application's `AGENTS.md`
-and its Client and Server instructions before editing; follow its existing
-composition and test layout.
+Use `@nocobase/app-plugin-file/server` and `@nocobase/app-plugin-file/client`. The plugin provides Repository managers, service tokens, route helpers, and the component-ui Registry recipe. The App or business plugin owns collections, migrations, Drive configuration, resource routes, permissions, and pages.
 
-Do not run `plugin:create`, create `packages/plugins/app-plugin-*`, or add a
-`defineServerPlugin()` declaration for an application-specific file feature.
-Create a plugin only when the user explicitly requests an independently
-published capability or the same domain implementation is intentionally shared
-by multiple applications.
+Inspect the App's existing registrations, migrations, disks, and resources first. Register the Server default export and the Client default factory before consumers, using the App's plugin lifecycle commands. The core does not create collections or routes.
 
-## Ownership
+The following business example uses collection `invoice_files`, resource `invoiceAttachments`, connection `main`, and disk `local`. Adapt these to the App.
 
-```text
-Application owns
-  business collections and file relations
-  database/migrations and optional seeds
-  Server Route composition and authorization policy
-  Client pages, forms, state, navigation, and application copy
-  application tests and observable workflow
+## Collection
 
-@nocobase/app-plugin-file owns
-  createFileRoute() and the standard HTTP contract
-  createFilesClient() and FilesClient types
-  reusable upload, list, thumbnail, and preview components
-  storage, filename, token, and preview mechanics
+Create an App-owned, self-contained migration under `database/main/migrations/` with a unique name matching its filename. Replace `main` with the target connection when needed:
+
+```ts
+import { defineMigration, type MigrationDefinition } from '@nocobase/db';
+
+const migration: MigrationDefinition = defineMigration({
+  name: '202609080001_create_invoice_files',
+  async up({ builder }) {
+    await builder.createCollection('invoice_files', (collection) => {
+      collection.uuid('id').primary().notNull();
+      collection.string('disk', { length: 255 }).notNull();
+      collection.text('key').notNull();
+      collection.text('filename').notNull();
+      collection.string('ext', { length: 32 }).notNull();
+      collection.string('mimeType', { length: 255 }).notNull();
+      collection.bigInt('size').notNull();
+      collection.datetime('createdAt').notNull();
+      collection.datetime('updatedAt').notNull();
+    });
+  },
+  async down({ builder }) {
+    await builder.dropCollection('invoice_files');
+  },
+});
+export default migration;
 ```
 
-## Application workflow
+The fields are fixed; mapping is unsupported. The primary key must accept a 36-character UUID, string fields accept string/char/text, size accepts integer/bigInt, and timestamps accept datetime/datetimeTz. Apply with the App's migration command. Never import a live collection schema from a migration.
 
-1. Confirm `@nocobase/app-plugin-file` is installed and registered so its
-   Client and Server locale contributions are available.
-2. Add the business collection and its standard file table under the
-   application's `database/migrations/` directory.
-3. Add a scoped `createFileRoute()` contribution under the application's
-   `server/routes/` directory and include it in the App's routes array. Resolve
-   Database, Drive, Session, authentication, and authorization from the App's
-   existing container and config.
-4. Resolve `apiClientToken` from the owning App, pass that `ApiClient` to
-   `createFilesClient()`, and use the reusable File components in the App page
-   or form. Add an application route in `client/routes.ts` only when the
-   workflow needs a new page.
-5. Put application-specific user-facing text in the App's locale resources and
-   behavior tests in the App's normal test directories.
+Upload generates the ID and storage key, normalizes the filename/extension, validates stored size, and supplies timestamps. Extra required columns need defaults because upload accepts no business values. `contentUrl` is derived, never persisted. Save returned file IDs through an App-owned relation or link table when submitting the business form; upload and form submission are separate commits.
 
-## Core constraints
+## API routes
 
-- Store stable metadata only. Never persist final URLs or access tokens.
-- Keep table names and scope fields in Server code. Derive scope from validated
-  Route parameters and apply it to every list, read, create, and delete query.
-- Persist the parent record before constructing its scoped client or enabling
-  uploads. Initialize edit and read views with `client.list()`.
-- Use a unique owner key for one-to-one relations and an indexed owner key for
-  one-to-many relations. Keep `UNIQUE (disk, key)` on each file table.
-- Each application Route owns authentication and authorization. Map every
-  `FileRouteAction` to the App's existing business policy and authorize the
-  parent record before allowing file operations.
-- `FileUploadField` removes only local controlled state by default. Use
-  `removeOnDelete` for immediate Server deletion or let the App workflow call
-  `client.remove()` deliberately.
-- Do not use the legacy `storages:*` protocol, expose Drive credentials or the
-  signing secret, accept table/disk/key names from the browser, or create a
-  second Database/Drive/session runtime.
+Declare in the App or business plugin's Server routes module and merge both returned contributions into its existing routes:
 
-## References
+```ts
+import { defineFileRepositoryApiRoutes } from '@nocobase/app-plugin-file/server';
 
-- Read [quick start](reference/quick-start.md) for the App-owned end-to-end
-  integration and composition locations.
-- Read [data model](reference/data-model.md) when creating or reviewing the
-  application's business and file collections.
-- Read [Route API](reference/route-api.md) when implementing HTTP behavior,
-  validation, visibility, tokens, or deletion.
+const fileRoutes: ReturnType<typeof defineFileRepositoryApiRoutes> =
+  defineFileRepositoryApiRoutes({
+    repositories: [
+      {
+        name: 'invoiceAttachments',
+        collection: 'invoice_files',
+        connection: 'main',
+        disk: 'local',
+        accessPath: '/uploads/invoices',
+        accessMode: 'stream',
+        actions: {
+          findMany: { maxLimit: 100 },
+          findOne: {},
+          deleteOne: {},
+          uploadOne: { maxSize: 5 * 1024 * 1024 },
+          uploadMany: { maxSize: 20 * 1024 * 1024 },
+        },
+      },
+    ],
+  });
+export default fileRoutes;
+```
 
-## Completion
+`name` is the Client resource; `collection` defaults to name, `connection` to the database default, and `accessPath` to `/uploads/<name>`. Disk is required. Content paths contain static alphanumeric, underscore or hyphen segments, start with `/`, and have no trailing slash.
 
-Verify the application migration, scoped Server Route, allowed and denied
-authorization, Public and Private content access, limits, deletion, Client
-upload state, preview behavior, and the real page-to-API workflow. Run the
-target App's focused lint, typecheck, tests, and build; use inspectors only when
-composition itself changed or is unexpectedly unavailable.
+Only declared POST `/api/<name>:<action>` operations are exposed. Ordinary actions are `findMany/findOne/count/exists/aggregate/groupBy/createOne/updateOne/deleteOne`. Metadata createOne/updateOne require a server writePolicy; uploads do not require exposing createOne. There are no createMany/updateMany/deleteMany HTTP actions.
+
+Content is GET `<accessPath>/<uuid>.<ext>` outside `/api`, omitting the dot when extensionless. Stream returns full bytes as an attachment; redirect returns a public storage URL or a five-minute signed URL. A disk without URL support requires stream mode; there is no automatic fallback.
+
+These are public routes. For restricted files, register App-owned authentication and authorization on the paths each contribution owns before mounting it — `/<name>:<action>` per exposed API action, `<accessPath>/*` for content. Never `router.use('*', ...)` in a contribution router: contributions share the mounted router, so it also guards the SPA and every contribution mounted after yours. Check the operation and record/parent-record access; a login page, private disk, Client filter or writePolicy is not authorization. If the generic routes cannot express the policy, write business routes using the public Server manager. Never trust browser-supplied ownership.
+
+## Server and Client services
+
+Resolve the original token from the current App container after registration; in a ServiceProvider use `this.app.container`. Do not create another database, Drive manager, or API Client.
+
+```ts
+import { serverFileRepositoryManagerToken } from '@nocobase/app-plugin-file/server';
+
+const manager = container.resolve(serverFileRepositoryManagerToken);
+const files = manager.repository('invoice_files', {
+  connection: 'main',
+  disk: 'local',
+  accessPath: '/uploads/invoices',
+});
+const { record } = await files.uploadOne({ file });
+const url = files.getUrl(record);
+```
+
+Server repository() takes the collection name and requires disk/accessPath matching its routes. getUrl is synchronous and App-local; getStorageUrl asynchronously uses the record's disk/key to obtain a public or signed storage URL. Neither queries the database. Direct Server CRUD does not decorate URLs; uploads do.
+
+Client code resolves `clientFileRepositoryManagerToken` and calls `manager.repository('invoiceAttachments')` with the resource name. It reuses apiClientToken, session and base URL; do not pass disk/connection/accessPath.
+
+```ts
+const { record } = await files.uploadOne({ file });
+const batch = await files.uploadMany({ files: Array.from(input.files ?? []) });
+const rows = await files.findMany({ limit: 20 });
+await files.deleteOne({ filter: { id: record.id } });
+```
+
+Inputs are a native File or a nonempty File array. Results are `{ record, createdTargets, version? }` and `{ createdCount, records }`. Upload already creates metadata. Client uploads accept an optional second `{ signal }` argument; abort does not undo a server commit. Use returned contentUrl directly: HTTP already adds the host prefix, such as `/main`. Custom selects need id and ext for contentUrl; UI also needs filename, mimeType, size and timestamps.
+
+## Registry components
+
+Install component-ui for editable upload, list, thumbnail and preview source. From a NocoBase source workspace:
+
+```bash
+pnpm registry materialize --package @nocobase/app-plugin-file --item component-ui --output-root packages/templates/app-template-default
+```
+
+Materialize copies source only. The App must provide React/React DOM, lucide-react, react-markdown, remark-gfm and shadcn button/dialog primitives. It adds no route or permissions. A hosted Registry JSON can instead be installed with shadcn add; npm publication alone supplies no Registry URL.
+
+Compose inside the started App's React context:
+
+```tsx
+import { useMemo, useState, type ReactElement } from 'react';
+import { useService } from '@nocobase/app-client';
+import {
+  clientFileRepositoryManagerToken,
+  type FileRecord,
+} from '@nocobase/app-plugin-file/client';
+import {
+  FileUploadField,
+  FileList,
+} from '@/extensions/nocobase-file-component-ui';
+
+export function InvoiceAttachments(): ReactElement {
+  const manager = useService(clientFileRepositoryManagerToken);
+  const repository = useMemo(
+    () => manager.repository('invoiceAttachments'),
+    [manager],
+  );
+  const [value, setValue] = useState<readonly FileRecord[]>([]);
+  const [error, setError] = useState('');
+  return (
+    <>
+      <FileUploadField
+        repository={repository}
+        value={value}
+        onChange={setValue}
+        multiple
+        onError={(cause) => setError(cause.message)}
+      />
+      <FileList files={value} onError={(cause) => setError(cause.message)} />
+      {error && <p role='alert'>{error}</p>}
+    </>
+  );
+}
+```
+
+FileUploadField takes a repository and controlled value/onChange; onStatusChange reports idle/uploading/error so forms can prevent incomplete submissions. Accept/maxSize/maxFiles are UI checks. removeOnDelete calls deleteOne, deleting metadata only; otherwise removal unlinks the selection. Read-only FileList, FileThumbnail, FilePreviewField and FilePreviewDialog use contentUrl without a repository prop. Import UI types from the installed recipe. Supply translated labels and adapt App-owned source as needed.
+
+Preview supports safe raster images, PDF via a fetched blob, text/Markdown, audio/video and Office fallback. HTML/SVG/XML previews and unsafe URL schemes are rejected. Office Online requires an internet-accessible URL and cannot use the App session. Same-origin fetches include credentials; external fetches need CORS. Bearer-only content policies need an App-owned authenticated blob adapter. Merge installed source upgrades with App customizations.
+
+## Verify and handle failures
+
+Verify upload → query → contentUrl → identical downloaded bytes, including batch upload, resource aliases and host prefixes. After materialization run the consuming App's typecheck/build and exercise upload, cancel/retry, remove, download and preview. Restricted files need anonymous, forbidden-user and permitted-user tests against both API and content routes. Inspectors check registration only.
+
+- Upload defaults are 5 MiB single / 20 MiB batch for the whole multipart body, including overhead. Direct Server uploads have no HTTP limit; UI maxSize checks an individual file. The Client supplies the multipart boundary.
+- BODY_TOO_LARGE (413): reduce request size or adjust route limits. INVALID_FILE/INVALID_FILES (400): send native File values and a nonempty batch.
+- INVALID_FILE_COLLECTION: fix the migration before storage writes. STORAGE_URL_UNAVAILABLE: configure a capable disk or stream mode.
+- FILE_COMMIT_UNCERTAIN / FILE_CLEANUP_FAILED: reconcile database records and stored objects before retrying; uploads have no idempotency key.
+
+There is no built-in route authentication, row ACL, Range/206, ETag, conditional download, resumable upload, physical cleanup, content sniffing or malware scan. Metadata deletion retains objects; cancelled forms may leave unlinked files. Implement the policies required by the business, including referenced-file deletion and orphan cleanup.

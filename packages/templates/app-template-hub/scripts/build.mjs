@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { readCliHooks, runHookStage } from './utils/cli-hooks.mjs';
+
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '..',
@@ -190,11 +192,19 @@ const run = (label, command, args, options = {}) => {
   }
 };
 
+// Read before anything is built, so a broken CLI assembly fails here rather than after several minutes of work.
+const { build: buildHooks } = readCliHooks(rootDir);
+
 fs.rmSync(distDir, { recursive: true, force: true });
+
+// After `dist` is cleared rather than before, so a hook may write into it. Clearing is the build's first step, and a
+// hook writing to a directory about to be deleted would succeed, leave nothing behind, and report nothing wrong.
+runHookStage(buildHooks, 'beforeBuild', run);
 
 run('Typecheck client', 'pnpm', ['exec', 'tsc']);
 run('Typecheck tooling', 'pnpm', ['exec', 'tsc', '-p', 'tsconfig.node.json']);
 run('Build client', 'pnpm', ['exec', 'refine', 'build']);
+runHookStage(buildHooks, 'afterClientBuild', run);
 // `^...` selects every workspace package this one depends on, transitively, which is exactly the set whose `dist`
 // the steps below read. Spelling the set out by hand drifted instead: `@nocobase/config` was missing from the list
 // and a template built on its own failed at "Generate server package" with `Missing ../../libs/config/dist`.
@@ -218,13 +228,7 @@ run('Rewrite server path aliases', 'pnpm', [
   '-p',
   'tsconfig.server.json',
 ]);
-run('Build workflow artifacts', 'pnpm', [
-  'nocobase',
-  'workflow',
-  'build',
-  '--resource-root',
-  './dist/server/workflows',
-]);
+runHookStage(buildHooks, 'afterServerBuild', run);
 writeDistEnv();
 run('Generate server package', 'node', [
   './scripts/utils/build-server-dist-package.mjs',
@@ -251,7 +255,37 @@ run(
 run('Materialize server dependency links', 'node', [
   './scripts/utils/clean-dist-bin.mjs',
 ]);
+// A `.node` binary is compiled for one platform, architecture, C library, and Node ABI at once, so an install run
+// here produces binaries for this machine. Defaults to this machine so `pnpm build && pnpm start` works; a
+// deployment build passes --target and --node-version.
+run('Retarget native modules', 'node', [
+  './scripts/utils/retarget-native.mjs',
+  ...process.argv.slice(2),
+]);
+// Removes type declarations, third-party source maps, and third-party documentation from the installed tree. Runs
+// after the native retarget, which installs platform packages of its own, and before verification, which reads
+// `dist/package.json` and package directories rather than any of the files removed here.
+run('Prune deployment artifacts', 'node', [
+  './scripts/utils/prune-dist-artifacts.mjs',
+]);
+// Fails the build when something the application's own server, database, or CLI code imports would not be usable
+// in a deployment. It runs against the installed tree rather than the manifest alone, because the question is not
+// whether a package is declared but whether the deployment install will actually fetch it. Catching it here costs
+// a build; the alternative is finding out from `Cannot find module` on a deployed server.
+run('Verify server dependencies', 'node', [
+  './scripts/utils/verify-server-deps.mjs',
+]);
+// Last, with the deployment tree complete and installed. A hook here sees what a deployment will see, and runs
+// before `--tar` so whatever it produces is packed with everything else.
+runHookStage(buildHooks, 'afterBuild', run);
 
 console.log(
   '\nBuild complete: dist/client, dist/server, dist/cli, dist/.env, and dist/package.json',
 );
+
+// Opt-in, because the archive is only wanted when the build is being shipped somewhere, and packing several hundred
+// megabytes is a minute nobody building to run locally should pay. Matched exactly so it cannot be confused with
+// `--target`, which selects the platform the binaries are built for and is a different question entirely.
+if (process.argv.slice(2).includes('--tar')) {
+  run('Pack deployment archive', 'node', ['./scripts/utils/pack-dist.mjs']);
+}

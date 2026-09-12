@@ -1,6 +1,10 @@
-import type { CollectionRepository } from '@nocobase/ai-employee';
+import type {
+  CollectionRepository,
+  RepositoryOptions,
+} from '@nocobase/ai-employee';
 
 export type AIUsageEventEntity = {
+  id?: string | number | bigint;
   occurredAt?: Date | string | number | bigint;
   sessionId?: string;
   messageId?: string | number | bigint;
@@ -21,8 +25,21 @@ export type AIUsageEventEntity = {
   toolCallCount?: number;
   autoToolCallCount?: number;
   status?: string;
-  rawUsageMetadata?: unknown;
-  rawResponseMetadata?: unknown;
+  rawUsageMetadata?: Record<string, unknown>;
+  rawResponseMetadata?: Record<string, unknown>;
 };
 
-export interface AIUsageEventRepository extends CollectionRepository<AIUsageEventEntity> {}
+export type AIUsageEventUpsertValues = Omit<
+  AIUsageEventEntity,
+  'messageId' | 'eventType'
+> & {
+  messageId: string | number;
+  eventType: string;
+};
+
+export interface AIUsageEventRepository extends CollectionRepository<AIUsageEventEntity> {
+  upsert(
+    values: AIUsageEventUpsertValues,
+    options?: RepositoryOptions,
+  ): Promise<void>;
+}

@@ -1,11 +1,6 @@
-import {
-  createDatabaseManager,
-  type DatabaseManager,
-  type Row,
-} from '@nocobase/db';
+import { createDatabaseManager, type DatabaseManager } from '@nocobase/db';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { WORKFLOW_COLLECTIONS } from '../server/collections/names.js';
 import {
   EXECUTION_REASON,
   EXECUTION_STATUS,
@@ -18,10 +13,14 @@ import type {
   WorkflowId,
   WorkflowNode,
 } from '../server/engine/types.js';
-import { loadWorkflow } from '../server/engine/utils.js';
+import {
+  asId,
+  asIdFilter,
+  loadWorkflow,
+  serializeJson,
+} from '../server/engine/utils.js';
 import type { WorkflowInstructionClass } from '../server/instructions/base.js';
 import { ConditionInstruction } from '../server/instructions/condition/instruction.js';
-import { createWorkflowCollections } from './helpers.js';
 import {
   defineTestInstruction,
   echoInstruction,
@@ -29,9 +28,12 @@ import {
 import {
   createTestDatabase,
   createTestWorkflow,
+  createWorkflowCollections,
+  findRun,
   insertTestRun,
   listNodeRuns,
   readRun,
+  testStore,
 } from './helpers.js';
 
 describe('workflow dispatcher and processor', () => {
@@ -54,32 +56,24 @@ describe('workflow dispatcher and processor', () => {
   });
 
   it('dispatches and processes nodes connected only by upstreamKey and downstreamKey', async () => {
-    await database
-      .query()
-      .insertInto(WORKFLOW_COLLECTIONS.workflows)
-      .values({
+    const store = testStore(database);
+    const created = await store.workflows.createOne({
+      values: {
         key: 'key-topology',
         title: 'Key topology',
         enabled: true,
         current: true,
-        inputSchema: { type: 'object' },
-        parametersSchema: {},
-        parameterValues: {},
-        options: {},
-      })
-      .execute();
-    const workflowRow = await database
-      .query()
-      .selectFrom(WORKFLOW_COLLECTIONS.workflows)
-      .select('id')
-      .where('key', '=', 'key-topology')
-      .executeTakeFirstOrThrow<Row>();
-    const workflowId = workflowRow.id;
+        inputSchema: serializeJson({ type: 'object' }),
+        parametersSchema: serializeJson({}),
+        parameterValues: serializeJson({}),
+        options: serializeJson({}),
+      },
+      select: (select) => select.fields('id'),
+    });
+    const workflowId = asIdFilter(asId(created.record.id));
 
-    await database
-      .query()
-      .insertInto(WORKFLOW_COLLECTIONS.nodes)
-      .values([
+    await store.nodes.createMany({
+      values: [
         {
           workflowId,
           key: 'first',
@@ -98,8 +92,8 @@ describe('workflow dispatcher and processor', () => {
           downstreamKey: null,
           branchKey: null,
         },
-      ])
-      .execute();
+      ],
+    });
 
     const echo: WorkflowInstructionClass = defineTestInstruction(
       'echo',
@@ -108,10 +102,7 @@ describe('workflow dispatcher and processor', () => {
         result: instruction.node.config.value,
       }),
     );
-    const workflow = await loadWorkflow(
-      database.query(),
-      workflowId as string | number,
-    );
+    const workflow = await loadWorkflow(store, workflowId);
     expect(workflow).not.toBeNull();
 
     const dispatcher = new Dispatcher({
@@ -124,76 +115,29 @@ describe('workflow dispatcher and processor', () => {
       { eventKey: 'event-key-topology' },
     );
 
-    const execution = await database
-      .query()
-      .selectFrom(WORKFLOW_COLLECTIONS.runs)
-      .selectAll()
-      .where('eventKey', '=', 'event-key-topology')
-      .executeTakeFirstOrThrow<Row>();
+    const execution = await findRun(database, 'event-key-topology');
     expect(execution.status).toBe(EXECUTION_STATUS.RESOLVED);
+    // SQLite gives a `json` column NUMERIC affinity, so the stored JSON text
+    // `2` reads back as the number. `parseJson` is what normalizes it.
     expect(execution.output).toBe(2);
 
-    const nodeRuns = await database
-      .query()
-      .selectFrom(WORKFLOW_COLLECTIONS.nodeRuns)
-      .select(['nodeKey', 'status', 'result'])
-      .where('workflowRunId', '=', execution.id)
-      .orderBy('id')
-      .execute<Row>();
-    expect(nodeRuns).toEqual([
+    await expect(listNodeRuns(database, asId(execution.id))).resolves.toEqual([
       { nodeKey: 'first', status: NODE_RUN_STATUS.RESOLVED, result: 1 },
       { nodeKey: 'second', status: NODE_RUN_STATUS.RESOLVED, result: 2 },
     ]);
   });
 
   it('recovers an undispatched execution through the same key-based processor path', async () => {
-    await database
-      .query()
-      .insertInto(WORKFLOW_COLLECTIONS.workflows)
-      .values({
-        key: 'recoverable',
-        enabled: true,
-        current: true,
-        inputSchema: { type: 'object' },
-        parametersSchema: {},
-        parameterValues: {},
-        options: {},
-      })
-      .execute();
-    const workflowId = await database
-      .query()
-      .selectFrom(WORKFLOW_COLLECTIONS.workflows)
-      .where('key', '=', 'recoverable')
-      .value<string | number>('id');
-    await database
-      .query()
-      .insertInto(WORKFLOW_COLLECTIONS.nodes)
-      .values({
-        workflowId,
-        key: 'only',
-        type: 'echo',
-        config: JSON.stringify({}),
-        upstreamKey: null,
-        downstreamKey: null,
-        branchKey: null,
-      })
-      .execute();
-    await database
-      .query()
-      .insertInto(WORKFLOW_COLLECTIONS.runs)
-      .values({
-        workflowId,
-        workflowKey: 'recoverable',
-        eventKey: 'recover-event',
-        input: JSON.stringify({}),
-        parameters: JSON.stringify({}),
-        status: null,
-        dispatched: false,
-        stack: JSON.stringify([]),
-        createdAt: new Date(0).toISOString(),
-        manually: false,
-      })
-      .execute();
+    const workflow = await createTestWorkflow(database, {
+      key: 'recoverable',
+      nodes: [{ key: 'only', type: 'echo' }],
+    });
+    await insertTestRun(database, {
+      workflowId: workflow.id,
+      workflowKey: 'recoverable',
+      eventKey: 'recover-event',
+      createdAt: new Date(0).toISOString(),
+    });
 
     const dispatcher = new Dispatcher({
       database,
@@ -209,13 +153,9 @@ describe('workflow dispatcher and processor', () => {
     });
     await expect(dispatcher.recover()).resolves.toBe(1);
 
-    await expect(
-      database
-        .query()
-        .selectFrom(WORKFLOW_COLLECTIONS.runs)
-        .where('eventKey', '=', 'recover-event')
-        .value('status'),
-    ).resolves.toBe(EXECUTION_STATUS.RESOLVED);
+    expect((await findRun(database, 'recover-event')).status).toBe(
+      EXECUTION_STATUS.RESOLVED,
+    );
   });
 });
 
@@ -260,7 +200,7 @@ describe('Processor public API', () => {
     const execution = await readRun(database, runId);
     // A fresh definition per processor: `prepare()` links `upstream` /
     // `downstream` on the node objects themselves.
-    const definition = await loadWorkflow(database.query(), target.id);
+    const definition = await loadWorkflow(testStore(database), target.id);
     if (!definition) {
       throw new Error('Workflow was not reloaded');
     }
@@ -357,13 +297,15 @@ describe('Processor public API', () => {
     expect(pending.finishedAt).toBeNull();
   });
 
-  it('exposes a query adapter bound to the configured connection', async () => {
+  it('exposes a store bound to the configured connection', async () => {
     const { processor, runId } = await createProcessor();
     await expect(
-      processor.query
-        .selectFrom(WORKFLOW_COLLECTIONS.runs)
-        .where('id', '=', runId)
-        .value('eventKey'),
+      processor.store.runs
+        .findOne({
+          filter: { id: asIdFilter(runId) },
+          select: (select) => select.fields('eventKey'),
+        })
+        .then((row) => row?.eventKey),
     ).resolves.toBe('processor-1');
     expect(processor.database).toBe(database);
     expect(processor.execution.id).toBe(runId);

@@ -1,13 +1,13 @@
 import type { AIManager } from '@nocobase/ai-employee';
 import type { DatabaseConnection } from '@nocobase/db';
-import type { Actor, Translate } from '../domain/contracts.js';
+import type { Actor, Translate } from '../types.js';
 import type { DatabaseRepositoryFactory } from '../repository/runtime-factory.js';
 import { EEFeatures } from '@nocobase/ai-employee';
 import type {
   AIEmployeeEntity,
   AIEmployeeToolSetting,
 } from '@nocobase/ai-employee';
-import type { AIEmployeeDto } from '../domain/api-contracts.js';
+import type { AIEmployeeDto } from '../types.js';
 import type { UserAIEmployeeEntity } from '../repository/index.js';
 import {
   asRecord,

@@ -20,6 +20,12 @@ describe('app client routes', () => {
           name: 'applications-root',
           path: '/',
         },
+        {
+          access: { resource: 'hub', action: 'access' },
+          auth: 'required',
+          name: 'applications-legacy',
+          path: '/hub',
+        },
         { auth: 'guest', name: 'login', path: '/login' },
         { auth: 'guest', name: 'register', path: '/register' },
         {

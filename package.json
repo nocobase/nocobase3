@@ -43,12 +43,18 @@
     "app:start": "pnpm --filter @nocobase/app-template-default start",
     "template:dev": "pnpm --filter @nocobase/app-template-default dev",
     "app:build": "pnpm --filter @nocobase/app-template-default build",
+    "examples:dev": "pnpm --filter @nocobase/app-template-examples dev",
+    "examples:build": "pnpm --filter @nocobase/app-template-examples build",
+    "examples:start": "pnpm --filter @nocobase/app-template-examples start",
     "hub:dev": "pnpm --filter @nocobase/app-template-hub dev",
     "hub:build": "pnpm --filter @nocobase/app-template-hub build",
     "hub:start": "pnpm --filter @nocobase/app-template-hub start",
     "app-host:dev": "APP_DIST_DIR=\"$PWD/packages/app/app-host/fixtures/app-dist\" pnpm --filter @nocobase/app-host dev",
     "app-host:build": "pnpm --filter @nocobase/app-host build",
-    "sdk:test": "pnpm --filter @nocobase/app-portal-sdk test"
+    "sdk:test": "pnpm --filter @nocobase/app-portal-sdk test",
+    "docs:dev": "pnpm --filter @nocobase/docs dev",
+    "docs:build": "pnpm --filter @nocobase/docs build",
+    "docs:preview": "pnpm --filter @nocobase/docs preview"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "catalog:",

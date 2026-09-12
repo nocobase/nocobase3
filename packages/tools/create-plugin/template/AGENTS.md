@@ -4,28 +4,32 @@ This is a NocoBase application plugin: a package published to a registry and ins
 
 ## Adding a dependency
 
-Where a package goes depends on where the code that imports it runs, not on what the package is for.
+Where a package goes depends on who has to resolve the import, and there are three different answers.
 
-| The import is reached from                          | Declare it in                             |
-| --------------------------------------------------- | ----------------------------------------- |
-| `server/` or `database/`, at runtime                | `dependencies`                            |
-| `client/` or `registry/`                            | `devDependencies`                         |
-| A package the application must own a single copy of | `peerDependencies` **and** `devDependencies` |
-| Tests, build scripts, or `import type` only         | `devDependencies`                         |
+| The import is reached from                  | Declare it in                                |
+| ------------------------------------------- | -------------------------------------------- |
+| `server/` or `database/`, at runtime        | `dependencies`                               |
+| `client/`, as a value import                | `peerDependencies`                           |
+| `registry/`                                 | nothing — the application compiles it        |
+| Tests, build scripts, or `import type` only | `devDependencies`                            |
 
 `pnpm deps:check` at the repository root enforces the server row and runs in CI.
 
-### Why server and client differ
+### Why the client row is different
 
-They are deployed differently, and the split follows from that.
+**A deployed server resolves its imports at runtime.** An application's `pnpm build` generates `dist/package.json` from `dependencies` and installs from it. A server import declared only as a devDependency resolves in every development checkout and is absent exactly once — on the deployed server, as a bare `Cannot find package` naming nothing that points back at this manifest.
 
-**Server code is deployed unbundled.** An application's `pnpm build` emits `dist/server` with its bare imports intact, generates `dist/package.json` by walking `dependencies`, and installs a `node_modules` beside it. That tree is what the deployed server resolves against, and `devDependencies` are not in it. A server import declared only as a devDependency resolves in every development checkout and is absent exactly once — on the deployed server, as a bare `Cannot find package` naming nothing that points back at this manifest.
+**An installing application resolves your client imports at build time.** Your `client/` is not bundled by this plugin: `build` is `tsc`, so `dist/client/*.js` keeps its bare imports and the application's Vite build resolves them. That application has only what the published manifest declares, and npm does not publish `devDependencies` — so a client import left there fails with `Could not resolve "…"`. It will not fail here, because a workspace install links every devDependency into this plugin's own `node_modules`, which is why this mistake reaches a registry before anyone sees it.
 
-**Client code is bundled by the application.** Your `client/` is compiled by the application's Vite build, which resolves those imports at build time and inlines them. Nothing resolves them again at runtime, so a `dependencies` entry buys the bundle nothing — and costs something real, because that same walk over `dependencies` drags every one of them into the server deployment to be installed and never required. Two plugins doing this were 44 MB of exactly that before the rule was written down.
+**But that same server never requires a browser package.** Declaring one as a `dependency` would install it into every deployment, where nothing loads it.
 
-So `hono` in `server/routes/` is a `dependency`, while `react`, `lucide-react`, `@base-ui/react`, `clsx`, and `tailwind-merge` in `client/` are `devDependencies`. A dynamic `import()` counts as a runtime import; `import type` does not, wherever it appears.
+`peerDependencies` is what satisfies both: the application installs one shared copy for its Vite build, while a deployment sets `autoInstallPeers: false` and installs none of them. One declaration is enough — pnpm installs and links a peer here, so this plugin's own lint, tests, and build resolve it without a second entry.
 
-`registry/` is even further from a dependency: it is source the application copies into itself and compiles there, against that application's own `react` and `@/` alias. This plugin never resolves those imports at all.
+Do not mark such a peer `optional`. An optional peer is not auto-installed anywhere, including in the application that needs it, which is the failure this arrangement exists to prevent. `optional` means the consumer may legitimately not need the package at all.
+
+So `hono` in `server/routes/` is a `dependency`, and `sonner` in `client/` is a peer. A dynamic `import()` counts as a value import; `import type` does not, wherever it appears.
+
+`registry/` is the exception: it is source the application copies into itself and compiles there, against that application's own `react` and `@/` alias. This plugin never resolves those imports at all, so declaring them would claim dependencies it does not have.
 
 ### Prefer what the application already has
 
@@ -35,7 +39,25 @@ Before adding a client package, check whether `packages/templates/app-template-d
 
 `@nocobase/app-server`, `@nocobase/app-client`, `@nocobase/db`, `@nocobase/i18n`, `@nocobase/service-provider`, `@nocobase/queue`, and every other `@nocobase/app-plugin-*` carry process-wide state — service tokens compared by object identity, React contexts, a job registry. A second copy splits that state, and nothing warns: the install succeeds, the build succeeds, and at runtime a demonstrably registered service reports `Service "..." is not registered`.
 
-Declare each as a `peerDependency` (the published contract: "provide this, and provide exactly one") paired with a `devDependency` (which pins this repository's copy for development, where the wide peer range should not float). `pnpm peers:check` enforces this. The generator already emits this shape for the capabilities you selected.
+Declare each as a `peerDependency` — the published contract: "provide this, and provide exactly one". One declaration is enough; pnpm installs a peer and links it into this package's own `node_modules`, so lint, tests, and the build resolve it without a second entry to keep in step. `pnpm peers:check` enforces this. The generator already emits this shape for the capabilities you selected.
+
+## Contributing CLI commands
+
+A plugin can add commands to an application's `pnpm nocobase`, and can ask an application to run a command during its `pnpm build` or `pnpm dev`. Both are declared in `cli/index.ts` through `defineCliPlugin`, and the `cli` capability generates that entry with one example command.
+
+Commands here are static tooling: they read and write files and packages. They never start the application, so nothing in one may resolve a service or query the database — anything needing the running application is a server route or a job.
+
+Build and dev hooks are for a plugin that has to produce something before the application can run. Declaring the step here rather than in each application's build script is what keeps it correct: it appears only where this plugin is registered, and disappears with it.
+
+```ts
+buildHooks: {
+  afterServerBuild: [{ label: 'Build artifacts', command: ['pnpm', 'nocobase', '<topic>', 'build'] }],
+},
+```
+
+A hook command is any executable with its arguments, already split — no shell, so no quoting to get right, and no `&&` or pipes. The stage names say what exists when the hook runs: `beforeBuild` (empty `dist`), `afterClientBuild` (`dist/client`), `afterServerBuild` (`+ dist/server`), `afterBuild` (the installed deployment tree), and `beforeDev` for `pnpm dev`.
+
+Read `internal-docs/development/plugin-development/cli.md` before adding either.
 
 ## Before you finish
 

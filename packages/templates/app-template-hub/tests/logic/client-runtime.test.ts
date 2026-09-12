@@ -94,6 +94,35 @@ describe('app client runtime', () => {
       text: 'Configured application',
     });
     expect(app.refineConfig.authProvider).toBeDefined();
+    expect(
+      runtime.routes
+        .filter((route) => route.navigation)
+        .map((route) => ({
+          name: route.name,
+          path: route.path,
+          access: route.access,
+          title: route.navigation?.title,
+        })),
+    ).toEqual([
+      {
+        name: 'hub',
+        path: '/apps',
+        access: { resource: 'hub', action: 'access' },
+        title: 'navigation.applications',
+      },
+      {
+        name: 'hub-roles',
+        path: '/roles',
+        access: { resource: 'users', action: 'access' },
+        title: 'navigation.roles',
+      },
+      {
+        name: 'users',
+        path: '/users',
+        access: { resource: 'users', action: 'access' },
+        title: 'nav.users',
+      },
+    ]);
     await app.shutdown();
   });
 

@@ -8,10 +8,7 @@ import {
   type ReactElement,
 } from 'react';
 
-import type {
-  FileRecord,
-  FileUploadFieldProps,
-} from '@nocobase/app-plugin-file/client/types';
+import type { FileRecord, FileUploadFieldProps } from '../types';
 import { Button } from '@/components/ui/button';
 import { FileThumbnail } from './file-thumbnail';
 
@@ -38,7 +35,7 @@ function accepts(file: File, rules: readonly string[]): boolean {
 }
 
 export function FileUploadField({
-  client,
+  repository,
   value,
   onChange,
   onError,
@@ -47,7 +44,6 @@ export function FileUploadField({
   accept = [],
   maxSize,
   maxFiles,
-  public: isPublic,
   disabled = false,
   removeOnDelete = false,
   labels,
@@ -119,10 +115,10 @@ export function FileUploadField({
       ),
     );
     try {
-      const record = await client.upload(item.file, {
-        public: isPublic,
-        signal: controller.signal,
-      });
+      const { record } = await repository.uploadOne(
+        { file: item.file },
+        { signal: controller.signal },
+      );
       controllersRef.current.delete(item.key);
       if (!mountedRef.current || controller.signal.aborted) return;
       setItems((current) =>
@@ -185,7 +181,7 @@ export function FileUploadField({
   const removeRecord = async (record: FileRecord): Promise<void> => {
     if (removeOnDelete) {
       try {
-        await client.remove(record.id);
+        await repository.deleteOne({ filter: { id: record.id } });
       } catch (error) {
         onError?.(
           error instanceof Error ? error : new Error('File removal failed.'),

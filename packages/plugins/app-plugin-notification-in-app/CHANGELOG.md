@@ -1,5 +1,71 @@
 # @nocobase/app-plugin-notification-in-app
 
+## 0.2.0-beta.8
+
+### Patch Changes
+
+- adedf9c: Use a database-side count for unread in-app notifications instead of loading all matching rows.
+- 426bd48: Remove logical IM `target` recipients and make `send().to` optional so Webhook Providers can be selected directly by Provider name or fan-out strategy.
+- Updated dependencies [a009e2d]
+- Updated dependencies [426bd48]
+  - @nocobase/app-server@1.0.0-beta.10
+  - @nocobase/app-client@1.0.0-beta.13
+  - @nocobase/i18n@1.0.0-beta.3
+  - @nocobase/app-plugin-notification@0.1.0-beta.7
+
+## 0.2.0-beta.7
+
+### Minor Changes
+
+- 0a3fa83: Ship package changelogs, return stable localized error envelopes for notification-owned failures, and show user-facing Channel and Provider labels in notification logs.
+
+### Patch Changes
+
+- 0a3fa83: Require stable send idempotency keys, expose ordered notification status observation and reason-required Delivery retry APIs, persist inferred retry resolutions and Provider idempotency windows, and declare built-in Provider idempotency capabilities.
+- 0a3fa83: Always show the notification test action, use user-facing delivery method labels, and enforce its permission only when a test message is submitted.
+- Updated dependencies [e3fa827]
+- Updated dependencies [0a3fa83]
+- Updated dependencies [c3e02bf]
+- Updated dependencies [0a3fa83]
+- Updated dependencies [0a3fa83]
+- Updated dependencies [1d042c0]
+- Updated dependencies [0a3fa83]
+  - @nocobase/app-server@1.0.0-beta.9
+  - @nocobase/app-plugin-authentication@0.1.0-beta.10
+  - @nocobase/app-plugin-notification@0.1.0-beta.6
+  - @nocobase/app-client@1.0.0-beta.12
+  - @nocobase/db@1.0.0-beta.4
+
+## 0.2.0-beta.6
+
+### Patch Changes
+
+- 52d1107: Resolve the shared UI packages through the workspace catalog: `@base-ui/react`, `class-variance-authority`, `clsx`, `lucide-react`, `shadcn`, `tailwind-merge`, and `tw-animate-css`.
+
+  Every package already agreed on one version for each of these — the catalog is what keeps them agreeing. A range edited in one manifest and not the others would otherwise put two copies of a UI primitive into an application's bundle, which is the kind of drift nothing reports until a component behaves differently depending on which plugin rendered it.
+
+  Peer dependencies use `catalog:` too. `pnpm pack` resolves it before publishing, so a consumer still reads an ordinary range.
+
+- 52d1107: Declare the packages each plugin's browser code imports as peer dependencies, so an application that installs the plugin can resolve them while a server deployment installs none of them.
+
+  A plugin's `client/` is not bundled by the plugin: `build` is `tsc`, so `dist/client/*.js` keeps its bare imports and the consuming application's Vite build resolves them. That application has only what the published manifest declares, and npm does not publish `devDependencies` — so a client import declared only there fails with `Could not resolve "…"`. `sonner` and `@xyflow/react` both shipped that way. Ten of these plugins appeared to work only because `app-template-default` happened to declare the same package for its own use; `@nocobase/app-plugin-hub`'s CodeMirror imports had no such coincidence and were unresolvable wherever it was installed.
+
+  Peer dependencies are what satisfy both sides. An application installs one shared copy, and a deployment — which sets `autoInstallPeers: false` — installs none, so packages a server never requires stay out of it. Each keeps a matching devDependency so the workspace still resolves it and the version used here stays pinned. None is marked `optional`: an optional peer is not auto-installed anywhere, including in the application that needs it.
+
+  `create-plugin` emits the same shape and its generated `AGENTS.md` teaches it, so a plugin created tomorrow declares its browser packages as peers rather than repeating the mistake.
+
+- 52d1107: Declare each peer dependency once, dropping the devDependency that used to accompany it.
+
+  The pairing was required on the grounds that a peer range is wide enough for development to drift off this repository's copy. It is not: pnpm installs a peer and links it into the plugin's own `node_modules`, resolving `workspace:^` to the same package `workspace:*` would. A plugin with the devDependency removed still links, typechecks, builds, and tests against it — verified against a clean install with every plugin's `node_modules` deleted first.
+
+  What remained was a second declaration that changed nothing and had to be kept in step with the first. `pnpm peers:check` no longer asks for it, and `create-plugin` no longer emits it.
+
+- Updated dependencies [52d1107]
+- Updated dependencies [52d1107]
+- Updated dependencies [52d1107]
+  - @nocobase/app-plugin-authentication@0.1.0-beta.9
+  - @nocobase/app-plugin-notification@0.1.0-beta.5
+
 ## 0.2.0-beta.5
 
 ### Patch Changes

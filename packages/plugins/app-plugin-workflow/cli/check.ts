@@ -10,6 +10,7 @@ export default class WorkflowCheck extends Command {
   static override examples: Command.Example[] = [
     '<%= config.bin %> <%= command.id %> server/workflows/order-fulfillment',
     '<%= config.bin %> <%= command.id %> server/workflows/order-fulfillment/workflow.ts --json',
+    '<%= config.bin %> <%= command.id %> server/workflows/order-fulfillment --ir',
   ];
 
   static override args: {
@@ -23,8 +24,14 @@ export default class WorkflowCheck extends Command {
   };
 
   static override flags: {
+    ir: Interfaces.BooleanFlag<boolean>;
     json: Interfaces.BooleanFlag<boolean>;
   } = {
+    ir: Flags.boolean({
+      default: false,
+      description:
+        'Print the compiled flat IR, the definition an Artifact would carry.',
+    }),
     json: Flags.boolean({
       default: false,
       description: 'Print one machine-readable JSON result.',
@@ -40,10 +47,15 @@ export default class WorkflowCheck extends Command {
       status: 'success',
       file: result.file,
       nodes: result.ir.nodes.length,
+      ...(flags.ir ? { ir: result.ir } : {}),
     };
 
     if (flags.json) {
       this.logJson(output);
+      return;
+    }
+    if (flags.ir) {
+      this.log(JSON.stringify(result.ir, null, 2));
       return;
     }
     this.log(`Workflow check passed: ${output.file} (${output.nodes} nodes)`);

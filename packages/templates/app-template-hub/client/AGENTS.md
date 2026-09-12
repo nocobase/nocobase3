@@ -7,14 +7,15 @@ This directory is the application's browser client. Read the application's root 
 - `routes.ts` declares your page routes. `pages/` holds the components they load.
 - `components/` holds your components; `components/ui/` holds shadcn/ui primitives added with `pnpm exec shadcn add`.
 - `locales/` holds every user-visible string.
-- `runtime.ts` is the composition root. `service-provider.ts` holds startup logic and the Refine resources that populate the sidebar, `react-providers.ts` your React context providers, and `plugins.ts` the plugins the browser loads.
+- `runtime.ts` is the composition root. `service-provider.ts` holds startup logic and Refine resources for CRUD integration. `react-providers.ts` holds your React context providers, and `plugins.ts` lists the plugins the browser loads. Sidebar entries come from route `navigation` declarations.
 - `routing/`, `layouts/`, `shell/`, and `theme/` are the framework structure: route rendering and access checks, the settings and dev shells, the authenticated chrome, and the theme provider. The template evolves these, so an edit here is what a future upgrade has to reconcile — prefer the built-in mechanism, and when you do change them, comment why. Do not declare product routes in any of them.
 - `extensions/` holds application-owned copies of plugin-published UI. A copy may add an `extension.ts`, which the runtime discovers automatically as a source extension.
 
 ## Rules
 
 - Keep every page behind a lazy `componentLoader()`, default-exporting its component. Route metadata stays synchronous.
-- A route makes the URL work; it does not add a sidebar entry. That needs a Refine resource in `service-provider.ts` whose `list` matches the route path, with `meta.label` as a translation key and `meta.i18nNs` set to `APP_NS`. Settings and dev pages instead use the route's own `navigation` field.
+- All three route surfaces define sidebar entries with `navigation` on routes. Refine resources serve CRUD, not menus. Recursive groups organize navigation; page children require a manually placed `Outlet`. Read `skills/nocobase-app-development/references/client-child-routes.md` from the application root.
+- For URL-addressable dialogs and drawers, first add the child route in `client/routes.ts` inside `defineAppRoutes()`, then place the owning page's `Outlet`, and finally render the child with `RouteDialog` or `RouteDrawer`. Use `useRouteOverlay()` for closing. Read the child-routes guide before implementing nested overlays or close guards.
 - Never write the deployment base path such as `/main` into a route path. The runtime restores it.
 - `auth` on a route controls browser navigation only. The endpoint it calls enforces its own authentication.
 - Pages declared with `defineDevRoutes()` mount under `/dev` and are absent from a production build. That is a build boundary, not a permission boundary.

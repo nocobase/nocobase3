@@ -196,7 +196,9 @@ async function inspectLoadedAppClient({
     before: provider.before ?? [],
     after: provider.after ?? [],
   }));
-  const routeSnapshots = routes.map((route, index) => {
+  const flattenRoutes = (nodes) =>
+    nodes.flatMap((node) => [node, ...flattenRoutes(node.children ?? [])]);
+  const routeSnapshots = flattenRoutes(routes).map((route, index) => {
     const override = overrides.find((entry) => entry.routeId === route.id);
     return {
       order: index + 1,

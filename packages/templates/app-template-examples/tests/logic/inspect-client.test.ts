@@ -85,6 +85,32 @@ describe('client inspection', () => {
       },
       {
         auth: 'required',
+        id: '@nocobase/app-template-examples:routeOverlays',
+        path: '/route-overlays',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-template-examples:routeDialogExample',
+        path: '/route-overlays/dialog',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-template-examples:routeDialogDrawerExample',
+        path: '/route-overlays/dialog/drawer',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-template-examples:routeDrawerExample',
+        path: '/route-overlays/drawer',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-template-examples:routeDrawerDialogExample',
+        path: '/route-overlays/drawer/dialog',
+      },
+
+      {
+        auth: 'required',
         id: '@nocobase/app-template-examples:articles',
         path: '/articles',
       },
@@ -135,6 +161,11 @@ describe('client inspection', () => {
       },
       {
         auth: 'required',
+        id: '@nocobase/app-plugin-repository-example:api-examples',
+        path: '/',
+      },
+      {
+        auth: 'required',
         id: '@nocobase/app-plugin-repository-example:sort',
         path: '/repository-example/sort',
       },
@@ -165,18 +196,28 @@ describe('client inspection', () => {
       },
       {
         auth: 'required',
+        id: '@nocobase/app-plugin-repository-example:crm-group',
+        path: '/',
+      },
+      {
+        auth: 'required',
         id: '@nocobase/app-plugin-repository-example:crm',
         path: '/repository-example/crm',
       },
       {
         auth: 'required',
-        id: '@nocobase/app-plugin-repository-example:orders',
-        path: '/repository-example/orders',
+        id: '@nocobase/app-plugin-repository-example:contacts',
+        path: '/repository-example/crm/contacts',
       },
       {
         auth: 'required',
-        id: '@nocobase/app-plugin-repository-example:contacts',
-        path: '/repository-example/crm/contacts',
+        id: '@nocobase/app-plugin-repository-example:orders-group',
+        path: '/',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-repository-example:orders',
+        path: '/repository-example/orders',
       },
       {
         auth: 'required',
@@ -213,6 +254,26 @@ describe('client inspection', () => {
         id: '@nocobase/app-plugin-repository-example:products-detail',
         path: '/repository-example/orders/products/details/:recordId',
       },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-file-example:file-repository',
+        path: '/',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-file-example:file-repository-attachments',
+        path: '/file-repository',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-file-example:file-repository-profile-avatars',
+        path: '/file-repository/profile-avatars',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-file-example:file-repository-order-attachments',
+        path: '/file-repository/order-attachments',
+      },
     ]);
     expect(
       inspection.reactProviders.map(({ id, order }) => ({ id, order })),
@@ -245,7 +306,7 @@ describe('client inspection', () => {
       { packageName: '@nocobase/app-plugin-workflow', order: 6 },
       { packageName: '@nocobase/app-plugin-notification', order: 7 },
       { packageName: '@nocobase/app-plugin-repository-example', order: 8 },
-      { packageName: '@nocobase/app-plugin-file-repository', order: 9 },
+      { packageName: '@nocobase/app-plugin-file', order: 9 },
     ]);
     expect(inspection.configs[0]).toMatchObject({
       kind: 'factory',

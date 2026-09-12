@@ -82,6 +82,24 @@ describe('realtime', () => {
     realtime.close();
   });
 
+  it('disconnects all realtime connections for one user', () => {
+    const realtime = createRealtimeService();
+    const first = createTestWebSocket();
+    const second = createTestWebSocket();
+    const other = createTestWebSocket();
+    realtime.connect(first, { principal: { userId: 'user-1' } });
+    realtime.connect(second, { principal: { userId: 'user-1' } });
+    realtime.connect(other, { principal: { userId: 'user-2' } });
+
+    expect(realtime.disconnectUser('user-1')).toBe(2);
+    expect(first.readyState).toBe(3);
+    expect(second.readyState).toBe(3);
+    expect(other.readyState).toBe(1);
+    expect(realtime.disconnectUser('user-1')).toBe(0);
+
+    realtime.close();
+  });
+
   it('checks browser origins and resolves a principal before accepting a connection', async () => {
     const realtime = createRealtimeService();
     const resolve = vi.fn(async () => ({ userId: 'user-1' }));

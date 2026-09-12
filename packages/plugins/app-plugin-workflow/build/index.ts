@@ -21,7 +21,20 @@ export type {
   WorkflowArtifactDefinition,
   WorkflowArtifactDigestFile,
 } from './artifact-builder.js';
+export {
+  loadWorkflowSourcePackage,
+  loadWorkflowSourcePackages,
+  workflowSourceSignature,
+} from './dev-source.js';
+export type {
+  WorkflowSourceLoadOptions,
+  WorkflowSourcePackage,
+} from './dev-source.js';
 export { checkWorkflowPackage } from './source-check.js';
+export type {
+  WorkflowSourceCheckOptions,
+  WorkflowSourceCheckResult,
+} from './source-check.js';
 export { WorkflowSourceCheckError } from './source-issues.js';
 export type {
   WorkflowSourceIssue,

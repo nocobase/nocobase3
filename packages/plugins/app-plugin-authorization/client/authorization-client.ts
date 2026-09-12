@@ -122,6 +122,7 @@ interface DataResponse<T> {
 
 export class AuthorizationClient {
   private snapshot?: Promise<PermissionsSnapshot>;
+  private readonly invalidationListeners = new Set<() => void>();
 
   constructor(private readonly api: ApiClient) {}
 
@@ -306,6 +307,14 @@ export class AuthorizationClient {
 
   invalidatePermissions(): void {
     this.snapshot = undefined;
+    for (const listener of this.invalidationListeners) listener();
+  }
+
+  onPermissionsInvalidated(listener: () => void): () => void {
+    this.invalidationListeners.add(listener);
+    return () => {
+      this.invalidationListeners.delete(listener);
+    };
   }
 
   private get<T>(path: string): Promise<T> {

@@ -10,6 +10,7 @@ import { idGeneratorToken } from '@nocobase/app-server/id-generator';
 import { type AppIdentityConfig } from '@nocobase/app-server/config';
 import {
   realtimePrincipalResolverToken,
+  realtimeServiceToken,
   type RealtimePrincipal,
 } from '@nocobase/app-server/realtime';
 
@@ -20,6 +21,8 @@ import {
 } from '../auth.js';
 import { createAuthStorage } from '../auth-storage.js';
 import { authenticationToken } from '../tokens.js';
+import { userAdministrationServiceToken } from '../tokens.js';
+import { createUserAdministrationService } from '../user-administration.js';
 import { type AuthConfig, resolveAuthSecret } from '../config.js';
 
 interface RequestInitWithDuplex extends RequestInit {
@@ -52,6 +55,19 @@ export class AuthenticationProvider<
   public override register(): void {
     this.app.container.singleton(authenticationToken, (container) =>
       this.createAuthentication(container),
+    );
+    this.app.container.singleton(
+      userAdministrationServiceToken,
+      (container) => {
+        const database = container.resolve(databaseManagerToken);
+        return createUserAdministrationService({
+          auth: container.resolve(authenticationToken),
+          connection: database.connection(),
+          ...(container.has(realtimeServiceToken)
+            ? { realtime: container.resolve(realtimeServiceToken) }
+            : {}),
+        });
+      },
     );
     if (!this.app.container.has(realtimePrincipalResolverToken)) {
       this.app.container.singleton(
