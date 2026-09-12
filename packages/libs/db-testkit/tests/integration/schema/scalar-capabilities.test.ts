@@ -3,7 +3,6 @@ import { describeIntegrationDatabases } from '../helpers.js';
 
 describeIntegrationDatabases('Physical scalar capabilities', (context) => {
   it('preserves char semantics, numeric capacity and boolean identity', async () => {
-    const dialect = context.spec.dialect;
     const native = context.profile.schema.scalarTypes;
     await context.db.schema.createTable(context.table('scalars'), (table) => {
       ['fixed', 'label', 'quantity', 'ratio', 'enabled'].forEach(
@@ -23,10 +22,15 @@ describeIntegrationDatabases('Physical scalar capabilities', (context) => {
       dataType: 'string',
       length: 16,
     });
-    if (dialect === 'sqlite') {
+    const scalarInspection = context.profile.schema.scalarInspection;
+    if (scalarInspection.affinity) {
       expect(schema?.strict).toBe(false);
-      expect(columns.get('fixed')?.affinity).toBe('text');
-      expect(columns.get('enabled')?.affinity).toBe('numeric');
+      expect(columns.get('fixed')?.affinity).toBe(
+        scalarInspection.affinity.fixed,
+      );
+      expect(columns.get('enabled')?.affinity).toBe(
+        scalarInspection.affinity.boolean,
+      );
       expect(columns.get('label')?.lengthUnit).toBeUndefined();
     } else {
       expect(columns.get('ratio')?.binaryPrecision).toBe(24);
@@ -40,30 +44,32 @@ describeIntegrationDatabases('Physical scalar capabilities', (context) => {
       if (context.profile.character.characterSet)
         expect(columns.get('label')?.characterSet).toBeTruthy();
     }
-    if (dialect === 'oracle') {
-      expect(columns.get('label')?.nativeType).toBe('VARCHAR2(16 BYTE)');
-      expect(columns.get('fixed')?.nativeType).toBe('CHAR(8 CHAR)');
-      expect(columns.get('quantity')).toMatchObject({
-        dataType: 'decimal',
-        precision: 10,
-        scale: 0,
-      });
+    if (scalarInspection.nativeTypes) {
+      expect(columns.get('label')?.nativeType).toBe(
+        scalarInspection.nativeTypes.label,
+      );
+      expect(columns.get('fixed')?.nativeType).toBe(
+        scalarInspection.nativeTypes.fixed,
+      );
     }
-    if (dialect === 'dameng') {
-      expect(columns.get('quantity')).toMatchObject({
-        dataType: 'integer',
-      });
-      expect(columns.get('ratio')).toMatchObject({ dataType: 'float' });
-    }
-    if (dialect === 'mysql')
-      expect(columns.get('quantity')).toMatchObject({
-        integerBits: 32,
-        unsigned: true,
-      });
-    if (dialect === 'mssql')
-      expect(columns.get('quantity')).toMatchObject({
-        integerBits: 8,
-        unsigned: true,
+    expect(columns.get('quantity')).toMatchObject({
+      dataType: scalarInspection.quantity.dataType,
+      ...(scalarInspection.quantity.integerBits === undefined
+        ? {}
+        : { integerBits: scalarInspection.quantity.integerBits }),
+      ...(scalarInspection.quantity.unsigned === undefined
+        ? {}
+        : { unsigned: scalarInspection.quantity.unsigned }),
+      ...(scalarInspection.quantity.precision === undefined
+        ? {}
+        : { precision: scalarInspection.quantity.precision }),
+      ...(scalarInspection.quantity.scale === undefined
+        ? {}
+        : { scale: scalarInspection.quantity.scale }),
+    });
+    if (scalarInspection.ratioDataType)
+      expect(columns.get('ratio')).toMatchObject({
+        dataType: scalarInspection.ratioDataType,
       });
     expect(columns.get('enabled')?.dataType).toBe(
       context.profile.schema.booleanStorage === 'integer'

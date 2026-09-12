@@ -57,6 +57,24 @@ export interface DatabaseIntegrationProfile {
     readonly emptyStringIsNull: boolean;
     readonly integerResolution: 'integer' | 'decimal';
     readonly scalarTypes: readonly [string, string, string, string, string];
+    readonly scalarInspection: {
+      readonly affinity?: {
+        readonly fixed: string;
+        readonly boolean: string;
+      };
+      readonly quantity: {
+        readonly dataType: 'integer' | 'decimal';
+        readonly integerBits?: number;
+        readonly unsigned?: boolean;
+        readonly precision?: number;
+        readonly scale?: number;
+      };
+      readonly ratioDataType?: 'float';
+      readonly nativeTypes?: {
+        readonly fixed: string;
+        readonly label: string;
+      };
+    };
   };
   readonly json: {
     readonly filters: 'supported' | 'unsupported';

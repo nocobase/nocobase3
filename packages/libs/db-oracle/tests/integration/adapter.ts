@@ -67,6 +67,10 @@ export const oracleIntegrationProfile: DatabaseIntegrationProfile = {
       'BINARY_FLOAT',
       'NUMBER(1,0)',
     ],
+    scalarInspection: {
+      quantity: { dataType: 'decimal', precision: 10, scale: 0 },
+      nativeTypes: { fixed: 'CHAR(8 CHAR)', label: 'VARCHAR2(16 BYTE)' },
+    },
   },
   json: {
     filters: 'unsupported',

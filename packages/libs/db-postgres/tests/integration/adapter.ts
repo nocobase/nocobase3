@@ -61,6 +61,7 @@ export const postgresIntegrationProfile: DatabaseIntegrationProfile = {
     emptyStringIsNull: false,
     integerResolution: 'integer',
     scalarTypes: ['char(8)', 'varchar(16)', 'integer', 'real', 'boolean'],
+    scalarInspection: { quantity: { dataType: 'integer' } },
   },
   json: {
     filters: 'supported',

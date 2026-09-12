@@ -56,6 +56,9 @@ export const mssqlIntegrationProfile: DatabaseIntegrationProfile = {
     emptyStringIsNull: false,
     integerResolution: 'integer',
     scalarTypes: ['nchar(8)', 'nvarchar(16)', 'tinyint', 'real', 'bit'],
+    scalarInspection: {
+      quantity: { dataType: 'integer', integerBits: 8, unsigned: true },
+    },
   },
   json: {
     filters: 'unsupported',

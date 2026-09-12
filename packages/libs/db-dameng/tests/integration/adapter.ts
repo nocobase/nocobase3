@@ -60,6 +60,10 @@ export const damengIntegrationProfile: DatabaseIntegrationProfile = {
     emptyStringIsNull: false,
     integerResolution: 'integer',
     scalarTypes: ['CHAR(8)', 'VARCHAR(16)', 'INTEGER', 'REAL', 'NUMBER(1,0)'],
+    scalarInspection: {
+      quantity: { dataType: 'integer' },
+      ratioDataType: 'float',
+    },
   },
   json: {
     filters: 'unsupported',

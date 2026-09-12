@@ -58,6 +58,9 @@ export const mysqlIntegrationProfile: DatabaseIntegrationProfile = {
       'float',
       'tinyint(1)',
     ],
+    scalarInspection: {
+      quantity: { dataType: 'integer', integerBits: 32, unsigned: true },
+    },
   },
   json: {
     filters: 'supported',

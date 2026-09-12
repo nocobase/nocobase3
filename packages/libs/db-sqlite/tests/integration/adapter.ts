@@ -54,6 +54,10 @@ export const sqliteIntegrationProfile: DatabaseIntegrationProfile = {
     emptyStringIsNull: false,
     integerResolution: 'integer',
     scalarTypes: ['CHAR(8)', 'VARCHAR(16)', 'INTEGER', 'REAL', 'BOOLEAN'],
+    scalarInspection: {
+      affinity: { fixed: 'text', boolean: 'numeric' },
+      quantity: { dataType: 'integer' },
+    },
   },
   json: {
     filters: 'supported',
