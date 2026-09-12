@@ -255,6 +255,119 @@ describe('workflow repositories', () => {
     });
   });
 
+  it('offers a deployed Artifact as a revision before anything materializes it', async () => {
+    const current = await createTestWorkflow(database, {
+      key: 'deployed-update',
+      enabled: true,
+      nodes: [],
+    });
+    const currentHash = '1'.repeat(64);
+    const pending = {
+      ...createArtifact('deployed-update'),
+      digest: '2'.repeat(64),
+    };
+    pending.workflow.title = 'Pending title';
+    await testStore(database).workflows.updateMany({
+      filter: { id: asIdFilter(current.id) },
+      values: {
+        title: 'Current title',
+        version: 'version-1',
+        hash: currentHash,
+      },
+    });
+    await testStore(database).stats.createOne({
+      values: { key: 'deployed-update', executed: 4 },
+    });
+    const materialize = vi.fn(async () => undefined);
+    const service: WorkflowServiceApi = {
+      trigger: async () => ({ status: 'accepted', eventKey: 'test-event' }),
+      triggerRevision: async () => ({
+        status: 'accepted',
+        eventKey: 'test-event',
+      }),
+      discoverArtifacts: async () => [pending],
+      ensureArtifactMaterialized: materialize,
+    };
+    workflows = new WorkflowRepository(database, service);
+
+    await expect(workflows.revisions(current.id)).resolves.toMatchObject([
+      {
+        id: null,
+        key: 'deployed-update',
+        title: 'Pending title',
+        hash: pending.digest,
+        version: null,
+        current: null,
+        enabled: false,
+        executed: 4,
+      },
+      {
+        id: String(current.id),
+        hash: currentHash,
+        version: 'version-1',
+        current: true,
+        enabled: true,
+        executed: 4,
+      },
+    ]);
+    // Reading the candidate revision must not turn it into a row, because
+    // materializing it is what enabling it does.
+    expect(materialize).not.toHaveBeenCalled();
+    await expect(
+      testStore(database).workflows.count({
+        filter: { key: 'deployed-update' },
+      }),
+    ).resolves.toBe(1);
+    await expect(workflows.get(pending.digest)).resolves.toMatchObject({
+      id: null,
+      hash: pending.digest,
+      version: null,
+      executed: 4,
+    });
+  });
+
+  it('lists a materialized Artifact once', async () => {
+    const current = await createTestWorkflow(database, {
+      key: 'materialized-update',
+      enabled: true,
+      nodes: [],
+    });
+    const pending = {
+      ...createArtifact('materialized-update'),
+      digest: '3'.repeat(64),
+    };
+    const materializedRevision = await testStore(database).workflows.createOne({
+      values: {
+        key: 'materialized-update',
+        hash: pending.digest,
+        version: 'version-2',
+        enabled: false,
+        current: null,
+        inputSchema: serializeJson({ type: 'object' }),
+        parametersSchema: serializeJson({}),
+        parameterValues: serializeJson({}),
+        options: serializeJson({}),
+      },
+      select: (select) => select.fields('id'),
+    });
+    const service: WorkflowServiceApi = {
+      trigger: async () => ({ status: 'accepted', eventKey: 'test-event' }),
+      triggerRevision: async () => ({
+        status: 'accepted',
+        eventKey: 'test-event',
+      }),
+      discoverArtifacts: async () => [pending],
+      ensureArtifactMaterialized: async () => undefined,
+    };
+    workflows = new WorkflowRepository(database, service);
+
+    const revisions = await workflows.revisions(current.id);
+    expect(revisions.map((revision) => revision.id)).toEqual([
+      String(materializedRevision.record.id),
+      String(current.id),
+    ]);
+  });
+
   it('filters executions before applying pagination', async () => {
     const leave = await createTestWorkflow(database, {
       key: 'leave-approval',

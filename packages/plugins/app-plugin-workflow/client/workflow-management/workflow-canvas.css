@@ -576,6 +576,25 @@
   background: color-mix(in oklab, var(--workflow-aborted) 10%, transparent);
   color: var(--workflow-aborted);
 }
+.workflow-version-tag {
+  padding: 2px 8px;
+  line-height: 18px;
+  background: var(--muted);
+  color: var(--muted-foreground);
+}
+.workflow-version-tag.pending {
+  background: color-mix(in oklab, var(--workflow-pending) 12%, transparent);
+  color: var(--workflow-pending);
+}
+.workflow-pending-version-link {
+  text-decoration: none;
+}
+.workflow-version-current-marker {
+  display: inline-block;
+  width: 12px;
+  color: var(--workflow-success);
+  font-weight: 700;
+}
 .workflow-status.enabled {
   color: var(--workflow-success);
   background: var(--workflow-success-soft);

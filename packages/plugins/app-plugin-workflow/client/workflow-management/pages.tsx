@@ -12,6 +12,13 @@ import {
   DropdownMenuTrigger,
 } from './ui/dropdown-menu.js';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './ui/select.js';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -247,7 +254,7 @@ function useAsync<T>(load: () => Promise<T>): {
   };
 }
 
-function InputDialog({
+export function InputDialog({
   workflow,
   onClose,
 }: {
@@ -274,27 +281,40 @@ function InputDialog({
           {Object.entries(workflow.parametersSchema).map(([key, item]) => (
             <label className='workflow-parameter-field' key={key}>
               <span>{item.title ?? key}</span>
-              <input
-                placeholder={
-                  item.default === undefined
-                    ? t('common.notSet')
-                    : displayInputValue(item.default)
-                }
-                value={
-                  Object.hasOwn(values, key)
-                    ? displayInputValue(values[key])
-                    : ''
-                }
-                onChange={(event) =>
-                  setValues((current) => ({
-                    ...current,
-                    [key]:
-                      item.type === 'number'
-                        ? Number(event.target.value)
-                        : event.target.value,
-                  }))
-                }
-              />
+              {item.type === 'boolean' ? (
+                <Switch
+                  checked={
+                    Object.hasOwn(values, key)
+                      ? values[key] === true
+                      : item.default === true
+                  }
+                  onCheckedChange={(checked) =>
+                    setValues((current) => ({ ...current, [key]: checked }))
+                  }
+                />
+              ) : (
+                <input
+                  placeholder={
+                    item.default === undefined
+                      ? t('common.notSet')
+                      : displayInputValue(item.default)
+                  }
+                  value={
+                    Object.hasOwn(values, key)
+                      ? displayInputValue(values[key])
+                      : ''
+                  }
+                  onChange={(event) =>
+                    setValues((current) => ({
+                      ...current,
+                      [key]:
+                        item.type === 'number'
+                          ? Number(event.target.value)
+                          : event.target.value,
+                    }))
+                  }
+                />
+              )}
               {item.description ? <small>{item.description}</small> : null}
             </label>
           ))}
@@ -589,24 +609,17 @@ function WorkflowRow({
             </span>
           )}
           {pendingArtifact ? (
-            <Badge>{t('workflows.newVersionAvailable')}</Badge>
+            <Link
+              className='workflow-pending-version-link'
+              to={workflowPath(pendingArtifact.hash)}
+            >
+              <Badge className='workflow-version-tag pending'>
+                {t('workflows.newVersionAvailable')}
+              </Badge>
+            </Link>
           ) : null}
         </div>
         <div className='workflow-row-actions'>
-          {pendingArtifact ? (
-            <button
-              className='workflow-button workflow-button-outline'
-              type='button'
-              onClick={() => {
-                void workflowApi.enable(pendingArtifact.hash).then((next) => {
-                  onChange(next);
-                  onReload();
-                });
-              }}
-            >
-              {t('actions.enableNewVersion')}
-            </button>
-          ) : null}
           <label className='workflow-switch'>
             <WorkflowStatusSwitch
               checked={item.enabled}
@@ -717,7 +730,11 @@ export function WorkflowListPage(): React.ReactElement {
               <option value='false'>{t('status.disabled')}</option>
             </select>
           </div>
-          <button type='button' onClick={load}>
+          <button
+            className='workflow-button workflow-button-outline'
+            type='button'
+            onClick={load}
+          >
             {t('common.refresh')}
           </button>
         </header>
@@ -754,12 +771,16 @@ export function WorkflowDetailPage(): React.ReactElement {
     () => workflowApi.workflow(workflowId),
     [workflowId],
   );
+  const loadRevisions = useCallback(
+    () => workflowApi.revisions(workflowId),
+    [workflowId],
+  );
   const loaded = useAsync(loadWorkflow);
-  const [revisionState, setRevisionState] = useState<{
-    workflowId: string;
-    items: WorkflowDetailRecord[] | null;
-    loading: boolean;
-  }>(() => ({ workflowId: '', items: null, loading: false }));
+  // Loaded with the definition rather than when the picker is opened. A native
+  // select renders its options as the popup opens, so options that arrive while
+  // it is open stay invisible until the next open -- and the candidate revision
+  // is the one option someone opens this picker to find.
+  const revisionList = useAsync(loadRevisions);
   const [dialog, setDialog] = useState<'parameters' | 'manual' | null>(null);
   const [selectedNodeKey, setSelectedNodeKey] = useState<string | null>(null);
   const [runs, setRuns] = useState<WorkflowRunRecord[] | null>(null);
@@ -776,22 +797,28 @@ export function WorkflowDetailPage(): React.ReactElement {
   const pendingArtifact = workflow.pendingArtifact;
   const hasInput =
     Object.keys(contextProperties(workflow.inputSchema)).length > 0;
-  const revisions =
-    revisionState.workflowId === workflowId ? revisionState.items : null;
-  const revisionsLoading =
-    revisionState.workflowId === workflowId && revisionState.loading;
+  const revisions = revisionList.value;
+  // Enabling a revision that another revision has superseded swaps the version
+  // the workflow runs, which is not what an enable/disable switch says it does.
+  // A definition that has never been enabled has no current revision at all,
+  // and keeps the switch the list page shows for it.
+  const supersededRevision =
+    workflow.version != null &&
+    workflow.current !== true &&
+    (revisions ?? []).some((item) => item.current === true);
   const selectedNode = workflow.nodes.find(
     (node) => node.key === selectedNodeKey,
   );
-  const loadRevisions = (): void => {
-    if (revisions || revisionsLoading) return;
-    setRevisionState({ workflowId, items: null, loading: true });
-    void workflowApi
-      .revisions(workflowId)
-      .then((items) => setRevisionState({ workflowId, items, loading: false }))
-      .catch(() =>
-        setRevisionState({ workflowId, items: null, loading: false }),
-      );
+  const enableRevision = (target: string): void => {
+    void workflowApi.enable(target).then((next) => {
+      const nextIdentifier = next.id ?? next.hash ?? identifier;
+      if (nextIdentifier === workflowId) {
+        loaded.reload();
+        revisionList.reload();
+        return;
+      }
+      void navigate(workflowPath(nextIdentifier), { replace: true });
+    });
   };
   return (
     <main className='workflow-page'>
@@ -809,24 +836,49 @@ export function WorkflowDetailPage(): React.ReactElement {
           <div className='workflow-canvas-header-leading'>
             <label>
               {t('workflows.version')}{' '}
-              <select
+              <Select
                 value={identifier}
-                onPointerDown={loadRevisions}
-                onFocus={loadRevisions}
-                onChange={(event) =>
-                  void navigate(workflowPath(event.target.value))
+                onValueChange={(value) =>
+                  value && void navigate(workflowPath(value))
                 }
               >
-                {(revisions ?? [workflow]).map((item) => (
-                  <option
-                    key={item.id ?? item.hash ?? item.key}
-                    value={item.id ?? item.hash ?? item.key}
-                  >
-                    {item.version ?? t('common.unpublished')}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className='min-w-28'>
+                  <SelectValue>
+                    <span className={workflow.version ? '' : 'italic'}>
+                      {workflow.version ?? t('common.unpublished')}
+                    </span>
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {(revisions ?? [workflow]).map((item) => (
+                    <SelectItem
+                      key={item.id ?? item.hash ?? item.key}
+                      value={item.id ?? item.hash ?? item.key}
+                    >
+                      <span
+                        aria-hidden='true'
+                        className='workflow-version-current-marker'
+                      >
+                        {item.current === true ? '>' : ''}
+                      </span>
+                      <span className={item.version ? '' : 'italic'}>
+                        {item.version ?? t('common.unpublished')}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </label>
+            {pendingArtifact ? (
+              <Link
+                className='workflow-pending-version-link'
+                to={workflowPath(pendingArtifact.hash)}
+              >
+                <Badge className='workflow-version-tag pending'>
+                  {t('workflows.newVersionAvailable')}
+                </Badge>
+              </Link>
+            ) : null}
             <div className='workflow-execution-summary'>
               {workflow.executed > 0 ? (
                 <button
@@ -843,49 +895,38 @@ export function WorkflowDetailPage(): React.ReactElement {
             </div>
           </div>
           <div className='canvas-header-actions'>
-            {pendingArtifact ? (
+            {supersededRevision ? (
               <button
                 className='workflow-button workflow-button-outline'
                 type='button'
-                onClick={() => {
-                  void workflowApi.enable(pendingArtifact.hash).then((next) => {
-                    const nextIdentifier = next.id ?? next.hash ?? identifier;
-                    void navigate(workflowPath(nextIdentifier), {
-                      replace: true,
-                    });
-                  });
-                }}
+                onClick={() => enableRevision(identifier)}
               >
-                {t('actions.enableNewVersion')}
+                {t('actions.enableThisVersion')}
               </button>
-            ) : null}
-            <label className='workflow-switch'>
-              <WorkflowStatusSwitch
-                checked={enabled}
-                label={t(
-                  enabled
-                    ? 'actions.disableWorkflow'
-                    : 'actions.enableWorkflow',
-                  { title: workflow.title ?? workflow.key },
-                )}
-                onCheckedChange={(checked) => {
-                  void (
-                    checked
-                      ? workflowApi.enable(identifier)
-                      : workflowApi.status(identifier, false)
-                  ).then((next) => {
-                    const nextIdentifier = next.id ?? next.hash ?? identifier;
-                    if (nextIdentifier !== workflowId) {
-                      void navigate(workflowPath(nextIdentifier), {
-                        replace: true,
-                      });
-                      return;
-                    }
-                    loaded.reload();
-                  });
-                }}
-              />
-            </label>
+            ) : (
+              <>
+                <label className='workflow-switch'>
+                  <WorkflowStatusSwitch
+                    checked={enabled}
+                    label={t(
+                      enabled
+                        ? 'actions.disableWorkflow'
+                        : 'actions.enableWorkflow',
+                      { title: workflow.title ?? workflow.key },
+                    )}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        enableRevision(identifier);
+                        return;
+                      }
+                      void workflowApi
+                        .status(identifier, false)
+                        .then(() => loaded.reload());
+                    }}
+                  />
+                </label>
+              </>
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger
                 render={
@@ -998,7 +1039,11 @@ export function WorkflowRunListPage(): React.ReactElement {
               <option value='-2'>{t('status.error')}</option>
             </select>
           </div>
-          <button type='button' onClick={load}>
+          <button
+            className='workflow-button workflow-button-outline'
+            type='button'
+            onClick={load}
+          >
             {t('common.refresh')}
           </button>
         </header>
