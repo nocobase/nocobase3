@@ -65,7 +65,28 @@ export const mssqlDialectIntegrationAdapter: DatabaseDialectIntegrationAdapter =
     listColumns: async (context, tableName) =>
       rows(
         await context.db.raw(
-          `select c.name, t.name as type from sys.columns c
+          `select c.name,
+           case
+             when t.name in ('varchar', 'nvarchar', 'char', 'nchar', 'binary', 'varbinary')
+               then concat(
+                 t.name,
+                 '(',
+                 case
+                   when c.max_length = -1 then 'max'
+                   when t.name in ('nvarchar', 'nchar') then cast(c.max_length / 2 as varchar(10))
+                   else cast(c.max_length as varchar(10))
+                 end,
+                 ')'
+               )
+             when t.name in ('decimal', 'numeric')
+               then concat(t.name, '(', c.precision, ',', c.scale, ')')
+             when t.name in ('datetime2', 'datetimeoffset', 'time')
+               then concat(t.name, '(', c.scale, ')')
+             when t.name = 'float'
+               then concat(t.name, '(', c.precision, ')')
+             else t.name
+           end as type
+           from sys.columns c
            join sys.types t on t.user_type_id = c.user_type_id
            join sys.tables tb on tb.object_id = c.object_id where tb.name = ?`,
           [tableName],

@@ -50,7 +50,7 @@ export const mssqlIntegrationProfile: DatabaseIntegrationProfile = {
     uniqueConstraints: false,
     foreignKeyActions: { onDelete: 'noAction', onUpdate: 'cascade' },
     uniqueConstraintDropKeepsIndex: false,
-    nativeTextType: 'nvarchar',
+    nativeTextType: 'nvarchar(max)',
     comments: 'complete',
     booleanStorage: 'native',
     emptyStringIsNull: false,

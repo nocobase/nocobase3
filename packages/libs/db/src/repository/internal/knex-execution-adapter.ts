@@ -525,6 +525,13 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       plan.relations,
       createdTargets,
     );
+    if (!plan.select?.root.includes?.length) {
+      return {
+        record,
+        createdTargets,
+        version: versionOf(plan.collection, record),
+      };
+    }
     const selected = await this.findOne({
       collection: plan.collection,
       fields: plan.fields,
