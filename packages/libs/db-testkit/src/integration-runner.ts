@@ -254,3 +254,8 @@ async function pauseForInspection(projectName: string): Promise<void> {
     readline.close();
   }
 }
+
+export {
+  parseDatabaseIntegrationArguments,
+  type DatabaseIntegrationTestArguments,
+} from './integration-arguments.js';
