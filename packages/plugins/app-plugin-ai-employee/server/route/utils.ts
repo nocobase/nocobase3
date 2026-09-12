@@ -1,7 +1,7 @@
-import { DomainError } from '../domain/errors.js';
+import { DomainError } from '../types.js';
 import type { Auth } from '@nocobase/app-plugin-authentication';
 import type { Logger } from '@nocobase/logging';
-import type { Actor } from '../domain/contracts.js';
+import type { Actor } from '../types.js';
 import type { Context as HonoContext, MiddlewareHandler } from 'hono';
 import { AI_API_BASE_PATH } from './contracts.js';
 import { SSEStreamTarget, sseResponseHeaders } from './sse.js';

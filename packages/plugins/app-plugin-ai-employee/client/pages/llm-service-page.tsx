@@ -94,9 +94,6 @@ export default function LLMServicePage(): ReactElement {
                 <td className='px-3 py-2.5'>
                   <ModelsCell
                     service={service}
-                    provider={providers.find(
-                      (item) => item.name === service.provider,
-                    )}
                     onEdit={() => setEditing(service)}
                   />
                 </td>
@@ -157,19 +154,14 @@ function ProviderCell({
 
 function ModelsCell({
   service,
-  provider,
   onEdit,
 }: {
   service: LLMService;
-  provider?: LLMProvider;
   onEdit: () => void;
 }): ReactElement {
   const t = useT();
   const config = normalizeEnabledModels(service.enabledModels);
-  const models =
-    config.mode === 'recommended'
-      ? (provider?.recommendedModels ?? [])
-      : config.models;
+  const models = config.models;
   return (
     <div className='flex max-w-xl items-start gap-2'>
       <button

@@ -12,6 +12,9 @@ export type ToolsEntity<TContext = unknown> = {
   from?: ToolsFrom;
   execution?: 'frontend' | 'backend';
   requiresContext?: boolean;
+  /** Effective auto-call policy resolved for the current agent execution. */
+  auto?: boolean;
+  /** Default policy supplied by the registered tool definition. */
   defaultPermission?: ToolsPermission;
   silence?: boolean;
   introduction?: { title: string; about?: string };

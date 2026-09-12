@@ -25,3 +25,9 @@ export {
   resolveAIKnowledgeBaseStorageDisks,
 } from './config.js';
 export { aiManagerToken } from './provider/ai-employee.js';
+export {
+  AIConversationsManager,
+  aiConversationsManagerToken,
+  type CreateAIConversationParams,
+} from './manager/ai-conversations-manager.js';
+export { agentServiceFactoryToken } from './agent/service/agent-service-factory.js';

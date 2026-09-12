@@ -8,6 +8,10 @@
  */
 
 import type { AIManager } from '@nocobase/ai-employee';
+import {
+  createServiceToken,
+  type ServiceToken,
+} from '@nocobase/service-provider';
 import type { RepositoryFactory } from '../factory/repository-factory.js';
 import type { DatabaseConnection } from '@nocobase/db';
 import {
@@ -18,7 +22,7 @@ import {
   UserDecision,
 } from '@nocobase/ai-employee';
 import { parseResponseMessage } from '@nocobase/ai-employee';
-import type { FrontendToolManifest } from '../ai-employees/common/frontend-tools.js';
+import type { FrontendToolManifest } from '../agent/context/ai-employee/common/frontend-tool-contracts.js';
 
 export type AIConversationsOptions = {
   systemMessage?: unknown;
@@ -37,7 +41,7 @@ export type AIConversationFilterParams = {
 
 export type CreateAIConversationParams = {
   userId?: string | number;
-  aiEmployee: { username: string };
+  aiEmployee?: { username: string };
   title?: string;
   options?: AIConversationsOptions;
   from?: 'main-agent' | 'sub-agent';
@@ -75,6 +79,11 @@ type ParsedResponseMessage = {
   };
   [key: string]: unknown;
 };
+
+export const aiConversationsManagerToken: ServiceToken<AIConversationsManager> =
+  createServiceToken<AIConversationsManager>(
+    '@nocobase/app-plugin-ai-employee/ai-conversations-manager',
+  );
 
 export type GetAIConversationMessagesResult = {
   rows: any[];

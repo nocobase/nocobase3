@@ -4,7 +4,7 @@ import { idGeneratorToken } from '@nocobase/app-server/id-generator';
 import { loggingToken } from '@nocobase/app-server/logging';
 import { databaseManagerToken } from '@nocobase/db';
 import { ServiceContainer } from '@nocobase/service-provider';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   ManagerFactory,
@@ -19,8 +19,18 @@ import {
   serviceFactoryToken,
 } from '../server/factory/service-factory.js';
 import { aiManagerToken } from '../server/provider/ai-employee.js';
+import {
+  AgentServiceFactory,
+  agentServiceFactoryToken,
+} from '../server/agent/service/agent-service-factory.js';
+import type { AgentProviders } from '../server/agent/types.js';
 import { createTestAppDeps } from './app/test-app-deps.js';
 
+import {
+  AgentServiceFactory,
+  agentServiceFactoryToken,
+} from '../server/agent/service/agent-service-factory.js';
+import { AgentService } from '../server/agent/service/agent-service.js';
 function createContainer(): ServiceContainer {
   const deps = createTestAppDeps();
   const container = new ServiceContainer();
@@ -41,6 +51,10 @@ function createContainer(): ServiceContainer {
   container.singleton(
     serviceFactoryToken,
     () => new ServiceFactory({ container }),
+  );
+  container.singleton(
+    agentServiceFactoryToken,
+    (resolver) => new AgentServiceFactory({ container: resolver }),
   );
   return container;
 }
@@ -72,6 +86,45 @@ describe('AI employee container-scoped factories', () => {
     expect(managers.subAgentsDispatcher).toBe(managers.subAgentsDispatcher);
     expect(services.modelService).toBe(services.modelService);
     expect(services.toolService).toBe(services.toolService);
+  });
+  it('creates a Fixed AgentService through the registered container factory', async () => {
+    const container = createContainer();
+    const factory = container.resolve(agentServiceFactoryToken);
+    const ai = container.resolve(aiManagerToken);
+    const provider = {
+      createModel: vi.fn(() => ({ invoke: vi.fn(), stream: vi.fn() })),
+      resolveTools: vi.fn(() => []),
+    };
+    vi.spyOn(ai.llmProviderManager, 'resolveModel').mockResolvedValue({
+      provider: 'test',
+      llmService: 'test-service',
+      model: 'test-model',
+    });
+    vi.spyOn(ai.llmProviderManager, 'getLLMService').mockResolvedValue({
+      provider,
+      service: { name: 'test-service', provider: 'test' },
+    } as never);
+    const agent = await factory.createAgent({ sessionId: 'factory-session' });
+    expect(agent).toBeInstanceOf(AgentService);
+    const second = await factory.createAgent({
+      sessionId: 'factory-session-2',
+    });
+    const firstProviders = (agent as unknown as { providers: AgentProviders })
+      .providers;
+    const secondProviders = (second as unknown as { providers: AgentProviders })
+      .providers;
+    expect(firstProviders.conversation.messages).not.toBe(
+      secondProviders.conversation.messages,
+    );
+    expect(firstProviders.conversation.streamCache).not.toBe(
+      secondProviders.conversation.streamCache,
+    );
+    expect(firstProviders.conversation.event).not.toBe(
+      secondProviders.conversation.event,
+    );
+    expect(firstProviders.conversation.abort).not.toBe(
+      secondProviders.conversation.abort,
+    );
   });
 
   it('isolates repositories, services, readiness and mutable managers by container', async () => {

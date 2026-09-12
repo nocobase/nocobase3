@@ -7,11 +7,11 @@ export type AIToolMessageEntity = {
   messageId?: string | number | bigint;
   toolCallId?: string;
   toolName?: string;
-  status?: string;
-  content?: string;
+  status?: string | null;
+  content?: unknown;
   invokeStatus?: string;
-  invokeStartTime?: Date | string | number;
-  invokeEndTime?: Date | string | number;
+  invokeStartTime?: Date | string | number | null;
+  invokeEndTime?: Date | string | number | null;
   auto?: boolean;
   execution?: string;
   interruptActionOrder?: number;

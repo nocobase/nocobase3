@@ -565,7 +565,6 @@ listLLMProviders(): Array<{
   supportedModel: SupportedModel[];
   supportWebSearch: boolean;
   webSearchModels?: string[];
-  recommendedModels: Array<{ label: string; value: string }>;
 }>;
 getSupportedProvider(model: SupportedModel): string[];
 listAllEnabledModels(): Promise<Array<{

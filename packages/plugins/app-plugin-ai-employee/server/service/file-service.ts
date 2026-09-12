@@ -3,8 +3,8 @@ import { Readable } from 'node:stream';
 import type { FileMetadata, FileStorage } from '@nocobase/ai-employee';
 import type { IdGeneratorService } from '@nocobase/snowflake';
 
-import type { Actor } from '../domain/contracts.js';
-import { forbiddenError, notFoundError } from '../domain/errors.js';
+import type { Actor } from '../types.js';
+import { forbiddenError, notFoundError } from '../types.js';
 import type { AIFileMetadataCreateContext } from '../repository/file-storage/ai-file-metadata-repository.js';
 import type { AIFileEntity } from '../repository/ai-file.js';
 
