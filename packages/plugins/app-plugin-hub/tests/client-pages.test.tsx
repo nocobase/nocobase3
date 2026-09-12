@@ -357,7 +357,7 @@ describe('Hub client pages', () => {
     expect(screen.queryByText('Releases tab')).not.toBeInTheDocument();
   });
 
-  it('keeps unavailable action reasons accessible without rendering a visible hint panel', () => {
+  it('visibly explains unavailable detail actions and keeps them accessible', () => {
     render(
       <MemoryRouter>
         <Detail
@@ -398,7 +398,24 @@ describe('Hub client pages', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    const availabilityMessages = screen
+      .getAllByRole('status')
+      .map((element) => element.textContent);
+    expect(
+      availabilityMessages.some((message) =>
+        message?.startsWith('Start unavailable:'),
+      ),
+    ).toBe(true);
+    expect(
+      availabilityMessages.some((message) =>
+        message?.startsWith('Stop unavailable:'),
+      ),
+    ).toBe(true);
+    expect(
+      availabilityMessages.some((message) =>
+        message?.startsWith('Visit unavailable:'),
+      ),
+    ).toBe(true);
     expect(screen.getByRole('button', { name: 'Start' })).toHaveAttribute(
       'aria-describedby',
       'hub-lifecycle-action-reason',

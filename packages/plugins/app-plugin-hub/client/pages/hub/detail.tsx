@@ -29,7 +29,7 @@ import { useTranslation } from '@nocobase/i18n/client';
 import { useState, type ReactElement } from 'react';
 import { Outlet } from 'react-router';
 import type { DetailTab, AppDetail } from './types.js';
-import { AppMark, StatusBadge } from './shared.js';
+import { ActionAvailabilityHint, AppMark, StatusBadge } from './shared.js';
 import {
   appActionState,
   appManagementStatus,
@@ -91,13 +91,25 @@ export function Detail({
     ? undefined
     : status === 'host-unavailable'
       ? 'hostUnavailable'
-      : status === 'not-deployed'
-        ? 'deployReleaseFirst'
-        : 'notRunning';
+      : status === 'deployment-pending'
+        ? 'deploymentInProgress'
+        : status === 'not-deployed'
+          ? 'deployReleaseFirst'
+          : 'notRunning';
+  const visitActionReason = busy
+    ? 'operationInProgress'
+    : (visitReason ?? (!visitUrl ? 'unavailable' : undefined));
   const startState = appActionState(app, 'start', busy);
   const restartState = appActionState(app, 'restart', busy);
   const stopState = appActionState(app, 'stop', busy);
-  const lifecycleReason = running ? restartState.reason : startState.reason;
+  const lifecycleAction = running ? 'restart' : 'start';
+  const lifecycleReason =
+    capabilities[lifecycleAction] === true
+      ? running
+        ? restartState.reason
+        : startState.reason
+      : undefined;
+  const stopReason = capabilities.stop ? stopState.reason : undefined;
   return (
     <>
       <Button
@@ -170,6 +182,16 @@ export function Detail({
                   <Button
                     className='cursor-pointer'
                     disabled={busy}
+                    title={
+                      visitActionReason
+                        ? t(`actions.${visitActionReason}`, {
+                            defaultValue: visitActionReason,
+                          })
+                        : undefined
+                    }
+                    aria-describedby={
+                      visitActionReason ? 'hub-visit-action-reason' : undefined
+                    }
                     render={
                       <a href={visitUrl} rel='noreferrer' target='_blank' />
                     }
@@ -182,14 +204,14 @@ export function Detail({
                   <Button
                     disabled
                     title={
-                      visitReason
-                        ? t(`actions.${visitReason}`, {
-                            defaultValue: visitReason,
+                      visitActionReason
+                        ? t(`actions.${visitActionReason}`, {
+                            defaultValue: visitActionReason,
                           })
                         : undefined
                     }
                     aria-describedby={
-                      visitReason ? 'hub-visit-action-reason' : undefined
+                      visitActionReason ? 'hub-visit-action-reason' : undefined
                     }
                     variant='outline'
                   >
@@ -250,7 +272,20 @@ export function Detail({
                 ) : null}
               </div>
             </div>
-            {lifecycleReason || stopState.reason || visitReason ? (
+            {lifecycleReason || stopReason || visitActionReason ? (
+              <div className='mb-5 flex flex-col items-end gap-1'>
+                <ActionAvailabilityHint
+                  action={lifecycleAction}
+                  reason={lifecycleReason}
+                />
+                <ActionAvailabilityHint action='stop' reason={stopReason} />
+                <ActionAvailabilityHint
+                  action='visit'
+                  reason={visitActionReason}
+                />
+              </div>
+            ) : null}
+            {lifecycleReason || stopReason || visitActionReason ? (
               <>
                 <span className='sr-only' id='hub-lifecycle-action-reason'>
                   {lifecycleReason
@@ -260,16 +295,16 @@ export function Detail({
                     : null}
                 </span>
                 <span className='sr-only' id='hub-stop-action-reason'>
-                  {stopState.reason
-                    ? t(`actions.${stopState.reason}`, {
-                        defaultValue: stopState.reason,
+                  {stopReason
+                    ? t(`actions.${stopReason}`, {
+                        defaultValue: stopReason,
                       })
                     : null}
                 </span>
-                {visitReason ? (
+                {visitActionReason ? (
                   <span className='sr-only' id='hub-visit-action-reason'>
-                    {t(`actions.${visitReason}`, {
-                      defaultValue: visitReason,
+                    {t(`actions.${visitActionReason}`, {
+                      defaultValue: visitActionReason,
                     })}
                   </span>
                 ) : null}
