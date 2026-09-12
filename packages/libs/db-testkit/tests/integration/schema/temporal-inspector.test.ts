@@ -12,6 +12,7 @@ describeIntegrationDatabases('Temporal physical inspection', (context) => {
           'timestamp(6) with time zone',
         ],
         mysql: ['date', 'time(3)', 'datetime(3)', 'timestamp(6)'],
+        'oceanbase-mysql': ['date', 'time(3)', 'datetime(3)', 'timestamp(6)'],
         sqlite: ['DATE', 'TIME(3)', 'DATETIME(3)', 'TEXT'],
         oracle: [
           'DATE',

@@ -14,6 +14,13 @@ describeIntegrationDatabases('Physical scalar capabilities', (context) => {
           'float',
           'tinyint(1)',
         ],
+        'oceanbase-mysql': [
+          'char(8)',
+          'varchar(16)',
+          'int unsigned',
+          'float',
+          'tinyint(1)',
+        ],
         sqlite: ['CHAR(8)', 'VARCHAR(16)', 'INTEGER', 'REAL', 'BOOLEAN'],
         oracle: [
           'CHAR(8 CHAR)',
@@ -60,7 +67,11 @@ describeIntegrationDatabases('Physical scalar capabilities', (context) => {
       );
       if (dialect !== 'oracle' && dialect !== 'dameng')
         expect(columns.get('label')?.collation).toBeTruthy();
-      if (dialect === 'mysql' || dialect === 'postgres')
+      if (
+        dialect === 'mysql' ||
+        dialect === 'oceanbase-mysql' ||
+        dialect === 'postgres'
+      )
         expect(columns.get('label')?.characterSet).toBeTruthy();
     }
     if (dialect === 'oracle') {
@@ -78,7 +89,7 @@ describeIntegrationDatabases('Physical scalar capabilities', (context) => {
       });
       expect(columns.get('ratio')).toMatchObject({ dataType: 'float' });
     }
-    if (dialect === 'mysql')
+    if (dialect === 'mysql' || dialect === 'oceanbase-mysql')
       expect(columns.get('quantity')).toMatchObject({
         integerBits: 32,
         unsigned: true,
@@ -89,7 +100,7 @@ describeIntegrationDatabases('Physical scalar capabilities', (context) => {
         unsigned: true,
       });
     expect(columns.get('enabled')?.dataType).toBe(
-      dialect === 'mysql'
+      dialect === 'mysql' || dialect === 'oceanbase-mysql'
         ? 'integer'
         : dialect === 'oracle' || dialect === 'dameng'
           ? 'decimal'

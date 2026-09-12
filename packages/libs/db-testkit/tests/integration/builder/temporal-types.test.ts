@@ -59,7 +59,8 @@ describeIntegrationDatabases('Declared temporal field types', (context) => {
     expect(instant?.dataType).toBe(
       context.spec.dialect === 'sqlite'
         ? 'text'
-        : context.spec.dialect === 'mysql'
+        : context.spec.dialect === 'mysql' ||
+            context.spec.dialect === 'oceanbase-mysql'
           ? 'datetime'
           : 'datetimeTz',
     );

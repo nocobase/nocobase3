@@ -16,7 +16,8 @@ describeIntegrationDatabases('Exact numeric input contract', (context) => {
     const sql =
       context.spec.dialect === 'oracle'
         ? 'to_char(??) as ??'
-        : context.spec.dialect === 'mysql'
+        : context.spec.dialect === 'mysql' ||
+            context.spec.dialect === 'oceanbase-mysql'
           ? 'cast(?? as char) as ??'
           : 'cast(?? as varchar(100)) as ??';
     return context

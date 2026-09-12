@@ -209,6 +209,7 @@ describeIntegrationDatabases('Repository temporal contract', (context) => {
       sqlite: 'TIMESTAMP(6)',
       postgres: 'timestamp(6) with time zone',
       mysql: 'datetime(6)',
+      'oceanbase-mysql': 'datetime(6)',
       oracle: 'timestamp(6) with time zone',
       mssql: 'datetimeoffset(6)',
       dameng: 'timestamp(6) with time zone',
@@ -344,7 +345,10 @@ describeIntegrationDatabases('Repository temporal contract', (context) => {
             await client.raw("select set_config('TimeZone', ?, true)", [
               zone === '+08:00' ? 'Asia/Shanghai' : 'America/New_York',
             ]);
-          if (context.spec.dialect === 'mysql')
+          if (
+            context.spec.dialect === 'mysql' ||
+            context.spec.dialect === 'oceanbase-mysql'
+          )
             await client.raw('set time_zone = ?', [zone]);
           if (context.spec.dialect === 'oracle')
             await client.raw(`alter session set time_zone = '${zone}'`);
@@ -367,7 +371,10 @@ describeIntegrationDatabases('Repository temporal contract', (context) => {
               instant: '2026-09-06T01:30:00.000Z',
             });
           } finally {
-            if (context.spec.dialect === 'mysql')
+            if (
+              context.spec.dialect === 'mysql' ||
+              context.spec.dialect === 'oceanbase-mysql'
+            )
               await client.raw("set time_zone = '+00:00'");
             if (context.spec.dialect === 'oracle')
               await client.raw("alter session set time_zone = '+00:00'");
@@ -378,7 +385,11 @@ describeIntegrationDatabases('Repository temporal contract', (context) => {
   });
 
   it('handles native MySQL TIMESTAMP columns without metadata under different session zones', async () => {
-    if (context.spec.dialect !== 'mysql') return;
+    if (
+      context.spec.dialect !== 'mysql' &&
+      context.spec.dialect !== 'oceanbase-mysql'
+    )
+      return;
     await context.db.schema.createTable(
       context.table('nativeInstants'),
       (t) => {
