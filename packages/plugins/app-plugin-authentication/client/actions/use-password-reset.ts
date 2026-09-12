@@ -1,23 +1,31 @@
-import { useUpdatePassword } from '@refinedev/core';
-
-import { resolveAuthenticationActionError } from './action-state.js';
+import { useState } from 'react';
+import { useAuthentication } from '../auth-provider.js';
+import { resolveAuthenticationActionError } from './errors.js';
 import type { AuthenticationActionState, PasswordResetInput } from './types.js';
-
-interface RefinePasswordResetInput {
-  readonly newPassword: string;
-  readonly token: string;
-}
-
 export function usePasswordReset(): AuthenticationActionState<PasswordResetInput> {
-  const mutation = useUpdatePassword<RefinePasswordResetInput>();
-
+  const { client, refresh } = useAuthentication();
+  const [state, setState] = useState<{
+    error?: { message: string };
+    pending: boolean;
+  }>({ pending: false });
   return {
-    error: resolveAuthenticationActionError(mutation.data, mutation.error),
-    isPending: mutation.isPending,
-    submit: async (input: PasswordResetInput): Promise<void> => {
-      await mutation
-        .mutateAsync({ newPassword: input.password, token: input.token })
-        .catch(() => undefined);
+    error: state.error,
+    isPending: state.pending,
+    submit: async (input) => {
+      setState({ pending: true });
+      try {
+        await client.resetPassword(
+          { newPassword: input.password, token: input.token },
+          { throw: true },
+        );
+        await refresh();
+        setState({ pending: false });
+      } catch (error) {
+        setState({
+          pending: false,
+          error: resolveAuthenticationActionError(error),
+        });
+      }
     },
   };
 }

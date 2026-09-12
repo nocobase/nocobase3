@@ -208,6 +208,7 @@
     "@nocobase/nb3-cli": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
     "@oclif/core": "catalog:",
+    "better-auth": "catalog:",
     "hono": "catalog:"
   },
   "description": "Runnable NocoBase 3 examples for application development.",

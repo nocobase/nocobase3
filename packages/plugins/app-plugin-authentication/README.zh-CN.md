@@ -2,16 +2,10 @@
 
 `@nocobase/app-plugin-authentication` 是 NocoBase 应用的认证基础包。它将 Better Auth
 接入 NocoBase Database 和 Caching，提供 Hono 中间件、浏览器客户端以及
-Refine `AuthProvider` 适配器。
+基于 Better Auth 的认证客户端、React 上下文和路由守卫。
 
 当前内置的默认认证方式是邮箱或用户名加密码。应用可以继续通过 Better Auth
 配置和插件扩展认证能力。
-
-服务端入口还提供 `userAdministrationServiceToken`。用户管理插件通过它查询、创建和
-编辑用户，启用或禁用账号，重置密码并撤销全部 Session；调用方可以把这些操作绑定到
-同一个数据库事务，但不直接访问 Authentication 的内部表。禁用账号会立即撤销缓存和
-数据库中的 Session、关闭 Realtime 连接，并在后续 HTTP 和 Realtime 身份解析中按未登录
-处理。管理员创建或编辑用户时，重复的邮箱和用户名会返回稳定的身份冲突错误。
 
 ## 文档入口
 
@@ -27,18 +21,17 @@ Refine `AuthProvider` 适配器。
 
 ## 包入口
 
-| 入口                                                 | 用途                                              |
-| ---------------------------------------------------- | ------------------------------------------------- |
-| `@nocobase/app-plugin-authentication`                | 服务端认证、存储适配、数据库适配和 migration      |
-| `@nocobase/app-plugin-authentication/server`         | 服务端入口，包括认证与统一用户管理 ServiceToken   |
-| `@nocobase/app-plugin-authentication/client`         | 浏览器 `AuthClient` 和 Refine `AuthProvider` 适配 |
-| `@nocobase/app-plugin-authentication/client/routes`  | 按需加载默认密码认证页面的插件入口                |
-| `@nocobase/app-plugin-authentication/client/actions` | 无页面依赖的认证动作 hooks                        |
-| `@nocobase/app-plugin-authentication/client/ui`      | 认证路由链接 `AuthLink`                           |
+| 入口                                                 | 用途                                         |
+| ---------------------------------------------------- | -------------------------------------------- |
+| `@nocobase/app-plugin-authentication`                | 服务端认证、存储适配、数据库适配和 migration |
+| `@nocobase/app-plugin-authentication/server`         | 显式的服务端入口，与根入口导出相同           |
+| `@nocobase/app-plugin-authentication/client`         | 浏览器 `AuthClient`、认证上下文和路由守卫    |
+| `@nocobase/app-plugin-authentication/client/actions` | 无页面依赖的认证动作 hooks                   |
 
-插件还在 `registry/auth-ui` 发布官方认证 UI 配方。Template 可以将它物化到
+插件还在独立的 UI Library 发布官方认证 UI 配方。Template 可以将它物化到
 `client/extensions/nocobase-auth-ui`；安装后的副本属于应用，可以直接修改，不是插件
-运行时源码。
+运行时源码。认证页面路由由应用声明：插件不发布 `/login` 等路由，也不提供路由覆盖
+契约。
 
 Registry 元数据位于 `registry.config.json`，使用仓库级工具构建 shadcn 安装产物：
 
@@ -49,10 +42,10 @@ pnpm registry:build
 生成的安装入口为 `public/r/auth-ui.json`。Registry 源码变更后需要重新构建；消费方只需
 对已发布的 JSON 执行 `shadcn add`。
 
-插件自身的 fallback 页面不依赖宿主 UI 包，而是在 `client/components/ui` 按需持有
-shadcn `base-nova` 源码。新增基础组件可在本包目录执行 `pnpm exec shadcn add <name>`；
-由于本包会生成声明文件，生成后需要保留显式导出类型，并将内部引用写成带 `.js` 后缀的
-相对 ESM 路径。
+认证守卫会跳转到 `/login`，因此使用本插件的应用必须在自己的 `client/routes.ts` 中声明
+`/login`、`/register`、`/forgot-password` 和 `/reset-password` 四条 `auth: 'guest'`
+路由。仓库内的三个模板已内置这些路由，页面组件来自
+`client/extensions/nocobase-auth-ui/`。
 
 根入口是服务端入口，浏览器代码必须从 `@nocobase/app-plugin-authentication/client` 导入。
 
@@ -64,3 +57,7 @@ pnpm --filter @nocobase/app-plugin-authentication typecheck
 pnpm --filter @nocobase/app-plugin-authentication test
 pnpm --filter @nocobase/app-plugin-authentication build
 ```
+
+## 应用配置
+
+模板中的 `server/config/auth.ts` 和 `client/config/auth.ts` 分别提供认证服务端与原生客户端 options。两端均从对应的 authentication 入口导入 `AuthConfig`。插件列表和回调写在 TS 中，部署密钥写在 `config.yml` 或 `AUTH_SECRET` 中。详细用法见 [服务端配置](./docs/zh-CN/server/integration.md) 与 [客户端配置](./docs/zh-CN/client/integration.md)。

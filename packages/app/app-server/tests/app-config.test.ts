@@ -1,421 +1,113 @@
-import { Type } from '@sinclair/typebox';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { objectProvider } from '@nocobase/config/providers/object';
-import { describe, expect, it, vi } from 'vitest';
-
 import {
-  AppConfig,
-  defineAppConfig,
-  defineAppConfigVariant,
-  envBoolean,
+  environmentProvider,
   envInteger,
-} from '../src/config/index.js';
+} from '@nocobase/config/providers/env';
+import { AppConfig } from '../src/config/index.js';
 
-const featureConfig = defineAppConfig({
-  namespace: 'feature',
-  schema: Type.Object({
-    enabled: Type.Boolean(),
-    label: Type.String(),
-  }),
-  defaults: { enabled: false, label: 'default' },
-  envMappings: { FEATURE_LABEL: { path: 'label' } },
-});
+const directories: string[] = [];
+function directory(): string {
+  const root = mkdtempSync(path.join(tmpdir(), 'app-config-'));
+  directories.push(root);
+  return root;
+}
+afterEach(() =>
+  directories
+    .splice(0)
+    .forEach((root) => rmSync(root, { recursive: true, force: true })),
+);
 
 describe('AppConfig', () => {
-  it('logs successful loads and reloads to stderr without configuration values', async () => {
-    const info = vi.spyOn(console, 'error').mockImplementation(() => {});
-    try {
-      const config = new AppConfig([featureConfig]);
-      await config.loadAll();
-      expect(info).toHaveBeenCalledWith('App configuration loaded', {
-        durationMs: expect.any(Number),
-      });
-      info.mockClear();
-      await Promise.all([config.reload(), config.reload()]);
-      expect(info).toHaveBeenCalledExactlyOnceWith(
-        'App configuration reloaded',
-        {
-          changedNamespaces: [],
-          durationMs: expect.any(Number),
-        },
-      );
-    } finally {
-      info.mockRestore();
-    }
-  });
-
-  it('loads YAML and JSON files according to their extension', async () => {
-    const directory = mkdtempSync(path.join(tmpdir(), 'nocobase-app-config-'));
-    try {
-      const yamlPath = path.join(directory, 'config.yaml');
-      const jsonPath = path.join(directory, 'config.json');
-      writeFileSync(yamlPath, 'feature:\n  enabled: true\n');
-      writeFileSync(jsonPath, JSON.stringify({ feature: { label: 'json' } }));
-      const config = new AppConfig([featureConfig], { context: {} });
-
-      config.loadFile(yamlPath).loadFile(jsonPath);
-      await config.loadAll();
-
-      expect(config.get(featureConfig)).toEqual({
-        enabled: true,
-        label: 'json',
-      });
-    } finally {
-      rmSync(directory, { recursive: true, force: true });
-    }
-  });
-
-  it('discovers a supported config file when the path has no extension', async () => {
-    const directory = mkdtempSync(path.join(tmpdir(), 'nocobase-app-config-'));
-    try {
-      writeFileSync(
-        path.join(directory, 'config.json'),
-        JSON.stringify({ feature: { enabled: true, label: 'discovered' } }),
-      );
-      const config = new AppConfig([featureConfig], { context: {} });
-
-      config.loadFile(path.join(directory, 'config'));
-      await config.loadAll();
-
-      expect(config.get(featureConfig).label).toBe('discovered');
-    } finally {
-      rmSync(directory, { recursive: true, force: true });
-    }
-  });
-
-  it('prefers yml, yaml, then json for extensionless config paths', async () => {
-    const directory = mkdtempSync(path.join(tmpdir(), 'nocobase-app-config-'));
-    try {
-      writeFileSync(
-        path.join(directory, 'config.yml'),
-        'feature:\n  enabled: true\n  label: yml\n',
-      );
-      writeFileSync(
-        path.join(directory, 'config.json'),
-        JSON.stringify({ feature: { enabled: true, label: 'json' } }),
-      );
-      const config = new AppConfig([featureConfig], { context: {} });
-
-      config.loadFile(path.join(directory, 'config'));
-      await config.loadAll();
-
-      expect(config.get(featureConfig).label).toBe('yml');
-    } finally {
-      rmSync(directory, { recursive: true, force: true });
-    }
-  });
-
-  it('rejects unsupported config file extensions', () => {
-    const config = new AppConfig([featureConfig], { context: {} });
-
-    expect(() => config.loadFile('config.toml')).toThrow(
-      /Expected \.yml, \.yaml, or \.json/,
-    );
-  });
-
-  it('merges defaults, loaded providers, and definition env layers', async () => {
-    const config = new AppConfig([featureConfig], {
-      context: {},
-      environment: { FEATURE_LABEL: 'environment' },
-    });
-    config.load(objectProvider({ feature: { enabled: true } }));
+  it.each([
+    ['json', '{"feature":{"label":"file"}}'],
+    ['yml', 'feature:\n  label: file\n'],
+    ['yaml', 'feature:\n  label: file\n'],
+    ['toml', '[feature]\nlabel = "file"\n'],
+  ])('loads %s files', async (extension, content) => {
+    const file = path.join(directory(), `config.${extension}`);
+    writeFileSync(file, content);
+    const config = new AppConfig().loadFile(file);
     await config.loadAll();
-
-    expect(config.get(featureConfig)).toEqual({
-      enabled: true,
-      label: 'environment',
-    });
-    expect(config.get<boolean>('feature.enabled')).toBe(true);
-    expect(config.get('feature.missing')).toBeUndefined();
+    expect(config.get('feature.label')).toBe('file');
   });
 
-  it('rejects duplicate namespaces before loading', () => {
-    expect(
-      () =>
-        new AppConfig([featureConfig, { ...featureConfig }], { context: {} }),
-    ).toThrow(/registered more than once/);
-  });
-
-  it('validates record entries with contributed config variants', async () => {
-    const cachingConfig = defineAppConfig({
-      namespace: 'caching',
-      schema: Type.Object({
-        providers: Type.Record(
-          Type.String(),
-          Type.Object(
-            { driver: Type.String() },
-            { additionalProperties: true },
-          ),
-        ),
-      }),
-      defaults: { providers: {} },
-    });
-    const redisConfig = defineAppConfigVariant({
-      target: 'caching.providers',
-      discriminator: 'driver',
-      value: 'redis',
-      schema: Type.Object(
-        {
-          driver: Type.Literal('redis'),
-          url: Type.String({ format: 'uri' }),
-          database: Type.Optional(Type.Integer({ minimum: 0 })),
-        },
-        { additionalProperties: false },
-      ),
-    });
-    const config = new AppConfig([cachingConfig, redisConfig], {
-      context: {},
-    });
-    config.load(
-      objectProvider({
-        caching: {
-          providers: {
-            primary: {
-              driver: 'redis',
-              url: 'redis://localhost:6379',
-              database: 1,
-            },
-          },
-        },
-      }),
-    );
-
+  it('prefers YAML when resolving an extensionless filename', async () => {
+    const file = path.join(directory(), 'config');
+    writeFileSync(file + '.toml', 'label = "toml"');
+    writeFileSync(file + '.yaml', 'label: yaml');
+    const config = new AppConfig().loadFile(file);
     await config.loadAll();
-
-    expect(config.get('caching.providers.primary')).toEqual({
-      driver: 'redis',
-      url: 'redis://localhost:6379',
-      database: 1,
-    });
+    expect(config.get('label')).toBe('yaml');
   });
 
-  it('rejects missing, unknown, duplicate, and invalid config variants', async () => {
-    const cachingConfig = defineAppConfig({
-      namespace: 'caching',
-      schema: Type.Object({
-        providers: Type.Record(
-          Type.String(),
-          Type.Object(
-            { driver: Type.String() },
-            { additionalProperties: true },
-          ),
-        ),
-      }),
-      defaults: { providers: {} },
-    });
-    const redisConfig = defineAppConfigVariant({
-      target: 'caching.providers',
-      discriminator: 'driver',
-      value: 'redis',
-      schema: Type.Object(
-        { driver: Type.Literal('redis'), url: Type.String() },
-        { additionalProperties: false },
-      ),
-    });
-
-    expect(
-      () =>
-        new AppConfig(
-          [
-            cachingConfig,
-            defineAppConfigVariant({ ...redisConfig, target: 'caching' }),
-          ],
-          { context: {} },
-        ),
-    ).toThrow(/must be a full config path/);
-
-    expect(() => new AppConfig([redisConfig], { context: {} })).toThrow(
-      /target namespace "caching" is not registered/,
-    );
-    expect(
-      () =>
-        new AppConfig([cachingConfig, redisConfig, redisConfig], {
-          context: {},
-        }),
-    ).toThrow(/registered more than once/);
-
-    const unknown = new AppConfig([cachingConfig, redisConfig], {
-      context: {},
-    });
-    unknown.load(
-      objectProvider({
-        caching: { providers: { primary: { driver: 'memcached' } } },
-      }),
-    );
-    await expect(unknown.loadAll()).rejects.toThrow(
-      /no variant is registered for "memcached"/,
-    );
-
-    const invalid = new AppConfig([cachingConfig, redisConfig], {
-      context: {},
-    });
-    invalid.load(
-      objectProvider({
-        caching: { providers: { primary: { driver: 'redis' } } },
-      }),
-    );
-    await expect(invalid.loadAll()).rejects.toThrow(
-      /caching\.providers\.primary.*required property 'url'/,
-    );
-  });
-
-  it('loads each new provider once and replays all providers on reload', async () => {
-    const firstRead = vi.fn(async () => ({
-      kind: 'map' as const,
-      value: { feature: { enabled: true } },
-    }));
-    const secondRead = vi.fn(async () => ({
-      kind: 'map' as const,
-      value: { feature: { label: 'second' } },
-    }));
-    const config = new AppConfig([featureConfig], { context: {} });
-
-    config.load({ name: 'first', read: firstRead });
-    config.load({ name: 'second', read: secondRead });
-
-    expect(firstRead).not.toHaveBeenCalled();
-    expect(secondRead).not.toHaveBeenCalled();
-
+  it('supports missing optional files and rejects missing required files', async () => {
+    const file = path.join(directory(), 'config.toml');
+    const config = new AppConfig().loadFile(file, { optional: true });
     await config.loadAll();
-
-    expect(firstRead).toHaveBeenCalledOnce();
-    expect(secondRead).toHaveBeenCalledOnce();
-    expect(config.get(featureConfig)).toEqual({
-      enabled: true,
-      label: 'second',
-    });
-
-    await config.reload();
-
-    expect(firstRead).toHaveBeenCalledTimes(2);
-    expect(secondRead).toHaveBeenCalledTimes(2);
+    config.mergeDefaults({ feature: { enabled: true } });
+    expect(config.get('feature.enabled')).toBe(true);
+    await expect(new AppConfig().loadFile(file).loadAll()).rejects.toThrow();
+    expect(() => new AppConfig().loadFile('config.ini')).toThrow('Unsupported');
   });
 
-  it('reloads atomically and notifies namespace subscribers', async () => {
-    let enabled = false;
-    const config = new AppConfig([featureConfig], { context: {} });
-    config.load({
-      name: 'feature',
-      read: async () => ({
-        kind: 'map',
-        value: { feature: { enabled } },
+  it('merges code defaults below file and explicit environment sources and reloads them', async () => {
+    const file = path.join(directory(), 'config.toml');
+    writeFileSync(file, '[feature]\nport=2000\nlabel="file"');
+    const env: Record<string, string | undefined> = { APP_TEST_PORT: '3000' };
+    const config = new AppConfig().loadFile(file).load(
+      environmentProvider(env, {
+        mappings: { APP_TEST_PORT: envInteger('feature.port') },
       }),
-    });
+    );
     await config.loadAll();
+    const callback = vi.fn();
+    config.mergeDefaults({
+      feature: { port: 1000, label: 'code', callback, items: ['a'] },
+    });
+    expect(config.get('feature.port')).toBe(3000);
+    expect(config.get('feature.label')).toBe('file');
     const listener = vi.fn();
-
-    config.subscribe(featureConfig, listener);
-    enabled = true;
-    const result = await config.reload();
-
-    expect(result).toEqual({ changedNamespaces: ['feature'] });
-    expect(config.get(featureConfig).enabled).toBe(true);
-    expect(listener).toHaveBeenCalledExactlyOnceWith({
-      previous: { enabled: false, label: 'default' },
-      current: { enabled: true, label: 'default' },
-    });
-  });
-
-  it('supports unique object properties in contributed array schemas', async () => {
-    const servicesConfig = defineAppConfig({
-      namespace: 'services',
-      schema: Type.Object({
-        entries: Type.Array(
-          Type.Object({ name: Type.String(), provider: Type.String() }),
-          { uniqueItemProperties: ['name'] },
-        ),
-      }),
-      defaults: { entries: [] },
-    });
-    const config = new AppConfig([servicesConfig], { context: {} });
-    config.load(
-      objectProvider({
-        services: {
-          entries: [
-            { name: 'same', provider: 'first' },
-            { name: 'same', provider: 'second' },
-          ],
-        },
-      }),
-    );
-
-    await expect(config.loadAll()).rejects.toThrow(/uniqueItemProperties/);
-  });
-
-  it('keeps the previous snapshot when a reload fails validation', async () => {
-    let enabled: boolean | string = false;
-    const config = new AppConfig([featureConfig], { context: {} });
-    config.load({
-      name: 'feature',
-      read: async () => ({
-        kind: 'map',
-        value: { feature: { enabled } },
-      }),
-    });
-    await config.loadAll();
-
-    enabled = 'invalid';
-
-    await expect(config.reload()).rejects.toThrow(/Invalid application config/);
-    expect(config.get(featureConfig).enabled).toBe(false);
-  });
-
-  it('evaluates asynchronous defaults once and reuses them on reload', async () => {
-    const defaults = vi.fn(async () => ({
-      enabled: false,
-      label: 'default',
-    }));
-    const config = new AppConfig([{ ...featureConfig, defaults }], {
-      context: {},
-    });
-
-    await config.loadAll();
+    const unsubscribe = config.subscribe('feature', listener);
+    delete env.APP_TEST_PORT;
+    writeFileSync(file, '[feature]\nitems=["b"]');
+    expect(await config.reload()).toEqual({ changedNamespaces: ['feature'] });
+    expect(config.get('feature.port')).toBe(1000);
+    expect(config.get('feature.label')).toBe('code');
+    expect(config.get('feature.items')).toEqual(['b']);
+    expect(config.get('feature.callback')).toBe(callback);
+    expect(listener).toHaveBeenCalledOnce();
+    expect(await config.reload()).toEqual({ changedNamespaces: [] });
+    unsubscribe();
+    writeFileSync(file, '[feature]\nlabel="later"');
     await config.reload();
-
-    expect(defaults).toHaveBeenCalledOnce();
+    expect(listener).toHaveBeenCalledOnce();
   });
 
-  it('keeps validated configuration as plain data', async () => {
-    const endpointConfig = defineAppConfig({
-      namespace: 'endpoint',
-      schema: Type.Object({ url: Type.String({ format: 'uri' }) }),
-      defaults: { url: 'https://example.com/api' },
-    });
-    const config = new AppConfig([endpointConfig], { context: {} });
-
+  it('preserves the last configuration when a reload cannot parse its source', async () => {
+    const file = path.join(directory(), 'config.json');
+    writeFileSync(file, '{"value":1}');
+    const config = new AppConfig().loadFile(file);
     await config.loadAll();
-
-    expect(config.get(endpointConfig)).toEqual({
-      url: 'https://example.com/api',
-    });
-    expect(config.get<string>('endpoint.url')).toBe('https://example.com/api');
+    writeFileSync(file, '{ invalid');
+    await expect(config.reload()).rejects.toThrow();
+    expect(config.get('value')).toBe(1);
   });
 
-  it('loads mapped environment values as the highest-priority layer', async () => {
-    const serverConfig = defineAppConfig({
-      namespace: 'server',
-      schema: Type.Object({
-        port: Type.Number(),
-        enabled: Type.Boolean(),
-      }),
-      defaults: { port: 13000, enabled: false },
-      envMappings: {
-        APP_SERVER_PORT: envInteger('port'),
-        APP_SERVER_ENABLED: envBoolean('enabled'),
-      },
-    });
-    const config = new AppConfig([serverConfig], {
-      context: {},
-      environment: {
-        APP_SERVER_PORT: '14000',
-        APP_SERVER_ENABLED: 'true',
-      },
-    });
-    config.load(objectProvider({ server: { port: 13500 } }));
-    await config.loadAll();
-
-    expect(config.get(serverConfig)).toEqual({ port: 14000, enabled: true });
+  it('does not implicitly load process environment', async () => {
+    vi.stubEnv('AUTH_SECRET', 'not-an-implicit-source');
+    try {
+      const config = new AppConfig();
+      await config.loadAll();
+      expect(config.raw()).toEqual({});
+      expect(() => config.load(objectProvider({ value: 1 }))).toThrow(
+        'after loading',
+      );
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import path from 'node:path';
-import { tmpdir } from 'node:os';

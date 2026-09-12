@@ -5,35 +5,8 @@ import routeComponentOverrides from '../../client/route-overrides.ts';
 import sourceExtensions from '../../client/source-extensions.ts';
 
 describe('app client routes', () => {
-  it('discovers application-owned authentication page overrides', () => {
-    expect(
-      sourceExtensions
-        .flatMap((extension) => extension.routeComponentOverrides ?? [])
-        .map(({ componentEntry, routeId }) => ({
-          componentEntry,
-          routeId,
-        })),
-    ).toEqual([
-      {
-        componentEntry: './client/extensions/nocobase-auth-ui/pages/login-page',
-        routeId: '@nocobase/app-plugin-authentication:login',
-      },
-      {
-        componentEntry:
-          './client/extensions/nocobase-auth-ui/pages/register-page',
-        routeId: '@nocobase/app-plugin-authentication:register',
-      },
-      {
-        componentEntry:
-          './client/extensions/nocobase-auth-ui/pages/forgot-password-page',
-        routeId: '@nocobase/app-plugin-authentication:forgot-password',
-      },
-      {
-        componentEntry:
-          './client/extensions/nocobase-auth-ui/pages/reset-password-page',
-        routeId: '@nocobase/app-plugin-authentication:reset-password',
-      },
-    ]);
+  it('owns authentication pages instead of overriding plugin routes', () => {
+    expect(sourceExtensions).toEqual([]);
     expect(routeComponentOverrides).toEqual([]);
   });
 
@@ -65,6 +38,14 @@ describe('app client routes', () => {
           ],
         },
         { auth: 'required', name: 'articles', path: '/articles' },
+        { auth: 'guest', name: 'login', path: '/login' },
+        { auth: 'guest', name: 'register', path: '/register' },
+        {
+          auth: 'guest',
+          name: 'forgot-password',
+          path: '/forgot-password',
+        },
+        { auth: 'guest', name: 'reset-password', path: '/reset-password' },
       ],
     });
     expect(applicationRoutes[1]).toEqual({

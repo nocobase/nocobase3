@@ -1,6 +1,6 @@
 import type { ExecutionContext, Hono } from 'hono';
 import type { AppConfigAccessor } from '../config/index.js';
-import { appConfig } from '../config/index.js';
+import { type AppIdentityConfig } from '../config/index.js';
 
 import type { ConfigPaths } from '../config/index.js';
 import {
@@ -63,7 +63,6 @@ export interface ApplicationRuntimeContributions<
   readonly plugins: ResolvedAppServerPlugins;
   readonly serviceProviders: readonly ApplicationServiceProviderConstructor<TConfig>[];
   readonly routes: readonly AppRouteContribution<Application<TConfig>>[];
-  readonly locales?: AppServerPluginLocalesLoader;
 }
 
 /**
@@ -106,7 +105,6 @@ export class Application<
     packageName: string;
     load: AppServerPluginLocalesLoader;
   }[] = [];
-  private applicationLocales: AppServerPluginLocalesLoader | undefined;
 
   public constructor(options: ApplicationOptions<TConfig>) {
     this.config = options.config;
@@ -126,11 +124,13 @@ export class Application<
   }
 
   public get appName(): string {
-    return resolveAppName(this.config.get(appConfig).name);
+    return resolveAppName(this.config.get<AppIdentityConfig>('app')!.name);
   }
 
   public get publicBasePath(): string {
-    return normalizeBasePath(this.config.get(appConfig).publicBasePath);
+    return normalizeBasePath(
+      this.config.get<AppIdentityConfig>('app')!.publicBasePath,
+    );
   }
 
   public get router(): Hono {
@@ -174,23 +174,10 @@ export class Application<
     runtime: ApplicationRuntimeContributions<TConfig>,
   ): void {
     this.addServerPlugins(runtime.plugins);
-    if (runtime.locales) {
-      this.addApplicationLocales(runtime.locales);
-    }
     this.addServiceProviders(runtime.serviceProviders);
     for (const routes of runtime.routes) {
       this.addRoutes(routes);
     }
-  }
-
-  /**
-   * Registers the application's own `server/locales/index.ts`.
-   *
-   * It is what decides which languages the server offers, so it is kept apart from the plugin contributions, which
-   * only supply translations for languages the application already declares.
-   */
-  public addApplicationLocales(load: AppServerPluginLocalesLoader): void {
-    this.applicationLocales = load;
   }
 
   public addRoutes(routes: AppRouteContribution<Application<TConfig>>): void {
@@ -250,25 +237,13 @@ export class Application<
     }
 
     const runtime = this.container.resolve(i18nToken);
-    const applicationPackageName = this.appPackageName ?? '';
-    const sources = [
-      ...(this.applicationLocales
-        ? [
-            {
-              packageName: applicationPackageName,
-              load: this.applicationLocales,
-            },
-          ]
-        : []),
-      ...this.localeContributions,
-    ];
     const contributions = await Promise.all(
-      sources.map(async (contribution) => ({
+      this.localeContributions.map(async (contribution) => ({
         packageName: contribution.packageName,
         locales: await contribution.load(),
       })),
     );
-    await registerAppLocales(runtime, applicationPackageName, contributions);
+    await registerAppLocales(runtime, this.appPackageName ?? '', contributions);
   }
 
   private async registerRoutes(): Promise<void> {

@@ -35,19 +35,14 @@ Better Auth
 - NocoBase Database 自定义 Better Auth adapter。
 - NocoBase Caching secondary storage 和限流计数器适配。
 - Refine `AuthProvider` 适配。
-- 通过客户端插件路由按需加载登录、注册、忘记密码和重置密码页面。
+- 登录、注册、忘记密码和重置密码页面由应用的 guest 路由按需加载；插件本身不声明
+  客户端路由。
 
 ## 默认行为
 
-`Auth` 在调用 Better Auth 前补充以下默认值：
+模板的 `server/config/auth.ts` 默认启用邮箱密码登录和 username plugin，并配置 `displayUsername: false`。`client/config/auth.ts` 配置对应的原生客户端插件。用户可以直接修改这些文件中的登录策略和回调。
 
-- `appName` 默认为 `NocoBase3`。
-- `emailAndPassword.enabled` 默认为 `true`。
-- 自动安装 username plugin；如果调用方已经配置同 ID 插件，则不重复安装。
-- username plugin 使用 `displayUsername: false`，数据库中不增加展示用户名字段。
-- `advanced.database.generateId` 默认使用 `crypto.randomUUID()`。
-
-调用方传入的配置优先于默认值。
+认证 Provider 补充应用名称、数据库连接、缓存、ID 生成和公开路径等运行时依赖。`config.yml` 与声明的环境变量覆盖部署相关字段。
 
 ## 不属于本包的职责
 

@@ -1,19 +1,31 @@
-import { useRegister } from '@refinedev/core';
-
-import { resolveAuthenticationActionError } from './action-state.js';
+import { useState } from 'react';
+import { useAuthentication } from '../auth-provider.js';
+import { resolveAuthenticationActionError } from './errors.js';
 import type {
   AuthenticationActionState,
   PasswordRegistrationInput,
 } from './types.js';
-
 export function usePasswordRegistration(): AuthenticationActionState<PasswordRegistrationInput> {
-  const mutation = useRegister<PasswordRegistrationInput>();
-
+  const { client, refresh } = useAuthentication();
+  const [state, setState] = useState<{
+    error?: { message: string };
+    pending: boolean;
+  }>({ pending: false });
   return {
-    error: resolveAuthenticationActionError(mutation.data, mutation.error),
-    isPending: mutation.isPending,
-    submit: async (input: PasswordRegistrationInput): Promise<void> => {
-      await mutation.mutateAsync(input).catch(() => undefined);
+    error: state.error,
+    isPending: state.pending,
+    submit: async (input) => {
+      setState({ pending: true });
+      try {
+        await client.signUp.email(input, { throw: true });
+        await refresh();
+        setState({ pending: false });
+      } catch (error) {
+        setState({
+          pending: false,
+          error: resolveAuthenticationActionError(error),
+        });
+      }
     },
   };
 }

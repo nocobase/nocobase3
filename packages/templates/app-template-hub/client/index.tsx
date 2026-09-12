@@ -1,3 +1,4 @@
+import { createApp } from './app.js';
 import {
   AppClientRoot,
   resolveAppBase,
@@ -6,7 +7,6 @@ import {
 import { resolveAppRuntime } from '@nocobase/app-client/runtime';
 import { createRoot } from 'react-dom/client';
 
-import { createApp } from './app';
 import appRuntime from './runtime';
 import { AppStartupError } from './startup';
 import './styles.css';

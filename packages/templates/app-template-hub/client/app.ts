@@ -4,7 +4,7 @@ import {
   type AppClientRenderConfig,
 } from '@nocobase/app-client';
 import { I18nProvider } from '@nocobase/i18n/client';
-import type { ResolvedAppRuntime } from '@nocobase/app-client/runtime';
+import type { AppRuntimeContext } from '@nocobase/app-client/runtime';
 import {
   createElement,
   type PropsWithChildren,
@@ -12,12 +12,12 @@ import {
 } from 'react';
 
 import { AppRouter } from './routing/app-router.js';
-export function createApp(runtime: ResolvedAppRuntime): ClientApplication {
+export function createApp(runtime: AppRuntimeContext): ClientApplication {
   // Outermost, so every provider and page below can translate.
   const AppI18nProvider = ({ children }: PropsWithChildren): ReactElement =>
     createElement(I18nProvider, { runtime: runtime.i18n }, children);
 
-  return new ClientApplication({
+  const app = new ClientApplication({
     runtime,
     createRenderConfig: (): AppClientRenderConfig =>
       defineAppClientRenderConfig({
@@ -33,4 +33,6 @@ export function createApp(runtime: ResolvedAppRuntime): ClientApplication {
         }),
       }),
   });
+  runtime.app = app;
+  return app;
 }

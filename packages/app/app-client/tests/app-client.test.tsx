@@ -40,7 +40,7 @@ async function createTestApplication(
   const runtime = await resolveAppRuntime(
     defineAppRuntime({
       packageName: '@example/app',
-      config: createAppClientConfig,
+      createAppConfig: createAppClientConfig,
       serviceProviders: [TestProvider],
       plugins: defineClientPlugins([]),
     }),
@@ -92,7 +92,7 @@ describe('app client', () => {
       const runtime = await resolveAppRuntime(
         defineAppRuntime({
           packageName: '@example/app',
-          config: createAppClientConfig,
+          createAppConfig: createAppClientConfig,
           plugins: defineClientPlugins([]),
         }),
         { rawConfig: { api } },
@@ -188,7 +188,7 @@ describe('app client', () => {
     const runtime = await resolveAppRuntime(
       defineAppRuntime({
         packageName: '@example/app',
-        config: createAppClientConfig,
+        createAppConfig: createAppClientConfig,
         routes: defineAppRoutes([
           {
             name: 'home',
@@ -235,7 +235,7 @@ describe('app client', () => {
     const runtime = await resolveAppRuntime(
       defineAppRuntime({
         packageName: '@example/app',
-        config: createAppClientConfig,
+        createAppConfig: createAppClientConfig,
         serviceProviders: [AuthProviderService],
         routes: defineAppRoutes([
           {
@@ -291,7 +291,7 @@ describe('app client', () => {
     const runtime = await resolveAppRuntime(
       defineAppRuntime({
         packageName: '@example/app',
-        config: createAppClientConfig,
+        createAppConfig: createAppClientConfig,
         serviceProviders: [createProvider('first'), createProvider('second')],
         plugins: defineClientPlugins([]),
       }),

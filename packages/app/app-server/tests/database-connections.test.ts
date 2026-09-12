@@ -15,10 +15,9 @@ import { objectProvider } from '@nocobase/config/providers/object';
 import { AppConfig, createConfigPaths } from '../src/config/index.js';
 import {
   createAppDatabaseManager,
-  databaseConfig,
+  type AppDatabaseConfig,
   planAppDatabaseTasks,
   runAppDatabaseTasks,
-  type AppDatabaseConfig,
 } from '../src/database/index.js';
 import { executeAppDatabasePlan } from '../src/database/tasks.js';
 import { createAppPluginDatabaseConfig } from '../src/plugins/resolve.js';
@@ -395,17 +394,7 @@ describe('connection-bound application database tasks', () => {
 
   it('maps old environment task settings to a custom default without contaminating other connections', async () => {
     const { paths } = fixture();
-    const config = new AppConfig([databaseConfig], {
-      context: {
-        paths,
-        appPackageName: 'test-app',
-        plugins: { appPackageName: 'test-app', plugins: [] },
-      },
-      environment: {
-        DB_MIGRATIONS_AUTO_RUN: 'false',
-        DB_MIGRATIONS_TABLE: 'legacy_history',
-      },
-    });
+    const config = new AppConfig();
     config.load(
       objectProvider({
         database: {
@@ -420,9 +409,17 @@ describe('connection-bound application database tasks', () => {
         },
       }),
     );
+    config.load(
+      objectProvider({
+        database: {
+          migrations: { autoRun: false, tableName: 'legacy_history' },
+          connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
+        },
+      }),
+    );
     await config.loadAll();
     const plan = planAppDatabaseTasks(
-      config.get(databaseConfig),
+      config.get<AppDatabaseConfig>('database')!,
       paths,
       ['migrations'],
       { all: true },

@@ -29,13 +29,6 @@ export async function loadConfigProvider(
   }
 
   if (result.kind === 'map') {
-    if (parser) {
-      throw new ConfigParserError(
-        parser.name,
-        provider.name,
-        'a parser cannot be used with a map provider',
-      );
-    }
     return {
       value: cloneConfigValue(assertConfigMap(result.value)),
       metadata: result.metadata,

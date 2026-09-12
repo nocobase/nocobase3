@@ -1,4 +1,7 @@
-import { Authenticated } from '@refinedev/core';
+import {
+  GuestAuthentication,
+  RequiredAuthentication,
+} from '@nocobase/app-plugin-authentication/client';
 import type { AppClientRegisteredRoute } from '@nocobase/app-client/plugins';
 import { lazy, Suspense, useMemo, type ReactElement } from 'react';
 import { Navigate, Outlet, Route, Routes } from 'react-router';
@@ -71,12 +74,9 @@ export function AppRouter({
     <Routes>
       <Route
         element={
-          <Authenticated
-            key='authenticated-inner'
-            fallback={<Navigate to='/login' replace />}
-          >
+          <RequiredAuthentication>
             <Outlet />
-          </Authenticated>
+          </RequiredAuthentication>
         }
       >
         <Route element={<AppShell routes={routeGroups.required} />}>
@@ -115,9 +115,9 @@ export function AppRouter({
 
       <Route
         element={
-          <Authenticated key='authenticated-outer' fallback={<Outlet />}>
-            <Navigate to='/' replace />
-          </Authenticated>
+          <GuestAuthentication>
+            <Outlet />
+          </GuestAuthentication>
         }
       >
         <Route element={<StandalonePageLayout />}>

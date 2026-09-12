@@ -1,3 +1,5 @@
+import { createApp } from '../../server/app.js';
+import authConfig from '../../server/config/auth.js';
 // @vitest-environment node
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -29,9 +31,8 @@ import {
 } from '@nocobase/app-server/session';
 import { createConfigPaths } from '@nocobase/app-server/config';
 import {
-  appConfig,
+  type AppIdentityConfig,
   type AppConfigAccessor,
-  type AppConfigToken,
 } from '@nocobase/app-server/config';
 import { startNodeAppServer } from '@nocobase/app-server/node';
 import {
@@ -87,7 +88,6 @@ import {
 import authenticationServerPlugin from '@nocobase/app-plugin-authentication/server';
 import authorizationServerPlugin from '@nocobase/app-plugin-authorization/server';
 
-import { createApp } from '../../server/app.ts';
 import { createServer as createEmbeddedServer } from '../../server/embedded.ts';
 import { createStandaloneRuntimeScope } from '@nocobase/app-server/node';
 import appRuntime from '../../server/runtime.ts';
@@ -168,7 +168,9 @@ describe('app server', () => {
     expect(app.container).toBeDefined();
     expect(app.appName).toBe('app-template-hub');
     expect(app.publicBasePath).toBe('/app-template-hub');
-    expect(app.config.get(appConfig).publicBasePath).toBe('/app-template-hub');
+    expect(app.config.get<AppIdentityConfig>('app')!.publicBasePath).toBe(
+      '/app-template-hub',
+    );
   });
 
   it('passes the application to plugin providers', () => {
@@ -330,7 +332,7 @@ describe('app server', () => {
       },
       scope,
     );
-    const runtime = {
+    const application = createApp({
       ...resolvedRuntime,
       plugins: createResolvedTestServerPlugins([
         defineServerPlugin<AppConfig>({
@@ -338,8 +340,7 @@ describe('app server', () => {
           serviceProviders: [TestRuntimePluginProvider],
         }),
       ]),
-    };
-    const application = createApp(runtime);
+    });
     const app = trackCloseable(
       Object.assign(application, {
         close(): Promise<void> {
@@ -381,15 +382,15 @@ describe('app server', () => {
       }),
     );
 
-    expect(runtime.appConfig.raw()).toMatchObject({
+    expect(runtime.config.raw()).toMatchObject({
       heartbeat: { enabled: false },
     });
 
     writeFileSync(configPath, 'heartbeat:\n  enabled: true\n');
-    await expect(runtime.appConfig.reload()).resolves.toMatchObject({
+    await expect(runtime.config.reload()).resolves.toMatchObject({
       changedNamespaces: ['heartbeat'],
     });
-    expect(runtime.appConfig.raw()).toMatchObject({
+    expect(runtime.config.raw()).toMatchObject({
       heartbeat: { enabled: true },
     });
   });
@@ -1199,6 +1200,7 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
     publicBasePath: configValues.app.publicBasePath,
     paths,
   });
+  configValues.auth = { ...authConfig({} as never), ...configValues.auth };
   if (database) {
     app.addServiceProvider(TestDatabaseProvider);
   }
@@ -1251,8 +1253,7 @@ function createTestConfig(
   values: Readonly<Record<string, unknown>>,
 ): AppConfigAccessor {
   return {
-    get: <TValue>(definition: AppConfigToken<TValue>): TValue =>
-      values[definition.namespace] as TValue,
+    get: <TValue>(definition: string): TValue => values[definition] as TValue,
     raw: () => values,
     reload: () => Promise.resolve({ changedNamespaces: [] }),
     subscribe: () => () => undefined,
@@ -1280,7 +1281,9 @@ function createEmbeddedTestScope(
       // install Hub tables or exercise the managed host process.
       HUB_HOST_ENABLED: 'false',
       ...options.env,
-      DB_DATABASE: path.join(databaseDir, 'database.sqlite'),
+      APP_CONFIG_FILE: options.rootDir
+        ? undefined
+        : writeRuntimeTestConfig(databaseDir, options.env),
     },
     paths:
       options.paths ??
@@ -1315,7 +1318,7 @@ async function createIsolatedStandaloneServer(
     env: {
       HUB_HOST_ENABLED: 'false',
       ...options.env,
-      DB_DATABASE: path.join(databaseDir, 'database.sqlite'),
+      APP_CONFIG_FILE: writeRuntimeTestConfig(databaseDir, options.env),
     },
     paths: {
       rootDir: sourceRoot,
@@ -1439,4 +1442,30 @@ function createMockQuery(
       throw new Error('Not implemented.');
     },
   } as unknown as QueryAdapter;
+}
+
+function writeRuntimeTestConfig(
+  directory: string,
+  env: Readonly<Record<string, string | undefined>> = {},
+): string {
+  const file = path.join(directory, 'config.json');
+  writeFileSync(
+    file,
+    JSON.stringify({
+      auth: { secret: 'test-auth-secret-at-least-32-characters' },
+      database: {
+        default: 'main',
+        connections: {
+          main: {
+            dialect: 'sqlite',
+            filename: path.join(directory, 'database.sqlite'),
+          },
+        },
+        migrations: { autoRun: env.DB_MIGRATIONS_AUTO_RUN !== 'false' },
+        seeds: { autoRun: env.DB_SEEDS_AUTO_RUN === 'true' },
+      },
+      hub: { host: { enabled: false } },
+    }),
+  );
+  return file;
 }

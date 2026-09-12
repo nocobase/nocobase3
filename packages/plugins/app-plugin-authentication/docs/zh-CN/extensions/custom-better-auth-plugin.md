@@ -210,7 +210,7 @@ helper。这样默认模板中的这些能力才能继续工作：
 ```ts
 auth.getSession(headers);
 auth.required();
-createAuthProvider(authClient);
+createAuthProvider(authClient, realtimeClient);
 ```
 
 具体方法应以应用所安装 Better Auth 版本的 plugin 文档和公开类型为准。优先使用：
@@ -362,21 +362,25 @@ plugin schema 和 migration 应保持一致。增加字段时，两处需要一�
 
 ## 8. 注册 plugin
 
-在应用创建 authentication service 时加入 plugin：
+在应用的 `server/config/auth.ts` 中加入 plugin：
 
 ```ts
-const auth = createAuthentication({
-  connection: services.resolve(databaseManagerToken).connection(),
-  secret: app.config.get(authenticationConfig).secret,
+import type { AuthConfig } from '@nocobase/app-plugin-authentication/server';
+import { ticketAuthPlugin } from '../auth/ticket/plugin.js';
+import { ticketProtocolClient } from '../auth/ticket/protocol-client.js';
+
+const auth: AuthConfig = {
   plugins: [
     ticketAuthPlugin({
-      issuer: app.config.get(authenticationConfig).ticket.issuer,
-      audience: app.config.get(authenticationConfig).ticket.audience,
+      issuer: 'https://identity.example.com',
+      audience: 'my-app',
       verifyTicket: ticketProtocolClient.verify,
       allowSignUp: false,
     }),
   ],
-});
+};
+
+export default auth;
 ```
 
 默认模板已经挂载 `/api/auth/*`，因此 `/sign-in/ticket` 会出现在：

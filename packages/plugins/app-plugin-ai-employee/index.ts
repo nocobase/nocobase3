@@ -1,4 +1,3 @@
-export { aiEmployeeConfig } from './server/config.js';
 export type {
   AIEmployeeConfig,
   AIEmployeeEnabledModelConfig,

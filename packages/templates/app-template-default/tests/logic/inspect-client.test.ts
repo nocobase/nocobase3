@@ -112,22 +112,22 @@ describe('client inspection', () => {
       },
       {
         auth: 'guest',
-        id: '@nocobase/app-plugin-authentication:login',
+        id: '@nocobase/app-template-default:login',
         path: '/login',
       },
       {
         auth: 'guest',
-        id: '@nocobase/app-plugin-authentication:register',
+        id: '@nocobase/app-template-default:register',
         path: '/register',
       },
       {
         auth: 'guest',
-        id: '@nocobase/app-plugin-authentication:forgot-password',
+        id: '@nocobase/app-template-default:forgot-password',
         path: '/forgot-password',
       },
       {
         auth: 'guest',
-        id: '@nocobase/app-plugin-authentication:reset-password',
+        id: '@nocobase/app-template-default:reset-password',
         path: '/reset-password',
       },
       {
@@ -151,8 +151,12 @@ describe('client inspection', () => {
     ).toEqual([
       { id: '@nocobase/app-template-default:theme', order: 1 },
       {
-        id: '@nocobase/app-plugin-notification-provider:notification-host',
+        id: '@nocobase/app-plugin-authentication:authentication',
         order: 2,
+      },
+      {
+        id: '@nocobase/app-plugin-notification-provider:notification-host',
+        order: 3,
       },
     ]);
     expect(
@@ -233,7 +237,6 @@ describe('client inspection', () => {
       }
       const plugin = {
         packageName: '@example/client-plugin',
-        config: [],
         serviceProviders: [ExampleProvider],
         locales: {
           'en-US': async () => {
@@ -282,7 +285,6 @@ describe('client inspection', () => {
       globalThis.__clientLocalesOnlyCalls = { lifecycle: 0, locale: 0, route: 0 };
       const plugin = {
         packageName: '@example/client-locales-only-inspection',
-        config: [],
         serviceProviders: [],
         locales: {
           'en-US': async () => {

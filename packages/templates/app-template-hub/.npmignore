@@ -24,3 +24,5 @@ scripts/registry.mjs
 sdk/
 .github/
 !.gitignore
+
+/config.toml

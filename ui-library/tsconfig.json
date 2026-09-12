@@ -1,0 +1,13 @@
+{
+  "extends": "@nocobase/dev-config/tsconfig/client.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.tsbuildinfo",
+    "paths": {
+      "@/*": ["./website/*"],
+      "@nocobase/app-plugin-authentication/client/actions": [
+        "./website/demo/auth/auth-ui/mock-actions.tsx"
+      ]
+    }
+  },
+  "include": ["website/**/*.ts", "website/**/*.tsx", "vite.config.ts"]
+}

@@ -22,6 +22,7 @@
     "@nocobase/ai-employee-avatars": "^1.0.2",
     "@nocobase/app-client": "workspace:^",
     "@nocobase/app-plugin-notification-provider": "workspace:^",
+    "@nocobase/app-plugin-users": "workspace:^",
     "@nocobase/app-portal-sdk": "workspace:^",
     "@nocobase/app-websocket": "workspace:^",
     "@nocobase/caching": "workspace:^",
@@ -194,6 +195,7 @@
     "@nocobase/db": "workspace:^",
     "@nocobase/nb3-cli": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
-    "@oclif/core": "catalog:"
+    "@oclif/core": "catalog:",
+    "better-auth": "catalog:"
   }
 }

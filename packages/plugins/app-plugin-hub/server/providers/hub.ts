@@ -6,7 +6,7 @@ import { databaseManagerToken } from '@nocobase/db';
 import type { AppConfigAccessor } from '@nocobase/app-server/config';
 import { AppHostSupervisor } from '@nocobase/app-host/supervisor';
 
-import { hubConfig } from '../config.js';
+import { type HubPluginConfig } from '../config.js';
 import { DefaultHubService } from '../services/hub.js';
 import { hubServiceToken } from '../tokens.js';
 
@@ -21,7 +21,7 @@ export class HubProvider extends ServiceProvider<HubProviderApplication> {
 
   public override register(): void {
     this.app.container.singleton(hubServiceToken, (resolver) => {
-      const config = this.app.config.get(hubConfig);
+      const config = this.app.config.get<HubPluginConfig>('hub')!;
       this.hostController = AppHostSupervisor.initialize({
         ...config.host,
         mode: 'managed',
@@ -35,7 +35,7 @@ export class HubProvider extends ServiceProvider<HubProviderApplication> {
   }
 
   public override async start(): Promise<void> {
-    if (!this.app.config.get(hubConfig).host.enabled) return;
+    if (!this.app.config.get<HubPluginConfig>('hub')!.host.enabled) return;
     await this.app.container.resolve(hubServiceToken).restoreDesiredState();
   }
 

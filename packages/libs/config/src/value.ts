@@ -37,6 +37,8 @@ export function assertConfigMap(value: unknown, path: string = ''): ConfigMap {
 
 export function assertConfigValue(value: unknown, path: string = ''): void {
   if (
+    value === undefined ||
+    typeof value === 'function' ||
     value === null ||
     typeof value === 'string' ||
     typeof value === 'boolean' ||
@@ -52,10 +54,13 @@ export function assertConfigValue(value: unknown, path: string = ''): void {
     return;
   }
 
+  if (typeof value === 'object' && value !== null && !isConfigMap(value))
+    return;
+
   if (!isConfigMap(value)) {
     throw new ConfigPathError(
       path,
-      'values must be strings, finite numbers, booleans, null, arrays, or plain objects',
+      'values must be strings, finite numbers, booleans, null, undefined, functions, or objects',
     );
   }
 
@@ -91,7 +96,9 @@ export function freezeConfigValue(value: ConfigValue): ConfigValue {
   } else if (isConfigMap(value)) {
     Object.values(value).forEach((item) => freezeConfigValue(item));
   }
-  return Object.freeze(value);
+  return isConfigMap(value) || isConfigArray(value)
+    ? Object.freeze(value)
+    : value;
 }
 
 export function configValueType(value: ConfigValue | undefined): string {

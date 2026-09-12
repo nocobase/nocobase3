@@ -1,11 +1,4 @@
 import path from 'node:path';
-import {
-  defineAppConfig,
-  envString,
-  type AppConfigDefinition,
-} from '@nocobase/app-server/config';
-import { Type } from '@sinclair/typebox';
-import type { ResolvedAppRuntimeConfigContext } from '@nocobase/app-server/runtime';
 
 export interface WorkflowRuntimeConfig {
   readonly sourceRoot: string;
@@ -18,42 +11,6 @@ export interface ResolveWorkflowRuntimeConfigOptions {
   readonly rootDir: string;
   readonly serverDir: string;
 }
-
-export const workflowConfig: AppConfigDefinition<
-  WorkflowRuntimeConfig,
-  ResolvedAppRuntimeConfigContext
-> = defineAppConfig({
-  namespace: 'workflow',
-  schema: Type.Object({
-    sourceRoot: Type.String(),
-    distRoot: Type.String(),
-    artifactDisk: Type.String(),
-    production: Type.Boolean(),
-  }),
-  defaults: ({
-    paths,
-    runtimePaths,
-  }: ResolvedAppRuntimeConfigContext): WorkflowRuntimeConfig =>
-    resolveWorkflowRuntimeConfig(
-      {
-        sourceRoot: paths.server('workflows'),
-        distRoot: paths.server('workflows'),
-        artifactDisk: 'local',
-        production: false,
-      },
-      {
-        rootDir: runtimePaths.rootDir ?? paths.root(),
-        serverDir: runtimePaths.serverDir ?? paths.server(),
-      },
-    ),
-  envMappings: {
-    WORKFLOW_ARTIFACT_DISK: envString('artifactDisk'),
-    NODE_ENV: {
-      path: 'production',
-      parse: (value): boolean => value === 'production',
-    },
-  },
-});
 
 export function resolveWorkflowRuntimeConfig(
   config: WorkflowRuntimeConfig,

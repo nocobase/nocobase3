@@ -1,4 +1,3 @@
-import type { AppConfigContribution } from '../config/index.js';
 import type {
   AppServerPlugin,
   AppServerPluginDefinition,
@@ -14,7 +13,6 @@ export function defineServerPlugin<TConfig = object>(
 
   return Object.freeze({
     packageName,
-    config: Object.freeze(normalizeConfigDefinitions(definition.config)),
     serviceProviders: Object.freeze([...(definition.serviceProviders ?? [])]),
     routes: Object.freeze([...(definition.routes ?? [])]),
     database: definition.database
@@ -46,22 +44,6 @@ export function defineServerPlugins(
   }
 
   return Object.freeze({ plugins: Object.freeze([...plugins]) });
-}
-
-function normalizeConfigDefinitions(
-  value:
-    | AppConfigContribution<never>
-    | readonly AppConfigContribution<never>[]
-    | undefined,
-): readonly AppConfigContribution<never>[] {
-  if (value === undefined) return [];
-  return isConfigDefinitionArray(value) ? [...value] : [value];
-}
-
-function isConfigDefinitionArray(
-  value: AppConfigContribution<never> | readonly AppConfigContribution<never>[],
-): value is readonly AppConfigContribution<never>[] {
-  return Array.isArray(value);
 }
 
 function normalizePackageName(packageName: string): string {

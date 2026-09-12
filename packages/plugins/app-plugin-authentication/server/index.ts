@@ -1,8 +1,7 @@
 export { default } from './plugin.js';
 export * from './auth.js';
 export * from './auth-storage.js';
-export * from './user-administration.js';
-export { authenticationConfig, resolveAuthSecret } from './config.js';
+export { resolveAuthSecret } from './config.js';
 export * from './better-auth/database-adapter.js';
 export {
   AuthenticationProvider,
@@ -12,3 +11,6 @@ export {
   type AuthenticationProviderConfig,
 } from './providers/authentication.js';
 export * from './tokens.js';
+export * from './user-administration.js';
+
+export type { AuthConfig } from './config.js';

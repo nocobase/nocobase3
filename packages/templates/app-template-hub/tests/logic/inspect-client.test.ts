@@ -117,22 +117,22 @@ describe('client inspection', () => {
       },
       {
         auth: 'guest',
-        id: '@nocobase/app-plugin-authentication:login',
+        id: '@nocobase/app-template-hub:login',
         path: '/login',
       },
       {
         auth: 'guest',
-        id: '@nocobase/app-plugin-authentication:register',
+        id: '@nocobase/app-template-hub:register',
         path: '/register',
       },
       {
         auth: 'guest',
-        id: '@nocobase/app-plugin-authentication:forgot-password',
+        id: '@nocobase/app-template-hub:forgot-password',
         path: '/forgot-password',
       },
       {
         auth: 'guest',
-        id: '@nocobase/app-plugin-authentication:reset-password',
+        id: '@nocobase/app-template-hub:reset-password',
         path: '/reset-password',
       },
       {
@@ -161,8 +161,12 @@ describe('client inspection', () => {
     ).toEqual([
       { id: '@nocobase/app-template-hub:theme', order: 1 },
       {
-        id: '@nocobase/app-plugin-notification-provider:notification-host',
+        id: '@nocobase/app-plugin-authentication:authentication',
         order: 2,
+      },
+      {
+        id: '@nocobase/app-plugin-notification-provider:notification-host',
+        order: 3,
       },
     ]);
     expect(

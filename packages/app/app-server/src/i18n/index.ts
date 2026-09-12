@@ -1,13 +1,8 @@
 import { I18nRuntime, type Locale, type LocalesModule } from '@nocobase/i18n';
-import { Type } from '@sinclair/typebox';
+
 import { createI18nMiddleware } from '@nocobase/i18n/server';
 import type { Hono } from 'hono';
-import {
-  type AppConfigAccessor,
-  defineAppConfig,
-  envString,
-  type AppConfigDefinition,
-} from '../config/index.js';
+import { type AppConfigAccessor } from '../config/index.js';
 import {
   ServiceProvider,
   createServiceToken,
@@ -25,28 +20,8 @@ export const i18nToken: ServiceToken<I18nRuntime> =
 
 export interface AppI18nConfig {
   readonly defaultLocale: Locale;
+  readonly locales: readonly Locale[];
 }
-
-/**
- * Which language the application answers in when nothing else decides.
- *
- * There is deliberately no list of supported languages here: the application's own `locales/` files are that list, so
- * adding a language means adding its file rather than editing configuration in a second place. A plugin's locale file
- * supplies translations for a language the application already offers; it never adds one.
- */
-export const i18nConfig: AppConfigDefinition<AppI18nConfig> = defineAppConfig({
-  namespace: 'i18n',
-  schema: Type.Object(
-    {
-      defaultLocale: Type.String(),
-    },
-    { additionalProperties: false },
-  ),
-  defaults: { defaultLocale: 'en-US' },
-  envMappings: {
-    APP_DEFAULT_LOCALE: envString('defaultLocale'),
-  },
-});
 
 export interface I18nProviderApplication {
   readonly container: ServiceContainer;
@@ -70,12 +45,13 @@ export class I18nProvider<
   public readonly name: string = 'i18n';
 
   public override register(): void {
-    const config = this.app.config.get(i18nConfig);
-    // Only the default locale is known here. The languages on offer follow from the application's own locale files,
-    // which are registered later in the boot sequence by `registerAppLocales`.
+    const config = this.app.config.get<AppI18nConfig>('i18n')!;
     this.app.container.instance(
       i18nToken,
-      new I18nRuntime({ defaultLocale: config.defaultLocale }),
+      new I18nRuntime({
+        defaultLocale: config.defaultLocale,
+        locales: config.locales,
+      }),
     );
   }
 }

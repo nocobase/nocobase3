@@ -7,7 +7,7 @@ import {
 import { databaseManagerToken } from '@nocobase/db';
 import { cachingToken } from '@nocobase/app-server/caching';
 import { idGeneratorToken } from '@nocobase/app-server/id-generator';
-import { appConfig } from '@nocobase/app-server/config';
+import { type AppIdentityConfig } from '@nocobase/app-server/config';
 import {
   realtimePrincipalResolverToken,
   realtimeServiceToken,
@@ -23,7 +23,7 @@ import { createAuthStorage } from '../auth-storage.js';
 import { authenticationToken } from '../tokens.js';
 import { userAdministrationServiceToken } from '../tokens.js';
 import { createUserAdministrationService } from '../user-administration.js';
-import { authenticationConfig, resolveAuthSecret } from '../config.js';
+import { type AuthConfig, resolveAuthSecret } from '../config.js';
 
 interface RequestInitWithDuplex extends RequestInit {
   duplex?: 'half';
@@ -87,8 +87,8 @@ export class AuthenticationProvider<
   }
 
   private createAuthentication(container: ServiceResolver): Auth {
-    const app = this.app.config.get(appConfig);
-    const configuredAuth = this.app.config.get(authenticationConfig);
+    const app = this.app.config.get<AppIdentityConfig>('app')!;
+    const configuredAuth = this.app.config.get<AuthConfig>('auth') ?? {};
     const authConfig = {
       ...configuredAuth,
       secret: resolveAuthSecret(configuredAuth.secret, this.app.paths.root()),

@@ -1,0 +1,72 @@
+{
+  "items": [
+    {
+      "name": "auth-ui",
+      "type": "registry:block",
+      "title": "Authentication UI",
+      "description": "A configurable authentication UI for NocoBase applications.",
+      "meta": {
+        "group": "Authentication",
+        "iframeHeight": 720
+      },
+      "dependencies": [
+        "@nocobase/app-plugin-authentication@^0.1.0",
+        "lucide-react@^0.487.0"
+      ],
+      "registryDependencies": ["button", "input", "label"],
+      "docs": "Requires @nocobase/app-plugin-authentication. Compose application-owned routes with AuthLayout and the installed forms.",
+      "files": [
+        {
+          "path": "auth-ui/components/auth-brand.tsx",
+          "type": "registry:component",
+          "target": "client/extensions/nocobase-auth-ui/components/auth-brand.tsx"
+        },
+        {
+          "path": "auth-ui/components/auth-layout.tsx",
+          "type": "registry:component",
+          "target": "client/extensions/nocobase-auth-ui/components/auth-layout.tsx"
+        },
+        {
+          "path": "auth-ui/components/auth-form-tabs.tsx",
+          "type": "registry:component",
+          "target": "client/extensions/nocobase-auth-ui/components/auth-form-tabs.tsx"
+        },
+        {
+          "path": "auth-ui/components/auth-sso-buttons.tsx",
+          "type": "registry:component",
+          "target": "client/extensions/nocobase-auth-ui/components/auth-sso-buttons.tsx"
+        },
+        {
+          "path": "auth-ui/components/auth-marketing-panel.tsx",
+          "type": "registry:component",
+          "target": "client/extensions/nocobase-auth-ui/components/auth-marketing-panel.tsx"
+        },
+        {
+          "path": "auth-ui/components/form-status.tsx",
+          "type": "registry:component",
+          "target": "client/extensions/nocobase-auth-ui/components/form-status.tsx"
+        },
+        {
+          "path": "auth-ui/forms/password-login-form.tsx",
+          "type": "registry:component",
+          "target": "client/extensions/nocobase-auth-ui/forms/password-login-form.tsx"
+        },
+        {
+          "path": "auth-ui/forms/password-registration-form.tsx",
+          "type": "registry:component",
+          "target": "client/extensions/nocobase-auth-ui/forms/password-registration-form.tsx"
+        },
+        {
+          "path": "auth-ui/forms/password-reset-form.tsx",
+          "type": "registry:component",
+          "target": "client/extensions/nocobase-auth-ui/forms/password-reset-form.tsx"
+        },
+        {
+          "path": "auth-ui/forms/password-reset-request-form.tsx",
+          "type": "registry:component",
+          "target": "client/extensions/nocobase-auth-ui/forms/password-reset-request-form.tsx"
+        }
+      ]
+    }
+  ]
+}

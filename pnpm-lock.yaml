@@ -102,9 +102,6 @@ catalogs:
     '@vitest/eslint-plugin':
       specifier: ^1.6.27
       version: 1.6.27
-    ajv:
-      specifier: ^8.20.0
-      version: 8.20.0
     better-auth:
       specifier: ^1.7.1
       version: 1.7.1
@@ -581,9 +578,6 @@ importers:
       '@sinclair/typebox':
         specifier: 'catalog:'
         version: 0.34.52
-      ajv:
-        specifier: 'catalog:'
-        version: 8.20.0
       hono:
         specifier: 'catalog:'
         version: 4.13.2
@@ -1347,6 +1341,9 @@ importers:
 
   packages/libs/config:
     dependencies:
+      '@iarna/toml':
+        specifier: ^2.2.5
+        version: 2.2.5
       yaml:
         specifier: 'catalog:'
         version: 2.9.0
@@ -1884,58 +1881,43 @@ importers:
 
   packages/plugins/app-plugin-authentication:
     dependencies:
-      '@base-ui/react':
-        specifier: 'catalog:'
-        version: 1.7.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      '@nocobase/app-client':
-        specifier: workspace:^
-        version: link:../../app/app-client
-      '@nocobase/app-server':
-        specifier: workspace:^
-        version: link:../../app/app-server
       '@nocobase/caching':
         specifier: workspace:^
         version: link:../../libs/caching
-      '@nocobase/db':
-        specifier: workspace:^
-        version: link:../../libs/db
-      '@nocobase/service-provider':
-        specifier: workspace:^
-        version: link:../../libs/service-provider
       '@nocobase/snowflake':
         specifier: workspace:^
         version: link:../../libs/snowflake
-      '@refinedev/core':
-        specifier: ^5.0.0
-        version: 5.0.12(@tanstack/react-query@5.101.4(react@19.2.8))(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@sinclair/typebox':
         specifier: 'catalog:'
         version: 0.34.52
       better-auth:
         specifier: 'catalog:'
         version: 1.7.1(@opentelemetry/api@1.9.0)(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg@8.23.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(vitest@4.1.10)
-      class-variance-authority:
-        specifier: 'catalog:'
-        version: 0.7.1
-      clsx:
-        specifier: 'catalog:'
-        version: 2.1.1
       hono:
         specifier: 'catalog:'
         version: 4.13.2
       knex:
         specifier: 'catalog:'
         version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(tedious@20.0.0)
-      react:
-        specifier: ^19.0.0
-        version: 19.2.8
-      tailwind-merge:
-        specifier: 'catalog:'
-        version: 3.6.0
     devDependencies:
+      '@base-ui/react':
+        specifier: ^1.6.0
+        version: 1.7.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@nocobase/app-client':
+        specifier: workspace:*
+        version: link:../../app/app-client
+      '@nocobase/app-server':
+        specifier: workspace:*
+        version: link:../../app/app-server
+      '@nocobase/db':
+        specifier: workspace:*
+        version: link:../../libs/db
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
+      '@nocobase/service-provider':
+        specifier: workspace:*
+        version: link:../../libs/service-provider
       '@testing-library/jest-dom':
         specifier: 'catalog:'
         version: 7.0.1(@testing-library/dom@10.4.1)(vitest@4.1.10)
@@ -1954,6 +1936,12 @@ importers:
       better-sqlite3:
         specifier: 'catalog:'
         version: 12.11.1
+      class-variance-authority:
+        specifier: ^0.7.1
+        version: 0.7.1
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
       eslint:
         specifier: 'catalog:'
         version: 10.8.1(jiti@2.7.0)
@@ -1963,17 +1951,26 @@ importers:
       prettier:
         specifier: 'catalog:'
         version: 3.9.6
+      react:
+        specifier: 'catalog:'
+        version: 19.2.8
       react-dom:
         specifier: 'catalog:'
         version: 19.2.8(react@19.2.8)
-      shadcn:
+      react-router:
         specifier: 'catalog:'
+        version: 7.18.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      shadcn:
+        specifier: ^4.13.1
         version: 4.18.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(typescript@6.0.3)
+      tailwind-merge:
+        specifier: ^3.2.0
+        version: 3.6.0
       tailwindcss:
         specifier: 'catalog:'
         version: 4.3.3
       tw-animate-css:
-        specifier: 'catalog:'
+        specifier: ^1.2.5
         version: 1.4.0
       typescript:
         specifier: 'catalog:'
@@ -2217,7 +2214,7 @@ importers:
         version: 10.8.1(jiti@2.7.0)
       knex:
         specifier: 'catalog:'
-        version: 3.3.0(better-sqlite3@13.0.3)(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)
+        version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(tedious@20.0.0)
       prettier:
         specifier: 'catalog:'
         version: 3.9.6
@@ -2877,6 +2874,9 @@ importers:
       '@oclif/core':
         specifier: 'catalog:'
         version: 4.14.0
+      better-auth:
+        specifier: 'catalog:'
+        version: 1.7.1(@opentelemetry/api@1.9.0)(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg@8.23.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(vitest@4.1.10)
     devDependencies:
       '@ai-sdk/react':
         specifier: 2.0.0
@@ -3223,6 +3223,9 @@ importers:
       '@oclif/core':
         specifier: 'catalog:'
         version: 4.14.0
+      better-auth:
+        specifier: 'catalog:'
+        version: 1.7.1(@opentelemetry/api@1.9.0)(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg@8.23.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(vitest@4.1.10)
       hono:
         specifier: 'catalog:'
         version: 4.13.2
@@ -3542,6 +3545,9 @@ importers:
       '@oclif/core':
         specifier: 'catalog:'
         version: 4.14.0
+      better-auth:
+        specifier: 'catalog:'
+        version: 1.7.1(@opentelemetry/api@1.9.0)(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg@8.23.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(vitest@4.1.10)
       hono:
         specifier: 'catalog:'
         version: 4.13.2
@@ -3573,6 +3579,9 @@ importers:
       '@nocobase/app-plugin-notification-provider':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-notification-provider
+      '@nocobase/app-plugin-workflow':
+        specifier: workspace:^
+        version: link:../../plugins/app-plugin-workflow
       '@nocobase/app-portal-sdk':
         specifier: workspace:^
         version: link:../../app/app-portal-sdk
@@ -3982,6 +3991,58 @@ importers:
       vitest:
         specifier: 'catalog:'
         version: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@30.0.1(@noble/hashes@2.3.0))(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(sass-embedded@1.103.1)(sass@1.103.1)(tsx@4.23.12)(yaml@2.9.0))
+
+  ui-library:
+    dependencies:
+      '@base-ui/react':
+        specifier: ^1.7.0
+        version: 1.7.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      class-variance-authority:
+        specifier: ^0.7.1
+        version: 0.7.1
+      cn:
+        specifier: ^0.2.6
+        version: 0.2.6
+      lucide-react:
+        specifier: ^0.487.0
+        version: 0.487.0(react@19.2.8)
+      react:
+        specifier: 'catalog:'
+        version: 19.2.8
+      react-dom:
+        specifier: 'catalog:'
+        version: 19.2.8(react@19.2.8)
+      react-router:
+        specifier: 'catalog:'
+        version: 7.18.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      simple-icons:
+        specifier: ^16.30.0
+        version: 16.30.0
+    devDependencies:
+      '@tailwindcss/vite':
+        specifier: 'catalog:'
+        version: 4.3.3(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(sass-embedded@1.103.1)(sass@1.103.1)(tsx@4.23.12)(yaml@2.9.0))
+      '@types/react':
+        specifier: 'catalog:'
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: 'catalog:'
+        version: 19.2.4(@types/react@19.2.18)
+      '@vitejs/plugin-react':
+        specifier: 'catalog:'
+        version: 4.7.0(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(sass-embedded@1.103.1)(sass@1.103.1)(tsx@4.23.12)(yaml@2.9.0))
+      shadcn:
+        specifier: ^4.18.0
+        version: 4.18.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(typescript@6.0.3)
+      tailwindcss:
+        specifier: 'catalog:'
+        version: 4.3.3
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vite:
+        specifier: 'catalog:'
+        version: 6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(sass-embedded@1.103.1)(sass@1.103.1)(tsx@4.23.12)(yaml@2.9.0)
 
 packages:
 
@@ -8448,6 +8509,11 @@ packages:
     peerDependencies:
       react: ^18 || ^19 || ^19.0.0-rc
       react-dom: ^18 || ^19 || ^19.0.0-rc
+
+  cn@0.2.6:
+    resolution: {integrity: sha512-+i4L0zUGgRcEnhsxueVrP7iBGxBx5iD0WOTYg1MwFEu2ZyCmH5Ov2V1cul2Ht5UchRQQgftCf4be/RxspuW6QQ==}
+    engines: {node: '>=20'}
+    hasBin: true
 
   coa@2.0.2:
     resolution: {integrity: sha512-q5/jG+YQnSy4nRTV4F7lPepBJZ8qBNJJDBuJdoejDyLXgmL7IEo+Le2JDZudFTFt7mrCqIRaSjws4ygRCTCAXA==}
@@ -13056,6 +13122,10 @@ packages:
 
   simple-get@4.0.1:
     resolution: {integrity: sha512-brv7p5WgH0jmQJr1ZDDfKDOSeWWg+OVypG99A/5vYGPqJ6pxiaHLy8nxtFjBA7oMa01ebA9gfh1uMCFqOuXxvA==}
+
+  simple-icons@16.30.0:
+    resolution: {integrity: sha512-YX/HmgEqjpn5Zs3myzKp8ek5Ti+TdrkvNWn9skGLetg9tOg0cTjYizj9ESAYJn4xwc0GQYVGzQxBELDfbxq7WQ==}
+    engines: {node: '>=0.12.18'}
 
   sisteransi@1.0.5:
     resolution: {integrity: sha512-bLGGlR1QxBcynn2d5YmDX4MGjlZvy2MRBDRNHLJ8VI6l6+9FUiyTFNJ0IveOSP0bcXgVDPRcfGqA0pjaqUpfVg==}
@@ -19105,6 +19175,8 @@ snapshots:
       - '@types/react'
       - '@types/react-dom'
 
+  cn@0.2.6: {}
+
   coa@2.0.2:
     dependencies:
       '@types/q': 1.5.8
@@ -24602,6 +24674,8 @@ snapshots:
       decompress-response: 6.0.0
       once: 1.4.0
       simple-concat: 1.0.1
+
+  simple-icons@16.30.0: {}
 
   sisteransi@1.0.5: {}
 

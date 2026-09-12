@@ -2,11 +2,10 @@ import { AppConfig } from '@nocobase/app-server/config';
 import { describe, expect, it } from 'vitest';
 
 import {
-  aiConfig,
+  type AIApplicationConfig,
   normalizeDisks,
   resolveAIEmployeeStorageDisk,
   resolveAIKnowledgeBaseStorageDisks,
-  type AIApplicationConfig,
 } from '../server/config.js';
 import { normalizeLLMServiceConfig } from '../server/manager/llm-service-config.js';
 
@@ -24,7 +23,7 @@ function storageConfig(
 }
 
 async function loadAIConfig(value: unknown): Promise<AppConfig> {
-  const config = new AppConfig([aiConfig], { context: {} });
+  const config = new AppConfig();
   if (value !== undefined) {
     config.load({
       name: 'test-config',
@@ -35,6 +34,14 @@ async function loadAIConfig(value: unknown): Promise<AppConfig> {
     });
   }
   await config.loadAll();
+  config.mergeDefaults({
+    ai: {
+      storage: {},
+      aiEmployee: { storage: {} },
+      aiKnowledgeBase: { storage: {}, vectorDatabases: [], manifests: [] },
+      llmServices: [],
+    },
+  });
   return config;
 }
 
@@ -42,7 +49,7 @@ describe('AI application config', () => {
   it('defaults storage scopes, LLM services, and knowledge-base inputs', async () => {
     const config = await loadAIConfig(undefined);
 
-    expect(config.get(aiConfig)).toEqual({
+    expect(config.get<AIApplicationConfig>('ai')!).toEqual({
       storage: {},
       aiEmployee: { storage: {} },
       aiKnowledgeBase: {
@@ -59,7 +66,7 @@ describe('AI application config', () => {
       ai: { aiKnowledgeBase: { storage: { disk: ['local'] } } },
     });
 
-    expect(config.get(aiConfig).aiKnowledgeBase).toEqual({
+    expect(config.get<AIApplicationConfig>('ai')!.aiKnowledgeBase).toEqual({
       storage: { disk: ['local'] },
       vectorDatabases: [],
       manifests: [],
@@ -90,7 +97,7 @@ describe('AI application config', () => {
       },
     });
 
-    expect(config.get(aiConfig)).toMatchObject({
+    expect(config.get<AIApplicationConfig>('ai')!).toMatchObject({
       futureOption: { enabled: true },
       llmServices: [
         {
@@ -146,7 +153,7 @@ describe('AI application config', () => {
       },
     });
 
-    expect(config.get(aiConfig).aiKnowledgeBase).toEqual({
+    expect(config.get<AIApplicationConfig>('ai')!.aiKnowledgeBase).toEqual({
       storage: { disk: ['local', 'archive'] },
       vectorDatabases: [
         {
@@ -184,260 +191,6 @@ describe('AI application config', () => {
         },
       ],
     });
-  });
-
-  it.each([
-    [{ ai: { llmServices: [{ provider: 'openai' }] } }, /name/],
-    [{ ai: { llmServices: [{ name: 'openai' }] } }, /provider/],
-    [
-      {
-        ai: {
-          llmServices: [{ name: 'openai', provider: 'openai', sort: '1' }],
-        },
-      },
-      /sort/,
-    ],
-    [
-      {
-        ai: {
-          llmServices: [
-            {
-              name: 'openai',
-              provider: 'openai',
-              enabledModels: { mode: 'custom', models: [] },
-            },
-          ],
-        },
-      },
-      /enabledModels/,
-    ],
-    [
-      {
-        ai: {
-          llmServices: [
-            { name: 'openai', provider: 'openai', enabledModels: ['gpt-4.1'] },
-          ],
-        },
-      },
-      /enabledModels/,
-    ],
-  ])('rejects invalid service definitions', async (value, message) => {
-    await expect(loadAIConfig(value)).rejects.toThrow(message);
-  });
-
-  it.each([
-    [
-      {
-        ai: {
-          aiKnowledgeBase: {
-            vectorDatabases: [
-              {
-                name: ' ',
-                connection: {
-                  host: 'localhost',
-                  port: 5432,
-                  user: 'nocobase',
-                  database: 'nocobase',
-                  tableName: 'vectors',
-                },
-              },
-            ],
-          },
-        },
-      },
-      /name/,
-    ],
-    [
-      {
-        ai: {
-          aiKnowledgeBase: {
-            vectorDatabases: [
-              {
-                name: 'vectors',
-                connection: {
-                  host: 'localhost',
-                  port: '5432',
-                  user: 'nocobase',
-                  database: 'nocobase',
-                  tableName: 'vectors',
-                },
-              },
-            ],
-          },
-        },
-      },
-      /port/,
-    ],
-    [
-      {
-        ai: {
-          aiKnowledgeBase: {
-            vectorDatabases: [
-              {
-                name: 'vectors',
-                connection: {
-                  host: 'localhost',
-                  port: 5432,
-                  user: 'nocobase',
-                  database: 'nocobase',
-                  tableName: 'vectors',
-                  ssl: true,
-                },
-              },
-            ],
-          },
-        },
-      },
-      /additional properties/,
-    ],
-    [
-      {
-        ai: {
-          aiKnowledgeBase: {
-            vectorDatabases: [
-              {
-                name: 'vectors',
-                connection: {
-                  host: 'localhost',
-                  port: 5432,
-                  user: 'nocobase',
-                  databaseName: 'nocobase',
-                  table: 'vectors',
-                },
-              },
-            ],
-          },
-        },
-      },
-      /additional properties/,
-    ],
-    [
-      {
-        ai: {
-          aiKnowledgeBase: {
-            vectorDatabases: [
-              {
-                name: 'vectors',
-                connection: {
-                  host: 'localhost',
-                  port: 5432,
-                  user: 'nocobase',
-                  database: 'nocobase',
-                  tableName: 'vectors',
-                },
-                connectProps: {},
-              },
-            ],
-          },
-        },
-      },
-      /additional properties/,
-    ],
-    [
-      {
-        ai: {
-          aiKnowledgeBase: {
-            manifests: [{ disk: ' ', locations: ['manifest.yml'] }],
-          },
-        },
-      },
-      /disk/,
-    ],
-    [
-      {
-        ai: {
-          aiKnowledgeBase: {
-            manifests: [{ disk: 'local', locations: [' '] }],
-          },
-        },
-      },
-      /locations/,
-    ],
-    [
-      {
-        ai: {
-          aiKnowledgeBase: {
-            manifests: [{ disk: 'local', locations: ['///'] }],
-          },
-        },
-      },
-      /locations/,
-    ],
-    [
-      {
-        ai: {
-          aiKnowledgeBase: {
-            manifests: [{ disk: 'local', locations: [] }],
-          },
-        },
-      },
-      /fewer than 1/,
-    ],
-    [
-      {
-        ai: {
-          aiKnowledgeBase: {
-            manifests: [
-              {
-                disk: 'local',
-                locations: ['manifest.yml'],
-                absolutePath: '/manifest.yml',
-              },
-            ],
-          },
-        },
-      },
-      /additional properties/,
-    ],
-    [
-      {
-        ai: {
-          aiKnowledgeBase: {
-            manifests: [],
-            unsupported: true,
-          },
-        },
-      },
-      /additional properties/,
-    ],
-  ])('rejects invalid knowledge-base definitions', async (value, message) => {
-    await expect(loadAIConfig(value)).rejects.toThrow(message);
-  });
-
-  it('rejects duplicate service names during application config validation', async () => {
-    await expect(
-      loadAIConfig({
-        ai: {
-          llmServices: [
-            { name: 'openai', provider: 'openai' },
-            { name: 'openai', provider: 'deepseek' },
-          ],
-        },
-      }),
-    ).rejects.toThrow(/uniqueItemProperties/);
-  });
-
-  it('rejects duplicate vector database names during config validation', async () => {
-    const connection = {
-      host: 'localhost',
-      port: 5432,
-      user: 'nocobase',
-      database: 'nocobase',
-      tableName: 'vectors',
-    };
-
-    await expect(
-      loadAIConfig({
-        ai: {
-          aiKnowledgeBase: {
-            vectorDatabases: [
-              { name: 'primary', connection },
-              { name: 'primary', connection },
-            ],
-          },
-        },
-      }),
-    ).rejects.toThrow(/uniqueItemProperties/);
   });
 
   it('also rejects duplicate names before direct synchronization', () => {

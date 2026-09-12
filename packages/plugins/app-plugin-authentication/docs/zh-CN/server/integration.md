@@ -1,172 +1,46 @@
-# 服务端集成
+# 服务端认证配置
 
-服务端入口导出 `Auth`、`createAuthentication()`、Hono middleware、缓存适配器
-以及 Better Auth 数据库适配器。通常优先使用 `createAuthentication()` 创建实例。
-
-## 创建 Auth
+应用在 `server/config/auth.ts` 提供默认认证 options：
 
 ```ts
-import { databaseManagerToken } from '@nocobase/db';
-import { createAuthentication } from '@nocobase/app-plugin-authentication';
+import {
+  defineAppConfig,
+  type AppConfigFactory,
+} from '@nocobase/app-server/config';
+import { username } from 'better-auth/plugins';
+import { type AuthConfig } from '@nocobase/app-plugin-authentication/server';
 
-const database = services.resolve(databaseManagerToken);
-
-const auth = createAuthentication({
-  connection: database.connection(),
-  baseURL: app.config.get(appConfig).publicOrigin,
-  secret: app.config.get(authenticationConfig).secret,
-  appName: app.config.get(appConfig).name,
-});
-```
-
-`createAuthentication()` 接收 Better Auth 配置，并额外要求 NocoBase
-`DatabaseConnection`。如果应用的数据库运行时可能为空，应该在创建认证服务前
-完成配置校验；不要把缺少连接推迟到首个 HTTP 请求。
-
-也可以直接实例化 `Auth`：
-
-```ts
-import { Auth } from '@nocobase/app-plugin-authentication/server';
-
-const auth = new Auth({
-  connection,
-  secret,
-});
-```
-
-## HTTP handler
-
-`auth.handler(request)` 将完整请求转发给 Better Auth，并返回原始 `Response`：
-
-```ts
-app.on(['GET', 'POST'], '/api/auth/*', (context) =>
-  auth.handler(context.req.raw),
-);
-```
-
-建议把 `/api/auth/*` 保持为公开协议面，然后对业务路由使用认证中间件。不要把
-`required()` 放在登录、注册、session 查询或认证 callback 路由之前。
-
-## 获取 Session
-
-服务端可以直接从请求 Header 解析 session：
-
-```ts
-const current = await auth.getSession(request.headers);
-
-if (current) {
-  console.log(current.user.id, current.session.id);
-}
-```
-
-返回值是 `{ user, session } | null`。验证失败或没有有效 Cookie 时返回 `null`。
-
-## required 中间件
-
-`required()` 只允许有效 session 继续执行：
-
-```ts
-import type { AuthEnv } from '@nocobase/app-plugin-authentication';
-
-const protectedRoutes = new Hono<AuthEnv>();
-
-protectedRoutes.use('*', auth.required());
-protectedRoutes.get('/apps', (context) => {
-  const current = context.get('auth');
-  return context.json({ userId: current.user.id });
-});
-```
-
-认证成功后，`context.get('auth')` 是非空 session。匿名请求由中间件直接返回
-HTTP 401。
-
-## optional 中间件
-
-公开页面需要按登录状态返回不同内容时使用 `optional()`：
-
-```ts
-const routes = new Hono<AuthEnv>();
-
-routes.get('/profile', auth.optional(), (context) => {
-  const current = context.get('auth');
-  return context.json({ user: current?.user ?? null });
-});
-```
-
-匿名请求会继续执行，`context.get('auth')` 为 `null`。
-
-## 跳过特定请求
-
-两个 middleware 都接受 `skip(context)`：
-
-```ts
-app.use(
-  '*',
-  auth.required({
-    skip: (context) => context.req.path.endsWith('/healthz'),
-  }),
-);
-```
-
-被跳过的请求不会写入 `auth` context 变量。后续 handler 不应假设该值存在。
-
-## 接入 secondary storage
-
-```ts
-import { createAuthStorage } from '@nocobase/app-plugin-authentication';
-import { createCaching } from '@nocobase/caching';
-
-const caching = createCaching(app.config.get(cachingConfig));
-
-const auth = createAuthentication({
-  connection,
-  secret,
-  secondaryStorage: createAuthStorage(caching),
-});
-```
-
-默认 namespace 是：
-
-```text
-nocobase-auth
-nocobase-auth:rate-limit
-```
-
-可以指定 namespace 和 provider：
-
-```ts
-const secondaryStorage = createAuthStorage(caching, {
-  namespace: 'customer-portal-auth',
-  provider: 'redis',
-});
-```
-
-Better Auth 的 TTL 单位是秒，适配器会转换为 NocoBase Caching 使用的毫秒。
-`getAndDelete()` 使用原子 take，`increment()` 使用原子 counter，分别用于一次性
-验证值和固定窗口限流。
-
-应用退出时仍需要释放自己创建的 `Caching` 实例：
-
-```ts
-await caching.dispose();
-```
-
-## Cookie 路径
-
-应用部署在子路径时，应让 Cookie path 对齐应用公开路径：
-
-```ts
-const auth = createAuthentication({
-  connection,
-  secret,
-  advanced: {
-    cookiePrefix: 'my_app',
-    defaultCookieAttributes: {
-      path: '/my-app',
-    },
+const auth: AppConfigFactory<AuthConfig> = defineAppConfig((runtime) => ({
+  plugins: [username({ displayUsername: false })],
+  emailAndPassword: {
+    enabled: true,
+    autoSignIn: false,
+    // disableSignUp: true,
+    // sendResetPassword: async ({ user, url }) => { /* 发送邮件 */ },
   },
-});
+  session: { storeSessionInDatabase: true },
+}));
+
+export default auth;
 ```
 
-否则浏览器可能不会在应用 API 请求中携带 session Cookie。生产环境的完整检查
-见[部署与安全](../security/deployment.md)。
+`AuthConfig` 复用原生认证 options。应用可以直接填写插件、social providers 和邮件回调。用户名插件由 `plugins` 数组决定；邮箱密码登录与注册分别使用 `emailAndPassword.enabled`、`emailAndPassword.disableSignUp` 配置。
+
+模板的 `server/config/index.ts` 使用 `defaultAppConfigs({ auth })` 汇总模块配置。runtime 先加载静态配置，执行代码配置工厂并合并得到最终 options；入口随后创建应用。优先级为默认值、TS 配置、YAML、已声明的环境变量映射。普通对象按字段合并，数组和函数整体替换。
+
+```yaml
+auth:
+  secret: 至少 32 个字符的部署密钥
+app:
+  publicOrigin: https://example.com
+```
+
+认证 Provider 从 `app.config.get<AuthConfig>('auth')` 读取最终 options，补充数据库、缓存、ID 生成和公开路径等运行时依赖，然后创建认证服务。修改认证配置后重启应用。
+
+```ts
+const auth = runtime.app!.container.resolve(authenticationToken);
+const session = await auth.getSession(request.headers);
+const nativeSession = await auth.api.getSession({ headers: request.headers });
+```
+
+业务路由仍通过 `auth.required()` 或 `auth.optional()` 明确指定认证策略。Better Auth 原生插件的数据库扩展需要对应的迁移；配置插件不会自动创建表。

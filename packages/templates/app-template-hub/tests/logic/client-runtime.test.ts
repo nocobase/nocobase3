@@ -1,3 +1,4 @@
+import { createApp } from '../../client/app.js';
 import { ServiceProvider } from '@nocobase/service-provider';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -14,7 +15,6 @@ import {
 } from '@nocobase/app-client/runtime';
 import type { ClientApplication as ClientApplicationType } from '@nocobase/app-client';
 
-import { createApp } from '../../client/app.ts';
 import appRuntime from '../../client/runtime.ts';
 
 describe('app client runtime', () => {
@@ -31,7 +31,7 @@ describe('app client runtime', () => {
     const runtime = await resolveAppRuntime(
       defineAppRuntime({
         packageName: '@example/app',
-        config: createAppClientConfig,
+        createAppConfig: createAppClientConfig,
         serviceProviders: [Provider],
         reactProviders: [],
         routes: [],
@@ -66,7 +66,7 @@ describe('app client runtime', () => {
     const runtime = await resolveAppRuntime(
       defineAppRuntime({
         packageName: '@example/app',
-        config: createAppClientConfig,
+        createAppConfig: createAppClientConfig,
         serviceProviders: [Provider],
         plugins: defineClientPlugins([]),
       }),
