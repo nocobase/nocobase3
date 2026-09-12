@@ -2,15 +2,15 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { DatabaseManager, Row } from '@nocobase/db';
-import { WORKFLOW_COLLECTIONS } from '../server/collections/names.js';
+import type { DatabaseManager } from '@nocobase/db';
 import {
   buildWorkflowArtifact,
   type WorkflowDistArtifact,
 } from '../build/artifact-builder.js';
 import { LocalWorkflowArtifactStore } from '../server/loader/artifact-store.js';
 import { WorkflowPublisher } from '../server/loader/synchronizer.js';
-import { createTestDatabase, insertTestRun } from './helpers.js';
+import { asIdFilter } from '../server/engine/utils.js';
+import { createTestDatabase, insertTestRun, testStore } from './helpers.js';
 const roots: string[] = [];
 async function artifact(
   root: string,
@@ -79,16 +79,11 @@ describe('workflow publisher', () => {
     expect(third.workflowId).not.toBe(second.workflowId);
     await publisher.activate(third.workflowId);
     await expect(
-      database
-        .query()
-        .selectFrom(WORKFLOW_COLLECTIONS.runs)
-        .select(['workflowId', 'hash'])
-        .where('id', '=', oldRunId)
-        .executeTakeFirstOrThrow<Row>(),
-    ).resolves.toEqual({
-      workflowId: String(second.workflowId),
-      hash: v2.digest,
-    });
+      testStore(database).runs.findOne({
+        filter: { id: asIdFilter(oldRunId) },
+        select: (select) => select.fields('workflowId', 'hash'),
+      }),
+    ).resolves.toEqual({ workflowId: second.workflowId, hash: v2.digest });
   });
   it('rolls back DB registration after a consistency failure while leaving the imported orphan safe', async () => {
     const value = await artifact(storage, 'bad', 'bad');
@@ -96,22 +91,22 @@ describe('workflow publisher', () => {
     const publisher = new WorkflowPublisher({
       database,
       artifactStore: store,
-      afterMaterialize: async (workflowId, query) => {
-        await query
-          .insertInto(WORKFLOW_COLLECTIONS.nodes)
-          .values({ workflowId, key: 'rogue', type: 'rogue', config: '{}' })
-          .execute();
+      afterMaterialize: async (workflowId, store) => {
+        await store.nodes.createOne({
+          values: {
+            workflowId: asIdFilter(workflowId),
+            key: 'rogue',
+            type: 'rogue',
+            config: '{}',
+          },
+        });
       },
     });
     await expect(publisher.registerArtifact(value)).rejects.toThrow(
       /node count mismatch/,
     );
     await expect(
-      database
-        .query()
-        .selectFrom(WORKFLOW_COLLECTIONS.workflows)
-        .where('key', '=', 'bad')
-        .exists(),
+      testStore(database).workflows.exists({ filter: { key: 'bad' } }),
     ).resolves.toBe(false);
     await expect(store.has('bad', value.digest)).resolves.toBe(true);
   });

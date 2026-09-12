@@ -26,9 +26,13 @@ export function defineWorkflowNodeRuns(
   collection.json('meta');
   collection.json('result');
   collection.text('error');
-  collection.datetime('startedAt').notNull();
-  collection.datetime('finishedAt');
-  collection.datetime('expiresAt');
+  // These are instants, not wall clocks, so they are `datetimeTz`: it is the
+  // only logical type whose value survives a driver that decodes timestamps
+  // itself. The Repository is what applies that per dialect — see
+  // `server/collections/store.ts`.
+  collection.datetimeTz('startedAt').notNull();
+  collection.datetimeTz('finishedAt');
+  collection.datetimeTz('expiresAt');
   collection.text('log');
 
   collection.index(['workflowRun', 'id']);

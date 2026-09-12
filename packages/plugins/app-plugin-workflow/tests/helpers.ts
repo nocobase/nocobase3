@@ -8,7 +8,6 @@ import {
   type Row,
 } from '@nocobase/db';
 
-import { WORKFLOW_COLLECTIONS } from '../server/collections/names.js';
 import type {
   JsonObject,
   WorkflowDefinition,
@@ -16,8 +15,19 @@ import type {
   WorkflowNodeRun,
   WorkflowRun,
 } from '../server/engine/types.js';
-import { loadRun, loadWorkflow } from '../server/engine/utils.js';
-import { workflowCollectionSchemas } from '../server/collections/index.js';
+import {
+  asId,
+  asIdFilter,
+  loadRun,
+  loadWorkflow,
+  nowInstant,
+  serializeJson,
+} from '../server/engine/utils.js';
+import {
+  workflowCollectionSchemas,
+  workflowStore,
+  type WorkflowStore,
+} from '../server/collections/index.js';
 
 export async function createWorkflowCollections(
   builder: CollectionBuilder,
@@ -59,54 +69,59 @@ export async function createTestDatabase(): Promise<DatabaseManager> {
   return database;
 }
 
+/** A row a test knows must exist; `findOne` returns `undefined` rather than throwing. */
+export async function requireRow(
+  row: Promise<Row | undefined>,
+  description: string,
+): Promise<Row> {
+  const found = await row;
+  if (!found) {
+    throw new Error(`${description} was not found`);
+  }
+  return found;
+}
+
+/** The workflow collections of a test database, the way the plugin reaches them. */
+export function testStore(database: DatabaseManager): WorkflowStore {
+  return workflowStore(database);
+}
+
 export async function createTestWorkflow(
   database: DatabaseManager,
   input: TestWorkflowInput,
 ): Promise<WorkflowDefinition> {
-  await database
-    .query()
-    .insertInto(WORKFLOW_COLLECTIONS.workflows)
-    .values({
+  const store = testStore(database);
+  const created = await store.workflows.createOne({
+    values: {
       key: input.key,
       title: input.key,
       enabled: input.enabled ?? true,
       current: true,
-      inputSchema: JSON.stringify({ type: 'object' }),
-      parametersSchema: JSON.stringify({}),
-      parameterValues: JSON.stringify({}),
-      options: JSON.stringify(input.options ?? {}),
-    })
-    .execute();
-  const workflowId = await database
-    .query()
-    .selectFrom(WORKFLOW_COLLECTIONS.workflows)
-    .where('key', '=', input.key)
-    .value<WorkflowId>('id');
-  if (workflowId == null) {
-    throw new Error(`Failed to insert workflow "${input.key}"`);
+      inputSchema: serializeJson({ type: 'object' }),
+      parametersSchema: serializeJson({}),
+      parameterValues: serializeJson({}),
+      options: serializeJson(input.options ?? {}),
+    },
+    select: (select) => select.fields('id'),
+  });
+  const workflowId = asId(created.record.id);
+
+  const [firstNode, ...otherNodes] = input.nodes.map((node) => ({
+    workflowId: asIdFilter(workflowId),
+    key: node.key,
+    title: node.key,
+    type: node.type,
+    config: serializeJson(node.config ?? {}),
+    options: serializeJson({}),
+    upstreamKey: node.upstreamKey ?? null,
+    downstreamKey: node.downstreamKey ?? null,
+    branchKey: node.branchKey ?? null,
+  }));
+  if (firstNode) {
+    await store.nodes.createMany({ values: [firstNode, ...otherNodes] });
   }
 
-  if (input.nodes.length) {
-    await database
-      .query()
-      .insertInto(WORKFLOW_COLLECTIONS.nodes)
-      .values(
-        input.nodes.map((node) => ({
-          workflowId,
-          key: node.key,
-          title: node.key,
-          type: node.type,
-          config: JSON.stringify(node.config ?? {}),
-          options: JSON.stringify({}),
-          upstreamKey: node.upstreamKey ?? null,
-          downstreamKey: node.downstreamKey ?? null,
-          branchKey: node.branchKey ?? null,
-        })),
-      )
-      .execute();
-  }
-
-  const workflow = await loadWorkflow(database.query(), workflowId);
+  const workflow = await loadWorkflow(store, workflowId);
   if (!workflow) {
     throw new Error(`Failed to load workflow "${input.key}"`);
   }
@@ -117,12 +132,11 @@ export async function findRun(
   database: DatabaseManager,
   eventKey: string,
 ): Promise<Row> {
-  return database
-    .query()
-    .selectFrom(WORKFLOW_COLLECTIONS.runs)
-    .selectAll()
-    .where('eventKey', '=', eventKey)
-    .executeTakeFirstOrThrow<Row>();
+  const row = await testStore(database).runs.findOne({ filter: { eventKey } });
+  if (!row) {
+    throw new Error(`Run "${eventKey}" was not found`);
+  }
+  return row;
 }
 
 export async function listNodeRuns(
@@ -133,13 +147,11 @@ export async function listNodeRuns(
     Pick<WorkflowNodeRun, 'nodeKey' | 'status' | 'result'> & { error?: string }
   >
 > {
-  const rows = await database
-    .query()
-    .selectFrom(WORKFLOW_COLLECTIONS.nodeRuns)
-    .select(['nodeKey', 'status', 'result', 'error'])
-    .where('workflowRunId', '=', runId)
-    .orderBy('id')
-    .execute<Row>();
+  const rows = await testStore(database).nodeRuns.findMany({
+    filter: { workflowRunId: asIdFilter(runId) },
+    select: (select) => select.fields('nodeKey', 'status', 'result', 'error'),
+    sort: (sort) => sort.field('id').asc(),
+  });
   return rows.map((row) => ({
     nodeKey: String(row.nodeKey),
     status: Number(row.status),
@@ -167,35 +179,26 @@ export async function insertTestRun(
   database: DatabaseManager,
   input: TestRunInput,
 ): Promise<WorkflowId> {
-  await database
-    .query()
-    .insertInto(WORKFLOW_COLLECTIONS.runs)
-    .values({
-      workflowId: input.workflowId,
+  const created = await testStore(database).runs.createOne({
+    values: {
+      workflowId: asIdFilter(input.workflowId),
       workflowKey: input.workflowKey,
       hash: input.hash ?? null,
       eventKey: input.eventKey,
-      input: JSON.stringify(input.input ?? {}),
-      parameters: JSON.stringify({}),
+      input: serializeJson(input.input ?? {}),
+      parameters: serializeJson({}),
       status: input.status ?? null,
       dispatched: input.dispatched ?? false,
-      stack: JSON.stringify([]),
-      output: JSON.stringify(null),
+      stack: serializeJson([]),
+      output: serializeJson(null),
       startedAt: input.startedAt ?? null,
       expiresAt: input.expiresAt ?? null,
-      createdAt: input.createdAt ?? new Date().toISOString(),
+      createdAt: input.createdAt ?? nowInstant(),
       manually: false,
-    })
-    .execute();
-  const id = await database
-    .query()
-    .selectFrom(WORKFLOW_COLLECTIONS.runs)
-    .where('eventKey', '=', input.eventKey)
-    .value<WorkflowId>('id');
-  if (id == null) {
-    throw new Error(`Failed to insert run "${input.eventKey}"`);
-  }
-  return id;
+    },
+    select: (select) => select.fields('id'),
+  });
+  return asId(created.record.id);
 }
 
 /** Reads a run hydrated the way the engine sees it, so JSON columns are values and not text. */
@@ -203,7 +206,7 @@ export async function readRun(
   database: DatabaseManager,
   id: WorkflowId,
 ): Promise<WorkflowRun> {
-  const run = await loadRun(database.query(), id);
+  const run = await loadRun(testStore(database), id);
   if (!run) {
     throw new Error(`Run "${id}" was not found`);
   }

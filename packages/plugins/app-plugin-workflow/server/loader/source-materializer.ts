@@ -1,9 +1,14 @@
-import type { QueryAdapter, Row } from '@nocobase/db';
+import type { Row } from '@nocobase/db';
 import type { WorkflowFlatIr } from '../instructions/definition.js';
 
-import { WORKFLOW_COLLECTIONS } from '../collections/names.js';
+import type { WorkflowStore } from '../collections/store.js';
 import type { WorkflowId } from '../engine/types.js';
-import { asId, hydrateWorkflow, serializeJson } from '../engine/utils.js';
+import {
+  asId,
+  asIdFilter,
+  hydrateWorkflow,
+  serializeJson,
+} from '../engine/utils.js';
 import { retainCompatibleWorkflowParameterValues } from '../engine/parameters.js';
 
 export interface MaterializedWorkflowSource {
@@ -27,14 +32,12 @@ function nextVersion(rows: readonly Row[]): string {
 
 export async function materializeWorkflowSource(
   loaded: MaterializedWorkflowSource,
-  query: QueryAdapter,
+  store: WorkflowStore,
 ): Promise<WorkflowSourceMaterializeResult> {
-  const revisions = await query
-    .selectFrom(WORKFLOW_COLLECTIONS.workflows)
-    .selectAll()
-    .where('key', '=', loaded.key)
-    .orderBy('id', 'desc')
-    .execute<Row>();
+  const revisions = await store.workflows.findMany({
+    filter: { key: loaded.key },
+    sort: (sort) => sort.field('id').desc(),
+  });
   const unchanged = revisions.find((row) => row.hash === loaded.hash);
   if (unchanged) return { action: 'unchanged', workflowId: asId(unchanged.id) };
   const currentRow = revisions.find((row) => Boolean(row.current));
@@ -44,9 +47,8 @@ export async function materializeWorkflowSource(
     parametersSchema,
     current?.parameterValues,
   );
-  await query
-    .insertInto(WORKFLOW_COLLECTIONS.workflows)
-    .values({
+  const created = await store.workflows.createOne({
+    values: {
       key: loaded.key,
       hash: loaded.hash,
       version: nextVersion(revisions),
@@ -58,68 +60,55 @@ export async function materializeWorkflowSource(
       parameterValues: serializeJson(inheritedInputValues),
       enabled: false,
       current: null,
-    })
-    .execute();
-  const inserted = await query
-    .selectFrom(WORKFLOW_COLLECTIONS.workflows)
-    .select('id')
-    .where('key', '=', loaded.key)
-    .where('hash', '=', loaded.hash)
-    .orderBy('id', 'desc')
-    .limit(1)
-    .executeTakeFirstOrThrow<Row>();
-  const workflowId = asId(inserted.id);
-  if (loaded.ir.nodes.length) {
-    await query
-      .insertInto(WORKFLOW_COLLECTIONS.nodes)
-      .values(
-        loaded.ir.nodes.map((node) => ({
-          workflowId,
-          key: node.key,
-          title: node.title ?? null,
-          description: node.description ?? null,
-          type: node.type,
-          config: serializeJson(node.config),
-          ...(node.options === undefined
-            ? {}
-            : { options: serializeJson(node.options) }),
-          upstreamKey: node.upstreamKey,
-          downstreamKey: node.downstreamKey,
-          branchKey: node.branchKey,
-        })),
-      )
-      .execute();
+    },
+    select: (select) => select.fields('id'),
+  });
+  const workflowId = asId(created.record.id);
+  // Written as a non-empty tuple because that is the shape `createMany` takes;
+  // it refuses an empty batch rather than silently doing nothing.
+  const [firstNode, ...otherNodes] = loaded.ir.nodes.map((node) => ({
+    workflowId: asIdFilter(workflowId),
+    key: node.key,
+    title: node.title ?? null,
+    description: node.description ?? null,
+    type: node.type,
+    config: serializeJson(node.config),
+    options: serializeJson(node.options ?? {}),
+    upstreamKey: node.upstreamKey,
+    downstreamKey: node.downstreamKey,
+    branchKey: node.branchKey,
+  }));
+  if (firstNode) {
+    await store.nodes.createMany({ values: [firstNode, ...otherNodes] });
   }
   return { action: 'created', workflowId };
 }
 
 export async function activateWorkflowSource(
-  query: QueryAdapter,
+  store: WorkflowStore,
   workflowId: WorkflowId,
 ): Promise<void> {
-  const selected = await query
-    .selectFrom(WORKFLOW_COLLECTIONS.workflows)
-    .selectAll()
-    .where('id', '=', workflowId)
-    .executeTakeFirstOrThrow<Row>();
-  const previous = await query
-    .selectFrom(WORKFLOW_COLLECTIONS.workflows)
-    .selectAll()
-    .where('key', '=', String(selected.key))
-    .where('current', '=', true)
-    .executeTakeFirst<Row>();
+  const selected = await store.workflows.findOne({
+    filter: { id: asIdFilter(workflowId) },
+    select: (select) => select.fields('key'),
+  });
+  if (!selected)
+    throw new Error(`Workflow ${String(workflowId)} was not found.`);
+  const key = String(selected.key);
+  const previous = await store.workflows.findOne({
+    filter: { key, current: true },
+    select: (select) => select.fields('enabled'),
+  });
   const inheritedEnabled = previous ? Boolean(previous.enabled) : false;
   // A workflow key can have at most one enabled revision, and it must be current.
   // Clear stale state before selecting the new current revision so historical
   // rows cannot remain enabled after activation.
-  await query
-    .updateTable(WORKFLOW_COLLECTIONS.workflows)
-    .set({ current: null, enabled: false })
-    .where('key', '=', String(selected.key))
-    .execute();
-  await query
-    .updateTable(WORKFLOW_COLLECTIONS.workflows)
-    .set({ current: true, enabled: inheritedEnabled })
-    .where('id', '=', workflowId)
-    .execute();
+  await store.workflows.updateMany({
+    filter: { key },
+    values: { current: null, enabled: false },
+  });
+  await store.workflows.updateMany({
+    filter: { id: asIdFilter(workflowId) },
+    values: { current: true, enabled: inheritedEnabled },
+  });
 }
