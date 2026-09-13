@@ -1023,12 +1023,31 @@ export class DefaultRepository<
     input: RepositoryFilter<T> | undefined,
     context: Readonly<Record<string, unknown>> | undefined,
   ): Promise<FilterAst | undefined> {
-    return normalizeFilterWithRelations(
+    const normalized = await normalizeFilterWithRelations(
       this.options.collections,
       collection,
       input,
       context,
     );
+    const policy = this.options.policy?.read;
+    if (policy === false) {
+      invalid(
+        'READ_FORBIDDEN',
+        'Reading from this Repository is forbidden by Policy.',
+        { collection: collection.name },
+      );
+    }
+    if (policy === true || policy === undefined) return normalized;
+    const scope =
+      policy.scope === true
+        ? undefined
+        : await normalizeFilterWithRelations(
+            this.options.collections,
+            collection,
+            policy.scope,
+            undefined,
+          );
+    return combinePolicyFilter(normalized, scope, collection.name!);
   }
 
   private async validateSelect(
@@ -1424,6 +1443,25 @@ function wrapFilter(node: FilterNode, collection: string): FilterAst {
       node.kind === 'group'
         ? node
         : { kind: 'group', logic: 'and', items: [node] },
+  };
+}
+
+function combinePolicyFilter(
+  caller: FilterAst | undefined,
+  policy: FilterAst | undefined,
+  collection: string,
+): FilterAst | undefined {
+  if (!caller) return policy;
+  if (!policy) return caller;
+  return {
+    kind: 'filter',
+    version: 1,
+    collection,
+    root: {
+      kind: 'group',
+      logic: 'and',
+      items: [caller.root, policy.root],
+    },
   };
 }
 

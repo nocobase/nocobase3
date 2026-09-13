@@ -62,4 +62,48 @@ describe('DefaultRepository.withPolicy', () => {
       },
     });
   });
+
+  it('adds read scope to the caller filter before execution', async () => {
+    let plan: { filter?: { root: { items: unknown[] } } } | undefined;
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {
+        get: async () => ({
+          name: 'projects',
+          fields: [
+            { name: 'tenantId', type: 'string' },
+            { name: 'status', type: 'string' },
+          ],
+        }),
+      },
+      adapter: {
+        assertReadable: () => undefined,
+        count: async (nextPlan: typeof plan) => {
+          plan = nextPlan;
+          return 0;
+        },
+      } as never,
+    });
+
+    await repository
+      .withPolicy({
+        read: { scope: { tenantId: 'T1' } },
+        create: { scope: true },
+        update: { scope: true },
+        delete: { scope: true },
+      })
+      .count({ filter: { status: 'draft' } });
+
+    expect(plan?.filter?.root.items).toHaveLength(2);
+    expect(plan?.filter?.root.items).toEqual([
+      expect.objectContaining({
+        logic: 'and',
+        items: [expect.objectContaining({ path: ['status'], value: 'draft' })],
+      }),
+      expect.objectContaining({
+        logic: 'and',
+        items: [expect.objectContaining({ path: ['tenantId'], value: 'T1' })],
+      }),
+    ]);
+  });
 });
