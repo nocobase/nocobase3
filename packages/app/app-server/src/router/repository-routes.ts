@@ -1,6 +1,8 @@
 import {
   databaseManagerToken,
   buildWritePolicy,
+  normalizeRepositoryPolicy,
+  type RepositoryPolicy,
   type WritePolicy,
   type WritePolicyInput,
   RepositoryError,
@@ -8,7 +10,7 @@ import {
   type GroupByOptions,
   type CreateOneOptions,
   type FindManyOptions,
-  type Repository,
+  type RepositoryOperations,
   type RepositoryFilter,
   type RepositoryRecord,
   type UpdateOneOptions,
@@ -32,13 +34,24 @@ export type RepositoryApiAction =
   | 'updateOne'
   | 'deleteOne';
 
-/** An enabled endpoint with no configurable options. */
-export type RepositoryApiEmptyActionOptions = Readonly<Record<string, never>>;
-export interface RepositoryApiFindManyOptions {
+/**
+ * Options every action accepts.
+ *
+ * `policy` is server-owned. A request body naming `policy` or `scope` is
+ * rejected before it reaches here, because the allowlist below enumerates
+ * exactly what an action reads from the body and neither is on it — a caller
+ * who could send their own policy could grant themselves anything.
+ */
+export interface RepositoryApiActionOptions {
+  /** Repository Policy bound to this action. Absent leaves it unbound. */
+  readonly policy?: RepositoryPolicy;
+}
+export type RepositoryApiEmptyActionOptions = RepositoryApiActionOptions;
+export interface RepositoryApiFindManyOptions extends RepositoryApiActionOptions {
   /** Default and maximum limit. Defaults to 100. */
   readonly maxLimit?: number;
 }
-export interface RepositoryApiWriteOptions {
+export interface RepositoryApiWriteOptions extends RepositoryApiActionOptions {
   /** Server-owned policy. HTTP input cannot override this value. */
   readonly writePolicy?: false | WritePolicyInput;
 }
@@ -139,12 +152,13 @@ export function defineRepositoryApiRoutes(
     );
     const actions = Object.entries(entry.actions).map(([key, config]) => {
       const action = key as RepositoryApiAction;
-      const keys =
-        action === 'findMany'
-          ? ['maxLimit']
-          : action === 'createOne' || action === 'updateOne'
-            ? ['writePolicy']
-            : [];
+      const keys = [
+        'policy',
+        ...(action === 'findMany' ? ['maxLimit'] : []),
+        ...(action === 'createOne' || action === 'updateOne'
+          ? ['writePolicy']
+          : []),
+      ];
       assertConfig(config, keys, `Repository API action ${action}`);
       const maxLimit =
         action === 'findMany' && config.maxLimit !== undefined
@@ -165,7 +179,13 @@ export function defineRepositoryApiRoutes(
           ? false
           : buildWritePolicy(policyInput as WritePolicyInput);
       if (action === 'createOne') assertCreateAllowance(writePolicy);
-      return { action, maxLimit, writePolicy };
+      // Normalized here so a malformed Policy fails when the routes are
+      // defined rather than on the first request that reaches them.
+      const policy =
+        config.policy === undefined
+          ? undefined
+          : normalizeRepositoryPolicy(config.policy as RepositoryPolicy);
+      return { action, maxLimit, writePolicy, policy };
     });
     return {
       name: entry.name,
@@ -206,7 +226,8 @@ export function defineRepositoryApiRoutes(
       const repository = app.container
         .resolve(databaseManagerToken)
         .repository(entry.collection, entry.connection);
-      for (const { action, maxLimit, writePolicy } of entry.actions) {
+      for (const { action, maxLimit, writePolicy, policy } of entry.actions) {
+        const scoped = policy ? repository.withPolicy(policy) : repository;
         router.post(
           `/${encodeURIComponent(entry.name)}:${action}`,
           bodyLimit({
@@ -223,9 +244,9 @@ export function defineRepositoryApiRoutes(
           async (context) => {
             const input = await readInput(context, action, maxLimit);
             if (action === 'findMany' && acceptsRepositoryStream(context)) {
-              return streamFindMany(context, repository, input);
+              return streamFindMany(context, scoped, input);
             }
-            const data = await execute(repository, action, input, writePolicy);
+            const data = await execute(scoped, action, input, writePolicy);
             if (action === 'aggregate' || action === 'groupBy') {
               return context.body(
                 JSON.stringify({ data }, (_key, value: unknown) =>
@@ -246,7 +267,7 @@ export function defineRepositoryApiRoutes(
 
 async function streamFindMany(
   context: Context,
-  repository: Repository,
+  repository: RepositoryOperations,
   input: FindManyOptions<RepositoryRecord>,
 ): Promise<Response> {
   const iterator = repository.findMany(input)[Symbol.asyncIterator]();
@@ -414,7 +435,7 @@ async function readInput(
 }
 
 async function execute(
-  repository: Repository,
+  repository: RepositoryOperations,
   action: RepositoryApiAction,
   input: RepositoryRecord,
   writePolicy: false | WritePolicy,

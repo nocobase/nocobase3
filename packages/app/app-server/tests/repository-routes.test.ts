@@ -1119,6 +1119,93 @@ describe('Repository API routes', () => {
     }
   });
 
+  it('binds a declared policy and refuses one sent in the body', async () => {
+    await database.repository('orders').createMany({
+      values: [
+        { id: 'paid-1', status: 'paid' },
+        { id: 'draft-1', status: 'draft' },
+      ],
+    });
+    const contribution = defineRepositoryApiRoutes({
+      repositories: [
+        {
+          name: 'scoped-orders',
+          collection: 'orders',
+          actions: {
+            findMany: {
+              policy: {
+                read: { scope: { status: 'paid' }, fields: ['id', 'status'] },
+                create: { scope: true },
+                update: { scope: true },
+                delete: { scope: true },
+              },
+            },
+          },
+        },
+      ],
+    });
+    const scopedRouter = new Hono();
+    scopedRouter.route('/api', await contribution.createRouter({ container }));
+
+    const listed = await scopedRouter.request('/api/scoped-orders:findMany', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    });
+    expect(listed.status).toBe(200);
+    const body = (await listed.json()) as { data: Array<{ status: string }> };
+    expect(body.data.length).toBeGreaterThan(0);
+    expect(body.data.every((record) => record.status === 'paid')).toBe(true);
+
+    // A field the policy does not grant is refused, not quietly trimmed.
+    const forbidden = await scopedRouter.request(
+      '/api/scoped-orders:findMany',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          select: {
+            kind: 'select',
+            version: 1,
+            root: { kind: 'selection', fields: ['id', 'version'] },
+          },
+        }),
+      },
+    );
+    expect(forbidden.status).toBe(403);
+
+    // And the caller cannot supply a policy of their own: a policy that the
+    // request could set would let it grant itself anything.
+    for (const key of ['policy', 'scope']) {
+      const smuggled = await scopedRouter.request(
+        '/api/scoped-orders:findMany',
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ [key]: { read: true } }),
+        },
+      );
+      expect(smuggled.status).toBe(400);
+      expect(await smuggled.json()).toMatchObject({
+        code: 'UNSUPPORTED_REPOSITORY_OPTION',
+      });
+    }
+  });
+
+  it('rejects a malformed policy when the routes are defined', () => {
+    expect(() =>
+      defineRepositoryApiRoutes({
+        repositories: [
+          {
+            name: 'broken-orders',
+            collection: 'orders',
+            actions: { count: { policy: { read: true } as never } },
+          },
+        ],
+      }),
+    ).toThrowError(/create is required/);
+  });
+
   it('does not expose undeclared collections or actions and preserves other routes', async () => {
     for (const path of [
       '/api/orders:findMany',

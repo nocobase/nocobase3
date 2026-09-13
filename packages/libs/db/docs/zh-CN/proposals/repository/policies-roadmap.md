@@ -197,8 +197,13 @@ SQLite、PostgreSQL、MySQL、Kingbase 可并发；OceanBase、Oracle、MSSQL、
 - 3.1 `ScopedConnection` 与 `conn.withPolicies(map, principal)`
 - 3.2 事务内派生的 Repository 自动携带 policy
 - 3.3 `narrow` 与归并算法（`false` 传播、`fields` 取交、patch 独有关系丢弃）
-- 3.4 HTTP：`RepositoryApiActions` 的读写 action 统一加 `policy` 位，缺省拒绝
+- 3.4 HTTP：`RepositoryApiActions` 的读写 action 统一加 `policy` 位
 - 3.5 HTTP：请求体出现 `policy` / `scope` 一律 400
+
+**「缺省拒绝」推迟到迁移一并处理。** `policy` 位已加在全部九个 action 上，声明则绑定、未声明则不绑定。现在就把缺省翻成拒绝，会让所有既有路由声明（`findMany: {}` 这类）当场失效，波及 `app-plugin-repository-example`、`app-plugin-file-example` 与两个模板；设计文档说的是与 `writePolicy` 在 HTTP 层的默认一致，而那条默认是随 `writePolicy` 本身一起引入的。翻转放在迁移那一步，与消费方改造同一个改动里做。
+
+3.5 **不需要新代码**：`readInput` 早已按 `allowedOptions[action]` 逐键白名单校验请求体，`policy` 和 `scope` 都不在任何 action 的列表里，因此一律 400 `UNSUPPORTED_REPOSITORY_OPTION`。已补测试把这条钉住，免得日后有人放宽白名单时无声打开这个口子。
+
 - 3.6 `explainPolicy()` 覆盖多层 `narrow` 的归并结果
 
 ### 验收

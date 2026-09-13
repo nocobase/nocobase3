@@ -406,11 +406,25 @@ export interface Repository<
   deleteMany(options: DeleteManyOptions<TRecord>): Promise<DeleteManyResult>;
 }
 
+/**
+ * The operations a Repository performs, without the derivation methods.
+ *
+ * Both a plain and a policy-bound Repository satisfy this, which is what lets
+ * code that only runs queries accept either. Neither is a subtype of the
+ * other on purpose: `withPolicy` must not be reachable on a bound instance,
+ * and `narrow` means nothing on an unbound one.
+ */
+export type RepositoryOperations<
+  TRecord extends object = RepositoryRecord,
+  TCreate extends object = Partial<TRecord>,
+  TUpdate extends object = Partial<TRecord>,
+> = Omit<Repository<TRecord, TCreate, TUpdate>, 'withPolicy'>;
+
 export interface ScopedRepository<
   TRecord extends object = RepositoryRecord,
   TCreate extends object = Partial<TRecord>,
   TUpdate extends object = Partial<TRecord>,
-> extends Omit<Repository<TRecord, TCreate, TUpdate>, 'withPolicy'> {
+> extends RepositoryOperations<TRecord, TCreate, TUpdate> {
   /**
    * Narrow the bound Policy further. Scopes intersect, field and relation
    * allowlists intersect, and `false` on either side wins — there is no
