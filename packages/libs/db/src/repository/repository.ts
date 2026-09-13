@@ -7,18 +7,27 @@ import {
   type WritePolicy,
   type FieldWritePolicy,
   type ThroughWritePolicy,
-  type RelationWritePolicy,
 } from './write-policy.js';
 import { normalizeRepositoryPolicy } from './policy/normalize.js';
+import {
+  applyCreateDefaults,
+  assertPolicyFilterFields,
+  combinePolicyFilter,
+  policyReadFields,
+  policyReadRelations,
+  resolveMutationNode,
+  resolveReadNode,
+  resolveWriteShapeNode,
+  toWritePolicy,
+  type PolicyMutationOperation,
+} from './policy/enforce.js';
 import type {
   NormalizedReadNode,
-  NormalizedRelationShapeNode,
-  NormalizedRelationWriteNode,
   NormalizedRepositoryPolicy,
-  NormalizedWriteNode,
   PolicyRef,
   RepositoryPolicy,
 } from './policy/types.js';
+import { invalid, isPlainRecord } from './internal/guards.js';
 import {
   assertMutationWritePolicy,
   assertFieldWrites,
@@ -555,7 +564,8 @@ export class DefaultRepository<
       collection,
       writePolicy,
     );
-    const createValues = this.applyCreateDefaults(
+    const createValues = applyCreateDefaults(
+      this.options.policy,
       evaluateValues(options.values),
     );
     const mutation = await normalizeModelMutation(
@@ -642,7 +652,7 @@ export class DefaultRepository<
       });
     }
     const recordsWithDefaults = input.map((record: unknown, index: number) => {
-      const createValues = this.applyCreateDefaults(record);
+      const createValues = applyCreateDefaults(this.options.policy, record);
       return {
         values: validateValues(
           collection,
@@ -794,7 +804,8 @@ export class DefaultRepository<
       'update',
     );
     const by = uniqueSelectorFromFilter(collection, filter, ['filter']);
-    const createValues = this.applyCreateDefaults(
+    const createValues = applyCreateDefaults(
+      this.options.policy,
       evaluateValues(options.create),
     );
     const [createMutation, updateMutation] = await Promise.all([
@@ -1093,15 +1104,11 @@ export class DefaultRepository<
     path: readonly (string | number)[],
     protectedFields: readonly string[] = [],
   ): void {
-    const policy =
-      operation === 'create'
-        ? this.options.policy?.create
-        : this.options.policy?.update;
-    if (policy === false) {
-      invalid('WRITE_FORBIDDEN', `${operation} is forbidden by Policy.`, {
-        collection: collection.name,
-      });
-    }
+    const policy = resolveWriteShapeNode(
+      this.options.policy,
+      operation,
+      collection,
+    );
     if (policy === undefined || policy === true) return;
     validatePolicyFields(collection, { fields: policy.fields }, [
       'policy',
@@ -1120,23 +1127,6 @@ export class DefaultRepository<
     );
   }
 
-  private applyCreateDefaults(input: unknown): {
-    readonly values: unknown;
-    readonly protectedFields: readonly string[];
-  } {
-    const policy = this.options.policy?.create;
-    if (!policy || policy === true || !isPlainRecord(input)) {
-      return { values: input, protectedFields: [] };
-    }
-    const protectedFields = Object.keys(policy.defaults).filter(
-      (field) => !policy.fields.includes(field) && !Object.hasOwn(input, field),
-    );
-    return {
-      values: { ...policy.defaults, ...input },
-      protectedFields,
-    };
-  }
-
   private async normalizeFilter<T extends object>(
     collection: CollectionDefinition,
     input: RepositoryFilter<T> | undefined,
@@ -1148,18 +1138,9 @@ export class DefaultRepository<
       input,
       context,
     );
-    const policy = this.options.policy?.read;
-    if (policy && typeof policy === 'object') {
-      assertPolicyFilterFields(collection, normalized, policy.fields);
-    }
-    if (policy === false) {
-      invalid(
-        'READ_FORBIDDEN',
-        'Reading from this Repository is forbidden by Policy.',
-        { collection: collection.name },
-      );
-    }
+    const policy = resolveReadNode(this.options.policy, collection);
     if (policy === true || policy === undefined) return normalized;
+    assertPolicyFilterFields(collection, normalized, policy.fields);
     const scope =
       policy.scope === true
         ? undefined
@@ -1189,14 +1170,12 @@ export class DefaultRepository<
   }
 
   private readPolicyFields(): readonly string[] | undefined {
-    const policy = this.options.policy?.read;
-    return policy && typeof policy === 'object' ? policy.fields : undefined;
+    return policyReadFields(this.options.policy);
   }
 
   private readPolicyRelations():
     Readonly<Record<string, NormalizedReadNode | PolicyRef>> | undefined {
-    const policy = this.options.policy?.read;
-    return policy && typeof policy === 'object' ? policy.relations : undefined;
+    return policyReadRelations(this.options.policy);
   }
 
   private async validateSort(
@@ -1217,7 +1196,7 @@ export class DefaultRepository<
     filter: RepositoryFilter<T> | undefined,
     context: Readonly<Record<string, unknown>> | undefined,
     all: boolean,
-    operation: 'update' | 'delete',
+    operation: PolicyMutationOperation,
   ): Promise<FilterAst | undefined> {
     if (all) {
       if (filter !== undefined) {
@@ -1251,7 +1230,7 @@ export class DefaultRepository<
     collection: CollectionDefinition,
     filter: RepositoryFilter<T> | undefined,
     context: Readonly<Record<string, unknown>> | undefined,
-    operation: 'update' | 'delete',
+    operation: PolicyMutationOperation,
   ): Promise<FilterAst> {
     const normalized = await this.normalizeFilterWithoutPolicy(
       collection,
@@ -1291,17 +1270,13 @@ export class DefaultRepository<
 
   private async normalizePolicyMutationScope(
     collection: CollectionDefinition,
-    operation: 'update' | 'delete',
+    operation: PolicyMutationOperation,
   ): Promise<FilterAst | undefined> {
-    const node =
-      operation === 'update'
-        ? this.options.policy?.update
-        : this.options.policy?.delete;
-    if (node === false) {
-      invalid('WRITE_FORBIDDEN', `${operation} is forbidden by Policy.`, {
-        collection: collection.name,
-      });
-    }
+    const node = resolveMutationNode(
+      this.options.policy,
+      operation,
+      collection,
+    );
     if (node === undefined || node === true || node.scope === true) {
       return undefined;
     }
@@ -1316,7 +1291,7 @@ export class DefaultRepository<
   private async combineMutationPolicyScope(
     collection: CollectionDefinition,
     caller: FilterAst | undefined,
-    operation: 'update' | 'delete',
+    operation: PolicyMutationOperation,
   ): Promise<FilterAst | undefined> {
     const scope = await this.normalizePolicyMutationScope(
       collection,
@@ -1649,57 +1624,6 @@ function wrapFilter(node: FilterNode, collection: string): FilterAst {
         ? node
         : { kind: 'group', logic: 'and', items: [node] },
   };
-}
-
-function combinePolicyFilter(
-  caller: FilterAst | undefined,
-  policy: FilterAst | undefined,
-  collection: string,
-): FilterAst | undefined {
-  if (!caller) return policy;
-  if (!policy) return caller;
-  return {
-    kind: 'filter',
-    version: 1,
-    collection,
-    root: {
-      kind: 'group',
-      logic: 'and',
-      items: [caller.root, policy.root],
-    },
-  };
-}
-
-function assertPolicyFilterFields(
-  collection: CollectionDefinition,
-  filter: FilterAst | undefined,
-  fields: readonly string[],
-): void {
-  if (!filter) return;
-  const allowed = new Set(fields);
-  const visit = (node: FilterNode): void => {
-    if (node.kind === 'condition') {
-      const field = node.path.length === 1 ? node.path[0] : undefined;
-      if (field && !allowed.has(field)) {
-        invalid(
-          'FIELD_READ_FORBIDDEN',
-          `Field "${field}" is not readable by Policy.`,
-          {
-            collection: collection.name,
-            field,
-            path: ['filter', 'root'],
-          },
-        );
-      }
-      return;
-    }
-    if (node.kind === 'group') {
-      node.items.forEach(visit);
-      return;
-    }
-    for (const item of node.filter?.items ?? []) visit(item);
-  };
-  filter.root.items.forEach(visit);
 }
 
 function validateFilterGroup(
@@ -3283,58 +3207,6 @@ function validatePolicyFields(
       );
     }
   }
-}
-
-function toWritePolicy(policy: NormalizedWriteNode): WritePolicy {
-  return {
-    fields: policy.fields,
-    relations: Object.fromEntries(
-      Object.entries(policy.relations).map(([name, relation]) => [
-        name,
-        toRelationWritePolicy(relation),
-      ]),
-    ),
-  };
-}
-
-function toRelationWritePolicy(
-  policy: NormalizedRelationWriteNode,
-): RelationWritePolicy {
-  const shape = (node: NormalizedRelationShapeNode): WritePolicy => ({
-    fields: node.fields,
-    relations: Object.fromEntries(
-      Object.entries(node.relations).map(([name, relation]) => [
-        name,
-        toRelationWritePolicy(relation),
-      ]),
-    ),
-  });
-  const through = (node: {
-    readonly through?: false | { readonly fields: readonly string[] };
-  }): ThroughWritePolicy =>
-    node.through === false
-      ? { through: false }
-      : node.through === undefined
-        ? {}
-        : { through: { fields: node.through.fields } };
-  return {
-    ...(policy.create
-      ? { create: { ...shape(policy.create), ...through(policy.create) } }
-      : {}),
-    ...(policy.update ? { update: shape(policy.update) } : {}),
-    ...(policy.upsert
-      ? {
-          upsert: {
-            create: shape(policy.upsert.create),
-            update: shape(policy.upsert.update),
-          },
-        }
-      : {}),
-    ...(policy.connect ? { connect: through(policy.connect) } : {}),
-    ...(policy.set ? { set: through(policy.set) } : {}),
-    ...(policy.disconnect ? { disconnect: {} } : {}),
-    ...(policy.delete ? { delete: {} } : {}),
-  };
 }
 
 async function validateWritePolicyMetadata(
@@ -5496,20 +5368,4 @@ function toValidationError(error: RepositoryError): MutationValidationError {
     retryable: error.retryable,
     details: error.details,
   };
-}
-
-function isPlainRecord(value: unknown): value is RepositoryRecord {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    return false;
-  }
-  const prototype = Object.getPrototypeOf(value) as unknown;
-  return prototype === Object.prototype || prototype === null;
-}
-
-function invalid(
-  code: ConstructorParameters<typeof RepositoryError>[0],
-  message: string,
-  options: ConstructorParameters<typeof RepositoryError>[2] = {},
-): never {
-  throw new RepositoryError(code, message, options);
 }
