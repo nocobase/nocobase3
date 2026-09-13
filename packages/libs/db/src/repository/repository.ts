@@ -33,6 +33,7 @@ import type {
   PartialRepositoryPolicy,
   RepositoryPolicy,
 } from './policy/types.js';
+import type { PolicyRecord } from './types.js';
 import { invalid, isPlainRecord } from './internal/guards.js';
 import {
   assertMutationWritePolicy,
@@ -176,21 +177,24 @@ export class DefaultRepository<
 
   constructor(private readonly options: DefaultRepositoryOptions) {}
 
-  withPolicy(
-    policy: RepositoryPolicy<TRecord>,
-  ): ScopedRepository<TRecord, TCreate, TUpdate>;
-  withPolicy<P>(
-    policy: (principal: P) => RepositoryPolicy<TRecord>,
+  withPolicy<const TPolicy extends RepositoryPolicy<TRecord>>(
+    policy: TPolicy,
+  ): ScopedRepository<PolicyRecord<TRecord, TPolicy>, TCreate, TUpdate>;
+  withPolicy<P, const TPolicy extends RepositoryPolicy<TRecord>>(
+    policy: (principal: P) => TPolicy,
     principal: P,
-  ): ScopedRepository<TRecord, TCreate, TUpdate>;
-  withPolicy<P>(
-    policy:
-      RepositoryPolicy<TRecord> | ((principal: P) => RepositoryPolicy<TRecord>),
+  ): ScopedRepository<PolicyRecord<TRecord, TPolicy>, TCreate, TUpdate>;
+  withPolicy<P, const TPolicy extends RepositoryPolicy<TRecord>>(
+    policy: TPolicy | ((principal: P) => TPolicy),
     principal?: P,
-  ): ScopedRepository<TRecord, TCreate, TUpdate> {
+  ): ScopedRepository<PolicyRecord<TRecord, TPolicy>, TCreate, TUpdate> {
     const input =
       typeof policy === 'function' ? policy(principal as P) : policy;
-    return new DefaultRepository<TRecord, TCreate, TUpdate>({
+    return new DefaultRepository<
+      PolicyRecord<TRecord, TPolicy>,
+      TCreate,
+      TUpdate
+    >({
       ...this.options,
       policy: normalizeRepositoryPolicy(input),
     });

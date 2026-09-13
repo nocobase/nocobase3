@@ -281,13 +281,13 @@ export interface Repository<
   TCreate extends object = Partial<TRecord>,
   TUpdate extends object = Partial<TRecord>,
 > {
-  withPolicy(
-    policy: RepositoryPolicy<TRecord>,
-  ): ScopedRepository<TRecord, TCreate, TUpdate>;
-  withPolicy<P>(
-    policy: (principal: P) => RepositoryPolicy<TRecord>,
+  withPolicy<const TPolicy extends RepositoryPolicy<TRecord>>(
+    policy: TPolicy,
+  ): ScopedRepository<PolicyRecord<TRecord, TPolicy>, TCreate, TUpdate>;
+  withPolicy<P, const TPolicy extends RepositoryPolicy<TRecord>>(
+    policy: (principal: P) => TPolicy,
     principal: P,
-  ): ScopedRepository<TRecord, TCreate, TUpdate>;
+  ): ScopedRepository<PolicyRecord<TRecord, TPolicy>, TCreate, TUpdate>;
   findMany<TSelection extends AnySelectBuilder<TRecord>>(
     options: FindManyOptions<TRecord> & {
       readonly select: (select: SelectBuilder<TRecord>) => TSelection;
@@ -405,6 +405,25 @@ export interface Repository<
   ): Promise<DeleteManyResult<TRecord>>;
   deleteMany(options: DeleteManyOptions<TRecord>): Promise<DeleteManyResult>;
 }
+
+/**
+ * What a read returns once a Policy is bound.
+ *
+ * A `read` node means the returned record is shaped by an allowlist, so the
+ * type degrades to `Partial<TRecord>`: a query with no select comes back
+ * carrying `read.fields` alone, and an omitted `fields` is an empty allowlist
+ * rather than a free pass. `read: true` adds no limits and keeps the full
+ * record type.
+ *
+ * The degradation is deliberately coarse. Narrowing to exactly the listed
+ * fields would need the literal list to survive inference at every call site,
+ * and a `Partial` that is honest beats a precise type that silently widens
+ * when someone stores the policy in a variable.
+ */
+export type PolicyRecord<
+  TRecord extends object,
+  TPolicy extends { readonly read: unknown },
+> = TPolicy['read'] extends object ? Partial<TRecord> : TRecord;
 
 /**
  * The operations a Repository performs, without the derivation methods.

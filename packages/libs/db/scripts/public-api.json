@@ -200,6 +200,7 @@
         "PhysicalSchemaInfo",
         "PhysicalTypeNormalizationStrategy",
         "PhysicalUniqueConstraintSchema",
+        "PolicyRecord",
         "PolicyRef",
         "PolicyScalarValue",
         "PolicyScope",

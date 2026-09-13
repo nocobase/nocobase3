@@ -27,7 +27,7 @@ description: 按阶段拆分的实施任务，含前置决策、技术验证、�
 
 ### 两个技术验证（spike，各半天）
 
-- **0.6 返回类型降级能否从字面量推出来。** 目标形态 `P['read'] extends { fields: readonly string[] } ? Partial<TRecord> : TRecord`。写个最小复现试 const 泛型与强制 `satisfies`；推不出来就退化为显式类型参数，`withPolicy` 的签名要跟着改。
+- ~~**0.6 返回类型降级能否从字面量推出来。**~~ **已定：能，但按更粗的判据降级。** `withPolicy` 用 `const` 泛型捕获策略字面量，`PolicyRecord<TRecord, TPolicy> = TPolicy['read'] extends object ? Partial<TRecord> : TRecord`。判据从「`fields` 是不是字符串数组」放宽成「`read` 是不是一个规则对象」，因为省略 `fields` 同样是空白名单、同样不返回完整记录，两者应当得到同一个类型。不做「精确到列出的那几个字段」那一档：那需要字面量数组在每个调用点都活过推导，而一个诚实的 `Partial` 好过一个在策略被存进变量时悄悄变宽的精确类型。类型层契约钉在 `tests/unit/repository/policy/return-type.test-d.ts`。
 - **0.7 `evaluateScope` 与 SQL 的语义一致性边界。** 见阶段 1 的 1.4——先确认哪些操作符能在内存里和数据库给出完全一致的结果，定不下来的直接排除出 `Scope` 的允许集合。
 
 **出口条件**：五个决策写进设计文档的对应位置（不再留在「待决」），两个 spike 有结论。
