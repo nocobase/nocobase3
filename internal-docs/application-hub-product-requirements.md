@@ -131,8 +131,6 @@ Configuration 默认左右布局：左侧 Release template 只读，右侧 Deplo
 
 首次使用 Config file 时，若 Release 携带 `config.example.yml` 或 `config.example.yaml`，New configuration 自动使用该模板，并明确提示用户在继续前替换示例值、占位符、凭据和密钥；否则使用空 YAML 配置。模板后缀不影响实际文件格式，目标和运行文件统一使用 `.yml`，具体命名见第 7 节。
 
-服务端落盘前会检查 `auth.secret`：首次或当前配置缺少该值时，Hub 自动生成 32 字节随机密钥；用户填写的密钥优先，已有 Config file 中的密钥作为后续部署和配置发布的回退值。External 模式不创建或修改配置文件中的密钥。
-
 选择 Release 时不立即读取模板；进入 Configuration 步骤后才加载。加载失败显示错误和 Retry，并禁止继续 Review，避免将旧配置误认为新 Release 的模板。返回上一步后仍选择同一 Release 会保留编辑；改选 Release 后重新加载。
 
 提交后 Hub 立即创建 `queued` Deployment 并返回 HTTP 202，页面转到 Deployments 并轮询进度，不要求用户保持部署弹窗打开。
@@ -386,7 +384,6 @@ Hub 数据库是 App 设置、Release、Deployment 历史和当前成功 Deploym
 - checksum 不匹配时拒绝部署；
 - App ID 限制为字母、数字、下划线和连字符，用于避免路径和身份歧义；
 - Config file 以 `0600` 权限原子写入受保护目录，并校验 YAML 根节点为对象；
-- Config file 缺少 `auth.secret` 时由 Hub 生成并持久化随机密钥，后续部署复用该值；External 模式不执行此补齐；
 - 返回配置正文的 API 使用 `Cache-Control: no-store`，避免敏感配置被浏览器或代理缓存。
 
 ## 10. 当前交付范围
