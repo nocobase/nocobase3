@@ -8,6 +8,7 @@ import {
   positiveIntegerInput,
   stringInput,
 } from '../input.js';
+import { nowDatetime } from '../temporal.js';
 
 export function createContactRoutes(crm: DatabaseConnection): Hono {
   const routes = new Hono();
@@ -51,7 +52,7 @@ export function createContactRoutes(crm: DatabaseConnection): Hono {
         name: stringInput(input, 'name'),
         email: stringInput(input, 'email'),
         role: stringInput(input, 'role'),
-        createdAt: new Date().toISOString(),
+        createdAt: nowDatetime(),
       })
       .execute();
     const contact = await crm.query
