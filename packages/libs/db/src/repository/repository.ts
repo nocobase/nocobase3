@@ -2590,6 +2590,18 @@ async function validateSelectInputWithRelations(
       node.filter,
       context,
     );
+    const policyScope =
+      relationPolicy && !('kind' in relationPolicy)
+        ? relationPolicy.scope === true
+          ? undefined
+          : await normalizeFilterWithRelations(
+              collections,
+              target,
+              relationPolicy.scope,
+              undefined,
+            )
+        : undefined;
+    const scopedFilter = combinePolicyFilter(filter, policyScope, target.name!);
     const sortInput = normalizeSortInput(target, node.sort);
     if (
       sortInput?.items.length &&
@@ -2632,7 +2644,7 @@ async function validateSelectInputWithRelations(
       kind: 'include',
       relation: node.relation,
       select: nested.select.root,
-      filter,
+      filter: scopedFilter,
       sort,
       limit: node.limit,
       cursor: cursorAxes

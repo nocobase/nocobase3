@@ -414,4 +414,109 @@ describe('DefaultRepository.withPolicy', () => {
       select: { fields: ['id', 'title'] },
     });
   });
+
+  it('adds the relation read scope to the nested relation filter', async () => {
+    let plan:
+      | {
+          select?: {
+            root: {
+              includes: Array<{
+                filter?: { root: { items: unknown[] } };
+              }>;
+            };
+          };
+        }
+      | undefined;
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {
+        get: async (name: string) =>
+          name === 'projects'
+            ? {
+                name,
+                fields: [
+                  { name: 'id', type: 'string' },
+                  { name: 'tasks', type: 'hasMany', target: 'tasks' },
+                ],
+              }
+            : {
+                name,
+                fields: [
+                  { name: 'id', type: 'string' },
+                  { name: 'status', type: 'string' },
+                  { name: 'tenantId', type: 'string' },
+                ],
+              },
+      },
+      adapter: {
+        assertReadable: () => undefined,
+        findMany: async (nextPlan: typeof plan) => {
+          plan = nextPlan;
+          return [];
+        },
+      } as never,
+    });
+
+    await repository
+      .withPolicy({
+        read: {
+          scope: true,
+          fields: ['id'],
+          relations: {
+            tasks: {
+              scope: { tenantId: 'T1' },
+              fields: ['id'],
+              relations: {},
+            },
+          },
+        },
+        create: { scope: true },
+        update: { scope: true },
+        delete: { scope: true },
+      })
+      .findMany({
+        select: {
+          kind: 'select',
+          version: 1,
+          root: {
+            kind: 'selection',
+            fields: ['id'],
+            includes: [
+              {
+                kind: 'include',
+                relation: 'tasks',
+                filter: {
+                  kind: 'filter',
+                  version: 1,
+                  root: {
+                    kind: 'group',
+                    logic: 'and',
+                    items: [
+                      {
+                        kind: 'condition',
+                        path: ['status'],
+                        operator: '$eq',
+                        value: 'draft',
+                      },
+                    ],
+                  },
+                },
+                select: { kind: 'selection', includes: [] },
+              },
+            ],
+          },
+        },
+      });
+
+    expect(plan?.select?.root.includes[0]?.filter?.root.items).toEqual([
+      expect.objectContaining({
+        logic: 'and',
+        items: [expect.objectContaining({ path: ['status'], value: 'draft' })],
+      }),
+      expect.objectContaining({
+        logic: 'and',
+        items: [expect.objectContaining({ path: ['tenantId'], value: 'T1' })],
+      }),
+    ]);
+  });
 });
