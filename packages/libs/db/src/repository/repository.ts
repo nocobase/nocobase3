@@ -10,7 +10,9 @@ import {
 } from './write-policy.js';
 import { normalizeRepositoryPolicy } from './policy/normalize.js';
 import type {
+  NormalizedReadNode,
   NormalizedRepositoryPolicy,
+  PolicyRef,
   RepositoryPolicy,
 } from './policy/types.js';
 import {
@@ -1070,12 +1072,19 @@ export class DefaultRepository<
       select,
       context,
       policyFields,
+      this.readPolicyRelations(),
     );
   }
 
   private readPolicyFields(): readonly string[] | undefined {
     const policy = this.options.policy?.read;
     return policy && typeof policy === 'object' ? policy.fields : undefined;
+  }
+
+  private readPolicyRelations():
+    Readonly<Record<string, NormalizedReadNode | PolicyRef>> | undefined {
+    const policy = this.options.policy?.read;
+    return policy && typeof policy === 'object' ? policy.relations : undefined;
   }
 
   private async validateSort(
@@ -2453,6 +2462,7 @@ async function validateSelectWithRelations<TRecord extends object>(
   input: RepositorySelect<TRecord> | undefined,
   context: Readonly<Record<string, unknown>> | undefined,
   policyFields?: readonly string[],
+  policyRelations?: Readonly<Record<string, NormalizedReadNode | PolicyRef>>,
 ): Promise<ValidatedSelect> {
   return validateSelectInputWithRelations(
     collections,
@@ -2460,6 +2470,7 @@ async function validateSelectWithRelations<TRecord extends object>(
     normalizeSelectInput(collection, input),
     context,
     policyFields,
+    policyRelations,
   );
 }
 
@@ -2469,6 +2480,7 @@ async function validateSelectInputWithRelations(
   select: SelectInputAst | undefined,
   context: Readonly<Record<string, unknown>> | undefined,
   policyFields?: readonly string[],
+  policyRelations?: Readonly<Record<string, NormalizedReadNode | PolicyRef>>,
   budget: { nodes: number } = { nodes: 0 },
   depth: number = 0,
 ): Promise<ValidatedSelect> {
@@ -2501,6 +2513,29 @@ async function validateSelectInputWithRelations(
       );
     }
     seen.add(node.relation);
+    const relationPolicy = policyRelations?.[node.relation];
+    if (policyRelations && relationPolicy === undefined) {
+      invalid(
+        'RELATION_READ_FORBIDDEN',
+        `Relation "${node.relation}" is not readable by Policy.`,
+        {
+          collection: collection.name,
+          relation: node.relation,
+          path: [...path, 'relation'],
+        },
+      );
+    }
+    if (relationPolicy && 'kind' in relationPolicy) {
+      invalid(
+        'RELATION_READ_FORBIDDEN',
+        `Relation "${node.relation}" is not resolved by Policy.`,
+        {
+          collection: collection.name,
+          relation: node.relation,
+          path: [...path, 'relation'],
+        },
+      );
+    }
     const relation = relationField(collection, node.relation, [
       ...path,
       'relation',
@@ -2534,7 +2569,12 @@ async function validateSelectInputWithRelations(
         root: node.select,
       },
       context,
-      undefined,
+      relationPolicy && !('kind' in relationPolicy)
+        ? relationPolicy.fields
+        : undefined,
+      relationPolicy && !('kind' in relationPolicy)
+        ? relationPolicy.relations
+        : undefined,
       budget,
       depth + 1,
     );
@@ -2652,6 +2692,7 @@ async function validateRelationResult(
       },
     },
     context,
+    undefined,
     undefined,
     budget,
     depth,

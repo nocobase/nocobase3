@@ -275,4 +275,143 @@ describe('DefaultRepository.withPolicy', () => {
 
     expect(plan?.fields).toEqual([]);
   });
+
+  it('rejects relations that are absent from the read relation allowlist', async () => {
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {
+        get: async (name: string) =>
+          name === 'projects'
+            ? {
+                name,
+                fields: [
+                  { name: 'id', type: 'string' },
+                  { name: 'tasks', type: 'hasMany', target: 'tasks' },
+                ],
+              }
+            : {
+                name,
+                fields: [{ name: 'id', type: 'string' }],
+              },
+      },
+      adapter: {
+        assertReadable: () => undefined,
+        findMany: async () => [],
+      } as never,
+    });
+
+    await expect(
+      repository
+        .withPolicy({
+          read: { scope: true, fields: ['id'], relations: {} },
+          create: { scope: true },
+          update: { scope: true },
+          delete: { scope: true },
+        })
+        .findMany({
+          select: {
+            kind: 'select',
+            version: 1,
+            root: {
+              kind: 'selection',
+              fields: ['id'],
+              includes: [
+                {
+                  kind: 'include',
+                  relation: 'tasks',
+                  select: {
+                    kind: 'selection',
+                    fields: ['id'],
+                    includes: [],
+                  },
+                },
+              ],
+            },
+          },
+        }),
+    ).rejects.toMatchObject({
+      code: 'RELATION_READ_FORBIDDEN',
+      relation: 'tasks',
+    });
+  });
+
+  it('applies a relation read field allowlist to nested selections', async () => {
+    let plan:
+      | {
+          select?: {
+            root: {
+              includes: Array<{
+                relation: string;
+                select?: { fields?: readonly string[] };
+              }>;
+            };
+          };
+        }
+      | undefined;
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {
+        get: async (name: string) =>
+          name === 'projects'
+            ? {
+                name,
+                fields: [
+                  { name: 'id', type: 'string' },
+                  { name: 'tasks', type: 'hasMany', target: 'tasks' },
+                ],
+              }
+            : {
+                name,
+                fields: [
+                  { name: 'id', type: 'string' },
+                  { name: 'title', type: 'string' },
+                  { name: 'secret', type: 'string' },
+                ],
+              },
+      },
+      adapter: {
+        assertReadable: () => undefined,
+        findMany: async (nextPlan: typeof plan) => {
+          plan = nextPlan;
+          return [];
+        },
+      } as never,
+    });
+
+    await repository
+      .withPolicy({
+        read: {
+          scope: true,
+          fields: ['id'],
+          relations: {
+            tasks: { scope: true, fields: ['id', 'title'], relations: {} },
+          },
+        },
+        create: { scope: true },
+        update: { scope: true },
+        delete: { scope: true },
+      })
+      .findMany({
+        select: {
+          kind: 'select',
+          version: 1,
+          root: {
+            kind: 'selection',
+            fields: ['id'],
+            includes: [
+              {
+                kind: 'include',
+                relation: 'tasks',
+                select: { kind: 'selection', includes: [] },
+              },
+            ],
+          },
+        },
+      });
+
+    expect(plan?.select?.root.includes[0]).toMatchObject({
+      relation: 'tasks',
+      select: { fields: ['id', 'title'] },
+    });
+  });
 });
