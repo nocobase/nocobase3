@@ -13,18 +13,17 @@ import {
   applyCreateDefaults,
   assertPolicyFilterFields,
   combinePolicyFilter,
-  policyReadFields,
-  policyReadRelations,
+  readableFields,
+  relationReadContext,
   resolveMutationNode,
-  resolveReadNode,
   resolveWriteShapeNode,
+  rootReadContext,
   toWritePolicy,
   type PolicyMutationOperation,
+  type PolicyReadContext,
 } from './policy/enforce.js';
 import type {
-  NormalizedReadNode,
   NormalizedRepositoryPolicy,
-  PolicyRef,
   RepositoryPolicy,
 } from './policy/types.js';
 import { invalid, isPlainRecord } from './internal/guards.js';
@@ -202,16 +201,18 @@ export class DefaultRepository<
   ): Promise<RepositoryReadPlan> {
     this.options.adapter.assertReadable();
     const collection = await this.collection();
+    const policy = this.readContext(collection);
     const selection = await this.validateSelect(
       collection,
       options.select,
       options.context,
-      this.readPolicyFields(),
+      policy,
     );
     const filter = await this.normalizeFilter(
       collection,
       options.filter,
       options.context,
+      policy,
     );
     const sort = await this.validateSort(collection, options.sort);
     validatePagination(options.limit, options.offset, sort, options.cursor);
@@ -259,18 +260,19 @@ export class DefaultRepository<
     options: FindOneOptions<TRecord>,
   ): Promise<TRecord | undefined> {
     const collection = await this.collection();
+    const policy = this.readContext(collection);
     const selection = await this.validateSelect(
       collection,
       options.select,
       options.context,
-      this.readPolicyFields(),
+      policy,
     );
-    const filter = await this.normalizeFilter(
+    const callerFilter = await this.normalizeFilterWithoutPolicy(
       collection,
       options.filter,
       options.context,
     );
-    if (!filter && options.sort === undefined) {
+    if (!callerFilter && options.sort === undefined) {
       invalid(
         'INVALID_FILTER',
         'findOne() requires filter or non-empty sort.',
@@ -279,7 +281,12 @@ export class DefaultRepository<
         },
       );
     }
-    const sort = await this.validateSort(collection, options.sort, !filter);
+    const filter = await this.applyReadPolicy(collection, callerFilter, policy);
+    const sort = await this.validateSort(
+      collection,
+      options.sort,
+      !callerFilter,
+    );
     return (await this.options.adapter.findOne({
       collection,
       fields: selection.fields,
@@ -298,6 +305,7 @@ export class DefaultRepository<
         collection,
         options.filter,
         options.context,
+        this.readContext(collection),
       ),
     });
   }
@@ -310,6 +318,7 @@ export class DefaultRepository<
         collection,
         options.filter,
         options.context,
+        this.readContext(collection),
       ),
     });
   }
@@ -333,6 +342,7 @@ export class DefaultRepository<
       collection,
       options.filter,
       options.context,
+      this.readContext(collection),
     );
     return this.options.adapter.aggregate({ collection, aggregate, filter });
   }
@@ -366,6 +376,7 @@ export class DefaultRepository<
       collection,
       options.filter,
       options.context,
+      this.readContext(collection),
     );
     const having = await normalizeFilterWithRelations(
       this.options.collections,
@@ -595,6 +606,7 @@ export class DefaultRepository<
       collection,
       options.select,
       options.context,
+      this.readContext(collection),
     );
     const requestedFields = selection.fields;
     const executionFields = includeExecutionFields(collection, requestedFields);
@@ -686,7 +698,12 @@ export class DefaultRepository<
       ),
     );
     const selection = options.select
-      ? await this.validateSelect(collection, options.select, options.context)
+      ? await this.validateSelect(
+          collection,
+          options.select,
+          options.context,
+          this.readContext(collection),
+        )
       : undefined;
     if (selection) assertBulkReturningIdentity(collection);
     const result = await this.options.adapter.createMany({
@@ -748,6 +765,7 @@ export class DefaultRepository<
       collection,
       options.select,
       options.context,
+      this.readContext(collection),
     );
     const requestedFields = selection.fields;
     const result = await this.options.adapter.updateOne({
@@ -882,6 +900,7 @@ export class DefaultRepository<
       collection,
       options.select,
       options.context,
+      this.readContext(collection),
     );
     const requestedFields = selection.fields;
     const result = await this.options.adapter.upsertOne({
@@ -961,7 +980,12 @@ export class DefaultRepository<
       'values',
     ]);
     const selection = options.select
-      ? await this.validateSelect(collection, options.select, options.context)
+      ? await this.validateSelect(
+          collection,
+          options.select,
+          options.context,
+          this.readContext(collection),
+        )
       : undefined;
     if (selection) assertBulkReturningIdentity(collection);
     const result = await this.options.adapter.updateMany({
@@ -1006,7 +1030,12 @@ export class DefaultRepository<
     );
     validateIfVersion(collection, options.ifVersion);
     const selection = options.select
-      ? await this.validateSelect(collection, options.select, options.context)
+      ? await this.validateSelect(
+          collection,
+          options.select,
+          options.context,
+          this.readContext(collection),
+        )
       : undefined;
     const result = await this.options.adapter.deleteOne({
       collection,
@@ -1060,7 +1089,12 @@ export class DefaultRepository<
       'delete',
     );
     const selection = options.select
-      ? await this.validateSelect(collection, options.select, options.context)
+      ? await this.validateSelect(
+          collection,
+          options.select,
+          options.context,
+          this.readContext(collection),
+        )
       : undefined;
     if (selection) assertBulkReturningIdentity(collection);
     const result = await this.options.adapter.deleteMany({
@@ -1131,15 +1165,25 @@ export class DefaultRepository<
     collection: CollectionDefinition,
     input: RepositoryFilter<T> | undefined,
     context: Readonly<Record<string, unknown>> | undefined,
+    policy: PolicyReadContext,
   ): Promise<FilterAst | undefined> {
-    const normalized = await normalizeFilterWithRelations(
-      this.options.collections,
+    return this.applyReadPolicy(
       collection,
-      input,
-      context,
+      await this.normalizeFilterWithoutPolicy(collection, input, context),
+      policy,
     );
-    const policy = resolveReadNode(this.options.policy, collection);
-    if (policy === true || policy === undefined) return normalized;
+  }
+
+  /**
+   * Narrow an already-normalized caller filter by the read policy: reject the
+   * fields it may not name, then intersect it with the scope.
+   */
+  private async applyReadPolicy(
+    collection: CollectionDefinition,
+    normalized: FilterAst | undefined,
+    policy: PolicyReadContext,
+  ): Promise<FilterAst | undefined> {
+    if (policy.kind === 'unrestricted') return normalized;
     assertPolicyFilterFields(collection, normalized, policy.fields);
     const scope =
       policy.scope === true
@@ -1156,26 +1200,25 @@ export class DefaultRepository<
   private async validateSelect(
     collection: CollectionDefinition,
     select: RepositorySelect<TRecord> | undefined,
-    context?: Readonly<Record<string, unknown>>,
-    policyFields?: readonly string[],
+    context: Readonly<Record<string, unknown>> | undefined,
+    policy: PolicyReadContext,
   ): Promise<ValidatedSelect> {
     return validateSelectWithRelations(
       this.options.collections,
       collection,
       select,
       context,
-      policyFields,
-      this.readPolicyRelations(),
+      policy,
     );
   }
 
-  private readPolicyFields(): readonly string[] | undefined {
-    return policyReadFields(this.options.policy);
-  }
-
-  private readPolicyRelations():
-    Readonly<Record<string, NormalizedReadNode | PolicyRef>> | undefined {
-    return policyReadRelations(this.options.policy);
+  /**
+   * The read authorization in force on this Repository. Every read surface
+   * takes it as a required argument, so a new one cannot skip the checks by
+   * forgetting to ask for it.
+   */
+  private readContext(collection: CollectionDefinition): PolicyReadContext {
+    return rootReadContext(this.options.policy, collection);
   }
 
   private async validateSort(
@@ -2008,8 +2051,9 @@ function normalizeSelectInput<TRecord extends object>(
 function validateScalarSelect(
   collection: CollectionDefinition,
   select: SelectInputAst | undefined,
-  policyFields?: readonly string[],
+  policy: PolicyReadContext,
 ): string[] {
+  const policyFields = readableFields(policy);
   if (policyFields !== undefined) {
     for (const field of policyFields) {
       scalarField(collection, field, ['policy', 'read', 'fields']);
@@ -2529,16 +2573,14 @@ async function validateSelectWithRelations<TRecord extends object>(
   collection: CollectionDefinition,
   input: RepositorySelect<TRecord> | undefined,
   context: Readonly<Record<string, unknown>> | undefined,
-  policyFields?: readonly string[],
-  policyRelations?: Readonly<Record<string, NormalizedReadNode | PolicyRef>>,
+  policy: PolicyReadContext,
 ): Promise<ValidatedSelect> {
   return validateSelectInputWithRelations(
     collections,
     collection,
     normalizeSelectInput(collection, input),
     context,
-    policyFields,
-    policyRelations,
+    policy,
   );
 }
 
@@ -2547,14 +2589,13 @@ async function validateSelectInputWithRelations(
   collection: CollectionDefinition,
   select: SelectInputAst | undefined,
   context: Readonly<Record<string, unknown>> | undefined,
-  policyFields?: readonly string[],
-  policyRelations?: Readonly<Record<string, NormalizedReadNode | PolicyRef>>,
+  policy: PolicyReadContext,
   budget: { nodes: number } = { nodes: 0 },
   depth: number = 0,
 ): Promise<ValidatedSelect> {
   if (++budget.nodes > 200 || depth > 20)
     invalid('INVALID_SELECT', 'Selection exceeds the node or depth limit.', {});
-  const fields = validateScalarSelect(collection, select, policyFields);
+  const fields = validateScalarSelect(collection, select, policy);
   const seen = new Set<string>();
   const includes: SelectIncludeNode[] = [];
   for (const [index, node] of (select?.root.includes ?? []).entries()) {
@@ -2581,29 +2622,12 @@ async function validateSelectInputWithRelations(
       );
     }
     seen.add(node.relation);
-    const relationPolicy = policyRelations?.[node.relation];
-    if (policyRelations && relationPolicy === undefined) {
-      invalid(
-        'RELATION_READ_FORBIDDEN',
-        `Relation "${node.relation}" is not readable by Policy.`,
-        {
-          collection: collection.name,
-          relation: node.relation,
-          path: [...path, 'relation'],
-        },
-      );
-    }
-    if (relationPolicy && 'kind' in relationPolicy) {
-      invalid(
-        'RELATION_READ_FORBIDDEN',
-        `Relation "${node.relation}" is not resolved by Policy.`,
-        {
-          collection: collection.name,
-          relation: node.relation,
-          path: [...path, 'relation'],
-        },
-      );
-    }
+    const relationPolicy = relationReadContext(
+      policy,
+      collection,
+      node.relation,
+      [...path, 'relation'],
+    );
     const relation = relationField(collection, node.relation, [
       ...path,
       'relation',
@@ -2622,6 +2646,7 @@ async function validateSelectInputWithRelations(
         node.relation,
         node,
         context,
+        policy,
         budget,
         depth + 1,
       );
@@ -2637,12 +2662,7 @@ async function validateSelectInputWithRelations(
         root: node.select,
       },
       context,
-      relationPolicy && !('kind' in relationPolicy)
-        ? relationPolicy.fields
-        : undefined,
-      relationPolicy && !('kind' in relationPolicy)
-        ? relationPolicy.relations
-        : undefined,
+      relationPolicy,
       budget,
       depth + 1,
     );
@@ -2658,19 +2678,17 @@ async function validateSelectInputWithRelations(
       node.filter,
       context,
     );
-    if (relationPolicy && !('kind' in relationPolicy)) {
+    if (relationPolicy.kind === 'restricted') {
       assertPolicyFilterFields(target, filter, relationPolicy.fields);
     }
     const policyScope =
-      relationPolicy && !('kind' in relationPolicy)
-        ? relationPolicy.scope === true
-          ? undefined
-          : await normalizeFilterWithRelations(
-              collections,
-              target,
-              relationPolicy.scope,
-              undefined,
-            )
+      relationPolicy.kind === 'restricted' && relationPolicy.scope !== true
+        ? await normalizeFilterWithRelations(
+            collections,
+            target,
+            relationPolicy.scope,
+            undefined,
+          )
         : undefined;
     const scopedFilter = combinePolicyFilter(filter, policyScope, target.name!);
     const sortInput = normalizeSortInput(target, node.sort);
@@ -2748,6 +2766,7 @@ async function validateRelationResult(
   relation: string,
   input: RelationSelectBranchInput,
   context: Readonly<Record<string, unknown>> | undefined,
+  policy: PolicyReadContext,
   budget: { nodes: number },
   depth: number,
 ): Promise<RelationSelectBranchNode> {
@@ -2775,8 +2794,7 @@ async function validateRelationResult(
       },
     },
     context,
-    undefined,
-    undefined,
+    policy,
     budget,
     depth,
   );
@@ -2851,6 +2869,7 @@ async function validateRelationResult(
         relation,
         child,
         context,
+        policy,
         budget,
         depth + 1,
       );

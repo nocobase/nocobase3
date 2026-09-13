@@ -666,6 +666,140 @@ describe('DefaultRepository.withPolicy', () => {
     });
   });
 
+  it('applies the read field allowlist to mutation returning selects', async () => {
+    const collection = {
+      name: 'projects',
+      fields: [
+        { name: 'id', type: 'string' },
+        { name: 'title', type: 'string' },
+        { name: 'budget', type: 'number' },
+      ],
+    };
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: { get: async () => collection },
+      adapter: {
+        createOne: async () => ({ record: { id: 'p1' }, createdTargets: [] }),
+        updateOne: async () => ({ record: { id: 'p1' }, createdTargets: [] }),
+        deleteOne: async () => ({ record: { id: 'p1' } }),
+      } as never,
+    });
+    const scoped = repository.withPolicy({
+      read: { scope: true, fields: ['id', 'title'] },
+      create: { scope: true, fields: ['title'] },
+      update: { scope: true, fields: ['title'] },
+      delete: { scope: true },
+    });
+    const select = {
+      kind: 'select',
+      version: 1,
+      root: { kind: 'selection', fields: ['budget'], includes: [] },
+    } as const;
+
+    await expect(
+      scoped.createOne({ values: { title: 'a' }, select }),
+    ).rejects.toMatchObject({ code: 'FIELD_READ_FORBIDDEN', field: 'budget' });
+    await expect(
+      scoped.updateOne({
+        filter: { id: 'p1' },
+        values: { title: 'b' },
+        select,
+      }),
+    ).rejects.toMatchObject({ code: 'FIELD_READ_FORBIDDEN', field: 'budget' });
+    await expect(
+      scoped.deleteOne({ filter: { id: 'p1' }, select }),
+    ).rejects.toMatchObject({ code: 'FIELD_READ_FORBIDDEN', field: 'budget' });
+  });
+
+  it('applies the read relation allowlist to mutation returning selects', async () => {
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {
+        get: async (name: string) =>
+          name === 'projects'
+            ? {
+                name,
+                fields: [
+                  { name: 'id', type: 'string' },
+                  { name: 'title', type: 'string' },
+                  {
+                    name: 'tasks',
+                    type: 'hasMany',
+                    target: 'tasks',
+                    foreignKey: 'projectId',
+                  },
+                ],
+              }
+            : { name, fields: [{ name: 'id', type: 'string' }] },
+      },
+      adapter: {
+        updateOne: async () => ({ record: { id: 'p1' }, createdTargets: [] }),
+      } as never,
+    });
+
+    await expect(
+      repository
+        .withPolicy({
+          read: { scope: true, fields: ['id'], relations: {} },
+          create: { scope: true },
+          update: { scope: true, fields: ['title'] },
+          delete: { scope: true },
+        })
+        .updateOne({
+          filter: { id: 'p1' },
+          values: { title: 'b' },
+          select: {
+            kind: 'select',
+            version: 1,
+            root: {
+              kind: 'selection',
+              fields: ['id'],
+              includes: [
+                {
+                  kind: 'include',
+                  relation: 'tasks',
+                  select: { kind: 'selection', fields: ['id'], includes: [] },
+                },
+              ],
+            },
+          },
+        }),
+    ).rejects.toMatchObject({
+      code: 'RELATION_READ_FORBIDDEN',
+      relation: 'tasks',
+    });
+  });
+
+  it('keeps the findOne determinism guard when a read scope is bound', async () => {
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {
+        get: async () => ({
+          name: 'projects',
+          fields: [
+            { name: 'id', type: 'string' },
+            { name: 'tenantId', type: 'string' },
+          ],
+        }),
+      },
+      adapter: {
+        assertReadable: () => undefined,
+        findOne: async () => undefined,
+      } as never,
+    });
+
+    await expect(
+      repository
+        .withPolicy({
+          read: { scope: { tenantId: 'T1' }, fields: ['id', 'tenantId'] },
+          create: { scope: true },
+          update: { scope: true },
+          delete: { scope: true },
+        })
+        .findOne({}),
+    ).rejects.toMatchObject({ code: 'INVALID_FILTER' });
+  });
+
   it('enforces create and update field allowlists', async () => {
     const collection = {
       name: 'projects',

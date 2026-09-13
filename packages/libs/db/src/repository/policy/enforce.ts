@@ -222,3 +222,104 @@ export function toRelationWritePolicy(
     ...(policy.delete ? { delete: {} } : {}),
   };
 }
+
+/**
+ * What a bound Policy allows on one collection, at one point in a read.
+ *
+ * Every read validator takes this as a required argument. A call site with no
+ * Policy passes {@link UNRESTRICTED_READ} rather than omitting the argument, so
+ * a new read path cannot silently skip the checks — leaving it out is a
+ * compile error instead of a leak.
+ */
+export type PolicyReadContext =
+  | { readonly kind: 'unrestricted' }
+  | {
+      readonly kind: 'restricted';
+      readonly fields: readonly string[];
+      readonly relations: Readonly<
+        Record<string, NormalizedReadNode | PolicyRef>
+      >;
+      readonly scope: true | FilterAst;
+    };
+
+export const UNRESTRICTED_READ: PolicyReadContext = Object.freeze({
+  kind: 'unrestricted' as const,
+});
+
+/** Build the root read context, rejecting the call when reading is forbidden. */
+export function rootReadContext(
+  policy: NormalizedRepositoryPolicy | undefined,
+  collection: CollectionDefinition,
+): PolicyReadContext {
+  const node = resolveReadNode(policy, collection);
+  return node === undefined || node === true
+    ? UNRESTRICTED_READ
+    : {
+        kind: 'restricted',
+        fields: node.fields,
+        relations: node.relations,
+        scope: node.scope,
+      };
+}
+
+/**
+ * Descend into a relation, rejecting the expansion when the Policy does not
+ * authorize it. Returns the context that governs the relation target, which is
+ * the target collection's allowlist — never the parent's.
+ */
+export function relationReadContext(
+  parent: PolicyReadContext,
+  collection: CollectionDefinition,
+  relation: string,
+  path: readonly (string | number)[],
+): PolicyReadContext {
+  if (parent.kind === 'unrestricted') return UNRESTRICTED_READ;
+  const node = parent.relations[relation];
+  if (node === undefined) {
+    invalid(
+      'RELATION_READ_FORBIDDEN',
+      `Relation "${relation}" is not readable by Policy.`,
+      { collection: collection.name, relation, path },
+    );
+  }
+  if ('kind' in node) {
+    invalid(
+      'RELATION_READ_FORBIDDEN',
+      `Relation "${relation}" is not resolved by Policy.`,
+      { collection: collection.name, relation, path },
+    );
+  }
+  return {
+    kind: 'restricted',
+    fields: node.fields,
+    relations: node.relations,
+    scope: node.scope,
+  };
+}
+
+/** The scalar allowlist, or `undefined` when this context adds no limits. */
+export function readableFields(
+  policy: PolicyReadContext,
+): readonly string[] | undefined {
+  return policy.kind === 'restricted' ? policy.fields : undefined;
+}
+
+/**
+ * Reject a caller reference to a field outside the read allowlist. Used by
+ * every surface that names a field without returning it — filter, sort,
+ * distinct, cursor, group by, aggregate — because each of them leaks the
+ * value just as surely as selecting it would.
+ */
+export function assertReadableField(
+  policy: PolicyReadContext,
+  collection: CollectionDefinition,
+  field: string,
+  path: readonly (string | number)[],
+): void {
+  if (policy.kind === 'unrestricted' || policy.fields.includes(field)) return;
+  invalid(
+    'FIELD_READ_FORBIDDEN',
+    `Field "${field}" is not readable by Policy.`,
+    { collection: collection.name, field, path },
+  );
+}
