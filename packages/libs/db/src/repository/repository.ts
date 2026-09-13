@@ -1149,6 +1149,9 @@ export class DefaultRepository<
       context,
     );
     const policy = this.options.policy?.read;
+    if (policy && typeof policy === 'object') {
+      assertPolicyFilterFields(collection, normalized, policy.fields);
+    }
     if (policy === false) {
       invalid(
         'READ_FORBIDDEN',
@@ -1665,6 +1668,38 @@ function combinePolicyFilter(
       items: [caller.root, policy.root],
     },
   };
+}
+
+function assertPolicyFilterFields(
+  collection: CollectionDefinition,
+  filter: FilterAst | undefined,
+  fields: readonly string[],
+): void {
+  if (!filter) return;
+  const allowed = new Set(fields);
+  const visit = (node: FilterNode): void => {
+    if (node.kind === 'condition') {
+      const field = node.path.length === 1 ? node.path[0] : undefined;
+      if (field && !allowed.has(field)) {
+        invalid(
+          'FIELD_READ_FORBIDDEN',
+          `Field "${field}" is not readable by Policy.`,
+          {
+            collection: collection.name,
+            field,
+            path: ['filter', 'root'],
+          },
+        );
+      }
+      return;
+    }
+    if (node.kind === 'group') {
+      node.items.forEach(visit);
+      return;
+    }
+    for (const item of node.filter?.items ?? []) visit(item);
+  };
+  filter.root.items.forEach(visit);
 }
 
 function validateFilterGroup(

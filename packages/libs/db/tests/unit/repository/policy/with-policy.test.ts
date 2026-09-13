@@ -88,7 +88,7 @@ describe('DefaultRepository.withPolicy', () => {
 
     await repository
       .withPolicy({
-        read: { scope: { tenantId: 'T1' } },
+        read: { scope: { tenantId: 'T1' }, fields: ['status'] },
         create: { scope: true },
         update: { scope: true },
         delete: { scope: true },
@@ -106,6 +106,56 @@ describe('DefaultRepository.withPolicy', () => {
         items: [expect.objectContaining({ path: ['tenantId'], value: 'T1' })],
       }),
     ]);
+  });
+
+  it('rejects caller filters on fields outside the read allowlist', async () => {
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {
+        get: async () => ({
+          name: 'projects',
+          fields: [
+            { name: 'id', type: 'string' },
+            { name: 'budget', type: 'string' },
+          ],
+        }),
+      },
+      adapter: {
+        assertReadable: () => undefined,
+        exists: async () => true,
+      } as never,
+    });
+
+    await expect(
+      repository
+        .withPolicy({
+          read: { scope: true, fields: ['id'] },
+          create: { scope: true },
+          update: { scope: true },
+          delete: { scope: true },
+        })
+        .exists({
+          filter: {
+            kind: 'filter',
+            version: 1,
+            root: {
+              kind: 'group',
+              logic: 'and',
+              items: [
+                {
+                  kind: 'condition',
+                  path: ['budget'],
+                  operator: '$eq',
+                  value: '100',
+                },
+              ],
+            },
+          },
+        }),
+    ).rejects.toMatchObject({
+      code: 'FIELD_READ_FORBIDDEN',
+      field: 'budget',
+    });
   });
 
   it('uses the mutation scope instead of read scope for updates', async () => {
