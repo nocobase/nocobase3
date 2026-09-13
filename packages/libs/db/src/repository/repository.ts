@@ -555,15 +555,24 @@ export class DefaultRepository<
       collection,
       writePolicy,
     );
+    const createValues = this.applyCreateDefaults(
+      evaluateValues(options.values),
+    );
     const mutation = await normalizeModelMutation(
       this.options.collections,
       collection,
-      evaluateValues(options.values),
+      createValues.values,
       'createOne',
       1,
       { nodes: 0, clientKeys: new Set(), context: options.context },
     );
-    this.assertPolicyMutationFields(collection, mutation, 'create', ['values']);
+    this.assertPolicyMutationFields(
+      collection,
+      mutation,
+      'create',
+      ['values'],
+      createValues.protectedFields,
+    );
     assertMutationWritePolicy(
       mutation,
       writePolicy,
@@ -632,17 +641,29 @@ export class DefaultRepository<
         path: ['values'],
       });
     }
-    const records = input.map((record: unknown, index: number) =>
-      validateValues(collection, record, 'createMany', false, options.context, [
-        'values',
-        index,
-      ]),
-    );
-    records.forEach((values, index) =>
-      this.assertPolicyMutationFields(collection, { values }, 'create', [
-        'values',
-        index,
-      ]),
+    const recordsWithDefaults = input.map((record: unknown, index: number) => {
+      const createValues = this.applyCreateDefaults(record);
+      return {
+        values: validateValues(
+          collection,
+          createValues.values,
+          'createMany',
+          false,
+          options.context,
+          ['values', index],
+        ),
+        protectedFields: createValues.protectedFields,
+      };
+    });
+    const records = recordsWithDefaults.map((record) => record.values);
+    recordsWithDefaults.forEach((record, index) =>
+      this.assertPolicyMutationFields(
+        collection,
+        { values: record.values },
+        'create',
+        ['values', index],
+        record.protectedFields,
+      ),
     );
     records.forEach((values, index) =>
       assertFieldWrites(
@@ -773,11 +794,14 @@ export class DefaultRepository<
       'update',
     );
     const by = uniqueSelectorFromFilter(collection, filter, ['filter']);
+    const createValues = this.applyCreateDefaults(
+      evaluateValues(options.create),
+    );
     const [createMutation, updateMutation] = await Promise.all([
       normalizeModelMutation(
         this.options.collections,
         collection,
-        evaluateValues(options.create),
+        createValues.values,
         'createOne',
         1,
         { nodes: 0, clientKeys: new Set(), context: options.context },
@@ -801,9 +825,13 @@ export class DefaultRepository<
       'create',
       collection.name,
     );
-    this.assertPolicyMutationFields(collection, createMutation, 'create', [
+    this.assertPolicyMutationFields(
+      collection,
+      createMutation,
       'create',
-    ]);
+      ['create'],
+      createValues.protectedFields,
+    );
     this.assertPolicyMutationFields(collection, updateMutation, 'update', [
       'update',
     ]);
@@ -1063,6 +1091,7 @@ export class DefaultRepository<
     },
     operation: 'create' | 'update',
     path: readonly (string | number)[],
+    protectedFields: readonly string[] = [],
   ): void {
     const policy =
       operation === 'create'
@@ -1080,12 +1109,32 @@ export class DefaultRepository<
     ]);
     assertMutationWritePolicy(
       mutation,
-      toWritePolicy(policy),
+      {
+        ...toWritePolicy(policy),
+        fields: [...policy.fields, ...protectedFields],
+      },
       path,
       [],
       operation,
       collection.name,
     );
+  }
+
+  private applyCreateDefaults(input: unknown): {
+    readonly values: unknown;
+    readonly protectedFields: readonly string[];
+  } {
+    const policy = this.options.policy?.create;
+    if (!policy || policy === true || !isPlainRecord(input)) {
+      return { values: input, protectedFields: [] };
+    }
+    const protectedFields = Object.keys(policy.defaults).filter(
+      (field) => !policy.fields.includes(field) && !Object.hasOwn(input, field),
+    );
+    return {
+      values: { ...policy.defaults, ...input },
+      protectedFields,
+    };
   }
 
   private async normalizeFilter<T extends object>(

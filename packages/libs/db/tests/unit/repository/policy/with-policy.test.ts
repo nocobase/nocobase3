@@ -582,6 +582,51 @@ describe('DefaultRepository.withPolicy', () => {
     });
   });
 
+  it('applies create defaults without allowing callers to override protected defaults', async () => {
+    let values: Record<string, unknown> | undefined;
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {
+        get: async () => ({
+          name: 'projects',
+          fields: [
+            { name: 'id', type: 'string' },
+            { name: 'tenantId', type: 'string' },
+            { name: 'title', type: 'string' },
+          ],
+        }),
+      },
+      adapter: {
+        createOne: async (plan: { values: Record<string, unknown> }) => {
+          values = plan.values;
+          return {
+            record: { id: 'p1', tenantId: 'T1', title: 'Created' },
+            createdTargets: [],
+          };
+        },
+      } as never,
+    });
+    const scoped = repository.withPolicy({
+      read: { scope: true },
+      create: {
+        scope: true,
+        defaults: { tenantId: 'T1' },
+        fields: ['title'],
+      },
+      update: { scope: true },
+      delete: { scope: true },
+    });
+
+    await scoped.createOne({ values: { title: 'Created' } });
+    expect(values).toMatchObject({ tenantId: 'T1', title: 'Created' });
+    await expect(
+      scoped.createOne({ values: { title: 'Created', tenantId: 'T2' } }),
+    ).rejects.toMatchObject({
+      code: 'FIELD_WRITE_FORBIDDEN',
+      field: 'tenantId',
+    });
+  });
+
   it('forbids create and update when their policy nodes are false', async () => {
     const repository = new DefaultRepository({
       collection: 'projects',
