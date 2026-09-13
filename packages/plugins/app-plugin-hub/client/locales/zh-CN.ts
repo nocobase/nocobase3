@@ -267,6 +267,8 @@ const zhCN: HubResource = {
     externalRuntimeNotice: '运行时配置和密钥由 Hub 外部提供。',
     secretWarning:
       'config.yml 可能包含密钥。Hub 会为此应用保存完整文件，获得授权的管理员可以查看其内容。',
+    secretAutoGeneration:
+      '如果未填写 auth.secret，首次使用配置文件部署时 Hub 会自动生成唯一密钥，后续部署会继续复用该密钥。',
     noSourceChanges: '配置来源未变更',
     continue: '继续',
     review: '检查',

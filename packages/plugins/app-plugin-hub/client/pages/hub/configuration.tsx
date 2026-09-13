@@ -682,6 +682,17 @@ export function DeploymentDialog({
                 </AlertDescription>
               </Alert>
             ) : null}
+            {mode === 'file' ? (
+              <Alert className='border-blue-500/25 bg-blue-500/5'>
+                <Info className='size-4 shrink-0 text-blue-600' />
+                <AlertDescription>
+                  {t('configuration.secretAutoGeneration', {
+                    defaultValue:
+                      'When auth.secret is missing, Hub generates a unique secret for the first Config file deployment and reuses it for later deployments.',
+                  })}
+                </AlertDescription>
+              </Alert>
+            ) : null}
           </div>
         ) : (
           <div className='overflow-hidden rounded-xl border'>

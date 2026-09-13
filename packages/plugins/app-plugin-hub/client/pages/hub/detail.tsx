@@ -192,6 +192,7 @@ export function Detail({
                     aria-describedby={
                       visitActionReason ? 'hub-visit-action-reason' : undefined
                     }
+                    nativeButton={false}
                     render={
                       <a href={visitUrl} rel='noreferrer' target='_blank' />
                     }

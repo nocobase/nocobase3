@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import {
   chmod,
   lstat,
@@ -26,7 +26,11 @@ import {
 } from '@nocobase/drive';
 import type { Knex } from 'knex';
 import { x as extractTar } from 'tar';
-import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
+import {
+  parse as parseYaml,
+  parseDocument as parseYamlDocument,
+  stringify as stringifyYaml,
+} from 'yaml';
 
 import type { HubPluginConfig } from '../config.js';
 import type {
@@ -54,6 +58,7 @@ import type {
 } from '../tokens.js';
 
 const MAX_ARTIFACT_SIZE = 256 * 1024 * 1024;
+const AUTH_SECRET_BYTES = 32;
 const APP_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
 const RELEASE_VERSION_PATTERN = /^[0-9A-Za-z][0-9A-Za-z._+-]{0,254}$/;
 const CONFIG_TEMPLATE_PATHS = [
@@ -430,11 +435,19 @@ export class DefaultHubService implements HubService {
           409,
         );
       }
+      const currentContent = await readFile(
+        this.configPath(deployment),
+        'utf8',
+      );
       validateYamlConfig(input.content);
-      await writeTextAtomic(this.configPath(deployment), input.content);
+      const publishedContent = ensureAuthSecret(
+        input.content,
+        extractAuthSecret(currentContent),
+      );
+      await writeTextAtomic(this.configPath(deployment), publishedContent);
       try {
         const management = await this.hostController.getManagementClient();
-        await management.publishAppConfig(appId, input.content);
+        await management.publishAppConfig(appId, publishedContent);
       } catch (error) {
         throw new HubError(
           `Configuration was saved, but runtime configuration reload failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -651,6 +664,7 @@ export class DefaultHubService implements HubService {
   }
 
   public async hostStatus(): Promise<HostStatus> {
+    await this.startupReconciliation;
     return await (await this.hostController.getManagementClient()).getStatus();
   }
 
@@ -1040,18 +1054,23 @@ export class DefaultHubService implements HubService {
     assertConfigMode(mode);
     if (mode === 'external') return { mode };
     let content = input?.content;
-    content ??= release.configTemplate ?? undefined;
-    if (content === undefined && app.currentDeploymentId) {
+    let currentContent: string | undefined;
+    if (app.currentDeploymentId) {
       const current = await this.getDeployment(app.id, app.currentDeploymentId);
       if (current.config.mode === 'file') {
         try {
-          content = await readFile(this.configPath(current), 'utf8');
+          currentContent = await readFile(this.configPath(current), 'utf8');
+          content ??= currentContent;
         } catch (error) {
           if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
         }
       }
     }
+    // A Release template initializes a new App; it must never replace a
+    // configuration that the App is already using.
+    content ??= release.configTemplate ?? undefined;
     content ??= '';
+    content = ensureAuthSecret(content, extractAuthSecret(currentContent));
     validateYamlConfig(content);
     const configPath = path.join(
       path.dirname(this.options.config.host.configPath),
@@ -1407,6 +1426,60 @@ function validateYamlConfig(content: string): void {
       422,
     );
   }
+}
+
+function ensureAuthSecret(content: string, fallbackSecret?: string): string {
+  const document = parseYamlDocument(content);
+  if (document.errors.length > 0) {
+    throw new HubError(
+      `Invalid config.yml: ${document.errors[0]?.message ?? 'Invalid YAML.'}`,
+      'INVALID_CONFIG_FILE',
+      422,
+    );
+  }
+  const value: unknown =
+    content.trim() === '' ? {} : (document.toJS() as unknown);
+  if (!isRecord(value)) {
+    throw new HubError(
+      'Invalid config.yml: the YAML root must be an object.',
+      'INVALID_CONFIG_FILE',
+      422,
+    );
+  }
+
+  const auth = value.auth;
+  if (
+    isRecord(auth) &&
+    typeof auth.secret === 'string' &&
+    auth.secret.trim().length > 0
+  ) {
+    return content;
+  }
+  if (
+    isRecord(auth) &&
+    auth.secret !== undefined &&
+    !(typeof auth.secret === 'string' && auth.secret.trim().length === 0)
+  ) {
+    return content;
+  }
+  if (auth !== undefined && !isRecord(auth)) return content;
+
+  document.setIn(['auth', 'secret'], fallbackSecret ?? generateAuthSecret());
+  return ensureTrailingNewline(document.toString());
+}
+
+function extractAuthSecret(content: string | undefined): string | undefined {
+  if (!content) return undefined;
+  const value: unknown = parseYaml(content) as unknown;
+  if (!isRecord(value) || !isRecord(value.auth)) return undefined;
+  const secret = value.auth.secret;
+  return typeof secret === 'string' && secret.trim().length > 0
+    ? secret
+    : undefined;
+}
+
+function generateAuthSecret(): string {
+  return randomBytes(AUTH_SECRET_BYTES).toString('base64url');
 }
 
 function assertConfigMode(mode: unknown): asserts mode is HubConfigMode {

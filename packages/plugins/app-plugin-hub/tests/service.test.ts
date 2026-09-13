@@ -328,10 +328,11 @@ describe('@nocobase/app-plugin-hub service', () => {
     ]);
     const configPath = deployment.config.path;
     if (!configPath) throw new Error('Expected deployment config path.');
-    expect(parseYaml(await readFile(configPath, 'utf8'))).toEqual({
+    expect(parseYaml(await readFile(configPath, 'utf8'))).toMatchObject({
+      auth: { secret: expect.any(String) },
       feature: { enabled: true },
     });
-    expect(await readFile(configPath, 'utf8')).toBe(content);
+    expect(await readFile(configPath, 'utf8')).toContain('# Edited by the Hub');
   });
 
   it('updates the recovery startup policy without a runtime operation', async () => {
@@ -570,15 +571,37 @@ describe('@nocobase/app-plugin-hub service', () => {
     await service.createApp({ id: 'customer', name: 'Customer' });
     const release = await service.createRelease('customer', {
       bytes: await createArtifact(rootDir, '1.2.3', {
-        configTemplate: 'feature:\n  enabled: true\n',
+        configTemplate:
+          '# Keep this comment while Hub initializes the missing secret.\n' +
+          'auth:\n' +
+          '  emailAndPassword:\n' +
+          '    enabled: true\n' +
+          'feature:\n' +
+          '  enabled: true\n',
       }),
     });
 
     const queued = await service.deploy('customer', { releaseId: release.id });
     const deployment = await waitForDeployment(service, 'customer', queued.id);
+    const content = await readFile(deployment.config.path!, 'utf8');
+    const parsed = parseYaml(content) as {
+      readonly auth?: {
+        readonly emailAndPassword?: unknown;
+        readonly secret?: unknown;
+      };
+      readonly feature?: { readonly enabled?: unknown };
+    };
 
-    await expect(readFile(deployment.config.path!, 'utf8')).resolves.toBe(
-      'feature:\n  enabled: true\n',
+    expect(parsed).toMatchObject({
+      auth: {
+        emailAndPassword: { enabled: true },
+        secret: expect.any(String),
+      },
+      feature: { enabled: true },
+    });
+    expect(parsed.auth?.secret).toHaveLength(43);
+    expect(content).toContain(
+      '# Keep this comment while Hub initializes the missing secret.',
     );
     await expect(stat(deployment.config.path!)).resolves.toMatchObject({
       mode: expect.any(Number),
@@ -590,8 +613,88 @@ describe('@nocobase/app-plugin-hub service', () => {
     expect(host.lastDeploymentSet?.deployments[0]?.config).toEqual({
       provider: 'file',
       revision: deployment.id,
-      content: await readFile(deployment.config.path!, 'utf8'),
+      content,
     });
+  });
+
+  it('reuses an existing auth secret and keeps a user-provided secret', async () => {
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    const firstRelease = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '1.0.0', {
+        configTemplate: 'feature: first\n',
+      }),
+    });
+    const first = await service.deploy('customer', {
+      releaseId: firstRelease.id,
+    });
+    const firstCompleted = await waitForDeployment(
+      service,
+      'customer',
+      first.id,
+    );
+    const firstConfig = parseYaml(
+      await readFile(firstCompleted.config.path!, 'utf8'),
+    ) as { readonly auth: { readonly secret: string } };
+
+    const secondRelease = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '2.0.0', {
+        configTemplate: 'feature: second\n',
+      }),
+    });
+    const second = await service.deploy('customer', {
+      releaseId: secondRelease.id,
+    });
+    const secondCompleted = await waitForDeployment(
+      service,
+      'customer',
+      second.id,
+    );
+    const secondConfig = parseYaml(
+      await readFile(secondCompleted.config.path!, 'utf8'),
+    ) as { readonly auth: { readonly secret: string } };
+    expect(secondConfig.auth.secret).toBe(firstConfig.auth.secret);
+
+    const customSecret = 'custom-auth-secret-at-least-32-characters';
+    const thirdRelease = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '3.0.0'),
+    });
+    const third = await service.deploy('customer', {
+      releaseId: thirdRelease.id,
+      config: {
+        mode: 'file',
+        content: `auth:\n  secret: ${customSecret}\nfeature: custom\n`,
+      },
+    });
+    const thirdCompleted = await waitForDeployment(
+      service,
+      'customer',
+      third.id,
+    );
+    const thirdConfig = parseYaml(
+      await readFile(thirdCompleted.config.path!, 'utf8'),
+    ) as { readonly auth: { readonly secret: string } };
+    expect(thirdConfig.auth.secret).toBe(customSecret);
+  });
+
+  it('does not generate a file secret for external configuration', async () => {
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    const release = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '1.2.3', {
+        configTemplate: 'auth:\n  emailAndPassword:\n    enabled: true\n',
+      }),
+    });
+
+    const queued = await service.deploy('customer', {
+      releaseId: release.id,
+      config: { mode: 'external' },
+    });
+    await waitForDeployment(service, 'customer', queued.id);
+
+    expect(await service.readConfig('customer')).toEqual({
+      mode: 'external',
+      content: null,
+    });
+    expect(host.lastDeploymentSet?.deployments[0]?.config).toBeUndefined();
   });
 
   it('does not overwrite saved config with a newer Release template', async () => {
@@ -608,9 +711,13 @@ describe('@nocobase/app-plugin-hub service', () => {
     });
     const deployment = await waitForDeployment(service, 'customer', queued.id);
 
-    await expect(readFile(deployment.config.path!, 'utf8')).resolves.toBe(
-      'feature:\n  enabled: false\n',
-    );
+    const content = parseYaml(
+      await readFile(deployment.config.path!, 'utf8'),
+    ) as { readonly auth?: unknown; readonly feature?: unknown };
+    expect(content).toMatchObject({
+      auth: { secret: expect.any(String) },
+      feature: { enabled: false },
+    });
   });
 
   it('does not pass config to Host in external mode', async () => {
@@ -644,13 +751,27 @@ describe('@nocobase/app-plugin-hub service', () => {
     const deployment = await waitForDeployment(service, 'customer', queued.id);
     const deploymentsBefore = await service.listDeployments('customer');
 
-    await expect(
-      service.updateConfig('customer', { content: 'feature: true\n' }),
-    ).resolves.toEqual({ mode: 'file', content: 'feature: true\n' });
+    const updated = await service.updateConfig('customer', {
+      content: 'feature: true\n',
+    });
+    expect(updated.mode).toBe('file');
+    expect(parseYaml(updated.content!)).toMatchObject({
+      auth: { secret: expect.any(String) },
+      feature: true,
+    });
+    expect(
+      parseYaml(host.publishedConfigContents.get('customer') ?? ''),
+    ).toMatchObject({
+      auth: { secret: expect.any(String) },
+      feature: true,
+    });
 
-    await expect(readFile(deployment.config.path!, 'utf8')).resolves.toBe(
-      'feature: true\n',
-    );
+    expect(
+      parseYaml(await readFile(deployment.config.path!, 'utf8')),
+    ).toMatchObject({
+      auth: { secret: expect.any(String) },
+      feature: true,
+    });
     expect((await service.listDeployments('customer')).total).toBe(
       deploymentsBefore.total,
     );
@@ -662,9 +783,12 @@ describe('@nocobase/app-plugin-hub service', () => {
     await expect(
       service.updateConfig('customer', { content: 'feature: false\n' }),
     ).rejects.toMatchObject({ code: 'CONFIG_RELOAD_FAILED' });
-    await expect(readFile(deployment.config.path!, 'utf8')).resolves.toBe(
-      'feature: false\n',
-    );
+    expect(
+      parseYaml(await readFile(deployment.config.path!, 'utf8')),
+    ).toMatchObject({
+      auth: { secret: expect.any(String) },
+      feature: false,
+    });
   });
 
   it('rejects invalid updates to the active file configuration', async () => {
@@ -769,7 +893,7 @@ describe('@nocobase/app-plugin-hub service', () => {
     expect(second.checksum).not.toBe(first.checksum);
   });
 
-  it('uses the selected Release config example for a new deployment', async () => {
+  it('keeps the active config when a newer Release has a config example', async () => {
     await service.createApp({ id: 'customer', name: 'Customer' });
     const firstRelease = await service.createRelease('customer', {
       bytes: await createArtifact(rootDir, '1.0.0', {
@@ -779,7 +903,14 @@ describe('@nocobase/app-plugin-hub service', () => {
     const first = await service.deploy('customer', {
       releaseId: firstRelease.id,
     });
-    await waitForDeployment(service, 'customer', first.id);
+    const firstCompleted = await waitForDeployment(
+      service,
+      'customer',
+      first.id,
+    );
+    const firstContent = parseYaml(
+      await readFile(firstCompleted.config.path!, 'utf8'),
+    ) as { readonly auth: { readonly secret: string } };
 
     const secondRelease = await service.createRelease('customer', {
       bytes: await createArtifact(rootDir, '2.0.0', {
@@ -791,9 +922,12 @@ describe('@nocobase/app-plugin-hub service', () => {
     });
     const completed = await waitForDeployment(service, 'customer', second.id);
 
-    await expect(readFile(completed.config.path!, 'utf8')).resolves.toBe(
-      'feature: new\n',
-    );
+    expect(
+      parseYaml(await readFile(completed.config.path!, 'utf8')),
+    ).toMatchObject({
+      auth: { secret: firstContent.auth.secret },
+      feature: 'old',
+    });
   });
 
   it('keeps the active configuration when a Release has no config example', async () => {
@@ -806,7 +940,14 @@ describe('@nocobase/app-plugin-hub service', () => {
     const first = await service.deploy('customer', {
       releaseId: firstRelease.id,
     });
-    await waitForDeployment(service, 'customer', first.id);
+    const firstCompleted = await waitForDeployment(
+      service,
+      'customer',
+      first.id,
+    );
+    const firstContent = parseYaml(
+      await readFile(firstCompleted.config.path!, 'utf8'),
+    ) as { readonly auth: { readonly secret: string } };
 
     const secondRelease = await service.createRelease('customer', {
       bytes: await createArtifact(rootDir, '2.0.0'),
@@ -816,9 +957,12 @@ describe('@nocobase/app-plugin-hub service', () => {
     });
     const completed = await waitForDeployment(service, 'customer', second.id);
 
-    await expect(readFile(completed.config.path!, 'utf8')).resolves.toBe(
-      'feature: current\n',
-    );
+    expect(
+      parseYaml(await readFile(completed.config.path!, 'utf8')),
+    ).toMatchObject({
+      auth: { secret: firstContent.auth.secret },
+      feature: 'current',
+    });
   });
 
   it('rolls back by creating a new deployment history record', async () => {
@@ -866,9 +1010,11 @@ describe('@nocobase/app-plugin-hub service', () => {
     });
     await waitForDeployment(service, 'customer', first.id);
 
-    await expect(service.readConfig('customer')).resolves.toMatchObject({
-      mode: 'file',
-      content: 'feature: false\n',
+    const currentConfig = await service.readConfig('customer');
+    expect(currentConfig.mode).toBe('file');
+    expect(parseYaml(currentConfig.content!)).toMatchObject({
+      auth: { secret: expect.any(String) },
+      feature: false,
     });
 
     const rollback = await service.rollback('customer', {
@@ -887,9 +1033,12 @@ describe('@nocobase/app-plugin-hub service', () => {
     });
 
     expect(completed.config.mode).toBe(first.config.mode);
-    await expect(readFile(completed.config.path!, 'utf8')).resolves.toBe(
-      'feature: true\n',
-    );
+    expect(
+      parseYaml(await readFile(completed.config.path!, 'utf8')),
+    ).toMatchObject({
+      auth: { secret: expect.any(String) },
+      feature: true,
+    });
   });
 
   it('isolates pending deployment configuration and cleans rejected candidates', async () => {
@@ -916,10 +1065,18 @@ describe('@nocobase/app-plugin-hub service', () => {
     });
     try {
       expect(candidate.config.path).not.toBe(initial.config.path);
-      expect(await readFile(initial.config.path!, 'utf8')).toBe('value: old\n');
-      expect(await readFile(candidate.config.path!, 'utf8')).toBe(
-        'value: new\n',
-      );
+      expect(
+        parseYaml(await readFile(initial.config.path!, 'utf8')),
+      ).toMatchObject({
+        auth: { secret: expect.any(String) },
+        value: 'old',
+      });
+      expect(
+        parseYaml(await readFile(candidate.config.path!, 'utf8')),
+      ).toMatchObject({
+        auth: { secret: expect.any(String) },
+        value: 'new',
+      });
     } finally {
       gate.resolve();
     }
@@ -931,7 +1088,12 @@ describe('@nocobase/app-plugin-hub service', () => {
         code: 'ENOENT',
       });
     });
-    expect(await readFile(initial.config.path!, 'utf8')).toBe('value: old\n');
+    expect(
+      parseYaml(await readFile(initial.config.path!, 'utf8')),
+    ).toMatchObject({
+      auth: { secret: expect.any(String) },
+      value: 'old',
+    });
   });
 
   it('inherits the target deployment config mode during rollback', async () => {
@@ -998,6 +1160,38 @@ describe('@nocobase/app-plugin-hub service', () => {
     await host.nextDeploymentSetGate;
   });
 
+  it('waits for startup restoration before reporting Host status', async () => {
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    const release = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '1.2.3'),
+    });
+    const deployed = await service.deploy('customer', {
+      releaseId: release.id,
+    });
+    await waitForDeployment(service, 'customer', deployed.id);
+    let releaseStartup: (() => void) | undefined;
+    host.nextDeploymentSetGate = new Promise<void>((resolve) => {
+      releaseStartup = resolve;
+    });
+
+    await service.restoreDesiredState();
+    await vi.waitFor(() => expect(host.deploymentSetStarted).toBe(true));
+
+    let resolved = false;
+    const status = service.hostStatus().then((value) => {
+      resolved = true;
+      return value;
+    });
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(resolved).toBe(false);
+    expect(host.deploymentSetCompleted).toBe(false);
+
+    releaseStartup?.();
+    await expect(status).resolves.toMatchObject({
+      deployments: [{ appId: 'customer', observedState: 'running' }],
+    });
+  });
+
   it('rebuilds recovery targets from current configuration and settings after Host readiness', async () => {
     await service.createApp({ id: 'customer', name: 'Customer' });
     const release = await service.createRelease('customer', {
@@ -1010,9 +1204,14 @@ describe('@nocobase/app-plugin-hub service', () => {
     await waitForDeployment(service, 'customer', operation.id);
     await service.restoreDesiredState();
     await vi.waitFor(() =>
-      expect(host.lastDeploymentSet?.deployments[0]?.config?.content).toBe(
-        'value: initial\n',
-      ),
+      expect(
+        parseYaml(
+          host.lastDeploymentSet?.deployments[0]?.config?.content ?? '',
+        ),
+      ).toMatchObject({
+        auth: { secret: expect.any(String) },
+        value: 'initial',
+      }),
     );
     await service.updateConfig('customer', { content: 'value: published\n' });
     await service.updateSettings('customer', { activation: 'lazy' });
@@ -1020,7 +1219,15 @@ describe('@nocobase/app-plugin-hub service', () => {
     await vi.waitFor(() => {
       expect(host.lastDeploymentSet?.deployments[0]).toMatchObject({
         activation: 'lazy',
-        config: { content: 'value: published\n', revision: operation.id },
+        config: { revision: operation.id },
+      });
+      expect(
+        parseYaml(
+          host.lastDeploymentSet?.deployments[0]?.config?.content ?? '',
+        ),
+      ).toMatchObject({
+        auth: { secret: expect.any(String) },
+        value: 'published',
       });
     });
     expect(
@@ -1077,6 +1284,11 @@ class FakeHostController implements HubHostController {
   readonly reloadAppConfig = vi.fn(async (_appId: string) => ({
     changedNamespaces: ['feature'],
   }));
+  readonly publishedConfigContents = new Map<string, string>();
+  readonly publishAppConfig = vi.fn(async (appId: string, content: string) => {
+    this.publishedConfigContents.set(appId, content);
+    return await this.reloadAppConfig(appId);
+  });
   public lastDeploymentSet: HostDeploymentSet | undefined;
   public targetedOperations: string[] = [];
   public nextApplyError: Error | undefined;
@@ -1141,7 +1353,7 @@ class FakeHostController implements HubHostController {
 
   public async getManagementClient(): Promise<HostManagementService> {
     return {
-      publishAppConfig: (appId) => this.reloadAppConfig(appId),
+      publishAppConfig: this.publishAppConfig,
       reloadAppConfig: this.reloadAppConfig,
       restoreDeploymentSet: async (deploymentSet) => ({
         accepted: true,

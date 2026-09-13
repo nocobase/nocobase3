@@ -54,6 +54,15 @@ describe('Hub App status and action mapping', () => {
       ),
     ).toBe('ready');
     expect(appManagementStatus(summary())).toBe('stopped');
+    expect(
+      appManagementStatus(
+        summary({
+          enabled: true,
+          startupMode: 'eager',
+          runtime: { hostAvailable: true, state: 'stopped' },
+        }),
+      ),
+    ).toBe('stopped');
   });
 
   it('does not treat an unknown runtime as lazy Ready', () => {

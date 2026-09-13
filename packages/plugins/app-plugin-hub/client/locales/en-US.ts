@@ -285,6 +285,8 @@ const enUS = {
       'Runtime configuration and secrets are supplied outside Hub.',
     secretWarning:
       'config.yml may contain secrets. Hub stores the complete file for this application, and authorized administrators can view its contents.',
+    secretAutoGeneration:
+      'When auth.secret is missing, Hub generates a unique secret for the first Config file deployment and reuses it for later deployments.',
     noSourceChanges: 'No configuration source changes',
     continue: 'Continue',
     review: 'Review',

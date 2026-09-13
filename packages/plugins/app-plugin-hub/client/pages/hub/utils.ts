@@ -50,10 +50,9 @@ export function appManagementStatus(
   if (app.runtime.state === 'running') return 'running';
   const activation =
     'deployment' in app ? app.deployment.activation : app.startupMode;
-  if (app.enabled && activation === 'lazy' && app.runtime.state === 'stopped') {
-    return 'ready';
+  if (app.runtime.state === 'stopped') {
+    return app.enabled && activation === 'lazy' ? 'ready' : 'stopped';
   }
-  if (!app.enabled && app.runtime.state === 'stopped') return 'stopped';
   return 'unknown';
 }
 
