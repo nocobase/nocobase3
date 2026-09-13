@@ -22,6 +22,7 @@
 ## 2. 创建认证服务
 
 ```ts
+import { usernameClient } from 'better-auth/client/plugins';
 import { createAuthentication } from '@nocobase/app-plugin-authentication';
 
 const secret = process.env.AUTH_SECRET;
@@ -109,13 +110,16 @@ import {
   createAuthClient,
   createAuthProvider,
 } from '@nocobase/app-plugin-authentication/client';
-import { apiClientToken, realtimeClientToken } from '@nocobase/app-client';
+import { resolveAppUrl, realtimeClientToken } from '@nocobase/app-client';
 
 export const authClient = createAuthClient({
-  api: app.services.resolve(apiClientToken),
-  realtime: app.services.resolve(realtimeClientToken),
+  baseURL: new URL(resolveAppUrl('/api/auth'), window.location.origin).href,
+  plugins: [usernameClient({ displayUsername: false })],
 });
-export const authProvider = createAuthProvider(authClient);
+export const authProvider = createAuthProvider(
+  authClient,
+  app.container.resolve(realtimeClientToken),
+);
 ```
 
 将适配器传给 Refine：
@@ -124,10 +128,11 @@ export const authProvider = createAuthProvider(authClient);
 <Refine authProvider={authProvider}>{/* application routes */}</Refine>
 ```
 
-插件注册到支持 Client Plugin 协议的应用后，会从独立的 `client/routes` 入口提供
-`/login`、`/register`、`/forgot-password` 和 `/reset-password`。这些路由均为
-`auth: 'guest'`，已登录用户访问时由应用路由层返回首页，页面模块仅在对应 URL
-被访问时按需加载。
+插件不声明客户端路由。应用需要在 `client/routes.ts` 中声明 `/login`、`/register`、
+`/forgot-password` 和 `/reset-password` 四条 `auth: 'guest'` 路由，页面组件用
+`componentLoader` 指向应用的认证页面源码。已登录用户访问这些路由时由应用路由层
+返回首页，页面模块仅在对应 URL 被访问时按需加载。认证守卫跳转到 `/login`，缺少该
+路由会让未登录用户无法进入应用。
 
 `/forgot-password` 只是调用密码重置协议。生产环境还必须在
 `emailAndPassword.sendResetPassword` 中接入真实邮件服务；未配置时 Better Auth

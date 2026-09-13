@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { AppConfig, createConfigPaths } from '../src/config/index.js';
+import { AppConfig } from '../src/config/index.js';
 import { databaseManagerToken, type DatabaseManager } from '@nocobase/db';
 import {
   ServiceContainer,
@@ -27,13 +27,11 @@ vi.mock('@nocobase/db', async (importOriginal) => {
 
 import {
   DatabaseProvider,
-  databaseConfig,
+  type AppDatabaseConfig,
   runAppMigrations,
   runAppSeeds,
-  type AppDatabaseConfig,
   type DatabaseProviderApplication,
 } from '../src/database/index.js';
-import type { ResolvedAppRuntimeConfigContext } from '../src/runtime/index.js';
 
 const tempDirs: string[] = [];
 
@@ -145,32 +143,6 @@ describe('DatabaseProvider', () => {
   });
 });
 
-describe('database config', () => {
-  it('defaults to managed schema ownership and accepts the external env override', async () => {
-    const paths = createConfigPaths({ rootDir: process.cwd() });
-    const context = {
-      paths,
-      plugins: { appPackageName: 'test-app', plugins: [] },
-      appPackageName: 'test-app',
-    } as ResolvedAppRuntimeConfigContext;
-    const defaults = new AppConfig([databaseConfig], { context });
-    const external = new AppConfig([databaseConfig], {
-      context,
-      environment: { DB_SCHEMA_MANAGEMENT: 'external' },
-    });
-
-    await defaults.loadAll();
-    await external.loadAll();
-
-    expect(defaults.get(databaseConfig).connections.main.schemaManagement).toBe(
-      'managed',
-    );
-    expect(external.get(databaseConfig).connections.main.schemaManagement).toBe(
-      'external',
-    );
-  });
-});
-
 describe('standalone database tasks', () => {
   it('runs manual migrations and always destroys their database', async () => {
     const error = new Error('migration failed');
@@ -223,10 +195,9 @@ async function createProvider(database: AppDatabaseConfig): Promise<{
   readonly container: ServiceContainer;
 }> {
   const container = new ServiceContainer();
-  const appConfig = new AppConfig([{ ...databaseConfig, defaults: database }], {
-    context: {},
-  });
+  const appConfig = new AppConfig();
   await appConfig.loadAll();
+  appConfig.mergeDefaults({ database });
   const app: DatabaseProviderApplication = {
     config: appConfig,
     container,

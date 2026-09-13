@@ -13,7 +13,7 @@ import {
   defineHttpMiddleware,
   type AppHttpMiddleware,
 } from '../router/index.js';
-import { sessionConfig, type AppSessionConfigInput } from './config.js';
+import { type AppSessionConfigInput } from './config.js';
 import { sessionManagerToken } from './token.js';
 
 export class SessionProvider extends ServiceProvider<AppPluginApplication> {
@@ -25,9 +25,8 @@ export class SessionProvider extends ServiceProvider<AppPluginApplication> {
     this.app.container.singleton(sessionManagerToken, () =>
       createSessionManager(
         resolveAppSessionConfig(
-          this.app.config.get(sessionConfig),
+          this.app.config.get<AppSessionConfigInput>('session')!,
           this.ephemeralSecret,
-          this.app.config.get<string>('server.nodeEnv') === 'production',
         ),
       ),
     );
@@ -41,7 +40,6 @@ export class SessionProvider extends ServiceProvider<AppPluginApplication> {
 export function resolveAppSessionConfig(
   configured: AppSessionConfigInput,
   ephemeralSecret: string,
-  production: boolean,
 ): AppSessionConfig {
   const { gcLottery: configuredGcLottery, secret, ...rest } = configured;
   const gcLottery = configuredGcLottery ?? { hits: 2, total: 100 };
@@ -52,10 +50,6 @@ export function resolveAppSessionConfig(
   }
   return {
     ...rest,
-    cookie: {
-      ...configured.cookie,
-      secure: configured.cookie.secure ?? production,
-    },
     secret: secret ?? ephemeralSecret,
     gcLottery: [gcLottery.hits, gcLottery.total],
   };

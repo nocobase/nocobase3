@@ -7,7 +7,6 @@ import { createAppDatabaseManager } from './manager.js';
 import { executeAppDatabasePlan } from './tasks.js';
 import { planAppDatabaseTasks } from './plan.js';
 import { prepareAppDatabaseStorage } from './storage.js';
-import { databaseConfig } from './config.js';
 import type { AppConfigAccessor, ConfigPaths } from '../config/index.js';
 import type { AppDatabaseConfig } from './types.js';
 
@@ -64,6 +63,6 @@ export class DatabaseProvider extends ServiceProvider<DatabaseProviderApplicatio
   }
 
   private getDatabaseConfig(): AppDatabaseConfig {
-    return this.app.config.get(databaseConfig);
+    return this.app.config.get<AppDatabaseConfig>('database')!;
   }
 }

@@ -1,6 +1,9 @@
 import { AppConfig, createConfigPaths } from '@nocobase/app-server/config';
 import { cachingToken } from '@nocobase/app-server/caching';
-import { driveConfig, driveManagerToken } from '@nocobase/app-server/drive';
+import {
+  type AppDriveConfig,
+  driveManagerToken,
+} from '@nocobase/app-server/drive';
 import { idGeneratorToken } from '@nocobase/app-server/id-generator';
 import { loggingToken } from '@nocobase/app-server/logging';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
@@ -11,7 +14,7 @@ import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { aiEmployeeConfig, type AIEmployeeConfig } from '../server/config.js';
+import { type AIEmployeeConfig } from '../server/config.js';
 import {
   AIEmployeeProvider,
   aiManagerToken,
@@ -285,14 +288,25 @@ async function createProvider(
   }
 
   const paths = createConfigPaths({ rootDir: process.cwd() });
-  const config = new AppConfig([aiEmployeeConfig, driveConfig], {
-    context: { paths } as never,
-  });
+  const config = new AppConfig();
   config.load({
     name: 'test-ai-config',
     read: async () => ({ kind: 'map', value: readConfig() }),
   });
   await config.loadAll();
+  config.mergeDefaults({
+    ai: { llmServices: [] },
+    drive: {
+      default: 'local',
+      disks: {
+        local: {
+          driver: 'fs',
+          location: paths.storage(),
+          visibility: 'private',
+        },
+      },
+    },
+  });
 
   const container = new ServiceContainer();
   container.instance(databaseManagerToken, deps.database);
@@ -302,7 +316,7 @@ async function createProvider(
   container.instance(loggingToken, deps.logging);
   container.instance(
     driveManagerToken,
-    createDriveManager(config.get(driveConfig)),
+    createDriveManager(config.get<AppDriveConfig>('drive')!),
   );
   const app: AppPluginApplication = {
     appName: 'main',

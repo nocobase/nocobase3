@@ -1,6 +1,6 @@
 import type { ExecutionContext, Hono } from 'hono';
 import type { AppConfigAccessor } from '../config/index.js';
-import { appConfig } from '../config/index.js';
+import { type AppIdentityConfig } from '../config/index.js';
 
 import type { ConfigPaths } from '../config/index.js';
 import {
@@ -126,11 +126,13 @@ export class Application<
   }
 
   public get appName(): string {
-    return resolveAppName(this.config.get(appConfig).name);
+    return resolveAppName(this.config.get<AppIdentityConfig>('app')!.name);
   }
 
   public get publicBasePath(): string {
-    return normalizeBasePath(this.config.get(appConfig).publicBasePath);
+    return normalizeBasePath(
+      this.config.get<AppIdentityConfig>('app')!.publicBasePath,
+    );
   }
 
   public get router(): Hono {
@@ -183,12 +185,6 @@ export class Application<
     }
   }
 
-  /**
-   * Registers the application's own `server/locales/index.ts`.
-   *
-   * It is what decides which languages the server offers, so it is kept apart from the plugin contributions, which
-   * only supply translations for languages the application already declares.
-   */
   public addApplicationLocales(load: AppServerPluginLocalesLoader): void {
     this.applicationLocales = load;
   }
@@ -250,12 +246,11 @@ export class Application<
     }
 
     const runtime = this.container.resolve(i18nToken);
-    const applicationPackageName = this.appPackageName ?? '';
     const sources = [
       ...(this.applicationLocales
         ? [
             {
-              packageName: applicationPackageName,
+              packageName: this.appPackageName ?? '',
               load: this.applicationLocales,
             },
           ]
@@ -268,7 +263,7 @@ export class Application<
         locales: await contribution.load(),
       })),
     );
-    await registerAppLocales(runtime, applicationPackageName, contributions);
+    await registerAppLocales(runtime, this.appPackageName ?? '', contributions);
   }
 
   private async registerRoutes(): Promise<void> {

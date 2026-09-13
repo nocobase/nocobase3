@@ -1,25 +1,24 @@
-import { resolveAppUrl } from '@nocobase/app-client';
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 
-export function AuthBrand(): ReactElement {
+export interface AuthBrandProps {
+  readonly light?: ReactNode;
+  readonly dark?: ReactNode;
+  readonly name?: ReactNode;
+}
+
+export function AuthBrand({
+  light,
+  dark,
+  name = 'NocoBase',
+}: AuthBrandProps): ReactElement {
   return (
     <div
-      aria-label='NocoBase'
-      className='flex h-10 w-full items-center justify-center'
+      aria-label={typeof name === 'string' ? name : undefined}
+      className='flex min-h-10 w-full items-center justify-start'
       role='img'
     >
-      <img
-        alt=''
-        aria-hidden='true'
-        className='h-10 w-auto object-contain dark:hidden'
-        src={resolveAppUrl('/assets/logo.png')}
-      />
-      <img
-        alt=''
-        aria-hidden='true'
-        className='hidden h-10 w-auto object-contain dark:block'
-        src={resolveAppUrl('/assets/logo-dark.png')}
-      />
+      <span className='dark:hidden'>{light ?? name}</span>
+      <span className='hidden dark:block'>{dark ?? light ?? name}</span>
     </div>
   );
 }

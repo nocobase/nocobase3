@@ -57,7 +57,8 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "yaml": "catalog:"
+    "yaml": "catalog:",
+    "@iarna/toml": "^2.2.5"
   },
   "devDependencies": {
     "@nocobase/dev-config": "workspace:*",

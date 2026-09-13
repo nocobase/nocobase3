@@ -17,15 +17,16 @@ import {
   sessionHttpMiddleware,
 } from '@nocobase/app-server/session';
 import { healthCheckApiRoutes } from '@nocobase/app-server/router';
-import type { ResolvedAppRuntime } from '@nocobase/app-server/runtime';
+import type { AppRuntimeContext } from '@nocobase/app-server/runtime';
 import { spaRootRoutes } from '@nocobase/app-server/spa';
 
-export function createApp(runtime: ResolvedAppRuntime): Application {
+export function createApp(runtime: AppRuntimeContext): Application {
   const app = new Application<ApplicationConfig>({
-    config: runtime.appConfig,
+    config: runtime.config,
     mode: runtime.mode,
     paths: runtime.configPaths,
   });
+
   app.addServiceProvider(DatabaseProvider);
   app.addServiceProvider(I18nProvider);
   app.addServiceProvider(LoggingProvider);
@@ -41,5 +42,6 @@ export function createApp(runtime: ResolvedAppRuntime): Application {
   app.addRuntimeContributions(runtime);
   app.addRoutes(spaRootRoutes);
 
+  runtime.app = app;
   return app;
 }
