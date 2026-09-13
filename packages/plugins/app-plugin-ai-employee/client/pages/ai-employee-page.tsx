@@ -178,36 +178,44 @@ function AddMenu({
   items: AIMetadataItem[];
   onAdd: (name: string) => void;
 }): ReactElement {
+  const [open, setOpen] = useState(false);
+  const disabled = items.length === 0;
   return (
-    <details className='group relative'>
-      <summary
-        className={`inline-flex list-none items-center gap-2 rounded-md px-3 py-2 text-sm font-medium marker:content-none ${items.length ? 'cursor-pointer bg-primary text-primary-foreground' : 'pointer-events-none bg-muted text-muted-foreground'}`}
+    <div className='relative'>
+      <button
+        type='button'
+        disabled={disabled}
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+        className={`inline-flex list-none items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${disabled ? 'pointer-events-none bg-muted text-muted-foreground' : 'cursor-pointer bg-primary text-primary-foreground'}`}
       >
         <Plus className='h-4 w-4' /> {label}
-      </summary>
-      <div className='absolute right-0 z-30 mt-1 max-h-72 min-w-72 overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md'>
-        {items.map((item) => (
-          <button
-            type='button'
-            key={item.name}
-            onClick={(event) => {
-              onAdd(item.name);
-              event.currentTarget.closest('details')?.removeAttribute('open');
-            }}
-            className='block w-full rounded-sm px-3 py-2 text-left hover:bg-accent hover:text-accent-foreground'
-          >
-            <span className='block text-sm font-medium'>
-              {item.title ?? item.name}
-            </span>
-            {item.description ? (
-              <span className='mt-1 block text-xs text-muted-foreground'>
-                {item.description}
+      </button>
+      {open && !disabled ? (
+        <div className='absolute right-0 z-30 mt-1 max-h-72 min-w-72 overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md'>
+          {items.map((item) => (
+            <button
+              type='button'
+              key={item.name}
+              onClick={() => {
+                onAdd(item.name);
+                setOpen(false);
+              }}
+              className='block w-full rounded-sm px-3 py-2 text-left hover:bg-accent hover:text-accent-foreground'
+            >
+              <span className='block text-sm font-medium'>
+                {item.title ?? item.name}
               </span>
-            ) : null}
-          </button>
-        ))}
-      </div>
-    </details>
+              {item.description ? (
+                <span className='mt-1 block text-xs text-muted-foreground'>
+                  {item.description}
+                </span>
+              ) : null}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -558,6 +566,20 @@ export default function AIEmployeePage(): ReactElement {
   const patchDraft = (patch: Partial<AIEmployeeEditableValues>): void => {
     setSaved(false);
     setDraft((current) => (current ? { ...current, ...patch } : current));
+  };
+
+  const updateSkillNames = (update: (skills: string[]) => string[]): void => {
+    setSaved(false);
+    setDraft((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        skillSettings: {
+          ...current.skillSettings,
+          skills: update(current.skillSettings.skills),
+        },
+      };
+    });
   };
 
   const save = async (): Promise<void> => {
@@ -937,17 +959,16 @@ export default function AIEmployeePage(): ReactElement {
                     description={t(
                       'Can be added to or removed from this AI employee.',
                     )}
+                    defaultOpen={customSkills.length > 0}
                     action={
                       <AddMenu
                         label={t('Add skill')}
                         items={availableCustomSkills}
                         onAdd={(name) =>
-                          patchDraft({
-                            skillSettings: {
-                              ...draft.skillSettings,
-                              skills: [...configuredSkills, name],
-                            },
-                          })
+                          updateSkillNames((currentSkills) => [
+                            ...currentSkills,
+                            name,
+                          ])
                         }
                       />
                     }
@@ -964,14 +985,11 @@ export default function AIEmployeePage(): ReactElement {
                           aria-label={`${t('Remove')} ${item.title ?? item.name}`}
                           className='rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground'
                           onClick={() =>
-                            patchDraft({
-                              skillSettings: {
-                                ...draft.skillSettings,
-                                skills: configuredSkills.filter(
-                                  (name) => name !== item.name,
-                                ),
-                              },
-                            })
+                            updateSkillNames((currentSkills) =>
+                              currentSkills.filter(
+                                (name) => name !== item.name,
+                              ),
+                            )
                           }
                         >
                           <Trash2 className='h-4 w-4' />
