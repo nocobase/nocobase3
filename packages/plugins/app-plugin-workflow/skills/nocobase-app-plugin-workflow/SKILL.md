@@ -18,6 +18,10 @@ Use NocoBase 3's source-managed Workflow implementation where business behavior 
 
 The application owns workflow source packages, business services, trigger timing, authentication and authorization, business idempotency, and compensation policy. The plugin owns the DSL and core Instructions, Artifact and execution lifecycle, persisted history, management API, and diagnostic views. Use public package exports and APIs; do not bypass them through plugin internals or materialized tables.
 
+For an initialized application, configuration is read from the application-root
+`config.yml`; use that file in setup instructions and examples. Environment
+variables may be used as secret placeholders referenced by this file.
+
 # Choose the Task Path
 
 - Before designing a new business feature, creating a workflow, or moving existing behavior into Workflow, read [Workflow Architecture Decisions](references/workflow-concepts.md) and decide whether the behavior belongs in Workflow, ordinary typed code, or a combination of both. Apply this decision even when the user did not explicitly ask about Workflow, but do not expand the requested implementation scope without a concrete architectural reason.
