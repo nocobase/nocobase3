@@ -321,15 +321,16 @@ describe('workflow node descriptions', () => {
     );
 
     const picker = await screen.findByRole('combobox');
+    fireEvent.click(picker);
     await waitFor(() =>
       expect(
-        [...picker.querySelectorAll('option')].map(
-          (option) => option.textContent,
-        ),
-      ).toEqual(['Unpublished', 'version-1']),
+        [...screen.getAllByRole('option')].map((option) => option.textContent),
+      ).toEqual(['Unpublished', '>version-1']),
     );
 
-    fireEvent.change(picker, { target: { value: 'candidate-hash' } });
+    fireEvent.click(
+      screen.getByRole('link', { name: 'New version available' }),
+    );
 
     await waitFor(() =>
       expect(screen.getByLabelText('Current location').textContent).toBe(
