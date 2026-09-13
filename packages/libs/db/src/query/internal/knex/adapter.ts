@@ -28,6 +28,7 @@ import {
 } from '../../../repository/boolean.js';
 import {
   isTemporalType,
+  normalizeTemporalValue,
   normalizeTemporalResultValue,
 } from '../../../repository/temporal.js';
 import { temporalProjection } from '../../../repository/internal/temporal-sql.js';
@@ -2947,15 +2948,15 @@ function encodeQueryTemporal(
   field: FieldDefinition,
   value: unknown,
 ): unknown {
-  if (value === null) return null;
   const temporalBinding =
     getDatabaseDriverRuntime(client)?.repository?.temporalBinding;
-  if (!temporalBinding) return value;
-  if (value instanceof Date) {
-    if (!Number.isFinite(value.getTime())) return value;
-    value = value.toISOString();
+  if (!(value instanceof Date)) {
+    return temporalBinding ? temporalBinding({ client, field, value }) : value;
   }
-  return temporalBinding({ client, field, value });
+  const normalized = normalizeTemporalValue(field, value);
+  return temporalBinding
+    ? temporalBinding({ client, field, value: normalized })
+    : normalized;
 }
 
 async function resolveWriteFields(

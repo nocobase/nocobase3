@@ -145,7 +145,9 @@ describeIntegrationDatabases('Repository temporal contract', (context) => {
       ).rejects.toMatchObject({ code: 'INVALID_FILTER' });
     }
     await expect(
-      repo.createOne({ values: { code: 'bad', local: new Date() } }),
+      repo.createOne({
+        values: { code: 'bad', local: new Date('invalid') },
+      }),
     ).rejects.toMatchObject({ code: 'INVALID_MUTATION' });
     expect(await repo.count()).toBe(0);
   });

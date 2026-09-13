@@ -54,6 +54,48 @@ describeIntegrationDatabases('Temporal field values', (context) => {
     });
   });
 
+  it('accepts local Date values for date, time, and datetime mutations', async () => {
+    await createCollection('temporalRepositoryLocalDates');
+    const repository = context.database.repository(
+      'temporalRepositoryLocalDates',
+    );
+    const created = new Date(2026, 8, 6, 9, 30, 0, 120);
+
+    await expect(
+      repository.createOne({
+        values: {
+          id: 'local-date',
+          day: created,
+          clock: created,
+          local: created,
+        },
+        select: (select) => select.fields('id', 'day', 'clock', 'local'),
+      }),
+    ).resolves.toMatchObject({
+      record: {
+        id: 'local-date',
+        day: '2026-09-06',
+        clock: '09:30:00.120',
+        local: '2026-09-06T09:30:00.120',
+      },
+    });
+
+    const updated = new Date(2026, 8, 7, 10, 45, 1, 456);
+    await expect(
+      repository.updateOne({
+        filter: { id: 'local-date' },
+        values: { day: updated, clock: updated, local: updated },
+        select: (select) => select.fields('day', 'clock', 'local'),
+      }),
+    ).resolves.toMatchObject({
+      record: {
+        day: '2026-09-07',
+        clock: '10:45:01.456',
+        local: '2026-09-07T10:45:01.456',
+      },
+    });
+  });
+
   it('creates and updates multiple temporal values through Repository bulk methods', async () => {
     await context.builder.createCollection(
       'temporalRepositoryBulk',

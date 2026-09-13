@@ -74,6 +74,47 @@ describeIntegrationDatabases('Temporal query values', (context) => {
     });
   });
 
+  it('accepts local Date values for date, time, and datetime mutations', async () => {
+    await createCollection('temporalQueryLocalDates');
+    const created = new Date(2026, 8, 6, 9, 30, 0, 120);
+
+    await expect(
+      context.database
+        .query()
+        .insertInto('temporalQueryLocalDates')
+        .values({
+          id: 'local-date',
+          day: created,
+          clock: created,
+          local: created,
+        })
+        .execute(),
+    ).resolves.toMatchObject({ insertedCount: 1 });
+
+    const updated = new Date(2026, 8, 7, 10, 45, 1, 456);
+    await expect(
+      context.database
+        .query()
+        .updateTable('temporalQueryLocalDates')
+        .set({ day: updated, clock: updated, local: updated })
+        .where('id', '=', 'local-date')
+        .execute(),
+    ).resolves.toEqual({ updatedCount: 1 });
+
+    await expect(
+      context.database
+        .query()
+        .selectFrom('temporalQueryLocalDates')
+        .select(['day', 'clock', 'local'])
+        .where('id', '=', 'local-date')
+        .executeTakeFirst(),
+    ).resolves.toEqual({
+      day: '2026-09-07',
+      clock: '10:45:01.456',
+      local: '2026-09-07T10:45:01.456',
+    });
+  });
+
   it('selects temporal fields through aliases and scalar subqueries', async () => {
     await context.builder.createCollection(
       'temporalQueryParents',

@@ -27,9 +27,17 @@ export function normalizeTemporalValue(
   }
   let value = input;
   if (value instanceof Date) {
-    if (field.type !== 'datetimeTz' || !Number.isFinite(value.getTime()))
-      return fail();
-    value = value.toISOString();
+    if (!Number.isFinite(value.getTime())) return fail();
+    const pad = (part: number) => String(part).padStart(2, '0');
+    const milliseconds = String(value.getMilliseconds()).padStart(3, '0');
+    value =
+      field.type === 'date'
+        ? `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`
+        : field.type === 'time'
+          ? `${pad(value.getHours())}:${pad(value.getMinutes())}:${pad(value.getSeconds())}.${milliseconds}`
+          : field.type === 'datetime'
+            ? `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}T${pad(value.getHours())}:${pad(value.getMinutes())}:${pad(value.getSeconds())}.${milliseconds}`
+            : value.toISOString();
   }
   if (typeof value !== 'string') return fail();
   const datePattern = '(\\d{4})-(\\d{2})-(\\d{2})';
