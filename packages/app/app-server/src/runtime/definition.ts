@@ -110,6 +110,7 @@ function createAppRuntimeConfigContext(
   const plugins = resolveAppServerPlugins(
     runtime.paths.rootDir,
     definition.plugins,
+    { preferBuiltPackages: isCompiledRuntime() },
   );
   const configs = plugins.plugins.flatMap(
     (plugin) => plugin.definition.config,
@@ -125,4 +126,8 @@ function createAppRuntimeConfigContext(
     configPath: scope.configPath,
     configs,
   };
+}
+
+function isCompiledRuntime(): boolean {
+  return !import.meta.url.includes('/src/');
 }

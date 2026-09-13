@@ -16,6 +16,14 @@ const require = createRequire(import.meta.url);
 
 export interface ResolveAppServerPluginsOptions {
   readonly defaultAppPackageName?: string;
+  /**
+   * Prefer the application's compiled production dependency tree over workspace links.
+   *
+   * Standalone production builds carry their dependencies under `dist/node_modules`, while a source checkout may have
+   * both that tree and root-level links to TypeScript sources. Callers that run the compiled runtime must opt in so
+   * source development keeps resolving the workspace packages it is meant to watch.
+   */
+  readonly preferBuiltPackages?: boolean;
 }
 
 export interface ResolvedAppPluginDatabaseConfig {
@@ -38,7 +46,11 @@ export function resolveAppServerPlugins(
         : (options.defaultAppPackageName ?? 'app'),
     plugins: serverPlugins.plugins.map((definition) => ({
       definition,
-      metadata: resolvePlugin(rootDir, definition),
+      metadata: resolvePlugin(
+        rootDir,
+        definition,
+        options.preferBuiltPackages === true,
+      ),
     })),
   };
 }
@@ -111,8 +123,13 @@ export function createPluginJobLocations(
 function resolvePlugin(
   rootDir: string,
   definition: AppServerPlugin,
+  preferBuiltPackages: boolean,
 ): ResolvedAppPlugin {
-  const packageJsonPath = resolvePackageJson(rootDir, definition.packageName);
+  const packageJsonPath = resolvePackageJson(
+    rootDir,
+    definition.packageName,
+    preferBuiltPackages,
+  );
   const packageJson = readJson(packageJsonPath);
   const packageRoot = path.dirname(packageJsonPath);
 
@@ -176,10 +193,18 @@ function validatePackagePath(configuredPath: string): void {
   }
 }
 
-function resolvePackageJson(rootDir: string, packageName: string): string {
+function resolvePackageJson(
+  rootDir: string,
+  packageName: string,
+  preferBuiltPackages: boolean,
+): string {
   try {
     return require.resolve(`${packageName}/package.json`, {
-      paths: [rootDir, path.join(rootDir, 'dist')],
+      // A built standalone app keeps its production dependency tree under `dist/node_modules`, while source
+      // development intentionally resolves the workspace links from the application root.
+      paths: preferBuiltPackages
+        ? [path.join(rootDir, 'dist'), rootDir]
+        : [rootDir, path.join(rootDir, 'dist')],
     });
   } catch {
     throw new Error(
