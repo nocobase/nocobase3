@@ -1303,6 +1303,146 @@ describe('DefaultRepository.withPolicy', () => {
     expect(checks[0]).toMatchObject({ fields: ['tenantId'] });
   });
 
+  it('treats a foreign key as readable when its relation already reveals it', async () => {
+    const collections = {
+      get: async (name: string) =>
+        name === 'projects'
+          ? {
+              name,
+              fields: [
+                { name: 'id', type: 'string' },
+                { name: 'ownerId', type: 'string' },
+                { name: 'secretId', type: 'string' },
+                {
+                  name: 'owner',
+                  type: 'belongsTo',
+                  target: 'users',
+                  foreignKey: 'ownerId',
+                  targetKey: 'id',
+                },
+                {
+                  name: 'secret',
+                  type: 'belongsTo',
+                  target: 'users',
+                  foreignKey: 'secretId',
+                  targetKey: 'id',
+                },
+              ],
+            }
+          : {
+              name,
+              fields: [
+                { name: 'id', type: 'string' },
+                { name: 'name', type: 'string' },
+              ],
+            },
+    };
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: collections as never,
+      adapter: {
+        assertReadable: () => undefined,
+        findMany: async () => [],
+      } as never,
+    });
+    const scoped = repository.withPolicy({
+      read: {
+        scope: true,
+        fields: ['id'],
+        relations: {
+          // Expanding owner and reading its key hands ownerId over anyway.
+          owner: { scope: true, fields: ['id'] },
+          // secret returns no key, so secretId stays hidden.
+          secret: { scope: true, fields: ['name'] },
+        },
+      },
+      create: { scope: true },
+      update: { scope: true },
+      delete: { scope: true },
+    });
+
+    await expect(
+      scoped.findMany({
+        select: {
+          kind: 'select',
+          version: 1,
+          root: {
+            kind: 'selection',
+            fields: ['id', 'ownerId'],
+            includes: [],
+          },
+        },
+      }),
+    ).resolves.toEqual([]);
+
+    await expect(
+      scoped.findMany({
+        select: {
+          kind: 'select',
+          version: 1,
+          root: {
+            kind: 'selection',
+            fields: ['id', 'secretId'],
+            includes: [],
+          },
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: 'FIELD_READ_FORBIDDEN',
+      field: 'secretId',
+    });
+  });
+
+  it('does not return an implied foreign key when no select was given', async () => {
+    let plan: { fields?: readonly string[] } | undefined;
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {
+        get: async (name: string) =>
+          name === 'projects'
+            ? {
+                name,
+                fields: [
+                  { name: 'id', type: 'string' },
+                  { name: 'ownerId', type: 'string' },
+                  {
+                    name: 'owner',
+                    type: 'belongsTo',
+                    target: 'users',
+                    foreignKey: 'ownerId',
+                    targetKey: 'id',
+                  },
+                ],
+              }
+            : { name, fields: [{ name: 'id', type: 'string' }] },
+      } as never,
+      adapter: {
+        assertReadable: () => undefined,
+        findMany: async (nextPlan: typeof plan) => {
+          plan = nextPlan;
+          return [];
+        },
+      } as never,
+    });
+
+    await repository
+      .withPolicy({
+        read: {
+          scope: true,
+          fields: ['id'],
+          relations: { owner: { scope: true, fields: ['id'] } },
+        },
+        create: { scope: true },
+        update: { scope: true },
+        delete: { scope: true },
+      })
+      .findMany({});
+
+    // Omitting select means "the server decides", which is read.fields — the
+    // implied key is about what may be asked for, not about what comes back.
+    expect(plan?.fields).toEqual(['id']);
+  });
+
   it('enforces create and update field allowlists', async () => {
     const collection = {
       name: 'projects',

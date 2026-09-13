@@ -202,7 +202,19 @@ export type PolicyReadContext =
   | { readonly kind: 'unrestricted' }
   | {
       readonly kind: 'restricted';
+      /** The declared allowlist. Decides what a query with no select returns. */
       readonly fields: readonly string[];
+      /**
+       * What the caller may name, which is the allowlist plus the foreign keys
+       * an authorized relation already gives away. Refusing `ownerId` while
+       * allowing `owner { id }` hides nothing — the same value comes back by
+       * the other route — so the two are kept in step.
+       *
+       * The implication runs one way only. A readable `ownerId` says nothing
+       * about whether `owner` may be expanded, because the target carries
+       * other fields.
+       */
+      readonly readableFields: readonly string[];
       readonly relations: Readonly<
         Record<string, NormalizedReadNode | PolicyRef>
       >;
@@ -221,12 +233,49 @@ export function rootReadContext(
   const node = resolveReadNode(policy, collection);
   return node === undefined || node === true
     ? UNRESTRICTED_READ
-    : {
-        kind: 'restricted',
-        fields: node.fields,
-        relations: node.relations,
-        scope: node.scope,
-      };
+    : restrictedReadContext(collection, node);
+}
+
+/**
+ * Build a restricted context, widening the nameable fields by the foreign keys
+ * the authorized relations already expose.
+ */
+export function restrictedReadContext(
+  collection: CollectionDefinition,
+  node: NormalizedReadNode,
+): PolicyReadContext {
+  return {
+    kind: 'restricted',
+    fields: node.fields,
+    readableFields: withImpliedForeignKeys(collection, node),
+    relations: node.relations,
+    scope: node.scope,
+  };
+}
+
+function withImpliedForeignKeys(
+  collection: CollectionDefinition,
+  node: NormalizedReadNode,
+): readonly string[] {
+  const implied: string[] = [];
+  for (const [name, child] of Object.entries(node.relations)) {
+    if ('kind' in child) continue;
+    const relation = collection.fields?.find(
+      (field) => field.name === name && 'target' in field,
+    );
+    const foreignKey =
+      relation && 'foreignKey' in relation ? relation.foreignKey : undefined;
+    if (!foreignKey || node.fields.includes(foreignKey)) continue;
+    // The key is only given away when the relation actually returns the value
+    // the foreign key points at.
+    const targetKey =
+      relation && 'targetKey' in relation ? relation.targetKey : undefined;
+    const revealsKey = targetKey
+      ? child.fields.includes(targetKey)
+      : child.fields.length > 0;
+    if (revealsKey) implied.push(foreignKey);
+  }
+  return implied.length > 0 ? [...node.fields, ...implied] : node.fields;
 }
 
 /**
@@ -239,6 +288,7 @@ export function relationReadContext(
   collection: CollectionDefinition,
   relation: string,
   path: readonly (string | number)[],
+  target: CollectionDefinition,
 ): PolicyReadContext {
   if (parent.kind === 'unrestricted') return UNRESTRICTED_READ;
   const node = parent.relations[relation];
@@ -256,12 +306,8 @@ export function relationReadContext(
       { collection: collection.name, relation, path },
     );
   }
-  return {
-    kind: 'restricted',
-    fields: node.fields,
-    relations: node.relations,
-    scope: node.scope,
-  };
+  // The node governs the target, so its own relations are resolved there.
+  return restrictedReadContext(target, node);
 }
 
 /** The scalar allowlist, or `undefined` when this context adds no limits. */
@@ -283,7 +329,9 @@ export function assertReadableField(
   field: string,
   path: readonly (string | number)[],
 ): void {
-  if (policy.kind === 'unrestricted' || policy.fields.includes(field)) return;
+  if (policy.kind === 'unrestricted' || policy.readableFields.includes(field)) {
+    return;
+  }
   invalid(
     'FIELD_READ_FORBIDDEN',
     `Field "${field}" is not readable by Policy.`,

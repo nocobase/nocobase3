@@ -2224,17 +2224,9 @@ function validateScalarSelect(
       });
     }
     scalarField(collection, field, ['root', 'fields', index]);
-    if (policyFields && !policyFields.includes(field)) {
-      invalid(
-        'FIELD_READ_FORBIDDEN',
-        `Field "${field}" is not readable by Policy.`,
-        {
-          collection: collection.name,
-          field,
-          path: ['root', 'fields', index],
-        },
-      );
-    }
+    // The projection defaults to the declared allowlist, but what the caller
+    // may ask for includes the foreign keys an authorized relation reveals.
+    assertReadableField(policy, collection, field, ['root', 'fields', index]);
     if (seen.has(field)) {
       invalid(
         'INVALID_SELECT',
@@ -2572,14 +2564,15 @@ async function scopeCallerFilterNode(
   }
   const name = node.path[0];
   const relationPath = [...path, 'path', 0] as const;
+  const relation = relationField(collection, name, relationPath);
+  const target = await targetCollection(collections, relation, path);
   const relationPolicy = relationReadContext(
     policy,
     collection,
     name,
     relationPath,
+    target,
   );
-  const relation = relationField(collection, name, relationPath);
-  const target = await targetCollection(collections, relation, path);
   const inner = node.filter
     ? await scopeCallerFilterGroup(
         collections,
@@ -2826,17 +2819,18 @@ async function validateSelectInputWithRelations(
       );
     }
     seen.add(node.relation);
-    const relationPolicy = relationReadContext(
-      policy,
-      collection,
-      node.relation,
-      [...path, 'relation'],
-    );
     const relation = relationField(collection, node.relation, [
       ...path,
       'relation',
     ]);
     const target = await targetCollection(collections, relation, path);
+    const relationPolicy = relationReadContext(
+      policy,
+      collection,
+      node.relation,
+      [...path, 'relation'],
+      target,
+    );
     if (node.result !== undefined) {
       if (!isToManyRelation(relation))
         invalid(
@@ -3123,7 +3117,7 @@ async function validateRelationResult(
       version: 1,
       items: [{ ...result, alias: 'value' }],
     },
-    relationReadContext(policy, source, relation, []),
+    relationReadContext(policy, source, relation, [], target),
   );
   if (
     scope.limit !== undefined &&
@@ -3295,18 +3289,23 @@ async function validateSortWithRelations<TRecord extends object>(
     let terminal: RelationFieldDefinition | undefined;
     for (const [relationIndex, name] of item.relation.entries()) {
       const relationPath = ['items', index, 'relation', relationIndex] as const;
-      currentPolicy = relationReadContext(
-        currentPolicy,
-        current,
-        name,
-        relationPath,
-      );
       terminal = relationField(current, name, [
         'items',
         index,
         'relation',
         relationIndex,
       ]);
+      const relationTarget = await targetCollection(collections, terminal, [
+        'items',
+        index,
+      ]);
+      currentPolicy = relationReadContext(
+        currentPolicy,
+        current,
+        name,
+        relationPath,
+        relationTarget,
+      );
       if (
         relationIndex < item.relation.length - 1 &&
         terminal.type !== 'belongsTo' &&
@@ -3400,12 +3399,6 @@ async function validateFieldSortNode(
   let current = collection;
   let currentPolicy = policy;
   for (const [relationIndex, name] of item.path.slice(0, -1).entries()) {
-    currentPolicy = relationReadContext(currentPolicy, current, name, [
-      'items',
-      index,
-      'path',
-      relationIndex,
-    ]);
     const relation = relationField(current, name, [
       'items',
       index,
@@ -3423,12 +3416,20 @@ async function validateFieldSortNode(
         },
       );
     }
-    current = await targetCollection(collections, relation, [
+    const target = await targetCollection(collections, relation, [
       'items',
       index,
       'path',
       relationIndex,
     ]);
+    currentPolicy = relationReadContext(
+      currentPolicy,
+      current,
+      name,
+      ['items', index, 'path', relationIndex],
+      target,
+    );
+    current = target;
   }
   const fieldIndex = item.path.length - 1;
   const field = scalarField(current, item.path[fieldIndex], [
