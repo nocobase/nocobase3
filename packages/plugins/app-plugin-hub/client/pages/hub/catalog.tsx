@@ -8,7 +8,6 @@ import {
   Plus,
   RefreshCw,
   Search,
-  Trash2,
 } from 'lucide-react';
 import { Button } from '../../components/ui/button.js';
 import { Card, CardContent, CardHeader } from '../../components/ui/card.js';
@@ -55,8 +54,6 @@ export function Catalog({
   onView,
   canCreate,
   onCreate,
-  canRemove,
-  onRemove,
   onSelect,
   onPage,
 }: {
@@ -76,8 +73,6 @@ export function Catalog({
   readonly onView: (value: ViewMode) => void;
   readonly canCreate: boolean;
   readonly onCreate: () => void;
-  readonly canRemove: boolean;
-  readonly onRemove: (app: AppSummary) => void;
   readonly onSelect: (id: string) => void;
   readonly onPage: (page: number) => void;
 }): ReactElement {
@@ -166,9 +161,7 @@ export function Catalog({
             {apps.map((app) => (
               <AppCard
                 app={app}
-                canRemove={canRemove}
                 key={app.app.id}
-                onRemove={() => onRemove(app)}
                 onClick={() => onSelect(app.app.id)}
               />
             ))}
@@ -187,7 +180,7 @@ export function Catalog({
                   <TableHead className='w-40'>
                     {t('page.release', { defaultValue: 'Release' })}
                   </TableHead>
-                  <TableHead className='w-24'>
+                  <TableHead className='w-12'>
                     <span className='sr-only'>
                       {t('page.open', { defaultValue: 'Open' })}
                     </span>
@@ -198,9 +191,7 @@ export function Catalog({
                 {apps.map((app) => (
                   <AppListRow
                     app={app}
-                    canRemove={canRemove}
                     key={app.app.id}
-                    onRemove={() => onRemove(app)}
                     onClick={() => onSelect(app.app.id)}
                   />
                 ))}
@@ -324,13 +315,9 @@ export function Catalog({
 
 export function AppCard({
   app,
-  canRemove,
-  onRemove,
   onClick,
 }: {
   readonly app: AppSummary;
-  readonly canRemove: boolean;
-  readonly onRemove: () => void;
   readonly onClick: () => void;
 }): ReactElement {
   const { t } = useTranslation('@nocobase/app-plugin-hub');
@@ -358,7 +345,7 @@ export function AppCard({
             <StatusBadge state={appManagementStatus(app)} />
           </div>
         </CardHeader>
-        <CardContent className='flex items-center gap-2 px-3.5 pt-1 pr-20 pb-3 text-[11px] text-muted-foreground'>
+        <CardContent className='flex items-center gap-2 px-3.5 pt-1 pb-3 text-[11px] text-muted-foreground'>
           <span className='font-medium text-foreground'>
             {version
               ? `v${version}`
@@ -368,53 +355,16 @@ export function AppCard({
           <span>{formatDate(app.app.updatedAt)}</span>
         </CardContent>
       </Button>
-      {canRemove ? (
-        <div className='absolute right-10 bottom-2 z-10 opacity-100 transition-opacity md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100'>
-          <ApplicationActions app={app} onRemove={onRemove} />
-        </div>
-      ) : null}
       <ChevronRight className='pointer-events-none absolute right-3 bottom-3 size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5' />
     </Card>
   );
 }
 
-function ApplicationActions({
-  app,
-  onRemove,
-}: {
-  readonly app: AppSummary;
-  readonly onRemove: () => void;
-}): ReactElement {
-  const { t } = useTranslation('@nocobase/app-plugin-hub');
-  const removeLabel = t('page.remove', {
-    defaultValue: 'Remove application',
-  });
-  return (
-    <Button
-      aria-label={`${removeLabel} for ${app.app.name}`}
-      className='size-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive'
-      onClick={(event) => {
-        event.stopPropagation();
-        onRemove();
-      }}
-      size='icon'
-      title={removeLabel}
-      variant='ghost'
-    >
-      <Trash2 />
-    </Button>
-  );
-}
-
 export function AppListRow({
   app,
-  canRemove,
-  onRemove,
   onClick,
 }: {
   readonly app: AppSummary;
-  readonly canRemove: boolean;
-  readonly onRemove: () => void;
   readonly onClick: () => void;
 }): ReactElement {
   const { t } = useTranslation('@nocobase/app-plugin-hub');
@@ -441,22 +391,17 @@ export function AppListRow({
           : t('page.notDeployed', { defaultValue: 'Not deployed' })}
       </TableCell>
       <TableCell className='text-right'>
-        <div className='flex items-center justify-end gap-1'>
-          {canRemove ? (
-            <ApplicationActions app={app} onRemove={onRemove} />
-          ) : null}
-          <Button
-            aria-label={`${t('page.open', { defaultValue: 'Open' })} ${app.app.name}`}
-            onClick={(event) => {
-              event.stopPropagation();
-              onClick();
-            }}
-            size='icon'
-            variant='ghost'
-          >
-            <ChevronRight />
-          </Button>
-        </div>
+        <Button
+          aria-label={`${t('page.open', { defaultValue: 'Open' })} ${app.app.name}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            onClick();
+          }}
+          size='icon'
+          variant='ghost'
+        >
+          <ChevronRight />
+        </Button>
       </TableCell>
     </TableRow>
   );

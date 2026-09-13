@@ -42,7 +42,6 @@ const enUS = {
     listView: 'List view',
     refresh: 'Refresh',
     newApplication: 'New application',
-    remove: 'Remove application',
     loading: 'Loading applications',
     application: 'Application',
     status: 'Status',

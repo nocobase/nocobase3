@@ -38,7 +38,6 @@ const zhCN: HubResource = {
     listView: '列表视图',
     refresh: '刷新',
     newApplication: '新建应用',
-    remove: '删除应用',
     loading: '正在加载应用',
     application: '应用',
     status: '状态',
