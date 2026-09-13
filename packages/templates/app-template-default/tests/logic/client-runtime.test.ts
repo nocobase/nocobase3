@@ -93,14 +93,13 @@ describe('app client runtime', () => {
     expect(app.refineConfig.options?.title).toEqual({
       text: 'Configured application',
     });
-    expect(app.refineConfig.authProvider).toBeDefined();
     expect(app.refineConfig.notificationProvider).toBeDefined();
     expect(app.refineConfig.resources ?? []).toEqual([]);
     await app.shutdown();
   });
 
   it('requires a Client config factory in the breaking static Runtime protocol', async () => {
-    const { config: _config, ...withoutConfig } = appRuntime;
+    const { createAppConfig: _createAppConfig, ...withoutConfig } = appRuntime;
     await expect(
       resolveAppRuntime(withoutConfig as AppRuntimeDefinition),
     ).rejects.toThrow();

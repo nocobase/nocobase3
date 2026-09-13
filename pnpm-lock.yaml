@@ -2862,6 +2862,9 @@ importers:
       '@nocobase/app-server':
         specifier: workspace:^
         version: link:../../app/app-server
+      '@nocobase/config':
+        specifier: workspace:^
+        version: link:../../libs/config
       '@nocobase/db':
         specifier: workspace:^
         version: link:../../libs/db
@@ -2871,6 +2874,9 @@ importers:
       '@nocobase/service-provider':
         specifier: workspace:^
         version: link:../../libs/service-provider
+      '@nocobase/snowflake':
+        specifier: workspace:^
+        version: link:../../libs/snowflake
       '@oclif/core':
         specifier: 'catalog:'
         version: 4.14.0
@@ -2914,9 +2920,6 @@ importers:
       '@nocobase/caching':
         specifier: workspace:^
         version: link:../../libs/caching
-      '@nocobase/config':
-        specifier: workspace:^
-        version: link:../../libs/config
       '@nocobase/cron':
         specifier: workspace:^
         version: link:../../libs/cron
@@ -2938,9 +2941,6 @@ importers:
       '@nocobase/session':
         specifier: workspace:^
         version: link:../../libs/session
-      '@nocobase/snowflake':
-        specifier: workspace:^
-        version: link:../../libs/snowflake
       '@refinedev/cli':
         specifier: ^2.16.48
         version: 2.16.52(@types/node@24.13.3)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(bluebird@3.4.7)(encoding@0.1.13)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -3211,6 +3211,9 @@ importers:
       '@nocobase/app-server':
         specifier: workspace:^
         version: link:../../app/app-server
+      '@nocobase/config':
+        specifier: workspace:^
+        version: link:../../libs/config
       '@nocobase/db':
         specifier: workspace:^
         version: link:../../libs/db
@@ -3220,6 +3223,9 @@ importers:
       '@nocobase/service-provider':
         specifier: workspace:^
         version: link:../../libs/service-provider
+      '@nocobase/snowflake':
+        specifier: workspace:^
+        version: link:../../libs/snowflake
       '@oclif/core':
         specifier: 'catalog:'
         version: 4.14.0
@@ -3269,9 +3275,6 @@ importers:
       '@nocobase/caching':
         specifier: workspace:^
         version: link:../../libs/caching
-      '@nocobase/config':
-        specifier: workspace:^
-        version: link:../../libs/config
       '@nocobase/cron':
         specifier: workspace:^
         version: link:../../libs/cron
@@ -3293,9 +3296,6 @@ importers:
       '@nocobase/session':
         specifier: workspace:^
         version: link:../../libs/session
-      '@nocobase/snowflake':
-        specifier: workspace:^
-        version: link:../../libs/snowflake
       '@refinedev/cli':
         specifier: ^2.16.48
         version: 2.16.52(@types/node@24.13.3)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(bluebird@3.4.7)(encoding@0.1.13)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -3539,15 +3539,24 @@ importers:
       '@nocobase/app-plugin-users':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-users
+      '@nocobase/app-plugin-workflow':
+        specifier: workspace:^
+        version: link:../../plugins/app-plugin-workflow
       '@nocobase/app-server':
         specifier: workspace:^
         version: link:../../app/app-server
+      '@nocobase/config':
+        specifier: workspace:^
+        version: link:../../libs/config
       '@nocobase/nb3-cli':
         specifier: workspace:^
         version: link:../../tools/cli
       '@nocobase/service-provider':
         specifier: workspace:^
         version: link:../../libs/service-provider
+      '@nocobase/snowflake':
+        specifier: workspace:^
+        version: link:../../libs/snowflake
       '@oclif/core':
         specifier: 'catalog:'
         version: 4.14.0
@@ -3585,9 +3594,6 @@ importers:
       '@nocobase/app-plugin-notification-provider':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-notification-provider
-      '@nocobase/app-plugin-workflow':
-        specifier: workspace:^
-        version: link:../../plugins/app-plugin-workflow
       '@nocobase/app-portal-sdk':
         specifier: workspace:^
         version: link:../../app/app-portal-sdk
@@ -3597,9 +3603,6 @@ importers:
       '@nocobase/caching':
         specifier: workspace:^
         version: link:../../libs/caching
-      '@nocobase/config':
-        specifier: workspace:^
-        version: link:../../libs/config
       '@nocobase/db':
         specifier: workspace:^
         version: link:../../libs/db
@@ -3621,9 +3624,6 @@ importers:
       '@nocobase/session':
         specifier: workspace:^
         version: link:../../libs/session
-      '@nocobase/snowflake':
-        specifier: workspace:^
-        version: link:../../libs/snowflake
       '@refinedev/cli':
         specifier: ^2.16.48
         version: 2.16.52(@types/node@24.13.3)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(bluebird@3.4.7)(encoding@0.1.13)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)

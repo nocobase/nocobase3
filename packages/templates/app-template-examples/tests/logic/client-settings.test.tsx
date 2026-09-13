@@ -5,6 +5,14 @@ import type {
   AppClientSettingIcon,
 } from '@nocobase/app-client/plugins';
 import {
+  ClientApplicationContext,
+  type ClientApplication,
+} from '@nocobase/app-client';
+import {
+  AuthenticationProvider,
+  authenticationClientToken,
+} from '@nocobase/app-plugin-authentication/client';
+import {
   Refine,
   type AccessControlProvider,
   type AuthProvider,
@@ -492,7 +500,7 @@ function renderSettings(
   routes: readonly AppClientRegisteredRoute[] = [],
   tree?: readonly AppClientRegisteredRoute[],
 ): void {
-  render(
+  renderWithAuthentication(
     <MemoryRouter initialEntries={[initialEntry]}>
       <AppThemeProvider>
         <Refine
@@ -526,7 +534,7 @@ function renderSettings(
 
 /** Renders a router subtree the way renderSettings does, for a surface other than the settings centre. */
 function renderApp(element: ReactElement, initialEntry: string): void {
-  render(
+  renderWithAuthentication(
     <MemoryRouter initialEntries={[initialEntry]}>
       <AppThemeProvider>
         <Refine
@@ -561,6 +569,37 @@ function createAuthProvider(): AuthProvider {
     logout: vi.fn().mockResolvedValue({ success: true }),
     onError: async (error) => ({ error }),
   };
+}
+
+function renderWithAuthentication(element: ReactElement): void {
+  const authClient = {
+    getSession: vi.fn().mockResolvedValue({
+      data: {
+        session: null,
+        user: {
+          email: 'alice@example.com',
+          id: '1',
+          image: null,
+          name: 'Alice',
+        },
+      },
+    }),
+    signOut: vi.fn().mockResolvedValue({ data: null }),
+  };
+  const app = {
+    services: {
+      resolve: (token: unknown) => {
+        if (token === authenticationClientToken) return authClient;
+        throw new Error(`Unexpected service token: ${String(token)}`);
+      },
+    },
+  } as unknown as ClientApplication;
+
+  render(
+    <ClientApplicationContext.Provider value={app}>
+      <AuthenticationProvider>{element}</AuthenticationProvider>
+    </ClientApplicationContext.Provider>,
+  );
 }
 
 function createSetting(

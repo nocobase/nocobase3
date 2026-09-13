@@ -2,7 +2,7 @@ import {
   defineAppConfig,
   type AppConfigFactory,
 } from '@nocobase/app-server/config';
-import type { AIApplicationConfig } from '@nocobase/app-plugin-ai-employee/server';
+import type { AIApplicationConfig } from '@nocobase/app-plugin-ai-employee/server/config';
 
 const ai: AppConfigFactory<AIApplicationConfig> = defineAppConfig(
   (_runtime) => ({

@@ -20,7 +20,6 @@ export const i18nToken: ServiceToken<I18nRuntime> =
 
 export interface AppI18nConfig {
   readonly defaultLocale: Locale;
-  readonly locales: readonly Locale[];
 }
 
 export interface I18nProviderApplication {
@@ -45,13 +44,10 @@ export class I18nProvider<
   public readonly name: string = 'i18n';
 
   public override register(): void {
-    const config = this.app.config.get<AppI18nConfig>('i18n')!;
+    const config = this.app.config.get<AppI18nConfig>('i18n');
     this.app.container.instance(
       i18nToken,
-      new I18nRuntime({
-        defaultLocale: config.defaultLocale,
-        locales: config.locales,
-      }),
+      new I18nRuntime({ defaultLocale: config?.defaultLocale ?? 'en-US' }),
     );
   }
 }

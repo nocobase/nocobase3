@@ -4,19 +4,20 @@ import path from 'node:path';
 
 import { Hono } from 'hono';
 import { afterEach, describe, expect, it } from 'vitest';
+import { environmentProvider, envString } from '@nocobase/config/providers/env';
 
 import {
   Application,
   type ApplicationOptions,
 } from '../src/application/index.js';
+import { AppConfig, createConfigPaths } from '../src/config/index.js';
 import {
-  appConfig as appIdentityConfig,
-  AppConfig,
-  createConfigPaths,
-} from '../src/config/index.js';
-import { i18nConfig, i18nToken, I18nProvider } from '../src/i18n/index.js';
+  type AppI18nConfig,
+  i18nToken,
+  I18nProvider,
+} from '../src/i18n/index.js';
 import { defineServerPlugin } from '../src/plugins/index.js';
-import { spaConfig, spaRootRoutes } from '../src/spa/index.js';
+import { spaRootRoutes } from '../src/spa/index.js';
 
 const applicationLocales = {
   'en-US': () => Promise.resolve({ default: { greeting: 'Hello' } }),
@@ -41,27 +42,15 @@ describe('i18n config', () => {
   it('defaults to en-US and declares no locale list', async () => {
     const config = await createAppConfig();
 
-    expect(config.get(i18nConfig)).toEqual({ defaultLocale: 'en-US' });
+    expect(config.get<AppI18nConfig>('i18n')).toEqual({
+      defaultLocale: 'en-US',
+    });
   });
 
   it('reads the default locale from APP_DEFAULT_LOCALE', async () => {
     const config = await createAppConfig({ APP_DEFAULT_LOCALE: 'zh-CN' });
 
-    expect(config.get(i18nConfig).defaultLocale).toBe('zh-CN');
-  });
-
-  it('rejects a locale list in configuration', async () => {
-    const config = new AppConfig([i18nConfig]);
-    config.load({
-      name: 'test',
-      read: () =>
-        Promise.resolve({
-          kind: 'map' as const,
-          value: { i18n: { locales: ['en-US', 'zh-CN'] } },
-        }),
-    });
-
-    await expect(config.loadAll()).rejects.toThrow(/i18n/);
+    expect(config.get<string>('i18n.defaultLocale')).toBe('zh-CN');
   });
 });
 
@@ -153,33 +142,32 @@ async function createSpaAppConfig(
   temporaryDirectories.push(root);
   writeFileSync(path.join(root, 'index.html'), '<main></main>', 'utf8');
 
-  const config = new AppConfig(
-    [
-      {
-        ...appIdentityConfig,
-        defaults: {
-          name: 'main',
-          publicBasePath: '/main',
-          internalBasePath: '',
-          publicApiUrl: '/main/api',
-        },
-      },
-      ...(options.withI18nConfig === false ? [] : [i18nConfig]),
-      {
-        ...spaConfig,
-        defaults: {
-          indexPath: path.join(root, 'index.html'),
-          runtime: {
-            storagePrefix: 'NOCOBASE_',
-            storageType: 'localStorage',
-            shareToken: false,
-          },
-        },
-      },
-    ],
-    { environment },
+  const config = new AppConfig();
+  config.load(
+    environmentProvider(environment, {
+      mappings: { APP_DEFAULT_LOCALE: envString('i18n.defaultLocale') },
+    }),
   );
   await config.loadAll();
+  config.mergeDefaults({
+    app: {
+      name: 'main',
+      publicBasePath: '/main',
+      internalBasePath: '',
+      publicApiUrl: '/main/api',
+    },
+    ...(options.withI18nConfig === false
+      ? {}
+      : { i18n: { defaultLocale: 'en-US' } }),
+    spa: {
+      indexPath: path.join(root, 'index.html'),
+      runtime: {
+        storagePrefix: 'NOCOBASE_',
+        storageType: 'localStorage',
+        shareToken: false,
+      },
+    },
+  });
   return config;
 }
 
@@ -221,30 +209,36 @@ async function startApplication(
 async function createAppConfig(
   environment: Readonly<Record<string, string>> = {},
 ): Promise<AppConfig> {
-  const config = new AppConfig([i18nConfig], { environment });
+  const config = new AppConfig();
+  config.load(
+    environmentProvider(environment, {
+      mappings: { APP_DEFAULT_LOCALE: envString('i18n.defaultLocale') },
+    }),
+  );
   await config.loadAll();
+  config.mergeDefaults({ i18n: { defaultLocale: 'en-US' } });
   return config;
 }
 
 async function createTestApplicationOptions(
   environment: Readonly<Record<string, string>>,
 ): Promise<ApplicationOptions> {
-  const config = new AppConfig(
-    [
-      {
-        ...appIdentityConfig,
-        defaults: {
-          name: 'main',
-          publicBasePath: '/main',
-          internalBasePath: '',
-          publicApiUrl: '/main/api',
-        },
-      },
-      i18nConfig,
-    ],
-    { environment },
+  const config = new AppConfig();
+  config.load(
+    environmentProvider(environment, {
+      mappings: { APP_DEFAULT_LOCALE: envString('i18n.defaultLocale') },
+    }),
   );
   await config.loadAll();
+  config.mergeDefaults({
+    app: {
+      name: 'main',
+      publicBasePath: '/main',
+      internalBasePath: '',
+      publicApiUrl: '/main/api',
+    },
+    i18n: { defaultLocale: 'en-US' },
+  });
 
   return { config, paths: createConfigPaths({ rootDir: '/test/app' }) };
 }

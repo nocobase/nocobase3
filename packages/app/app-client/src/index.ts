@@ -7,6 +7,7 @@ export {
   type ClientApplicationRenderConfigFactory,
 } from './application.js';
 export { AppClientRoot, type AppClientRootProps } from './app-client.js';
+export { ClientApplicationContext } from './application-context.js';
 export { resolveAppBase, resolveAppUrl } from './client.js';
 export {
   ApiClientError,

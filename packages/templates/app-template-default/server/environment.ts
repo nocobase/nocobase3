@@ -14,6 +14,7 @@ export const environmentMappings: Readonly<Record<string, EnvironmentMapping>> =
     APP_SERVER_HOST: envString('server.host'),
     APP_SERVER_PORT: envInteger('server.port'),
     APP_PUBLIC_ORIGIN: envString('app.publicOrigin'),
+    APP_DEFAULT_LOCALE: envString('i18n.defaultLocale'),
     SNOWFLAKE_WORKER_ID: envInteger('snowflake.workerId'),
 
     // Development server
