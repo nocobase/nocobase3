@@ -28,7 +28,7 @@ describeIntegrationDatabases(
 
       expect(await scoped.repository('policyProjects').count()).toBe(2);
       // A collection the map does not cover stays unbound.
-      expect(await scoped.repository('policyTasks').count()).toBe(3);
+      expect(await scoped.repository('policyTasks').count()).toBe(5);
       // And the connection it was derived from is untouched.
       expect(await context.database.repository('policyProjects').count()).toBe(
         3,

@@ -79,6 +79,7 @@ import type {
   RepositoryFilterPlan,
   RepositoryReadPlan,
   RepositorySingleMutationMiss,
+  RelationScopeNode,
   RepositoryScopeCheck,
   RepositoryUpdateManyPlan,
   RepositoryUpdateOnePlan,
@@ -530,6 +531,9 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       plan.values,
       plan.relations,
       createdTargets,
+      undefined,
+      {},
+      plan.relationScopes,
     );
     if (plan.scopeCheck) {
       await this.assertWithinScope(
@@ -666,6 +670,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
         unique,
         plan.relations,
         createdTargets,
+        plan.relationScopes,
       );
     }
     if (plan.collection.optimisticLock) {
@@ -718,6 +723,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
             relations: plan.createRelations,
             select: plan.select,
             scopeCheck: plan.createScopeCheck,
+            relationScopes: plan.createRelationScopes,
           }),
         );
       } catch (error) {
@@ -744,6 +750,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       relations: plan.updateRelations,
       select: plan.select,
       scopeCheck: plan.updateScopeCheck,
+      relationScopes: plan.updateRelationScopes,
     });
     if (updated === 'conflict') return updated;
     if (updated === 'missing' || updated === 'multiple') {
@@ -1072,11 +1079,12 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
   private async findByUnique(
     collection: CollectionDefinition,
     unique: UniqueSelector,
+    scope?: FilterAst,
   ): Promise<RepositoryRecord | undefined> {
     return this.findOne({
       collection,
       fields: scalarFields(collection).map((field) => field.name),
-      filter: uniqueFilter(unique),
+      filter: withRelationScope(uniqueFilter(unique), scope),
     });
   }
 
@@ -1305,6 +1313,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     createdTargets: CreatedTargetReference[],
     clientKey?: string,
     additionalPhysicalValues: PhysicalWriteRecord = {},
+    scopes?: Readonly<Record<string, RelationScopeNode>>,
   ): Promise<{ record: RepositoryRecord; unique: UniqueSelector }> {
     const values = withInitialVersion(collection, input);
     const physicalValues = {
@@ -1347,6 +1356,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
           items: deferred,
         },
         createdTargets,
+        scopes,
       );
     }
     return { record, unique };
@@ -1432,6 +1442,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     sourceUnique: UniqueSelector,
     mutations: RelationMutationAst,
     createdTargets: CreatedTargetReference[],
+    scopes?: Readonly<Record<string, RelationScopeNode>>,
   ): Promise<void> {
     for (const node of mutations.items) {
       const resolved = await this.resolveRelation(collection, node.field);
@@ -1441,6 +1452,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
         sourceUnique,
         node,
         createdTargets,
+        scopes?.[node.field],
       );
     }
   }
@@ -1451,6 +1463,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     sourceUnique: UniqueSelector,
     node: RelationMutationNode,
     createdTargets: CreatedTargetReference[],
+    scopeNode?: RelationScopeNode,
   ): Promise<void> {
     if (node.action === 'set') {
       const target = await this.resolveMutationTarget(
@@ -1459,6 +1472,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
         createdTargets,
         resolved,
         source,
+        scopeNode,
       );
       await this.connectRelation(resolved, source, sourceUnique, target.record);
       return;
@@ -1474,6 +1488,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
           source,
           node.update,
           createdTargets,
+          scopeNode,
         );
       } else if (node.upsert) {
         await this.upsertRelatedTarget(
@@ -1482,6 +1497,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
           sourceUnique,
           node.upsert,
           createdTargets,
+          scopeNode,
         );
       } else if (node.delete) {
         await this.deleteRelatedTarget(
@@ -1489,6 +1505,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
           source,
           sourceUnique,
           node.delete,
+          scopeNode,
         );
       }
       return;
@@ -1509,6 +1526,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
           createdTargets,
           resolved,
           source,
+          scopeNode,
         )),
         through: target.through,
       });
@@ -1527,11 +1545,21 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       );
     }
     for (const selector of node.disconnect ?? []) {
-      const target = await this.findTarget(resolved.target, selector);
+      const target = await this.findTarget(
+        resolved.target,
+        selector,
+        scopeNode?.scope,
+      );
       await this.disconnectRelation(resolved, source, sourceUnique, target);
     }
     for (const target of node.update ?? []) {
-      await this.updateRelatedTarget(resolved, source, target, createdTargets);
+      await this.updateRelatedTarget(
+        resolved,
+        source,
+        target,
+        createdTargets,
+        scopeNode,
+      );
     }
     for (const target of node.upsert ?? []) {
       await this.upsertRelatedTarget(
@@ -1540,10 +1568,17 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
         sourceUnique,
         target,
         createdTargets,
+        scopeNode,
       );
     }
     for (const target of node.delete ?? []) {
-      await this.deleteRelatedTarget(resolved, source, sourceUnique, target);
+      await this.deleteRelatedTarget(
+        resolved,
+        source,
+        sourceUnique,
+        target,
+        scopeNode,
+      );
     }
   }
 
@@ -1552,11 +1587,13 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     source: RepositoryRecord,
     target: RelationUpdateTarget,
     createdTargets: CreatedTargetReference[],
+    scopeNode?: RelationScopeNode,
   ): Promise<void> {
     const selected = await this.lockRelatedTarget(
       resolved,
       source,
       target.filter,
+      scopeNode?.scope,
     );
     if (selected === 'missing') relationTargetNotFound(resolved);
     if (selected === 'multiple') multipleRelationTargetsMatched(resolved);
@@ -1565,6 +1602,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       selected,
       target,
       createdTargets,
+      scopeNode?.relations,
     );
   }
 
@@ -1574,11 +1612,13 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     sourceUnique: UniqueSelector,
     target: RelationUpsertTarget,
     createdTargets: CreatedTargetReference[],
+    scopeNode?: RelationScopeNode,
   ): Promise<void> {
     const selected = await this.lockRelatedTarget(
       resolved,
       source,
       target.filter,
+      scopeNode?.scope,
     );
     if (selected === 'multiple') multipleRelationTargetsMatched(resolved);
     if (selected !== 'missing') {
@@ -1587,6 +1627,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
         selected,
         target.update,
         createdTargets,
+        scopeNode?.relations,
       );
       return;
     }
@@ -1609,6 +1650,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       createdTargets,
       resolved,
       source,
+      scopeNode,
     );
     await this.connectRelation(resolved, source, sourceUnique, created.record);
   }
@@ -1618,11 +1660,13 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     source: RepositoryRecord,
     sourceUnique: UniqueSelector,
     target: RelationDeleteTarget,
+    scopeNode?: RelationScopeNode,
   ): Promise<void> {
     const selected = await this.lockRelatedTarget(
       resolved,
       source,
       target.filter,
+      scopeNode?.scope,
     );
     if (selected === 'missing') relationTargetNotFound(resolved);
     if (selected === 'multiple') multipleRelationTargetsMatched(resolved);
@@ -1672,6 +1716,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     selected: LockedMutationRecord,
     target: RelationUpdateTarget,
     createdTargets: CreatedTargetReference[],
+    scopes?: Readonly<Record<string, RelationScopeNode>>,
   ): Promise<void> {
     if (Object.keys(target.values).length > 0) {
       const query = tableQuery(this.getClient(), collection).update(
@@ -1705,6 +1750,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
         selected.unique,
         target.relations,
         createdTargets,
+        scopes,
       );
     }
     if (collection.optimisticLock) {
@@ -1733,8 +1779,10 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
   private async lockRelatedTarget(
     resolved: ResolvedRepositoryRelation,
     source: RepositoryRecord,
-    filter: FilterAst | undefined,
+    callerFilter: FilterAst | undefined,
+    scope?: FilterAst,
   ): Promise<LockedMutationRecord | 'missing' | 'multiple'> {
+    const filter = withRelationScope(callerFilter, scope);
     const client = this.getClient();
     const targetAlias = 'repository_relation_target';
     const fields = scalarFields(resolved.target).map((field) => field.name);
@@ -1816,6 +1864,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     createdTargets: CreatedTargetReference[],
     resolved?: ResolvedRepositoryRelation,
     source?: RepositoryRecord,
+    scopeNode?: RelationScopeNode,
   ): Promise<{ record: RepositoryRecord; unique: UniqueSelector }> {
     if (target.kind === 'create') {
       const additionalPhysicalValues: PhysicalWriteRecord = {};
@@ -1833,6 +1882,8 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
           source[resolved.sourceKey],
         );
       }
+      // A created target belongs to whoever it is being attached to, so the
+      // scope does not constrain it; its own relations still do.
       return this.createRecord(
         collection,
         target.values as RepositoryRecord,
@@ -1840,10 +1891,11 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
         createdTargets,
         target.clientKey,
         additionalPhysicalValues,
+        scopeNode?.relations,
       );
     }
     return {
-      record: await this.findTarget(collection, target.by),
+      record: await this.findTarget(collection, target.by, scopeNode?.scope),
       unique: target.by,
     };
   }
@@ -1851,8 +1903,12 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
   private async findTarget(
     collection: CollectionDefinition,
     unique: UniqueSelector,
+    scope?: FilterAst,
   ): Promise<RepositoryRecord> {
-    const target = await this.findByUnique(collection, unique);
+    // A target outside the scope raises the same error as one that does not
+    // exist. Telling them apart would let a caller probe another tenant's
+    // keys through a relation, which is the leak the root scope closes.
+    const target = await this.findByUnique(collection, unique, scope);
     if (!target) {
       throw new RepositoryError(
         'RECORD_NOT_FOUND',
@@ -3983,6 +4039,23 @@ function withInitialVersion(
   return collection.optimisticLock
     ? { ...values, [collection.optimisticLock.field]: 1 }
     : values;
+}
+
+/**
+ * Intersect a caller filter with a Policy scope without flattening either, so
+ * an `or` group on one side cannot escape the other.
+ */
+function withRelationScope(
+  filter: FilterAst | undefined,
+  scope: FilterAst | undefined,
+): FilterAst | undefined {
+  if (!scope) return filter;
+  if (!filter) return scope;
+  return {
+    kind: 'filter',
+    version: 1,
+    root: { kind: 'group', logic: 'and', items: [filter.root, scope.root] },
+  };
 }
 
 function versionOf(

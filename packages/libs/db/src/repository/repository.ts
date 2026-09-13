@@ -28,6 +28,7 @@ import {
 } from './policy/enforce.js';
 import type {
   NormalizedCreateNode,
+  NormalizedRelationWriteNode,
   NormalizedRepositoryPolicy,
   PartialRepositoryPolicy,
   RepositoryPolicy,
@@ -77,6 +78,7 @@ import {
 import { DefaultSortBuilder, sortExpressionToNode } from './sort-builder.js';
 import type {
   RepositoryCursorAxis,
+  RelationScopeNode,
   RepositoryExecutionAdapter,
   RepositoryScopeCheck,
   RepositoryReadPlan,
@@ -658,6 +660,7 @@ export class DefaultRepository<
       relations: mutation.relations,
       select: selection.select,
       scopeCheck: await this.scopeCheck(collection, 'create'),
+      relationScopes: await this.writeRelationScopes(collection, 'create'),
     });
     return {
       record: pickSelection(
@@ -820,6 +823,7 @@ export class DefaultRepository<
       relations: mutation.relations,
       select: selection.select,
       scopeCheck: await this.scopeCheck(collection, 'update'),
+      relationScopes: await this.writeRelationScopes(collection, 'update'),
     });
     if (result === 'multiple') multipleRecordsMatched(collection);
     if (result === 'conflict') versionConflict(collection);
@@ -975,6 +979,14 @@ export class DefaultRepository<
       select: selection.select,
       createScopeCheck: await this.scopeCheck(collection, 'create'),
       updateScopeCheck: await this.scopeCheck(collection, 'update'),
+      createRelationScopes: await this.writeRelationScopes(
+        collection,
+        'create',
+      ),
+      updateRelationScopes: await this.writeRelationScopes(
+        collection,
+        'update',
+      ),
     });
     if (result === 'conflict') versionConflict(collection);
     return {
@@ -1228,6 +1240,64 @@ export class DefaultRepository<
    * The post-write scope check for an operation, or undefined when the Policy
    * puts no limit on where the record may land.
    */
+  /**
+   * Build the relation target scopes for a write, mirroring the Policy's
+   * relation tree onto the Collection graph.
+   *
+   * Nested shapes each carry their own relation nodes, so a relation reached
+   * through more than one of them gets every scope ANDed together — the
+   * narrowest reading, since none of them was granted more than once.
+   */
+  private async relationScopes(
+    collection: CollectionDefinition,
+    relations: Readonly<Record<string, NormalizedRelationWriteNode>>,
+  ): Promise<Readonly<Record<string, RelationScopeNode>> | undefined> {
+    const entries = Object.entries(relations);
+    if (entries.length === 0) return undefined;
+    const result: Record<string, RelationScopeNode> = {};
+    for (const [name, node] of entries) {
+      const relation = collection.fields?.find(
+        (field) => field.name === name && 'target' in field,
+      ) as RelationFieldDefinition | undefined;
+      if (!relation) continue;
+      const target = await this.options.collections.get(relation.target);
+      if (!target) continue;
+      const scope =
+        node.scope === undefined || node.scope === true
+          ? undefined
+          : await normalizeFilterWithRelations(
+              this.options.collections,
+              target,
+              node.scope,
+              undefined,
+            );
+      const nested = await this.relationScopes(
+        target,
+        mergeNestedRelationNodes(node),
+      );
+      if (scope || nested) {
+        result[name] = {
+          ...(scope ? { scope } : {}),
+          ...(nested ? { relations: nested } : {}),
+        };
+      }
+    }
+    return Object.keys(result).length > 0 ? result : undefined;
+  }
+
+  private async writeRelationScopes(
+    collection: CollectionDefinition,
+    operation: 'create' | 'update',
+  ): Promise<Readonly<Record<string, RelationScopeNode>> | undefined> {
+    const node = resolveWriteShapeNode(
+      this.options.policy,
+      operation,
+      collection,
+    );
+    if (node === undefined || node === true) return undefined;
+    return this.relationScopes(collection, node.relations);
+  }
+
   private async scopeCheck(
     collection: CollectionDefinition,
     operation: 'create' | 'update',
@@ -2598,6 +2668,55 @@ async function scopeCallerFilterNode(
       kind: 'group',
       logic: 'and',
       items: inner ? [inner, scope.root] : [scope.root],
+    },
+  };
+}
+
+/**
+ * Collect the relation nodes nested under every shape of a relation write.
+ *
+ * `create`, `update` and both halves of `upsert` each carry their own map, and
+ * a name in more than one of them is the same relation reached by different
+ * routes. Their scopes are ANDed so the result is no wider than any single
+ * route allowed.
+ */
+function mergeNestedRelationNodes(
+  node: NormalizedRelationWriteNode,
+): Readonly<Record<string, NormalizedRelationWriteNode>> {
+  const shapes = [
+    node.create,
+    node.update,
+    node.upsert?.create,
+    node.upsert?.update,
+  ].filter((shape) => shape !== undefined);
+  const merged: Record<string, NormalizedRelationWriteNode> = {};
+  for (const shape of shapes) {
+    for (const [name, child] of Object.entries(shape.relations)) {
+      const existing = merged[name];
+      merged[name] = existing
+        ? intersectRelationScopes(existing, child)
+        : child;
+    }
+  }
+  return merged;
+}
+
+function intersectRelationScopes(
+  left: NormalizedRelationWriteNode,
+  right: NormalizedRelationWriteNode,
+): NormalizedRelationWriteNode {
+  if (left.scope === undefined || left.scope === true) return right;
+  if (right.scope === undefined || right.scope === true) return left;
+  return {
+    ...left,
+    scope: {
+      kind: 'filter',
+      version: 1,
+      root: {
+        kind: 'group',
+        logic: 'and',
+        items: [left.scope.root, right.scope.root],
+      },
     },
   };
 }

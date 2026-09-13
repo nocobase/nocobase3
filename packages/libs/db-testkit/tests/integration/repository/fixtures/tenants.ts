@@ -62,6 +62,22 @@ export async function createTenantFixture(
         secret: 'c',
         projectId: 'p3',
       },
+      // Unattached, so a relation write can claim them without the explicit
+      // reassignment that moving an already-owned row requires.
+      {
+        id: 't4',
+        tenantId: 'T1',
+        title: 'Free mine',
+        secret: 'd',
+        projectId: null,
+      },
+      {
+        id: 't5',
+        tenantId: 'T2',
+        title: 'Free theirs',
+        secret: 'e',
+        projectId: null,
+      },
     ],
   });
 }

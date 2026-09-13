@@ -68,6 +68,23 @@ export interface RepositoryScopeCheck {
   readonly fields: readonly string[];
 }
 
+/**
+ * Which existing records a relation mutation may locate.
+ *
+ * The root scope constrains the root record and nothing else. A relation
+ * operation reaches its target straight from the target table by selector, so
+ * without this a caller inside their own tenant could `connect` somebody
+ * else's row into their data — the root scope stops them touching the wrong
+ * project, not the wrong task.
+ *
+ * `create` is absent on purpose: a target being created takes its ownership
+ * from the relation key, so it necessarily lands under the originator.
+ */
+export interface RelationScopeNode {
+  readonly scope?: FilterAst;
+  readonly relations?: Readonly<Record<string, RelationScopeNode>>;
+}
+
 export interface RepositoryCreateOnePlan {
   readonly collection: CollectionDefinition;
   readonly fields: readonly string[];
@@ -75,6 +92,7 @@ export interface RepositoryCreateOnePlan {
   readonly relations?: RelationMutationAst;
   readonly select?: SelectAst;
   readonly scopeCheck?: RepositoryScopeCheck;
+  readonly relationScopes?: Readonly<Record<string, RelationScopeNode>>;
 }
 
 export interface RepositoryCreateManyPlan {
@@ -94,6 +112,7 @@ export interface RepositoryUpdateOnePlan {
   readonly relations?: RelationMutationAst;
   readonly select?: SelectAst;
   readonly scopeCheck?: RepositoryScopeCheck;
+  readonly relationScopes?: Readonly<Record<string, RelationScopeNode>>;
 }
 
 export interface RepositoryUpsertOnePlan {
@@ -106,6 +125,8 @@ export interface RepositoryUpsertOnePlan {
   readonly updateRelations?: RelationMutationAst;
   readonly ifVersion?: string | number;
   readonly select?: SelectAst;
+  readonly createRelationScopes?: Readonly<Record<string, RelationScopeNode>>;
+  readonly updateRelationScopes?: Readonly<Record<string, RelationScopeNode>>;
   readonly createScopeCheck?: RepositoryScopeCheck;
   /**
    * Judged against the record that already exists, before it is updated, and

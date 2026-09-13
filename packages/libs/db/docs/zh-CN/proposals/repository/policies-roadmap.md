@@ -142,7 +142,11 @@ description: 按阶段拆分的实施任务，含前置决策、技术验证、�
 
 ### 1.8 关系写入目标
 
-`resolveMutationTarget` 的定位查询加上 `RelationWriteNode.scope`；未命中返回 `RELATION_TARGET_NOT_FOUND`；关系 `update` 分支同样走写入后重判。
+`resolveMutationTarget` 与 `lockRelatedTarget` 的定位查询加上 `RelationWriteNode.scope`；关系 `update` 分支同样走写入后重判。
+
+**未命中不使用独立错误码。** 原计划返回 `RELATION_TARGET_NOT_FOUND`，实际保留各条路径原有的未命中错误（`connect` / `disconnect` 走 `RECORD_NOT_FOUND`，关系 `update` / `delete` 走 `RELATION_TARGET_NOT_FOUND`）。理由是不变量 3：越界目标与不存在的目标必须给出完全相同的回答，否则调用方可以拿 ID 逐个试，通过关系把别的租户有哪些记录枚举出来。为越界单独设码，等于在关系这条路上重新开一个存在性预言机。
+
+`toWritePolicy` 桥接（决策 0.9）**保留**：关系目标 scope 不经过旧 `WritePolicy` 结构，而是与 mutation AST 平行地下发一棵 `RelationScopeNode` 树，在适配器里与定位查询合并。旧结构装不下 scope 这件事因此不再构成拆桥的触发条件，拆除时机改由迁移（阶段 2 结束后的文档转正与消费方改造）决定。
 
 ### 阶段 1 验收
 
