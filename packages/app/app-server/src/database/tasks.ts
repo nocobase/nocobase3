@@ -12,7 +12,7 @@ import {
   planAppDatabaseTasks,
   type AppDatabaseTask,
   type AppDatabaseTaskKind,
-  type AppDatabaseTaskSelection,
+  type AppDatabaseTaskPlanOptions,
 } from './plan.js';
 import type { AppDatabaseConfig } from './types.js';
 
@@ -48,14 +48,18 @@ export class AppDatabaseTaskError extends Error {
   }
 }
 
+export interface AppDatabasePlanExecutionOptions {
+  readonly paths?: ConfigPaths;
+  readonly drivers?: Record<string, DatabaseDriverRegistration>;
+  readonly fresh?: boolean;
+}
+
 /** Manual commands and startup share the same resolved, connection-bound plan. */
 export async function executeAppDatabasePlan(
   database: DatabaseManager,
   config: AppDatabaseConfig,
-  paths: ConfigPaths | undefined,
   plan: readonly AppDatabaseTask[],
-  drivers?: Record<string, DatabaseDriverRegistration>,
-  fresh = false,
+  { paths, drivers, fresh = false }: AppDatabasePlanExecutionOptions = {},
 ): Promise<AppDatabaseTasksResult> {
   if (fresh && plan.some((task) => task.kind !== 'migrations')) {
     throw new Error('--fresh is only supported for migrations.');
@@ -121,24 +125,21 @@ export async function executeAppDatabasePlan(
   return result;
 }
 
+export interface AppDatabaseTaskRunOptions extends AppDatabaseTaskPlanOptions {
+  readonly kind: AppDatabaseTaskKind;
+}
+
 export async function runAppDatabaseTasks(
   config: AppDatabaseConfig,
-  paths: ConfigPaths | undefined,
-  selection: AppDatabaseTaskSelection & { kind: AppDatabaseTaskKind },
-  drivers?: Record<string, DatabaseDriverRegistration>,
+  options: AppDatabaseTaskRunOptions,
 ): Promise<AppDatabaseTasksResult> {
-  if (selection.fresh && selection.kind !== 'migrations') {
+  const { paths, drivers } = options;
+  if (options.fresh && options.kind !== 'migrations') {
     throw new Error('--fresh is only supported for migrations.');
   }
-  const plan = planAppDatabaseTasks(
-    config,
-    paths,
-    [selection.kind],
-    selection,
-    drivers,
-  );
+  const plan = planAppDatabaseTasks(config, [options.kind], options);
   if (!plan.length) return { ok: true, status: 'not-configured', results: [] };
-  if (selection.fresh) {
+  if (options.fresh) {
     for (const task of plan) {
       if (task.skipReason) continue;
       const connection = config.connections[task.connection];
@@ -154,7 +155,7 @@ export async function runAppDatabaseTasks(
         );
       }
     }
-    if (selection.confirmFresh && !(await selection.confirmFresh(plan))) {
+    if (options.confirmFresh && !(await options.confirmFresh(plan))) {
       throw new Error('Fresh migration cancelled.');
     }
   }
@@ -164,14 +165,11 @@ export async function runAppDatabaseTasks(
   });
   if (!database) return { ok: true, status: 'not-configured', results: [] };
   try {
-    return await executeAppDatabasePlan(
-      database,
-      config,
+    return await executeAppDatabasePlan(database, config, plan, {
       paths,
-      plan,
       drivers,
-      selection.fresh,
-    );
+      fresh: options.fresh,
+    });
   } finally {
     await database.destroy();
   }
@@ -179,15 +177,12 @@ export async function runAppDatabaseTasks(
 
 export async function runAppMigrations(
   config: AppDatabaseConfig,
-  paths?: ConfigPaths,
-  drivers?: Record<string, DatabaseDriverRegistration>,
+  options: Omit<AppDatabaseTaskRunOptions, 'kind'>,
 ): Promise<AppMigrationRunResult | undefined> {
-  const result = await runAppDatabaseTasks(
-    config,
-    paths,
-    { kind: 'migrations' },
-    drivers,
-  );
+  const result = await runAppDatabaseTasks(config, {
+    ...options,
+    kind: 'migrations',
+  });
   const first = result.results[0];
   return (
     first && {
@@ -202,15 +197,12 @@ export async function runAppMigrations(
 
 export async function runAppSeeds(
   config: AppDatabaseConfig,
-  paths?: ConfigPaths,
-  drivers?: Record<string, DatabaseDriverRegistration>,
+  options: Omit<AppDatabaseTaskRunOptions, 'kind'>,
 ): Promise<AppSeedRunResult | undefined> {
-  const result = await runAppDatabaseTasks(
-    config,
-    paths,
-    { kind: 'seeds' },
-    drivers,
-  );
+  const result = await runAppDatabaseTasks(config, {
+    ...options,
+    kind: 'seeds',
+  });
   const first = result.results[0];
   return (
     first && {

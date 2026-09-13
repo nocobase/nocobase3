@@ -27,12 +27,14 @@ export {
   runAppDatabaseTasks,
   AppDatabaseTaskError,
   type AppDatabaseTaskResult,
+  type AppDatabaseTaskRunOptions,
   type AppDatabaseTasksResult,
 } from './tasks.js';
 export {
   planAppDatabaseTasks,
   type AppDatabaseTask,
   type AppDatabaseTaskKind,
+  type AppDatabaseTaskPlanOptions,
   type AppDatabaseTaskSelection,
 } from './plan.js';
 export type {
@@ -40,4 +42,5 @@ export type {
   AppDatabaseConnectionConfig,
   AppDatabaseMigrationConfig,
   AppDatabaseSeedConfig,
+  AppDatabaseTaskContributions,
 } from './types.js';

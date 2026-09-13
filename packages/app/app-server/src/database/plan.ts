@@ -5,7 +5,11 @@ import { validateDatabaseOwnership } from './ownership.js';
 
 import type { ConfigPaths } from '../config/index.js';
 import type { DatabaseDriverRegistration } from '@nocobase/db';
-import type { AppDatabaseConfig, AppDatabaseMigrationConfig } from './types.js';
+import type {
+  AppDatabaseConfig,
+  AppDatabaseMigrationConfig,
+  AppDatabaseTaskContributions,
+} from './types.js';
 
 export type AppDatabaseTaskKind = 'migrations' | 'seeds';
 
@@ -15,6 +19,17 @@ export interface AppDatabaseTaskSelection {
   autoRun?: boolean;
   fresh?: boolean;
   confirmFresh?: (plan: readonly AppDatabaseTask[]) => Promise<boolean>;
+}
+
+/**
+ * Everything planning needs beyond the configuration itself. `contributions` is
+ * required so that a caller which has not been updated fails to compile rather
+ * than silently planning without its plugins' migrations.
+ */
+export interface AppDatabaseTaskPlanOptions extends AppDatabaseTaskSelection {
+  readonly contributions: AppDatabaseTaskContributions;
+  readonly paths?: ConfigPaths;
+  readonly drivers?: Record<string, DatabaseDriverRegistration>;
 }
 
 export interface AppDatabaseTask {
@@ -33,11 +48,11 @@ export function defaultConnectionName(
 /** Resolve the entire plan before any database is opened or modified. */
 export function planAppDatabaseTasks(
   config: AppDatabaseConfig,
-  paths: ConfigPaths | undefined,
   kinds: readonly AppDatabaseTaskKind[],
-  selection: AppDatabaseTaskSelection = {},
-  drivers?: Record<string, DatabaseDriverRegistration>,
+  planOptions: AppDatabaseTaskPlanOptions,
 ): AppDatabaseTask[] {
+  const { contributions, paths, drivers } = planOptions;
+  const selection: AppDatabaseTaskSelection = planOptions;
   if (selection.connection !== undefined && selection.all) {
     throw new Error('--connection and --all are mutually exclusive.');
   }
@@ -96,10 +111,7 @@ export function planAppDatabaseTasks(
           `Configure either ${kind} directory or sources for "${name}", not both.`,
         );
       }
-      const root =
-        paths?.database() ??
-        config.taskSources?.directory ??
-        path.resolve('database');
+      const root = paths?.database() ?? path.resolve('database');
       const modern = path.join(root, name, kind);
       const old = path.join(root, kind);
       let directory = options.directory;
@@ -115,8 +127,7 @@ export function planAppDatabaseTasks(
       }
       const resolvePath = (value: string): string =>
         path.resolve(paths?.root() ?? process.cwd(), value);
-      const packageName =
-        options.packageName ?? config.taskSources?.packageName ?? 'app';
+      const packageName = options.packageName ?? contributions.appPackageName;
       const appSources = options.sources?.map((source) => ({
         ...source,
         directory: resolvePath(source.directory),
@@ -127,9 +138,11 @@ export function planAppDatabaseTasks(
           extensions: options.extensions,
         },
       ];
+      // Plugins contribute to the default connection only; they cannot know
+      // which additional connections an application happens to define.
       const sources = [
         ...appSources,
-        ...(name === primary ? (config.taskSources?.[kind] ?? []) : []),
+        ...(name === primary ? contributions[kind] : []),
       ];
       const autoRun = options.autoRun ?? name === primary;
       if (!external && (!selection.autoRun || autoRun)) {

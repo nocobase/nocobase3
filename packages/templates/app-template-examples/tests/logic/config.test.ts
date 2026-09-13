@@ -10,6 +10,7 @@ import {
   planAppDatabaseTasks,
   type AppDatabaseConfig,
 } from '@nocobase/app-server/database';
+import { createAppDatabaseTaskContributions } from '@nocobase/app-server/plugins';
 import { resolveStandaloneAppRuntime } from '@nocobase/app-server/node';
 import {
   type CachingConfig,
@@ -51,9 +52,12 @@ describe('application config', () => {
       });
       const analytics = planAppDatabaseTasks(
         database,
-        runtime.configPaths,
         ['migrations', 'seeds'],
-        { autoRun: true },
+        {
+          paths: runtime.configPaths,
+          contributions: createAppDatabaseTaskContributions(runtime.plugins),
+          autoRun: true,
+        },
       ).filter((task) => task.connection === 'analytics');
       expect(analytics.map((task) => task.skipReason)).toEqual([
         undefined,

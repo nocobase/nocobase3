@@ -43,6 +43,7 @@ function fixture() {
   const runtime = async () => ({
     config: { get: () => database } as unknown as AppConfigAccessor,
     configPaths: paths,
+    plugins: { appPackageName: 'test-app', plugins: [] },
   });
   const command = {
     log: vi.fn(),
