@@ -2,7 +2,7 @@
   {
     "type": "file",
     "name": "index",
-    "label": "工作流概览"
+    "label": "概览"
   },
   {
     "type": "file",
@@ -12,7 +12,7 @@
   {
     "type": "dir",
     "name": "development",
-    "label": "使用 Agent 开发"
+    "label": "应用开发中的工作流"
   },
   {
     "type": "dir",

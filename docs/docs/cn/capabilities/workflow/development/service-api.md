@@ -1,10 +1,10 @@
 ---
-title: 'Workflow Service API'
+title: 'Service API'
 description: '从应用业务代码触发工作流，并为工作流注册扩展节点能力。'
-keywords: 'NocoBase,Workflow Service API,trigger,eventKey'
+keywords: 'NocoBase,Service API,trigger,eventKey'
 ---
 
-# Workflow Service API
+# Service API
 
 应用业务代码通过公开的 Workflow Service 触发流程。管理界面的查询、启停和手动运行走认证管理 API，不属于这个面向业务模块的 Service 合同。
 
@@ -98,6 +98,105 @@ workflow.registerInstruction(CustomInstruction);
 重复 type 会被拒绝。运行时注册并不足够：应用的源码检查和 Artifact 构建也必须使用同一个合同，否则定义可能在一个阶段通过、另一个阶段失败。
 
 优先让应用 Agent 使用 Workflow Skill 检查是否已有插件提供所需能力。只有可复用的流程控制语义才适合成为 Instruction；普通业务动作继续使用 Run + Service。
+
+### 可运行示例：发邮件节点
+
+下面的最小扩展把“发送邮件”做成可复用节点。扩展插件公开同一个
+`SendEmailInstruction`，并在 Provider 的 `boot()` 中注册；`boot()` 可以异步等待
+邮件 Service 就绪，但注册本身必须在工作流被检查、构建和运行前完成。
+
+```ts
+// server/instructions/send-email.ts
+import {
+  WorkflowInstruction,
+  createNodeExpression,
+  type WorkflowNodeSourceInput,
+  type WorkflowInstructionResult,
+} from '@nocobase/app-plugin-workflow';
+import { mailServiceToken, type MailService } from '../mail/service.js';
+
+type Config = { to: string; subject: string; body: string };
+export class SendEmailInstruction extends WorkflowInstruction<Config> {
+  static readonly type = 'send-email';
+  static readonly branches = null;
+  static create(source: WorkflowNodeSourceInput<Config>) {
+    return createNodeExpression(SendEmailInstruction, source);
+  }
+  static validateConfig(config: unknown) {
+    const c = config as Partial<Config>;
+    return typeof c?.to === 'string' &&
+      typeof c?.subject === 'string' &&
+      typeof c?.body === 'string'
+      ? []
+      : [{ path: 'config', message: 'to, subject and body are required' }];
+  }
+  async run(): Promise<WorkflowInstructionResult> {
+    this.signal.throwIfAborted();
+    const mail =
+      this.processor.services?.resolve<MailService>(mailServiceToken);
+    if (!mail) throw new Error('Mail service is not configured');
+    await mail.send(this.config); // MailService must provide an idempotency key.
+    return { status: 1, result: { sent: true } }; // 1 = RESOLVED
+  }
+}
+```
+
+在扩展插件 Provider 中注册运行时合同：
+
+```ts
+export class MailWorkflowProvider extends ServiceProvider<App> {
+  async boot() {
+    const workflow = this.app.container.resolve(workflowServiceToken);
+    await this.app.container.resolve(mailServiceToken).ready();
+    workflow.registerInstruction(SendEmailInstruction);
+  }
+}
+```
+
+工作流定义直接使用公开导入：
+
+```ts
+import {
+  defineWorkflow,
+  type WorkflowSourceAst,
+} from '@nocobase/app-plugin-workflow';
+import { SendEmailInstruction } from 'your-mail-plugin/server/instructions/send-email';
+const workflow: WorkflowSourceAst = defineWorkflow({
+  title: 'Send welcome email',
+  inputSchema: { type: 'object' },
+  nodes: [
+    SendEmailInstruction.create({
+      key: 'welcome',
+      config: {
+        to: '{{$input.email}}',
+        subject: 'Welcome',
+        body: 'Hello!',
+      },
+    }),
+  ],
+});
+export default workflow;
+```
+
+构建侧必须传入同一个 Instruction map，不能只注册运行时：
+
+```ts
+import {
+  buildApplicationWorkflows,
+  checkWorkflowPackage,
+} from '@nocobase/app-plugin-workflow/build';
+const instructions = new Map([['send-email', SendEmailInstruction]]);
+await checkWorkflowPackage(packageRoot, { contracts: { nodes: instructions } });
+await buildApplicationWorkflows({
+  sourceRoot,
+  distRoot,
+  resourceRoot,
+  instructions,
+});
+```
+
+`check`、Artifact 输出和运行时注册必须使用同一个 `type`、`validateConfig`、
+`create` 和执行合同；Artifact 只写入隔离的 `dist/server/workflows`，不会替代启用。
 
 ## 接入示例
 

@@ -1,14 +1,14 @@
 ---
-title: '内置工作流节点'
+title: '概览'
 description: '选择 NocoBase 3 工作流内置的 Run、Condition 和 Terminate 节点。'
 keywords: 'NocoBase,工作流节点,Run,Condition,Terminate'
 ---
 
-# 内置工作流节点
+# 概览
 
 节点是工作流中具有独立业务意义、可以被记录和观察的步骤。不要把每次函数调用或数据库查询都拆成节点；一个节点内部可以通过类型化 Service 完成一项原子业务动作。
 
-## 节点选择
+## 内置节点
 
 | 目标                         | 节点      | 文档                             |
 | ---------------------------- | --------- | -------------------------------- |
@@ -24,10 +24,8 @@ keywords: 'NocoBase,工作流节点,Run,Condition,Terminate'
 
 节点标题和描述可以随版本调整，`key` 应在业务含义不变时保持稳定，以便关联历史、诊断和结果引用。
 
-## 当前能力边界
-
-默认插件没有内置人工审批、持久化等待、循环、通知或子流程节点。Run 节点可以调用通知服务或其他业务服务，但不能凭空提供“暂停几天后恢复”这样的流程控制语义。
-
 ## 扩展节点能力
 
-只有当一种缺失能力是可复用的流程控制语义时，才考虑实现自定义 Instruction。自定义能力必须同时交给源码检查器、Artifact 构建过程和运行时注册表。让应用 Agent 先使用 Workflow Skill 检查现有插件，参见[使用 Workflow Skill](../using-skill.md)和[Workflow Service API](../service-api.md)。
+只有当一种缺失能力是可复用的流程控制语义时，才考虑实现自定义 Instruction。自定义能力必须同时交给源码检查器、Artifact 构建过程和运行时注册表。让应用 Agent 先使用 Workflow Skill 检查现有插件，参见[使用 Workflow Skill](../using-skill.md)和[Service API](../service-api.md)。
+
+需要直接套用的完整实现可参考 [Service API 的发邮件节点示例](../service-api.md#可运行示例发邮件节点)，其中包含公开导入、异步 Provider、checker/build 合同、隔离 Artifact 输出和运行时注册。
