@@ -164,7 +164,7 @@ Explicitly choose scope, execution, and permission. Validate input, enforce busi
 ## Skill, MCP, and LLM services
 
 - Skill: create `SKILL.md` with `scope`, `name`, `description`, optional `tools`, and instructions. Skill-local tools are discovered automatically.
-- MCP: default-export `defineMCP({...})`; the filename is the server name. Read the installed public `MCPOptions` type and keep credentials in environment/config.
+- MCP: configure `ai.mcpServers` in `config.yml`; the settings page is read-only and only tests connections or displays discovered tools. Keep credentials in environment/config.
 - LLM services: configure `config.yml` `ai.llmServices` with environment placeholders and explicit enabled models. The name set is authoritative; reload application config after edits. No process restart or AI resource rescan is required.
 
 The App runtime already owns its `AIManager`; do not call `createAIManager()` merely to load normal `ai/` resources.

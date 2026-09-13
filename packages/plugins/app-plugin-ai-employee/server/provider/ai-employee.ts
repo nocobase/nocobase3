@@ -95,8 +95,8 @@ export class AIEmployeeProvider extends ServiceProvider<AppPluginApplication> {
     );
     services.configure({
       llmServices: config.llmServices,
+      mcpServers: config.mcpServers,
       resourceRegistrar: new AIEmployeeResources({
-        mcpDirectory: path.resolve(this.app.paths.root(), 'ai/mcp'),
         logger: this.app.container
           .resolve(loggingToken)
           .getLogger('ai-employee'),
@@ -113,6 +113,9 @@ export class AIEmployeeProvider extends ServiceProvider<AppPluginApplication> {
         await services.ready();
         await services.llmServiceConfigSynchronizer.enqueue(
           current.llmServices,
+        );
+        await services.mcpServerService.syncConfiguredMCPServers(
+          current.mcpServers,
         );
       },
     );

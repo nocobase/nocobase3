@@ -3,6 +3,7 @@ import {
   type AppConfigDefinition,
 } from '@nocobase/app-server/config';
 import type {
+  MCPOptions,
   EnabledModelsConfig,
   LLMServiceOptions,
 } from '@nocobase/ai-employee';
@@ -64,6 +65,7 @@ export interface AIApplicationConfig {
   readonly skills?: AISkillsConfig;
   readonly aiKnowledgeBase?: AIKnowledgeBaseConfig;
   readonly llmServices: AIEmployeeLLMServiceConfig[];
+  readonly mcpServers?: Readonly<Record<string, MCPOptions>>;
   readonly [key: string]: unknown;
 }
 
@@ -139,6 +141,25 @@ const llmServiceSchema = Type.Object(
   { additionalProperties: false },
 );
 
+const mcpServerSchema = Type.Object(
+  {
+    title: Type.Optional(Type.String()),
+    transport: Type.Union([
+      Type.Literal('stdio'),
+      Type.Literal('sse'),
+      Type.Literal('http'),
+    ]),
+    command: Type.Optional(Type.String()),
+    args: Type.Optional(Type.Array(Type.String())),
+    env: Type.Optional(Type.Record(Type.String(), Type.String())),
+    url: Type.Optional(Type.String()),
+    enabled: Type.Optional(Type.Boolean()),
+    headers: Type.Optional(Type.Record(Type.String(), Type.String())),
+    restart: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
+  },
+  { additionalProperties: false },
+);
+
 export const aiConfig: AppConfigDefinition<AIApplicationConfig> =
   defineAppConfig({
     namespace: 'ai',
@@ -164,6 +185,9 @@ export const aiConfig: AppConfigDefinition<AIApplicationConfig> =
           llmServices: Type.Array(llmServiceSchema, {
             uniqueItemProperties: ['name'],
           }),
+          mcpServers: Type.Optional(
+            Type.Record(Type.String(), mcpServerSchema),
+          ),
         },
         { additionalProperties: true },
       ),
@@ -178,6 +202,7 @@ export const aiConfig: AppConfigDefinition<AIApplicationConfig> =
         manifests: [],
       },
       llmServices: [],
+      mcpServers: {},
     },
   });
 

@@ -32,10 +32,10 @@ Read these App-local files when present:
 ## App AI resources
 
 - `config.yml` `ai.llmServices`: LLM service application config with environment placeholders.
+- `config.yml` `ai.mcpServers`: MCP server connection configuration with environment placeholders.
 - `server/ai/employees/<name>/index.ts`: App Employee definition with an inline `systemPrompt`.
 - `server/ai/tools/<name>.ts`: App backend Tool definition.
 - `ai/skills/<name>/SKILL.md`: App Skill; optional Skill-local `tools/` remain Skill-loader behavior.
-- `ai/mcp/<name>.ts`: MCP server definition; filename is the resource name.
 
 Aggregate Employees and Tools through static imports in `server/ai/index.ts`, subclass the public `AIResourceRegistrar` from `@nocobase/app-plugin-ai-employee/server`, and invoke it from the App Provider `boot()` with the existing `aiManagerToken`. There is no Employee/Tool filesystem scan and no Employee-local prompt, Skill, or Tool auto-binding.
 

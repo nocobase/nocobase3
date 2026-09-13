@@ -59,6 +59,7 @@ describe('AI application config', () => {
       },
       skills: { paths: [] },
       llmServices: [],
+      mcpServers: {},
     });
   });
 

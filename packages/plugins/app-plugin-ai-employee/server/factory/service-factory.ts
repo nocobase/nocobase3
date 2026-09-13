@@ -9,7 +9,10 @@ import {
   type ServiceToken,
 } from '@nocobase/service-provider';
 
-import type { AIEmployeeLLMServiceConfig } from '../config.js';
+import type {
+  AIEmployeeLLMServiceConfig,
+  AIApplicationConfig,
+} from '../config.js';
 import type { AIResourceRegistrar } from '../ai/index.js';
 import { type ManagerFactory, managerFactoryToken } from './manager-factory.js';
 import { repositoryFactoryToken } from './repository-factory.js';
@@ -38,6 +41,7 @@ export interface ServiceFactoryOptions {
 
 export interface ServiceFactoryInitialization {
   readonly llmServices?: readonly AIEmployeeLLMServiceConfig[];
+  readonly mcpServers?: AIApplicationConfig['mcpServers'];
   readonly resourceRegistrar: AIResourceRegistrar;
 }
 
@@ -158,6 +162,9 @@ export class ServiceFactory {
       this.repositories.aiEmployees,
     );
     await this.llmServiceConfigSynchronizer.enqueue(initialization.llmServices);
+    await this.mcpServerService.syncConfiguredMCPServers(
+      initialization.mcpServers,
+    );
     await this.ai.llmServiceManager.switchRepository(
       this.repositories.llmServices,
     );
