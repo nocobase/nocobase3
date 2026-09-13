@@ -287,7 +287,7 @@ Use an exact template such as `{{$parameters.approvalLimit}}` or JSON Logic `{ v
 - Keep node keys stable across revisions. Titles/descriptions may change; keys connect history, diagnostics, and result references.
 - Only call `.branch()` on a branching node, and only use branch names declared by that instruction contract.
 
-Every node source has `key`, optional `title`/`description`, required `config`, optional `options: { timeout }`, and optional `result`. `timeout` must be a finite positive number. Config is an instruction-owned namespace; never flatten config fields onto the node.
+Every node source has `key`, optional `title`/`description`, required `config`, and optional `result`. Node-level timeout is not currently enforced by the runtime; configure a workflow-level timeout instead. Config is an instruction-owned namespace; never flatten config fields onto the node.
 
 ## Condition nodes
 

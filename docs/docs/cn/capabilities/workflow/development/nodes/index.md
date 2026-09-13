@@ -20,7 +20,7 @@ keywords: 'NocoBase,工作流节点,Run,Condition,Terminate'
 
 ## 所有节点共有的字段
 
-每个节点都具有稳定且全局唯一的 `key`，还可以提供面向管理界面的 `title` 和 `description`。`config` 由具体节点类型定义；`options.timeout` 可设置节点最长执行时间；`result` 描述后续节点可以引用的结果结构。
+每个节点都具有稳定且全局唯一的 `key`，还可以提供面向管理界面的 `title` 和 `description`。`config` 由具体节点类型定义；`result` 描述后续节点可以引用的结果结构。
 
 节点标题和描述可以随版本调整，`key` 应在业务含义不变时保持稳定，以便关联历史、诊断和结果引用。
 
