@@ -152,11 +152,11 @@ Before editing an existing migration, check its Git history and the status of th
 Run dialect integration tests with the package filters described in
 [`internal-docs/development/database-integration-testing.md`](internal-docs/development/database-integration-testing.md).
 The default `@nocobase/db` integration command runs SQLite only; all other
-dialects are opt-in. SQLite, PostgreSQL, and MySQL may run concurrently when
-requested. OceanBase, Oracle, MSSQL, and Dameng must run one at a time because
-their database services and initialization steps are heavier and more sensitive
-to concurrent startup. The `@nocobase/db` `test:integration:all` script remains
-a safe, fully-serial fallback.
+dialects are opt-in. SQLite, PostgreSQL, MySQL, and Kingbase may run
+concurrently when requested. OceanBase, Oracle, MSSQL, and Dameng must run one
+at a time because their database services and initialization steps are heavier
+and more sensitive to concurrent startup. The `@nocobase/db`
+`test:integration:all` script remains a safe, fully-serial fallback.
 
 ## Native Dependencies in Generated Applications
 
@@ -369,6 +369,15 @@ Every package that emits `.d.ts` files (`declaration: true`) enables both `isola
 | `packages/plugins/app-plugin-authentication/tsconfig.json`     | Authentication library     |
 | `packages/libs/authorization/tsconfig.json`                    | Authorization library      |
 | `packages/libs/db/tsconfig.json`                               | Database package           |
+| `packages/libs/db-testkit/tsconfig.json`                       | Database test contract     |
+| `packages/libs/db-sqlite/tsconfig.json`                        | SQLite dialect             |
+| `packages/libs/db-postgres/tsconfig.json`                      | PostgreSQL dialect         |
+| `packages/libs/db-mysql/tsconfig.json`                         | MySQL dialect              |
+| `packages/libs/db-kingbase/tsconfig.json`                      | Kingbase dialect           |
+| `packages/libs/db-oceanbase/tsconfig.json`                     | OceanBase dialect          |
+| `packages/libs/db-oracle/tsconfig.json`                        | Oracle dialect             |
+| `packages/libs/db-mssql/tsconfig.json`                         | MSSQL dialect              |
+| `packages/libs/db-dameng/tsconfig.json`                        | Dameng dialect             |
 | `packages/app/app-host/tsconfig.json`                          | Application host           |
 | `packages/app/app-server/tsconfig.json`                        | Application server library |
 | `packages/libs/caching/tsconfig.json`                          | Caching library            |

@@ -38,6 +38,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint . --max-warnings 0",
     "test": "vitest run tests/index.test.ts tests/unit",
+    "check": "pnpm lint && pnpm typecheck && pnpm typecheck:unit && pnpm typecheck:integration && pnpm test && pnpm build",
     "typecheck:integration": "tsc -p tsconfig.integration.json --noEmit",
     "typecheck:unit": "tsc -p tsconfig.unit.json --noEmit"
   },
