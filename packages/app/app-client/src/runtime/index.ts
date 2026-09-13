@@ -43,7 +43,9 @@ export type AppRuntimeValidator = (
 
 export interface AppRuntimeDefinition {
   readonly packageName: string;
-  readonly createAppConfig: AppClientConfigFactory;
+  readonly createAppConfig?: AppClientConfigFactory;
+  /** @deprecated Use createAppConfig. */
+  readonly config?: AppClientConfigFactory;
   readonly defaultConfigs?: AppConfigFactory<AppClientConfigMap>;
   readonly serviceProviders?: AppClientServiceProviders;
   readonly reactProviders?: AppClientReactProviders;
@@ -102,7 +104,12 @@ export async function resolveAppRuntime(
   definition: AppRuntimeDefinition,
   options: ResolveAppRuntimeOptions = {},
 ): Promise<ResolvedAppRuntime> {
-  const config = await definition.createAppConfig({
+  const createAppConfig = definition.createAppConfig ?? definition.config;
+  if (!createAppConfig)
+    throw new Error(
+      `App runtime '${definition.packageName}' must define createAppConfig`,
+    );
+  const config = await createAppConfig({
     rawConfig:
       options.rawConfig === undefined
         ? readAppClientRuntimeConfig()

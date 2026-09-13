@@ -195,6 +195,8 @@
     "@nocobase/service-provider": "workspace:^",
     "@oclif/core": "catalog:",
     "better-auth": "catalog:",
-    "hono": "catalog:"
+    "hono": "catalog:",
+    "@nocobase/app-plugin-service-provider-example": "workspace:^",
+    "@nocobase/app-plugin-notification": "workspace:^"
   }
 }
