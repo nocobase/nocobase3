@@ -8,6 +8,11 @@ import {
   type FieldWritePolicy,
   type ThroughWritePolicy,
 } from './write-policy.js';
+import { normalizeRepositoryPolicy } from './policy/normalize.js';
+import type {
+  NormalizedRepositoryPolicy,
+  RepositoryPolicy,
+} from './policy/types.js';
 import {
   assertMutationWritePolicy,
   assertFieldWrites,
@@ -90,13 +95,13 @@ import type {
   GroupBySelectionResult,
   MutationValidationError,
   MutationValidationResult,
-  Repository,
   RepositoryQuery,
   RepositoryContext,
   RepositoryCursor,
   RepositoryFilter,
   RepositoryMutationDescription,
   RepositoryRecord,
+  ScopedRepository,
   RepositorySelect,
   RepositorySort,
   RelationMutationAst,
@@ -128,14 +133,46 @@ export interface DefaultRepositoryOptions {
   readonly collection: string;
   readonly collections: Pick<ConnectionCollections, 'get'>;
   readonly adapter: RepositoryExecutionAdapter;
+  readonly policy?: NormalizedRepositoryPolicy;
 }
 
 export class DefaultRepository<
   TRecord extends object = RepositoryRecord,
   TCreate extends object = Partial<TRecord>,
   TUpdate extends object = Partial<TRecord>,
-> implements Repository<TRecord, TCreate, TUpdate> {
+> implements ScopedRepository<TRecord, TCreate, TUpdate> {
   constructor(private readonly options: DefaultRepositoryOptions) {}
+
+  withPolicy(
+    policy: RepositoryPolicy<TRecord>,
+  ): ScopedRepository<TRecord, TCreate, TUpdate>;
+  withPolicy<P>(
+    policy: (principal: P) => RepositoryPolicy<TRecord>,
+    principal: P,
+  ): ScopedRepository<TRecord, TCreate, TUpdate>;
+  withPolicy<P>(
+    policy:
+      RepositoryPolicy<TRecord> | ((principal: P) => RepositoryPolicy<TRecord>),
+    principal?: P,
+  ): ScopedRepository<TRecord, TCreate, TUpdate> {
+    const input =
+      typeof policy === 'function' ? policy(principal as P) : policy;
+    return new DefaultRepository<TRecord, TCreate, TUpdate>({
+      ...this.options,
+      policy: normalizeRepositoryPolicy(input),
+    });
+  }
+
+  explainPolicy(): NormalizedRepositoryPolicy {
+    if (!this.options.policy) {
+      throw new RepositoryError(
+        'POLICY_REQUIRED',
+        'Repository does not have a bound Policy.',
+        { collection: this.options.collection },
+      );
+    }
+    return this.options.policy;
+  }
 
   findMany(options: FindManyOptions<TRecord> = {}): RepositoryQuery<TRecord> {
     return new DefaultRepositoryQuery(

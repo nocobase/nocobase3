@@ -266,6 +266,7 @@ export type {
   RepositorySelect,
   RepositorySort,
   RepositoryUniqueFieldSetDescription,
+  ScopedRepository,
   RelationSelectBuilder,
   RelationConnectInput,
   RelationCreateInput,

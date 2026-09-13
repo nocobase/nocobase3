@@ -33,6 +33,10 @@ import type {
   RepositoryCursor,
   RepositoryCursorDirection,
 } from '@nocobase/repository-input';
+import type {
+  NormalizedRepositoryPolicy,
+  RepositoryPolicy,
+} from './policy/types.js';
 export type * from '@nocobase/repository-input';
 
 export interface RepositoryReadOptions<
@@ -276,6 +280,13 @@ export interface Repository<
   TCreate extends object = Partial<TRecord>,
   TUpdate extends object = Partial<TRecord>,
 > {
+  withPolicy(
+    policy: RepositoryPolicy<TRecord>,
+  ): ScopedRepository<TRecord, TCreate, TUpdate>;
+  withPolicy<P>(
+    policy: (principal: P) => RepositoryPolicy<TRecord>,
+    principal: P,
+  ): ScopedRepository<TRecord, TCreate, TUpdate>;
   findMany<TSelection extends AnySelectBuilder<TRecord>>(
     options: FindManyOptions<TRecord> & {
       readonly select: (select: SelectBuilder<TRecord>) => TSelection;
@@ -392,4 +403,12 @@ export interface Repository<
     options: DeleteManyOptions<TRecord> & { readonly select: SelectAst },
   ): Promise<DeleteManyResult<TRecord>>;
   deleteMany(options: DeleteManyOptions<TRecord>): Promise<DeleteManyResult>;
+}
+
+export interface ScopedRepository<
+  TRecord extends object = RepositoryRecord,
+  TCreate extends object = Partial<TRecord>,
+  TUpdate extends object = Partial<TRecord>,
+> extends Omit<Repository<TRecord, TCreate, TUpdate>, 'withPolicy'> {
+  explainPolicy(): NormalizedRepositoryPolicy;
 }
