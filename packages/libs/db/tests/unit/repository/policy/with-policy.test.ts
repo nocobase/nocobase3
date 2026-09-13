@@ -519,4 +519,90 @@ describe('DefaultRepository.withPolicy', () => {
       }),
     ]);
   });
+
+  it('enforces create and update field allowlists', async () => {
+    const collection = {
+      name: 'projects',
+      fields: [
+        { name: 'id', type: 'string' },
+        { name: 'title', type: 'string' },
+        { name: 'secret', type: 'string' },
+      ],
+    };
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: { get: async () => collection },
+      adapter: {
+        createOne: async () => ({
+          record: { id: 'p1', title: 'Created' },
+          createdTargets: [],
+        }),
+        updateOne: async () => ({
+          record: { id: 'p1', title: 'Updated' },
+          createdTargets: [],
+        }),
+      } as never,
+    });
+    const scoped = repository.withPolicy({
+      read: { scope: true },
+      create: { scope: true, fields: ['title'] },
+      update: { scope: true, fields: ['title'] },
+      delete: { scope: true },
+    });
+
+    await expect(
+      scoped.createOne({ values: { secret: 'hidden' } }),
+    ).rejects.toMatchObject({
+      code: 'FIELD_WRITE_FORBIDDEN',
+      field: 'secret',
+    });
+    await expect(
+      scoped.updateOne({
+        filter: {
+          kind: 'filter',
+          version: 1,
+          root: { kind: 'group', logic: 'and', items: [] },
+        },
+        values: { secret: 'hidden' },
+      }),
+    ).rejects.toMatchObject({
+      code: 'FIELD_WRITE_FORBIDDEN',
+      field: 'secret',
+    });
+  });
+
+  it('forbids create and update when their policy nodes are false', async () => {
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {
+        get: async () => ({
+          name: 'projects',
+          fields: [{ name: 'title', type: 'string' }],
+        }),
+      },
+      adapter: {} as never,
+    });
+    const scoped = repository.withPolicy({
+      read: { scope: true },
+      create: false,
+      update: false,
+      delete: { scope: true },
+    });
+
+    await expect(
+      scoped.createOne({ values: { title: 'Created' } }),
+    ).rejects.toMatchObject({
+      code: 'WRITE_FORBIDDEN',
+    });
+    await expect(
+      scoped.updateOne({
+        filter: {
+          kind: 'filter',
+          version: 1,
+          root: { kind: 'group', logic: 'and', items: [] },
+        },
+        values: { title: 'Updated' },
+      }),
+    ).rejects.toMatchObject({ code: 'WRITE_FORBIDDEN' });
+  });
 });

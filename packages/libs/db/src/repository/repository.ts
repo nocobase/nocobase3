@@ -506,6 +506,12 @@ export class DefaultRepository<
         1,
         { nodes: 0, clientKeys: new Set(), context: options.context },
       );
+      this.assertPolicyMutationFields(
+        collection,
+        mutation.values,
+        options.operation === 'createOne' ? 'create' : 'update',
+        ['values'],
+      );
       assertMutationWritePolicy(
         mutation,
         writePolicy,
@@ -553,6 +559,9 @@ export class DefaultRepository<
       1,
       { nodes: 0, clientKeys: new Set(), context: options.context },
     );
+    this.assertPolicyMutationFields(collection, mutation.values, 'create', [
+      'values',
+    ]);
     assertMutationWritePolicy(
       mutation,
       writePolicy,
@@ -628,6 +637,12 @@ export class DefaultRepository<
       ]),
     );
     records.forEach((values, index) =>
+      this.assertPolicyMutationFields(collection, values, 'create', [
+        'values',
+        index,
+      ]),
+    );
+    records.forEach((values, index) =>
       assertFieldWrites(
         values,
         writePolicy,
@@ -680,6 +695,9 @@ export class DefaultRepository<
       1,
       { nodes: 0, clientKeys: new Set(), context: options.context },
     );
+    this.assertPolicyMutationFields(collection, mutation.values, 'update', [
+      'values',
+    ]);
     assertMutationWritePolicy(
       mutation,
       writePolicy,
@@ -782,6 +800,18 @@ export class DefaultRepository<
       [],
       'create',
       collection.name,
+    );
+    this.assertPolicyMutationFields(
+      collection,
+      createMutation.values,
+      'create',
+      ['create'],
+    );
+    this.assertPolicyMutationFields(
+      collection,
+      updateMutation.values,
+      'update',
+      ['update'],
     );
     assertMutationWritePolicy(
       updateMutation,
@@ -894,6 +924,7 @@ export class DefaultRepository<
       'update',
       collection.name,
     );
+    this.assertPolicyMutationFields(collection, values, 'update', ['values']);
     const selection = options.select
       ? await this.validateSelect(collection, options.select, options.context)
       : undefined;
@@ -1026,6 +1057,36 @@ export class DefaultRepository<
       );
     }
     return collection;
+  }
+
+  private assertPolicyMutationFields(
+    collection: CollectionDefinition,
+    values: Readonly<Record<string, unknown>>,
+    operation: 'create' | 'update',
+    path: readonly (string | number)[],
+  ): void {
+    const policy =
+      operation === 'create'
+        ? this.options.policy?.create
+        : this.options.policy?.update;
+    if (policy === false) {
+      invalid('WRITE_FORBIDDEN', `${operation} is forbidden by Policy.`, {
+        collection: collection.name,
+      });
+    }
+    if (policy === undefined || policy === true) return;
+    validatePolicyFields(collection, { fields: policy.fields }, [
+      'policy',
+      operation,
+    ]);
+    assertFieldWrites(
+      values,
+      { fields: policy.fields },
+      path,
+      [],
+      operation,
+      collection.name,
+    );
   }
 
   private async normalizeFilter<T extends object>(
