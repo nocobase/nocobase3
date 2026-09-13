@@ -219,6 +219,11 @@ function normalizeRelationShape(
     return Object.freeze({
       fields: normalizeFields(value.fields, [...path, 'fields']),
       relations: Object.freeze(relations),
+      ...(allowThrough
+        ? {
+            through: normalizeThrough({ through: value.through }, path).through,
+          }
+        : {}),
     });
   } finally {
     ancestors.delete(value);

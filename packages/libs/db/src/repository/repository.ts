@@ -7,11 +7,15 @@ import {
   type WritePolicy,
   type FieldWritePolicy,
   type ThroughWritePolicy,
+  type RelationWritePolicy,
 } from './write-policy.js';
 import { normalizeRepositoryPolicy } from './policy/normalize.js';
 import type {
   NormalizedReadNode,
+  NormalizedRelationShapeNode,
+  NormalizedRelationWriteNode,
   NormalizedRepositoryPolicy,
+  NormalizedWriteNode,
   PolicyRef,
   RepositoryPolicy,
 } from './policy/types.js';
@@ -508,7 +512,7 @@ export class DefaultRepository<
       );
       this.assertPolicyMutationFields(
         collection,
-        mutation.values,
+        mutation,
         options.operation === 'createOne' ? 'create' : 'update',
         ['values'],
       );
@@ -559,9 +563,7 @@ export class DefaultRepository<
       1,
       { nodes: 0, clientKeys: new Set(), context: options.context },
     );
-    this.assertPolicyMutationFields(collection, mutation.values, 'create', [
-      'values',
-    ]);
+    this.assertPolicyMutationFields(collection, mutation, 'create', ['values']);
     assertMutationWritePolicy(
       mutation,
       writePolicy,
@@ -637,7 +639,7 @@ export class DefaultRepository<
       ]),
     );
     records.forEach((values, index) =>
-      this.assertPolicyMutationFields(collection, values, 'create', [
+      this.assertPolicyMutationFields(collection, { values }, 'create', [
         'values',
         index,
       ]),
@@ -695,9 +697,7 @@ export class DefaultRepository<
       1,
       { nodes: 0, clientKeys: new Set(), context: options.context },
     );
-    this.assertPolicyMutationFields(collection, mutation.values, 'update', [
-      'values',
-    ]);
+    this.assertPolicyMutationFields(collection, mutation, 'update', ['values']);
     assertMutationWritePolicy(
       mutation,
       writePolicy,
@@ -801,18 +801,12 @@ export class DefaultRepository<
       'create',
       collection.name,
     );
-    this.assertPolicyMutationFields(
-      collection,
-      createMutation.values,
+    this.assertPolicyMutationFields(collection, createMutation, 'create', [
       'create',
-      ['create'],
-    );
-    this.assertPolicyMutationFields(
-      collection,
-      updateMutation.values,
+    ]);
+    this.assertPolicyMutationFields(collection, updateMutation, 'update', [
       'update',
-      ['update'],
-    );
+    ]);
     assertMutationWritePolicy(
       updateMutation,
       writePolicy === true ? true : writePolicy.update,
@@ -924,7 +918,9 @@ export class DefaultRepository<
       'update',
       collection.name,
     );
-    this.assertPolicyMutationFields(collection, values, 'update', ['values']);
+    this.assertPolicyMutationFields(collection, { values }, 'update', [
+      'values',
+    ]);
     const selection = options.select
       ? await this.validateSelect(collection, options.select, options.context)
       : undefined;
@@ -1061,7 +1057,10 @@ export class DefaultRepository<
 
   private assertPolicyMutationFields(
     collection: CollectionDefinition,
-    values: Readonly<Record<string, unknown>>,
+    mutation: {
+      readonly values: Readonly<Record<string, unknown>>;
+      readonly relations?: RelationMutationAst;
+    },
     operation: 'create' | 'update',
     path: readonly (string | number)[],
   ): void {
@@ -1079,9 +1078,9 @@ export class DefaultRepository<
       'policy',
       operation,
     ]);
-    assertFieldWrites(
-      values,
-      { fields: policy.fields },
+    assertMutationWritePolicy(
+      mutation,
+      toWritePolicy(policy),
       path,
       [],
       operation,
@@ -3198,6 +3197,59 @@ function validatePolicyFields(
     }
   }
 }
+
+function toWritePolicy(policy: NormalizedWriteNode): WritePolicy {
+  return {
+    fields: policy.fields,
+    relations: Object.fromEntries(
+      Object.entries(policy.relations).map(([name, relation]) => [
+        name,
+        toRelationWritePolicy(relation),
+      ]),
+    ),
+  };
+}
+
+function toRelationWritePolicy(
+  policy: NormalizedRelationWriteNode,
+): RelationWritePolicy {
+  const shape = (node: NormalizedRelationShapeNode): WritePolicy => ({
+    fields: node.fields,
+    relations: Object.fromEntries(
+      Object.entries(node.relations).map(([name, relation]) => [
+        name,
+        toRelationWritePolicy(relation),
+      ]),
+    ),
+  });
+  const through = (node: {
+    readonly through?: false | { readonly fields: readonly string[] };
+  }): ThroughWritePolicy =>
+    node.through === false
+      ? { through: false }
+      : node.through === undefined
+        ? {}
+        : { through: { fields: node.through.fields } };
+  return {
+    ...(policy.create
+      ? { create: { ...shape(policy.create), ...through(policy.create) } }
+      : {}),
+    ...(policy.update ? { update: shape(policy.update) } : {}),
+    ...(policy.upsert
+      ? {
+          upsert: {
+            create: shape(policy.upsert.create),
+            update: shape(policy.upsert.update),
+          },
+        }
+      : {}),
+    ...(policy.connect ? { connect: through(policy.connect) } : {}),
+    ...(policy.set ? { set: through(policy.set) } : {}),
+    ...(policy.disconnect ? { disconnect: {} } : {}),
+    ...(policy.delete ? { delete: {} } : {}),
+  };
+}
+
 async function validateWritePolicyMetadata(
   collections: Pick<ConnectionCollections, 'get'>,
   collection: CollectionDefinition,

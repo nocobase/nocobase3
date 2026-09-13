@@ -286,7 +286,12 @@ describe('DefaultRepository.withPolicy', () => {
                 name,
                 fields: [
                   { name: 'id', type: 'string' },
-                  { name: 'tasks', type: 'hasMany', target: 'tasks' },
+                  {
+                    name: 'tasks',
+                    type: 'hasMany',
+                    target: 'tasks',
+                    foreignKey: 'projectId',
+                  },
                 ],
               }
             : {
@@ -357,7 +362,12 @@ describe('DefaultRepository.withPolicy', () => {
                 name,
                 fields: [
                   { name: 'id', type: 'string' },
-                  { name: 'tasks', type: 'hasMany', target: 'tasks' },
+                  {
+                    name: 'tasks',
+                    type: 'hasMany',
+                    target: 'tasks',
+                    foreignKey: 'projectId',
+                  },
                 ],
               }
             : {
@@ -367,6 +377,7 @@ describe('DefaultRepository.withPolicy', () => {
                   { name: 'title', type: 'string' },
                   { name: 'secret', type: 'string' },
                 ],
+                constraints: [{ type: 'primary', fields: ['id'] }],
               },
       },
       adapter: {
@@ -604,5 +615,96 @@ describe('DefaultRepository.withPolicy', () => {
         values: { title: 'Updated' },
       }),
     ).rejects.toMatchObject({ code: 'WRITE_FORBIDDEN' });
+  });
+
+  it('enforces relation write actions and nested fields', async () => {
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {
+        get: async (name: string) =>
+          name === 'projects'
+            ? {
+                name,
+                fields: [
+                  { name: 'id', type: 'string' },
+                  {
+                    name: 'tasks',
+                    type: 'hasMany',
+                    target: 'tasks',
+                    foreignKey: 'projectId',
+                  },
+                ],
+              }
+            : {
+                name,
+                fields: [
+                  { name: 'id', type: 'string' },
+                  { name: 'title', type: 'string' },
+                  { name: 'secret', type: 'string' },
+                ],
+                constraints: [{ type: 'primary', fields: ['id'] }],
+              },
+      },
+      adapter: {
+        createOne: async () => ({
+          record: { id: 'p1' },
+          createdTargets: [],
+        }),
+        updateOne: async () => ({
+          record: { id: 'p1' },
+          createdTargets: [],
+        }),
+      } as never,
+    });
+    const scoped = repository.withPolicy({
+      read: { scope: true },
+      create: { scope: true, fields: [], relations: {} },
+      update: {
+        scope: true,
+        fields: [],
+        relations: {
+          tasks: {
+            create: { fields: ['title'], relations: {} },
+          },
+        },
+      },
+      delete: { scope: true },
+    });
+
+    await expect(
+      scoped.updateOne({
+        filter: {
+          kind: 'filter',
+          version: 1,
+          root: { kind: 'group', logic: 'and', items: [] },
+        },
+        values: {
+          tasks: {
+            create: [
+              {
+                kind: 'relationCreate',
+                version: 1,
+                values: { secret: 'hidden' },
+              },
+            ],
+          },
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: 'FIELD_WRITE_FORBIDDEN',
+      field: 'secret',
+    });
+    await expect(
+      scoped.createOne({
+        values: {
+          tasks: {
+            connect: { id: 't1' },
+          },
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: 'RELATION_WRITE_FORBIDDEN',
+      relation: 'tasks',
+    });
   });
 });

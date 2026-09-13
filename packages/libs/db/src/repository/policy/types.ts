@@ -104,6 +104,7 @@ export interface NormalizedRelationWriteNode {
 export interface NormalizedRelationShapeNode {
   readonly fields: readonly string[];
   readonly relations: Readonly<Record<string, NormalizedRelationWriteNode>>;
+  readonly through?: false | { readonly fields: readonly string[] };
 }
 
 export interface NormalizedThroughNode {
