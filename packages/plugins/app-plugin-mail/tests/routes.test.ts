@@ -140,7 +140,7 @@ describe('mail API routes', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         mode: 'initial',
-        batchSize: 100,
+        batchSize: 500,
         maxMessages: 5_000,
       }),
     });
@@ -151,7 +151,6 @@ describe('mail API routes', () => {
       {
         accountId: 'account-1',
         mode: 'initial',
-        batchSize: 100,
         maxMessages: 5_000,
       },
     );

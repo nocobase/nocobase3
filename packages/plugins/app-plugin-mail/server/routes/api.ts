@@ -708,7 +708,6 @@ async function readSyncInput(
     mode,
     receivedAfter: optionalString(value.receivedAfter, 'receivedAfter'),
     maxMessages: optionalInteger(value.maxMessages, 'maxMessages'),
-    batchSize: optionalInteger(value.batchSize, 'batchSize'),
   };
 }
 

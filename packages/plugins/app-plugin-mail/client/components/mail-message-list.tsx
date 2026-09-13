@@ -9,6 +9,7 @@ export interface MailMessageListLabels {
   readonly empty: string;
   readonly loadMore: string;
   readonly noSubject: string;
+  readonly subjectCount?: (count: number) => string;
   readonly unknownSender: string;
 }
 
@@ -31,19 +32,21 @@ export function MailMessageList({
   onSelect,
   selectedMessageId,
 }: MailMessageListProps): ReactElement {
+  const groupedMessages = groupMessagesByConversation(messages);
+
   return (
     <section
       aria-busy={loading}
       aria-label='Messages'
       className='min-h-0 overflow-y-auto border-b lg:border-r lg:border-b-0'
     >
-      {messages.length === 0 && !loading ? (
+      {groupedMessages.length === 0 && !loading ? (
         <p className='p-8 text-center text-sm text-muted-foreground'>
           {labels.empty}
         </p>
       ) : null}
       <div className='divide-y'>
-        {messages.map((message) => {
+        {groupedMessages.map(({ message, subjectCount }) => {
           const sender = message.from?.name ?? message.from?.address;
           return (
             <button
@@ -87,6 +90,17 @@ export function MailMessageList({
                 >
                   {message.subject || labels.noSubject}
                 </span>
+                {subjectCount > 1 ? (
+                  <span
+                    aria-label={
+                      labels.subjectCount?.(subjectCount) ??
+                      `${subjectCount} messages in this conversation`
+                    }
+                    className='shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-xs font-medium text-primary'
+                  >
+                    {subjectCount}
+                  </span>
+                ) : null}
                 {message.hasAttachments ? (
                   <Paperclip
                     aria-label='Has attachments'
@@ -129,6 +143,60 @@ export function MailMessageList({
       ) : null}
     </section>
   );
+}
+
+interface GroupedMailMessage {
+  readonly message: MailMessageSummary;
+  readonly loadedCount: number;
+  readonly subjectCount: number;
+}
+
+function groupMessagesByConversation(
+  messages: readonly MailMessageSummary[],
+): readonly GroupedMailMessage[] {
+  const groups = new Map<string, GroupedMailMessage>();
+  for (const message of messages) {
+    const key = messageGroupKey(message);
+    const existing = groups.get(key);
+    if (!existing) {
+      groups.set(key, {
+        message,
+        loadedCount: 1,
+        subjectCount: Math.max(1, message.subjectCount ?? 1),
+      });
+      continue;
+    }
+    groups.set(key, {
+      message: mergeGroupedMessage(existing.message, message),
+      loadedCount: existing.loadedCount + 1,
+      subjectCount: Math.max(
+        existing.subjectCount,
+        existing.loadedCount + 1,
+        message.subjectCount ?? 1,
+      ),
+    });
+  }
+  return [...groups.values()];
+}
+
+function messageGroupKey(message: MailMessageSummary): string {
+  if (message.conversationId)
+    return `${message.accountId}:conversation:${message.conversationId}`;
+  return `${message.accountId}:message:${message.id}`;
+}
+
+function mergeGroupedMessage(
+  representative: MailMessageSummary,
+  message: MailMessageSummary,
+): MailMessageSummary {
+  return {
+    ...representative,
+    hasAttachments: representative.hasAttachments || message.hasAttachments,
+    note: representative.note ?? message.note,
+    read: representative.read && message.read,
+    starred: representative.starred || message.starred,
+    todo: representative.todo || message.todo,
+  };
 }
 
 function formatMessageDate(value?: string): string {

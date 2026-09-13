@@ -16,8 +16,11 @@ The first runnable vertical slice provides:
   for read-only all-user account visibility, plus
   `/settings/mail/send-logs` for all-user synchronization and delivery
   operation logs;
-- a production Mail workspace at `/mail` and current-user account management at
-  `/settings/mail/my-accounts`, plus development diagnostics under `/dev/mail`;
+- a production Mail workspace at `/mail`, plus current-user account connection
+  and development diagnostics under `/dev/mail`; `/dev/mail/accounts` defaults
+  to a connected-account table and also exposes account association (including
+  the initial sync date), signature management in an account drawer, and
+  reusable-template management;
 - account and folder filtering, refresh, message
   search, conversation detail, account connection, synchronization controls,
   sending, synchronization logs, and delivery submission logs;
@@ -59,7 +62,8 @@ The first runnable vertical slice provides:
 - a top-level Mail navigation entry with a cross-account unread badge;
 - filterable operation logs with safe synchronization cancellation and retry;
 - bounded bulk delivery as separate per-recipient submissions;
-- current-user account default selection, suspend/resume, and disconnect;
+- current-user account default selection, account deactivation/reactivation, and
+  removal with local data cleanup;
 - Provider contracts, registry, adapter resolver, database storage, and an
   explicit migration.
 
@@ -105,9 +109,11 @@ returning history. One Queue
 execution advances one state-machine step, so a large mailbox never requires
 one unbounded HTTP request or one unbounded Job.
 
-The default initial policy is 10,000 messages with pages of 200; API callers
-may choose 1–100,000 messages and pages of 1–500. Provider cursors are opaque
-and are never returned by the HTTP API as standalone Queue payloads.
+The default initial policy is 10,000 messages with pages of 100. The server-side
+page size is configured through `mail.syncBatchSize` or
+`MAIL_SYNC_BATCH_SIZE` and is constrained to 1–200; API callers may choose the
+received-after date and maximum message count. Provider cursors are opaque and
+are never returned by the HTTP API as standalone Queue payloads.
 
 ## Push notifications
 
@@ -126,8 +132,10 @@ Gmail push service account to publish.
 
 For Microsoft 365, Mail Core creates the Graph subscription itself, handles the
 plain-text `validationToken` challenge, verifies `clientState`, and renews the
-subscription before expiry. Disconnecting an account attempts to remove its
-Provider subscription; local removal still completes if remote cleanup fails.
+subscription before expiry. Removing an account attempts to remove its Provider
+subscription and credential, then deletes its local synchronized data; the
+local removal still completes if remote cleanup fails and never deletes mail
+from the Provider mailbox.
 
 ## Provider integration
 
@@ -206,7 +214,7 @@ GET  /api/mail/accounts/:accountId/conversations/:conversationId/messages
 `GET /mail/oauth/callback` is intentionally public because Google and
 Microsoft redirect the browser to it. It accepts only a short-lived,
 single-use state created by the authenticated start endpoint and redirects the
-browser to `/settings/mail/my-accounts` after completion; state and PKCE verifiers are
+browser to `/dev/mail/accounts` after completion; state and PKCE verifiers are
 never returned by account APIs.
 
 `POST /mail/webhooks/:providerType/:providerName/:secret` is intentionally

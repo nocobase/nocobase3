@@ -55,7 +55,7 @@ describe('MailClient', () => {
     });
   });
 
-  it('encodes message queries and bounded sync requests', async () => {
+  it('encodes message queries and sync requests', async () => {
     const request = vi.fn(async () => ({
       data: { items: [], id: 'sync-1', status: 'pending' },
     }));
@@ -78,7 +78,6 @@ describe('MailClient', () => {
       mode: 'initial',
       receivedAfter: '2026-01-01T00:00:00.000Z',
       maxMessages: 1000,
-      batchSize: 100,
     });
     expect(request).toHaveBeenLastCalledWith({
       path: 'mail/accounts/account%2F1/sync',
@@ -87,7 +86,6 @@ describe('MailClient', () => {
         mode: 'initial',
         receivedAfter: '2026-01-01T00:00:00.000Z',
         maxMessages: 1000,
-        batchSize: 100,
       },
     });
 

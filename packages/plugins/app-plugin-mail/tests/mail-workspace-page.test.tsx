@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mail = vi.hoisted(() => ({
@@ -7,6 +13,7 @@ const mail = vi.hoisted(() => ({
   getSyncRun: vi.fn(),
   getMessage: vi.fn(),
   listAccounts: vi.fn(),
+  listProviders: vi.fn(),
   listConversationMessages: vi.fn(),
   listFolders: vi.fn(),
   listIdentities: vi.fn(),
@@ -44,6 +51,25 @@ describe('MailWorkspacePage', () => {
         scopes: [],
         status: 'active',
         isDefault: true,
+      },
+    ]);
+    mail.listProviders.mockResolvedValue([
+      {
+        type: 'gmail',
+        name: 'google',
+        label: 'Gmail',
+        connection: 'oauth',
+        capabilities: {
+          receive: true,
+          send: true,
+          incrementalSync: true,
+          pushNotifications: true,
+          folders: true,
+          labels: true,
+          drafts: true,
+          moveMessage: true,
+          aliases: true,
+        },
       },
     ]);
     mail.listFolders.mockResolvedValue([]);
@@ -122,6 +148,252 @@ describe('MailWorkspacePage', () => {
         idempotencyKey: expect.any(String),
       }),
     );
+  });
+
+  it('opens the configured default account first', async () => {
+    mail.listAccounts.mockResolvedValue([
+      {
+        id: 'account-1',
+        userId: 'user-1',
+        provider: { type: 'gmail', name: 'google' },
+        address: 'first@example.com',
+        scopes: [],
+        status: 'active',
+        isDefault: false,
+      },
+      {
+        id: 'account-2',
+        userId: 'user-1',
+        provider: { type: 'gmail', name: 'google' },
+        address: 'default@example.com',
+        scopes: [],
+        status: 'active',
+        isDefault: true,
+      },
+    ]);
+
+    render(<MailWorkspacePage />);
+
+    expect(await screen.findByLabelText('Account')).toHaveValue('account-2');
+  });
+
+  it('groups messages from the same conversation into one mailbox row', async () => {
+    mail.listMessages.mockResolvedValue({
+      items: [
+        {
+          id: 'message-1',
+          accountId: 'account-1',
+          providerMessageId: 'provider-message-1',
+          conversationId: 'conversation-1',
+          folderIds: ['INBOX'],
+          from: { address: 'latest@example.com' },
+          to: [{ address: 'user@example.com' }],
+          cc: [],
+          bcc: [],
+          subject: 'Project update',
+          preview: 'Latest update',
+          receivedAt: '2026-09-08T00:00:00.000Z',
+          read: false,
+          starred: false,
+          draft: false,
+          hasAttachments: false,
+          todo: false,
+        },
+        {
+          id: 'message-2',
+          accountId: 'account-1',
+          providerMessageId: 'provider-message-2',
+          conversationId: 'conversation-1',
+          folderIds: ['INBOX'],
+          from: { address: 'older@example.com' },
+          to: [{ address: 'user@example.com' }],
+          cc: [],
+          bcc: [],
+          subject: ' Re:   project   update ',
+          preview: 'Older update',
+          receivedAt: '2026-09-07T00:00:00.000Z',
+          read: true,
+          starred: true,
+          draft: false,
+          hasAttachments: true,
+          todo: true,
+        },
+      ],
+    });
+
+    render(<MailWorkspacePage />);
+
+    expect(await screen.findByText('Project update')).toBeInTheDocument();
+    expect(screen.getAllByText('Project update')).toHaveLength(1);
+    expect(screen.getByText('2', { exact: true })).toBeInTheDocument();
+  });
+
+  it('disables sending and synchronization for an inactive account', async () => {
+    mail.listAccounts.mockResolvedValue([
+      {
+        id: 'account-1',
+        userId: 'user-1',
+        provider: { type: 'gmail', name: 'google' },
+        address: 'user@example.com',
+        scopes: [],
+        status: 'suspended',
+        isDefault: true,
+      },
+    ]);
+
+    render(<MailWorkspacePage />);
+
+    expect(
+      await screen.findByRole('button', { name: 'Compose' }),
+    ).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Sync mailbox' })).toBeDisabled();
+  });
+
+  it('keeps the selected signature when sending individual messages', async () => {
+    mail.listSignatures.mockResolvedValue([
+      {
+        id: 'signature-1',
+        identityId: 'identity-1',
+        name: 'Support signature',
+        text: 'Regards, Support',
+        isDefault: false,
+        createdAt: '2026-09-08T00:00:00.000Z',
+        updatedAt: '2026-09-08T00:00:00.000Z',
+      },
+    ]);
+    render(<MailWorkspacePage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Compose' }));
+    fireEvent.change(await screen.findByLabelText('Signature'), {
+      target: { value: 'signature-1' },
+    });
+    fireEvent.change(screen.getByLabelText('TO'), {
+      target: { value: 'recipient@example.com' },
+    });
+    fireEvent.change(screen.getByLabelText('Subject'), {
+      target: { value: 'Private message' },
+    });
+    const editor = screen.getByLabelText('Message body');
+    editor.innerHTML = '<p>Message content</p>';
+    fireEvent.input(editor);
+    fireEvent.click(
+      screen.getByRole('checkbox', {
+        name: 'Send one private message per recipient (up to 100)',
+      }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await waitFor(() =>
+      expect(mail.sendBulk).toHaveBeenCalledWith(
+        expect.objectContaining({
+          signatureId: 'signature-1',
+          recipients: [{ address: 'recipient@example.com' }],
+        }),
+      ),
+    );
+  });
+
+  it('does not allow sending without a subject and message body', async () => {
+    render(<MailWorkspacePage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Compose' }));
+    fireEvent.change(screen.getByLabelText('TO'), {
+      target: { value: 'recipient@example.com' },
+    });
+    const send = screen.getByRole('button', { name: 'Send' });
+    expect(send).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText('Subject'), {
+      target: { value: 'Subject' },
+    });
+    expect(send).toBeDisabled();
+
+    const editor = screen.getByLabelText('Message body');
+    editor.innerHTML = '<p>Message content</p>';
+    fireEvent.input(editor);
+    await waitFor(() => expect(send).toBeEnabled());
+  });
+
+  it('hides unsupported draft, label, and archive actions for IMAP', async () => {
+    const message = {
+      id: 'message-1',
+      accountId: 'account-1',
+      providerMessageId: 'imap-message-1',
+      folderIds: ['INBOX'],
+      from: { address: 'sender@example.com' },
+      to: [{ address: 'user@example.com' }],
+      cc: [],
+      bcc: [],
+      replyTo: [],
+      references: [],
+      subject: 'IMAP message',
+      text: 'Message content',
+      read: true,
+      starred: false,
+      draft: false,
+      hasAttachments: false,
+      attachments: [],
+    };
+    mail.listAccounts.mockResolvedValue([
+      {
+        id: 'account-1',
+        userId: 'user-1',
+        provider: { type: 'imap-smtp', name: 'personal' },
+        address: 'user@example.com',
+        scopes: [],
+        status: 'active',
+        isDefault: true,
+      },
+    ]);
+    mail.listProviders.mockResolvedValue([
+      {
+        type: 'imap-smtp',
+        name: 'personal',
+        label: 'IMAP / SMTP',
+        connection: 'credentials',
+        capabilities: {
+          receive: true,
+          send: true,
+          incrementalSync: true,
+          pushNotifications: false,
+          folders: true,
+          labels: false,
+          drafts: false,
+          moveMessage: false,
+          aliases: false,
+        },
+      },
+    ]);
+    mail.listFolders.mockResolvedValue([
+      {
+        id: 'archive',
+        accountId: 'account-1',
+        providerFolderId: 'Archive',
+        type: 'archive',
+        name: 'Archive',
+        kind: 'folder',
+      },
+    ]);
+    mail.listMessages.mockResolvedValue({ items: [message] });
+    mail.getMessage.mockResolvedValue(message);
+
+    render(<MailWorkspacePage />);
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Compose' })).toBeEnabled(),
+    );
+    expect(screen.queryByRole('button', { name: 'New label' })).toBeNull();
+    fireEvent.click(await screen.findByText('IMAP message'));
+    await screen.findByRole('heading', { name: 'IMAP message' });
+    const conversation = screen
+      .getByRole('heading', { name: 'IMAP message' })
+      .closest('section');
+    if (!conversation) throw new Error('Missing conversation view');
+    expect(
+      within(conversation).queryByRole('button', { name: 'Archive' }),
+    ).toBe(null);
+    fireEvent.click(screen.getByRole('button', { name: 'Compose' }));
+    expect(screen.queryByRole('button', { name: 'Save draft' })).toBeNull();
   });
 
   it('auto-saves rich text and updates the same Provider draft', async () => {
@@ -258,6 +530,12 @@ describe('MailWorkspacePage', () => {
     fireEvent.change(screen.getByLabelText('TO'), {
       target: { value: 'recipient@example.com' },
     });
+    fireEvent.change(screen.getByLabelText('Subject'), {
+      target: { value: 'Attachment message' },
+    });
+    const editor = screen.getByLabelText('Message body');
+    editor.innerHTML = '<p>Message with attachment</p>';
+    fireEvent.input(editor);
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
     await waitFor(() =>
@@ -320,17 +598,16 @@ describe('MailWorkspacePage', () => {
     }
   });
 
-  it('runs incremental synchronization when refreshing the mailbox', async () => {
+  it('lets the server choose initial or incremental mode when syncing', async () => {
     render(<MailWorkspacePage />);
 
     fireEvent.click(
-      await screen.findByRole('button', { name: 'Sync updates' }),
+      await screen.findByRole('button', { name: 'Sync mailbox' }),
     );
 
     await waitFor(() =>
       expect(mail.startSync).toHaveBeenCalledWith({
         accountId: 'account-1',
-        mode: 'incremental',
       }),
     );
   });

@@ -28,20 +28,6 @@ describe('Mail client routes', () => {
           navigation: { title: 'nav.settings' },
           children: [
             {
-              name: 'my-accounts',
-              path: '/my-accounts',
-              navigation: { title: 'nav.myAccounts' },
-              access: { resource: 'mail.workspace', action: 'access' },
-              componentLoader: expect.any(Function),
-            },
-            {
-              name: 'templates',
-              path: '/templates',
-              navigation: { title: 'nav.templates' },
-              access: { resource: 'mail.workspace', action: 'access' },
-              componentLoader: expect.any(Function),
-            },
-            {
               name: 'accounts',
               path: '/accounts',
               navigation: { title: 'nav.accounts' },
@@ -109,6 +95,13 @@ describe('Mail client routes', () => {
               access: { resource: 'mail.workspace', action: 'access' },
               componentLoader: expect.any(Function),
             },
+            {
+              name: 'templates',
+              path: '/templates',
+              navigation: { title: 'nav.templates' },
+              access: { resource: 'mail.workspace', action: 'access' },
+              componentLoader: expect.any(Function),
+            },
           ],
         },
       ],
@@ -133,9 +126,6 @@ describe('Mail client routes', () => {
       settings.routes[0]?.children?.[1]?.componentLoader(),
     ).resolves.toMatchObject({ default: expect.any(Function) });
     await expect(
-      settings.routes[0]?.children?.[2]?.componentLoader(),
-    ).resolves.toMatchObject({ default: expect.any(Function) });
-    await expect(
       dev.routes[0]?.children?.[0]?.componentLoader(),
     ).resolves.toMatchObject({ default: expect.any(Function) });
     await expect(
@@ -153,6 +143,9 @@ describe('Mail client routes', () => {
     await expect(
       dev.routes[0]?.children?.[5]?.componentLoader(),
     ).resolves.toMatchObject({ default: expect.any(Function) });
+    await expect(
+      dev.routes[0]?.children?.[6]?.componentLoader(),
+    ).resolves.toMatchObject({ default: expect.any(Function) });
 
     const resolved = resolveAppClientContributions([
       { packageName: '@nocobase/app-plugin-mail', routes },
@@ -162,8 +155,6 @@ describe('Mail client routes', () => {
       { id: 'mail', title: 'nav.settings' },
     ]);
     expect(resolved.settings.map((route) => route.path)).toEqual([
-      '/settings/mail/my-accounts',
-      '/settings/mail/templates',
       '/settings/mail/accounts',
       '/settings/mail/send-logs',
     ]);
@@ -174,6 +165,7 @@ describe('Mail client routes', () => {
       '/dev/mail/send',
       '/dev/mail/sync-logs',
       '/dev/mail/send-logs',
+      '/dev/mail/templates',
     ]);
   });
 });

@@ -10,4 +10,5 @@ export * from './mail-navigation-icon.js';
 export * from './mail-signature-manager.js';
 export * from './mail-status-badge.js';
 export * from './mail-sync-policy-fields.js';
+export * from './mail-template-manager.js';
 export * from './mailbox-sidebar.js';

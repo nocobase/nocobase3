@@ -36,6 +36,7 @@ import type {
 } from './types.js';
 import { SendMailOperation } from './operations/send-mail.js';
 import { toMailAccountView } from './store.js';
+import { resolveMailSyncBatchSize } from './config.js';
 import type {
   MailProviderAdapter,
   MailProviderAdapterResolver,
@@ -49,6 +50,7 @@ export interface DefaultMailServiceDependencies {
   readonly store: MailStore;
   readonly adapters: MailProviderAdapterResolver;
   readonly outbox: MailOutboxPublisher;
+  readonly syncBatchSize?: number;
   readonly registry?: MailProviderRegistry;
   readonly providerContext?: MailProviderContext;
   readonly credentials?: MailCredentialVault;
@@ -61,10 +63,12 @@ export interface DefaultMailServiceDependencies {
 
 export class DefaultMailService implements MailService {
   private readonly sendMail: SendMailOperation;
+  private readonly syncBatchSize: number;
 
   public constructor(
     private readonly dependencies: DefaultMailServiceDependencies,
   ) {
+    this.syncBatchSize = resolveMailSyncBatchSize(dependencies.syncBatchSize);
     this.sendMail = new SendMailOperation({
       ...dependencies,
       outbox: dependencies.outbox,
@@ -75,8 +79,10 @@ export class DefaultMailService implements MailService {
     const registry = this.dependencies.registry;
     const listConfigs = this.dependencies.listProviderConfigs;
     if (!registry || !listConfigs) return Promise.resolve([]);
-    return Promise.resolve(
-      listConfigs().flatMap((config) => {
+    return Promise.resolve().then(() => {
+      const configuredTypes = new Set<string>();
+      const providers = listConfigs().flatMap((config) => {
+        configuredTypes.add(config.type);
         const definition = registry.definition(config.type);
         if (!definition || config.enabled === false) return [];
         try {
@@ -88,14 +94,33 @@ export class DefaultMailService implements MailService {
               capabilities: definition.capabilities,
               ...(definition.connection
                 ? { connection: 'credentials' as const }
-                : {}),
+                : definition.authorization
+                  ? { connection: 'oauth' as const }
+                  : {}),
+              configured: true,
             },
           ];
         } catch {
           return [];
         }
-      }),
-    );
+      });
+      for (const definition of registry.definitions()) {
+        if (configuredTypes.has(definition.type)) continue;
+        providers.push({
+          type: definition.type,
+          name: definition.type,
+          label: definition.label,
+          capabilities: definition.capabilities,
+          ...(definition.connection
+            ? { connection: 'credentials' as const }
+            : definition.authorization
+              ? { connection: 'oauth' as const }
+              : {}),
+          configured: false,
+        });
+      }
+      return providers;
+    });
   }
 
   public async connectAccount(
@@ -559,7 +584,7 @@ export class DefaultMailService implements MailService {
       policy: {
         receivedAfter: input.receivedAfter,
         maxMessages: boundedInteger(input.maxMessages, 10_000, 1, 100_000),
-        batchSize: boundedInteger(input.batchSize, 200, 1, 500),
+        batchSize: this.syncBatchSize,
       },
     });
     this.dependencies.outbox.kick();
@@ -597,7 +622,6 @@ export class DefaultMailService implements MailService {
       mode: run.mode,
       receivedAfter: run.policy.receivedAfter,
       maxMessages: run.policy.maxMessages,
-      batchSize: run.policy.batchSize,
     });
   }
 

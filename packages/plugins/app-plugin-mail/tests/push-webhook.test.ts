@@ -197,6 +197,7 @@ async function createRouter(
   config.get = <TValue>(): TValue =>
     ({
       automaticSyncIntervalMs: 300_000,
+      syncBatchSize: 100,
       pushWebhookSecret: SECRET,
       providers: { company: { type: 'test' } },
     }) as TValue;

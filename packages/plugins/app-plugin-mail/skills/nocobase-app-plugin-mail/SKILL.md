@@ -22,7 +22,11 @@ Use the Mail plugin's public Client, Server, and HTTP contracts. The plugin owns
 1. Add an enabled `mail.providers` entry with a stable `type` and `name` plus the Provider OAuth client or IMAP/SMTP endpoint configuration.
 2. Register the matching Gmail, Microsoft, or IMAP/SMTP Server Provider plugin.
 3. Grant intended users access to `mail.workspace`; grant only administrators access to `mail.admin`.
-4. Open `/settings/mail/my-accounts`, select the mail account type, and complete its OAuth redirect or enter the IMAP/SMTP mailbox credentials.
+4. Open `/dev/mail/accounts`, use Associate account to select the mail account
+   type, and complete its OAuth redirect or enter the IMAP/SMTP mailbox
+   credentials. The page defaults to the connected-account table; the
+   association drawer also contains the initial sync date, while account
+   signatures and reusable templates are managed there as well.
 5. Verify that the account appears without credential references or token material in the API response.
 
 For push synchronization, set `MAIL_PUSH_WEBHOOK_URL` to the public Mail
@@ -32,7 +36,18 @@ and a Google Cloud Pub/Sub push subscription targeting the generated callback
 URL. Microsoft Graph subscription creation and endpoint validation are managed
 by Mail Core.
 
-`/settings/mail/my-accounts` manages the authenticated user's accounts, including default selection, suspend/resume, disconnect, and manual synchronization. `/settings/mail/accounts` and `GET /api/mail/settings/accounts` show every connected account to administrators granted `page:mail.admin/access`. The ordinary `GET /api/mail/accounts` endpoint remains scoped to the authenticated user and requires `page:mail.workspace/access`. Do not bypass Mail Core ownership checks for another user's account.
+`/dev/mail/accounts` manages the authenticated user's accounts, including
+default selection, suspend/resume, disconnect, manual synchronization, the
+received-after date in the account association drawer, signature management in
+an account drawer, and reusable templates. The account
+association control lists registered Providers; a Provider without a
+`mail.providers` entry is shown as unavailable until the server endpoint or
+OAuth configuration is added. `/settings/mail/accounts` and
+`GET /api/mail/settings/accounts` show every connected account to
+administrators granted `page:mail.admin/access`. The ordinary
+`GET /api/mail/accounts` endpoint remains scoped to the authenticated user and
+requires `page:mail.workspace/access`. Do not bypass Mail Core ownership checks
+for another user's account.
 
 `/settings/mail/send-logs` and `GET /api/mail/settings/operation-logs` provide an all-user administration view of synchronization and delivery operations. The UI filters by owner or operation text, account, status, and start time. Failed or cancelled synchronization runs can be retried, and active synchronization runs can be cancelled by their account owner. Do not automatically retry a delivery with an unknown Provider result because that may create a duplicate message. The response includes API-safe account metadata for resolving each operation to its owner; it never includes credentials, idempotency fingerprints, leases, Provider cursors, or internal Provider error messages. The development log pages remain scoped to the authenticated user.
 
@@ -61,7 +76,7 @@ Sending supports plain text plus safe rich-text HTML, replies, forwards, Provide
 
 ## Synchronize a mailbox
 
-Start synchronization through `MailService.startSync()` or `POST /api/mail/accounts/:accountId/sync`. The runtime also schedules active accounts automatically; the default interval is five minutes and `MAIL_AUTOMATIC_SYNC_INTERVAL_MS` configures it. Initial synchronization is resumable and bounded by `receivedAfter`, `maxMessages`, and `batchSize`; subsequent runs use the Provider cursor. The Outbox relay is the only component that publishes Queue work, and each Job delegates one bounded step to the sync Operation.
+Start synchronization through `MailService.startSync()` or `POST /api/mail/accounts/:accountId/sync`. The runtime also schedules active accounts automatically; the default interval is five minutes and `MAIL_AUTOMATIC_SYNC_INTERVAL_MS` configures it. Initial synchronization is resumable and bounded by `receivedAfter`, `maxMessages`, and the server-configured `mail.syncBatchSize` (or `MAIL_SYNC_BATCH_SIZE`, constrained to 1–200); subsequent runs use the Provider cursor. The Outbox relay is the only component that publishes Queue work, and each Job delegates one bounded step to the sync Operation.
 
 When push configuration is present, the same sweep creates and renews Gmail
 watches and Microsoft Graph subscriptions. A valid notification only schedules
@@ -70,7 +85,7 @@ coalesce behind the active-run constraint. Keep periodic synchronization
 enabled because both Providers document that notifications can be delayed or
 dropped.
 
-When a Provider cursor expires, Mail Core clears it so the next request starts a fresh initial synchronization. A terminal OAuth failure changes the account to `reauthorizationRequired`; reconnect through `/settings/mail/my-accounts` before retrying. Review recent runs on the development-only `/dev/mail/sync-logs` page.
+When a Provider cursor expires, Mail Core clears it so the next request starts a fresh initial synchronization. A terminal OAuth failure changes the account to `reauthorizationRequired`; reconnect through `/dev/mail/accounts` before retrying. Review recent runs on the development-only `/dev/mail/sync-logs` page.
 
 ## Verify and diagnose
 

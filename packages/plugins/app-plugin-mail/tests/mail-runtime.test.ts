@@ -246,6 +246,7 @@ describe('mail MVP runtime', () => {
       adapters: resolver(baseAdapter()),
       queue,
       queueName: 'mail:automatic-sync-test',
+      syncBatchSize: 37,
     });
 
     await expect(runtime.createAutomaticSyncRuns()).resolves.toBe(1);
@@ -255,6 +256,7 @@ describe('mail MVP runtime', () => {
       accountId: 'account-1',
       requestedBy: 'user-1',
       mode: 'initial',
+      policy: { batchSize: 37 },
     });
   });
 
@@ -1335,10 +1337,11 @@ describe('mail MVP runtime', () => {
       store,
       adapters,
       outbox: { kick: vi.fn() },
+      syncBatchSize: 1,
     });
     const created = await service.startSync(
       { actorId: 'user-1' },
-      { accountId: 'account-1', batchSize: 1 },
+      { accountId: 'account-1' },
     );
 
     for (let step = 0; step < 4; step += 1) {
@@ -1445,10 +1448,11 @@ describe('mail MVP runtime', () => {
       store,
       adapters,
       outbox: { kick: vi.fn() },
+      syncBatchSize: 100,
     });
     const created = await service.startSync(
       { actorId: 'user-1' },
-      { accountId: 'account-1', batchSize: 100 },
+      { accountId: 'account-1' },
     );
 
     for (let step = 0; step < 3; step += 1) {
@@ -1499,6 +1503,12 @@ describe('mail MVP runtime', () => {
           providerFolderIds: ['sent'],
           receivedAt: '2026-09-04T00:00:00.000Z',
         },
+        {
+          ...message('thread-message-3', 'Re: Project update'),
+          providerConversationId: 'conversation-1',
+          providerFolderIds: ['sent'],
+          receivedAt: '2026-09-05T00:00:00.000Z',
+        },
         message('standalone-message', 'Standalone'),
       ],
       deletedProviderMessageIds: [],
@@ -1519,9 +1529,14 @@ describe('mail MVP runtime', () => {
       expect.arrayContaining(['thread-message-1', 'standalone-message']),
     );
     expect(inbox.items).toHaveLength(2);
+    expect(
+      inbox.items.find((item) => item.providerMessageId === 'thread-message-1')
+        ?.subjectCount,
+    ).toBe(3);
     expect(conversation.items.map((item) => item.providerMessageId)).toEqual([
       'thread-message-1',
       'thread-message-2',
+      'thread-message-3',
     ]);
   });
 
@@ -1576,6 +1591,8 @@ describe('mail MVP runtime', () => {
       mailboxFirst.items[0].providerMessageId,
       mailboxSecond.items[0].providerMessageId,
     ]).toEqual(['thread-message-3', 'thread-message-2']);
+    expect(mailboxFirst.items[0].subjectCount).toBe(3);
+    expect(mailboxSecond.items[0].subjectCount).toBe(3);
     expect([
       conversationFirst.items[0].providerMessageId,
       conversationSecond.items[0].providerMessageId,

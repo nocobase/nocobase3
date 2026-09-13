@@ -1129,8 +1129,27 @@ export class DatabaseMailStore implements MailStore {
     const hasMore = rows.length > limit;
     const items = rows.slice(0, limit);
     const lastItem = items.at(-1);
+    const loaded = await loadMailMessages(this.database.query(), items);
+    const conversationCounts = await countMessageConversations(
+      this.database.query(),
+      requested.map((account) => account.id),
+      items,
+    );
     return {
-      items: await loadMailMessages(this.database.query(), items),
+      items: loaded.map((message) => ({
+        ...message,
+        ...(message.conversationId
+          ? {
+              subjectCount:
+                conversationCounts.get(
+                  conversationGroupKey(
+                    message.accountId,
+                    message.conversationId,
+                  ),
+                ) ?? 1,
+            }
+          : {}),
+      })),
       nextCursor:
         hasMore && lastItem ? encodeMessageCursor(lastItem) : undefined,
     };
@@ -2676,6 +2695,62 @@ function toMessageRow(
     createdAt,
     updatedAt,
   };
+}
+
+async function countMessageConversations(
+  query: QueryAdapter,
+  accountIds: readonly string[],
+  rows: readonly MessageRow[],
+): Promise<ReadonlyMap<string, number>> {
+  const counts = new Map<string, number>();
+  const conversationIds = [
+    ...new Set(
+      rows
+        .map((row) => row.providerConversationId)
+        .filter((conversationId): conversationId is string =>
+          Boolean(conversationId),
+        ),
+    ),
+  ];
+
+  if (accountIds.length === 0) return counts;
+
+  // The conversation detail view includes every message in a Provider
+  // conversation, so its badge must not be narrowed by the current mailbox
+  // folder, search, unread, or starred filters.
+  if (conversationIds.length > 0) {
+    const conversationCountRows = await query
+      .selectFrom<MessageRow>('mailMessages')
+      .select(['mailMessages.accountId', 'mailMessages.providerConversationId'])
+      .select(({ fn }) => [fn.count<number>('mailMessages.id').as('count')])
+      .where('mailMessages.accountId', 'in', accountIds)
+      .where('mailMessages.providerConversationId', 'in', conversationIds)
+      .groupBy([
+        'mailMessages.accountId',
+        'mailMessages.providerConversationId',
+      ])
+      .execute<{
+        readonly accountId: string;
+        readonly providerConversationId: string;
+        readonly count: number | string;
+      }>();
+
+    for (const row of conversationCountRows) {
+      counts.set(
+        conversationGroupKey(row.accountId, row.providerConversationId),
+        Number(row.count),
+      );
+    }
+  }
+
+  return counts;
+}
+
+function conversationGroupKey(
+  accountId: string,
+  conversationId: string,
+): string {
+  return `${accountId}:conversation:${conversationId}`;
 }
 
 async function loadMailMessages(

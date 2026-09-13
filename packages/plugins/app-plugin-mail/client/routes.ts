@@ -32,20 +32,6 @@ const routes: readonly AppClientRouteContribution[] = [
       navigation: { title: 'nav.settings', icon: Mail },
       children: [
         {
-          name: 'my-accounts',
-          path: '/my-accounts',
-          navigation: { title: 'nav.myAccounts', icon: Link2 },
-          access: { resource: 'mail.workspace', action: 'access' },
-          componentLoader: () => import('./pages/mail-accounts-dev-page.js'),
-        },
-        {
-          name: 'templates',
-          path: '/templates',
-          navigation: { title: 'nav.templates', icon: FileText },
-          access: { resource: 'mail.workspace', action: 'access' },
-          componentLoader: () => import('./pages/mail-templates-page.js'),
-        },
-        {
           name: 'accounts',
           path: '/accounts',
           navigation: { title: 'nav.accounts', icon: Users },
@@ -117,6 +103,13 @@ const routes: readonly AppClientRouteContribution[] = [
           navigation: { title: 'nav.sendLogs', icon: Send },
           access: { resource: 'mail.workspace', action: 'access' },
           componentLoader: () => import('./pages/mail-send-logs-page.js'),
+        },
+        {
+          name: 'templates',
+          path: '/templates',
+          navigation: { title: 'nav.templates', icon: FileText },
+          access: { resource: 'mail.workspace', action: 'access' },
+          componentLoader: () => import('./pages/mail-templates-page.js'),
         },
       ],
     },

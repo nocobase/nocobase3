@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -53,6 +53,7 @@ describe('Mail client components', () => {
           connecting: 'Opening authorization',
           connectedAccounts: (count) => `${count} connected`,
           capability: (capability) => capability,
+          configurationRequired: 'Server setup required',
         }}
         onConnect={onConnect}
         providers={providers}
@@ -88,6 +89,7 @@ describe('Mail client components', () => {
           connecting: 'Connecting',
           connectedAccounts: (count) => `${count} connected`,
           capability: (capability) => capability,
+          configurationRequired: 'Server setup required',
           emailAddress: 'Email address',
           username: 'Username',
           password: 'Password',
@@ -125,6 +127,46 @@ describe('Mail client components', () => {
       password: 'secret',
       displayName: 'Mailbox user',
     });
+  });
+
+  it('shows an unconfigured IMAP and SMTP Provider in the account type list', () => {
+    const provider: MailProviderView = {
+      type: 'imap-smtp',
+      name: 'imap-smtp',
+      label: 'IMAP / SMTP',
+      configured: false,
+      connection: 'credentials',
+      capabilities,
+    };
+    render(
+      <MailAccountConnector
+        connectedAccountCount={() => 0}
+        labels={{
+          accountType: 'Mail account type',
+          chooseAccountType: 'Select an account type',
+          connect: 'Connect account',
+          connecting: 'Connecting',
+          connectedAccounts: (count) => `${count} connected`,
+          capability: (capability) => capability,
+          configurationRequired: 'Server setup required',
+        }}
+        onConnect={vi.fn()}
+        providers={[provider]}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText('Mail account type'), {
+      target: { value: 'imap-smtp:imap-smtp' },
+    });
+    expect(
+      screen.getByRole('option', {
+        name: 'IMAP / SMTP · Server setup required',
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Server setup required')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Connect account' }),
+    ).toBeDisabled();
   });
 
   it('renders Provider capabilities and starts authorization', () => {
@@ -205,31 +247,26 @@ describe('Mail client components', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('reports sync-limit changes as one value', () => {
+  it('reports received-after changes as one value', () => {
     const onChange = vi.fn();
     render(
       <MailSyncPolicyFields
         labels={{
           receivedAfter: 'Received after',
-          maxMessages: 'Maximum messages',
-          batchSize: 'Batch size',
         }}
         onChange={onChange}
         value={{
           receivedAfter: '2026-01-01',
-          maxMessages: 1000,
-          batchSize: 100,
         }}
       />,
     );
 
-    fireEvent.change(screen.getByLabelText('Maximum messages'), {
-      target: { value: '2500' },
+    expect(screen.queryByLabelText('Batch size')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Received after'), {
+      target: { value: '2026-02-01' },
     });
     expect(onChange).toHaveBeenCalledWith({
-      receivedAfter: '2026-01-01',
-      maxMessages: 2500,
-      batchSize: 100,
+      receivedAfter: '2026-02-01',
     });
   });
 
@@ -305,7 +342,81 @@ describe('Mail client components', () => {
     expect(screen.getByText('Second message')).toBeInTheDocument();
   });
 
-  it('renders HTML-only messages as safe plain text', () => {
+  it('keeps message metadata behind compact action buttons', () => {
+    const saveNote = vi.fn();
+    const toggleLabel = vi.fn();
+    const message = {
+      ...conversationMessage('message-1', 'Alice', 'Message body'),
+      note: 'Existing note',
+      folderIds: ['INBOX', 'label-customers'],
+    };
+    render(
+      <MailConversationView
+        actions={{
+          delete: vi.fn(),
+          saveNote,
+          toggleLabel,
+          toggleRead: vi.fn(),
+          toggleStarred: vi.fn(),
+          toggleTodo: vi.fn(),
+        }}
+        availableLabels={[
+          {
+            id: 'label-1',
+            accountId: 'account-1',
+            providerFolderId: 'label-customers',
+            type: 'custom',
+            name: 'Customers',
+            kind: 'label',
+          },
+        ]}
+        labels={{
+          attachmentCount: (count) => `${count} attachments`,
+          conversation: (count) => `${count} messages`,
+          loadMore: 'Load more',
+          noSubject: '(no subject)',
+          selectMessage: 'Select a message',
+          unknownSender: 'Unknown sender',
+          labels: 'Labels',
+          note: 'Note',
+          notePlaceholder: 'Add a private note…',
+          saveNote: 'Save note',
+          todo: 'To do',
+        }}
+        messages={[message]}
+        onLoadMore={vi.fn()}
+        subject='Project update'
+      />,
+    );
+
+    expect(
+      screen.queryByRole('textbox', { name: 'Note' }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Note' }));
+    const noteDialog = screen.getByRole('dialog');
+    fireEvent.change(
+      within(noteDialog).getByRole('textbox', { name: 'Note' }),
+      {
+        target: { value: 'Updated note' },
+      },
+    );
+    fireEvent.click(
+      within(noteDialog).getByRole('button', { name: 'Save note' }),
+    );
+    expect(saveNote).toHaveBeenCalledWith(message, 'Updated note');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Labels' }));
+    const labelsDialog = screen.getByRole('dialog');
+    expect(
+      within(labelsDialog).getByRole('checkbox', { name: 'Customers' }),
+    ).toBeChecked();
+    fireEvent.click(
+      within(labelsDialog).getByRole('checkbox', { name: 'Customers' }),
+    );
+    expect(toggleLabel).toHaveBeenCalledWith(message, 'label-customers', false);
+  });
+
+  it('renders sanitized HTML-only messages as HTML', () => {
     render(
       <MailConversationView
         labels={{
@@ -326,7 +437,8 @@ describe('Mail client components', () => {
       />,
     );
 
-    expect(screen.getByText(/Hello team/)).toBeInTheDocument();
+    const team = screen.getByText('team');
+    expect(team.tagName).toBe('STRONG');
     expect(screen.queryByText(/bad\(\)/)).not.toBeInTheDocument();
     expect(document.querySelector('script')).not.toBeInTheDocument();
   });

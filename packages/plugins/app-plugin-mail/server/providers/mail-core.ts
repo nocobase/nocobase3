@@ -62,6 +62,7 @@ export class MailCoreProvider extends ServiceProvider<MailCoreProviderApplicatio
         queueName: `mail:${this.app.appName}`,
         automaticSyncIntervalMs:
           this.app.config.get(mailConfig).automaticSyncIntervalMs,
+        syncBatchSize: this.app.config.get(mailConfig).syncBatchSize,
         pushWebhookUrl: this.app.config.get(mailConfig).pushWebhookUrl,
         pushWebhookSecret: this.app.config.get(mailConfig).pushWebhookSecret,
         outboundAttachments: container.resolve(
@@ -90,6 +91,7 @@ export class MailCoreProvider extends ServiceProvider<MailCoreProviderApplicatio
           store: container.resolve(mailStoreToken),
           adapters: container.resolve(mailProviderAdapterResolverToken),
           outbox: container.resolve(mailRuntimeToken),
+          syncBatchSize: this.app.config.get(mailConfig).syncBatchSize,
           registry,
           providerContext: {
             publicBasePath: this.app.publicBasePath,

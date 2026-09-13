@@ -164,6 +164,8 @@ export interface MailMessageSummary {
   readonly cc: readonly MailAddress[];
   readonly bcc: readonly MailAddress[];
   readonly subject: string;
+  /** Number of messages in the corresponding Provider conversation. */
+  readonly subjectCount?: number;
   readonly preview?: string;
   readonly receivedAt?: string;
   readonly sentAt?: string;
@@ -286,7 +288,6 @@ export interface MailStartSyncInput {
   readonly mode?: MailSyncMode;
   readonly receivedAfter?: string;
   readonly maxMessages?: number;
-  readonly batchSize?: number;
 }
 
 export interface MailUpdateAccountInput {
@@ -1125,6 +1126,8 @@ export interface MailProviderView {
   readonly label: string;
   readonly capabilities: MailProviderCapabilities;
   readonly connection?: 'oauth' | 'credentials';
+  /** False when the Provider is registered but has no mail.providers entry. */
+  readonly configured?: boolean;
 }
 
 export interface MailAuthorizationTransaction {

@@ -13,6 +13,7 @@ import SendScheduledMailJob, {
 } from './jobs/send-scheduled-mail.js';
 import { SendMailOperation } from './operations/send-mail.js';
 import { SyncMailboxOperation } from './operations/sync-mailbox.js';
+import { resolveMailSyncBatchSize } from './config.js';
 import type { MailOutboxPublisher } from './service.js';
 import type {
   MailProviderAdapterResolver,
@@ -36,6 +37,7 @@ export interface MailRuntimeOptions {
   readonly logger?: MailRuntimeLogger;
   readonly relayIntervalMs?: number;
   readonly automaticSyncIntervalMs?: number;
+  readonly syncBatchSize?: number;
   readonly outboundAttachments?: MailOutboundAttachmentStorage;
   readonly credentials?: MailCredentialVault;
   readonly pushWebhookUrl?: string;
@@ -44,6 +46,7 @@ export interface MailRuntimeOptions {
 
 export class MailRuntime implements MailOutboxPublisher {
   private readonly operation: SyncMailboxOperation;
+  private readonly syncBatchSize: number;
   private readonly handler: (
     payload: MailSyncMailboxTaskPayload,
   ) => Promise<void>;
@@ -58,6 +61,7 @@ export class MailRuntime implements MailOutboxPublisher {
   private closed = false;
 
   public constructor(private readonly options: MailRuntimeOptions) {
+    this.syncBatchSize = resolveMailSyncBatchSize(options.syncBatchSize);
     this.operation = new SyncMailboxOperation(options);
     this.handler = (payload): Promise<void> => this.operation.execute(payload);
     this.unregisterHandler = registerMailSyncJobHandler(
@@ -246,7 +250,10 @@ export class MailRuntime implements MailOutboxPublisher {
       accountId: account.id,
       requestedBy: account.userId,
       mode: cursor ? 'incremental' : 'initial',
-      policy: { maxMessages: 10_000, batchSize: 200 },
+      policy: {
+        maxMessages: 10_000,
+        batchSize: this.syncBatchSize,
+      },
     });
     return run.id === id;
   }

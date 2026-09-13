@@ -3,26 +3,33 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { FormEvent, ReactElement } from 'react';
 import { useTranslation } from '@nocobase/i18n/client';
 
-import { MailDevPageShell, MailStatusBadge } from '../components/index.js';
+import {
+  MailDevPageShell,
+  MailStatusBadge,
+  MailRichTextEditor,
+} from '../components/index.js';
 import {
   mailErrorMessage,
   type MailAccountView,
   type MailIdentity,
   type MailSubmissionView,
+  type MailSignature,
+  type MailTemplate,
 } from '../mail-client.js';
 import { getMailClient } from '../runtime.js';
 import { Button } from '../components/ui/button.js';
 import { Card } from '../components/ui/card.js';
 import { Input } from '../components/ui/input.js';
 import { NativeSelect } from '../components/ui/native-select.js';
-import { Textarea } from '../components/ui/textarea.js';
 import MailWorkspacePage from './mail-workspace-page.js';
+import { renderMailTemplate } from '../lib/mail-template.js';
 
 const mail = getMailClient();
 interface ComposeValue {
   readonly to: string;
   readonly subject: string;
   readonly text: string;
+  readonly html: string;
 }
 
 export function MailCenterDevPage(): ReactElement {
@@ -59,7 +66,11 @@ function MailDevPage(): ReactElement {
     to: '',
     subject: '',
     text: '',
+    html: '',
   });
+  const [signatures, setSignatures] = useState<readonly MailSignature[]>([]);
+  const [signatureId, setSignatureId] = useState('');
+  const [templates, setTemplates] = useState<readonly MailTemplate[]>([]);
   const [submission, setSubmission] = useState<MailSubmissionView>();
   const [busy, setBusy] = useState<'loading' | 'sending'>();
   const [error, setError] = useState<string>();
@@ -102,6 +113,10 @@ function MailDevPage(): ReactElement {
   }, [loadAccounts]);
 
   useEffect(() => {
+    void mail.listTemplates().then(setTemplates);
+  }, []);
+
+  useEffect(() => {
     if (!accountId) return;
     let active = true;
     void mail.listIdentities(accountId).then(
@@ -113,6 +128,10 @@ function MailDevPage(): ReactElement {
             nextIdentities[0]?.id ??
             '',
         );
+        const primary =
+          nextIdentities.find((i) => i.isPrimary) ?? nextIdentities[0];
+        if (primary)
+          void mail.listSignatures(accountId, primary.id).then(setSignatures);
       },
       (cause: unknown) => {
         if (active)
@@ -148,6 +167,8 @@ function MailDevPage(): ReactElement {
           .map((address) => ({ address })),
         subject: compose.subject,
         text: compose.text,
+        html: compose.html || undefined,
+        signatureId: signatureId || undefined,
         idempotencyKey: createIdempotencyKey(),
       })
       .then(setSubmission)
@@ -286,24 +307,75 @@ function MailDevPage(): ReactElement {
                   value={compose.subject}
                 />
               </label>
-              <label className='block text-sm font-medium'>
-                {t('dev.send.body', { defaultValue: 'Plain-text body' })}
-                <Textarea
-                  className='mt-1 min-h-32'
-                  onChange={(event) =>
-                    setCompose((current) => ({
-                      ...current,
-                      text: event.target.value,
-                    }))
+              <div className='space-y-2'>
+                <div className='flex gap-2'>
+                  <NativeSelect
+                    value={signatureId}
+                    onChange={(e) => setSignatureId(e.target.value)}
+                  >
+                    <option value=''>
+                      {t('workspace.noSignature', {
+                        defaultValue: 'No signature',
+                      })}
+                    </option>
+                    {signatures.map((signature) => (
+                      <option key={signature.id} value={signature.id}>
+                        {signature.name}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                  <NativeSelect
+                    onChange={(e) => {
+                      const template = templates.find(
+                        (item) => item.id === e.target.value,
+                      );
+                      if (!template) return;
+                      const rendered = renderMailTemplate(template);
+                      setCompose((current) => ({
+                        ...current,
+                        subject: rendered.subject,
+                        text: rendered.text,
+                        html: rendered.html,
+                      }));
+                    }}
+                    defaultValue=''
+                  >
+                    <option value=''>
+                      {t('workspace.applyTemplate', {
+                        defaultValue: 'Apply template',
+                      })}
+                    </option>
+                    {templates.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.name}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                </div>
+                <MailRichTextEditor
+                  ariaLabel={t('dev.send.body', {
+                    defaultValue: 'Message body',
+                  })}
+                  labels={{
+                    toolbar: 'Formatting',
+                    bold: 'Bold',
+                    italic: 'Italic',
+                    underline: 'Underline',
+                    bulletList: 'Bulleted list',
+                    numberedList: 'Numbered list',
+                    undo: 'Undo',
+                    redo: 'Redo',
+                    clearFormatting: 'Clear formatting',
+                  }}
+                  onChange={(value) =>
+                    setCompose((current) => ({ ...current, ...value }))
                   }
                   placeholder={t('dev.send.bodyPlaceholder', {
-                    defaultValue:
-                      'This message was sent from the NocoBase Mail development page.',
+                    defaultValue: 'Write your message.',
                   })}
-                  required
-                  value={compose.text}
+                  value={compose.html || compose.text}
                 />
-              </label>
+              </div>
               <Button
                 disabled={!accountId || !identityId || busy === 'sending'}
                 type='submit'

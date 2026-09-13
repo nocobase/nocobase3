@@ -14,6 +14,7 @@ export interface MailAccountConnectorLabels {
   readonly connecting: string;
   readonly connectedAccounts: (count: number) => string;
   readonly capability: (capability: string) => string;
+  readonly configurationRequired: string;
   readonly emailAddress?: string;
   readonly username?: string;
   readonly password?: string;
@@ -59,6 +60,7 @@ export function MailAccountConnector({
   const connecting =
     selectedProvider !== undefined &&
     selectedProvider.name === connectingProviderName;
+  const providerConfigured = selectedProvider?.configured !== false;
   const capabilities = selectedProvider
     ? Object.entries(selectedProvider.capabilities)
         .filter(([, enabled]) => enabled)
@@ -91,6 +93,9 @@ export function MailAccountConnector({
               <option key={providerKey(provider)} value={providerKey(provider)}>
                 {provider.label}
                 {provider.name === provider.type ? '' : ` · ${provider.name}`}
+                {provider.configured === false
+                  ? ` · ${labels.configurationRequired}`
+                  : ''}
               </option>
             ))}
           </NativeSelect>
@@ -98,6 +103,7 @@ export function MailAccountConnector({
         <Button
           disabled={
             !selectedProvider ||
+            !providerConfigured ||
             connecting ||
             (usesCredentials && !credentialsReady)
           }
@@ -120,7 +126,7 @@ export function MailAccountConnector({
         </Button>
       </div>
 
-      {usesCredentials ? (
+      {usesCredentials && providerConfigured ? (
         <div className='grid gap-3 sm:grid-cols-2'>
           <label className='space-y-1.5 text-sm font-medium'>
             <span>{labels.emailAddress ?? 'Email address'}</span>
@@ -164,21 +170,25 @@ export function MailAccountConnector({
             <div>
               <p className='font-medium'>{selectedProvider.label}</p>
               <p className='text-xs text-muted-foreground'>
-                {labels.connectedAccounts(
-                  connectedAccountCount(selectedProvider),
-                )}
+                {providerConfigured
+                  ? labels.connectedAccounts(
+                      connectedAccountCount(selectedProvider),
+                    )
+                  : labels.configurationRequired}
               </p>
             </div>
-            <div className='flex flex-wrap justify-end gap-1.5'>
-              {capabilities.map((capability) => (
-                <span
-                  className='rounded-md border bg-background px-2 py-1 text-xs text-muted-foreground'
-                  key={capability}
-                >
-                  {labels.capability(capability)}
-                </span>
-              ))}
-            </div>
+            {providerConfigured ? (
+              <div className='flex flex-wrap justify-end gap-1.5'>
+                {capabilities.map((capability) => (
+                  <span
+                    className='rounded-md border bg-background px-2 py-1 text-xs text-muted-foreground'
+                    key={capability}
+                  >
+                    {labels.capability(capability)}
+                  </span>
+                ))}
+              </div>
+            ) : null}
           </div>
         </div>
       ) : null}
