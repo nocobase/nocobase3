@@ -63,7 +63,7 @@ describe('application shell', () => {
     expect(screen.getByText('NocoBase Hub v0.0.0')).toBeVisible();
     expect(screen.getByText('Hub console')).toBeVisible();
     expect(
-      screen.getByRole('heading', { name: 'App client is ready' }),
+      await screen.findByRole('heading', { name: 'App client is ready' }),
     ).toBeVisible();
   });
 

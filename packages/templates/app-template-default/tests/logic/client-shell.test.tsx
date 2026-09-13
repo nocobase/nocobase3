@@ -61,7 +61,7 @@ describe('application shell', () => {
     expect(screen.getByText('AI builds freely.')).toBeVisible();
     expect(screen.getByText('Default Template v0.0.0')).toBeVisible();
     expect(
-      screen.getByRole('heading', { name: 'App client is ready' }),
+      await screen.findByRole('heading', { name: 'App client is ready' }),
     ).toBeVisible();
   });
 
