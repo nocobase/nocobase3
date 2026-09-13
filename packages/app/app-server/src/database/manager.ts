@@ -10,21 +10,14 @@ import {
 import type { ConfigPaths } from '../config/index.js';
 import type { AppDatabaseConfig } from './types.js';
 
-const registeredDrivers: Record<string, DatabaseDriverRegistration> = {};
-
 /**
- * Registers the dialect packages owned by the application composition root.
+ * Builds the manager from the application's own database config.
  *
- * The app-server package deliberately does not depend on any concrete
- * database driver. Applications can register exactly the packages they
- * install, while tests and command entry points can share the same registry.
+ * The app-server package deliberately does not depend on any concrete database
+ * driver. An application declares the dialect packages it installs under
+ * `database.drivers`, which is what every entry point — the runtime, the CLI
+ * commands and the tests — resolves a dialect from.
  */
-export function registerAppDatabaseDrivers(
-  drivers: Record<string, DatabaseDriverRegistration>,
-): void {
-  Object.assign(registeredDrivers, drivers);
-}
-
 export function createAppDatabaseManager(
   config: AppDatabaseConfig,
   paths?: ConfigPaths,
@@ -38,7 +31,6 @@ export function createAppDatabaseManager(
     defineDatabase({
       default: config.default,
       drivers: {
-        ...registeredDrivers,
         ...config.drivers,
         ...drivers,
       },
@@ -82,7 +74,7 @@ export function resolveAppDatabaseDriver(
   dialect: string,
   drivers?: Record<string, DatabaseDriverRegistration>,
 ): DatabaseDriverDefinition | undefined {
-  const value = { ...registeredDrivers, ...drivers }[dialect];
+  const value = drivers?.[dialect];
   if (!value) return undefined;
   const candidate = value as DatabaseDriverRegistration & {
     driver?: DatabaseDriverDefinition;

@@ -8,6 +8,7 @@ import {
   type AppConfigAccessor,
 } from '@nocobase/app-server/config';
 import type { AppDatabaseConfig } from '@nocobase/app-server/database';
+import sqlite from '@nocobase/db-sqlite';
 
 const roots: string[] = [];
 afterEach(() => {
@@ -23,6 +24,7 @@ function fixture() {
   roots.push(root);
   const paths = createConfigPaths({ rootDir: root });
   const database: AppDatabaseConfig = {
+    drivers: { sqlite },
     default: 'main',
     connections: {
       main: { dialect: 'sqlite', filename: paths.storage('main.sqlite') },

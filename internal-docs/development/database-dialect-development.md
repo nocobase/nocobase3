@@ -275,23 +275,30 @@ shared helper。那只是把 central helper 换了一个位置。
 应用组合入口负责安装和注册 driver。`@nocobase/app-server` 本身不应依赖
 所有具体 native driver。
 
-模板或应用可以这样注册：
+注册的唯一入口是应用自己的 `database` 配置，模板在
+`server/config/database.ts` 里和 connections 写在一起：
 
 ```ts
 import sqlite from '@nocobase/db-sqlite';
-import { registerAppDatabaseDrivers } from '@nocobase/app-server/database';
 
-export const databaseDrivers = { sqlite };
-
-registerAppDatabaseDrivers(databaseDrivers);
+const database: AppDatabaseConfig = {
+  drivers: { sqlite },
+  default: 'main',
+  connections: {
+    main: { dialect: 'sqlite', filename: runtime.configPaths.storage('database.sqlite') },
+  },
+};
 ```
 
-自定义应用需要 PostgreSQL 时，只安装并注册
+driver 是代码而不是设置项，只能由应用代码提供，config.yml 无法覆盖；
+connection 只能使用这里列出的 dialect。运行时、CLI 命令和测试都从同一份
+配置解析 driver，不存在需要提前 import 才能生效的全局注册表。
+
+自定义应用需要 PostgreSQL 时，只安装并声明
 `@nocobase/db-postgres`；不应因为 core 支持五种数据库就安装五套 native
 driver。
 
-应用中可以通过 `databaseDrivers` 传入局部注册，或者通过
-`registerAppDatabaseDrivers` 注册全局组合入口。最终 manager 收到的是：
+最终 manager 收到的是：
 
 ```ts
 {

@@ -10,7 +10,6 @@ import type {
   AppConfigAccessor,
   ConfigPaths,
 } from '@nocobase/app-server/config';
-import '../server/database-drivers.js';
 import { createInterface } from 'node:readline/promises';
 
 /** Keep single-connection JSON fields compatible while exposing per-connection bulk results. */

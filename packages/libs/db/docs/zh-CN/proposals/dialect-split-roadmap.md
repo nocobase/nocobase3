@@ -84,11 +84,11 @@ Repository、Schema 和 Inspector 都从该上下文取得策略，执行器不�
 | PostgreSQL `pg-query-stream`                                             | `@nocobase/db-postgres`              |
 | Oracle LOB、MSSQL precision、MySQL temporal range 等                     | 对应 Dialect package                 |
 
-### app-server registry
+### app-server driver 声明
 
-`@nocobase/app-server` 只接受 `databaseDrivers` registry。默认模板显式注册
-`@nocobase/db-sqlite`，因此默认应用只安装并加载 SQLite 实现。其他模板或应用可以注入
-任意已安装的 Dialect package。
+`@nocobase/app-server` 只从应用的 `database.drivers` 配置解析 Dialect。默认模板在
+`server/config/database.ts` 里声明 `@nocobase/db-sqlite`，因此默认应用只安装并加载
+SQLite 实现。其他模板或应用可以声明任意已安装的 Dialect package。
 
 app-server 的连接 manager、ownership 和 storage 代码只调用 descriptor hooks，不包含
 具体 Dialect 分支。配置 schema 的 `dialect` 是非空字符串，以便第三方 Dialect 不需要

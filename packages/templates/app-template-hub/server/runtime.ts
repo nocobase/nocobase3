@@ -8,7 +8,6 @@ import { createAppConfig } from './config.js';
 import plugins from './plugins.js';
 import serviceProviders from './providers/index.js';
 import routes from './routes/index.js';
-import './database-drivers.js';
 
 const appRuntime: AppRuntimeDefinition = defineAppRuntime({
   createAppConfig,

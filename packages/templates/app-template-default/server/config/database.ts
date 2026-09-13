@@ -1,3 +1,4 @@
+import sqlite from '@nocobase/db-sqlite';
 import {
   defineAppConfig,
   type AppConfigFactory,
@@ -8,6 +9,12 @@ import { createAppPluginDatabaseConfig } from '@nocobase/app-server/plugins';
 const database: AppConfigFactory<AppDatabaseConfig> = defineAppConfig(
   (runtime) => {
     const database: AppDatabaseConfig = {
+      /**
+       * The dialect packages this application installs. Drivers are code rather
+       * than settings, so they are declared here and cannot be overridden from
+       * config.yml; a connection may only use a dialect listed here.
+       */
+      drivers: { sqlite },
       default: 'main',
       connections: {
         main: {

@@ -27,7 +27,6 @@ import type {
   ResolvedAppServerPlugins,
 } from '../plugins/index.js';
 import { i18nToken, registerAppLocales } from '../i18n/index.js';
-import type { DatabaseDriverRegistration } from '@nocobase/db';
 
 export type ApplicationFetchHandler = (
   request: Request,
@@ -48,7 +47,6 @@ export interface ApplicationOptions<
   readonly mode?: 'standalone' | 'embedded';
   readonly paths: ConfigPaths;
   readonly websocket?: ApplicationWebSocketFactory;
-  readonly databaseDrivers?: Record<string, DatabaseDriverRegistration>;
 }
 
 export type ApplicationServiceProviderConstructor<
@@ -81,8 +79,6 @@ export class Application<
   public readonly config: TConfig;
   public readonly mode: 'standalone' | 'embedded';
   public readonly paths: ConfigPaths;
-  public readonly databaseDrivers:
-    Record<string, DatabaseDriverRegistration> | undefined;
   public readonly container: ServiceContainer;
   public readonly fetch: ApplicationFetchHandler = async (
     request,
@@ -116,7 +112,6 @@ export class Application<
     this.config = options.config;
     this.mode = options.mode ?? 'embedded';
     this.paths = options.paths;
-    this.databaseDrivers = options.databaseDrivers;
     this.container = new ServiceContainer();
     this.usesDefaultWebSocket = options.websocket === undefined;
     this.websocketFactory = options.websocket ?? createRealtimeWebSocketHandler;

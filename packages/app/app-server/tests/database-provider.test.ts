@@ -213,7 +213,6 @@ async function createProvider(database: AppDatabaseConfig): Promise<{
   const app: DatabaseProviderApplication = {
     config: appConfig,
     container,
-    databaseDrivers: { sqlite: sqliteStorageDriver },
   };
   return {
     provider: new DatabaseProvider(app),
@@ -230,6 +229,7 @@ function createConfig(
   };
 } {
   return {
+    drivers: { sqlite: sqliteStorageDriver },
     default: 'main',
     connections: {
       main: {

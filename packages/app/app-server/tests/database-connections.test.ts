@@ -20,7 +20,6 @@ import mssql from '@nocobase/db-mssql';
 import { AppConfig, createConfigPaths } from '../src/config/index.js';
 import {
   createAppDatabaseManager,
-  registerAppDatabaseDrivers,
   type AppDatabaseConfig,
   planAppDatabaseTasks,
   runAppDatabaseTasks,
@@ -28,7 +27,7 @@ import {
 import { executeAppDatabasePlan } from '../src/database/tasks.js';
 import { createAppPluginDatabaseConfig } from '../src/plugins/resolve.js';
 
-registerAppDatabaseDrivers({ postgres, mysql, sqlite, oracle, mssql });
+const drivers = { postgres, mysql, sqlite, oracle, mssql };
 
 const roots: string[] = [];
 afterEach(() => {
@@ -43,6 +42,7 @@ function fixture() {
   roots.push(root);
   const paths = createConfigPaths({ rootDir: root });
   const config: AppDatabaseConfig = {
+    drivers,
     default: 'main',
     connections: {
       analytics: {
@@ -489,6 +489,7 @@ export default defineMigration({ name: '001_main', async up({ builder }) {
     config.load(
       objectProvider({
         database: {
+          drivers,
           default: 'analytics',
           connections: {
             analytics: {
