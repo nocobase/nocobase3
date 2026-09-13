@@ -311,6 +311,30 @@ export type {
   RepositoryErrorOptions,
 } from './repository/errors.js';
 
+export { normalizeRepositoryPolicy } from './repository/policy/normalize.js';
+export type {
+  CreateNode,
+  DeleteNode,
+  NormalizedCreateNode,
+  NormalizedDeleteNode,
+  NormalizedReadNode,
+  NormalizedRelationShapeNode,
+  NormalizedRelationWriteNode,
+  NormalizedRepositoryPolicy,
+  NormalizedThroughNode,
+  NormalizedWriteNode,
+  PartialRepositoryPolicy,
+  PolicyRef,
+  PolicyScalarValue,
+  PolicyScope,
+  ReadNode,
+  RelationCreateNode,
+  RelationShapeNode,
+  RelationWriteNode,
+  RepositoryPolicy,
+  WriteNode,
+} from './repository/policy/types.js';
+
 export {
   buildWritePolicy,
   buildUpsertWritePolicy,
