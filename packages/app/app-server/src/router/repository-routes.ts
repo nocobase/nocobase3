@@ -479,10 +479,20 @@ function fail(status: 400 | 415, code: string, message: string): never {
 function repositoryErrorStatus(
   error: RepositoryError,
 ): 400 | 403 | 404 | 409 | undefined {
+  // SCOPE_VIOLATION is 403 rather than 404 because the caller can see the
+  // record; it was their own values that pushed it out of scope. Saying so
+  // leaks nothing about anyone else's data, and the request cannot be
+  // repaired without being told. A scope that simply does not match is a
+  // different thing and never reaches here: it is mapped to 404 or an empty
+  // result, so that forbidden and absent stay indistinguishable.
   switch (error.code) {
     case 'WRITE_FORBIDDEN':
     case 'FIELD_WRITE_FORBIDDEN':
     case 'RELATION_WRITE_FORBIDDEN':
+    case 'READ_FORBIDDEN':
+    case 'FIELD_READ_FORBIDDEN':
+    case 'RELATION_READ_FORBIDDEN':
+    case 'SCOPE_VIOLATION':
       return 403;
     case 'RECORD_NOT_FOUND':
     case 'RELATION_TARGET_NOT_FOUND':
@@ -491,6 +501,7 @@ function repositoryErrorStatus(
     case 'MULTIPLE_RECORDS_MATCHED':
     case 'MULTIPLE_RELATION_TARGETS_MATCHED':
     case 'RELATION_UPSERT_TARGET_OUTSIDE_SCOPE':
+    case 'RECORD_OUTSIDE_SCOPE':
     case 'RELATION_REASSIGNMENT_REQUIRED':
       return 409;
     case 'COLLECTION_NOT_FOUND':

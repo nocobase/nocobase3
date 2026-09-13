@@ -1069,6 +1069,56 @@ describe('Repository API routes', () => {
     ]);
   });
 
+  it('maps Policy error codes to their HTTP status', async () => {
+    // A status these codes do not have is not a cosmetic problem: 400 tells a
+    // caller their request was malformed, when in fact it was refused.
+    const expected = [
+      ['READ_FORBIDDEN', 403],
+      ['FIELD_READ_FORBIDDEN', 403],
+      ['RELATION_READ_FORBIDDEN', 403],
+      ['SCOPE_VIOLATION', 403],
+      ['RECORD_OUTSIDE_SCOPE', 409],
+      ['INVALID_POLICY', 400],
+      ['POLICY_REQUIRED', 400],
+    ] as const;
+
+    for (const [code, status] of expected) {
+      const repository = database.repository('orders');
+      vi.spyOn(repository, 'count').mockRejectedValue(
+        new RepositoryError(code, `${code} raised.`),
+      );
+      vi.spyOn(database, 'repository').mockReturnValue(repository);
+      const contribution = defineRepositoryApiRoutes({
+        repositories: [
+          {
+            name: `policy-status-${code}`,
+            collection: 'orders',
+            actions: { count: {} },
+          },
+        ],
+      });
+      const scopedRouter = new Hono();
+      scopedRouter.route(
+        '/api',
+        await contribution.createRouter({ container }),
+      );
+
+      const response = await scopedRouter.request(
+        `/api/policy-status-${code}:count`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: '{}',
+        },
+      );
+
+      expect({ code, status: response.status }).toEqual({ code, status });
+      expect(response.status).toBe(status);
+      expect(await response.json()).toMatchObject({ code });
+      vi.restoreAllMocks();
+    }
+  });
+
   it('does not expose undeclared collections or actions and preserves other routes', async () => {
     for (const path of [
       '/api/orders:findMany',
