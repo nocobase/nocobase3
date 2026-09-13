@@ -3530,6 +3530,12 @@ importers:
       '@nocobase/app-plugin-install':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-install
+      '@nocobase/app-plugin-notification':
+        specifier: workspace:^
+        version: link:../../plugins/app-plugin-notification
+      '@nocobase/app-plugin-service-provider-example':
+        specifier: workspace:^
+        version: link:../../examples/app-plugin-service-provider-example
       '@nocobase/app-plugin-users':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-users
