@@ -11,7 +11,7 @@ export function createLLMServiceCollection(
       c.string('provider').nullable();
       c.json('options').nullable();
       c.json('enabledModels', {
-        defaultValue: { mode: 'recommended', models: [] },
+        defaultValue: { mode: 'provider', models: [] },
       }).notNull();
       c.boolean('enabled', { defaultValue: true }).notNull();
       c.json('modelOptions', {

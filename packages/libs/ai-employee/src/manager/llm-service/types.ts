@@ -16,7 +16,7 @@ export type EnabledModelsConfigItem = {
   label: string;
   value: string;
 };
-export type EnabledModelsMode = 'recommended' | 'provider' | 'custom';
+export type EnabledModelsMode = 'provider' | 'custom';
 
 export type EnabledModelsConfig = {
   mode: EnabledModelsMode;
@@ -24,24 +24,60 @@ export type EnabledModelsConfig = {
 };
 
 export function normalizeEnabledModelsConfig(
-  value: EnabledModelsConfig | string[] | null | undefined,
+  value: unknown,
 ): EnabledModelsConfig {
   if (Array.isArray(value)) {
     return {
       mode: 'custom',
-      models: value.flatMap((model) => {
-        if (typeof model !== 'string' || !model.trim()) return [];
-        const normalized = model.trim();
-        return [{ label: normalized, value: normalized }];
-      }),
+      models: normalizeModelItems(value),
     };
   }
-  return value ?? DEFAULT_ENABLED_MODELS;
+  if (!value || typeof value !== 'object') return { ...DEFAULT_ENABLED_MODELS };
+  const record = value as { mode?: unknown; models?: unknown };
+  if (record.mode !== 'provider' && record.mode !== 'custom') {
+    return { ...DEFAULT_ENABLED_MODELS };
+  }
+  return {
+    mode: record.mode,
+    models: normalizeModelItems(record.models),
+  };
 }
 export const DEFAULT_ENABLED_MODELS: EnabledModelsConfig = {
-  mode: 'recommended',
+  mode: 'provider',
   models: [],
 };
+
+function normalizeModelItems(value: unknown): EnabledModelsConfigItem[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  return value.flatMap((model) => {
+    if (typeof model === 'string') {
+      const normalized = model.trim();
+      if (!normalized || seen.has(normalized)) return [];
+      seen.add(normalized);
+      return [{ label: normalized, value: normalized }];
+    }
+    if (
+      !model ||
+      typeof model !== 'object' ||
+      typeof (model as { value?: unknown }).value !== 'string'
+    )
+      return [];
+    const item = model as { label?: unknown; value: string };
+    const normalized = item.value.trim();
+    if (!normalized || seen.has(normalized)) return [];
+    seen.add(normalized);
+    return [
+      {
+        label:
+          typeof item.label === 'string' && item.label.trim()
+            ? item.label.trim()
+            : normalized,
+        value: normalized,
+      },
+    ];
+  });
+}
 
 export type LLMServiceOptions = {
   name: string;

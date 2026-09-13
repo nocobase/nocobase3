@@ -512,13 +512,10 @@ Actions: `list`, `get?key`, `create`, `update?key`, `destroy?key` on resource `l
   title?: string;
   provider?: string;
   options?: Record<string, unknown>;
-  enabledModels?:
-    | string[]
-    | {
-        mode: 'recommended' | 'provider' | 'custom';
-        models: { label: string; value: string }[];
-      }
-    | null;
+  enabledModels?: {
+    mode: 'provider' | 'custom';
+    models: { label: string; value: string }[];
+  };
   modelOptions?: Record<string, unknown>;
   enabled?: boolean;
   sort?: number;

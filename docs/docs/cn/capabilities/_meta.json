@@ -45,8 +45,13 @@
     "label": "主题"
   },
   {
-    "type": "file",
+    "type": "dir",
     "name": "ai-employee",
-    "label": "AI 员工和知识库"
+    "label": "AI 员工"
+  },
+  {
+    "type": "dir",
+    "name": "ai-knowledge-base",
+    "label": "AI 知识库"
   }
 ]

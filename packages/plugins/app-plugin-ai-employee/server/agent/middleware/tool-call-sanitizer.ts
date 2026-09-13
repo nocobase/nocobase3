@@ -9,7 +9,7 @@
 
 import { AIMessage, BaseMessage } from '@langchain/core/messages';
 import { createMiddleware } from 'langchain';
-import { sanitizeLangChainAIMessage } from '../../ai-employees/tool-call-sanitizer.js';
+import { sanitizeLangChainAIMessage } from '../context/ai-employee/tool-call-sanitizer.js';
 
 type ToolCallSanitizerLogger = {
   warn: (message: string, meta?: Record<string, unknown>) => void;

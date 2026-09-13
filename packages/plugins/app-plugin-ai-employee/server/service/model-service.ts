@@ -1,11 +1,14 @@
-import { SupportedModel } from '@nocobase/ai-employee';
+import {
+  normalizeEnabledModelsConfig,
+  SupportedModel,
+} from '@nocobase/ai-employee';
 import type { AIManager } from '@nocobase/ai-employee';
 import { randomUUID } from 'node:crypto';
 import type {
   EnabledLLMServiceDto,
   ProviderModelDto,
   ProviderModelListRequest,
-} from '../domain/api-contracts.js';
+} from '../types.js';
 import { badRequest, notFound, requiredString } from './utils.js';
 
 /**
@@ -155,17 +158,7 @@ export class ModelService {
     if (!providerMeta) {
       throw new Error(`LLM provider is not configured: ${service.provider}`);
     }
-    const { getRecommendedModels } = await import('@nocobase/ai-employee');
-    const enabledModels = service.enabledModels ?? [];
-    const models =
-      enabledModels &&
-      typeof enabledModels === 'object' &&
-      !Array.isArray(enabledModels)
-        ? ((enabledModels as { models?: Array<{ value?: string }> }).models ??
-          [])
-        : Array.isArray(enabledModels)
-          ? enabledModels.map((id: string) => ({ value: id }))
-          : getRecommendedModels(service.provider);
+    const models = normalizeEnabledModelsConfig(service.enabledModels).models;
     if (
       !models.some(
         (candidate: { value?: string }) => candidate?.value === model.model,
