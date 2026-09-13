@@ -2,7 +2,6 @@ import { createPortalViteConfig } from '@nocobase/dev-config/vite/portal';
 import agentAnnotations from '@gchust/agent-annotations/vite';
 import fs from 'node:fs';
 import path from 'path';
-import { loadEnv } from 'vite';
 
 const AGENT_ANNOTATIONS_DISABLED_VALUES = new Set(['false', '0', 'no', 'off']);
 
@@ -45,14 +44,12 @@ const numberFromEnv = (value: string | undefined): number | undefined => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 };
 
-export const resolvePortalEnv = (mode: string, root = __dirname) => ({
-  ...loadEnv(mode, root, ''),
-  ...process.env,
-});
-
 // https://vite.dev/config/
-export default createPortalViteConfig(({ command, mode }) => {
-  const env = resolvePortalEnv(mode);
+export default createPortalViteConfig(({ command }) => {
+  // Configuration is loaded by the application runtime. Vite should only
+  // consume the environment explicitly supplied by the invoking process;
+  // reading .env here would make the client and server use different paths.
+  const env = process.env;
   const appBase = normalizeBase(env.APP_BASE_PATH ?? '/main');
   const viteBase = appBase;
   const annotationsEnabled = isAgentAnnotationsEnabled(

@@ -32,12 +32,7 @@ import {
 import { useTranslation } from '@nocobase/i18n/client';
 import { useState, type ReactElement } from 'react';
 import type { AppDetail, DeploymentRecord } from './types.js';
-import {
-  ActionAvailabilityHint,
-  Empty,
-  StatusBadge,
-  AppDialog,
-} from './shared.js';
+import { Empty, StatusBadge, AppDialog } from './shared.js';
 import {
   appActionState,
   shortId,
@@ -103,10 +98,6 @@ export function Deployments({
                 <Play className='size-4' />{' '}
                 {t('deployments.deploy', { defaultValue: 'Deploy' })}
               </Button>
-              <ActionAvailabilityHint
-                action='deploy'
-                reason={deployState.reason}
-              />
               {deployState.reason ? (
                 <span className='sr-only' id='hub-deploy-action-reason'>
                   {t(`actions.${deployState.reason}`, {
@@ -154,21 +145,15 @@ export function Deployments({
           </Button>
         ) : null}
       </div>
-      {deployState.reason || rollbackState.reason ? (
-        <div className='flex flex-col gap-1'>
-          <ActionAvailabilityHint action='deploy' reason={deployState.reason} />
-          <ActionAvailabilityHint
-            action='rollback'
-            reason={rollbackState.reason}
-          />
-          {deployState.reason ? (
-            <span className='sr-only' id='hub-deploy-action-reason'>
-              {t(`actions.${deployState.reason}`, {
-                defaultValue: deployState.reason,
-              })}
-            </span>
-          ) : null}
-        </div>
+      {/* The reason a disabled action cannot run is shown as the button's tooltip and read out through
+          `aria-describedby`; the header of the detail page follows the same pattern. Repeating it as visible text
+          above the table added noise without telling the user anything the button itself does not. */}
+      {deployState.reason ? (
+        <span className='sr-only' id='hub-deploy-action-reason'>
+          {t(`actions.${deployState.reason}`, {
+            defaultValue: deployState.reason,
+          })}
+        </span>
       ) : null}
       <div
         className='overflow-hidden rounded-lg border bg-card'

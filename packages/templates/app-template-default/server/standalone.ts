@@ -10,19 +10,8 @@ import { createServer } from './embedded.js';
 import appRuntime from './runtime.js';
 import { nodeServerConfig as serverConfig } from '@nocobase/app-server/node';
 
-export function resolveStandaloneRootDir(entryDir: string): string {
-  const resolvedEntryDir = path.resolve(entryDir);
-  const parentDir = path.dirname(resolvedEntryDir);
-
-  return path.basename(parentDir) === 'dist'
-    ? path.resolve(resolvedEntryDir, '../..')
-    : path.resolve(resolvedEntryDir, '..');
-}
-
 const standalone = defineStandaloneServer({
-  // Source runs from `server/`; the compiled entry runs from `dist/server/`. Both use the application root for config,
-  // storage, and the built client.
-  rootDir: resolveStandaloneRootDir(import.meta.dirname),
+  rootDir: path.resolve(import.meta.dirname, '..'),
   appRuntime,
   serverConfig,
   createServer,

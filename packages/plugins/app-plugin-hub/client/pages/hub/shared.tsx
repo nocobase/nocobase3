@@ -29,7 +29,6 @@ import {
   initials,
   type ReadableError,
   stateLabel,
-  type AppActionReason,
   type AppManagementStatus,
 } from './utils.js';
 
@@ -380,36 +379,5 @@ export function StatusBadge({
       />
       {label}
     </Badge>
-  );
-}
-
-export function ActionAvailabilityHint({
-  action,
-  reason,
-}: {
-  readonly action:
-    'start' | 'stop' | 'restart' | 'deploy' | 'rollback' | 'visit';
-  readonly reason?: AppActionReason;
-}): ReactElement | null {
-  const { t } = useTranslation('@nocobase/app-plugin-hub');
-  if (!reason) return null;
-  const actionLabel: Readonly<Record<typeof action, string>> = {
-    start: t('detail.start', { defaultValue: 'Start' }),
-    stop: t('detail.stop', { defaultValue: 'Stop' }),
-    restart: t('detail.restart', { defaultValue: 'Restart' }),
-    deploy: t('deployments.deploy', { defaultValue: 'Deploy' }),
-    rollback: t('deployments.rollback', { defaultValue: 'Roll back' }),
-    visit: t('detail.visit', { defaultValue: 'Visit' }),
-  };
-  const reasonLabel = t(`actions.${reason}`, {
-    defaultValue: reason,
-  });
-  return (
-    <p className='text-xs text-muted-foreground' role='status'>
-      {t(`actions.${action}Unavailable`, {
-        defaultValue: `${actionLabel[action]} unavailable: ${reasonLabel}`,
-        reason: reasonLabel,
-      })}
-    </p>
   );
 }
