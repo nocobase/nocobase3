@@ -515,6 +515,7 @@ export class DefaultRepository<
           collection,
           options.filter,
           options.context,
+          'update',
         );
         validateIfVersion(collection, options.ifVersion);
       }
@@ -687,6 +688,7 @@ export class DefaultRepository<
       collection,
       options.filter,
       options.context,
+      'update',
     );
     validateIfVersion(collection, options.ifVersion);
     const selection = await this.validateSelect(
@@ -746,6 +748,7 @@ export class DefaultRepository<
       collection,
       options.filter,
       options.context,
+      'update',
     );
     const by = uniqueSelectorFromFilter(collection, filter, ['filter']);
     const [createMutation, updateMutation] = await Promise.all([
@@ -870,6 +873,7 @@ export class DefaultRepository<
       options.filter,
       options.context,
       options.all === true,
+      'update',
     );
     const values = validateValues(
       collection,
@@ -928,6 +932,7 @@ export class DefaultRepository<
       collection,
       options.filter,
       options.context,
+      'delete',
     );
     validateIfVersion(collection, options.ifVersion);
     const selection = options.select
@@ -982,6 +987,7 @@ export class DefaultRepository<
       options.filter,
       options.context,
       options.all === true,
+      'delete',
     );
     const selection = options.select
       ? await this.validateSelect(collection, options.select, options.context)
@@ -1081,6 +1087,7 @@ export class DefaultRepository<
     filter: RepositoryFilter<T> | undefined,
     context: Readonly<Record<string, unknown>> | undefined,
     all: boolean,
+    operation: 'update' | 'delete',
   ): Promise<FilterAst | undefined> {
     if (all) {
       if (filter !== undefined) {
@@ -1088,26 +1095,45 @@ export class DefaultRepository<
           collection: collection.name,
         });
       }
-      return undefined;
+      return this.normalizePolicyMutationScope(collection, operation);
     }
-    const normalized = await this.normalizeFilter(collection, filter, context);
-    if (!normalized || normalized.root.items.length === 0) {
+    const normalized = await this.normalizeFilterWithoutPolicy(
+      collection,
+      filter,
+      context,
+    );
+    const scoped = await this.combineMutationPolicyScope(
+      collection,
+      normalized,
+      operation,
+    );
+    if (!scoped || scoped.root.items.length === 0) {
       invalid(
         'INVALID_FILTER',
         'Bulk mutations require a non-empty filter or all: true.',
         { collection: collection.name, path: ['filter'] },
       );
     }
-    return normalized;
+    return scoped;
   }
 
   private async normalizeSingleMutationFilter<T extends object>(
     collection: CollectionDefinition,
     filter: RepositoryFilter<T> | undefined,
     context: Readonly<Record<string, unknown>> | undefined,
+    operation: 'update' | 'delete',
   ): Promise<FilterAst> {
-    const normalized = await this.normalizeFilter(collection, filter, context);
-    if (!normalized || normalized.root.items.length === 0) {
+    const normalized = await this.normalizeFilterWithoutPolicy(
+      collection,
+      filter,
+      context,
+    );
+    const scoped = await this.combineMutationPolicyScope(
+      collection,
+      normalized,
+      operation,
+    );
+    if (!scoped || scoped.root.items.length === 0) {
       invalid(
         'INVALID_FILTER',
         'Single mutations require a non-empty filter.',
@@ -1117,7 +1143,56 @@ export class DefaultRepository<
         },
       );
     }
-    return normalized;
+    return scoped;
+  }
+
+  private async normalizeFilterWithoutPolicy<T extends object>(
+    collection: CollectionDefinition,
+    input: RepositoryFilter<T> | undefined,
+    context: Readonly<Record<string, unknown>> | undefined,
+  ): Promise<FilterAst | undefined> {
+    return normalizeFilterWithRelations(
+      this.options.collections,
+      collection,
+      input,
+      context,
+    );
+  }
+
+  private async normalizePolicyMutationScope(
+    collection: CollectionDefinition,
+    operation: 'update' | 'delete',
+  ): Promise<FilterAst | undefined> {
+    const node =
+      operation === 'update'
+        ? this.options.policy?.update
+        : this.options.policy?.delete;
+    if (node === false) {
+      invalid('WRITE_FORBIDDEN', `${operation} is forbidden by Policy.`, {
+        collection: collection.name,
+      });
+    }
+    if (node === undefined || node === true || node.scope === true) {
+      return undefined;
+    }
+    return normalizeFilterWithRelations(
+      this.options.collections,
+      collection,
+      node.scope,
+      undefined,
+    );
+  }
+
+  private async combineMutationPolicyScope(
+    collection: CollectionDefinition,
+    caller: FilterAst | undefined,
+    operation: 'update' | 'delete',
+  ): Promise<FilterAst | undefined> {
+    const scope = await this.normalizePolicyMutationScope(
+      collection,
+      operation,
+    );
+    return combinePolicyFilter(caller, scope, collection.name!);
   }
 }
 

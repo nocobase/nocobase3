@@ -71,6 +71,7 @@ describe('DefaultRepository.withPolicy', () => {
         get: async () => ({
           name: 'projects',
           fields: [
+            { name: 'id', type: 'string' },
             { name: 'tenantId', type: 'string' },
             { name: 'status', type: 'string' },
           ],
@@ -103,6 +104,56 @@ describe('DefaultRepository.withPolicy', () => {
       expect.objectContaining({
         logic: 'and',
         items: [expect.objectContaining({ path: ['tenantId'], value: 'T1' })],
+      }),
+    ]);
+  });
+
+  it('uses the mutation scope instead of read scope for updates', async () => {
+    let updateFilter: { root: { items: readonly unknown[] } } | undefined;
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {
+        get: async () => ({
+          name: 'projects',
+          fields: [
+            { name: 'id', type: 'string' },
+            { name: 'tenantId', type: 'string' },
+            { name: 'ownerId', type: 'string' },
+            { name: 'title', type: 'string' },
+          ],
+        }),
+      },
+      adapter: {
+        updateOne: async (plan: { filter: typeof updateFilter }) => {
+          updateFilter = plan.filter;
+          return {
+            record: { id: 'p1' },
+            createdTargets: [],
+          };
+        },
+      } as never,
+    });
+
+    await repository
+      .withPolicy({
+        read: { scope: { tenantId: 'T1' } },
+        create: { scope: true },
+        update: { scope: { ownerId: 'u1' }, fields: ['title'] },
+        delete: { scope: { tenantId: 'T1' } },
+      })
+      .updateOne({
+        filter: { id: 'p1' },
+        values: { title: 'Updated' },
+      });
+
+    expect(updateFilter?.root.items).toEqual([
+      expect.objectContaining({
+        logic: 'and',
+        items: [expect.objectContaining({ path: ['id'], value: 'p1' })],
+      }),
+      expect.objectContaining({
+        logic: 'and',
+        items: [expect.objectContaining({ path: ['ownerId'], value: 'u1' })],
       }),
     ]);
   });
