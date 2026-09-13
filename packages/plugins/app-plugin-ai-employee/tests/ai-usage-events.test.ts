@@ -140,8 +140,8 @@ describe('AI usage metadata normalization', () => {
       }),
     ).toEqual({
       inputTokens: 7,
-      outputTokens: 4,
-      totalTokens: 15,
+      outputTokens: '4',
+      totalTokens: '15',
       cachedTokens: 6,
       reasoningTokens: 5,
     });
