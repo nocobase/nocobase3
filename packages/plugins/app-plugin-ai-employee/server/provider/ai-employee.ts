@@ -4,10 +4,7 @@ import {
   fileStorageFactoryToken,
   type AIManager,
 } from '@nocobase/ai-employee';
-import {
-  type AppDriveConfig,
-  driveManagerToken,
-} from '@nocobase/app-server/drive';
+import { driveConfig, driveManagerToken } from '@nocobase/app-server/drive';
 import { loggingToken } from '@nocobase/app-server/logging';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import {
@@ -16,10 +13,13 @@ import {
   type ServiceToken,
 } from '@nocobase/service-provider';
 
+import path from 'node:path';
+
+import { aiConfig, resolveAIEmployeeStorageDisk } from '../config.js';
 import {
-  type AIApplicationConfig,
-  resolveAIEmployeeStorageDisk,
-} from '../config.js';
+  AIEmployeeResources,
+  normalizeAISkillDirectories,
+} from '../ai/index.js';
 import {
   ManagerFactory,
   managerFactoryToken,
@@ -81,21 +81,34 @@ export class AIEmployeeProvider extends ServiceProvider<AppPluginApplication> {
 
   public override async boot(): Promise<void> {
     const services = this.app.container.resolve(serviceFactoryToken);
-    const config = this.app.config.get<AIApplicationConfig>('ai')!;
+    const config = this.app.config.get(aiConfig);
     const aiStorageDisk = resolveAIEmployeeStorageDisk(
       config,
-      this.app.config.get<AppDriveConfig>('drive')!.default,
+      this.app.config.get(driveConfig).default,
     );
     this.app.container.resolve(managerFactoryToken).configure({
       aiStorageDisk,
     });
+    const configuredSkillDirectories = normalizeAISkillDirectories(
+      config.skills?.paths ?? [],
+      this.app.paths.root(),
+    );
     services.configure({
-      paths: this.app.paths,
       llmServices: config.llmServices,
+      resourceRegistrar: new AIEmployeeResources({
+        mcpDirectory: path.resolve(this.app.paths.root(), 'ai/mcp'),
+        logger: this.app.container
+          .resolve(loggingToken)
+          .getLogger('ai-employee'),
+        skillsDirectories: [
+          path.resolve(this.app.paths.root(), 'ai/skills'),
+          ...configuredSkillDirectories,
+        ],
+      }),
     });
     await services.initialize();
-    this.unsubscribeConfig = this.app.config.subscribe<AIApplicationConfig>(
-      'ai',
+    this.unsubscribeConfig = this.app.config.subscribe(
+      aiConfig,
       async ({ current }): Promise<void> => {
         await services.ready();
         await services.llmServiceConfigSynchronizer.enqueue(

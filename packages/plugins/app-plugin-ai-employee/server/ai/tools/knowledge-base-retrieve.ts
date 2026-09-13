@@ -11,8 +11,8 @@ import { defineTools, type AgentContext } from '@nocobase/ai-employee';
 import type {
   AIConversationRepository,
   AIToolMessageRepository,
-} from '../../server/repository/index.js';
-import type { AgentKnowledgeBaseService } from '../../server/agent/contracts.js';
+} from '../../repository/index.js';
+import type { AgentKnowledgeBaseService } from '../../agent/contracts.js';
 import { z } from 'zod';
 import packageMetadata from '@nocobase/app-plugin-ai-employee/package.json' with { type: 'json' };
 

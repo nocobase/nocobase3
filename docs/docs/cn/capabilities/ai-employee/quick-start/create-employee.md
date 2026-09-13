@@ -1,16 +1,16 @@
 ---
 title: '声明 AI 员工'
-description: '使用 Agent 在 ai/employees 目录声明应用专属的 AI 员工。'
-keywords: 'AI 员工,ai/employees,defineAIEmployee,Agent'
+description: '使用 Agent 在 server/ai/employees 目录声明应用专属的 AI 员工。'
+keywords: 'AI 员工,server/ai/employees,defineAIEmployee,Agent'
 ---
 
 # 声明 AI 员工
 
-应用专属的 AI 员工必须声明在应用源码的 `ai/employees/` 目录。推荐直接告诉 Agent 你的业务目标，让 Agent 检查当前应用并完成员工定义、加载和验证。
+应用专属的 AI 员工必须声明在应用源码的 `server/ai/employees/` 目录。推荐直接告诉 Agent 你的业务目标，让 Agent 检查当前应用并完成员工定义、加载和验证。
 
 ## 让 Agent 声明员工
 
-在开发任务中说明员工职责、允许使用的工具、模型限制和验收要求。Agent 会根据 `nocobase-plugin-ai-employee` 技能在 `ai/employees/` 下生成员工定义，并完成加载检查。
+在开发任务中说明员工职责、允许使用的工具、模型限制和验收要求。Agent 会根据 `nocobase-plugin-ai-employee` 技能在 `server/ai/employees/` 下生成员工定义，并完成加载检查。
 
 推荐明确要求 Agent 验证以下内容：
 
@@ -36,14 +36,15 @@ export default defineAIEmployee({
 });
 ```
 
+员工定义完成后，从 `server/ai/index.ts` 静态导入，并在 `AIResourceRegistrar.registerAIEmployees()` 中注册；应用 Provider 的 `boot()` 调用 `registerAIResources(ai)`。
+
 目录结构如下：
 
 ```text
-ai/
+server/ai/
 └── employees/
     └── sales-assistant/
-        ├── index.ts
-        └── prompt.md       # 可选
+        └── index.ts  # prompt 写在 systemPrompt 字段
 ```
 
 `username` 是稳定标识，会被聊天任务、会话和前端快捷入口引用。员工定义发布后不要随意修改。

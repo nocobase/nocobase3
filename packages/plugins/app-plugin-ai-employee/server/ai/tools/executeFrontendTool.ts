@@ -3,8 +3,8 @@ import { z } from 'zod';
 import {
   EXECUTE_FRONTEND_TOOL_NAME,
   isFrontendToolInvokeResult,
-} from '../../server/agent/context/ai-employee/common/frontend-tool-contracts.js';
-import type { AgentFrontendToolService } from '../../server/agent/contracts.js';
+} from '../../agent/context/ai-employee/common/frontend-tool-contracts.js';
+import type { AgentFrontendToolService } from '../../agent/contracts.js';
 import packageMetadata from '@nocobase/app-plugin-ai-employee/package.json' with { type: 'json' };
 
 type FrontendToolContext = AgentContext<

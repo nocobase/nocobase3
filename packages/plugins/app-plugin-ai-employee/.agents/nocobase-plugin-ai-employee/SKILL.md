@@ -98,33 +98,44 @@ Clarification bounds: max clarification rounds = 2; max questions per round = 3.
 | [API guide](references/api-reference.md)          | integrating backend actions             | Prefer existing service/transport over handwritten requests.                                                |
 | [Runtime boundaries](references/agent-service.md) | direct server AgentService integrations | Container tokens, conversation-first creation, `createAIEmployee`, `createAgent`, context, and persistence. |
 
-# App AI Resources
+# Register application AI Employees and Tools from server/ai
 
-The App's `ai/` directory extends package built-ins. Built-ins load first and App resources load afterward. Do not copy built-ins. Use this layout:
+Application Employees and Tools are defined under `server/ai/employees/` and `server/ai/tools/`, aggregated with static imports in `server/ai/index.ts`, and registered from the application's Server Provider.
 
-- `ai/employees/<name>/index.ts` and optional `prompt.md`;
-- `ai/tools/<name>.ts`;
-- `ai/skills/<name>/SKILLS.md` and optional `tools/`;
-- `ai/mcp/<name>.ts`;
-- `config.yml` `ai.llmServices`.
+Employee and Tool implementations use `defineAIEmployee()` and `defineTools()`. Put the Employee prompt in its `systemPrompt` field and configure its Skill and Tool names explicitly.
 
-## Employee
+Use the public `AIResourceRegistrar` contract exported by `@nocobase/app-plugin-ai-employee/server`:
 
 ```ts
-import { defineAIEmployee } from '@nocobase/ai-employee';
+import { AIResourceRegistrar } from '@nocobase/app-plugin-ai-employee/server';
+import type { AIEmployeeManager, ToolsManager } from '@nocobase/ai-employee';
+import employee from './employees/sales/index.js';
+import tool from './tools/lookup-lead.js';
 
-export default defineAIEmployee({
-  username: 'sales-assistant',
-  category: 'business',
-  nickname: 'Sage',
-  description: 'Helps users summarize and qualify leads.',
-  systemPrompt: 'Use only supplied context and configured tools.',
-  skills: ['lead-qualification'],
-  tools: [{ name: 'lookup-lead', autoCall: false }],
-});
+export default class AppAIResources extends AIResourceRegistrar {
+  protected override async registerAIEmployees(
+    aiEmployeeManager: AIEmployeeManager,
+  ): Promise<void> {
+    await aiEmployeeManager.registerEmployee(employee);
+  }
+
+  protected override async registerTools(
+    toolsManager: ToolsManager,
+  ): Promise<void> {
+    await toolsManager.registerTools(tool);
+  }
+}
 ```
 
-Use a unique stable username. Employee-local tools/skills are discovered and merged. Built-ins such as Atlas, Dex, Ellis, Lexi, Vera, and Viz are selected by username; never import or copy their definitions.
+In the application's Provider `boot()`, resolve the existing `aiManagerToken` and call `registerAIResources(ai)`. Do not create another AI Manager. Register order is Tool, MCP, Skill, then Employee; make same-name Tool behavior an explicit registration decision rather than relying on directory scan order.
+
+## Configure additional Skill directories
+
+The plugin always loads its published package-root `ai/skills`, then the App-root `ai/skills` as a second default directory, then any application or shared Skill directories listed in `ai.skills.paths` in `config.yml`. Paths may be absolute or relative to the App root, are trimmed and de-duplicated, and later directories have later-registration semantics.
+
+Skill files must be named `SKILL.md`; their frontmatter contract is unchanged. This configuration affects only Skill loading. It does not discover Employees or Tools.
+
+## Employee
 
 ## Backend tool
 
@@ -152,7 +163,7 @@ Explicitly choose scope, execution, and permission. Validate input, enforce busi
 
 ## Skill, MCP, and LLM services
 
-- Skill: create `SKILLS.md` with `scope`, `name`, `description`, optional `tools`, and instructions. Skill-local tools are discovered automatically.
+- Skill: create `SKILL.md` with `scope`, `name`, `description`, optional `tools`, and instructions. Skill-local tools are discovered automatically.
 - MCP: default-export `defineMCP({...})`; the filename is the server name. Read the installed public `MCPOptions` type and keep credentials in environment/config.
 - LLM services: configure `config.yml` `ai.llmServices` with environment placeholders and explicit enabled models. The name set is authoritative; reload application config after edits. No process restart or AI resource rescan is required.
 

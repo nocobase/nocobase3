@@ -1,7 +1,7 @@
 ---
 title: '使用 Agent 开发 AI 员工功能'
 description: '使用 nocobase-plugin-ai-employee 技能，让 Agent 声明 AI 员工、添加技能和工具，并集成前端聊天。'
-keywords: 'Agent,AI 员工,nocobase-plugin-ai-employee,ai/tools,ai/skills'
+keywords: 'Agent,AI 员工,nocobase-plugin-ai-employee,server/ai/tools,ai/skills'
 ---
 
 # 使用 Agent 开发
@@ -30,18 +30,18 @@ NocoBase AI 员工插件配套 `nocobase-plugin-ai-employee` 技能。你可以�
 - 需要运行的检查和测试
 
 :::tip 目录名说明
-资源加载约定使用 `ai/employees/`（复数）。如果任务描述使用单数目录名，Agent 应该根据当前项目的 `nocobase-plugin-ai-employee` 技能和已有目录结构选择正确路径，不要凭空创建第二套目录。
+资源加载约定使用 `server/ai/employees/`（复数）。如果任务描述使用单数目录名，Agent 应该根据当前项目的 `nocobase-plugin-ai-employee` 技能和已有目录结构选择正确路径，不要凭空创建第二套目录。
 
 :::
 
 ## 四种开发能力
 
-| 需求                         | 推荐做法                       |
-| ---------------------------- | ------------------------------ |
-| 让员工理解一个业务角色       | 在 `ai/employees/` 添加员工    |
-| 让员工遵循一组稳定的业务知识 | 在 `ai/skills/` 添加技能       |
-| 让员工查询或操作应用数据     | 在 `ai/tools/` 添加工具        |
-| 让用户在页面中和员工对话     | 使用 Registry 的聊天和员工组件 |
+| 需求                         | 推荐做法                           |
+| ---------------------------- | ---------------------------------- |
+| 让员工理解一个业务角色       | 在 `server/ai/employees/` 添加员工 |
+| 让员工遵循一组稳定的业务知识 | 在 `ai/skills/` 添加技能           |
+| 让员工查询或操作应用数据     | 在 `server/ai/tools/` 添加工具     |
+| 让用户在页面中和员工对话     | 使用 Registry 的聊天和员工组件     |
 
 ## 相关页面
 

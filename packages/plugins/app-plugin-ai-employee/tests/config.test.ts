@@ -57,6 +57,7 @@ describe('AI application config', () => {
         vectorDatabases: [],
         manifests: [],
       },
+      skills: { paths: [] },
       llmServices: [],
     });
   });

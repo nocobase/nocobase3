@@ -37,7 +37,7 @@ describe('Skills loader test cases', () => {
     aiManager = app.aiManager;
     skillsManager = aiManager.skillsManager;
     loader = new SkillsLoader(aiManager, {
-      scan: { basePath, pattern: ['**/skills/**/SKILLS.md'] },
+      scan: { basePath, pattern: ['**/skills/**/SKILL.md'] },
     });
   });
 
@@ -49,7 +49,7 @@ describe('Skills loader test cases', () => {
     await loader.load();
     await app.init();
     const skillsMarkdown = await readFile(
-      path.resolve(basePath, 'skills', 'data-modeling', 'SKILLS.md'),
+      path.resolve(basePath, 'skills', 'data-modeling', 'SKILL.md'),
       'utf-8',
     );
     const { content } = matter(skillsMarkdown);

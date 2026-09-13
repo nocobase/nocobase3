@@ -12,7 +12,7 @@ import {
   type AgentContext,
   type AIEmployeeRepository,
 } from '@nocobase/ai-employee';
-import type { AgentBuiltInService } from '../../../server/agent/contracts.js';
+import type { AgentBuiltInService } from '../../../agent/contracts.js';
 import { z } from 'zod';
 import {
   listAccessibleAIEmployees,
