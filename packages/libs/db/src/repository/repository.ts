@@ -11,7 +11,6 @@ import {
 import { normalizeRepositoryPolicy } from './policy/normalize.js';
 import {
   applyCreateDefaults,
-  assertPolicyFilterFields,
   assertReadableField,
   combinePolicyFilter,
   readableFields,
@@ -1201,7 +1200,18 @@ export class DefaultRepository<
     policy: PolicyReadContext,
   ): Promise<FilterAst | undefined> {
     if (policy.kind === 'unrestricted') return normalized;
-    assertPolicyFilterFields(collection, normalized, policy.fields);
+    const caller = normalized
+      ? {
+          ...normalized,
+          root: await scopeCallerFilterGroup(
+            this.options.collections,
+            collection,
+            normalized.root,
+            policy,
+            ['root'],
+          ),
+        }
+      : undefined;
     const scope =
       policy.scope === true
         ? undefined
@@ -1211,7 +1221,7 @@ export class DefaultRepository<
             policy.scope,
             undefined,
           );
-    return combinePolicyFilter(normalized, scope, collection.name!);
+    return combinePolicyFilter(caller, scope, collection.name!);
   }
 
   private async validateSelect(
@@ -2428,6 +2438,95 @@ function validateSortAst(
   }
 }
 
+/**
+ * Narrow a normalized caller filter by the read policy.
+ *
+ * Two things happen in one pass, because both need the collection each node
+ * actually belongs to. Every condition is checked against the allowlist of its
+ * own collection — a condition under `tasks.some(...)` is judged by the tasks
+ * node, never by the root's — and every relation branch is intersected with
+ * that relation's scope, so a quantifier only ever reasons about rows the
+ * caller may see.
+ *
+ * Only caller nodes reach here. A Policy scope is a separate value combined
+ * afterwards, so a scope condition is never judged against the allowlist that
+ * governs the caller; there is no need to tag nodes with their origin, and no
+ * ordering assumption to get wrong.
+ */
+async function scopeCallerFilterGroup(
+  collections: Pick<ConnectionCollections, 'get'>,
+  collection: CollectionDefinition,
+  group: FilterGroupNode,
+  policy: PolicyReadContext,
+  path: readonly (string | number)[],
+): Promise<FilterGroupNode> {
+  return {
+    ...group,
+    items: await Promise.all(
+      group.items.map((node, index) =>
+        scopeCallerFilterNode(collections, collection, node, policy, [
+          ...path,
+          'items',
+          index,
+        ]),
+      ),
+    ),
+  };
+}
+
+async function scopeCallerFilterNode(
+  collections: Pick<ConnectionCollections, 'get'>,
+  collection: CollectionDefinition,
+  node: FilterNode,
+  policy: PolicyReadContext,
+  path: readonly (string | number)[],
+): Promise<FilterNode> {
+  if (node.kind === 'group') {
+    return scopeCallerFilterGroup(collections, collection, node, policy, path);
+  }
+  if (node.kind === 'condition') {
+    assertReadableField(policy, collection, node.path[0], [...path, 'path', 0]);
+    return node;
+  }
+  const name = node.path[0];
+  const relationPath = [...path, 'path', 0] as const;
+  const relationPolicy = relationReadContext(
+    policy,
+    collection,
+    name,
+    relationPath,
+  );
+  const relation = relationField(collection, name, relationPath);
+  const target = await targetCollection(collections, relation, path);
+  const inner = node.filter
+    ? await scopeCallerFilterGroup(
+        collections,
+        target,
+        node.filter,
+        relationPolicy,
+        [...path, 'filter'],
+      )
+    : undefined;
+  const scope =
+    relationPolicy.kind === 'restricted' && relationPolicy.scope !== true
+      ? await normalizeFilterWithRelations(
+          collections,
+          target,
+          relationPolicy.scope,
+          undefined,
+        )
+      : undefined;
+  if (!scope) return inner ? { ...node, filter: inner } : node;
+  return {
+    ...node,
+    filter: {
+      kind: 'group',
+      logic: 'and',
+      items: inner ? [inner, scope.root] : [scope.root],
+    },
+  };
+}
+
 async function normalizeFilterWithRelations<TRecord extends object>(
   collections: Pick<ConnectionCollections, 'get'>,
   collection: CollectionDefinition,
@@ -2701,9 +2800,19 @@ async function validateSelectInputWithRelations(
       node.filter,
       context,
     );
-    if (relationPolicy.kind === 'restricted') {
-      assertPolicyFilterFields(target, filter, relationPolicy.fields);
-    }
+    const callerFilter =
+      filter && relationPolicy.kind === 'restricted'
+        ? {
+            ...filter,
+            root: await scopeCallerFilterGroup(
+              collections,
+              target,
+              filter.root,
+              relationPolicy,
+              [...path, 'filter', 'root'],
+            ),
+          }
+        : filter;
     const policyScope =
       relationPolicy.kind === 'restricted' && relationPolicy.scope !== true
         ? await normalizeFilterWithRelations(
@@ -2713,7 +2822,11 @@ async function validateSelectInputWithRelations(
             undefined,
           )
         : undefined;
-    const scopedFilter = combinePolicyFilter(filter, policyScope, target.name!);
+    const scopedFilter = combinePolicyFilter(
+      callerFilter,
+      policyScope,
+      target.name!,
+    );
     const sortInput = normalizeSortInput(target, node.sort);
     if (
       sortInput?.items.length &&

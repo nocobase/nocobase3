@@ -88,11 +88,17 @@ description: 按阶段拆分的实施任务，含前置决策、技术验证、�
 - 写**差分测试**：同一批记录、同一个 scope，分别走内存求值和 `SELECT ... WHERE <scope>`，断言两边挑出的行完全相同；八种方言各跑一遍
 - 求值器和 SQL 构造器共用同一份操作符语义表，不要各写一套
 
-### 1.5 filter 合并与 `origin`
+### 1.5 filter 合并与来源区分
 
-- `FilterNode` 增加 `origin: 'caller' | 'policy'`（是否公开由 0.5 决定）
 - 合并函数：调用方 filter **整体包成 group**，与 scope group 取 AND，不打平
 - 接入所有构造 filter 的位置：读方法、`lockByFilter`、`lockManyByFilter`、`updateMany` / `deleteMany` 的快路径
+- 调用方条件与 policy 条件必须可区分，否则 scope 里的 `tenantId` 会被 `read.fields` 自己拒掉
+
+**实现方式与原设计不同，结论相同。** 原计划给 `FilterNode` 加 `origin: 'caller' | 'policy'` 标记。实际实现改为**结构性区分**：调用方 filter 与 policy scope 自始至终是两个独立的值，校验只遍历前者，合并发生在校验之后且不再回头校验。
+
+这不是「合并前先校验」的时序技巧——设计文档警告的是那种做法，理由是嵌套关系与 `combine` 分支会让时序假设失效。这里没有时序假设可失效：`scopeCallerFilterGroup` 接收的永远是调用方那个值，policy scope 走的是另一条路径，两者在类型和调用图上都分得开。关系分支的 scope 注入也发生在同一次递归里，注入点之后不再有校验。
+
+代价是没有一个可以在运行时检视的来源标记。收益是 `@nocobase/repository-input` 的公开 `FilterAst` 不变（决策 0.5），且少了一个「标记漏打」的失败模式。若将来出现调用方与 policy 条件真正交织的构造，再引入标记。
 
 ### 1.6 写路径接入
 

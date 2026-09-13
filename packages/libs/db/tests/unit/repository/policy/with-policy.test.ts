@@ -904,6 +904,283 @@ describe('DefaultRepository.withPolicy', () => {
     ]);
   });
 
+  it('judges relation filter conditions by the relation allowlist, not the root', async () => {
+    let plan: { filter?: { root: { items: unknown[] } } } | undefined;
+    const collections = {
+      get: async (name: string) =>
+        name === 'projects'
+          ? {
+              name,
+              fields: [
+                { name: 'id', type: 'string' },
+                { name: 'title', type: 'string' },
+                {
+                  name: 'tasks',
+                  type: 'hasMany',
+                  target: 'tasks',
+                  foreignKey: 'projectId',
+                },
+              ],
+            }
+          : {
+              name,
+              fields: [
+                { name: 'id', type: 'string' },
+                { name: 'projectId', type: 'string' },
+                { name: 'secret', type: 'string' },
+              ],
+            },
+    };
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections,
+      adapter: {
+        assertReadable: () => undefined,
+        count: async (nextPlan: typeof plan) => {
+          plan = nextPlan;
+          return 0;
+        },
+      } as never,
+    });
+    const someTasks = (field: string) => ({
+      kind: 'filter' as const,
+      version: 1 as const,
+      root: {
+        kind: 'group' as const,
+        logic: 'and' as const,
+        items: [
+          {
+            kind: 'relation' as const,
+            path: ['tasks'],
+            quantifier: 'some' as const,
+            filter: {
+              kind: 'group' as const,
+              logic: 'and' as const,
+              items: [
+                {
+                  kind: 'condition' as const,
+                  path: [field],
+                  operator: '$eq' as const,
+                  value: 'x',
+                },
+              ],
+            },
+          },
+        ],
+      },
+    });
+
+    // The relation authorizes 'secret' on tasks, so the root's allowlist,
+    // which has no such field, must not reject it.
+    await repository
+      .withPolicy({
+        read: {
+          scope: true,
+          fields: ['id'],
+          relations: { tasks: { scope: true, fields: ['id', 'secret'] } },
+        },
+        create: { scope: true },
+        update: { scope: true },
+        delete: { scope: true },
+      })
+      .count({ filter: someTasks('secret') as never });
+    expect(plan?.filter).toBeDefined();
+
+    // 'title' exists on the root and is allowed there, but the condition is
+    // on tasks, where it is not.
+    await expect(
+      repository
+        .withPolicy({
+          read: {
+            scope: true,
+            fields: ['id', 'title'],
+            relations: { tasks: { scope: true, fields: ['id'] } },
+          },
+          create: { scope: true },
+          update: { scope: true },
+          delete: { scope: true },
+        })
+        .count({ filter: someTasks('secret') as never }),
+    ).rejects.toMatchObject({ code: 'FIELD_READ_FORBIDDEN', field: 'secret' });
+  });
+
+  it('rejects filters that traverse a relation the read policy omits', async () => {
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {
+        get: async (name: string) =>
+          name === 'projects'
+            ? {
+                name,
+                fields: [
+                  { name: 'id', type: 'string' },
+                  { name: 'title', type: 'string' },
+                  {
+                    name: 'tasks',
+                    type: 'hasMany',
+                    target: 'tasks',
+                    foreignKey: 'projectId',
+                  },
+                ],
+              }
+            : {
+                name,
+                fields: [
+                  { name: 'id', type: 'string' },
+                  { name: 'title', type: 'string' },
+                ],
+              },
+      },
+      adapter: {
+        assertReadable: () => undefined,
+        count: async () => 0,
+      } as never,
+    });
+
+    await expect(
+      repository
+        .withPolicy({
+          read: { scope: true, fields: ['id', 'title'], relations: {} },
+          create: { scope: true },
+          update: { scope: true },
+          delete: { scope: true },
+        })
+        .count({
+          filter: {
+            kind: 'filter',
+            version: 1,
+            root: {
+              kind: 'group',
+              logic: 'and',
+              items: [
+                {
+                  kind: 'relation',
+                  path: ['tasks'],
+                  quantifier: 'some',
+                  filter: {
+                    kind: 'group',
+                    logic: 'and',
+                    items: [
+                      {
+                        kind: 'condition',
+                        path: ['title'],
+                        operator: '$eq',
+                        value: 'x',
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          } as never,
+        }),
+    ).rejects.toMatchObject({
+      code: 'RELATION_READ_FORBIDDEN',
+      relation: 'tasks',
+    });
+  });
+
+  it('adds the relation scope to a filter relation branch', async () => {
+    let plan: { filter?: { root: { items: unknown[] } } } | undefined;
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {
+        get: async (name: string) =>
+          name === 'projects'
+            ? {
+                name,
+                fields: [
+                  { name: 'id', type: 'string' },
+                  {
+                    name: 'tasks',
+                    type: 'hasMany',
+                    target: 'tasks',
+                    foreignKey: 'projectId',
+                  },
+                ],
+              }
+            : {
+                name,
+                fields: [
+                  { name: 'id', type: 'string' },
+                  { name: 'projectId', type: 'string' },
+                  { name: 'tenantId', type: 'string' },
+                  { name: 'title', type: 'string' },
+                ],
+              },
+      },
+      adapter: {
+        assertReadable: () => undefined,
+        count: async (nextPlan: typeof plan) => {
+          plan = nextPlan;
+          return 0;
+        },
+      } as never,
+    });
+
+    await repository
+      .withPolicy({
+        read: {
+          scope: true,
+          fields: ['id'],
+          relations: {
+            tasks: { scope: { tenantId: 'T1' }, fields: ['id', 'title'] },
+          },
+        },
+        create: { scope: true },
+        update: { scope: true },
+        delete: { scope: true },
+      })
+      .count({
+        filter: {
+          kind: 'filter',
+          version: 1,
+          root: {
+            kind: 'group',
+            logic: 'and',
+            items: [
+              {
+                kind: 'relation',
+                path: ['tasks'],
+                quantifier: 'some',
+                filter: {
+                  kind: 'group',
+                  logic: 'and',
+                  items: [
+                    {
+                      kind: 'condition',
+                      path: ['title'],
+                      operator: '$eq',
+                      value: 'x',
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        } as never,
+      });
+
+    expect(plan?.filter?.root.items[0]).toMatchObject({
+      kind: 'relation',
+      path: ['tasks'],
+      quantifier: 'some',
+      filter: {
+        logic: 'and',
+        items: [
+          {
+            logic: 'and',
+            items: [expect.objectContaining({ path: ['title'] })],
+          },
+          {
+            logic: 'and',
+            items: [expect.objectContaining({ path: ['tenantId'] })],
+          },
+        ],
+      },
+    });
+  });
+
   it('enforces create and update field allowlists', async () => {
     const collection = {
       name: 'projects',

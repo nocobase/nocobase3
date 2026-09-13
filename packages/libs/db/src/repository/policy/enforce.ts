@@ -1,4 +1,4 @@
-import type { FilterAst, FilterNode } from '@nocobase/repository-input';
+import type { FilterAst } from '@nocobase/repository-input';
 import type { CollectionDefinition } from '../../collection/types.js';
 import { invalid, isPlainRecord } from '../internal/guards.js';
 import type {
@@ -128,39 +128,6 @@ export function combinePolicyFilter(
       items: [caller.root, policy.root],
     },
   };
-}
-
-/** Reject caller conditions that reference fields outside the read allowlist. */
-export function assertPolicyFilterFields(
-  collection: CollectionDefinition,
-  filter: FilterAst | undefined,
-  fields: readonly string[],
-): void {
-  if (!filter) return;
-  const allowed = new Set(fields);
-  const visit = (node: FilterNode): void => {
-    if (node.kind === 'condition') {
-      const field = node.path.length === 1 ? node.path[0] : undefined;
-      if (field && !allowed.has(field)) {
-        invalid(
-          'FIELD_READ_FORBIDDEN',
-          `Field "${field}" is not readable by Policy.`,
-          {
-            collection: collection.name,
-            field,
-            path: ['filter', 'root'],
-          },
-        );
-      }
-      return;
-    }
-    if (node.kind === 'group') {
-      node.items.forEach(visit);
-      return;
-    }
-    for (const item of node.filter?.items ?? []) visit(item);
-  };
-  filter.root.items.forEach(visit);
 }
 
 /**
