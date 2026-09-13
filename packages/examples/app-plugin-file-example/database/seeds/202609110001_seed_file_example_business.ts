@@ -6,7 +6,7 @@ interface SeedRecord {
   readonly record: Readonly<Record<string, string | number>>;
 }
 
-// datetime columns store the App's V1 temporal format, not a Date instance.
+// datetime columns store the App's V1 temporal format.
 const createdAt = '2026-09-11T00:00:00.000';
 
 // Demo business records. Files stay empty on purpose: they are uploaded from

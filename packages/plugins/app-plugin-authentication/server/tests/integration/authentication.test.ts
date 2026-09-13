@@ -460,7 +460,7 @@ describe('Authentication seed', () => {
         name: 'nocobase',
         username: 'nocobase',
         email: 'admin@nocobase.com',
-        emailVerified: 1,
+        emailVerified: true,
       });
 
       const account = await connection.query

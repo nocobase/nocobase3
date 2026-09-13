@@ -35,6 +35,7 @@ describeIntegrationDatabases('native aggregate contract', (context) => {
       const statements: string[] = [];
       const listener = (query: { sql: string }) => statements.push(query.sql);
       db.connection().collections.invalidate('floatChildren');
+      await db.connection().collections.get('floatChildren');
       context.db.on('query', listener);
       try {
         expect(

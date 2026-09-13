@@ -152,7 +152,7 @@ describe('application workflow Artifact lazy synchronization', () => {
       }),
       'Its node run',
     );
-    expect(JSON.parse(String(nodeRun.result))).toBe('source');
+    expect(nodeRun.result).toBe('source');
     await service.dispose();
   });
 
@@ -178,7 +178,7 @@ describe('application workflow Artifact lazy synchronization', () => {
       current: true,
       enabled: false,
     });
-    expect(JSON.parse(String(revision.parameterValues))).toEqual({
+    expect(revision.parameterValues).toEqual({
       label: 'configured',
     });
     await expect(repository.get(hash)).resolves.toMatchObject({
@@ -250,7 +250,7 @@ describe('application workflow Artifact lazy synchronization', () => {
       }),
       'Its node run',
     );
-    expect(JSON.parse(String(nodeRun.result))).toBe('v1');
+    expect(nodeRun.result).toBe('v1');
     await firstService.dispose();
 
     const v2 = await emit(f.distRoot, 'v2');

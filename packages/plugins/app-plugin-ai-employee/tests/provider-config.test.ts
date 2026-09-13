@@ -120,7 +120,7 @@ describe('AIEmployeeProvider application config', () => {
       title: 'Configured title',
       provider: 'openai',
       options: { apiKey: 'configured' },
-      enabled: 1,
+      enabled: true,
       enabledModels: {
         mode: 'custom',
         models: [{ label: 'User model', value: 'user-model' }],
@@ -152,7 +152,7 @@ describe('AIEmployeeProvider application config', () => {
     const manager = container.resolve(aiManagerToken).llmServiceManager;
     await expect(manager.getLLMService('openai')).resolves.toMatchObject({
       title: 'Initial OpenAI',
-      enabled: 0,
+      enabled: false,
     });
 
     await manager.registerLLMService(
@@ -186,7 +186,7 @@ describe('AIEmployeeProvider application config', () => {
     await expect(manager.getLLMService('openai')).resolves.toMatchObject({
       title: 'Reloaded OpenAI',
       options: { apiKey: 'reloaded' },
-      enabled: 1,
+      enabled: true,
       enabledModels: {
         mode: 'custom',
         models: [{ label: 'user-model', value: 'user-model' }],
@@ -236,7 +236,7 @@ describe('AIEmployeeProvider application config', () => {
     await config.reload();
 
     await expect(manager.getLLMService('openai')).resolves.toMatchObject({
-      enabled: 1,
+      enabled: true,
       enabledModels: {
         mode: 'custom',
         models: [{ label: 'Second model', value: 'second-model' }],

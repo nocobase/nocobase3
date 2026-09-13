@@ -56,6 +56,7 @@ describeIntegrationDatabases(
       ];
       for (const createQuery of queries) {
         db.connection().collections.invalidate('nativeDecimals');
+        await db.connection().collections.get('nativeDecimals');
         const statements: string[] = [];
         const listener = (query: { sql: string }) => statements.push(query.sql);
         context.db.on('query', listener);
@@ -73,6 +74,7 @@ describeIntegrationDatabases(
         }
       }
       db.connection().collections.invalidate('nativeDecimals');
+      await db.connection().collections.get('nativeDecimals');
       const countStatements: string[] = [];
       const countListener = (query: { sql: string }) =>
         countStatements.push(query.sql);

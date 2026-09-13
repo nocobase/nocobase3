@@ -1,10 +1,14 @@
 import sqlite from '@nocobase/db-sqlite';
-import dameng from '@nocobase/db-dameng';
+import postgres from '@nocobase/db-postgres';
+import mysql from '@nocobase/db-mysql';
+import oracle from '@nocobase/db-oracle';
 import { registerAppDatabaseDrivers } from '@nocobase/app-server/database';
 
 export const databaseDrivers: {
   sqlite: typeof sqlite;
-  dameng: typeof dameng;
-} = { sqlite, dameng };
+  postgres: typeof postgres;
+  mysql: typeof mysql;
+  oracle: typeof oracle;
+} = { sqlite, postgres, mysql, oracle };
 
 registerAppDatabaseDrivers(databaseDrivers);

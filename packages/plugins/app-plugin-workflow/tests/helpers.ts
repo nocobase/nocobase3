@@ -155,8 +155,7 @@ export async function listNodeRuns(
   return rows.map((row) => ({
     nodeKey: String(row.nodeKey),
     status: Number(row.status),
-    result:
-      typeof row.result === 'string' ? JSON.parse(row.result) : row.result,
+    result: row.result,
     ...(row.error == null ? {} : { error: String(row.error) }),
   }));
 }

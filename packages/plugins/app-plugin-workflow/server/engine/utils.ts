@@ -3,6 +3,7 @@ import type { Row } from '@nocobase/db';
 import type { WorkflowStore } from '../collections/store.js';
 import type {
   JsonObject,
+  JsonValue,
   WorkflowDefinition,
   WorkflowId,
   WorkflowLogger,
@@ -35,7 +36,7 @@ export function nowInstant(): string {
 }
 
 export function parseJson<T>(value: unknown, fallback: T): T {
-  if (value == null || value === '') {
+  if (value == null) {
     return fallback;
   }
   if (typeof value !== 'string') {
@@ -44,28 +45,24 @@ export function parseJson<T>(value: unknown, fallback: T): T {
   try {
     return JSON.parse(value) as T;
   } catch {
-    return fallback;
+    // Repository rows already decode JSON string scalars to plain strings.
+    // Keep those values instead of treating them as malformed JSON text.
+    return value as T;
   }
 }
 
 /**
- * What every `json` column of this plugin is written as: JSON text.
- *
- * The Repository serializes an object or an array for the column itself, but a
- * scalar it binds exactly as given — and a bare `after-restart` or `false` is
- * not JSON, so PostgreSQL's `jsonb` rejects one and SQLite stores the other as
- * the number 0. A node result is arbitrary and is a scalar often enough that
- * the difference matters, so everything here is serialized on the way in and
- * `parseJson` reads it back. That is also the shape these columns have always
- * held, so nothing already stored has to change.
- *
- * `bigint` is rewritten rather than thrown on, because a node result can carry
- * an id and `JSON.stringify` refuses one outright.
+ * Normalize an arbitrary workflow value to the JSON value contract expected
+ * by Repository JSON fields. The database layer owns the actual encoding, so
+ * this must return a value rather than JSON text; otherwise a scalar such as
+ * `2` would be written as the JSON string `"2"`.
  */
-export function serializeJson(value: unknown): string {
-  return JSON.stringify(value === undefined ? null : value, (_key, item) =>
-    typeof item === 'bigint' ? item.toString() : item,
+export function serializeJson(value: unknown): JsonValue {
+  const text = JSON.stringify(
+    value === undefined ? null : value,
+    (_key, item) => (typeof item === 'bigint' ? item.toString() : item),
   );
+  return JSON.parse(text) as JsonValue;
 }
 
 export function asId(value: unknown, field: string = 'id'): WorkflowId {
