@@ -87,4 +87,102 @@ describe('normalizeRepositoryPolicy', () => {
       }),
     ).toThrowError(/scope is required/);
   });
+
+  it('refuses a scope that reaches outside this collection', () => {
+    const withScope = (scope: unknown) => () =>
+      normalizeRepositoryPolicy({
+        read: { scope } as never,
+        create: { scope: true },
+        update: { scope: true },
+        delete: { scope: true },
+      });
+
+    expect(
+      withScope({
+        kind: 'filter',
+        version: 1,
+        root: {
+          kind: 'group',
+          logic: 'and',
+          items: [{ kind: 'relation', path: ['owner'], quantifier: 'exists' }],
+        },
+      }),
+    ).toThrowError(/must not traverse relations/);
+
+    expect(
+      withScope({
+        kind: 'filter',
+        version: 1,
+        root: {
+          kind: 'group',
+          logic: 'and',
+          items: [
+            {
+              kind: 'condition',
+              path: ['owner', 'tenantId'],
+              operator: '$eq',
+              value: 'T1',
+            },
+          ],
+        },
+      }),
+    ).toThrowError(/direct Field/);
+
+    expect(
+      withScope({
+        kind: 'filter',
+        version: 1,
+        root: {
+          kind: 'group',
+          logic: 'and',
+          items: [
+            {
+              kind: 'condition',
+              path: ['metadata'],
+              operator: '$jsonEq',
+              value: 1,
+            },
+          ],
+        },
+      }),
+    ).toThrowError(/JSON operator/);
+  });
+
+  it('freezes the whole scope AST, not only its root', () => {
+    const policy = normalizeRepositoryPolicy({
+      read: { scope: { tenantId: 'T1' } },
+      create: { scope: true },
+      update: { scope: true },
+      delete: { scope: true },
+    });
+    const scope = (
+      policy.read as {
+        scope: { root: { items: readonly unknown[] } };
+      }
+    ).scope;
+
+    // explainPolicy hands this out; a caller who mutated it would change the
+    // effective range of every later query on that repository.
+    expect(Object.isFrozen(scope)).toBe(true);
+    expect(Object.isFrozen(scope.root)).toBe(true);
+    expect(Object.isFrozen(scope.root.items)).toBe(true);
+    expect(Object.isFrozen(scope.root.items[0])).toBe(true);
+  });
+
+  it('copies and freezes a Date used as a create default', () => {
+    const supplied = new Date('2020-01-01T00:00:00.000Z');
+    const policy = normalizeRepositoryPolicy({
+      read: { scope: true },
+      create: { scope: true, defaults: { startedAt: supplied } },
+      update: { scope: true },
+      delete: { scope: true },
+    });
+    const defaults = (policy.create as { defaults: Record<string, unknown> })
+      .defaults;
+    const startedAt = defaults.startedAt as Date;
+
+    expect(startedAt).not.toBe(supplied);
+    expect(startedAt.toISOString()).toBe(supplied.toISOString());
+    expect(Object.isFrozen(startedAt)).toBe(true);
+  });
 });

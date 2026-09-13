@@ -1,6 +1,7 @@
 import {
   buildFilter,
   type FilterAst,
+  type FilterNode,
   type RepositoryFilter,
 } from '@nocobase/repository-input';
 import { RepositoryError } from '../errors.js';
@@ -83,16 +84,67 @@ function normalizeFields(value: unknown, path: PolicyPath): readonly string[] {
 function normalizeScope(value: unknown, path: PolicyPath): true | FilterAst {
   if (value === true) return true;
   if (value === undefined) invalid('scope is required.', path);
+  let ast: FilterAst;
   try {
-    return Object.freeze(
-      buildFilter(value as RepositoryFilter<Record<string, unknown>>),
-    );
+    ast = buildFilter(value as RepositoryFilter<Record<string, unknown>>);
   } catch (error) {
     if (error instanceof RepositoryError) {
       invalid(error.message, path);
     }
     throw error;
   }
+  assertScopeNodes(ast.root, path);
+  return deepFreeze(ast);
+}
+
+/**
+ * A scope reads this Collection's own scalar columns and nothing else.
+ *
+ * Relation paths and quantifiers are refused because a scope that reaches
+ * another table raises a question with no good answer — whether the target's
+ * own Policy applies — and because every query would silently carry a join
+ * the caller cannot see. JSON operators are refused because a scope has to
+ * stay a plain, comparable condition on a column.
+ *
+ * The restriction is about what a scope should mean, not about what can be
+ * evaluated: the write-back check runs as a statement, so it would handle
+ * these perfectly well. Opening relation paths for `read.scope` alone is a
+ * separate, deliberate step; see phase 4 of the policy roadmap.
+ */
+function assertScopeNodes(node: FilterNode, path: PolicyPath): void {
+  if (node.kind === 'group') {
+    for (const item of node.items) assertScopeNodes(item, path);
+    return;
+  }
+  if (node.kind === 'relation') {
+    invalid(
+      'scope must not traverse relations. Materialize the value onto this Collection, or split the query in the service layer.',
+      path,
+    );
+  }
+  if (node.path.length !== 1) {
+    invalid('scope conditions must name a direct Field of this Collection.', [
+      ...path,
+      'path',
+    ]);
+  }
+  if (node.operator.startsWith('$json')) {
+    invalid(`scope does not accept the JSON operator ${node.operator}.`, [
+      ...path,
+      'operator',
+    ]);
+  }
+}
+
+/** Freeze the whole AST, not only its root: `explainPolicy` hands it out. */
+function deepFreeze<T>(value: T): T {
+  if (value === null || typeof value !== 'object') return value;
+  if (Object.isFrozen(value)) return value;
+  Object.freeze(value);
+  for (const item of Object.values(value as Record<string, unknown>)) {
+    deepFreeze(item);
+  }
+  return value;
 }
 
 function normalizeDefaults(
@@ -111,13 +163,14 @@ function normalizeDefaults(
       typeof item === 'boolean' ||
       item instanceof Date
     ) {
-      defaults[field] = item;
+      defaults[field] =
+        item instanceof Date ? deepFreeze(new Date(item)) : item;
       continue;
     } else {
       invalid('defaults values must be scalar values.', [...path, field]);
     }
   }
-  return Object.freeze(defaults);
+  return deepFreeze(defaults);
 }
 
 function normalizeRef(value: unknown, path: PolicyPath): PolicyRef {

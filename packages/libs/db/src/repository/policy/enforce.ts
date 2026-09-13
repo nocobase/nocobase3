@@ -315,3 +315,51 @@ export function scopeFieldNames(scope: FilterAst): readonly string[] {
   scope.root.items.forEach(visit);
   return [...names];
 }
+
+/**
+ * Refuse a `create` node whose scope references a field the operation can
+ * never give a value to.
+ *
+ * `scope: <status ne 'archived'>` with `fields: ['title']` and no default for
+ * `status` describes a create that can never succeed: the column takes
+ * whatever the database supplies, the record is judged against a condition
+ * nobody could influence, and every call inserts, fails the check and rolls
+ * back — reporting an error about `values`, which the caller cannot fix.
+ *
+ * The three inputs are all static, so this is worth catching before the first
+ * insert rather than once per call. A field that has a column default is
+ * accepted: whether that default satisfies the condition is a comparison only
+ * the database can make, and the write-back check makes it.
+ *
+ * This runs when the Collection first resolves rather than at `withPolicy`,
+ * because binding is synchronous and the Collection is not.
+ */
+export function assertCreateScopeSatisfiable(
+  collection: CollectionDefinition,
+  node: NormalizedCreateNode,
+): void {
+  if (node.scope === true) return;
+  for (const name of scopeFieldNames(node.scope)) {
+    if (node.fields.includes(name) || Object.hasOwn(node.defaults, name)) {
+      continue;
+    }
+    const field = collection.fields?.find((item) => item.name === name);
+    if (!field || 'target' in field) continue;
+    const hasValueSource =
+      field.defaultValue !== undefined ||
+      field.db?.generated !== undefined ||
+      field.autoIncrement === true ||
+      field.type === 'increments' ||
+      collection.optimisticLock?.field === name;
+    if (hasValueSource) continue;
+    invalid(
+      'INVALID_POLICY',
+      `create.scope reads Field "${name}", which this create can never set: it is absent from create.fields and create.defaults, and the Collection gives it no default.`,
+      {
+        collection: collection.name,
+        field: name,
+        path: ['policy', 'create', 'scope'],
+      },
+    );
+  }
+}

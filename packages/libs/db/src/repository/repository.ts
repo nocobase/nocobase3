@@ -11,6 +11,7 @@ import {
 import { normalizeRepositoryPolicy } from './policy/normalize.js';
 import {
   applyCreateDefaults,
+  assertCreateScopeSatisfiable,
   assertReadableField,
   combinePolicyFilter,
   readableFields,
@@ -25,6 +26,7 @@ import {
   type PolicyReadContext,
 } from './policy/enforce.js';
 import type {
+  NormalizedCreateNode,
   NormalizedRepositoryPolicy,
   RepositoryPolicy,
 } from './policy/types.js';
@@ -158,6 +160,16 @@ export class DefaultRepository<
   TCreate extends object = Partial<TRecord>,
   TUpdate extends object = Partial<TRecord>,
 > implements ScopedRepository<TRecord, TCreate, TUpdate> {
+  /**
+   * Normalized scopes, resolved once per instance. A bound Policy is frozen,
+   * so its scope cannot change while this Repository lives, and normalizing
+   * it on every call meant walking the Collection metadata on every write.
+   */
+  private readonly scopeChecks = new Map<
+    'create' | 'update',
+    RepositoryScopeCheck
+  >();
+
   constructor(private readonly options: DefaultRepositoryOptions) {}
 
   withPolicy(
@@ -1214,16 +1226,26 @@ export class DefaultRepository<
       operation,
       collection,
     );
-    if (node === undefined || node === true || node.scope === true) {
-      return undefined;
+    if (node === undefined || node === true) return undefined;
+    if (operation === 'create') {
+      assertCreateScopeSatisfiable(collection, node as NormalizedCreateNode);
     }
+    if (node.scope === true) return undefined;
+    const cached = this.scopeChecks.get(operation);
+    if (cached) return cached;
     const scope = await normalizeFilterWithRelations(
       this.options.collections,
       collection,
       node.scope,
       undefined,
     );
-    return scope ? { scope, fields: scopeFieldNames(scope) } : undefined;
+    if (!scope) return undefined;
+    const check: RepositoryScopeCheck = {
+      scope,
+      fields: scopeFieldNames(scope),
+    };
+    this.scopeChecks.set(operation, check);
+    return check;
   }
 
   private async normalizeFilter<T extends object>(

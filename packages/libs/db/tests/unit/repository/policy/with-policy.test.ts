@@ -1181,6 +1181,128 @@ describe('DefaultRepository.withPolicy', () => {
     });
   });
 
+  it('refuses a create whose scope reads a field it can never set', async () => {
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {
+        get: async () => ({
+          name: 'projects',
+          fields: [
+            { name: 'id', type: 'string' },
+            { name: 'title', type: 'string' },
+            // No default, so a create that cannot submit it gets whatever the
+            // database decides — and can never influence the outcome.
+            { name: 'status', type: 'string' },
+          ],
+        }),
+      },
+      adapter: { createOne: async () => ({ record: {}, createdTargets: [] }) },
+    } as never);
+
+    await expect(
+      repository
+        .withPolicy({
+          read: { scope: true },
+          create: { scope: { status: 'draft' }, fields: ['title'] },
+          update: { scope: true },
+          delete: { scope: true },
+        })
+        .createOne({ values: { title: 'x' } }),
+    ).rejects.toMatchObject({ code: 'INVALID_POLICY', field: 'status' });
+  });
+
+  it('accepts a create scope field that defaults or is submittable', async () => {
+    const collections = {
+      get: async () => ({
+        name: 'projects',
+        fields: [
+          { name: 'id', type: 'string' },
+          { name: 'title', type: 'string' },
+          { name: 'status', type: 'string', defaultValue: 'draft' },
+          { name: 'tenantId', type: 'string' },
+        ],
+      }),
+    };
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections,
+      adapter: {
+        createOne: async () => ({
+          record: { id: 'p1' },
+          createdTargets: [],
+        }),
+      },
+    } as never);
+
+    // A column default is accepted: whether it satisfies the condition is a
+    // comparison only the database can make, and the write-back check makes it.
+    await expect(
+      repository
+        .withPolicy({
+          read: { scope: true },
+          create: { scope: { status: 'draft' }, fields: ['title'] },
+          update: { scope: true },
+          delete: { scope: true },
+        })
+        .createOne({ values: { title: 'x' } }),
+    ).resolves.toBeDefined();
+
+    // So is a field the policy assigns itself.
+    await expect(
+      repository
+        .withPolicy({
+          read: { scope: true },
+          create: {
+            scope: { tenantId: 'T1' },
+            defaults: { tenantId: 'T1' },
+            fields: ['title'],
+          },
+          update: { scope: true },
+          delete: { scope: true },
+        })
+        .createOne({ values: { title: 'x' } }),
+    ).resolves.toBeDefined();
+  });
+
+  it('normalizes a mutation scope once per repository', async () => {
+    const checks: unknown[] = [];
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {
+        get: async () => ({
+          name: 'projects',
+          fields: [
+            { name: 'id', type: 'string' },
+            { name: 'tenantId', type: 'string' },
+            { name: 'title', type: 'string' },
+          ],
+        }),
+      },
+      adapter: {
+        updateOne: async (plan: { scopeCheck?: unknown }) => {
+          checks.push(plan.scopeCheck);
+          return { record: { id: 'p1' }, createdTargets: [] };
+        },
+      },
+    } as never);
+    const scoped = repository.withPolicy({
+      read: { scope: true },
+      create: { scope: true },
+      update: { scope: { tenantId: 'T1' }, fields: ['title'] },
+      delete: { scope: true },
+    });
+
+    await scoped.updateOne({ filter: { id: 'p1' }, values: { title: 'a' } });
+    await scoped.updateOne({ filter: { id: 'p1' }, values: { title: 'b' } });
+
+    // The same object both times: a bound policy is frozen, so re-normalizing
+    // its scope against the collection on every write buys nothing.
+    expect(checks).toHaveLength(2);
+    expect(checks[0]).toBeDefined();
+    expect(checks[0]).toBe(checks[1]);
+    expect(checks[0]).toMatchObject({ fields: ['tenantId'] });
+  });
+
   it('enforces create and update field allowlists', async () => {
     const collection = {
       name: 'projects',
