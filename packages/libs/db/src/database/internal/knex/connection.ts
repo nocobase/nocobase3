@@ -21,6 +21,7 @@ import type {
   RepositoryRecord,
 } from '../../../repository/types.js';
 import { normalizeRepositoryPolicy } from '../../../repository/policy/normalize.js';
+import { expandPolicyRefs } from '../../../repository/policy/refs.js';
 import { PolicyBoundConnection } from './policy-bound-connection.js';
 import type {
   NormalizedRepositoryPolicy,
@@ -251,7 +252,7 @@ export class KnexDatabaseConnection implements DatabaseConnection {
         ),
       ]),
     );
-    return new PolicyBoundConnection(this, normalized);
+    return new PolicyBoundConnection(this, expandPolicyRefs(normalized));
   }
 
   async disconnect(): Promise<void> {

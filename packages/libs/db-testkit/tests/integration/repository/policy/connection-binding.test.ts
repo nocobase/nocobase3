@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest';
 import { describeIntegrationDatabases } from '../../helpers.js';
+import { ref } from '../../../../../db/src/index.js';
 import { createTenantFixture, selection } from '../fixtures/tenants.js';
 
 const T1 = {
@@ -101,6 +102,59 @@ describeIntegrationDatabases(
         read: { fields: ['id', 'name'] },
         delete: { scope: { root: { items: [{ path: ['tenantId'] }] } } },
       });
+    });
+
+    it('PB-07 expands a policy reference against the same binding', async () => {
+      await createTenantFixture(context);
+      const scoped = context.connection.withPolicies(
+        {
+          policyProjects: {
+            read: {
+              scope: true,
+              fields: ['id'],
+              relations: { tasks: ref('policyTasks') },
+            },
+            create: { scope: true },
+            update: { scope: true },
+            delete: { scope: true },
+          },
+          policyTasks: {
+            read: { scope: { tenantId: 'T1' }, fields: ['id'] },
+            create: { scope: true },
+            update: { scope: true },
+            delete: { scope: true },
+          },
+        },
+        undefined,
+      );
+
+      const records = await scoped.repository('policyProjects').findMany({
+        select: {
+          kind: 'select',
+          version: 1,
+          root: {
+            kind: 'selection',
+            fields: ['id'],
+            includes: [
+              {
+                kind: 'include',
+                relation: 'tasks',
+                select: { kind: 'selection', fields: ['id'], includes: [] },
+              },
+            ],
+          },
+        },
+      });
+
+      // The reference carried both the field allowlist and the scope across,
+      // so p1's task from the other tenant stays hidden.
+      expect(
+        [...records].sort((a, b) => String(a.id).localeCompare(String(b.id))),
+      ).toEqual([
+        { id: 'p1', tasks: [{ id: 't1' }] },
+        { id: 'p2', tasks: [] },
+        { id: 'p3', tasks: [{ id: 't3' }] },
+      ]);
     });
 
     it('PB-06 evaluates a principal function once per binding', async () => {

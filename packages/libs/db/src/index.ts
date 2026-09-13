@@ -314,6 +314,7 @@ export type {
 
 export { normalizeRepositoryPolicy } from './repository/policy/normalize.js';
 export { narrowRepositoryPolicy } from './repository/policy/narrow.js';
+export { expandPolicyRefs, ref } from './repository/policy/refs.js';
 export type { ScopedDatabaseConnection } from './database/connection.js';
 export type {
   CreateNode,
