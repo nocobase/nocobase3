@@ -3,6 +3,7 @@ import type { ConnectionCollections } from '../collection/registry/types.js';
 import type { CollectionMetadataService } from '../metadata/service.js';
 import type { QueryAdapter } from '../query/types.js';
 import type { Repository, RepositoryRecord } from '../repository/types.js';
+import type { RepositoryPolicy } from '../repository/policy/types.js';
 import type { DatabaseCapabilities, SchemaAdapter } from '../schema/adapter.js';
 import type { SchemaInspector } from '../schema/inspector/types.js';
 import type { DatabaseDriver, SchemaManagementMode } from './config.js';
@@ -33,6 +34,12 @@ export interface DatabaseConnection {
   >(
     collection: string,
   ): Repository<TRecord, TCreate, TUpdate>;
+  withPolicies<P>(
+    policies: Readonly<
+      Record<string, RepositoryPolicy | ((principal: P) => RepositoryPolicy)>
+    >,
+    principal: P,
+  ): DatabaseConnection;
   schema: SchemaAdapter;
   /** Read-only physical database schema introspection. Uses physical names. */
   schemaInspector: SchemaInspector;
