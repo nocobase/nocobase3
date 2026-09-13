@@ -313,6 +313,7 @@ export type {
 } from './repository/errors.js';
 
 export { normalizeRepositoryPolicy } from './repository/policy/normalize.js';
+export type { ScopedDatabaseConnection } from './database/connection.js';
 export type {
   CreateNode,
   DeleteNode,

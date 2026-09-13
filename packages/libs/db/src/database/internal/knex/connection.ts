@@ -21,6 +21,7 @@ import type {
   RepositoryRecord,
 } from '../../../repository/types.js';
 import { normalizeRepositoryPolicy } from '../../../repository/policy/normalize.js';
+import { PolicyBoundConnection } from './policy-bound-connection.js';
 import type {
   NormalizedRepositoryPolicy,
   RepositoryPolicy,
@@ -44,7 +45,10 @@ import type {
   DatabaseDriverDefinition,
   SchemaManagementMode,
 } from '../../config.js';
-import type { DatabaseConnection } from '../../connection.js';
+import type {
+  DatabaseConnection,
+  ScopedDatabaseConnection,
+} from '../../connection.js';
 import { SchemaManagementSchemaAdapter } from '../../schema-management.js';
 import { createKnexClient } from './client.js';
 import {
@@ -77,9 +81,6 @@ export class KnexDatabaseConnection implements DatabaseConnection {
     transactionInvalidations?: TransactionInvalidationCollector,
     private readonly dialectDriver:
       DatabaseDriverDefinition | undefined = undefined,
-    private readonly policies:
-      | Readonly<Record<string, NormalizedRepositoryPolicy>>
-      | undefined = undefined,
   ) {
     this.knexInstance = knexInstance;
     this.config = resolveKnexConnectionConfig(sourceConfig, dialectDriver);
@@ -205,10 +206,29 @@ export class KnexDatabaseConnection implements DatabaseConnection {
     TCreate extends object = Partial<TRecord>,
     TUpdate extends object = Partial<TRecord>,
   >(collection: string): Repository<TRecord, TCreate, TUpdate> {
+    return this.createRepository<TRecord, TCreate, TUpdate>(
+      collection,
+      undefined,
+    );
+  }
+
+  /**
+   * Build a Repository with a pre-normalized Policy already attached. Used by
+   * {@link PolicyBoundConnection} so binding does not have to re-normalize on
+   * every call.
+   */
+  createRepository<
+    TRecord extends object = RepositoryRecord,
+    TCreate extends object = Partial<TRecord>,
+    TUpdate extends object = Partial<TRecord>,
+  >(
+    collection: string,
+    policy: NormalizedRepositoryPolicy | undefined,
+  ): Repository<TRecord, TCreate, TUpdate> {
     return new DefaultRepository<TRecord, TCreate, TUpdate>({
       collection,
       collections: this.collections,
-      policy: this.policies?.[collection],
+      policy,
       adapter: new KnexRepositoryExecutionAdapter(
         () => this.getClient(),
         (name) => this.collections.get(name),
@@ -222,7 +242,7 @@ export class KnexDatabaseConnection implements DatabaseConnection {
       Record<string, RepositoryPolicy | ((principal: P) => RepositoryPolicy)>
     >,
     principal: P,
-  ): DatabaseConnection {
+  ): ScopedDatabaseConnection {
     const normalized = Object.fromEntries(
       Object.entries(policies).map(([collection, policy]) => [
         collection,
@@ -231,15 +251,7 @@ export class KnexDatabaseConnection implements DatabaseConnection {
         ),
       ]),
     );
-    return new KnexDatabaseConnection(
-      this.name,
-      this.sourceConfig,
-      this.metadataStore,
-      this.knexInstance,
-      undefined,
-      this.dialectDriver,
-      normalized,
-    );
+    return new PolicyBoundConnection(this, normalized);
   }
 
   async disconnect(): Promise<void> {
@@ -304,7 +316,6 @@ export class KnexDatabaseConnection implements DatabaseConnection {
           trx,
           invalidations,
           this.dialectDriver,
-          this.policies,
         );
         const transactionResult = await fn(connection);
         await invalidations.validateRelations(connection.collections);

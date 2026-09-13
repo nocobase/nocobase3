@@ -933,7 +933,7 @@ describe('DefaultRepository.withPolicy', () => {
     };
     const repository = new DefaultRepository({
       collection: 'projects',
-      collections,
+      collections: collections as never,
       adapter: {
         assertReadable: () => undefined,
         count: async (nextPlan: typeof plan) => {
