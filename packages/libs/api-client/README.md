@@ -273,7 +273,11 @@ Requests use `POST /orders:aggregate` and `POST /orders:groupBy`; the client
 unwraps `{ data }` into an aggregate object or array of group objects. Exported
 contracts are `RemoteAggregateAst`, `RemoteAggregateOptions`,
 `RemoteGroupByOptions`, and `RemoteAggregateResult`. Result aliases are dynamic.
-An empty input set returns count 0 and null for SUM/AVG/MIN/MAX; empty grouped
+COUNT (including the standalone `count()` method) returns a safe integer number; counts above Number.MAX_SAFE_INTEGER fail with INVALID_STORED_VALUE.
+SUM/AVG of integer, BIGINT and DECIMAL fields preserve database-formatted strings;
+FLOAT/DOUBLE SUM/AVG return numbers. MIN/MAX retain the field's
+logical type (BIGINT string, integer number). An empty input set returns count
+`0` and null for SUM/AVG/MIN/MAX; empty grouped
 results are `[]`. BigInt results are serialized as decimal strings to avoid
 precision loss, dates as ISO strings, and dialect-specific numeric strings are
 preserved. These methods do not use `findMany` pagination or NDJSON streaming.

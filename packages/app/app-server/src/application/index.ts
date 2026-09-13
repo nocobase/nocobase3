@@ -22,10 +22,12 @@ import {
   registerRealtimeWebSocketRoutes,
 } from '../realtime/websocket.js';
 import { RealtimeProvider } from '../realtime/provider.js';
-import type {
-  AppServerPluginLocalesLoader,
-  ResolvedAppServerPlugins,
+import {
+  createAppDatabaseTaskContributions,
+  type AppServerPluginLocalesLoader,
+  type ResolvedAppServerPlugins,
 } from '../plugins/index.js';
+import type { AppDatabaseTaskContributions } from '../database/types.js';
 import { i18nToken, registerAppLocales } from '../i18n/index.js';
 
 export type ApplicationFetchHandler = (
@@ -102,6 +104,12 @@ export class Application<
   private startPromise: Promise<void> | undefined;
   private websocketHandler: AppWebSocketHandler | undefined;
   private appPackageName: string | undefined;
+  /** Defaults match an application that registered no server plugins. */
+  private databaseTaskContributionsValue: AppDatabaseTaskContributions = {
+    appPackageName: 'app',
+    migrations: [],
+    seeds: [],
+  };
   private readonly localeContributions: {
     packageName: string;
     load: AppServerPluginLocalesLoader;
@@ -154,8 +162,14 @@ export class Application<
     }
   }
 
+  public get databaseTaskContributions(): AppDatabaseTaskContributions {
+    return this.databaseTaskContributionsValue;
+  }
+
   public addServerPlugins(serverPlugins: ResolvedAppServerPlugins): void {
     this.appPackageName = serverPlugins.appPackageName;
+    this.databaseTaskContributionsValue =
+      createAppDatabaseTaskContributions(serverPlugins);
     for (const plugin of serverPlugins.plugins) {
       for (const Provider of plugin.definition.serviceProviders) {
         this.addServiceProvider(Provider);

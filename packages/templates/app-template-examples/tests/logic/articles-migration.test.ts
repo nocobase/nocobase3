@@ -1,12 +1,14 @@
 // @vitest-environment node
 import path from 'node:path';
 import { createDatabaseManager } from '@nocobase/db';
+import sqlite from '@nocobase/db-sqlite';
 import type { Knex } from 'knex';
 import { expect, it } from 'vitest';
 
 it('creates article schema and metadata, preserves migration history, and reverses the schema', async () => {
   const database = createDatabaseManager({
     default: 'main',
+    drivers: { sqlite },
     connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
   });
   try {

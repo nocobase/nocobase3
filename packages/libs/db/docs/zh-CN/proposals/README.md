@@ -9,6 +9,10 @@ description: 保留 DB 候选方案与设计演进；Repository 已有正式使�
 
 不得把提案中的接口、类型或示例当作当前 API 生成生产代码。实现业务需求时，以[公开 API 导航](../reference/api-index.md)、正式主题文档和 TypeScript 类型声明为准。
 
+## Database Dialect 拆分
+
+- [数据库 Dialect 拆分推进路线](./dialect-split-roadmap.md)：记录 package-level 拆分已完成的边界，以及 core SQL strategy、app-server driver registry 和单驱动安装的后续任务。
+
 ## 精确数值提案
 
 - [Numeric field types and schema inspection](./numeric-field-types.md): proposed five-database mappings, Inspector capabilities, and metadata compatibility; SQLite semantics and exact-value transport remain separate decisions.

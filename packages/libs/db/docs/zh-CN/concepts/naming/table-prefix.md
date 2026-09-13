@@ -33,12 +33,12 @@ naming: {
 通常在 Connection 上设置统一前缀：
 
 ```ts
+import postgres from '@nocobase/db-postgres';
+import { createDatabaseManager } from '@nocobase/db';
+
 const db = createDatabaseManager({
   connections: {
-    main: {
-      dialect: 'postgres',
-      naming: { tablePrefix: 'app_' },
-    },
+    main: postgres({ naming: { tablePrefix: 'app_' } }),
   },
 });
 ```

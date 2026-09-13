@@ -1,3 +1,4 @@
+import sqlite from '@nocobase/db-sqlite';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
@@ -11,6 +12,7 @@ const managers: DatabaseManager[] = [];
 
 async function createDatabase(): Promise<DatabaseManager> {
   const database = createDatabaseManager({
+    drivers: { sqlite },
     default: 'main',
     connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
   });
@@ -168,8 +170,8 @@ describe('native AI employee persistence', () => {
       invokeStatus: 'confirmed',
       status: 'success',
       content,
-      invokeStartTime: invokeStartTime.getTime(),
-      invokeEndTime: Date.parse(invokeEndTime),
+      invokeStartTime: String(invokeStartTime.getTime()),
+      invokeEndTime: String(Date.parse(invokeEndTime)),
     });
   });
 

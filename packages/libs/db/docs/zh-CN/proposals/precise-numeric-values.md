@@ -1,9 +1,17 @@
 ---
+
+> 2026-09-10 实现进度：Repository 已支持 BIGINT / DECIMAL 精确字符串筛选，
+> 普通 INTEGER / BIGINT 写入已复用安全整数校验，整数原子更新已处理操作数精度。
+> 下文的“当前行为”保留为提案编写时的历史记录，不代表上述入口仍未实现。
+> Oracle 存储范围、SQLite DECIMAL 存储方案及低层 Query 输入校验仍单独处理。
+
 title: BigInt 与 Decimal 精确数值处理
 description: 记录 Query where 与 Repository filter 的精确数值风险、业界处理方式和候选契约；暂缓实施，输入、返回类型及数据库能力边界尚未定案。
 ---
 
 # BigInt 与 Decimal 精确数值处理
+
+> Implementation update: BIGINT column reads now preserve exact strings in Query and Repository across the five default drivers. See [Query results](../query/overview.md#exact-bigint-results) and [Repository values](../repository/values.md). The original observations below are historical; remaining Filter/input, arithmetic, Decimal, and aggregate policy is still deferred.
 
 > 状态：待决策，暂缓实施。本文记录问题与候选方案，不代表当前 API 或已批准的实现计划。记录日期：2026-09-05。
 

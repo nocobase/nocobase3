@@ -16,16 +16,56 @@
 
 ## 创建数据库入口
 
+推荐在应用边界显式安装并注册所需的 dialect 包：
+
 ```ts
+import postgres from '@nocobase/db-postgres';
+import { createDatabaseManager } from '@nocobase/db';
+
+const db = createDatabaseManager({
+  drivers: { postgres },
+  connections: {
+    main: {
+      dialect: 'postgres',
+      host: process.env.DB_HOST,
+      database: process.env.DB_NAME,
+    },
+  },
+});
+```
+
+也可以直接使用 dialect 工厂。工厂会把 `dialect`、native `driver` 和
+`databaseDriver` descriptor 一起绑定到连接：
+
+```ts
+const db = createDatabaseManager({
+  connections: {
+    main: postgres({
+      host: process.env.DB_HOST,
+      database: process.env.DB_NAME,
+    }),
+  },
+});
+```
+
+SQLite、MySQL、Oracle 和 SQL Server 分别从
+`@nocobase/db-sqlite`、`@nocobase/db-mysql`、`@nocobase/db-oracle` 和
+`@nocobase/db-mssql` 引入。`@nocobase/db` 不包含任何具体 dialect 的连接、
+Inspector 或 native driver 实现；使用某个方言前必须安装对应的包。
+
+Dialect 标识是开放的。第三方 Dialect package 可以定义自己的连接字段，并通过
+`ExtensibleDatabaseConfig<TConnection>` 传入 `createDatabaseManager()`；新增 package
+不需要修改 `@nocobase/db` 的 Dialect union、Manager、Query、Repository 或 Schema
+adapter。应用侧只需安装并注册该 package 的 driver。
+
+```ts
+import sqlite from '@nocobase/db-sqlite';
 import { createDatabaseManager } from '@nocobase/db';
 
 const db = createDatabaseManager({
   default: 'main',
   connections: {
-    main: {
-      dialect: 'sqlite',
-      filename: ':memory:',
-    },
+    main: sqlite({ filename: ':memory:' }),
   },
 });
 

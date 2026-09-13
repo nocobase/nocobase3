@@ -4,6 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { afterEach, expect, it } from 'vitest';
 import { createDatabaseManager, databaseManagerToken } from '@nocobase/db';
+import sqlite from '@nocobase/db-sqlite';
 import { createDriveManager } from '@nocobase/drive';
 import { driveManagerToken } from '@nocobase/app-server/drive';
 import { ServiceContainer } from '@nocobase/service-provider';
@@ -25,6 +26,7 @@ interface UploadedRecord {
 
 async function fixture() {
   const db = createDatabaseManager({
+    drivers: { sqlite },
     connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
   });
   disposers.push(() => db.destroy());

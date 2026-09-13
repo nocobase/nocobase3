@@ -1,7 +1,10 @@
+import { decimalString } from '../../numeric/decimal.js';
+import { decodeJsonValue } from '../../json.js';
 import type {
   CollectionDefinition,
   FieldDefinition,
 } from '../../collection/types.js';
+import { decodeIntegerValue } from '../integer.js';
 import { decodeBooleanValue } from '../boolean.js';
 import { normalizeCharValue } from '../char.js';
 import { normalizeEnumValue } from '../enum.js';
@@ -21,9 +24,15 @@ const decodeTemporal: ScalarDecoder = (field, value) =>
     field.name,
   ]);
 
-/** Preserve existing read semantics; no new coercion or JSON parsing here. */
+/** Normalize logical scalar values, including driver-specific JSON payloads. */
 const scalarDecoders: ReadonlyMap<string, ScalarDecoder> = new Map([
   ['boolean', decodeBooleanValue],
+  ['integer', decodeIntegerValue],
+  ['increments', decodeIntegerValue],
+  ['bigInt', decodeIntegerValue],
+  ['decimal', (_field, value) => decimalString(value)],
+  ['float', (_field, value) => (value === null ? null : Number(value))],
+  ['double', (_field, value) => (value === null ? null : Number(value))],
   [
     'enum',
     (field, value) =>
@@ -44,12 +53,14 @@ const scalarDecoders: ReadonlyMap<string, ScalarDecoder> = new Map([
   ['time', decodeTemporal],
   ['datetime', decodeTemporal],
   ['datetimeTz', decodeTemporal],
+  ['json', (_field, value) => decodeJsonValue(value)],
 ]);
 
 /** Prepare once per result shape; reuse synchronously for ordinary and streamed rows. */
 export function prepareScalarRowDecoder(
   collection: CollectionDefinition,
   selectedFields?: readonly string[],
+  trimCharResults = false,
 ): RowDecoder {
   const selected = selectedFields && new Set(selectedFields);
   const entries: {
@@ -59,7 +70,11 @@ export function prepareScalarRowDecoder(
   for (const field of collection.fields ?? []) {
     if ('target' in field) continue;
     if (selected && !selected.has(field.name)) continue;
-    const decode = scalarDecoders.get(field.type);
+    const decode =
+      field.type === 'char' && trimCharResults
+        ? (_: FieldDefinition, value: unknown) =>
+            value === null ? null : (value as string).replace(/\s+$/u, '')
+        : scalarDecoders.get(field.type);
     if (decode) {
       entries.push({
         name: field.name,

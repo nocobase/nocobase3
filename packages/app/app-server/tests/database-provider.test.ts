@@ -3,7 +3,11 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { AppConfig } from '../src/config/index.js';
-import { databaseManagerToken, type DatabaseManager } from '@nocobase/db';
+import {
+  databaseManagerToken,
+  type DatabaseDriverDefinition,
+  type DatabaseManager,
+} from '@nocobase/db';
 import {
   ServiceContainer,
   ServiceProviderRegistry,
@@ -28,12 +32,28 @@ vi.mock('@nocobase/db', async (importOriginal) => {
 import {
   DatabaseProvider,
   type AppDatabaseConfig,
+  type AppDatabaseTaskContributions,
   runAppMigrations,
   runAppSeeds,
   type DatabaseProviderApplication,
 } from '../src/database/index.js';
 
+/** An application that registered no server plugins. */
+const contributions: AppDatabaseTaskContributions = {
+  appPackageName: 'app',
+  migrations: [],
+  seeds: [],
+};
+
 const tempDirs: string[] = [];
+const sqliteStorageDriver: DatabaseDriverDefinition<'sqlite'> = {
+  dialect: 'sqlite',
+  prepareStorage: async (source, context) => {
+    const filename = (source as { filename?: string }).filename;
+    if (!filename || filename === ':memory:') return;
+    await context.ensureDirectory(path.dirname(filename));
+  },
+};
 
 beforeEach(() => {
   createDatabaseManagerMock.mockReset();
@@ -154,7 +174,7 @@ describe('standalone database tasks', () => {
     });
 
     await expect(
-      runAppMigrations(createConfig(createTempDirectory())),
+      runAppMigrations(createConfig(createTempDirectory()), { contributions }),
     ).rejects.toMatchObject({ cause: error });
     expect(database.destroy).toHaveBeenCalledOnce();
   });
@@ -167,7 +187,7 @@ describe('standalone database tasks', () => {
     });
 
     await expect(
-      runAppSeeds(createConfig(createTempDirectory())),
+      runAppSeeds(createConfig(createTempDirectory()), { contributions }),
     ).resolves.toEqual({
       status: 'completed',
       executed: ['seed'],
@@ -183,9 +203,11 @@ describe('standalone database tasks', () => {
       connections: {},
     };
 
-    await expect(runAppMigrations(config)).resolves.toBeUndefined();
     await expect(
-      runAppSeeds({ ...config, seeds: undefined }),
+      runAppMigrations(config, { contributions }),
+    ).resolves.toBeUndefined();
+    await expect(
+      runAppSeeds({ ...config, seeds: undefined }, { contributions }),
     ).resolves.toBeUndefined();
   });
 });
@@ -201,6 +223,7 @@ async function createProvider(database: AppDatabaseConfig): Promise<{
   const app: DatabaseProviderApplication = {
     config: appConfig,
     container,
+    databaseTaskContributions: contributions,
   };
   return {
     provider: new DatabaseProvider(app),
@@ -217,6 +240,7 @@ function createConfig(
   };
 } {
   return {
+    drivers: { sqlite: sqliteStorageDriver },
     default: 'main',
     connections: {
       main: {

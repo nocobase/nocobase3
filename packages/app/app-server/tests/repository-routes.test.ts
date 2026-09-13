@@ -12,6 +12,7 @@ import {
   RepositoryError,
   type RepositoryQuery,
 } from '@nocobase/db';
+import sqlite from '@nocobase/db-sqlite';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -54,6 +55,7 @@ describe('Repository API routes', () => {
 
   beforeEach(async () => {
     database = createDatabaseManager({
+      drivers: { sqlite },
       connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
     });
     container = new ServiceContainer();
@@ -81,6 +83,62 @@ describe('Repository API routes', () => {
 
   afterEach(async () => {
     await database.destroy();
+  });
+
+  it('preserves precise numeric strings through HTTP filters, updates and errors', async () => {
+    await database.builder().createCollection('balances', (c) => {
+      c.string('id').primary();
+      c.bigInt('amount');
+      c.decimal('price', { precision: 20, scale: 6 });
+    });
+    const contribution = defineRepositoryApiRoutes({
+      repositories: [
+        {
+          name: 'balances',
+          collection: 'balances',
+          actions: {
+            findOne: {},
+            createOne: { writePolicy: { fields: ['id', 'amount', 'price'] } },
+            updateOne: { writePolicy: { fields: ['amount'] } },
+          },
+        },
+      ],
+    });
+    router.route('/api', await contribution.createRouter({ container }));
+    const balances = client().repository<{
+      id: string;
+      amount: string;
+      price: string;
+    }>('balances');
+    await balances.createOne({
+      values: { id: 'A', amount: '9007199254740993', price: '42.125000' },
+    });
+    expect(
+      await balances.findOne({
+        filter: (f) => f.number('amount').eq('9007199254740993'),
+      }),
+    ).toMatchObject({ id: 'A', amount: '9007199254740993' });
+    expect(
+      await balances.findOne({ filter: { price: '42.125' } }),
+    ).toMatchObject({ id: 'A' });
+    expect(
+      await balances.updateOne({
+        filter: { amount: '9007199254740993' },
+        values: { amount: { increment: '2' } },
+      }),
+    ).toMatchObject({ record: { amount: '9007199254740995' } });
+    const rejected = await router.request('/api/balances:updateOne', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        filter: { id: 'A' },
+        values: { amount: Number.MAX_SAFE_INTEGER + 1 },
+      }),
+    });
+    expect(rejected.status).toBe(400);
+    expect(
+      await database.repository('balances').findOne({ filter: { id: 'A' } }),
+    ).toMatchObject({ amount: '9007199254740995' });
   });
 
   function client() {
@@ -135,7 +193,7 @@ describe('Repository API routes', () => {
       await orders.aggregate({
         aggregate: (a) => ({ count: a.count(), total: a.sum('version') }),
       }),
-    ).toEqual({ count: 1, total: 1 });
+    ).toEqual({ count: 1, total: '1' });
     const groups = buildGroupByOptions<Order>({
       by: ['status'],
       aggregate: (a) => ({ count: a.count() }),
@@ -570,7 +628,7 @@ describe('Repository API routes', () => {
       }),
     ).toEqual({
       id: 'parent',
-      children: { records: [{ id: 'child', points: 5 }], total: 5 },
+      children: { records: [{ id: 'child', points: 5 }], total: '5' },
     });
     await expect(
       parents.createOne({
@@ -662,8 +720,8 @@ describe('Repository API routes', () => {
     // maxLimit restricts findMany, never the input rows of an aggregate.
     expect(await orders.aggregate({ aggregate })).toEqual({
       count: 3,
-      total: 3,
-      average: 1,
+      total: '3',
+      average: '1',
       minimum: 1,
       maximum: 1,
     });
@@ -678,7 +736,7 @@ describe('Repository API routes', () => {
     });
     expect(
       await orders.aggregate({ filter: { status: 'paid' }, aggregate }),
-    ).toMatchObject({ count: 2, total: 2 });
+    ).toMatchObject({ count: 2, total: '2' });
     expect(
       await orders.groupBy({
         by: ['status'],
@@ -709,8 +767,8 @@ describe('Repository API routes', () => {
       {
         status: 'paid',
         count: 2,
-        total: 2,
-        average: 1,
+        total: '2',
+        average: '1',
         minimum: 1,
         maximum: 1,
       },

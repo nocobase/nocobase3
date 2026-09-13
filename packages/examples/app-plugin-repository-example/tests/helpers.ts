@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { createDatabaseManager, databaseManagerToken } from '@nocobase/db';
+import sqlite from '@nocobase/db-sqlite';
 import { Auth, authenticationToken } from '@nocobase/app-plugin-authentication';
 import { createConfigPaths } from '@nocobase/app-server/config';
 import { ServiceContainer } from '@nocobase/service-provider';
@@ -10,6 +11,7 @@ import { apiRoutes } from '../server/routes/index.js';
 
 export async function createFixture() {
   const database = createDatabaseManager({
+    drivers: { sqlite },
     connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
   });
   const migrator = database.createMigrator({

@@ -193,7 +193,7 @@ describe('workflow runtime', () => {
       await expect(
         readRun(database, await runIdOf('once')),
       ).resolves.toMatchObject({
-        workflowId: workflow.id,
+        workflowId: String(workflow.id),
         input: { enabled: true },
       });
     });
@@ -260,7 +260,7 @@ describe('workflow runtime', () => {
       });
       const runId = await runIdOf('pinned-event');
       await expect(readRun(database, runId)).resolves.toMatchObject({
-        workflowId: first.id,
+        workflowId: String(first.id),
         input: context,
         parameters: { limit: 3 },
       });
