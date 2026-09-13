@@ -102,9 +102,6 @@ catalogs:
     '@vitest/eslint-plugin':
       specifier: ^1.6.27
       version: 1.6.27
-    ajv:
-      specifier: ^8.20.0
-      version: 8.20.0
     better-auth:
       specifier: ^1.7.1
       version: 1.7.1
@@ -262,7 +259,7 @@ importers:
         version: link:packages/tools/cli
       eslint:
         specifier: 'catalog:'
-        version: 10.8.1(jiti@2.7.0)(supports-color@8.1.1)
+        version: 10.8.1(jiti@2.7.0)
       husky:
         specifier: 'catalog:'
         version: 9.1.7
@@ -581,9 +578,6 @@ importers:
       '@sinclair/typebox':
         specifier: 'catalog:'
         version: 0.34.52
-      ajv:
-        specifier: 'catalog:'
-        version: 8.20.0
       hono:
         specifier: 'catalog:'
         version: 4.13.2
@@ -900,7 +894,7 @@ importers:
         version: 19.2.8(react@19.2.8)
       shadcn:
         specifier: 'catalog:'
-        version: 4.18.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(typescript@6.0.3)
+        version: 4.18.0(@cfworker/json-schema@4.1.1)(typescript@6.0.3)
       tailwindcss:
         specifier: 'catalog:'
         version: 4.3.3
@@ -1000,7 +994,7 @@ importers:
         version: 19.2.8(react@19.2.8)
       shadcn:
         specifier: 'catalog:'
-        version: 4.18.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(typescript@6.0.3)
+        version: 4.18.0(@cfworker/json-schema@4.1.1)(typescript@6.0.3)
       tailwindcss:
         specifier: 'catalog:'
         version: 4.3.3
@@ -1073,7 +1067,7 @@ importers:
         version: 19.2.8(react@19.2.8)
       shadcn:
         specifier: 'catalog:'
-        version: 4.18.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(typescript@6.0.3)
+        version: 4.18.0(@cfworker/json-schema@4.1.1)(typescript@6.0.3)
       tailwindcss:
         specifier: 'catalog:'
         version: 4.3.3
@@ -1371,6 +1365,9 @@ importers:
 
   packages/libs/config:
     dependencies:
+      '@iarna/toml':
+        specifier: ^2.2.5
+        version: 2.2.5
       yaml:
         specifier: 'catalog:'
         version: 2.9.0
@@ -1429,7 +1426,7 @@ importers:
         version: link:../service-provider
       knex:
         specifier: 'catalog:'
-        version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(tedious@20.0.0)
+        version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)
     devDependencies:
       '@hono/node-server':
         specifier: 'catalog:'
@@ -1478,7 +1475,7 @@ importers:
         version: 1.0.52452
       knex-dm:
         specifier: ^1.0.52452
-        version: 1.0.52452(knex@3.3.0(better-sqlite3@12.11.1)(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(tedious@20.0.0))
+        version: 1.0.52452(knex@3.3.0(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0))
     devDependencies:
       '@nocobase/db':
         specifier: workspace:*
@@ -1497,7 +1494,7 @@ importers:
         version: 10.8.1(jiti@2.7.0)
       knex:
         specifier: 'catalog:'
-        version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(tedious@20.0.0)
+        version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)
       tsx:
         specifier: 'catalog:'
         version: 4.23.12
@@ -1512,7 +1509,7 @@ importers:
     dependencies:
       knex:
         specifier: 'catalog:'
-        version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(tedious@20.0.0)
+        version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)
       pg:
         specifier: ^8.23.0
         version: 8.23.0
@@ -1549,7 +1546,7 @@ importers:
     dependencies:
       knex:
         specifier: 'catalog:'
-        version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(tedious@20.0.0)
+        version: 3.3.0(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(tedious@20.0.0)
       tedious:
         specifier: 'catalog:'
         version: 20.0.0
@@ -1583,7 +1580,7 @@ importers:
     dependencies:
       knex:
         specifier: 'catalog:'
-        version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(tedious@20.0.0)
+        version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)
       mysql2:
         specifier: ^3.23.3
         version: 3.23.3(@types/node@24.13.3)
@@ -1617,7 +1614,7 @@ importers:
     dependencies:
       knex:
         specifier: 'catalog:'
-        version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(tedious@20.0.0)
+        version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)
       mysql2:
         specifier: ^3.23.3
         version: 3.23.3(@types/node@24.13.3)
@@ -1651,7 +1648,7 @@ importers:
     dependencies:
       knex:
         specifier: 'catalog:'
-        version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(tedious@20.0.0)
+        version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)
       oracledb:
         specifier: 'catalog:'
         version: 6.10.0
@@ -1685,7 +1682,7 @@ importers:
     dependencies:
       knex:
         specifier: 'catalog:'
-        version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(tedious@20.0.0)
+        version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)
       pg:
         specifier: ^8.23.0
         version: 8.23.0
@@ -1725,7 +1722,7 @@ importers:
         version: 12.11.1
       knex:
         specifier: 'catalog:'
-        version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(tedious@20.0.0)
+        version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)
     devDependencies:
       '@nocobase/db':
         specifier: workspace:*
@@ -1787,7 +1784,7 @@ importers:
         version: 10.8.1(jiti@2.7.0)
       knex:
         specifier: 'catalog:'
-        version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(tedious@20.0.0)
+        version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -1913,7 +1910,7 @@ importers:
     dependencies:
       '@boringnode/queue':
         specifier: 'catalog:'
-        version: 0.7.1(@opentelemetry/api@1.9.0)(ioredis@5.11.1)(knex@3.3.0(better-sqlite3@12.11.1)(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(tedious@20.0.0))(kysely@0.29.5)
+        version: 0.7.1(@opentelemetry/api@1.9.0)(ioredis@5.11.1)(knex@3.3.0(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0))(kysely@0.29.5)
       '@nocobase/db':
         specifier: workspace:^
         version: link:../db
@@ -1925,7 +1922,7 @@ importers:
         version: 5.11.1
       knex:
         specifier: 'catalog:'
-        version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(tedious@20.0.0)
+        version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)
     devDependencies:
       '@nocobase/dev-config':
         specifier: workspace:*
@@ -2223,61 +2220,46 @@ importers:
 
   packages/plugins/app-plugin-authentication:
     dependencies:
-      '@base-ui/react':
-        specifier: 'catalog:'
-        version: 1.7.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      '@nocobase/app-client':
-        specifier: workspace:^
-        version: link:../../app/app-client
-      '@nocobase/app-server':
-        specifier: workspace:^
-        version: link:../../app/app-server
       '@nocobase/caching':
         specifier: workspace:^
         version: link:../../libs/caching
-      '@nocobase/db':
-        specifier: workspace:^
-        version: link:../../libs/db
-      '@nocobase/service-provider':
-        specifier: workspace:^
-        version: link:../../libs/service-provider
       '@nocobase/snowflake':
         specifier: workspace:^
         version: link:../../libs/snowflake
-      '@refinedev/core':
-        specifier: ^5.0.0
-        version: 5.0.12(@tanstack/react-query@5.101.4(react@19.2.8))(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@sinclair/typebox':
         specifier: 'catalog:'
         version: 0.34.52
       better-auth:
         specifier: 'catalog:'
         version: 1.7.1(@opentelemetry/api@1.9.0)(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg@8.23.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(vitest@4.1.10)
-      class-variance-authority:
-        specifier: 'catalog:'
-        version: 0.7.1
-      clsx:
-        specifier: 'catalog:'
-        version: 2.1.1
       hono:
         specifier: 'catalog:'
         version: 4.13.2
       knex:
         specifier: 'catalog:'
-        version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(tedious@20.0.0)
-      react:
-        specifier: ^19.0.0
-        version: 19.2.8
-      tailwind-merge:
-        specifier: 'catalog:'
-        version: 3.6.0
+        version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)
     devDependencies:
+      '@base-ui/react':
+        specifier: ^1.6.0
+        version: 1.7.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@nocobase/app-client':
+        specifier: workspace:*
+        version: link:../../app/app-client
+      '@nocobase/app-server':
+        specifier: workspace:*
+        version: link:../../app/app-server
+      '@nocobase/db':
+        specifier: workspace:*
+        version: link:../../libs/db
       '@nocobase/db-sqlite':
         specifier: workspace:*
         version: link:../../libs/db-sqlite
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
+      '@nocobase/service-provider':
+        specifier: workspace:*
+        version: link:../../libs/service-provider
       '@testing-library/jest-dom':
         specifier: 'catalog:'
         version: 7.0.1(@testing-library/dom@10.4.1)(vitest@4.1.10)
@@ -2296,6 +2278,12 @@ importers:
       better-sqlite3:
         specifier: 'catalog:'
         version: 12.11.1
+      class-variance-authority:
+        specifier: ^0.7.1
+        version: 0.7.1
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
       eslint:
         specifier: 'catalog:'
         version: 10.8.1(jiti@2.7.0)
@@ -2305,17 +2293,26 @@ importers:
       prettier:
         specifier: 'catalog:'
         version: 3.9.6
+      react:
+        specifier: 'catalog:'
+        version: 19.2.8
       react-dom:
         specifier: 'catalog:'
         version: 19.2.8(react@19.2.8)
-      shadcn:
+      react-router:
         specifier: 'catalog:'
-        version: 4.18.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(typescript@6.0.3)
+        version: 7.18.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      shadcn:
+        specifier: ^4.13.1
+        version: 4.18.0(@cfworker/json-schema@4.1.1)(typescript@6.0.3)
+      tailwind-merge:
+        specifier: ^3.2.0
+        version: 3.6.0
       tailwindcss:
         specifier: 'catalog:'
         version: 4.3.3
       tw-animate-css:
-        specifier: 'catalog:'
+        specifier: ^1.2.5
         version: 1.4.0
       typescript:
         specifier: 'catalog:'
@@ -2565,13 +2562,13 @@ importers:
         version: 10.8.1(jiti@2.7.0)
       knex:
         specifier: 'catalog:'
-        version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(tedious@20.0.0)
+        version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)
       prettier:
         specifier: 'catalog:'
         version: 3.9.6
       shadcn:
         specifier: 'catalog:'
-        version: 4.18.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(typescript@6.0.3)
+        version: 4.18.0(@cfworker/json-schema@4.1.1)(typescript@6.0.3)
       tailwindcss:
         specifier: 'catalog:'
         version: 4.3.3
@@ -2681,7 +2678,7 @@ importers:
         version: 3.9.6
       shadcn:
         specifier: 'catalog:'
-        version: 4.18.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(typescript@6.0.3)
+        version: 4.18.0(@cfworker/json-schema@4.1.1)(typescript@6.0.3)
       tailwindcss:
         specifier: 'catalog:'
         version: 4.3.3
@@ -2860,7 +2857,7 @@ importers:
         version: 3.9.6
       shadcn:
         specifier: 'catalog:'
-        version: 4.18.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(typescript@6.0.3)
+        version: 4.18.0(@cfworker/json-schema@4.1.1)(typescript@6.0.3)
       tailwindcss:
         specifier: 'catalog:'
         version: 4.3.3
@@ -2933,7 +2930,7 @@ importers:
         version: 3.9.6
       shadcn:
         specifier: 'catalog:'
-        version: 4.18.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(typescript@6.0.3)
+        version: 4.18.0(@cfworker/json-schema@4.1.1)(typescript@6.0.3)
       tailwindcss:
         specifier: 'catalog:'
         version: 4.3.3
@@ -3061,7 +3058,7 @@ importers:
         version: 3.9.6
       shadcn:
         specifier: 'catalog:'
-        version: 4.18.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(typescript@6.0.3)
+        version: 4.18.0(@cfworker/json-schema@4.1.1)(typescript@6.0.3)
       tailwindcss:
         specifier: 'catalog:'
         version: 4.3.3
@@ -3225,6 +3222,9 @@ importers:
       '@nocobase/app-server':
         specifier: workspace:^
         version: link:../../app/app-server
+      '@nocobase/config':
+        specifier: workspace:^
+        version: link:../../libs/config
       '@nocobase/db':
         specifier: workspace:^
         version: link:../../libs/db
@@ -3237,9 +3237,15 @@ importers:
       '@nocobase/service-provider':
         specifier: workspace:^
         version: link:../../libs/service-provider
+      '@nocobase/snowflake':
+        specifier: workspace:^
+        version: link:../../libs/snowflake
       '@oclif/core':
         specifier: 'catalog:'
         version: 4.14.0
+      better-auth:
+        specifier: 'catalog:'
+        version: 1.7.1(@opentelemetry/api@1.9.0)(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg@8.23.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(vitest@4.1.10)
     devDependencies:
       '@ai-sdk/react':
         specifier: 2.0.0
@@ -3277,9 +3283,6 @@ importers:
       '@nocobase/caching':
         specifier: workspace:^
         version: link:../../libs/caching
-      '@nocobase/config':
-        specifier: workspace:^
-        version: link:../../libs/config
       '@nocobase/cron':
         specifier: workspace:^
         version: link:../../libs/cron
@@ -3301,9 +3304,6 @@ importers:
       '@nocobase/session':
         specifier: workspace:^
         version: link:../../libs/session
-      '@nocobase/snowflake':
-        specifier: workspace:^
-        version: link:../../libs/snowflake
       '@refinedev/cli':
         specifier: ^2.16.48
         version: 2.16.52(@types/node@24.13.3)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(bluebird@3.4.7)(encoding@0.1.13)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -3429,7 +3429,7 @@ importers:
         version: 30.0.1(@noble/hashes@2.3.0)
       knex:
         specifier: 'catalog:'
-        version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(tedious@20.0.0)
+        version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)
       lucide-react:
         specifier: 'catalog:'
         version: 0.487.0(react@19.2.8)
@@ -3477,7 +3477,7 @@ importers:
         version: 4.0.1
       shadcn:
         specifier: 'catalog:'
-        version: 4.18.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(typescript@6.0.3)
+        version: 4.18.0(@cfworker/json-schema@4.1.1)(typescript@6.0.3)
       sonner:
         specifier: ^2.0.3
         version: 2.0.8(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -3598,12 +3598,15 @@ importers:
       '@nocobase/service-provider':
         specifier: workspace:^
         version: link:../../libs/service-provider
+      '@nocobase/snowflake':
+        specifier: workspace:^
+        version: link:../../libs/snowflake
       '@oclif/core':
         specifier: 'catalog:'
         version: 4.14.0
-      better-sqlite3:
+      better-auth:
         specifier: 'catalog:'
-        version: 12.11.1
+        version: 1.7.1(@opentelemetry/api@1.9.0)(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg@8.23.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(vitest@4.1.10)
       hono:
         specifier: 'catalog:'
         version: 4.13.2
@@ -3668,9 +3671,6 @@ importers:
       '@nocobase/session':
         specifier: workspace:^
         version: link:../../libs/session
-      '@nocobase/snowflake':
-        specifier: workspace:^
-        version: link:../../libs/snowflake
       '@refinedev/cli':
         specifier: ^2.16.48
         version: 2.16.52(@types/node@24.13.3)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(bluebird@3.4.7)(encoding@0.1.13)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -3805,7 +3805,7 @@ importers:
         version: 30.0.1(@noble/hashes@2.3.0)
       knex:
         specifier: 'catalog:'
-        version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(tedious@20.0.0)
+        version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)
       lucide-react:
         specifier: 'catalog:'
         version: 0.487.0(react@19.2.8)
@@ -3853,7 +3853,7 @@ importers:
         version: 4.0.1
       shadcn:
         specifier: 'catalog:'
-        version: 4.18.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(typescript@6.0.3)
+        version: 4.18.0(@cfworker/json-schema@4.1.1)(typescript@6.0.3)
       sonner:
         specifier: ^2.0.3
         version: 2.0.8(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -3905,12 +3905,24 @@ importers:
       '@nocobase/app-plugin-install':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-install
+      '@nocobase/app-plugin-notification':
+        specifier: workspace:^
+        version: link:../../plugins/app-plugin-notification
+      '@nocobase/app-plugin-service-provider-example':
+        specifier: workspace:^
+        version: link:../../examples/app-plugin-service-provider-example
       '@nocobase/app-plugin-users':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-users
+      '@nocobase/app-plugin-workflow':
+        specifier: workspace:^
+        version: link:../../plugins/app-plugin-workflow
       '@nocobase/app-server':
         specifier: workspace:^
         version: link:../../app/app-server
+      '@nocobase/config':
+        specifier: workspace:^
+        version: link:../../libs/config
       '@nocobase/db-sqlite':
         specifier: workspace:^
         version: link:../../libs/db-sqlite
@@ -3920,9 +3932,15 @@ importers:
       '@nocobase/service-provider':
         specifier: workspace:^
         version: link:../../libs/service-provider
+      '@nocobase/snowflake':
+        specifier: workspace:^
+        version: link:../../libs/snowflake
       '@oclif/core':
         specifier: 'catalog:'
         version: 4.14.0
+      better-auth:
+        specifier: 'catalog:'
+        version: 1.7.1(@opentelemetry/api@1.9.0)(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg@8.23.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(vitest@4.1.10)
       hono:
         specifier: 'catalog:'
         version: 4.13.2
@@ -3963,9 +3981,6 @@ importers:
       '@nocobase/caching':
         specifier: workspace:^
         version: link:../../libs/caching
-      '@nocobase/config':
-        specifier: workspace:^
-        version: link:../../libs/config
       '@nocobase/db':
         specifier: workspace:^
         version: link:../../libs/db
@@ -3987,9 +4002,6 @@ importers:
       '@nocobase/session':
         specifier: workspace:^
         version: link:../../libs/session
-      '@nocobase/snowflake':
-        specifier: workspace:^
-        version: link:../../libs/snowflake
       '@refinedev/cli':
         specifier: ^2.16.48
         version: 2.16.52(@types/node@24.13.3)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(bluebird@3.4.7)(encoding@0.1.13)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -4124,7 +4136,7 @@ importers:
         version: 30.0.1(@noble/hashes@2.3.0)
       knex:
         specifier: 'catalog:'
-        version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(tedious@20.0.0)
+        version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)
       lucide-react:
         specifier: 'catalog:'
         version: 0.487.0(react@19.2.8)
@@ -4172,7 +4184,7 @@ importers:
         version: 4.0.1
       shadcn:
         specifier: 'catalog:'
-        version: 4.18.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(typescript@6.0.3)
+        version: 4.18.0(@cfworker/json-schema@4.1.1)(typescript@6.0.3)
       sonner:
         specifier: ^2.0.3
         version: 2.0.8(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -4363,6 +4375,58 @@ importers:
       vitest:
         specifier: 'catalog:'
         version: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@30.0.1(@noble/hashes@2.3.0))(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(sass-embedded@1.103.1)(sass@1.103.1)(tsx@4.23.12)(yaml@2.9.0))
+
+  ui-library:
+    dependencies:
+      '@base-ui/react':
+        specifier: ^1.7.0
+        version: 1.7.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      class-variance-authority:
+        specifier: ^0.7.1
+        version: 0.7.1
+      cn:
+        specifier: ^0.2.6
+        version: 0.2.6
+      lucide-react:
+        specifier: ^0.487.0
+        version: 0.487.0(react@19.2.8)
+      react:
+        specifier: 'catalog:'
+        version: 19.2.8
+      react-dom:
+        specifier: 'catalog:'
+        version: 19.2.8(react@19.2.8)
+      react-router:
+        specifier: 'catalog:'
+        version: 7.18.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      simple-icons:
+        specifier: ^16.30.0
+        version: 16.30.0
+    devDependencies:
+      '@tailwindcss/vite':
+        specifier: 'catalog:'
+        version: 4.3.3(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(sass-embedded@1.103.1)(sass@1.103.1)(tsx@4.23.12)(yaml@2.9.0))
+      '@types/react':
+        specifier: 'catalog:'
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: 'catalog:'
+        version: 19.2.4(@types/react@19.2.18)
+      '@vitejs/plugin-react':
+        specifier: 'catalog:'
+        version: 4.7.0(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(sass-embedded@1.103.1)(sass@1.103.1)(tsx@4.23.12)(yaml@2.9.0))
+      shadcn:
+        specifier: ^4.18.0
+        version: 4.18.0(@cfworker/json-schema@4.1.1)(typescript@6.0.3)
+      tailwindcss:
+        specifier: 'catalog:'
+        version: 4.3.3
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vite:
+        specifier: 'catalog:'
+        version: 6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(sass-embedded@1.103.1)(sass@1.103.1)(tsx@4.23.12)(yaml@2.9.0)
 
 packages:
 
@@ -8829,6 +8893,11 @@ packages:
     peerDependencies:
       react: ^18 || ^19 || ^19.0.0-rc
       react-dom: ^18 || ^19 || ^19.0.0-rc
+
+  cn@0.2.6:
+    resolution: {integrity: sha512-+i4L0zUGgRcEnhsxueVrP7iBGxBx5iD0WOTYg1MwFEu2ZyCmH5Ov2V1cul2Ht5UchRQQgftCf4be/RxspuW6QQ==}
+    engines: {node: '>=20'}
+    hasBin: true
 
   coa@2.0.2:
     resolution: {integrity: sha512-q5/jG+YQnSy4nRTV4F7lPepBJZ8qBNJJDBuJdoejDyLXgmL7IEo+Le2JDZudFTFt7mrCqIRaSjws4ygRCTCAXA==}
@@ -13460,6 +13529,10 @@ packages:
   simple-get@4.0.1:
     resolution: {integrity: sha512-brv7p5WgH0jmQJr1ZDDfKDOSeWWg+OVypG99A/5vYGPqJ6pxiaHLy8nxtFjBA7oMa01ebA9gfh1uMCFqOuXxvA==}
 
+  simple-icons@16.30.0:
+    resolution: {integrity: sha512-YX/HmgEqjpn5Zs3myzKp8ek5Ti+TdrkvNWn9skGLetg9tOg0cTjYizj9ESAYJn4xwc0GQYVGzQxBELDfbxq7WQ==}
+    engines: {node: '>=0.12.18'}
+
   sisteransi@1.0.5:
     resolution: {integrity: sha512-bLGGlR1QxBcynn2d5YmDX4MGjlZvy2MRBDRNHLJ8VI6l6+9FUiyTFNJ0IveOSP0bcXgVDPRcfGqA0pjaqUpfVg==}
 
@@ -15661,17 +15734,6 @@ snapshots:
 
   '@borewit/text-codec@0.2.2': {}
 
-  '@boringnode/queue@0.7.1(@opentelemetry/api@1.9.0)(ioredis@5.11.1)(knex@3.3.0(better-sqlite3@12.11.1)(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(tedious@20.0.0))(kysely@0.29.5)':
-    dependencies:
-      '@lukeed/ms': 2.0.2
-      '@poppinss/utils': 7.0.1
-      cron-parser: 5.10.0
-    optionalDependencies:
-      '@opentelemetry/api': 1.9.0
-      ioredis: 5.11.1
-      knex: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(tedious@20.0.0)
-      kysely: 0.29.5
-
   '@boringnode/queue@0.7.1(@opentelemetry/api@1.9.0)(ioredis@5.11.1)(knex@3.3.0(better-sqlite3@13.0.3)(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0))(kysely@0.29.5)':
     dependencies:
       '@lukeed/ms': 2.0.2
@@ -15681,6 +15743,17 @@ snapshots:
       '@opentelemetry/api': 1.9.0
       ioredis: 5.11.1
       knex: 3.3.0(better-sqlite3@13.0.3)(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)
+      kysely: 0.29.5
+
+  '@boringnode/queue@0.7.1(@opentelemetry/api@1.9.0)(ioredis@5.11.1)(knex@3.3.0(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0))(kysely@0.29.5)':
+    dependencies:
+      '@lukeed/ms': 2.0.2
+      '@poppinss/utils': 7.0.1
+      cron-parser: 5.10.0
+    optionalDependencies:
+      '@opentelemetry/api': 1.9.0
+      ioredis: 5.11.1
+      knex: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)
       kysely: 0.29.5
 
   '@braidai/lang@1.1.2': {}
@@ -16196,11 +16269,6 @@ snapshots:
   '@esbuild/win32-x64@0.28.2':
     optional: true
 
-  '@eslint-community/eslint-utils@4.10.1(eslint@10.8.1(jiti@2.7.0)(supports-color@8.1.1))':
-    dependencies:
-      eslint: 10.8.1(jiti@2.7.0)(supports-color@8.1.1)
-      eslint-visitor-keys: 3.4.3
-
   '@eslint-community/eslint-utils@4.10.1(eslint@10.8.1(jiti@2.7.0))':
     dependencies:
       eslint: 10.8.1(jiti@2.7.0)
@@ -16307,7 +16375,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@eslint/config-array@0.23.5(supports-color@8.1.1)':
+  '@eslint/config-array@0.23.5':
     dependencies:
       '@eslint/object-schema': 3.0.5
       debug: 4.4.3(supports-color@8.1.1)
@@ -16659,7 +16727,7 @@ snapshots:
     dependencies:
       '@langchain/core': 1.1.49(@opentelemetry/api@1.9.0)(openai@6.49.0(@aws-sdk/credential-provider-node@3.972.80)(@smithy/signature-v4@5.7.2)(ws@8.21.3)(zod@3.25.76))(ws@8.21.3)
       '@langchain/langgraph': 1.4.4(@langchain/core@1.1.49(@opentelemetry/api@1.9.0)(openai@6.49.0(@aws-sdk/credential-provider-node@3.972.80)(@smithy/signature-v4@5.7.2)(ws@8.21.3)(zod@3.25.76))(ws@8.21.3))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(zod-to-json-schema@3.25.2(zod@3.25.76))(zod@3.25.76)
-      '@modelcontextprotocol/sdk': 1.30.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(zod@3.25.76)
+      '@modelcontextprotocol/sdk': 1.30.0(@cfworker/json-schema@4.1.1)(zod@3.25.76)
       debug: 4.4.3(supports-color@8.1.1)
       zod: 3.25.76
     optionalDependencies:
@@ -16797,7 +16865,7 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  '@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(zod@3.25.76)':
+  '@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(zod@3.25.76)':
     dependencies:
       '@hono/node-server': 2.1.1(hono@4.13.2)
       ajv: 8.20.0
@@ -16807,8 +16875,8 @@ snapshots:
       cross-spawn: 7.0.6
       eventsource: 3.0.7
       eventsource-parser: 3.1.0
-      express: 5.2.1(supports-color@8.1.1)
-      express-rate-limit: 8.6.2(express@5.2.1(supports-color@8.1.1))(supports-color@8.1.1)
+      express: 5.2.1
+      express-rate-limit: 8.6.2(express@5.2.1)
       hono: 4.13.2
       jose: 6.2.9
       json-schema-typed: 8.0.2
@@ -19122,7 +19190,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  body-parser@2.3.0(supports-color@8.1.1):
+  body-parser@2.3.0:
     dependencies:
       bytes: 3.1.2
       content-type: 2.1.0
@@ -19507,6 +19575,8 @@ snapshots:
     transitivePeerDependencies:
       - '@types/react'
       - '@types/react-dom'
+
+  cn@0.2.6: {}
 
   coa@2.0.2:
     dependencies:
@@ -20539,44 +20609,7 @@ snapshots:
     dependencies:
       '@eslint-community/eslint-utils': 4.10.1(eslint@10.8.1(jiti@2.7.0))
       '@eslint-community/regexpp': 4.12.2
-      '@eslint/config-array': 0.23.5(supports-color@8.1.1)
-      '@eslint/config-helpers': 0.7.0
-      '@eslint/core': 1.2.1
-      '@eslint/plugin-kit': 0.7.2
-      '@humanfs/node': 0.16.8
-      '@humanwhocodes/module-importer': 1.0.1
-      '@humanwhocodes/retry': 0.4.3
-      '@types/estree': 1.0.9
-      ajv: 6.15.0
-      cross-spawn: 7.0.6
-      debug: 4.4.3(supports-color@8.1.1)
-      escape-string-regexp: 4.0.0
-      eslint-scope: 9.1.2
-      eslint-visitor-keys: 5.0.1
-      espree: 11.2.0
-      esquery: 1.7.0
-      esutils: 2.0.3
-      fast-deep-equal: 3.1.3
-      file-entry-cache: 8.0.0
-      find-up: 5.0.0
-      glob-parent: 6.0.2
-      ignore: 5.3.2
-      imurmurhash: 0.1.4
-      is-glob: 4.0.3
-      json-stable-stringify-without-jsonify: 1.0.1
-      minimatch: 10.2.6
-      natural-compare: 1.4.0
-      optionator: 0.9.4
-    optionalDependencies:
-      jiti: 2.7.0
-    transitivePeerDependencies:
-      - supports-color
-
-  eslint@10.8.1(jiti@2.7.0)(supports-color@8.1.1):
-    dependencies:
-      '@eslint-community/eslint-utils': 4.10.1(eslint@10.8.1(jiti@2.7.0)(supports-color@8.1.1))
-      '@eslint-community/regexpp': 4.12.2
-      '@eslint/config-array': 0.23.5(supports-color@8.1.1)
+      '@eslint/config-array': 0.23.5
       '@eslint/config-helpers': 0.7.0
       '@eslint/core': 1.2.1
       '@eslint/plugin-kit': 0.7.2
@@ -20765,10 +20798,10 @@ snapshots:
 
   exponential-backoff@3.1.3: {}
 
-  express-rate-limit@8.6.2(express@5.2.1(supports-color@8.1.1))(supports-color@8.1.1):
+  express-rate-limit@8.6.2(express@5.2.1):
     dependencies:
       debug: 4.4.3(supports-color@8.1.1)
-      express: 5.2.1(supports-color@8.1.1)
+      express: 5.2.1
       ip-address: 10.5.0
     transitivePeerDependencies:
       - supports-color
@@ -20809,10 +20842,10 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  express@5.2.1(supports-color@8.1.1):
+  express@5.2.1:
     dependencies:
       accepts: 2.0.0
-      body-parser: 2.3.0(supports-color@8.1.1)
+      body-parser: 2.3.0
       content-disposition: 1.1.0
       content-type: 1.0.5
       cookie: 0.7.2
@@ -20822,7 +20855,7 @@ snapshots:
       encodeurl: 2.0.0
       escape-html: 1.0.3
       etag: 1.8.1
-      finalhandler: 2.1.1(supports-color@8.1.1)
+      finalhandler: 2.1.1
       fresh: 2.0.0
       http-errors: 2.0.1
       merge-descriptors: 2.0.0
@@ -20833,8 +20866,8 @@ snapshots:
       proxy-addr: 2.0.7
       qs: 6.15.3
       range-parser: 1.3.0
-      router: 2.2.0(supports-color@8.1.1)
-      send: 1.2.1(supports-color@8.1.1)
+      router: 2.2.0
+      send: 1.2.1
       serve-static: 2.2.1
       statuses: 2.0.2
       type-is: 2.1.0
@@ -20953,7 +20986,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  finalhandler@2.1.1(supports-color@8.1.1):
+  finalhandler@2.1.1:
     dependencies:
       debug: 4.4.3(supports-color@8.1.1)
       encodeurl: 2.0.0
@@ -22181,16 +22214,16 @@ snapshots:
 
   kleur@4.1.5: {}
 
-  knex-dm@1.0.52452(knex@3.3.0(better-sqlite3@12.11.1)(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(tedious@20.0.0)):
+  knex-dm@1.0.52452(knex@3.3.0(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)):
     dependencies:
       dmdb: 1.0.52452
-      knex: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(tedious@20.0.0)
+      knex: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)
       lodash: 4.18.1
     transitivePeerDependencies:
       - snappy
       - snappyjs
 
-  knex@3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(tedious@20.0.0):
+  knex@3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0):
     dependencies:
       colorette: 2.0.19
       commander: 10.0.1
@@ -22211,7 +22244,6 @@ snapshots:
       mysql2: 3.23.3(@types/node@24.13.3)
       pg: 8.23.0
       pg-query-stream: 4.17.0(pg@8.23.0)
-      tedious: 20.0.0
     transitivePeerDependencies:
       - supports-color
 
@@ -22235,6 +22267,29 @@ snapshots:
       better-sqlite3: 13.0.3
       pg: 8.23.0
       pg-query-stream: 4.17.0(pg@8.23.0)
+    transitivePeerDependencies:
+      - supports-color
+
+  knex@3.3.0(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(tedious@20.0.0):
+    dependencies:
+      colorette: 2.0.19
+      commander: 10.0.1
+      debug: 4.3.4
+      escalade: 3.2.0
+      esm: 3.2.25
+      get-package-type: 0.1.0
+      getopts: 2.3.0
+      interpret: 2.2.0
+      lodash: 4.18.1
+      pg-connection-string: 2.6.2
+      rechoir: 0.8.0
+      resolve-from: 5.0.0
+      tarn: 3.1.2
+      tildify: 2.0.0
+    optionalDependencies:
+      pg: 8.23.0
+      pg-query-stream: 4.17.0(pg@8.23.0)
+      tedious: 20.0.0
     transitivePeerDependencies:
       - supports-color
 
@@ -24611,7 +24666,7 @@ snapshots:
 
   rou3@0.9.2: {}
 
-  router@2.2.0(supports-color@8.1.1):
+  router@2.2.0:
     dependencies:
       debug: 4.4.3(supports-color@8.1.1)
       depd: 2.0.0
@@ -24843,7 +24898,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  send@1.2.1(supports-color@8.1.1):
+  send@1.2.1:
     dependencies:
       debug: 4.4.3(supports-color@8.1.1)
       encodeurl: 2.0.0
@@ -24875,7 +24930,7 @@ snapshots:
       encodeurl: 2.0.0
       escape-html: 1.0.3
       parseurl: 1.3.3
-      send: 1.2.1(supports-color@8.1.1)
+      send: 1.2.1
     transitivePeerDependencies:
       - supports-color
 
@@ -24917,14 +24972,14 @@ snapshots:
       safe-buffer: 5.2.1
       to-buffer: 1.2.2
 
-  shadcn@4.18.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(typescript@6.0.3):
+  shadcn@4.18.0(@cfworker/json-schema@4.1.1)(typescript@6.0.3):
     dependencies:
       '@babel/core': 7.29.7
       '@babel/parser': 7.29.8
       '@babel/plugin-transform-typescript': 7.29.7(@babel/core@7.29.7)
       '@babel/preset-typescript': 7.29.7(@babel/core@7.29.7)
       '@dotenvx/dotenvx': 1.75.1
-      '@modelcontextprotocol/sdk': 1.30.0(@cfworker/json-schema@4.1.1)(supports-color@8.1.1)(zod@3.25.76)
+      '@modelcontextprotocol/sdk': 1.30.0(@cfworker/json-schema@4.1.1)(zod@3.25.76)
       '@types/validate-npm-package-name': 4.0.2
       browserslist: 4.28.8
       commander: 14.0.3
@@ -25022,6 +25077,8 @@ snapshots:
       decompress-response: 6.0.0
       once: 1.4.0
       simple-concat: 1.0.1
+
+  simple-icons@16.30.0: {}
 
   sisteransi@1.0.5: {}
 

@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import migration from '../database/migrations/202608190001_create_notification_tables.js';
 import idempotencyMigration from '../database/migrations/202609080001_create_notification_idempotency.js';
+import instantMigration from '../database/migrations/202609130001_notification_instant_columns.js';
 
 interface SqliteClient {
   readonly schema: {
@@ -31,6 +32,7 @@ const MIGRATIONS_DIRECTORY = resolve(process.cwd(), 'database/migrations');
 const MIGRATION_NAMES = [
   '202608190001_create_notification_tables',
   '202609080001_create_notification_idempotency',
+  '202609130001_notification_instant_columns',
 ] as const;
 
 interface DispatchRow extends Row {
@@ -312,7 +314,7 @@ describe('notification database migration', () => {
         }),
         expect.objectContaining({
           name: 'createdAt',
-          type: 'datetime',
+          type: 'datetimeTz',
           nullable: false,
         }),
       ]),
@@ -340,6 +342,7 @@ describe('notification database migration', () => {
 
     expect(loaded.map(({ name }) => name)).toEqual(MIGRATION_NAMES);
     expect(loaded.map(({ checksum }) => checksum)).toEqual([
+      expect.stringMatching(/^[a-f0-9]{64}$/),
       expect.stringMatching(/^[a-f0-9]{64}$/),
       expect.stringMatching(/^[a-f0-9]{64}$/),
     ]);
@@ -381,9 +384,14 @@ describe('notification database migration', () => {
     ).resolves.toEqual([]);
   });
 
-  it('reverses only the idempotency migration and leaves the base schema intact', async () => {
+  it('reverses the incremental migrations and leaves the base schema intact', async () => {
     await migrateUp(database);
     const connection = database.connection();
+    await instantMigration.down?.({
+      builder: connection.builder,
+      query: connection.query,
+      connection,
+    });
     await idempotencyMigration.down?.({
       builder: connection.builder,
       query: connection.query,
@@ -588,10 +596,20 @@ async function migrateUp(database: DatabaseManager): Promise<void> {
     query: connection.query,
     connection,
   });
+  await instantMigration.up({
+    builder: connection.builder,
+    query: connection.query,
+    connection,
+  });
 }
 
 async function migrateDown(database: DatabaseManager): Promise<void> {
   const connection = database.connection();
+  await instantMigration.down?.({
+    builder: connection.builder,
+    query: connection.query,
+    connection,
+  });
   await idempotencyMigration.down?.({
     builder: connection.builder,
     query: connection.query,

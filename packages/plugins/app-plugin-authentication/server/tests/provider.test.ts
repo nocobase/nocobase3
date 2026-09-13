@@ -4,11 +4,7 @@ import { databaseManagerToken, type DatabaseManager } from '@nocobase/db';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { type Caching } from '@nocobase/caching';
 import { cachingToken } from '@nocobase/app-server/caching';
-import {
-  appConfig,
-  AppConfig,
-  createConfigPaths,
-} from '@nocobase/app-server/config';
+import { AppConfig, createConfigPaths } from '@nocobase/app-server/config';
 import { idGeneratorToken } from '@nocobase/app-server/id-generator';
 import { realtimePrincipalResolverToken } from '@nocobase/app-server/realtime';
 import { Hono } from 'hono';
@@ -33,7 +29,6 @@ import {
   toPublicRequest,
 } from '../providers/authentication.js';
 import { authenticationToken } from '../tokens.js';
-import { authenticationConfig } from '../config.js';
 
 describe('authentication provider', () => {
   it('registers authentication with the application runtime and dependencies', async () => {
@@ -132,27 +127,36 @@ describe('authentication provider', () => {
 });
 
 async function createConfig(): Promise<AppConfig> {
-  const config = new AppConfig([
-    {
-      ...appConfig,
-      defaults: {
-        name: 'main app',
-        publicOrigin: 'https://example.com',
-        publicBasePath: '/main',
-        internalBasePath: '',
-        publicApiUrl: '/main/api',
+  const config = new AppConfig();
+  config.load({
+    name: 'app',
+    read: async () => ({
+      kind: 'map',
+      value: {
+        app: {
+          name: 'main app',
+          publicOrigin: 'https://example.com',
+          publicBasePath: '/main',
+          internalBasePath: '',
+          publicApiUrl: '/main/api',
+        },
       },
-    },
-    {
-      ...authenticationConfig,
-      defaults: {
-        emailAndPassword: { enabled: true, autoSignIn: false },
-        session: { storeSessionInDatabase: true },
-        secret: 'test-auth-secret-at-least-32-characters',
-        advanced: { useSecureCookies: true },
+    }),
+  });
+  config.load({
+    name: 'test-auth-options',
+    read: async () => ({
+      kind: 'map',
+      value: {
+        auth: {
+          emailAndPassword: { enabled: true, autoSignIn: false },
+          session: { storeSessionInDatabase: true },
+          secret: 'test-auth-secret-at-least-32-characters',
+          advanced: { useSecureCookies: true },
+        },
       },
-    },
-  ]);
+    }),
+  });
   await config.loadAll();
   return config;
 }

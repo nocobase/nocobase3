@@ -62,6 +62,30 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
     navigation: { title: 'navigation.numbers', icon: Hash },
     path: '/numeric-examples',
   },
+  {
+    auth: 'guest',
+    componentLoader: () => import('./pages/auth/login.js'),
+    name: 'login',
+    path: '/login',
+  },
+  {
+    auth: 'guest',
+    componentLoader: () => import('./pages/auth/register.js'),
+    name: 'register',
+    path: '/register',
+  },
+  {
+    auth: 'guest',
+    componentLoader: () => import('./pages/auth/forgot-password.js'),
+    name: 'forgot-password',
+    path: '/forgot-password',
+  },
+  {
+    auth: 'guest',
+    componentLoader: () => import('./pages/auth/reset-password.js'),
+    name: 'reset-password',
+    path: '/reset-password',
+  },
 ]);
 
 const settingsRoutes: AppClientRouteContribution = defineSettingsRoutes([]);

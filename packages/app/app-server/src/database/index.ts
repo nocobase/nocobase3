@@ -42,4 +42,3 @@ export type {
   AppDatabaseMigrationConfig,
   AppDatabaseSeedConfig,
 } from './types.js';
-export * from './config.js';

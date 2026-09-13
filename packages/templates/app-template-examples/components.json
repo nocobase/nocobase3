@@ -20,5 +20,8 @@
     "hooks": "@/hooks"
   },
   "menuColor": "default",
-  "menuAccent": "subtle"
+  "menuAccent": "subtle",
+  "registries": {
+    "@nocobase": "https://registry.nocobase.com/r/{name}.json"
+  }
 }

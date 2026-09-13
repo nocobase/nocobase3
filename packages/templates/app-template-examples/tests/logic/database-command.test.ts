@@ -39,7 +39,7 @@ function fixture() {
     },
   };
   const runtime = async () => ({
-    appConfig: { get: () => database } as unknown as AppConfigAccessor,
+    config: { get: () => database } as unknown as AppConfigAccessor,
     configPaths: paths,
   });
   const command = {

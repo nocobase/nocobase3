@@ -5,18 +5,18 @@ import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { appConfig } from '@nocobase/app-server/config';
+import { type AppIdentityConfig } from '@nocobase/app-server/config';
 import {
-  databaseConfig,
   planAppDatabaseTasks,
+  type AppDatabaseConfig,
 } from '@nocobase/app-server/database';
 import { resolveStandaloneAppRuntime } from '@nocobase/app-server/node';
 import {
-  cachingConfig,
-  driveConfig,
-  loggingConfig,
-  queueConfig,
-  sessionConfig,
+  type CachingConfig,
+  type AppDriveConfig,
+  type AppLoggingConfig,
+  type AppQueueConfig,
+  type AppSessionConfigInput,
 } from '@nocobase/app-server';
 import { describe, expect, it } from 'vitest';
 
@@ -40,22 +40,21 @@ describe('application config', () => {
         configPath,
         env: { AUTH_SECRET: 'test-auth-secret-at-least-32-characters' },
       });
-      const database = runtime.appConfig.get(databaseConfig);
+      const database = runtime.config.get<AppDatabaseConfig>('database')!;
       expect(database.default).toBe('main');
       expect(database.connections.analytics).toMatchObject({
         dialect: 'sqlite',
-        database: 'analytics.sqlite',
+        filename: path.join(templateRootDir, 'storage/analytics.sqlite'),
         schemaManagement: 'managed',
         migrations: { autoRun: true },
         seeds: { autoRun: true },
       });
-      const plan = planAppDatabaseTasks(
+      const analytics = planAppDatabaseTasks(
         database,
         runtime.configPaths,
         ['migrations', 'seeds'],
         { autoRun: true },
-      );
-      const analytics = plan.filter((task) => task.connection === 'analytics');
+      ).filter((task) => task.connection === 'analytics');
       expect(analytics.map((task) => task.skipReason)).toEqual([
         undefined,
         undefined,
@@ -72,9 +71,10 @@ describe('application config', () => {
         configPath,
         'database:\n  connections:\n    analytics:\n      database: custom-analytics.sqlite\n      migrations:\n        autoRun: false\n      seeds:\n        autoRun: false\n',
       );
-      await runtime.appConfig.reload();
+      await runtime.config.reload();
       expect(
-        runtime.appConfig.get(databaseConfig).connections.analytics,
+        runtime.config.get<AppDatabaseConfig>('database')!.connections
+          .analytics,
       ).toMatchObject({
         dialect: 'sqlite',
         database: 'custom-analytics.sqlite',
@@ -85,16 +85,20 @@ describe('application config', () => {
       rmSync(directory, { recursive: true, force: true });
     }
   });
-  it('loads module definitions through the runtime registry', async () => {
+  it('assembles module defaults in the runtime', async () => {
     const runtime = await resolveStandaloneAppRuntime(appRuntime, {
       rootDir: templateRootDir,
       env: { AUTH_SECRET: 'test-auth-secret-at-least-32-characters' },
     });
 
-    expect(runtime.appConfig.get(appConfig).name).toBe('main');
-    expect(runtime.appConfig.get(cachingConfig).default).toBe('memory');
-    expect(runtime.appConfig.get(databaseConfig).default).toBe('main');
-    const drive = runtime.appConfig.get(driveConfig);
+    expect(runtime.config.get<AppIdentityConfig>('app')!.name).toBe('main');
+    expect(runtime.config.get<CachingConfig>('caching')!.default).toBe(
+      'memory',
+    );
+    expect(runtime.config.get<AppDatabaseConfig>('database')!.default).toBe(
+      'main',
+    );
+    const drive = runtime.config.get<AppDriveConfig>('drive')!;
     expect(drive.default).toBe('local');
     expect(drive.disks.local).toEqual({
       driver: 'fs',
@@ -102,9 +106,22 @@ describe('application config', () => {
       visibility: 'private',
     });
     expect(drive.disks.public).toBeUndefined();
-    expect(runtime.appConfig.get(loggingConfig).default).toBe('system');
-    expect(runtime.appConfig.get(queueConfig).default).toBe('sync');
-    expect(runtime.appConfig.get(sessionConfig).default).toBe('memory');
+    expect(runtime.config.get<AppLoggingConfig>('logging')!.default).toBe(
+      'system',
+    );
+    expect(runtime.config.get<AppQueueConfig>('queue')!.default).toBe('sync');
+    expect(
+      runtime.config.get<AppQueueConfig>('queue')!.jobs?.locations,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(
+          /app-template-examples\/server\/jobs\/\*\*\/\*\.\{ts,js\}$/,
+        ),
+      ]),
+    );
+    expect(runtime.config.get<AppSessionConfigInput>('session')!.default).toBe(
+      'memory',
+    );
   });
 
   it('reloads a file-backed configuration explicitly', async () => {
@@ -113,8 +130,29 @@ describe('application config', () => {
       env: { AUTH_SECRET: 'test-auth-secret-at-least-32-characters' },
     });
 
-    const result = await runtime.appConfig.reload();
+    const result = await runtime.config.reload();
 
     expect(result.changedNamespaces).toEqual([]);
+  });
+  it('loads only explicit env overrides and restores defaults on reload', async () => {
+    const runtime = await resolveStandaloneAppRuntime(appRuntime, {
+      rootDir: templateRootDir,
+      env: {
+        APP_SERVER_PORT: '14001',
+        REDIS_HOST: 'ignored',
+        NODE_ENV: 'production',
+      },
+    });
+    expect(runtime.config.get('server.port')).toBe(14001);
+    expect(runtime.config.get('queue.connections.redis.host')).toBe(
+      '127.0.0.1',
+    );
+    expect(runtime.config.get('session.stores.redis.host')).toBe('127.0.0.1');
+    expect(runtime.config.get('logging.pretty')).toBe(false);
+    expect(runtime.config.get('session.cookie.secure')).toBe(true);
+    expect(runtime.config.get('workflow.production')).toBe(true);
+    delete runtime.env.APP_SERVER_PORT;
+    await runtime.config.reload();
+    expect(runtime.config.get('server.port')).toBe(13000);
   });
 });

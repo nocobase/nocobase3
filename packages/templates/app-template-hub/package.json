@@ -25,7 +25,6 @@
     "@nocobase/app-portal-sdk": "workspace:^",
     "@nocobase/app-websocket": "workspace:^",
     "@nocobase/caching": "workspace:^",
-    "@nocobase/config": "workspace:^",
     "@nocobase/db": "workspace:^",
     "@nocobase/dev-config": "workspace:*",
     "@nocobase/drive": "workspace:^",
@@ -33,7 +32,6 @@
     "@nocobase/logging": "workspace:^",
     "@nocobase/queue": "workspace:^",
     "@nocobase/session": "workspace:^",
-    "@nocobase/snowflake": "workspace:^",
     "@refinedev/cli": "^2.16.48",
     "@refinedev/core": "catalog:",
     "@refinedev/devtools": "^2.0.1",
@@ -188,12 +186,18 @@
     "@nocobase/app-plugin-hub": "workspace:^",
     "@nocobase/app-plugin-i18n": "workspace:^",
     "@nocobase/app-plugin-install": "workspace:^",
+    "@nocobase/app-plugin-workflow": "workspace:^",
+    "@nocobase/config": "workspace:^",
     "@nocobase/app-plugin-users": "workspace:^",
     "@nocobase/app-server": "workspace:^",
     "@nocobase/db-sqlite": "workspace:^",
     "@nocobase/nb3-cli": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
+    "@nocobase/snowflake": "workspace:^",
     "@oclif/core": "catalog:",
-    "hono": "catalog:"
+    "better-auth": "catalog:",
+    "hono": "catalog:",
+    "@nocobase/app-plugin-service-provider-example": "workspace:^",
+    "@nocobase/app-plugin-notification": "workspace:^"
   }
 }

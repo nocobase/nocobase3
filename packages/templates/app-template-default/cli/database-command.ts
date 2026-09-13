@@ -1,6 +1,6 @@
 import {
   AppDatabaseTaskError,
-  databaseConfig,
+  type AppDatabaseConfig,
   runAppDatabaseTasks,
   type AppDatabaseTaskKind,
   type AppDatabaseTasksResult,
@@ -29,7 +29,7 @@ export async function runDatabaseCommand(
     force?: boolean;
   },
   resolveRuntime: () => Promise<{
-    appConfig: AppConfigAccessor;
+    config: AppConfigAccessor;
     configPaths: ConfigPaths;
   }>,
 ): Promise<void> {
@@ -53,7 +53,7 @@ export async function runDatabaseCommand(
   try {
     const runtime = await resolveRuntime();
     result = await runAppDatabaseTasks(
-      runtime.appConfig.get(databaseConfig),
+      runtime.config.get<AppDatabaseConfig>('database')!,
       runtime.configPaths,
       {
         kind,

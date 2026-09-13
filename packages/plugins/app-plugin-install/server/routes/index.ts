@@ -12,7 +12,7 @@ import {
 } from '../configure.js';
 import { isInstallModeAuthSecret } from '../install-mode.js';
 import {
-  authenticationConfig,
+  type AuthConfig,
   resolveAuthSecret,
 } from '@nocobase/app-plugin-authentication/server';
 
@@ -69,7 +69,7 @@ export const rootRoutes: AppRootRouteContribution<InstallPluginRoutesApplication
   defineRootRoutes(({ config, paths }) => {
     const router = new Hono();
     const installMode = isInstallModeAuthSecret(
-      resolveAuthSecret(config.get(authenticationConfig).secret, paths.root()),
+      resolveAuthSecret(config.get<AuthConfig>('auth')?.secret, paths.root()),
     );
 
     router.get('/install/status', (context) => {

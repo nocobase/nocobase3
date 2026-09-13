@@ -25,7 +25,7 @@ import type {
   AppClientRegisteredServiceProvider,
   ClientServiceProviderContext,
 } from './plugins.js';
-import type { ResolvedAppRuntime } from './runtime/index.js';
+import type { AppRuntimeContext } from './runtime/index.js';
 import {
   createRefineConfigCollector,
   type AppClientRefineConfigCollector,
@@ -42,7 +42,7 @@ export type ClientApplicationRenderConfigFactory = (
 ) => AppClientRenderConfig;
 
 export interface ClientApplicationOptions {
-  readonly runtime: ResolvedAppRuntime;
+  readonly runtime: AppRuntimeContext;
   readonly createRenderConfig: ClientApplicationRenderConfigFactory;
 }
 
@@ -122,7 +122,7 @@ class ContextualServiceProvider implements ServiceProviderLifecycle {
 }
 
 export class ClientApplication {
-  public readonly runtime: ResolvedAppRuntime;
+  public readonly runtime: AppRuntimeContext;
   public readonly config: AppClientConfig;
   public readonly container: ServiceContainer;
   public readonly services: ServiceResolver;
@@ -247,7 +247,6 @@ export class ClientApplication {
       await this.providerRegistry.bootAll();
       this.resolvedRefine = this.refineCollector.finalize();
       this.resolvedRenderConfig = Object.freeze(this.createRenderConfig(this));
-      this.validateAuthenticatedRoutes();
       await this.runtime.validate?.(this);
       await this.providerRegistry.startAll();
       await this.providerRegistry.readyAll();
@@ -255,27 +254,6 @@ export class ClientApplication {
     } catch (error) {
       this.state = 'failed';
       await this.shutdownAfterFailure(error);
-    }
-  }
-
-  private validateAuthenticatedRoutes(): void {
-    if (!this.runtime.routes.some((route) => route.auth === 'required')) {
-      return;
-    }
-    if (!this.refineConfig.authProvider) {
-      throw new Error(
-        'Client Application routes requiring authentication need an auth provider.',
-      );
-    }
-    if (
-      !this.runtime.routes.some(
-        (route) =>
-          route.path.toLowerCase() === '/login' && route.auth === 'guest',
-      )
-    ) {
-      throw new Error(
-        'Client Application routes requiring authentication need a guest /login route.',
-      );
     }
   }
 
@@ -306,7 +284,7 @@ export class ClientApplication {
 }
 
 export function createApp(
-  runtime: ResolvedAppRuntime,
+  runtime: AppRuntimeContext,
   createRenderConfig: ClientApplicationRenderConfigFactory,
 ): ClientApplication {
   return new ClientApplication({ runtime, createRenderConfig });

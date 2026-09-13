@@ -8,12 +8,10 @@ import {
 
 import { createServer } from './embedded.js';
 import appRuntime from './runtime.js';
-import { nodeServerConfig as serverConfig } from '@nocobase/app-server/node';
 
 const standalone = defineStandaloneServer({
   rootDir: path.resolve(import.meta.dirname, '..'),
   appRuntime,
-  serverConfig,
   createServer,
 });
 

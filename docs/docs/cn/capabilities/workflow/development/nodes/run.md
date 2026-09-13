@@ -82,9 +82,9 @@ export const run: WorkflowRunFunction = (
 
 返回 `{ status: 'failed' }` 只是普通成功数据，不会让节点失败。需要表示执行错误时抛出异常；可预期的业务结果也可以作为结构化数据返回，再由 Condition 判断。
 
-## 日志、超时和取消
+## 日志和取消
 
-使用 `options.logger` 记录必要的业务定位信息，不记录密码、令牌或完整敏感数据。设置 `options.timeout` 后，运行超时会触发取消信号；脚本应在开始、耗时步骤之间调用 `throwIfAborted()`，并把 signal 传给支持取消的 I/O。
+使用 `options.logger` 记录必要的业务定位信息，不记录密码、令牌或完整敏感数据。工作流达到顶层 `workflow.options.timeout` 后会触发取消信号；脚本应在开始、耗时步骤之间调用 `throwIfAborted()`，并把 signal 传给支持取消的 I/O。
 
 取消无法自动撤销已经提交的数据库事务、已发送的消息或外部请求。
 

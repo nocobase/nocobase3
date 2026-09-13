@@ -34,7 +34,6 @@
     "@nocobase/logging": "workspace:^",
     "@nocobase/queue": "workspace:^",
     "@nocobase/session": "workspace:^",
-    "@nocobase/snowflake": "workspace:^",
     "@refinedev/cli": "^2.16.48",
     "@refinedev/core": "catalog:",
     "@refinedev/devtools": "^2.0.1",
@@ -213,8 +212,9 @@
     "@nocobase/db": "workspace:^",
     "@nocobase/nb3-cli": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
+    "@nocobase/snowflake": "workspace:^",
     "@oclif/core": "catalog:",
-    "better-sqlite3": "catalog:",
+    "better-auth": "catalog:",
     "hono": "catalog:"
   },
   "description": "Runnable NocoBase 3 examples for application development.",

@@ -92,6 +92,7 @@ export interface WorkflowDefinitionView {
   version: string | null;
   enabled: boolean;
   current: boolean | null;
+  hasParameters: boolean;
   executed: number;
   latestRun: { id: string; status: number | null; createdAt: string } | null;
   pendingArtifact: {
