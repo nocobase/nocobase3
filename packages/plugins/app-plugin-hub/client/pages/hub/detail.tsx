@@ -29,7 +29,7 @@ import { useTranslation } from '@nocobase/i18n/client';
 import { useState, type ReactElement } from 'react';
 import { Outlet } from 'react-router';
 import type { DetailTab, AppDetail } from './types.js';
-import { ActionAvailabilityHint, AppMark, StatusBadge } from './shared.js';
+import { AppMark, StatusBadge } from './shared.js';
 import {
   appActionState,
   appManagementStatus,
@@ -273,19 +273,6 @@ export function Detail({
               </div>
             </div>
             {lifecycleReason || stopReason || visitActionReason ? (
-              <div className='mb-5 flex flex-col items-end gap-1'>
-                <ActionAvailabilityHint
-                  action={lifecycleAction}
-                  reason={lifecycleReason}
-                />
-                <ActionAvailabilityHint action='stop' reason={stopReason} />
-                <ActionAvailabilityHint
-                  action='visit'
-                  reason={visitActionReason}
-                />
-              </div>
-            ) : null}
-            {lifecycleReason || stopReason || visitActionReason ? (
               <>
                 <span className='sr-only' id='hub-lifecycle-action-reason'>
                   {lifecycleReason
@@ -333,7 +320,7 @@ export function RemoveApplicationDialog({
   onClose,
   onRemove,
 }: {
-  readonly app: AppDetail;
+  readonly app: Pick<AppDetail, 'app'>;
   readonly busy: boolean;
   readonly onClose: () => void;
   readonly onRemove: () => void;

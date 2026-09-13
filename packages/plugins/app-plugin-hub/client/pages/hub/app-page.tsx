@@ -25,7 +25,7 @@ import {
 import { useTranslation } from '@nocobase/i18n/client';
 
 import { Button } from '../../components/ui/button.js';
-import { ErrorBanner, AppDialog } from './shared.js';
+import { ErrorBanner, ErrorDialog, AppDialog } from './shared.js';
 import { Detail, RemoveApplicationDialog } from './detail.js';
 import { DeploymentDialog } from './configuration.js';
 import { UploadReleaseDialog } from './releases.js';
@@ -543,9 +543,6 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
     <>
       <main className='min-h-[calc(100svh-4rem)] bg-muted/20 [&_button:not(:disabled)]:cursor-pointer'>
         <div className='mx-auto max-w-[1600px] px-5 py-6 sm:px-8 sm:py-8'>
-          {error ? (
-            <ErrorBanner error={error} onClose={() => setError(undefined)} />
-          ) : null}
           <HubAppPageContext.Provider value={contextValue}>
             <Detail
               app={selectedApp}
@@ -604,15 +601,17 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
             <Button
               disabled={busy}
               variant={lifecycleAction === 'stop' ? 'destructive' : 'default'}
-              onClick={() =>
+              onClick={() => {
+                const action = lifecycleAction;
+                if (!action) return;
+                setLifecycleAction(undefined);
                 void perform(async () => {
                   await client.request({
-                    path: `hub/apps/${appId}/${lifecycleAction}`,
+                    path: `hub/apps/${appId}/${action}`,
                     method: 'POST',
                   });
-                  setLifecycleAction(undefined);
-                })
-              }
+                });
+              }}
             >
               {busy ? <LoaderCircle className='size-4 animate-spin' /> : null}
               {lifecycleAction === 'start'
@@ -701,6 +700,9 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
             }, false)
           }
         />
+      ) : null}
+      {error ? (
+        <ErrorDialog error={error} onClose={() => setError(undefined)} />
       ) : null}
     </>
   );

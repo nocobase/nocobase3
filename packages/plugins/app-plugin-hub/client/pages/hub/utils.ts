@@ -102,7 +102,7 @@ export function appStatusLabel(status: AppManagementStatus): string {
     running: 'Running',
     ready: 'Ready',
     stopped: 'Stopped',
-    unknown: 'Unknown',
+    unknown: 'Status unavailable',
   };
   return labels[status];
 }

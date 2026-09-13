@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   appActionState,
   appManagementStatus,
+  appStatusLabel,
   readError,
 } from '../client/pages/hub/utils.js';
 import type { AppOverview, AppSummary } from '../client/pages/hub/types.js';
@@ -65,6 +66,10 @@ describe('Hub App status and action mapping', () => {
         }),
       ),
     ).toBe('unknown');
+  });
+
+  it('uses a user-facing label for an unresolved runtime state', () => {
+    expect(appStatusLabel('unknown')).toBe('Status unavailable');
   });
 
   it('explains lifecycle action availability', () => {

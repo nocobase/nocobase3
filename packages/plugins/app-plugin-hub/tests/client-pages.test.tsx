@@ -49,6 +49,8 @@ vi.mock('@nocobase/i18n/client', () => ({
 import AppPage from '../client/pages/hub/app-page.js';
 import { Detail } from '../client/pages/hub/detail.js';
 import { ApplicationsCatalog } from '../client/pages/hub-page.js';
+import { ErrorBanner } from '../client/pages/hub/shared.js';
+import { readError } from '../client/pages/hub/utils.js';
 
 const appSummary = (id: string, name = id): AppSummary => ({
   app: {
@@ -331,6 +333,169 @@ describe('Hub client pages', () => {
     expect(screen.getByText('Customer Portal')).toBeInTheDocument();
   });
 
+  it('uses a user-facing label for an unresolved catalog status', async () => {
+    mocks.client.request.mockResolvedValue({
+      data: page([
+        {
+          ...appSummary('customer', 'Customer Portal'),
+          runtime: { hostAvailable: true, state: 'unknown' },
+        },
+      ]),
+    });
+    renderCatalog();
+
+    await waitFor(() =>
+      expect(screen.getByText('Customer Portal')).toBeInTheDocument(),
+    );
+    expect(screen.getByText('Status unavailable')).toBeInTheDocument();
+    expect(screen.queryByText('Unknown')).not.toBeInTheDocument();
+  });
+
+  it('renders a friendly restart failure while keeping raw details collapsed', () => {
+    const rawMessage = 'Restart failed: App "hdsp" failed to reload';
+    const apiError = Object.assign(new Error(rawMessage), {
+      payload: {
+        error: {
+          code: 'RESTART_FAILED',
+          message: rawMessage,
+        },
+      },
+    });
+    render(<ErrorBanner error={readError(apiError)} />);
+
+    expect(screen.getByText('Restart failed')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'The application could not be restarted. Check its deployment status and try again.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(rawMessage)).not.toBeInTheDocument();
+    expect(screen.getByText('Show technical details')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Show technical details'));
+    expect(
+      screen.getByText((content) => content.includes('failed to reload')),
+    ).toBeInTheDocument();
+  });
+
+  it('closes the lifecycle confirmation before showing a restart failure', async () => {
+    const rawMessage = 'Restart failed: App "hdsp" failed to reload';
+    const apiError = Object.assign(new Error(rawMessage), {
+      payload: {
+        error: {
+          code: 'RESTART_FAILED',
+          message: rawMessage,
+        },
+      },
+    });
+    renderAppPage('/apps/customer/deployments');
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Restart' })).toBeEnabled(),
+    );
+    mocks.client.request.mockImplementation(({ path }: { path: string }) =>
+      path === 'hub/apps/customer/restart'
+        ? Promise.reject(apiError)
+        : Promise.reject(new Error(`Unexpected request: ${path}`)),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Restart' }));
+    expect(screen.getByText('Restart Customer?')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Restart' }));
+    await waitFor(() =>
+      expect(screen.getByText('Restart failed')).toBeInTheDocument(),
+    );
+    expect(screen.queryByText('Restart Customer?')).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'The application could not be restarted. Check its deployment status and try again.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Show technical details')).toBeInTheDocument();
+  });
+
+  it('exposes the compact remove action in both catalog views', async () => {
+    mocks.client.request.mockResolvedValue({
+      data: page([appSummary('customer', 'Customer Portal')]),
+    });
+    renderCatalog();
+    await waitFor(() =>
+      expect(screen.getByText('Customer Portal')).toBeInTheDocument(),
+    );
+
+    expect(
+      screen.getByRole('button', {
+        name: 'Remove application for Customer Portal',
+      }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'List view' }));
+    expect(
+      screen.getByRole('button', {
+        name: 'Remove application for Customer Portal',
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it('hides application actions without remove permission', async () => {
+    mocks.authorization.can.mockImplementation(
+      (_resource: unknown, action: string) =>
+        Promise.resolve(action !== 'remove'),
+    );
+    mocks.client.request.mockResolvedValue({
+      data: page([appSummary('customer', 'Customer Portal')]),
+    });
+    renderCatalog();
+
+    await waitFor(() =>
+      expect(screen.getByText('Customer Portal')).toBeInTheDocument(),
+    );
+    expect(
+      screen.queryByRole('button', {
+        name: 'Remove application for Customer Portal',
+      }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('confirms removal from the catalog and refreshes the list', async () => {
+    let listed = true;
+    mocks.client.request.mockImplementation(
+      ({ path, method }: { path: string; method?: string }) => {
+        if (path === 'hub/apps/customer' && method === 'DELETE') {
+          listed = false;
+          return Promise.resolve({});
+        }
+        return Promise.resolve({
+          data: page(listed ? [appSummary('customer', 'Customer Portal')] : []),
+        });
+      },
+    );
+    renderCatalog();
+    await waitFor(() =>
+      expect(screen.getByText('Customer Portal')).toBeInTheDocument(),
+    );
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Remove application for Customer Portal',
+      }),
+    );
+    expect(screen.getByText('Remove application?')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    await waitFor(() =>
+      expect(mocks.client.request).toHaveBeenCalledWith({
+        path: 'hub/apps/customer',
+        method: 'DELETE',
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByText('Customer Portal')).not.toBeInTheDocument(),
+    );
+  });
+
   it('replaces the detail parent URL with the first accessible Tab', async () => {
     renderAppPage('/apps/customer?filter=recent');
 
@@ -398,24 +563,7 @@ describe('Hub client pages', () => {
       </MemoryRouter>,
     );
 
-    const availabilityMessages = screen
-      .getAllByRole('status')
-      .map((element) => element.textContent);
-    expect(
-      availabilityMessages.some((message) =>
-        message?.startsWith('Start unavailable:'),
-      ),
-    ).toBe(true);
-    expect(
-      availabilityMessages.some((message) =>
-        message?.startsWith('Stop unavailable:'),
-      ),
-    ).toBe(true);
-    expect(
-      availabilityMessages.some((message) =>
-        message?.startsWith('Visit unavailable:'),
-      ),
-    ).toBe(true);
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Start' })).toHaveAttribute(
       'aria-describedby',
       'hub-lifecycle-action-reason',

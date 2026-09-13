@@ -16,6 +16,7 @@ import { useNavigate, useOutlet, useResolvedPath } from 'react-router';
 import type { ApiResponse, AppPageResponse } from './hub/types.js';
 import { ErrorBanner } from './hub/shared.js';
 import { Catalog, CreateDialog } from './hub/catalog.js';
+import { RemoveApplicationDialog } from './hub/detail.js';
 import { readError, type ReadableError } from './hub/utils.js';
 import {
   emptyHubCapabilities,
@@ -52,6 +53,8 @@ export function ApplicationsCatalog(): ReactElement {
   const [fetching, setFetching] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [appToRemove, setAppToRemove] =
+    useState<AppPageResponse['items'][number]>();
   const [newAppId, setNewAppId] = useState('');
   const [newAppName, setNewAppName] = useState('');
   const [busy, setBusy] = useState(false);
@@ -149,6 +152,30 @@ export function ApplicationsCatalog(): ReactElement {
       setBusy(false);
     }
   };
+  const removeApplication = async (): Promise<void> => {
+    if (!appToRemove) return;
+    setBusy(true);
+    setError(undefined);
+    try {
+      await client.request({
+        path: `hub/apps/${appToRemove.app.id}`,
+        method: 'DELETE',
+      });
+      setAppToRemove(undefined);
+      const nextPage =
+        apps.length === 1 && pagination.page > 1
+          ? pagination.page - 1
+          : pagination.page;
+      setPagination((current) => ({ ...current, page: nextPage }));
+      if (nextPage === pagination.page) {
+        await loadApps(query, nextPage);
+      }
+    } catch (reason) {
+      reportError(reason);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <main className='min-h-[calc(100svh-4rem)] bg-muted/20 [&_button:not(:disabled)]:cursor-pointer'>
@@ -178,6 +205,8 @@ export function ApplicationsCatalog(): ReactElement {
           onView={setView}
           canCreate={capabilities.create}
           onCreate={() => setCreateOpen(true)}
+          canRemove={capabilities.remove}
+          onRemove={setAppToRemove}
           onSelect={goToApp}
           onPage={(page) => setPagination((current) => ({ ...current, page }))}
         />
@@ -193,6 +222,16 @@ export function ApplicationsCatalog(): ReactElement {
             if (!busy) setCreateOpen(false);
           }}
           onCreate={() => void createApp()}
+        />
+      ) : null}
+      {appToRemove && capabilities.remove ? (
+        <RemoveApplicationDialog
+          app={appToRemove}
+          busy={busy}
+          onClose={() => {
+            if (!busy) setAppToRemove(undefined);
+          }}
+          onRemove={() => void removeApplication()}
         />
       ) : null}
     </main>

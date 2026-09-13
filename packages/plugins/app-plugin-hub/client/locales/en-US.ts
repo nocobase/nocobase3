@@ -8,6 +8,7 @@ const enUS = {
   },
   common: {
     dismissError: 'Dismiss error',
+    close: 'Close',
   },
   errors: {
     unexpectedTitle: 'Something went wrong',
@@ -19,6 +20,9 @@ const enUS = {
     artifactVersionMismatchTitle: 'Release does not match this application',
     artifactVersionMismatchDescription:
       'Build the release from this application source, then upload the generated artifact again.',
+    restartFailedTitle: 'Restart failed',
+    restartFailedDescription:
+      'The application could not be restarted. Check its deployment status and try again.',
     forbiddenTitle: 'You do not have permission to perform this action',
     forbiddenDescription:
       'Your account does not have permission to complete this action.',
@@ -38,6 +42,7 @@ const enUS = {
     listView: 'List view',
     refresh: 'Refresh',
     newApplication: 'New application',
+    remove: 'Remove application',
     loading: 'Loading applications',
     application: 'Application',
     status: 'Status',
@@ -113,7 +118,7 @@ const enUS = {
     running: 'Running',
     ready: 'Ready',
     stopped: 'Stopped',
-    unknown: 'Unknown',
+    unknown: 'Status unavailable',
   },
   actions: {
     operationInProgress: 'An operation is in progress.',

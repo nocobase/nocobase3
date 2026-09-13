@@ -8,6 +8,7 @@ const zhCN: HubResource = {
   },
   common: {
     dismissError: '关闭错误提示',
+    close: '关闭',
   },
   errors: {
     unexpectedTitle: '操作未完成',
@@ -19,6 +20,8 @@ const zhCN: HubResource = {
     artifactVersionMismatchTitle: '版本与当前应用不匹配',
     artifactVersionMismatchDescription:
       '请从当前应用的源代码重新构建版本，然后再次上传生成的制品。',
+    restartFailedTitle: '重启失败',
+    restartFailedDescription: '应用未能成功重启，请检查部署状态后重试。',
     forbiddenTitle: '你没有执行此操作的权限',
     forbiddenDescription: '当前账号没有完成此操作所需的权限。',
     notFoundTitle: '未找到请求的资源',
@@ -35,6 +38,7 @@ const zhCN: HubResource = {
     listView: '列表视图',
     refresh: '刷新',
     newApplication: '新建应用',
+    remove: '删除应用',
     loading: '正在加载应用',
     application: '应用',
     status: '状态',
@@ -106,7 +110,7 @@ const zhCN: HubResource = {
     running: '运行中',
     ready: '就绪',
     stopped: '已停止',
-    unknown: '未知',
+    unknown: '状态不可用',
   },
   actions: {
     operationInProgress: '当前有操作正在进行。',
