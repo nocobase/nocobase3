@@ -23,6 +23,7 @@ keywords: 'NocoBase,工作流,快速开始,库存补货'
 ## 开始之前
 
 - 当前目录是一个基于 NocoBase 3 应用模板创建的应用；
+- 应用配置使用根目录的 `config.yml`（如需密钥，请在其中引用环境变量）；
 - 应用已经安装并注册 `@nocobase/app-plugin-workflow`；
 - 应用已有库存与补货相关的 Collection 或 Service，或者允许 Agent 在确认后补齐；
 - 开发者可以让应用 Agent 读取和修改源码；
@@ -104,7 +105,7 @@ server/workflows/inventory-replenishment/
 要求 Agent 报告实际执行的验证命令和结果，至少包括：
 
 ```bash
-pnpm exec workflow check server/workflows/inventory-replenishment
+pnpm nocobase workflow check server/workflows/inventory-replenishment
 pnpm typecheck
 pnpm test
 pnpm build
@@ -158,7 +159,7 @@ pnpm build
 
 > 现在请把库存补货处理接入实际库存变更逻辑。重复投递同一次库存变更时，应复用同一个业务事件标识，且补货写入本身也不能重复。补充相应测试，并告诉我哪项业务操作会触发它、触发被跳过时如何处理，以及如何在管理界面确认结果。
 
-应用代码的接入方式见[Workflow Service API](./development/service-api.md)。
+应用代码的接入方式见 [Service API](./development/service-api.md)。
 
 ## 常见问题
 
