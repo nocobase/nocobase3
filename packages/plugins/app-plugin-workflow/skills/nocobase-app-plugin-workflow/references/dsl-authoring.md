@@ -36,6 +36,8 @@ Only use Instruction classes exported by an installed plugin and registered in t
 
 ## Complete current example
 
+若应用需要可复用的流程控制能力（例如发邮件节点），请先阅读文档中的“可运行示例：发邮件节点”。示例覆盖公开导入、异步 Provider 注册、checker/build 的同一 Instruction 合同、隔离 Artifact 输出和运行时注册；不要只在 `boot()` 中注册后就直接编写 DSL。
+
 Create all of these files; the DSL alone is not a complete package:
 
 ```text
