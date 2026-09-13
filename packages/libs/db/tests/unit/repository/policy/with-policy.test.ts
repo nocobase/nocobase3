@@ -157,4 +157,122 @@ describe('DefaultRepository.withPolicy', () => {
       }),
     ]);
   });
+
+  it('restricts implicit root selection to the read field allowlist', async () => {
+    let plan:
+      | {
+          fields: readonly string[];
+        }
+      | undefined;
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {
+        get: async () => ({
+          name: 'projects',
+          fields: [
+            { name: 'id', type: 'string' },
+            { name: 'title', type: 'string' },
+            { name: 'budget', type: 'number' },
+          ],
+        }),
+      },
+      adapter: {
+        assertReadable: () => undefined,
+        findMany: async (nextPlan: typeof plan) => {
+          plan = nextPlan;
+          return [];
+        },
+      } as never,
+    });
+
+    await repository
+      .withPolicy({
+        read: { scope: true, fields: ['id', 'title'] },
+        create: { scope: true },
+        update: { scope: true },
+        delete: { scope: true },
+      })
+      .findMany();
+
+    expect(plan?.fields).toEqual(['id', 'title']);
+  });
+
+  it('rejects explicitly selected root fields outside the read allowlist', async () => {
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {
+        get: async () => ({
+          name: 'projects',
+          fields: [
+            { name: 'id', type: 'string' },
+            { name: 'title', type: 'string' },
+            { name: 'budget', type: 'number' },
+          ],
+        }),
+      },
+      adapter: {
+        assertReadable: () => undefined,
+        findMany: async () => [],
+      } as never,
+    });
+
+    await expect(
+      repository
+        .withPolicy({
+          read: { scope: true, fields: ['id', 'title'] },
+          create: { scope: true },
+          update: { scope: true },
+          delete: { scope: true },
+        })
+        .findMany({
+          select: {
+            kind: 'select',
+            version: 1,
+            root: {
+              kind: 'selection',
+              fields: ['id', 'budget'],
+              includes: [],
+            },
+          },
+        }),
+    ).rejects.toMatchObject({ code: 'FIELD_READ_FORBIDDEN', field: 'budget' });
+  });
+
+  it('returns no root scalar fields when read fields are omitted', async () => {
+    let plan:
+      | {
+          fields: readonly string[];
+        }
+      | undefined;
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {
+        get: async () => ({
+          name: 'projects',
+          fields: [
+            { name: 'id', type: 'string' },
+            { name: 'title', type: 'string' },
+          ],
+        }),
+      },
+      adapter: {
+        assertReadable: () => undefined,
+        findMany: async (nextPlan: typeof plan) => {
+          plan = nextPlan;
+          return [];
+        },
+      } as never,
+    });
+
+    await repository
+      .withPolicy({
+        read: { scope: true },
+        create: { scope: true },
+        update: { scope: true },
+        delete: { scope: true },
+      })
+      .findMany();
+
+    expect(plan?.fields).toEqual([]);
+  });
 });

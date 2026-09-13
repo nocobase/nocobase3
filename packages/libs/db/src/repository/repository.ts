@@ -191,6 +191,7 @@ export class DefaultRepository<
       collection,
       options.select,
       options.context,
+      this.readPolicyFields(),
     );
     const filter = await this.normalizeFilter(
       collection,
@@ -247,6 +248,7 @@ export class DefaultRepository<
       collection,
       options.select,
       options.context,
+      this.readPolicyFields(),
     );
     const filter = await this.normalizeFilter(
       collection,
@@ -1060,13 +1062,20 @@ export class DefaultRepository<
     collection: CollectionDefinition,
     select: RepositorySelect<TRecord> | undefined,
     context?: Readonly<Record<string, unknown>>,
+    policyFields?: readonly string[],
   ): Promise<ValidatedSelect> {
     return validateSelectWithRelations(
       this.options.collections,
       collection,
       select,
       context,
+      policyFields,
     );
+  }
+
+  private readPolicyFields(): readonly string[] | undefined {
+    const policy = this.options.policy?.read;
+    return policy && typeof policy === 'object' ? policy.fields : undefined;
   }
 
   private async validateSort(
@@ -1922,9 +1931,18 @@ function normalizeSelectInput<TRecord extends object>(
 function validateScalarSelect(
   collection: CollectionDefinition,
   select: SelectInputAst | undefined,
+  policyFields?: readonly string[],
 ): string[] {
-  if (select === undefined)
-    return scalarFields(collection).map((field) => field.name);
+  if (policyFields !== undefined) {
+    for (const field of policyFields) {
+      scalarField(collection, field, ['policy', 'read', 'fields']);
+    }
+  }
+  if (select === undefined) {
+    return policyFields
+      ? [...policyFields]
+      : scalarFields(collection).map((field) => field.name);
+  }
   if (
     !isPlainRecord(select) ||
     select.kind !== 'select' ||
@@ -1961,7 +1979,10 @@ function validateScalarSelect(
     });
   }
   const fields =
-    select.root.fields ?? scalarFields(collection).map((field) => field.name);
+    select.root.fields ??
+    (policyFields
+      ? [...policyFields]
+      : scalarFields(collection).map((field) => field.name));
   const seen = new Set<string>();
   for (const [index, field] of fields.entries()) {
     if (typeof field !== 'string') {
@@ -1971,6 +1992,17 @@ function validateScalarSelect(
       });
     }
     scalarField(collection, field, ['root', 'fields', index]);
+    if (policyFields && !policyFields.includes(field)) {
+      invalid(
+        'FIELD_READ_FORBIDDEN',
+        `Field "${field}" is not readable by Policy.`,
+        {
+          collection: collection.name,
+          field,
+          path: ['root', 'fields', index],
+        },
+      );
+    }
     if (seen.has(field)) {
       invalid(
         'INVALID_SELECT',
@@ -2420,12 +2452,14 @@ async function validateSelectWithRelations<TRecord extends object>(
   collection: CollectionDefinition,
   input: RepositorySelect<TRecord> | undefined,
   context: Readonly<Record<string, unknown>> | undefined,
+  policyFields?: readonly string[],
 ): Promise<ValidatedSelect> {
   return validateSelectInputWithRelations(
     collections,
     collection,
     normalizeSelectInput(collection, input),
     context,
+    policyFields,
   );
 }
 
@@ -2434,12 +2468,13 @@ async function validateSelectInputWithRelations(
   collection: CollectionDefinition,
   select: SelectInputAst | undefined,
   context: Readonly<Record<string, unknown>> | undefined,
+  policyFields?: readonly string[],
   budget: { nodes: number } = { nodes: 0 },
   depth: number = 0,
 ): Promise<ValidatedSelect> {
   if (++budget.nodes > 200 || depth > 20)
     invalid('INVALID_SELECT', 'Selection exceeds the node or depth limit.', {});
-  const fields = validateScalarSelect(collection, select);
+  const fields = validateScalarSelect(collection, select, policyFields);
   const seen = new Set<string>();
   const includes: SelectIncludeNode[] = [];
   for (const [index, node] of (select?.root.includes ?? []).entries()) {
@@ -2499,6 +2534,7 @@ async function validateSelectInputWithRelations(
         root: node.select,
       },
       context,
+      undefined,
       budget,
       depth + 1,
     );
@@ -2616,6 +2652,7 @@ async function validateRelationResult(
       },
     },
     context,
+    undefined,
     budget,
     depth,
   );
