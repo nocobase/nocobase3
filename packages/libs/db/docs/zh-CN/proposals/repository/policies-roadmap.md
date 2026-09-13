@@ -1,0 +1,210 @@
+---
+title: Policy 实施清单
+description: 按阶段拆分的实施任务，含前置决策、技术验证、每阶段的交付物与验收标准，以及替换现有 writePolicy 的迁移面。
+---
+
+# Policy 实施清单
+
+> 文档状态：本页保留设计与实现演进记录，不作为当前用法契约。Repository 已提供[正式使用文档](../../repository/overview.md)和 [API 参考](../../reference/repository-api.md)；本页中的候选项及旧限制需以正式文档、公开类型和实际测试核对。
+
+> **状态：提案，尚未实现。** 现行实现见 [Write policy](../../repository/write-policy.md)。
+
+配套 [Policy 设计](./policies.md)。每个阶段独立可交付，阶段 1 完成即可用于生产的多租户隔离。
+
+## 阶段 0：前置决策与技术验证
+
+这一阶段不产出代码，但**不做完就开工必然返工**——下面每一条都会改变阶段 1 的类型形状。
+
+### 五个设计决策
+
+| #       | 决策                                                                                                                                                               | 影响                                         |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------- |
+| ~~0.1~~ | ~~Scope 是否复用 `RepositoryFilter` 语法~~ **已定**：复用简写与 AST 两种形式，不接受 Builder 回调；排除 JSON 系列操作符。见 [Policy 参考](./policies-reference.md) | —                                            |
+| 0.2     | `fields` 是否也必填                                                                                                                                                | 只影响类型，但改起来是全量 breaking          |
+| 0.3     | 现有 `writePolicy` 的 callback builder 是否移除                                                                                                                    | 决定迁移面是 41 个文件还是更多               |
+| 0.4     | `requireScope` 落在 Collection metadata 还是 Connection 配置                                                                                                       | 影响阶段 4，但接口要在阶段 1 预留            |
+| 0.5     | `origin` 标记是否进入公开的 `FilterAst`                                                                                                                            | 影响 `@nocobase/repository-input` 的公开类型 |
+
+### 两个技术验证（spike，各半天）
+
+- **0.6 返回类型降级能否从字面量推出来。** 目标形态 `P['read'] extends { fields: readonly string[] } ? Partial<TRecord> : TRecord`。写个最小复现试 const 泛型与强制 `satisfies`；推不出来就退化为显式类型参数，`withPolicy` 的签名要跟着改。
+- **0.7 `evaluateScope` 与 SQL 的语义一致性边界。** 见阶段 1 的 1.4——先确认哪些操作符能在内存里和数据库给出完全一致的结果，定不下来的直接排除出 `Scope` 的允许集合。
+
+**出口条件**：五个决策写进设计文档的对应位置（不再留在「待决」），两个 spike 有结论。
+
+## 阶段 1：行范围
+
+核心阶段。做完就有完整的多租户与归属隔离，不依赖后续任何一步。
+
+### 1.1 错误码
+
+- `@nocobase/repository-input` 的 `RepositoryErrorCode` 增加 `INVALID_POLICY`、`POLICY_REQUIRED`、`SCOPE_VIOLATION`、`RECORD_OUTSIDE_SCOPE`
+- `app-server` 的 `repositoryErrorStatus` 增加映射：前两个 400，`SCOPE_VIOLATION` 403，`RECORD_OUTSIDE_SCOPE` 409
+
+无依赖，可以最先做。
+
+### 1.2 类型定义
+
+新增 `src/repository/policy/types.ts`：`RepositoryPolicy`、`ReadNode`、`WriteNode`、`DeleteNode`、`RelationWriteNode`、`Scope`、`PartialRepositoryPolicy`。
+
+阶段 1 只需要 `scope` 相关部分可用，`fields` / `relations` 的字段先定义出来但不接入校验（阶段 2 才用）。
+
+### 1.3 编译
+
+新增 `src/repository/policy/normalize.ts`，实现设计文档「Policy 的编译」五步：函数求值、四节点齐全校验、逐节点规范化、`defaults` / `readable` 预计算、深冻结。
+
+同时做 **`create.scope` 的可满足性检查**：每个被引用的字段必须在 `create.defaults` 里、在 `create.fields` 里、或有满足条件的数据库字面量默认值，否则 `INVALID_POLICY`。三样输入都是静态的；不做这一步就会出现「配置合法但每次 create 都必然回滚」的死锁。
+
+失败一律 `INVALID_POLICY` 并带 `path`。
+
+### 1.4 `evaluateScope` 内存求值器 ⚠️
+
+**这是整个实施里最容易被低估、也最容易出错的一块。**
+
+它要对一条已读出的记录求 `Scope` 的值，结果必须与同一条件下推成 SQL 的结果**完全一致**。不一致就会出现两类幽灵故障：写进去了却读不出来，或者本该拒绝的写入放行了。
+
+风险点：
+
+| 项         | 陷阱                                                 |
+| ---------- | ---------------------------------------------------- |
+| NULL       | SQL 三值逻辑：`NULL != 'x'` 不为真。JS 的 `!==` 为真 |
+| 字符串比较 | 数据库排序规则决定大小写敏感性；八种方言默认值不同   |
+| 日期       | 时区与精度截断，`datetime` 与 `datetimeTz` 行为不同  |
+| 数值       | BigInt 与 Decimal 的精度，JS number 会丢             |
+| 布尔       | 部分方言用 0/1 存储，读出来需要 `decodeBooleanRow`   |
+
+做法：
+
+- 先按 0.7 的结论确定允许的操作符集合，**拿不准的直接不允许进 `Scope`**，而不是求值器里猜
+- 写**差分测试**：同一批记录、同一个 scope，分别走内存求值和 `SELECT ... WHERE <scope>`，断言两边挑出的行完全相同；八种方言各跑一遍
+- 求值器和 SQL 构造器共用同一份操作符语义表，不要各写一套
+
+### 1.5 filter 合并与 `origin`
+
+- `FilterNode` 增加 `origin: 'caller' | 'policy'`（是否公开由 0.5 决定）
+- 合并函数：调用方 filter **整体包成 group**，与 scope group 取 AND，不打平
+- 接入所有构造 filter 的位置：读方法、`lockByFilter`、`lockManyByFilter`、`updateMany` / `deleteMany` 的快路径
+
+### 1.6 写路径接入
+
+按依赖顺序：
+
+- `updateOne`：在 `lockByFilter` 之后、`update` 之前插入重判（用前像 + values 算后像）
+- `createOne`：形状检查 → 应用 `create.defaults` → 插入 → 对 `createRecord` 返回的后像判 `create.scope`
+- `upsertOne`：三分支，命中但越界抛 `RECORD_OUTSIDE_SCOPE`，不退化成插入
+- `updateMany`：静态判定；`or` 分组被 values 触及或 scope 字段有原子操作时降级到 `lockManyByFilter`
+- `deleteOne` / `deleteMany`：只加 WHERE，无后像判定
+- 原子值例外：`refreshAtomicValues` 之后再判
+
+### 1.7 绑定 API
+
+- `ScopedRepository` 接口，与 `Repository` 共享操作方法基接口，**不是**其子类型
+- `withPolicy` 两个重载
+- `explainPolicy()`
+
+阶段 1 不做 `narrow`（阶段 3）。
+
+### 1.8 关系写入目标
+
+`resolveMutationTarget` 的定位查询加上 `RelationWriteNode.scope`；未命中返回 `RELATION_TARGET_NOT_FOUND`；关系 `update` 分支同样走写入后重判。
+
+### 阶段 1 验收
+
+- [ ] 生成的 SQL 含 scope 条件，且不存在「先查全量再内存过滤」的路径
+- [ ] 调用方 `or` 分组与 scope 合并为 `(A OR B) AND scope`
+- [ ] 越权与不存在的响应**逐字节相同**
+- [ ] 常规 update 路径零额外查询（断言查询次数）
+- [ ] `evaluateScope` 差分测试八方言全绿
+- [ ] `create.defaults` 被调用方同名字段覆盖后由重判挡下；`defaults` 可设 `fields` 之外的字段
+- [ ] scope 引用的字段取不到值时，配置阶段就报 `INVALID_POLICY`（不是运行时回滚）
+- [ ] 关系 `connect` 越界目标返回 `RELATION_TARGET_NOT_FOUND`
+- [ ] 目标 Collection 单独绑 `update: false` 时，经由关系的写入**不**被拒
+
+## 阶段 2：读取形状
+
+### 任务
+
+- 2.1 `read.fields` / `read.relations` 的编译与校验（1.3 里预留的部分接入）
+- 2.2 `select ∩ policy`：显式越权报 `FIELD_READ_FORBIDDEN` / `RELATION_READ_FORBIDDEN`
+- 2.3 省略 `select` 时按 `read.fields` 裁剪
+- 2.4 返回类型降级（按 0.6 的结论实现）
+- 2.5 查询条件字段校验：`filter` / 关系 filter / `sort` / `distinct` / `cursor` / `groupBy.by` / `aggregate` / `having`，只遍历 `origin: 'caller'`
+- 2.6 关系节点递归 + 关系 scope 进关系分支查询的 WHERE
+- 2.7 `ref()` 展开与环检测
+- 2.8 外键与关系的对称规则：关系可展开且 `fields` 含目标主键 ⇒ 视同外键可读
+
+### 验收
+
+- [ ] 显式请求越权字段报错，不静默裁剪
+- [ ] 省略 select 时裁剪，且关系仍不自动展开
+- [ ] `exists({ filter: { budget: ... } })` 被 2.5 拒绝
+- [ ] 关系 scope 不减少根记录数
+- [ ] `ref` 成环时编译报错
+
+## 阶段 3：绑定层与 HTTP
+
+### 任务
+
+- 3.1 `ScopedConnection` 与 `conn.withPolicies(map, principal)`
+- 3.2 事务内派生的 Repository 自动携带 policy
+- 3.3 `narrow` 与归并算法（`false` 传播、`fields` 取交、patch 独有关系丢弃）
+- 3.4 HTTP：`RepositoryApiActions` 的读写 action 统一加 `policy` 位，缺省拒绝
+- 3.5 HTTP：请求体出现 `policy` / `scope` 一律 400
+- 3.6 `explainPolicy()` 覆盖多层 `narrow` 的归并结果
+
+### 验收
+
+- [ ] `withPolicies` 未覆盖的 Collection 抛 `POLICY_REQUIRED`
+- [ ] 事务内外 policy 一致
+- [ ] `narrow` 无法放宽任何一维（scope / fields / relations / 节点级 `false`）
+- [ ] `explainPolicy()` 与手工归并结果一致
+
+## 阶段 4：加固
+
+- 4.1 `requireScope`（位置按 0.4）
+- 4.2 `read.scope` 开放关系路径与关系量词
+- 4.3 可序列化的 policy 模板（存库的角色配置）
+
+阶段 4 三项互相独立，按需要排期。
+
+## 迁移：替换现有 writePolicy
+
+当前有 **41 个文件**引用 `writePolicy`，分四类：
+
+| 类别   | 位置                                                                                                                     | 处理                 |
+| ------ | ------------------------------------------------------------------------------------------------------------------------ | -------------------- |
+| 实现   | `db/src/repository/write-policy.ts`、`write-policy-check.ts`、`repository.ts`、`types.ts`                                | 并入新的 policy 模块 |
+| 消费方 | `app-server/src/router/repository-routes.ts`、`app-plugin-file-example`、`app-plugin-repository-example`                 | 改写为新形态         |
+| 测试   | `app-server/tests/`、`db-testkit/tests/integration/repository/relations/write-policy.test.ts`、`api-client/tests/types/` | 重写                 |
+| 文档   | `db/docs/zh-CN/repository/` 下约 12 篇 + 三个包的 README / SKILL.md                                                      | 更新                 |
+
+要点：
+
+- **不保留兼容层。** 保留等于两套语义并存，而 policy 的错误方向是「看起来配过了」，两套并存正好制造这种形态。
+- `db-testkit` 的 `write-policy.test.ts` 是跨方言契约测试，它的重写决定了八个 dialect 包的验收，要排在消费方改造之前。
+- 阶段 2 结束后，`policies.md`、`policies-examples.md`、`policies-reference.md`、`policies-internals.md` 四篇转为正式文档移入 `docs/zh-CN/repository/`，`proposals/` 只留一条指向新位置的记录；本篇（实施清单）不转正，随实施完成归档。
+- 每个受影响的发布包都需要 changeset；`db`、`repository-input`、`app-server` 与两个 example 插件都在其中。
+
+## 关键路径
+
+```text
+阶段 0（决策 + 两个 spike）
+   └─ 1.1 错误码 ─┬─ 1.2 类型 ─ 1.3 编译 ─┬─ 1.4 evaluateScope ⚠ ─┬─ 1.6 写路径 ─ 1.8 关系目标
+                  │                        └─ 1.5 filter 合并 ────┘
+                  └─────────────────────── 1.7 绑定 API
+阶段 1 完成即可用
+   ├─ 阶段 2（读取形状）
+   ├─ 阶段 3（绑定层 + HTTP）
+   └─ 迁移（可与 2、3 并行，但 db-testkit 契约测试先行）
+阶段 4 按需
+```
+
+**1.4 是关键路径上的主要风险**，也是唯一一个「做错了不会立刻发现」的任务——内存求值与 SQL 语义不一致造成的故障会在很久以后以「数据明明写进去了却查不出来」的形式出现。差分测试不是可选项。
+
+相关文档：
+
+- [Policy 设计](./policies.md)
+- [Policy 示例说明](./policies-examples.md)
+- [Policy 参考](./policies-reference.md)
+- [Policy 执行细节](./policies-internals.md)
+- [Policy 实施清单](./policies-roadmap.md)
