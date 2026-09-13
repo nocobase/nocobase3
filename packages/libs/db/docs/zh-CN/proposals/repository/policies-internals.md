@@ -7,7 +7,7 @@ description: Policy 在现有 Knex 适配器里的落点——编译、filter �
 
 > 文档状态：本页保留设计与实现演进记录，不作为当前用法契约。Repository 已提供[正式使用文档](../../repository/overview.md)和 [API 参考](../../reference/repository-api.md)；本页中的候选项及旧限制需以正式文档、公开类型和实际测试核对。
 
-> **状态：提案，尚未实现。** 现行实现见 [Write policy](../../repository/write-policy.md)。
+> **状态：阶段 1 至阶段 3 已实现**，见 `db/src/repository/policy/`、`db-testkit/tests/integration/repository/policy/` 与 [实施清单](./policies-roadmap.md) 的逐项进度。本组文档仍在 `proposals/` 下：转为正式文档并入 `docs/zh-CN/repository/` 与消费方迁移一并进行，在那之前 [Write policy](../../repository/write-policy.md) 描述的方法级 `writePolicy` 仍然有效，两者并存。
 
 面向实现者。[Policy 设计](./policies.md) 说规则是什么，[Policy 示例说明](./policies-examples.md) 说写出来什么样，本文说它在现有执行链路上挂在哪、每一步产生什么 SQL。
 

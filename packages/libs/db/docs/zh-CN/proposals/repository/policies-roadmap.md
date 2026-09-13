@@ -7,7 +7,7 @@ description: 按阶段拆分的实施任务，含前置决策、技术验证、�
 
 > 文档状态：本页保留设计与实现演进记录，不作为当前用法契约。Repository 已提供[正式使用文档](../../repository/overview.md)和 [API 参考](../../reference/repository-api.md)；本页中的候选项及旧限制需以正式文档、公开类型和实际测试核对。
 
-> **状态：提案，尚未实现。** 现行实现见 [Write policy](../../repository/write-policy.md)。
+> **状态：阶段 1 至阶段 3 已实现**，见 `db/src/repository/policy/`、`db-testkit/tests/integration/repository/policy/` 与 [实施清单](./policies-roadmap.md) 的逐项进度。本组文档仍在 `proposals/` 下：转为正式文档并入 `docs/zh-CN/repository/` 与消费方迁移一并进行，在那之前 [Write policy](../../repository/write-policy.md) 描述的方法级 `writePolicy` 仍然有效，两者并存。
 
 配套 [Policy 设计](./policies.md)。每个阶段独立可交付，阶段 1 完成即可用于生产的多租户隔离。
 
@@ -221,6 +221,17 @@ SQLite、PostgreSQL、MySQL、Kingbase 可并发；OceanBase、Oracle、MSSQL、
 
 阶段 4 三项互相独立，按需要排期。
 
+## 进度
+
+| 阶段                 | 状态   | 说明                                                                            |
+| -------------------- | ------ | ------------------------------------------------------------------------------- |
+| 阶段 0 决策与 spike  | 已完成 | 0.1 / 0.5 / 0.6 已定，另补记 0.8 / 0.9；0.7 因改为 SQL 重判而不再适用           |
+| 阶段 1 行范围        | 已完成 | 1.4 改为 SQL 重判，1.5 改为结构性区分来源，1.8 未命中沿用既有错误码；其余按设计 |
+| 阶段 2 读取形状      | 已完成 | 2.1–2.8 全部落地，含 `ref()` 展开与外键对称                                     |
+| 阶段 3 绑定层与 HTTP | 已完成 | 3.1–3.6 落地；HTTP 的「缺省拒绝」推迟到迁移，理由见 3.4                         |
+| 阶段 4 加固          | 未开始 | `requireScope`、`read.scope` 的关系路径、可序列化模板三项互相独立，按需排期     |
+| 迁移                 | 未开始 | 见下节                                                                          |
+
 ## 迁移：替换现有 writePolicy
 
 当前有 **41 个文件**引用 `writePolicy`，分四类：
@@ -231,6 +242,10 @@ SQLite、PostgreSQL、MySQL、Kingbase 可并发；OceanBase、Oracle、MSSQL、
 | 消费方 | `app-server/src/router/repository-routes.ts`、`app-plugin-file-example`、`app-plugin-repository-example`                 | 改写为新形态         |
 | 测试   | `app-server/tests/`、`db-testkit/tests/integration/repository/relations/write-policy.test.ts`、`api-client/tests/types/` | 重写                 |
 | 文档   | `db/docs/zh-CN/repository/` 下约 12 篇 + 三个包的 README / SKILL.md                                                      | 更新                 |
+
+**当前状态：尚未开始，两套语义暂时并存。** 这与下面第一条要点相反，是一个有意识的推迟而不是遗漏：Policy 的实现已经全部落地并通过跨方言契约测试，但拆掉 `writePolicy` 要同时改四类消费方，而在那之前把它删掉会让所有既有路由声明与插件当场失效。方法级 `writePolicy` 目前作为单次调用的额外收窄保留（设计文档本来也是这么说的），`toWritePolicy` 桥接同样保留（决策 0.9）。需要注意的是，并存期正是设计文档警告的那种形态，所以这一步不宜久拖。
+
+`db-testkit/tests/integration/repository/relations/write-policy.test.ts` 暂不重写：它测的 API 还活着。新的 Policy 契约测试放在 `db-testkit/tests/integration/repository/policy/` 与之并列，迁移时再合并。
 
 要点：
 

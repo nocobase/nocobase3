@@ -7,7 +7,7 @@ description: 从没有 Policy 的现状出发，逐层加入 scope、写入后�
 
 > 文档状态：本页保留设计与实现演进记录，不作为当前用法契约。Repository 已提供[正式使用文档](../../repository/overview.md)和 [API 参考](../../reference/repository-api.md)；本页中的候选项及旧限制需以正式文档、公开类型和实际测试核对。
 
-> **状态：提案，尚未实现。** 现行实现见 [Write policy](../../repository/write-policy.md)。
+> **状态：阶段 1 至阶段 3 已实现**，见 `db/src/repository/policy/`、`db-testkit/tests/integration/repository/policy/` 与 [实施清单](./policies-roadmap.md) 的逐项进度。本组文档仍在 `proposals/` 下：转为正式文档并入 `docs/zh-CN/repository/` 与消费方迁移一并进行，在那之前 [Write policy](../../repository/write-policy.md) 描述的方法级 `writePolicy` 仍然有效，两者并存。
 
 本文是 [Repository Policy](./policies.md) 的配套说明，按层次递进：每一节只加入一个概念，并保持前面各层继续生效。设计依据与取舍理由在设计文档里，这里只讲"写成什么样、跑出什么结果"。
 

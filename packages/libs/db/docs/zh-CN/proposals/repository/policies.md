@@ -7,7 +7,9 @@ description: 重构 Repository 权限模型，用 read/create/update/delete 四�
 
 > 文档状态：本页保留设计与实现演进记录，不作为当前用法契约。Repository 已提供[正式使用文档](../../repository/overview.md)和 [API 参考](../../reference/repository-api.md)；本页中的候选项及旧限制需以正式文档、公开类型和实际测试核对。
 
-> **状态：提案，尚未实现。** 现有 `writePolicy` 的结构会被这份设计取代，不保留兼容层。现行实现见 [Write policy](../../repository/write-policy.md)。
+> **状态：阶段 1 至阶段 3 已实现**，见 `db/src/repository/policy/`、`db-testkit/tests/integration/repository/policy/` 与 [实施清单](./policies-roadmap.md) 的逐项进度。本组文档仍在 `proposals/` 下：转为正式文档并入 `docs/zh-CN/repository/` 与消费方迁移一并进行，在那之前 [Write policy](../../repository/write-policy.md) 描述的方法级 `writePolicy` 仍然有效，两者并存。
+
+> 设计中写的「不保留兼容层」尚未发生：方法级 `writePolicy` 作为单次调用的额外收窄保留下来，`toWritePolicy` 桥接也还在（决策 0.9）。拆除时机见实施清单。
 
 ## 这套文档怎么读
 
