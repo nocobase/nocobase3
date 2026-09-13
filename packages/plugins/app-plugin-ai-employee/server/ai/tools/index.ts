@@ -9,7 +9,6 @@ import getAIEmployee from './sub-agents/get-ai-employee.js';
 import listAIEmployees from './sub-agents/list-ai-employees.js';
 import subAgentWebSearch from './subAgentWebSearch.js';
 import suggestions from './suggestions.js';
-
 const tools = [
   chartGenerator,
   executeFrontendTool,

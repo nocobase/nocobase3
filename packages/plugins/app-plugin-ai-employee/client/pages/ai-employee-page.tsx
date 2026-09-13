@@ -595,6 +595,23 @@ export default function AIEmployeePage(): ReactElement {
     });
   };
 
+  const updateToolSettings = (
+    update: (
+      tools: AIEmployeeEditableValues['skillSettings']['tools'],
+    ) => AIEmployeeEditableValues['skillSettings']['tools'],
+  ): void => {
+    setDraft((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        skillSettings: {
+          ...current.skillSettings,
+          tools: update(current.skillSettings.tools),
+        },
+      };
+    });
+  };
+
   const save = async (): Promise<void> => {
     if (!selected || !draft || !dirty) return;
     if (
@@ -1079,20 +1096,16 @@ export default function AIEmployeePage(): ReactElement {
                     description={t(
                       'Created by workflow. You can add/remove and set default permissions.',
                     )}
+                    defaultOpen={customTools.length > 0}
                     action={
                       <AddMenu
                         label={t('Add tool')}
                         items={availableCustomTools}
                         onAdd={(name) =>
-                          patchDraft({
-                            skillSettings: {
-                              ...draft.skillSettings,
-                              tools: [
-                                ...configuredTools,
-                                { name, autoCall: false },
-                              ],
-                            },
-                          })
+                          updateToolSettings((currentTools) => [
+                            ...currentTools,
+                            { name, autoCall: false },
+                          ])
                         }
                       />
                     }
@@ -1125,20 +1138,17 @@ export default function AIEmployeePage(): ReactElement {
                                     type='button'
                                     key={permission}
                                     onClick={() =>
-                                      patchDraft({
-                                        skillSettings: {
-                                          ...draft.skillSettings,
-                                          tools: configuredTools.map((tool) =>
-                                            tool.name === item.name
-                                              ? {
-                                                  ...tool,
-                                                  autoCall:
-                                                    permission === 'ALLOW',
-                                                }
-                                              : tool,
-                                          ),
-                                        },
-                                      })
+                                      updateToolSettings((currentTools) =>
+                                        currentTools.map((tool) =>
+                                          tool.name === item.name
+                                            ? {
+                                                ...tool,
+                                                autoCall:
+                                                  permission === 'ALLOW',
+                                              }
+                                            : tool,
+                                        ),
+                                      )
                                     }
                                     className={`rounded px-3 py-1 text-sm ${active ? 'bg-background shadow-sm' : 'text-muted-foreground'}`}
                                   >
@@ -1154,14 +1164,11 @@ export default function AIEmployeePage(): ReactElement {
                               aria-label={`${t('Remove')} ${item.title ?? item.name}`}
                               className='rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground'
                               onClick={() =>
-                                patchDraft({
-                                  skillSettings: {
-                                    ...draft.skillSettings,
-                                    tools: configuredTools.filter(
-                                      (tool) => tool.name !== item.name,
-                                    ),
-                                  },
-                                })
+                                updateToolSettings((currentTools) =>
+                                  currentTools.filter(
+                                    (tool) => tool.name !== item.name,
+                                  ),
+                                )
                               }
                             >
                               <Trash2 className='h-4 w-4' />
