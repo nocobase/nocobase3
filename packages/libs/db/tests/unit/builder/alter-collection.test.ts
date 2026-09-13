@@ -222,4 +222,46 @@ describe('CollectionBuilder alterCollection', () => {
       ]),
     });
   });
+
+  it('deduplicates relation indexes added through field and collection definitions', async () => {
+    const builder = new CollectionBuilder();
+
+    await builder.createCollection('orders', {
+      fields: [{ name: 'id', type: 'increments', primaryKey: true }],
+    });
+
+    const result = await builder.alterCollection(
+      'orders',
+      (collection) => {
+        collection.string('productId');
+        collection
+          .belongsTo('product', 'products')
+          .foreignKey('productId')
+          .targetKey('id')
+          .foreignKeyType('string')
+          .index();
+        collection.index('productId');
+      },
+      { dryRun: true },
+    );
+
+    const schemaOperation = result.schemaOperations?.[0];
+    expect(schemaOperation?.type).toBe('alterTable');
+    if (!schemaOperation || schemaOperation.type !== 'alterTable') {
+      throw new Error('Expected an alterTable schema operation.');
+    }
+    expect(
+      schemaOperation.operations.filter(
+        (operation) => operation.type === 'addIndex',
+      ),
+    ).toEqual([
+      {
+        type: 'addIndex',
+        index: {
+          columns: ['product_id'],
+          name: 'idx_orders_product_id',
+        },
+      },
+    ]);
+  });
 });
