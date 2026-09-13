@@ -5,8 +5,11 @@ import {
 } from '../router/index.js';
 
 import { registerSpaRoutes } from './routes.js';
-import { appConfig, type AppConfigAccessor } from '../config/index.js';
-import { spaConfig } from './config.js';
+import {
+  type AppIdentityConfig,
+  type AppConfigAccessor,
+} from '../config/index.js';
+import { type SpaConfig } from './config.js';
 import { createMountedOriginProxyHandler } from '../proxy/index.js';
 import { joinBasePath } from '../support/index.js';
 import {
@@ -24,8 +27,8 @@ export interface SpaRoutesApplication {
 export const spaRootRoutes: AppRootRouteContribution<SpaRoutesApplication> =
   defineRootRoutes((app: SpaRoutesApplication): Hono => {
     const router = new Hono();
-    const identity = app.config.get(appConfig);
-    const spa = app.config.get(spaConfig);
+    const identity = app.config.get<AppIdentityConfig>('app')!;
+    const spa = app.config.get<SpaConfig>('spa')!;
     const apiUrl = joinBasePath(app.publicBasePath, '/api');
     registerSpaRoutes(router, {
       basePath: identity.internalBasePath,

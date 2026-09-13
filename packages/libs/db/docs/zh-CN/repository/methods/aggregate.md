@@ -30,9 +30,9 @@ const result = await db.repository('tasks').aggregate({
 console.log(result.count, result.total);
 ```
 
-返回以所选别名为键的对象，不带 record 包装。count() 统计行，count(field) 忽略该字段的 SQL NULL。空范围 count 为 0，sum/avg/min/max 为 null。
+返回以所选别名为键的对象，不带 record 包装。count() 统计行，count(field) 忽略该字段的 SQL NULL。空范围 count 为数字 0，sum/avg/min/max 为 null。
 
-sum/avg 仅接受数值字段；min/max 要求可排序字段。聚合值保留数据库驱动的 number/string/bigint 表示，不应为方便而一律 `Number()`，否则可能丢失 decimal 或大整数精度。count 转为 number，超大计数也需考虑 JavaScript 安全整数范围。
+sum/avg 仅接受数值字段；min/max 要求可排序字段。COUNT 返回安全整数 number，SUM/AVG 对整数和 DECIMAL 返回数据库格式字符串，对 float/double 返回 number，MIN/MAX 保留字段的逻辑类型。不要一律使用 `Number()`，否则可能丢失 decimal 或大整数精度。
 
 对应 JSON AST：
 
@@ -66,3 +66,6 @@ const result = await db.repository('tasks').aggregate({
 ## 验证依据
 
 行为覆盖见 [aggregate.test.ts](../../../../tests/integration/repository/methods/aggregate.test.ts)；公开签名见 [API 参考](../../reference/repository-api.md)。
+
+COUNT 返回安全整数 number，SUM、AVG 对整数和 DECIMAL 保留原生字符串，对 float/double 返回 number；MIN/MAX(bigInt) 返回字符串，MIN/MAX(integer/float/double) 返回数字，MIN/MAX(decimal) 返回字符串。浮点字段的 MIN/MAX 与普通读取保持相同类型；浮点 SUM/AVG 保留原生计算误差。
+关联聚合与 groupBy 使用相同规则。详见 [统一聚合类型与容量边界](../../query/aggregates.md#统一返回类型)。

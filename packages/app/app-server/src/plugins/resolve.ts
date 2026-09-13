@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import type { MigrationSource, SeedSource } from '@nocobase/db';
 
-import type { AppDatabaseConfig } from '../database/index.js';
+import type { AppDatabaseTaskContributions } from '../database/index.js';
 import type {
   AppServerPlugin,
   AppServerPlugins,
@@ -24,11 +24,6 @@ export interface ResolveAppServerPluginsOptions {
    * source development keeps resolving the workspace packages it is meant to watch.
    */
   readonly preferBuiltPackages?: boolean;
-}
-
-export interface ResolvedAppPluginDatabaseConfig {
-  readonly database: AppDatabaseConfig;
-  readonly plugins: readonly ResolvedAppPlugin[];
 }
 
 export function resolveAppServerPlugins(
@@ -55,32 +50,15 @@ export function resolveAppServerPlugins(
   };
 }
 
-export function resolveAppPluginDatabaseConfig(
-  rootDir: string,
-  database: AppDatabaseConfig,
-  serverPlugins: AppServerPlugins,
-  options: ResolveAppServerPluginsOptions = {},
-): ResolvedAppPluginDatabaseConfig {
-  const resolved = resolveAppServerPlugins(rootDir, serverPlugins, options);
-  return createAppPluginDatabaseConfig(database, resolved);
-}
-
-export function createAppPluginDatabaseConfig(
-  database: AppDatabaseConfig,
+/** The application identity and plugin task sources that database planning needs. */
+export function createAppDatabaseTaskContributions(
   resolved: ResolvedAppServerPlugins,
-): ResolvedAppPluginDatabaseConfig {
+): AppDatabaseTaskContributions {
   const plugins = resolved.plugins.map((plugin) => plugin.metadata);
   return {
-    plugins,
-    database: {
-      ...database,
-      taskSources: {
-        ...database.taskSources,
-        packageName: resolved.appPackageName,
-        migrations: createPluginMigrationSources(plugins),
-        seeds: createPluginSeedSources(plugins),
-      },
-    },
+    appPackageName: resolved.appPackageName,
+    migrations: createPluginMigrationSources(plugins),
+    seeds: createPluginSeedSources(plugins),
   };
 }
 

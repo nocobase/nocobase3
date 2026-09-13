@@ -41,6 +41,16 @@ Complete, runnable applications. `create-app` downloads one and scaffolds a proj
 
 `app-template-default` is what `pnpm create @nocobase/app` produces. `app-template-hub` is the application hub. `app-template-examples` combines application-owned article management with installable capability examples and demonstration data.
 
+For everyday development and exploring examples in this repository, run `pnpm examples:dev` from the repository root. Each template has explicit root commands:
+
+| Template | Development         | Build                 | Start the built application |
+| -------- | ------------------- | --------------------- | --------------------------- |
+| Examples | `pnpm examples:dev` | `pnpm examples:build` | `pnpm examples:start`       |
+| Default  | `pnpm default:dev`  | `pnpm default:build`  | `pnpm default:start`        |
+| Hub      | `pnpm hub:dev`      | `pnpm hub:build`      | `pnpm hub:start`            |
+
+Inside a template's own directory, use `pnpm dev`, `pnpm build`, and `pnpm start`.
+
 ## `tools/`
 
 Everything used to develop and build the packages above, none of which ends up inside a generated application. `dev-config` holds the shared TypeScript, ESLint, Prettier, Vitest, and Vite presets that every other package extends; `create-app` is the scaffolder that turns a template into a project.

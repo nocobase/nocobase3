@@ -14,6 +14,7 @@ import usersPlugin, {
 } from '@nocobase/app-plugin-users/server';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { createDatabaseManager, createMigrator } from '@nocobase/db';
+import sqlite from '@nocobase/db-sqlite';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
@@ -236,6 +237,7 @@ const USER_API_CASES: readonly ApiCase[] = [
 
 describe('Hub role API permissions', () => {
   const database = createDatabaseManager({
+    drivers: { sqlite },
     default: 'main',
     connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
   });

@@ -1,3 +1,4 @@
+import sqlite from '@nocobase/db-sqlite';
 import { Readable } from 'node:stream';
 
 import {
@@ -38,6 +39,7 @@ export function createTestAppDeps(): TestAppDeps {
   const caches = new Map<string, Map<string, unknown>>();
   const objects = new Map<string, Uint8Array>();
   const database = createDatabaseManager({
+    drivers: { sqlite },
     default: 'main',
     connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
   });

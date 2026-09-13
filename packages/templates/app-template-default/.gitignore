@@ -40,3 +40,5 @@ _.ntvs_
 _.njsproj
 _.sln
 \*.sw?
+
+/config.toml

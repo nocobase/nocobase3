@@ -1,0 +1,19 @@
+services:
+  mysql:
+    image: mysql:8.4
+    ports:
+      - '0:3306'
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_USER: nocobase
+      MYSQL_PASSWORD: nocobase
+      MYSQL_DATABASE: nocobase_collection_builder
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'mysqladmin ping -h 127.0.0.1 -unocobase -pnocobase --silent',
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 30

@@ -14,6 +14,7 @@ describe('development config watch', () => {
     expect([...watch.filenames]).toEqual([
       'config.yml',
       'config.yaml',
+      'config.toml',
       'config.json',
     ]);
   });

@@ -50,6 +50,7 @@ it('builds a business attachment feature from the shipped Skill and materialized
       '@nocobase/app-client',
       '@nocobase/app-server',
       '@nocobase/db',
+      '@nocobase/db-sqlite',
       '@nocobase/drive',
       '@nocobase/service-provider',
       '@nocobase/api-client',

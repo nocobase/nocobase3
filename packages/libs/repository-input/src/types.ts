@@ -201,12 +201,12 @@ export interface StringFilterOptions {
 export type TextFilterOperators = StringFilterOperators;
 
 export interface NumberFilterOperators extends EmptyFilterOperators {
-  eq(value: FilterOperand<number | null>): FilterConditionNode;
-  ne(value: FilterOperand<number | null>): FilterConditionNode;
-  gt(value: FilterOperand<number>): FilterConditionNode;
-  gte(value: FilterOperand<number>): FilterConditionNode;
-  lt(value: FilterOperand<number>): FilterConditionNode;
-  lte(value: FilterOperand<number>): FilterConditionNode;
+  eq(value: FilterOperand<number | string | null>): FilterConditionNode;
+  ne(value: FilterOperand<number | string | null>): FilterConditionNode;
+  gt(value: FilterOperand<number | string>): FilterConditionNode;
+  gte(value: FilterOperand<number | string>): FilterConditionNode;
+  lt(value: FilterOperand<number | string>): FilterConditionNode;
+  lte(value: FilterOperand<number | string>): FilterConditionNode;
 }
 
 export interface DateFilterOperators extends EmptyFilterOperators {
@@ -663,7 +663,7 @@ export interface AggregateExpression<T = unknown> {
   readonly [aggregateExpressionType]?: T;
 }
 
-export type RepositoryAggregateNumeric = number | string | bigint;
+export type RepositoryAggregateNumeric = string | number;
 
 export interface AggregateBuilder<TRecord extends object = RepositoryRecord> {
   count(field?: keyof TRecord & string): AggregateExpression<number>;

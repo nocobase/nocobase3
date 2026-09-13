@@ -1,54 +1,42 @@
-import type { ApiClient, RealtimeClient } from '@nocobase/app-client';
+import { usernameClient } from 'better-auth/client/plugins';
 import { describe, expect, it, vi } from 'vitest';
-
 import { createAuthClient } from '../auth-client.js';
 
-describe('AuthClient', () => {
-  it('sends a JSON body when signing out', async () => {
-    const request = vi.fn<ApiClient['request']>().mockResolvedValue(undefined);
-    const reconnect = vi.fn();
+describe('native authentication client', () => {
+  it('uses the configured public URL and username plugin', async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(Response.json({ token: 'token', user: { id: '1' } }));
     const client = createAuthClient({
-      api: { request } as ApiClient,
-      realtime: createRealtimeClient(reconnect),
+      baseURL: 'https://example.com/main/api/auth',
+      plugins: [usernameClient({ displayUsername: false })],
+      fetchOptions: { customFetchImpl: fetch },
     });
-
-    await client.signOut();
-
-    expect(request).toHaveBeenCalledWith({
-      path: 'auth/sign-out',
+    await client.signIn.username({ username: 'alice', password: 'password' });
+    expect(String(fetch.mock.calls[0]?.[0])).toBe(
+      'https://example.com/main/api/auth/sign-in/username',
+    );
+    expect(fetch.mock.calls[0]?.[1]).toMatchObject({
       method: 'POST',
-      json: {},
+      body: JSON.stringify({ username: 'alice', password: 'password' }),
     });
-    expect(reconnect).toHaveBeenCalledOnce();
   });
-
-  it('sends a reset password request with the token', async () => {
-    const request = vi.fn<ApiClient['request']>().mockResolvedValue(undefined);
+  it('propagates native errors when requested', async () => {
     const client = createAuthClient({
-      api: { request } as ApiClient,
-      realtime: createRealtimeClient(vi.fn()),
-    });
-
-    await client.resetPassword('new-password', 'reset-token');
-
-    expect(request).toHaveBeenCalledWith({
-      path: 'auth/reset-password',
-      method: 'POST',
-      json: {
-        newPassword: 'new-password',
-        token: 'reset-token',
+      baseURL: 'https://example.com/api/auth',
+      fetchOptions: {
+        customFetchImpl: async () =>
+          Response.json({ message: 'Invalid credentials' }, { status: 401 }),
       },
+    });
+    await expect(
+      client.signIn.email(
+        { email: 'alice@example.com', password: 'wrong' },
+        { throw: true },
+      ),
+    ).rejects.toMatchObject({
+      status: 401,
+      error: { message: 'Invalid credentials' },
     });
   });
 });
-
-function createRealtimeClient(reconnect: () => void): RealtimeClient {
-  return {
-    connected: false,
-    subscribe: vi.fn(() => vi.fn()),
-    onOpen: vi.fn(() => vi.fn()),
-    onError: vi.fn(() => vi.fn()),
-    reconnect,
-    close: vi.fn(),
-  };
-}

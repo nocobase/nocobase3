@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import type { AIMessage } from '@nocobase/ai-employee';
+import sqlite from '@nocobase/db-sqlite';
 import {
   createDatabaseManager,
   createMigrator,
@@ -47,6 +48,7 @@ function message(overrides: Partial<AIMessage> = {}): AIMessage {
 
 async function createDatabase(): Promise<DatabaseManager> {
   const database = createDatabaseManager({
+    drivers: { sqlite },
     default: 'main',
     connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
   });
@@ -411,8 +413,8 @@ describe('AI usage event database integration', () => {
         filter: { messageId: '9007199254740993' },
       }),
     ).resolves.toMatchObject({
-      id: 1000,
-      occurredAt: Date.parse('2026-07-06T01:02:03.004Z'),
+      id: '1000',
+      occurredAt: String(Date.parse('2026-07-06T01:02:03.004Z')),
       sessionId: SESSION_ID,
       aiEmployeeUsername: 'nathan',
       from: 'sub-agent',
@@ -420,9 +422,9 @@ describe('AI usage event database integration', () => {
       eventType: 'llm_message',
       provider: 'openai',
       model: 'gpt-5.3',
-      inputTokens: 10,
-      outputTokens: 5,
-      totalTokens: 15,
+      inputTokens: '10',
+      outputTokens: '5',
+      totalTokens: '15',
       rawUsageMetadata: {
         input_tokens: 10,
         output_tokens: 5,

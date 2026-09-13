@@ -5,6 +5,8 @@
 以下导出同时存在于：
 
 ```ts
+import { username } from 'better-auth/plugins';
+import { usernameClient } from 'better-auth/client/plugins';
 import {} from '@nocobase/app-plugin-authentication';
 import {} from '@nocobase/app-plugin-authentication/server';
 ```
@@ -124,89 +126,36 @@ function databaseAdapter(
 import {} from '@nocobase/app-plugin-authentication/client';
 ```
 
-### AuthClient
+### AuthConfig、AuthClient 与 createAuthClient
+
+`AuthConfig` 是原生客户端 options 的类型别名，供应用的 `client/config/auth.ts` 使用。`createAuthClient(options)` 创建原生客户端，支持插件和 fetch options。`AuthSession`、`AuthSessionUser` 从客户端推导。
 
 ```ts
-class AuthClient {
-  constructor(options: AuthClientOptions);
-  getSession(): Promise<AuthSession | null>;
-  signIn(identifier: string, password: string): Promise<AuthSession>;
-  signUp(
-    name: string,
-    username: string,
-    email: string,
-    password: string,
-  ): Promise<AuthSession>;
-  signOut(): Promise<void>;
-  requestPasswordReset(email: string, redirectTo: string): Promise<void>;
-  resetPassword(newPassword: string, token: string): Promise<void>;
-}
+const { data, error } = await client.getSession();
+await client.signIn.email({ email, password });
+await client.signIn.username({ username, password });
+await client.signUp.email({ name, username, email, password });
+await client.signOut();
+await client.requestPasswordReset({ email, redirectTo });
+await client.resetPassword({ newPassword, token });
 ```
 
-所有 HTTP 请求通过 `ApiClient` 发送到 `auth/*`；身份变化后通过
-`RealtimeClient.reconnect()` 刷新 WebSocket 身份。
-
-### createAuthClient
-
-```ts
-function createAuthClient(options: AuthClientOptions): AuthClient;
-```
-
-### AuthClientOptions
-
-```ts
-interface AuthClientOptions {
-  api: ApiClient;
-  realtime: RealtimeClient;
-}
-```
-
-### 客户端 AuthSession
-
-```ts
-interface AuthSessionUser {
-  id: string;
-  name: string;
-  username?: string | null;
-  email: string;
-  image?: string | null;
-}
-
-interface AuthSession {
-  user: AuthSessionUser;
-  session: {
-    id: string;
-    expiresAt: string;
-  };
-}
-```
-
-客户端 `AuthSession` 与服务端同名类型来自不同入口，字段范围也不同。避免在同一
-文件中不加别名地同时导入两者。
+`username` API 需要配置 `usernameClient()`。请求默认返回 `{ data, error }`，传入 `{ throw: true }` 时直接返回数据或抛出错误。
 
 ### createAuthProvider
 
-```ts
-function createAuthProvider(client: AuthClient): AuthProvider;
-```
-
-返回 Refine `AuthProvider`，实现 login、register、forgotPassword、updatePassword、
-logout、check、getIdentity 和 onError。
+`createAuthProvider(client, realtime)` 返回 Refine `AuthProvider`，实现 login、register、forgotPassword、updatePassword、logout、check、getIdentity 和 onError。`realtime` 提供 `reconnect()`，用于刷新身份变化后的连接。
 
 ## 客户端插件入口
 
 - `@nocobase/app-plugin-authentication/client` 默认导出 Client plugin factory，
   其 ServiceProvider 在 `boot()` 中注册 Refine `authProvider`；
-- `@nocobase/app-plugin-authentication/client/routes` 默认导出登录、注册、忘记密码和
-  重置密码的 guest 路由定义；
-- `@nocobase/app-plugin-authentication/client/route-contracts` 导出稳定的
-  `AUTHENTICATION_ROUTE_IDS`，应用或 Registry 用它声明 component override；
 - `@nocobase/app-plugin-authentication/client/actions` 导出密码登录、注册、请求重置和
   完成重置的 headless hooks；
-- `@nocobase/app-plugin-authentication/client/ui` 仅导出用于应用内 SPA 导航的
-  `AuthLink`。密码表单由 `auth-ui` Registry 拥有；需要自行实现表单时使用
-  `@nocobase/app-plugin-authentication/client/actions` 的 headless hooks。
+- 密码表单和页面由 UI Library Registry 拥有；需要自行实现表单时使用
+  `@nocobase/app-plugin-authentication/client/actions` 的 headless hooks。页面之间的
+  链接由应用自己的路由和页面源码负责。
 
-具体 fallback 页面通过路由的 `componentLoader` 按需加载，不从公开入口导出。默认
-表单直接持有按需生成的 shadcn 基础组件源码；品牌、营销区域和最终页面组合由宿主
-Registry 源码负责。
+插件不声明客户端路由。应用在自己的 `client/routes.ts` 中声明 `/login`、`/register`、
+`/forgot-password` 和 `/reset-password` 四条 `auth: 'guest'` 路由；页面组件通过
+`componentLoader` 按需加载，品牌、表单和最终页面组合由应用的 Registry 源码负责。

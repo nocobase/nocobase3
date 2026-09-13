@@ -161,6 +161,7 @@
     "zod": "^3"
   },
   "devDependencies": {
+    "@nocobase/db-sqlite": "workspace:*",
     "@base-ui/react": "catalog:",
     "@langchain/openai": "1.4.7",
     "@nocobase/dev-config": "workspace:*",

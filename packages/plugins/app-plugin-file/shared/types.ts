@@ -6,7 +6,8 @@ export interface FileRecord {
   filename: string;
   ext: string;
   mimeType: string;
-  size: number;
+  /** BIGINT-backed collections return an exact string; integer-backed ones return a number. */
+  size: string | number;
   createdAt: Date | string;
   updatedAt: Date | string;
   /** Present when the selected record includes id and ext. Never persisted. */

@@ -504,7 +504,7 @@ export function WorkflowCanvas({
               pannable
               zoomable
             />
-            <Controls />
+            <Controls showInteractive={false} />
           </ReactFlow>
           {viewportReady ? null : (
             <div className='workflow-canvas-loading'>{t('canvas.fitting')}</div>

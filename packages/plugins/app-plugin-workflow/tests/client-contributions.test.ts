@@ -37,14 +37,10 @@ describe('workflow client contributions', () => {
           path: '/workflows',
           navigation: { title: 'nav.workflows' },
         },
-        {
-          name: 'workflow-runs',
-          path: '/workflow-runs',
-          navigation: { title: 'nav.runs' },
-        },
       ],
     });
     expect(settings?.routes[0]).toHaveProperty('navigation.icon');
+    expect(settings?.routes[0].children?.[0]).toHaveProperty('navigation.icon');
     expect(appRoutes?.routes.map(({ name, path }) => ({ name, path }))).toEqual(
       [
         {

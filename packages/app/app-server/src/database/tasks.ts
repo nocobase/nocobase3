@@ -1,7 +1,10 @@
-import type { DatabaseManager } from '@nocobase/db';
+import type { DatabaseDriverRegistration, DatabaseManager } from '@nocobase/db';
 
 import type { ConfigPaths } from '../config/index.js';
-import { createAppDatabaseManager } from './manager.js';
+import {
+  createAppDatabaseManager,
+  resolveAppDatabaseDriver,
+} from './manager.js';
 import { createAppMigrator, type AppMigrationRunResult } from './migrator.js';
 import { createAppSeeder, type AppSeedRunResult } from './seeder.js';
 import { prepareAppDatabaseStorage } from './storage.js';
@@ -9,7 +12,7 @@ import {
   planAppDatabaseTasks,
   type AppDatabaseTask,
   type AppDatabaseTaskKind,
-  type AppDatabaseTaskSelection,
+  type AppDatabaseTaskPlanOptions,
 } from './plan.js';
 import type { AppDatabaseConfig } from './types.js';
 
@@ -22,6 +25,7 @@ export interface AppDatabaseTaskResult {
   batch?: number;
   executed?: string[];
   skipped?: string[];
+  fresh?: boolean;
 }
 
 export interface AppDatabaseTasksResult {
@@ -44,13 +48,22 @@ export class AppDatabaseTaskError extends Error {
   }
 }
 
+export interface AppDatabasePlanExecutionOptions {
+  readonly paths?: ConfigPaths;
+  readonly drivers?: Record<string, DatabaseDriverRegistration>;
+  readonly fresh?: boolean;
+}
+
 /** Manual commands and startup share the same resolved, connection-bound plan. */
 export async function executeAppDatabasePlan(
   database: DatabaseManager,
   config: AppDatabaseConfig,
-  paths: ConfigPaths | undefined,
   plan: readonly AppDatabaseTask[],
+  { paths, drivers, fresh = false }: AppDatabasePlanExecutionOptions = {},
 ): Promise<AppDatabaseTasksResult> {
+  if (fresh && plan.some((task) => task.kind !== 'migrations')) {
+    throw new Error('--fresh is only supported for migrations.');
+  }
   const result: AppDatabaseTasksResult = {
     ok: true,
     status: 'completed',
@@ -67,7 +80,12 @@ export async function executeAppDatabasePlan(
       continue;
     }
     try {
-      await prepareAppDatabaseStorage(config, paths, [task.connection]);
+      await prepareAppDatabaseStorage(
+        config,
+        paths,
+        [task.connection],
+        drivers,
+      );
       const options = {
         database,
         connection: task.connection,
@@ -76,9 +94,15 @@ export async function executeAppDatabasePlan(
       };
       const completed =
         task.kind === 'migrations'
-          ? await createAppMigrator(options).latest()
+          ? await (fresh
+              ? createAppMigrator(options).fresh()
+              : createAppMigrator(options).latest())
           : await createAppSeeder(options).run();
-      result.results.push({ ...identity, ...completed });
+      result.results.push({
+        ...identity,
+        ...completed,
+        ...(fresh ? { fresh: true } : {}),
+      });
     } catch (error) {
       result.ok = false;
       result.status = 'failed';
@@ -101,17 +125,51 @@ export async function executeAppDatabasePlan(
   return result;
 }
 
+export interface AppDatabaseTaskRunOptions extends AppDatabaseTaskPlanOptions {
+  readonly kind: AppDatabaseTaskKind;
+}
+
 export async function runAppDatabaseTasks(
   config: AppDatabaseConfig,
-  paths: ConfigPaths | undefined,
-  selection: AppDatabaseTaskSelection & { kind: AppDatabaseTaskKind },
+  options: AppDatabaseTaskRunOptions,
 ): Promise<AppDatabaseTasksResult> {
-  const plan = planAppDatabaseTasks(config, paths, [selection.kind], selection);
+  const { paths, drivers } = options;
+  if (options.fresh && options.kind !== 'migrations') {
+    throw new Error('--fresh is only supported for migrations.');
+  }
+  const plan = planAppDatabaseTasks(config, [options.kind], options);
   if (!plan.length) return { ok: true, status: 'not-configured', results: [] };
-  const database = createAppDatabaseManager(config, paths);
+  if (options.fresh) {
+    for (const task of plan) {
+      if (task.skipReason) continue;
+      const connection = config.connections[task.connection];
+      const driver =
+        connection?.databaseDriver ??
+        resolveAppDatabaseDriver(connection?.dialect ?? '', {
+          ...config.drivers,
+          ...drivers,
+        });
+      if (!driver?.resetManagedSchema) {
+        throw new Error(
+          `Database driver for connection "${task.connection}" does not support managed schema reset.`,
+        );
+      }
+    }
+    if (options.confirmFresh && !(await options.confirmFresh(plan))) {
+      throw new Error('Fresh migration cancelled.');
+    }
+  }
+  const database = createAppDatabaseManager(config, paths, {
+    ...config.drivers,
+    ...drivers,
+  });
   if (!database) return { ok: true, status: 'not-configured', results: [] };
   try {
-    return await executeAppDatabasePlan(database, config, paths, plan);
+    return await executeAppDatabasePlan(database, config, plan, {
+      paths,
+      drivers,
+      fresh: options.fresh,
+    });
   } finally {
     await database.destroy();
   }
@@ -119,9 +177,10 @@ export async function runAppDatabaseTasks(
 
 export async function runAppMigrations(
   config: AppDatabaseConfig,
-  paths?: ConfigPaths,
+  options: Omit<AppDatabaseTaskRunOptions, 'kind'>,
 ): Promise<AppMigrationRunResult | undefined> {
-  const result = await runAppDatabaseTasks(config, paths, {
+  const result = await runAppDatabaseTasks(config, {
+    ...options,
     kind: 'migrations',
   });
   const first = result.results[0];
@@ -138,9 +197,12 @@ export async function runAppMigrations(
 
 export async function runAppSeeds(
   config: AppDatabaseConfig,
-  paths?: ConfigPaths,
+  options: Omit<AppDatabaseTaskRunOptions, 'kind'>,
 ): Promise<AppSeedRunResult | undefined> {
-  const result = await runAppDatabaseTasks(config, paths, { kind: 'seeds' });
+  const result = await runAppDatabaseTasks(config, {
+    ...options,
+    kind: 'seeds',
+  });
   const first = result.results[0];
   return (
     first && {

@@ -71,6 +71,14 @@ export default workflow;
 
 顶层没有 `trigger`、`start`、节点 Map 或边列表。业务事件从定义外部调用 Service API。
 
+当前运行时支持在顶层 `options` 中设置工作流整体超时：
+
+```ts
+options: { timeout: 30 }, // 单位：秒
+```
+
+Run 节点上的 `options.timeout` 目前不会被运行时作为独立的节点计时器执行。
+
 ## 定义每次运行的输入
 
 `inputSchema` 根必须是对象。当前支持常见 JSON Schema 子集：

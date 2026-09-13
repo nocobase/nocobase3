@@ -16,8 +16,10 @@ function _acceptsFilter(f: FilterBuilder<Row>): FilterNode {
   f.number('amount').gte(f.variable('$minimum'));
   f.date('createdAt').between([new Date(), f.variable('$end')]);
   f.json('payload').hasEvery([1, true, null, '1']);
-  // @ts-expect-error Numeric comparisons do not accept string literals.
+  // BIGINT and DECIMAL accept exact strings; runtime validates the field type.
   f.number('amount').gt('1');
+  // @ts-expect-error Numeric comparisons do not accept boolean literals.
+  f.number('amount').gt(true);
   // @ts-expect-error Text patterns require textual operands.
   f.string('code').includes(1);
   // @ts-expect-error Only supported comparison modes are accepted.

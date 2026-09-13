@@ -1,3 +1,4 @@
+import sqlite from '@nocobase/db-sqlite';
 import {
   mkdtemp,
   mkdir,
@@ -39,6 +40,7 @@ describe('@nocobase/app-plugin-hub service', () => {
   beforeEach(async () => {
     rootDir = await mkdtemp(path.join(os.tmpdir(), 'nocobase-hub-test-'));
     database = createDatabaseManager({
+      drivers: { sqlite },
       default: 'main',
       metadataStore: new InMemoryCollectionMetadataStore(),
       connections: { main: { dialect: 'sqlite', filename: ':memory:' } },

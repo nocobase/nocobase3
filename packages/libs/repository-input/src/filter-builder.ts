@@ -198,27 +198,27 @@ class StringOperators extends BaseOperators implements StringFilterOperators {
 }
 
 class NumberOperators extends BaseOperators implements NumberFilterOperators {
-  eq(value: FilterOperand<number | null>): FilterConditionNode {
+  eq(value: FilterOperand<number | string | null>): FilterConditionNode {
     return condition(this.path, this.group, '$eq', value);
   }
 
-  ne(value: FilterOperand<number | null>): FilterConditionNode {
+  ne(value: FilterOperand<number | string | null>): FilterConditionNode {
     return condition(this.path, this.group, '$ne', value);
   }
 
-  gt(value: FilterOperand<number>): FilterConditionNode {
+  gt(value: FilterOperand<number | string>): FilterConditionNode {
     return condition(this.path, this.group, '$gt', value);
   }
 
-  gte(value: FilterOperand<number>): FilterConditionNode {
+  gte(value: FilterOperand<number | string>): FilterConditionNode {
     return condition(this.path, this.group, '$gte', value);
   }
 
-  lt(value: FilterOperand<number>): FilterConditionNode {
+  lt(value: FilterOperand<number | string>): FilterConditionNode {
     return condition(this.path, this.group, '$lt', value);
   }
 
-  lte(value: FilterOperand<number>): FilterConditionNode {
+  lte(value: FilterOperand<number | string>): FilterConditionNode {
     return condition(this.path, this.group, '$lte', value);
   }
 }

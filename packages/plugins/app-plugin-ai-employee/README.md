@@ -11,7 +11,7 @@ helpers. The dependency is one-way; the core package does not import this plugin
 
 ## Plugin entries
 
-- `server/plugin.ts` is the only server runtime entry and contributes the `ai` application-config schema, provider lifecycle, routes, and migration location.
+- `server/plugin.ts` is the only server runtime entry and contributes provider lifecycle, routes, and migration location.
 - `server/provider/ai-employee.ts` registers App-container-scoped repository and service factories, initializes package resources before the application's external `ai/` directory, and synchronizes `ai.llmServices` on configuration reload.
 - `server/route/index.ts` creates the authenticated `/api/ai` child router. Routes parse HTTP input and map responses while domain behavior is delegated to factory-owned services.
 - `database/collections` defines the AI Employee collection layout, and
@@ -19,7 +19,7 @@ helpers. The dependency is one-way; the core package does not import this plugin
 
 ## LLM service configuration
 
-Declare LLM services only in the application's `config.yml`:
+Declare LLM service defaults in `server/config/ai.ts` and deployment overrides in `config.yml`:
 
 ```yaml
 ai:

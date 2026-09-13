@@ -8,11 +8,37 @@ import { Label } from '@/components/ui/label';
 
 import { FormStatus } from '../components/form-status';
 
-export function PasswordLoginForm(): ReactElement {
+export interface PasswordLoginAction {
+  readonly error?: { readonly message: string };
+  readonly isPending: boolean;
+  readonly submit: (input: {
+    readonly identifier: string;
+    readonly password: string;
+  }) => Promise<void>;
+}
+
+export interface PasswordLoginFormProps {
+  readonly action?: PasswordLoginAction;
+  readonly className?: string;
+  readonly identifierLabel?: string;
+  readonly passwordLabel?: string;
+  readonly submitLabel?: string;
+  readonly pendingLabel?: string;
+}
+
+export function PasswordLoginForm({
+  action: actionOverride,
+  className,
+  identifierLabel = 'Username or email',
+  passwordLabel = 'Password',
+  submitLabel = 'Sign in',
+  pendingLabel = 'Signing in…',
+}: PasswordLoginFormProps = {}): ReactElement {
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
-  const action = usePasswordLogin();
+  const defaultAction = usePasswordLogin();
+  const action = actionOverride ?? defaultAction;
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
@@ -20,9 +46,9 @@ export function PasswordLoginForm(): ReactElement {
   };
 
   return (
-    <form className='space-y-5' onSubmit={handleSubmit}>
+    <form className={className ?? 'space-y-5'} onSubmit={handleSubmit}>
       <div className='space-y-2'>
-        <Label htmlFor='identifier'>Username or email</Label>
+        <Label htmlFor='identifier'>{identifierLabel}</Label>
         <Input
           id='identifier'
           autoComplete='username'
@@ -33,7 +59,7 @@ export function PasswordLoginForm(): ReactElement {
         />
       </div>
       <div className='space-y-2'>
-        <Label htmlFor='password'>Password</Label>
+        <Label htmlFor='password'>{passwordLabel}</Label>
         <div className='relative'>
           <Input
             id='password'
@@ -63,8 +89,24 @@ export function PasswordLoginForm(): ReactElement {
         <FormStatus type='error'>{action.error.message}</FormStatus>
       ) : null}
       <Button className='w-full' disabled={action.isPending} type='submit'>
-        {action.isPending ? 'Signing in…' : 'Sign in'}
+        {action.isPending ? pendingLabel : submitLabel}
       </Button>
+      <div className='pt-3 text-sm'>
+        <nav className='flex items-center justify-between text-muted-foreground'>
+          <a
+            className='hover:text-foreground hover:underline'
+            href='forgot-password'
+          >
+            Forgot password?
+          </a>
+          <a
+            className='font-semibold text-foreground underline underline-offset-4'
+            href='register'
+          >
+            Sign up
+          </a>
+        </nav>
+      </div>
     </form>
   );
 }

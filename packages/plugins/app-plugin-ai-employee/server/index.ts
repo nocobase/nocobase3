@@ -1,4 +1,3 @@
-export { aiEmployeeConfig } from './config.js';
 export type {
   AIApplicationConfig,
   AIEmployeeConfig,
@@ -19,7 +18,6 @@ export {
 export type { LLMServiceSyncSummary } from './manager/llm-service-config.js';
 export { AIEmployeeProvider } from './provider/index.js';
 export {
-  aiConfig,
   normalizeDisks,
   resolveAIEmployeeStorageDisk,
   resolveAIKnowledgeBaseStorageDisks,

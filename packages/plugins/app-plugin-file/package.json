@@ -65,6 +65,7 @@
     "prepack": "pnpm registry:build && pnpm build"
   },
   "devDependencies": {
+    "@nocobase/db-sqlite": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@types/node": "catalog:",
     "eslint": "catalog:",
