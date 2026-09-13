@@ -4,7 +4,8 @@ const enUS = {
   nav: {
     automation: 'Automation',
     workflows: 'Workflows',
-    runs: 'Workflow runs',
+    flow: 'Flows',
+    runs: 'Execution records',
   },
   common: {
     cancel: 'Cancel',
@@ -40,6 +41,7 @@ const enUS = {
     enableWorkflow: 'Enable {{title}}',
     disableWorkflow: 'Disable {{title}}',
     enableNewVersion: 'Enable new version',
+    enableThisVersion: 'Enable this version',
     parameterSettings: 'Parameter settings',
     runManually: 'Run manually',
   },
@@ -49,6 +51,20 @@ const enUS = {
     workflowStatus: 'Filter workflow status',
     runStatus: 'Filter run status',
     allStatuses: 'All statuses',
+  },
+  tables: {
+    workflow: 'Workflow',
+    runCount: 'Runs',
+    status: 'Status',
+    actions: 'Actions',
+    triggeredAt: 'Triggered at',
+    duration: 'Duration',
+  },
+  pagination: {
+    label: 'List pagination',
+    page: 'Page {{page}} of {{total}}',
+    previous: 'Previous',
+    next: 'Next',
   },
   workflows: {
     title: 'Workflows',
@@ -60,6 +76,7 @@ const enUS = {
     noNodeDescription: 'No node description provided.',
     version: 'Version',
     newVersionAvailable: 'New version available',
+    inactiveVersion: 'Not the running version',
     runFailed: 'Unable to run workflow',
     parametersMissingIdentifier:
       'Workflow has no identifier for editing parameters.',

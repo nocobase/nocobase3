@@ -118,7 +118,7 @@ they are not additional package-root service exports.
 | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
 | `list()`                             | Current definitions with their actual enabled/version/hash state; a newer deployed Artifact is reported separately as `pendingArtifact` |
 | `getWorkflow(id)`                    | One definition and its materialized nodes/input/input settings; a current definition may include `pendingArtifact`                      |
-| `revisions(id)`                      | All revisions sharing the selected definition's key                                                                                     |
+| `revisions(id)`                      | All revisions sharing the selected definition's key, newest first, including a deployed Artifact that has no row yet (null id/version)  |
 | `enable(idOrArtifactHash)`           | Enable a synchronized definition by id or publish/enable an unsynchronized Artifact by hash                                             |
 | `disable(id)`                        | Disable the current definition                                                                                                          |
 | `setStatus(id, enabled)`             | Change enabled state on a current definition                                                                                            |
@@ -138,6 +138,7 @@ Input override updates accept only declared scalar values with exact types and e
 Read before writing. A synchronized item has a database `id`; an unsynchronized
 Artifact has no id and is identified by its deployed `hash`.
 
+- Read an unsynchronized Artifact with `getWorkflow(hash)` or `GET /api/workflows/<hash>`, and find its hash in `pendingArtifact` or in `revisions(id)`. Reading it materializes nothing, so a candidate revision can be inspected without being enabled.
 - For an unsynchronized Artifact, call `enable(hash)` or `POST /api/workflows/<hash>/enable`.
 - For a synchronized workflow, call `enable(id)` or `POST /api/workflows/<id>/enable`.
 - Enabling a revision atomically makes it the current revision and enables it; the previous current revision is no longer current or enabled.

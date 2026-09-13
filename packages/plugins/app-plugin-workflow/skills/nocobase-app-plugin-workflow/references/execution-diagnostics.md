@@ -68,7 +68,7 @@ For `STARTED`:
 
 - Check latest node status and timestamps.
 - `PENDING` may be valid for a branching/resumable instruction; `run` itself never intentionally stays pending.
-- Compare node `options.timeout`, workflow timeout/reaper behavior, abort signal handling, and external I/O.
+- Compare workflow timeout/reaper behavior, abort signal handling, and external I/O.
 - Look for a crashed worker leaving stale started state and timeout-reaper recovery evidence.
 
 For `FAILED` or `ERROR`:

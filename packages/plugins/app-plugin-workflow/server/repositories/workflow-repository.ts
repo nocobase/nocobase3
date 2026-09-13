@@ -362,7 +362,10 @@ export class WorkflowRepository {
       );
       if (!artifact)
         throw new BadRequestError(`Workflow ${String(id)} was not found.`);
-      return toDiscoveredWorkflowDefinition(artifact);
+      return {
+        ...toDiscoveredWorkflowDefinition(artifact),
+        executed: await this.getExecutedCount(artifact.key),
+      };
     }
     const view: WorkflowDefinitionView = {
       ...toWorkflowDefinitionView(workflow),
@@ -383,15 +386,39 @@ export class WorkflowRepository {
     return view;
   }
 
+  /**
+   * Every revision of the selected definition's key, newest first, including a
+   * deployed Artifact that has no row yet.
+   *
+   * A deployed Artifact is only materialized into a revision row when something
+   * enables or runs it, so listing rows alone leaves the candidate revision
+   * unreachable until it has been activated -- and activating it is exactly
+   * what someone who wants to read it first is trying to avoid. It is returned
+   * with a null id and a null version, addressed by its Artifact hash, which
+   * `get` already resolves without writing anything.
+   */
   async revisions(id: WorkflowId): Promise<WorkflowDefinitionView[]> {
     const workflow = await this.get(id);
     const rows = await this.store.workflows.findMany({
       filter: { key: workflow.key },
       sort: (sort) => sort.field('id').desc(),
-      select: (select) => select.fields('id'),
+      select: (select) => select.fields('id', 'hash'),
     });
-    const result: WorkflowDefinitionView[] =
-      workflow.id === null ? [workflow] : [];
+    const materialized = new Set(
+      rows.map((row) => (row.hash == null ? '' : String(row.hash))),
+    );
+    const result: WorkflowDefinitionView[] = (
+      await this.service.discoverArtifacts()
+    )
+      .filter(
+        (artifact) =>
+          artifact.key === workflow.key && !materialized.has(artifact.digest),
+      )
+      .map((artifact) => ({
+        ...toDiscoveredWorkflowDefinition(artifact),
+        executed: workflow.executed,
+        latestRun: workflow.latestRun,
+      }));
     for (const row of rows) {
       const revision = await loadWorkflow(this.store, asWorkflowId(row.id));
       if (revision)
