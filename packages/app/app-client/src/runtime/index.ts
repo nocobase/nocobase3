@@ -1,10 +1,16 @@
-import type { AppConfigFactory, AppClientConfigMap } from '../config.js';
-import type { I18nRuntime } from '@nocobase/i18n';
+import { resolveSupportedLocale, type I18nRuntime } from '@nocobase/i18n';
 
 import type { ClientApplication } from '../application.js';
-import type { AppClientConfig, AppClientConfigFactory } from '../config.js';
+import type {
+  AppClientConfig,
+  AppClientConfigFactory,
+  AppConfigFactory,
+  AppClientConfigMap,
+} from '../config.js';
 import {
   createAppI18nRuntime,
+  DEFAULT_LOCALE,
+  readStoredLocale,
   type AppClientLocaleContribution,
 } from '../i18n.js';
 import {
@@ -43,9 +49,7 @@ export type AppRuntimeValidator = (
 
 export interface AppRuntimeDefinition {
   readonly packageName: string;
-  readonly createAppConfig?: AppClientConfigFactory;
-  /** @deprecated Use createAppConfig. */
-  readonly config?: AppClientConfigFactory;
+  readonly createAppConfig: AppClientConfigFactory;
   readonly defaultConfigs?: AppConfigFactory<AppClientConfigMap>;
   readonly serviceProviders?: AppClientServiceProviders;
   readonly reactProviders?: AppClientReactProviders;
@@ -104,12 +108,7 @@ export async function resolveAppRuntime(
   definition: AppRuntimeDefinition,
   options: ResolveAppRuntimeOptions = {},
 ): Promise<ResolvedAppRuntime> {
-  const createAppConfig = definition.createAppConfig ?? definition.config;
-  if (!createAppConfig)
-    throw new Error(
-      `App runtime '${definition.packageName}' must define createAppConfig`,
-    );
-  const config = await createAppConfig({
+  const config = await definition.createAppConfig({
     rawConfig:
       options.rawConfig === undefined
         ? readAppClientRuntimeConfig()
@@ -126,8 +125,31 @@ export async function resolveAppRuntime(
     applicationContribution,
     ...pluginContributions,
   ]);
+  const localeContributions = collectLocaleContributions(definition);
+  const applicationLocales = localeContributions
+    .filter(({ source }) => source === 'application')
+    .flatMap(({ locales }) =>
+      Object.keys('default' in locales ? locales.default : locales),
+    );
+  const configuredLocale = config.get<unknown>('i18n.defaultLocale');
+  const defaultLocale =
+    (typeof configuredLocale === 'string'
+      ? resolveSupportedLocale(configuredLocale, [
+          DEFAULT_LOCALE,
+          ...applicationLocales,
+        ])
+      : undefined) ?? DEFAULT_LOCALE;
+  const supportedLocales = [...applicationLocales, defaultLocale];
+  const storedLocale = readStoredLocale();
+  const initialLocale =
+    (storedLocale === undefined
+      ? undefined
+      : resolveSupportedLocale(storedLocale, supportedLocales)) ??
+    defaultLocale;
   const i18n = await createAppI18nRuntime({
-    contributions: collectLocaleContributions(definition),
+    contributions: localeContributions,
+    defaultLocale,
+    initialLocale,
   });
   const extensionOverrides = collectSourceExtensionRouteOverrides(
     definition.sourceExtensions ?? [],

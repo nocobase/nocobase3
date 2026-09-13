@@ -10,10 +10,11 @@ import routes from './routes/index.js';
 
 const appRuntime: AppRuntimeDefinition = defineAppRuntime({
   createAppConfig,
-  config: createAppConfig,
   plugins,
   serviceProviders,
   routes,
+  // The application's own server locale files, which are what decides the languages the server offers.
+  locales: () => import('./locales/index.js'),
 });
 
 export default appRuntime;

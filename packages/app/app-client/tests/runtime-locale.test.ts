@@ -7,7 +7,7 @@ import { defineAppRuntime, resolveAppRuntime } from '../src/runtime/index.js';
 
 const definition = defineAppRuntime({
   packageName: '@example/app',
-  config: createAppClientConfig,
+  createAppConfig: createAppClientConfig,
   plugins: defineClientPlugins([]),
   locales: {
     'en-US': async () => ({ greeting: 'Hello' }),

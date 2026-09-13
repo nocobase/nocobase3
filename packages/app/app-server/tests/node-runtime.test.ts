@@ -140,7 +140,7 @@ function createStandaloneDefinition(
 
 function createDefinition(_publicBasePath: string): AppRuntimeDefinition {
   return defineAppRuntime({
-    config: async (context) => {
+    createAppConfig: (context) => {
       const config = new AppConfig();
       config.load(
         objectProvider({
