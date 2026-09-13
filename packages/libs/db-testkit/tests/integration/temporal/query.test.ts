@@ -74,6 +74,52 @@ describeIntegrationDatabases('Temporal query values', (context) => {
     });
   });
 
+  it('preserves null temporal values through Query mutations', async () => {
+    await createCollection('temporalQueryNulls');
+
+    await expect(
+      context.database
+        .query()
+        .insertInto('temporalQueryNulls')
+        .values({
+          id: 'nulls',
+          day: null,
+          clock: null,
+          local: null,
+          instant: null,
+        })
+        .execute(),
+    ).resolves.toMatchObject({ insertedCount: 1 });
+
+    await expect(
+      context.database
+        .query()
+        .updateTable('temporalQueryNulls')
+        .set({
+          day: null,
+          clock: null,
+          local: null,
+          instant: null,
+        })
+        .where('id', '=', 'nulls')
+        .execute(),
+    ).resolves.toEqual({ updatedCount: 1 });
+
+    await expect(
+      context.database
+        .query()
+        .selectFrom('temporalQueryNulls')
+        .select(['day', 'clock', 'local', 'instant'])
+        .where('id', '=', 'nulls')
+        .executeTakeFirst(),
+    ).resolves.toEqual({
+      day: null,
+      clock: null,
+      local: null,
+      instant: null,
+    });
+  });
+
   it('accepts local Date values for date, time, and datetime mutations', async () => {
     await createCollection('temporalQueryLocalDates');
     const created = new Date(2026, 8, 6, 9, 30, 0, 120);

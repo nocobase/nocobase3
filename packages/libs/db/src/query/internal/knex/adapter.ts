@@ -2948,6 +2948,7 @@ function encodeQueryTemporal(
   field: FieldDefinition,
   value: unknown,
 ): unknown {
+  if (value === null) return null;
   const temporalBinding =
     getDatabaseDriverRuntime(client)?.repository?.temporalBinding;
   if (!(value instanceof Date)) {
