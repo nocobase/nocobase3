@@ -1,0 +1,27 @@
+[
+  {
+    "type": "file",
+    "name": "index",
+    "label": "概览"
+  },
+  {
+    "type": "dir",
+    "name": "quick-start",
+    "label": "开始使用"
+  },
+  {
+    "type": "dir",
+    "name": "llm",
+    "label": "模型服务"
+  },
+  {
+    "type": "dir",
+    "name": "agent-development",
+    "label": "Agent 开发"
+  },
+  {
+    "type": "dir",
+    "name": "management",
+    "label": "员工管理"
+  }
+]

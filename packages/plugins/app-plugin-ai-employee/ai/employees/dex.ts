@@ -10,6 +10,7 @@
 import { defineAIEmployee } from '@nocobase/ai-employee';
 
 export default defineAIEmployee({
+  sort: 10,
   username: 'dex',
   description:
     'AI employee for extract and structure data from text, and can fill forms automatically.',

@@ -168,12 +168,15 @@ export class BaseCollectionRepository<
     const normalized: Record<string, unknown> = { ...value };
     if (this.table === 'aiConversations' && normalized.sessionId == null)
       normalized.sessionId = randomUUID();
-    if (
-      ['aiMessages', 'aiToolMessages'].includes(this.table) &&
-      normalized[this.table === 'aiMessages' ? 'messageId' : 'id'] == null
-    )
-      normalized[this.table === 'aiMessages' ? 'messageId' : 'id'] =
-        this.generateId();
+    const generatedIdField =
+      this.table === 'aiMessages'
+        ? 'messageId'
+        : ['aiToolMessages', 'aiUsageEvents'].includes(this.table)
+          ? 'id'
+          : undefined;
+    if (generatedIdField && normalized[generatedIdField] == null) {
+      normalized[generatedIdField] = this.generateId();
+    }
     if (
       this.table !== 'aiUsageEvents' &&
       !this.table.startsWith('lcCheckpoint')

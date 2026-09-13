@@ -90,7 +90,7 @@ describe('AI Employee application client transport', () => {
         name: 'deepseek',
         provider: 'deepseek',
         enabled: true,
-        enabledModels: { mode: 'recommended', models: [] },
+        enabledModels: { mode: 'provider', models: [] },
       })
       .mockResolvedValueOnce([]);
 

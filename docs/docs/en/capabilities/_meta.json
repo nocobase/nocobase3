@@ -45,8 +45,13 @@
     "label": "Themes"
   },
   {
-    "type": "file",
+    "type": "dir",
     "name": "ai-employee",
-    "label": "AI employees and knowledge base"
+    "label": "AI employees"
+  },
+  {
+    "type": "dir",
+    "name": "ai-knowledge-base",
+    "label": "AI knowledge base"
   }
 ]

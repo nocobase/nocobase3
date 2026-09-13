@@ -1,0 +1,5 @@
+[
+  { "type": "file", "name": "index", "label": "管理入口" },
+  { "type": "file", "name": "employees", "label": "员工配置项" },
+  { "type": "file", "name": "permissions", "label": "可见性和权限" }
+]

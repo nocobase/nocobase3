@@ -10,6 +10,7 @@
 import { defineAIEmployee } from '@nocobase/ai-employee';
 
 export default defineAIEmployee({
+  sort: 50,
   username: 'viz',
   description: 'AI employee for data insights',
   avatar: 'nocobase-010-male',

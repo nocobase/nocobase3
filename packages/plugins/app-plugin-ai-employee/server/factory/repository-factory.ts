@@ -18,7 +18,6 @@ import type {
   AISettingsRepository,
   AIToolMessageEntity,
   AIToolMessageRepository,
-  AIUsageEventEntity,
   AIUsageEventRepository,
   LCCheckpointBlobEntity,
   LCCheckpointBlobRepository,
@@ -39,6 +38,7 @@ import type {
 } from '@nocobase/ai-employee';
 import type { DatabaseRepositoryFactory } from '../repository/runtime-factory.js';
 import { DatabaseAIEmployeeRepository } from '../repository/database/ai-employee.js';
+import { DatabaseAIUsageEventRepository } from '../repository/database/ai-usage-event.js';
 import { BaseCollectionRepository } from '../repository/database/base-collection-repository.js';
 
 const JSON_FIELDS: Readonly<Record<string, ReadonlySet<string>>> = {
@@ -150,7 +150,16 @@ export class RepositoryFactory implements DatabaseRepositoryFactory {
   }
 
   public get aiUsageEvents(): AIUsageEventRepository {
-    return this.collectionRepository<AIUsageEventEntity>('aiUsageEvents');
+    const name = 'aiUsageEvents';
+    let repository = this.records.get(name);
+    if (!(repository instanceof DatabaseAIUsageEventRepository)) {
+      repository = new DatabaseAIUsageEventRepository(
+        this.connection,
+        this.generateId,
+      );
+      this.records.set(name, repository);
+    }
+    return repository as unknown as DatabaseAIUsageEventRepository;
   }
 
   public get lcCheckpoints(): LCCheckpointRepository {
