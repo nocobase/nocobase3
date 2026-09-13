@@ -526,7 +526,7 @@ describe('DefaultRepository.withPolicy', () => {
           relations: {
             tasks: {
               scope: { tenantId: 'T1' },
-              fields: ['id'],
+              fields: ['id', 'status'],
               relations: {},
             },
           },
@@ -579,6 +579,91 @@ describe('DefaultRepository.withPolicy', () => {
         items: [expect.objectContaining({ path: ['tenantId'], value: 'T1' })],
       }),
     ]);
+  });
+
+  it('rejects relation filters outside the relation field allowlist', async () => {
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {
+        get: async (name: string) =>
+          name === 'projects'
+            ? {
+                name,
+                fields: [
+                  { name: 'id', type: 'string' },
+                  {
+                    name: 'tasks',
+                    type: 'hasMany',
+                    target: 'tasks',
+                    foreignKey: 'projectId',
+                  },
+                ],
+              }
+            : {
+                name,
+                fields: [
+                  { name: 'id', type: 'string' },
+                  { name: 'secret', type: 'string' },
+                ],
+              },
+      },
+      adapter: {
+        assertReadable: () => undefined,
+        findMany: async () => [],
+      } as never,
+    });
+
+    await expect(
+      repository
+        .withPolicy({
+          read: {
+            scope: true,
+            fields: ['id'],
+            relations: {
+              tasks: { scope: true, fields: ['id'], relations: {} },
+            },
+          },
+          create: { scope: true },
+          update: { scope: true },
+          delete: { scope: true },
+        })
+        .findMany({
+          select: {
+            kind: 'select',
+            version: 1,
+            root: {
+              kind: 'selection',
+              fields: ['id'],
+              includes: [
+                {
+                  kind: 'include',
+                  relation: 'tasks',
+                  filter: {
+                    kind: 'filter',
+                    version: 1,
+                    root: {
+                      kind: 'group',
+                      logic: 'and',
+                      items: [
+                        {
+                          kind: 'condition',
+                          path: ['secret'],
+                          operator: '$eq',
+                          value: 'hidden',
+                        },
+                      ],
+                    },
+                  },
+                  select: { kind: 'selection', fields: ['id'], includes: [] },
+                },
+              ],
+            },
+          },
+        }),
+    ).rejects.toMatchObject({
+      code: 'FIELD_READ_FORBIDDEN',
+      field: 'secret',
+    });
   });
 
   it('enforces create and update field allowlists', async () => {

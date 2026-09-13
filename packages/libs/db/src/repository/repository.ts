@@ -2734,6 +2734,9 @@ async function validateSelectInputWithRelations(
       node.filter,
       context,
     );
+    if (relationPolicy && !('kind' in relationPolicy)) {
+      assertPolicyFilterFields(target, filter, relationPolicy.fields);
+    }
     const policyScope =
       relationPolicy && !('kind' in relationPolicy)
         ? relationPolicy.scope === true
