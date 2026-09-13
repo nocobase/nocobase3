@@ -18,6 +18,7 @@ import {
   resolveMutationNode,
   resolveWriteShapeNode,
   rootReadContext,
+  scopeFieldNames,
   toWritePolicy,
   UNRESTRICTED_READ,
   type PolicyMutationOperation,
@@ -73,6 +74,7 @@ import { DefaultSortBuilder, sortExpressionToNode } from './sort-builder.js';
 import type {
   RepositoryCursorAxis,
   RepositoryExecutionAdapter,
+  RepositoryScopeCheck,
   RepositoryReadPlan,
 } from './internal/execution-adapter.js';
 import type {
@@ -632,6 +634,7 @@ export class DefaultRepository<
       values: mutation.values,
       relations: mutation.relations,
       select: selection.select,
+      scopeCheck: await this.scopeCheck(collection, 'create'),
     });
     return {
       record: pickSelection(
@@ -729,6 +732,7 @@ export class DefaultRepository<
         ? includeExecutionFields(collection, selection.fields)
         : undefined,
       select: selection?.select,
+      scopeCheck: await this.scopeCheck(collection, 'create'),
     });
     return selection
       ? {
@@ -792,6 +796,7 @@ export class DefaultRepository<
       ifVersion: options.ifVersion,
       relations: mutation.relations,
       select: selection.select,
+      scopeCheck: await this.scopeCheck(collection, 'update'),
     });
     if (result === 'multiple') multipleRecordsMatched(collection);
     if (result === 'conflict') versionConflict(collection);
@@ -831,13 +836,29 @@ export class DefaultRepository<
         ['writePolicy', 'update'],
       );
     }
-    const filter = await this.normalizeSingleMutationFilter(
+    // The Policy scope is deliberately kept out of this filter. An upsert
+    // locates its target by a unique key, and a scope merged in would leave a
+    // filter that is no longer one key, breaking the uniqueness judgement
+    // outright. Whether the caller may touch the target is asked separately,
+    // of the record that is actually there: see `updateScopeCheck`.
+    const filter = await this.normalizeFilterWithoutPolicy(
       collection,
       options.filter,
       options.context,
-      'update',
     );
+    if (!filter || filter.root.items.length === 0) {
+      invalid(
+        'INVALID_FILTER',
+        'Single mutations require a non-empty filter.',
+        {
+          collection: collection.name,
+          path: ['filter'],
+        },
+      );
+    }
     const by = uniqueSelectorFromFilter(collection, filter, ['filter']);
+    // A Policy that forbids the operation outright still refuses here.
+    resolveWriteShapeNode(this.options.policy, 'update', collection);
     const createValues = applyCreateDefaults(
       this.options.policy,
       evaluateValues(options.create),
@@ -929,6 +950,8 @@ export class DefaultRepository<
       updateRelations: updateMutation.relations,
       ifVersion: options.ifVersion,
       select: selection.select,
+      createScopeCheck: await this.scopeCheck(collection, 'create'),
+      updateScopeCheck: await this.scopeCheck(collection, 'update'),
     });
     if (result === 'conflict') versionConflict(collection);
     return {
@@ -1013,6 +1036,7 @@ export class DefaultRepository<
         ? includeExecutionFields(collection, selection.fields)
         : undefined,
       select: selection?.select,
+      scopeCheck: await this.scopeCheck(collection, 'update'),
     });
     return selection
       ? {
@@ -1175,6 +1199,31 @@ export class DefaultRepository<
       operation,
       collection.name,
     );
+  }
+
+  /**
+   * The post-write scope check for an operation, or undefined when the Policy
+   * puts no limit on where the record may land.
+   */
+  private async scopeCheck(
+    collection: CollectionDefinition,
+    operation: 'create' | 'update',
+  ): Promise<RepositoryScopeCheck | undefined> {
+    const node = resolveWriteShapeNode(
+      this.options.policy,
+      operation,
+      collection,
+    );
+    if (node === undefined || node === true || node.scope === true) {
+      return undefined;
+    }
+    const scope = await normalizeFilterWithRelations(
+      this.options.collections,
+      collection,
+      node.scope,
+      undefined,
+    );
+    return scope ? { scope, fields: scopeFieldNames(scope) } : undefined;
   }
 
   private async normalizeFilter<T extends object>(

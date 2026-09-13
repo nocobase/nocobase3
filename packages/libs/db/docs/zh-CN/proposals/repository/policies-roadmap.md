@@ -66,7 +66,26 @@ description: 按阶段拆分的实施任务，含前置决策、技术验证、�
 
 失败一律 `INVALID_POLICY` 并带 `path`。
 
-### 1.4 `evaluateScope` 内存求值器 ⚠️
+### 1.4 写入后重判 ⚠️
+
+**实现方式与原设计不同。** 原计划写一个内存求值器 `evaluateScope`，对已读出的记录求 `Scope` 的值，结果必须与同一条件下推成 SQL **完全一致**。动手前逐条核对下面那张风险表时，发现其中一条在内存里无解：
+
+> **排序规则（collation）。** scope 写 `{ tenantId: 'T1' }`，行里存 `'t1'`——MySQL 默认排序规则下 SQL 判定为匹配，PostgreSQL 判定为不匹配。求值器看不到列的 collation，只能二选一，必然在另一半方言上给出与 SQL 相反的结论。
+
+而这正是本节警告的那类故障：不一致不会立刻暴露，日后以「写进去了却查不出来」的形式出现。
+
+**改为在 SQL 里重判**：事务内、行已锁定时发一条 `SELECT … WHERE <主键> AND <scope>`，命不中则抛 `SCOPE_VIOLATION` 回滚。同一个表达式、同一个引擎、同一套排序规则，与选中该行的 WHERE 子句在构造上就一致。下表五条风险一起消失，差分测试（1.4 的做法一节、阶段 1 验收的对应条目）不再有对象。
+
+**「零额外查询」这条验收基本保住了**，靠的是一条观察：**写入没有触及 scope 引用的任何字段时，记录不可能离开 scope，重判可以整个跳过**。`update.scope` 是 `{ tenantId }` 而调用方只改 `name`，走的仍是原来的路径，一条语句都不多。只有触及 scope 字段的写才付那一次主键索引查找。`create` 例外——新记录没有前像可比，`create.scope` 不为 `true` 时一律重判。
+
+同一条观察决定了 `updateMany` 的降级时机：单条 UPDATE 事后无法得知自己碰了哪些行，所以**只有触及 scope 字段的批量写**才降级到 `lockManyByFilter`，其余保持快路径。
+
+下面这张表保留下来，是为了记住为什么不走内存求值：
+
+<details>
+<summary>内存求值器的风险点（已不适用，保留作为决策依据）</summary>
+
+### 原计划：`evaluateScope` 内存求值器
 
 **这是整个实施里最容易被低估、也最容易出错的一块。**
 
@@ -87,6 +106,8 @@ description: 按阶段拆分的实施任务，含前置决策、技术验证、�
 - 先按 0.7 的结论确定允许的操作符集合，**拿不准的直接不允许进 `Scope`**，而不是求值器里猜
 - 写**差分测试**：同一批记录、同一个 scope，分别走内存求值和 `SELECT ... WHERE <scope>`，断言两边挑出的行完全相同；八种方言各跑一遍
 - 求值器和 SQL 构造器共用同一份操作符语义表，不要各写一套
+
+</details>
 
 ### 1.5 filter 合并与来源区分
 
@@ -133,8 +154,8 @@ SQLite、PostgreSQL、MySQL、Kingbase 可并发；OceanBase、Oracle、MSSQL、
 - [ ] 生成的 SQL 含 scope 条件，且不存在「先查全量再内存过滤」的路径
 - [ ] 调用方 `or` 分组与 scope 合并为 `(A OR B) AND scope`
 - [ ] 越权与不存在的响应**逐字节相同**：`findOne` 返回 `null`，`findMany` / `count` / `exists` 不含该行，`updateOne` / `deleteOne` 抛 `RECORD_NOT_FOUND`，`updateMany` / `deleteMany` 计 0 不报错
-- [ ] 常规 update 路径零额外查询（断言查询次数）
-- [ ] `evaluateScope` 差分测试八方言全绿
+- [ ] 未触及 scope 字段的 update 零额外查询（断言查询次数）
+- [ ] 触及 scope 字段的 update、以及全部 create，走重判并在越界时回滚
 - [ ] 重判触发回滚后事务干净，不留半条记录
 - [ ] 并发下重判发生在锁之后（照 `repository/methods/concurrent-writes.test.ts` 的模式）
 - [ ] `create.defaults` 被调用方同名字段覆盖后由重判挡下；`defaults` 可设 `fields` 之外的字段

@@ -46,12 +46,35 @@ export interface RepositoryFilterPlan {
   readonly filter?: FilterAst;
 }
 
+/**
+ * The scope a written record must still satisfy once the write lands.
+ *
+ * It is checked with a statement rather than in memory. An in-memory check
+ * would have to reproduce the database's own comparison semantics — NULL's
+ * three-valued logic, the column's collation, date precision, the numeric
+ * carrier, how the dialect stores booleans — and one of those cannot be
+ * reproduced at all: the same string equality that matches under MySQL's
+ * default collation does not match under PostgreSQL's, and the evaluator
+ * cannot see which applies. Asking the database keeps the check and the WHERE
+ * clause that selected the row in exact agreement by construction.
+ */
+export interface RepositoryScopeCheck {
+  readonly scope: FilterAst;
+  /**
+   * Fields the scope references. A write that touches none of them cannot
+   * move the record out of scope, so the check is skipped and the ordinary
+   * update path issues no extra statement.
+   */
+  readonly fields: readonly string[];
+}
+
 export interface RepositoryCreateOnePlan {
   readonly collection: CollectionDefinition;
   readonly fields: readonly string[];
   readonly values: RepositoryRecord;
   readonly relations?: RelationMutationAst;
   readonly select?: SelectAst;
+  readonly scopeCheck?: RepositoryScopeCheck;
 }
 
 export interface RepositoryCreateManyPlan {
@@ -59,6 +82,7 @@ export interface RepositoryCreateManyPlan {
   readonly records: readonly RepositoryRecord[];
   readonly fields?: readonly string[];
   readonly select?: SelectAst;
+  readonly scopeCheck?: RepositoryScopeCheck;
 }
 
 export interface RepositoryUpdateOnePlan {
@@ -69,6 +93,7 @@ export interface RepositoryUpdateOnePlan {
   readonly ifVersion?: string | number;
   readonly relations?: RelationMutationAst;
   readonly select?: SelectAst;
+  readonly scopeCheck?: RepositoryScopeCheck;
 }
 
 export interface RepositoryUpsertOnePlan {
@@ -81,6 +106,14 @@ export interface RepositoryUpsertOnePlan {
   readonly updateRelations?: RelationMutationAst;
   readonly ifVersion?: string | number;
   readonly select?: SelectAst;
+  readonly createScopeCheck?: RepositoryScopeCheck;
+  /**
+   * Judged against the record that already exists, before it is updated, and
+   * again after. A target outside it raises RECORD_OUTSIDE_SCOPE rather than
+   * degrading to an insert, which would only hit the unique constraint and
+   * report a misleading duplicate key.
+   */
+  readonly updateScopeCheck?: RepositoryScopeCheck;
 }
 
 export interface RepositoryUpdateManyPlan {
@@ -90,6 +123,7 @@ export interface RepositoryUpdateManyPlan {
   readonly values: RepositoryRecord;
   readonly fields?: readonly string[];
   readonly select?: SelectAst;
+  readonly scopeCheck?: RepositoryScopeCheck;
 }
 
 export interface RepositoryDeleteOnePlan {

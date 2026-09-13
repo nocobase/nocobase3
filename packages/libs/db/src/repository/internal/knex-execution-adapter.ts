@@ -79,6 +79,7 @@ import type {
   RepositoryFilterPlan,
   RepositoryReadPlan,
   RepositorySingleMutationMiss,
+  RepositoryScopeCheck,
   RepositoryUpdateManyPlan,
   RepositoryUpdateOnePlan,
   RepositoryUpsertOnePlan,
@@ -530,6 +531,14 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       plan.relations,
       createdTargets,
     );
+    if (plan.scopeCheck) {
+      await this.assertWithinScope(
+        plan.collection,
+        [unique],
+        plan.scopeCheck,
+        'create',
+      );
+    }
     if (!plan.select?.root.includes?.length) {
       return {
         record,
@@ -555,6 +564,21 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
   async createMany(
     plan: RepositoryCreateManyPlan,
   ): Promise<RepositoryExecutedManyMutation> {
+    if (plan.scopeCheck && !plan.fields) {
+      // The bulk insert paths below never learn which rows they wrote, so a
+      // scope that has to be judged forces the row-at-a-time path.
+      return this.inTransaction(async (adapter) => {
+        for (const values of plan.records) {
+          await adapter.executeCreateOne({
+            collection: plan.collection,
+            fields: [],
+            values,
+            scopeCheck: plan.scopeCheck,
+          });
+        }
+        return { count: plan.records.length };
+      });
+    }
     if (plan.fields) {
       return this.inTransaction((adapter) =>
         adapter.executeCreateManyReturning(plan),
@@ -597,6 +621,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
         fields,
         values,
         select: plan.select,
+        scopeCheck: plan.scopeCheck,
       });
       records.push(result.record);
     }
@@ -650,6 +675,14 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       incrementVersion(versionQuery, plan.collection);
       if (affectedCount(await versionQuery) === 0) return 'conflict';
     }
+    if (this.scopeCheckApplies(plan.scopeCheck, plan.values)) {
+      await this.assertWithinScope(
+        plan.collection,
+        [unique],
+        plan.scopeCheck,
+        'update',
+      );
+    }
     const record = await this.findOne({
       collection: plan.collection,
       fields: plan.fields,
@@ -684,6 +717,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
             values: plan.createValues,
             relations: plan.createRelations,
             select: plan.select,
+            scopeCheck: plan.createScopeCheck,
           }),
         );
       } catch (error) {
@@ -691,6 +725,15 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
         const concurrent = await this.lockByUnique(plan.collection, plan.by);
         if (concurrent === 'missing') throw error;
       }
+    }
+    // The target exists. Whether this caller may update it is a question about
+    // the record as it stands, before their values are applied.
+    if (plan.updateScopeCheck) {
+      await this.assertUpsertTargetInScope(
+        plan.collection,
+        plan.by,
+        plan.updateScopeCheck,
+      );
     }
     const updated = await this.executeUpdateOne({
       collection: plan.collection,
@@ -700,6 +743,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       ifVersion: plan.ifVersion,
       relations: plan.updateRelations,
       select: plan.select,
+      scopeCheck: plan.updateScopeCheck,
     });
     if (updated === 'conflict') return updated;
     if (updated === 'missing' || updated === 'multiple') {
@@ -711,7 +755,10 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
   async updateMany(
     plan: RepositoryUpdateManyPlan,
   ): Promise<RepositoryExecutedManyMutation> {
-    if (plan.fields) {
+    if (plan.fields || this.scopeCheckApplies(plan.scopeCheck, plan.values)) {
+      // A single UPDATE never learns which rows it touched, so judging them
+      // afterwards means locking them first. Only a write that touches a
+      // field the scope reads pays for that.
       return this.inTransaction((adapter) =>
         adapter.executeUpdateManyReturning(plan),
       );
@@ -741,9 +788,9 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     plan: RepositoryUpdateManyPlan,
   ): Promise<RepositoryExecutedManyMutation> {
     const fields = plan.fields;
-    if (!fields) throw new Error('Returning updateMany requires fields.');
     const selected = await this.lockManyByFilter(plan.collection, plan.filter);
-    if (selected.length === 0) return { count: 0, records: [] };
+    if (selected.length === 0)
+      return fields ? { count: 0, records: [] } : { count: 0 };
     const query = tableQuery(this.getClient(), plan.collection).update(
       mapUpdate(this.getClient(), plan.collection, plan.values),
     );
@@ -755,6 +802,15 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     incrementVersion(query, plan.collection);
     const count = affectedCount(await query);
     assertBulkMutationCount('updateMany', count, selected.length);
+    if (this.scopeCheckApplies(plan.scopeCheck, plan.values)) {
+      await this.assertWithinScope(
+        plan.collection,
+        selected.map((item) => item.unique),
+        plan.scopeCheck,
+        'update',
+      );
+    }
+    if (!fields) return { count };
     const resultSelectors = selected.map((item) =>
       selectorFromFields(
         plan.collection,
@@ -1022,6 +1078,99 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       fields: scalarFields(collection).map((field) => field.name),
       filter: uniqueFilter(unique),
     });
+  }
+
+  /**
+   * Assert that the records named by `selectors` satisfy the scope, and roll
+   * the transaction back with SCOPE_VIOLATION if any of them does not.
+   *
+   * The check is a statement rather than an in-memory comparison so that it
+   * agrees with the WHERE clause that selected the row by construction —
+   * same collation, same NULL semantics, same numeric and temporal handling.
+   */
+  private async assertWithinScope(
+    collection: CollectionDefinition,
+    selectors: readonly UniqueSelector[],
+    check: RepositoryScopeCheck,
+    operation: 'create' | 'update',
+  ): Promise<void> {
+    if (selectors.length === 0) return;
+    const client = this.getClient();
+    const alias = 'repository_scope';
+    const query = tableQuery(client, collection, alias).select(
+      selectColumn(
+        client,
+        collection,
+        {
+          column: column(collection, selectors[0].fields[0]),
+          alias: 'id',
+        },
+        alias,
+      ),
+    );
+    applySelectors(query, collection, selectors);
+    const graph = await this.prepareFilterGraph(collection, check.scope.root);
+    applyFilter(query, collection, check.scope.root, graph, alias, client);
+    const rows = (await query) as RepositoryRecord[];
+    if (rows.length === selectors.length) return;
+    throw new RepositoryError(
+      'SCOPE_VIOLATION',
+      `The written record does not satisfy ${operation}.scope.`,
+      {
+        collection: collection.name,
+        path: [operation === 'create' ? 'values' : 'values'],
+        details: {
+          scopeFields: [...check.fields],
+          hint: 'The submitted values put the record outside the scope this operation allows. If the change is legitimate, widen the policy scope rather than editing the values.',
+        },
+      },
+    );
+  }
+
+  /** Whether a write touching these fields could move a record out of the scope. */
+  private scopeCheckApplies(
+    check: RepositoryScopeCheck | undefined,
+    values: RepositoryRecord,
+  ): check is RepositoryScopeCheck {
+    if (!check) return false;
+    return check.fields.some((field) => Object.hasOwn(values, field));
+  }
+
+  /**
+   * An upsert whose target exists but lies outside the update scope raises
+   * RECORD_OUTSIDE_SCOPE rather than falling back to an insert.
+   *
+   * This is the one place a policy deliberately tells forbidden and absent
+   * apart, and it costs nothing: an insert would collide with the very unique
+   * constraint that located the row, so "this key is taken" leaks either way —
+   * the fallback would only report it as a confusing duplicate key error. A
+   * caller who must not learn that a key is taken should not be using upsert.
+   */
+  private async assertUpsertTargetInScope(
+    collection: CollectionDefinition,
+    by: UniqueSelector,
+    check: RepositoryScopeCheck,
+  ): Promise<void> {
+    const client = this.getClient();
+    const alias = 'repository_scope';
+    const query = tableQuery(client, collection, alias).select(
+      selectColumn(
+        client,
+        collection,
+        { column: column(collection, by.fields[0]), alias: 'id' },
+        alias,
+      ),
+    );
+    applySelectors(query, collection, [by]);
+    const graph = await this.prepareFilterGraph(collection, check.scope.root);
+    applyFilter(query, collection, check.scope.root, graph, alias, client);
+    const rows = (await query) as RepositoryRecord[];
+    if (rows.length > 0) return;
+    throw new RepositoryError(
+      'RECORD_OUTSIDE_SCOPE',
+      'The upsert target exists but lies outside update.scope.',
+      { collection: collection.name, path: ['filter'] },
+    );
   }
 
   private async lockByUnique(

@@ -1,4 +1,4 @@
-import type { FilterAst } from '@nocobase/repository-input';
+import type { FilterAst, FilterNode } from '@nocobase/repository-input';
 import type { CollectionDefinition } from '../../collection/types.js';
 import { invalid, isPlainRecord } from '../internal/guards.js';
 import type {
@@ -289,4 +289,29 @@ export function assertReadableField(
     `Field "${field}" is not readable by Policy.`,
     { collection: collection.name, field, path },
   );
+}
+
+/**
+ * Collect the root-level fields a scope reads.
+ *
+ * A write that touches none of them cannot move a record out of that scope,
+ * which is what lets the ordinary update path stay free of extra statements.
+ * Relation nodes contribute nothing: a scope may not traverse relations, so
+ * one appearing here is a normalization bug rather than a field to watch.
+ */
+export function scopeFieldNames(scope: FilterAst): readonly string[] {
+  const names = new Set<string>();
+  const visit = (node: FilterNode): void => {
+    if (node.kind === 'condition') {
+      if (node.path.length === 1) names.add(node.path[0]);
+      return;
+    }
+    if (node.kind === 'group') {
+      node.items.forEach(visit);
+      return;
+    }
+    for (const item of node.filter?.items ?? []) visit(item);
+  };
+  scope.root.items.forEach(visit);
+  return [...names];
 }
