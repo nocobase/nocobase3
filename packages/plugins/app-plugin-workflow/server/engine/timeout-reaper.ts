@@ -1,13 +1,19 @@
-import type { DatabaseManager, Row } from '@nocobase/db';
+import type { DatabaseManager } from '@nocobase/db';
 
-import { WORKFLOW_COLLECTIONS } from '../collections/names.js';
+import { workflowStore, type WorkflowStore } from '../collections/store.js';
 import {
   EXECUTION_REASON,
   EXECUTION_STATUS,
   NODE_RUN_STATUS,
 } from './constants.js';
 import type { WorkflowId, WorkflowLogger } from './types.js';
-import { asId, noopWorkflowLogger, serializeJson } from './utils.js';
+import {
+  asId,
+  asIdFilter,
+  noopWorkflowLogger,
+  nowInstant,
+  serializeJson,
+} from './utils.js';
 
 export interface TimeoutReaper {
   start(): void;
@@ -55,50 +61,57 @@ export function createTimeoutReaper(
   let sweeping: Promise<number> | null = null;
   let stopped = true;
 
-  const query = () => options.database.query(options.connectionName);
+  // Resolved on use rather than here, because asking for a Repository asks for
+  // the connection behind it: this function runs inside the engine's
+  // constructor, and a reaper that is never started has no business
+  // materializing anything.
+  const store = (): WorkflowStore =>
+    workflowStore(options.database, options.connectionName);
 
   const abortExpiredRun = async (executionId: WorkflowId): Promise<boolean> => {
     // The status guard makes the sweep safe to run concurrently with a live
     // processor: whoever updates the row first wins and the other one is a no-op.
-    const result = await query()
-      .updateTable(WORKFLOW_COLLECTIONS.runs)
-      .set({
+    const result = await store().runs.updateMany({
+      filter: {
+        id: asIdFilter(executionId),
+        status: EXECUTION_STATUS.STARTED,
+      },
+      values: {
         status: EXECUTION_STATUS.ABORTED,
         reason: EXECUTION_REASON.TIMEOUT,
-        finishedAt: new Date().toISOString(),
-      })
-      .where('id', '=', executionId)
-      .where('status', '=', EXECUTION_STATUS.STARTED)
-      .execute();
-    if ((result.updatedCount ?? 0) === 0) {
+        finishedAt: nowInstant(),
+      },
+    });
+    if (result.updatedCount === 0) {
       return false;
     }
-    await query()
-      .updateTable(WORKFLOW_COLLECTIONS.nodeRuns)
-      .set({
+    await store().nodeRuns.updateMany({
+      filter: {
+        workflowRunId: asIdFilter(executionId),
+        status: NODE_RUN_STATUS.PENDING,
+      },
+      values: {
         status: NODE_RUN_STATUS.ABORTED,
         result: serializeJson(null),
         error: 'Workflow execution timed out',
-        finishedAt: new Date().toISOString(),
-      })
-      .where('workflowRunId', '=', executionId)
-      .where('status', '=', NODE_RUN_STATUS.PENDING)
-      .execute();
+        finishedAt: nowInstant(),
+      },
+    });
     return true;
   };
 
   const performSweep = async (): Promise<number> => {
-    const now = new Date().toISOString();
-    const rows = await query()
-      .selectFrom(WORKFLOW_COLLECTIONS.runs)
-      .select(['id', 'workflowId', 'expiresAt'])
-      .where('status', '=', EXECUTION_STATUS.STARTED)
-      .where('expiresAt', 'is not', null)
-      .where('expiresAt', '<', now)
-      .orderBy('expiresAt')
-      .orderBy('id')
-      .limit(batchSize)
-      .execute<Row>();
+    const rows = await store().runs.findMany({
+      filter: (filter) =>
+        filter.and([
+          filter.number('status').eq(EXECUTION_STATUS.STARTED),
+          filter.date('expiresAt').notEmpty(),
+          filter.date('expiresAt').before(nowInstant()),
+        ]),
+      select: (select) => select.fields('id', 'workflowId', 'expiresAt'),
+      sort: (sort) => [sort.field('expiresAt').asc(), sort.field('id').asc()],
+      limit: batchSize,
+    });
 
     let reclaimed = 0;
     for (const row of rows) {

@@ -1,11 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
-import {
-  appConfig as appIdentityConfig,
-  AppConfig,
-  defineAppConfig,
-} from '../src/config/index.js';
-import { Type } from '@sinclair/typebox';
+import { AppConfig } from '../src/config/index.js';
 
 import {
   Application,
@@ -78,13 +73,9 @@ describe('application', () => {
   });
 
   it('initializes plugin-owned config before registering providers', async () => {
-    const featureConfig = defineAppConfig({
-      namespace: 'feature',
-      schema: Type.Object({ enabled: Type.Boolean() }),
-      defaults: { enabled: true },
-    });
-    const appConfig = new AppConfig([featureConfig], { context: {} });
+    const appConfig = new AppConfig();
     await appConfig.loadAll();
+    appConfig.mergeDefaults({ feature: { enabled: true } });
     const options = createTestApplicationOptions();
     const app = new Application({ ...options, config: appConfig });
     const enabledValues: boolean[] = [];
@@ -93,7 +84,9 @@ describe('application', () => {
       public readonly name: string = 'config-provider';
 
       public override register(): void {
-        enabledValues.push(this.app.config.get(featureConfig).enabled);
+        enabledValues.push(
+          this.app.config.get<{ enabled: boolean }>('feature')!.enabled,
+        );
       }
     }
 
@@ -421,15 +414,13 @@ function createTestApplicationOptions(): ApplicationOptions {
   };
 }
 
-const testAppConfig = new AppConfig([
-  {
-    ...appIdentityConfig,
-    defaults: {
-      name: '/main/',
-      publicBasePath: '//main//',
-      internalBasePath: '',
-      publicApiUrl: '/main/api',
-    },
-  },
-]);
+const testAppConfig = new AppConfig();
 await testAppConfig.loadAll();
+testAppConfig.mergeDefaults({
+  app: {
+    name: '/main/',
+    publicBasePath: '//main//',
+    internalBasePath: '',
+    publicApiUrl: '/main/api',
+  },
+});

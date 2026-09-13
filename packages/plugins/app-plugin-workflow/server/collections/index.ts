@@ -7,7 +7,9 @@ import { defineWorkflowStats } from './workflow-stats.js';
 import { defineWorkflowVersionStats } from './workflow-version-stats.js';
 import { defineWorkflows } from './workflows.js';
 
+export * from './filters.js';
 export * from './names.js';
+export * from './store.js';
 export * from './types.js';
 export * from './workflow-nodes.js';
 export * from './workflow-node-runs.js';

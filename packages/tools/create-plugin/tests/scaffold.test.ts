@@ -157,6 +157,12 @@ describe('createPlugin', () => {
       ['@nocobase/app-client', '@nocobase/i18n'],
     ],
     ['registry', ['./package.json'], [], ['react']],
+    [
+      'cli',
+      ['./cli', './package.json'],
+      [],
+      ['@nocobase/nb3-cli', '@oclif/core'],
+    ],
     ['skills', ['./package.json'], [], []],
   ] as const)(
     '%s derives exact runtime dependencies and aligned exports',

@@ -85,27 +85,53 @@ describe('client inspection', () => {
       },
       {
         auth: 'required',
+        id: '@nocobase/app-template-examples:routeOverlays',
+        path: '/route-overlays',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-template-examples:routeDialogExample',
+        path: '/route-overlays/dialog',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-template-examples:routeDialogDrawerExample',
+        path: '/route-overlays/dialog/drawer',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-template-examples:routeDrawerExample',
+        path: '/route-overlays/drawer',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-template-examples:routeDrawerDialogExample',
+        path: '/route-overlays/drawer/dialog',
+      },
+
+      {
+        auth: 'required',
         id: '@nocobase/app-template-examples:articles',
         path: '/articles',
       },
       {
         auth: 'guest',
-        id: '@nocobase/app-plugin-authentication:login',
+        id: '@nocobase/app-template-examples:login',
         path: '/login',
       },
       {
         auth: 'guest',
-        id: '@nocobase/app-plugin-authentication:register',
+        id: '@nocobase/app-template-examples:register',
         path: '/register',
       },
       {
         auth: 'guest',
-        id: '@nocobase/app-plugin-authentication:forgot-password',
+        id: '@nocobase/app-template-examples:forgot-password',
         path: '/forgot-password',
       },
       {
         auth: 'guest',
-        id: '@nocobase/app-plugin-authentication:reset-password',
+        id: '@nocobase/app-template-examples:reset-password',
         path: '/reset-password',
       },
       {
@@ -228,18 +254,42 @@ describe('client inspection', () => {
         id: '@nocobase/app-plugin-repository-example:products-detail',
         path: '/repository-example/orders/products/details/:recordId',
       },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-file-example:file-repository',
+        path: '/',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-file-example:file-repository-attachments',
+        path: '/file-repository',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-file-example:file-repository-profile-avatars',
+        path: '/file-repository/profile-avatars',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-file-example:file-repository-order-attachments',
+        path: '/file-repository/order-attachments',
+      },
     ]);
     expect(
       inspection.reactProviders.map(({ id, order }) => ({ id, order })),
     ).toEqual([
       { id: '@nocobase/app-template-examples:theme', order: 1 },
       {
-        id: '@nocobase/app-plugin-notification-provider:notification-host',
+        id: '@nocobase/app-plugin-authentication:authentication',
         order: 2,
       },
       {
-        id: '@nocobase/app-plugin-routes-example:routes-example',
+        id: '@nocobase/app-plugin-notification-provider:notification-host',
         order: 3,
+      },
+      {
+        id: '@nocobase/app-plugin-routes-example:routes-example',
+        order: 4,
       },
     ]);
     expect(
@@ -321,7 +371,6 @@ describe('client inspection', () => {
       }
       const plugin = {
         packageName: '@example/client-plugin',
-        config: [],
         serviceProviders: [ExampleProvider],
         locales: {
           'en-US': async () => {
@@ -370,7 +419,6 @@ describe('client inspection', () => {
       globalThis.__clientLocalesOnlyCalls = { lifecycle: 0, locale: 0, route: 0 };
       const plugin = {
         packageName: '@example/client-locales-only-inspection',
-        config: [],
         serviceProviders: [],
         locales: {
           'en-US': async () => {

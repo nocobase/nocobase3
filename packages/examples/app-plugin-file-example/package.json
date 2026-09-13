@@ -21,8 +21,7 @@
     "dist",
     "README.md",
     "CHANGELOG.md",
-    "database",
-    "skills"
+    "database"
   ],
   "publishConfig": {
     "access": "public",
@@ -85,6 +84,7 @@
     "@nocobase/db": "workspace:^",
     "@nocobase/i18n": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
+    "lucide-react": "catalog:",
     "react": "^19.0.0"
   },
   "engines": {

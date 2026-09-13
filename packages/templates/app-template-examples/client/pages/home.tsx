@@ -6,6 +6,7 @@ import {
   FileText,
   FolderOpen,
   ShoppingCart,
+  PanelsTopLeft,
   Users,
 } from 'lucide-react';
 import type { ReactElement } from 'react';
@@ -13,6 +14,7 @@ import { Link } from 'react-router';
 import { Button } from '@/components/ui/button';
 
 const examples = [
+  { key: 'routeOverlays', path: '/route-overlays', icon: PanelsTopLeft },
   { key: 'articles', path: '/articles', icon: FileText },
   { key: 'repository', path: '/repository-example/find-many', icon: Database },
   { key: 'crm', path: '/repository-example/crm', icon: Users },

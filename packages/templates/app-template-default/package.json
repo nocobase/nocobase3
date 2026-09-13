@@ -1,7 +1,7 @@
 {
   "name": "@nocobase/app-template-default",
   "displayName": "Default Template",
-  "version": "1.0.0-beta.21",
+  "version": "1.0.0-beta.22",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -10,7 +10,7 @@
   "packageManager": "pnpm@11.7.0",
   "nocobase": {
     "templateKind": "app",
-    "defaultTemplateVersion": "1.0.0-beta.21"
+    "defaultTemplateVersion": "1.0.0-beta.22"
   },
   "devDependencies": {
     "@ai-sdk/react": "2.0.0",
@@ -22,10 +22,10 @@
     "@nocobase/ai-employee-avatars": "^1.0.2",
     "@nocobase/app-client": "workspace:^",
     "@nocobase/app-plugin-notification-provider": "workspace:^",
+    "@nocobase/app-plugin-users": "workspace:^",
     "@nocobase/app-portal-sdk": "workspace:^",
     "@nocobase/app-websocket": "workspace:^",
     "@nocobase/caching": "workspace:^",
-    "@nocobase/config": "workspace:^",
     "@nocobase/cron": "workspace:^",
     "@nocobase/dev-config": "workspace:*",
     "@nocobase/drive": "workspace:^",
@@ -33,7 +33,6 @@
     "@nocobase/logging": "workspace:^",
     "@nocobase/queue": "workspace:^",
     "@nocobase/session": "workspace:^",
-    "@nocobase/snowflake": "workspace:^",
     "@refinedev/cli": "^2.16.48",
     "@refinedev/core": "catalog:",
     "@refinedev/react-hook-form": "^5.0.0",
@@ -191,9 +190,12 @@
     "@nocobase/app-plugin-users": "workspace:^",
     "@nocobase/app-plugin-workflow": "workspace:^",
     "@nocobase/app-server": "workspace:^",
+    "@nocobase/config": "workspace:^",
     "@nocobase/db": "workspace:^",
     "@nocobase/nb3-cli": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
-    "@oclif/core": "catalog:"
+    "@nocobase/snowflake": "workspace:^",
+    "@oclif/core": "catalog:",
+    "better-auth": "catalog:"
   }
 }

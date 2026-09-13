@@ -43,6 +43,24 @@ System administrator assignment without allowing that assignment to be changed
 through User management. Permission Sets assigned to `authenticated:*` remain
 default access for every signed-in user and are not shown as direct roles.
 
+## Record the source template in the manifest
+
+`pnpm create @nocobase/app` now writes `nocobase.templatePackage` into the generated application, naming the template package it came from. An upgrade diffs two releases of that package, and nothing else in a derived application identifies it: `name` became the application's own at generation, and `templateKind` reads `app` for both Default and Examples.
+
+Applications generated before this field existed have to add it by hand. Confirm which template the application came from, then add it beside the fields already there:
+
+```json
+{
+  "nocobase": {
+    "templateKind": "app",
+    "templatePackage": "@nocobase/app-template-default",
+    "defaultTemplateVersion": "1.0.0-beta.21"
+  }
+}
+```
+
+`defaultTemplateVersion` keeps its meaning: the template release whose source has actually been merged, moved only after the merge. `skills/nocobase-app-upgrade/` is the procedure for performing that merge.
+
 ## Upgrade checklist
 
 1. Commit or back up application-owned changes.

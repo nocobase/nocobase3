@@ -117,12 +117,13 @@ export default cliPlugin;
       "./cli": { "types": "./dist/cli/index.d.ts", "import": "./dist/cli/index.js" }
     }
   },
-  "peerDependencies": { "@oclif/core": "^4.14.0" },
-  "devDependencies": { "@oclif/core": "catalog:" }
+  "peerDependencies": { "@oclif/core": "^4.14.0" }
 }
 ```
 
-`@oclif/core` 走 peer 而不是 dependency：让插件和 App 用同一个 oclif 大版本，help 渲染和 flag 解析行为才一致，也避免每个插件各拖一份副本。peer 是发布出去的契约，装它的人不在本仓库的 workspace 里，所以不能写 `catalog:`；devDependency 才写 `catalog:`，把开发时的版本钉在仓库统一的那个上。
+`@oclif/core` 走 peer 而不是 dependency：让插件和 App 用同一个 oclif 大版本，help 渲染和 flag 解析行为才一致，也避免每个插件各拖一份副本。peer 是发布出去的契约，装它的人不在本仓库的 workspace 里，所以写明确的版本范围而不是 `catalog:`。
+
+只声明这一处就够了：pnpm 会把 peer 装好并 link 进插件自己的 `node_modules`，插件的 lint、测试、构建都解析得到，再配一条 devDependency 只是多一行要同步维护的东西。
 
 `cli/` 要进 `files`（或经由 `dist`），否则装到 App 里没有这个入口。
 
@@ -205,6 +206,92 @@ const devCommands: AppCliCommands = runningFromSource
 
 这样 `dist` 里的 `--help` 干脆不列这些命令，而不是列出来一跑就崩。
 
+## 构建钩子
+
+插件除了贡献命令，还可以要求 App 在 `pnpm build` 或 `pnpm dev` 的某个时点跑一条命令。这是给那种"必须先产出点什么，App 才能跑起来"的插件准备的——典型的是源码态工作流：`server/workflows/` 里的 `.ts` 要先编译成 Artifact，部署的服务端才加载得了。
+
+以前这一步是直接写死在模板的 `scripts/build.mjs` 里的。问题很直接：这行命令属于 workflow 插件，却躺在每个 App 的构建脚本里。装了插件的 App 要自己去加，卸载了也不会自动消失，三个模板还各存一份、各自漂移。写成钩子之后，这一步跟着插件走——插件在哪个 App 里注册了，哪个 App 的构建就有这步。
+
+### 声明
+
+钩子挂在 `defineCliPlugin` 上，跟命令一起：
+
+```ts
+const cliPlugin: AppCliPlugin = defineCliPlugin({
+  packageName: '@nocobase/app-plugin-workflow',
+  topic: 'workflow',
+  commands: { check: WorkflowCheck, build: WorkflowBuild },
+  buildHooks: {
+    afterServerBuild: [
+      {
+        label: 'Build workflow artifacts',
+        command: [
+          'pnpm', 'nocobase', 'workflow', 'build',
+          '--resource-root', './dist/server/workflows',
+        ],
+      },
+    ],
+  },
+});
+```
+
+workflow 插件只声明了 `buildHooks`。dev 阶段的钩子写法一样：
+
+```ts
+  devHooks: {
+    beforeDev: [
+      { label: 'Prepare demo artifacts', command: ['pnpm', 'nocobase', 'demo', 'build'] },
+    ],
+  },
+```
+
+workflow 不挂这个，是因为非生产运行时下 loader 会按需编译 `server/workflows`，产出的 digest 跟构建产出的一致——再加一次预编译只会给每次 `pnpm dev` 启动加上几秒，不会让任何原本看不见的东西变得可见。
+
+`command` 是拆好的数组，不是字符串。不过 shell，所以带空格的参数不用管引号，跨平台行为也一致；反过来说 `&&`、管道、重定向、`FOO=1` 前缀都不成立——顺序执行靠多个钩子，别的自己包一条命令。数组第 0 位是任意可执行文件，不限于 `pnpm`：直接跑 `['node', './scripts/x.mjs']` 也可以，不必为了用钩子而先包一条 oclif 命令。
+
+`label` 可选，就是构建日志里那行 `> ...`；不给就拿命令本身顶上。
+
+一个插件可以完全不贡献命令、只挂钩子。`commands` 和两组钩子全空才会警告——那种插件注册了也没有任何效果。
+
+### 阶段
+
+阶段名说的是**钩子跑的时候有什么**，不是哪一步产出的它。这是刻意的：钩子关心的是 `dist/server` 在不在，而不是把它放在那儿的是不是 `tsc`。所以中间那些步骤（`tsc-alias`、`Generate server package`）随时可以改，这四个名字不受影响。
+
+| 阶段               | 位置                          | 此时 `dist` 里有什么          |
+| ------------------ | ----------------------------- | ----------------------------- |
+| `beforeBuild`      | 清空 `dist` 之后，typecheck 前 | 空目录                        |
+| `afterClientBuild` | 客户端构建之后                 | `dist/client`                 |
+| `afterServerBuild` | 服务端编译和路径重写之后       | `+ dist/server`               |
+| `afterBuild`       | 依赖校验之后，`--tar` 打包前   | 完整产物，含 `node_modules`   |
+
+`beforeBuild` 跑在清空 `dist` **之后**而不是之前，所以钩子可以往里写东西。清空是构建的第一步，跑在它前面的钩子只要碰 `dist` 就会白写——文件确实写成功了，构建也成功了，只是产物没了，而且没有任何地方会报错。
+
+dev 只有 `beforeDev` 一个阶段，这个不对称是有原因的：构建是一串会结束的步骤，而 `pnpm dev` 起的是并发常驻的客户端和服务端进程，`afterClientDev` 指向一个不存在的时刻。
+
+同阶段多个钩子按 `cli/plugins.ts` 里的插件顺序、以及各插件声明的顺序依次执行，任一失败即中止。工作目录固定是 App 根目录。
+
+阶段名写错会当场抛错，不是警告。少跑一个钩子和正常跑完看起来一模一样——插件加载成功、构建成功、那一步只是没发生，产物里少了东西，而最早发现它的地方通常是部署之后。
+
+### App 侧怎么串起来
+
+`scripts/build.mjs` 和 `scripts/dev/index.mjs` 都是纯 Node，读不了 `cli/plugins.ts`（那是 TypeScript，还要 import 各插件的 CLI 入口）。所以它们去问 CLI——CLI 为了自己派发命令，本来就已经把这些插件装配好了：
+
+```bash
+pnpm nocobase plugin cli-hooks --json
+```
+
+一次把 build 和 dev 两组都返回。分两条命令问会让 dev 多付一次进程启动，而 dev 恰恰是最在意启动时间的那个。
+
+这条命令查不动就直接让构建失败，不是告警跳过。查不动意味着 CLI 装配是坏的——某个插件的入口 import 失败，或者 `cli/plugins.ts` 编译不过——这时候继续构建，产出的是一个"看起来成功、但少跑了钩子"的 `dist`，这是所有结果里最坏的一种。
+
+**没有钩子不算失败。** 返回四个空阶段的 App 就是插件都只贡献命令而已，构建一行都不多打，照常走完。
+
+手动跑一下（不带 `--json`）可以看清这次构建会多做什么：
+
+```bash
+pnpm nocobase plugin cli-hooks
+```
+
 ## 执行
 
 ```bash
@@ -213,6 +300,7 @@ pnpm nocobase demo --help                # 某个插件贡献了什么
 pnpm nocobase demo greet --help          # 单条命令的 flags 和 args
 pnpm nocobase demo greet world --loud
 pnpm nocobase demo greet world --json    # 机器可读输出
+pnpm nocobase plugin cli-hooks           # 这次构建和 dev 会多跑哪些命令
 ```
 
 约定与内置命令一致：`--json` 成功写 stdout、失败写 stderr 并保留非零退出码；退出码 `0` 成功、`1` 运行错误、`2` 参数错误。

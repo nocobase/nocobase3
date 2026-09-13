@@ -10,7 +10,7 @@
 
 核心插件只提供 Service 和路由工具。应用或业务插件负责创建 collection、配置 Drive disk、声明具体资源路由和页面。本文假定已有 `main` 数据库连接和 `local` disk。
 
-需要可运行示例时，使用独立的 [File Repository Example](../../../examples/app-plugin-file-example/README.md)。它包含 `attachments` 迁移、资源路由和 `/dev/file-repository` 页面；启用后不要再重复创建该表或注册同名资源。
+需要可运行示例时，使用独立的 [File Repository Example](../../../examples/app-plugin-file-example/README.md)。它包含 `attachments` 迁移、资源路由和 `/file-repository` 页面；启用后不要再重复创建该表或注册同名资源。
 
 ### Collection 固定字段
 

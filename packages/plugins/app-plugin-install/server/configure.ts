@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
 import type { ConfigPaths } from '@nocobase/app-server/config';
@@ -45,6 +46,16 @@ export async function configureInstallation(
 ): Promise<ConfigureInstallationResult> {
   const config = parseInstallDatabaseConfig(input);
   const configPath = options.paths.root('config.yml');
+  if (
+    ['config.yaml', 'config.toml', 'config.json'].some((name) =>
+      existsSync(options.paths.root(name)),
+    )
+  ) {
+    throw new InstallConfigurationError(
+      409,
+      'The application has already been configured.',
+    );
+  }
 
   const generateSecret =
     options.generateSecret ?? (() => randomBytes(32).toString('base64url'));

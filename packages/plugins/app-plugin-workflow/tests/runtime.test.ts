@@ -8,14 +8,18 @@ import {
 import type { Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { WORKFLOW_COLLECTIONS } from '../server/collections/names.js';
 import {
   EXECUTION_REASON,
   EXECUTION_STATUS,
   NODE_RUN_STATUS,
 } from '../server/engine/constants.js';
 import WorkflowEngine from '../server/engine/engine.js';
-import { loadWorkflow } from '../server/engine/utils.js';
+import {
+  asId,
+  asIdFilter,
+  loadWorkflow,
+  serializeJson,
+} from '../server/engine/utils.js';
 import type {
   JsonObject,
   WorkflowId,
@@ -40,8 +44,9 @@ import {
   jobTrace,
   listNodeRuns,
   readRun,
-  waitFor,
+  testStore,
   type TestWorkflowInput,
+  waitFor,
 } from './helpers.js';
 
 const QUEUE_TABLE = 'queue_jobs';
@@ -116,11 +121,12 @@ describe('workflow runtime', () => {
   }
 
   async function runIdOf(eventKey: string): Promise<WorkflowId> {
-    const id = await database
-      .query()
-      .selectFrom(WORKFLOW_COLLECTIONS.runs)
-      .where('eventKey', '=', eventKey)
-      .value<WorkflowId>('id');
+    const id = await testStore(database)
+      .runs.findOne({
+        filter: { eventKey },
+        select: (select) => select.fields('id'),
+      })
+      .then((row) => (row ? asId(row.id) : null));
     if (id == null) {
       throw new Error(`Run "${eventKey}" was not created`);
     }
@@ -131,12 +137,12 @@ describe('workflow runtime', () => {
     runId: WorkflowId,
     nodeKey: string,
   ): Promise<WorkflowId> {
-    const id = await database
-      .query()
-      .selectFrom(WORKFLOW_COLLECTIONS.nodeRuns)
-      .where('workflowRunId', '=', runId)
-      .where('nodeKey', '=', nodeKey)
-      .value<WorkflowId>('id');
+    const id = await testStore(database)
+      .nodeRuns.findOne({
+        filter: { workflowRunId: asIdFilter(runId), nodeKey },
+        select: (select) => select.fields('id'),
+      })
+      .then((row) => (row ? asId(row.id) : null));
     if (id == null) {
       throw new Error(`Node run of node "${nodeKey}" was not created`);
     }
@@ -166,19 +172,17 @@ describe('workflow runtime', () => {
           nodes: [{ key: 'only', type: 'echo', config: { value: 'ok' } }],
         }),
       );
-      await database
-        .query()
-        .updateTable(WORKFLOW_COLLECTIONS.workflows)
-        .set({
-          inputSchema: JSON.stringify({
+      await testStore(database).workflows.updateMany({
+        filter: { id: asIdFilter(workflow.id) },
+        values: {
+          inputSchema: serializeJson({
             type: 'object',
             required: ['enabled'],
             properties: { enabled: { type: 'boolean' } },
             additionalProperties: false,
           }),
-        })
-        .where('id', '=', workflow.id)
-        .execute();
+        },
+      });
       const runtime = buildRuntime(new Map([['echo', echoInstruction]]));
       await runtime.initialize();
       await runtime.trigger(
@@ -202,11 +206,10 @@ describe('workflow runtime', () => {
           nodes: [{ key: 'only', type: 'echo' }],
         }),
       );
-      await database
-        .query()
-        .updateTable(WORKFLOW_COLLECTIONS.workflows)
-        .set({
-          inputSchema: JSON.stringify({
+      await testStore(database).workflows.updateMany({
+        filter: { id: asIdFilter(first.id) },
+        values: {
+          inputSchema: serializeJson({
             type: 'object',
             required: ['falseValue', 'zero', 'empty', 'nested'],
             properties: {
@@ -219,12 +222,11 @@ describe('workflow runtime', () => {
               },
             },
           }),
-          parametersSchema: JSON.stringify({
+          parametersSchema: serializeJson({
             limit: { type: 'number', default: 3 },
           }),
-        })
-        .where('id', '=', first.id)
-        .execute();
+        },
+      });
       const runtime = await initializeRuntime(
         new Map([['echo', echoInstruction]]),
       );
@@ -234,15 +236,13 @@ describe('workflow runtime', () => {
         empty: '',
         nested: { value: 0 },
       };
-      const pinned = await loadWorkflow(database.query(), first.id);
+      const pinned = await loadWorkflow(testStore(database), first.id);
       if (!pinned) throw new Error('Pinned workflow was not found');
       await runtime.trigger(pinned, context, { eventKey: 'pinned-event' });
-      await database
-        .query()
-        .updateTable(WORKFLOW_COLLECTIONS.workflows)
-        .set({ current: null })
-        .where('id', '=', first.id)
-        .execute();
+      await testStore(database).workflows.updateMany({
+        filter: { id: asIdFilter(first.id) },
+        values: { current: null },
+      });
       const second = await createTestWorkflow(
         database,
         defineWorkflow({
@@ -250,16 +250,14 @@ describe('workflow runtime', () => {
           nodes: [{ key: 'replacement', type: 'echo' }],
         }),
       );
-      await database
-        .query()
-        .updateTable(WORKFLOW_COLLECTIONS.workflows)
-        .set({
-          parametersSchema: JSON.stringify({
+      await testStore(database).workflows.updateMany({
+        filter: { id: asIdFilter(second.id) },
+        values: {
+          parametersSchema: serializeJson({
             limit: { type: 'number', default: 9 },
           }),
-        })
-        .where('id', '=', second.id)
-        .execute();
+        },
+      });
       const runId = await runIdOf('pinned-event');
       await expect(readRun(database, runId)).resolves.toMatchObject({
         workflowId: first.id,
@@ -723,12 +721,10 @@ describe('workflow runtime', () => {
       // What an external system does while the nodeRun waits: write the answer onto
       // the pending nodeRun, then hand the nodeRun back to the dispatcher.
       const nodeRunId = await nodeRunIdOf(runId, 'hold');
-      await database
-        .query()
-        .updateTable(WORKFLOW_COLLECTIONS.nodeRuns)
-        .set({ result: JSON.stringify('approved') })
-        .where('id', '=', nodeRunId)
-        .execute();
+      await testStore(database).nodeRuns.updateMany({
+        filter: { id: asIdFilter(nodeRunId) },
+        values: { result: serializeJson('approved') },
+      });
 
       await runtime.dispatcher.dispatch({ executionId: runId, nodeRunId });
 
@@ -1033,19 +1029,17 @@ describe('workflow runtime', () => {
         startedAt: new Date(Date.now() - 120_000).toISOString(),
         expiresAt: new Date(Date.now() - 60_000).toISOString(),
       });
-      await database
-        .query()
-        .insertInto(WORKFLOW_COLLECTIONS.nodeRuns)
-        .values({
-          workflowRunId: runId,
-          nodeId: workflow.nodes[0].id,
+      await testStore(database).nodeRuns.createOne({
+        values: {
+          workflowRunId: asIdFilter(runId),
+          nodeId: asIdFilter(workflow.nodes[0].id),
           nodeKey: 'hold',
           status: NODE_RUN_STATUS.PENDING,
-          meta: JSON.stringify(null),
-          result: JSON.stringify(null),
+          meta: serializeJson(null),
+          result: serializeJson(null),
           startedAt: new Date(Date.now() - 120_000).toISOString(),
-        })
-        .execute();
+        },
+      });
 
       await initializeRuntime(new Map([['pending', pendingInstruction]]), {
         timeoutReaperIntervalMs: 5,
@@ -1244,11 +1238,7 @@ describe('workflow runtime', () => {
 
       expect(failures).toHaveLength(1);
       await expect(
-        database
-          .query()
-          .selectFrom(WORKFLOW_COLLECTIONS.runs)
-          .where('eventKey', '=', 'stack-2')
-          .exists(),
+        testStore(database).runs.exists({ filter: { eventKey: 'stack-2' } }),
       ).resolves.toBe(false);
     });
   });

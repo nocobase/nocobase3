@@ -1,7 +1,26 @@
 import type { AppResource } from './en-US.js';
 
 const zhCN: AppResource = {
+  routeOverlays: {
+    title: '路由弹窗与抽屉',
+    description:
+      '打开弹窗或抽屉，再打开下一层。关闭子层后可以继续编辑草稿。每一层都有独立的网址。',
+    openDialog: '打开弹窗',
+    openDrawer: '打开抽屉',
+    dialogTitle: '弹窗示例',
+    drawerTitle: '抽屉示例',
+    hint: '输入草稿后打开子层，关闭子层即可继续编辑。',
+    draft: '草稿',
+    allowClose: '允许关闭当前层',
+    historyHint:
+      '取消勾选后，按 Esc、点击遮罩或关闭按钮都会保持当前层打开。浏览器前进和后退仍会正常导航。',
+  },
   examples: {
+    routeOverlays: {
+      title: '路由弹窗与抽屉',
+      description:
+        '打开弹窗或抽屉，再打开下一层。关闭子层后可以继续编辑草稿。每一层都有独立的网址。',
+    },
     eyebrow: 'NocoBase 示例中心',
     title: '从可运行的示例开始',
     description:
@@ -94,6 +113,7 @@ const zhCN: AppResource = {
     signingOut: '正在退出…',
   },
   navigation: {
+    routeOverlays: '路由弹窗与抽屉',
     articles: '文章',
     home: '首页',
     open: '打开导航',

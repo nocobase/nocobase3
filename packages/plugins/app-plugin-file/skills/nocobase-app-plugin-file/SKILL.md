@@ -7,7 +7,7 @@ description: Add file collections, uploads, downloads, business attachments, and
 
 Use `@nocobase/app-plugin-file/server` and `@nocobase/app-plugin-file/client`. The plugin provides Repository managers, service tokens, route helpers, and the component-ui Registry recipe. The App or business plugin owns collections, migrations, Drive configuration, resource routes, permissions, and pages.
 
-Inspect the App's existing registrations, migrations, disks, and resources first. Register the Server default export and the Client default factory before consumers, using the App's plugin lifecycle commands. The core does not create collections or routes. `@nocobase/app-plugin-file-example` already owns `attachments` and `/dev/file-repository`; do not duplicate them when enabled. Use the example's full package name in CLI commands.
+Inspect the App's existing registrations, migrations, disks, and resources first. Register the Server default export and the Client default factory before consumers, using the App's plugin lifecycle commands. The core does not create collections or routes.
 
 The following business example uses collection `invoice_files`, resource `invoiceAttachments`, connection `main`, and disk `local`. Adapt these to the App.
 
@@ -80,7 +80,7 @@ Only declared POST `/api/<name>:<action>` operations are exposed. Ordinary actio
 
 Content is GET `<accessPath>/<uuid>.<ext>` outside `/api`, omitting the dot when extensionless. Stream returns full bytes as an attachment; redirect returns a public storage URL or a five-minute signed URL. A disk without URL support requires stream mode; there is no automatic fallback.
 
-These are public routes. For restricted files, wrap both API and root contributions with App-owned authentication and authorization before mounting them. Check the operation and record/parent-record access; a login page, private disk, Client filter or writePolicy is not authorization. If the generic routes cannot express the policy, write business routes using the public Server manager. Never trust browser-supplied ownership.
+These are public routes. For restricted files, register App-owned authentication and authorization on the paths each contribution owns before mounting it — `/<name>:<action>` per exposed API action, `<accessPath>/*` for content. Never `router.use('*', ...)` in a contribution router: contributions share the mounted router, so it also guards the SPA and every contribution mounted after yours. Check the operation and record/parent-record access; a login page, private disk, Client filter or writePolicy is not authorization. If the generic routes cannot express the policy, write business routes using the public Server manager. Never trust browser-supplied ownership.
 
 ## Server and Client services
 
@@ -173,4 +173,4 @@ Verify upload → query → contentUrl → identical downloaded bytes, including
 - INVALID_FILE_COLLECTION: fix the migration before storage writes. STORAGE_URL_UNAVAILABLE: configure a capable disk or stream mode.
 - FILE_COMMIT_UNCERTAIN / FILE_CLEANUP_FAILED: reconcile database records and stored objects before retrying; uploads have no idempotency key.
 
-There is no built-in route authentication, row ACL, Range/206, ETag, conditional download, resumable upload, physical cleanup, content sniffing or malware scan. Metadata deletion retains objects; cancelled forms may leave unlinked files. Implement the policies required by the business, including referenced-file deletion and orphan cleanup. The example's development-only page does not protect its public Server routes.
+There is no built-in route authentication, row ACL, Range/206, ETag, conditional download, resumable upload, physical cleanup, content sniffing or malware scan. Metadata deletion retains objects; cancelled forms may leave unlinked files. Implement the policies required by the business, including referenced-file deletion and orphan cleanup.

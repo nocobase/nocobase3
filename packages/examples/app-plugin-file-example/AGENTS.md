@@ -1,10 +1,12 @@
 # AGENTS.md
 
-This example owns the attachments migration, concrete API routes and development
-page. Consume the core File Repository plugin only through its public exports;
-register both plugins in the target App, core first. Keep public documentation in
-English. The example exposes public routes. Applications own authentication and
-authorization; Range and conditional requests are not supported.
+This example owns the file and business migrations, concrete API routes and the
+upload, preview and relation pages. Consume the core File Repository plugin only
+through its public exports; register both plugins in the target App, core first.
+Keep public documentation in English. The example exposes public routes.
+Applications own authentication and authorization; Range and conditional
+requests are not supported. Business relations are written through the owning
+repository's write policy, never by editing file metadata directly.
 
 This is a NocoBase application plugin: a package published to a registry and installed into an application someone else assembled. That makes it a guest, and most of the rules below follow from it.
 

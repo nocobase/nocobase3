@@ -135,6 +135,7 @@ export class ManagerFactory {
       knowledgeBaseManager: this.knowledgeBaseManager,
       workContextHandler: this.workContextHandler,
       documentLoaders: this.documentLoaders,
+      container: this.container,
     }));
   }
 

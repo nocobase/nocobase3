@@ -25,7 +25,7 @@ An expired preparation lease returns to pending. An expired submission lease bec
 
 ### Failed
 
-- `recipient`: the Channel cannot resolve the recipient or the address/target is invalid.
+- `recipient`: the Channel cannot resolve the recipient, the recipient is required but missing, or the address is invalid.
 - `configuration`: definition, Provider identity, sender, or runtime configuration is missing/invalid.
 - `authentication`: Provider credentials were rejected.
 - `content`: rendered/prepared message violates Provider constraints.
@@ -37,7 +37,7 @@ A Provider can request same-Provider retry. Once the configured attempt limit is
 
 ### Partial
 
-Treat every Delivery independently. Identify exactly which recipient/Channel/Provider targets were accepted and which failed. A new send for only failed targets is a new Notification and requires duplicate-risk review.
+Treat every Delivery independently. Identify exactly which recipient/Channel/Provider combinations were accepted and which failed. A new send for only failed combinations is a new Notification and requires duplicate-risk review.
 
 ### Unknown
 

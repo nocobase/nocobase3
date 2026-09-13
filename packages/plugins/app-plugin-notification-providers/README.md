@@ -21,9 +21,9 @@ definitions explicitly as shown below.
 The core notification plugin owns the protected test API and dynamic form.
 This package contributes safe Email and IM input fields plus conversion into
 the normal `NotificationManager.send()` input. Email requires an explicit test
-address; IM resolves the selected Provider's logical target on the server.
+address; IM sends directly to the selected Provider's Webhook on the server.
 Provider configuration, Webhook URLs, API keys, and secrets are never returned
-in public target descriptors.
+in public test descriptors.
 
 ## Register definitions
 
@@ -125,7 +125,6 @@ const im = defineImChannelConfig({
   providers: [
     defineFeishuWebhookProviderConfig({
       name: 'feishu',
-      target: 'ops-alerts',
       webhookUrl:
         'https://open.feishu.cn/open-apis/bot/v2/hook/replace-this-value',
       secret: secretStore.feishuWebhookSecret,
@@ -153,7 +152,6 @@ const im = defineImChannelConfig({
   providers: [
     defineDingTalkWebhookProviderConfig({
       name: 'dingtalk',
-      target: 'ops-alerts',
       webhookUrl:
         'https://oapi.dingtalk.com/robot/send?access_token=replace-this-value',
       secret: secretStore.dingTalkWebhookSecret,
@@ -178,13 +176,12 @@ await notification.send({
 });
 ```
 
-IM uses a logical target recipient. The default template maps the `default`
-target to each configured Webhook Provider:
+IM Webhook Providers are themselves the delivery destinations, so `to` can be
+omitted:
 
 ```ts
 await notification.send({
-  idempotencyKey: 'deployment:42:ops-alerts:im',
-  to: { type: 'target', id: 'ops-alerts' },
+  idempotencyKey: 'deployment:42:im',
   channels: ['im'],
   content: { title: 'Deployment complete', body: 'Production is ready.' },
 });
@@ -195,8 +192,7 @@ set its channel-unique name; `strategy: 'single'` can be omitted:
 
 ```ts
 await notification.send({
-  idempotencyKey: 'deployment:42:ops-alerts:feishu',
-  to: { type: 'target', id: 'ops-alerts' },
+  idempotencyKey: 'deployment:42:feishu',
   channels: ['im'],
   routing: {
     im: {
@@ -215,8 +211,7 @@ Channel configuration. To send to every enabled IM Provider, use
 
 ```ts
 await notification.send({
-  idempotencyKey: 'deployment:42:ops-alerts:all-im',
-  to: { type: 'target', id: 'ops-alerts' },
+  idempotencyKey: 'deployment:42:all-im',
   channels: ['im'],
   routing: { im: { providers: { strategy: 'all' } } },
   content: { title: 'Deployment complete', body: 'Production is ready.' },

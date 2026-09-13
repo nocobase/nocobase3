@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 
 import { createAIEmployeeRoutes } from '../../server/route/index.js';
 import { createTestAIEmployeeFixture } from './test-context.js';
-import { createTestAppDeps } from './test-app-deps.js';
 
 const methods: Record<string, string> = {
   'ai:listProviderModels': 'POST',

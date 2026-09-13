@@ -26,7 +26,7 @@ pnpm dev
 
 - **Database.** Point the connection at the database you actually intend to use — dialect, host, port, and credentials.
 - **Where the application is served.** `APP_BASE_PATH` is the public mount path, `/main` by default, so the development URL looks like `http://127.0.0.1:13000/main/`. `APP_SERVER_PORT` and `APP_SERVER_HOST` change what the server binds to.
-- **Anything a feature you enable requires** — mail delivery, IM webhooks, storage. `config.example.yml` documents every available option, including sections your `config.yml` does not yet have.
+- **Anything a feature you enable requires** — mail delivery, IM webhooks, storage. `config.example.yml` documents common deployment options, including sections your `config.yml` does not yet have.
 
 `config.yml` is gitignored because it holds your `auth.secret`. Deploy it through your secret management rather than committing it.
 
@@ -73,7 +73,7 @@ database/
 
 tests/                   Unit and integration tests
 e2e/                     Browser tests needing a real server
-config.yml               Your configuration, generated at setup; gitignored
+config.yml              Your configuration, generated at setup; gitignored
 config.example.yml       Documented configuration template
 skills/                  In-depth development guides for AI agents
 ```
@@ -113,6 +113,8 @@ Database tasks support `--connection <name>` and `--all`; no argument targets `d
 | `pnpm lint`          | Report lint problems                                         |
 | `pnpm fix`           | Fix lint problems, then format                               |
 | `pnpm check`         | Everything above plus a build; what to run before committing |
+
+`pnpm nocobase app i18n:check` reports a language declared in `client/locales/` but not `server/locales/`, or the reverse. The browser builds its language picker from one and the server decides what it answers in from the other, so a language on only one side is one the interface offers and the server then rejects.
 
 ### Plugins
 
@@ -228,7 +230,7 @@ Rebuild with a matching `--target` and `--node-version`. ABI 115 is Node 20, 127
 
 ## Configuration
 
-`config.yml` is the single source of configuration, written for you at generation time and yours to edit from there. It is gitignored because it carries your `auth.secret`; deploy it through your secret management rather than committing it. `config.example.yml` documents every available option, including sections the generated file leaves out.
+`server/config/` and `client/config/` contain editable TypeScript defaults. `config.yml` holds environment-specific overrides, written for you at generation time and yours to edit from there. It is gitignored because it carries your `auth.secret`; deploy it through your secret management rather than committing it. `config.example.yml` documents common deployment options, including sections the generated file leaves out.
 
 Two settings decide where the application is reachable:
 

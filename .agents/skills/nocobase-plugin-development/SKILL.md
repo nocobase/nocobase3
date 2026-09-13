@@ -30,30 +30,31 @@ Always read the repository `AGENTS.md` first, then read
 `internal-docs/development/plugin-development/README.md`. Read only the relevant topic page
 for the current task:
 
-| Task                                   | Read                                                 |
-| -------------------------------------- | ---------------------------------------------------- |
-| Create and register a plugin           | `quick-start.md`, `plugin-registration-workspace.md` |
-| Implement a complete business plugin   | `development-workflow.md`                            |
-| Choose an App or cross-plugin entry    | `public-contracts.md`                                |
-| Choose a Client module                 | `client.md`                                          |
-| Build public or internal Client UI     | `client-components.md`                               |
-| Share React Context                    | `client-react-providers.md`                          |
-| Add a Client Service or initialization | `client-service-providers.md`                        |
-| Choose a Server module                 | `server.md`                                          |
-| Choose a Service/Token/Provider        | `server-services-and-providers.md`                   |
-| Implement Provider lifecycle           | `service-provider.md`                                |
-| Apply Token/Container patterns         | `service-token-examples.md`                          |
-| Add asynchronous work                  | `server-jobs.md`                                     |
-| Choose a database operation            | `database.md`                                        |
-| Change schema                          | `database-migrations.md`                             |
-| Add required initial records           | `database-seeds.md`                                  |
-| Add Client or Server translations      | `i18n.md`                                            |
-| Choose an App-owned Registry item      | `registry.md`                                        |
-| Author a Registry item                 | `registry-authoring.md`                              |
-| Build, publish, or install Registry    | `registry-delivery.md`                               |
-| Upgrade or remove a Registry item      | `registry-upgrades.md`                               |
-| Write Plugin Skills for an App Agent   | `skills.md`                                          |
-| Test, build, and verify                | `testing.md`                                         |
+| Task                                    | Read                                                 |
+| --------------------------------------- | ---------------------------------------------------- |
+| Create and register a plugin            | `quick-start.md`, `plugin-registration-workspace.md` |
+| Implement a complete business plugin    | `development-workflow.md`                            |
+| Choose an App or cross-plugin entry     | `public-contracts.md`                                |
+| Choose a Client module                  | `client.md`                                          |
+| Build public or internal Client UI      | `client-components.md`                               |
+| Share React Context                     | `client-react-providers.md`                          |
+| Add a Client Service or initialization  | `client-service-providers.md`                        |
+| Choose a Server module                  | `server.md`                                          |
+| Choose a Service/Token/Provider         | `server-services-and-providers.md`                   |
+| Implement Provider lifecycle            | `service-provider.md`                                |
+| Apply Token/Container patterns          | `service-token-examples.md`                          |
+| Add asynchronous work                   | `server-jobs.md`                                     |
+| Choose a database operation             | `database.md`                                        |
+| Change schema                           | `database-migrations.md`                             |
+| Add required initial records            | `database-seeds.md`                                  |
+| Add Client or Server translations       | `i18n.md`                                            |
+| Choose an App-owned Registry item       | `registry.md`                                        |
+| Author a Registry item                  | `registry-authoring.md`                              |
+| Build, publish, or install Registry     | `registry-delivery.md`                               |
+| Upgrade or remove a Registry item       | `registry-upgrades.md`                               |
+| Contribute CLI commands and build hooks | `cli.md`                                             |
+| Write Plugin Skills for an App Agent    | `skills.md`                                          |
+| Test, build, and verify                 | `testing.md`                                         |
 
 When building a plugin page with Tabs, use child routes by default, even if the
 user does not mention routing. Declare Tab content under the plugin's parent

@@ -1,7 +1,7 @@
 {
   "name": "@nocobase/app-template-examples",
   "displayName": "NocoBase Examples",
-  "version": "0.1.0-beta.3",
+  "version": "0.1.0-beta.4",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -10,7 +10,7 @@
   "packageManager": "pnpm@11.7.0",
   "nocobase": {
     "templateKind": "app",
-    "defaultTemplateVersion": "0.1.0-beta.3"
+    "defaultTemplateVersion": "0.1.0-beta.4"
   },
   "devDependencies": {
     "@ai-sdk/react": "2.0.0",
@@ -26,7 +26,6 @@
     "@nocobase/app-portal-sdk": "workspace:^",
     "@nocobase/app-websocket": "workspace:^",
     "@nocobase/caching": "workspace:^",
-    "@nocobase/config": "workspace:^",
     "@nocobase/cron": "workspace:^",
     "@nocobase/dev-config": "workspace:*",
     "@nocobase/drive": "workspace:^",
@@ -34,7 +33,6 @@
     "@nocobase/logging": "workspace:^",
     "@nocobase/queue": "workspace:^",
     "@nocobase/session": "workspace:^",
-    "@nocobase/snowflake": "workspace:^",
     "@refinedev/cli": "^2.16.48",
     "@refinedev/core": "catalog:",
     "@refinedev/devtools": "^2.0.1",
@@ -204,10 +202,13 @@
     "@nocobase/app-plugin-skills-example": "workspace:^",
     "@nocobase/app-plugin-workflow": "workspace:^",
     "@nocobase/app-server": "workspace:^",
+    "@nocobase/config": "workspace:^",
     "@nocobase/db": "workspace:^",
     "@nocobase/nb3-cli": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
+    "@nocobase/snowflake": "workspace:^",
     "@oclif/core": "catalog:",
+    "better-auth": "catalog:",
     "hono": "catalog:"
   },
   "description": "Runnable NocoBase 3 examples for application development.",

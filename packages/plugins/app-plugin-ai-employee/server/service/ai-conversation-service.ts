@@ -7,7 +7,7 @@
  */
 
 import type { ConversationExecution } from '../agent/contracts.js';
-import type { ConversationStreamTarget } from '../domain/stream.js';
+import type { ConversationStreamTarget } from '../types.js';
 import type { AIEmployeeEntity, AIMessageInput } from '@nocobase/ai-employee';
 import type { AIManager } from '@nocobase/ai-employee';
 import type { DatabaseConnection } from '@nocobase/db';
@@ -18,21 +18,20 @@ import type { AIFileEntity } from '../repository/ai-file.js';
 import type { AIFileMetadataCreateContext } from '../repository/file-storage/ai-file-metadata-repository.js';
 import type { Logger } from '@nocobase/logging';
 import type { IdGeneratorService } from '@nocobase/snowflake';
-import type { Actor, Translate } from '../domain/contracts.js';
-import { ResourceActionError, sendStreamError } from '../domain/errors.js';
+import type { Actor, Translate } from '../types.js';
+import { ResourceActionError, sendStreamError } from '../types.js';
 import type {
   AIMessageEntity,
   AIToolMessageEntity,
 } from '../repository/index.js';
-import { AgentSSEAdapter } from '../agent/sse.js';
-import { createAIEmployeeAgentService } from '../agent/ai-employee/index.js';
+import { AgentSSEAdapter } from '../agent/transport/sse.js';
 import {
   createAgentContext,
   type AppAgentContext,
   type CreateAgentContextOptions,
 } from '../agent/context.js';
-import { EXECUTE_FRONTEND_TOOL_NAME } from '../ai-employees/common/frontend-tools.js';
-import { findCurrentFrontendTool } from '../ai-employees/frontend-tools.js';
+import { EXECUTE_FRONTEND_TOOL_NAME } from '../agent/context/ai-employee/common/frontend-tool-contracts.js';
+import { findCurrentFrontendTool } from '../agent/context/ai-employee/frontend-tools.js';
 import type { RepositoryFactory } from '../factory/repository-factory.js';
 import type { DocumentLoaders } from '@nocobase/ai-employee';
 import type { AIEmployeesManager } from '../manager/ai-employees-manager.js';
@@ -57,7 +56,7 @@ async function prependCancelledToolContinuation(
   repositories: RepositoryFactory,
   sessionId: string,
   messages: AIMessageInput[],
-  toolMessages: AIMessageEntity[],
+  toolMessages: AIMessageInput[],
 ): Promise<void> {
   if (!toolMessages.length) return;
   const continuationMessageId = String(
@@ -226,6 +225,7 @@ export interface AIConversationServiceOptions {
   readonly knowledgeBaseManager: KnowledgeBaseManager;
   readonly workContextHandler: WorkContextHandler;
   readonly documentLoaders: DocumentLoaders;
+  readonly agentServiceFactory: import('../agent/service/agent-service-factory.js').AgentServiceFactory;
 }
 
 export class AIConversationService {
@@ -233,11 +233,6 @@ export class AIConversationService {
   private readonly database: DatabaseConnection;
   private readonly databaseManager: DatabaseManager;
   private readonly logger: Logger;
-  private readonly caching: Caching;
-  private readonly fileStorage: FileStorage<
-    AIFileEntity,
-    AIFileMetadataCreateContext
-  >;
   private readonly snowflake: IdGeneratorService;
   private readonly repositories: RepositoryFactory;
   private readonly aiEmployeesManager: AIEmployeesManager;
@@ -246,16 +241,13 @@ export class AIConversationService {
   private readonly llmStreamCachedManager: LLMStreamCachedManager;
   private readonly subAgentsDispatcher: SubAgentsDispatcher;
   private readonly knowledgeBaseManager: KnowledgeBaseManager;
-  private readonly workContextHandler: WorkContextHandler;
-  private readonly documentLoaders: DocumentLoaders;
+  private readonly agentServiceFactory: import('../agent/service/agent-service-factory.js').AgentServiceFactory;
 
   public constructor(options: AIConversationServiceOptions) {
     this.ai = options.ai;
     this.database = options.database;
     this.databaseManager = options.databaseManager;
     this.logger = options.logger;
-    this.caching = options.caching;
-    this.fileStorage = options.fileStorage;
     this.snowflake = options.snowflake;
     this.repositories = options.repositories;
     this.aiEmployeesManager = options.aiEmployeesManager;
@@ -264,8 +256,7 @@ export class AIConversationService {
     this.llmStreamCachedManager = options.llmStreamCachedManager;
     this.subAgentsDispatcher = options.subAgentsDispatcher;
     this.knowledgeBaseManager = options.knowledgeBaseManager;
-    this.workContextHandler = options.workContextHandler;
-    this.documentLoaders = options.documentLoaders;
+    this.agentServiceFactory = options.agentServiceFactory;
   }
   private createAgentContext({
     actor,
@@ -282,8 +273,22 @@ export class AIConversationService {
   }): AppAgentContext {
     return createAgentContext({
       actor,
-      execution,
-      state,
+      state: {
+        sessionId: execution?.sessionId,
+        messageId: execution?.messageId,
+        messages: execution?.messages ? [...execution.messages] : undefined,
+        model: execution?.model ? { ...execution.model } : undefined,
+        webSearch: execution?.webSearch,
+        important: execution?.important,
+        frontendTools: execution?.frontendTools
+          ? [...execution.frontendTools]
+          : undefined,
+        toolCallResults: execution?.toolCallResults
+          ? [...execution.toolCallResults]
+          : undefined,
+        timezone: execution?.timezone,
+        ...state,
+      },
       ai: this.ai,
       database: this.databaseManager,
       logger: this.logger,
@@ -318,7 +323,7 @@ export class AIConversationService {
   }: {
     sessionId: string;
     messages: AIMessageInput[];
-    toolMessages: AIMessageEntity[];
+    toolMessages: AIMessageInput[];
   }): Promise<void> {
     await prependCancelledToolContinuation(
       this.repositories,
@@ -706,28 +711,20 @@ export class AIConversationService {
       );
       const agentContext = this.createAgentContext({
         actor,
-        execution,
         translate,
         getHeader,
       });
       const agentOptions = {
-        agentContext,
-        database: this.database,
-        caching: this.caching,
-        fileStorage: this.fileStorage,
-        snowflake: this.snowflake,
-        execution,
+        username: employee.username,
+        actor,
+        translate,
         getHeader,
-        repositories: this.repositories,
-        aiEmployeesManager: this.aiEmployeesManager,
-        builtInManager: this.builtInManager,
-        llmStreamCachedManager: this.llmStreamCachedManager,
-        knowledgeBaseManager: this.knowledgeBaseManager,
-        workContextHandler: this.workContextHandler,
-        documentLoaders: this.documentLoaders,
-        employee,
         sessionId,
-        systemMessage:
+        frontendTools: execution.frontendTools,
+        from: (execution.sessionId === sessionId
+          ? 'main-agent'
+          : 'sub-agent') as 'main-agent' | 'sub-agent',
+        systemPrompt:
           typeof conversation.options?.systemMessage === 'string'
             ? conversation.options.systemMessage
             : undefined,
@@ -738,13 +735,23 @@ export class AIConversationService {
           ? conversation.options.tools
           : undefined,
         webSearch,
-        model: resolvedModel,
       };
       if (conversation.category !== 'chat') {
         throw new ResourceActionError(404, 'conversation not found');
       }
-      const agent = await createAIEmployeeAgentService(agentOptions);
+      const agent =
+        await this.agentServiceFactory.createAIEmployee(agentOptions);
       const runStream = async (request: any) => {
+        const agentRequest = {
+          ...request,
+          model: resolvedModel,
+          context: {
+            ...(request.context ?? {}),
+            agentContext,
+            important: execution.important,
+            timezone: execution.timezone,
+          },
+        };
         const adapter = new AgentSSEAdapter(
           (chunk) => streamTarget(execution).write(chunk),
           (chunk) =>
@@ -752,19 +759,29 @@ export class AIConversationService {
         );
         await adapter.consume(
           request?.messageId
-            ? agent.service.forkStream(request, agentContext)
-            : agent.service.stream(request, agentContext),
+            ? agent.forkStream(agentRequest)
+            : agent.stream(agentRequest),
         );
         streamTarget(execution).end();
         return true;
       };
       const runInvoke = (request: any) => {
+        const agentRequest = {
+          ...request,
+          model: resolvedModel,
+          context: {
+            ...(request.context ?? {}),
+            agentContext,
+            important: execution.important,
+            timezone: execution.timezone,
+          },
+        };
         return request?.messageId
-          ? agent.service.forkInvoke(request, agentContext)
-          : agent.service.invoke(request, agentContext);
+          ? agent.forkInvoke(agentRequest)
+          : agent.invoke(agentRequest);
       };
       const cancelToolCall = () => {
-        return agent.facade.cancelToolCall();
+        return agent.cancelToolCall();
       };
       if (!editingMessageId) {
         if (await this.subAgentsDispatcher.isInterrupted(sessionId)) {
@@ -1021,28 +1038,20 @@ export class AIConversationService {
       );
       const agentContext = this.createAgentContext({
         actor,
-        execution,
         translate,
         getHeader,
       });
       const agentOptions = {
-        agentContext,
-        database: this.database,
-        caching: this.caching,
-        fileStorage: this.fileStorage,
-        snowflake: this.snowflake,
-        execution,
+        username: employee.username,
+        actor,
+        translate,
         getHeader,
-        repositories: this.repositories,
-        aiEmployeesManager: this.aiEmployeesManager,
-        builtInManager: this.builtInManager,
-        llmStreamCachedManager: this.llmStreamCachedManager,
-        knowledgeBaseManager: this.knowledgeBaseManager,
-        workContextHandler: this.workContextHandler,
-        documentLoaders: this.documentLoaders,
-        employee,
         sessionId,
-        systemMessage:
+        frontendTools: execution.frontendTools,
+        from: (execution.sessionId === sessionId
+          ? 'main-agent'
+          : 'sub-agent') as 'main-agent' | 'sub-agent',
+        systemPrompt:
           typeof conversation.options?.systemMessage === 'string'
             ? conversation.options.systemMessage
             : undefined,
@@ -1053,40 +1062,45 @@ export class AIConversationService {
           ? conversation.options.tools
           : undefined,
         webSearch,
-        model: resolvedModel,
       };
       if (conversation.category !== 'chat') {
         throw new ResourceActionError(404, 'conversation not found');
       }
       if (shouldStream) {
         {
-          const { service } = await createAIEmployeeAgentService(agentOptions);
+          const service =
+            await this.agentServiceFactory.createAIEmployee(agentOptions);
           await new AgentSSEAdapter(
             (chunk) => streamTarget(execution).write(chunk),
             (chunk) =>
               this.llmStreamCachedManager.getCached(sessionId).append(chunk),
           ).consume(
-            service.forkStream(
-              {
-                messageId,
-                userMessages: resendMessages.length
-                  ? resendMessages
-                  : undefined,
+            service.forkStream({
+              messageId,
+              model: resolvedModel,
+              userMessages: resendMessages.length ? resendMessages : undefined,
+              context: {
+                agentContext,
+                important: execution.important,
+                timezone: execution.timezone,
               },
-              agentContext,
-            ),
+            }),
           );
           streamTarget(execution).end();
         }
       } else {
-        const { service } = await createAIEmployeeAgentService(agentOptions);
-        return service.forkInvoke(
-          {
-            messageId,
-            userMessages: resendMessages.length ? resendMessages : undefined,
+        const service =
+          await this.agentServiceFactory.createAIEmployee(agentOptions);
+        return service.forkInvoke({
+          messageId,
+          model: resolvedModel,
+          userMessages: resendMessages.length ? resendMessages : undefined,
+          context: {
+            agentContext,
+            important: execution.important,
+            timezone: execution.timezone,
           },
-          agentContext,
-        );
+        });
       }
       return undefined;
     } catch (err: any) {
@@ -1171,9 +1185,13 @@ export class AIConversationService {
         : undefined;
       const frontendTool =
         typeof toolId === 'string'
-          ? await findCurrentFrontendTool(this.repositories, toolId, {
-              sessionId: message.sessionId,
-            })
+          ? await findCurrentFrontendTool(
+              this.repositories.aiConversations,
+              toolId,
+              {
+                sessionId: message.sessionId,
+              },
+            )
           : undefined;
       if (!frontendTool) {
         throw new ResourceActionError(
@@ -1311,28 +1329,20 @@ export class AIConversationService {
       );
       const agentContext = this.createAgentContext({
         actor,
-        execution,
         translate,
         getHeader,
       });
       const agentOptions = {
-        agentContext,
-        database: this.database,
-        caching: this.caching,
-        fileStorage: this.fileStorage,
-        snowflake: this.snowflake,
-        execution,
+        username: employee.username,
+        actor,
+        translate,
         getHeader,
-        repositories: this.repositories,
-        aiEmployeesManager: this.aiEmployeesManager,
-        builtInManager: this.builtInManager,
-        llmStreamCachedManager: this.llmStreamCachedManager,
-        knowledgeBaseManager: this.knowledgeBaseManager,
-        workContextHandler: this.workContextHandler,
-        documentLoaders: this.documentLoaders,
-        employee,
         sessionId,
-        systemMessage:
+        frontendTools: execution.frontendTools,
+        from: (execution.sessionId === sessionId
+          ? 'main-agent'
+          : 'sub-agent') as 'main-agent' | 'sub-agent',
+        systemPrompt:
           typeof conversation.options?.systemMessage === 'string'
             ? conversation.options.systemMessage
             : undefined,
@@ -1343,7 +1353,6 @@ export class AIConversationService {
           ? conversation.options.tools
           : undefined,
         webSearch,
-        model: resolvedModel,
       };
       const userDecisions = await this.aiConversationsManager.getUserDecisions(
         message.messageId,
@@ -1352,12 +1361,19 @@ export class AIConversationService {
         throw new ResourceActionError(404, 'conversation not found');
       }
       {
-        const { service } = await createAIEmployeeAgentService(agentOptions);
+        const service =
+          await this.agentServiceFactory.createAIEmployee(agentOptions);
         await new AgentSSEAdapter(
           (chunk) => streamTarget(execution).write(chunk),
           (chunk) =>
             this.llmStreamCachedManager.getCached(sessionId).append(chunk),
-        ).consume(service.resumeStream({ userDecisions }, agentContext));
+        ).consume(
+          service.resumeStream({
+            model: resolvedModel,
+            userDecisions,
+            context: { agentContext },
+          }),
+        );
         streamTarget(execution).end();
       }
     } catch (err: any) {

@@ -8,7 +8,7 @@ Add domain APIs here, in this application. Do not create a plugin package for a 
 
 - `routes/` holds your HTTP endpoints and the array `routes/index.ts` exports.
 - `providers/` holds your services, their tokens, and their lifecycle.
-- `config/` composes application configuration: defaults, environment mapping, and package-owned config sections.
+- `config/` defines editable module defaults with `defineAppConfig`; `config/index.ts` collects them with `defaultAppConfigs`. `config.ts` loads deployment settings and `environment.ts` maps environment variables.
 - `runtime.ts` is the composition root, declaring config, plugins, service providers, and routes.
 - `app.ts` assembles the application and its core providers and middleware.
 - `standalone.ts` is the Node entry point; `embedded.ts` is the entry point when a host process mounts this application. Both resolve the same runtime.

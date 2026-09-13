@@ -1,0 +1,6 @@
+[
+  { "type": "file", "name": "index", "label": "开发入口" },
+  { "type": "file", "name": "resources", "label": "员工、技能和工具" },
+  { "type": "file", "name": "frontend", "label": "前端聊天组件" },
+  { "type": "file", "name": "runtime", "label": "服务端运行时" }
+]

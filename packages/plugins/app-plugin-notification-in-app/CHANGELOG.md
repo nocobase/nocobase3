@@ -1,5 +1,18 @@
 # @nocobase/app-plugin-notification-in-app
 
+## 0.2.0-beta.8
+
+### Patch Changes
+
+- adedf9c: Use a database-side count for unread in-app notifications instead of loading all matching rows.
+- 426bd48: Remove logical IM `target` recipients and make `send().to` optional so Webhook Providers can be selected directly by Provider name or fan-out strategy.
+- Updated dependencies [a009e2d]
+- Updated dependencies [426bd48]
+  - @nocobase/app-server@1.0.0-beta.10
+  - @nocobase/app-client@1.0.0-beta.13
+  - @nocobase/i18n@1.0.0-beta.3
+  - @nocobase/app-plugin-notification@0.1.0-beta.7
+
 ## 0.2.0-beta.7
 
 ### Minor Changes

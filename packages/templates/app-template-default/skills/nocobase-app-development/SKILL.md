@@ -15,6 +15,8 @@ Use this Skill when building a feature in this application: a page, an endpoint,
 
 Do not use it to develop a published plugin package. Plugin development has its own protocol and lives in a separate repository.
 
+Do not use it to upgrade the template this application was generated from. That is `skills/nocobase-app-upgrade/`, which reconciles a newer template release against the application without reverting the user's work.
+
 For pages with Tabs, nested pages, or navigation groups, read [child routes](references/client-child-routes.md). Page-level Tabs use child routes by default, even when the user does not mention routing. Declare their content under the parent route and derive the selected Tab from the URL. Opening the parent URL redirects to the default accessible Tab with replace and preserves query parameters; explicit Tab URLs retain their selection. Follow an explicit user request for a different interaction.
 
 Default ships with a localized homepage, no application-owned routes, and no example plugins or demo data. Its built-in application provider exposes Authorization Permission Sets as direct roles in the Users page; add other application services beside it. Use `app-template-examples` to explore runnable demonstrations. `database/main/` starts empty; do not copy example history into Default.
@@ -133,4 +135,6 @@ pnpm build
 
 Verify observable behavior, not just that the commands passed. [Testing and verification](references/testing.md) lists what to check for each kind of change.
 
-Application startup defaults belong in `config.yml` under `client.app`: `defaultLocale`, `defaultColorScheme`, and `defaultTheme`. Valid browser-local choices take precedence. See the i18n and themes references for fallback behavior.
+After touching `client/locales/` or `server/locales/`, run `pnpm nocobase app i18n:check`. It reports a language declared on one side alone, which the interface offers and the server then rejects.
+
+Application startup defaults belong in `config.yml`: `i18n.defaultLocale` for the language, and `client.app.defaultColorScheme` and `client.app.defaultTheme` for appearance. Valid browser-local choices take precedence. Which languages the application offers is not configured — its own `client/locales/` and `server/locales/` are that list. See the i18n and themes references.

@@ -96,7 +96,7 @@ export function SurfaceLayout({
       ) : null}
       <aside
         aria-label={`${copy.title} navigation`}
-        className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width,transform] duration-200 md:static md:z-auto md:flex md:translate-x-0 ${desktopSidebarCollapsed ? 'md:w-16' : 'md:w-64'} ${mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
+        className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width,transform] duration-200 md:sticky md:top-0 md:bottom-auto md:h-svh md:z-auto md:flex md:translate-x-0 ${desktopSidebarCollapsed ? 'md:w-16' : 'md:w-64'} ${mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
       >
         <div
           className={`flex h-16 shrink-0 items-center justify-between overflow-hidden border-b border-sidebar-border/70 px-5 ${desktopSidebarCollapsed ? 'md:justify-center md:px-0' : ''}`}
@@ -119,7 +119,7 @@ export function SurfaceLayout({
         </div>
         <nav
           aria-label={copy.title}
-          className={`flex-1 space-y-1 overflow-x-hidden overflow-y-auto py-4 ${desktopSidebarCollapsed ? 'px-3 md:px-2' : 'px-3'}`}
+          className={`flex-1 min-h-0 space-y-1 overflow-x-hidden overflow-y-auto py-4 ${desktopSidebarCollapsed ? 'px-3 md:px-2' : 'px-3'}`}
         >
           {navEntries.map((entry) => (
             <NavigationTree

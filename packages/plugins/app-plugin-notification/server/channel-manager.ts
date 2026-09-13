@@ -59,7 +59,7 @@ export class ChannelManager {
 
   async resolveRecipient(
     type: string,
-    recipient: NotificationRecipient,
+    recipient: NotificationRecipient | undefined,
     provider: NotificationProviderIdentity,
   ): Promise<object | undefined> {
     const channel = this.runtimes.get(type)?.channel;

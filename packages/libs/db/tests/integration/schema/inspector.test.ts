@@ -637,4 +637,47 @@ describeIntegrationDatabases('schema inspector', (context) => {
       ]),
     );
   });
+
+  /**
+   * A default that has to be written as an expression is not a generated
+   * column, and telling them apart is per-dialect.
+   *
+   * MySQL conflates them in `information_schema`: an expression default reports
+   * `EXTRA = 'DEFAULT_GENERATED'`, which contains the word but describes a
+   * default, while a real generated column reports `VIRTUAL GENERATED` or
+   * `STORED GENERATED` and is the only kind that carries a generation
+   * expression. The distinction matters because the Repository refuses to write
+   * a generated column — and MySQL accepts no literal default on `json`, so
+   * every defaulted `json` column takes an expression default and was being
+   * reported as unwritable.
+   */
+  it('separates an expression default from a generated column', async () => {
+    await context.builder.createCollection('settings', (collection) => {
+      collection.increments('id');
+      collection.json('payload').notNull().defaultTo({ enabled: true });
+      collection.string('name', { length: 40 }).nullable();
+    });
+
+    const result = await context.database
+      .connection()
+      .schemaInspector.getPhysicalCollection({
+        tableName: context.table('settings'),
+      });
+    const payload = result?.columns.find(
+      (column) => column.columnName === 'payload',
+    );
+
+    expect(payload?.generated).toBeUndefined();
+    expect(payload?.default).toBeDefined();
+
+    // And the Repository can therefore write it, which is the behaviour the
+    // misclassification actually broke.
+    const repository = context.database.repository('settings');
+    const created = await repository.createOne({
+      values: { payload: { enabled: false } },
+    });
+    const decode = (value: unknown): unknown =>
+      typeof value === 'string' ? JSON.parse(value) : value;
+    expect(decode(created.record.payload)).toEqual({ enabled: false });
+  });
 });

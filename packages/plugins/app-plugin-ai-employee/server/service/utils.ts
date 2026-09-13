@@ -1,4 +1,4 @@
-import { notFoundError, validationError } from '../domain/errors.js';
+import { notFoundError, validationError } from '../types.js';
 
 export type ResourceInput = Record<string, any>;
 

@@ -128,7 +128,7 @@ describe('NotificationManager registration', () => {
             type: 'email',
             resolveRecipient({ recipient, provider }): object {
               resolvedProviders.push(provider);
-              return recipient;
+              return recipient ?? {};
             },
             render({ content }): object {
               return { subject: content.title, text: content.body };
@@ -233,9 +233,7 @@ describe('NotificationManager registration', () => {
           return {
             type: 'im',
             resolveRecipient({ recipient, provider }): object | undefined {
-              return recipient.type === 'target'
-                ? { providerName: provider.name }
-                : undefined;
+              return !recipient ? { providerName: provider.name } : undefined;
             },
             render({ content }): object {
               return { text: content.body };
@@ -261,7 +259,6 @@ describe('NotificationManager registration', () => {
 
     const result = await manager.send({
       idempotencyKey: 'manager-select-provider',
-      to: { type: 'target', id: 'ops-alerts' },
       channels: ['im'],
       routing: {
         im: {
@@ -314,7 +311,7 @@ describe('NotificationManager registration', () => {
         return {
           type: 'im',
           resolveRecipient({ recipient, provider }): object | undefined {
-            return recipient.type === 'target' ? { provider } : undefined;
+            return !recipient ? { provider } : undefined;
           },
           render({ content }): object {
             return { text: content.body };
@@ -336,7 +333,6 @@ describe('NotificationManager registration', () => {
 
     const result = await manager.send({
       idempotencyKey: 'manager-all-providers',
-      to: { type: 'target', id: 'ops-alerts' },
       channels: ['im'],
       routing: { im: { providers: { strategy: 'all' } } },
       content: { body: 'Send it everywhere.' },
@@ -375,7 +371,6 @@ describe('NotificationManager registration', () => {
 
     const selectedResult = await manager.send({
       idempotencyKey: 'manager-selected-all-provider',
-      to: { type: 'target', id: 'ops-alerts' },
       channels: ['im'],
       routing: {
         im: {
@@ -452,7 +447,6 @@ describe('NotificationManager registration', () => {
     await expect(
       manager.send({
         idempotencyKey: 'manager-missing-provider',
-        to: { type: 'target', id: 'ops-alerts' },
         routing: {
           im: {
             providers: {
@@ -508,8 +502,8 @@ describe('NotificationManager registration', () => {
               async resolveRecipient({
                 recipient,
               }): Promise<object | undefined> {
-                if (recipient.type === 'user') return { userId: recipient.id };
-                if (channelType === 'email' && recipient.type === 'email')
+                if (recipient?.type === 'user') return { userId: recipient.id };
+                if (channelType === 'email' && recipient?.type === 'email')
                   return { address: recipient.address };
                 return undefined;
               },
@@ -611,6 +605,37 @@ describe('NotificationManager registration', () => {
     expect(
       (await manager.logs.get(partialResult.notificationId))?.log.status,
     ).toBe('partial');
+
+    const missingRecipientResult = await manager.send({
+      idempotencyKey: 'manager-missing-recipient',
+      channels: ['email'],
+      content: { body: 'Recipient is required by this Channel.' },
+    });
+    expect(missingRecipientResult.status).toBe('failed');
+    expect(missingRecipientResult.deliveries).toEqual([
+      expect.objectContaining({
+        channel: 'email',
+        status: 'failed',
+        error: {
+          code: 'RECIPIENT_UNSUPPORTED',
+          category: 'recipient',
+          message: 'Notification Channel "email" requires a recipient.',
+        },
+      }),
+    ]);
+    await expect(
+      store.listDeliveries(missingRecipientResult.notificationId),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        channel: 'email',
+        recipientSnapshot: {},
+        lastError: {
+          code: 'RECIPIENT_UNSUPPORTED',
+          category: 'recipient',
+          message: 'Notification Channel "email" requires a recipient.',
+        },
+      }),
+    ]);
 
     const failedResult = await manager.send({
       idempotencyKey: 'manager-failed',
@@ -1434,7 +1459,7 @@ function createEmailManagerHarness(input: {
         return {
           type: 'email',
           resolveRecipient({ recipient }): object | undefined {
-            return recipient.type === 'email'
+            return recipient?.type === 'email'
               ? { address: recipient.address }
               : undefined;
           },

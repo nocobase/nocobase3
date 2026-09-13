@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { readCliHooks, runHookStage } from './utils/cli-hooks.mjs';
+
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '..',
@@ -190,11 +192,19 @@ const run = (label, command, args, options = {}) => {
   }
 };
 
+// Read before anything is built, so a broken CLI assembly fails here rather than after several minutes of work.
+const { build: buildHooks } = readCliHooks(rootDir);
+
 fs.rmSync(distDir, { recursive: true, force: true });
+
+// After `dist` is cleared rather than before, so a hook may write into it. Clearing is the build's first step, and a
+// hook writing to a directory about to be deleted would succeed, leave nothing behind, and report nothing wrong.
+runHookStage(buildHooks, 'beforeBuild', run);
 
 run('Typecheck client', 'pnpm', ['exec', 'tsc']);
 run('Typecheck tooling', 'pnpm', ['exec', 'tsc', '-p', 'tsconfig.node.json']);
 run('Build client', 'pnpm', ['exec', 'refine', 'build']);
+runHookStage(buildHooks, 'afterClientBuild', run);
 // `^...` selects every workspace package this one depends on, transitively, which is exactly the set whose `dist`
 // the steps below read. Spelling the set out by hand drifted instead: `@nocobase/config` was missing from the list
 // and a template built on its own failed at "Generate server package" with `Missing ../../libs/config/dist`.
@@ -218,6 +228,7 @@ run('Rewrite server path aliases', 'pnpm', [
   '-p',
   'tsconfig.server.json',
 ]);
+runHookStage(buildHooks, 'afterServerBuild', run);
 writeDistEnv();
 run('Generate server package', 'node', [
   './scripts/utils/build-server-dist-package.mjs',
@@ -264,6 +275,9 @@ run('Prune deployment artifacts', 'node', [
 run('Verify server dependencies', 'node', [
   './scripts/utils/verify-server-deps.mjs',
 ]);
+// Last, with the deployment tree complete and installed. A hook here sees what a deployment will see, and runs
+// before `--tar` so whatever it produces is packed with everything else.
+runHookStage(buildHooks, 'afterBuild', run);
 
 console.log(
   '\nBuild complete: dist/client, dist/server, dist/cli, dist/.env, and dist/package.json',

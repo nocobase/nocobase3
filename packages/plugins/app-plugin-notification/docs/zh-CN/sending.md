@@ -6,7 +6,18 @@ keywords: 'NocoBase,NotificationManager,发送通知,站内信,邮件,飞书,钉
 
 # 发送通知
 
-服务端业务代码通过 `NotificationManager.send()` 发送通知。一个调用可以包含多个接收人，并将同一份通知内容发送到多个 Channel。
+服务端业务代码通过 `NotificationManager.send()` 发送通知。一个调用可以包含多个接收人，并将同一份通知内容发送到多个 Channel；对于不需要收件人的 Webhook Channel，也可以省略 `to`。
+
+## 收件人与可选的 `to`
+
+`to` 是可选的通知收件人。需要收件人的 Channel 必须提供它；飞书、钉钉这类 Webhook Channel 可以省略 `to`，直接向选中的 Provider 发送。核心包支持以下收件人形状，实际能否发送由对应 Channel 的收件人解析器（recipient resolver）决定：
+
+| `to.type` | 示例                                              | 说明                                                       |
+| --------- | ------------------------------------------------- | ---------------------------------------------------------- |
+| `user`    | `{ type: 'user', id: 'user-1' }`                  | 通过用户 ID 发送。Channel 需要提供对应的用户地址解析能力。 |
+| `email`   | `{ type: 'email', address: 'alice@example.com' }` | 直接向邮箱地址发送。                                       |
+
+Provider 路由中的 `provider` 是 Provider 名称。`routing.im.providers.provider: 'feishu'` 表示选择名为 `feishu` 的 Webhook Provider；也可以使用 `strategy: 'all'` 同时选择多个 Provider。
 
 ## 发送站内信
 
@@ -133,12 +144,11 @@ Provider 路由支持这些写法：
 
 ## 发送飞书或钉钉消息
 
-Webhook Provider 的目标使用逻辑目标 ID 表示。默认模板将飞书和钉钉 Webhook 都映射到 `default` 目标：
+飞书和钉钉 Webhook Provider 自身就是发送目的地，因此发送 IM 消息时可以省略 `to`：
 
 ```ts
 await notification.send({
-  idempotencyKey: 'deployment:42:default:im',
-  to: { type: 'target', id: 'default' },
+  idempotencyKey: 'deployment:42:im',
   channels: ['im'],
   content: {
     title: '部署完成',
@@ -148,12 +158,11 @@ await notification.send({
 });
 ```
 
-如果只发送到飞书，可以通过路由指定 Provider。`provider` 的值必须与配置中的 Provider `name` 一致：
+如果只发送到飞书，可以通过路由指定 Provider。`provider` 的值必须与配置中的 Provider `name` 一致；它不会使用 Provider 的 `type`：
 
 ```ts
 await notification.send({
-  idempotencyKey: 'deployment:42:default:feishu',
-  to: { type: 'target', id: 'default' },
+  idempotencyKey: 'deployment:42:feishu',
   channels: ['im'],
   routing: {
     im: {
@@ -166,14 +175,13 @@ await notification.send({
 });
 ```
 
-如果你通过 `createImChannelDefinition()` 提供了用户 ID 到 IM 目标的 resolver，也可以传 `{ type: 'user', id: 'user-1' }`。
+如果你通过 `createImChannelDefinition()` 提供了用户 ID 到外部 IM 地址的 resolver，也可以传 `{ type: 'user', id: 'user-1' }`。
 
 如果要同时发送到所有已启用的 IM Provider，使用 `strategy: 'all'`。每个 Provider 会创建一条独立 Delivery：
 
 ```ts
 await notification.send({
-  idempotencyKey: 'deployment:42:default:all-im',
-  to: { type: 'target', id: 'default' },
+  idempotencyKey: 'deployment:42:all-im',
   channels: ['im'],
   routing: { im: { providers: { strategy: 'all' } } },
   content: {
@@ -219,7 +227,7 @@ const unsubscribe = notification.onStatusChanged(
 
 ## 幂等与 Delivery 重试
 
-`idempotencyKey` 必传，由调用方按业务事件、收件人范围、Channel，以及必要时的 Provider 范围稳定生成。同一逻辑发送发生超时、重复提交或服务恢复时必须复用原键。相同键和等价输入返回原 Notification，并令 `deduplicated` 为 `true`；相同键配不同内容会抛出 `IDEMPOTENCY_KEY_CONFLICT`。当前不提供 `idempotencyExpiresAt`，键不会因调用方等待超时而自动失效。
+`idempotencyKey` 必传，由调用方按业务事件、收件人范围（无收件人时使用 Channel 范围），以及必要时的 Provider 范围稳定生成。同一逻辑发送发生超时、重复提交或服务恢复时必须复用原键。相同键和等价输入返回原 Notification，并令 `deduplicated` 为 `true`；相同键配不同内容会抛出 `IDEMPOTENCY_KEY_CONFLICT`。当前不提供 `idempotencyExpiresAt`，键不会因调用方等待超时而自动失效。
 
 对终态 `failed`，可在问题修复后调用 `retryDelivery`。如果 Delivery 已有 `nextRunAt`，表示自动重试已排期，不允许再手工重试。接收人类型不受 Channel 支持时，原 Delivery 无法原地修正，必须用正确接收人发起新的业务发送。
 
@@ -241,13 +249,15 @@ await notification.retryDelivery({
 以下情况会直接抛出错误：
 
 - 配置的 Channel 或 Provider Definition 尚未由插件注册
-- `to` 为空
+- `to` 显式传入空数组
 - 没有任何 Channel
 - 使用了未启用的 Channel
 - Channel 不支持通用内容
 - Channel 没有可用的 Provider
 - `idempotencyKey` 为空、包含首尾空白或超过 191 个字符
 - 同一 `idempotencyKey` 被用于不同请求内容
+
+如果省略 `to`，需要收件人的 Channel 会创建一条失败的 Delivery，并且不会调用外部 Provider；支持无收件人发送的 Channel（例如 IM Webhook）则会正常投递。
 
 Channel 不支持某种接收人时，对应组合会创建一条失败的 Delivery，其他接收人与 Channel 仍可继续投递。地址解析、消息校验和 Provider 调用在队列任务中执行；这些阶段失败时，`send()` 可能已经返回，需要到 Delivery 日志中查看结果。
 

@@ -60,6 +60,17 @@ describe('notification idempotency', () => {
     );
   });
 
+  it('fingerprints a recipientless send without requiring `to`', () => {
+    const input = request({ to: undefined });
+
+    expect(notificationRequestFingerprint(input)).toBe(
+      notificationRequestFingerprint({
+        ...input,
+        to: undefined,
+      }),
+    );
+  });
+
   it('treats omitted and explicit default Provider routing as equivalent', () => {
     const omitted = request({});
     const explicit = request({

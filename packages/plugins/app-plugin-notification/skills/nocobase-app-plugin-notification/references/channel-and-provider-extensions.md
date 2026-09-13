@@ -4,7 +4,7 @@
 
 A Channel defines the business-to-delivery adaptation:
 
-- Resolve a generic `NotificationRecipient` into a Channel recipient.
+- Resolve an optional generic `NotificationRecipient` into a Channel recipient; return a recipient directly when the Channel supports recipientless delivery.
 - Render common `NotificationContent` plus a Channel override into a Channel message.
 - Prepare a Provider-ready payload with an abort signal.
 
@@ -69,7 +69,7 @@ Use the core error categories: `authentication`, `channel`, `configuration`, `co
 
 ## Extension tests
 
-- Channel resolves each allowed recipient and rejects unsupported shapes without external I/O.
+- Channel resolves each allowed recipient, supports an omitted recipient when applicable, and rejects unsupported shapes without external I/O.
 - Renderer merges common content and overrides without mutating input.
 - Preparation validates payload and honors abort.
 - Provider returns accepted with the external id on a confirmed success.

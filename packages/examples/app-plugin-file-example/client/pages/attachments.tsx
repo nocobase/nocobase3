@@ -7,155 +7,100 @@ import {
 } from 'react';
 import { useService } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
-import { clientFileRepositoryManagerToken } from '@nocobase/app-plugin-file/client';
-import type { FileRecord } from '@nocobase/app-plugin-file/client';
+import {
+  clientFileRepositoryManagerToken,
+  type FileRecord,
+} from '@nocobase/app-plugin-file/client';
 
+import { FileList } from '../components/file-list.js';
+import { FileUploadField } from '../components/file-upload-field.js';
+import { useFileLabels } from '../lib/labels.js';
+
+function messageOf(cause: unknown): string {
+  return cause instanceof Error ? cause.message : String(cause);
+}
+
+/** Flat File Repository demo: upload, list, preview and delete metadata. */
 export default function AttachmentsPage(): ReactElement {
   const { t } = useTranslation('@nocobase/app-plugin-file-example');
+  const labels = useFileLabels();
   const manager = useService(clientFileRepositoryManagerToken);
   const repository = useMemo(
     () => manager.repository('attachments'),
     [manager],
   );
-  const [records, setRecords] = useState<FileRecord[]>([]);
-  const [selected, setSelected] = useState<File[]>([]);
+  const [records, setRecords] = useState<readonly FileRecord[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const refresh = useCallback(async () => {
-    setRecords(
-      await repository.findMany({
+
+  const fetchRecords = useCallback(
+    async (): Promise<readonly FileRecord[]> =>
+      repository.findMany({
         limit: 100,
         sort: (s) => s.field('createdAt').desc(),
       }),
+    [repository],
+  );
+
+  useEffect(() => {
+    let active = true;
+    void fetchRecords().then(
+      (rows) => {
+        if (active) setRecords(rows);
+      },
+      (cause: unknown) => {
+        if (active) setError(messageOf(cause));
+      },
     );
-  }, [repository]);
+    return () => {
+      active = false;
+    };
+  }, [fetchRecords]);
+
   const run = useCallback(
-    async (action: () => Promise<unknown>) => {
+    async (action: () => Promise<unknown>): Promise<void> => {
       setBusy(true);
       setError('');
       try {
         await action();
-        await refresh();
+        setRecords(await fetchRecords());
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : String(cause));
+        setError(messageOf(cause));
       } finally {
         setBusy(false);
       }
     },
-    [refresh],
+    [fetchRecords],
   );
-  useEffect(() => {
-    let active = true;
-    void repository
-      .findMany({ limit: 100, sort: (s) => s.field('createdAt').desc() })
-      .then(
-        (rows) => {
-          if (active) setRecords(rows);
-        },
-        (cause: unknown) => {
-          if (active)
-            setError(cause instanceof Error ? cause.message : String(cause));
-        },
-      );
-    return () => {
-      active = false;
-    };
-  }, [repository]);
+
   return (
     <main className='mx-auto max-w-5xl space-y-6 p-8'>
-      <h1 className='text-2xl font-semibold'>{t('title')}</h1>
-      <p>{t('description')}</p>
-      <fieldset
+      <header className='space-y-2'>
+        <h1 className='text-2xl font-semibold'>{t('title')}</h1>
+        <p className='text-sm text-muted-foreground'>{t('description')}</p>
+        <p className='text-sm text-muted-foreground'>{t('apiHint')}</p>
+      </header>
+      <FileUploadField
+        repository={repository}
+        labels={labels}
+        multiple
         disabled={busy}
-        className='flex flex-wrap items-center gap-4 rounded-lg border p-4'
-      >
-        <label>
-          {t('choose')}{' '}
-          <input
-            type='file'
-            multiple
-            onChange={(event) =>
-              setSelected(Array.from(event.target.files ?? []))
-            }
-          />
-        </label>
-        <button
-          className='rounded border px-3 py-2'
-          disabled={selected.length !== 1}
-          onClick={() => {
-            void run(() => repository.uploadOne({ file: selected[0] }));
-          }}
-        >
-          {t('single')}
-        </button>
-        <button
-          className='rounded border px-3 py-2'
-          disabled={!selected.length}
-          onClick={() => {
-            void run(() => repository.uploadMany({ files: selected }));
-          }}
-        >
-          {t('multiple')}
-        </button>
-        <button
-          className='rounded border px-3 py-2'
-          onClick={() => {
-            void run(async () => undefined);
-          }}
-        >
-          {t('refresh')}
-        </button>
-      </fieldset>
-      {busy && <p role='status'>{t('busy')}</p>}
+        onChange={() => run(async () => undefined)}
+      />
       {error && (
-        <p role='alert' className='text-destructive'>
+        <p role='alert' className='text-sm text-destructive'>
           {error}
         </p>
       )}
+      <FileList
+        files={records}
+        labels={labels}
+        disabled={busy}
+        onRemove={(file) =>
+          run(() => repository.deleteOne({ filter: { id: file.id } }))
+        }
+      />
       <p className='text-sm text-muted-foreground'>{t('retention')}</p>
-      <table className='w-full text-left'>
-        <thead>
-          <tr>
-            <th>{t('filename')}</th>
-            <th>{t('type')}</th>
-            <th>{t('size')}</th>
-            <th>{t('open')}</th>
-            <th>{t('remove')}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {records.map((record) => (
-            <tr className='border-t' key={record.id}>
-              <td className='py-3'>{record.filename}</td>
-              <td>{record.mimeType}</td>
-              <td>{String(record.size)}</td>
-              <td>
-                <a
-                  className='underline'
-                  href={record.contentUrl}
-                  target='_blank'
-                  rel='noreferrer'
-                >
-                  {t('open')}
-                </a>
-              </td>
-              <td>
-                <button
-                  disabled={busy}
-                  onClick={() => {
-                    void run(() =>
-                      repository.deleteOne({ filter: { id: record.id } }),
-                    );
-                  }}
-                >
-                  {t('remove')}
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {!records.length && <p>{t('empty')}</p>}
     </main>
   );
 }

@@ -1,3 +1,5 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import type { DatabaseManager } from '@nocobase/db';
 import type { NocoBaseQueueManager } from '@nocobase/queue';
 import type { ServiceResolver } from '@nocobase/service-provider';
@@ -10,6 +12,7 @@ import {
 import {
   WorkflowEngine,
   assertInputSize,
+  asIdFilter,
   loadRun,
   loadWorkflow,
   type JsonObject,
@@ -22,7 +25,8 @@ import {
   validateInputValue,
 } from './engine/index.js';
 import type { FsDriveDiskConfig } from '@nocobase/drive';
-import { WORKFLOW_COLLECTIONS } from './collections/names.js';
+import { anyOfIds } from './collections/filters.js';
+import { workflowStore, type WorkflowStore } from './collections/store.js';
 import { createWorkflowRunServices } from './engine/run-services.js';
 
 export interface WorkflowServiceOptions {
@@ -39,12 +43,18 @@ export interface WorkflowServiceOptions {
 export class WorkflowService {
   private readonly database: DatabaseManager;
   private readonly store: LocalWorkflowArtifactStore;
+  /** Set in development only, where run modules load from the source package. */
+  private readonly developmentResourceRoot: string | undefined;
   private readonly engine: WorkflowEngine;
   private readonly loader: WorkflowLoader;
   private initializationPromise: Promise<void> | undefined;
 
   constructor(options: WorkflowServiceOptions) {
     this.database = options.database;
+    this.developmentResourceRoot =
+      !options.production && options.sourceRoot
+        ? options.sourceRoot
+        : undefined;
     this.store = new LocalWorkflowArtifactStore({
       storeRoot: options.artifactDisk.location,
     });
@@ -56,15 +66,32 @@ export class WorkflowService {
         : { queueName: options.queueName }),
       services: createWorkflowRunServices(options.services),
       artifactStore: this.store,
-      ...(!options.production && options.sourceRoot
-        ? { developmentResourceRoot: options.sourceRoot }
-        : {}),
+      ...(this.developmentResourceRoot === undefined
+        ? {}
+        : { developmentResourceRoot: this.developmentResourceRoot }),
     });
     this.loader = new WorkflowLoader({
       database: options.database,
       artifactStore: this.store,
       distRoot: options.distRoot,
+      // Development reads the workflow source directly, so an edited
+      // `workflow.ts` is picked up without `nocobase workflow build` and
+      // without restarting the server.
+      ...(this.developmentResourceRoot === undefined
+        ? {}
+        : {
+            source: {
+              root: this.developmentResourceRoot,
+              instructions: (): ReadonlyMap<string, WorkflowInstructionClass> =>
+                this.engine.instructions,
+            },
+          }),
     });
+  }
+
+  /** The workflow collections. `store` here is already the Artifact store. */
+  private get collections(): WorkflowStore {
+    return workflowStore(this.database);
   }
 
   registerInstruction(instruction: WorkflowInstructionClass): void {
@@ -76,13 +103,10 @@ export class WorkflowService {
     input: JsonObject,
     triggerOptions: WorkflowEventOptions = {},
   ): Promise<WorkflowTriggerReceipt> {
-    const row = await this.database
-      .query()
-      .selectFrom(WORKFLOW_COLLECTIONS.workflows)
-      .select(['id', 'enabled', 'hash'])
-      .where('key', '=', workflowKey)
-      .where('current', '=', true)
-      .executeTakeFirst();
+    const row = await this.collections.workflows.findOne({
+      filter: { key: workflowKey, current: true },
+      select: (select) => select.fields('id', 'enabled', 'hash'),
+    });
     if (!row) return { status: 'skipped', reason: 'not-found' };
     if (!triggerOptions.force && !triggerOptions.manually && !row.enabled)
       return { status: 'skipped', reason: 'disabled' };
@@ -90,7 +114,7 @@ export class WorkflowService {
       await this.loader.ensureMaterialized(row.hash);
 
     const workflow = await loadWorkflow(
-      this.database.query(),
+      this.collections,
       row.id as string | number,
     );
     if (!workflow)
@@ -107,7 +131,7 @@ export class WorkflowService {
     input: JsonObject,
     triggerOptions: WorkflowEventOptions = {},
   ): Promise<WorkflowTriggerReceipt> {
-    const workflow = await loadWorkflow(this.database.query(), revisionId);
+    const workflow = await loadWorkflow(this.collections, revisionId);
     if (!workflow)
       throw new WorkflowInvocationError(
         'WORKFLOW_NOT_FOUND',
@@ -134,6 +158,35 @@ export class WorkflowService {
     await this.engine.dispose();
   }
 
+  /**
+   * Refuse to start a run whose code is not where the engine will look for it.
+   *
+   * Production resolves run modules from the Artifact store, keyed by the
+   * revision's digest. Development resolves them from the source package and
+   * never consults the store, so a definition compiled from source has nothing
+   * committed there and the store cannot be the precondition.
+   */
+  private async assertResourcesPresent(
+    workflow: WorkflowDefinition,
+  ): Promise<void> {
+    if (this.developmentResourceRoot !== undefined) {
+      const resourceRoot = path.join(
+        this.developmentResourceRoot,
+        workflow.key,
+      );
+      if (!(await isDirectory(resourceRoot)))
+        throw new Error(
+          `Workflow source package ${workflow.key} is missing at ${resourceRoot}`,
+        );
+      return;
+    }
+    const hash = workflow.hash;
+    if (!hash || !(await this.store.has(workflow.key, hash)))
+      throw new Error(
+        `Workflow Artifact ${workflow.key}/${String(hash)} is missing`,
+      );
+  }
+
   private ensureInitialized(): Promise<void> {
     if (this.initializationPromise) return this.initializationPromise;
     this.initializationPromise = this.engine
@@ -153,11 +206,7 @@ export class WorkflowService {
     if (!triggerOptions.force && !triggerOptions.manually && !workflow.enabled)
       return { status: 'skipped', reason: 'disabled' };
 
-    const hash = workflow.hash;
-    if (!hash || !(await this.store.has(workflow.key, hash)))
-      throw new Error(
-        `Workflow Artifact ${workflow.key}/${String(hash)} is missing`,
-      );
+    await this.assertResourcesPresent(workflow);
 
     assertInputSize(input);
     const validation = validateInputValue(workflow.inputSchema, input);
@@ -171,7 +220,7 @@ export class WorkflowService {
     let stack = triggerOptions.stack ? [...triggerOptions.stack] : undefined;
     if (stack === undefined && triggerOptions.parentRunId !== undefined) {
       const parent = await loadRun(
-        this.database.query(),
+        this.collections,
         triggerOptions.parentRunId,
       );
       if (!parent)
@@ -182,15 +231,15 @@ export class WorkflowService {
       stack = [...parent.stack, parent.id];
     }
     if (stack?.length) {
-      const repeats = await this.database
-        .query()
-        .selectFrom(WORKFLOW_COLLECTIONS.runs)
-        .select(({ fn }) => [fn.countAll().as('count')])
-        .where('workflowId', '=', workflow.id)
-        .where('id', 'in', stack)
-        .executeTakeFirst<{ count: number | string }>();
+      const repeats = await this.collections.runs.count({
+        filter: (filter) =>
+          filter.and([
+            filter.number('workflowId').eq(asIdFilter(workflow.id)),
+            anyOfIds(filter, 'id', stack),
+          ]),
+      });
       const limit = Number(workflow.options.stackLimit ?? 1);
-      if (Number(repeats?.count ?? 0) >= limit)
+      if (repeats >= limit)
         throw new WorkflowInvocationError(
           'STACK_LIMIT_EXCEEDED',
           `Workflow "${workflow.key}" stack limit ${limit} was exceeded`,
@@ -218,3 +267,11 @@ export type WorkflowServiceApi = Pick<
   | 'discoverArtifacts'
   | 'ensureArtifactMaterialized'
 >;
+
+async function isDirectory(target: string): Promise<boolean> {
+  try {
+    return (await fs.stat(target)).isDirectory();
+  } catch {
+    return false;
+  }
+}

@@ -1,4 +1,12 @@
+import {
+  ClientApplicationContext,
+  type ClientApplication,
+} from '@nocobase/app-client';
 import type { AppClientRegisteredRoute } from '@nocobase/app-client/plugins';
+import {
+  AuthenticationProvider,
+  authenticationClientToken,
+} from '@nocobase/app-plugin-authentication/client';
 import {
   Refine,
   type AccessControlProvider,
@@ -55,7 +63,7 @@ describe('application shell', () => {
     expect(screen.getByText('NocoBase Hub v0.0.0')).toBeVisible();
     expect(screen.getByText('Hub console')).toBeVisible();
     expect(
-      screen.getByRole('heading', { name: 'App client is ready' }),
+      await screen.findByRole('heading', { name: 'App client is ready' }),
     ).toBeVisible();
   });
 
@@ -337,40 +345,60 @@ function renderApplication(
         createRoute('home', '/', 'required', HomePage, 'application'),
         ...routes,
       ];
+  const authenticated =
+    (authProvider as TestAuthProvider).authenticated ?? true;
+  const authClient = createTestAuthClient(authenticated);
+  const app = {
+    services: {
+      resolve: (token: unknown) => {
+        if (token === authenticationClientToken) return authClient;
+        throw new Error(`Unexpected service token: ${String(token)}`);
+      },
+    },
+  } as unknown as ClientApplication;
   render(
-    <MemoryRouter initialEntries={[initialEntry]}>
-      <AppThemeProvider>
-        <Refine
-          accessControlProvider={options.accessControlProvider}
-          authProvider={authProvider}
-          dataProvider={{
-            getList: vi.fn(),
-            getMany: vi.fn(),
-            getOne: vi.fn(),
-            create: vi.fn(),
-            createMany: vi.fn(),
-            update: vi.fn(),
-            updateMany: vi.fn(),
-            deleteOne: vi.fn(),
-            deleteMany: vi.fn(),
-            getApiUrl: vi.fn(),
-            custom: vi.fn(),
-          }}
-          options={{ disableTelemetry: true }}
-        >
-          <AppRouter
-            devRouteTree={[]}
-            clientRoutes={clientRoutes}
-            settingsRouteTree={[]}
-          />
-        </Refine>
-      </AppThemeProvider>
-    </MemoryRouter>,
+    <ClientApplicationContext.Provider value={app}>
+      <AuthenticationProvider>
+        <MemoryRouter initialEntries={[initialEntry]}>
+          <AppThemeProvider>
+            <Refine
+              accessControlProvider={options.accessControlProvider}
+              authProvider={authProvider}
+              dataProvider={{
+                getList: vi.fn(),
+                getMany: vi.fn(),
+                getOne: vi.fn(),
+                create: vi.fn(),
+                createMany: vi.fn(),
+                update: vi.fn(),
+                updateMany: vi.fn(),
+                deleteOne: vi.fn(),
+                deleteMany: vi.fn(),
+                getApiUrl: vi.fn(),
+                custom: vi.fn(),
+              }}
+              options={{ disableTelemetry: true }}
+            >
+              <AppRouter
+                devRouteTree={[]}
+                clientRoutes={clientRoutes}
+                settingsRouteTree={[]}
+              />
+            </Refine>
+          </AppThemeProvider>
+        </MemoryRouter>
+      </AuthenticationProvider>
+    </ClientApplicationContext.Provider>,
   );
 }
 
-function createAuthProvider(authenticated: boolean): AuthProvider {
+interface TestAuthProvider extends AuthProvider {
+  readonly authenticated: boolean;
+}
+
+function createAuthProvider(authenticated: boolean): TestAuthProvider {
   return {
+    authenticated,
     check: async () => ({ authenticated }),
     getIdentity: async () =>
       authenticated
@@ -383,6 +411,25 @@ function createAuthProvider(authenticated: boolean): AuthProvider {
     login: vi.fn(),
     logout: vi.fn().mockResolvedValue({ success: true }),
     onError: async (error) => ({ error }),
+  };
+}
+
+function createTestAuthClient(authenticated: boolean) {
+  return {
+    getSession: vi.fn().mockResolvedValue({
+      data: authenticated
+        ? {
+            session: null,
+            user: {
+              email: 'alice@example.com',
+              id: '1',
+              image: null,
+              name: 'Alice',
+            },
+          }
+        : null,
+    }),
+    signOut: vi.fn().mockResolvedValue({ data: null }),
   };
 }
 
