@@ -1,3 +1,4 @@
+import sqlite from '@nocobase/db-sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   createDatabaseManager,
@@ -18,6 +19,7 @@ describe('recommended LLM models migration', () => {
   it('migrates historical rows and installs the provider-mode default', async () => {
     const metadataStore = new InMemoryCollectionMetadataStore();
     const database = createDatabaseManager({
+      drivers: { sqlite },
       default: 'main',
       metadataStore,
       connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
