@@ -73,12 +73,28 @@ export interface RepositoryPolicy<TRecord extends object = RepositoryRecord> {
   readonly delete: true | false | DeleteNode<TRecord>;
 }
 
+/**
+ * A read node as `narrow` accepts it: every member optional, all the way down.
+ *
+ * `scope` is optional here although it is required when a Policy is first
+ * bound. The two are not in tension: binding must say everything out loud
+ * because a half-written Policy reads as configured while leaving the rest
+ * wide open, whereas a patch that omits a member is asking for it to stay as
+ * it was — which can only keep or tighten what is already in force.
+ */
+export interface PartialReadNode<TRecord extends object = RepositoryRecord> {
+  readonly scope?: true | PolicyScope<TRecord>;
+  readonly fields?: false | readonly string[];
+  readonly relations?:
+    false | Readonly<Record<string, PartialReadNode | PolicyRef>>;
+}
+
 export type PartialRepositoryPolicy<TRecord extends object = RepositoryRecord> =
   {
-    readonly [K in keyof RepositoryPolicy<TRecord>]?:
-      | true
-      | false
-      | Partial<NonNullable<Extract<RepositoryPolicy<TRecord>[K], object>>>;
+    readonly read?: true | false | PartialReadNode<TRecord>;
+    readonly create?: true | false | Partial<CreateNode<TRecord>>;
+    readonly update?: true | false | Partial<WriteNode<TRecord>>;
+    readonly delete?: true | false | Partial<DeleteNode<TRecord>>;
   };
 
 export interface NormalizedReadNode {

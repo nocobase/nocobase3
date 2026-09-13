@@ -9,6 +9,7 @@ import {
   type ThroughWritePolicy,
 } from './write-policy.js';
 import { normalizeRepositoryPolicy } from './policy/normalize.js';
+import { narrowRepositoryPolicy } from './policy/narrow.js';
 import {
   applyCreateDefaults,
   assertCreateScopeSatisfiable,
@@ -28,6 +29,7 @@ import {
 import type {
   NormalizedCreateNode,
   NormalizedRepositoryPolicy,
+  PartialRepositoryPolicy,
   RepositoryPolicy,
 } from './policy/types.js';
 import { invalid, isPlainRecord } from './internal/guards.js';
@@ -189,6 +191,15 @@ export class DefaultRepository<
     return new DefaultRepository<TRecord, TCreate, TUpdate>({
       ...this.options,
       policy: normalizeRepositoryPolicy(input),
+    });
+  }
+
+  narrow(
+    patch: PartialRepositoryPolicy<TRecord>,
+  ): ScopedRepository<TRecord, TCreate, TUpdate> {
+    return new DefaultRepository<TRecord, TCreate, TUpdate>({
+      ...this.options,
+      policy: narrowRepositoryPolicy(this.explainPolicy(), patch),
     });
   }
 

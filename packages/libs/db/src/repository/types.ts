@@ -35,6 +35,7 @@ import type {
 } from '@nocobase/repository-input';
 import type {
   NormalizedRepositoryPolicy,
+  PartialRepositoryPolicy,
   RepositoryPolicy,
 } from './policy/types.js';
 export type * from '@nocobase/repository-input';
@@ -410,5 +411,17 @@ export interface ScopedRepository<
   TCreate extends object = Partial<TRecord>,
   TUpdate extends object = Partial<TRecord>,
 > extends Omit<Repository<TRecord, TCreate, TUpdate>, 'withPolicy'> {
+  /**
+   * Narrow the bound Policy further. Scopes intersect, field and relation
+   * allowlists intersect, and `false` on either side wins — there is no
+   * spelling that widens, so a narrowed Repository cannot climb back out.
+   *
+   * Absent from an unbound Repository on purpose: narrowing nothing is not a
+   * meaningful request, and `withPolicy` is absent here for the mirror reason.
+   */
+  narrow(
+    patch: PartialRepositoryPolicy<TRecord>,
+  ): ScopedRepository<TRecord, TCreate, TUpdate>;
+  /** The Policy actually in force, after `withPolicy` and every `narrow`. */
   explainPolicy(): NormalizedRepositoryPolicy;
 }

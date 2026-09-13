@@ -313,6 +313,7 @@ export type {
 } from './repository/errors.js';
 
 export { normalizeRepositoryPolicy } from './repository/policy/normalize.js';
+export { narrowRepositoryPolicy } from './repository/policy/narrow.js';
 export type { ScopedDatabaseConnection } from './database/connection.js';
 export type {
   CreateNode,
@@ -325,6 +326,7 @@ export type {
   NormalizedRepositoryPolicy,
   NormalizedThroughNode,
   NormalizedWriteNode,
+  PartialReadNode,
   PartialRepositoryPolicy,
   PolicyRef,
   PolicyScalarValue,
