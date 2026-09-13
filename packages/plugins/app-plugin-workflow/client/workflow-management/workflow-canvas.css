@@ -401,41 +401,6 @@
   gap: 8px;
 }
 
-.workflow-status-switch {
-  position: relative;
-  display: inline-flex;
-}
-
-.workflow-status-switch-label {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-inline: 0.375rem;
-  pointer-events: none;
-  font-size: 0.625rem;
-  font-weight: 600;
-  line-height: 1;
-  text-transform: uppercase;
-}
-
-.workflow-status-switch .workflow-status-switch-on {
-  color: var(--primary-foreground);
-  opacity: 0;
-}
-
-.workflow-status-switch .workflow-status-switch-off {
-  color: var(--muted-foreground);
-}
-
-.workflow-status-switch:has([data-checked]) .workflow-status-switch-on {
-  opacity: 1;
-}
-
-.workflow-status-switch:has([data-checked]) .workflow-status-switch-off {
-  opacity: 0;
-}
 .workflow-canvas-card {
   overflow: visible;
   border: 1px solid var(--border);
@@ -560,7 +525,7 @@
   gap: 8px;
   min-width: 0;
 }
-.workflow-row-main .workflow-execution-link,
+.workflow-execution-link,
 .workflow-execution-count {
   color: var(--muted-foreground);
   font-size: 12px;
@@ -698,6 +663,93 @@
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 12px;
+}
+.workflow-table-container {
+  overflow-x: auto;
+}
+.workflow-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+.workflow-table th,
+.workflow-table td {
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.workflow-table tbody td {
+  height: 60px;
+  line-height: 1.25;
+}
+.workflow-table tbody td > .workflow-row-main,
+.workflow-table tbody td > .workflow-row-actions,
+.workflow-table tbody td > .workflow-execution-link,
+.workflow-table tbody td > .workflow-execution-count {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  line-height: 1.25;
+}
+.workflow-table tbody td > .workflow-row-main {
+  display: flex;
+}
+.workflow-table tbody td > .workflow-row-actions {
+  justify-content: flex-end;
+}
+.workflow-table tbody td.workflow-table-status-cell > [data-slot='switch'] {
+  vertical-align: middle;
+}
+.workflow-table th {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.workflow-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.workflow-table tbody tr:hover {
+  background: var(--muted);
+}
+.workflow-table-run-count-cell,
+.workflow-table-status-cell,
+.workflow-table-actions-cell {
+  white-space: nowrap;
+}
+.workflow-table-actions-cell {
+  width: 1%;
+}
+.workflow-table .workflow-list-empty {
+  padding-block: 48px;
+  text-align: center;
+}
+.workflow-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.workflow-pagination > div {
+  display: flex;
+  gap: 8px;
+}
+.workflow-pagination button {
+  min-height: 32px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--background);
+  color: var(--foreground);
+  cursor: pointer;
+}
+.workflow-pagination button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 .workflow-list-header {
   display: flex;

@@ -52,6 +52,20 @@ const enUS = {
     runStatus: 'Filter run status',
     allStatuses: 'All statuses',
   },
+  tables: {
+    workflow: 'Workflow',
+    runCount: 'Runs',
+    status: 'Status',
+    actions: 'Actions',
+    triggeredAt: 'Triggered at',
+    duration: 'Duration',
+  },
+  pagination: {
+    label: 'List pagination',
+    page: 'Page {{page}} of {{total}}',
+    previous: 'Previous',
+    next: 'Next',
+  },
   workflows: {
     title: 'Workflows',
     back: '← Workflows',

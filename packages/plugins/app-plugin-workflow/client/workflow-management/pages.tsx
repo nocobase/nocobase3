@@ -42,6 +42,14 @@ import type {
   WorkflowRunRecord,
 } from './types.js';
 import { WorkflowCanvas } from './workflow-canvas.js';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from './ui/table.js';
 import { WORKFLOW_SETTING_PATHS } from '../route-contracts.js';
 import { WORKFLOW_NS } from '../namespace.js';
 import './workflow-canvas.css';
@@ -135,22 +143,50 @@ function WorkflowStatusSwitch({
   label: string;
   onCheckedChange: (checked: boolean) => void;
 }): React.ReactElement {
-  const { t } = useTranslation(WORKFLOW_NS);
   return (
-    <span className='workflow-status-switch'>
-      <Switch
-        aria-label={label}
-        checked={checked}
-        onCheckedChange={onCheckedChange}
-        size='labeled'
-      />
-      <span aria-hidden='true' className='workflow-status-switch-label'>
-        <span className='workflow-status-switch-on'>{t('status.on')}</span>
-        <span className='workflow-status-switch-off'>{t('status.off')}</span>
-      </span>
-    </span>
+    <Switch
+      aria-label={label}
+      checked={checked}
+      onCheckedChange={onCheckedChange}
+      size='default'
+    />
   );
 }
+
+function WorkflowPagination({
+  pagination,
+  onPageChange,
+}: {
+  pagination: { page: number; pageSize: number; total: number };
+  onPageChange: (page: number) => void;
+}): React.ReactElement {
+  const { t } = useTranslation(WORKFLOW_NS);
+  const pageCount = Math.ceil(pagination.total / pagination.pageSize);
+  return (
+    <nav className='workflow-pagination' aria-label={t('pagination.label')}>
+      <span>
+        {t('pagination.page', { page: pagination.page, total: pageCount })}
+      </span>
+      <div>
+        <button
+          type='button'
+          disabled={pagination.page <= 1}
+          onClick={() => onPageChange(pagination.page - 1)}
+        >
+          {t('pagination.previous')}
+        </button>
+        <button
+          type='button'
+          disabled={pagination.page >= pageCount}
+          onClick={() => onPageChange(pagination.page + 1)}
+        >
+          {t('pagination.next')}
+        </button>
+      </div>
+    </nav>
+  );
+}
+
 function formatTime(value?: string | null, locale?: string): string {
   return value
     ? new Intl.DateTimeFormat(locale, {
@@ -615,24 +651,27 @@ function WorkflowRow({
   };
   return (
     <>
-      <li>
-        <div className='workflow-row-main'>
-          <div className='workflow-row-title'>
-            <Link to={workflowPath(identifier)}>{item.title ?? item.key}</Link>
-            {pendingArtifact ? (
-              <Link
-                className='workflow-pending-version-link'
-                to={workflowPath(pendingArtifact.hash)}
-              >
-                <Badge className='workflow-version-tag pending'>
-                  {t('workflows.newVersionAvailable')}
-                </Badge>
+      <TableRow>
+        <TableCell>
+          <div className='workflow-row-main'>
+            <div className='workflow-row-title'>
+              <Link to={workflowPath(identifier)}>
+                {item.title ?? item.key}
               </Link>
-            ) : null}
+              {pendingArtifact ? (
+                <Link
+                  className='workflow-pending-version-link'
+                  to={workflowPath(pendingArtifact.hash)}
+                >
+                  <Badge className='workflow-version-tag pending'>
+                    {t('workflows.newVersionAvailable')}
+                  </Badge>
+                </Link>
+              ) : null}
+            </div>
           </div>
-          <span aria-hidden='true' className='workflow-row-separator'>
-            ·
-          </span>
+        </TableCell>
+        <TableCell className='workflow-table-run-count-cell'>
           {item.executed > 0 ? (
             <button
               type='button'
@@ -648,59 +687,61 @@ function WorkflowRow({
               {t('common.runCount', { count: 0 })}
             </span>
           )}
-        </div>
-        <div className='workflow-row-actions'>
-          <label className='workflow-switch'>
-            <WorkflowStatusSwitch
-              checked={item.enabled}
-              label={t(
-                item.enabled
-                  ? 'actions.disableWorkflow'
-                  : 'actions.enableWorkflow',
-                { title: item.title ?? item.key },
-              )}
-              onCheckedChange={(enabled) => {
-                const update = enabled
-                  ? workflowApi.enable(identifier)
-                  : workflowApi.status(identifier, false);
-                void update.then((next) => {
-                  onChange(next);
-                  onReload();
-                });
-              }}
-            />
-          </label>
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <button
-                  aria-label={t('actions.more')}
-                  className='workflow-row-menu-trigger'
-                  type='button'
-                >
-                  ···
-                </button>
-              }
-            />
-            <DropdownMenuContent
-              align='end'
-              className='workflow-row-menu-content'
-            >
-              <DropdownMenuItem
-                disabled={!item.hasParameters}
-                onClick={() =>
-                  void workflowApi.workflow(identifier).then(setSettings)
+        </TableCell>
+        <TableCell className='workflow-table-status-cell'>
+          <WorkflowStatusSwitch
+            checked={item.enabled}
+            label={t(
+              item.enabled
+                ? 'actions.disableWorkflow'
+                : 'actions.enableWorkflow',
+              { title: item.title ?? item.key },
+            )}
+            onCheckedChange={(enabled) => {
+              const update = enabled
+                ? workflowApi.enable(identifier)
+                : workflowApi.status(identifier, false);
+              void update.then((next) => {
+                onChange(next);
+                onReload();
+              });
+            }}
+          />
+        </TableCell>
+        <TableCell className='workflow-table-actions-cell'>
+          <div className='workflow-row-actions'>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <button
+                    aria-label={t('actions.more')}
+                    className='workflow-row-menu-trigger'
+                    type='button'
+                  >
+                    ···
+                  </button>
                 }
+              />
+              <DropdownMenuContent
+                align='end'
+                className='workflow-row-menu-content'
               >
-                {t('actions.parameterSettings')}
-              </DropdownMenuItem>
-              <DropdownMenuItem disabled={running} onClick={execute}>
-                {running ? t('common.running') : t('common.run')}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </li>
+                <DropdownMenuItem
+                  disabled={!item.hasParameters}
+                  onClick={() =>
+                    void workflowApi.workflow(identifier).then(setSettings)
+                  }
+                >
+                  {t('actions.parameterSettings')}
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled={running} onClick={execute}>
+                  {running ? t('common.running') : t('common.run')}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </TableCell>
+      </TableRow>
       {runs ? (
         <ExecutionDialog
           runs={runs}
@@ -726,16 +767,29 @@ export function WorkflowListPage(): React.ReactElement {
   const { t } = useTranslation(WORKFLOW_NS);
   const detail = useOutlet();
   const [items, setItems] = useState<WorkflowListRecord[] | null>(null);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    pageSize: 20,
+    total: 0,
+  });
   const [query, setQuery] = useState('');
   const [enabled, setEnabled] = useState('');
   const [activeTab, setActiveTab] = useState<'workflows' | 'runs'>('workflows');
-  const load = (): void => {
-    const params = new URLSearchParams();
-    if (query) params.set('q', query);
-    if (enabled) params.set('enabled', enabled);
-    void workflowApi.workflows(params.size ? `?${params}` : '').then(setItems);
-  };
-  useEffect(load, [query, enabled]);
+  const load = useCallback(
+    (nextPage: number): void => {
+      const params = new URLSearchParams();
+      if (query) params.set('q', query);
+      if (enabled) params.set('enabled', enabled);
+      params.set('page', String(nextPage));
+      params.set('pageSize', String(pagination.pageSize));
+      void workflowApi.workflowPage(`?${params}`).then((result) => {
+        setItems(result.data);
+        setPagination(result.meta);
+      });
+    },
+    [enabled, pagination.pageSize, query],
+  );
+  useEffect(() => load(1), [load]);
   if (detail) return detail;
   return (
     <main className='workflow-page'>
@@ -768,31 +822,51 @@ export function WorkflowListPage(): React.ReactElement {
             <button
               className='workflow-button workflow-button-outline'
               type='button'
-              onClick={load}
+              onClick={() => load(pagination.page)}
             >
               {t('common.refresh')}
             </button>
           </header>
-          <ul className='workflow-list'>
-            {items?.map((item) => (
-              <WorkflowRow
-                key={item.id ?? item.hash ?? item.key}
-                item={item}
-                onReload={load}
-                onChange={(next) =>
-                  setItems(
-                    (current) =>
-                      current?.map((candidate) =>
-                        candidate.key === next.key ? next : candidate,
-                      ) ?? null,
-                  )
-                }
-              />
-            ))}
-            {items?.length === 0 ? (
-              <li className='workflow-list-empty'>{t('common.noData')}</li>
-            ) : null}
-          </ul>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t('tables.workflow')}</TableHead>
+                <TableHead>{t('tables.runCount')}</TableHead>
+                <TableHead>{t('tables.status')}</TableHead>
+                <TableHead>{t('tables.actions')}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {items?.map((item) => (
+                <WorkflowRow
+                  key={item.id ?? item.hash ?? item.key}
+                  item={item}
+                  onReload={() => load(pagination.page)}
+                  onChange={(next) =>
+                    setItems(
+                      (current) =>
+                        current?.map((candidate) =>
+                          candidate.key === next.key ? next : candidate,
+                        ) ?? null,
+                    )
+                  }
+                />
+              ))}
+              {items?.length === 0 ? (
+                <TableRow>
+                  <TableCell className='workflow-list-empty' colSpan={4}>
+                    {t('common.noData')}
+                  </TableCell>
+                </TableRow>
+              ) : null}
+            </TableBody>
+          </Table>
+          {pagination.total > pagination.pageSize ? (
+            <WorkflowPagination
+              pagination={pagination}
+              onPageChange={(page) => load(page)}
+            />
+          ) : null}
         </section>
       )}
     </main>
@@ -1041,15 +1115,28 @@ export function WorkflowRunListPage({
   const { i18n, t } = useTranslation(WORKFLOW_NS);
   const detail = useOutlet();
   const [items, setItems] = useState<WorkflowRunRecord[] | null>(null);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    pageSize: 20,
+    total: 0,
+  });
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('');
-  const load = (): void => {
-    const params = new URLSearchParams();
-    if (query) params.set('workflowTitle', query);
-    if (status) params.set('status', status);
-    void workflowApi.runs(params.size ? `?${params}` : '').then(setItems);
-  };
-  useEffect(load, [query, status]);
+  const load = useCallback(
+    (nextPage: number): void => {
+      const params = new URLSearchParams();
+      if (query) params.set('workflowTitle', query);
+      if (status) params.set('status', status);
+      params.set('page', String(nextPage));
+      params.set('pageSize', String(pagination.pageSize));
+      void workflowApi.runPage(`?${params}`).then((result) => {
+        setItems(result.data);
+        setPagination(result.meta);
+      });
+    },
+    [pagination.pageSize, query, status],
+  );
+  useEffect(() => load(1), [load]);
   if (detail) return detail;
   const content = (
     <section className='workflow-list-card'>
@@ -1076,40 +1163,63 @@ export function WorkflowRunListPage({
         <button
           className='workflow-button workflow-button-outline'
           type='button'
-          onClick={load}
+          onClick={() => load(pagination.page)}
         >
           {t('common.refresh')}
         </button>
       </header>
-      <ul className='workflow-list workflow-run-list'>
-        {items?.map((run) => (
-          <li key={run.id}>
-            <Link className='execution-item' to={workflowRunPath(run.id)}>
-              <div>
-                <span className='execution-item-title'>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>{t('tables.workflow')}</TableHead>
+            <TableHead>{t('tables.status')}</TableHead>
+            <TableHead>{t('tables.triggeredAt')}</TableHead>
+            <TableHead>{t('tables.duration')}</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {items?.map((run) => (
+            <TableRow key={run.id}>
+              <TableCell>
+                <Link
+                  className='execution-item-title'
+                  to={workflowRunPath(run.id)}
+                >
                   <span className='execution-run-id'>#{run.id}</span>{' '}
                   <span className='execution-workflow-title'>
                     {run.workflowTitle ?? run.workflowKey}
                   </span>
-                </span>
-                <span className='execution-item-time'>
-                  {formatTime(
-                    run.startedAt ?? run.createdAt,
-                    i18n.resolvedLanguage,
-                  )}
-                </span>
-              </div>
-              <div className='execution-item-meta'>
+                </Link>
+              </TableCell>
+              <TableCell>
                 <WorkflowRunStatusTag status={run.status} />
-                <span>{t('common.duration', { duration: duration(run) })}</span>
-              </div>
-            </Link>
-          </li>
-        ))}
-        {items?.length === 0 ? (
-          <li className='workflow-list-empty'>{t('common.noData')}</li>
-        ) : null}
-      </ul>
+              </TableCell>
+              <TableCell className='execution-item-time'>
+                {formatTime(
+                  run.startedAt ?? run.createdAt,
+                  i18n.resolvedLanguage,
+                )}
+              </TableCell>
+              <TableCell className='execution-item-meta'>
+                {duration(run)}
+              </TableCell>
+            </TableRow>
+          ))}
+          {items?.length === 0 ? (
+            <TableRow>
+              <TableCell className='workflow-list-empty' colSpan={4}>
+                {t('common.noData')}
+              </TableCell>
+            </TableRow>
+          ) : null}
+        </TableBody>
+      </Table>
+      {pagination.total > pagination.pageSize ? (
+        <WorkflowPagination
+          pagination={pagination}
+          onPageChange={(page) => load(page)}
+        />
+      ) : null}
     </section>
   );
   return embedded ? (

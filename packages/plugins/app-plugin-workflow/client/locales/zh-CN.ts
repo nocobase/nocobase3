@@ -52,6 +52,20 @@ const zhCN: WorkflowResource = {
     runStatus: '筛选运行状态',
     allStatuses: '全部状态',
   },
+  tables: {
+    workflow: '工作流',
+    runCount: '运行次数',
+    status: '状态',
+    actions: '操作',
+    triggeredAt: '触发时间',
+    duration: '耗时',
+  },
+  pagination: {
+    label: '列表分页',
+    page: '第 {{page}} / {{total}} 页',
+    previous: '上一页',
+    next: '下一页',
+  },
   workflows: {
     title: '工作流',
     back: '← 工作流',
