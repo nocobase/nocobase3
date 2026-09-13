@@ -28,6 +28,7 @@ import migration from '../database/migrations/202609010001_create_hub_app_tables
 import {
   DefaultHubService,
   HubError,
+  type DefaultHubServiceOptions,
   type HubHostController,
 } from '../server/services/hub.js';
 
@@ -52,7 +53,14 @@ describe('@nocobase/app-plugin-hub service', () => {
       connection,
     });
     host = new FakeHostController();
-    service = new DefaultHubService({
+    service = new DefaultHubService(createServiceOptions());
+    await service.prepare();
+  });
+
+  function createServiceOptions(
+    overrides: Partial<DefaultHubServiceOptions> = {},
+  ): DefaultHubServiceOptions {
+    return {
       database,
       hostController: host,
       config: {
@@ -69,9 +77,9 @@ describe('@nocobase/app-plugin-hub service', () => {
           configPath: path.join(rootDir, 'hub', 'host-config.yml'),
         },
       },
-    });
-    await service.prepare();
-  });
+      ...overrides,
+    };
+  }
 
   afterEach(async () => {
     await service.shutdown();
@@ -1191,6 +1199,53 @@ describe('@nocobase/app-plugin-hub service', () => {
     releaseStartup?.();
     await expect(status).resolves.toMatchObject({
       deployments: [{ appId: 'customer', observedState: 'running' }],
+    });
+  });
+
+  it('stops waiting for a stuck startup restoration and reports unreached Apps as pending', async () => {
+    await service.shutdown();
+    service = new DefaultHubService(
+      createServiceOptions({ startupRestorationWaitMs: 20 }),
+    );
+    await service.prepare();
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    const release = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '1.2.3'),
+    });
+    const deployed = await service.deploy('customer', {
+      releaseId: release.id,
+    });
+    await waitForDeployment(service, 'customer', deployed.id);
+    // Simulate a Host that has restarted with nothing registered yet and then hangs on the first App it restores.
+    host.lastDeploymentSet = undefined;
+    let releaseStartup: (() => void) | undefined;
+    host.nextDeploymentSetGate = new Promise<void>((resolve) => {
+      releaseStartup = resolve;
+    });
+
+    await service.restoreDesiredState();
+    await vi.waitFor(() => expect(host.deploymentSetStarted).toBe(true));
+
+    const started = Date.now();
+    const status = await service.hostStatus();
+    expect(Date.now() - started).toBeLessThan(1_000);
+    expect(host.deploymentSetCompleted).toBe(false);
+    expect(status.deployments).toEqual([]);
+
+    const [restoring] = await service.listApps();
+    expect(restoring?.runtime).toMatchObject({
+      hostAvailable: true,
+      state: 'pending',
+    });
+    await expect(
+      service.updateSettings('customer', { activation: 'lazy' }),
+    ).resolves.toMatchObject({ app: { startupMode: 'lazy' } });
+
+    releaseStartup?.();
+    await host.nextDeploymentSetGate;
+    await vi.waitFor(async () => {
+      const [restored] = await service.listApps();
+      expect(restored?.runtime.state).toBe('running');
     });
   });
 

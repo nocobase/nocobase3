@@ -67,11 +67,22 @@ const CONFIG_TEMPLATE_PATHS = [
 ] as const;
 const ARTIFACT_MANIFEST_PATHS = ['dist/package.json', 'package.json'] as const;
 const EMBEDDED_ENTRY_PATH = 'dist/server/embedded.js';
+/**
+ * How long a read waits for startup restoration before answering with what the Host knows so far.
+ *
+ * Restoration starts every eager App in turn, so it lasts as long as the slowest one takes to come up — or forever,
+ * when one hangs on its database. Readers wait a little so the catalog does not flash every App as stopped in the
+ * first moments after a Hub restart, then answer anyway; an App the Host has not reached yet is reported as pending
+ * rather than stopped, and the client keeps polling until the picture settles.
+ */
+const DEFAULT_STARTUP_RESTORATION_WAIT_MS = 5_000;
 
 export interface DefaultHubServiceOptions {
   readonly database: DatabaseManager;
   readonly config: HubPluginConfig;
   readonly hostController: HubHostController;
+  /** Upper bound on how long reads wait for startup restoration. Defaults to five seconds. */
+  readonly startupRestorationWaitMs?: number;
 }
 
 export interface HubHostController {
@@ -275,7 +286,10 @@ export class DefaultHubService implements HubService {
       physical.columns.find((column) => column.columnName === 'name')
         ?.columnName ?? 'name';
     const knex = await connection.client<Knex>();
+    // A raw query bypasses the Repository, which is what normally scopes a table to the Collection's schema; without
+    // this the search fails on PostgreSQL whenever the application runs in a schema other than the connection default.
     const rows = await knex(physical.tableName)
+      .withSchema(physical.schema)
       .select(idColumn)
       .whereRaw('lower(??) like lower(?) or lower(??) like lower(?)', [
         idColumn,
@@ -515,7 +529,7 @@ export class DefaultHubService implements HubService {
   ): Promise<HubAppDetail> {
     return await this.withLock(appId, async () => {
       assertActivation(input.activation);
-      await this.startupReconciliation;
+      await this.awaitStartupRestoration();
       await this.requireApp(appId);
       await this.updateApp(appId, { startupMode: input.activation });
       return await this.getApp(appId);
@@ -664,8 +678,37 @@ export class DefaultHubService implements HubService {
   }
 
   public async hostStatus(): Promise<HostStatus> {
-    await this.startupReconciliation;
+    await this.awaitStartupRestoration();
     return await (await this.hostController.getManagementClient()).getStatus();
+  }
+
+  /**
+   * Wait for startup restoration, but only up to the configured bound.
+   *
+   * Resolves `true` when no restoration is running or it finished in time, `false` when it is still going and the
+   * caller should answer with the Host's current picture instead of blocking on it.
+   */
+  private async awaitStartupRestoration(): Promise<boolean> {
+    const restoration = this.startupReconciliation;
+    if (!restoration) return true;
+    const waitMs =
+      this.options.startupRestorationWaitMs ??
+      DEFAULT_STARTUP_RESTORATION_WAIT_MS;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        restoration.then(() => true),
+        new Promise<boolean>((resolve) => {
+          timer = setTimeout(() => resolve(false), waitMs);
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
+  private isRestoringStartupState(): boolean {
+    return this.startupReconciliation !== null;
   }
 
   public async restoreDesiredState(): Promise<void> {
@@ -968,7 +1011,9 @@ export class DefaultHubService implements HubService {
       if (!item)
         return {
           hostAvailable: true,
-          state: 'stopped',
+          // The Host knows nothing about this App yet. During startup restoration that means it simply has not been
+          // reached in the eager start sequence, so it is pending rather than stopped.
+          state: this.isRestoringStartupState() ? 'pending' : 'stopped',
           version: null,
           startedAt: null,
           lastAccessedAt: null,
