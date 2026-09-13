@@ -6,6 +6,7 @@ import type {
   OracleConnectionConfig,
 } from '@nocobase/db';
 import { rawRows } from '@nocobase/db';
+import type { Knex } from 'knex';
 import { preciseIntegerClient } from './precise-integers.js';
 import { OracleSchemaInspector } from './inspectors/oracle.js';
 
@@ -15,6 +16,10 @@ export type OracleOptions = Omit<
   OracleConnectionConfig,
   'dialect' | 'driver' | 'databaseDriver'
 >;
+
+const SPACE_DATETIME_PATTERN =
+  /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d{1,3})?$/;
+
 export const oracleDriver: DatabaseDriverDefinition<'oracle'> = {
   dialect: 'oracle',
   packageName: '@nocobase/db-oracle',
@@ -241,19 +246,29 @@ export const oracleDriver: DatabaseDriverDefinition<'oracle'> = {
               ? 1
               : 0,
       temporalBinding: ({ client, field, value }) => {
-        const normalized = String(value);
+        const normalized = String(value)
+          .replace(
+            /^(\d{4}-\d{2}-\d{2})[ ](\d{2}:\d{2}:\d{2})(\.\d{1,3})?$/,
+            '$1T$2$3',
+          )
+          .replace(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})$/, '$1.000');
         if (field.type === 'date')
-          return client.raw("to_date(?, 'YYYY-MM-DD')", [normalized]);
+          return client.raw(
+            `to_date('${escapeOracleLiteral(normalized)}', 'YYYY-MM-DD')`,
+          );
         if (field.type === 'time') return normalized;
         const instant = field.type === 'datetimeTz';
         return instant
           ? client.raw(
-              'to_timestamp_tz(?, \'YYYY-MM-DD"T"HH24:MI:SS.FF3TZH:TZM\')',
-              [normalized.replace('Z', '+00:00')],
+              `to_timestamp_tz('${escapeOracleLiteral(
+                normalized.replace('Z', '+00:00'),
+              )}', 'YYYY-MM-DD"T"HH24:MI:SS.FF3TZH:TZM')`,
             )
-          : client.raw('to_timestamp(?, \'YYYY-MM-DD"T"HH24:MI:SS.FF3\')', [
-              normalized,
-            ]);
+          : client.raw(
+              `to_timestamp('${escapeOracleLiteral(
+                normalized,
+              )}', 'YYYY-MM-DD"T"HH24:MI:SS.FF3')`,
+            );
       },
       temporalProjection: ({ client, field, reference }) => {
         if (!field)
@@ -278,6 +293,10 @@ export const oracleDriver: DatabaseDriverDefinition<'oracle'> = {
       },
     },
     query: {
+      insertManyFallback: (collection) =>
+        collection.fields?.some(
+          (field) => !('target' in field) && isOracleTemporalType(field.type),
+        ) ?? false,
       configureAggregateResults: ({ query, aliases }) => {
         const driver = Oracledb as {
           DB_TYPE_NUMBER: unknown;
@@ -292,9 +311,24 @@ export const oracleDriver: DatabaseDriverDefinition<'oracle'> = {
       },
     },
   }),
-  createKnexClient: () =>
+  createKnexClient: () => {
     // Oracle's integer codecs are installed by the shared Knex helper.
-    preciseIntegerClient(Oracledb),
+    const BaseClient = preciseIntegerClient(Oracledb);
+    if (typeof BaseClient === 'string') return BaseClient;
+    class NocobaseOracleClient extends BaseClient {
+      prepBindings(bindings: readonly unknown[]): unknown[] {
+        const prepared = super.prepBindings(
+          bindings as Parameters<Knex.Client['prepBindings']>[0],
+        ) as unknown[];
+        return prepared.map((value) =>
+          typeof value === 'string' && SPACE_DATETIME_PATTERN.test(value)
+            ? new Date(value.replace(' ', 'T'))
+            : value,
+        );
+      }
+    }
+    return NocobaseOracleClient;
+  },
   resolveConnection: (source: ConnectionConfig) => {
     const config = source as OracleConnectionConfig;
     assertDriverOptions(config.driverOptions, [
@@ -468,6 +502,14 @@ function compactObject(
   return Object.fromEntries(
     Object.entries(input).filter(([, value]) => value !== undefined),
   );
+}
+
+function escapeOracleLiteral(value: string): string {
+  return value.replaceAll("'", "''");
+}
+
+function isOracleTemporalType(type: string): boolean {
+  return ['date', 'datetime', 'datetimeTz'].includes(type);
 }
 
 export { oracleTypes, oracleNumeric } from './inspectors/oracle.js';

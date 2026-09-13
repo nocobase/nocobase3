@@ -174,6 +174,12 @@ export const damengDriver: DatabaseDriverDefinition<'dameng'> = {
         client.raw('cast(? as varchar(100))', [expression]),
     },
     query: {
+      insertManyFallback: (collection) =>
+        collection.fields?.some(
+          (field) =>
+            !('target' in field) &&
+            ['date', 'datetime', 'datetimeTz'].includes(field.type),
+        ) ?? false,
       decodeScalarResult: ({ field, value }) => {
         if (value === null) return null;
         if (field.type === 'integer' || field.type === 'increments')
@@ -291,23 +297,38 @@ export const damengDriver: DatabaseDriverDefinition<'dameng'> = {
       decodeReturnedRow: decodeDamengLobRow,
       encodeBoolean: (_field, value) => (value === null ? null : value ? 1 : 0),
       temporalBinding: ({ client, field, value }) => {
-        const normalized =
-          value instanceof Date ? value.toISOString() : String(value);
-        if (field.type === 'date') {
-          return client.raw("to_date(?, 'YYYY-MM-DD')", [normalized]);
-        }
-        if (field.type === 'time') {
-          return normalized;
-        }
+        const normalized = (
+          value instanceof Date ? value.toISOString() : String(value)
+        )
+          .replace(
+            /^(\d{4}-\d{2}-\d{2})[ ](\d{2}:\d{2}:\d{2})(\.\d{1,3})?$/,
+            '$1T$2$3',
+          )
+          .replace(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})$/, '$1.000')
+          .replace(
+            /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(Z|[+-]\d{2}:\d{2})$/,
+            '$1.000$2',
+          )
+          .replace(/^(\d{2}:\d{2}:\d{2})$/, '$1.000');
+        if (field.type === 'date')
+          return client.raw(
+            `to_date('${escapeDamengLiteral(normalized)}', 'YYYY-MM-DD')`,
+          );
+        if (field.type === 'time')
+          return client.raw(`time '${escapeDamengLiteral(normalized)}'`);
         if (field.type === 'datetimeTz') {
           const instant = normalized.replace(/Z$/u, '+00:00');
           return client.raw(
-            `to_timestamp_tz('${instant.replace(/'/g, "''")}', 'YYYY-MM-DD"T"HH24:MI:SS.FF3TZH:TZM')`,
+            `to_timestamp_tz('${escapeDamengLiteral(
+              instant,
+            )}', 'YYYY-MM-DD"T"HH24:MI:SS.FF3TZH:TZM')`,
           );
         }
-        return client.raw('to_timestamp(?, \'YYYY-MM-DD"T"HH24:MI:SS.FF3\')', [
-          normalized,
-        ]);
+        return client.raw(
+          `to_timestamp('${escapeDamengLiteral(
+            normalized,
+          )}', 'YYYY-MM-DD"T"HH24:MI:SS.FF3')`,
+        );
       },
       temporalProjection: ({ client, field, reference }) => {
         if (!field) {
@@ -516,6 +537,10 @@ function compactObject(
   return Object.fromEntries(
     Object.entries(input).filter(([, value]) => value !== undefined),
   );
+}
+
+function escapeDamengLiteral(value: string): string {
+  return value.replaceAll("'", "''");
 }
 
 function asDamengConfig(source: unknown): DamengConnectionConfig {

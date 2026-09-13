@@ -238,9 +238,9 @@ describe('oracle runtime strategy', () => {
       field: { type: 'date' } as never,
       value: '2026-09-06',
     });
-    expect(
-      binding && typeof binding !== 'string' ? binding.toQuery() : binding,
-    ).toContain('to_date');
+    expect(binding).toBeTruthy();
+    expect(typeof binding).toBe('object');
+    expect((binding as { toQuery(): string }).toQuery()).toContain('to_date');
     expect(
       repository.temporalProjection!({
         client,

@@ -54,6 +54,7 @@ export interface DatabaseDriverRuntime {
 }
 
 export interface DatabaseQueryRuntimeStrategy {
+  readonly insertManyFallback?: (collection: CollectionDefinition) => boolean;
   readonly configureAggregateResults?: (context: {
     query: Knex.QueryBuilder;
     aliases: ReadonlySet<string>;

@@ -1,6 +1,11 @@
 import type { Knex } from 'knex';
 import { expect, it } from 'vitest';
 import dameng from '../src/index.js';
+import knex from 'knex';
+import {
+  attachDatabaseDriverRuntime,
+  temporalBinding,
+} from '@nocobase/db/testing';
 
 class FakeBaseClient {
   prepBindings(bindings: readonly unknown[]): unknown[] {
@@ -41,4 +46,45 @@ it('leaves non-instant bindings untouched', () => {
   expect(prepared[1]).toBe(42);
   expect(prepared[2]).toBeNull();
   expect(prepared[3]).toBe(true);
+});
+
+it('renders safe temporal literals for Dameng single-row writes', async () => {
+  const client = knex({ client: 'sqlite3' });
+  attachDatabaseDriverRuntime(
+    client,
+    dameng.driver.createRuntime!({
+      dialect: 'dameng',
+      sourceConfig: {} as never,
+      config: {} as never,
+      capabilities: (dameng.driver.capabilities ?? {}) as never,
+      getClient: () => client,
+      resolveClient: async () => client,
+    }),
+  );
+
+  for (const [type, value, fragment] of [
+    ['date', '2026-09-06', "to_date('2026-09-06'"],
+    [
+      'datetime',
+      '2026-09-06T09:30:00.120',
+      "to_timestamp('2026-09-06T09:30:00.120'",
+    ],
+    [
+      'datetimeTz',
+      '2026-09-06T01:30:00.120Z',
+      "to_timestamp_tz('2026-09-06T01:30:00.120+00:00'",
+    ],
+  ] as const) {
+    const expression = temporalBinding(
+      client,
+      { name: 'occurredAt', type },
+      value,
+    );
+    if (!expression || typeof expression === 'string')
+      throw new Error('Expected a Knex raw temporal expression.');
+    expect(expression.toQuery()).toContain(fragment);
+    expect(expression.toQuery()).not.toContain('?');
+  }
+
+  await client.destroy();
 });

@@ -67,4 +67,45 @@ describe('Oracle temporal SQL boundaries', () => {
     expect(expression.toQuery()).toContain('sys_extract_utc');
     await client.destroy();
   });
+
+  it('renders safe temporal literals for Oracle single-row writes', async () => {
+    const client = knex({ client: 'oracledb' });
+    attachDatabaseDriverRuntime(
+      client,
+      oracle.driver.createRuntime!({
+        dialect: 'oracle',
+        sourceConfig: {} as never,
+        config: {} as never,
+        capabilities: (oracle.driver.capabilities ?? {}) as never,
+        getClient: () => client,
+        resolveClient: async () => client,
+      }),
+    );
+
+    for (const [type, value, fragment] of [
+      ['date', '2026-09-06', "to_date('2026-09-06'"],
+      [
+        'datetime',
+        '2026-09-06T09:30:00.120',
+        "to_timestamp('2026-09-06T09:30:00.120'",
+      ],
+      [
+        'datetimeTz',
+        '2026-09-06T01:30:00.120Z',
+        "to_timestamp_tz('2026-09-06T01:30:00.120+00:00'",
+      ],
+    ] as const) {
+      const expression = temporalBinding(
+        client,
+        { name: 'occurredAt', type },
+        value,
+      );
+      if (!expression || typeof expression === 'string')
+        throw new Error('Expected a Knex raw temporal expression.');
+      expect(expression.toQuery()).toContain(fragment);
+      expect(expression.toQuery()).not.toContain('?');
+    }
+
+    await client.destroy();
+  });
 });

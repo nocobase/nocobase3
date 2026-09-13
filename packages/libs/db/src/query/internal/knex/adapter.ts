@@ -26,6 +26,11 @@ import {
   decodeBooleanValue,
   normalizeBooleanValue,
 } from '../../../repository/boolean.js';
+import {
+  isTemporalType,
+  normalizeTemporalResultValue,
+} from '../../../repository/temporal.js';
+import { temporalProjection } from '../../../repository/internal/temporal-sql.js';
 import type {
   AggregateExpression,
   AliasedExpression,
@@ -715,6 +720,19 @@ class KnexInsertQuery<
   async execute(): Promise<InsertResult> {
     const data = this.requireValues();
     const fields = await resolveWriteFields(this.lookup, this.tableName);
+    const collection = await this.lookup?.(
+      parseAliasedIdentifier(this.tableName).identifier,
+    );
+    const fallback =
+      Array.isArray(data) &&
+      collection &&
+      getDatabaseDriverRuntime(this.getClient())?.query?.insertManyFallback?.(
+        collection,
+      );
+    if (fallback) {
+      for (const item of data) await this.buildQuery(item, fields);
+      return { insertedCount: data.length };
+    }
     const result = await this.buildQuery(data, fields);
     return normalizeInsertResult(result, data);
   }
@@ -1138,10 +1156,8 @@ class KnexSubqueryBuilder<
     const first = this.state.selections[0];
     if (first?.type !== 'selection') return undefined;
     if (typeof first.selection === 'string') {
-      return numericSource(
-        parseAliasedIdentifier(first.selection).identifier,
-        scope,
-      );
+      const reference = parseAliasedIdentifier(first.selection).identifier;
+      return numericSource(reference, scope) ?? scalarSource(reference, scope);
     }
     if (typeof first.selection === 'string') return undefined;
     let node = getExpressionNode(first.selection);
@@ -1708,15 +1724,22 @@ function applySelections(
     if (selection.type === 'all') {
       resultMap.mapUnmatchedColumns = true;
       addCollectionScalarDecoders(resultMap, context, selection.table);
-      query.select(
-        selection.table
-          ? `${mapTableQualifier(
-              selection.table,
-              context.naming,
-              context.tableScope,
-            )}.*`
-          : '*',
-      );
+      const expanded = expandTemporalAllSelection(selection, context);
+      if (expanded) {
+        for (const fieldSelection of expanded) {
+          applySelectionExpression(query, fieldSelection, context, resultMap);
+        }
+      } else {
+        query.select(
+          selection.table
+            ? `${mapTableQualifier(
+                selection.table,
+                context.naming,
+                context.tableScope,
+              )}.*`
+            : '*',
+        );
+      }
       continue;
     }
 
@@ -1752,7 +1775,11 @@ function applySelectionExpression(
         mapped.result.reference,
       );
     }
-    query.select(mapped.selection as any);
+    query.select(
+      mapped.result
+        ? selectionToQueryExpression(mapped, context)
+        : (mapped.selection as any),
+    );
     return;
   }
 
@@ -2565,6 +2592,18 @@ function expressionNodeToSelectRaw(
   expression: ExpressionNode,
   physicalAlias: string,
 ): Knex.Raw {
+  if (expression.type === 'ref') {
+    const field = scalarSource(expression.reference, context.tableScope);
+    const reference = mapReference(
+      expression.reference,
+      context.naming,
+      context.tableScope,
+    );
+    return context.client.raw('? as ??', [
+      temporalProjection(context.client, field, reference),
+      physicalAlias,
+    ]);
+  }
   if (expression.type === 'decimalResult') {
     return context.client.raw('? as ??', [
       aggregateProjection(
@@ -2687,6 +2726,59 @@ function mapStringSelection(
   };
 }
 
+function selectionToQueryExpression(
+  mapped: {
+    selection: unknown;
+    result?: { physical: string; logical: string; reference: string };
+  },
+  context: ExpressionCompileContext,
+): unknown {
+  if (!mapped.result) return mapped.selection;
+  const field = scalarSource(mapped.result.reference, context.tableScope);
+  if (!field || !isTemporalType(field.type)) return mapped.selection;
+  return context.client.raw('? as ??', [
+    temporalProjection(
+      context.client,
+      field,
+      mapReference(mapped.result.reference, context.naming, context.tableScope),
+    ),
+    mapped.result.physical,
+  ]);
+}
+
+function expandTemporalAllSelection(
+  selection: Extract<SelectItem, { type: 'all' }>,
+  context: ExpressionCompileContext,
+): string[] | undefined {
+  const requestedTables = selection.table
+    ? [selection.table]
+    : [...(context.tableScope.tables ?? [])];
+  if (requestedTables.length === 0) return undefined;
+
+  const targets = requestedTables.map((table) => {
+    const parsed = parseAliasedIdentifier(table);
+    return {
+      qualifier: parsed.alias ?? parsed.identifier,
+      collection: collectionForTable(context.tableScope, table),
+    };
+  });
+  if (
+    targets.some((target) => !target.collection) ||
+    !targets.some((target) =>
+      target.collection?.fields?.some(
+        (field) => !('target' in field) && isTemporalType(field.type),
+      ),
+    )
+  )
+    return undefined;
+
+  return targets.flatMap(({ qualifier, collection }) =>
+    (collection?.fields ?? [])
+      .filter((field) => !('target' in field))
+      .map((field) => `${qualifier}.${field.name}`),
+  );
+}
+
 function logicalResultKeyForSelection(selection: string): string {
   const parsed = parseAliasedIdentifier(selection);
   return parsed.alias ?? lastReferenceSegment(parsed.identifier);
@@ -2803,11 +2895,13 @@ function mapIdentifier(identifier: string, naming: NamingStrategy): string {
 interface WriteFields {
   readonly json: ReadonlySet<string>;
   readonly boolean: ReadonlyMap<string, FieldDefinition>;
+  readonly temporal: ReadonlyMap<string, FieldDefinition>;
 }
 
 const emptyWriteFields: WriteFields = {
   json: emptyStringSet,
   boolean: new Map(),
+  temporal: new Map(),
 };
 
 function mapData(
@@ -2822,11 +2916,14 @@ function mapData(
   return Object.fromEntries(
     Object.entries(data).map(([key, value]) => {
       const booleanField = fields.boolean.get(key);
+      const temporalField = fields.temporal.get(key);
       const encoded = booleanField
         ? encodeQueryBoolean(client, booleanField, value)
-        : fields.json.has(key) && value !== null
-          ? encodeJsonValue(value as JsonValue)
-          : value;
+        : temporalField && client
+          ? encodeQueryTemporal(client, temporalField, value)
+          : fields.json.has(key) && value !== null
+            ? encodeJsonValue(value as JsonValue)
+            : value;
       return [mapIdentifier(key, naming), encoded];
     }),
   );
@@ -2845,6 +2942,22 @@ function encodeQueryBoolean(
     : normalizeBooleanValue(field, value);
 }
 
+function encodeQueryTemporal(
+  client: Knex,
+  field: FieldDefinition,
+  value: unknown,
+): unknown {
+  if (value === null) return null;
+  const temporalBinding =
+    getDatabaseDriverRuntime(client)?.repository?.temporalBinding;
+  if (!temporalBinding) return value;
+  if (value instanceof Date) {
+    if (!Number.isFinite(value.getTime())) return value;
+    value = value.toISOString();
+  }
+  return temporalBinding({ client, field, value });
+}
+
 async function resolveWriteFields(
   lookup: CollectionLookup | undefined,
   tableName: string,
@@ -2853,12 +2966,14 @@ async function resolveWriteFields(
   const collection = await lookup(parseAliasedIdentifier(tableName).identifier);
   const json = new Set<string>();
   const boolean = new Map<string, FieldDefinition>();
+  const temporal = new Map<string, FieldDefinition>();
   for (const field of collection?.fields ?? []) {
     if ('target' in field) continue;
     if (field.type === 'json') json.add(field.name);
     if (field.type === 'boolean') boolean.set(field.name, field);
+    if (isTemporalType(field.type)) temporal.set(field.name, field);
   }
-  return { json, boolean };
+  return { json, boolean, temporal };
 }
 
 function parseAliasedIdentifier(value: string): {
@@ -2918,6 +3033,12 @@ function addScalarDecoder(
   if (field.type === 'boolean') {
     resultMap.scalarDecoders?.set(physicalKey, (value) =>
       decodeBooleanValue(field, value),
+    );
+    return;
+  }
+  if (isTemporalType(field.type)) {
+    resultMap.scalarDecoders?.set(physicalKey, (value) =>
+      normalizeTemporalResultValue(field, value),
     );
     return;
   }
