@@ -12,6 +12,7 @@ import { normalizeRepositoryPolicy } from './policy/normalize.js';
 import {
   applyCreateDefaults,
   assertPolicyFilterFields,
+  assertReadableField,
   combinePolicyFilter,
   readableFields,
   relationReadContext,
@@ -19,6 +20,7 @@ import {
   resolveWriteShapeNode,
   rootReadContext,
   toWritePolicy,
+  UNRESTRICTED_READ,
   type PolicyMutationOperation,
   type PolicyReadContext,
 } from './policy/enforce.js';
@@ -214,10 +216,20 @@ export class DefaultRepository<
       options.context,
       policy,
     );
-    const sort = await this.validateSort(collection, options.sort);
+    const sort = await this.validateSort(
+      collection,
+      options.sort,
+      false,
+      policy,
+    );
     validatePagination(options.limit, options.offset, sort, options.cursor);
     validateCursorDirection(options.direction, options.cursor);
-    const distinct = validateDistinct(collection, options.distinct, sort);
+    const distinct = validateDistinct(
+      collection,
+      options.distinct,
+      sort,
+      policy,
+    );
     const cursor = validateCursor(
       collection,
       options.cursor,
@@ -286,6 +298,7 @@ export class DefaultRepository<
       collection,
       options.sort,
       !callerFilter,
+      policy,
     );
     return (await this.options.adapter.findOne({
       collection,
@@ -336,13 +349,14 @@ export class DefaultRepository<
     options: AggregateOptions<TRecord>,
   ): Promise<AggregateResult> {
     const collection = await this.collection();
+    const policy = this.readContext(collection);
     const aggregate = normalizeAggregateInput(collection, options.aggregate);
-    validateAggregate(collection, aggregate);
+    validateAggregate(collection, aggregate, policy);
     const filter = await this.normalizeFilter(
       collection,
       options.filter,
       options.context,
-      this.readContext(collection),
+      policy,
     );
     return this.options.adapter.aggregate({ collection, aggregate, filter });
   }
@@ -368,15 +382,16 @@ export class DefaultRepository<
   async groupBy(options: GroupByOptions<TRecord>): Promise<GroupByResult[]>;
   async groupBy(options: GroupByOptions<TRecord>): Promise<GroupByResult[]> {
     const collection = await this.collection();
-    const by = validateGroupByFields(collection, options.by);
+    const policy = this.readContext(collection);
+    const by = validateGroupByFields(collection, options.by, policy);
     const aggregate = normalizeAggregateInput(collection, options.aggregate);
-    validateAggregate(collection, aggregate);
+    validateAggregate(collection, aggregate, policy);
     const resultCollection = groupByResultCollection(collection, by, aggregate);
     const filter = await this.normalizeFilter(
       collection,
       options.filter,
       options.context,
-      this.readContext(collection),
+      policy,
     );
     const having = await normalizeFilterWithRelations(
       this.options.collections,
@@ -388,6 +403,8 @@ export class DefaultRepository<
       this.options.collections,
       resultCollection,
       options.sort,
+      false,
+      UNRESTRICTED_READ,
     );
     return this.options.adapter.groupBy({
       collection,
@@ -1224,13 +1241,15 @@ export class DefaultRepository<
   private async validateSort(
     collection: CollectionDefinition,
     sort: RepositorySort<TRecord> | undefined,
-    requireNonEmpty = false,
+    requireNonEmpty: boolean,
+    policy: PolicyReadContext,
   ): Promise<SortAst | undefined> {
     return validateSortWithRelations(
       this.options.collections,
       collection,
       sort,
       requireNonEmpty,
+      policy,
     );
   }
 
@@ -2203,6 +2222,7 @@ function normalizeAggregateInput<TRecord extends object>(
 function validateAggregate(
   collection: CollectionDefinition,
   aggregate: AggregateAst,
+  policy: PolicyReadContext,
 ): void {
   if (
     !aggregate ||
@@ -2276,6 +2296,7 @@ function validateAggregate(
     }
     if (item.field === undefined) continue;
     const field = scalarField(collection, item.field, [...path, 'field']);
+    assertReadableField(policy, collection, field.name, [...path, 'field']);
     const supported =
       item.kind === 'count' ||
       (item.kind === 'sum' || item.kind === 'avg'
@@ -2298,6 +2319,7 @@ function validateAggregate(
 function validateGroupByFields(
   collection: CollectionDefinition,
   input: readonly string[],
+  policy: PolicyReadContext,
 ): string[] {
   if (!Array.isArray(input) || input.length === 0) {
     invalid('INVALID_GROUP_BY', 'GroupBy requires at least one Field.', {
@@ -2308,6 +2330,7 @@ function validateGroupByFields(
   const seen = new Set<string>();
   for (const [index, name] of input.entries()) {
     const field = scalarField(collection, name, ['by', index]);
+    assertReadableField(policy, collection, field.name, ['by', index]);
     // Enum equality is defined independently of member ordering.
     if (field.type !== 'enum' && !SORTABLE_TYPES.has(field.type)) {
       invalid(
@@ -2721,11 +2744,22 @@ async function validateSelectInputWithRelations(
       );
     }
     const sort = isToManyRelation(relation)
-      ? await validateSortWithRelations(collections, target, sortInput)
+      ? await validateSortWithRelations(
+          collections,
+          target,
+          sortInput,
+          false,
+          relationPolicy,
+        )
       : undefined;
     validatePagination(node.limit, undefined, sort, node.cursor);
     validateCursorDirection(node.direction, node.cursor);
-    const distinct = validateDistinct(target, node.distinct, sort);
+    const distinct = validateDistinct(
+      target,
+      node.distinct,
+      sort,
+      relationPolicy,
+    );
     const cursorAxes = isToManyRelation(relation)
       ? validateCursor(target, node.cursor, sort, node.sort !== undefined)
       : undefined;
@@ -2887,11 +2921,15 @@ async function validateRelationResult(
     relationField(source, relation, []),
     [],
   );
-  validateAggregate(target, {
-    kind: 'aggregate',
-    version: 1,
-    items: [{ ...result, alias: 'value' }],
-  });
+  validateAggregate(
+    target,
+    {
+      kind: 'aggregate',
+      version: 1,
+      items: [{ ...result, alias: 'value' }],
+    },
+    relationReadContext(policy, source, relation, []),
+  );
   if (
     scope.limit !== undefined &&
     scope.sort?.items.some(
@@ -2927,7 +2965,8 @@ async function validateSortWithRelations<TRecord extends object>(
   collections: Pick<ConnectionCollections, 'get'>,
   collection: CollectionDefinition,
   input: RepositorySort<TRecord> | undefined,
-  requireNonEmpty = false,
+  requireNonEmpty: boolean,
+  policy: PolicyReadContext,
 ): Promise<SortAst | undefined> {
   const sort = normalizeSortInput(collection, input);
   if (sort !== undefined) validateSortAst(collection, sort);
@@ -3053,12 +3092,20 @@ async function validateSortWithRelations<TRecord extends object>(
     }
     seen.add(identity);
     if (item.kind === 'field') {
-      await validateFieldSortNode(collections, collection, item, index);
+      await validateFieldSortNode(collections, collection, item, index, policy);
       continue;
     }
     let current = collection;
+    let currentPolicy = policy;
     let terminal: RelationFieldDefinition | undefined;
     for (const [relationIndex, name] of item.relation.entries()) {
+      const relationPath = ['items', index, 'relation', relationIndex] as const;
+      currentPolicy = relationReadContext(
+        currentPolicy,
+        current,
+        name,
+        relationPath,
+      );
       terminal = relationField(current, name, [
         'items',
         index,
@@ -3101,6 +3148,11 @@ async function validateSortWithRelations<TRecord extends object>(
     }
     if (item.aggregate !== 'count') {
       const field = scalarField(current, item.field, ['items', index, 'field']);
+      assertReadableField(currentPolicy, current, field.name, [
+        'items',
+        index,
+        'field',
+      ]);
       const allowed =
         item.aggregate === 'sum' || item.aggregate === 'avg'
           ? FILTER_GROUP_BY_TYPE[field.type] === 'number'
@@ -3142,6 +3194,7 @@ async function validateFieldSortNode(
   collection: CollectionDefinition,
   item: Extract<SortNode, { readonly kind: 'field' }>,
   index: number,
+  policy: PolicyReadContext,
 ): Promise<void> {
   if (item.path.length === 0) {
     invalid('INVALID_SORT', 'Field sort path must not be empty.', {
@@ -3150,7 +3203,14 @@ async function validateFieldSortNode(
     });
   }
   let current = collection;
+  let currentPolicy = policy;
   for (const [relationIndex, name] of item.path.slice(0, -1).entries()) {
+    currentPolicy = relationReadContext(currentPolicy, current, name, [
+      'items',
+      index,
+      'path',
+      relationIndex,
+    ]);
     const relation = relationField(current, name, [
       'items',
       index,
@@ -3177,6 +3237,12 @@ async function validateFieldSortNode(
   }
   const fieldIndex = item.path.length - 1;
   const field = scalarField(current, item.path[fieldIndex], [
+    'items',
+    index,
+    'path',
+    fieldIndex,
+  ]);
+  assertReadableField(currentPolicy, current, field.name, [
     'items',
     index,
     'path',
@@ -4978,6 +5044,7 @@ function validateDistinct(
   collection: CollectionDefinition,
   input: readonly string[] | undefined,
   sort: SortAst | undefined,
+  policy: PolicyReadContext,
 ): string[] | undefined {
   if (input === undefined) return undefined;
   if (!Array.isArray(input) || input.length === 0) {
@@ -4989,6 +5056,7 @@ function validateDistinct(
   const seen = new Set<string>();
   for (const [index, name] of input.entries()) {
     const field = scalarField(collection, name, ['distinct', index]);
+    assertReadableField(policy, collection, field.name, ['distinct', index]);
     if (!SORTABLE_TYPES.has(field.type)) {
       invalid(
         'FIELD_CAPABILITY_NOT_SUPPORTED',

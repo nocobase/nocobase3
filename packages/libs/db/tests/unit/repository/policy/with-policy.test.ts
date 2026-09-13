@@ -796,8 +796,112 @@ describe('DefaultRepository.withPolicy', () => {
           update: { scope: true },
           delete: { scope: true },
         })
-        .findOne({}),
+        .findOne({} as never),
     ).rejects.toMatchObject({ code: 'INVALID_FILTER' });
+  });
+
+  it('rejects query surfaces that name fields outside the read allowlist', async () => {
+    const collection = {
+      name: 'projects',
+      fields: [
+        { name: 'id', type: 'string' },
+        { name: 'title', type: 'string' },
+        { name: 'budget', type: 'integer' },
+      ],
+    };
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: { get: async () => collection },
+      adapter: {
+        assertReadable: () => undefined,
+        findMany: async () => [],
+        aggregate: async () => ({}),
+        groupBy: async () => [],
+      } as never,
+    });
+    const scoped = repository.withPolicy({
+      read: { scope: true, fields: ['id', 'title'] },
+      create: { scope: true },
+      update: { scope: true },
+      delete: { scope: true },
+    });
+    const forbidden = { code: 'FIELD_READ_FORBIDDEN', field: 'budget' };
+
+    await expect(
+      scoped.findMany({
+        sort: {
+          kind: 'sort',
+          version: 1,
+          items: [{ kind: 'field', path: ['budget'], direction: 'desc' }],
+        },
+      }),
+    ).rejects.toMatchObject(forbidden);
+
+    await expect(
+      scoped.findMany({
+        distinct: ['budget'],
+      } as never),
+    ).rejects.toMatchObject(forbidden);
+
+    await expect(
+      scoped.aggregate({
+        aggregate: {
+          kind: 'aggregate',
+          version: 1,
+          items: [{ kind: 'max', field: 'budget', alias: 'peak' }],
+        },
+      } as never),
+    ).rejects.toMatchObject(forbidden);
+
+    await expect(
+      scoped.groupBy({
+        by: ['budget'],
+        aggregate: {
+          kind: 'aggregate',
+          version: 1,
+          items: [{ kind: 'count', alias: 'total' }],
+        },
+      } as never),
+    ).rejects.toMatchObject(forbidden);
+  });
+
+  it('still sorts by the primary key it injected for determinism', async () => {
+    let plan: { sort?: { items: readonly unknown[] } } | undefined;
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {
+        get: async () => ({
+          name: 'projects',
+          fields: [
+            { name: 'id', type: 'string', nullable: false },
+            { name: 'title', type: 'string' },
+          ],
+          constraints: [{ type: 'primary', fields: ['id'] }],
+        }),
+      },
+      adapter: {
+        assertReadable: () => undefined,
+        findMany: async (nextPlan: typeof plan) => {
+          plan = nextPlan;
+          return [];
+        },
+      } as never,
+    });
+
+    // 'id' is outside the allowlist, but the sort on it is injected rather
+    // than asked for, so it must not be rejected.
+    await repository
+      .withPolicy({
+        read: { scope: true, fields: ['title'] },
+        create: { scope: true },
+        update: { scope: true },
+        delete: { scope: true },
+      })
+      .findMany({});
+
+    expect(plan?.sort?.items).toEqual([
+      expect.objectContaining({ path: ['id'] }),
+    ]);
   });
 
   it('enforces create and update field allowlists', async () => {
