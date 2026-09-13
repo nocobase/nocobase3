@@ -334,6 +334,37 @@
 .workflow-page h1 {
   margin: 0;
 }
+
+.workflow-tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin: 0;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border);
+}
+
+.workflow-tabs button {
+  flex: none;
+  padding: 0.5rem 0.75rem 0.625rem;
+  color: var(--muted-foreground);
+  font: inherit;
+  font-size: 0.875rem;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.workflow-tabs button:hover,
+.workflow-tabs button.active {
+  color: var(--foreground);
+}
+
+.workflow-tabs button.active {
+  border-bottom-color: var(--primary);
+  font-weight: 500;
+}
 .workflow-title-row,
 .workflow-canvas-header,
 .workflow-list li,

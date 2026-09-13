@@ -4,7 +4,8 @@ const enUS = {
   nav: {
     automation: 'Automation',
     workflows: 'Workflows',
-    runs: 'Workflow runs',
+    flow: 'Flows',
+    runs: 'Execution records',
   },
   common: {
     cancel: 'Cancel',

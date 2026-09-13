@@ -54,6 +54,34 @@ function workflowRunPath(runId: string): string {
   return `${WORKFLOW_SETTING_PATHS.workflowRuns}/${encodeURIComponent(runId)}`;
 }
 
+function WorkflowTabs({
+  active,
+  onChange,
+}: {
+  active: 'workflows' | 'runs';
+  onChange: (value: 'workflows' | 'runs') => void;
+}): React.ReactElement {
+  const { t } = useTranslation(WORKFLOW_NS);
+  return (
+    <nav aria-label={t('nav.automation')} className='workflow-tabs'>
+      <button
+        className={active === 'workflows' ? 'active' : ''}
+        type='button'
+        onClick={() => onChange('workflows')}
+      >
+        {t('nav.flow')}
+      </button>
+      <button
+        className={active === 'runs' ? 'active' : ''}
+        type='button'
+        onClick={() => onChange('runs')}
+      >
+        {t('nav.runs')}
+      </button>
+    </nav>
+  );
+}
+
 function statusLabel(status: number | null, t: Translator): string {
   return status == null
     ? t('status.queued')
@@ -700,6 +728,7 @@ export function WorkflowListPage(): React.ReactElement {
   const [items, setItems] = useState<WorkflowListRecord[] | null>(null);
   const [query, setQuery] = useState('');
   const [enabled, setEnabled] = useState('');
+  const [activeTab, setActiveTab] = useState<'workflows' | 'runs'>('workflows');
   const load = (): void => {
     const params = new URLSearchParams();
     if (query) params.set('q', query);
@@ -713,54 +742,59 @@ export function WorkflowListPage(): React.ReactElement {
       <h1 className='text-2xl font-semibold tracking-tight'>
         {t('workflows.title')}
       </h1>
-      <section className='workflow-list-card'>
-        <header className='workflow-list-header'>
-          <div className='workflow-filter-bar'>
-            <input
-              aria-label={t('filters.searchWorkflowTitle')}
-              placeholder={t('filters.searchWorkflowTitle')}
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-            />
-            <select
-              aria-label={t('filters.workflowStatus')}
-              value={enabled}
-              onChange={(event) => setEnabled(event.target.value)}
+      <WorkflowTabs active={activeTab} onChange={setActiveTab} />
+      {activeTab === 'runs' ? (
+        <WorkflowRunListPage embedded />
+      ) : (
+        <section className='workflow-list-card'>
+          <header className='workflow-list-header'>
+            <div className='workflow-filter-bar'>
+              <input
+                aria-label={t('filters.searchWorkflowTitle')}
+                placeholder={t('filters.searchWorkflowTitle')}
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+              />
+              <select
+                aria-label={t('filters.workflowStatus')}
+                value={enabled}
+                onChange={(event) => setEnabled(event.target.value)}
+              >
+                <option value=''>{t('filters.allStatuses')}</option>
+                <option value='true'>{t('status.enabled')}</option>
+                <option value='false'>{t('status.disabled')}</option>
+              </select>
+            </div>
+            <button
+              className='workflow-button workflow-button-outline'
+              type='button'
+              onClick={load}
             >
-              <option value=''>{t('filters.allStatuses')}</option>
-              <option value='true'>{t('status.enabled')}</option>
-              <option value='false'>{t('status.disabled')}</option>
-            </select>
-          </div>
-          <button
-            className='workflow-button workflow-button-outline'
-            type='button'
-            onClick={load}
-          >
-            {t('common.refresh')}
-          </button>
-        </header>
-        <ul className='workflow-list'>
-          {items?.map((item) => (
-            <WorkflowRow
-              key={item.id ?? item.hash ?? item.key}
-              item={item}
-              onReload={load}
-              onChange={(next) =>
-                setItems(
-                  (current) =>
-                    current?.map((candidate) =>
-                      candidate.key === next.key ? next : candidate,
-                    ) ?? null,
-                )
-              }
-            />
-          ))}
-          {items?.length === 0 ? (
-            <li className='workflow-list-empty'>{t('common.noData')}</li>
-          ) : null}
-        </ul>
-      </section>
+              {t('common.refresh')}
+            </button>
+          </header>
+          <ul className='workflow-list'>
+            {items?.map((item) => (
+              <WorkflowRow
+                key={item.id ?? item.hash ?? item.key}
+                item={item}
+                onReload={load}
+                onChange={(next) =>
+                  setItems(
+                    (current) =>
+                      current?.map((candidate) =>
+                        candidate.key === next.key ? next : candidate,
+                      ) ?? null,
+                  )
+                }
+              />
+            ))}
+            {items?.length === 0 ? (
+              <li className='workflow-list-empty'>{t('common.noData')}</li>
+            ) : null}
+          </ul>
+        </section>
+      )}
     </main>
   );
 }
@@ -1001,7 +1035,9 @@ export function WorkflowDetailPage(): React.ReactElement {
   );
 }
 
-export function WorkflowRunListPage(): React.ReactElement {
+export function WorkflowRunListPage({
+  embedded = false,
+}: { embedded?: boolean } = {}): React.ReactElement {
   const { i18n, t } = useTranslation(WORKFLOW_NS);
   const detail = useOutlet();
   const [items, setItems] = useState<WorkflowRunRecord[] | null>(null);
@@ -1015,72 +1051,76 @@ export function WorkflowRunListPage(): React.ReactElement {
   };
   useEffect(load, [query, status]);
   if (detail) return detail;
-  return (
+  const content = (
+    <section className='workflow-list-card'>
+      <header className='workflow-list-header'>
+        <div className='workflow-filter-bar'>
+          <input
+            aria-label={t('filters.filterWorkflowTitle')}
+            placeholder={t('filters.filterWorkflowTitle')}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+          <select
+            aria-label={t('filters.runStatus')}
+            value={status}
+            onChange={(event) => setStatus(event.target.value)}
+          >
+            <option value=''>{t('filters.allStatuses')}</option>
+            <option value='0'>{t('status.running')}</option>
+            <option value='1'>{t('status.resolved')}</option>
+            <option value='-1'>{t('status.failed')}</option>
+            <option value='-2'>{t('status.error')}</option>
+          </select>
+        </div>
+        <button
+          className='workflow-button workflow-button-outline'
+          type='button'
+          onClick={load}
+        >
+          {t('common.refresh')}
+        </button>
+      </header>
+      <ul className='workflow-list workflow-run-list'>
+        {items?.map((run) => (
+          <li key={run.id}>
+            <Link className='execution-item' to={workflowRunPath(run.id)}>
+              <div>
+                <span className='execution-item-title'>
+                  <span className='execution-run-id'>#{run.id}</span>{' '}
+                  <span className='execution-workflow-title'>
+                    {run.workflowTitle ?? run.workflowKey}
+                  </span>
+                </span>
+                <span className='execution-item-time'>
+                  {formatTime(
+                    run.startedAt ?? run.createdAt,
+                    i18n.resolvedLanguage,
+                  )}
+                </span>
+              </div>
+              <div className='execution-item-meta'>
+                <WorkflowRunStatusTag status={run.status} />
+                <span>{t('common.duration', { duration: duration(run) })}</span>
+              </div>
+            </Link>
+          </li>
+        ))}
+        {items?.length === 0 ? (
+          <li className='workflow-list-empty'>{t('common.noData')}</li>
+        ) : null}
+      </ul>
+    </section>
+  );
+  return embedded ? (
+    content
+  ) : (
     <main className='workflow-page'>
       <h1 className='text-2xl font-semibold tracking-tight'>
-        {t('runs.title')}
+        {t('workflows.title')}
       </h1>
-      <section className='workflow-list-card'>
-        <header className='workflow-list-header'>
-          <div className='workflow-filter-bar'>
-            <input
-              aria-label={t('filters.filterWorkflowTitle')}
-              placeholder={t('filters.filterWorkflowTitle')}
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-            />
-            <select
-              aria-label={t('filters.runStatus')}
-              value={status}
-              onChange={(event) => setStatus(event.target.value)}
-            >
-              <option value=''>{t('filters.allStatuses')}</option>
-              <option value='0'>{t('status.running')}</option>
-              <option value='1'>{t('status.resolved')}</option>
-              <option value='-1'>{t('status.failed')}</option>
-              <option value='-2'>{t('status.error')}</option>
-            </select>
-          </div>
-          <button
-            className='workflow-button workflow-button-outline'
-            type='button'
-            onClick={load}
-          >
-            {t('common.refresh')}
-          </button>
-        </header>
-        <ul className='workflow-list workflow-run-list'>
-          {items?.map((run) => (
-            <li key={run.id}>
-              <Link className='execution-item' to={workflowRunPath(run.id)}>
-                <div>
-                  <span className='execution-item-title'>
-                    <span className='execution-run-id'>#{run.id}</span>{' '}
-                    <span className='execution-workflow-title'>
-                      {run.workflowTitle ?? run.workflowKey}
-                    </span>
-                  </span>
-                  <span className='execution-item-time'>
-                    {formatTime(
-                      run.startedAt ?? run.createdAt,
-                      i18n.resolvedLanguage,
-                    )}
-                  </span>
-                </div>
-                <div className='execution-item-meta'>
-                  <WorkflowRunStatusTag status={run.status} />
-                  <span>
-                    {t('common.duration', { duration: duration(run) })}
-                  </span>
-                </div>
-              </Link>
-            </li>
-          ))}
-          {items?.length === 0 ? (
-            <li className='workflow-list-empty'>{t('common.noData')}</li>
-          ) : null}
-        </ul>
-      </section>
+      <WorkflowTabs active='runs' onChange={() => undefined} />
+      {content}
     </main>
   );
 }
@@ -1117,7 +1157,7 @@ export function WorkflowRunDetailPage(): React.ReactElement {
   const description = selectedNode?.description ?? null;
   return (
     <main className='workflow-page'>
-      <Link to={WORKFLOW_SETTING_PATHS.workflowRuns}>{t('runs.back')}</Link>
+      <Link to={workflowPath(run.workflowId)}>{t('workflows.back')}</Link>
       <div className='workflow-title-row'>
         <div>
           <h1 className='text-2xl font-semibold tracking-tight'>

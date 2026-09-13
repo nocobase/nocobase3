@@ -16,6 +16,7 @@ import { workflowApi } from '../../client/workflow-management/data.js';
 import {
   NodeDescriptionDialog,
   WorkflowDetailPage,
+  WorkflowRunDetailPage,
 } from '../../client/workflow-management/pages.js';
 import type { WorkflowNestedDefinition } from '../../client/types.js';
 import clientLocales from '../../client/locales/index.js';
@@ -250,6 +251,38 @@ describe('workflow node descriptions', () => {
         '/settings/automation/workflow-runs/run-42',
       ),
     );
+  });
+
+  it('returns from an execution detail to its workflow detail', async () => {
+    vi.spyOn(workflowApi, 'run').mockResolvedValue({
+      id: 'run-42',
+      workflowId: 'workflow-1',
+      workflowKey: 'notification',
+      workflowTitle: 'Notification workflow',
+      eventKey: 'event-42',
+      status: 1,
+      createdAt: '2026-09-02T08:00:00.000Z',
+    });
+    vi.spyOn(workflowApi, 'workflow').mockResolvedValue(
+      workflow({ enabled: true, current: true }),
+    );
+
+    renderWithI18n(
+      <MemoryRouter initialEntries={['/workflow-runs/run-42']}>
+        <Routes>
+          <Route
+            path='/workflow-runs/:runId'
+            element={<WorkflowRunDetailPage />}
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(
+      (await screen.findByRole('link', { name: '← Workflows' })).getAttribute(
+        'href',
+      ),
+    ).toBe('/settings/automation/workflows/workflow-1');
   });
 
   it('offers the candidate revision in the version picker without enabling it', async () => {

@@ -1,7 +1,12 @@
 import type { WorkflowResource } from './en-US.js';
 
 const zhCN: WorkflowResource = {
-  nav: { automation: '自动化', workflows: '工作流', runs: '工作流执行' },
+  nav: {
+    automation: '自动化',
+    workflows: '工作流',
+    flow: '流程',
+    runs: '执行记录',
+  },
   common: {
     cancel: '取消',
     save: '保存',
