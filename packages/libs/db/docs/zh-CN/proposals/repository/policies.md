@@ -111,10 +111,13 @@ declare function ref(target: string): PolicyRef;
 type ScalarValue = string | number | boolean | null | Date;
 
 /**
- * 简写对象（根级标量等值、隐式 AND）或完整 FilterAst。
- * 不接受 Builder 回调、关系节点、变量节点、JSON 操作符。
+ * 简写对象（根级标量等值、隐式 AND）、完整 FilterAst，或返回 FilterNode 的 Builder 回调。
+ * 回调在绑定期求值一次并物化成 AST。不接受关系节点、变量节点、JSON 操作符。
  */
-type Scope = Readonly<Record<string, ScalarValue>> | FilterAst;
+type Scope =
+  | Readonly<Record<string, ScalarValue>>
+  | FilterAst
+  | ((filter: FilterBuilder) => FilterNode);
 
 /** narrow 的入参：节点可省、节点内每个成员也可省。 */
 type PartialRepositoryPolicy = {
@@ -211,7 +214,7 @@ withPolicy({
 
 非等值条件都可以用。scope 任何情况下都不产生值——create 的字段赋值由 `create.defaults` 负责，与 scope 的语法形状无关。
 
-注意 scope 只接受**简写对象**和 **`FilterAst`** 两种形式，不接受 Builder 回调（回调无法序列化，也就无法被 `explainPolicy()` 检视或存库）。而简写**只能表达根级标量等值**——`{ budget: { $gt: 100000 } }`、`{ $or: [...] }`、`$in` 在整个 Repository 里都不是有效语法，非等值条件一律走 AST。完整的操作符表、按字段类型的可用范围、NULL 三值语义与索引义务见 [Policy 参考](./policies-reference.md)。
+注意 scope 接受**简写对象**、**`FilterAst`** 和 **Builder 回调**三种形式。回调在 `withPolicy` 绑定时就被 `buildFilter` 求值一次并物化成 AST，之后存在策略里的只有 AST——所以它照样能被 `explainPolicy()` 检视、能序列化存库，与前两种形式没有区别。而简写**只能表达根级标量等值**——`{ budget: { $gt: 100000 } }`、`{ $or: [...] }`、`$in` 在整个 Repository 里都不是有效语法，非等值条件一律走 AST。完整的操作符表、按字段类型的可用范围、NULL 三值语义与索引义务见 [Policy 参考](./policies-reference.md)。
 
 **不支持关系路径与关系量词**（`owner.tenantId`、`tasks.some(...)`）。理由是递归歧义（关系目标自己的 Policy 是否生效，两个答案都不好）、隐式 join（每次查询都多一个 EXISTS 且调用方看不见）、以及并发下写后重判需要回查关联表。这是分期决定：`read.scope` 不需要任何反向操作，可以在后续阶段单独开放。当前的替代做法是把归属物化到本表，或在 service 层拆成两段查询。
 

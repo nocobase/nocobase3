@@ -17,13 +17,13 @@ description: 按阶段拆分的实施任务，含前置决策、技术验证、�
 
 ### 五个设计决策
 
-| #       | 决策                                                                                                                                                               | 影响                                         |
-| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------- |
-| ~~0.1~~ | ~~Scope 是否复用 `RepositoryFilter` 语法~~ **已定**：复用简写与 AST 两种形式，不接受 Builder 回调；排除 JSON 系列操作符。见 [Policy 参考](./policies-reference.md) | —                                            |
-| 0.2     | `fields` 是否也必填                                                                                                                                                | 只影响类型，但改起来是全量 breaking          |
-| 0.3     | 现有 `writePolicy` 的 callback builder 是否移除                                                                                                                    | 决定迁移面是 41 个文件还是更多               |
-| 0.4     | `requireScope` 落在 Collection metadata 还是 Connection 配置                                                                                                       | 影响阶段 4，但接口要在阶段 1 预留            |
-| 0.5     | `origin` 标记是否进入公开的 `FilterAst`                                                                                                                            | 影响 `@nocobase/repository-input` 的公开类型 |
+| #       | 决策                                                                                                                                                                                                    | 影响                                |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| ~~0.1~~ | ~~Scope 是否复用 `RepositoryFilter` 语法~~ **已定**：复用简写、AST 与 Builder 回调三种形式，回调在绑定期物化成 AST；排除关系路径、关系量词与 JSON 系列操作符。见 [Policy 参考](./policies-reference.md) | —                                   |
+| 0.2     | `fields` 是否也必填                                                                                                                                                                                     | 只影响类型，但改起来是全量 breaking |
+| 0.3     | 现有 `writePolicy` 的 callback builder 是否移除                                                                                                                                                         | 决定迁移面是 41 个文件还是更多      |
+| 0.4     | `requireScope` 落在 Collection metadata 还是 Connection 配置                                                                                                                                            | 影响阶段 4，但接口要在阶段 1 预留   |
+| ~~0.5~~ | ~~`origin` 标记是否进入公开的 `FilterAst`~~ **已定**：不进公开类型。标记只在 `@nocobase/db` 内部携带，`@nocobase/repository-input` 的 `FilterAst` 不变，零 breaking                                     | —                                   |
 
 ### 两个技术验证（spike，各半天）
 
@@ -31,6 +31,15 @@ description: 按阶段拆分的实施任务，含前置决策、技术验证、�
 - **0.7 `evaluateScope` 与 SQL 的语义一致性边界。** 见阶段 1 的 1.4——先确认哪些操作符能在内存里和数据库给出完全一致的结果，定不下来的直接排除出 `Scope` 的允许集合。
 
 **出口条件**：五个决策写进设计文档的对应位置（不再留在「待决」），两个 spike 有结论。
+
+### 实施期决定
+
+实施开始后补记的两条，与上表的设计决策并列，但它们决定的是施工方式而不是契约形状。
+
+| #   | 决策                                                                                                                      | 理由                                                                                                                                                                                         |
+| --- | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0.8 | 分支整体做完阶段 2 再合入 `develop`，其间 `src/index.ts` 保持导出 policy 入口不变                                         | 半成品 policy 的危险形态正是「看起来配过了」。要么不合，要么撤掉导出；两者都比反复增删公开 API 好。若改为分组合入，须在该组最后一个 commit 撤出 `withPolicy` / `withPolicies` 与 policy 类型 |
+| 0.9 | 保留 `toWritePolicy` 桥接（新 policy 翻回旧 `WritePolicy` 再走 `assertMutationWritePolicy`），到关系写入目标（1.8）时再拆 | 阶段 1 的执行层重构已经很宽，再并入 `write-policy.ts` + `write-policy-check.ts`（687 行）会大到无法 review。拆除的触发条件是 `RelationWriteNode.scope` 在旧结构里无处安放                    |
 
 ## 阶段 1：行范围
 
@@ -110,11 +119,18 @@ description: 按阶段拆分的实施任务，含前置决策、技术验证、�
 
 ### 阶段 1 验收
 
+下列前五条都是关于**真实 SQL** 的断言，单元测试的假适配器在结构上证明不了，必须落在
+`db-testkit/tests/integration/repository/policy/`，跟随八个 dialect 包执行。方言排期见
+[数据库集成测试](../../../../../../../internal-docs/development/database-integration-testing.md)：
+SQLite、PostgreSQL、MySQL、Kingbase 可并发；OceanBase、Oracle、MSSQL、Dameng 必须串行。
+
 - [ ] 生成的 SQL 含 scope 条件，且不存在「先查全量再内存过滤」的路径
 - [ ] 调用方 `or` 分组与 scope 合并为 `(A OR B) AND scope`
-- [ ] 越权与不存在的响应**逐字节相同**
+- [ ] 越权与不存在的响应**逐字节相同**：`findOne` 返回 `null`，`findMany` / `count` / `exists` 不含该行，`updateOne` / `deleteOne` 抛 `RECORD_NOT_FOUND`，`updateMany` / `deleteMany` 计 0 不报错
 - [ ] 常规 update 路径零额外查询（断言查询次数）
 - [ ] `evaluateScope` 差分测试八方言全绿
+- [ ] 重判触发回滚后事务干净，不留半条记录
+- [ ] 并发下重判发生在锁之后（照 `repository/methods/concurrent-writes.test.ts` 的模式）
 - [ ] `create.defaults` 被调用方同名字段覆盖后由重判挡下；`defaults` 可设 `fields` 之外的字段
 - [ ] scope 引用的字段取不到值时，配置阶段就报 `INVALID_POLICY`（不是运行时回滚）
 - [ ] 关系 `connect` 越界目标返回 `RELATION_TARGET_NOT_FOUND`
@@ -135,6 +151,8 @@ description: 按阶段拆分的实施任务，含前置决策、技术验证、�
 
 ### 验收
 
+- [ ] 写方法的 returning `select` 同样受 `read.fields` / `read.relations` 约束
+- [ ] `sort` / `distinct` / `cursor` / `groupBy.by` / `aggregate` / `having` 同样受 `read.fields` 约束
 - [ ] 显式请求越权字段报错，不静默裁剪
 - [ ] 省略 select 时裁剪，且关系仍不自动展开
 - [ ] `exists({ filter: { budget: ... } })` 被 2.5 拒绝
