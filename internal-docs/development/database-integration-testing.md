@@ -18,9 +18,9 @@ The default `@nocobase/db` integration command runs **SQLite only**:
 pnpm --filter @nocobase/db test:integration
 ```
 
-PostgreSQL, MySQL, Oracle, MSSQL, Dameng, and OceanBase are opt-in. Run their
-package-specific command only when that database is available and the suite is
-needed.
+PostgreSQL, MySQL, Kingbase, Oracle, MSSQL, Dameng, and OceanBase are opt-in.
+Run their package-specific command only when that database is available and the
+suite is needed.
 
 ## Run one dialect
 
@@ -76,9 +76,9 @@ database without pausing the process.
 The same syntax works for SQLite, PostgreSQL, MySQL, Oracle, MSSQL, Dameng,
 OceanBase, and Kingbase.
 
-Replace `mysql` with `sqlite`, `postgres`, `oceanbase`, `oracle`, `mssql`, or
-`dameng` as needed. SQLite runs directly through Vitest; the other dialects use
-the package's integration runner and Docker Compose.
+Replace `mysql` with `sqlite`, `postgres`, `kingbase`, `oceanbase`, `oracle`,
+`mssql`, or `dameng` as needed. SQLite runs directly through Vitest; the other
+dialects use the package's integration runner and Docker Compose.
 
 ## Suites that may run concurrently when requested
 
@@ -87,6 +87,7 @@ These suites can be started at the same time:
 - `sqlite`
 - `postgres`
 - `mysql`
+- `kingbase`
 
 From the repository root:
 
@@ -97,14 +98,17 @@ pnpm --filter @nocobase/db-postgres test:integration &
 postgres_pid=$!
 pnpm --filter @nocobase/db-mysql test:integration &
 mysql_pid=$!
+pnpm --filter @nocobase/db-kingbase test:integration &
+kingbase_pid=$!
 
-wait "$sqlite_pid" "$postgres_pid" "$mysql_pid"
+wait "$sqlite_pid" "$postgres_pid" "$mysql_pid" "$kingbase_pid"
 ```
 
 The commands use separate package-level configurations. The Docker-backed
 runners generate an isolated Compose project name and a dynamically published
-host port, so these three suites do not need to share a database container or
-port.
+host port, so these suites do not need to share a database container or port.
+Kingbase is the slowest of this group: its service declares a 30 second health
+check start period, so expect it to finish after the other three.
 
 ## Suites that must run one at a time
 
@@ -140,9 +144,9 @@ conservative and runs every dialect serially:
 pnpm --filter @nocobase/db test:integration:all
 ```
 
-When a full verification is required, run the `sqlite`/`postgres`/`mysql` group
-in parallel first, then run `oracle`/`mssql`/`dameng`/`oceanbase` using the
-serial chain above. Do not append the serial-only suites to background jobs from
+When a full verification is required, run the
+`sqlite`/`postgres`/`mysql`/`kingbase` group in parallel first, then run
+`oracle`/`mssql`/`dameng`/`oceanbase` using the serial chain above. Do not append the serial-only suites to background jobs from
 the parallel group. For normal development, prefer the default SQLite command
 and opt into only the dialect under change.
 
