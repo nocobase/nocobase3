@@ -421,7 +421,7 @@ function ModelEditor({
     <div
       role='dialog'
       aria-label={t('Edit models')}
-      className='fixed inset-0 grid place-items-center bg-black/30 p-4'
+      className='fixed inset-0 z-50 grid place-items-center bg-black/30 p-4'
     >
       <div className='w-full max-w-xl space-y-5 rounded-lg bg-background p-6 shadow-lg'>
         <div>
