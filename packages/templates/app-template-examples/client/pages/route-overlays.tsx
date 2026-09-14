@@ -1,18 +1,32 @@
 import { useTranslation } from '@nocobase/i18n/client';
+import { Plus, Sparkles } from 'lucide-react';
 import { Link, Outlet, useLocation } from 'react-router';
+import { Breadcrumbs } from '@/components/breadcrumbs';
 import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/page-header';
 
 export default function RouteOverlaysPage() {
   const { t } = useTranslation();
   const location = useLocation();
   return (
-    <section className='mx-auto w-full max-w-6xl space-y-6 p-6 md:p-8'>
-      <h1 className='font-heading text-3xl font-semibold'>
-        {t('routeOverlays.title')}
-      </h1>
-      <p className='text-sm text-muted-foreground'>
-        {t('routeOverlays.description')}
-      </p>
+    <section className='w-full space-y-6 p-6 md:p-8'>
+      <Breadcrumbs />
+      <PageHeader
+        actions={
+          <>
+            <Button variant='outline'>
+              <Sparkles />
+              {t('routeOverlays.preview')}
+            </Button>
+            <Button>
+              <Plus />
+              {t('routeOverlays.newExample')}
+            </Button>
+          </>
+        }
+        description={t('routeOverlays.description')}
+        title={t('routeOverlays.title')}
+      />
       <div className='flex flex-wrap gap-3'>
         <Button
           render={<Link to={{ pathname: 'dialog', search: location.search }} />}

@@ -7,6 +7,8 @@ const enUS = {
       'Open a dialog or drawer, then open another layer. Close the child to return to your draft. Each layer has its own URL.',
     openDialog: 'Open dialog',
     openDrawer: 'Open drawer',
+    preview: 'Preview',
+    newExample: 'New example',
     dialogTitle: 'Dialog example',
     drawerTitle: 'Drawer example',
     hint: 'Type a draft and open a child layer to try keeping your work in place.',
@@ -182,6 +184,7 @@ const enUS = {
     expand: 'Expand navigation',
     collapse: 'Collapse navigation',
     label: 'Application navigation',
+    breadcrumb: 'Breadcrumb',
   },
 };
 

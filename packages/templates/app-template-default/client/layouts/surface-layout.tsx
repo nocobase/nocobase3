@@ -8,6 +8,7 @@ import { Loading } from '@/components/loading';
 import { Button } from '@/components/ui/button';
 
 import { renderRouteTree } from '../routing/route-tree.js';
+import { RouteMetadataBoundary } from '../routing/route-context.js';
 import {
   routeKey,
   matchRouteTree,
@@ -195,10 +196,12 @@ export function SurfaceLayout({
               </option>
             ))}
           </select>
-          <Routes>
-            {renderRouteTree(routeTree, copy.pathPrefix, false, true)}
-            {renderRouteTree(routes, copy.pathPrefix)}
-          </Routes>
+          <RouteMetadataBoundary routes={allRoutes}>
+            <Routes>
+              {renderRouteTree(routeTree, copy.pathPrefix, false, true)}
+              {renderRouteTree(routes, copy.pathPrefix)}
+            </Routes>
+          </RouteMetadataBoundary>
         </main>
       </div>
     </div>

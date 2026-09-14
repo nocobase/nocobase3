@@ -39,6 +39,7 @@ const enUS = {
     expand: 'Expand navigation',
     collapse: 'Collapse navigation',
     label: 'Application navigation',
+    breadcrumb: 'Breadcrumb',
   },
 };
 

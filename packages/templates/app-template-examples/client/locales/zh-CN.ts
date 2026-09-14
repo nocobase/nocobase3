@@ -7,6 +7,8 @@ const zhCN: AppResource = {
       '打开弹窗或抽屉，再打开下一层。关闭子层后可以继续编辑草稿。每一层都有独立的网址。',
     openDialog: '打开弹窗',
     openDrawer: '打开抽屉',
+    preview: '预览',
+    newExample: '新建示例',
     dialogTitle: '弹窗示例',
     drawerTitle: '抽屉示例',
     hint: '输入草稿后打开子层，关闭子层即可继续编辑。',
@@ -174,6 +176,7 @@ const zhCN: AppResource = {
     expand: '展开导航',
     collapse: '收起导航',
     label: '应用导航',
+    breadcrumb: '面包屑',
   },
 };
 

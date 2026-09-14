@@ -38,6 +38,7 @@ const zhCN: AppResource = {
     expand: '展开导航',
     collapse: '收起导航',
     label: '应用导航',
+    breadcrumb: '面包屑',
   },
 };
 
