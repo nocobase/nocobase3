@@ -77,7 +77,7 @@ const authorization: AppConfigFactory<AuthorizationConfig> = defineAppConfig(
     permissionSets: { rootSet: 'root', defaultSet: 'member' },
     plugins: [
       pages(),
-      databaseAuthorization({ source: 'main' }),
+      databaseAuthorization(),
       defaultAccess(),
       sharingRules(),
       restrictionRules(),
@@ -86,10 +86,10 @@ const authorization: AppConfigFactory<AuthorizationConfig> = defineAppConfig(
 );
 ```
 
-| Field            | Default                                     | What it decides                                                                                                                             |
-| ---------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `permissionSets` | `{ rootSet: 'root', defaultSet: 'member' }` | The keys of the two code-owned sets. The plugin installs Permission Sets itself; an application names its sets, not the plugin.             |
-| `plugins`        | none                                        | The rest of the Authorization plugins this application installs. Dropping one is deleting a line; `databaseAuthorization` takes the source. |
+| Field            | Default                                     | What it decides                                                                                                                 |
+| ---------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `permissionSets` | `{ rootSet: 'root', defaultSet: 'member' }` | The keys of the two code-owned sets. The plugin installs Permission Sets itself; an application names its sets, not the plugin. |
+| `plugins`        | none                                        | The rest of the Authorization plugins this application installs. Dropping one is deleting a line.                               |
 
 The plugin ships no default list beyond Permission Sets: an application that
 configures nothing else installs nothing else, and the library's own errors

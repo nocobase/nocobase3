@@ -5,7 +5,6 @@ import type {
 import type { PermissionGrant } from '@nocobase/authorization/permissions';
 import type { RepositoryPolicy } from '@nocobase/db';
 import { UNRESTRICTED_ACCESS } from './authorizer.js';
-import { databaseResourceId } from './collections.js';
 import type {
   DatabaseAccessScope,
   DatabaseAuthorizationConditions,
@@ -30,10 +29,8 @@ export interface DatabaseAuthorizationApi {
 
 export class DatabaseAuthorizationService implements DatabaseApi {
   readonly recordAccess: RecordAccessPolicyRegistry;
-  private readonly source: string;
 
-  constructor(source: string, recordAccess: RecordAccessPolicyRegistry) {
-    this.source = source;
+  constructor(recordAccess: RecordAccessPolicyRegistry) {
     this.recordAccess = recordAccess;
   }
 
@@ -42,10 +39,7 @@ export class DatabaseAuthorizationService implements DatabaseApi {
     definition: DatabaseGrantDefinition,
   ): PermissionGrant {
     return {
-      resource: {
-        type: 'database.collection',
-        id: databaseResourceId(this.source, resource),
-      },
+      resource: { type: 'database.collection', id: resource },
       actions: Object.entries(definition).map(([action, config]) => ({
         action,
         policy: { type: 'database', ...config },
@@ -72,10 +66,7 @@ export class DatabaseAuthorizationService implements DatabaseApi {
     collection: string,
     scope: AuthorizationScope,
   ): Promise<RepositoryPolicy> {
-    const resource = {
-      type: 'database.collection',
-      id: databaseResourceId(this.source, collection),
-    };
+    const resource = { type: 'database.collection', id: collection };
     const decide = async (
       action: string,
     ): Promise<true | false | DatabasePolicyNode> =>

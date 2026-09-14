@@ -14,16 +14,9 @@ export type DatabaseAuthorizationPlugin = AuthorizationPlugin<
   DatabaseConnection
 >;
 
-export interface DatabaseAuthorizationOptions {
-  source?: string;
-}
-
-export function databaseAuthorization(
-  options: DatabaseAuthorizationOptions = {},
-): DatabaseAuthorizationPlugin {
-  const source = options.source ?? 'main';
+export function databaseAuthorization(): DatabaseAuthorizationPlugin {
   const recordAccess = new RecordAccessPolicyRegistry();
-  const api = new DatabaseAuthorizationService(source, recordAccess);
+  const api = new DatabaseAuthorizationService(recordAccess);
   return {
     id: 'database',
     requiresGrants: true,
@@ -32,7 +25,6 @@ export function databaseAuthorization(
       // Collection metadata comes from the connection the host passed in; an
       // application that installed the plugin without one grants nothing.
       const authorizer = new DatabaseResourceAuthorizer({
-        source,
         recordAccess,
         ...(authz.connection
           ? { resolveCollection: collectionResolver(authz.connection) }

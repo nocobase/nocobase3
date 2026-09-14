@@ -68,7 +68,7 @@ beforeEach(async () => {
     connection: db.connection(),
     config: {
       permissionSets: { rootSet: 'root' },
-      plugins: [databaseAuthorization({ source: 'main' })],
+      plugins: [databaseAuthorization()],
     },
   });
   const resolved = appAuthorizationDatabase(created);

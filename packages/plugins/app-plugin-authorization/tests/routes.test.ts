@@ -70,7 +70,7 @@ describe('@nocobase/app-plugin-authorization routes', () => {
     { existing: undefined, expected: 'create' },
     {
       existing: {
-        resource: { type: 'database.collection', id: 'main.orders' },
+        resource: { type: 'database.collection', id: 'orders' },
         actions: [],
       },
       expected: 'update',
@@ -107,7 +107,7 @@ describe('@nocobase/app-plugin-authorization routes', () => {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          resource: { type: 'database.collection', id: 'main.orders' },
+          resource: { type: 'database.collection', id: 'orders' },
           actions: [{ action: 'read', scope: { type: 'all' } }],
         }),
       });

@@ -31,7 +31,7 @@ const authz = createAuthorization({
 await authz.defaultAccess.set({
   resource: {
     type: 'database.collection',
-    id: 'main.articles',
+    id: 'articles',
   },
   actions: [{ action: 'read', scope: { type: 'all' } }],
 });
@@ -61,7 +61,7 @@ Access Policy：
 await authz.defaultAccess.set({
   resource: {
     type: 'database.collection',
-    id: 'main.articles',
+    id: 'articles',
   },
   actions: [
     {
@@ -75,14 +75,11 @@ await authz.defaultAccess.set({
 ## 管理配置
 
 ```ts
-const rule = await authz.defaultAccess.get(
-  'database.collection',
-  'main.articles',
-);
+const rule = await authz.defaultAccess.get('database.collection', 'articles');
 
 const rules = await authz.defaultAccess.list();
 
-await authz.defaultAccess.delete('database.collection', 'main.articles');
+await authz.defaultAccess.delete('database.collection', 'articles');
 ```
 
 再次调用 `set()` 会更新相同 Resource Type 和 Resource ID 的配置。

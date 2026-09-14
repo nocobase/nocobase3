@@ -255,7 +255,7 @@ function post(
 async function grantOrders(config: object): Promise<void> {
   await createSet('order-reader', [
     {
-      resource: { type: 'database.collection', id: 'main.authzOrders' },
+      resource: { type: 'database.collection', id: 'authzOrders' },
       actions: ['read', 'create', 'update', 'delete'].map((action) => ({
         action,
         policy: {

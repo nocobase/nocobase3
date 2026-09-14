@@ -44,13 +44,14 @@ the primary key, and whether the database generates it from
 
 ## 2. Know what the resource is called
 
-`orders` resolves to `main.orders` when the database plugin uses its default
-source, and the actions are the fixed `read`, `create`, `update` and `delete`.
+A `database.collection` resource is identified by the collection name db knows
+— `orders`, with no connection prefix — and the actions are the fixed `read`,
+`create`, `update` and `delete`.
 
 ```ts
 const ordersResource = {
   type: 'database.collection',
-  id: 'main.orders',
+  id: 'orders',
 } as const;
 ```
 
@@ -80,9 +81,7 @@ routes.use('*', authz.middleware());
 const repositoryFor = async (context: Context) =>
   database
     .repository('orders')
-    .withPolicy(
-      await authz.database.policyFor('main.orders', context.get('authz')),
-    );
+    .withPolicy(await authz.database.policyFor('orders', context.get('authz')));
 ```
 
 The bound Repository applies the scope to every statement and rejects a field

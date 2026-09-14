@@ -31,7 +31,7 @@ await authz.sharingRules.create({
   title: '审计订单',
   resource: {
     type: 'database.collection',
-    id: 'main.orders',
+    id: 'orders',
   },
   actions: [
     {
@@ -57,7 +57,7 @@ await authz.sharingRules.create({
   key: 'share-north-orders',
   resource: {
     type: 'database.collection',
-    id: 'main.orders',
+    id: 'orders',
   },
   actions: [
     {

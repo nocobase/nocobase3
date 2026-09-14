@@ -51,16 +51,14 @@ describe('the records an application offers to a settings page', () => {
     await createUser('alice', 'Alice');
     await createUser('bob', 'Bob');
 
-    await expect(administration.listRecords('main.user')).resolves.toEqual([
+    await expect(administration.listRecords('user')).resolves.toEqual([
       { id: 'alice', label: 'Alice', description: 'alice' },
       { id: 'bob', label: 'Bob', description: 'bob' },
     ]);
   });
 
   it('offers nothing for a collection the database does not hold', async () => {
-    await expect(administration.listRecords('main.orders')).resolves.toEqual(
-      [],
-    );
+    await expect(administration.listRecords('orders')).resolves.toEqual([]);
   });
 
   async function createUser(id: string, name: string): Promise<void> {

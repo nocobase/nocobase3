@@ -93,7 +93,7 @@ export const articlesRoutes: AppApiRouteContribution<Application> =
     const policyFor = (c: {
       get(name: 'authz'): AuthorizationEnv['Variables']['authz'];
     }): Promise<RepositoryPolicy> =>
-      authzDatabase.policyFor('main.articles', c.get('authz'));
+      authzDatabase.policyFor('articles', c.get('authz'));
     routes.use(
       '*',
       auth.required(),

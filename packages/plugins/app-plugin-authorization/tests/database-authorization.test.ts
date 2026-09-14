@@ -106,7 +106,7 @@ afterAll(async () => {
   await database.destroy();
 });
 
-const resource = { type: 'database.collection', id: 'main.orders' } as const;
+const resource = { type: 'database.collection', id: 'orders' } as const;
 
 const ast = (root: object): object => ({
   kind: 'filter',
@@ -181,7 +181,7 @@ describe('database resource authorization', () => {
     await expect(
       setup().authorize({
         ...request,
-        resource: { type: 'database.collection', id: 'main.invoices' },
+        resource: { type: 'database.collection', id: 'invoices' },
       }),
     ).resolves.toMatchObject({
       effect: 'deny',
@@ -235,7 +235,7 @@ describe('database resource authorization', () => {
       effect: 'conditional',
       conditions: {
         type: 'database',
-        collection: 'main.orders',
+        collection: 'orders',
         action: 'read',
         scope: ast(and([condition('ownerId', '$eq', 'alice')])),
         fields: ['id', 'amount', 'ownerId'],
@@ -659,7 +659,7 @@ describe('database resource authorization', () => {
     await expect(
       authorization.authorize({
         principal,
-        resource: { type: 'database.collection', id: 'main.invoices' },
+        resource: { type: 'database.collection', id: 'invoices' },
         action: 'read',
       }),
     ).resolves.toMatchObject({
@@ -686,7 +686,7 @@ describe('database resource authorization', () => {
       effect: 'conditional',
       conditions: {
         type: 'database',
-        collection: 'main.orders',
+        collection: 'orders',
         action: 'read',
         scope: true,
         fields: orderFields,
@@ -694,7 +694,7 @@ describe('database resource authorization', () => {
       reasons: [
         {
           code: 'UNRESTRICTED_ACCESS',
-          message: 'Unrestricted access allows main.orders.read',
+          message: 'Unrestricted access allows orders.read',
           plugin: 'database',
         },
       ],

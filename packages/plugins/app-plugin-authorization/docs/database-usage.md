@@ -22,7 +22,7 @@ import {
 
 const authz = createAppAuthorization({
   connection,
-  config: { plugins: [databaseAuthorization({ source: 'main' })] },
+  config: { plugins: [databaseAuthorization()] },
 });
 ```
 
@@ -34,8 +34,8 @@ Database Authorization 需要一个 Grant Provider。应用插件默认安装 Pe
 插件不再维护自己的 Collection 注册表：字段清单、主键以及主键是否由数据库生成，都由
 `connection.collections` 提供。应用只需要保证 db 认识这张表，授权就能用它。
 
-- 资源 ID 是 `<source>.<collection>`，默认数据源为 `main`，所以 `orders` 对应
-  `main.orders`。
+- 资源 ID 就是 db 认识的 Collection 名，例如 `orders`，不带数据源前缀：插件只面向一个
+  连接。
 - 动作固定为 `read`、`create`、`update`、`delete`。
 - 字段是 Collection 的直接列；关系由 Repository Policy 的 `relations` 管辖，不出现在
   字段清单里。
@@ -76,7 +76,7 @@ await authz.permissionSets.create({
 `policyFor()` 把本次请求的四个动作判断折叠成一个 Repository Policy：
 
 ```ts
-const policy = await authz.database.policyFor('main.articles', c.get('authz'));
+const policy = await authz.database.policyFor('articles', c.get('authz'));
 const repository = database.repository('articles').withPolicy(policy);
 
 const rows = await repository.findMany({ limit: 20 });
@@ -105,7 +105,7 @@ if (policy.read === false) return c.json({ code: 'FORBIDDEN' }, 403);
 ```ts
 {
   type: 'database',
-  collection: 'main.orders',
+  collection: 'orders',
   action: 'read',
   scope: { kind: 'filter', version: 1, collection: 'orders', root: { … } },
   fields: ['id', 'number', 'amount'],
@@ -172,7 +172,7 @@ AND Restriction Rules
 ```ts
 await authz.sharingRules.create({
   key: 'share-orders-with-auditors',
-  resource: { type: 'database.collection', id: 'main.orders' },
+  resource: { type: 'database.collection', id: 'orders' },
   actions: [
     {
       action: 'read',
@@ -184,7 +184,7 @@ await authz.sharingRules.create({
 
 await authz.restrictionRules.create({
   key: 'contractor-owned-orders',
-  resource: { type: 'database.collection', id: 'main.orders' },
+  resource: { type: 'database.collection', id: 'orders' },
   actions: [
     { action: 'read', scope: authz.database.scope('recordsIOwn') },
     { action: 'update', scope: authz.database.scope('recordsIOwn') },
@@ -212,7 +212,7 @@ router.route(
 );
 ```
 
-- `resource` 接受 `'main.orders'` 或裸名 `'orders'`，后者按插件的数据源补全。
+- `resource` 就是 Collection 名，例如 `'orders'`。
 - 声明了 `resource` 的 exposure 必须给出静态 `policy`：它是这个端点开放的形状，函数
   形式会在定义时抛出 `TypeError`。
 - 收窄方向是「形状 ∩ 授权」。`policyFor()` 不产出 `relations`，而 patch 没提到的成员

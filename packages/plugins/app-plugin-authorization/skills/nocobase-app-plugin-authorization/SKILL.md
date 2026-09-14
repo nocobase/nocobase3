@@ -58,8 +58,8 @@ const authz = createAppAuthorization({
 });
 ```
 
-- The resource id is `<source>.<collection>`; the default source is `main`, so
-  `orders` is `main.orders`.
+- The resource id is the collection name db knows — `orders`, with no
+  connection prefix. The plugin reads one connection.
 - The actions are fixed: `read`, `create`, `update`, `delete`.
 - Fields are the collection's own columns. Relations are governed by a
   Repository Policy's `relations`, not by a field list.
@@ -76,21 +76,17 @@ the constraints used by that service; it does not replace the service.
 
 ```ts
 routes.get('/orders', async (context) => {
-  const policy = await authz.database.policyFor(
-    'main.orders',
-    context.get('authz'),
-  );
+  const policy = await authz.database.policyFor('orders', context.get('authz'));
   if (policy.read === false) return context.json({ code: 'FORBIDDEN' }, 403);
   const orders = database.repository('orders').withPolicy(policy);
   return context.json({ data: await orders.findMany() });
 });
 ```
 
-A collection belongs to the `main` source by default, so the authorization
-resource id in this example is `main.orders`:
+The authorization resource id in this example is the collection name itself:
 
 ```ts
-resource: { type: 'database.collection', id: 'main.orders' }
+resource: { type: 'database.collection', id: 'orders' }
 ```
 
 For routes where only a yes/no decision is needed, use the guard middleware.
@@ -127,7 +123,7 @@ written without its scope.
 ```ts
 const orders = database
   .repository('orders')
-  .withPolicy(await authz.database.policyFor('main.orders', scope));
+  .withPolicy(await authz.database.policyFor('orders', scope));
 
 await orders.updateOne({ filter: { id }, values: input });
 ```

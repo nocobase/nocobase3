@@ -32,10 +32,7 @@ export type {
 // reads `AuthorizationConfig` from.
 export { pages } from './pages-authorization.js';
 export type { PermissionSetsApi } from '@nocobase/authorization/permissions';
-export {
-  databaseAuthorization,
-  type DatabaseAuthorizationOptions,
-} from './database/index.js';
+export { databaseAuthorization } from './database/index.js';
 export {
   defaultAccess,
   restrictionRules,

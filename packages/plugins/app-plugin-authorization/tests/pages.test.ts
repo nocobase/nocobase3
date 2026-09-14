@@ -18,7 +18,7 @@ function setup() {
             actions: [{ action: 'access' }],
           },
           {
-            resource: { type: 'database.collection', id: 'main.orders' },
+            resource: { type: 'database.collection', id: 'orders' },
             actions: [
               {
                 action: 'read',

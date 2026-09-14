@@ -18,7 +18,7 @@ const authorization: AppConfigFactory<AuthorizationConfig> = defineAppConfig(
     permissionSets: { rootSet: 'root', defaultSet: 'member' },
     plugins: [
       pages(),
-      databaseAuthorization({ source: 'main' }),
+      databaseAuthorization(),
       defaultAccess(),
       sharingRules(),
       restrictionRules(),

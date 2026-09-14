@@ -68,7 +68,7 @@ export const orderAdminRoutes: AppApiRouteContribution<Application> =
     routes.use('*', auth.required(), authorization.middleware());
     routes.get('/', async (context) => {
       const allowed = await context.get('authz').can({
-        resource: { type: 'database.collection', id: 'main.orders' },
+        resource: { type: 'database.collection', id: 'orders' },
         action: 'read',
       });
       if (!allowed) {
@@ -93,7 +93,7 @@ Use a stable `resource`/`action` pair per operation — `read` and `create` are 
 
 ```ts
 const policy = await authz.database.policyFor(
-  'main.customers',
+  'customers',
   context.get('authz'),
 );
 if (policy.read === false) return context.json({ code: 'FORBIDDEN' }, 403);

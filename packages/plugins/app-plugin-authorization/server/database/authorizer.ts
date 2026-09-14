@@ -7,7 +7,6 @@ import type {
   AuthorizationRequest,
   Principal,
 } from '@nocobase/authorization/core';
-import { databaseCollectionName, databaseResourceId } from './collections.js';
 import {
   databaseCollectionFieldsKnown,
   databaseFieldsAllowed,
@@ -41,27 +40,24 @@ export const UNRESTRICTED_ACCESS = 'UNRESTRICTED_ACCESS';
 const actions: readonly string[] = ['read', 'create', 'update', 'delete'];
 
 export interface DatabaseResourceAuthorizerOptions {
-  source: string;
   recordAccess: RecordAccessPolicyRegistry;
   /** Absent when the application installed the plugin without a connection. */
   resolveCollection?: ResolveAuthorizationCollection;
 }
 
 export class DatabaseResourceAuthorizer {
-  private readonly source: string;
   private readonly recordAccess: RecordAccessPolicyRegistry;
   private readonly resolveCollection:
     ResolveAuthorizationCollection | undefined;
 
   constructor(options: DatabaseResourceAuthorizerOptions) {
-    this.source = options.source;
     this.recordAccess = options.recordAccess;
     this.resolveCollection = options.resolveCollection;
   }
 
   /** db owns the metadata, so an unknown Collection is whatever db does not hold. */
   private async collection(
-    resourceId: string,
+    name: string,
     action: string,
   ): Promise<AuthorizationCollection | AuthorizationDecision> {
     if (!this.resolveCollection) {
@@ -71,13 +67,13 @@ export class DatabaseResourceAuthorizer {
       );
     }
     const collection = actions.includes(action)
-      ? await this.resolveCollection(databaseCollectionName(resourceId))
+      ? await this.resolveCollection(name)
       : undefined;
     return (
       collection ??
       this.deny(
         'UNKNOWN_DATABASE_RESOURCE_OR_ACTION',
-        `Unknown database resource or action: ${resourceId}.${action}`,
+        `Unknown database resource or action: ${name}.${action}`,
       )
     );
   }
@@ -87,7 +83,7 @@ export class DatabaseResourceAuthorizer {
     grantsService: AuthorizationGrantService,
     constraintsService: AccessConstraintService,
   ): Promise<AuthorizationDecision> {
-    const resourceId = databaseResourceId(this.source, request.resource.id);
+    const resourceId = request.resource.id;
     const resolved = await this.collection(resourceId, request.action);
     if ('effect' in resolved) return resolved;
     const resource = resolved;
@@ -149,10 +145,7 @@ export class DatabaseResourceAuthorizer {
         type: 'database',
         collection: resourceId,
         action: request.action,
-        scope:
-          scope === true
-            ? true
-            : scopeAst(databaseCollectionName(resourceId), scope),
+        scope: scope === true ? true : scopeAst(resourceId, scope),
         fields: resolveActionFields(request.action, fields, resource),
       };
       return {
@@ -180,7 +173,7 @@ export class DatabaseResourceAuthorizer {
   async authorizeUnrestricted(
     request: AuthorizationRequest<DatabaseAuthorizationParams>,
   ): Promise<AuthorizationDecision> {
-    const resourceId = databaseResourceId(this.source, request.resource.id);
+    const resourceId = request.resource.id;
     const resolved = await this.collection(resourceId, request.action);
     if ('effect' in resolved) return resolved;
     const resource = resolved;

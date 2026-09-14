@@ -79,7 +79,7 @@ describe('authorization plugin database stores', () => {
           {
             resource: {
               type: 'database.collection',
-              id: 'main.orders',
+              id: 'orders',
             },
           },
         ],
@@ -109,7 +109,7 @@ describe('authorization plugin database stores', () => {
       connection: database.connection(),
       plugins: [defaultAccess(), sharingRules(), restrictionRules()],
     });
-    const resource = { type: 'database.collection', id: 'main.orders' };
+    const resource = { type: 'database.collection', id: 'orders' };
 
     await authorization.defaultAccess.set({
       resource,

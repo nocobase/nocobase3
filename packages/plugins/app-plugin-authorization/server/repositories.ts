@@ -19,8 +19,8 @@ const principalVariable = '@nocobase/app-plugin-authorization/repository';
 
 /**
  * An exposure `defineRepositoryApiRoutes` accepts, plus the authorization
- * resource its rows belong to. `resource` takes `'main.orders'` or the bare
- * `'orders'`, which the plugin's source prefixes exactly as `grant()` does.
+ * resource its rows belong to. A `database.collection` resource is named by the
+ * collection alone — `'orders'` — exactly as `grant()` names it.
  */
 export type RepositoryAuthorizationExposure = RepositoryApiExposure & {
   readonly resource?: string;

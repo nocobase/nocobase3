@@ -152,7 +152,7 @@ const decision = await authz
     subjects: [{ type: 'role', id: 'sales-manager' }],
   })
   .explain({
-    resource: { type: 'database.collection', id: 'main.orders' },
+    resource: { type: 'database.collection', id: 'orders' },
     action: 'read',
     params: {
       fields: { output: ['id', 'number', 'amount'] },

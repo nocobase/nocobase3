@@ -353,7 +353,7 @@ describe('@nocobase/app-plugin-authorization client', () => {
       })),
     ).toEqual([
       { value: 'page', resources: ['*', 'orders'] },
-      { value: 'database.collection', resources: ['main.orders'] },
+      { value: 'database.collection', resources: ['orders'] },
     ]);
     expect(merged.resourceTypes[0].resources[0].description).toBe(
       'Allow access to every page, including pages added later.',
@@ -371,7 +371,7 @@ describe('@nocobase/app-plugin-authorization client', () => {
     expect(isUnknownPage(merged, { type: 'page', id: '*' })).toBe(false);
     // Only pages are decided from the route registry; every other resource type comes from the server.
     expect(
-      isUnknownPage(merged, { type: 'database.collection', id: 'main.gone' }),
+      isUnknownPage(merged, { type: 'database.collection', id: 'gone' }),
     ).toBe(false);
   });
 });
@@ -411,7 +411,7 @@ function options(): AuthorizationOptions {
       {
         value: 'database.collection',
         label: 'Collections',
-        resources: [{ value: 'main.orders', label: 'Orders' }],
+        resources: [{ value: 'orders', label: 'Orders' }],
         actions: [{ value: 'read', label: 'Read' }],
       },
     ],

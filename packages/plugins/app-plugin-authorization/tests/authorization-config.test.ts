@@ -55,7 +55,7 @@ afterAll(async () => {
 /** The plugin list all three templates ship; the plugin adds Permission Sets. */
 const templatePlugins = (): AuthorizationPlugin[] => [
   pages(),
-  databaseAuthorization({ source: 'main' }),
+  databaseAuthorization(),
   defaultAccess(),
   sharingRules(),
   restrictionRules(),
@@ -145,20 +145,14 @@ describe('what an application configures about its own authorization', () => {
     ).toEqual(['permission-sets', 'pages']);
   });
 
-  it('resolves database resources against the source the application passes', () => {
-    const named = authorizationWith({
-      plugins: [pages(), databaseAuthorization({ source: 'analytics' })],
+  it('identifies a database resource by the collection name alone', () => {
+    const authorization = authorizationWith({
+      plugins: [databaseAuthorization()],
     });
-    const unnamed = authorizationWith({ plugins: [databaseAuthorization()] });
 
-    expect(databaseOf(named).grant('orders', { read: {} }).resource).toEqual({
-      type: 'database.collection',
-      id: 'analytics.orders',
-    });
-    expect(databaseOf(unnamed).grant('orders', { read: {} }).resource).toEqual({
-      type: 'database.collection',
-      id: 'main.orders',
-    });
+    expect(
+      databaseOf(authorization).grant('orders', { read: {} }).resource,
+    ).toEqual({ type: 'database.collection', id: 'orders' });
   });
 
   it('tells the application whose permissions an assignment changed', async () => {
@@ -224,7 +218,7 @@ describe('what an application configures about its own authorization', () => {
 
     const [options, records] = await Promise.all([
       router.request('/api/authz/sharing-rules/options'),
-      router.request('/api/authz/sharing-rules/records/main.orders'),
+      router.request('/api/authz/sharing-rules/records/orders'),
     ]);
 
     expect([options.status, records.status]).toEqual([200, 200]);

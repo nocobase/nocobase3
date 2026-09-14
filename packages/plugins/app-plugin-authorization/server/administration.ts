@@ -41,7 +41,7 @@ export function createAuthorizationAdministration(
       name: string,
     ): Promise<readonly AuthorizationRecordOption[]> {
       const { connection } = options;
-      const collection = await options.resolveCollection(collectionName(name));
+      const collection = await options.resolveCollection(name);
       if (!connection || !collection) return [];
       const idField = collection.fields.includes('id')
         ? 'id'
@@ -81,10 +81,4 @@ function text(value: unknown): string {
     return String(value);
   }
   return '';
-}
-
-/** Resources are registered as `<source>.<collection>`; a Repository takes the collection. */
-function collectionName(resourceName: string): string {
-  const separator = resourceName.indexOf('.');
-  return separator === -1 ? resourceName : resourceName.slice(separator + 1);
 }

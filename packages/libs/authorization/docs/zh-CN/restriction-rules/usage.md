@@ -31,7 +31,7 @@ await authz.restrictionRules.create({
   title: '外部协作者只能操作自己的订单',
   resource: {
     type: 'database.collection',
-    id: 'main.orders',
+    id: 'orders',
   },
   actions: [
     { action: 'read', scope: authz.database.scope('recordsIOwn') },
@@ -48,7 +48,7 @@ await authz.restrictionRules.create({
   key: 'temporary-order-access',
   resource: {
     type: 'database.collection',
-    id: 'main.orders',
+    id: 'orders',
   },
   actions: [
     {

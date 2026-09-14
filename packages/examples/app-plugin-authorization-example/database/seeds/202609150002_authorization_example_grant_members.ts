@@ -5,7 +5,7 @@ import {
 } from '@nocobase/db';
 
 const SET = 'authorization-example-member';
-const RESOURCE = 'main.authorizationExampleTasks';
+const RESOURCE = 'authorizationExampleTasks';
 
 /**
  * What `authz.database.grant()` emits, written out: a seed reaches the tables

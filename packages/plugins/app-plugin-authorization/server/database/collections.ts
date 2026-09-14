@@ -4,17 +4,6 @@ import type {
   ResolveAuthorizationCollection,
 } from './model.js';
 
-/** A resource is `<source>.<collection>`; a bare name takes the plugin's source. */
-export function databaseResourceId(source: string, name: string): string {
-  return name.includes('.') ? name : `${source}.${name}`;
-}
-
-/** The inverse: a scope and a Repository both name the Collection alone. */
-export function databaseCollectionName(resourceId: string): string {
-  const separator = resourceId.indexOf('.');
-  return separator === -1 ? resourceId : resourceId.slice(separator + 1);
-}
-
 const relationTypes: ReadonlySet<string> = new Set([
   'belongsTo',
   'hasOne',
