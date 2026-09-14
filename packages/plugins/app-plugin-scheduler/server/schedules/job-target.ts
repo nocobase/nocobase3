@@ -1,10 +1,14 @@
 import type { JsonObject } from './define.js';
 import type {
+  ScheduleExecutionCompletion,
   ScheduleExecutionContext,
-  ScheduleTargetExecutionResult,
+  ScheduleTargetStartResult,
+  ScheduleTargetObservation,
+  ScheduleTargetReference,
   ScheduleTargetType,
   TargetValidationResult,
 } from './registry.js';
+import type { ScheduleExecutionReporter } from './registry.js';
 
 export interface ScheduleJobRegistration<
   TPayload extends JsonObject = JsonObject,
@@ -15,11 +19,36 @@ export interface ScheduleJobRegistration<
   dispatch(
     payload: TPayload,
     context: ScheduleExecutionContext,
-  ): Promise<ScheduleTargetExecutionResult>;
+  ): Promise<ScheduleTargetStartResult>;
 }
 
 export class JobDispatchRegistry {
   private readonly jobs = new Map<string, ScheduleJobRegistration>();
+  private readonly observers = new Map<
+    string,
+    (reference: ScheduleTargetReference) => Promise<ScheduleTargetObservation>
+  >();
+  private reporter?:
+    ScheduleExecutionReporter | (() => ScheduleExecutionReporter);
+  public setCompletionReporter(
+    reporter: ScheduleExecutionReporter | (() => ScheduleExecutionReporter),
+  ): void {
+    this.reporter = reporter;
+  }
+  /** Queue workers call this from their terminal lifecycle, including after retries. */
+  public reportCompletion(
+    occurrenceId: string,
+    reference: ScheduleTargetReference,
+    completion: ScheduleExecutionCompletion,
+  ): Promise<void> {
+    if (!this.reporter)
+      return Promise.reject(
+        new Error('Schedule completion reporter is unavailable'),
+      );
+    const reporter =
+      typeof this.reporter === 'function' ? this.reporter() : this.reporter;
+    return reporter.complete(occurrenceId, reference, completion);
+  }
   public register(job: ScheduleJobRegistration): void {
     if (this.jobs.has(job.name))
       throw new Error(`Schedule job already registered: ${job.name}`);
@@ -28,17 +57,37 @@ export class JobDispatchRegistry {
   public get(name: string): ScheduleJobRegistration | undefined {
     return this.jobs.get(name);
   }
+  public registerObserver(
+    referenceType: string,
+    inspect: (
+      reference: ScheduleTargetReference,
+    ) => Promise<ScheduleTargetObservation>,
+  ): void {
+    if (this.observers.has(referenceType))
+      throw new Error(
+        `Schedule Job observer already registered: ${referenceType}`,
+      );
+    this.observers.set(referenceType, inspect);
+  }
+  public inspect(
+    reference: ScheduleTargetReference,
+  ): Promise<ScheduleTargetObservation> {
+    const observer = this.observers.get(reference.type);
+    return observer
+      ? observer(reference)
+      : Promise.resolve({ state: 'unknown', reason: 'observer-unavailable' });
+  }
   public async dispatch(
     name: string,
     payload: JsonObject,
     context: ScheduleExecutionContext,
-  ): Promise<ScheduleTargetExecutionResult> {
+  ): Promise<ScheduleTargetStartResult> {
     const job = this.get(name);
-    if (!job) return { status: 'failed', reason: 'job-not-found' };
+    if (!job) return { state: 'failed', reason: 'job-not-found' };
     const validation = job.validate(payload);
     if (!validation.valid)
       return {
-        status: 'failed',
+        state: 'failed',
         reason: validation.reason ?? 'invalid-payload',
       };
     return job.dispatch(payload, context);
@@ -80,11 +129,12 @@ export function createJobTarget(
         state: job ? ('ready' as const) : ('missing' as const),
       };
     },
-    async execute(
+    async start(
       config: JobScheduleTargetConfig,
       context: ScheduleExecutionContext,
-    ): Promise<ScheduleTargetExecutionResult> {
+    ): Promise<ScheduleTargetStartResult> {
       return registry.dispatch(config.jobName, config.payload, context);
     },
+    inspect: (reference) => registry.inspect(reference),
   };
 }

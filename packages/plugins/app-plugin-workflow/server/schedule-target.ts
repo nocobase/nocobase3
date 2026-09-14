@@ -3,11 +3,13 @@ import type { WorkflowServiceContract } from './tokens.js';
 import type {
   JsonObject,
   ScheduleExecutionContext,
-  ScheduleTargetExecutionResult,
+  ScheduleTargetStartResult,
   ScheduleTargetSummary,
   ScheduleTargetType,
+  ScheduleTargetObservation,
   TargetValidationResult,
 } from '@nocobase/app-plugin-scheduler/server';
+import { EXECUTION_STATUS } from './engine/constants.js';
 
 export type WorkflowScheduleTargetConfig = JsonObject & {
   readonly workflowKey: string;
@@ -15,10 +17,18 @@ export type WorkflowScheduleTargetConfig = JsonObject & {
 };
 
 interface WorkflowRow extends Row {
+  id: string | number;
   key: string;
   title?: string | null;
   enabled: boolean | number;
   current: boolean | number;
+}
+
+interface WorkflowRunRow extends Row {
+  id: string | number;
+  status: number | null;
+  reason?: string | null;
+  finishedAt?: Date | string | null;
 }
 
 export class WorkflowScheduleTarget implements ScheduleTargetType<WorkflowScheduleTargetConfig> {
@@ -53,15 +63,15 @@ export class WorkflowScheduleTarget implements ScheduleTargetType<WorkflowSchedu
     if (!row) return { targetLabel: config.workflowKey, state: 'missing' };
     return {
       targetLabel: row.title ?? row.key,
-      href: `/settings/workflows/${encodeURIComponent(row.key)}`,
+      href: `/settings/automation/workflows/${encodeURIComponent(String(row.id))}`,
       state: row.enabled ? 'ready' : 'disabled',
     };
   }
 
-  public async execute(
+  public async start(
     config: WorkflowScheduleTargetConfig,
     context: ScheduleExecutionContext,
-  ): Promise<ScheduleTargetExecutionResult> {
+  ): Promise<ScheduleTargetStartResult> {
     const eventKey = `schedule:${context.scheduleId}:${context.occurrenceId}`;
     try {
       const existing = await this.database
@@ -70,28 +80,94 @@ export class WorkflowScheduleTarget implements ScheduleTargetType<WorkflowSchedu
         .select('id')
         .where('eventKey', '=', eventKey)
         .executeTakeFirst();
-      if (existing) return { status: 'triggered', receipt: { eventKey } };
+      if (existing)
+        return {
+          state: 'accepted',
+          reference: { type: 'workflow-run', id: String(existing.id) },
+          receipt: { eventKey },
+        };
       const receipt = await this.workflow.trigger(
         config.workflowKey,
         config.input ?? {},
-        { eventKey },
+        { eventKey, sourceType: 'schedule', sourceId: context.occurrenceId },
       );
       if (receipt.status === 'accepted')
-        return { status: 'triggered', receipt: { eventKey: receipt.eventKey } };
+        return {
+          state: 'accepted',
+          reference: { type: 'workflow-run', id: receipt.runId },
+          receipt: { eventKey: receipt.eventKey },
+        };
       return receipt.reason === 'disabled'
-        ? { status: 'skipped', reason: 'target-disabled' }
-        : { status: 'failed', reason: 'target-not-found' };
+        ? { state: 'skipped', reason: 'target-disabled' }
+        : { state: 'failed', reason: 'target-not-found' };
     } catch (error) {
       const code =
         typeof error === 'object' && error !== null && 'code' in error
           ? String(error.code)
           : undefined;
       if (code === 'INVALID_INPUT' || code === 'INPUT_TOO_LARGE')
-        return { status: 'failed', reason: 'invalid-input' };
+        return { state: 'failed', reason: 'invalid-input' };
       if (error instanceof Error && error.message.includes('Artifact'))
-        return { status: 'failed', reason: 'artifact-unavailable' };
-      return { status: 'failed', reason: 'trigger-failed' };
+        return { state: 'failed', reason: 'artifact-unavailable' };
+      return { state: 'failed', reason: 'dispatch-failed' };
     }
+  }
+
+  public async inspect(reference: {
+    readonly type: string;
+    readonly id: string;
+  }): Promise<ScheduleTargetObservation> {
+    if (reference.type !== 'workflow-run')
+      return { state: 'unknown' as const, reason: 'reference-type-mismatch' };
+    const run = await this.database
+      .query()
+      .selectFrom<WorkflowRunRow>('workflow_runs')
+      .select(['id', 'status', 'reason', 'finishedAt'])
+      .where('id', '=', reference.id)
+      .executeTakeFirst<WorkflowRunRow>();
+    if (!run) return { state: 'unknown' as const, reason: 'run-not-found' };
+    if (run.status == null) return { state: 'pending' as const };
+    if (run.status === EXECUTION_STATUS.STARTED)
+      return { state: 'running' as const };
+    const finishedAt = run.finishedAt ? new Date(run.finishedAt) : undefined;
+    if (run.status === EXECUTION_STATUS.RESOLVED)
+      return {
+        state: 'completed' as const,
+        completion: { status: 'succeeded' as const, finishedAt },
+      };
+    if (run.status === EXECUTION_STATUS.ABORTED)
+      return {
+        state: 'completed' as const,
+        completion:
+          run.reason === 'timeout'
+            ? {
+                status: 'timed_out' as const,
+                reason: 'execution-timeout',
+                finishedAt,
+              }
+            : {
+                status: 'cancelled' as const,
+                reason: 'execution-cancelled',
+                finishedAt,
+              },
+      };
+    return {
+      state: 'completed' as const,
+      completion: {
+        status: 'failed' as const,
+        reason: 'execution-failed',
+        finishedAt,
+      },
+    };
+  }
+
+  public referenceHref(reference: {
+    readonly type: string;
+    readonly id: string;
+  }): string | undefined {
+    return reference.type === 'workflow-run'
+      ? `/settings/automation/workflow-runs/${encodeURIComponent(reference.id)}`
+      : undefined;
   }
 
   private find(key: string): Promise<WorkflowRow | undefined> {

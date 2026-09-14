@@ -23,6 +23,10 @@ export class DefaultSchedulerService implements SchedulerService {
         const target = byId.get(record.id);
         return {
           ...record,
+          targetState: target
+            ? ((await this.targets.describe(target.type, target.config))
+                .state ?? 'invalid')
+            : 'missing',
           targetSummary: target
             ? await this.targets.describe(target.type, target.config)
             : { targetLabel: record.targetType, state: 'missing' },
@@ -31,10 +35,22 @@ export class DefaultSchedulerService implements SchedulerService {
     );
   }
 
-  public listOccurrences(
+  public async listOccurrences(
     scheduleId: string,
-  ): ReturnType<ScheduleStore['listOccurrences']> {
-    return this.store.listOccurrences(scheduleId);
+  ): Promise<readonly import('../tokens.js').ScheduleOccurrenceView[]> {
+    const occurrences = await this.store.listOccurrences(scheduleId);
+    return occurrences.map((occurrence) => {
+      const href = occurrence.target.reference
+        ? this.targets.referenceHref(
+            occurrence.target.type,
+            occurrence.target.reference,
+          )
+        : undefined;
+      return {
+        ...occurrence,
+        target: { ...occurrence.target, ...(href ? { href } : {}) },
+      };
+    });
   }
 
   public async sync(finalize: boolean = false): Promise<void> {
@@ -56,5 +72,15 @@ export class DefaultSchedulerService implements SchedulerService {
       }
     }
     await this.store.reconcile(manifest, finalize);
+  }
+
+  public async setEnabled(
+    id: string,
+    enabled: boolean,
+  ): Promise<ScheduleListItem> {
+    await this.store.setEnabled(id, enabled);
+    const item = (await this.list()).find((entry) => entry.id === id);
+    if (!item) throw new Error('Schedule not found.');
+    return item;
   }
 }

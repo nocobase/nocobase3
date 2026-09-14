@@ -14,6 +14,7 @@ const seedsDirectory = fileURLToPath(
   new URL('../database/seeds', import.meta.url),
 );
 const migrationName = '202608200001_create_workflow_collections';
+const sourceMigrationName = '202609090001_add_workflow_run_source';
 const collectionNames = [
   'workflows',
   'workflowNodes',
@@ -28,6 +29,7 @@ describe('@nocobase/app-plugin-workflow database', () => {
     const migrations = await validateMigrations(migrationsDirectory);
     expect(migrations.map((migration) => migration.name)).toEqual([
       migrationName,
+      sourceMigrationName,
     ]);
     await expect(validateSeeds(seedsDirectory)).resolves.toEqual([]);
   });
@@ -50,7 +52,7 @@ describe('@nocobase/app-plugin-workflow database', () => {
       });
 
       await expect(migrator.latest()).resolves.toMatchObject({
-        executed: [migrationName],
+        executed: [migrationName, sourceMigrationName],
         skipped: [],
       });
       const connection = database.connection();
@@ -90,7 +92,7 @@ describe('@nocobase/app-plugin-workflow database', () => {
       );
 
       await expect(migrator.rollback()).resolves.toMatchObject({
-        rolledBack: [migrationName],
+        rolledBack: [sourceMigrationName, migrationName],
       });
       await expect(
         Promise.all(

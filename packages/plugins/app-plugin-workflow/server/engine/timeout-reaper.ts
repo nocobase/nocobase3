@@ -8,6 +8,7 @@ import {
 } from './constants.js';
 import type { WorkflowId, WorkflowLogger } from './types.js';
 import { asId, noopWorkflowLogger, serializeJson } from './utils.js';
+import { finalizeWorkflowRun } from './finalize-run.js';
 
 export interface TimeoutReaper {
   start(): void;
@@ -24,6 +25,7 @@ export interface TimeoutReaperOptions {
   intervalMs?: number;
   /** Maximum rows handled per sweep, default 100. */
   batchSize?: number;
+  terminalObserver?: import('./types.js').WorkflowTerminalObserver;
 }
 
 const DEFAULT_INTERVAL_MS = 60_000;
@@ -60,19 +62,16 @@ export function createTimeoutReaper(
   const abortExpiredRun = async (executionId: WorkflowId): Promise<boolean> => {
     // The status guard makes the sweep safe to run concurrently with a live
     // processor: whoever updates the row first wins and the other one is a no-op.
-    const result = await query()
-      .updateTable(WORKFLOW_COLLECTIONS.runs)
-      .set({
-        status: EXECUTION_STATUS.ABORTED,
-        reason: EXECUTION_REASON.TIMEOUT,
-        finishedAt: new Date().toISOString(),
-      })
-      .where('id', '=', executionId)
-      .where('status', '=', EXECUTION_STATUS.STARTED)
-      .execute();
-    if ((result.updatedCount ?? 0) === 0) {
-      return false;
-    }
+    const terminal = await finalizeWorkflowRun({
+      query: query(),
+      runId: executionId,
+      expectedStatus: EXECUTION_STATUS.STARTED,
+      status: EXECUTION_STATUS.ABORTED,
+      reason: EXECUTION_REASON.TIMEOUT,
+      output: null,
+      observer: options.terminalObserver,
+    });
+    if (!terminal) return false;
     await query()
       .updateTable(WORKFLOW_COLLECTIONS.nodeRuns)
       .set({

@@ -8,28 +8,64 @@ import type { WorkflowServiceContract } from '../server/tokens.js';
 const context = {
   scheduleId: 'schedule-1',
   occurrenceId: 'occurrence-2',
-  scheduledFor: new Date('2026-09-02T00:00:00.000Z'),
-  runNumber: 3,
 };
 
 describe('WorkflowScheduleTarget', () => {
+  it('describes workflows with their route id, not the workflow key', async () => {
+    const database = createDatabaseManager({
+      connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
+    });
+    try {
+      await database.builder().createCollection('workflows', (c) => {
+        c.increments('id');
+        c.string('key');
+        c.string('title');
+        c.boolean('enabled');
+        c.boolean('current');
+      });
+      await database
+        .query()
+        .insertInto('workflows')
+        .values({
+          key: 'daily',
+          title: 'Daily',
+          enabled: true,
+          current: true,
+        })
+        .execute();
+      const target = createTarget(vi.fn(), database);
+      await expect(
+        target.describe({ workflowKey: 'daily' }),
+      ).resolves.toMatchObject({
+        href: '/settings/automation/workflows/1',
+      });
+    } finally {
+      await database.destroy();
+    }
+  });
   it('uses a stable occurrence-scoped event key and returns only a controlled receipt', async () => {
     const trigger = vi.fn(async () => ({
       status: 'accepted' as const,
       eventKey: 'schedule:schedule-1:occurrence-2',
+      runId: '42',
     }));
     const target = createTarget(trigger);
 
     await expect(
-      target.execute({ workflowKey: 'daily', input: { customer: 1 } }, context),
+      target.start({ workflowKey: 'daily', input: { customer: 1 } }, context),
     ).resolves.toEqual({
-      status: 'triggered',
+      state: 'accepted',
+      reference: { type: 'workflow-run', id: '42' },
       receipt: { eventKey: 'schedule:schedule-1:occurrence-2' },
     });
     expect(trigger).toHaveBeenCalledWith(
       'daily',
       { customer: 1 },
-      { eventKey: 'schedule:schedule-1:occurrence-2' },
+      {
+        eventKey: 'schedule:schedule-1:occurrence-2',
+        sourceType: 'schedule',
+        sourceId: 'occurrence-2',
+      },
     );
   });
 
@@ -53,13 +89,15 @@ describe('WorkflowScheduleTarget', () => {
         return {
           status: 'accepted' as const,
           eventKey: options?.eventKey ?? '',
+          runId: '1',
         };
       });
       const target = createTarget(trigger, database);
       const config = { workflowKey: 'daily' };
-      await target.execute(config, context);
-      await expect(target.execute(config, context)).resolves.toEqual({
-        status: 'triggered',
+      await target.start(config, context);
+      await expect(target.start(config, context)).resolves.toEqual({
+        state: 'accepted',
+        reference: { type: 'workflow-run', id: '1' },
         receipt: { eventKey: 'schedule:schedule-1:occurrence-2' },
       });
       expect(trigger).toHaveBeenCalledOnce();
@@ -72,12 +110,12 @@ describe('WorkflowScheduleTarget', () => {
   });
 
   it.each([
-    ['not-found', { status: 'failed', reason: 'target-not-found' }],
-    ['disabled', { status: 'skipped', reason: 'target-disabled' }],
+    ['not-found', { state: 'failed', reason: 'target-not-found' }],
+    ['disabled', { state: 'skipped', reason: 'target-disabled' }],
   ] as const)('maps a %s receipt', async (reason, expected) => {
     const target = createTarget(async () => ({ status: 'skipped', reason }));
     await expect(
-      target.execute({ workflowKey: 'daily' }, context),
+      target.start({ workflowKey: 'daily' }, context),
     ).resolves.toEqual(expected);
   });
 
@@ -88,15 +126,15 @@ describe('WorkflowScheduleTarget', () => {
       new Error('Workflow Artifact daily/hash is missing'),
       'artifact-unavailable',
     ],
-    [new Error('network'), 'trigger-failed'],
+    [new Error('network'), 'dispatch-failed'],
   ])('maps execution failure %s', async (error, reason) => {
     const target = createTarget(async () => {
       throw error;
     });
     await expect(
-      target.execute({ workflowKey: 'daily' }, context),
+      target.start({ workflowKey: 'daily' }, context),
     ).resolves.toEqual({
-      status: 'failed',
+      state: 'failed',
       reason,
     });
   });

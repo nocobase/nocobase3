@@ -82,7 +82,7 @@ describe('createQueueManager', () => {
     await queueManager.close();
   });
 
-  it('hydrates claimed Schedule windows and run numbers into Job context', async () => {
+  it('hydrates the claimed Schedule id into Job context', async () => {
     const database = createDatabaseManager({
       connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
     });
@@ -91,7 +91,7 @@ describe('createQueueManager', () => {
     const schema = new QueueSchemaService(client);
     await schema.createJobsTable('queue_jobs');
     await schema.createSchedulesTable('queue_schedules');
-    const scheduledFor = new Date(Date.now() - 1_000);
+    const dueAt = new Date(Date.now() - 1_000);
     let captured:
       InstanceType<typeof ScheduleContextJob>['context'] | undefined;
     ScheduleContextJob.capture = (context) => {
@@ -129,7 +129,7 @@ describe('createQueueManager', () => {
         toDate: null,
         runLimit: 10,
         runCount: 4,
-        nextRunAt: scheduledFor,
+        nextRunAt: dueAt,
         lastRunAt: null,
         createdAt: new Date(),
       })
@@ -142,10 +142,12 @@ describe('createQueueManager', () => {
     const completion = worker.start();
     try {
       await waitFor(() => captured !== undefined);
+      // `@boringnode/queue` is used unmodified, so a claimed Schedule reaches
+      // its Job with the schedule id and the job id and nothing more. Consumers
+      // that need per-firing detail derive it themselves rather than expecting
+      // the transport to carry it.
       expect(captured).toMatchObject({
         scheduleId: 'schedule-context',
-        scheduledFor,
-        scheduleRunNumber: 5,
         jobId: expect.any(String),
       });
     } finally {

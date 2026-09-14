@@ -108,12 +108,9 @@ const migration: MigrationDefinition = defineMigration({
         .constraints(true)
         .onDelete('restrict');
       collection.string('definitionHash', { nullable: false });
-      collection.datetime('scheduledFor', { nullable: false });
-      collection.integer('runNumber', { nullable: false });
       collection.string('status', { nullable: false });
       collection.string('reason');
       collection.string('targetType', { nullable: false });
-      collection.string('targetReference');
       collection.json('targetReceipt');
       collection.integer('executionCount', {
         nullable: false,

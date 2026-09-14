@@ -112,8 +112,6 @@ async function createRouter(options: {
       {
         id: 'occurrence-1',
         scheduleId: 'schedule-1',
-        scheduledFor: '2026-09-02T00:00:00.000Z',
-        runNumber: 1,
         status: 'triggered',
         executionCount: 1,
         startedAt: '2026-09-02T00:00:01.000Z',

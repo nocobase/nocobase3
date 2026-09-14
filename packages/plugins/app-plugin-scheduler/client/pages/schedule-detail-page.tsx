@@ -1,17 +1,21 @@
-import { apiClientToken, useService } from '@nocobase/app-client';
+import {
+  apiClientToken,
+  useService,
+  type ApiClient,
+} from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { ArrowLeft, CalendarClock, CircleAlert } from 'lucide-react';
 import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router';
 
 import { DateTimeValue } from './date-time-value.js';
-import { formatClientDateTime } from './date-time.js';
+import { formatClientDateTime, formatClientDuration } from './date-time.js';
 import { formatCronDescription } from './cron-description.js';
+import { ScheduleSwitch } from './schedule-switch.js';
 
 const SCHEDULER_NS = '@nocobase/app-plugin-scheduler';
 type TargetState = 'ready' | 'disabled' | 'missing' | 'invalid';
 type ViewStatus = 'active' | 'paused' | 'inactive' | 'targetIssue';
-type DetailTab = 'overview' | 'triggers';
 type Translate = (
   key: string,
   options?: Readonly<Record<string, unknown>>,
@@ -27,6 +31,7 @@ interface ScheduleItem {
   readonly lifecycleState: 'active' | 'inactive';
   readonly inactiveReason?: string;
   readonly scheduleStatus: 'active' | 'paused';
+  readonly targetState: TargetState;
   readonly runCount: number;
   readonly lastRunAt?: string;
   readonly nextRunAt?: string;
@@ -40,18 +45,17 @@ interface ScheduleItem {
 
 interface OccurrenceItem {
   readonly id: string;
-  readonly scheduledFor: string;
   readonly status: string;
   readonly reason?: string;
   readonly startedAt: string;
   readonly finishedAt?: string;
+  readonly target?: { readonly href?: string };
 }
 
 function viewStatus(item: ScheduleItem): ViewStatus {
-  if (item.targetSummary.state && item.targetSummary.state !== 'ready')
-    return 'targetIssue';
+  if (!item.enabled) return 'paused';
   if (item.lifecycleState === 'inactive') return 'inactive';
-  if (!item.enabled || item.scheduleStatus === 'paused') return 'paused';
+  if (item.targetState !== 'ready') return 'targetIssue';
   return 'active';
 }
 
@@ -94,13 +98,15 @@ function StatusBadge({
   readonly status: string;
 }): ReactElement {
   const tone =
-    status === 'active' || status === 'triggered'
+    status === 'active' || status === 'succeeded'
       ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
       : status === 'failed' || status === 'targetIssue'
         ? 'bg-destructive/10 text-destructive'
-        : status === 'running'
+        : status === 'running' || status === 'waiting'
           ? 'bg-blue-500/10 text-blue-700 dark:text-blue-300'
-          : status === 'inactive'
+          : status === 'inactive' ||
+              status === 'triggered' ||
+              status === 'timed_out'
             ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
             : 'bg-muted text-muted-foreground';
   return (
@@ -139,10 +145,11 @@ export default function ScheduleDetailPage(): ReactElement {
   const [loadedOccurrencesId, setLoadedOccurrencesId] = useState<string>();
   const [error, setError] = useState<string>();
   const [occurrencesError, setOccurrencesError] = useState<string>();
-  const [tab, setTab] = useState<DetailTab>('overview');
+  const [updating, setUpdating] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
+    let occurrenceTimer: ReturnType<typeof setTimeout> | undefined;
     void api
       .request<{ data: readonly ScheduleItem[] }>({
         path: 'schedules',
@@ -164,30 +171,42 @@ export default function ScheduleDetailPage(): ReactElement {
           setLoading(false);
         }
       });
-    void api
-      .request<{ data: readonly OccurrenceItem[] }>({
-        path: `schedules/${encodeURIComponent(scheduleId)}/occurrences`,
-        signal: controller.signal,
-      })
-      .then((response) => {
+    const loadOccurrences = async (): Promise<void> => {
+      try {
+        const response = await api.request<{
+          data: readonly OccurrenceItem[];
+        }>({
+          path: `schedules/${encodeURIComponent(scheduleId)}/occurrences`,
+          signal: controller.signal,
+        });
+        if (controller.signal.aborted) return;
         setOccurrencesError(undefined);
         setOccurrences(response.data);
-      })
-      .catch((cause: unknown) => {
+        if (
+          response.data.some(({ status }) =>
+            ['pending', 'running', 'waiting'].includes(status),
+          )
+        )
+          occurrenceTimer = setTimeout(() => void loadOccurrences(), 2_000);
+      } catch (cause) {
         if (!controller.signal.aborted)
           setOccurrencesError(
             cause instanceof Error
               ? cause.message
               : t('errors.loadOccurrences'),
           );
-      })
-      .finally(() => {
+      } finally {
         if (!controller.signal.aborted) {
           setLoadedOccurrencesId(scheduleId);
           setOccurrencesLoading(false);
         }
-      });
-    return () => controller.abort();
+      }
+    };
+    void loadOccurrences();
+    return () => {
+      controller.abort();
+      if (occurrenceTimer) clearTimeout(occurrenceTimer);
+    };
   }, [api, scheduleId, t]);
 
   const scheduleLoading = loading || loadedScheduleId !== scheduleId;
@@ -221,14 +240,16 @@ export default function ScheduleDetailPage(): ReactElement {
         </Card>
       ) : (
         <Details
+          api={api}
           item={item}
           occurrences={occurrences}
           occurrencesError={currentOccurrencesError}
           occurrencesLoading={triggersLoading}
           language={i18n.resolvedLanguage ?? i18n.language}
-          setTab={setTab}
           t={t}
-          tab={tab}
+          onUpdated={setItem}
+          updating={updating}
+          setUpdating={setUpdating}
         />
       )}
     </main>
@@ -236,23 +257,27 @@ export default function ScheduleDetailPage(): ReactElement {
 }
 
 function Details({
+  api,
   item,
   occurrences,
   occurrencesError,
   occurrencesLoading,
   language,
-  setTab,
   t,
-  tab,
+  onUpdated,
+  updating,
+  setUpdating,
 }: {
+  readonly api: ApiClient;
   readonly item: ScheduleItem;
   readonly occurrences: readonly OccurrenceItem[];
   readonly occurrencesError?: string;
   readonly occurrencesLoading: boolean;
   readonly language: string;
-  readonly setTab: (tab: DetailTab) => void;
   readonly t: Translate;
-  readonly tab: DetailTab;
+  readonly onUpdated: (item: ScheduleItem) => void;
+  readonly updating: boolean;
+  readonly setUpdating: (value: boolean) => void;
 }): ReactElement {
   const status = viewStatus(item);
   return (
@@ -268,7 +293,29 @@ function Details({
             </p>
           ) : null}
         </div>
-        <StatusBadge label={t(`page.statuses.${status}`)} status={status} />
+        <div className='flex items-center gap-2'>
+          <ScheduleSwitch
+            checked={item.enabled}
+            disabled={updating || item.lifecycleState === 'inactive'}
+            label={
+              item.enabled
+                ? t('page.actions.disable')
+                : t('page.actions.enable')
+            }
+            onChange={(enabled) => {
+              onUpdated({ ...item, enabled });
+              setUpdating(true);
+              void api
+                .request<{ data: ScheduleItem }>({
+                  method: 'POST',
+                  path: `schedules/${encodeURIComponent(item.id)}/${enabled ? 'enable' : 'disable'}`,
+                })
+                .then((response) => onUpdated(response.data))
+                .catch(() => onUpdated(item))
+                .finally(() => setUpdating(false));
+            }}
+          />
+        </div>
       </header>
       {status === 'targetIssue' ? (
         <div className='flex gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm'>
@@ -281,51 +328,14 @@ function Details({
           </div>
         </div>
       ) : null}
-      <div className='border-b border-border' role='tablist'>
-        <Tab
-          active={tab === 'overview'}
-          label={t('page.details.overview')}
-          onClick={() => setTab('overview')}
-        />
-        <Tab
-          active={tab === 'triggers'}
-          label={`${t('page.details.triggers')} (${occurrences.length})`}
-          onClick={() => setTab('triggers')}
-        />
-      </div>
-      {tab === 'overview' ? (
-        <Overview item={item} language={language} t={t} />
-      ) : (
-        <Triggers
-          error={occurrencesError}
-          items={occurrences}
-          loading={occurrencesLoading}
-          t={t}
-        />
-      )}
+      <Overview item={item} language={language} t={t} />
+      <Triggers
+        error={occurrencesError}
+        items={occurrences}
+        loading={occurrencesLoading}
+        t={t}
+      />
     </>
-  );
-}
-
-function Tab({
-  active,
-  label,
-  onClick,
-}: {
-  readonly active: boolean;
-  readonly label: string;
-  readonly onClick: () => void;
-}): ReactElement {
-  return (
-    <button
-      aria-selected={active}
-      className={`border-b-2 px-4 py-3 text-sm font-medium ${active ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'}`}
-      onClick={onClick}
-      role='tab'
-      type='button'
-    >
-      {label}
-    </button>
   );
 }
 
@@ -420,11 +430,19 @@ function Triggers({
   readonly loading: boolean;
   readonly t: Translate;
 }): ReactElement {
+  const pageSize = 10;
+  const [page, setPage] = useState(1);
+  const pageCount = Math.max(1, Math.ceil(items.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const pageItems = items.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize,
+  );
   return (
     <Card>
-      <div className='border-b border-border p-4 text-sm text-muted-foreground'>
-        <p>{t('page.triggersHelp')}</p>
-      </div>
+      <h2 className='border-b border-border p-4 font-semibold'>
+        {t('page.details.triggers')}
+      </h2>
       {error ? (
         <p className='p-4 text-sm text-destructive'>{error}</p>
       ) : loading ? (
@@ -436,7 +454,7 @@ function Triggers({
           <table className='w-full min-w-4xl text-left text-sm'>
             <thead className='bg-muted/40 text-xs text-muted-foreground'>
               <tr>
-                {(['scheduledFor', 'timing', 'status'] as const).map(
+                {(['startedAt', 'duration', 'status', 'target'] as const).map(
                   (column) => (
                     <th className='px-4 py-3 font-medium' key={column}>
                       {t(`page.triggerColumns.${column}`)}
@@ -446,18 +464,14 @@ function Triggers({
               </tr>
             </thead>
             <tbody className='divide-y divide-border'>
-              {items.map((item) => (
+              {pageItems.map((item) => (
                 <tr key={item.id}>
                   <td className='px-4 py-4'>
-                    {formatClientDateTime(item.scheduledFor)}
+                    {formatClientDateTime(item.startedAt)}
                   </td>
                   <td className='px-4 py-4'>
-                    <p>{formatClientDateTime(item.startedAt)}</p>
-                    <p className='mt-1 text-xs text-muted-foreground'>
-                      {item.finishedAt
-                        ? formatClientDateTime(item.finishedAt)
-                        : t('page.inProgress')}
-                    </p>
+                    {formatClientDuration(item.startedAt, item.finishedAt) ??
+                      t('page.inProgress')}
                   </td>
                   <td className='px-4 py-4'>
                     <StatusBadge
@@ -472,10 +486,52 @@ function Triggers({
                       </p>
                     ) : null}
                   </td>
+                  <td className='px-4 py-4'>
+                    {item.target?.href ? (
+                      <Link
+                        className='mt-1 block text-xs text-primary hover:underline'
+                        to={item.target.href}
+                      >
+                        {t('page.viewTarget')}
+                      </Link>
+                    ) : (
+                      t('page.unavailable')
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          {pageCount > 1 ? (
+            <div className='flex items-center justify-between border-t border-border px-4 py-3 text-sm'>
+              <span className='text-muted-foreground'>
+                {t('page.pagination.summary', {
+                  page: currentPage,
+                  total: pageCount,
+                })}
+              </span>
+              <div className='flex gap-2'>
+                <button
+                  className='rounded-md border border-border px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-50'
+                  disabled={currentPage === 1}
+                  onClick={() => setPage((value) => Math.max(1, value - 1))}
+                  type='button'
+                >
+                  {t('page.pagination.previous')}
+                </button>
+                <button
+                  className='rounded-md border border-border px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-50'
+                  disabled={currentPage === pageCount}
+                  onClick={() =>
+                    setPage((value) => Math.min(pageCount, value + 1))
+                  }
+                  type='button'
+                >
+                  {t('page.pagination.next')}
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
       )}
     </Card>

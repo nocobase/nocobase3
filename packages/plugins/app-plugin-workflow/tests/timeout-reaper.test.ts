@@ -1,5 +1,5 @@
 import type { DatabaseManager, Row } from '@nocobase/db';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { WORKFLOW_COLLECTIONS } from '../server/collections/names.js';
 import {
@@ -15,6 +15,8 @@ type RunInput = {
   eventKey: string;
   status: number | null;
   expiresAt: string | null;
+  sourceType?: string;
+  sourceId?: string;
 };
 
 function minutesFromNow(minutes: number): string {
@@ -46,6 +48,8 @@ describe('timeout reaper', () => {
         expiresAt: input.expiresAt,
         createdAt: new Date(Date.now() - 3_600_000).toISOString(),
         manually: false,
+        sourceType: input.sourceType ?? null,
+        sourceId: input.sourceId ?? null,
       })
       .execute();
     const id = await database
@@ -95,6 +99,30 @@ describe('timeout reaper', () => {
     expect(run.status).toBe(EXECUTION_STATUS.ABORTED);
     expect(run.reason).toBe(EXECUTION_REASON.TIMEOUT);
     expect(run.finishedAt).toBeTruthy();
+  });
+
+  it('finalizes an expired run through the shared terminal observer', async () => {
+    const expired = await insertRun({
+      eventKey: 'scheduled-expired',
+      status: EXECUTION_STATUS.STARTED,
+      expiresAt: minutesFromNow(-1),
+      sourceType: 'schedule',
+      sourceId: 'occurrence-1',
+    });
+    const terminalObserver = vi.fn(async () => undefined);
+
+    await expect(
+      createTimeoutReaper({ database, terminalObserver }).sweep(),
+    ).resolves.toBe(1);
+    expect(terminalObserver).toHaveBeenCalledWith({
+      runId: expired,
+      status: EXECUTION_STATUS.ABORTED,
+      reason: EXECUTION_REASON.TIMEOUT,
+      output: null,
+      finishedAt: expect.any(String),
+      sourceType: 'schedule',
+      sourceId: 'occurrence-1',
+    });
   });
 
   it('leaves runs that are not expired, not started, or have no deadline', async () => {

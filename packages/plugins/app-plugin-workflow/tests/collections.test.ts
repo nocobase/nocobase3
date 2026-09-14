@@ -100,7 +100,7 @@ describe('workflow collections', () => {
     );
 
     const runIndexes = await db.raw('PRAGMA index_list(workflow_runs)');
-    expect(runIndexes).toHaveLength(5);
+    expect(runIndexes).toHaveLength(6);
 
     await expect(
       db.raw('PRAGMA foreign_key_list(workflow_node_runs)'),

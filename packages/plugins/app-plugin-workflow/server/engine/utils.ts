@@ -127,6 +127,8 @@ export function hydrateRun(row: Row): WorkflowRun {
     createdAt: asNullableString(row.createdAt) ?? new Date(0).toISOString(),
     manually: asBoolean(row.manually),
     reason: asNullableString(row.reason),
+    sourceType: asNullableString(row.sourceType),
+    sourceId: asNullableString(row.sourceId),
   };
 }
 

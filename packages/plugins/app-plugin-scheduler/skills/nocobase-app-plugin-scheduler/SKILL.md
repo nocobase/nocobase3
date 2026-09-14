@@ -20,7 +20,7 @@ administrator-editable schedules; Scheduler v1 is code-defined and read-only.
   `@nocobase/app-plugin-scheduler/server/tokens`.
 - Server contribution: `schedules: { definitions: './server/schedules' }` on
   the declaring plugin's `defineServerPlugin()` declaration.
-- Operations: the App-owned `scheduler:sync` script, with optional
+- Operations: the globally registered `pnpm nocobase schedule sync` command, with optional
   `--finalize`.
 - Product surface: the authenticated and authorized read-only Scheduled Tasks
   Settings page and `/api/schedules` endpoints.
@@ -36,7 +36,7 @@ administrator-editable schedules; Scheduler v1 is code-defined and read-only.
    `schedules: { definitions: './server/schedules' }`.
 4. Select an installed target type. The Workflow plugin owns `workflow`; the
    Scheduler plugin owns `job`.
-5. Run `pnpm scheduler:sync`, then verify the schedule in the read-only
+5. Run `pnpm nocobase schedule sync`, then verify the schedule in the read-only
    Scheduled Tasks page.
 
 `from` and `to` are inclusive. `limit` counts Queue schedule claims, not target
@@ -50,7 +50,13 @@ During the owning plugin Provider's `boot()` lifecycle, resolve the original
 `jobDispatchRegistryToken` and register a stable Job name, title, payload
 validator, and dispatch function. The dispatch function should use the
 Schedule execution context's `occurrenceId` as the downstream Queue dispatch
-dedup/idempotency key and return only a controlled receipt such as a Job ID.
+dedup/idempotency key. Synchronous operations return a `completed` result;
+Queue dispatchers return `accepted` with a stable `queue-job` reference and a
+controlled receipt. The Queue integration owner should also register one
+`queue-job` observer with `registerObserver(referenceType, inspect)` so
+Scheduler can repair a missed completion notification after a worker or
+process failure. Reference types identify observer domains and can only have
+one observer; do not register one observer per business Job name.
 Do not expose arbitrary Queue Job names and do not resolve a private Scheduler
 implementation.
 
@@ -61,10 +67,10 @@ Scheduler infrastructure and must not be replaced by a business Job name.
 
 ## Synchronize safely
 
-- `pnpm scheduler:sync` validates the complete loaded manifest and performs
+- `pnpm nocobase schedule sync` validates the complete loaded manifest and performs
   non-destructive upserts. Normal App startup also follows this path before
   starting the Schedule worker.
-- Run `pnpm scheduler:sync --finalize` once per App during a production
+- Run `pnpm nocobase schedule sync --finalize` once per App during a production
   deployment only when the process sees the complete manifest. It additionally
   soft-deactivates missing code definitions.
 - The one-shot sync command does not start the Schedule worker. A validation,
@@ -81,8 +87,9 @@ modules, business Job payloads, and deployment timing for finalize.
 Schedule APIs require authentication and `scheduler.schedules:access`.
 Responses expose controlled scheduling data, while the Settings UI shows
 localized schedule descriptions, trigger counts, and trigger history. Neither
-surface exposes raw Job payloads or Workflow input. “Triggered” means the target
-accepted the request; it does not mean downstream work completed.
+surface exposes raw Job payloads or Workflow input. New asynchronous executions
+move through `waiting` to a final outcome. A historical `triggered` record only
+means the old target accepted the request, so its final result is unknown.
 
 Verify that synchronization succeeds, the Settings page shows the expected
 next run, a due schedule creates one trigger record, and stalled execution

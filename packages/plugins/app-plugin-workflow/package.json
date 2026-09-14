@@ -115,6 +115,9 @@
     "typescript": "catalog:"
   },
   "peerDependenciesMeta": {
+    "@nocobase/app-plugin-scheduler": {
+      "optional": true
+    },
     "typescript": {
       "optional": true
     }

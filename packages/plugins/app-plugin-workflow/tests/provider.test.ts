@@ -65,6 +65,15 @@ describe('WorkflowProvider', () => {
     );
   });
 
+  it('keeps Workflow available when Scheduler is not registered', async () => {
+    const { container, provider } =
+      createProviderWithDependencies('without-scheduler');
+    provider.register();
+
+    await expect(provider.boot()).resolves.toBeUndefined();
+    expect(container.resolve(workflowServiceToken)).toBeDefined();
+  });
+
   it.each(['scheduler-first', 'workflow-first'] as const)(
     'registers the Schedule target independently of plugin declaration order: %s',
     async (order) => {

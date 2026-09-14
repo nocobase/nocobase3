@@ -7,8 +7,6 @@ export interface TargetValidationResult {
 export interface ScheduleExecutionContext {
   readonly scheduleId: string;
   readonly occurrenceId: string;
-  readonly scheduledFor: Date;
-  readonly runNumber: number;
 }
 export interface ScheduleTargetSummary {
   readonly targetLabel: string;
@@ -16,20 +14,61 @@ export interface ScheduleTargetSummary {
   readonly href?: string;
   readonly state?: 'ready' | 'disabled' | 'missing' | 'invalid';
 }
-export interface ScheduleTargetExecutionResult {
-  readonly status: 'triggered' | 'skipped' | 'failed';
-  readonly reason?: string;
-  readonly receipt?: JsonObject;
+export interface ScheduleTargetReference extends JsonObject {
+  readonly type: string;
+  readonly id: string;
 }
+export type ScheduleTerminalStatus =
+  'succeeded' | 'failed' | 'cancelled' | 'timed_out';
+export interface ScheduleExecutionCompletion {
+  readonly status: ScheduleTerminalStatus;
+  readonly reason?: string;
+  readonly result?: JsonObject;
+  readonly finishedAt?: Date;
+}
+export interface ScheduleExecutionReporter {
+  complete(
+    occurrenceId: string,
+    reference: ScheduleTargetReference,
+    completion: ScheduleExecutionCompletion,
+  ): Promise<void>;
+}
+export type ScheduleTargetObservation =
+  | { readonly state: 'pending' | 'running' }
+  | {
+      readonly state: 'completed';
+      readonly completion: ScheduleExecutionCompletion;
+    }
+  | { readonly state: 'unknown'; readonly reason: string };
+export interface ScheduleTargetObserver {
+  inspect(
+    reference: ScheduleTargetReference,
+  ): Promise<ScheduleTargetObservation>;
+}
+export type ScheduleTargetStartResult =
+  | {
+      readonly state: 'completed';
+      readonly outcome: 'succeeded';
+      readonly result?: JsonObject;
+    }
+  | {
+      readonly state: 'accepted';
+      readonly reference: ScheduleTargetReference;
+      readonly receipt?: JsonObject;
+    }
+  | { readonly state: 'skipped'; readonly reason: string }
+  | { readonly state: 'failed'; readonly reason: string };
 export interface ScheduleTargetType<TConfig extends JsonObject = JsonObject> {
   readonly type: string;
   readonly title: string;
   validate(config: unknown): TargetValidationResult;
   describe(config: TConfig): Promise<ScheduleTargetSummary>;
-  execute(
+  start(
     config: TConfig,
     context: ScheduleExecutionContext,
-  ): Promise<ScheduleTargetExecutionResult>;
+  ): Promise<ScheduleTargetStartResult>;
+  inspect?: ScheduleTargetObserver['inspect'];
+  referenceHref?: (reference: ScheduleTargetReference) => string | undefined;
 }
 
 export class ScheduleTargetRegistry {
@@ -61,19 +100,34 @@ export class ScheduleTargetRegistry {
       ? target.describe(config)
       : { targetLabel: type, state: 'missing' };
   }
-  public async execute(
+  public async start(
     type: string,
     config: JsonObject,
     context: ScheduleExecutionContext,
-  ): Promise<ScheduleTargetExecutionResult> {
+  ): Promise<ScheduleTargetStartResult> {
     const target = this.get(type);
-    if (!target) return { status: 'failed', reason: 'target-not-found' };
+    if (!target) return { state: 'failed', reason: 'target-not-found' };
     const validation = target.validate(config);
     if (!validation.valid)
       return {
-        status: 'failed',
+        state: 'failed',
         reason: validation.reason ?? 'invalid-config',
       };
-    return target.execute(config, context);
+    return target.start(config, context);
+  }
+  public inspect(
+    targetType: string,
+    reference: ScheduleTargetReference,
+  ): Promise<ScheduleTargetObservation> {
+    const target = this.get(targetType);
+    return target?.inspect
+      ? target.inspect(reference)
+      : Promise.resolve({ state: 'unknown', reason: 'observer-unavailable' });
+  }
+  public referenceHref(
+    targetType: string,
+    reference: ScheduleTargetReference,
+  ): string | undefined {
+    return this.get(targetType)?.referenceHref?.(reference);
   }
 }

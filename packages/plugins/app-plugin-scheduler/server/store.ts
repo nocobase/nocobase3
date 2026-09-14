@@ -14,6 +14,7 @@ import {
 } from './jobs/dispatch.js';
 import type { NormalizedScheduleDefinition } from './schedules/define.js';
 import type { JsonObject } from './schedules/define.js';
+import type { ScheduleOccurrenceStatus } from './occurrences.js';
 
 export interface ScheduleManifestEntry {
   readonly owner: string;
@@ -35,6 +36,7 @@ export interface ScheduleRecord {
   readonly inactiveReason?: string;
   readonly definitionHash: string;
   readonly runCount: number;
+  readonly completedCount: number;
   readonly nextRunAt?: string;
   readonly lastRunAt?: string;
   readonly scheduleStatus: 'active' | 'paused';
@@ -49,14 +51,18 @@ export interface ScheduleTargetProjection {
 export interface ScheduleOccurrenceRecord {
   readonly id: string;
   readonly scheduleId: string;
-  readonly scheduledFor: string;
-  readonly runNumber: number;
-  readonly status: string;
+  readonly status: ScheduleOccurrenceStatus;
   readonly reason?: string;
   readonly executionCount: number;
   readonly startedAt: string;
+  readonly acceptedAt?: string;
   readonly finishedAt?: string;
   readonly targetReceipt?: JsonObject;
+  readonly resultSummary?: JsonObject;
+  readonly target: {
+    readonly type: string;
+    readonly reference?: { readonly type: string; readonly id: string };
+  };
 }
 
 interface DefinitionRow extends Row {
@@ -140,6 +146,9 @@ export class ScheduleStore {
       .selectAll()
       .execute<QueueScheduleRow>();
     const byId = new Map(schedules.map((schedule) => [schedule.id, schedule]));
+    const completedByScheduleId = await this.countCompleted(
+      definitions.map((definition) => definition.id),
+    );
     return definitions.map((definition) => {
       const schedule = byId.get(definition.id);
       return {
@@ -161,6 +170,7 @@ export class ScheduleStore {
           : {}),
         definitionHash: definition.definitionHash,
         runCount: Number(schedule?.runCount ?? 0),
+        completedCount: completedByScheduleId.get(definition.id) ?? 0,
         ...(schedule?.nextRunAt
           ? { nextRunAt: dateValue(schedule.nextRunAt) }
           : {}),
@@ -170,6 +180,55 @@ export class ScheduleStore {
         scheduleStatus: schedule?.status ?? 'paused',
       };
     });
+  }
+
+  public async setEnabled(id: string, enabled: boolean): Promise<void> {
+    await this.database.transaction(async (connection) => {
+      const query = connection.query;
+      const definition = await query
+        .selectFrom<DefinitionRow>('schedule_definitions')
+        .select('id')
+        .where('id', '=', id)
+        .where('appName', '=', this.appName)
+        .executeTakeFirst();
+      if (!definition) throw new Error('Schedule not found.');
+      await query
+        .updateTable<DefinitionRow>('schedule_definitions')
+        .set({ enabled, updatedAt: this.now() })
+        .where('id', '=', id)
+        .execute();
+      await query
+        .updateTable<QueueScheduleRow>('queue_schedules')
+        .set({ status: enabled ? 'active' : 'paused' })
+        .where('id', '=', id)
+        .execute();
+    });
+  }
+
+  /**
+   * Counts occurrences that reached the `succeeded` terminal state, per schedule.
+   * Only successful outcomes count as completed: `failed`, `timed_out`,
+   * `cancelled`, `triggered` (result unknown) and `skipped` (never executed) are
+   * deliberately excluded. The result is keyed by schedule id for the schedules
+   * passed in, so occurrences orphaned from an app's definitions never appear.
+   */
+  private async countCompleted(
+    scheduleIds: readonly string[],
+  ): Promise<Map<string, number>> {
+    const completed = new Map<string, number>();
+    if (scheduleIds.length === 0) return completed;
+    const rows = await this.database
+      .query()
+      .selectFrom('schedule_occurrences')
+      .select(({ fn }) => ['scheduleId', fn.countAll().as('completedCount')])
+      .where('scheduleId', 'in', [...scheduleIds])
+      .where('status', '=', 'succeeded')
+      .groupBy('scheduleId')
+      .execute<Row>();
+    for (const row of rows) {
+      completed.set(String(row.scheduleId), Number(row.completedCount ?? 0));
+    }
+    return completed;
   }
 
   public async listTargets(): Promise<readonly ScheduleTargetProjection[]> {
@@ -208,12 +267,13 @@ export class ScheduleStore {
     return rows.map((row) => ({
       id: String(row.id),
       scheduleId: String(row.scheduleId),
-      scheduledFor: dateValue(row.scheduledFor as Date | string) ?? '',
-      runNumber: Number(row.runNumber),
-      status: String(row.status),
+      status: row.status as ScheduleOccurrenceStatus,
       ...(typeof row.reason === 'string' ? { reason: row.reason } : {}),
       executionCount: Number(row.executionCount),
       startedAt: dateValue(row.startedAt as Date | string) ?? '',
+      ...(row.acceptedAt
+        ? { acceptedAt: dateValue(row.acceptedAt as Date | string) }
+        : {}),
       ...(row.finishedAt
         ? { finishedAt: dateValue(row.finishedAt as Date | string) }
         : {}),
@@ -224,6 +284,25 @@ export class ScheduleStore {
             ),
           }
         : {}),
+      ...(row.resultSummary
+        ? {
+            resultSummary: jsonObject(
+              row.resultSummary as string | Record<string, unknown>,
+            ),
+          }
+        : {}),
+      target: {
+        type: String(row.targetType),
+        ...(typeof row.targetReferenceType === 'string' &&
+        typeof row.targetReferenceId === 'string'
+          ? {
+              reference: {
+                type: row.targetReferenceType,
+                id: row.targetReferenceId,
+              },
+            }
+          : {}),
+      },
     }));
   }
 
@@ -262,7 +341,7 @@ export class ScheduleStore {
           fromDate: definition.schedule.from ?? null,
           toDate: definition.schedule.to ?? null,
           runLimit: definition.schedule.limit ?? null,
-          enabled: definition.enabled,
+          enabled: true,
           targetType: definition.target.type,
           targetConfig: JSON.stringify(definition.target.config),
           lifecycleState: 'active',
@@ -275,7 +354,7 @@ export class ScheduleStore {
           updatedAt: now,
         })
         .execute();
-      await this.materialize(query, id, definition, payload, true);
+      await this.materialize(query, id, definition, payload, true, true);
       return;
     }
     const scheduleChanged =
@@ -296,7 +375,6 @@ export class ScheduleStore {
         fromDate: definition.schedule.from ?? null,
         toDate: definition.schedule.to ?? null,
         runLimit: definition.schedule.limit ?? null,
-        enabled: definition.enabled,
         targetType: definition.target.type,
         targetConfig: JSON.stringify(definition.target.config),
         lifecycleState: 'active',
@@ -315,6 +393,7 @@ export class ScheduleStore {
       definition,
       payload,
       scheduleChanged || reactivated,
+      Boolean(existing.enabled),
     );
   }
 
@@ -324,6 +403,7 @@ export class ScheduleStore {
     definition: NormalizedScheduleDefinition,
     payload: ScheduleDispatchPayload,
     recalculate: boolean,
+    enabled: boolean,
   ): Promise<void> {
     const current = await query
       .selectFrom<QueueScheduleRow>('queue_schedules')
@@ -331,7 +411,7 @@ export class ScheduleStore {
       .where('id', '=', id)
       .executeTakeFirst<QueueScheduleRow>();
     const values = {
-      status: definition.enabled ? ('active' as const) : ('paused' as const),
+      status: enabled ? ('active' as const) : ('paused' as const),
       name: ScheduleDispatchJob.options.name ?? ScheduleDispatchJob.name,
       payload: JSON.stringify(payload),
       cronExpression: definition.schedule.cron,
@@ -460,7 +540,11 @@ function calculateNextRunAt(
   const currentDate =
     definition.schedule.from && definition.schedule.from > now
       ? new Date(definition.schedule.from.getTime() - 1)
-      : now;
+      : new Date(now);
+  // Cron expressions describe discrete second/minute boundaries. Do not let
+  // the scheduler's polling millisecond leak into the next occurrence (for
+  // example, `02:40:00.722Z`).
+  currentDate.setMilliseconds(0);
   const next = CronExpressionParser.parse(definition.schedule.cron, {
     currentDate,
     tz: definition.schedule.timezone,

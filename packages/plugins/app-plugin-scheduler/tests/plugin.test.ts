@@ -31,7 +31,7 @@ describe('@nocobase/app-plugin-scheduler', () => {
     expect(source).toContain('schedules: { definitions:');
     expect(source).toContain('jobDispatchRegistryToken');
     expect(source).toContain('occurrenceId');
-    expect(source).toContain('scheduler:sync --finalize');
+    expect(source).toContain('nocobase schedule sync --finalize');
     expect(source).toContain('must not contain credentials');
   });
 });

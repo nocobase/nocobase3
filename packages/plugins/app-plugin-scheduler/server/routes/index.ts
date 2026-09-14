@@ -40,6 +40,16 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
         data: await scheduler.listOccurrences(context.req.param('id')),
       }),
     );
+    schedules.post('/:id/enable', async (context) =>
+      context.json({
+        data: await scheduler.setEnabled(context.req.param('id'), true),
+      }),
+    );
+    schedules.post('/:id/disable', async (context) =>
+      context.json({
+        data: await scheduler.setEnabled(context.req.param('id'), false),
+      }),
+    );
     router.route('/schedules', schedules);
     return router;
   });

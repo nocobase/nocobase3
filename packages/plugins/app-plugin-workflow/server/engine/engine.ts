@@ -77,6 +77,9 @@ export default class WorkflowEngine {
       ...(options.functions === undefined
         ? {}
         : { functions: options.functions }),
+      ...(options.terminalObserver === undefined
+        ? {}
+        : { terminalObserver: options.terminalObserver }),
     });
 
     this.reaper =
@@ -94,6 +97,9 @@ export default class WorkflowEngine {
             ...(options.timeoutReaperBatchSize === undefined
               ? {}
               : { batchSize: options.timeoutReaperBatchSize }),
+            ...(options.terminalObserver === undefined
+              ? {}
+              : { terminalObserver: options.terminalObserver }),
           });
   }
 
@@ -178,7 +184,7 @@ export default class WorkflowEngine {
     workflow: WorkflowDefinition,
     input: JsonObject,
     options: WorkflowEventOptions = {},
-  ): Promise<Processor | null | void> {
+  ): Promise<Processor | import('./types.js').WorkflowRun | null | void> {
     return this.dispatcher.trigger(workflow, input, options);
   }
 

@@ -10,6 +10,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import migration from '../database/migrations/202609020001_scheduler_create_definitions.js';
+import observationMigration from '../database/migrations/202609100001_scheduler_execution_observation.js';
 
 interface SqliteClient {
   readonly schema: { hasTable(name: string): Promise<boolean> };
@@ -39,7 +40,7 @@ describe('@nocobase/app-plugin-scheduler database', () => {
 
   afterEach(async () => database.destroy());
 
-  it('provides one self-contained migration and no seeds', async () => {
+  it('provides execution-observation migrations and no seeds', async () => {
     const migrationsDirectory = fileURLToPath(
       new URL('../database/migrations', import.meta.url),
     );
@@ -47,11 +48,16 @@ describe('@nocobase/app-plugin-scheduler database', () => {
       new URL('../database/seeds', import.meta.url),
     );
 
-    await expect(
-      validateMigrations(migrationsDirectory),
-    ).resolves.toMatchObject([
-      { name: '202609020001_scheduler_create_definitions' },
-    ]);
+    await expect(validateMigrations(migrationsDirectory)).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: '202609020001_scheduler_create_definitions',
+        }),
+        expect.objectContaining({
+          name: '202609100001_scheduler_execution_observation',
+        }),
+      ]),
+    );
     await expect(validateSeeds(seedsDirectory)).resolves.toEqual([]);
   });
 
@@ -105,12 +111,18 @@ describe('@nocobase/app-plugin-scheduler database', () => {
       }),
     ]);
     await expect(
+      client.raw('PRAGMA index_list(schedule_occurrences)'),
+    ).resolves.toEqual(expect.arrayContaining([expect.objectContaining({})]));
+    await expect(
       metadataStore
         .get('scheduleOccurrences')
         .then((stored) => stored?.document),
     ).resolves.toMatchObject({
       fields: {
         executionCount: { type: 'integer' },
+        targetReferenceType: { type: 'string' },
+        targetReferenceId: { type: 'string' },
+        resultSummary: { type: 'json' },
       },
       relations: {
         schedule: { target: 'scheduleDefinitions' },
@@ -144,10 +156,20 @@ async function migrateUp(database: DatabaseManager): Promise<void> {
     query: connection.query,
     connection,
   });
+  await observationMigration.up({
+    builder: connection.builder,
+    query: connection.query,
+    connection,
+  });
 }
 
 async function migrateDown(database: DatabaseManager): Promise<void> {
   const connection = database.connection();
+  await observationMigration.down?.({
+    builder: connection.builder,
+    query: connection.query,
+    connection,
+  });
   await migration.down?.({
     builder: connection.builder,
     query: connection.query,

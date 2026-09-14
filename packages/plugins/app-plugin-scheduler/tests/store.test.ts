@@ -126,6 +126,56 @@ describe('ScheduleStore reconciliation', () => {
     });
   });
 
+  it('counts only succeeded occurrences as completed', async () => {
+    await store.reconcile([
+      entry(baseDefinition()),
+      entry(baseDefinition({ key: 'weekly', title: 'Weekly' })),
+    ]);
+    const daily = scheduleId('main', 'plugin-a', 'daily');
+    const weekly = scheduleId('main', 'plugin-a', 'weekly');
+    await insertOccurrences(daily, [
+      'succeeded',
+      'succeeded',
+      'failed',
+      'timed_out',
+      'cancelled',
+      'triggered',
+      'skipped',
+    ]);
+    await insertOccurrences(weekly, ['succeeded', 'running']);
+
+    const byKey = new Map(
+      (await store.list()).map((record) => [record.key, record]),
+    );
+    expect(byKey.get('daily')?.completedCount).toBe(2);
+    expect(byKey.get('weekly')?.completedCount).toBe(1);
+  });
+
+  it('reports zero completed for a schedule with no occurrences', async () => {
+    await store.reconcile([entry(baseDefinition())]);
+    expect((await store.list())[0]?.completedCount).toBe(0);
+  });
+
+  it('scopes completed counts to the app that owns the definitions', async () => {
+    const otherStore = new ScheduleStore(
+      database,
+      'other',
+      () => new Date(NOW),
+    );
+    await store.reconcile([entry(baseDefinition())]);
+    await otherStore.reconcile([entry(baseDefinition())]);
+    await insertOccurrences(scheduleId('main', 'plugin-a', 'daily'), [
+      'succeeded',
+    ]);
+    await insertOccurrences(scheduleId('other', 'plugin-a', 'daily'), [
+      'succeeded',
+      'succeeded',
+    ]);
+
+    expect((await store.list())[0]?.completedCount).toBe(1);
+    expect((await otherStore.list())[0]?.completedCount).toBe(2);
+  });
+
   it('rolls back the complete reconciliation when a projection write fails', async () => {
     const client = await database.connection().client();
     await client.raw(`
@@ -180,6 +230,29 @@ describe('ScheduleStore reconciliation', () => {
 
   function rows(table: string): Promise<Row[]> {
     return database.query().selectFrom(table).selectAll().execute();
+  }
+  async function insertOccurrences(
+    schedule: string,
+    statuses: readonly string[],
+  ): Promise<void> {
+    for (const [index, status] of statuses.entries()) {
+      await database
+        .query()
+        .insertInto('schedule_occurrences')
+        .values({
+          id: `${schedule}-occurrence-${index}`,
+          scheduleId: schedule,
+          definitionHash: 'definition-hash',
+          status,
+          targetType: 'job',
+          executionCount: 1,
+          startedAt: new Date('2026-03-08T00:00:00.000Z'),
+          lastStartedAt: new Date('2026-03-08T00:00:00.000Z'),
+          createdAt: new Date('2026-03-08T00:00:00.000Z'),
+          updatedAt: new Date('2026-03-08T00:00:00.000Z'),
+        })
+        .execute();
+    }
   }
   function queueRow(id: string): Promise<Row | undefined> {
     return database

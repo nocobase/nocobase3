@@ -46,6 +46,7 @@ export interface DispatcherOptions {
     | ((workflowId: WorkflowId | 'dispatcher') => WorkflowLogger);
   environment?: Record<string, unknown> | (() => Record<string, unknown>);
   functions?: Record<string, (...args: unknown[]) => unknown>;
+  terminalObserver?: import('./types.js').WorkflowTerminalObserver;
 }
 
 type ExecutionPlan = {
@@ -76,7 +77,7 @@ export default class Dispatcher {
     workflow: WorkflowDefinition,
     input: unknown,
     options: WorkflowEventOptions = {},
-  ): Promise<Processor | null | void> {
+  ): Promise<Processor | WorkflowRun | null | void> {
     const operation = this.triggerEvent(workflow, input, options);
     this.inFlight.add(operation);
     return operation.finally(() => {
@@ -88,7 +89,7 @@ export default class Dispatcher {
     workflow: WorkflowDefinition,
     input: unknown,
     options: WorkflowEventOptions,
-  ): Promise<Processor | null | void> {
+  ): Promise<Processor | WorkflowRun | null | void> {
     const logger = this.getLogger(workflow.id);
     if (!options.force && !options.manually && !workflow.enabled) {
       logger.warn(`Workflow "${workflow.key}" is disabled; event ignored`);
@@ -129,7 +130,7 @@ export default class Dispatcher {
         return entered ? this.process({ execution: entered, workflow }) : null;
       }
       await this.enqueue({ executionId: execution.id });
-      return null;
+      return execution;
     } finally {
       this.pendingEventKeys.delete(eventKey);
     }
@@ -289,6 +290,8 @@ export default class Dispatcher {
             createdAt,
             manually: options.manually ?? false,
             reason: null,
+            sourceType: options.sourceType ?? null,
+            sourceId: options.sourceId ?? null,
           })
           .execute();
         const row = await query
@@ -367,6 +370,7 @@ export default class Dispatcher {
         logger,
         environment: this.options.environment,
         functions: this.options.functions,
+        terminalObserver: this.options.terminalObserver,
       });
       try {
         if (plan.rerun) {

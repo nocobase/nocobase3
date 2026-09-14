@@ -16,19 +16,17 @@ export interface ScheduleDefinition {
     readonly to?: Date;
     readonly limit?: number;
   };
-  readonly enabled?: boolean;
   readonly target: { readonly type: string; readonly config: JsonObject };
 }
 
 export interface NormalizedScheduleDefinition extends Omit<
   ScheduleDefinition,
-  'schedule' | 'enabled'
+  'schedule'
 > {
   readonly schedule: Required<
     Pick<ScheduleDefinition['schedule'], 'cron' | 'timezone'>
   > &
     Omit<ScheduleDefinition['schedule'], 'cron' | 'timezone'>;
-  readonly enabled: boolean;
   readonly definitionHash: string;
 }
 
@@ -81,7 +79,6 @@ export function defineSchedule(
       cron: definition.schedule.cron.trim(),
       timezone,
     },
-    enabled: definition.enabled ?? true,
   } as Omit<NormalizedScheduleDefinition, 'definitionHash'>;
   const canonical = stableStringify(normalized);
   return freezeDeep({

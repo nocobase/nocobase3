@@ -26,6 +26,7 @@ import { ScheduleTargetRegistry } from '../schedules/registry.js';
 import { ScheduleStore, type ScheduleManifestEntry } from '../store.js';
 import {
   jobDispatchRegistryToken,
+  scheduleExecutionReporterToken,
   scheduleOccurrenceStoreToken,
   scheduleStoreToken,
   scheduleTargetRegistryToken,
@@ -37,6 +38,7 @@ export class SchedulerProvider extends ServiceProvider<AppPluginApplication> {
   public readonly name: string = '@nocobase/app-plugin-scheduler';
   private worker: NocoBaseQueueWorker | undefined;
   private workerCompletion: Promise<void> | undefined;
+  private reconcileTimer: ReturnType<typeof setInterval> | undefined;
 
   public override register(): void {
     this.app.container.singleton(
@@ -54,6 +56,14 @@ export class SchedulerProvider extends ServiceProvider<AppPluginApplication> {
       scheduleOccurrenceStoreToken,
       (container) =>
         new ScheduleOccurrenceStore(container.resolve(databaseManagerToken)),
+    );
+    this.app.container
+      .resolve(jobDispatchRegistryToken)
+      .setCompletionReporter(() =>
+        this.app.container.resolve(scheduleOccurrenceStoreToken),
+      );
+    this.app.container.singleton(scheduleExecutionReporterToken, (container) =>
+      container.resolve(scheduleOccurrenceStoreToken),
     );
     this.app.container.singleton(
       scheduleStoreToken,
@@ -111,9 +121,20 @@ export class SchedulerProvider extends ServiceProvider<AppPluginApplication> {
       concurrency: 1,
     });
     this.workerCompletion = this.worker.start();
+    this.reconcileTimer = setInterval(() => {
+      void this.app.container
+        .resolve(scheduleOccurrenceStoreToken)
+        .reconcile(this.app.container.resolve(scheduleTargetRegistryToken))
+        .catch((error: unknown) => {
+          console.error('Scheduler occurrence reconciliation failed', error);
+        });
+    }, 60_000);
+    this.reconcileTimer.unref?.();
   }
 
   public override async shutdown(): Promise<void> {
+    if (this.reconcileTimer) clearInterval(this.reconcileTimer);
+    this.reconcileTimer = undefined;
     await this.worker?.stop();
     await this.workerCompletion;
     this.workerCompletion = undefined;

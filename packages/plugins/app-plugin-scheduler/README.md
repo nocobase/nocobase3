@@ -30,12 +30,13 @@ defineServerPlugin({
 
 The plugin reconciles declarations into `schedule_definitions` and the
 Database Queue schedule projection. It dispatches targets through a fixed
-`ScheduleDispatchJob`, records idempotent triggers, and provides an
+`ScheduleDispatchJob`, records idempotent occurrences through their final
+target outcome, and provides an
 authenticated, authorized, read-only Settings page and API. Raw target config
 is never returned by the API.
 
-Run a non-destructive synchronization with `pnpm scheduler:sync`. A deployment
-may run `pnpm scheduler:sync --finalize` once per App to deactivate declarations
+Run a non-destructive synchronization with `pnpm nocobase schedule sync`. A deployment
+may run `pnpm nocobase schedule sync --finalize` once per App to deactivate declarations
 missing from the complete manifest. The one-shot command does not start the
 Schedule worker.
 

@@ -10,7 +10,9 @@ export function DateTimeValue({ value }: DateTimeValueProps): ReactElement {
   const relative = formatClientRelativeTime(value);
   return (
     <span className='block'>
-      <span className='block'>{formatClientDateTime(value)}</span>
+      <span className='block whitespace-nowrap'>
+        {formatClientDateTime(value)}
+      </span>
       {relative ? (
         <span className='mt-1 block text-xs text-muted-foreground'>
           {relative}

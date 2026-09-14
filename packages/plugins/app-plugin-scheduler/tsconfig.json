@@ -11,6 +11,7 @@
   },
   "include": [
     "package.ts",
+    "cli/**/*.ts",
     "database/**/*.ts",
     "server/**/*.ts",
     "client/**/*.ts",

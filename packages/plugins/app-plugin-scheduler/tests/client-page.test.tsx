@@ -14,14 +14,15 @@ const mocks = vi.hoisted(() => {
   const request = vi.fn();
   let language: 'en-US' | 'zh-CN' = 'en-US';
   const translations: Readonly<Record<string, string>> = {
+    'nav.automation': 'Automation',
     'page.title': 'Scheduled tasks',
-    'page.description': 'Read-only code-defined schedules.',
-    'page.readOnly': 'Read only',
-    'page.summary.total': 'Total schedules',
-    'page.summary.active': 'Active schedules',
-    'page.summary.triggers': 'Triggers',
+    'page.targets.workflow': 'Workflow',
+    'page.targets.job': 'Job',
+    'page.pagination.previous': 'Previous',
+    'page.pagination.next': 'Next',
+    'page.pagination.summary': 'Page {{page}} of {{total}}',
     'page.filters.searchLabel': 'Search schedules',
-    'page.filters.searchPlaceholder': 'Search name, target, or schedule…',
+    'page.filters.searchPlaceholder': 'Search name, target type, or schedule…',
     'page.filters.statusLabel': 'Filter by status',
     'page.filters.targetLabel': 'Filter by target type',
     'page.filters.allStatuses': 'All statuses',
@@ -33,10 +34,8 @@ const mocks = vi.hoisted(() => {
     'page.columns.name': 'Name',
     'page.columns.target': 'Target',
     'page.columns.scheduleTimezone': 'Schedule / timezone',
-    'page.columns.triggers': 'Triggers',
-    'page.columns.lastTrigger': 'Last trigger',
-    'page.columns.nextRun': 'Next run',
-    'page.columns.status': 'Status',
+    'page.columns.triggered': 'Triggered',
+    'page.columns.nextRun': 'Next trigger',
     'page.loading': 'Loading scheduled tasks…',
     'page.empty': 'No scheduled tasks are defined.',
     'page.noMatches': 'No scheduled tasks match these filters.',
@@ -46,7 +45,7 @@ const mocks = vi.hoisted(() => {
     'page.details.loading': 'Loading schedule details…',
     'page.details.notFound': 'The scheduled task was not found.',
     'page.details.overview': 'Overview',
-    'page.details.triggers': 'Triggers',
+    'page.details.triggers': 'Execution records',
     'page.details.schedule': 'Schedule',
     'page.details.frequency': 'Frequency',
     'page.details.timezone': 'Timezone',
@@ -57,24 +56,18 @@ const mocks = vi.hoisted(() => {
     'page.details.targetName': 'Target',
     'page.details.targetType': 'Target type',
     'page.details.description': 'Description',
-    'page.triggersHelp':
-      'Triggered means the target accepted the request; it does not mean downstream work completed.',
     'page.triggersLoading': 'Loading triggers…',
     'page.triggersEmpty': 'No triggers have started.',
-    'page.triggerColumns.scheduledFor': 'Scheduled for',
     'page.triggerColumns.timing': 'Started / finished',
     'page.triggerColumns.status': 'Status',
     'page.triggerStatuses.triggered': 'Triggered',
   };
   const chineseTranslations: Readonly<Record<string, string>> = {
+    'nav.automation': '自动化',
     'page.title': '定时任务',
-    'page.description': '只读展示代码声明的定时任务及其触发记录。',
-    'page.readOnly': '只读',
-    'page.summary.total': '定时任务总数',
-    'page.summary.active': '运行中的任务',
-    'page.summary.triggers': '触发次数',
+    'page.columns.triggered': '已触发',
     'page.filters.searchLabel': '搜索定时任务',
-    'page.filters.searchPlaceholder': '搜索名称、目标或执行周期…',
+    'page.filters.searchPlaceholder': '搜索名称、目标类型或执行周期…',
     'page.filters.statusLabel': '按状态筛选',
     'page.filters.targetLabel': '按目标类型筛选',
     'page.filters.allStatuses': '全部状态',
@@ -122,6 +115,7 @@ vi.mock('@nocobase/i18n/client', () => ({
 import SchedulesPage from '../client/pages/schedules-page.js';
 import ScheduleDetailPage from '../client/pages/schedule-detail-page.js';
 import { formatCronDescription } from '../client/pages/cron-description.js';
+import { formatClientRelativeTime } from '../client/pages/date-time.js';
 
 const schedules = [
   {
@@ -134,6 +128,7 @@ const schedules = [
     lifecycleState: 'active',
     scheduleStatus: 'active',
     runCount: 4,
+    completedCount: 3,
     lastRunAt: '2026-09-01T02:00:00.000Z',
     nextRunAt: '2026-09-02T02:00:00.000Z',
     targetType: 'workflow',
@@ -152,12 +147,22 @@ const schedules = [
     lifecycleState: 'active',
     scheduleStatus: 'paused',
     runCount: 2,
+    completedCount: 0,
     targetType: 'job',
     targetSummary: { targetLabel: 'Cleanup job', state: 'ready' },
   },
 ] as const;
 
 const localDateTimeFormatter = new Intl.DateTimeFormat(undefined, {
+  year: 'numeric',
+  month: 'short',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+});
+
+const timeZoneLabelledFormatter = new Intl.DateTimeFormat(undefined, {
   year: 'numeric',
   month: 'short',
   day: '2-digit',
@@ -197,7 +202,10 @@ describe('SchedulesPage', () => {
     mocks.request.mockReset();
     mocks.setLanguage('en-US');
   });
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+  });
 
   it('describes interval schedules in the active language', () => {
     expect(formatCronDescription('0 0 */2 * * *', 'en-US')).toBe(
@@ -208,7 +216,7 @@ describe('SchedulesPage', () => {
     );
   });
 
-  it('renders polished loading and empty read-only states', async () => {
+  it('renders a page title and empty state without developer-facing copy', async () => {
     let resolveRequest: ((value: { data: never[] }) => void) | undefined;
     mocks.request.mockReturnValue(
       new Promise((resolve) => {
@@ -218,8 +226,13 @@ describe('SchedulesPage', () => {
 
     renderList();
     expect(screen.getByText('Loading scheduled tasks…')).toBeTruthy();
-    expect(screen.getByText('Read only')).toBeTruthy();
+    expect(
+      screen.getByRole('heading', { name: 'Scheduled tasks' }),
+    ).toBeTruthy();
+    expect(screen.getByText('Automation')).toBeTruthy();
     expect(screen.queryByText('Create')).toBeNull();
+    expect(screen.queryByText('Read only')).toBeNull();
+    expect(screen.queryByText('Read-only code-defined schedules.')).toBeNull();
 
     resolveRequest?.({ data: [] });
     expect(
@@ -234,26 +247,51 @@ describe('SchedulesPage', () => {
     renderList();
     expect(await screen.findByText('在上午 02:00')).toBeTruthy();
     expect(screen.getByRole('heading', { name: '定时任务' })).toBeTruthy();
-    expect(screen.getByText('只读')).toBeTruthy();
+    expect(screen.getByText('自动化')).toBeTruthy();
+    expect(screen.queryByText('只读')).toBeNull();
     expect(screen.queryByText('0 0 2 * * *')).toBeNull();
   });
 
-  it('shows summaries and filters schedules by text, status, and target', async () => {
+  it('filters schedules by text, status, and target', async () => {
     mocks.request.mockResolvedValueOnce({ data: schedules });
     renderList();
 
     await screen.findByText('Daily customer sync');
+    // The next trigger shows a local absolute time and no timezone label.
     expect(
       screen.getByText(
-        localDateTimeFormatter.format(new Date('2026-09-01T02:00:00.000Z')),
+        localDateTimeFormatter.format(new Date('2026-09-02T02:00:00.000Z')),
       ),
     ).toBeTruthy();
+    expect(
+      screen.queryByText(
+        timeZoneLabelledFormatter.format(new Date('2026-09-02T02:00:00.000Z')),
+      ),
+    ).toBeNull();
+    // The last trigger is relative only, so its exact instant is not rendered.
+    expect(
+      screen.queryByText(
+        localDateTimeFormatter.format(new Date('2026-09-01T02:00:00.000Z')),
+      ),
+    ).toBeNull();
     expect(screen.queryByText('2026-09-01T02:00:00.000Z')).toBeNull();
-    const summaries = screen.getAllByText('6');
-    expect(summaries).toHaveLength(1);
-    expect(screen.getByText('Active schedules')).toBeTruthy();
+    expect(screen.queryByText('2026-09-02T02:00:00.000Z')).toBeNull();
+    // The list intentionally has no aggregate statistics panel.
+    expect(screen.queryByText('Triggers')).toBeNull();
+    expect(screen.queryByText('Completed')).toBeNull();
     expect(screen.getByText('At 02:00 AM')).toBeTruthy();
     expect(screen.queryByText('0 0 2 * * *')).toBeNull();
+
+    // A row names its execution target by kind, and carries no description.
+    const syncRow = screen.getByText('Daily customer sync').closest('tr');
+    expect(syncRow).not.toBeNull();
+    expect(within(syncRow!).getByText('Workflow')).toBeTruthy();
+    expect(within(syncRow!).queryByText('Customer sync')).toBeNull();
+    const cleanupRow = screen.getByText('Archive cleanup').closest('tr');
+    expect(cleanupRow).not.toBeNull();
+    expect(within(cleanupRow!).getByText('Job')).toBeTruthy();
+    expect(within(cleanupRow!).queryByText('Cleanup job')).toBeNull();
+    expect(screen.queryByText('Synchronize active customers')).toBeNull();
 
     fireEvent.change(
       screen.getByRole('searchbox', { name: 'Search schedules' }),
@@ -303,6 +341,142 @@ describe('SchedulesPage', () => {
     expect(mocks.request).toHaveBeenCalledTimes(1);
   });
 
+  it('paginates the list once it outgrows one page', async () => {
+    const many = Array.from({ length: 12 }, (_, index) => ({
+      ...schedules[0],
+      id: `schedule-${index + 1}`,
+      title: `Task ${index + 1}`,
+    }));
+    mocks.request.mockResolvedValueOnce({ data: many });
+    renderList();
+
+    await screen.findByText('Task 1');
+    expect(screen.getByText('Page 1 of 2')).toBeTruthy();
+    expect(screen.getByText('Task 10')).toBeTruthy();
+    expect(screen.queryByText('Task 11')).toBeNull();
+    expect(
+      (screen.getByRole('button', { name: 'Previous' }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(await screen.findByText('Task 11')).toBeTruthy();
+    expect(screen.getByText('Task 12')).toBeTruthy();
+    expect(screen.queryByText('Task 1')).toBeNull();
+    expect(
+      (screen.getByRole('button', { name: 'Next' }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+
+    // Narrowing the list starts again from the first page, and the pager
+    // disappears once everything fits on one.
+    fireEvent.change(screen.getByRole('searchbox'), {
+      target: { value: 'Task 1' },
+    });
+    expect(screen.getByText('Task 1')).toBeTruthy();
+    expect(screen.getByText('Task 11')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Next' })).toBeNull();
+  });
+
+  it('hides the pager while the list fits on one page', async () => {
+    mocks.request.mockResolvedValueOnce({ data: schedules });
+    renderList();
+
+    await screen.findByText('Daily customer sync');
+    expect(screen.queryByRole('button', { name: 'Next' })).toBeNull();
+    expect(screen.queryByText('Page 1 of 1')).toBeNull();
+  });
+
+  it('merges trigger count and last trigger into one relative column', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date('2026-09-02T12:00:00.000Z'));
+    mocks.request.mockResolvedValueOnce({ data: schedules });
+    renderList();
+
+    await screen.findByText('Daily customer sync');
+    expect(
+      screen.getAllByRole('columnheader').map((cell) => cell.textContent),
+    ).toEqual([
+      'Name',
+      'Target',
+      'Schedule / timezone',
+      'Triggered',
+      'Next trigger',
+    ]);
+
+    const row = screen.getByText('Daily customer sync').closest('tr');
+    expect(row).not.toBeNull();
+    const triggered = within(row!).getAllByRole('cell')[3];
+    expect(triggered?.textContent).toContain('4');
+    expect(triggered?.textContent).toContain(
+      formatClientRelativeTime(
+        '2026-09-01T02:00:00.000Z',
+        new Date('2026-09-02T12:00:00.000Z'),
+      )!,
+    );
+    // A schedule that has never triggered still occupies the same cell shape.
+    const never = screen.getByText('Archive cleanup').closest('tr');
+    expect(within(never!).getAllByRole('cell')[3]?.textContent).toContain('—');
+  });
+
+  it('carries the status with the task name instead of its own column', async () => {
+    mocks.request.mockResolvedValueOnce({ data: schedules });
+    renderList();
+
+    await screen.findByText('Daily customer sync');
+    const syncRow = screen.getByText('Daily customer sync').closest('tr');
+    expect(syncRow).not.toBeNull();
+    const [name, ...rest] = within(syncRow!).getAllByRole('cell');
+    const link = within(name!).getByRole('link', {
+      name: 'Daily customer sync',
+    });
+    // The status is the name cell's second line, in a block of its own after
+    // the title link, so clicking the badge still follows the title's link.
+    const badge = within(name!).getAllByText('Active');
+    expect(badge).toHaveLength(1);
+    expect(within(link).queryByText('Active')).toBeNull();
+    expect(badge[0]?.parentElement?.previousElementSibling).toBe(link);
+    // The status no longer occupies a trailing column of its own.
+    expect(rest).toHaveLength(4);
+    expect(rest.at(-1)?.textContent).not.toContain('Active');
+
+    // A paused schedule reports that state in the same cell.
+    const cleanupRow = screen.getByText('Archive cleanup').closest('tr');
+    const cleanupName = within(cleanupRow!).getAllByRole('cell')[0];
+    expect(
+      within(cleanupName!).getByRole('link', { name: 'Archive cleanup' }),
+    ).toBeTruthy();
+    expect(within(cleanupName!).getByText('Paused')).toBeTruthy();
+  });
+
+  it('navigates to the detail page from anywhere on the row', async () => {
+    mocks.request.mockImplementation(({ path }: { path: string }) =>
+      Promise.resolve({ data: path === 'schedules' ? schedules : [] }),
+    );
+    render(
+      <MemoryRouter initialEntries={['/settings/automation/schedules']}>
+        <Routes>
+          <Route
+            element={<SchedulesPage />}
+            path='/settings/automation/schedules'
+          />
+          <Route
+            element={<ScheduleDetailPage />}
+            path='/settings/automation/schedules/:scheduleId'
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const row = (await screen.findByText('Daily customer sync')).closest('tr');
+    expect(row).not.toBeNull();
+    expect(row?.className).toContain('cursor-pointer');
+    fireEvent.click(within(row!).getAllByRole('cell')[1]!);
+    expect(
+      await screen.findByRole('link', { name: 'Back to scheduled tasks' }),
+    ).toBeTruthy();
+  });
+
   it('renders the read-only overview on the dedicated detail route', async () => {
     mocks.request.mockImplementation(({ path }: { path: string }) =>
       Promise.resolve({ data: path === 'schedules' ? schedules : [] }),
@@ -331,12 +505,10 @@ describe('SchedulesPage', () => {
         .getAttribute('href'),
     ).toBe('/settings/automation/schedules');
 
-    fireEvent.click(screen.getByRole('tab', { name: /Triggers/ }));
     expect(await screen.findByText('No triggers have started.')).toBeTruthy();
+    expect(screen.queryByRole('tab')).toBeNull();
     expect(
-      screen.getByText(
-        'Triggered means the target accepted the request; it does not mean downstream work completed.',
-      ),
+      screen.getByRole('heading', { name: 'Execution records' }),
     ).toBeTruthy();
 
     for (const action of [
@@ -360,8 +532,6 @@ describe('SchedulesPage', () => {
             : [
                 {
                   id: 'occurrence-1',
-                  scheduledFor: '2026-09-01T02:00:00.000Z',
-                  runNumber: 4,
                   status: 'triggered',
                   reason: 'accepted',
                   executionCount: 1,
@@ -375,7 +545,6 @@ describe('SchedulesPage', () => {
     renderDetail();
 
     await screen.findByRole('heading', { name: 'Daily customer sync' });
-    fireEvent.click(screen.getByRole('tab', { name: /Triggers/ }));
     const status = await screen.findByText('Triggered');
     const trigger = within(status.closest('tr')!);
     expect(trigger.getByText('accepted')).toBeTruthy();
