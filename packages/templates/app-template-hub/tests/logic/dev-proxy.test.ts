@@ -1,6 +1,6 @@
 // @vitest-environment node
 
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import http, { type IncomingMessage } from 'node:http';
 import net, { type Socket } from 'node:net';
@@ -82,6 +82,20 @@ describe('remote development proxy', () => {
   it('does not configure a proxy without a target', () => {
     expect(createDevProxy('/main', undefined)).toBeUndefined();
     expect(createDevProxy('/main/', '   ')).toBeUndefined();
+  });
+
+  it('isolates simultaneous proxies on operating-system-assigned ports', async () => {
+    const backend = await startBackend();
+    const urls = await Promise.all([
+      startVite(createDevProxy('/main', backend.url)),
+      startVite(createDevProxy('/main', backend.url)),
+    ]);
+
+    expect(new Set(urls).size).toBe(2);
+    for (const url of urls) {
+      const response = await fetch(`${url}/main/api/healthz`);
+      expect(await response.json()).toMatchObject({ url: '/api/healthz' });
+    }
   });
 
   it('forwards API traffic to a different remote app base', async () => {
@@ -249,28 +263,22 @@ async function startBackend(): Promise<TestBackend> {
 async function startVite(proxy: DevProxy): Promise<string> {
   const server = await createViteServer({
     appType: 'custom',
-    cacheDir: path.join(
-      tmpdir(),
-      `nocobase-dev-proxy-test-${process.pid}-${viteServers.length}`,
-    ),
+    cacheDir: path.join(tmpdir(), `nocobase-dev-proxy-test-${randomUUID()}`),
     configFile: false,
     logLevel: 'silent',
     optimizeDeps: { include: [], noDiscovery: true },
     server: {
       host: '127.0.0.1',
-      port: 0,
       proxy,
-      strictPort: true,
     },
   });
   viteServers.push(server);
-  await server.listen();
-
-  const address = server.httpServer?.address();
-  if (!address || typeof address === 'string') {
-    throw new Error('Unable to resolve the Vite test port.');
+  if (!server.httpServer) {
+    throw new Error('Expected a standalone Vite HTTP server.');
   }
-  return `http://127.0.0.1:${address.port}`;
+  // Vite 6's listen() replaces port 0 with 5173. Bind the underlying HTTP
+  // server directly so the OS allocates an independent port for each test.
+  return listen(server.httpServer);
 }
 
 async function listen(server: http.Server): Promise<string> {
