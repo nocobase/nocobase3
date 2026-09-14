@@ -161,27 +161,12 @@ describe('authentication provider', () => {
   });
 
   it('names cookies after the port when the app knows no public origin', async () => {
-    const container = new ServiceContainer();
-    container.instance(databaseManagerToken, {
-      connection: vi.fn(() => ({ kind: 'connection' })),
-    } as unknown as DatabaseManager);
-    container.instance(cachingToken, {
-      getCache: vi.fn(() => ({
-        get: vi.fn(),
-        set: vi.fn(),
-        delete: vi.fn(),
-        take: vi.fn(),
-      })),
-      getCounter: vi.fn(() => ({ increment: vi.fn() })),
-    } as unknown as Caching);
-    container.instance(idGeneratorToken, {
-      generate: vi.fn(() => 1),
-      generateString: vi.fn(() => 'generated-id'),
-    });
+    const container = createDependencies();
     createAuthentication.mockClear();
 
     new AuthenticationProvider({
       appName: 'main app',
+      mode: 'standalone',
       publicBasePath: '/main',
       config: await createConfig({
         server: { host: '127.0.0.1', port: 13001, startLog: true },
@@ -198,7 +183,57 @@ describe('authentication provider', () => {
       }),
     );
   });
+
+  it('ignores the port an embedded app does not own', async () => {
+    // An embedded app is merged the same template defaults as a standalone
+    // one, so it carries `server.port` without owning the port: the host does.
+    // Its name already comes from its own base path, so the bare name is
+    // distinct, and appending a port it is not reached on would only
+    // invalidate the sessions it already holds.
+    const container = createDependencies();
+    createAuthentication.mockClear();
+
+    new AuthenticationProvider({
+      appName: 'main app',
+      mode: 'embedded',
+      publicBasePath: '/main',
+      config: await createConfig({
+        server: { host: '127.0.0.1', port: 13000, startLog: true },
+      }),
+      container,
+      paths: createConfigPaths({ rootDir: '/test/app' }),
+      router: new Hono(),
+    }).register();
+    container.resolve(authenticationToken);
+
+    expect(createAuthentication).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        advanced: expect.objectContaining({ cookiePrefix: 'main-app' }),
+      }),
+    );
+  });
 });
+
+function createDependencies(): ServiceContainer {
+  const container = new ServiceContainer();
+  container.instance(databaseManagerToken, {
+    connection: vi.fn(() => ({ kind: 'connection' })),
+  } as unknown as DatabaseManager);
+  container.instance(cachingToken, {
+    getCache: vi.fn(() => ({
+      get: vi.fn(),
+      set: vi.fn(),
+      delete: vi.fn(),
+      take: vi.fn(),
+    })),
+    getCounter: vi.fn(() => ({ increment: vi.fn() })),
+  } as unknown as Caching);
+  container.instance(idGeneratorToken, {
+    generate: vi.fn(() => 1),
+    generateString: vi.fn(() => 'generated-id'),
+  });
+  return container;
+}
 
 interface ConfigOverrides {
   readonly publicOrigin?: string;

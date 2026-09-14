@@ -109,7 +109,14 @@ export class AuthenticationProvider<
       advanced: {
         cookiePrefix: createCookiePrefix(app.name, {
           publicOrigin: app.publicOrigin,
-          listenPort: this.app.config.get<NodeServerConfig>('server')?.port,
+          // Only a standalone app owns its port. An embedded app carries a
+          // `server` config all the same, because the template's defaults are
+          // merged in both modes, but there the port belongs to the host and
+          // says nothing about which app a cookie belongs to.
+          listenPort:
+            this.app.mode === 'standalone'
+              ? this.app.config.get<NodeServerConfig>('server')?.port
+              : undefined,
         }),
         ...authConfig.advanced,
         database: {
@@ -146,7 +153,8 @@ export interface CookiePrefixOptions {
  * the only thing left to separate them, and the app name alone does not:
  * every standalone app defaults to `main`. Appending the port the app is
  * reached on restores the distinction, and is stable for as long as the app
- * stays where it is.
+ * stays where it is. An app that owns no port of its own passes none, and
+ * keeps the bare name.
  */
 export function createCookiePrefix(
   appName: string,
@@ -168,11 +176,13 @@ export function createCookiePrefix(
  * A configured `publicOrigin` is what browsers actually see, so it wins over
  * the listen port a reverse proxy hides. It deliberately yields nothing when
  * it carries no explicit port: a production `https://example.com` keeps the
- * bare app name, so deployments that already have sessions keep them. The
- * listen port is the fallback for development, where `publicOrigin` is
- * usually unset and the port is the only thing telling two apps apart. An
- * embedded app has neither — the host owns the port, and the apps are already
- * separated by the cookie path their base paths give them.
+ * bare app name, so deployments that already have sessions keep them.
+ *
+ * The listen port is the fallback for development, where `publicOrigin` is
+ * usually unset and the port is the only thing telling two apps apart. The
+ * caller passes it only for a standalone app, which is the one case where the
+ * app owns the port it is reached on; embedded apps take their names from
+ * their base paths and are already distinct without it.
  */
 function resolveCookieScopePort(
   options: CookiePrefixOptions,
