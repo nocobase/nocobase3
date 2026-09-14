@@ -7,7 +7,7 @@ description: 按阶段拆分的实施任务，含前置决策、技术验证、�
 
 > 文档状态：本页保留设计与实现演进记录，不作为当前用法契约。Repository 已提供[正式使用文档](../../repository/overview.md)和 [API 参考](../../reference/repository-api.md)；本页中的候选项及旧限制需以正式文档、公开类型和实际测试核对。
 
-> **状态：阶段 1 至阶段 3 已实现**，见 `db/src/repository/policy/`、`db-testkit/tests/integration/repository/policy/` 与 [实施清单](./policies-roadmap.md) 的逐项进度。本组文档仍在 `proposals/` 下：转为正式文档并入 `docs/zh-CN/repository/` 与消费方迁移一并进行，在那之前 [Write policy](../../repository/write-policy.md) 描述的方法级 `writePolicy` 仍然有效，两者并存。
+> **状态：阶段 1 至阶段 3 已实现，HTTP 侧的迁移已完成。** 见 `db/src/repository/policy/`、`db-testkit/tests/integration/repository/policy/` 与下方的逐项进度。`defineRepositoryApiRoutes()` 不再接受 `writePolicy`；[Write policy](../../repository/write-policy.md) 描述的方法级选项仍然有效，用于内部调用的单次收窄。本组文档仍在 `proposals/` 下，转正另行安排。
 
 配套 [Policy 设计](./policies.md)。每个阶段独立可交付，阶段 1 完成即可用于生产的多租户隔离。
 
@@ -17,13 +17,13 @@ description: 按阶段拆分的实施任务，含前置决策、技术验证、�
 
 ### 五个设计决策
 
-| #       | 决策                                                                                                                                                                                                    | 影响                                |
-| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
-| ~~0.1~~ | ~~Scope 是否复用 `RepositoryFilter` 语法~~ **已定**：复用简写、AST 与 Builder 回调三种形式，回调在绑定期物化成 AST；排除关系路径、关系量词与 JSON 系列操作符。见 [Policy 参考](./policies-reference.md) | —                                   |
-| 0.2     | `fields` 是否也必填                                                                                                                                                                                     | 只影响类型，但改起来是全量 breaking |
-| 0.3     | 现有 `writePolicy` 的 callback builder 是否移除                                                                                                                                                         | 决定迁移面是 41 个文件还是更多      |
-| 0.4     | `requireScope` 落在 Collection metadata 还是 Connection 配置                                                                                                                                            | 影响阶段 4，但接口要在阶段 1 预留   |
-| ~~0.5~~ | ~~`origin` 标记是否进入公开的 `FilterAst`~~ **已定**：不进公开类型。标记只在 `@nocobase/db` 内部携带，`@nocobase/repository-input` 的 `FilterAst` 不变，零 breaking                                     | —                                   |
+| #       | 决策                                                                                                                                                                                                                                  | 影响                                |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| ~~0.1~~ | ~~Scope 是否复用 `RepositoryFilter` 语法~~ **已定**：复用简写、AST 与 Builder 回调三种形式，回调在绑定期物化成 AST；排除关系路径、关系量词与 JSON 系列操作符。见 [Policy 参考](./policies-reference.md)                               | —                                   |
+| 0.2     | `fields` 是否也必填                                                                                                                                                                                                                   | 只影响类型，但改起来是全量 breaking |
+| ~~0.3~~ | ~~现有 `writePolicy` 的 callback builder 是否移除~~ **已定**：Policy 补一套自己的 builder（`buildRepositoryPolicy`），旧 builder 随方法级 `writePolicy` 一起保留。没有 builder 的话，七种关系操作全开的声明改成对象字面量会长到没法读 | —                                   |
+| 0.4     | `requireScope` 落在 Collection metadata 还是 Connection 配置                                                                                                                                                                          | 影响阶段 4，但接口要在阶段 1 预留   |
+| ~~0.5~~ | ~~`origin` 标记是否进入公开的 `FilterAst`~~ **已定**：不进公开类型。标记只在 `@nocobase/db` 内部携带，`@nocobase/repository-input` 的 `FilterAst` 不变，零 breaking                                                                   | —                                   |
 
 ### 两个技术验证（spike，各半天）
 
@@ -200,7 +200,7 @@ SQLite、PostgreSQL、MySQL、Kingbase 可并发；OceanBase、Oracle、MSSQL、
 - 3.4 HTTP：`RepositoryApiActions` 的读写 action 统一加 `policy` 位
 - 3.5 HTTP：请求体出现 `policy` / `scope` 一律 400
 
-**「缺省拒绝」推迟到迁移一并处理。** `policy` 位已加在全部九个 action 上，声明则绑定、未声明则不绑定。现在就把缺省翻成拒绝，会让所有既有路由声明（`findMany: {}` 这类）当场失效，波及 `app-plugin-repository-example`、`app-plugin-file-example` 与两个模板；设计文档说的是与 `writePolicy` 在 HTTP 层的默认一致，而那条默认是随 `writePolicy` 本身一起引入的。翻转放在迁移那一步，与消费方改造同一个改动里做。
+**「缺省拒绝」已随迁移落地。** `policy` 位最初加在九个 action 上、声明则绑定，迁移时上移到 exposure 并改为必填：一个 exposure 只有一份 Policy，管它全部的 action。同一个改动里删掉了路由层的 `writePolicy`，并补上 `principal`——没有它，Policy 只能表达常量 scope，多租户和「只看自己的」写不出来，新的位置不过是更啰嗦的 `writePolicy`。
 
 3.5 **不需要新代码**：`readInput` 早已按 `allowedOptions[action]` 逐键白名单校验请求体，`policy` 和 `scope` 都不在任何 action 的列表里，因此一律 400 `UNSUPPORTED_REPOSITORY_OPTION`。已补测试把这条钉住，免得日后有人放宽白名单时无声打开这个口子。
 
@@ -228,31 +228,29 @@ SQLite、PostgreSQL、MySQL、Kingbase 可并发；OceanBase、Oracle、MSSQL、
 | 阶段 0 决策与 spike  | 已完成 | 0.1 / 0.5 / 0.6 已定，另补记 0.8 / 0.9；0.7 因改为 SQL 重判而不再适用           |
 | 阶段 1 行范围        | 已完成 | 1.4 改为 SQL 重判，1.5 改为结构性区分来源，1.8 未命中沿用既有错误码；其余按设计 |
 | 阶段 2 读取形状      | 已完成 | 2.1–2.8 全部落地，含 `ref()` 展开与外键对称                                     |
-| 阶段 3 绑定层与 HTTP | 已完成 | 3.1–3.6 落地；HTTP 的「缺省拒绝」推迟到迁移，理由见 3.4                         |
+| 阶段 3 绑定层与 HTTP | 已完成 | 3.1–3.6 落地；HTTP 的「缺省拒绝」随迁移落地，`policy` 位上移到 exposure         |
 | 阶段 4 加固          | 未开始 | `requireScope`、`read.scope` 的关系路径、可序列化模板三项互相独立，按需排期     |
-| 迁移                 | 未开始 | 见下节                                                                          |
+| 迁移                 | 已完成 | HTTP 侧的 `writePolicy` 已删除；方法级选项保留，见下节                          |
 
-## 迁移：替换现有 writePolicy
+## 迁移：替换 HTTP 层的 writePolicy
 
-当前有 **41 个文件**引用 `writePolicy`，分四类：
+**已完成。** `defineRepositoryApiRoutes()` 的 action 配置不再有 `writePolicy`，每个 exposure 必须声明一份 Policy。落地时定下的四条，理由都记在这里，因为它们不是设计文档推导得出的：
 
-| 类别   | 位置                                                                                                                     | 处理                 |
-| ------ | ------------------------------------------------------------------------------------------------------------------------ | -------------------- |
-| 实现   | `db/src/repository/write-policy.ts`、`write-policy-check.ts`、`repository.ts`、`types.ts`                                | 并入新的 policy 模块 |
-| 消费方 | `app-server/src/router/repository-routes.ts`、`app-plugin-file-example`、`app-plugin-repository-example`                 | 改写为新形态         |
-| 测试   | `app-server/tests/`、`db-testkit/tests/integration/repository/relations/write-policy.test.ts`、`api-client/tests/types/` | 重写                 |
-| 文档   | `db/docs/zh-CN/repository/` 下约 12 篇 + 三个包的 README / SKILL.md                                                      | 更新                 |
+| 决策                                    | 理由                                                                                                                                                                                                              |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `policy` 在 exposure 上，不在 action 上 | 四个节点必填，放在 action 上意味着一个 collection 写九份可能互相矛盾的策略；更糟的是 `read` 节点同时管写方法的 returning select，`createOne` 上写 `read: false` 会让整个 create 403                               |
+| 必填，缺省即拒绝                        | `writePolicy` 缺省是 `false`，而不绑定 Policy 等于不限制。可选的话，删掉 `writePolicy` 会把每一处既有声明从「拒绝一切写入」静默翻成「放行一切」                                                                   |
+| 一并做 `principal`                      | 静态策略只能表达常量 scope。Policy 存在的理由就是多租户和数据归属，没有 principal 这个位置只是更啰嗦的 `writePolicy`                                                                                              |
+| `ref()` 在这条路径上定义期拒绝          | 引用靠 `withPolicies` 那张 map 展开，而这里每个 exposure 绑一份；工厂策略下那张 map 只在请求期存在，展开就得把每个 exposure 的工厂在每个请求上都跑一遍。未展开的 ref 今天的表现是运行时 403，定义期报错已经是改善 |
 
-**当前状态：尚未开始，两套语义暂时并存。** 这与下面第一条要点相反，是一个有意识的推迟而不是遗漏：Policy 的实现已经全部落地并通过跨方言契约测试，但拆掉 `writePolicy` 要同时改四类消费方，而在那之前把它删掉会让所有既有路由声明与插件当场失效。方法级 `writePolicy` 目前作为单次调用的额外收窄保留（设计文档本来也是这么说的），`toWritePolicy` 桥接同样保留（决策 0.9）。需要注意的是，并存期正是设计文档警告的那种形态，所以这一步不宜久拖。
+同一个改动里顺手修掉的两处：
 
-`db-testkit/tests/integration/repository/relations/write-policy.test.ts` 暂不重写：它测的 API 还活着。新的 Policy 契约测试放在 `db-testkit/tests/integration/repository/policy/` 与之并列，迁移时再合并。
+- **`create`/`update` 为 `false` 时的拒绝时机。** 原先 `resolveWriteShapeNode` 在 payload 规范化之后才跑，所以 `update: false` 加上 `values: {}` 报的是 400 `INVALID_MUTATION` 而不是 403。现在四个写方法都在读 payload 之前先判一次——调用方不该从一个它无权执行的写里学到 payload 的形状。
+- **`create.relations` 里的无效操作。** 根级 create 在执行期只接受 `connect` 和 `create`，所以策略里给 `update`/`upsert`/`delete` 是永远用不上的配置。这条检查原来只在 HTTP 层（`assertCreateAllowance`），现在进了 `normalizeRepositoryPolicy`，对所有消费方生效。
 
-要点：
+**方法级 `writePolicy` 保留**，作为内部调用的单次额外收窄（设计文档本来也是这么说的），`toWritePolicy` 桥接同样保留（决策 0.9）。`db-testkit` 的 `relations/write-policy.test.ts` 测的仍是活着的 API，不重写。
 
-- **不保留兼容层。** 保留等于两套语义并存，而 policy 的错误方向是「看起来配过了」，两套并存正好制造这种形态。
-- `db-testkit` 的 `write-policy.test.ts` 是跨方言契约测试，它的重写决定了八个 dialect 包的验收，要排在消费方改造之前。
-- 阶段 2 结束后，`policies.md`、`policies-examples.md`、`policies-reference.md`、`policies-internals.md` 四篇转为正式文档移入 `docs/zh-CN/repository/`，`proposals/` 只留一条指向新位置的记录；本篇（实施清单）不转正，随实施完成归档。
-- 每个受影响的发布包都需要 changeset；`db`、`repository-input`、`app-server` 与两个 example 插件都在其中。
+`buildRepositoryPolicy` 是这次补的（决策 0.3）：`writePolicy` 的 callback builder 在 Policy 里没有等价物，而 `app-plugin-repository-example` 那份七种关系操作全开的声明改成对象字面量会长到没法读。未提及的节点等于 `false`，所以「四节点必填」不会变成每个 exposure 都要手写 `delete: false`。代价是字面量类型没了，`withPolicy` 的返回类型一律降级成 `Partial`。
 
 ## 关键路径
 

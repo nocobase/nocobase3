@@ -45,13 +45,15 @@ The plugin owns its migrations, components, routes and locale strings. An applic
 Verify migration success, authenticated navigation, a customer/product/order/item lifecycle, relation details, and conflict handling. The plugin's `check` runs lint, formatting, typecheck, real database/HTTP/page tests and build. The README documents the complete API and schema.
 
 Repository route actions use configuration objects (`findMany: { maxLimit: 100 }`,
-`findOne: {}`). API create/update writes default to `writePolicy: false`. Each server
-endpoint declares its own field and relation-operation allowlist, using objects or
-synchronous callback builders. Nested task create/update/upsert branches have separate
-field rules; task creation explicitly permits `assignee.connect`. Many-to-many tag
-operations permit only the `role` through field. Prefer relation `connect` when the
-endpoint exposes it; direct foreign-key fields are not implicitly writable. Keep
-policies on the server and never include them in client request options. New demos
-need an explicit server policy and route tests. Authentication guards every endpoint.
-Internal `db.repository` calls default to `writePolicy: true`, so custom HTTP handlers
-must pass a server-owned policy themselves.
+`findOne: {}`) and say only which endpoints exist. What they may do is the
+exposure's `policy`, which is required: a Repository Policy with `read`,
+`create`, `update` and `delete`, written out or built with
+`buildRepositoryPolicy`, where a node never mentioned is denied. Nested task
+create/update/upsert branches have separate field rules; task creation
+explicitly permits `assignee.connect`. Many-to-many tag operations permit only
+the `role` through field. Prefer relation `connect` when the Policy grants it;
+direct foreign-key fields are not implicitly writable. Keep Policies on the
+server and never include them in client request options — a request carrying
+`policy` or `scope` is rejected. New demos need their own Policy and route
+tests. Authentication guards every endpoint. Internal `db.repository` calls bind
+no Policy, so a custom HTTP handler is responsible for its own.

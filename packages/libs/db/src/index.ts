@@ -314,6 +314,20 @@ export type {
   RepositoryErrorOptions,
 } from './repository/errors.js';
 
+export { buildRepositoryPolicy } from './repository/policy/build.js';
+export type {
+  CreatePolicyNodeBuilder,
+  DeletePolicyNodeBuilder,
+  ReadPolicyNodeBuilder,
+  RelationCreateShapePolicyBuilder,
+  RelationPolicyNodeBuilder,
+  RelationShapePolicyBuilder,
+  RelationUpsertPolicyBuilder,
+  RepositoryPolicyBuilder,
+  ThroughFieldsPolicyBuilder,
+  ThroughPolicyBuilder,
+  WritePolicyNodeBuilder,
+} from './repository/policy/build.js';
 export { normalizeRepositoryPolicy } from './repository/policy/normalize.js';
 export { narrowRepositoryPolicy } from './repository/policy/narrow.js';
 export { expandPolicyRefs, ref } from './repository/policy/refs.js';

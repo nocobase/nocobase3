@@ -9,7 +9,7 @@ description: 十分钟给 Repository 配上行范围与字段白名单：绑定 
 
 Policy 把两个问题一起回答，并且绑在实例上而不是逐次调用传入。
 
-> 两者目前并存。`writePolicy` 作为**单次调用的额外收窄**仍然有效，见 [Write policy](./write-policy.md)。设计与取舍记在 [Policy 设计](../proposals/repository/policies.md)。
+> HTTP 路由这一侧已经完成迁移：`defineRepositoryApiRoutes()` 的每个 exposure 必须声明 `policy`，action 配置里不再有 `writePolicy`。方法级 `writePolicy` 作为**内部调用的单次额外收窄**仍然有效，见 [Write policy](./write-policy.md)。设计与取舍记在 [Policy 设计](../proposals/repository/policies.md)。
 
 ## 1. 绑一个 Policy
 
@@ -220,7 +220,7 @@ projects.explainPolicy();
 
 ## 8. HTTP
 
-在 action 上声明，请求体里传不进来：
+在 exposure 上声明，必填，管这个 exposure 的全部 action；请求体里传不进来：
 
 ```ts
 defineRepositoryApiRoutes({
@@ -228,19 +228,58 @@ defineRepositoryApiRoutes({
     {
       name: 'projects',
       collection: 'projects',
-      actions: {
-        findMany: { policy: projectPolicy },
-        updateOne: {
-          policy: projectPolicy,
-          writePolicy: { fields: ['title'] },
-        },
-      },
+      policy: projectPolicy,
+      actions: { findMany: {}, createOne: {}, updateOne: {} },
     },
   ],
 });
 ```
 
-Policy 在**定义路由时**规范化，配错了当场报错而不是等到某个请求打进来。请求体里出现 `policy` 或 `scope` 一律 400 `UNSUPPORTED_REPOSITORY_OPTION`。
+要按调用方收窄，把 `policy` 写成一个吃 principal 的函数，并给出解析器：
+
+```ts
+defineRepositoryApiRoutes<Session>({
+  principal: (context) => context.get('auth'),
+  repositories: [
+    {
+      name: 'projects',
+      policy: (session) => ({
+        read: { scope: { ownerId: session.userId }, fields: ['id', 'title'] },
+        create: {
+          scope: { ownerId: session.userId },
+          defaults: { ownerId: session.userId },
+          fields: ['title'],
+        },
+        update: { scope: { ownerId: session.userId }, fields: ['title'] },
+        delete: false,
+      }),
+      actions: { findMany: {}, createOne: {}, updateOne: {} },
+    },
+  ],
+});
+```
+
+解析器是应用自己的——这组路由不做认证，也不知道请求怎么携带身份。它每个请求跑一次，返回 `undefined` 或 `null` 时请求直接 403 `PRINCIPAL_REQUIRED`，而不是拿一个不存在的 principal 去构造 Policy。声明了函数却没给解析器，定义路由时就报错。
+
+两种写法的检查时机不同：固定 Policy 在**定义路由时**规范化，配错了当场报错；函数做不到，它每个请求才求值，校验也跟着推迟到第一个打进来的请求。那种失败是 `INVALID_POLICY`，交给宿主错误处理器按服务端错误返回，而不是 400——Policy 是服务端拥有的，配错了不是调用方的问题。
+
+请求体里出现 `policy` 或 `scope` 一律 400 `UNSUPPORTED_REPOSITORY_OPTION`。`ref()` 在这条路径上定义期就被拒绝：引用要靠 `withPolicies` 的那张 map 展开，而这里是每个 exposure 绑一份。
+
+写起来啰嗦的话用 `buildRepositoryPolicy`，没提到的节点就是 `false`：
+
+```ts
+import { buildRepositoryPolicy } from '@nocobase/db';
+
+const projectPolicy = buildRepositoryPolicy(
+  (policy) =>
+    policy
+      .read((read) => read.scope({ tenantId: 'T1' }).fields('id', 'title'))
+      .update((update) => update.scope({ tenantId: 'T1' }).fields('title')),
+  // create 和 delete 没提到，等于 false
+);
+```
+
+代价是字面量类型没了，`withPolicy` 的返回类型一律降级成 `Partial<TRecord>`。要那份精度就把对象写出来。
 
 ## 四个容易踩的坑
 

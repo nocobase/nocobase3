@@ -637,6 +637,11 @@ export class DefaultRepository<
       policyInput === true ? true : normalizeWritePolicy(policyInput, 'create');
     const collection = await this.collection();
     assertWritableCollection(collection);
+    // Before the payload is looked at: a Policy that forbids this operation
+    // refuses the call outright, so an empty or malformed body is reported as
+    // forbidden rather than as invalid input. The caller learns nothing about
+    // the shape of a write they may not perform.
+    resolveWriteShapeNode(this.options.policy, 'create', collection);
     await validateWritePolicyMetadata(
       this.options.collections,
       collection,
@@ -723,6 +728,11 @@ export class DefaultRepository<
       policyInput === true ? true : normalizeFieldWritePolicy(policyInput);
     const collection = await this.collection();
     assertWritableCollection(collection);
+    // Before the payload is looked at: a Policy that forbids this operation
+    // refuses the call outright, so an empty or malformed body is reported as
+    // forbidden rather than as invalid input. The caller learns nothing about
+    // the shape of a write they may not perform.
+    resolveWriteShapeNode(this.options.policy, 'create', collection);
     if (writePolicy !== true)
       validatePolicyFields(collection, writePolicy, ['writePolicy']);
     const input = evaluateValues(options.values);
@@ -802,6 +812,11 @@ export class DefaultRepository<
       policyInput === true ? true : normalizeWritePolicy(policyInput, 'update');
     const collection = await this.collection();
     assertWritableCollection(collection);
+    // Before the payload is looked at: a Policy that forbids this operation
+    // refuses the call outright, so an empty or malformed body is reported as
+    // forbidden rather than as invalid input. The caller learns nothing about
+    // the shape of a write they may not perform.
+    resolveWriteShapeNode(this.options.policy, 'update', collection);
     await validateWritePolicyMetadata(
       this.options.collections,
       collection,
@@ -1050,6 +1065,11 @@ export class DefaultRepository<
       policyInput === true ? true : normalizeFieldWritePolicy(policyInput);
     const collection = await this.collection();
     assertWritableCollection(collection);
+    // Before the payload is looked at: a Policy that forbids this operation
+    // refuses the call outright, so an empty or malformed body is reported as
+    // forbidden rather than as invalid input. The caller learns nothing about
+    // the shape of a write they may not perform.
+    resolveWriteShapeNode(this.options.policy, 'update', collection);
     if (writePolicy !== true)
       validatePolicyFields(collection, writePolicy, ['writePolicy']);
     const filter = await this.normalizeMutationFilter(

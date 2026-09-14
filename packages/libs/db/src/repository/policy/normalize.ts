@@ -261,6 +261,7 @@ function normalizeRelationShape(
   path: PolicyPath,
   ancestors: Set<object>,
   allowThrough: boolean,
+  createOnly: boolean = false,
 ): NormalizedRelationShapeNode {
   assertObject(value, path);
   if (ancestors.has(value)) invalid('Policy must not contain cycles.', path);
@@ -282,6 +283,7 @@ function normalizeRelationShape(
           child,
           [...path, 'relations', name],
           ancestors,
+          createOnly,
         );
       }
     }
@@ -302,24 +304,39 @@ function normalizeRelationShape(
   }
 }
 
+/**
+ * Normalize one relation write node.
+ *
+ * `createOnly` marks the whole relation tree below a `create` node. A root
+ * create refuses every relation operation but `connect` and `create` at
+ * execution time, so granting `update`, `upsert`, `disconnect`, `set` or
+ * `delete` there is configuration that can never be exercised — and a Policy
+ * that appears to grant something it cannot is the failure mode this module
+ * exists to prevent. Only the root operation decides: a `create` branch
+ * reached through `update.relations` creates its target while the statement is
+ * an update, so its own relations keep the full set.
+ */
 function normalizeRelationWrite(
   value: unknown,
   path: PolicyPath,
   ancestors: Set<object>,
+  createOnly: boolean = false,
 ): NormalizedRelationWriteNode {
   assertObject(value, path);
   assertKeys(
     value,
-    [
-      'scope',
-      'create',
-      'update',
-      'upsert',
-      'connect',
-      'disconnect',
-      'set',
-      'delete',
-    ],
+    createOnly
+      ? ['scope', 'create', 'connect']
+      : [
+          'scope',
+          'create',
+          'update',
+          'upsert',
+          'connect',
+          'disconnect',
+          'set',
+          'delete',
+        ],
     path,
   );
   const result: {
@@ -344,6 +361,7 @@ function normalizeRelationWrite(
       [...path, 'create'],
       ancestors,
       true,
+      createOnly,
     );
   }
   if (value.update !== undefined) {
@@ -395,6 +413,7 @@ function normalizeWriteNode(
   path: PolicyPath,
   ancestors: Set<object>,
   allowDefaults = false,
+  createOnly = false,
 ): NormalizedWriteNode {
   assertObject(value, path);
   assertKeys(
@@ -413,6 +432,7 @@ function normalizeWriteNode(
         child,
         [...path, 'relations', name],
         ancestors,
+        createOnly,
       );
     }
   }
@@ -431,7 +451,7 @@ function normalizeCreateNode(
   assertObject(value, path);
   assertKeys(value, ['scope', 'fields', 'relations', 'defaults'], path);
   return Object.freeze({
-    ...normalizeWriteNode(value, path, ancestors, true),
+    ...normalizeWriteNode(value, path, ancestors, true, true),
     defaults: normalizeDefaults(value.defaults, [...path, 'defaults']),
   });
 }

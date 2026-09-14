@@ -1,15 +1,16 @@
 import {
   databaseManagerToken,
-  buildWritePolicy,
   normalizeRepositoryPolicy,
+  type NormalizedReadNode,
+  type NormalizedRepositoryPolicy,
+  type PolicyRef,
   type RepositoryPolicy,
-  type WritePolicy,
-  type WritePolicyInput,
   RepositoryError,
   type AggregateOptions,
   type GroupByOptions,
   type CreateOneOptions,
   type FindManyOptions,
+  type Repository,
   type RepositoryOperations,
   type RepositoryFilter,
   type RepositoryRecord,
@@ -35,25 +36,14 @@ export type RepositoryApiAction =
   | 'deleteOne';
 
 /**
- * Options every action accepts.
- *
- * `policy` is server-owned. A request body naming `policy` or `scope` is
- * rejected before it reaches here, because the allowlist below enumerates
- * exactly what an action reads from the body and neither is on it — a caller
- * who could send their own policy could grant themselves anything.
+ * Options an action accepts. An action decides whether an endpoint exists;
+ * what it may do is the exposure's Policy, which every action shares.
  */
-export interface RepositoryApiActionOptions {
-  /** Repository Policy bound to this action. Absent leaves it unbound. */
-  readonly policy?: RepositoryPolicy;
-}
+export type RepositoryApiActionOptions = Readonly<Record<string, never>>;
 export type RepositoryApiEmptyActionOptions = RepositoryApiActionOptions;
-export interface RepositoryApiFindManyOptions extends RepositoryApiActionOptions {
+export interface RepositoryApiFindManyOptions {
   /** Default and maximum limit. Defaults to 100. */
   readonly maxLimit?: number;
-}
-export interface RepositoryApiWriteOptions extends RepositoryApiActionOptions {
-  /** Server-owned policy. HTTP input cannot override this value. */
-  readonly writePolicy?: false | WritePolicyInput;
 }
 export interface RepositoryApiActions {
   readonly findMany?: RepositoryApiFindManyOptions;
@@ -62,23 +52,44 @@ export interface RepositoryApiActions {
   readonly exists?: RepositoryApiEmptyActionOptions;
   readonly aggregate?: RepositoryApiEmptyActionOptions;
   readonly groupBy?: RepositoryApiEmptyActionOptions;
-  readonly createOne?: RepositoryApiWriteOptions;
-  readonly updateOne?: RepositoryApiWriteOptions;
+  readonly createOne?: RepositoryApiEmptyActionOptions;
+  readonly updateOne?: RepositoryApiEmptyActionOptions;
   readonly deleteOne?: RepositoryApiEmptyActionOptions;
 }
 
-export interface RepositoryApiExposure {
+export interface RepositoryApiExposure<P = unknown> {
   /** The name passed to api.repository(name). */
   readonly name: string;
   /** Logical Collection name; defaults to name. */
   readonly collection?: string;
   /** Database connection name; defaults to the application's default connection. */
   readonly connection?: string;
+  /**
+   * The Policy every action of this exposure runs under. Required: an exposure
+   * without one would accept anything, and a missing declaration is the one
+   * mistake that reads exactly like a deliberate one.
+   *
+   * A function receives the principal resolved for the request, which is what
+   * lets a scope name the caller. It is server-owned either way — a request
+   * body naming `policy` or `scope` is refused, because the per-action
+   * allowlist below enumerates what an action reads from the body and neither
+   * is on it.
+   */
+  readonly policy: RepositoryPolicy | ((principal: P) => RepositoryPolicy);
   readonly actions: RepositoryApiActions;
 }
 
-export interface DefineRepositoryApiRoutesOptions {
-  readonly repositories: readonly RepositoryApiExposure[];
+export interface DefineRepositoryApiRoutesOptions<P = unknown> {
+  readonly repositories: readonly RepositoryApiExposure<P>[];
+  /**
+   * Resolve the principal a Policy function receives. Required as soon as one
+   * exposure declares a Policy function, and never called otherwise.
+   *
+   * The application owns this: `app-server` does not know how a request is
+   * authenticated. Returning `undefined` or `null` refuses the request with
+   * 403 rather than binding a Policy built from a principal that is not there.
+   */
+  readonly principal?: (context: Context) => P | Promise<P>;
 }
 
 export interface RepositoryApiRoutesApplication {
@@ -113,17 +124,26 @@ const repositoryStreamMediaType = 'application/x-ndjson';
  * This basic adapter does not install authentication or authorization.
  * Database services are resolved only when the application creates the router.
  */
-export function defineRepositoryApiRoutes(
-  options: DefineRepositoryApiRoutesOptions,
+export function defineRepositoryApiRoutes<P = unknown>(
+  options: DefineRepositoryApiRoutesOptions<P>,
 ): AppApiRouteContribution<RepositoryApiRoutesApplication> {
-  assertConfig(options, ['repositories'], 'Repository API configuration');
+  assertConfig(
+    options,
+    ['repositories', 'principal'],
+    'Repository API configuration',
+  );
+  if (
+    options.principal !== undefined &&
+    typeof options.principal !== 'function'
+  )
+    throw new Error('Repository API principal must be a function.');
   if (!Array.isArray(options.repositories))
     throw new Error('repositories must be an array.');
   const names = new Set<string>();
   const repositories = options.repositories.map((entry) => {
     assertConfig(
       entry,
-      ['name', 'collection', 'connection', 'actions'],
+      ['name', 'collection', 'connection', 'policy', 'actions'],
       'Repository API exposure',
     );
     if (
@@ -150,16 +170,31 @@ export function defineRepositoryApiRoutes(
       Object.keys(allowedOptions),
       'Repository API actions',
     );
+    const policyInput = entry.policy;
+    if (policyInput === undefined)
+      throw new Error(
+        `Repository API exposure "${entry.name}" requires a policy. Declare one for every exposure; an exposure without a Policy restricts nothing.`,
+      );
+    if (typeof policyInput === 'function' && options.principal === undefined)
+      throw new Error(
+        `Repository API exposure "${entry.name}" declares a policy function, which needs a principal resolver. Pass one as principal(context).`,
+      );
+    // A Policy that does not depend on the principal is normalized once, here,
+    // so a malformed one fails where it is written. A function cannot be:
+    // it is evaluated per request, and so is its validation.
+    const policy =
+      typeof policyInput === 'function'
+        ? policyInput
+        : assertBindablePolicy(
+            normalizeRepositoryPolicy(policyInput as RepositoryPolicy),
+          );
     const actions = Object.entries(entry.actions).map(([key, config]) => {
       const action = key as RepositoryApiAction;
-      const keys = [
-        'policy',
-        ...(action === 'findMany' ? ['maxLimit'] : []),
-        ...(action === 'createOne' || action === 'updateOne'
-          ? ['writePolicy']
-          : []),
-      ];
-      assertConfig(config, keys, `Repository API action ${action}`);
+      assertConfig(
+        config,
+        action === 'findMany' ? ['maxLimit'] : [],
+        `Repository API action ${action}`,
+      );
       const maxLimit =
         action === 'findMany' && config.maxLimit !== undefined
           ? config.maxLimit
@@ -172,25 +207,13 @@ export function defineRepositoryApiRoutes(
         throw new Error(
           'Repository API maxLimit must be a positive safe integer.',
         );
-      const policyInput =
-        config.writePolicy === undefined ? false : config.writePolicy;
-      const writePolicy: false | WritePolicy =
-        policyInput === false
-          ? false
-          : buildWritePolicy(policyInput as WritePolicyInput);
-      if (action === 'createOne') assertCreateAllowance(writePolicy);
-      // Normalized here so a malformed Policy fails when the routes are
-      // defined rather than on the first request that reaches them.
-      const policy =
-        config.policy === undefined
-          ? undefined
-          : normalizeRepositoryPolicy(config.policy as RepositoryPolicy);
-      return { action, maxLimit, writePolicy, policy };
+      return { action, maxLimit };
     });
     return {
       name: entry.name,
       collection,
       connection: entry.connection,
+      policy,
       actions,
     };
   });
@@ -223,11 +246,19 @@ export function defineRepositoryApiRoutes(
 
     for (const entry of repositories) {
       if (entry.actions.length === 0) continue;
-      const repository = app.container
+      const repository: Repository = app.container
         .resolve(databaseManagerToken)
         .repository(entry.collection, entry.connection);
-      for (const { action, maxLimit, writePolicy, policy } of entry.actions) {
-        const scoped = policy ? repository.withPolicy(policy) : repository;
+      // A Policy that does not read the principal binds once, here. One that
+      // does cannot: it is built per request, and so is the Repository it
+      // binds to — `withPolicy` returns a new instance and leaves this one
+      // unbound for the next request.
+      const bound =
+        typeof entry.policy === 'function'
+          ? undefined
+          : repository.withPolicy(entry.policy);
+      const buildPolicy = entry.policy;
+      for (const { action, maxLimit } of entry.actions) {
         router.post(
           `/${encodeURIComponent(entry.name)}:${action}`,
           bodyLimit({
@@ -242,11 +273,25 @@ export function defineRepositoryApiRoutes(
               ),
           }),
           async (context) => {
+            const scoped =
+              bound ??
+              repository.withPolicy(
+                // Normalized before binding so the reference check runs on
+                // this Policy too; `withPolicy` normalizes again, which is
+                // idempotent.
+                assertBindablePolicy(
+                  normalizeRepositoryPolicy(
+                    (buildPolicy as (principal: P) => RepositoryPolicy)(
+                      await resolvePrincipal(context, options.principal),
+                    ),
+                  ),
+                ) as RepositoryPolicy,
+              );
             const input = await readInput(context, action, maxLimit);
             if (action === 'findMany' && acceptsRepositoryStream(context)) {
               return streamFindMany(context, scoped, input);
             }
-            const data = await execute(scoped, action, input, writePolicy);
+            const data = await execute(scoped, action, input);
             if (action === 'aggregate' || action === 'groupBy') {
               return context.body(
                 JSON.stringify({ data }, (_key, value: unknown) =>
@@ -438,7 +483,6 @@ async function execute(
   repository: RepositoryOperations,
   action: RepositoryApiAction,
   input: RepositoryRecord,
-  writePolicy: false | WritePolicy,
 ): Promise<unknown> {
   // HTTP validates the envelope; Repository validates ASTs, fields, and mutations.
   const read = input as FindManyOptions<RepositoryRecord>;
@@ -470,11 +514,9 @@ async function execute(
       return repository.createOne({
         select: read.select,
         values,
-        writePolicy,
       });
     case 'updateOne':
       return repository.updateOne({
-        writePolicy,
         select: read.select,
         filter,
         values: input.values as UpdateOneOptions<
@@ -491,10 +533,63 @@ function isObject(value: unknown): value is RepositoryRecord {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function fail(status: 400 | 415, code: string, message: string): never {
+function fail(status: 400 | 403 | 415, code: string, message: string): never {
   throw new HTTPException(status, {
     res: Response.json({ code, message }, { status }),
   });
+}
+
+/**
+ * Resolve the principal a Policy function is built from.
+ *
+ * No principal means no Policy, and no Policy would mean an unrestricted
+ * Repository, so the request is refused here rather than bound to a Policy
+ * whose scope names a principal that is not there. 403 rather than 401: this
+ * router installs no authentication and has no challenge to issue.
+ */
+async function resolvePrincipal<P>(
+  context: Context,
+  resolve: ((context: Context) => P | Promise<P>) | undefined,
+): Promise<P> {
+  const principal = await resolve?.(context);
+  if (principal === undefined || principal === null) {
+    fail(
+      403,
+      'PRINCIPAL_REQUIRED',
+      'This endpoint requires a principal and none was resolved.',
+    );
+  }
+  return principal;
+}
+
+/**
+ * Refuse a Policy reference, which this router cannot expand.
+ *
+ * A `ref()` resolves against a `withPolicies` map, and these routes bind one
+ * Policy per exposure. An unexpanded reference is not inert — it reaches a
+ * request as RELATION_READ_FORBIDDEN on a relation the Policy appears to
+ * grant, so it is rejected before it can be bound. For a fixed Policy that is
+ * when the routes are defined; for one built from a principal it is the first
+ * request that reaches it, which is as early as that Policy exists.
+ */
+function assertBindablePolicy(
+  policy: NormalizedRepositoryPolicy,
+): NormalizedRepositoryPolicy {
+  const walk = (
+    node: NormalizedReadNode | PolicyRef,
+    path: readonly string[],
+  ): void => {
+    if ('kind' in node) {
+      throw new Error(
+        `Repository API policy at ${path.join('.')} uses ref("${node.target}"), which these routes cannot expand. Write the relation's rules out, or bind the Policies with connection.withPolicies().`,
+      );
+    }
+    for (const [name, child] of Object.entries(node.relations))
+      walk(child, [...path, 'relations', name]);
+  };
+  if (policy.read !== true && policy.read !== false)
+    walk(policy.read, ['read']);
+  return policy;
 }
 
 function repositoryErrorStatus(
@@ -525,6 +620,11 @@ function repositoryErrorStatus(
     case 'RECORD_OUTSIDE_SCOPE':
     case 'RELATION_REASSIGNMENT_REQUIRED':
       return 409;
+    // A Policy is server-owned, so a Policy this router could not build or
+    // bind is a misconfiguration rather than something the caller got wrong.
+    // Reporting it as 400 would blame the request for the server's mistake.
+    case 'INVALID_POLICY':
+    case 'POLICY_REQUIRED':
     case 'COLLECTION_NOT_FOUND':
     case 'INVALID_STORED_VALUE':
     case 'QUERY_ALREADY_CONSUMED':
@@ -549,19 +649,4 @@ function assertConfig(
   for (const key of Object.keys(value))
     if (!keys.includes(key))
       throw new Error(`${label}: unsupported option ${key}.`);
-}
-
-function assertCreateAllowance(policy: false | WritePolicy): void {
-  if (policy === false) return;
-  for (const rule of Object.values(policy.relations || {})) {
-    if (
-      Object.keys(rule).some(
-        (operation) => operation !== 'create' && operation !== 'connect',
-      )
-    )
-      throw new Error(
-        'createOne writePolicy only supports create and connect relation operations.',
-      );
-    if (rule.create) assertCreateAllowance(rule.create);
-  }
 }
