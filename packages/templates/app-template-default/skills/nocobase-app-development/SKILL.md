@@ -57,6 +57,8 @@ Read the relevant Skill before writing the feature. Implementing a permission sy
 
 Bulk plugin Skills synchronization reads the explicit `client/plugins.ts`, `server/plugins.ts`, and `cli/plugins.ts` registrations. A package used only through imported components can have its Skills synchronized explicitly with the CLI plugin option.
 
+To update a registered plugin, use `pnpm plugin:update @nocobase/app-plugin-authentication` (or the short name `authentication`). Omit the name to update all registered plugins; add `--dry-run` to preview. `plugin:update` takes a positional name, not `--plugin`, and re-synchronizes all registered plugin Skills after a successful package update. See [plugin commands](../../README.MD#plugins) for version-range behavior and examples.
+
 ## Choose your reference
 
 Read the page for the task in front of you. Do not read all of them.
