@@ -27,6 +27,6 @@ export function createLLMServiceCollection(
       c.datetime('updatedAt').nullable();
       c.primary('name', { name: 'pk_llm_services' });
     },
-    { ifNotExists: true, syncMetadata: false },
+    { ifNotExists: true },
   );
 }

@@ -117,7 +117,11 @@ describe('recommended LLM models migration', () => {
       mode: 'provider',
       models: [],
     });
-    await expect(metadataStore.get('llmServices')).resolves.toBeUndefined();
+    // The collection records its logical types, which is what lets the Query
+    // layer treat `enabledModels` as JSON on a dialect that stores it as text.
+    await expect(metadataStore.get('llmServices')).resolves.toMatchObject({
+      document: { fields: { enabledModels: { type: 'json' } } },
+    });
   });
 });
 
