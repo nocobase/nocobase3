@@ -19,6 +19,8 @@ link. Nothing renders until the page actually sits under a parent, since a lone 
 sidebar. A page names itself at runtime through `usePageTitle` once it knows the record it is showing, with the
 declared title holding the level until then.
 
-Also adds the `PageHeader` component for a page title, description and action slots. It renders the trail above the
-heading by default, so the gap between the two is the same on every page while the page keeps its own container and
-width; `breadcrumbs={false}` leaves the placement to the page.
+A page places `<Breadcrumbs />` itself and keeps its own container and spacing. Where the trail starts travels with
+the surface rather than the call site, so the same usage is correct in the application and inside the settings
+centre, where no Home crumb belongs.
+
+Also adds the `PageHeader` component for a page title, description and action slots.

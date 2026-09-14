@@ -125,23 +125,26 @@ A navigable page normally changes `client/routes.ts`, its page component, and `c
 
 `title` falls back to `navigation.title`, so a route that already declares a menu entry does not state its name twice. Unlike `navigation`, it is allowed on a parameterised path — which is the only way a detail page can name itself.
 
-Breadcrumbs are built from these titles, and `PageHeader` renders them above the heading, so a page that uses it gets the trail without asking:
+Breadcrumbs are built from these titles. The page places `<Breadcrumbs />` itself, above its heading, and keeps its own container and spacing:
 
 ```tsx
-<PageHeader
-  title={t('orders.title')}
-  actions={<Button>{t('orders.create')}</Button>}
-/>
+<section className='mx-auto w-full max-w-6xl space-y-6 p-6 md:p-8'>
+  <Breadcrumbs />
+  <PageHeader
+    title={t('orders.title')}
+    actions={<Button>{t('orders.create')}</Button>}
+  />
+</section>
 ```
 
-Pass `breadcrumbs={false}` to place `<Breadcrumbs />` yourself. The page keeps its own container and width either way — the header only owns the gap between the trail and the heading, which is what makes that gap the same on every page.
+Adding it to a page costs nothing when the page does not warrant a trail: the component decides for itself and renders nothing until the page sits under a parent.
 
 What the trail shows is the sequence of destinations rather than the sequence of URL segments:
 
 - A route with a title is somewhere the user can return to, so it joins the trail.
 - A route without one is structure — a tab, an overlay, a layer that exists only to share a layout — and is skipped. Giving a tab route no title is how you keep it out of the breadcrumb.
-- Nothing renders until the page actually sits under a parent, because a lone `Home` crumb only repeats what the sidebar already shows. A top-level page may therefore use `PageHeader` without producing a trail at all.
-- The trail starts at the navigation space the page is rendered in. A settings or dev page needs no Home crumb, because that surface already offers its own way back — the surface states this, so the page does not have to.
+- Nothing renders until the page actually sits under a parent, because a lone `Home` crumb only repeats what the sidebar already shows.
+- The trail starts at the navigation space the page is rendered in. A settings or dev page needs no Home crumb, because that surface already offers its own way back. The surface states this, so the same `<Breadcrumbs />` is correct in either place and the page never passes `home` itself.
 
 When the name depends on data, report it once the data arrives. The declared title holds the level until then, so the trail does not gain one mid-load and push the page down:
 
