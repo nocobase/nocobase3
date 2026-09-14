@@ -432,6 +432,46 @@ describe('generateAppCollectionsArtifact', () => {
     });
   });
 
+  it('plans only the selected connection, so an unrelated misconfiguration does not fail it', async () => {
+    const { config, paths } = fixture();
+    migration(paths.database('main/migrations'), '001_main', 'mainRows');
+    await migrate(config, paths);
+    const broken: AppDatabaseConfig = {
+      ...config,
+      connections: {
+        ...config.connections,
+        analytics: {
+          ...config.connections.analytics,
+          // An explicit source that does not exist: planning this connection throws.
+          migrations: { autoRun: false, directory: paths.database('nowhere') },
+        },
+      },
+    };
+
+    const main = await generateAppCollectionsArtifact(broken, { paths });
+    expect(main.results[0]).toMatchObject({
+      connection: 'main',
+      status: 'completed',
+      manifest: { migrationHead: '001_main' },
+    });
+
+    const all = await generateAppCollectionsArtifact(broken, {
+      paths,
+      all: true,
+    });
+    expect(
+      all.results.find((entry) => entry.connection === 'analytics'),
+    ).toMatchObject({
+      status: 'failed',
+      error: expect.stringContaining('missing'),
+    });
+    expect(
+      all.results.find((entry) => entry.connection === 'main'),
+    ).toMatchObject({
+      status: 'completed',
+    });
+  });
+
   it('refuses conflicting flags and unknown connections', async () => {
     const { config, paths } = fixture();
     await expect(

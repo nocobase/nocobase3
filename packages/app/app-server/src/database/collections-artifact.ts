@@ -124,7 +124,6 @@ export async function generateAppCollectionsArtifact(
   if (!database) {
     return { ok: true, status: 'not-configured', check, results: [] };
   }
-  const migrationTables = migrationTableNames(config, options);
   const results: AppCollectionsArtifactConnectionResult[] = [];
   try {
     for (const name of names) {
@@ -140,7 +139,7 @@ export async function generateAppCollectionsArtifact(
               options.paths,
             ),
             migrationHead: () =>
-              readMigrationHead(database, name, migrationTables.get(name)),
+              readMigrationHead(database, config, name, options),
           }),
         );
       } catch (error) {
@@ -199,28 +198,30 @@ function selectConnections(
 /**
  * The history table name is part of a connection's migration configuration,
  * which planning already resolves — including the legacy top-level form. Ask
- * the planner rather than duplicating that resolution here.
+ * the planner rather than duplicating that resolution here, but ask it about
+ * this one connection: planning validates what it plans, and a misconfigured
+ * connection nobody selected must not fail a run that never touches it. An
+ * external connection has no history table at all, so it is not planned.
  */
-function migrationTableNames(
+async function readMigrationHead(
+  database: DatabaseManager,
   config: AppDatabaseConfig,
+  name: string,
   options: AppCollectionsArtifactOptions,
-): Map<string, string | undefined> {
-  const tasks = planAppDatabaseTasks(config, ['migrations'], {
+): Promise<string | null> {
+  if (config.connections[name].schemaManagement === 'external') return null;
+  const [task] = planAppDatabaseTasks(config, ['migrations'], {
     contributions: { appPackageName: 'app', migrations: [], seeds: [] },
     paths: options.paths,
     drivers: options.drivers,
-    all: true,
+    connection: name,
   });
-  return new Map(tasks.map((task) => [task.connection, task.config.tableName]));
-}
-
-async function readMigrationHead(
-  database: DatabaseManager,
-  connection: string,
-  tableName: string | undefined,
-): Promise<string | null> {
   const history = await database
-    .createMigrator({ connection, tableName, sources: [] })
+    .createMigrator({
+      connection: name,
+      tableName: task?.config.tableName,
+      sources: [],
+    })
     .history();
   return history.at(-1)?.name ?? null;
 }
