@@ -1,6 +1,6 @@
 {
   "name": "@nocobase/app-server",
-  "version": "1.0.0-beta.9",
+  "version": "1.0.0-beta.11",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -198,10 +198,14 @@
     "@nocobase/session": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
     "@sinclair/typebox": "catalog:",
-    "ajv": "catalog:",
     "hono": "catalog:"
   },
   "devDependencies": {
+    "@nocobase/db-mysql": "workspace:*",
+    "@nocobase/db-mssql": "workspace:*",
+    "@nocobase/db-oracle": "workspace:*",
+    "@nocobase/db-postgres": "workspace:*",
+    "@nocobase/db-sqlite": "workspace:*",
     "@nocobase/api-client": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@types/node": "catalog:",

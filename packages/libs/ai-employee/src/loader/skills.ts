@@ -53,12 +53,12 @@ export class SkillsLoader extends LoadAndRegister<SkillsLoaderOptions> {
 
     const descriptors = await Promise.all(
       this.files.map(async (skillsFile): Promise<SkillsDescriptor | null> => {
-        if (skillsFile.basename !== 'SKILLS.md') {
+        if (skillsFile.basename !== 'SKILL.md') {
           return null;
         }
         if (!existsSync(skillsFile.path)) {
           this.logger?.error(
-            `skills [${skillsFile.directory}] ignored: can not find SKILLS.md at ${skillsFile.path}`,
+            `skills [${skillsFile.directory}] ignored: can not find SKILL.md at ${skillsFile.path}`,
           );
           return null;
         }
@@ -81,7 +81,7 @@ export class SkillsLoader extends LoadAndRegister<SkillsLoaderOptions> {
         } catch (e) {
           this.logger?.error(
             { error: e },
-            `skills [${name}] load fail: error occur when reading SKILLS.md at ${skillsFile.path}`,
+            `skills [${name}] load fail: error occur when reading SKILL.md at ${skillsFile.path}`,
           );
           return null;
         }

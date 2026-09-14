@@ -3,14 +3,17 @@ import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { databaseManagerToken } from '@nocobase/db';
 import { loggingToken } from '@nocobase/app-server/logging';
 import { queueManagerToken } from '@nocobase/app-server/queue';
-import { driveConfig, driveManagerToken } from '@nocobase/app-server/drive';
+import {
+  driveManagerToken,
+  type AppDriveConfig,
+} from '@nocobase/app-server/drive';
 import {
   realtimeServiceToken,
   type RealtimeUserTopic,
 } from '@nocobase/app-server/realtime';
 
 import { createMailProviderAdapterResolver } from '../adapter-resolver.js';
-import { mailConfig } from '../config.js';
+import type { MailConfig } from '../config.js';
 import { createDatabaseMailCredentialVault } from '../credentials.js';
 import { createMailProviderRegistry } from '../registry.js';
 import { createMailRuntime } from '../runtime.js';
@@ -73,10 +76,11 @@ export class MailCoreProvider extends ServiceProvider<MailCoreProviderApplicatio
         queue: container.resolve(queueManagerToken),
         queueName: `mail:${this.app.appName}`,
         automaticSyncIntervalMs:
-          this.app.config.get(mailConfig).automaticSyncIntervalMs,
-        syncBatchSize: this.app.config.get(mailConfig).syncBatchSize,
-        pushWebhookUrl: this.app.config.get(mailConfig).pushWebhookUrl,
-        pushWebhookSecret: this.app.config.get(mailConfig).pushWebhookSecret,
+          this.app.config.get<MailConfig>('mail')!.automaticSyncIntervalMs,
+        syncBatchSize: this.app.config.get<MailConfig>('mail')!.syncBatchSize,
+        pushWebhookUrl: this.app.config.get<MailConfig>('mail')!.pushWebhookUrl,
+        pushWebhookSecret:
+          this.app.config.get<MailConfig>('mail')!.pushWebhookSecret,
         outboundAttachments: container.resolve(
           mailOutboundAttachmentStorageToken,
         ),
@@ -94,7 +98,7 @@ export class MailCoreProvider extends ServiceProvider<MailCoreProviderApplicatio
         new DriveMailOutboundAttachmentStorage(
           container.resolve(mailStoreToken),
           container.resolve(driveManagerToken),
-          this.app.config.get(driveConfig).default,
+          this.app.config.get<AppDriveConfig>('drive')!.default,
         ),
     );
     this.app.container.singleton(
@@ -104,7 +108,7 @@ export class MailCoreProvider extends ServiceProvider<MailCoreProviderApplicatio
           store: container.resolve(mailStoreToken),
           adapters: container.resolve(mailProviderAdapterResolverToken),
           outbox: container.resolve(mailRuntimeToken),
-          syncBatchSize: this.app.config.get(mailConfig).syncBatchSize,
+          syncBatchSize: this.app.config.get<MailConfig>('mail')!.syncBatchSize,
           registry,
           providerContext: {
             publicBasePath: this.app.publicBasePath,
@@ -137,15 +141,16 @@ export class MailCoreProvider extends ServiceProvider<MailCoreProviderApplicatio
   }
 
   private listProviderConfigs(): readonly import('../types.js').MailProviderConfig[] {
-    return Object.entries(this.app.config.get(mailConfig).providers).map(
-      ([name, config]) => ({ ...config, name }),
-    );
+    return Object.entries(
+      this.app.config.get<MailConfig>('mail')!.providers,
+    ).map(([name, config]) => ({ ...config, name }));
   }
 
   private resolveProviderConfig(
     provider: import('../types.js').MailProviderIdentity,
   ): import('../types.js').MailProviderConfig {
-    const config = this.app.config.get(mailConfig).providers[provider.name];
+    const config =
+      this.app.config.get<MailConfig>('mail')!.providers[provider.name];
     if (!config || config.type !== provider.type || config.enabled === false) {
       throw new Error(
         `Mail Provider configuration "${provider.name}" is unavailable.`,

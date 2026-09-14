@@ -7,8 +7,8 @@ const migration: MigrationDefinition = defineMigration({
       collection.uuid('id').primary();
       collection.string('ownerId', { length: 255, nullable: false });
       collection.string('name', { length: 255, nullable: false });
-      collection.datetime('createdAt', { nullable: false });
-      collection.datetime('updatedAt', { nullable: false });
+      collection.datetimeTz('createdAt', { nullable: false });
+      collection.datetimeTz('updatedAt', { nullable: false });
       collection.unique(['ownerId', 'name'], {
         name: 'mail_labels_owner_name_unique',
       });

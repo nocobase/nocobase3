@@ -111,24 +111,79 @@ describe('client inspection', () => {
         path: '/',
       },
       {
+        auth: 'required',
+        id: '@nocobase/app-template-hub:applications-legacy',
+        path: '/hub',
+      },
+      {
         auth: 'guest',
-        id: '@nocobase/app-plugin-authentication:login',
+        id: '@nocobase/app-template-hub:login',
         path: '/login',
       },
       {
         auth: 'guest',
-        id: '@nocobase/app-plugin-authentication:register',
+        id: '@nocobase/app-template-hub:register',
         path: '/register',
       },
       {
         auth: 'guest',
-        id: '@nocobase/app-plugin-authentication:forgot-password',
+        id: '@nocobase/app-template-hub:forgot-password',
         path: '/forgot-password',
       },
       {
         auth: 'guest',
-        id: '@nocobase/app-plugin-authentication:reset-password',
+        id: '@nocobase/app-template-hub:reset-password',
         path: '/reset-password',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-hub:hub',
+        path: '/apps',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-hub:hub-app-detail',
+        path: '/apps/:appId',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-hub:hub-app-deployments',
+        path: '/apps/:appId/deployments',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-hub:hub-app-releases',
+        path: '/apps/:appId/releases',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-hub:hub-app-development',
+        path: '/apps/:appId/development',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-hub:hub-app-resources',
+        path: '/apps/:appId/resources',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-hub:hub-app-configuration',
+        path: '/apps/:appId/configuration',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-hub:hub-app-settings',
+        path: '/apps/:appId/settings',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-hub:hub-roles',
+        path: '/roles',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-users:users',
+        path: '/users',
       },
       {
         auth: 'guest',
@@ -139,11 +194,6 @@ describe('client inspection', () => {
         auth: 'required',
         id: '@nocobase/app-plugin-mail:mail',
         path: '/mail',
-      },
-      {
-        auth: 'required',
-        id: '@nocobase/app-plugin-notification-provider:demo',
-        path: '/notification-provider',
       },
       {
         auth: 'required',
@@ -160,23 +210,22 @@ describe('client inspection', () => {
         id: '@nocobase/app-plugin-workflow:workflow-run-detail',
         path: '/settings/automation/workflow-runs/:runId',
       },
-      {
-        auth: 'required',
-        id: '@nocobase/app-plugin-hub:hub',
-        path: '/hub',
-      },
     ]);
     expect(
       inspection.reactProviders.map(({ id, order }) => ({ id, order })),
     ).toEqual([
       { id: '@nocobase/app-template-hub:theme', order: 1 },
       {
-        id: '@nocobase/app-plugin-notification-provider:notification-host',
+        id: '@nocobase/app-plugin-authentication:authentication',
         order: 2,
       },
       {
-        id: '@nocobase/app-plugin-routes-example:routes-example',
+        id: '@nocobase/app-plugin-notification-provider:notification-host',
         order: 3,
+      },
+      {
+        id: '@nocobase/app-plugin-routes-example:routes-example',
+        order: 4,
       },
     ]);
     expect(

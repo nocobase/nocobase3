@@ -172,3 +172,17 @@ Two things to decide before shipping one:
 - The job runs with a realistic payload, and running it twice is harmless.
 - A failure retries or terminates as intended.
 - A scheduled tick's work is tested directly, and running it on more than one instance does not duplicate its effect.
+
+### Application code configuration
+
+Each file under `server/config/` defines one section with `defineAppConfig((runtime) => options)` from `@nocobase/app-server/config`. `server/config/index.ts` imports those sections and exports `defaultAppConfigs({ auth })`. The client uses the same helpers from `@nocobase/app-client`.
+
+The runtime definition declares `config` for the static loader and `defaultConfig` for the aggregated configuration factory. `resolveAppRuntime()` assembles `runtime.config`. The entry point then calls `createApp(runtime)`, which binds `runtime.app` and uses the same configuration object. Services start afterwards.
+
+Code configuration executes once per application. Callbacks can capture `runtime` and resolve services through `runtime.app` when invoked; do not resolve services while generating defaults. Code defaults are overridden by file configuration, then explicit environment mappings. Objects merge by field; arrays and callbacks are replaced. Reload reads environment configuration again and retains code defaults. Changing TS configuration requires a restart.
+
+Edit `server/config/auth.ts` for authentication options, using `AuthConfig` from `@nocobase/app-plugin-authentication/server` and `username` from `better-auth/plugins`. Edit `client/config/auth.ts` for native client options, using `AuthConfig` from the `/client` entry and `usernameClient` from `better-auth/client/plugins`. Keep deployment secrets in YAML or environment variables. Better Auth instances are created once; reloading configuration does not recreate them.
+
+Module defaults are editable in `server/config/app.ts`, `database.ts`, `caching.ts`, `drive.ts`, `queue.ts`, `session.ts`, `logging.ts`, `i18n.ts`, `snowflake.ts`, `server.ts`, `spa.ts`, `ai.ts`, `notification.ts`, and `workflow.ts`. Hub also has `hub.ts`. The client has `app.ts`, `api.ts`, and `auth.ts`.
+
+Factories receive `runtime` and can use `runtime.configPaths`, `runtime.paths`, and `runtime.plugins` for application directories, routing, and resolved plugin metadata. Providers read sections with `app.config.get<ModuleConfig>('module')`. Runtime configuration reload subscriptions use `app.config.subscribe<ModuleConfig>('module', listener)`. Environment mappings live in `server/environment.ts`; each variable has one explicit target. Keep deployment parameters in `config.example.yml`, behavior defaults in TS, and reserve environment overrides for secrets and startup integration.

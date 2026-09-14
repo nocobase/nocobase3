@@ -7,7 +7,7 @@ import {
 import { Hono } from 'hono';
 import { getRequestTranslator } from '@nocobase/i18n/server';
 
-import { mailConfig, resolveMailOAuthCallbackPath } from '../config.js';
+import { type MailConfig, resolveMailOAuthCallbackPath } from '../config.js';
 import { mailServiceToken } from '../tokens.js';
 
 /** Public OAuth callback secured by a short-lived, one-time state transaction. */
@@ -16,7 +16,7 @@ export const mailOAuthCallbackRoutes: AppRootRouteContribution<AppPluginApplicat
     const router = new Hono();
     const mail = container.resolve(mailServiceToken);
     const callbackPath = resolveMailOAuthCallbackPath(
-      config.get(mailConfig).oauthCallbackUrl,
+      config.get<MailConfig>('mail')!.oauthCallbackUrl,
       publicBasePath,
     );
 

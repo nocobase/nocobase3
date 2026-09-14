@@ -1,3 +1,4 @@
+import sqlite from '@nocobase/db-sqlite';
 import { createDatabaseManager } from '@nocobase/db';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import permissionSetMigration from '../src/plugins/permission-sets/migrations/202608210001_create_permission_set_tables.js';
@@ -15,6 +16,7 @@ import {
 
 describe('authorization plugin database stores', () => {
   const database = createDatabaseManager({
+    drivers: { sqlite },
     default: 'main',
     connections: {
       main: { dialect: 'sqlite', filename: ':memory:' },

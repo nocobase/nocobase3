@@ -1,5 +1,6 @@
 import type { DatabaseConnection } from '@nocobase/db';
 import { PlaygroundHttpError } from '../errors.js';
+import { nowDatetime } from '../temporal.js';
 
 export interface CreateOrderItemInput {
   readonly productId: number;
@@ -117,7 +118,7 @@ export class OrderService {
           customerNameSnapshot: customer.name,
           status: 'draft',
           totalAmount,
-          createdAt: new Date().toISOString(),
+          createdAt: nowDatetime(),
         })
         .execute();
       const insertedOrderId = Number(insert.insertId);

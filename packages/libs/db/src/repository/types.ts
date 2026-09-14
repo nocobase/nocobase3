@@ -33,6 +33,11 @@ import type {
   RepositoryCursor,
   RepositoryCursorDirection,
 } from '@nocobase/repository-input';
+import type {
+  NormalizedRepositoryPolicy,
+  PartialRepositoryPolicy,
+  RepositoryPolicy,
+} from './policy/types.js';
 export type * from '@nocobase/repository-input';
 
 export interface RepositoryReadOptions<
@@ -276,6 +281,13 @@ export interface Repository<
   TCreate extends object = Partial<TRecord>,
   TUpdate extends object = Partial<TRecord>,
 > {
+  withPolicy<const TPolicy extends RepositoryPolicy<TRecord>>(
+    policy: TPolicy,
+  ): ScopedRepository<PolicyRecord<TRecord, TPolicy>, TCreate, TUpdate>;
+  withPolicy<P, const TPolicy extends RepositoryPolicy<TRecord>>(
+    policy: (principal: P) => TPolicy,
+    principal: P,
+  ): ScopedRepository<PolicyRecord<TRecord, TPolicy>, TCreate, TUpdate>;
   findMany<TSelection extends AnySelectBuilder<TRecord>>(
     options: FindManyOptions<TRecord> & {
       readonly select: (select: SelectBuilder<TRecord>) => TSelection;
@@ -392,4 +404,65 @@ export interface Repository<
     options: DeleteManyOptions<TRecord> & { readonly select: SelectAst },
   ): Promise<DeleteManyResult<TRecord>>;
   deleteMany(options: DeleteManyOptions<TRecord>): Promise<DeleteManyResult>;
+}
+
+/**
+ * What a read returns once a Policy is bound.
+ *
+ * A `read` node means the returned record is shaped by an allowlist, so the
+ * type degrades to `Partial<TRecord>`: a query with no select comes back
+ * carrying `read.fields` alone, and an omitted `fields` is an empty allowlist
+ * rather than a free pass. `read: true` adds no limits and keeps the full
+ * record type.
+ *
+ * The degradation is deliberately coarse. Narrowing to exactly the listed
+ * fields would need the literal list to survive inference at every call site,
+ * and a `Partial` that is honest beats a precise type that silently widens
+ * when someone stores the policy in a variable.
+ *
+ * The test asks whether the `read` union *contains* a rule object rather than
+ * whether the whole union is one. A policy held in a variable of type
+ * `RepositoryPolicy<T>` has `read: true | false | ReadNode`, which is not
+ * itself an object — testing the union directly returned the complete record
+ * for exactly the policies most likely to restrict it.
+ */
+export type PolicyRecord<
+  TRecord extends object,
+  TPolicy extends { readonly read: unknown },
+> = [Extract<TPolicy['read'], object>] extends [never]
+  ? TRecord
+  : Partial<TRecord>;
+
+/**
+ * The operations a Repository performs, without the derivation methods.
+ *
+ * Both a plain and a policy-bound Repository satisfy this, which is what lets
+ * code that only runs queries accept either. Neither is a subtype of the
+ * other on purpose: `withPolicy` must not be reachable on a bound instance,
+ * and `narrow` means nothing on an unbound one.
+ */
+export type RepositoryOperations<
+  TRecord extends object = RepositoryRecord,
+  TCreate extends object = Partial<TRecord>,
+  TUpdate extends object = Partial<TRecord>,
+> = Omit<Repository<TRecord, TCreate, TUpdate>, 'withPolicy'>;
+
+export interface ScopedRepository<
+  TRecord extends object = RepositoryRecord,
+  TCreate extends object = Partial<TRecord>,
+  TUpdate extends object = Partial<TRecord>,
+> extends RepositoryOperations<TRecord, TCreate, TUpdate> {
+  /**
+   * Narrow the bound Policy further. Scopes intersect, field and relation
+   * allowlists intersect, and `false` on either side wins — there is no
+   * spelling that widens, so a narrowed Repository cannot climb back out.
+   *
+   * Absent from an unbound Repository on purpose: narrowing nothing is not a
+   * meaningful request, and `withPolicy` is absent here for the mirror reason.
+   */
+  narrow(
+    patch: PartialRepositoryPolicy<TRecord>,
+  ): ScopedRepository<TRecord, TCreate, TUpdate>;
+  /** The Policy actually in force, after `withPolicy` and every `narrow`. */
+  explainPolicy(): NormalizedRepositoryPolicy;
 }

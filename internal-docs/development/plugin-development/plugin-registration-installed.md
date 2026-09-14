@@ -42,7 +42,7 @@ pnpm plugin:update
 只升级一个插件：
 
 ```bash
-pnpm plugin:update --plugin audit-log
+pnpm plugin:update @nocobase/app-plugin-audit-log
 ```
 
 升级成功后同步 Plugin Skills。升级失败时不能继续同步；升级成功但 Skills 同步失败时，应分别报告两个阶段，不要把旧副本描述为已更新。

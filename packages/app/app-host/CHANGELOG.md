@@ -1,5 +1,17 @@
 # @nocobase/app-host
 
+## 0.1.0-beta.5
+
+### Patch Changes
+
+- e11b855: Fail with a clear error when managed app-host port discovery reaches the TCP port limit.
+- e11b855: Republish managed application configuration before activating a stopped deployment.
+- e11b855: Read the application manifest from `dist/package.json` when loading `pnpm build --tar` artifacts.
+- Updated dependencies [f17f3a6]
+- Updated dependencies [ceb356b]
+  - @nocobase/config@0.1.0-beta.1
+  - @nocobase/logging@0.1.0-beta.4
+
 ## 0.1.0-beta.4
 
 ### Minor Changes

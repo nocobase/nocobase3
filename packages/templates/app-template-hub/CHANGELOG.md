@@ -1,5 +1,170 @@
 # @nocobase/app-template-hub
 
+## 1.0.0-beta.13
+
+### Minor Changes
+
+- 0f80d52: Support PROXY_TARGET_URL during development to run the local Vite client against another application's API and WebSocket service, including browser origin handling for authentication, without starting a local backend.
+- 3bb34a3: Add RouteDialog and RouteDrawer with guarded closing and a shared useRouteOverlay hook. The wrappers insert no child outlet: the page that owns a child route places one itself, so an overlay can render its next child wherever the page needs it. Include route overlay examples and application development guidance.
+
+### Patch Changes
+
+- ceb356b: Declare database dialect drivers on the application's own database config.
+
+  An application lists the dialect packages it installs under `database.drivers`,
+  next to the connections that use them, and the runtime, the CLI commands and the
+  tests all resolve a dialect from that one place. The app-server runtime stays
+  independent of every concrete database driver.
+
+  This replaces the process-wide `registerAppDatabaseDrivers` registry and the
+  `databaseDrivers` option on `Application`, both of which are removed. An
+  application that used either one moves its drivers into `database.drivers` and
+  drops the module it imported only for the registration side effect.
+
+- f17f3a6: Provide editable TypeScript defaults for application modules, assembled by the runtime before services start. Module factories receive the runtime with application paths and plugin metadata; deployment files and environment variables override defaults, and configuration reload preserves code defaults.
+
+  Keep deployment settings in YAML examples and reserve explicit environment overrides for secrets and startup integration. Simplify application configuration loading, merging and reload subscriptions.
+
+  Align client configuration assembly with the server: runtime merges application TypeScript defaults beneath public configuration before services start. Client inspection reports the application configuration entry.
+
+- f17f3a6: Move the password authentication pages to the application. The authentication plugin keeps only the protocol, session state, guards and headless actions: it no longer declares `/login`, `/register`, `/forgot-password` or `/reset-password`, drops the `client/routes` and `client/route-contracts` entries, and removes the `loginPage`/`registerPage` route override options.
+
+  Each application template now declares those four guest routes in `client/routes.ts` and loads the application-owned pages from `client/pages/auth/`, which compose the preinstalled UI from `client/extensions/nocobase-auth-ui/`. The pages use ordinary relative links; URL handling remains with the application router and basename.
+
+- f17f3a6: Support TypeScript authentication options in application templates and use the native authentication client. Keep authentication plugins and callbacks in editable server and client configuration, with YAML as the default format for deployment settings.
+
+  Runtime assembly now prepares complete configuration before application creation. Module configuration factories use defineAppConfig and defaultAppConfigs, receive the runtime once, and retain their defaults when environment configuration reloads.
+
+- ceb356b: Supply plugin migration and seed sources to database planning directly instead
+  of through the database configuration.
+
+  `AppDatabaseConfig.taskSources` is removed. It held the application's package
+  name and the migration and seed directories contributed by registered server
+  plugins — values the runtime derives from resolved plugins rather than values
+  anyone configures. Carrying them in the `database` namespace put them where a
+  `config.yml` deep-merges: `database.taskSources.migrations: []` silently
+  dropped every plugin's migrations, and the application still started.
+
+  They now travel as an `AppDatabaseTaskContributions` value alongside the
+  configuration. `planAppDatabaseTasks`, `runAppDatabaseTasks`, `runAppMigrations`
+  and `runAppSeeds` take an options object carrying it, with `paths`, `drivers`
+  and the task selection, in place of their positional parameters.
+  `createAppPluginDatabaseConfig` and `resolveAppPluginDatabaseConfig` are
+  replaced by `createAppDatabaseTaskContributions`, which maps resolved plugins to
+  that value. `contributions` is required, so a call site that has not been
+  updated fails to compile rather than quietly planning without its plugins.
+
+  An application's `server/config/database.ts` keeps only what it configures —
+  drivers and connections — and no longer calls into the plugin resolver. Its
+  `cli/database-command.ts` builds the contributions from the runtime it already
+  resolves; `cli/commands/migrate.ts` and `cli/commands/seed.ts` are unchanged.
+
+- e11b855: Locate a built application's `config.yml` next to `dist/` when none exists inside it, build the client against the same `.env` files the server loads, and prefer the compiled dependency tree when resolving plugins from a production build.
+- ceb356b: Add the destructive `pnpm migrate --fresh --force` workflow for managed
+  connections. It clears dialect-owned schema objects, reruns visible migrations,
+  requires confirmation in interactive terminals, and rejects external
+  connections.
+- bf0f05b: Replace the `plugin update --plugin` flag with an optional plugin name argument, supporting full package names and short names while preserving updates of all registered plugins when no name is supplied.
+
+  Document the positional plugin update command, version-range behavior, and Skills synchronization in all three application templates' README, agent guidelines, and development Skill.
+
+- f718a90: Honor APP_SERVER_PORT as the local Vite port during remote-backend development while retaining local backend port configuration in normal development.
+- d566dde: Align the example and Hub templates with the AI resource packaging and deployment artifact pruning changes.
+- f5b066d: Keep header navigation entries visible on their destination pages while retaining the development-only Dev tools entry.
+- e11b855: Use consistent medium-weight typography for sidebar navigation items, so an item's weight no longer changes as the selection moves.
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [f17f3a6]
+- Updated dependencies [f17f3a6]
+- Updated dependencies [f17f3a6]
+- Updated dependencies [43d25b4]
+- Updated dependencies [027d13d]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [027d13d]
+- Updated dependencies [027d13d]
+- Updated dependencies [40e2d49]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [e11b855]
+- Updated dependencies [ceb356b]
+- Updated dependencies [e11b855]
+- Updated dependencies [40e2d49]
+- Updated dependencies [e11b855]
+- Updated dependencies [e11b855]
+- Updated dependencies [e11b855]
+- Updated dependencies [590861e]
+- Updated dependencies [35f9722]
+- Updated dependencies [ceb356b]
+- Updated dependencies [bf0f05b]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [e11b855]
+- Updated dependencies [ceb356b]
+- Updated dependencies [027d13d]
+- Updated dependencies [e11b855]
+- Updated dependencies [c960d07]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [027d13d]
+- Updated dependencies [0867612]
+- Updated dependencies [027d13d]
+- Updated dependencies [72ed008]
+- Updated dependencies [027d13d]
+  - @nocobase/db-sqlite@0.1.0-beta.0
+  - @nocobase/app-server@1.0.0-beta.11
+  - @nocobase/app-plugin-notification@0.1.0-beta.8
+  - @nocobase/app-plugin-workflow@0.1.0-beta.14
+  - @nocobase/app-plugin-hub@0.1.0-beta.4
+  - @nocobase/app-plugin-service-provider-example@0.1.0-beta.4
+  - @nocobase/app-plugin-authentication@0.1.0-beta.11
+  - @nocobase/config@0.1.0-beta.1
+  - @nocobase/app-plugin-install@0.1.0-beta.7
+  - @nocobase/nb3-cli@1.0.0-beta.7
+  - @nocobase/app-plugin-users@0.0.2-beta.1
+
+## 1.0.0-beta.12
+
+### Minor Changes
+
+- a009e2d: Derive the languages an application offers from its own locale files, and configure the default language in one place.
+
+  `i18n.defaultLocale` in `config.yml` now names the language the application starts in, for the browser and the server alike. The `i18n.locales` setting and its `APP_LOCALES` environment variable are removed, along with `client.app.defaultLocale`: an application offers whichever languages its own `client/locales/index.ts` and `server/locales/index.ts` declare loaders for, so adding a language means adding its file rather than editing a second list. A plugin's locale file supplies translations for those languages and no longer adds one, which keeps an installed plugin from putting an unexpected language in the picker.
+
+  The browser resolves its startup language as the visitor's stored choice, then `i18n.defaultLocale`, then `en-US`. `navigator.language` is no longer consulted. Switching language in the interface remains a user-level choice and does not change the configured default.
+
+  An untranslated key now falls back through `i18n.defaultLocale` and then `en-US`, rather than through the default alone. An application that defaults to Chinese and adds Spanish leaves its plugins translated in neither, and English is the language they are most likely to ship; the fallback languages are loaded alongside the one in use so the fallback has resources to read. `pnpm nocobase app i18n:check` reports a language declared in `client/locales/` but not `server/locales/`, or the reverse — the case where the interface offers a language the server then rejects.
+
+  `LocaleResource` and `PartialLocaleResource` now accept an `overrides` block at the top level. The shape is derived from the source locale, which never declares that key, so annotating a locale file with it and adding the block documented for rewording a plugin's copy was a compile error — the documented example did not compile.
+
+  To migrate, replace `i18n.locales` and `client.app.defaultLocale` with `i18n.defaultLocale`, and make sure every language the application offers has a file in its own `client/locales/` and `server/locales/`.
+
+- e9f796d: Run plugin-registered commands during `pnpm build` and `pnpm dev`
+
+  Both scripts now ask the application's CLI which commands its plugins have registered, and run them at the matching stage. The workflow Artifact build was written directly into these scripts and moves to the workflow plugin, which is what installs it; an application without that plugin no longer carries the step, and a plugin that needs one no longer requires an edit here.
+
+  Failing to read the list fails the run: a build that silently skipped a hook would look successful while missing whatever the hook produces. Declaring no hooks is not that case and changes nothing.
+
+### Patch Changes
+
+- b90a65f: Keep the sidebar at viewport height
+
+  On a tall page the desktop sidebar used to stretch along with the document, because it was a stretched flex item of a `min-h-svh` shell. Its navigation therefore never scrolled: the whole page moved instead, and the sidebar's header and footer drifted out of view. The sidebar now sticks to the viewport at a fixed height, and the menu scrolls inside it once its entries overflow. The same fix applies to the settings and dev-tools surface, which shares the layout.
+
+- 426bd48: Remove logical IM `target` recipients and make `send().to` optional so Webhook Providers can be selected directly by Provider name or fan-out strategy.
+- 1d59a9c: Add a template upgrade Skill and record the source template in the generated manifest.
+
+  `skills/nocobase-app-upgrade/` describes how to merge a newer template release into an application generated from a template. It compares the two template releases to learn what changed, then decides file by file how each change lands in the application, so a customization is never reverted and a removal that breaks user code outside the changed files is caught before the upgrade is called done.
+
+  `pnpm create @nocobase/app` now writes `nocobase.templatePackage` into the generated manifest, naming the template package the application came from. An upgrade needs it to know which template to diff: `name` becomes the application's own at generation, and `templateKind` does not distinguish the app templates from each other.
+
+- Updated dependencies [a009e2d]
+- Updated dependencies [e9f796d]
+  - @nocobase/app-plugin-i18n@0.1.0-beta.5
+  - @nocobase/app-server@1.0.0-beta.10
+  - @nocobase/nb3-cli@1.0.0-beta.6
+
 ## 1.0.0-beta.11
 
 ### Patch Changes

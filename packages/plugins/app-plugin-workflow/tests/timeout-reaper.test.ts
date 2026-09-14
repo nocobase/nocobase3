@@ -1,7 +1,6 @@
-import type { DatabaseManager, Row } from '@nocobase/db';
+import type { DatabaseManager } from '@nocobase/db';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { WORKFLOW_COLLECTIONS } from '../server/collections/names.js';
 import {
   EXECUTION_REASON,
   EXECUTION_STATUS,
@@ -9,7 +8,13 @@ import {
 } from '../server/engine/constants.js';
 import { createTimeoutReaper } from '../server/engine/timeout-reaper.js';
 import type { WorkflowId } from '../server/engine/types.js';
-import { createTestDatabase, createTestWorkflow } from './helpers.js';
+import { asIdFilter, serializeJson } from '../server/engine/utils.js';
+import {
+  createTestDatabase,
+  createTestWorkflow,
+  insertTestRun,
+  testStore,
+} from './helpers.js';
 
 type RunInput = {
   eventKey: string;
@@ -26,46 +31,27 @@ describe('timeout reaper', () => {
   let workflowId: WorkflowId;
 
   async function insertRun(input: RunInput): Promise<WorkflowId> {
-    await database
-      .query()
-      .insertInto(WORKFLOW_COLLECTIONS.runs)
-      .values({
-        workflowId,
-        workflowKey: 'reaped',
-        eventKey: input.eventKey,
-        input: JSON.stringify({}),
-        parameters: JSON.stringify({}),
-        status: input.status,
-        dispatched: input.status != null,
-        stack: JSON.stringify([]),
-        output: JSON.stringify(null),
-        startedAt:
-          input.status == null
-            ? null
-            : new Date(Date.now() - 3_600_000).toISOString(),
-        expiresAt: input.expiresAt,
-        createdAt: new Date(Date.now() - 3_600_000).toISOString(),
-        manually: false,
-      })
-      .execute();
-    const id = await database
-      .query()
-      .selectFrom(WORKFLOW_COLLECTIONS.runs)
-      .where('eventKey', '=', input.eventKey)
-      .value<WorkflowId>('id');
-    if (id == null) {
-      throw new Error(`Failed to insert run "${input.eventKey}"`);
-    }
-    return id;
+    const anHourAgo = new Date(Date.now() - 3_600_000).toISOString();
+    return insertTestRun(database, {
+      workflowId,
+      workflowKey: 'reaped',
+      eventKey: input.eventKey,
+      status: input.status,
+      dispatched: input.status != null,
+      startedAt: input.status == null ? null : anHourAgo,
+      expiresAt: input.expiresAt,
+      createdAt: anHourAgo,
+    });
   }
 
   async function readRun(id: WorkflowId): Promise<Row> {
-    return database
-      .query()
-      .selectFrom(WORKFLOW_COLLECTIONS.runs)
-      .selectAll()
-      .where('id', '=', id)
-      .executeTakeFirstOrThrow<Row>();
+    const row = await testStore(database).runs.findOne({
+      filter: { id: asIdFilter(id) },
+    });
+    if (!row) {
+      throw new Error(`Run "${String(id)}" was not found`);
+    }
+    return row;
   }
 
   beforeEach(async () => {
@@ -134,40 +120,36 @@ describe('timeout reaper', () => {
       status: EXECUTION_STATUS.STARTED,
       expiresAt: minutesFromNow(-1),
     });
-    await database
-      .query()
-      .insertInto(WORKFLOW_COLLECTIONS.nodeRuns)
-      .values([
+    await testStore(database).nodeRuns.createMany({
+      values: [
         {
-          workflowRunId: expired,
+          workflowRunId: asIdFilter(expired),
           nodeId: 1,
           nodeKey: 'done',
           status: NODE_RUN_STATUS.RESOLVED,
-          meta: JSON.stringify(null),
-          result: JSON.stringify(1),
+          meta: serializeJson(null),
+          result: serializeJson(1),
           startedAt: new Date().toISOString(),
         },
         {
-          workflowRunId: expired,
+          workflowRunId: asIdFilter(expired),
           nodeId: 2,
           nodeKey: 'waiting',
           status: NODE_RUN_STATUS.PENDING,
-          meta: JSON.stringify(null),
-          result: JSON.stringify(null),
+          meta: serializeJson(null),
+          result: serializeJson(null),
           startedAt: new Date().toISOString(),
         },
-      ])
-      .execute();
+      ],
+    });
 
     await expect(createTimeoutReaper({ database }).sweep()).resolves.toBe(1);
 
-    const nodeRuns = await database
-      .query()
-      .selectFrom(WORKFLOW_COLLECTIONS.nodeRuns)
-      .select(['nodeKey', 'status', 'finishedAt'])
-      .where('workflowRunId', '=', expired)
-      .orderBy('id')
-      .execute<Row>();
+    const nodeRuns = await testStore(database).nodeRuns.findMany({
+      filter: { workflowRunId: asIdFilter(expired) },
+      select: (select) => select.fields('nodeKey', 'status', 'finishedAt'),
+      sort: (sort) => sort.field('id').asc(),
+    });
     expect(nodeRuns).toEqual([
       { nodeKey: 'done', status: NODE_RUN_STATUS.RESOLVED, finishedAt: null },
       {
@@ -232,11 +214,12 @@ describe('timeout reaper', () => {
     let status: unknown = EXECUTION_STATUS.STARTED;
     while (Date.now() < deadline && status !== EXECUTION_STATUS.ABORTED) {
       await new Promise((resolve) => setTimeout(resolve, 5));
-      status = await database
-        .query()
-        .selectFrom(WORKFLOW_COLLECTIONS.runs)
-        .where('eventKey', '=', 'scheduled')
-        .value('status');
+      status = (
+        await testStore(database).runs.findOne({
+          filter: { eventKey: 'scheduled' },
+          select: (select) => select.fields('status'),
+        })
+      )?.status;
     }
     expect(status).toBe(EXECUTION_STATUS.ABORTED);
 

@@ -3,10 +3,7 @@ import {
   type LLMServiceEntity,
 } from '@nocobase/ai-employee';
 import type { AIManager } from '@nocobase/ai-employee';
-import type {
-  LLMServiceDto,
-  LLMServiceResourceInput,
-} from '../domain/api-contracts.js';
+import type { LLMServiceDto, LLMServiceResourceInput } from '../types.js';
 import {
   asRecord,
   badRequest,

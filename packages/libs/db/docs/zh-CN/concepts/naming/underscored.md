@@ -40,12 +40,12 @@ export function snakeCase(value: string): string {
 Connection 提供默认值：
 
 ```ts
+import postgres from '@nocobase/db-postgres';
+import { createDatabaseManager } from '@nocobase/db';
+
 const db = createDatabaseManager({
   connections: {
-    main: {
-      dialect: 'postgres',
-      naming: { underscored: true },
-    },
+    main: postgres({ naming: { underscored: true } }),
   },
 });
 ```

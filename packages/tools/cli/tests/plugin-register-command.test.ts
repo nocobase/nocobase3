@@ -298,10 +298,9 @@ describe('app plugin register command', () => {
       '--no-install',
     ]);
     const planned = await runCommand(config, 'plugin:update', [
+      'audit-log',
       '--dir',
       appRoot,
-      '--plugin',
-      'audit-log',
       '--dry-run',
       '--json',
     ]);

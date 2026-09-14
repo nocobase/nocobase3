@@ -2,6 +2,8 @@ import type { FormEvent, ReactElement } from 'react';
 import { useState } from 'react';
 
 import { resolveAppUrl } from '@nocobase/app-client';
+import { CheckCircle2, LoaderCircle, RotateCw } from 'lucide-react';
+import { useTranslation } from '@nocobase/i18n/client';
 
 import { Button } from '../components/ui/button.js';
 import { Checkbox } from '../components/ui/checkbox.js';
@@ -16,12 +18,6 @@ import {
 } from '../components/ui/select.js';
 
 type DatabaseDialect = 'sqlite' | 'postgres' | 'mysql';
-
-const DATABASE_DIALECT_LABELS: Readonly<Record<DatabaseDialect, string>> = {
-  sqlite: 'SQLite',
-  postgres: 'PostgreSQL',
-  mysql: 'MySQL',
-};
 
 interface InstallFormValues {
   dialect: DatabaseDialect;
@@ -44,6 +40,8 @@ interface ConfigureResponse {
 
 export interface InstallPageProps {
   readonly onConfigured?: () => void;
+  readonly onCheckStatus?: () => void;
+  readonly checkingStatus?: boolean;
 }
 
 const initialValues: InstallFormValues = {
@@ -61,7 +59,10 @@ const initialValues: InstallFormValues = {
 
 export default function InstallPage({
   onConfigured,
+  onCheckStatus,
+  checkingStatus = false,
 }: InstallPageProps): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-install');
   const [values, setValues] = useState<InstallFormValues>(initialValues);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string>();
@@ -128,7 +129,10 @@ export default function InstallPage({
       const result = (await response.json()) as ConfigureResponse;
       if (!response.ok) {
         throw new Error(
-          result.message ?? 'Unable to save the application configuration.',
+          result.message ??
+            t('errors.save', {
+              defaultValue: 'Unable to save the application configuration.',
+            }),
         );
       }
       const configurationSaved =
@@ -141,7 +145,9 @@ export default function InstallPage({
       setError(
         submitError instanceof Error
           ? submitError.message
-          : 'Unable to save the application configuration.',
+          : t('errors.save', {
+              defaultValue: 'Unable to save the application configuration.',
+            }),
       );
     } finally {
       setSubmitting(false);
@@ -150,32 +156,113 @@ export default function InstallPage({
 
   if (configured) {
     return (
-      <main className='grid min-h-svh place-items-center bg-background px-6 py-12'>
-        <section className='w-full max-w-lg space-y-5 rounded-2xl border bg-card p-8 text-card-foreground shadow-sm'>
-          <p className='text-sm font-medium text-muted-foreground'>NocoBase</p>
-          <h1 className='text-3xl font-semibold tracking-tight'>
-            Configuration saved
-          </h1>
-          <p className='leading-7 text-muted-foreground'>
-            Your database configuration has been saved. Restart the application
-            to finish the installation and sign in.
-          </p>
-        </section>
+      <main className='min-h-svh bg-muted/20 px-6 py-12'>
+        <div className='mx-auto flex min-h-[calc(100svh-6rem)] max-w-3xl items-center justify-center'>
+          <section className='w-full max-w-xl overflow-hidden rounded-3xl border bg-card text-card-foreground shadow-lg shadow-black/5'>
+            <div className='border-b bg-primary/[0.06] px-8 py-7'>
+              <div className='flex items-start gap-4'>
+                <div className='grid size-12 shrink-0 place-items-center rounded-2xl bg-primary text-primary-foreground shadow-sm'>
+                  <CheckCircle2 className='size-6' />
+                </div>
+                <div className='space-y-2'>
+                  <p className='text-sm font-medium text-primary'>
+                    {t('success.eyebrow', { defaultValue: 'Setup complete' })}
+                  </p>
+                  <h1 className='text-3xl font-semibold tracking-tight'>
+                    {t('success.title', {
+                      defaultValue: 'Database configuration saved',
+                    })}
+                  </h1>
+                </div>
+              </div>
+            </div>
+            <div className='space-y-6 p-8'>
+              <p className='leading-7 text-muted-foreground'>
+                {t('success.description', {
+                  defaultValue:
+                    'Your database settings are saved. Restart the application to finish setup. This page will continue checking and take you to the sign-in screen when the application is ready.',
+                })}
+              </p>
+              <div className='rounded-2xl border bg-muted/30 p-5'>
+                <p className='text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground'>
+                  {t('success.nextStep', { defaultValue: 'Next step' })}
+                </p>
+                <div className='mt-4 flex items-start gap-3'>
+                  <div className='grid size-8 shrink-0 place-items-center rounded-full bg-background text-sm font-semibold shadow-sm'>
+                    1
+                  </div>
+                  <div className='space-y-1'>
+                    <h2 className='font-medium'>
+                      {t('success.restartTitle', {
+                        defaultValue: 'Restart the application',
+                      })}
+                    </h2>
+                    <p className='text-sm leading-6 text-muted-foreground'>
+                      {t('success.restartDescription', {
+                        defaultValue:
+                          'Use your process manager or the NocoBase Hub Restart action, then return here. You do not need to submit the form again.',
+                      })}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div
+                aria-live='polite'
+                className='flex flex-wrap items-center justify-between gap-3'
+              >
+                <p className='flex items-center gap-2 text-sm text-muted-foreground'>
+                  {checkingStatus ? (
+                    <LoaderCircle className='size-4 animate-spin' />
+                  ) : (
+                    <span className='size-2 rounded-full bg-amber-500' />
+                  )}
+                  {t(checkingStatus ? 'success.checking' : 'success.waiting', {
+                    defaultValue: checkingStatus
+                      ? 'Checking application status…'
+                      : 'Waiting for the application to restart…',
+                  })}
+                </p>
+                <Button
+                  disabled={checkingStatus}
+                  onClick={onCheckStatus}
+                  variant='outline'
+                >
+                  {checkingStatus ? (
+                    <LoaderCircle className='size-4 animate-spin' />
+                  ) : (
+                    <RotateCw className='size-4' />
+                  )}
+                  {t('success.checkAgain', { defaultValue: 'Check again' })}
+                </Button>
+              </div>
+            </div>
+          </section>
+        </div>
       </main>
     );
   }
+
+  const dialectLabels: Readonly<Record<DatabaseDialect, string>> = {
+    sqlite: 'SQLite',
+    postgres: 'PostgreSQL',
+    mysql: 'MySQL',
+  };
 
   return (
     <main className='grid min-h-svh place-items-center bg-background px-6 py-12'>
       <section className='w-full max-w-lg space-y-6 rounded-2xl border bg-card p-8 text-card-foreground shadow-sm'>
         <div className='space-y-2'>
-          <p className='text-sm font-medium text-muted-foreground'>NocoBase</p>
+          <p className='text-sm font-medium text-muted-foreground'>
+            {t('brand', { defaultValue: 'NocoBase setup' })}
+          </p>
           <h1 className='text-3xl font-semibold tracking-tight'>
-            Install your application
+            {t('form.title', { defaultValue: 'Install your application' })}
           </h1>
           <p className='leading-7 text-muted-foreground'>
-            Configure the database for this application. A secure authentication
-            secret will be generated automatically.
+            {t('form.description', {
+              defaultValue:
+                'Configure the database for this application. A secure authentication secret will be generated automatically.',
+            })}
           </p>
         </div>
 
@@ -184,16 +271,16 @@ export default function InstallPage({
           onSubmit={(event) => void handleSubmit(event)}
         >
           <div className='space-y-2'>
-            <Label htmlFor='dialect'>Database</Label>
+            <Label htmlFor='dialect'>
+              {t('form.database', { defaultValue: 'Database' })}
+            </Label>
             <Select
               id='dialect'
               value={values.dialect}
               onValueChange={handleDialectValueChange}
             >
               <SelectTrigger>
-                <SelectValue>
-                  {DATABASE_DIALECT_LABELS[values.dialect]}
-                </SelectValue>
+                <SelectValue>{dialectLabels[values.dialect]}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value='sqlite'>SQLite</SelectItem>
@@ -206,7 +293,9 @@ export default function InstallPage({
           <Field
             id='database'
             label={
-              values.dialect === 'sqlite' ? 'Database file' : 'Database name'
+              values.dialect === 'sqlite'
+                ? t('form.databaseFile', { defaultValue: 'Database file' })
+                : t('form.databaseName', { defaultValue: 'Database name' })
             }
             value={values.database}
             onChange={(value) => updateValue('database', value)}
@@ -217,14 +306,14 @@ export default function InstallPage({
             <div className='grid gap-4 sm:grid-cols-2'>
               <Field
                 id='host'
-                label='Host'
+                label={t('form.host', { defaultValue: 'Host' })}
                 value={values.host}
                 onChange={(value) => updateValue('host', value)}
                 required
               />
               <Field
                 id='port'
-                label='Port'
+                label={t('form.port', { defaultValue: 'Port' })}
                 type='number'
                 min={1}
                 max={65_535}
@@ -235,14 +324,14 @@ export default function InstallPage({
               />
               <Field
                 id='username'
-                label='Username'
+                label={t('form.username', { defaultValue: 'Username' })}
                 value={values.username}
                 onChange={(value) => updateValue('username', value)}
                 required
               />
               <Field
                 id='password'
-                label='Password'
+                label={t('form.password', { defaultValue: 'Password' })}
                 type='password'
                 value={values.password}
                 onChange={(value) => updateValue('password', value)}
@@ -254,14 +343,14 @@ export default function InstallPage({
             <div className='space-y-4'>
               <Field
                 id='schema'
-                label='Schema'
+                label={t('form.schema', { defaultValue: 'Schema' })}
                 value={values.schema}
                 onChange={(value) => updateValue('schema', value)}
                 required
               />
               <CheckboxField
                 id='ssl'
-                label='Use SSL'
+                label={t('form.useSsl', { defaultValue: 'Use SSL' })}
                 checked={values.ssl}
                 onChange={(checked) => updateValue('ssl', checked)}
               />
@@ -271,7 +360,7 @@ export default function InstallPage({
           {values.dialect === 'mysql' && (
             <Field
               id='charset'
-              label='Character set'
+              label={t('form.charset', { defaultValue: 'Character set' })}
               value={values.charset}
               onChange={(value) => updateValue('charset', value)}
               required
@@ -280,7 +369,9 @@ export default function InstallPage({
 
           <CheckboxField
             id='debug'
-            label='Enable database debug logging'
+            label={t('form.debugLogging', {
+              defaultValue: 'Enable database debug logging',
+            })}
             checked={values.debug}
             onChange={(checked) => updateValue('debug', checked)}
           />
@@ -295,7 +386,9 @@ export default function InstallPage({
           )}
 
           <Button className='w-full' type='submit' disabled={submitting}>
-            {submitting ? 'Saving configuration…' : 'Save configuration'}
+            {submitting
+              ? t('form.saving', { defaultValue: 'Saving configuration…' })
+              : t('form.save', { defaultValue: 'Save configuration' })}
           </Button>
         </form>
       </section>

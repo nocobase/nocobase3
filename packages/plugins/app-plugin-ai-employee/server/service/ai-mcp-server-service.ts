@@ -1,9 +1,13 @@
-import type { AIManager } from '@nocobase/ai-employee';
+import type {
+  AIManager,
+  MCPOptions,
+  MCPTestResult,
+  MCPToolEntry,
+} from '@nocobase/ai-employee';
 import {
   asRecord,
   badRequest,
   notFound,
-  optionalString,
   redactSecrets,
   requiredString,
   stringArray,
@@ -20,51 +24,89 @@ export class AIMCPServerService {
   public constructor({ ai }: AIMCPServerServiceOptions) {
     this.ai = ai;
   }
-  async list(_options: {}): Promise<unknown[]> {
+
+  public async syncConfiguredMCPServers(
+    configured: Readonly<Record<string, MCPOptions>> | undefined,
+  ): Promise<void> {
+    const desired = configured ?? {};
+    const current = await this.ai.mcpServerManager.listMCP({});
+    for (const server of current) {
+      if (!(server.name in desired))
+        await this.ai.mcpServerManager.deleteMCP(server.name);
+    }
+    if (Object.keys(desired).length > 0) {
+      await this.ai.mcpServerManager.registerMCP(desired);
+    }
+    await this.ai.mcpServerManager.rebuildClient();
+  }
+
+  public async updateEnabled({ input }: { input: unknown }): Promise<void> {
+    const record = asRecord(input);
+    if (!record) throw badRequest('Resource body must be an object');
+    const name = requiredString(record.name, 'name');
+    if (typeof record.enabled !== 'boolean')
+      throw badRequest('enabled must be a boolean');
+    await this.ai.mcpServerManager.updateMCPEnabled(name, record.enabled);
+    await this.ai.mcpServerManager.rebuildClient();
+  }
+
+  public async list(_options: {}): Promise<unknown[]> {
     return (await this.ai.mcpServerManager.listMCP({})).map(serializeMCPServer);
   }
 
-  async get({ name }: { name: string }): Promise<unknown> {
+  public async get({ name }: { name: string }): Promise<unknown> {
     const server = await this.ai.mcpServerManager.getMCP(name);
     if (!server) throw notFound('aiMcpServers', name);
     return serializeMCPServer(server);
   }
 
-  async upsert({ input }: { input: unknown }): Promise<unknown> {
+  public async testConnection({
+    input,
+  }: {
+    input: unknown;
+  }): Promise<MCPTestResult> {
     const record = asRecord(input);
     if (!record) throw badRequest('Resource body must be an object');
-    const name = requiredString(record.name, 'name');
-    const current = await this.ai.mcpServerManager.getMCP(name);
-    const currentRecord = asRecord(current) ?? {};
-    const transport = record.transport ?? current?.transport;
+    const configured =
+      typeof record.name === 'string'
+        ? await this.ai.mcpServerManager.getMCP(record.name)
+        : undefined;
+    const source = configured ? (asRecord(configured) ?? {}) : record;
+    const transport = source.transport;
     if (transport !== 'stdio' && transport !== 'sse' && transport !== 'http') {
       throw badRequest('transport must be stdio, sse, or http');
     }
-    const values = {
-      name,
-      title: optionalString(record.title) ?? currentRecord.title,
-      description:
-        optionalString(record.description) ?? currentRecord.description,
-      enabled:
-        typeof record.enabled === 'boolean'
-          ? record.enabled
-          : (current?.enabled ?? true),
+    return this.ai.mcpServerManager.testConnection({
       transport,
-      command: optionalString(record.command) ?? current?.command,
-      args: stringArray(record.args) ?? current?.args ?? [],
-      env: stringRecord(record.env) ?? current?.env ?? {},
-      url: optionalString(record.url) ?? current?.url,
-      headers: stringRecord(record.headers) ?? current?.headers ?? {},
-      restart: asRecord(record.restart) ?? current?.restart,
-    };
-    await this.ai.mcpServerManager.registerMCP({ [name]: values as any });
-    await this.ai.mcpServerManager.rebuildClient();
-    return this.get({ name });
+      command: typeof source.command === 'string' ? source.command : undefined,
+      args: stringArray(source.args),
+      env: stringRecord(source.env),
+      url: typeof source.url === 'string' ? source.url : undefined,
+      headers: stringRecord(source.headers),
+      restart: asRecord(source.restart),
+    });
   }
 
-  async delete({ name }: { name: string }): Promise<void> {
-    await this.ai.mcpServerManager.deleteMCP(name);
-    await this.ai.mcpServerManager.rebuildClient();
+  public async listTools(): Promise<Record<string, MCPToolEntry[]>> {
+    return this.ai.mcpServerManager.listMCPTools();
+  }
+
+  public async updateToolPermission({
+    input,
+  }: {
+    input: unknown;
+  }): Promise<void> {
+    const record = asRecord(input);
+    if (!record) throw badRequest('Resource body must be an object');
+    const toolName = requiredString(record.toolName, 'toolName');
+    const permission = record.permission;
+    if (permission !== 'ASK' && permission !== 'ALLOW') {
+      throw badRequest('permission must be ASK or ALLOW');
+    }
+    await this.ai.mcpServerManager.updateMCPToolPermission(
+      toolName,
+      permission,
+    );
   }
 }
 

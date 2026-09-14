@@ -12,16 +12,23 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { Knex } from 'knex';
 import ts from 'typescript';
 import { objectProvider } from '@nocobase/config/providers/object';
+import postgres from '@nocobase/db-postgres';
+import mysql from '@nocobase/db-mysql';
+import sqlite from '@nocobase/db-sqlite';
+import oracle from '@nocobase/db-oracle';
+import mssql from '@nocobase/db-mssql';
 import { AppConfig, createConfigPaths } from '../src/config/index.js';
 import {
   createAppDatabaseManager,
-  databaseConfig,
+  type AppDatabaseConfig,
+  type AppDatabaseTaskContributions,
   planAppDatabaseTasks,
   runAppDatabaseTasks,
-  type AppDatabaseConfig,
 } from '../src/database/index.js';
 import { executeAppDatabasePlan } from '../src/database/tasks.js';
-import { createAppPluginDatabaseConfig } from '../src/plugins/resolve.js';
+import { createAppDatabaseTaskContributions } from '../src/plugins/resolve.js';
+
+const drivers = { postgres, mysql, sqlite, oracle, mssql };
 
 const roots: string[] = [];
 afterEach(() => {
@@ -36,6 +43,7 @@ function fixture() {
   roots.push(root);
   const paths = createConfigPaths({ rootDir: root });
   const config: AppDatabaseConfig = {
+    drivers,
     default: 'main',
     connections: {
       analytics: {
@@ -46,14 +54,13 @@ function fixture() {
       },
       main: { dialect: 'sqlite', filename: paths.storage('main/data.sqlite') },
     },
-    taskSources: {
-      directory: paths.database(),
-      packageName: 'test-app',
-      migrations: [],
-      seeds: [],
-    },
   };
-  return { root, paths, config };
+  const contributions: AppDatabaseTaskContributions = {
+    appPackageName: 'test-app',
+    migrations: [],
+    seeds: [],
+  };
+  return { root, paths, config, contributions };
 }
 
 function migration(
@@ -109,7 +116,7 @@ describe('connection-bound application database tasks', () => {
     seed(paths.database('analytics/seeds'), 'analyticsRows');
     const pluginDirectory = path.join(root, 'plugin/migrations');
     migration(pluginDirectory, '000_plugin', 'systemRows');
-    const resolved = createAppPluginDatabaseConfig(config, {
+    const withPlugin = createAppDatabaseTaskContributions({
       appPackageName: 'test-app',
       plugins: [
         {
@@ -119,8 +126,10 @@ describe('connection-bound application database tasks', () => {
           },
         },
       ],
-    } as Parameters<typeof createAppPluginDatabaseConfig>[1]).database;
-    const result = await runAppDatabaseTasks(resolved, paths, {
+    } as Parameters<typeof createAppDatabaseTaskContributions>[0]);
+    const result = await runAppDatabaseTasks(config, {
+      paths,
+      contributions: withPlugin,
       kind: 'migrations',
       all: true,
     });
@@ -130,7 +139,12 @@ describe('connection-bound application database tasks', () => {
     ]);
     expect(result.results[0].executed).toEqual(['000_plugin', '001_main']);
     expect(result.results[1].executed).toEqual(['001_analytics']);
-    await runAppDatabaseTasks(resolved, paths, { kind: 'seeds', all: true });
+    await runAppDatabaseTasks(config, {
+      paths,
+      contributions: withPlugin,
+      kind: 'seeds',
+      all: true,
+    });
     await inspect(config, 'analytics', async (client) => {
       expect(await client.schema.hasTable('system_rows')).toBe(false);
       expect(await client.schema.hasTable('main_rows')).toBe(false);
@@ -138,26 +152,66 @@ describe('connection-bound application database tasks', () => {
         { value: 'initial' },
       ]);
     });
-    const again = await runAppDatabaseTasks(resolved, paths, {
+    const again = await runAppDatabaseTasks(config, {
+      paths,
+      contributions: withPlugin,
       kind: 'migrations',
       all: true,
     });
     expect(again.results.map((r) => r.executed)).toEqual([[], []]);
-    const seeds = await runAppDatabaseTasks(resolved, paths, {
+    const seeds = await runAppDatabaseTasks(config, {
+      paths,
+      contributions: withPlugin,
       kind: 'seeds',
       all: true,
     });
     expect(seeds.results.map((r) => r.executed)).toEqual([[], []]);
   });
 
+  it('ignores task sources that reach the database configuration', async () => {
+    const { config, paths, root } = fixture();
+    migration(paths.database('main/migrations'), '001_main', 'mainRows');
+    const pluginDirectory = path.join(root, 'plugin/migrations');
+    migration(pluginDirectory, '000_plugin', 'systemRows');
+    const withPlugin = createAppDatabaseTaskContributions({
+      appPackageName: 'test-app',
+      plugins: [
+        {
+          metadata: {
+            packageName: 'test-plugin',
+            migrationsDirectory: pluginDirectory,
+          },
+        },
+      ],
+    } as Parameters<typeof createAppDatabaseTaskContributions>[0]);
+    // config.yml deep-merges into the database namespace, so a key shaped like
+    // the former taskSources field can appear there. Planning must not read it.
+    const configured = {
+      ...config,
+      taskSources: { packageName: 'hijacked', migrations: [], seeds: [] },
+    } as AppDatabaseConfig;
+    const plan = planAppDatabaseTasks(configured, ['migrations'], {
+      paths,
+      contributions: withPlugin,
+      all: true,
+    });
+    expect(
+      plan
+        .find((task) => task.connection === 'main')!
+        .config.sources?.map((source) => source.packageName),
+    ).toEqual(['test-app', 'test-plugin']);
+  });
+
   it('manual selection ignores autoRun and never creates the unselected database', async () => {
-    const { config, paths } = fixture();
+    const { config, paths, contributions } = fixture();
     migration(
       paths.database('analytics/migrations'),
       '001_analytics',
       'analyticsRows',
     );
-    await runAppDatabaseTasks(config, paths, {
+    await runAppDatabaseTasks(config, {
+      paths,
+      contributions,
       kind: 'migrations',
       connection: 'analytics',
     });
@@ -166,23 +220,19 @@ describe('connection-bound application database tasks', () => {
   });
 
   it('keeps startup order, skips disabled tasks and migrates before seeding each connection', async () => {
-    const { config, paths } = fixture();
+    const { config, paths, contributions } = fixture();
     migration(paths.database('main/migrations'), '001_main', 'mainRows');
     seed(paths.database('main/seeds'), 'mainRows');
     const database = createAppDatabaseManager(config)!;
     try {
-      const plan = planAppDatabaseTasks(
-        config,
+      const plan = planAppDatabaseTasks(config, ['migrations', 'seeds'], {
         paths,
-        ['migrations', 'seeds'],
-        { autoRun: true },
-      );
-      const result = await executeAppDatabasePlan(
-        database,
-        config,
+        contributions,
+        autoRun: true,
+      });
+      const result = await executeAppDatabasePlan(database, config, plan, {
         paths,
-        plan,
-      );
+      });
       expect(
         result.results.map((r) => [r.connection, r.kind, r.status]),
       ).toEqual([
@@ -198,7 +248,7 @@ describe('connection-bound application database tasks', () => {
   });
 
   it('reports committed, failed and unattempted connections and stops on failure', async () => {
-    const { config, paths } = fixture();
+    const { config, paths, contributions } = fixture();
     config.connections.zlast = {
       dialect: 'sqlite',
       filename: paths.storage('last/data.sqlite'),
@@ -212,7 +262,12 @@ describe('connection-bound application database tasks', () => {
     );
     migration(paths.database('zlast/migrations'), '001_last', 'lastRows');
     await expect(
-      runAppDatabaseTasks(config, paths, { kind: 'migrations', all: true }),
+      runAppDatabaseTasks(config, {
+        paths,
+        contributions,
+        kind: 'migrations',
+        all: true,
+      }),
     ).rejects.toMatchObject({
       result: {
         ok: false,
@@ -230,13 +285,15 @@ describe('connection-bound application database tasks', () => {
   });
 
   it('skips external databases without opening them and rejects explicit execution', async () => {
-    const { config, paths } = fixture();
+    const { config, paths, contributions } = fixture();
     config.connections.erp = {
       dialect: 'sqlite',
       filename: paths.storage('erp.sqlite'),
       schemaManagement: 'external',
     };
-    const result = await runAppDatabaseTasks(config, paths, {
+    const result = await runAppDatabaseTasks(config, {
+      paths,
+      contributions,
       kind: 'seeds',
       all: true,
     });
@@ -246,23 +303,129 @@ describe('connection-bound application database tasks', () => {
     });
     expect(existsSync(paths.storage('erp.sqlite'))).toBe(false);
     await expect(
-      runAppDatabaseTasks(config, paths, { kind: 'seeds', connection: 'erp' }),
+      runAppDatabaseTasks(config, {
+        paths,
+        contributions,
+        kind: 'seeds',
+        connection: 'erp',
+      }),
     ).rejects.toThrow('external');
     await expect(
-      runAppDatabaseTasks(config, paths, {
+      runAppDatabaseTasks(config, {
+        paths,
+        contributions,
         kind: 'migrations',
         connection: 'erp',
       }),
     ).rejects.toThrow('external');
   });
 
+  it('freshly clears managed objects and reruns migrations without calling down', async () => {
+    const { config, paths, contributions } = fixture();
+    const directory = paths.database('main/migrations');
+    mkdirSync(directory, { recursive: true });
+    writeFileSync(
+      path.join(directory, '001_main.ts'),
+      `import { defineMigration } from '@nocobase/db';
+export default defineMigration({ name: '001_main', async up({ builder }) {
+  await builder.createCollection('freshRows', c => { c.increments('id'); c.string('value'); });
+}, async down() { throw new Error('down must not be called'); } });`,
+    );
+    const first = await runAppDatabaseTasks(config, {
+      paths,
+      contributions,
+      kind: 'migrations',
+    });
+    expect(first.results[0].executed).toEqual(['001_main']);
+    await inspect(config, 'main', async (client) => {
+      await client('fresh_rows').insert({ value: 'stale' });
+    });
+
+    const fresh = await runAppDatabaseTasks(config, {
+      paths,
+      contributions,
+      kind: 'migrations',
+      fresh: true,
+      confirmFresh: async () => true,
+    });
+    expect(fresh.results[0]).toMatchObject({
+      status: 'completed',
+      fresh: true,
+      executed: ['001_main'],
+    });
+    await inspect(config, 'main', async (client) => {
+      expect(await client('fresh_rows').select('value')).toEqual([]);
+    });
+  });
+
+  it('freshly skips external connections in all mode and rejects explicit external selection', async () => {
+    const { config, paths, contributions } = fixture();
+    migration(paths.database('main/migrations'), '001_main', 'mainRows');
+    migration(
+      paths.database('analytics/migrations'),
+      '001_analytics',
+      'analyticsRows',
+    );
+    config.connections.erp = {
+      dialect: 'sqlite',
+      filename: paths.storage('erp.sqlite'),
+      schemaManagement: 'external',
+    };
+    const result = await runAppDatabaseTasks(config, {
+      paths,
+      contributions,
+      kind: 'migrations',
+      all: true,
+      fresh: true,
+      confirmFresh: async () => true,
+    });
+    expect(
+      result.results.find((entry) => entry.connection === 'main'),
+    ).toMatchObject({
+      status: 'completed',
+      fresh: true,
+      executed: ['001_main'],
+    });
+    expect(
+      result.results.find((entry) => entry.connection === 'analytics'),
+    ).toMatchObject({
+      status: 'completed',
+      fresh: true,
+      executed: ['001_analytics'],
+    });
+    expect(
+      result.results.find((entry) => entry.connection === 'erp'),
+    ).toMatchObject({
+      status: 'skipped',
+      reason: 'external',
+    });
+    await expect(
+      runAppDatabaseTasks(config, {
+        paths,
+        contributions,
+        kind: 'migrations',
+        connection: 'erp',
+        fresh: true,
+        confirmFresh: async () => true,
+      }),
+    ).rejects.toThrow('external');
+  });
+
   it('preserves migration and seed history after moving legacy directories for a custom default', async () => {
-    const { config, paths } = fixture();
+    const { config, paths, contributions } = fixture();
     config.default = 'analytics';
     migration(paths.database('migrations'), '001_legacy', 'legacyRows');
     seed(paths.database('seeds'), 'legacyRows');
-    await runAppDatabaseTasks(config, paths, { kind: 'migrations' });
-    await runAppDatabaseTasks(config, paths, { kind: 'seeds' });
+    await runAppDatabaseTasks(config, {
+      paths,
+      contributions,
+      kind: 'migrations',
+    });
+    await runAppDatabaseTasks(config, {
+      paths,
+      contributions,
+      kind: 'seeds',
+    });
     mkdirSync(paths.database('analytics'), { recursive: true });
     renameSync(
       paths.database('migrations'),
@@ -271,8 +434,13 @@ describe('connection-bound application database tasks', () => {
     renameSync(paths.database('seeds'), paths.database('analytics/seeds'));
     for (const kind of ['migrations', 'seeds'] as const) {
       expect(
-        (await runAppDatabaseTasks(config, paths, { kind })).results[0]
-          .executed,
+        (
+          await runAppDatabaseTasks(config, {
+            paths,
+            contributions,
+            kind,
+          })
+        ).results[0].executed,
       ).toEqual([]);
     }
     await inspect(config, 'analytics', async (client) => {
@@ -281,26 +449,39 @@ describe('connection-bound application database tasks', () => {
   });
 
   it('preflights conflicts, missing explicit sources and unknown connections before writing', async () => {
-    const { config, paths } = fixture();
+    const { config, paths, contributions } = fixture();
     migration(paths.database('main/migrations'), '001_main', 'mainRows');
     mkdirSync(paths.database('migrations'), { recursive: true });
     await expect(
-      runAppDatabaseTasks(config, paths, { kind: 'migrations' }),
+      runAppDatabaseTasks(config, {
+        paths,
+        contributions,
+        kind: 'migrations',
+      }),
     ).rejects.toThrow('Both legacy');
     rmSync(paths.database('migrations'), { recursive: true });
     config.connections.analytics.migrations = { directory: 'missing' };
     await expect(
-      runAppDatabaseTasks(config, paths, { kind: 'migrations', all: true }),
+      runAppDatabaseTasks(config, {
+        paths,
+        contributions,
+        kind: 'migrations',
+        all: true,
+      }),
     ).rejects.toThrow('Explicit');
     expect(existsSync(paths.storage('main/data.sqlite'))).toBe(false);
     await expect(
-      runAppDatabaseTasks(config, paths, {
+      runAppDatabaseTasks(config, {
+        paths,
+        contributions,
         kind: 'migrations',
         connection: 'typo',
       }),
     ).rejects.toThrow('Unknown');
     await expect(
-      runAppDatabaseTasks(config, paths, {
+      runAppDatabaseTasks(config, {
+        paths,
+        contributions,
         kind: 'migrations',
         connection: 'main',
         all: true,
@@ -309,16 +490,21 @@ describe('connection-bound application database tasks', () => {
   });
 
   it('rejects two managed aliases of the same target before creating storage', async () => {
-    const { config, paths } = fixture();
+    const { config, paths, contributions } = fixture();
     config.connections.analytics.filename = config.connections.main.filename;
     await expect(
-      runAppDatabaseTasks(config, paths, { kind: 'migrations', all: true }),
+      runAppDatabaseTasks(config, {
+        paths,
+        contributions,
+        kind: 'migrations',
+        all: true,
+      }),
     ).rejects.toThrow('same database and schema');
     expect(existsSync(paths.storage('main/data.sqlite'))).toBe(false);
   });
 
   it('normalizes every SQLite path consistently, including database aliases and memory databases', async () => {
-    const { config, paths } = fixture();
+    const { config, paths, contributions } = fixture();
     config.connections.analytics = {
       dialect: 'sqlite',
       filename: 'unused.sqlite',
@@ -334,7 +520,9 @@ describe('connection-bound application database tasks', () => {
       '001_analytics',
       'analyticsRows',
     );
-    await runAppDatabaseTasks(config, paths, {
+    await runAppDatabaseTasks(config, {
+      paths,
+      contributions,
       kind: 'migrations',
       connection: 'analytics',
     });
@@ -343,7 +531,7 @@ describe('connection-bound application database tasks', () => {
   });
 
   it('loads compiled per-connection sources from the runtime database directory', async () => {
-    const { config, paths, root } = fixture();
+    const { config, paths, root, contributions } = fixture();
     const source = paths.database('analytics/migrations');
     migration(source, '001_compiled', 'compiledRows');
     seed(paths.database('analytics/seeds'), 'compiledRows');
@@ -372,14 +560,18 @@ describe('connection-bound application database tasks', () => {
       );
     }
     for (const kind of ['migrations', 'seeds'] as const) {
-      const result = await runAppDatabaseTasks(config, compiledPaths, {
+      const result = await runAppDatabaseTasks(config, {
+        paths: compiledPaths,
+        contributions,
         kind,
         connection: 'analytics',
       });
       expect(result.results[0].executed).toHaveLength(1);
       expect(
         (
-          await runAppDatabaseTasks(config, compiledPaths, {
+          await runAppDatabaseTasks(config, {
+            paths: compiledPaths,
+            contributions,
             kind,
             connection: 'analytics',
           })
@@ -394,21 +586,12 @@ describe('connection-bound application database tasks', () => {
   });
 
   it('maps old environment task settings to a custom default without contaminating other connections', async () => {
-    const { paths } = fixture();
-    const config = new AppConfig([databaseConfig], {
-      context: {
-        paths,
-        appPackageName: 'test-app',
-        plugins: { appPackageName: 'test-app', plugins: [] },
-      },
-      environment: {
-        DB_MIGRATIONS_AUTO_RUN: 'false',
-        DB_MIGRATIONS_TABLE: 'legacy_history',
-      },
-    });
+    const { paths, contributions } = fixture();
+    const config = new AppConfig();
     config.load(
       objectProvider({
         database: {
+          drivers,
           default: 'analytics',
           connections: {
             analytics: {
@@ -420,12 +603,19 @@ describe('connection-bound application database tasks', () => {
         },
       }),
     );
+    config.load(
+      objectProvider({
+        database: {
+          migrations: { autoRun: false, tableName: 'legacy_history' },
+          connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
+        },
+      }),
+    );
     await config.loadAll();
     const plan = planAppDatabaseTasks(
-      config.get(databaseConfig),
-      paths,
+      config.get<AppDatabaseConfig>('database')!,
       ['migrations'],
-      { all: true },
+      { paths, contributions, all: true },
     );
     expect(plan[0]).toMatchObject({
       connection: 'analytics',

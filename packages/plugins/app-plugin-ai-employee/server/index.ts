@@ -1,4 +1,3 @@
-export { aiEmployeeConfig } from './config.js';
 export type {
   AIApplicationConfig,
   AIEmployeeConfig,
@@ -19,9 +18,16 @@ export {
 export type { LLMServiceSyncSummary } from './manager/llm-service-config.js';
 export { AIEmployeeProvider } from './provider/index.js';
 export {
-  aiConfig,
   normalizeDisks,
   resolveAIEmployeeStorageDisk,
   resolveAIKnowledgeBaseStorageDisks,
 } from './config.js';
 export { aiManagerToken } from './provider/ai-employee.js';
+export { AIEmployeeResources, AIResourceRegistrar } from './ai/index.js';
+export type { AIResourceRegistrarOptions } from './ai/index.js';
+export {
+  AIConversationsManager,
+  aiConversationsManagerToken,
+  type CreateAIConversationParams,
+} from './manager/ai-conversations-manager.js';
+export { agentServiceFactoryToken } from './agent/service/agent-service-factory.js';

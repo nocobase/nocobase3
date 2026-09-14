@@ -35,12 +35,15 @@ it.each(['en-US', 'zh-CN'])(
     expect(
       screen.getAllByRole('link').map((link) => link.getAttribute('href')),
     ).toEqual([
+      '/demo/route-overlays',
       '/demo/articles',
+      '/demo/numeric-examples',
       '/demo/repository-example/find-many',
       '/demo/repository-example/crm',
       '/demo/repository-example/orders',
       '/demo/file-repository',
       '/demo/routes-example',
+      '/demo/settings/automation/workflows',
     ]);
   },
 );

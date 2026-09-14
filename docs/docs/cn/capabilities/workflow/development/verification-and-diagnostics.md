@@ -13,7 +13,7 @@ keywords: 'NocoBase,工作流检查,workflow check,Artifact,诊断'
 在应用根目录运行：
 
 ```bash
-pnpm exec workflow check server/workflows/<workflow-directory>
+pnpm nocobase workflow check server/workflows/<workflow-directory>
 ```
 
 检查按顺序执行五个阶段：
@@ -29,7 +29,7 @@ pnpm exec workflow check server/workflows/<workflow-directory>
 加 `--ir` 可以直接打印编译后的扁平 IR，也就是 Artifact 中 `workflow.json` 承载的那份定义：
 
 ```bash
-pnpm exec workflow check server/workflows/<workflow-directory> --ir
+pnpm nocobase workflow check server/workflows/<workflow-directory> --ir
 ```
 
 ## 检查运行模块和应用集成
@@ -124,4 +124,4 @@ pnpm exec workflow build
 
 ### 工作流因超时中止
 
-查看运行 `reason`、节点超时配置和日志，确认 Run 模块是否响应 signal。已经发生的外部副作用不会自动回滚，需要幂等或补偿。
+查看运行 `reason`、工作流顶层超时配置和日志，确认 Run 模块是否响应 signal。已经发生的外部副作用不会自动回滚，需要幂等或补偿。

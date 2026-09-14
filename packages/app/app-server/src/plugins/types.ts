@@ -3,10 +3,7 @@ import type {
   ServiceProviderLifecycle,
 } from '@nocobase/service-provider';
 import type { Hono } from 'hono';
-import type {
-  AppConfigAccessor,
-  AppConfigContribution,
-} from '../config/index.js';
+import type { AppConfigAccessor } from '../config/index.js';
 import type { LocalesModule } from '@nocobase/i18n';
 
 import type { ConfigPaths } from '../config/index.js';
@@ -14,6 +11,12 @@ import type { AppRouteContribution } from '../router/index.js';
 
 export interface AppPluginApplication<TConfig = object> {
   readonly appName: string;
+  /**
+   * Whether this app owns the process it runs in, or is one of several an
+   * app host mounted. Optional so an app composed by hand need not state it,
+   * and absent means embedded, matching what `Application` itself defaults to.
+   */
+  readonly mode?: 'standalone' | 'embedded';
   readonly publicBasePath: string;
   readonly config: AppConfigAccessor & Partial<Record<never, TConfig>>;
   readonly paths: ConfigPaths;
@@ -39,8 +42,6 @@ export type AppServerPluginLocalesLoader = () => Promise<LocalesModule>;
 
 export interface AppServerPluginDefinition<TConfig = object> {
   readonly packageName: string;
-  readonly config?:
-    AppConfigContribution<never> | readonly AppConfigContribution<never>[];
   readonly serviceProviders?: readonly AppPluginProviderConstructor<TConfig>[];
   readonly routes?: readonly AppRouteContribution<AppPluginApplication>[];
   readonly database?: AppServerPluginDatabaseContribution;
@@ -50,7 +51,6 @@ export interface AppServerPluginDefinition<TConfig = object> {
 
 export interface AppServerPlugin<TConfig = object> {
   readonly packageName: string;
-  readonly config: readonly AppConfigContribution<never>[];
   readonly serviceProviders: readonly AppPluginProviderConstructor<TConfig>[];
   readonly routes: readonly AppRouteContribution<AppPluginApplication>[];
   readonly database?: AppServerPluginDatabaseContribution;

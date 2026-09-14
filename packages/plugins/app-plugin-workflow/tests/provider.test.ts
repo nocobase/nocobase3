@@ -1,12 +1,10 @@
+import sqlite from '@nocobase/db-sqlite';
 import { createDatabaseManager, databaseManagerToken } from '@nocobase/db';
 import { createLogging, createSilentLoggingConfig } from '@nocobase/logging';
 import { createQueueManager, createSyncQueueConfig } from '@nocobase/queue';
 import { loggingToken } from '@nocobase/app-server/logging';
 import { queueManagerToken } from '@nocobase/app-server/queue';
-import type {
-  AppConfigAccessor,
-  AppConfigToken,
-} from '@nocobase/app-server/config';
+import type { AppConfigAccessor } from '@nocobase/app-server/config';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { afterEach, describe, expect, expectTypeOf, it } from 'vitest';
 
@@ -70,6 +68,7 @@ function createProviderWithDependencies(appName: string): {
 } {
   const container = new ServiceContainer();
   const database = createDatabaseManager({
+    drivers: { sqlite },
     connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
   });
   const queue = createQueueManager(createSyncQueueConfig());
@@ -116,8 +115,7 @@ function createTestConfig(
   values: Readonly<Record<string, unknown>>,
 ): AppConfigAccessor {
   return {
-    get: <TValue>(definition: AppConfigToken<TValue>): TValue =>
-      values[definition.namespace] as TValue,
+    get: <TValue>(definition: string): TValue => values[definition] as TValue,
     raw: () => values,
     reload: () => Promise.resolve({ changedNamespaces: [] }),
     subscribe: () => () => undefined,

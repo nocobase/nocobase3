@@ -36,6 +36,8 @@ Only use Instruction classes exported by an installed plugin and registered in t
 
 ## Complete current example
 
+若应用需要可复用的流程控制能力（例如发邮件节点），请先阅读文档中的“可运行示例：发邮件节点”。示例覆盖公开导入、异步 Provider 注册、checker/build 的同一 Instruction 合同、隔离 Artifact 输出和运行时注册；不要只在 `boot()` 中注册后就直接编写 DSL。
+
 Create all of these files; the DSL alone is not a complete package:
 
 ```text
@@ -287,7 +289,7 @@ Use an exact template such as `{{$parameters.approvalLimit}}` or JSON Logic `{ v
 - Keep node keys stable across revisions. Titles/descriptions may change; keys connect history, diagnostics, and result references.
 - Only call `.branch()` on a branching node, and only use branch names declared by that instruction contract.
 
-Every node source has `key`, optional `title`/`description`, required `config`, optional `options: { timeout }`, and optional `result`. `timeout` must be a finite positive number. Config is an instruction-owned namespace; never flatten config fields onto the node.
+Every node source has `key`, optional `title`/`description`, required `config`, and optional `result`. Node-level timeout is not currently enforced by the runtime; configure a workflow-level timeout instead. Config is an instruction-owned namespace; never flatten config fields onto the node.
 
 ## Condition nodes
 

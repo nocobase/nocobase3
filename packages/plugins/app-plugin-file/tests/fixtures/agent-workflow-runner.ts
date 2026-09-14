@@ -3,6 +3,7 @@ import path from 'node:path';
 import { mkdir } from 'node:fs/promises';
 import { Hono } from 'hono';
 import type { AppRouteContribution } from '@nocobase/app-server/router';
+import sqlite from '@nocobase/db-sqlite';
 import { createDatabaseManager, databaseManagerToken } from '@nocobase/db';
 import { createDriveManager } from '@nocobase/drive';
 import { driveManagerToken } from '@nocobase/app-server/drive';
@@ -23,6 +24,7 @@ const { default: routes } = (await import(
   path.join(process.cwd(), 'routes.ts')
 )) as { default: readonly AppRouteContribution<AppPluginApplication>[] };
 const db = createDatabaseManager({
+  drivers: { sqlite },
   connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
 });
 try {
@@ -107,6 +109,7 @@ try {
     .repository('invoice_files', {
       disk: 'local',
       accessPath: '/uploads/invoices',
+      policy: { read: true, create: true, update: false, delete: false },
     });
   assert.equal(server.getUrl(row), '/uploads/invoices/' + row.id + '.txt');
   await assert.rejects(

@@ -24,6 +24,22 @@ The manager exposes three things:
 
 Each takes an optional connection name and uses the default connection when omitted.
 
+## Analytics example connection
+
+This template supplies a second managed SQLite connection named `analytics` in
+`server/config/index.ts`, with file overrides in `config.yml`. Its migrations and
+seeds live under `database/analytics/` and run automatically at startup. It owns
+`channels`, `campaigns`, and `dailyMetrics`; all monetary values are integer cents.
+The seed intentionally includes demonstration data for this Examples application.
+
+Use `database.query('analytics')` or
+`database.repository('dailyMetrics', 'analytics')` to access it. The HTTP exposures
+`analyticsChannels`, `analyticsCampaigns`, and `analyticsDailyMetrics` in
+`server/routes/analytics.ts` use `defineRepositoryApiRoutes` with an explicit
+`connection: 'analytics'`. All signed-in users may manage these sample records.
+The server declares field and relation-operation write policies; clients cannot
+override them. This feature is specific to Examples, not shared template scaffolding.
+
 ## Reading
 
 ```ts

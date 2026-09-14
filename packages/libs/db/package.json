@@ -1,6 +1,6 @@
 {
   "name": "@nocobase/db",
-  "version": "1.0.0-beta.4",
+  "version": "1.0.0-beta.5",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -12,6 +12,10 @@
     ".": {
       "types": "./src/index.ts",
       "import": "./src/index.ts"
+    },
+    "./testing": {
+      "types": "./src/testing.ts",
+      "import": "./src/testing.ts"
     }
   },
   "files": [
@@ -22,6 +26,10 @@
       ".": {
         "types": "./dist/src/index.d.ts",
         "import": "./dist/src/index.js"
+      },
+      "./testing": {
+        "types": "./dist/src/testing.d.ts",
+        "import": "./dist/src/testing.js"
       }
     },
     "access": "public"
@@ -30,22 +38,11 @@
     "build": "node ./scripts/clean-dist.mjs && tsc -p tsconfig.build.json",
     "prepack": "pnpm build",
     "example": "tsx ./examples/command.ts",
+    "benchmark:numeric": "tsx ./benchmarks/numeric/run.ts",
+    "typecheck:benchmarks": "tsc -p benchmarks/tsconfig.json --noEmit",
     "playground": "tsx ./playground/command.ts",
-    "test": "vitest run",
+    "test": "vitest run tests --exclude **/tests/integration/**",
     "test:coverage": "vitest run --coverage",
-    "test:db:up:postgres": "docker compose up -d --wait postgres",
-    "test:db:up:mysql": "docker compose up -d --wait mysql",
-    "test:db:up:oracle": "docker compose up -d --wait oracle",
-    "test:db:up:mssql": "docker compose up -d --wait mssql && docker compose run --rm mssql-init",
-    "test:db:up:all": "docker compose up -d --wait postgres mysql oracle mssql && docker compose run --rm mssql-init",
-    "test:db:down": "docker compose down --volumes --remove-orphans",
-    "test:integration": "pnpm test:integration:sqlite",
-    "test:integration:sqlite": "INTEGRATION_DB_CONNECTIONS=sqlite vitest run tests/integration",
-    "test:integration:postgres": "INTEGRATION_DB_CONNECTIONS=postgres vitest run tests/integration",
-    "test:integration:mysql": "INTEGRATION_DB_CONNECTIONS=mysql vitest run tests/integration",
-    "test:integration:oracle": "INTEGRATION_DB_CONNECTIONS=oracle vitest run tests/integration",
-    "test:integration:mssql": "INTEGRATION_DB_CONNECTIONS=mssql vitest run tests/integration",
-    "test:integration:all": "INTEGRATION_DB_CONNECTIONS=all vitest run tests/integration",
     "api:check": "node ./scripts/check-public-api.mjs",
     "api:update": "node ./scripts/check-public-api.mjs --write",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -65,19 +62,16 @@
   },
   "devDependencies": {
     "@hono/node-server": "catalog:",
+    "@nocobase/db-sqlite": "workspace:*",
+    "@nocobase/db-dameng": "workspace:*",
+    "@nocobase/db-testkit": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@types/node": "catalog:",
     "@vitest/coverage-v8": "catalog:",
-    "better-sqlite3": "catalog:",
     "eslint": "catalog:",
     "hono": "catalog:",
-    "mysql2": "^3.23.3",
-    "oracledb": "catalog:",
-    "pg": "^8.23.0",
-    "pg-query-stream": "^4.14.0",
-    "tedious": "catalog:",
-    "tsx": "catalog:",
     "prettier": "catalog:",
+    "tsx": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

@@ -317,9 +317,10 @@ Server-rendered SPA HTML contains a versioned JSON data block:
 ```
 
 `resolveAppRuntime()` reads and validates this payload, then passes its public
-`config` value to the application config factory. Plugin config contributions
-provide namespaced defaults and validation; deployment values override those
-defaults. Runtime code reads the normalized result with `app.config.get()`.
+`config` value to the application config loader. It then executes the application
+TypeScript configuration factory with the runtime and merges its defaults below
+the public values. Services read the assembled configuration through
+`app.config.get()`; `app.config` and `runtime.config` reference the same object.
 
 Only public Browser configuration belongs in this payload. Server secrets must
 never be copied into the HTML data block, Client plugin options, logs, or

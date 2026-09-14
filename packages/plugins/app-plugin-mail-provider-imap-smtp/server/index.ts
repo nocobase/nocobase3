@@ -1,3 +1,6 @@
 export { default } from './plugin.js';
 export { imapSmtpMailProviderDefinition } from './imap-smtp.js';
-export { imapSmtpMailProviderConfig } from './config.js';
+export type {
+  ImapSmtpEndpointConfig,
+  ImapSmtpMailProviderConfig,
+} from './config.js';

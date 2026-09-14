@@ -1,8 +1,9 @@
-import type { QueryAdapter, Row } from '@nocobase/db';
+import type { Row } from '@nocobase/db';
 
-import { WORKFLOW_COLLECTIONS } from '../collections/names.js';
+import type { WorkflowStore } from '../collections/store.js';
 import type {
   JsonObject,
+  JsonValue,
   WorkflowDefinition,
   WorkflowId,
   WorkflowLogger,
@@ -23,8 +24,19 @@ export const noopWorkflowLogger: WorkflowLogger = {
   error: () => undefined,
 };
 
+/**
+ * The current instant, in the form every temporal column of this plugin holds.
+ *
+ * Those columns are `datetimeTz`, and the Repository reads and writes one as a
+ * canonical UTC ISO-8601 string on every dialect, so this is both what goes in
+ * and what comes back out. See `collections/store.ts`.
+ */
+export function nowInstant(): string {
+  return new Date().toISOString();
+}
+
 export function parseJson<T>(value: unknown, fallback: T): T {
-  if (value == null || value === '') {
+  if (value == null) {
     return fallback;
   }
   if (typeof value !== 'string') {
@@ -33,14 +45,24 @@ export function parseJson<T>(value: unknown, fallback: T): T {
   try {
     return JSON.parse(value) as T;
   } catch {
-    return fallback;
+    // Repository rows already decode JSON string scalars to plain strings.
+    // Keep those values instead of treating them as malformed JSON text.
+    return value as T;
   }
 }
 
-export function serializeJson(value: unknown): string {
-  return JSON.stringify(value, (_key, item) =>
-    typeof item === 'bigint' ? item.toString() : item,
+/**
+ * Normalize an arbitrary workflow value to the JSON value contract expected
+ * by Repository JSON fields. The database layer owns the actual encoding, so
+ * this must return a value rather than JSON text; otherwise a scalar such as
+ * `2` would be written as the JSON string `"2"`.
+ */
+export function serializeJson(value: unknown): JsonValue {
+  const text = JSON.stringify(
+    value === undefined ? null : value,
+    (_key, item) => (typeof item === 'bigint' ? item.toString() : item),
   );
+  return JSON.parse(text) as JsonValue;
 }
 
 export function asId(value: unknown, field: string = 'id'): WorkflowId {
@@ -50,7 +72,25 @@ export function asId(value: unknown, field: string = 'id'): WorkflowId {
   throw new Error(`Expected ${field} to be a number or string`);
 }
 
-function asNullableString(value: unknown): string | null {
+/**
+ * An id as a Repository filter takes it.
+ *
+ * Every id here belongs to a `bigInt` column, and a `bigInt` filter accepts a
+ * JavaScript number only — a string is rejected outright rather than coerced.
+ * Ids reach this plugin as strings often enough (a route parameter, a JSON
+ * body, a driver that returns bigints as text) that the conversion is worth
+ * one named place. Anything that cannot survive it is refused rather than
+ * rounded, because a rounded id silently addresses a different row.
+ */
+export function asIdFilter(value: WorkflowId): number {
+  const id = typeof value === 'number' ? value : Number(value);
+  if (!Number.isSafeInteger(id)) {
+    throw new Error(`Workflow identifier "${String(value)}" is out of range.`);
+  }
+  return id;
+}
+
+export function asNullableString(value: unknown): string | null {
   if (value == null) {
     return null;
   }
@@ -148,46 +188,32 @@ export function hydrateNodeRun(row: Row): WorkflowNodeRun {
 }
 
 export async function loadWorkflow(
-  query: QueryAdapter,
+  store: WorkflowStore,
   id: WorkflowId,
 ): Promise<WorkflowDefinition | null> {
-  const row = await query
-    .selectFrom(WORKFLOW_COLLECTIONS.workflows)
-    .selectAll()
-    .where('id', '=', id)
-    .executeTakeFirst<Row>();
+  const row = await store.workflows.findOne({ filter: { id: asIdFilter(id) } });
   if (!row) {
     return null;
   }
-  const nodes = await query
-    .selectFrom(WORKFLOW_COLLECTIONS.nodes)
-    .selectAll()
-    .where('workflowId', '=', id)
-    .orderBy('id')
-    .execute<Row>();
+  const nodes = await store.nodes.findMany({
+    filter: { workflowId: asIdFilter(id) },
+    sort: (sort) => sort.field('id').asc(),
+  });
   return hydrateWorkflow(row, nodes.map(hydrateWorkflowNode));
 }
 
 export async function loadRun(
-  query: QueryAdapter,
+  store: WorkflowStore,
   id: WorkflowId,
 ): Promise<WorkflowRun | null> {
-  const row = await query
-    .selectFrom(WORKFLOW_COLLECTIONS.runs)
-    .selectAll()
-    .where('id', '=', id)
-    .executeTakeFirst<Row>();
+  const row = await store.runs.findOne({ filter: { id: asIdFilter(id) } });
   return row ? hydrateRun(row) : null;
 }
 
 export async function loadNodeRun(
-  query: QueryAdapter,
+  store: WorkflowStore,
   id: WorkflowId,
 ): Promise<WorkflowNodeRun | null> {
-  const row = await query
-    .selectFrom(WORKFLOW_COLLECTIONS.nodeRuns)
-    .selectAll()
-    .where('id', '=', id)
-    .executeTakeFirst<Row>();
+  const row = await store.nodeRuns.findOne({ filter: { id: asIdFilter(id) } });
   return row ? hydrateNodeRun(row) : null;
 }

@@ -273,14 +273,18 @@ Requests use `POST /orders:aggregate` and `POST /orders:groupBy`; the client
 unwraps `{ data }` into an aggregate object or array of group objects. Exported
 contracts are `RemoteAggregateAst`, `RemoteAggregateOptions`,
 `RemoteGroupByOptions`, and `RemoteAggregateResult`. Result aliases are dynamic.
-An empty input set returns count 0 and null for SUM/AVG/MIN/MAX; empty grouped
+COUNT (including the standalone `count()` method) returns a safe integer number; counts above Number.MAX_SAFE_INTEGER fail with INVALID_STORED_VALUE.
+SUM/AVG of integer, BIGINT and DECIMAL fields preserve database-formatted strings;
+FLOAT/DOUBLE SUM/AVG return numbers. MIN/MAX retain the field's
+logical type (BIGINT string, integer number). An empty input set returns count
+`0` and null for SUM/AVG/MIN/MAX; empty grouped
 results are `[]`. BigInt results are serialized as decimal strings to avoid
 precision loss, dates as ISO strings, and dialect-specific numeric strings are
 preserved. These methods do not use `findMany` pagination or NDJSON streaming.
 
-`writePolicy` is a server-only option. Remote Repository options and their builders
-do not expose it, and HTTP requests containing it are rejected. Frontend code sends
-`values`; the server declares the allowed fields and relation operations in
-`defineRepositoryApiRoutes`, for example
-`updateOne: { writePolicy: { fields: ['name'], relations: { tasks: { update: { fields: ['title'] } } } } }`.
-Server API create/update actions default to denying writes until a policy is configured.
+Authorization is server-only. Remote Repository options and their builders expose
+neither `writePolicy` nor `policy`, and an HTTP request containing either is
+rejected. Frontend code sends `values`; the server declares what may be written
+in each exposure's `policy` in `defineRepositoryApiRoutes`, for example
+`policy: { read: true, create: false, update: { scope: true, fields: ['name'] }, delete: false }`.
+Every exposure declares one, and a node it does not grant is refused with 403.

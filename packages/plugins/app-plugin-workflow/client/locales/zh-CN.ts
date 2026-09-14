@@ -1,7 +1,12 @@
 import type { WorkflowResource } from './en-US.js';
 
 const zhCN: WorkflowResource = {
-  nav: { automation: '自动化', workflows: '工作流', runs: '工作流执行' },
+  nav: {
+    automation: '自动化',
+    workflows: '工作流',
+    flow: '流程',
+    runs: '执行记录',
+  },
   common: {
     cancel: '取消',
     save: '保存',
@@ -36,6 +41,7 @@ const zhCN: WorkflowResource = {
     enableWorkflow: '启用 {{title}}',
     disableWorkflow: '停用 {{title}}',
     enableNewVersion: '启用新版本',
+    enableThisVersion: '启用此版本',
     parameterSettings: '参数设置',
     runManually: '手动运行',
   },
@@ -46,6 +52,20 @@ const zhCN: WorkflowResource = {
     runStatus: '筛选运行状态',
     allStatuses: '全部状态',
   },
+  tables: {
+    workflow: '工作流',
+    runCount: '运行次数',
+    status: '状态',
+    actions: '操作',
+    triggeredAt: '触发时间',
+    duration: '耗时',
+  },
+  pagination: {
+    label: '列表分页',
+    page: '第 {{page}} / {{total}} 页',
+    previous: '上一页',
+    next: '下一页',
+  },
   workflows: {
     title: '工作流',
     back: '← 工作流',
@@ -55,6 +75,7 @@ const zhCN: WorkflowResource = {
     noNodeDescription: '暂无节点描述。',
     version: '版本',
     newVersionAvailable: '发现新版本',
+    inactiveVersion: '非运行版本',
     runFailed: '无法运行工作流',
     parametersMissingIdentifier: '工作流没有可用于编辑参数的标识符。',
     runMissingIdentifier: '工作流没有可用于手动运行的标识符。',

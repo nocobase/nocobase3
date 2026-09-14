@@ -5,7 +5,7 @@ description: 面向 AI Agent 的 NocoBase v3 Client 插件模块导航，帮助�
 
 # Client 模块选择
 
-Client 的基础装配是静态、可检查的声明：`config`、`serviceProviders`、`reactProviders`、`routes` 和 `locales`。静态 import 只让声明可见，不会执行 ServiceProvider 生命周期、渲染 React Provider、加载页面组件或语言消息。
+Client 的基础装配是静态、可检查的声明：`serviceProviders`、`reactProviders`、`routes` 和 `locales`。静态 import 只让声明可见，不会执行 ServiceProvider 生命周期、渲染 React Provider、加载页面组件或语言消息。
 
 ## 先按职责选择
 
@@ -15,7 +15,7 @@ Client 的基础装配是静态、可检查的声明：`config`、`serviceProvid
 | 增加 App 页面或 Settings 页面          | Route                | [Client Routes](./client-routes-examples.md)             |
 | 多个 Client surface 共享 React Context | React Provider       | [Client React Providers](./client-react-providers.md)    |
 | 注册 Client Service 或执行启动期初始化 | ServiceProvider      | [Client ServiceProviders](./client-service-providers.md) |
-| 声明浏览器公开配置的默认值与校验       | Client config        | 本页“config 与 options”                                  |
+| 声明浏览器配置的代码默认值       | Client config        | 本页“config 与 options”                                  |
 | 配置某次插件注册的稳定行为             | typed plugin options | 本页“config 与 options”                                  |
 | 声明翻译 namespace 和按语言消息 loader | Client locales       | [插件国际化](./i18n.md)                                  |
 | 向目标 App 交付可编辑源码              | Registry             | [Plugin Registry](./registry.md)                         |
@@ -38,7 +38,6 @@ import routes from './routes.js';
 const example: AppClientPluginFactory<ExampleClientOptions> =
   defineClientPlugin({
     packageName: '@nocobase/app-plugin-example',
-    config: [exampleClientConfig],
     serviceProviders,
     reactProviders,
     routes,
@@ -53,7 +52,7 @@ export default example;
 ## 装配关系
 
 ```text
-config           → app.config
+App config factory + public JSON → runtime.config / app.config
 serviceProviders → app.container + lifecycle + app.refine
 reactProviders    → Browser Host 渲染的 AppClientRoot tree
 routes           → Router 和页面 componentLoader
@@ -66,7 +65,7 @@ locales          → locale manifest 和 message loader
 
 两者解决不同问题：
 
-- `config` 是部署时公开给浏览器的 Application 配置。默认值和校验由 App/Plugin 静态声明，部署值来自 SPA HTML 中的公开 JSON data block，最终通过 `app.config.get()` 读取。
+- `config` 是部署时公开给浏览器的 Application 配置。默认值在应用的 `client/config/*.ts` 中定义，由 `config/index.ts` 汇总。Runtime 将 SPA HTML 中的公开 JSON data block 覆盖到代码默认值上，最终通过 `app.config.get()` 读取。
 - `options` 属于目标 App 对某一次插件 registration 的静态、typed 配置。它由 `defineClientPlugins([plugin(options)])` 提供，并传给该插件的 ServiceProvider context、Route/Wrapper 解析和 overrides。
 
 不要把 secret 放入任何 Client config 或 options。需要保密的数据必须留在 Server，并通过受保护的 API 返回必要结果。
@@ -84,7 +83,7 @@ locales          → locale manifest 和 message loader
 
 ## 自检
 
-- `client/plugin.ts` 只声明 `config`、`serviceProviders`、`reactProviders`、`routes`、`locales` 和 typed options；
+- `client/plugin.ts` 只声明 `serviceProviders`、`reactProviders`、`routes`、`locales` 和 typed options；
 - 不存在旧的 `bootstrap` Runtime field；
 - 不使用含义模糊的 `providers` Runtime field；
 - `client/providers/` 可以继续作为 ServiceProvider 源码目录，但公共字段始终叫 `serviceProviders`；

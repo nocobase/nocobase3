@@ -1,5 +1,77 @@
 # @nocobase/app-plugin-notification-in-app
 
+## 0.2.0-beta.9
+
+### Patch Changes
+
+- ceb356b: Fix published package metadata and database test driver registration.
+- Updated dependencies [ceb356b]
+- Updated dependencies [f17f3a6]
+- Updated dependencies [f17f3a6]
+- Updated dependencies [f17f3a6]
+- Updated dependencies [43d25b4]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [40e2d49]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [590861e]
+- Updated dependencies [e11b855]
+- Updated dependencies [72ed008]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [e11b855]
+- Updated dependencies [ceb356b]
+- Updated dependencies [e11b855]
+- Updated dependencies [ceb356b]
+- Updated dependencies [40e2d49]
+- Updated dependencies [590861e]
+- Updated dependencies [ceb356b]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+  - @nocobase/app-server@1.0.0-beta.11
+  - @nocobase/app-client@1.0.0-beta.14
+  - @nocobase/app-plugin-notification@0.1.0-beta.8
+  - @nocobase/app-plugin-authentication@0.1.0-beta.11
+  - @nocobase/db@1.0.0-beta.5
+
+## 0.2.0-beta.8
+
+### Patch Changes
+
+- adedf9c: Use a database-side count for unread in-app notifications instead of loading all matching rows.
+- 426bd48: Remove logical IM `target` recipients and make `send().to` optional so Webhook Providers can be selected directly by Provider name or fan-out strategy.
+- Updated dependencies [a009e2d]
+- Updated dependencies [426bd48]
+  - @nocobase/app-server@1.0.0-beta.10
+  - @nocobase/app-client@1.0.0-beta.13
+  - @nocobase/i18n@1.0.0-beta.3
+  - @nocobase/app-plugin-notification@0.1.0-beta.7
+
 ## 0.2.0-beta.7
 
 ### Minor Changes

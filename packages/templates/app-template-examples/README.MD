@@ -41,13 +41,48 @@ pnpm dev
 
 `pnpm dev` starts the API server and the Vite client together, picks free ports if the defaults are taken, and prints the URL to open. Use the printed URL rather than assuming a port.
 
+### Develop against another backend
+
+Set `PROXY_TARGET_URL` to the backend application's public URL, including its mount path but excluding `/api`:
+
+```bash
+# Example only: replace /main with the backend's actual public mount path.
+PROXY_TARGET_URL=http://127.0.0.1:13000/main pnpm dev
+```
+
+**`/main` is the fallback, not a required or fixed path.** Local development reads `APP_BASE_PATH` from the command-line environment, then `.env.local`, then `.env`, falling back to `/main` when unset. The remote path comes from `PROXY_TARGET_URL`; it is not inferred from the local `APP_BASE_PATH`. Read the target application's actual public URL before constructing this value. If it is mounted at the origin root, use the origin URL without a mount path.
+
+For example, these applications can use different paths:
+
+```bash
+APP_BASE_PATH=/local PROXY_TARGET_URL=http://127.0.0.1:13000/crm pnpm dev
+# /local/api/users -> http://127.0.0.1:13000/crm/api/users
+# /local/ws        -> ws://127.0.0.1:13000/crm/ws
+```
+
+This runs Vite with your local client source and proxies API and WebSocket requests to that application. It does not start a local backend, allocate its port, wait for its health endpoint, or watch server configuration/plugins. Existing `beforeDev` hooks still run to prepare client artifacts. Open the printed **Local** URL (the Vite port); **Backend** identifies the target.
+
+The target can be another local project running `pnpm dev`, or an HTTP(S) deployment. Use its printed application URL, not its Vite URL. Local `APP_BASE_PATH` and the remote mount path may differ: local `/main/api/users` can map to remote `/crm/api/users`. Trailing slashes are accepted. Credentials, query strings, and fragments are not accepted in the target URL.
+
+Requests use the remote backend's data and permissions, including writes. Only `<APP_BASE_PATH>/api` and `<APP_BASE_PATH>/ws` are proxied; application root callbacks and absolute URLs returned by the backend keep their original routing. Cookie domain/path scopes are adapted to the local application. HTTP and WebSocket requests whose Origin matches the local request's protocol and Host are forwarded with the target Origin, so browser authentication and realtime connections pass the backend's same-origin checks. Same-origin Referer URLs within the local app base are mapped to the target app base as well; requests without Origin keep it absent. Other origins and referers remain unchanged and subject to backend validation. HTTPS-only cookie requirements remain enforced, and authentication flows using explicit callback URLs still require appropriate callback configuration.
+
+The variable can also be set in `.env` or `.env.local`; the command-line environment takes precedence. Restart `pnpm dev` after changing the target. Without this variable, development still starts both the local backend and Vite. Production builds ignore it.
+
+Use `APP_SERVER_PORT` to choose the local application port in either development mode. With `PROXY_TARGET_URL` set, it selects Vite's preferred port (5173 when unset); without a proxy target, it selects the local backend's preferred port (13000 when unset), while Vite still starts from 5173. If the preferred port is occupied, development selects the next available port and prints the actual URL. The remote backend address is always taken from `PROXY_TARGET_URL`.
+
+```bash
+APP_SERVER_PORT=13399 PROXY_TARGET_URL=http://127.0.0.1:13000/main pnpm dev
+# Local: http://127.0.0.1:13399/main/ when 13399 is available.
+# Replace /main with the remote application's actual mount path.
+```
+
 ### Review your configuration
 
 `config.yml` was written when the project was created, carrying the database you chose and a generated `auth.secret`. It gets you running; adjust it for your situation:
 
 - **Database.** Point the connection at the database you actually intend to use — dialect, host, port, and credentials.
 - **Where the application is served.** `APP_BASE_PATH` is the public mount path, `/main` by default, so the development URL looks like `http://127.0.0.1:13000/main/`. `APP_SERVER_PORT` and `APP_SERVER_HOST` change what the server binds to.
-- **Anything a feature you enable requires** — mail delivery, IM webhooks, storage. `config.example.yml` documents every available option, including sections your `config.yml` does not yet have.
+- **Anything a feature you enable requires** — mail delivery, IM webhooks, storage. `config.example.yml` documents common deployment options, including sections your `config.yml` does not yet have.
 
 `config.yml` is gitignored because it holds your `auth.secret`. Deploy it through your secret management rather than committing it.
 
@@ -88,13 +123,16 @@ server/                  API server
 └── embedded.ts          Entry point when a host process mounts it
 
 database/
-└── main/
-    ├── migrations/      Schema history for the main connection
-    └── seeds/           Initial example data
+├── main/
+│   ├── migrations/      Schema history for the main connection
+│   └── seeds/           Initial example data
+└── analytics/
+    ├── migrations/      Independent analytics schema
+    └── seeds/           Channel, campaign and daily metric examples
 
 tests/                   Unit and integration tests
 e2e/                     Browser tests needing a real server
-config.yml               Your configuration, generated at setup; gitignored
+config.yml              Your configuration, generated at setup; gitignored
 config.example.yml       Documented configuration template
 skills/                  In-depth development guides for AI agents
 ```
@@ -114,14 +152,79 @@ The three files named `runtime.ts`, `plugins.ts`, and `routes.ts` are compositio
 
 ### Database
 
-| Script         | What it does                                                                                    |
-| -------------- | ----------------------------------------------------------------------------------------------- |
-| `pnpm migrate` | Apply pending migrations from your `database/main/migrations/` and from every registered plugin |
-| `pnpm seed`    | Run seeds from `database/main/seeds/` and from registered plugins                               |
+| Script         | What it does                                                                                                                                                                                    |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm migrate` | Apply pending migrations from your `database/main/migrations/` and from every registered plugin; `pnpm migrate --fresh --force` clears managed schema objects and rebuilds them from migrations |
+| `pnpm seed`    | Run seeds from `database/main/seeds/` and from registered plugins                                                                                                                               |
 
 Migrations also run automatically on startup while `database.connections.main.migrations.autoRun` is `true` in `config.yml`. Run `pnpm migrate` explicitly when you want to apply a schema change without restarting.
 
 Database tasks support `--connection <name>` and `--all`; no argument targets `database.default`. Per-connection source and upgrade rules are documented in [migrations and seeds](skills/nocobase-app-development/references/migrations.md).
+
+### Analytics database example
+
+The application supplies an independent managed `analytics` SQLite connection,
+stored at `storage/analytics.sqlite` when running standalone. Its defaults are
+loaded before `config.yml`, so existing and generated main-only configurations
+work, and explicit file settings can override the connection. `main` remains the
+system database. This demonstration belongs only to Examples.
+
+Migrations and seeds run automatically on startup. To initialize only analytics
+from this application directory:
+
+```bash
+pnpm migrate --connection analytics
+pnpm seed --connection analytics
+```
+
+| Collection     | Initial records | Purpose                                                        |
+| -------------- | --------------- | -------------------------------------------------------------- |
+| `channels`     | 3               | Search, social and email channels; unique channel code         |
+| `campaigns`    | 4               | Channel-linked campaigns in draft, active and completed states |
+| `dailyMetrics` | 12              | One row per campaign and date for September 6–8, 2026          |
+
+Channels have many campaigns; campaigns have many daily metrics. Each campaign
+and date pair is unique. Deleting a campaign cascades to its metrics; deleting a
+channel with campaigns is rejected. Budgets, spend and revenue are integer cents.
+The draft campaign has zero metrics to demonstrate the distinction between zero
+and absent data. Seeds use stable IDs and a transaction; normal reruns preserve
+edits and deletions, and explicit replays insert only missing identities.
+
+`server/routes/analytics.ts` exposes the following through
+`defineRepositoryApiRoutes`, each explicitly bound to `analytics`:
+
+| Repository API name     | Collection     |
+| ----------------------- | -------------- |
+| `analyticsChannels`     | `channels`     |
+| `analyticsCampaigns`    | `campaigns`    |
+| `analyticsDailyMetrics` | `dailyMetrics` |
+
+Each supports `findMany` (maximum 100), `findOne`, `count`, `exists`, `aggregate`,
+`groupBy`, `createOne`, `updateOne`, and `deleteOne`. Like the Repository example
+plugin, all signed-in users can manage the sample records. Server write policies
+allow only declared fields; use `channel.connect` and `campaign.connect` for
+relations. IDs are accepted on creation but cannot be changed through updates.
+
+Requests use `POST <app-base>/api/<repository>:<action>`, for example
+`POST /main/api/analyticsDailyMetrics:groupBy` with this JSON body:
+
+```json
+{
+  "by": ["campaignId"],
+  "aggregate": {
+    "kind": "aggregate",
+    "version": 1,
+    "items": [
+      { "kind": "count", "alias": "days" },
+      { "kind": "sum", "field": "spendCents", "alias": "spendCents" },
+      { "kind": "sum", "field": "revenueCents", "alias": "revenueCents" }
+    ]
+  }
+}
+```
+
+The response is wrapped in `{ "data": ... }`. Use the application's authenticated
+API client, for example `api.repository('analyticsChannels').findMany({ limit: 10 })`.
 
 ### Checks
 
@@ -135,17 +238,30 @@ Database tasks support `--connection <name>` and `--all`; no argument targets `d
 | `pnpm fix`           | Fix lint problems, then format                               |
 | `pnpm check`         | Everything above plus a build; what to run before committing |
 
+`pnpm nocobase app i18n:check` reports a language declared in `client/locales/` but not `server/locales/`, or the reverse. The browser builds its language picker from one and the server decides what it answers in from the other, so a language on only one side is one the interface offers and the server then rejects.
+
 ### Plugins
 
 Plugins add features to your application. Let these commands edit `package.json`, `client/plugins.ts`, and `server/plugins.ts` for you rather than editing those files by hand.
 
-| Script                          | What it does                                              |
-| ------------------------------- | --------------------------------------------------------- |
-| `pnpm plugin:register <name>`   | Install a plugin and wire it into the client and server   |
-| `pnpm plugin:unregister <name>` | Remove a plugin and its wiring                            |
-| `pnpm plugin:update`            | Upgrade registered plugins and re-sync their agent skills |
-| `pnpm plugin:inspect <name>`    | Report a plugin's registration state; read-only           |
-| `pnpm plugin:skills:sync`       | Re-copy plugin agent skills into `.agents/skills/`        |
+| Script                          | What it does                                             |
+| ------------------------------- | -------------------------------------------------------- |
+| `pnpm plugin:register <name>`   | Install a plugin and wire it into the client and server  |
+| `pnpm plugin:unregister <name>` | Remove a plugin and its wiring                           |
+| `pnpm plugin:update [name]`     | Upgrade one or all registered plugins and re-sync skills |
+| `pnpm plugin:inspect <name>`    | Report a plugin's registration state; read-only          |
+| `pnpm plugin:skills:sync`       | Re-copy plugin agent skills into `.agents/skills/`       |
+
+Use a full package name, as with `plugin:register` and `plugin:unregister`; short names such as `authentication` also work. The optional name is a positional argument, not `--plugin`.
+
+```bash
+pnpm plugin:update @nocobase/app-plugin-authentication  # Update one registered plugin
+pnpm plugin:update authentication                      # Equivalent short name
+pnpm plugin:update                                     # Update all registered plugins
+pnpm plugin:update @nocobase/app-plugin-authentication --dry-run  # Preview only
+```
+
+Without a name, the command collects registered plugins from `client/plugins.ts`, `server/plugins.ts`, and `cli/plugins.ts`. It uses the application's package manager; with pnpm, `update` follows the declared version ranges without `--latest`. An unregistered name is rejected, and an application with no registered plugins is left unchanged. After a successful package update, all registered plugins' agent skills are re-synchronized, even when only one package was selected.
 
 Ordering in `client/plugins.ts` and `server/plugins.ts` is contribution order, and a plugin is enabled by appearing in the array. Reorder entries or pass a plugin its options by hand; leave adding and removing entries to the commands.
 
@@ -249,7 +365,7 @@ Rebuild with a matching `--target` and `--node-version`. ABI 115 is Node 20, 127
 
 ## Configuration
 
-`config.yml` is the single source of configuration, written for you at generation time and yours to edit from there. It is gitignored because it carries your `auth.secret`; deploy it through your secret management rather than committing it. `config.example.yml` documents every available option, including sections the generated file leaves out.
+`server/config/` and `client/config/` contain editable TypeScript defaults. `config.yml` holds environment-specific overrides, written for you at generation time and yours to edit from there. It is gitignored because it carries your `auth.secret`; deploy it through your secret management rather than committing it. `config.example.yml` documents common deployment options, including sections the generated file leaves out.
 
 Two settings decide where the application is reachable:
 
@@ -279,3 +395,121 @@ is submitted.
 ## License
 
 MIT
+
+## Workflow examples
+
+Open **Workflow examples** on the homepage, or **Settings → Automation → Workflows**.
+The three application-owned packages under `server/workflows/` are built by
+`pnpm dev` and `pnpm build`. Enable a definition, open its detail page, choose
+**Run**, and enter the sample values below. Inspect the run diagram and select a
+node to see its output, errors, and logs.
+
+| Workflow                        | Sample input                                    | Expected result                                                                    |
+| ------------------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Example: Quotation routing      | `quotationId: Q-100`, `amountCents: 50000`      | Standard branch, followed by the shared summary node.                              |
+| Example: Quotation routing      | `quotationId: Q-100`, `amountCents: 150000`     | Manual follow-up classification. This is not a human approval or waiting step.     |
+| Example: Analytics daily report | `date: 2026-09-08`                              | Read four seeded metric rows, calculate totals, and save one report for that date. |
+| Example: Analytics daily report | `date: 2000-01-01`                              | Successful early termination without creating a report.                            |
+| Example: Failure diagnostics    | `reference: DIAG-100`, `simulateFailure: true`  | The execute node fails deliberately; the finish node does not run.                 |
+| Example: Failure diagnostics    | `reference: DIAG-100`, `simulateFailure: false` | A new run completes all three steps.                                               |
+
+Quotation routing exposes an administrator parameter, `reviewThresholdCents`,
+whose default is `100000`. Amounts at or above the threshold take the follow-up
+branch. Parameter changes apply to new runs; existing executions retain their
+parameter snapshots. The quotation and diagnostic examples only produce workflow
+execution evidence, with no external side effects.
+
+The report reads `analytics.dailyMetrics` and upserts `exampleDailyReports` in the
+application's default database by its unique date. With unchanged seed data,
+`2026-09-08` produces 96,000 impressions, 3,120 clicks, 168 conversions, 93,000
+spend cents, 672,000 revenue cents, and 579,000 profit cents. The `saveReport`
+node output contains the saved report. Repeating the workflow refreshes that date's
+report instead of inserting duplicates. Reports are application-owned data;
+workflow definitions and execution history remain owned by the plugin. Reading
+analytics and writing the report are separate operations, not a cross-database
+transaction.
+
+For development, check a package and regenerate development artifacts after editing:
+
+```bash
+pnpm nocobase workflow check server/workflows/example-quotation-routing
+pnpm nocobase workflow check server/workflows/example-analytics-report
+pnpm nocobase workflow check server/workflows/example-failure-diagnostics
+pnpm nocobase workflow build
+```
+
+Enable the newly built revision in the management UI before invoking it as a
+business workflow. Source validation, artifact generation, enablement, and
+execution are distinct steps. Never seed or edit the plugin's materialized tables.
+Production artifacts contain the JavaScript emitted by the normal server build.
+Keep the workflow artifact disk under the deployed application directory (the
+default local storage layout), so run modules resolve the same application
+`node_modules` and service tokens. Moving that disk outside the application tree
+currently requires a deployment-level module-resolution arrangement; an arbitrary
+external storage directory cannot resolve the report workflow’s `@nocobase/db`
+import on its own.
+
+Application code invokes an enabled package through the public
+`workflowServiceToken.trigger(key, input, { eventKey })` contract. An `accepted`
+receipt is not completion; execution is asynchronous. A `skipped` receipt creates
+no run. Reusing an event key deduplicates the same submission and does not replay
+a failed execution. The management UI starts a new manual run for each Run action.
+These examples do not implement approval, durable waits, node replay, or automatic
+retry. The plugin's management APIs currently require sign-in without per-action
+ACL; keep these workflows on demonstration data. Business trigger endpoints must
+supply their own authentication, authorization, and input validation.
+
+## 数字类型示例
+
+首页的“数字类型”卡片和侧栏入口打开 `/numeric-examples`。页面调用当前默认数据库的
+`GET /api/numeric-examples`，可切换 Query / Repository 和全部样本、空值样本、空结果。
+接口仅供已登录用户读取共享示例数据，不开放写入或任意 SQL。
+
+`database/main/migrations/202609100002_create_numeric_examples.ts` 创建
+`numericExamples`，声明 `increments` ID、唯一的样本名称以及 INTEGER、BIGINT、
+DECIMAL(30,6)、FLOAT、DOUBLE 字段。
+`database/main/seeds/202609100002_seed_numeric_examples.ts` 使用 Query insertInto
+插入七组固定样本：小整数、负数、零、相邻的大整数、小数和空值。
+BIGINT 使用字符串 `9007199254740992` / `9007199254740993`，不会先转成 JavaScript number。
+重复执行种子不会覆盖已编辑的同名样本；初始化数据是 Examples 模板的教学内容。
+
+应用启动时按现有配置执行迁移与种子。关闭自动执行时，在模板目录运行：
+
+```sh
+pnpm migrate
+pnpm seed
+```
+
+页面使用带引号的 JSON 值和实际 JavaScript 类型标签展示普通读取，并支持按 increments、INTEGER、BIGINT、DECIMAL、FLOAT 或 DOUBLE 升序 / 降序排序，以及查看各字段的 COUNT、SUM、AVG、MIN、MAX。DECIMAL 保留数据库格式；SQLite 的底层存储精度限制、
+浮点舍入和 increments 的数据库差异均保持可见，不在页面中做 Number() 转换或补零。
+空值样本的 ID 非空，所以 COUNT(id) 为 1；其他数字字段 COUNT 为 0。
+
+后端实现位于 `server/providers/numeric-examples-service.ts` 和
+`server/routes/numeric-examples.ts`，页面位于 `client/pages/numeric-examples.tsx`。
+这是 Examples 独有内容，不改变 Default / Hub 模板或数据库运行时。
+
+## Numeric types example
+
+Open **Numeric types** from the homepage or navigation (`/numeric-examples`).
+The page reads the current default database through the authenticated, read-only
+`GET /api/numeric-examples` endpoint. Switch between Query and Repository, or
+select all samples, the null sample, and empty input. Tables show actual JSON
+values and JavaScript types, plus COUNT(field), SUM, AVG, MIN and MAX.
+
+The application owns `numericExamples`: an `increments` ID, a unique sample key,
+and INTEGER, BIGINT, DECIMAL(30,6), FLOAT and DOUBLE fields. The migration is
+`database/main/migrations/202609100002_create_numeric_examples.ts`; initial data
+lives in `database/main/seeds/202609100002_seed_numeric_examples.ts`. Run
+`pnpm migrate` and `pnpm seed` when automatic startup tasks are disabled. Seeds
+insert missing sample keys and preserve existing records on repeat runs.
+
+Seven fixed samples include 42, negatives, zero, the adjacent BIGINT values
+9007199254740992 and 9007199254740993, fractions and nulls. Exact inputs use
+strings; the page never converts BIGINT or DECIMAL to Number. Decimal formatting
+and native floating arithmetic may differ by database. SQLite still has numeric
+storage precision limits, and increments uses each database's physical ID type.
+Every signed-in user may read these sample records; the endpoint exposes no
+writes or arbitrary collection/query parameters. Row previews are capped at 100;
+aggregates cover the entire selected sample set.
+
+This is Examples-only teaching content, so it does not change Default or Hub.

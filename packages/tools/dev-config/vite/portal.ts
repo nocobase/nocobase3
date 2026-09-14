@@ -1,7 +1,13 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'node:path';
-import type { ConfigEnv, Rollup, UserConfig, UserConfigExport } from 'vite';
+import type {
+  ConfigEnv,
+  RenderBuiltAssetUrl,
+  Rollup,
+  UserConfig,
+  UserConfigExport,
+} from 'vite';
 import { defineConfig, loadEnv, mergeConfig } from 'vite';
 
 // A locale module is a `locales/` sibling named after the locale it provides, such as `en-US.ts` or
@@ -53,6 +59,30 @@ const resolveChunkFileName = (chunk: Rollup.PreRenderedChunk): string => {
     ? `assets/locales/${owner}.[name]-[hash].js`
     : 'assets/locales/[name]-[hash].js';
 };
+
+// Vite bakes `base` into the `__vitePreload` helper it emits, which pins a build to the prefix it was built
+// for. A host that mounts the application somewhere else — the Hub serves each application under `/<appId>` —
+// rewrites the asset URLs in `index.html` as it serves them, but it cannot reach a string concatenation inside
+// a JavaScript chunk. Chunk-to-chunk imports survive because they are relative; the preload dependency list
+// does not. The helper awaits every stylesheet link it inserts, so a single 404 CSS dependency rejects the
+// dynamic import and the route renders its error state instead of the page. Only a lazy chunk carrying its own
+// CSS is affected, so this surfaces as one broken page rather than a broken application, which is what makes it
+// hard to recognise: `@nocobase/app-plugin-workflow` was the only such chunk, and its settings page was the only
+// thing that failed.
+//
+// The server injects `window.APP_BASE_PATH` ahead of the entry module, so resolve these URLs from it at runtime
+// and fall back to the build-time base when nothing injected one — a standalone deployment then behaves exactly
+// as it did before. Only a `js` host may carry a runtime expression; `html` and `css` keep the build-time base,
+// which is both what Vite requires and what a host's own HTML rewriting expects to find.
+const createRuntimeAssetUrl = (base: string, filename: string): string =>
+  `((globalThis.APP_BASE_PATH||${JSON.stringify(base)}).replace(/\\/+$/,"")+"/"+${JSON.stringify(filename)})`;
+
+const createBaseAgnosticAssetUrl =
+  (base: string): RenderBuiltAssetUrl =>
+  (filename, { hostType, ssr }) =>
+    hostType === 'js' && !ssr
+      ? { runtime: createRuntimeAssetUrl(base, filename) }
+      : undefined;
 
 const positiveInteger = (value: string | undefined): number | undefined => {
   if (!value) return undefined;
@@ -113,5 +143,13 @@ export const createPortalViteConfig: (
           : undefined,
     };
 
-    return mergeConfig(sharedConfig, resolvedLocalConfig);
+    const merged = mergeConfig(sharedConfig, resolvedLocalConfig);
+    const buildBase = typeof merged.base === 'string' ? merged.base : '/';
+
+    return mergeConfig(
+      {
+        experimental: { renderBuiltUrl: createBaseAgnosticAssetUrl(buildBase) },
+      } satisfies UserConfig,
+      merged,
+    );
   });

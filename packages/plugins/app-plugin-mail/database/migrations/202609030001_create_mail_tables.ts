@@ -13,11 +13,11 @@ const migration: MigrationDefinition = defineMigration({
         nullable: false,
         defaultValue: 'account',
       });
-      collection.datetime('expiresAt');
+      collection.datetimeTz('expiresAt');
       collection.string('refreshLeaseToken', { length: 100 });
-      collection.datetime('refreshLeaseExpiresAt');
-      collection.datetime('createdAt', { nullable: false });
-      collection.datetime('updatedAt', { nullable: false });
+      collection.datetimeTz('refreshLeaseExpiresAt');
+      collection.datetimeTz('createdAt', { nullable: false });
+      collection.datetimeTz('updatedAt', { nullable: false });
       collection.index('expiresAt', {
         name: 'mail_credentials_expiry_idx',
       });
@@ -31,8 +31,8 @@ const migration: MigrationDefinition = defineMigration({
       collection.string('fileName', { length: 500, nullable: false });
       collection.string('contentType', { length: 255, nullable: false });
       collection.integer('size', { nullable: false });
-      collection.datetime('createdAt', { nullable: false });
-      collection.datetime('expiresAt', { nullable: false });
+      collection.datetimeTz('createdAt', { nullable: false });
+      collection.datetimeTz('expiresAt', { nullable: false });
       collection.index('expiresAt', {
         name: 'mail_outbound_attachments_expiry_idx',
       });
@@ -48,8 +48,8 @@ const migration: MigrationDefinition = defineMigration({
       collection.text('text');
       collection.text('html');
       collection.string('ownerId', { length: 255, nullable: false });
-      collection.datetime('createdAt', { nullable: false });
-      collection.datetime('updatedAt', { nullable: false });
+      collection.datetimeTz('createdAt', { nullable: false });
+      collection.datetimeTz('updatedAt', { nullable: false });
       collection.unique(['ownerId', 'name'], {
         name: 'mail_templates_owner_name_unique',
       });
@@ -66,9 +66,9 @@ const migration: MigrationDefinition = defineMigration({
         nullable: false,
       });
       collection.json('scopes', { nullable: false });
-      collection.datetime('expiresAt', { nullable: false });
-      collection.datetime('consumedAt');
-      collection.datetime('createdAt', { nullable: false });
+      collection.datetimeTz('expiresAt', { nullable: false });
+      collection.datetimeTz('consumedAt');
+      collection.datetimeTz('createdAt', { nullable: false });
       collection.index(['expiresAt', 'consumedAt'], {
         name: 'mail_authorization_states_expiry_idx',
       });
@@ -89,8 +89,8 @@ const migration: MigrationDefinition = defineMigration({
       collection.json('scopes', { nullable: false });
       collection.string('status', { length: 50, nullable: false });
       collection.string('defaultForUserId', { length: 255 });
-      collection.datetime('createdAt', { nullable: false });
-      collection.datetime('updatedAt', { nullable: false });
+      collection.datetimeTz('createdAt', { nullable: false });
+      collection.datetimeTz('updatedAt', { nullable: false });
       collection.index(['userId', 'status'], {
         name: 'mail_accounts_user_status_idx',
       });
@@ -114,11 +114,11 @@ const migration: MigrationDefinition = defineMigration({
         length: 1000,
       });
       collection.string('configurationFingerprint', { length: 64 });
-      collection.datetime('renewAfter');
-      collection.datetime('expiresAt');
+      collection.datetimeTz('renewAfter');
+      collection.datetimeTz('expiresAt');
       collection.string('leaseToken', { length: 100 });
-      collection.datetime('leaseExpiresAt');
-      collection.datetime('updatedAt', { nullable: false });
+      collection.datetimeTz('leaseExpiresAt');
+      collection.datetimeTz('updatedAt', { nullable: false });
       collection
         .belongsTo('account', 'mailAccounts')
         .targetKey('id')
@@ -137,7 +137,7 @@ const migration: MigrationDefinition = defineMigration({
     await builder.createCollection('mailPushPending', (collection) => {
       collection.uuid('accountId').primary();
       collection.string('requestToken', { length: 100, nullable: false });
-      collection.datetime('requestedAt', { nullable: false });
+      collection.datetimeTz('requestedAt', { nullable: false });
       collection
         .belongsTo('account', 'mailAccounts')
         .targetKey('id')
@@ -174,8 +174,8 @@ const migration: MigrationDefinition = defineMigration({
       collection.text('text', { nullable: false });
       collection.text('html');
       collection.uuid('defaultForIdentityId');
-      collection.datetime('createdAt', { nullable: false });
-      collection.datetime('updatedAt', { nullable: false });
+      collection.datetimeTz('createdAt', { nullable: false });
+      collection.datetimeTz('updatedAt', { nullable: false });
       collection.unique(['identityId', 'name'], {
         name: 'mail_signatures_identity_name_unique',
       });
@@ -226,16 +226,16 @@ const migration: MigrationDefinition = defineMigration({
       collection.text('text');
       collection.text('html');
       collection.text('note');
-      collection.datetime('receivedAt');
-      collection.datetime('sentAt');
-      collection.datetime('sortAt', { nullable: false });
+      collection.datetimeTz('receivedAt');
+      collection.datetimeTz('sentAt');
+      collection.datetimeTz('sortAt', { nullable: false });
       collection.boolean('read', { nullable: false, defaultValue: false });
       collection.boolean('starred', { nullable: false, defaultValue: false });
       collection.boolean('draft', { nullable: false, defaultValue: false });
       collection.boolean('todo', { nullable: false, defaultValue: false });
       collection.json('attachments', { nullable: false });
-      collection.datetime('createdAt', { nullable: false });
-      collection.datetime('updatedAt', { nullable: false });
+      collection.datetimeTz('createdAt', { nullable: false });
+      collection.datetimeTz('updatedAt', { nullable: false });
       collection.unique(['accountId', 'providerMessageId'], {
         name: 'mail_messages_account_provider_unique',
       });
@@ -286,7 +286,7 @@ const migration: MigrationDefinition = defineMigration({
     await builder.createCollection('mailSyncStates', (collection) => {
       collection.uuid('accountId').primary();
       collection.json('cursor', { nullable: false });
-      collection.datetime('lastSyncedAt', { nullable: false });
+      collection.datetimeTz('lastSyncedAt', { nullable: false });
       collection
         .belongsTo('account', 'mailAccounts')
         .targetKey('id')
@@ -318,11 +318,11 @@ const migration: MigrationDefinition = defineMigration({
       collection.json('baselineCursor');
       collection.json('changeCursor');
       collection.string('leaseToken', { length: 100 });
-      collection.datetime('leaseExpiresAt');
+      collection.datetimeTz('leaseExpiresAt');
       collection.json('error');
-      collection.datetime('createdAt', { nullable: false });
-      collection.datetime('updatedAt', { nullable: false });
-      collection.datetime('completedAt');
+      collection.datetimeTz('createdAt', { nullable: false });
+      collection.datetimeTz('updatedAt', { nullable: false });
+      collection.datetimeTz('completedAt');
       collection.index(['accountId', 'status'], {
         name: 'mail_sync_runs_account_status_idx',
       });
@@ -344,14 +344,14 @@ const migration: MigrationDefinition = defineMigration({
       collection.string('requestFingerprint', { length: 64, nullable: false });
       collection.string('status', { length: 20, nullable: false });
       collection.string('providerMessageId', { length: 500 });
-      collection.datetime('scheduledAt');
+      collection.datetimeTz('scheduledAt');
       collection.string('requestedBy', { length: 255 });
       collection.json('composeInput');
       collection.json('error');
       collection.string('leaseToken', { length: 100 });
-      collection.datetime('leaseExpiresAt');
-      collection.datetime('createdAt', { nullable: false });
-      collection.datetime('updatedAt', { nullable: false });
+      collection.datetimeTz('leaseExpiresAt');
+      collection.datetimeTz('createdAt', { nullable: false });
+      collection.datetimeTz('updatedAt', { nullable: false });
       collection.index(['status', 'leaseExpiresAt'], {
         name: 'mail_submissions_expired_idx',
       });
@@ -374,11 +374,11 @@ const migration: MigrationDefinition = defineMigration({
       collection.json('payload', { nullable: false });
       collection.string('status', { length: 20, nullable: false });
       collection.integer('attempts', { nullable: false, defaultValue: 0 });
-      collection.datetime('availableAt', { nullable: false });
+      collection.datetimeTz('availableAt', { nullable: false });
       collection.string('leaseToken', { length: 100 });
-      collection.datetime('leaseExpiresAt');
-      collection.datetime('createdAt', { nullable: false });
-      collection.datetime('publishedAt');
+      collection.datetimeTz('leaseExpiresAt');
+      collection.datetimeTz('createdAt', { nullable: false });
+      collection.datetimeTz('publishedAt');
       collection.unique(['deduplicationKey'], {
         name: 'mail_outbox_deduplication_unique',
       });

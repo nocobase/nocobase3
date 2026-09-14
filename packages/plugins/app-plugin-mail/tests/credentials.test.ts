@@ -4,6 +4,7 @@ import {
   type DatabaseManager,
   type Row,
 } from '@nocobase/db';
+import sqlite from '@nocobase/db-sqlite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import migration from '../database/migrations/202609030001_create_mail_tables.js';
@@ -19,6 +20,7 @@ describe('Mail OAuth persistence', () => {
 
   beforeEach(async () => {
     database = createDatabaseManager({
+      drivers: { sqlite },
       default: 'main',
       metadataStore: new InMemoryCollectionMetadataStore(),
       connections: {

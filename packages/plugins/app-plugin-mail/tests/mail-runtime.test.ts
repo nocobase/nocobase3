@@ -5,6 +5,7 @@ import {
   InMemoryCollectionMetadataStore,
   type DatabaseManager,
 } from '@nocobase/db';
+import sqlite from '@nocobase/db-sqlite';
 import { createQueueManager, type NocoBaseQueueManager } from '@nocobase/queue';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -32,6 +33,7 @@ describe('mail MVP runtime', () => {
 
   beforeEach(async () => {
     database = createDatabaseManager({
+      drivers: { sqlite },
       default: 'main',
       metadataStore: new InMemoryCollectionMetadataStore(),
       connections: {

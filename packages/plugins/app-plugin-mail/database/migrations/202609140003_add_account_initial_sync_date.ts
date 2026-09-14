@@ -5,10 +5,10 @@ const migration: MigrationDefinition = defineMigration({
 
   async up({ builder }) {
     await builder.alterCollection('mailAuthorizationStates', (collection) => {
-      collection.datetime('initialSyncReceivedAfter');
+      collection.datetimeTz('initialSyncReceivedAfter');
     });
     await builder.alterCollection('mailAccounts', (collection) => {
-      collection.datetime('initialSyncReceivedAfter');
+      collection.datetimeTz('initialSyncReceivedAfter');
     });
   },
 

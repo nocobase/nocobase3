@@ -22,7 +22,7 @@
   {
     "type": "file",
     "name": "theme-tokens",
-    "label": "样式变量"
+    "label": "主题变量"
   },
   {
     "type": "file",

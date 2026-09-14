@@ -6,6 +6,7 @@ import {
   type DatabaseManager,
   type Row,
 } from '@nocobase/db';
+import sqlite from '@nocobase/db-sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import signatureScopeMigration from '../database/migrations/202609140004_move_mail_signatures_to_account_scope.js';
@@ -80,6 +81,7 @@ describe('mail database migration', () => {
   beforeEach(() => {
     metadataStore = new InMemoryCollectionMetadataStore();
     database = createDatabaseManager({
+      drivers: { sqlite },
       default: 'main',
       metadataStore,
       connections: {
@@ -159,7 +161,7 @@ describe('mail database migration', () => {
       fields: {
         value: { type: 'text' },
         purpose: { type: 'string' },
-        expiresAt: { type: 'datetime' },
+        expiresAt: { type: 'datetimeTz' },
       },
     });
     await expect(
@@ -167,7 +169,7 @@ describe('mail database migration', () => {
     ).resolves.toMatchObject({
       fields: {
         defaultForUserId: { type: 'string' },
-        initialSyncReceivedAfter: { type: 'datetime' },
+        initialSyncReceivedAfter: { type: 'datetimeTz' },
       },
     });
     await expect(
@@ -240,7 +242,7 @@ describe('mail database migration', () => {
       metadataStore.get('mailSubmissions').then((stored) => stored?.document),
     ).resolves.toMatchObject({
       fields: {
-        scheduledAt: { type: 'datetime' },
+        scheduledAt: { type: 'datetimeTz' },
         requestedBy: { type: 'string' },
         composeInput: { type: 'json' },
       },

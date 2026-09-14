@@ -30,6 +30,14 @@ vi.mock(
 
 const app = {
   app: { id: 'a', name: 'Example', currentDeploymentId: null },
+  deployment: {
+    desiredReleaseId: null,
+    observedReleaseId: null,
+    observedState: 'stopped',
+    activation: 'eager',
+    basePath: '/a',
+    updatedAt: '2026-09-01T00:00:00Z',
+  },
   releases: ['one', 'two'].map((id) => ({
     id,
     version: id,
@@ -132,5 +140,64 @@ describe('Hub deployment configuration step', () => {
       ).toHaveValue('edited: true'),
     );
     expect(loader).toHaveBeenCalledTimes(1);
+  });
+
+  it('tells releases with the same version apart by marking the running and newest ones', async () => {
+    // Two uploads of the same version differ only by checksum. The list is newest first: "two" was uploaded
+    // after "one", which is the release currently running.
+    const sameVersion = {
+      ...app,
+      deployment: {
+        ...app.deployment,
+        desiredReleaseId: 'one',
+        observedReleaseId: 'one',
+      },
+      releases: ['two', 'one'].map((id) => ({
+        id,
+        version: '1.0.0-beta.22',
+        checksum: `${id}-checksum-abcdef`,
+        hasConfigTemplate: true,
+        createdAt: '2026-09-01T00:00:00Z',
+        size: 1,
+      })),
+    } as AppDetail;
+    render(
+      <DeploymentDialog
+        app={sameVersion}
+        releaseId='two'
+        content=''
+        mode='file'
+        baselineContent=''
+        baselineMode='file'
+        rollback={false}
+        busy={false}
+        onRelease={() => undefined}
+        loadTemplate={vi.fn().mockResolvedValue('fresh: true')}
+        onContent={() => undefined}
+        onMode={() => undefined}
+        onClose={() => undefined}
+        onComplete={() => undefined}
+      />,
+    );
+
+    const rows = screen.getAllByRole('button', { name: /v1\.0\.0-beta\.22/ });
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toHaveTextContent('Latest');
+    expect(rows[0]).toHaveTextContent('two-checksum');
+    expect(rows[0]).not.toHaveTextContent('Current');
+    expect(rows[1]).toHaveTextContent('Current');
+    expect(rows[1]).not.toHaveTextContent('Latest');
+
+    // The review step names the release by version and checksum so the two uploads stay distinguishable at the
+    // moment of confirmation, not only in the picker.
+    fireEvent.click(screen.getByRole('button', { name: /Continue/ }));
+    await screen.findByRole('textbox', { name: 'New configuration' });
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /Continue/ })).toBeEnabled(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Continue/ }));
+    expect(
+      await screen.findByText('v1.0.0-beta.22 · two-checksum'),
+    ).toBeInTheDocument();
   });
 });

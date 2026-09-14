@@ -4,7 +4,7 @@ import {
   DEFAULT_MAIL_SYNC_BATCH_SIZE,
   MAX_MAIL_SYNC_BATCH_SIZE,
   DEFAULT_MAIL_OAUTH_CALLBACK_PATH,
-  mailConfig,
+  DEFAULT_MAIL_CONFIG,
   resolveMailOAuthCallbackPath,
   resolveMailOAuthCallbackUrl,
   resolveMailOAuthOrigin,
@@ -48,7 +48,7 @@ describe('mail OAuth callback configuration', () => {
   });
 
   it('uses the default path with the application origin and base path', () => {
-    expect(mailConfig.defaults).toMatchObject({
+    expect(DEFAULT_MAIL_CONFIG).toMatchObject({
       oauthCallbackUrl: DEFAULT_MAIL_OAUTH_CALLBACK_PATH,
     });
     expect(

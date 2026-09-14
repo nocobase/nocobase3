@@ -1,8 +1,16 @@
 // @vitest-environment node
 
+import {
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import path from 'node:path';
+import { tmpdir } from 'node:os';
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   defineServerPlugin,
@@ -12,6 +20,14 @@ import {
 import { defineApiRoutes, defineRootRoutes } from '../src/router/index.js';
 import { Hono } from 'hono';
 
+const tempDirs: string[] = [];
+
+afterEach(() => {
+  for (const directory of tempDirs.splice(0)) {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 describe('server plugin definitions', () => {
   it('normalizes optional contributions and freezes the result', () => {
     const plugin = defineServerPlugin({
@@ -20,7 +36,6 @@ describe('server plugin definitions', () => {
 
     expect(plugin).toEqual({
       packageName: '@nocobase/app-plugin-example',
-      config: [],
       serviceProviders: [],
       routes: [],
       database: undefined,
@@ -118,4 +133,84 @@ describe('server plugin definitions', () => {
       'Server plugin path "../outside" must be a safe package-relative path beginning with "./".',
     );
   });
+
+  it('keeps source packages first by default when a built tree is present', () => {
+    const rootDir = mkdtempSync(
+      path.join(tmpdir(), 'nocobase-plugin-resolution-'),
+    );
+    tempDirs.push(rootDir);
+    const packageName = '@example/runtime-plugin';
+
+    writeFileSync(
+      path.join(rootDir, 'package.json'),
+      JSON.stringify({ name: '@example/application' }),
+    );
+    writePackage(rootDir, packageName, 'source');
+    writePackage(path.join(rootDir, 'dist'), packageName, 'compiled');
+
+    const resolved = resolveAppServerPlugins(
+      rootDir,
+      defineServerPlugins([
+        defineServerPlugin({
+          packageName,
+        }),
+      ]),
+    ).plugins[0]?.metadata;
+
+    expect(resolved?.version).toBe('source');
+    expect(resolved?.rootDir).toBe(
+      realpathSync(path.join(rootDir, 'node_modules/@example/runtime-plugin')),
+    );
+  });
+
+  it('prefers compiled packages when the runtime opts into the built tree', () => {
+    const rootDir = mkdtempSync(
+      path.join(tmpdir(), 'nocobase-plugin-resolution-'),
+    );
+    tempDirs.push(rootDir);
+    const packageName = '@example/runtime-plugin';
+
+    writeFileSync(
+      path.join(rootDir, 'package.json'),
+      JSON.stringify({ name: '@example/application' }),
+    );
+    writePackage(rootDir, packageName, 'source');
+    writePackage(path.join(rootDir, 'dist'), packageName, 'compiled');
+
+    const resolved = resolveAppServerPlugins(
+      rootDir,
+      defineServerPlugins([
+        defineServerPlugin({
+          packageName,
+        }),
+      ]),
+      { preferBuiltPackages: true },
+    ).plugins[0]?.metadata;
+
+    expect(resolved?.version).toBe('compiled');
+    expect(resolved?.rootDir).toBe(
+      realpathSync(
+        path.join(rootDir, 'dist/node_modules/@example/runtime-plugin'),
+      ),
+    );
+  });
 });
+
+function writePackage(rootDir: string, packageName: string, version: string) {
+  const packageDir = path.join(
+    rootDir,
+    'node_modules',
+    ...packageName.split('/'),
+  );
+  mkdirSync(packageDir, { recursive: true });
+  writeFileSync(
+    path.join(packageDir, 'package.json'),
+    JSON.stringify({
+      name: packageName,
+      version,
+      exports: {
+        './package.json': './package.json',
+      },
+    }),
+  );
+}

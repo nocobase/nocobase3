@@ -7,6 +7,7 @@ import {
   optionalStringInput,
   stringInput,
 } from '../input.js';
+import { nowDatetime } from '../temporal.js';
 
 export function createCustomerRoutes(crm: DatabaseConnection): Hono {
   const routes = new Hono();
@@ -46,7 +47,7 @@ export function createCustomerRoutes(crm: DatabaseConnection): Hono {
         email: stringInput(input, 'email'),
         company: stringInput(input, 'company'),
         status: optionalStringInput(input, 'status') ?? 'active',
-        createdAt: new Date().toISOString(),
+        createdAt: nowDatetime(),
       })
       .execute();
     const customer = await crm.query

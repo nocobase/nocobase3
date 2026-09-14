@@ -1,11 +1,8 @@
 import {
   defineAppConfig,
-  envInteger,
-  envString,
-  type AppConfigDefinition,
+  type AppConfigFactory,
 } from '@nocobase/app-server/config';
 import { joinBasePath, normalizeBasePath } from '@nocobase/app-server/support';
-import { Type } from '@sinclair/typebox';
 
 export interface MailProviderConfigEntry {
   readonly type: string;
@@ -28,66 +25,17 @@ export interface MailConfig {
   readonly providers: Readonly<Record<string, MailProviderConfigEntry>>;
 }
 
-export const mailConfig: AppConfigDefinition<MailConfig> = defineAppConfig({
-  namespace: 'mail',
-  schema: Type.Object(
-    {
-      oauthCallbackUrl: Type.Optional(
-        Type.String({
-          minLength: 1,
-          description:
-            'Absolute OAuth callback URL or an app-local callback path. Absolute URLs must include the application public base path.',
-        }),
-      ),
-      automaticSyncIntervalMs: Type.Integer({ minimum: 60_000 }),
-      syncBatchSize: Type.Integer({
-        minimum: 1,
-        maximum: MAX_MAIL_SYNC_BATCH_SIZE,
-        description:
-          'Number of messages requested per Provider sync page. Lower values reduce memory usage.',
-      }),
-      pushWebhookUrl: Type.Optional(
-        Type.String({
-          format: 'uri',
-          description:
-            'Public base URL for Mail push callbacks, ending in /mail/webhooks.',
-        }),
-      ),
-      pushWebhookSecret: Type.Optional(
-        Type.String({
-          minLength: 32,
-          maxLength: 128,
-          pattern: '^[A-Za-z0-9_-]+$',
-          description: 'Shared secret embedded in Mail push callback URLs.',
-        }),
-      ),
-      providers: Type.Record(
-        Type.String(),
-        Type.Object(
-          {
-            type: Type.String(),
-            enabled: Type.Optional(Type.Boolean()),
-          },
-          { additionalProperties: true },
-        ),
-      ),
-    },
-    { additionalProperties: false },
-  ),
-  defaults: {
-    oauthCallbackUrl: DEFAULT_MAIL_OAUTH_CALLBACK_PATH,
-    automaticSyncIntervalMs: 300_000,
-    syncBatchSize: DEFAULT_MAIL_SYNC_BATCH_SIZE,
-    providers: {},
-  },
-  envMappings: {
-    MAIL_OAUTH_CALLBACK_URL: envString('oauthCallbackUrl'),
-    MAIL_AUTOMATIC_SYNC_INTERVAL_MS: envInteger('automaticSyncIntervalMs'),
-    MAIL_SYNC_BATCH_SIZE: envInteger('syncBatchSize'),
-    MAIL_PUSH_WEBHOOK_URL: envString('pushWebhookUrl'),
-    MAIL_PUSH_WEBHOOK_SECRET: envString('pushWebhookSecret'),
-  },
+export const DEFAULT_MAIL_CONFIG: MailConfig = Object.freeze({
+  oauthCallbackUrl: DEFAULT_MAIL_OAUTH_CALLBACK_PATH,
+  automaticSyncIntervalMs: 300_000,
+  syncBatchSize: DEFAULT_MAIL_SYNC_BATCH_SIZE,
+  providers: {},
 });
+
+/** Application-owned default configuration factory for the Mail module. */
+export const mailConfig: AppConfigFactory<MailConfig> = defineAppConfig(
+  (_runtime) => DEFAULT_MAIL_CONFIG,
+);
 
 export function resolveMailOAuthOrigin(
   configuredOrigin: string | undefined,

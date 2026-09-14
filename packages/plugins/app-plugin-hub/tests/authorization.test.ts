@@ -6,6 +6,7 @@ import {
   createMigrator,
   type DatabaseManager,
 } from '@nocobase/db';
+import sqlite from '@nocobase/db-sqlite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -19,6 +20,7 @@ describe('Hub user role scope', () => {
 
   beforeEach(async () => {
     database = createDatabaseManager({
+      drivers: { sqlite },
       default: 'main',
       connections: {
         main: { dialect: 'sqlite', filename: ':memory:' },
@@ -85,6 +87,32 @@ describe('Hub user role scope', () => {
         scope.replace('user-1', ['hub-viewer', 'hub-operator'], connection),
       ),
     ).rejects.toMatchObject({ code: 'INVALID_ROLE_SCOPE_VALUE' });
+  });
+
+  it('exposes localized labels for the Hub role scope and options', async () => {
+    const scope = createHubUserRoleScope(authorization);
+
+    await expect(scope.options()).resolves.toEqual([
+      expect.objectContaining({
+        value: 'hub-administrator',
+        labelI18nKey: 'roles.names.hub-administrator',
+        labelI18nNs: '@nocobase/app-plugin-hub',
+      }),
+      expect.objectContaining({
+        value: 'hub-operator',
+        labelI18nKey: 'roles.names.hub-operator',
+        labelI18nNs: '@nocobase/app-plugin-hub',
+      }),
+      expect.objectContaining({
+        value: 'hub-viewer',
+        labelI18nKey: 'roles.names.hub-viewer',
+        labelI18nNs: '@nocobase/app-plugin-hub',
+      }),
+    ]);
+    expect(scope).toMatchObject({
+      labelI18nKey: 'roles.scope',
+      labelI18nNs: '@nocobase/app-plugin-hub',
+    });
   });
 
   it('loads one page of Hub roles through one batch read', async () => {

@@ -1,5 +1,87 @@
 # @nocobase/app-plugin-hub
 
+## 0.1.0-beta.4
+
+### Minor Changes
+
+- f17f3a6: Provide editable TypeScript defaults for application modules, assembled by the runtime before services start. Module factories receive the runtime with application paths and plugin metadata; deployment files and environment variables override defaults, and configuration reload preserves code defaults.
+
+  Keep deployment settings in YAML examples and reserve explicit environment overrides for secrets and startup integration. Simplify application configuration loading, merging and reload subscriptions.
+
+  Align client configuration assembly with the server: runtime merges application TypeScript defaults beneath public configuration before services start. Client inspection reports the application configuration entry.
+
+- e11b855: Improve Hub App management with server-side catalog search and pagination, URL-addressable App detail Tabs, unified runtime status and action availability feedback, and application removal from the catalog.
+
+  The catalog search is scoped to the Collection's database schema, so it works on PostgreSQL when the application runs outside the connection's default schema, and Hub reads no longer wait indefinitely for startup restoration; Apps the Host has not reached yet are reported as pending in the meantime.
+
+  `GET /hub/apps` now returns a pagination object rather than an array. The response body changes from `HubAppSummary[]` to `{ items, total, page, pageSize }`, and accepts `search`, `page`, and `pageSize` query parameters. Any HTTP client reading the array directly has to read `items` instead. The `HubService.listApps()` method keeps its existing array return type; the new `HubService.listAppsPage()` serves the paginated route.
+
+### Patch Changes
+
+- ceb356b: Fix published package metadata and database test driver registration.
+- e11b855: Generate and persist an authentication secret when a Config file deployment does not provide one.
+- e11b855: Format dates in the language the application is in rather than the browser's. `Intl.DateTimeFormat` was constructed without a locale, which resolves to the browser's own language, so an English Hub on a Chinese browser rendered `2026年9月14日` beside its English labels — and a Chinese Hub on an English browser rendered `Sep 14, 2026`. The catalog, App detail header, Releases, Deployments and configuration history all read the application's language now.
+- e11b855: Default the deploy dialog to the newest uploaded release instead of the one already running, mark the running and newest releases in the picker so two uploads of the same version can be told apart, and show the release checksum in the review step.
+- e11b855: Preserve an existing App configuration when deploying a newer Release with a configuration template.
+- Updated dependencies [ceb356b]
+- Updated dependencies [f17f3a6]
+- Updated dependencies [f17f3a6]
+- Updated dependencies [f17f3a6]
+- Updated dependencies [43d25b4]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [40e2d49]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [590861e]
+- Updated dependencies [e11b855]
+- Updated dependencies [72ed008]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [e11b855]
+- Updated dependencies [e11b855]
+- Updated dependencies [e11b855]
+- Updated dependencies [ceb356b]
+- Updated dependencies [e11b855]
+- Updated dependencies [e11b855]
+- Updated dependencies [ceb356b]
+- Updated dependencies [40e2d49]
+- Updated dependencies [590861e]
+- Updated dependencies [ceb356b]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+  - @nocobase/app-server@1.0.0-beta.11
+  - @nocobase/app-client@1.0.0-beta.14
+  - @nocobase/app-plugin-authentication@0.1.0-beta.11
+  - @nocobase/db@1.0.0-beta.5
+  - @nocobase/authorization@0.1.0-beta.5
+  - @nocobase/app-host@0.1.0-beta.5
+  - @nocobase/app-plugin-users@0.0.2-beta.1
+
 ## 0.1.0-beta.3
 
 ### Minor Changes

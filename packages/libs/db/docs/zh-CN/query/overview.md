@@ -112,3 +112,33 @@ await db.query().selectFrom('orders').where('orderNo', '=', 'SO-001').execute();
 - 不要把 `QueryAdapter` 当 Repository 使用。
 - Query 表来源参数使用 Connection 相对标识符，不写 Connection 前缀。
 - 需要解析 Collection 级 `tablePrefix` 时，不要使用 `db.query()` 假装 Repository。
+
+## Exact BIGINT results
+
+With the default drivers, physical BIGINT columns return exact strings,
+including small values, from Query reads. Null remains null. Decoding happens
+before conversion to a JavaScript number and uses physical result metadata,
+including aliases and joined columns; Query does not read Collection metadata.
+
+SQLite recognizes declared BIGINT/INT8 columns. Auto-increment keys physically
+stored as INTEGER cannot be distinguished as logical bigInt by Query; use
+Repository when Collection metadata must determine the result type. Expressions without a declared
+column type return safe integers as numbers and larger int64 values as strings.
+Oracle fetches NUMBER(p,0) with p >= 16 as strings, including its INTEGER alias
+(NUMBER(38,0)); lower-precision integer columns retain number results. MySQL
+uses big-number strings. PostgreSQL and SQL Server already return BIGINT strings.
+
+This does not guarantee exact SQL arithmetic, numbers embedded
+in JSON, or custom driver parsers. Keep exact input values as strings: turning a
+rounded JS number into text cannot recover its original value.
+
+Query 与 Repository 的聚合结果类型已统一，详见 [聚合规则](./aggregates.md#统一返回类型)。
+
+### DECIMAL 读取
+
+DECIMAL 普通字段、别名、标量子查询及 MIN/MAX 返回字符串或 null，保留数据库输出格式，
+不统一去掉末尾零或补齐小数位。例如 PG/MySQL 的 `DECIMAL(..., 2)` 可以返回 `'42.00'`，
+其他数据库可能返回数值相同的 `'42'`。跨库统一类型和数值，不要求字符串逐字相同。
+PG/MySQL 直接使用原生驱动结果，不为 DECIMAL 读取查询 Collection 或增加文本投影；
+其他数据库按需在驱动转换成 JS number 前保护精度。WHERE 和 ORDER BY 保留数值语义。
+SQLite 的 REAL 存储近似值不因此变为任意精度十进制。

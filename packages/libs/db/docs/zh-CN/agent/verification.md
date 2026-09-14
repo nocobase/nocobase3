@@ -37,13 +37,14 @@ pnpm --filter @nocobase/db build
 pnpm --filter @nocobase/db check
 ```
 
-数据库行为先运行 SQLite 集成测试：
+数据库行为先运行 SQLite 集成测试。集成测试由 dialect package 拥有，
+`@nocobase/db` 本身没有集成测试脚本：
 
 ```bash
-pnpm --filter @nocobase/db test:integration
+pnpm --filter @nocobase/db-sqlite test:integration
 ```
 
-变更涉及方言差异时，再启动并运行对应的 PostgreSQL、MySQL、Oracle 或 SQL Server 测试。SQLite 通过不代表其他方言已经验证。
+变更涉及方言差异时，再运行对应的 PostgreSQL、MySQL、Oracle 或 SQL Server 包。SQLite 通过不代表其他方言已经验证。
 
 ## 业务包使用 DB API
 

@@ -25,11 +25,13 @@ import { buildWorkflowArtifact } from '../build/artifact-builder.js';
 import { LocalWorkflowArtifactStore } from '../server/loader/artifact-store.js';
 import { pendingInstruction } from './fixtures/instructions.js';
 import { createWorkflowRunServices } from '../server/engine/run-services.js';
+import { asIdFilter } from '../server/engine/utils.js';
 import {
   createTestDatabase,
   createTestWorkflow,
   findRun,
   listNodeRuns,
+  testStore,
 } from './helpers.js';
 
 const SOURCE_ROOT = fileURLToPath(
@@ -156,12 +158,10 @@ describe('run instruction', () => {
         },
       ],
     });
-    await database
-      .query()
-      .updateTable('workflows')
-      .set({ hash: v1Hash })
-      .where('id', '=', workflow.id)
-      .execute();
+    await testStore(database).workflows.updateMany({
+      filter: { id: asIdFilter(workflow.id) },
+      values: { hash: v1Hash },
+    });
     workflow.hash = v1Hash;
     const dispatcher = new Dispatcher({
       database,
@@ -182,19 +182,17 @@ describe('run instruction', () => {
       { eventKey: 'pinned', manually: true },
     );
     const execution = await findRun(database, 'pinned');
-    const pending = await database
-      .query()
-      .selectFrom('workflowNodeRuns')
-      .select(['id'])
-      .where('workflowRunId', '=', execution.id)
-      .where('nodeKey', '=', 'hold')
-      .executeTakeFirstOrThrow();
-    await database
-      .query()
-      .updateTable('workflows')
-      .set({ hash: v2Hash })
-      .where('id', '=', workflow.id)
-      .execute();
+    const pending = await testStore(database).nodeRuns.findOne({
+      filter: {
+        workflowRunId: asIdFilter(execution.id),
+        nodeKey: 'hold',
+      },
+      select: (select) => select.fields('id'),
+    });
+    await testStore(database).workflows.updateMany({
+      filter: { id: asIdFilter(workflow.id) },
+      values: { hash: v2Hash },
+    });
     await dispatcher.dispatch({
       executionId: execution.id,
       nodeRunId: pending.id as number,

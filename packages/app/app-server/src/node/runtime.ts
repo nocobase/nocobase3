@@ -4,7 +4,6 @@ import {
   type AppRuntimeDefinition,
   type ResolvedAppRuntime,
 } from '../runtime/definition.js';
-import type { AppConfigToken } from '../config/index.js';
 import type { NodeServerConfig } from './config.js';
 import { createPublicBasePathAdapter } from '../runtime/mount.js';
 import type { AppScope } from '../runtime/types.js';
@@ -38,7 +37,6 @@ export type StandaloneServerFactory = (scope: AppScope) => Promise<Application>;
 export interface StandaloneApplicationDefinition {
   readonly rootDir: string;
   readonly appRuntime: AppRuntimeDefinition;
-  readonly serverConfig?: AppConfigToken<NodeServerConfig>;
   readonly createServer: StandaloneServerFactory;
 }
 
@@ -59,12 +57,7 @@ export interface DefinedStandaloneServer {
 export async function createStandaloneServer(
   options: CreateStandaloneServerOptions,
 ): Promise<StandaloneServer> {
-  const {
-    appRuntime: _appRuntime,
-    createServer,
-    serverConfig,
-    ...serverOptions
-  } = options;
+  const { appRuntime: _appRuntime, createServer, ...serverOptions } = options;
   const scope = createStandaloneRuntimeScope(
     resolveStandaloneServerScopeOptions(serverOptions),
   );
@@ -75,14 +68,9 @@ export async function createStandaloneServer(
       application,
       application.publicBasePath,
     );
-    const serverConfigValue = serverConfig
-      ? application.config.get(serverConfig)
-      : {
-          host: '127.0.0.1',
-          port: 13000,
-          startLog: true,
-          viteDevUrl: undefined,
-        };
+    const serverConfigValue = application.config.get<NodeServerConfig>(
+      'server',
+    ) ?? { host: '127.0.0.1', port: 13000, startLog: true };
     const listenOptions: StandaloneServerListenOptions = {
       hostname: serverConfigValue.host,
       port: serverConfigValue.port,

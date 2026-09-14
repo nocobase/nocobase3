@@ -8,6 +8,7 @@ import {
   optionalStringInput,
   stringInput,
 } from '../input.js';
+import { nowDatetime } from '../temporal.js';
 
 export function createProductRoutes(main: DatabaseConnection): Hono {
   const routes = new Hono();
@@ -38,7 +39,7 @@ export function createProductRoutes(main: DatabaseConnection): Hono {
         sku: stringInput(input, 'sku'),
         price,
         stock,
-        createdAt: new Date().toISOString(),
+        createdAt: nowDatetime(),
       })
       .execute();
     return context.json(

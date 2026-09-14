@@ -6,8 +6,8 @@ import {
   authorizationToken,
   type AuthorizationEnv,
 } from '@nocobase/app-plugin-authorization';
+import type { AppIdentityConfig } from '@nocobase/app-server/config';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
-import { appConfig } from '@nocobase/app-server/config';
 import {
   defineApiRoutes,
   type AppApiRouteContribution,
@@ -17,7 +17,7 @@ import { bodyLimit } from 'hono/body-limit';
 import { getRequestTranslator } from '@nocobase/i18n/server';
 
 import {
-  mailConfig,
+  type MailConfig,
   resolveMailOAuthCallbackUrl,
   resolveMailOAuthOrigin,
 } from '../config.js';
@@ -191,13 +191,13 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
     });
     routes.post('/authorizations', async (context) => {
       const value = await readObject(context.req.raw);
-      const identity = config.get(appConfig);
+      const identity = config.get<AppIdentityConfig>('app')!;
       const requestOrigin = new URL(context.req.url).origin;
       const origin = resolveMailOAuthOrigin(
         identity.publicOrigin,
         requestOrigin,
       );
-      const configuredMail = config.get(mailConfig);
+      const configuredMail = config.get<MailConfig>('mail')!;
       return context.json({
         data: await mail.startAuthorization(operationContext(context), {
           provider: {

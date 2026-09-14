@@ -11,8 +11,9 @@ import {
   addBasePathToLocation,
   joinBasePath,
 } from '@nocobase/app-server/support';
+import type { RepositoryPolicy } from '@nocobase/db';
 import type { ServiceContainer } from '@nocobase/service-provider';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { HTTPException } from 'hono/http-exception';
 import {
@@ -28,26 +29,59 @@ export interface FileRepositoryApiActions extends RepositoryApiActions {
   readonly uploadOne?: { readonly maxSize?: number };
   readonly uploadMany?: { readonly maxSize?: number };
 }
-export interface FileRepositoryApiExposure {
+export interface FileRepositoryApiExposure<P = unknown> {
   readonly name: string;
   readonly collection?: string;
   readonly connection?: string;
   readonly disk: string;
   readonly accessPath?: string;
   readonly accessMode?: 'stream' | 'redirect';
+  /**
+   * The Policy every action of this exposure runs under, including uploads.
+   *
+   * `uploadOne` and `uploadMany` do not go through `defineRepositoryApiRoutes`
+   * — they compose their own values and call the Repository directly — so what
+   * they bind is derived from this one: the `create` scope and defaults are
+   * inherited, and the field allowlist is replaced by the file columns, which
+   * is the only thing a caller cannot influence here. See `uploadPolicy`.
+   *
+   * The public byte route under `accessPath` is the deliberate exception. It
+   * serves anyone holding the UUID, has no authentication of its own, and is
+   * unaffected by this Policy.
+   */
+  readonly policy: RepositoryPolicy | ((principal: P) => RepositoryPolicy);
   readonly actions: FileRepositoryApiActions;
 }
 export interface FileRepositoryRoutesApplication {
   readonly container: ServiceContainer;
   readonly publicBasePath?: string;
 }
-export interface DefineFileRepositoryApiRoutesOptions {
-  readonly repositories: readonly FileRepositoryApiExposure[];
+export interface DefineFileRepositoryApiRoutesOptions<P = unknown> {
+  readonly repositories: readonly FileRepositoryApiExposure<P>[];
+  /** Resolve the principal a Policy function receives. See `app-server`. */
+  readonly principal?: (context: Context) => P | Promise<P>;
 }
 
+/**
+ * The base Policy for the paths that neither write nor scope what they read:
+ * the public byte route, and the middleware that decorates a CRUD response
+ * with a content URL.
+ *
+ * `uploadPolicy` reads every file column whatever base it is handed, and none
+ * of these paths writes, so granting nothing is the honest base. It also keeps
+ * the application's principal resolver from running a second time on a request
+ * the CRUD routes have already resolved it for.
+ */
+const unwritablePolicy: RepositoryPolicy = {
+  read: false,
+  create: false,
+  update: false,
+  delete: false,
+};
+
 /** Public first-version routes. Authentication and authorization are application-owned. */
-export function defineFileRepositoryApiRoutes(
-  options: DefineFileRepositoryApiRoutesOptions,
+export function defineFileRepositoryApiRoutes<P = unknown>(
+  options: DefineFileRepositoryApiRoutesOptions<P>,
 ): readonly AppRouteContribution<FileRepositoryRoutesApplication>[] {
   const paths: string[] = [];
   const entries = options.repositories.map((entry) => {
@@ -87,17 +121,22 @@ export function defineFileRepositoryApiRoutes(
     }
     return { ...entry, accessPath, actions, uploadOne, uploadMany };
   });
-  const crud = defineRepositoryApiRoutes({
-    repositories: entries.map(({ name, collection, connection, actions }) => ({
-      name,
-      collection,
-      connection,
-      actions,
-    })),
+  const crud = defineRepositoryApiRoutes<P>({
+    principal: options.principal,
+    repositories: entries.map(
+      ({ name, collection, connection, policy, actions }) => ({
+        name,
+        collection,
+        connection,
+        policy,
+        actions,
+      }),
+    ),
   });
   const resolve = (
     app: FileRepositoryRoutesApplication,
     entry: (typeof entries)[number],
+    policy: RepositoryPolicy,
   ): ServerFileRepository =>
     app.container
       .resolve(serverFileRepositoryManagerToken)
@@ -105,6 +144,7 @@ export function defineFileRepositoryApiRoutes(
         connection: entry.connection,
         disk: entry.disk,
         accessPath: entry.accessPath,
+        policy,
       });
   const urlFor =
     (app: FileRepositoryRoutesApplication, files: ServerFileRepository) =>
@@ -114,7 +154,7 @@ export function defineFileRepositoryApiRoutes(
     defineApiRoutes(async (app: FileRepositoryRoutesApplication) => {
       const router = fileRouter();
       for (const entry of entries) {
-        const files = resolve(app, entry);
+        const files = resolve(app, entry, unwritablePolicy);
         const getUrl = urlFor(app, files);
         for (const action of Object.keys(entry.actions)) {
           router.use(
@@ -179,6 +219,25 @@ export function defineFileRepositoryApiRoutes(
                 ),
             }),
             async (c) => {
+              // The exposure's own Policy governs an upload, so a Policy that
+              // reads the principal has to be built here rather than when the
+              // router was.
+              let writable: ServerFileRepository;
+              if (typeof entry.policy === 'function') {
+                const principal = await options.principal?.(c);
+                if (principal === undefined || principal === null)
+                  return c.json(
+                    {
+                      code: 'PRINCIPAL_REQUIRED',
+                      message:
+                        'This endpoint requires a principal and none was resolved.',
+                    },
+                    403,
+                  );
+                writable = resolve(app, entry, entry.policy(principal));
+              } else {
+                writable = resolve(app, entry, entry.policy);
+              }
               if (
                 !c.req
                   .header('content-type')
@@ -216,7 +275,7 @@ export function defineFileRepositoryApiRoutes(
                   );
                 return c.json({
                   data: decorate(
-                    await files.uploadOne({ file: value }),
+                    await writable.uploadOne({ file: value }),
                     getUrl,
                     true,
                   ),
@@ -240,7 +299,7 @@ export function defineFileRepositoryApiRoutes(
                 );
               return c.json({
                 data: decorate(
-                  await files.uploadMany({ files: uploads as File[] }),
+                  await writable.uploadMany({ files: uploads as File[] }),
                   getUrl,
                   true,
                 ),
@@ -255,7 +314,7 @@ export function defineFileRepositoryApiRoutes(
     defineRootRoutes((app: FileRepositoryRoutesApplication) => {
       const router = fileRouter();
       for (const entry of entries) {
-        const files = resolve(app, entry);
+        const files = resolve(app, entry, unwritablePolicy);
         router.get(`${entry.accessPath}/:file`, async (c) => {
           const match =
             /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\.([a-z0-9]{1,32}))?$/.exec(

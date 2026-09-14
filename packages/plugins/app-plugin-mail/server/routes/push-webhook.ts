@@ -8,7 +8,7 @@ import {
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 
-import { mailConfig } from '../config.js';
+import { type MailConfig } from '../config.js';
 import {
   mailProviderRegistryToken,
   mailRuntimeToken,
@@ -39,7 +39,7 @@ export const mailPushWebhookRoutes: AppRootRouteContribution<AppPluginApplicatio
         onError: (context) => context.json({ accepted: false }, 413),
       }),
       async (context) => {
-        const configured = config.get(mailConfig);
+        const configured = config.get<MailConfig>('mail')!;
         const secret = context.req.param('secret');
         if (
           !configured.pushWebhookSecret ||

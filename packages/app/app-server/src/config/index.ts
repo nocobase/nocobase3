@@ -1,4 +1,4 @@
-export { AppConfig } from './app-config.js';
+export { AppConfig, resolveDefaultAppConfigFile } from './app-config.js';
 export {
   envBoolean,
   envInteger,
@@ -7,13 +7,12 @@ export {
   type EnvironmentMapping,
 } from '@nocobase/config/providers/env';
 export {
-  appConfig,
   defineAppConfig,
-  defineAppConfigVariant,
+  defaultAppConfigs,
+  type AppConfigFactory,
   type AppIdentityConfig,
 } from './define-app-config.js';
 export type * from './app-config-types.js';
 export * from './context.js';
 export * from './paths.js';
-export * from './schema-document.js';
 export type * from './types.js';
