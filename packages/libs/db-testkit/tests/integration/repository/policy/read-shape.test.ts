@@ -161,6 +161,54 @@ describeIntegrationDatabases('Repository policy read shape', (context) => {
     });
   });
 
+  it('PR-07 does not judge the relation scope as a caller filter in a combine branch', async () => {
+    await createTenantFixture(context);
+    // tenantId is in the relation scope but not in its read allowlist. The
+    // caller never names it, so nothing here may be refused on its account.
+    const records = await context.connection
+      .repository('policyProjects')
+      .withPolicy({
+        read: {
+          scope: true,
+          fields: ['id'],
+          relations: { tasks: { scope: { tenantId: 'T1' }, fields: ['id'] } },
+        },
+        create: { scope: true },
+        update: { scope: true },
+        delete: { scope: true },
+      })
+      .findMany({
+        filter: { id: 'p1' },
+        select: {
+          kind: 'select',
+          version: 1,
+          root: {
+            kind: 'selection',
+            fields: ['id'],
+            includes: [
+              {
+                kind: 'include',
+                relation: 'tasks',
+                select: { kind: 'selection', fields: [], includes: [] },
+                result: {
+                  kind: 'combine',
+                  branches: {
+                    visible: {
+                      select: { kind: 'selection' },
+                      result: { kind: 'count' },
+                    },
+                  },
+                },
+              },
+            ],
+          },
+        },
+      });
+
+    // p1 owns t1 (this tenant) and t2 (the other one); only t1 counts.
+    expect(records).toEqual([{ id: 'p1', tasks: { visible: 1 } }]);
+  });
+
   it('PR-06 scopes an expanded relation without dropping root records', async () => {
     await createTenantFixture(context);
     const records = await context.database

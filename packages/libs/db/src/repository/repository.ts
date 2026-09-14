@@ -3174,11 +3174,21 @@ async function validateRelationResult(
           path: ['result', 'branches', name],
         });
       }
-      const commonFilter = scope.filter;
       const target = await targetCollection(
         collections,
         relationField(source, relation, []),
         [],
+      );
+      // The caller's own filter, not `scope.filter`, which already carries the
+      // relation scope. Feeding that back in would put Policy conditions
+      // through the caller-filter validation below, where a scope field the
+      // read allowlist omits — `tenantId`, typically — is rejected as though
+      // the caller had named it. Every recursion re-applies the scope anyway.
+      const commonFilter = await normalizeFilterWithRelations(
+        collections,
+        target,
+        input.filter,
+        context,
       );
       const ownFilter = await normalizeFilterWithRelations(
         collections,

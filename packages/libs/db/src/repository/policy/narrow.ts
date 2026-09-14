@@ -40,11 +40,8 @@ export function narrowRepositoryPolicy<TRecord extends object>(
       ['create'],
       narrowCreateNode,
     ),
-    update: narrowNode(
-      current.update,
-      patch.update,
-      ['update'],
-      narrowWriteNode,
+    update: narrowNode(current.update, patch.update, ['update'], (node, item) =>
+      narrowWriteNode(node, item, 'update'),
     ),
     delete: narrowNode(
       current.delete,
@@ -225,8 +222,11 @@ function narrowReadRelations(
 function narrowWriteNode(
   current: NormalizedWriteNode,
   patch: object,
+  kind: 'create' | 'update' = 'update',
 ): NormalizedWriteNode {
-  const next = normalizePatchNode('update', patch) as NormalizedWriteNode;
+  // The node kind has to travel with the patch: only `create` accepts
+  // `defaults`, so normalizing a create patch as an update rejects it.
+  const next = normalizePatchNode(kind, patch) as NormalizedWriteNode;
   const has = (key: string) => Object.hasOwn(patch, key);
   return Object.freeze({
     scope: has('scope')
@@ -247,7 +247,7 @@ function narrowCreateNode(
 ): NormalizedCreateNode {
   const next = normalizePatchNode('create', patch) as NormalizedCreateNode;
   return Object.freeze({
-    ...narrowWriteNode(current, patch),
+    ...narrowWriteNode(current, patch, 'create'),
     // Defaults are server-assigned values rather than a permission, so a patch
     // replaces the ones it names and leaves the rest.
     defaults: Object.hasOwn(patch, 'defaults')

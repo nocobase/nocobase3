@@ -113,6 +113,32 @@ describe('ScopedRepository.narrow', () => {
     });
   });
 
+  it('replaces only the create defaults the patch names', () => {
+    const scoped = new DefaultRepository({
+      collection: 'projects',
+      collections: {} as never,
+      adapter: {} as never,
+    }).withPolicy({
+      read: base.read,
+      create: {
+        scope: true,
+        fields: ['title'],
+        defaults: { tenantId: 'T1', source: 'api' },
+      },
+      update: base.update,
+      delete: base.delete,
+    });
+
+    // Only `create` accepts `defaults`, so the node kind has to reach the
+    // normalizer; narrowing as an update rejected the patch outright.
+    const narrowed = scoped.narrow({
+      create: { defaults: { tenantId: 'T2' } },
+    });
+    expect(
+      (narrowed.explainPolicy().create as { defaults: unknown }).defaults,
+    ).toEqual({ tenantId: 'T2', source: 'api' });
+  });
+
   it('refuses an unknown key', () => {
     expect(() => scoped().narrow({ write: {} } as never)).toThrowError(
       /Unsupported Policy option/,
