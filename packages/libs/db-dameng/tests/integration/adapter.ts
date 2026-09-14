@@ -67,6 +67,9 @@ export const damengIntegrationProfile: DatabaseIntegrationProfile = {
   },
   json: {
     filters: 'unsupported',
+    // A json column is a plain clob here, so Knex never applies its json
+    // default handling and an object reaches the column as generic text.
+    defaults: 'unsupported',
   },
 } satisfies DatabaseIntegrationProfile;
 
