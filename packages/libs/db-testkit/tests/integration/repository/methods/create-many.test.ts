@@ -37,13 +37,11 @@ describeIntegrationDatabases('Repository createMany contracts', (context) => {
       });
       const first = rows.find((row) => row.code === `${prefix}A`)!;
       const second = rows.find((row) => row.code === `${prefix}B`)!;
-      const decode = (value: unknown): unknown =>
-        typeof value === 'string' ? JSON.parse(value) : value;
-      expect(decode(first.payload)).toEqual({ nested: [1, true, 'text'] });
+      expect(first.payload).toEqual({ nested: [1, true, 'text'] });
       expect(Buffer.from(first.bytes as Uint8Array)).toEqual(
         Buffer.from([1, 2, 3]),
       );
-      expect(decode(second.payload)).toEqual([1, 2]);
+      expect(second.payload).toEqual([1, 2]);
       expect(second.bytes).toBeNull();
       await repository.updateOne({
         filter: { code: `${prefix}A` },
@@ -53,7 +51,7 @@ describeIntegrationDatabases('Repository createMany contracts', (context) => {
         filter: { code: `${prefix}A` },
       });
       expect(updated?.bytes).toBeNull();
-      expect(decode(updated?.payload)).toEqual({ changed: true });
+      expect(updated?.payload).toEqual({ changed: true });
     }
   });
 

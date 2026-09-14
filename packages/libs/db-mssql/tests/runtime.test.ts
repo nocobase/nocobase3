@@ -29,12 +29,14 @@ describe('mssql runtime strategy', () => {
       runtime.schema!.columnType!({
         column: { type: 'datetimeTz' } as never,
         tablePrimaryKey: false,
+        altering: false,
       }),
     ).toBe('datetimeoffset(3)');
     expect(
       runtime.schema!.columnType!({
         column: { type: 'enum', length: 32 } as never,
         tablePrimaryKey: false,
+        altering: false,
       }),
     ).toBe('nvarchar(32)');
 

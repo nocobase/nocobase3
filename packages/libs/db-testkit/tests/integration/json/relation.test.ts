@@ -84,4 +84,66 @@ describeIntegrationDatabases('JSON relation select', (context) => {
       },
     ]);
   });
+
+  it('writes JSON values through nested relation mutations', async () => {
+    await context.builder.createCollections([
+      {
+        name: 'jsonNestedAuthors',
+        definition: (collection) => {
+          collection.increments('id');
+          collection.string('name').notNull();
+          collection
+            .hasMany('books', 'jsonNestedBooks')
+            .sourceKey('id')
+            .foreignKey('authorId');
+        },
+      },
+      {
+        name: 'jsonNestedBooks',
+        definition: (collection) => {
+          collection.increments('id');
+          collection.integer('authorId').notNull();
+          collection.string('title').notNull();
+          collection.json('payload').nullable();
+          collection
+            .belongsTo('author', 'jsonNestedAuthors')
+            .targetKey('id')
+            .foreignKey('authorId')
+            .constraints(false);
+        },
+      },
+    ]);
+
+    // A nested write reaches the encoder through the relation path rather than
+    // through the root values, so it is worth covering separately.
+    const authors = context.database.repository('jsonNestedAuthors');
+    await authors.createOne({
+      values: {
+        name: 'Ada',
+        books: {
+          create: [
+            { title: 'Alpha', payload: { deep: { list: [1, [2, null]] } } },
+            { title: 'Beta', payload: '{"looks":"like json"}' },
+          ],
+        },
+      },
+    });
+
+    await expect(
+      authors.findMany({
+        select: (select) =>
+          select
+            .fields('name')
+            .include('books', (book) => book.fields('title', 'payload')),
+      }),
+    ).resolves.toEqual([
+      {
+        name: 'Ada',
+        books: [
+          { title: 'Alpha', payload: { deep: { list: [1, [2, null]] } } },
+          { title: 'Beta', payload: '{"looks":"like json"}' },
+        ],
+      },
+    ]);
+  });
 });

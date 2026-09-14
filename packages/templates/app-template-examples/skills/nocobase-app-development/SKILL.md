@@ -78,6 +78,8 @@ For creating, editing or removing theme presets, read [themes](references/themes
 
 ## Where to work
 
+The Settings and Dev tools header entries stay visible on their destination pages. The Dev tools entry is development-only and must remain absent from production builds.
+
 Business code belongs in a small, stable set of places:
 
 ```text

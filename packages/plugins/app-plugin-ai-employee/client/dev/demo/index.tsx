@@ -21,7 +21,7 @@ import {
   useAIChatBase,
 } from '../../../registry/nocobase-ai/providers/index.js';
 import { Globe2, MousePointer2 } from 'lucide-react';
-import { useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { ContainerShowcase, type ChatContainer } from './container-showcase.js';
 import { InteractionShowcase } from './interaction-showcase.js';
 import { AIConfigurationGate } from './configuration-gate.js';
@@ -150,22 +150,43 @@ const surfacePropRows = [
 ];
 
 export function AIChatPage() {
+  const [webSearch, setWebSearch] = useState(false);
+
   return (
     <AIConfigurationGate>
-      <AIChatProvider id='ai-chat-demo'>
-        <AIChatPageContent />
+      <AIChatProvider id='ai-chat-demo' webSearch={webSearch}>
+        <AIChatPageContent
+          webSearch={webSearch}
+          onWebSearchChange={setWebSearch}
+        />
       </AIChatProvider>
     </AIConfigurationGate>
   );
 }
 
-function AIChatPageContent() {
+function AIChatPageContent({
+  webSearch,
+  onWebSearchChange,
+}: {
+  webSearch: boolean;
+  onWebSearchChange: (enabled: boolean) => void;
+}) {
   const t = useAITranslate();
   const [container, setContainer] = useState<ChatContainer>('embedded');
   const [surfaceOpen, setSurfaceOpen] = useState(false);
-  const [webSearch, setWebSearch] = useState(false);
-  const { id: chatId, addWorkContext, focusComposer } = useAIChatBase();
+  const {
+    id: chatId,
+    addWorkContext,
+    currentModel,
+    focusComposer,
+  } = useAIChatBase();
   const { registeredCount, startPicking } = useAIPageElementPicker();
+
+  useEffect(() => {
+    if (webSearch && currentModel.supportWebSearch !== true) {
+      onWebSearchChange(false);
+    }
+  }, [currentModel.supportWebSearch, onWebSearchChange, webSearch]);
 
   const composerActions = useMemo<AIChatComposerAction[]>(
     () => [
@@ -189,11 +210,18 @@ function AIChatPageContent() {
       },
       {
         key: 'web-search',
-        label: t('actions.webSearch', 'Web search'),
+        label:
+          currentModel.supportWebSearch === true
+            ? t('actions.webSearch', 'Web search')
+            : t(
+                'actions.webSearchUnsupported',
+                'Current model does not support web search',
+              ),
         icon: <Globe2 />,
+        disabled: currentModel.supportWebSearch !== true,
         active: webSearch,
         onClick: () => {
-          setWebSearch((active) => !active);
+          onWebSearchChange(!webSearch);
         },
       },
     ],
@@ -201,7 +229,9 @@ function AIChatPageContent() {
       addWorkContext,
       chatId,
       container,
+      currentModel.supportWebSearch,
       focusComposer,
+      onWebSearchChange,
       registeredCount,
       startPicking,
       surfaceOpen,

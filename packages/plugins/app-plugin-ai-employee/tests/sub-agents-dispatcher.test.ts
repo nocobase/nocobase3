@@ -50,4 +50,69 @@ describe('SubAgentsDispatcher direct dependencies', () => {
     ).resolves.toEqual({ decisions: [{ type: 'reject' }] });
     expect(getUserDecisions).toHaveBeenCalledWith('sub-message');
   });
+
+  it('passes the resolved execution context to sub-agent tools', async () => {
+    const invoke = vi.fn().mockResolvedValue({
+      messages: [{ content: 'Search result' }],
+    });
+    const resolvedModel = { llmService: 'openai', model: 'gpt-5' };
+    const createAIEmployee = vi.fn().mockResolvedValue({ invoke });
+    const dispatcher = new SubAgentsDispatcher({
+      ai: {} as never,
+      database: {} as never,
+      databaseManager: {} as never,
+      logger: {} as never,
+      caching: {} as never,
+      fileStorage: {} as never,
+      snowflake: {} as never,
+      repositories: {
+        aiMessages: { findOne: vi.fn().mockResolvedValue(null) },
+      } as never,
+      aiEmployeesManager: {
+        resolveModel: vi.fn().mockResolvedValue(resolvedModel),
+      } as never,
+      aiConversationsManager: {
+        getUserDecisions: vi.fn(),
+      } as never,
+      builtInManager: {} as never,
+      llmStreamCachedManager: {} as never,
+      knowledgeBaseManager: {} as never,
+      workContextHandler: {} as never,
+      documentLoaders: {} as never,
+      container: {
+        resolve: vi.fn(() => ({ createAIEmployee })),
+      } as never,
+    });
+
+    await expect(
+      dispatcher.run(
+        {
+          sessionId: 'sub-session',
+          employee: { username: 'researcher' } as never,
+          model: resolvedModel,
+          question: 'Find current information',
+          webSearch: true,
+          messages: [
+            {
+              role: 'user',
+              content: { type: 'text', content: 'Parent context' },
+            },
+          ],
+        },
+        {
+          actor: { id: 'user-1', roles: ['member'], isRoot: false },
+          execution: { timezone: 'Asia/Shanghai' },
+        },
+      ),
+    ).resolves.toBe('Search result');
+
+    const request = invoke.mock.calls[0][0];
+    expect(request.context.agentContext.state).toMatchObject({
+      sessionId: 'sub-session',
+      model: resolvedModel,
+      webSearch: true,
+      timezone: 'Asia/Shanghai',
+    });
+    expect(request.context.agentContext.state.messages).toHaveLength(1);
+  });
 });

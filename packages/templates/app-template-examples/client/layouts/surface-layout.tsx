@@ -16,12 +16,10 @@ import {
   useRouteNavigation,
 } from '../routing/route-navigation.js';
 import { NavigationTree } from '../shell/app-sidebar.js';
-import { AppBrand, HeaderActions, type HeaderSurface } from '../shell/index.js';
+import { AppBrand, HeaderActions } from '../shell/index.js';
 
 /** What distinguishes one surface from another. Everything else about the two is identical. */
 export interface SurfaceCopy {
-  /** Which surface this is. The header drops this surface's own entry, since it is already the destination. */
-  readonly surface: HeaderSurface;
   /** Labels the navigation landmark and the loading state, such as `Settings` or `Dev tools`. */
   readonly title: string;
   /** The path this surface mounts at, used to strip the prefix from nested route paths. */
@@ -169,7 +167,7 @@ export function SurfaceLayout({
               <span className='truncate'>Back to app</span>
             </Link>
           </div>
-          <HeaderActions surface={copy.surface} />
+          <HeaderActions />
         </header>
         <main className='min-w-0 flex-1'>
           <label className='sr-only' htmlFor='surface-page'>

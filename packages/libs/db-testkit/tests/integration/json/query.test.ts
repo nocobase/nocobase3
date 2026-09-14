@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest';
 import { describeIntegrationDatabases } from '../helpers.js';
+import { jsonFixtureRows, jsonValueFixtures } from './fixtures.js';
 
 describeIntegrationDatabases('JSON query values', (context) => {
   it('creates JSON values through Query.insertInto', async () => {
@@ -8,22 +9,25 @@ describeIntegrationDatabases('JSON query values', (context) => {
       collection.json('payload').nullable();
     });
 
-    const payloads = [
-      { id: 'object', payload: { enabled: true, labels: ['one', 'two'] } },
-      { id: 'array', payload: [1, false, { nested: 'value' }] },
-      { id: 'string', payload: 'text' },
-      { id: 'number', payload: 42.5 },
-      { id: 'boolean', payload: true },
-      { id: 'null', payload: null },
-    ] as const;
-
+    const rows = jsonFixtureRows();
     await expect(
       context.database
         .query()
         .insertInto('jsonQueryCreate')
-        .values(payloads)
+        .values(rows)
         .execute(),
-    ).resolves.toMatchObject({ insertedCount: payloads.length });
+    ).resolves.toMatchObject({ insertedCount: rows.length });
+
+    // A row count says nothing about what was written. Reading the values back
+    // is what makes a broken encoder fail here rather than in the next test.
+    expect(
+      await context.database
+        .query()
+        .selectFrom('jsonQueryCreate')
+        .selectAll()
+        .orderBy('id')
+        .execute(),
+    ).toEqual(rows);
   });
 
   it('reads JSON values through Query.selectFrom', async () => {
@@ -32,19 +36,10 @@ describeIntegrationDatabases('JSON query values', (context) => {
       collection.json('payload').nullable();
     });
 
-    const payloads = [
-      { id: 'object', payload: { enabled: true, labels: ['one', 'two'] } },
-      { id: 'array', payload: [1, false, { nested: 'value' }] },
-      { id: 'string', payload: 'text' },
-      { id: 'number', payload: 42.5 },
-      { id: 'boolean', payload: true },
-      { id: 'null', payload: null },
-    ] as const;
-
     await context.database
       .query()
       .insertInto('jsonQueryRead')
-      .values(payloads)
+      .values(jsonFixtureRows())
       .execute();
 
     expect(
@@ -54,9 +49,7 @@ describeIntegrationDatabases('JSON query values', (context) => {
         .selectAll()
         .orderBy('id')
         .execute(),
-    ).toEqual(
-      [...payloads].sort((left, right) => left.id.localeCompare(right.id)),
-    );
+    ).toEqual(jsonFixtureRows());
   });
 
   it('reads JSON values from scalar Query subqueries', async () => {
@@ -132,23 +125,25 @@ describeIntegrationDatabases('JSON query values', (context) => {
       .insertInto('jsonQueryUpdate')
       .values({ id: 'A', payload: { version: 1 } })
       .execute();
-    await context.database
-      .query()
-      .updateTable('jsonQueryUpdate')
-      .set({ payload: { version: 2, changed: true } })
-      .where('id', '=', 'A')
-      .execute();
 
-    expect(
+    // Every form has to survive an update, not just the one it was inserted as.
+    for (const fixture of jsonValueFixtures) {
       await context.database
         .query()
-        .selectFrom('jsonQueryUpdate')
-        .select(['id', 'payload'])
+        .updateTable('jsonQueryUpdate')
+        .set({ payload: fixture.payload })
         .where('id', '=', 'A')
-        .executeTakeFirst(),
-    ).toEqual({
-      id: 'A',
-      payload: { version: 2, changed: true },
-    });
+        .execute();
+
+      expect(
+        await context.database
+          .query()
+          .selectFrom('jsonQueryUpdate')
+          .select(['id', 'payload'])
+          .where('id', '=', 'A')
+          .executeTakeFirst(),
+        `updateTable to ${fixture.id}`,
+      ).toEqual({ id: 'A', payload: fixture.payload });
+    }
   });
 });

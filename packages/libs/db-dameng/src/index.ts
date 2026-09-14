@@ -4,6 +4,8 @@ import type {
   ConnectionConfig,
   DatabaseCapabilities,
   DatabaseDriverDefinition,
+  DatabaseDriverRuntimeContext,
+  JsonResultForm,
   RepositoryRecord,
 } from '@nocobase/db';
 import { rawRows } from '@nocobase/db';
@@ -150,7 +152,7 @@ export const damengDriver: DatabaseDriverDefinition<'dameng'> = {
       connectionName: context.connectionName,
       resolveClient: context.resolveClient,
     }),
-  createRuntime: ({ dialect, capabilities }) => ({
+  createRuntime: ({ dialect, capabilities, config }) => ({
     dialect,
     capabilities,
     numeric: {
@@ -209,6 +211,10 @@ export const damengDriver: DatabaseDriverDefinition<'dameng'> = {
         }
         return operation;
       },
+      // A json column is a plain clob here, so Knex never applies the JSON
+      // default handling it gives a column it built as `json()` and an object
+      // would reach the column as its JavaScript string form.
+      encodeJsonDefault: () => true,
       columnType: ({ column }) => {
         if (column.autoIncrement || column.type === 'increments')
           return undefined;
@@ -271,6 +277,7 @@ export const damengDriver: DatabaseDriverDefinition<'dameng'> = {
       },
     },
     repository: {
+      jsonResults: resolveJsonResults(config),
       emptyInsertValue: ({ client, collection, column }) => {
         const field = (collection.fields ?? []).find(
           (item) =>
@@ -545,4 +552,17 @@ function escapeDamengLiteral(value: string): string {
 
 function asDamengConfig(source: unknown): DamengConnectionConfig {
   return source as DamengConnectionConfig;
+}
+
+/**
+ * A json column is a plain clob here, so the stored JSON normally arrives as
+ * text. `parseJson` asks the driver to decode it instead, and the decoder has
+ * to be told which of the two it is looking at: a JSON string scalar decoded
+ * twice comes back as the wrong value.
+ */
+function resolveJsonResults(
+  config: DatabaseDriverRuntimeContext['config'],
+): JsonResultForm {
+  const connection = config.connection as { parseJson?: unknown } | undefined;
+  return connection?.parseJson === true ? 'parsed' : 'text';
 }

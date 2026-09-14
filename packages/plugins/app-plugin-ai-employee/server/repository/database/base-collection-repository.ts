@@ -47,20 +47,28 @@ function applyFilter<Q extends SelectQuery | UpdateQuery | DeleteQuery>(
             ? 'in'
             : operator === '$notIn'
               ? 'not in'
-              : operator === '$ne'
-                ? '!='
-                : operator === '$lt'
-                  ? '<'
-                  : operator === '$lte'
-                    ? '<='
-                    : operator === '$gt'
-                      ? '>'
-                      : operator === '$gte'
-                        ? '>='
-                        : '=';
+              : operator === '$ne' && value === null
+                ? 'is not'
+                : operator === '$ne'
+                  ? '!='
+                  : operator === '$lt'
+                    ? '<'
+                    : operator === '$lte'
+                      ? '<='
+                      : operator === '$gt'
+                        ? '>'
+                        : operator === '$gte'
+                          ? '>='
+                          : '=';
         current = current.where(field, op, value);
       }
-    } else current = current.where(field, Array.isArray(raw) ? 'in' : '=', raw);
+    } else {
+      current = current.where(
+        field,
+        raw === null ? 'is' : Array.isArray(raw) ? 'in' : '=',
+        raw,
+      );
+    }
   }
   return current as Q;
 }
