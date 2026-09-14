@@ -61,7 +61,10 @@
     "access": "public"
   },
   "files": [
-    "dist"
+    "dist",
+    "README.zh-CN.md",
+    "CHANGELOG.md",
+    "skills"
   ],
   "scripts": {
     "clean": "node ./scripts/clean-dist.mjs",

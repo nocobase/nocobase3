@@ -10,7 +10,7 @@
     "label": "Overview"
   },
   {
-    "type": "file",
+    "type": "dir",
     "name": "auth",
     "label": "Authentication"
   },
