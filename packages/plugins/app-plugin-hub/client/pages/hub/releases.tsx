@@ -21,7 +21,7 @@ export function Releases({
   readonly onSelect: (id: string) => void;
   readonly onUpload: () => void;
 }): ReactElement {
-  const { t } = useTranslation('@nocobase/app-plugin-hub');
+  const { t, i18n } = useTranslation('@nocobase/app-plugin-hub');
   return (
     <div>
       <div className='mb-5 flex items-center justify-between'>
@@ -72,7 +72,7 @@ export function Releases({
                 {formatBytes(item.size)}
               </span>
               <span className='text-muted-foreground'>
-                {formatDate(item.createdAt)}
+                {formatDate(item.createdAt, i18n.language)}
               </span>
             </Button>
           ))

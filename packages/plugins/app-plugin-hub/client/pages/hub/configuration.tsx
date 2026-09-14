@@ -313,7 +313,7 @@ export function DeploymentDialog({
   readonly onClose: () => void;
   readonly onComplete: () => void;
 }): ReactElement {
-  const { t } = useTranslation('@nocobase/app-plugin-hub');
+  const { t, i18n } = useTranslation('@nocobase/app-plugin-hub');
   const firstStep = rollback ? 1 : 0;
   const [step, setStep] = useState(firstStep);
   const [retry, setRetry] = useState(0);
@@ -438,7 +438,7 @@ export function DeploymentDialog({
                   </span>
                 </span>
                 <span className='text-xs text-muted-foreground'>
-                  {formatDate(item.createdAt)}
+                  {formatDate(item.createdAt, i18n.language)}
                 </span>
               </Button>
             ))}

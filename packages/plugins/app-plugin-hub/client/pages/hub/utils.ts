@@ -189,22 +189,24 @@ export function deploymentPhaseLabel(value: string): string {
   return labels[value] ?? stateLabel(value.replaceAll('_', ' '));
 }
 
-export function formatDate(value: string): string {
+// `locale` is the application's language, from `useTranslation().i18n.language`. Omitting it falls back to the
+// browser's own locale, which is a different language from the one the user chose in the application.
+export function formatDate(value: string, locale?: string): string {
   const date = new Date(value);
   return Number.isNaN(date.valueOf()) || date.valueOf() <= 0
     ? '—'
-    : new Intl.DateTimeFormat(undefined, {
+    : new Intl.DateTimeFormat(locale, {
         month: 'short',
         day: 'numeric',
         year: 'numeric',
       }).format(date);
 }
 
-export function formatDateTime(value: string): string {
+export function formatDateTime(value: string, locale?: string): string {
   const date = new Date(value);
   return Number.isNaN(date.valueOf()) || date.valueOf() <= 0
     ? '—'
-    : new Intl.DateTimeFormat(undefined, {
+    : new Intl.DateTimeFormat(locale, {
         month: 'short',
         day: 'numeric',
         year: 'numeric',

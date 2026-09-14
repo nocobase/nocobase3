@@ -4,6 +4,8 @@ import {
   appActionState,
   appManagementStatus,
   appStatusLabel,
+  formatDate,
+  formatDateTime,
   readError,
 } from '../client/pages/hub/utils.js';
 import type { AppOverview, AppSummary } from '../client/pages/hub/types.js';
@@ -171,5 +173,24 @@ describe('Hub App status and action mapping', () => {
       message: 'Application name is required',
       technicalMessage: 'Application name is required',
     });
+  });
+
+  it('formats dates in the language the application is in', () => {
+    // Without an explicit locale these fall back to the browser's own language, which is not the one the user chose
+    // in the application: an English UI on a Chinese browser rendered "2026年9月14日" next to English labels.
+    const value = '2026-09-14T08:30:00.000Z';
+    expect(formatDate(value, 'en-US')).toBe('Sep 14, 2026');
+    expect(formatDate(value, 'zh-CN')).toBe('2026年9月14日');
+    expect(formatDate(value, 'en-US')).not.toBe(formatDate(value, 'zh-CN'));
+    expect(formatDateTime(value, 'en-US')).not.toBe(
+      formatDateTime(value, 'zh-CN'),
+    );
+  });
+
+  it('renders an unusable date as a dash in every language', () => {
+    for (const locale of ['en-US', 'zh-CN']) {
+      expect(formatDate('not-a-date', locale)).toBe('—');
+      expect(formatDateTime('1970-01-01T00:00:00.000Z', locale)).toBe('—');
+    }
   });
 });

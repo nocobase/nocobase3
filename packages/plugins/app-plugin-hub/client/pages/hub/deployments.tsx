@@ -62,7 +62,7 @@ export function Deployments({
   readonly loading: boolean;
   readonly onPage: (page: number) => void;
 }): ReactElement {
-  const { t } = useTranslation('@nocobase/app-plugin-hub');
+  const { t, i18n } = useTranslation('@nocobase/app-plugin-hub');
   const deployState = appActionState(app, 'deploy', busy);
   const rollbackState = appActionState(app, 'rollback', busy);
   const previousDisabled = loading || pagination.page <= 1;
@@ -238,7 +238,7 @@ export function Deployments({
                     <DeploymentStatus deployment={deployment} />
                   </TableCell>
                   <TableCell className='whitespace-nowrap py-4 text-sm text-muted-foreground tabular-nums'>
-                    {formatDateTime(deployment.createdAt)}
+                    {formatDateTime(deployment.createdAt, i18n.language)}
                   </TableCell>
                   <TableCell className='w-20 py-4 text-right align-top'>
                     {canRollback ? (

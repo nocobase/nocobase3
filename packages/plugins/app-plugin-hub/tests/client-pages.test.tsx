@@ -44,6 +44,8 @@ vi.mock('@nocobase/i18n/client', () => ({
         readonly [key: string]: unknown;
       },
     ) => options?.defaultValue ?? key,
+    // Date formatting reads the application's language from here, so the mock has to carry it as the real hook does.
+    i18n: { language: 'en-US' },
   }),
 }));
 

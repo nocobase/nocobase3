@@ -74,7 +74,7 @@ export function Detail({
   readonly onRestart: () => void;
   readonly onStop: () => void;
 }): ReactElement {
-  const { t } = useTranslation('@nocobase/app-plugin-hub');
+  const { t, i18n } = useTranslation('@nocobase/app-plugin-hub');
   const deployed = hasDeployment(app);
   const detailTabs = visibleHubDetailTabs(
     { hasReleases: app.hasReleases, deployed },
@@ -160,8 +160,11 @@ export function Detail({
                     </span>
                     <span>
                       {t('detail.updated', {
-                        date: formatDate(app.deployment.updatedAt),
-                        defaultValue: `Updated ${formatDate(app.deployment.updatedAt)}`,
+                        date: formatDate(
+                          app.deployment.updatedAt,
+                          i18n.language,
+                        ),
+                        defaultValue: `Updated ${formatDate(app.deployment.updatedAt, i18n.language)}`,
                       })}
                     </span>
                   </div>

@@ -320,7 +320,7 @@ export function AppCard({
   readonly app: AppSummary;
   readonly onClick: () => void;
 }): ReactElement {
-  const { t } = useTranslation('@nocobase/app-plugin-hub');
+  const { t, i18n } = useTranslation('@nocobase/app-plugin-hub');
   const version = app.currentVersion;
   return (
     <Card className='group relative overflow-hidden p-0 transition hover:border-primary/40 hover:shadow-md'>
@@ -352,7 +352,7 @@ export function AppCard({
               : t('page.notDeployed', { defaultValue: 'Not deployed' })}
           </span>
           <span aria-hidden='true'>·</span>
-          <span>{formatDate(app.app.updatedAt)}</span>
+          <span>{formatDate(app.app.updatedAt, i18n.language)}</span>
         </CardContent>
       </Button>
       <ChevronRight className='pointer-events-none absolute right-3 bottom-3 size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5' />
