@@ -23,7 +23,7 @@ const enUS = {
     drawerFeatureHistory: 'Works with browser history',
     guideTitle: 'Try the nested flow',
     guideDescription:
-      'Move between layers to see how each route is reflected in the address bar and breadcrumb.',
+      'Move between layers to see how each route is reflected in the address bar and browser history.',
     stepOneTitle: 'Open a layer',
     stepOneDescription: 'Start with a dialog or drawer from the cards above.',
     stepTwoTitle: 'Open the next layer',
@@ -215,8 +215,6 @@ const enUS = {
     collapse: 'Collapse navigation',
     label: 'Application navigation',
     breadcrumb: 'Breadcrumb',
-    dialog: 'Dialog',
-    drawer: 'Drawer',
   },
 };
 

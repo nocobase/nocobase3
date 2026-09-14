@@ -3,50 +3,70 @@ import { ChevronRight, Home } from 'lucide-react';
 import type { ReactElement } from 'react';
 import { Link } from 'react-router';
 
-import { useRouteMetadata } from '../routing/route-context.js';
+import { useRouteTrail } from '../routing/route-context.js';
 
-export function Breadcrumbs(): ReactElement {
-  const routes = useRouteMetadata();
+export interface BreadcrumbsProps {
+  readonly className?: string;
+  /**
+   * Whether the trail starts at the application root. A surface such as the settings centre is its own navigation
+   * space and already offers a way back to the application, so a Home crumb there points out of the trail rather
+   * than up it.
+   */
+  readonly home?: boolean;
+}
+
+/**
+ * The trail of destinations leading to the current page.
+ *
+ * What it shows is the sequence of places the user can return to, which is not the same as the sequence of URL
+ * segments. A route earns a level by having a title: a page states one, while structure that happens to own a path
+ * segment — a tab, an overlay, a layer that exists only to share a layout — states none and is skipped. A level
+ * links somewhere only when a page sits behind it, so a menu group reads as plain text rather than a dead link.
+ *
+ * Nothing renders until there are at least two levels to show — that is, until the current page actually sits under
+ * a parent the user can return to. On a top-level page the sidebar already says where the user is, so a `Home /
+ * Articles` trail only repeats the sidebar and the heading below it.
+ */
+export function Breadcrumbs({
+  className,
+  home = true,
+}: BreadcrumbsProps = {}): ReactElement | null {
+  const trail = useRouteTrail();
   const { t } = useTranslation();
-  const breadcrumbRoutes = routes.filter(
-    (route) =>
-      route.path !== '/' && (route.navigation || route.componentLoader),
+  const levels = trail.filter(
+    (entry) => entry.pathname !== '/' && entry.title !== undefined,
   );
-  const hasCurrentRoute = breadcrumbRoutes.length > 0;
+
+  if (levels.length < 2) return null;
+
   const items = [
-    { href: '/', label: t('navigation.home', { defaultValue: 'Home' }) },
-    ...breadcrumbRoutes.map((route) => ({
-      href: route.path,
-      label: route.navigation
-        ? t(route.navigation.title, {
-            ns: route.packageName,
-            defaultValue: route.navigation.title,
-          })
-        : t(`navigation.${routeSegment(route.path)}`, {
-            defaultValue: formatRouteLabel(route.path),
-          }),
+    ...(home
+      ? [{ href: '/', label: t('navigation.home', { defaultValue: 'Home' }) }]
+      : []),
+    ...levels.map((entry) => ({
+      href: entry.route.componentLoader ? entry.pathname : undefined,
+      label: t(entry.title!, {
+        ns: entry.route.packageName,
+        defaultValue: entry.title!,
+      }),
     })),
   ];
 
   return (
     <nav
       aria-label={t('navigation.breadcrumb', { defaultValue: 'Breadcrumb' })}
+      className={className}
     >
       <ol className='flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground'>
-        {items.map((item, index) => {
-          const current = index === items.length - 1;
-          const isHome = index === 0;
-          const showHomeAsCurrent = isHome && !hasCurrentRoute;
-          return (
-            <BreadcrumbItem
-              current={current || showHomeAsCurrent}
-              href={item.href}
-              isHome={isHome}
-              key={`${item.href}-${item.label}`}
-              label={item.label}
-            />
-          );
-        })}
+        {items.map((item, index) => (
+          <BreadcrumbItem
+            current={index === items.length - 1}
+            href={item.href}
+            isHome={home && index === 0}
+            key={`${item.href ?? index}-${item.label}`}
+            label={item.label}
+          />
+        ))}
       </ol>
     </nav>
   );
@@ -59,26 +79,32 @@ function BreadcrumbItem({
   label,
 }: {
   readonly current: boolean;
-  readonly href: string;
+  readonly href: string | undefined;
   readonly isHome: boolean;
   readonly label: string;
 }): ReactElement {
+  const content = isHome ? (
+    <>
+      <Home aria-hidden className='size-4' />
+      <span className='sr-only'>{label}</span>
+    </>
+  ) : (
+    label
+  );
+
   return (
     <>
       <li className='inline-flex items-center gap-1'>
-        {current ? (
+        {current || !href ? (
           <span
-            aria-current='page'
-            className='font-normal text-foreground'
-            role='link'
+            {...(current ? { 'aria-current': 'page' as const } : {})}
+            className={current ? 'font-normal text-foreground' : undefined}
           >
-            {isHome ? <Home aria-hidden className='size-4' /> : label}
-            {isHome ? <span className='sr-only'>{label}</span> : null}
+            {content}
           </span>
         ) : (
           <Link className='transition-colors hover:text-foreground' to={href}>
-            {isHome ? <Home aria-hidden className='size-4' /> : label}
-            {isHome ? <span className='sr-only'>{label}</span> : null}
+            {content}
           </Link>
         )}
       </li>
@@ -92,21 +118,3 @@ function BreadcrumbItem({
 }
 
 Breadcrumbs.displayName = 'Breadcrumbs';
-
-function formatRouteLabel(path: string): string {
-  const segment = routeSegment(path);
-  return segment
-    .replace(/[-_]+/g, ' ')
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .replace(/^\w/, (value) => value.toUpperCase());
-}
-
-function routeSegment(path: string): string {
-  return (
-    path
-      .split('/')
-      .filter(Boolean)
-      .filter((value) => !value.startsWith(':'))
-      .at(-1) ?? 'page'
-  );
-}

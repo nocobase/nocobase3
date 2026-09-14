@@ -267,3 +267,75 @@ it('allows existing top-level settings page names at distinct paths', () => {
     '/dev/two',
   ]);
 });
+
+it('names a child page through title without putting it in a menu', () => {
+  const result = resolveAppClientContributions([
+    {
+      packageName: 'example',
+      routes: defineAppRoutes([
+        {
+          name: 'orders',
+          path: '/orders',
+          navigation: { title: 'Orders' },
+          componentLoader,
+          children: [
+            // A menu entry needs a static path, so a detail page can only name itself through `title`.
+            {
+              name: 'detail',
+              path: ':orderId',
+              title: 'Order detail',
+              componentLoader,
+            },
+            { name: 'preview', path: 'preview', componentLoader },
+          ],
+        },
+      ]),
+    },
+  ]);
+  const orders = result.routes[0];
+
+  // A route that declares only `navigation` still names a destination, so nothing has to be declared twice.
+  expect(orders).toMatchObject({ title: 'Orders' });
+  expect(orders?.children?.[0]).toMatchObject({
+    path: '/orders/:orderId',
+    title: 'Order detail',
+  });
+  expect(orders?.children?.[0]?.navigation).toBeUndefined();
+  // Structure that names no destination carries no title, which is how a consumer tells the two apart.
+  expect(orders?.children?.[1]?.title).toBeUndefined();
+});
+
+it('prefers a declared title over the menu title', () => {
+  const result = resolveAppClientContributions([
+    {
+      packageName: 'example',
+      routes: defineAppRoutes([
+        {
+          name: 'orders',
+          path: '/orders',
+          title: 'All orders',
+          navigation: { title: 'Orders' },
+          componentLoader,
+        },
+      ]),
+    },
+  ]);
+
+  expect(result.routes[0]).toMatchObject({
+    title: 'All orders',
+    navigation: { title: 'Orders' },
+  });
+});
+
+it('rejects a blank title', () => {
+  expect(() =>
+    resolveAppClientContributions([
+      {
+        packageName: 'example',
+        routes: defineAppRoutes([
+          { name: 'orders', path: '/orders', title: '  ', componentLoader },
+        ]),
+      },
+    ]),
+  ).toThrow(/must define a non-empty title/);
+});

@@ -21,7 +21,7 @@ const zhCN: AppResource = {
     drawerFeatureHistory: '支持浏览器历史记录',
     guideTitle: '尝试嵌套流程',
     guideDescription:
-      '在不同层级之间切换，观察地址栏和面包屑如何反映当前路由。',
+      '在不同层级之间切换，观察地址栏和浏览器历史如何反映当前路由。',
     stepOneTitle: '打开一层',
     stepOneDescription: '从上面的卡片开始打开弹窗或抽屉。',
     stepTwoTitle: '继续打开下一层',
@@ -204,8 +204,6 @@ const zhCN: AppResource = {
     collapse: '收起导航',
     label: '应用导航',
     breadcrumb: '面包屑',
-    dialog: '弹窗',
-    drawer: '抽屉',
   },
 };
 

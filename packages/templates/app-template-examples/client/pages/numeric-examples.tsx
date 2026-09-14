@@ -68,7 +68,7 @@ export default function NumericExamplesPage(): ReactElement {
     retry: false,
   });
   return (
-    <section className='mx-auto w-full max-w-7xl space-y-6 p-6 md:p-8'>
+    <section className='mx-auto w-full max-w-6xl space-y-6 p-6 md:p-8'>
       <header className='space-y-3'>
         <h1 className='font-heading text-3xl font-semibold tracking-tight'>
           {t('numbers.title')}

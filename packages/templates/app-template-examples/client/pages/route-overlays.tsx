@@ -11,7 +11,6 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { Link, Outlet, useLocation } from 'react-router';
-import { Breadcrumbs } from '@/components/breadcrumbs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/page-header';
@@ -67,8 +66,7 @@ export default function RouteOverlaysPage() {
   ] as const;
 
   return (
-    <section className='w-full space-y-6 p-6 md:p-8'>
-      <Breadcrumbs />
+    <section className='mx-auto w-full max-w-6xl space-y-6 p-6 md:p-8'>
       <PageHeader
         actions={
           <>

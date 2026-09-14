@@ -36,6 +36,12 @@ export interface AppClientRoutePageDefinition {
   readonly path: string;
   readonly auth?: AppClientRouteAuth;
   readonly access?: { readonly resource: string; readonly action: string };
+  /**
+   * What this page is called as a destination, independent of whether it appears in a menu. Breadcrumbs and the
+   * document title read it. A page reached only from another page declares it without declaring `navigation`; a
+   * parameterised path may declare it, which `navigation` may not.
+   */
+  readonly title?: string;
   readonly navigation?: AppClientSettingsRouteNavigation;
   readonly componentLoader: AppClientRouteComponentLoader;
   readonly children?: readonly AppClientRouteDefinition[];
@@ -45,6 +51,8 @@ export interface AppClientRouteGroupDefinition {
   readonly name: string;
   readonly path?: string;
   readonly auth?: AppClientRouteAuth;
+  /** Overrides the menu title when a breadcrumb should read differently from the menu entry. */
+  readonly title?: string;
   readonly navigation: AppClientSettingsRouteNavigation;
   readonly children: readonly AppClientRouteDefinition[];
   readonly componentLoader?: never;
@@ -58,6 +66,11 @@ export interface AppClientRegisteredRoute {
   readonly path: string;
   readonly auth: AppClientRouteAuth;
   readonly access?: { readonly resource: string; readonly action: string };
+  /**
+   * The resolved destination title: the declared `title`, falling back to the menu title when only `navigation` was
+   * declared. A route without one is structure rather than a destination, so breadcrumbs skip it.
+   */
+  readonly title?: string;
   readonly navigation?: AppClientSettingsRouteNavigation;
   readonly componentLoader?: AppClientRouteComponentLoader;
   readonly children?: readonly AppClientRegisteredRoute[];
@@ -86,6 +99,8 @@ export interface AppClientSettingsRoutePageDefinition {
   readonly name: string;
   /** Path relative to the built-in Settings Route. */
   readonly path: string;
+  /** What this page is called as a destination, independent of whether it appears in the settings menu. */
+  readonly title?: string;
   readonly navigation?: AppClientSettingsRouteNavigation;
   /** Authorization checked before the page is loaded. */
   readonly access?: {
@@ -104,6 +119,8 @@ export interface AppClientSettingsRouteGroupDefinition {
   readonly name: string;
   /** Path segment relative to the built-in Settings Route. */
   readonly path?: string;
+  /** Overrides the menu title when a breadcrumb should read differently from the menu entry. */
+  readonly title?: string;
   readonly navigation: AppClientSettingsRouteNavigation;
   readonly componentLoader?: never;
   readonly children: readonly AppClientSettingsRouteDefinition[];
@@ -928,6 +945,12 @@ function resolveRouteTree(
         throw new Error(
           `Client route "${id}" navigation requires a static path.`,
         );
+      // A menu entry needs a static path; a destination title does not. `title` is therefore the only way a detail
+      // page such as `/orders/:id` can name itself, and it falls back to the menu title so a route that already
+      // declares `navigation` needs no second declaration.
+      const title = route.title
+        ? normalizeSettingTitle(route.title, id, packageName, kind)
+        : navigation?.title;
       if (isPage) {
         const signature = createRoutePathSignature(path);
         const previous = claimed.get(signature);
@@ -980,6 +1003,7 @@ function resolveRouteTree(
         auth,
         packageName,
         source,
+        ...(title ? { title } : {}),
         ...(navigation ? { navigation } : {}),
         ...('access' in route && route.access ? { access: route.access } : {}),
         ...(isPage

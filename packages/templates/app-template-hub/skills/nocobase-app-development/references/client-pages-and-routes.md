@@ -110,6 +110,39 @@ Groups do not render business components. Pages must place `<Outlet />` explicit
 
 A navigable page normally changes `client/routes.ts`, its page component, and `client/locales/`. Do not edit the shell or a ServiceProvider merely to add a menu.
 
+## Naming the page as a destination
+
+`navigation` decides whether a page appears in a menu. `title` decides what the page is called. They are separate declarations because a page reached only from another page has a name without belonging in a menu.
+
+```ts
+{
+  name: 'orderDetail',
+  path: '/orders/:orderId',
+  title: 'orders.detail.title',
+  componentLoader: () => import('./pages/order-detail.js'),
+}
+```
+
+`title` falls back to `navigation.title`, so a route that already declares a menu entry does not state its name twice. Unlike `navigation`, it is allowed on a parameterised path — which is the only way a detail page can name itself.
+
+Breadcrumbs are built from these titles and rendered by the layout, not by the page. What they show is the trail of destinations rather than the URL segments:
+
+- A route with a title is somewhere the user can return to, so it joins the trail.
+- A route without one is structure — a tab, an overlay, a layer that exists only to share a layout — and is skipped. Giving a tab route no title is how you keep it out of the breadcrumb.
+- Nothing renders until the page actually sits under a parent, because a lone `Home` crumb only repeats what the sidebar already shows.
+
+When the name depends on data, report it once the data arrives. The declared title holds the level until then, so the trail does not gain one mid-load and push the page down:
+
+```tsx
+import { usePageTitle } from '../routing/route-context.js';
+
+export default function OrderDetailPage() {
+  const { data } = useOne({ resource: 'orders', id });
+
+  usePageTitle(data?.data.reference);
+}
+```
+
 ## Customizing a plugin's page
 
 Do not declare a duplicate route for a page a plugin owns. Registering a second `/install` is a conflict, not a customization. Three mechanisms exist, in order of preference:
