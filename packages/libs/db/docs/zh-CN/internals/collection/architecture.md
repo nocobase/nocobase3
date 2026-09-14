@@ -31,7 +31,7 @@ Metadata Store ──> Metadata Document ─┘
 - 修改数据库结构：`connection.builder`；
 - 选择 Connection：`db.connection(name)`。
 
-没有重复的 `db.collections()` 快捷入口。Collection 解析始终绑定到具体 Connection，因为 Physical Schema、命名配置和 Metadata Store 都是 Connection 级上下文。
+`db.collections(name?)` 返回的就是 `db.connection(name).collections`，不是第二个解析器。Collection 解析始终绑定到具体 Connection，因为 Physical Schema、命名配置和 Metadata Store 都是 Connection 级上下文。
 
 ## 信息边界
 

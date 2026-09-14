@@ -28,6 +28,37 @@ function createTestDatabase(config: DatabaseConfig) {
 }
 
 describe('DatabaseManager', () => {
+  it('mirrors connection collections through db.collections()', async () => {
+    const db = createTestDatabase({
+      default: 'main',
+      connections: {
+        main: { dialect: 'sqlite', filename: ':memory:' },
+        analytics: { dialect: 'sqlite', filename: ':memory:' },
+      },
+    });
+
+    try {
+      expect(db.collections()).toBe(db.connection().collections);
+      expect(db.collections('analytics')).toBe(
+        db.connection('analytics').collections,
+      );
+      expect(db.collections('analytics')).not.toBe(db.collections());
+
+      await db.builder('analytics').createCollection('events', (collection) => {
+        collection.increments('id');
+      });
+
+      await expect(
+        db.collections('analytics').get('events'),
+      ).resolves.toMatchObject({
+        name: 'events',
+      });
+      await expect(db.collections().get('events')).resolves.toBeUndefined();
+    } finally {
+      await db.destroy();
+    }
+  });
+
   it('requires an explicitly registered dialect package', () => {
     const db = createDatabaseManager({
       connections: {
@@ -253,9 +284,10 @@ describe('DatabaseManager', () => {
       expect(scanned).toEqual(['orders']);
 
       await db.reconnect();
-      await expect(
-        db.connection().collections.get('orders'),
-      ).resolves.toMatchObject({ name: 'orders', title: 'Orders' });
+      await expect(db.collections().get('orders')).resolves.toMatchObject({
+        name: 'orders',
+        title: 'Orders',
+      });
     } finally {
       await db.destroy();
       rmSync(directory, { recursive: true, force: true });
