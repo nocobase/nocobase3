@@ -88,15 +88,19 @@ pnpm plugin:unregister audit-log --dry-run --json
 
 ```bash
 pnpm plugin:update                                     # 升级全部已注册插件
-pnpm plugin:update --plugin audit-log                  # 只升级一个
-pnpm plugin:update --plugin audit-log --plugin workflow
+pnpm plugin:update @nocobase/app-plugin-workflow       # 只升级指定插件
+pnpm plugin:update workflow                            # 同样支持简写
 pnpm plugin:update --dry-run                           # 只打印不执行
 pnpm plugin:update --dry-run --json
 ```
 
-插件名可以用短名（`audit-log`）或完整包名（`@nocobase/app-plugin-audit-log`）。`--plugin` 可以重复；不传时升级 App 注册的全部插件。传了未注册的插件会被拒绝，并列出当前已注册的插件。
+推荐写完整包名（`@nocobase/app-plugin-workflow`），也兼容短名（`workflow`），行为与 `plugin:register` 一致。位置参数接受一个插件名，不传时升级 App 注册的全部插件。传了未注册的插件会被拒绝，并列出当前已注册的插件。
 
-升级用 App 自己在用的包管理器，按 `packageManager` 字段和 lockfile 判断。升级失败时不会同步 skills；升级成功但同步失败只警告，因为升级本身已经生效。
+全部已注册插件来自 `client/plugins.ts`、`server/plugins.ts` 和 `cli/plugins.ts` 的显式注册，合并去重后排序。仅安装在 `package.json`、没有出现在这些入口中的插件不在更新范围内；没有注册插件时直接返回，不会执行全项目依赖更新。
+
+升级用 App 自己在用的包管理器，优先读取 `packageManager` 字段，再检查 lockfile，默认 pnpm。实际执行 `pnpm update <包名...>`、`npm update <包名...>` 或 `yarn up <包名...>`。命令不附加 `--latest` 或版本号；默认 pnpm 按依赖声明的版本范围更新，其他包管理器遵循各自命令的默认版本规则。
+
+包更新成功后会重新同步所有已注册插件的 skills，包括仅选择部分插件更新的情况。升级失败时不会同步 skills；升级成功但同步失败只警告（JSON 返回 `partial-success`），因为升级本身已经生效。
 
 **为什么升级要连带同步 skills：**skills 是复制进 App 的 `.agents/skills/`，不是运行时从 `node_modules` 读的，所以单独升级包会留下旧副本。这条命令把两步绑在一起就是为了避免这个。
 
@@ -127,7 +131,7 @@ pnpm plugin:inspect audit-log --json
 | ----------------- | -------------------------------------------------- | ------------------------------ |
 | `--dir <path>`    | 全部                                               | App 目录，默认当前目录         |
 | `--dry-run`       | 全部                                               | 只打印将要发生的变更，不写文件 |
-| `--plugin <name>` | `update`、`skills sync`                            | 指定插件；省略时作用于全部     |
+| `--plugin <name>` | `skills sync`                                     | 指定插件；省略时作用于全部     |
 | `--no-install`    | `register`、`unregister`                           | 不调包管理器，只改注册         |
 | `--json`          | register、unregister、update、skills sync、inspect | 机器可读输出                   |
 
@@ -138,7 +142,7 @@ pnpm plugin:inspect audit-log --json
 | `--workspace-root <path>` | 从 monorepo 选择 App，并让 register 默认使用 `workspace:^`        |
 | `--app <name>`            | workspace App 的目录名或完整包名；省略时为 `app-template-default` |
 
-`register` 和 `unregister` 的插件名是位置参数，不是 `--plugin`。`--plugin` 在 `plugin update` 上可以重复，在 `plugin skills sync` 上只接受一个。
+`register` 和 `unregister` 的插件名是必填位置参数，`update` 的插件名是可选位置参数，都不接受 `--plugin`。`plugin skills sync` 使用 `--plugin`，只接受一个插件名。
 
 插件名到处都能用短名（`audit-log`）或完整包名（`@nocobase/app-plugin-audit-log`）。
 

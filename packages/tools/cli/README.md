@@ -18,6 +18,8 @@ NocoBase 3 的命令行工具，bin 名为 `nocobase`。
 | `nocobase plugin update`      | 升级插件包并同步其 skills                               |
 | `nocobase plugin skills sync` | 同步插件 skills，不升级                                 |
 
+`pnpm plugin:update @nocobase/app-plugin-workflow` 更新指定插件，也接受 `workflow` 简写。不传名称时更新全部已注册插件。插件名使用位置参数，与 `plugin:register`、`plugin:unregister` 一致。
+
 实现在 `src/lib/` 下的 `client-plugins.ts`、`server-plugins.ts`、`cli-plugins.ts`、`plugin-registration.ts` 和 `skills-sync.ts`。仓库根目录不再维护第二套 register、unregister 或 skills sync 脚本。
 
 ## 对外导出

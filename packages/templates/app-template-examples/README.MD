@@ -209,13 +209,24 @@ API client, for example `api.repository('analyticsChannels').findMany({ limit: 1
 
 Plugins add features to your application. Let these commands edit `package.json`, `client/plugins.ts`, and `server/plugins.ts` for you rather than editing those files by hand.
 
-| Script                          | What it does                                              |
-| ------------------------------- | --------------------------------------------------------- |
-| `pnpm plugin:register <name>`   | Install a plugin and wire it into the client and server   |
-| `pnpm plugin:unregister <name>` | Remove a plugin and its wiring                            |
-| `pnpm plugin:update`            | Upgrade registered plugins and re-sync their agent skills |
-| `pnpm plugin:inspect <name>`    | Report a plugin's registration state; read-only           |
-| `pnpm plugin:skills:sync`       | Re-copy plugin agent skills into `.agents/skills/`        |
+| Script                          | What it does                                             |
+| ------------------------------- | -------------------------------------------------------- |
+| `pnpm plugin:register <name>`   | Install a plugin and wire it into the client and server  |
+| `pnpm plugin:unregister <name>` | Remove a plugin and its wiring                           |
+| `pnpm plugin:update [name]`     | Upgrade one or all registered plugins and re-sync skills |
+| `pnpm plugin:inspect <name>`    | Report a plugin's registration state; read-only          |
+| `pnpm plugin:skills:sync`       | Re-copy plugin agent skills into `.agents/skills/`       |
+
+Use a full package name, as with `plugin:register` and `plugin:unregister`; short names such as `authentication` also work. The optional name is a positional argument, not `--plugin`.
+
+```bash
+pnpm plugin:update @nocobase/app-plugin-authentication  # Update one registered plugin
+pnpm plugin:update authentication                      # Equivalent short name
+pnpm plugin:update                                     # Update all registered plugins
+pnpm plugin:update @nocobase/app-plugin-authentication --dry-run  # Preview only
+```
+
+Without a name, the command collects registered plugins from `client/plugins.ts`, `server/plugins.ts`, and `cli/plugins.ts`. It uses the application's package manager; with pnpm, `update` follows the declared version ranges without `--latest`. An unregistered name is rejected, and an application with no registered plugins is left unchanged. After a successful package update, all registered plugins' agent skills are re-synchronized, even when only one package was selected.
 
 Ordering in `client/plugins.ts` and `server/plugins.ts` is contribution order, and a plugin is enabled by appearing in the array. Reorder entries or pass a plugin its options by hand; leave adding and removing entries to the commands.
 
