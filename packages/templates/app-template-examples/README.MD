@@ -43,20 +43,14 @@ pnpm dev
 
 ### Develop against another backend
 
-Set `PROXY_TARGET_URL` to the backend application's public URL, including its
-mount path but excluding `/api`:
+Set `PROXY_TARGET_URL` to the backend application's public URL, including its mount path but excluding `/api`:
 
 ```bash
 # Example only: replace /main with the backend's actual public mount path.
 PROXY_TARGET_URL=http://127.0.0.1:13000/main pnpm dev
 ```
 
-**`/main` is the fallback, not a required or fixed path.** Local development
-reads `APP_BASE_PATH` from the command-line environment, then `.env.local`,
-then `.env`, falling back to `/main` when unset. The remote path comes from
-`PROXY_TARGET_URL`; it is not inferred from the local `APP_BASE_PATH`.
-Read the target application's actual public URL before constructing this value.
-If it is mounted at the origin root, use the origin URL without a mount path.
+**`/main` is the fallback, not a required or fixed path.** Local development reads `APP_BASE_PATH` from the command-line environment, then `.env.local`, then `.env`, falling back to `/main` when unset. The remote path comes from `PROXY_TARGET_URL`; it is not inferred from the local `APP_BASE_PATH`. Read the target application's actual public URL before constructing this value. If it is mounted at the origin root, use the origin URL without a mount path.
 
 For example, these applications can use different paths:
 
@@ -66,30 +60,13 @@ APP_BASE_PATH=/local PROXY_TARGET_URL=http://127.0.0.1:13000/crm pnpm dev
 # /local/ws        -> ws://127.0.0.1:13000/crm/ws
 ```
 
-This runs Vite with your local client source and proxies API and WebSocket
-requests to that application. It does not start a local backend, allocate its
-port, wait for its health endpoint, or watch server configuration/plugins.
-Existing `beforeDev` hooks still run to prepare client artifacts. Open the
-printed **Local** URL (the Vite port); **Backend** identifies the target.
+This runs Vite with your local client source and proxies API and WebSocket requests to that application. It does not start a local backend, allocate its port, wait for its health endpoint, or watch server configuration/plugins. Existing `beforeDev` hooks still run to prepare client artifacts. Open the printed **Local** URL (the Vite port); **Backend** identifies the target.
 
-The target can be another local project running `pnpm dev`, or an HTTP(S)
-deployment. Use its printed application URL, not its Vite URL. Local
-`APP_BASE_PATH` and the remote mount path may differ: local `/main/api/users`
-can map to remote `/crm/api/users`. Trailing slashes are accepted. Credentials,
-query strings, and fragments are not accepted in the target URL.
+The target can be another local project running `pnpm dev`, or an HTTP(S) deployment. Use its printed application URL, not its Vite URL. Local `APP_BASE_PATH` and the remote mount path may differ: local `/main/api/users` can map to remote `/crm/api/users`. Trailing slashes are accepted. Credentials, query strings, and fragments are not accepted in the target URL.
 
-Requests use the remote backend's data and permissions, including writes.
-Only `<APP_BASE_PATH>/api` and `<APP_BASE_PATH>/ws` are proxied; application
-root callbacks and absolute URLs returned by the backend keep their original
-routing. Cookie domain/path scopes are adapted to the local application;
-authentication origin checks and HTTPS-only cookie requirements remain enforced
-by the backend/browser. Configure the backend's allowed origins and callback
-URLs when its authentication flow requires the local development origin.
+Requests use the remote backend's data and permissions, including writes. Only `<APP_BASE_PATH>/api` and `<APP_BASE_PATH>/ws` are proxied; application root callbacks and absolute URLs returned by the backend keep their original routing. Cookie domain/path scopes are adapted to the local application; authentication origin checks and HTTPS-only cookie requirements remain enforced by the backend/browser. Configure the backend's allowed origins and callback URLs when its authentication flow requires the local development origin.
 
-The variable can also be set in `.env` or `.env.local`; the command-line
-environment takes precedence. Restart `pnpm dev` after changing the target.
-Without this variable, development still starts both the local backend and Vite.
-Production builds ignore it.
+The variable can also be set in `.env` or `.env.local`; the command-line environment takes precedence. Restart `pnpm dev` after changing the target. Without this variable, development still starts both the local backend and Vite. Production builds ignore it.
 
 ### Review your configuration
 
