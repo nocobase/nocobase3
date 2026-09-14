@@ -1,3 +1,4 @@
+import sqlite from '@nocobase/db-sqlite';
 import {
   createDatabaseManager,
   InMemoryCollectionMetadataStore,
@@ -43,6 +44,7 @@ describe('authorization table migrations', () => {
 
   beforeEach(() => {
     database = createDatabaseManager({
+      drivers: { sqlite },
       default: 'main',
       metadataStore: new InMemoryCollectionMetadataStore(),
       connections: {

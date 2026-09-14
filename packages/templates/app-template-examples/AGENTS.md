@@ -289,3 +289,18 @@ For creating or editing theme presets, read `skills/nocobase-app-development/ref
 For UI styling, use the shared color, font, size, spacing, radius and shadow contract in `skills/nocobase-app-development/references/theme-tokens.md` (from the application root). Prefer its Tailwind utilities so components respond to theme changes; keep deliberate fixed-size exceptions explicit.
 
 Application startup defaults belong in `config.yml`: `i18n.defaultLocale` for the language, and `client.app.defaultColorScheme` and `client.app.defaultTheme` for appearance. Valid browser-local choices take precedence. Which languages the application offers is not configured — its own `client/locales/` and `server/locales/` are that list. See the i18n and themes references.
+
+## Application-owned workflow examples
+
+`server/workflows/` contains quotation routing, analytics daily reporting, and
+failure diagnostics. Follow the installed workflow plugin Skill when editing the
+DSL. Keep each package self-contained: its run modules and relative helpers ship
+inside its immutable artifact. Resolve shared runtime services through their
+original public tokens, never through plugin internals.
+
+The report reads the `analytics` connection and saves `exampleDailyReports` in
+the default application database by date. Its migration is application-owned;
+never seed workflow definitions or execution history. The other two examples have
+no business writes. Use the existing Automation settings pages for enablement,
+manual runs, and diagnostics; the homepage links to those pages. Sample inputs
+and expected outcomes are documented in `README.MD`.

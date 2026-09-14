@@ -23,6 +23,8 @@ export {
   resolveAIKnowledgeBaseStorageDisks,
 } from './config.js';
 export { aiManagerToken } from './provider/ai-employee.js';
+export { AIEmployeeResources, AIResourceRegistrar } from './ai/index.js';
+export type { AIResourceRegistrarOptions } from './ai/index.js';
 export {
   AIConversationsManager,
   aiConversationsManagerToken,

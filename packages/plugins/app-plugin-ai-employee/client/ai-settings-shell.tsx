@@ -43,14 +43,21 @@ export function AISettingsShell({
     getActiveAISettingsTabKey(location.pathname, location.search);
 
   return (
-    <div className='min-h-full bg-background text-foreground'>
-      <header className='border-b bg-background px-4 pt-5 sm:px-6 lg:px-8'>
-        <h1 className='text-2xl font-semibold tracking-tight'>
-          {t('AI Employee')}
-        </h1>
+    <div className='min-h-full bg-muted/20 text-foreground'>
+      <header className='border-b bg-background px-6 py-7'>
+        <div className='mx-auto w-full max-w-7xl'>
+          <h1 className='text-2xl font-semibold tracking-tight'>
+            {t('AI Employee')}
+          </h1>
+          <p className='mt-2 max-w-3xl text-sm text-muted-foreground'>
+            {t('Manage AI employees, LLM services, and MCP services.')}
+          </p>
+        </div>
+      </header>
+      <div className='mx-auto w-full max-w-7xl px-6 py-6'>
         <nav
           aria-label={t('AI settings')}
-          className='mt-4 flex gap-1 overflow-x-auto'
+          className='mb-6 flex gap-1 overflow-x-auto border-b'
         >
           {getAISettingsTabs().map((tab) => {
             const active = resolvedActiveTabKey === tab.key;
@@ -76,8 +83,8 @@ export function AISettingsShell({
             );
           })}
         </nav>
-      </header>
-      {children}
+        {children}
+      </div>
     </div>
   );
 }

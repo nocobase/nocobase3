@@ -45,10 +45,10 @@ ConditionInstruction.create({
 当前支持以下 JSON Logic 操作符：
 
 ```text
-and  or  !  ===  !==  >  >=  <  <=  in  var  startsWith  endsWith
+and  or  !  ===  !==  >  >=  <  <=  in  startsWith  endsWith
 ```
 
-变量根只有 `input`、`parameters` 和 `nodeResults`。数值和字符串比较必须使用相同类型。表达式有深度、节点数、数组长度和变量路径长度限制，以避免不受控计算。
+表达式中的 `{ var: '...' }` 用于读取变量，不属于条件操作符。变量根只有 `input`、`parameters` 和 `nodeResults`。数值和字符串比较必须使用相同类型。表达式有深度、节点数、数组长度和变量路径长度限制，以避免不受控计算。
 
 ## 分支结束后的共同后继
 

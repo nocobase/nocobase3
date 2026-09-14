@@ -10,9 +10,9 @@
     "label": "总览"
   },
   {
-    "type": "file",
+    "type": "dir",
     "name": "auth",
-    "label": "登录注册"
+    "label": "认证"
   },
   {
     "type": "file",

@@ -66,8 +66,8 @@ it('aggregates all items despite record limits and preserves empty-set nulls', a
         expect.objectContaining({ id: 'demo-item-2' }),
       ],
       count: 3,
-      quantity: 5,
-      averagePrice: (11900 + 5900 + 18900) / 3,
+      quantity: '5',
+      averagePrice: '12233.333333333333333333',
       minimumPrice: 5900,
       maximumPrice: 18900,
     },
@@ -93,7 +93,7 @@ it('returns nested combine results and product includes in each parent scope', a
           id: 'demo-order-1',
           items: {
             count: 3,
-            quantity: 5,
+            quantity: '5',
             preview: [
               { quantity: 2, product: { name: 'Mechanical Keyboard' } },
             ],
@@ -103,7 +103,7 @@ it('returns nested combine results and product includes in each parent scope', a
           id: 'demo-order-4',
           items: {
             count: 1,
-            quantity: 1,
+            quantity: '1',
             preview: [
               { quantity: 1, product: { name: 'Mechanical Keyboard' } },
             ],

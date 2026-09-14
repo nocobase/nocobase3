@@ -6,6 +6,7 @@ import {
   type RepositoryApiActions,
   type RepositoryApiExposure,
 } from '@nocobase/app-server/router';
+import { buildRepositoryPolicy, type RepositoryPolicy } from '@nocobase/db';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { Hono } from 'hono';
 
@@ -26,189 +27,204 @@ const relationActions: RepositoryApiActions = {
   createOne: {},
   updateOne: {},
 };
+
+/**
+ * Read whatever the sample data holds, write only the named fields.
+ *
+ * This example uses a shared workspace, so nothing here is scoped to a
+ * principal. A real application declares `policy` as a function of one and
+ * gives the scopes that keep each caller to their own rows.
+ */
+function fieldsPolicy(
+  create: readonly string[],
+  update: readonly string[],
+  remove: boolean = true,
+): RepositoryPolicy {
+  return {
+    read: true,
+    create: { scope: true, fields: create },
+    update: { scope: true, fields: update },
+    delete: remove ? true : false,
+  };
+}
+
 const repositories: readonly RepositoryApiExposure[] = [
   {
     name: 'repositoryExampleCustomers',
-    actions: {
-      ...actions,
-      createOne: {
-        writePolicy: (w) =>
-          w.fields('id', 'name', 'company', 'email', 'status'),
-      },
-      updateOne: {
-        writePolicy: (w) => w.fields('name', 'company', 'email', 'status'),
-      },
-    },
+    policy: fieldsPolicy(
+      ['id', 'name', 'company', 'email', 'status'],
+      ['name', 'company', 'email', 'status'],
+    ),
+    actions,
   },
   {
     name: 'repositoryExampleContacts',
-    actions: {
-      ...actions,
-      createOne: {
-        writePolicy: (w) =>
-          w
+    policy: buildRepositoryPolicy((policy) =>
+      policy
+        .read(true)
+        .create((create) =>
+          create
+            .scope(true)
             .fields('id', 'name', 'email', 'phone')
-            .relation('customer', (r) => r.connect()),
-      },
-      updateOne: {
-        writePolicy: (w) =>
-          w
+            .relation('customer', (customer) => customer.connect()),
+        )
+        .update((update) =>
+          update
+            .scope(true)
             .fields('name', 'email', 'phone')
-            .relation('customer', (r) => r.connect()),
-      },
-    },
+            .relation('customer', (customer) => customer.connect()),
+        )
+        .delete(true),
+    ),
+    actions,
   },
   {
     name: 'repositoryExampleProducts',
-    actions: {
-      ...actions,
-      createOne: {
-        writePolicy: (w) => w.fields('id', 'name', 'sku', 'unitPriceCents'),
-      },
-      updateOne: {
-        writePolicy: (w) => w.fields('name', 'sku', 'unitPriceCents'),
-      },
-    },
+    policy: fieldsPolicy(
+      ['id', 'name', 'sku', 'unitPriceCents'],
+      ['name', 'sku', 'unitPriceCents'],
+    ),
+    actions,
   },
   {
     name: 'repositoryExampleOrders',
-    actions: {
-      ...actions,
-      createOne: {
-        writePolicy: (w) =>
-          w
+    policy: buildRepositoryPolicy((policy) =>
+      policy
+        .read(true)
+        .create((create) =>
+          create
+            .scope(true)
             .fields('id', 'number', 'status')
-            .relation('customer', (r) => r.connect())
-            .relation('items', (r) =>
-              r.create((item) =>
+            .relation('customer', (customer) => customer.connect())
+            .relation('items', (items) =>
+              items.create((item) =>
                 item
                   .fields('id', 'quantity', 'unitPriceCents')
-                  .relation('product', (p) => p.connect()),
+                  .relation('product', (product) => product.connect()),
               ),
             ),
-      },
-      updateOne: {
-        writePolicy: (w) =>
-          w.fields('number', 'status').relation('customer', (r) => r.connect()),
-      },
-    },
+        )
+        .update((update) =>
+          update
+            .scope(true)
+            .fields('number', 'status')
+            .relation('customer', (customer) => customer.connect()),
+        )
+        .delete(true),
+    ),
+    actions,
   },
   {
     name: 'repositoryExampleOrderItems',
-    actions: {
-      ...actions,
-      createOne: {
-        writePolicy: (w) =>
-          w
+    policy: buildRepositoryPolicy((policy) =>
+      policy
+        .read(true)
+        .create((create) =>
+          create
+            .scope(true)
             .fields('id', 'quantity', 'unitPriceCents')
-            .relation('order', (r) => r.connect())
-            .relation('product', (r) => r.connect()),
-      },
-      updateOne: {
-        writePolicy: (w) =>
-          w
+            .relation('order', (order) => order.connect())
+            .relation('product', (product) => product.connect()),
+        )
+        .update((update) =>
+          update
+            .scope(true)
             .fields('quantity', 'unitPriceCents')
-            .relation('order', (r) => r.connect())
-            .relation('product', (r) => r.connect()),
-      },
-    },
+            .relation('order', (order) => order.connect())
+            .relation('product', (product) => product.connect()),
+        )
+        .delete(true),
+    ),
+    actions,
   },
   {
     name: 'repositoryExampleAtomicCounters',
-    actions: {
-      ...actions,
-      createOne: { writePolicy: { fields: ['id', 'name', 'value'] } },
-      updateOne: { writePolicy: { fields: ['name', 'value'] } },
-    },
+    policy: fieldsPolicy(['id', 'name', 'value'], ['name', 'value']),
+    actions,
   },
   {
     name: 'repositoryExampleRelationUsers',
-    actions: {
-      ...relationActions,
-      createOne: { writePolicy: { fields: ['id', 'name', 'email'] } },
-      updateOne: { writePolicy: { fields: ['name', 'email'] } },
-    },
+    policy: fieldsPolicy(['id', 'name', 'email'], ['name', 'email'], false),
+    actions: relationActions,
   },
   {
     name: 'repositoryExampleRelationProjectProfiles',
-    actions: {
-      ...relationActions,
-      createOne: { writePolicy: { fields: ['id', 'summary'] } },
-      updateOne: { writePolicy: { fields: ['summary'] } },
-    },
+    policy: fieldsPolicy(['id', 'summary'], ['summary'], false),
+    actions: relationActions,
   },
   {
     name: 'repositoryExampleRelationTasks',
-    actions: {
-      ...relationActions,
-      createOne: {
-        writePolicy: (w) =>
-          w
+    policy: buildRepositoryPolicy((policy) =>
+      policy
+        .read(true)
+        .create((create) =>
+          create
+            .scope(true)
             .fields('id', 'title', 'status', 'points')
-            .relation('assignee', (r) => r.connect()),
-      },
-      updateOne: { writePolicy: { fields: ['title', 'status', 'points'] } },
-    },
+            .relation('assignee', (assignee) => assignee.connect()),
+        )
+        .update((update) =>
+          update.scope(true).fields('title', 'status', 'points'),
+        ),
+    ),
+    actions: relationActions,
   },
   {
     name: 'repositoryExampleRelationTags',
-    actions: {
-      ...relationActions,
-      createOne: { writePolicy: { fields: ['id', 'label'] } },
-      updateOne: { writePolicy: { fields: ['label'] } },
-    },
+    policy: fieldsPolicy(['id', 'label'], ['label'], false),
+    actions: relationActions,
   },
   {
     name: 'repositoryExampleRelationProjectTags',
-    actions: {
-      ...relationActions,
-      createOne: { writePolicy: { fields: ['projectId', 'tagId', 'role'] } },
-      updateOne: { writePolicy: { fields: ['role'] } },
-    },
+    policy: fieldsPolicy(['projectId', 'tagId', 'role'], ['role'], false),
+    actions: relationActions,
   },
   {
     name: 'repositoryExampleRelationProjects',
-    actions: {
-      ...relationActions,
-      createOne: {
-        writePolicy: (w) =>
-          w
+    policy: buildRepositoryPolicy((policy) =>
+      policy
+        .read(true)
+        .create((create) =>
+          create
+            .scope(true)
             .fields('id', 'name', 'status')
-            .relation('owner', (r) => r.connect())
-            .relation('profile', (r) =>
-              r.create((profile) => profile.fields('id', 'summary')),
+            .relation('owner', (owner) => owner.connect())
+            .relation('profile', (profile) =>
+              profile.create((values) => values.fields('id', 'summary')),
             )
-            .relation('tasks', (r) =>
-              r.create((task) =>
+            .relation('tasks', (tasks) =>
+              tasks.create((task) =>
                 task
                   .fields('id', 'title', 'status', 'points')
-                  .relation('assignee', (a) => a.connect()),
+                  .relation('assignee', (assignee) => assignee.connect()),
               ),
             )
-            .relation('tags', (r) =>
-              r.connect((edge) => edge.through((t) => t.fields('role'))),
+            .relation('tags', (tags) =>
+              tags.connect((edge) =>
+                edge.through((through) => through.fields('role')),
+              ),
             ),
-      },
-      updateOne: {
-        writePolicy: (w) =>
-          w
+        )
+        .update((update) =>
+          update
+            .scope(true)
             .fields('name', 'status')
-            .relation('owner', (r) => r.connect())
-            .relation('profile', (r) =>
-              r
-                .create((profile) => profile.fields('id', 'summary'))
+            .relation('owner', (owner) => owner.connect())
+            .relation('profile', (profile) =>
+              profile
+                .create((values) => values.fields('id', 'summary'))
                 .connect()
                 .disconnect()
-                .update((profile) => profile.fields('summary'))
-                .upsert((u) =>
-                  u
-                    .create((profile) => profile.fields('id', 'summary'))
-                    .update((profile) => profile.fields('summary')),
+                .update((values) => values.fields('summary'))
+                .upsert((branches) =>
+                  branches
+                    .create((values) => values.fields('id', 'summary'))
+                    .update((values) => values.fields('summary')),
                 )
                 .delete(),
             )
-            .relation('tasks', (r) =>
-              r
+            .relation('tasks', (tasks) =>
+              tasks
                 .create((task) =>
                   task.fields('id', 'title', 'status', 'points'),
                 )
@@ -216,8 +232,8 @@ const repositories: readonly RepositoryApiExposure[] = [
                 .disconnect()
                 .set()
                 .update((task) => task.fields('title', 'status', 'points'))
-                .upsert((u) =>
-                  u
+                .upsert((branches) =>
+                  branches
                     .create((task) =>
                       task.fields('id', 'title', 'status', 'points'),
                     )
@@ -225,27 +241,35 @@ const repositories: readonly RepositoryApiExposure[] = [
                 )
                 .delete(),
             )
-            .relation('tags', (r) =>
-              r
+            .relation('tags', (tags) =>
+              tags
                 .create((tag) =>
-                  tag.fields('id', 'label').through((t) => t.fields('role')),
+                  tag
+                    .fields('id', 'label')
+                    .through((through) => through.fields('role')),
                 )
-                .connect((edge) => edge.through((t) => t.fields('role')))
-                .set((edge) => edge.through((t) => t.fields('role')))
+                .connect((edge) =>
+                  edge.through((through) => through.fields('role')),
+                )
+                .set((edge) =>
+                  edge.through((through) => through.fields('role')),
+                )
                 .disconnect()
                 .update((tag) => tag.fields('label'))
-                .upsert((u) =>
-                  u
+                .upsert((branches) =>
+                  branches
                     .create((tag) => tag.fields('id', 'label'))
                     .update((tag) => tag.fields('label')),
                 )
                 .delete(),
             ),
-      },
-    },
+        ),
+    ),
+    actions: relationActions,
   },
   {
     name: 'repositoryExampleFindManyRecords',
+    policy: { read: true, create: false, update: false, delete: false },
     actions: { findMany: { maxLimit: 100 } },
   },
 ];

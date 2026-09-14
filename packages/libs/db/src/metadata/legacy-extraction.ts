@@ -102,6 +102,22 @@ export function extractLegacyCollectionMetadata(
     }
   }
 
+  // A belongsTo field may create its scalar foreign key implicitly. Preserve
+  // its declared logical type too (Oracle NUMBER alone cannot distinguish it).
+  if (Array.isArray(input.fields)) {
+    for (const field of input.fields) {
+      if (
+        !isPlainObject(field) ||
+        field.type !== 'belongsTo' ||
+        typeof field.foreignKey !== 'string'
+      )
+        continue;
+      const type = metadataFieldType(field.foreignKeyType);
+      if (type && !Object.hasOwn(fields, field.foreignKey))
+        setRecordEntry(fields, field.foreignKey, { type });
+    }
+  }
+
   if (diagnostics.some((item) => item.severity === 'error') || !name) {
     return { diagnostics };
   }

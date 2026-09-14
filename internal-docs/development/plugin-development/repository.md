@@ -22,21 +22,27 @@ import {
   type RepositoryApiExposure,
 } from '@nocobase/app-server/router';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
+import { buildRepositoryPolicy } from '@nocobase/db';
 import { Hono } from 'hono';
 
 const repositories: readonly RepositoryApiExposure[] = [
   {
     name: 'repositoryExampleCustomers',
+    policy: buildRepositoryPolicy((policy) =>
+      policy
+        .read(true)
+        .create((create) =>
+          create.scope(true).fields('id', 'name', 'email', 'status'),
+        )
+        .update((update) => update.scope(true).fields('name', 'email', 'status'))
+        .delete(true),
+    ),
     actions: {
       findMany: { maxLimit: 100 },
       findOne: {},
       count: {},
-      createOne: {
-        writePolicy: (w) => w.fields('id', 'name', 'email', 'status'),
-      },
-      updateOne: {
-        writePolicy: (w) => w.fields('name', 'email', 'status'),
-      },
+      createOne: {},
+      updateOne: {},
       deleteOne: {},
     },
   },
@@ -64,7 +70,8 @@ export default routes;
 
 - `name` 是 Collection 逻辑名称；`actions` 只开放列出的操作。
 - `maxLimit` 限制单次列表读取数量。
-- API 的 `createOne`、`updateOne` 默认拒绝写入；`writePolicy` 声明允许的字段和嵌套关系操作，只能由服务端配置。
+- 每个 exposure 必须声明 `policy`，它管这个 exposure 的全部 action：`read` / `create` / `update` / `delete`，每项是 `true`、`false` 或规则节点。`buildRepositoryPolicy` 里没提到的节点就是 `false`，所以缺省是拒绝。策略只能由服务端配置，请求体里带 `policy` 或 `scope` 一律 400。
+- 需要按调用方收窄时，把 `policy` 写成 `(principal) => ...`，同时给 `defineRepositoryApiRoutes` 传 `principal(context)` 解析器；解析不出 principal 的请求返回 403。
 - 本例允许所有登录用户管理共享示例数据。业务权限、数据范围需由服务端按需求补充；`defineRepositoryApiRoutes()` 和 `/api` 前缀都不自动提供认证或授权，见 [Route 边界](./routes.md)。
 
 ## 2. 前端获取 Repository

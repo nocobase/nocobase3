@@ -10,15 +10,13 @@ description: 创建 DatabaseManager，用 Migration 建表、Seed 初始化数�
 ## 1. 创建 DatabaseManager
 
 ```ts
+import sqlite from '@nocobase/db-sqlite';
 import { createDatabaseManager } from '@nocobase/db';
 
 const db = createDatabaseManager({
   default: 'main',
   connections: {
-    main: {
-      dialect: 'sqlite',
-      filename: 'app.sqlite',
-    },
+    main: sqlite({ filename: 'app.sqlite' }),
   },
 });
 ```

@@ -1,3 +1,4 @@
+import sqlite from '@nocobase/db-sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   createDatabaseManager,
@@ -23,6 +24,7 @@ afterEach(async () => {
 describe('AI file storage migration', () => {
   it('replaces storageId with disk and reverses the change', async () => {
     const database = createDatabaseManager({
+      drivers: { sqlite },
       default: 'main',
       metadataStore: new InMemoryCollectionMetadataStore(),
       connections: { main: { dialect: 'sqlite', filename: ':memory:' } },

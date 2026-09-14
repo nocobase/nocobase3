@@ -14,6 +14,8 @@ const ai: AppConfigFactory<AIApplicationConfig> = defineAppConfig(
       manifests: [],
     },
     llmServices: [],
+    skills: { paths: [] },
+    mcpServers: {},
   }),
 );
 

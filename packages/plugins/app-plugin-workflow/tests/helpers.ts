@@ -1,3 +1,4 @@
+import sqlite from '@nocobase/db-sqlite';
 import {
   createDatabaseManager,
   type BuilderExecOptions,
@@ -59,6 +60,7 @@ export type TestWorkflowInput = {
 
 export async function createTestDatabase(): Promise<DatabaseManager> {
   const database = createDatabaseManager({
+    drivers: { sqlite },
     connections: {
       main: { dialect: 'sqlite', filename: ':memory:' },
     },
@@ -153,8 +155,7 @@ export async function listNodeRuns(
   return rows.map((row) => ({
     nodeKey: String(row.nodeKey),
     status: Number(row.status),
-    result:
-      typeof row.result === 'string' ? JSON.parse(row.result) : row.result,
+    result: row.result,
     ...(row.error == null ? {} : { error: String(row.error) }),
   }));
 }

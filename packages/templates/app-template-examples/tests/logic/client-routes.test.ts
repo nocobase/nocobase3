@@ -42,6 +42,11 @@ describe('app client routes', () => {
           ],
         },
         { auth: 'required', name: 'articles', path: '/articles' },
+        {
+          auth: 'required',
+          name: 'numeric-examples',
+          path: '/numeric-examples',
+        },
         { auth: 'guest', name: 'login', path: '/login' },
         { auth: 'guest', name: 'register', path: '/register' },
         {
@@ -96,6 +101,7 @@ describe('app client routes', () => {
       { name: 'routeDrawerExample', authorizedAs: null },
       { name: 'routeDrawerDialogExample', authorizedAs: null },
       { name: 'articles', authorizedAs: 'articles' },
+      { name: 'numeric-examples', authorizedAs: 'numeric-examples' },
     ]);
   });
 });

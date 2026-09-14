@@ -21,6 +21,8 @@ export default class AppMigrate extends Command {
     json: Interfaces.BooleanFlag<boolean>;
     all: Interfaces.BooleanFlag<boolean>;
     connection: Interfaces.OptionFlag<string | undefined>;
+    fresh: Interfaces.BooleanFlag<boolean>;
+    force: Interfaces.BooleanFlag<boolean>;
   } = {
     json: Flags.boolean({
       default: false,
@@ -35,6 +37,14 @@ export default class AppMigrate extends Command {
     connection: Flags.string({
       exclusive: ['all'],
       description: 'Target a named managed connection, regardless of autoRun.',
+    }),
+    fresh: Flags.boolean({
+      default: false,
+      description: 'Clear managed schema objects and rerun all migrations.',
+    }),
+    force: Flags.boolean({
+      default: false,
+      description: 'Skip the confirmation required by --fresh.',
     }),
   };
 

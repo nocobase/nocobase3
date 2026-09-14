@@ -57,6 +57,12 @@ export class DefaultMCPServerManager implements MCPServerManager {
     await this.repository.destroy({ filter: { name } });
   }
 
+  async updateMCPEnabled(name: string, enabled: boolean): Promise<void> {
+    const current = await this.repository.findOne({ filter: { name } });
+    if (!current) return;
+    await this.repository.update({ filter: { name }, values: { enabled } });
+  }
+
   async getMCP(name: string): Promise<MCPEntity | undefined> {
     return (await this.repository.findOne({ filter: { name } })) ?? undefined;
   }

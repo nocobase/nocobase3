@@ -441,7 +441,10 @@ describe('remote aggregate queries', () => {
       ],
     } as const;
     const options = { filter: { status: 'confirmed' as const }, aggregate };
-    expect(await orders.aggregate(options)).toEqual({ count: 0, total: null });
+    expect(await orders.aggregate(options)).toEqual({
+      count: 0,
+      total: null,
+    });
     const grouped = {
       by: ['status'] as const,
       aggregate,

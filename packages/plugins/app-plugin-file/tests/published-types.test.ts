@@ -78,22 +78,36 @@ it('typechecks published Server declarations with only declared consumer depende
       `import { ServiceContainer } from '@nocobase/service-provider';
 import { databaseManagerToken } from '@nocobase/db';
 import { driveManagerToken } from '@nocobase/app-server/drive';
+import type { RepositoryPolicy } from '@nocobase/db';
 import {
   ServerFileRepositoryManager,
   defineFileRepositoryApiRoutes,
   type ServerFileRepository,
 } from '@nocobase/app-plugin-file/server';
 
+const policy: RepositoryPolicy = {
+  read: true,
+  create: { scope: true },
+  update: false,
+  delete: false,
+};
+
 export function createFiles(container: ServiceContainer): ServerFileRepository {
   return new ServerFileRepositoryManager(
     container.resolve(databaseManagerToken),
     container.resolve(driveManagerToken),
-  ).repository('attachments', { disk: 'local', accessPath: '/uploads/attachments' });
+  ).repository('attachments', {
+    disk: 'local',
+    accessPath: '/uploads/attachments',
+    policy,
+  });
 }
 
 export const routes: ReturnType<typeof defineFileRepositoryApiRoutes> =
   defineFileRepositoryApiRoutes({
-    repositories: [{ name: 'attachments', disk: 'local', actions: { uploadOne: {} } }],
+    repositories: [
+      { name: 'attachments', disk: 'local', policy, actions: { uploadOne: {} } },
+    ],
   });
 `,
     );

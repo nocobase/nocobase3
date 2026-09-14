@@ -1,3 +1,4 @@
+import sqlite from '@nocobase/db-sqlite';
 import { fileURLToPath } from 'node:url';
 
 import type { UserAdministrationService } from '@nocobase/app-plugin-authentication';
@@ -23,6 +24,7 @@ describe('disabling an account that holds a protected Permission Set', () => {
 
   beforeEach(async () => {
     database = createDatabaseManager({
+      drivers: { sqlite },
       default: 'main',
       connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
     });

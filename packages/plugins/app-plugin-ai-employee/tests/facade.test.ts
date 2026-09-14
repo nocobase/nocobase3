@@ -25,6 +25,7 @@ import {
 } from '../server/agent/service/agent-service-factory.js';
 import type { AgentProviders } from '../server/agent/types.js';
 import { createTestAppDeps } from './app/test-app-deps.js';
+import { TestAIResourceRegistrar } from './app/test-context.js';
 
 import {
   AgentServiceFactory,
@@ -72,8 +73,8 @@ describe('AI employee container-scoped factories', () => {
     const services = container.resolve(serviceFactoryToken);
     managers.configure({ aiStorageDisk: 'local' });
     services.configure({
-      paths: createTestAppDeps().paths,
-      loadResources: false,
+      llmServices: [],
+      resourceRegistrar: new TestAIResourceRegistrar(),
     });
 
     expect(container.resolve(repositoryFactoryToken)).toBe(repositories);
@@ -137,12 +138,12 @@ describe('AI employee container-scoped factories', () => {
     firstManagers.configure({ aiStorageDisk: 'local' });
     secondManagers.configure({ aiStorageDisk: 'local' });
     first.configure({
-      paths: createTestAppDeps().paths,
-      loadResources: false,
+      llmServices: [],
+      resourceRegistrar: new TestAIResourceRegistrar(),
     });
     second.configure({
-      paths: createTestAppDeps().paths,
-      loadResources: false,
+      llmServices: [],
+      resourceRegistrar: new TestAIResourceRegistrar(),
     });
 
     expect(first).not.toBe(second);

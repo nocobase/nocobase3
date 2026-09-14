@@ -14,6 +14,7 @@ helpers. The dependency is one-way; the core package does not import this plugin
 - `server/plugin.ts` is the only server runtime entry and contributes provider lifecycle, routes, and migration location.
 - `server/provider/ai-employee.ts` registers App-container-scoped repository and service factories, initializes package resources before the application's external `ai/` directory, and synchronizes `ai.llmServices` on configuration reload.
 - `server/route/index.ts` creates the authenticated `/api/ai` child router. Routes parse HTTP input and map responses while domain behavior is delegated to factory-owned services.
+- `server/service/ai-mcp-server-service.ts` synchronizes MCP servers from `ai.mcpServers` in `config.yml` and exposes read, test, and tool-inspection operations.
 - `database/collections` defines the AI Employee collection layout, and
   `database/migrations` creates it through the App migration system.
 
@@ -35,6 +36,31 @@ ai:
       enabled: true
       sort: 10
 ```
+
+## MCP server configuration
+
+Declare MCP servers in the application's `config.yml`; the settings page is read-only:
+
+```yaml
+ai:
+  mcpServers:
+    filesystem:
+      transport: stdio
+      command: npx
+      args:
+        - -y
+        - '@modelcontextprotocol/server-filesystem'
+        - /tmp
+      env:
+        API_KEY: ${MCP_API_KEY}
+    remote:
+      transport: http
+      url: ${MCP_SERVER_URL}
+      headers:
+        Authorization: Bearer ${MCP_SERVER_TOKEN}
+```
+
+Configuration reload synchronizes the configured server set and rebuilds the MCP client. The UI only provides connection testing and viewing the tools discovered from each configured server.
 
 The configured name set is authoritative, including an empty array. Each configured `enabledModels` array is converted internally to custom mode; `mode` is not part of the application config contract. Reloading the `ai` application-config namespace reconciles additions, structural updates, and removals without restarting the process or rescanning the AI resource directory. Existing records preserve the user-managed `enabled` and `enabledModels` values. Environment references are expanded recursively after validation; missing variables become empty strings.
 

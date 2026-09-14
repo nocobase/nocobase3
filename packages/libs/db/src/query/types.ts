@@ -71,10 +71,10 @@ export interface FunctionModule {
     column: ReferenceExpression | Expression<unknown>,
   ): AggregateExpression<T>;
   countAll<T = number>(table?: string): AggregateExpression<T>;
-  sum<T = number>(
+  sum<T = string | number | null>(
     column: ReferenceExpression | Expression<unknown>,
   ): AggregateExpression<T>;
-  avg<T = number>(
+  avg<T = string | number | null>(
     column: ReferenceExpression | Expression<unknown>,
   ): AggregateExpression<T>;
   min<T = unknown>(
@@ -127,8 +127,8 @@ export interface QueryAdapter {
   /**
    * Database-layer query builder.
    * Table sources are connection-relative identifiers and use Connection naming.
-   * It does not read Collection metadata, so Collection-level naming overrides
-   * are not applied.
+   * Collection-level naming overrides are not applied. Execution resolves
+   * numeric field types to preserve DECIMAL results before driver conversion.
    */
   selectFrom<TRecord extends Row = Row>(
     table: string,

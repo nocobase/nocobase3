@@ -103,6 +103,7 @@
     "tailwind-merge": "catalog:"
   },
   "devDependencies": {
+    "@nocobase/db-sqlite": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@types/node": "catalog:",
     "@types/react": "catalog:",

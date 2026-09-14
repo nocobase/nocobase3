@@ -1,3 +1,4 @@
+import sqlite from '@nocobase/db-sqlite';
 import { fileURLToPath } from 'node:url';
 
 import {
@@ -16,6 +17,7 @@ describe('the subjects an application counts as able to act', () => {
 
   beforeEach(async () => {
     database = createDatabaseManager({
+      drivers: { sqlite },
       default: 'main',
       connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
     });

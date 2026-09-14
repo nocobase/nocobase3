@@ -8,12 +8,16 @@ import { executeAppDatabasePlan } from './tasks.js';
 import { planAppDatabaseTasks } from './plan.js';
 import { prepareAppDatabaseStorage } from './storage.js';
 import type { AppConfigAccessor, ConfigPaths } from '../config/index.js';
-import type { AppDatabaseConfig } from './types.js';
+import type {
+  AppDatabaseConfig,
+  AppDatabaseTaskContributions,
+} from './types.js';
 
 export interface DatabaseProviderApplication {
   readonly config: AppConfigAccessor;
   readonly container: ServiceContainer;
   readonly paths: ConfigPaths;
+  readonly databaseTaskContributions: AppDatabaseTaskContributions;
 }
 
 export class DatabaseProvider extends ServiceProvider<DatabaseProviderApplication> {
@@ -42,12 +46,11 @@ export class DatabaseProvider extends ServiceProvider<DatabaseProviderApplicatio
     }
 
     const config = this.getDatabaseConfig();
-    const plan = planAppDatabaseTasks(
-      config,
-      this.app.paths,
-      ['migrations', 'seeds'],
-      { autoRun: true },
-    );
+    const plan = planAppDatabaseTasks(config, ['migrations', 'seeds'], {
+      paths: this.app.paths,
+      contributions: this.app.databaseTaskContributions,
+      autoRun: true,
+    });
     // All SQLite connections must be usable by runtime services even without automatic tasks.
     await prepareAppDatabaseStorage(
       config,
@@ -55,7 +58,9 @@ export class DatabaseProvider extends ServiceProvider<DatabaseProviderApplicatio
       Object.keys(config.connections),
     );
     const database = container.resolve(databaseManagerToken);
-    await executeAppDatabasePlan(database, config, this.app.paths, plan);
+    await executeAppDatabasePlan(database, config, plan, {
+      paths: this.app.paths,
+    });
   }
 
   public override async shutdown(): Promise<void> {

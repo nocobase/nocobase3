@@ -2,7 +2,7 @@
   {
     "type": "file",
     "name": "index",
-    "label": "开发概览"
+    "label": "概览"
   },
   {
     "type": "file",
@@ -22,12 +22,12 @@
   {
     "type": "dir",
     "name": "nodes",
-    "label": "工作流节点"
+    "label": "节点"
   },
   {
     "type": "file",
     "name": "service-api",
-    "label": "Workflow Service API"
+    "label": "Service API"
   },
   {
     "type": "file",

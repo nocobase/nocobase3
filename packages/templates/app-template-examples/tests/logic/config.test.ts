@@ -1,9 +1,16 @@
 // @vitest-environment node
 
 import { fileURLToPath } from 'node:url';
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 
 import { type AppIdentityConfig } from '@nocobase/app-server/config';
-import { type AppDatabaseConfig } from '@nocobase/app-server/database';
+import {
+  planAppDatabaseTasks,
+  type AppDatabaseConfig,
+} from '@nocobase/app-server/database';
+import { createAppDatabaseTaskContributions } from '@nocobase/app-server/plugins';
 import { resolveStandaloneAppRuntime } from '@nocobase/app-server/node';
 import {
   type CachingConfig,
@@ -19,6 +26,69 @@ import appRuntime from '../../server/runtime.ts';
 const templateRootDir = fileURLToPath(new URL('../..', import.meta.url));
 
 describe('application config', () => {
+  it('supplies analytics for main-only configs and honors file overrides', async () => {
+    const directory = mkdtempSync(
+      path.join(tmpdir(), 'examples-analytics-config-'),
+    );
+    const configPath = path.join(directory, 'config.yml');
+    try {
+      writeFileSync(
+        configPath,
+        'database:\n  default: main\n  connections:\n    main:\n      dialect: sqlite\n      database: main.sqlite\n',
+      );
+      const runtime = await resolveStandaloneAppRuntime(appRuntime, {
+        rootDir: templateRootDir,
+        configPath,
+        env: { AUTH_SECRET: 'test-auth-secret-at-least-32-characters' },
+      });
+      const database = runtime.config.get<AppDatabaseConfig>('database')!;
+      expect(database.default).toBe('main');
+      expect(database.connections.analytics).toMatchObject({
+        dialect: 'sqlite',
+        filename: path.join(templateRootDir, 'storage/analytics.sqlite'),
+        schemaManagement: 'managed',
+        migrations: { autoRun: true },
+        seeds: { autoRun: true },
+      });
+      const analytics = planAppDatabaseTasks(
+        database,
+        ['migrations', 'seeds'],
+        {
+          paths: runtime.configPaths,
+          contributions: createAppDatabaseTaskContributions(runtime.plugins),
+          autoRun: true,
+        },
+      ).filter((task) => task.connection === 'analytics');
+      expect(analytics.map((task) => task.skipReason)).toEqual([
+        undefined,
+        undefined,
+      ]);
+      expect(
+        analytics.map((task) =>
+          task.config.sources?.map((source) => source.directory),
+        ),
+      ).toEqual([
+        [path.join(templateRootDir, 'database/analytics/migrations')],
+        [path.join(templateRootDir, 'database/analytics/seeds')],
+      ]);
+      writeFileSync(
+        configPath,
+        'database:\n  connections:\n    analytics:\n      database: custom-analytics.sqlite\n      migrations:\n        autoRun: false\n      seeds:\n        autoRun: false\n',
+      );
+      await runtime.config.reload();
+      expect(
+        runtime.config.get<AppDatabaseConfig>('database')!.connections
+          .analytics,
+      ).toMatchObject({
+        dialect: 'sqlite',
+        database: 'custom-analytics.sqlite',
+        migrations: { autoRun: false },
+        seeds: { autoRun: false },
+      });
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
   it('assembles module defaults in the runtime', async () => {
     const runtime = await resolveStandaloneAppRuntime(appRuntime, {
       rootDir: templateRootDir,

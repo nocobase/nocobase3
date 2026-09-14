@@ -478,7 +478,7 @@ Managed metadata body:
 }
 ```
 
-A managed backend tool cannot be created from JSON alone without an existing executable `invoke` function. Define executable App tools in `ai/tools`; use management APIs primarily to edit registered metadata/frontend tools.
+A managed backend tool cannot be created from JSON alone without an existing executable `invoke` function. Define executable App tools in `server/ai/tools`; use management APIs primarily to edit registered metadata/frontend tools.
 
 ### MCP servers
 

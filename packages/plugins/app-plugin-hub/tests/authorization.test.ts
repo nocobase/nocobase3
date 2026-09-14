@@ -6,6 +6,7 @@ import {
   createMigrator,
   type DatabaseManager,
 } from '@nocobase/db';
+import sqlite from '@nocobase/db-sqlite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PermissionSetLastAssignmentError } from '@nocobase/authorization/permissions';
@@ -22,6 +23,7 @@ describe('Hub user role scope', () => {
 
   beforeEach(async () => {
     database = createDatabaseManager({
+      drivers: { sqlite },
       default: 'main',
       connections: {
         main: { dialect: 'sqlite', filename: ':memory:' },
