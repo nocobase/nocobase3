@@ -22,7 +22,9 @@ export function Breadcrumbs(): ReactElement {
             ns: route.packageName,
             defaultValue: route.navigation.title,
           })
-        : formatRouteLabel(route.path),
+        : t(`navigation.${routeSegment(route.path)}`, {
+            defaultValue: formatRouteLabel(route.path),
+          }),
     })),
   ];
 
@@ -92,14 +94,19 @@ function BreadcrumbItem({
 Breadcrumbs.displayName = 'Breadcrumbs';
 
 function formatRouteLabel(path: string): string {
-  const segment =
-    path
-      .split('/')
-      .filter(Boolean)
-      .filter((value) => !value.startsWith(':'))
-      .at(-1) ?? 'Page';
+  const segment = routeSegment(path);
   return segment
     .replace(/[-_]+/g, ' ')
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
     .replace(/^\w/, (value) => value.toUpperCase());
+}
+
+function routeSegment(path: string): string {
+  return (
+    path
+      .split('/')
+      .filter(Boolean)
+      .filter((value) => !value.startsWith(':'))
+      .at(-1) ?? 'page'
+  );
 }

@@ -204,6 +204,8 @@ const zhCN: AppResource = {
     collapse: '收起导航',
     label: '应用导航',
     breadcrumb: '面包屑',
+    dialog: '弹窗',
+    drawer: '抽屉',
   },
 };
 

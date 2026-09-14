@@ -32,6 +32,8 @@ const enUS = {
     collapse: 'Collapse navigation',
     label: 'Application navigation',
     breadcrumb: 'Breadcrumb',
+    dialog: 'Dialog',
+    drawer: 'Drawer',
     console: 'Hub console',
   },
 };
