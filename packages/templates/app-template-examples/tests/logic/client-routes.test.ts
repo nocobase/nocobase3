@@ -43,6 +43,7 @@ describe('app client routes', () => {
           name: 'numeric-examples',
           path: '/numeric-examples',
         },
+        { auth: 'required', name: 'external-crm', path: '/external-crm' },
         { auth: 'guest', name: 'login', path: '/login' },
         { auth: 'guest', name: 'register', path: '/register' },
         {

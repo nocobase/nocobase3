@@ -256,6 +256,11 @@ missing, it creates `crm_customers` and `crm_orders` with the raw client and
 inserts three customers and four orders. Point the connection at an actual
 database in `config.yml` and the provider does nothing.
 
+Open **External CRM** from the homepage or navigation (`/external-crm`). The
+page in `client/pages/external-crm.tsx` lists the CRM's orders with their
+customers, filtered by status, entirely through the read-only routes below; it
+addresses everything by logical name and never sees the `crm_` table prefix.
+
 `server/routes/external-crm.ts` exposes the two Collections read-only through
 `defineRepositoryApiRoutes`, bound to `externalCrm`:
 

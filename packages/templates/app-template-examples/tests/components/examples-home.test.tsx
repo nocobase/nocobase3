@@ -38,6 +38,7 @@ it.each(['en-US', 'zh-CN'])(
       '/demo/route-overlays',
       '/demo/articles',
       '/demo/numeric-examples',
+      '/demo/external-crm',
       '/demo/repository-example/find-many',
       '/demo/repository-example/crm',
       '/demo/repository-example/orders',
