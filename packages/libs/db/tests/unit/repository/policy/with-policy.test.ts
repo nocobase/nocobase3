@@ -1,0 +1,1753 @@
+import { describe, expect, it } from 'vitest';
+import { DefaultRepository } from '../../../../src/repository/repository.js';
+
+describe('DefaultRepository.withPolicy', () => {
+  it('returns an immutable scoped repository with a normalized policy', () => {
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {} as never,
+      adapter: {} as never,
+    });
+    const policy = {
+      read: {
+        scope: { tenantId: 'T1' },
+        fields: ['id', 'title'],
+      },
+      create: { scope: true, fields: ['title'] },
+      update: { scope: true, fields: ['title'] },
+      delete: { scope: true },
+    } as const;
+
+    const scoped = repository.withPolicy(policy);
+
+    expect(() => repository.explainPolicy()).toThrowError(
+      'Repository does not have a bound Policy.',
+    );
+    expect(scoped.explainPolicy()).toMatchObject({
+      read: {
+        fields: ['id', 'title'],
+        relations: {},
+      },
+    });
+    expect(scoped).not.toBe(repository);
+  });
+
+  it('evaluates principal policies once at binding time', () => {
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {} as never,
+      adapter: {} as never,
+    });
+    let calls = 0;
+
+    const scoped = repository.withPolicy(
+      (principal: { tenantId: string }) => {
+        calls += 1;
+        return {
+          read: { scope: { tenantId: principal.tenantId } },
+          create: { scope: true },
+          update: { scope: true },
+          delete: { scope: true },
+        };
+      },
+      { tenantId: 'T1' },
+    );
+
+    expect(calls).toBe(1);
+    expect(scoped.explainPolicy().read).toMatchObject({
+      scope: {
+        root: {
+          items: [{ path: ['tenantId'], value: 'T1' }],
+        },
+      },
+    });
+  });
+
+  it('adds read scope to the caller filter before execution', async () => {
+    let plan: { filter?: { root: { items: unknown[] } } } | undefined;
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {
+        get: async () => ({
+          name: 'projects',
+          fields: [
+            { name: 'id', type: 'string' },
+            { name: 'tenantId', type: 'string' },
+            { name: 'status', type: 'string' },
+          ],
+        }),
+      },
+      adapter: {
+        assertReadable: () => undefined,
+        count: async (nextPlan: typeof plan) => {
+          plan = nextPlan;
+          return 0;
+        },
+      } as never,
+    });
+
+    await repository
+      .withPolicy({
+        read: { scope: { tenantId: 'T1' }, fields: ['status'] },
+        create: { scope: true },
+        update: { scope: true },
+        delete: { scope: true },
+      })
+      .count({ filter: { status: 'draft' } });
+
+    expect(plan?.filter?.root.items).toHaveLength(2);
+    expect(plan?.filter?.root.items).toEqual([
+      expect.objectContaining({
+        logic: 'and',
+        items: [expect.objectContaining({ path: ['status'], value: 'draft' })],
+      }),
+      expect.objectContaining({
+        logic: 'and',
+        items: [expect.objectContaining({ path: ['tenantId'], value: 'T1' })],
+      }),
+    ]);
+  });
+
+  it('rejects caller filters on fields outside the read allowlist', async () => {
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {
+        get: async () => ({
+          name: 'projects',
+          fields: [
+            { name: 'id', type: 'string' },
+            { name: 'budget', type: 'string' },
+          ],
+        }),
+      },
+      adapter: {
+        assertReadable: () => undefined,
+        exists: async () => true,
+      } as never,
+    });
+
+    await expect(
+      repository
+        .withPolicy({
+          read: { scope: true, fields: ['id'] },
+          create: { scope: true },
+          update: { scope: true },
+          delete: { scope: true },
+        })
+        .exists({
+          filter: {
+            kind: 'filter',
+            version: 1,
+            root: {
+              kind: 'group',
+              logic: 'and',
+              items: [
+                {
+                  kind: 'condition',
+                  path: ['budget'],
+                  operator: '$eq',
+                  value: '100',
+                },
+              ],
+            },
+          },
+        }),
+    ).rejects.toMatchObject({
+      code: 'FIELD_READ_FORBIDDEN',
+      field: 'budget',
+    });
+  });
+
+  it('uses the mutation scope instead of read scope for updates', async () => {
+    let updateFilter: { root: { items: readonly unknown[] } } | undefined;
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {
+        get: async () => ({
+          name: 'projects',
+          fields: [
+            { name: 'id', type: 'string' },
+            { name: 'tenantId', type: 'string' },
+            { name: 'ownerId', type: 'string' },
+            { name: 'title', type: 'string' },
+          ],
+        }),
+      },
+      adapter: {
+        updateOne: async (plan: { filter: typeof updateFilter }) => {
+          updateFilter = plan.filter;
+          return {
+            record: { id: 'p1' },
+            createdTargets: [],
+          };
+        },
+      } as never,
+    });
+
+    await repository
+      .withPolicy({
+        read: { scope: { tenantId: 'T1' } },
+        create: { scope: true },
+        update: { scope: { ownerId: 'u1' }, fields: ['title'] },
+        delete: { scope: { tenantId: 'T1' } },
+      })
+      .updateOne({
+        filter: { id: 'p1' },
+        values: { title: 'Updated' },
+      });
+
+    expect(updateFilter?.root.items).toEqual([
+      expect.objectContaining({
+        logic: 'and',
+        items: [expect.objectContaining({ path: ['id'], value: 'p1' })],
+      }),
+      expect.objectContaining({
+        logic: 'and',
+        items: [expect.objectContaining({ path: ['ownerId'], value: 'u1' })],
+      }),
+    ]);
+  });
+
+  it('restricts implicit root selection to the read field allowlist', async () => {
+    let plan:
+      | {
+          fields: readonly string[];
+        }
+      | undefined;
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {
+        get: async () => ({
+          name: 'projects',
+          fields: [
+            { name: 'id', type: 'string' },
+            { name: 'title', type: 'string' },
+            { name: 'budget', type: 'number' },
+          ],
+        }),
+      },
+      adapter: {
+        assertReadable: () => undefined,
+        findMany: async (nextPlan: typeof plan) => {
+          plan = nextPlan;
+          return [];
+        },
+      } as never,
+    });
+
+    await repository
+      .withPolicy({
+        read: { scope: true, fields: ['id', 'title'] },
+        create: { scope: true },
+        update: { scope: true },
+        delete: { scope: true },
+      })
+      .findMany();
+
+    expect(plan?.fields).toEqual(['id', 'title']);
+  });
+
+  it('rejects explicitly selected root fields outside the read allowlist', async () => {
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {
+        get: async () => ({
+          name: 'projects',
+          fields: [
+            { name: 'id', type: 'string' },
+            { name: 'title', type: 'string' },
+            { name: 'budget', type: 'number' },
+          ],
+        }),
+      },
+      adapter: {
+        assertReadable: () => undefined,
+        findMany: async () => [],
+      } as never,
+    });
+
+    await expect(
+      repository
+        .withPolicy({
+          read: { scope: true, fields: ['id', 'title'] },
+          create: { scope: true },
+          update: { scope: true },
+          delete: { scope: true },
+        })
+        .findMany({
+          select: {
+            kind: 'select',
+            version: 1,
+            root: {
+              kind: 'selection',
+              fields: ['id', 'budget'],
+              includes: [],
+            },
+          },
+        }),
+    ).rejects.toMatchObject({ code: 'FIELD_READ_FORBIDDEN', field: 'budget' });
+  });
+
+  it('returns no root scalar fields when read fields are omitted', async () => {
+    let plan:
+      | {
+          fields: readonly string[];
+        }
+      | undefined;
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {
+        get: async () => ({
+          name: 'projects',
+          fields: [
+            { name: 'id', type: 'string' },
+            { name: 'title', type: 'string' },
+          ],
+        }),
+      },
+      adapter: {
+        assertReadable: () => undefined,
+        findMany: async (nextPlan: typeof plan) => {
+          plan = nextPlan;
+          return [];
+        },
+      } as never,
+    });
+
+    await repository
+      .withPolicy({
+        read: { scope: true },
+        create: { scope: true },
+        update: { scope: true },
+        delete: { scope: true },
+      })
+      .findMany();
+
+    expect(plan?.fields).toEqual([]);
+  });
+
+  it('rejects relations that are absent from the read relation allowlist', async () => {
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {
+        get: async (name: string) =>
+          name === 'projects'
+            ? {
+                name,
+                fields: [
+                  { name: 'id', type: 'string' },
+                  {
+                    name: 'tasks',
+                    type: 'hasMany',
+                    target: 'tasks',
+                    foreignKey: 'projectId',
+                  },
+                ],
+              }
+            : {
+                name,
+                fields: [{ name: 'id', type: 'string' }],
+              },
+      },
+      adapter: {
+        assertReadable: () => undefined,
+        findMany: async () => [],
+      } as never,
+    });
+
+    await expect(
+      repository
+        .withPolicy({
+          read: { scope: true, fields: ['id'], relations: {} },
+          create: { scope: true },
+          update: { scope: true },
+          delete: { scope: true },
+        })
+        .findMany({
+          select: {
+            kind: 'select',
+            version: 1,
+            root: {
+              kind: 'selection',
+              fields: ['id'],
+              includes: [
+                {
+                  kind: 'include',
+                  relation: 'tasks',
+                  select: {
+                    kind: 'selection',
+                    fields: ['id'],
+                    includes: [],
+                  },
+                },
+              ],
+            },
+          },
+        }),
+    ).rejects.toMatchObject({
+      code: 'RELATION_READ_FORBIDDEN',
+      relation: 'tasks',
+    });
+  });
+
+  it('applies a relation read field allowlist to nested selections', async () => {
+    let plan:
+      | {
+          select?: {
+            root: {
+              includes: Array<{
+                relation: string;
+                select?: { fields?: readonly string[] };
+              }>;
+            };
+          };
+        }
+      | undefined;
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {
+        get: async (name: string) =>
+          name === 'projects'
+            ? {
+                name,
+                fields: [
+                  { name: 'id', type: 'string' },
+                  {
+                    name: 'tasks',
+                    type: 'hasMany',
+                    target: 'tasks',
+                    foreignKey: 'projectId',
+                  },
+                ],
+              }
+            : {
+                name,
+                fields: [
+                  { name: 'id', type: 'string' },
+                  { name: 'title', type: 'string' },
+                  { name: 'secret', type: 'string' },
+                ],
+                constraints: [{ type: 'primary', fields: ['id'] }],
+              },
+      },
+      adapter: {
+        assertReadable: () => undefined,
+        findMany: async (nextPlan: typeof plan) => {
+          plan = nextPlan;
+          return [];
+        },
+      } as never,
+    });
+
+    await repository
+      .withPolicy({
+        read: {
+          scope: true,
+          fields: ['id'],
+          relations: {
+            tasks: { scope: true, fields: ['id', 'title'], relations: {} },
+          },
+        },
+        create: { scope: true },
+        update: { scope: true },
+        delete: { scope: true },
+      })
+      .findMany({
+        select: {
+          kind: 'select',
+          version: 1,
+          root: {
+            kind: 'selection',
+            fields: ['id'],
+            includes: [
+              {
+                kind: 'include',
+                relation: 'tasks',
+                select: { kind: 'selection', includes: [] },
+              },
+            ],
+          },
+        },
+      });
+
+    expect(plan?.select?.root.includes[0]).toMatchObject({
+      relation: 'tasks',
+      select: { fields: ['id', 'title'] },
+    });
+  });
+
+  it('adds the relation read scope to the nested relation filter', async () => {
+    let plan:
+      | {
+          select?: {
+            root: {
+              includes: Array<{
+                filter?: { root: { items: unknown[] } };
+              }>;
+            };
+          };
+        }
+      | undefined;
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {
+        get: async (name: string) =>
+          name === 'projects'
+            ? {
+                name,
+                fields: [
+                  { name: 'id', type: 'string' },
+                  { name: 'tasks', type: 'hasMany', target: 'tasks' },
+                ],
+              }
+            : {
+                name,
+                fields: [
+                  { name: 'id', type: 'string' },
+                  { name: 'status', type: 'string' },
+                  { name: 'tenantId', type: 'string' },
+                ],
+              },
+      },
+      adapter: {
+        assertReadable: () => undefined,
+        findMany: async (nextPlan: typeof plan) => {
+          plan = nextPlan;
+          return [];
+        },
+      } as never,
+    });
+
+    await repository
+      .withPolicy({
+        read: {
+          scope: true,
+          fields: ['id'],
+          relations: {
+            tasks: {
+              scope: { tenantId: 'T1' },
+              fields: ['id', 'status'],
+              relations: {},
+            },
+          },
+        },
+        create: { scope: true },
+        update: { scope: true },
+        delete: { scope: true },
+      })
+      .findMany({
+        select: {
+          kind: 'select',
+          version: 1,
+          root: {
+            kind: 'selection',
+            fields: ['id'],
+            includes: [
+              {
+                kind: 'include',
+                relation: 'tasks',
+                filter: {
+                  kind: 'filter',
+                  version: 1,
+                  root: {
+                    kind: 'group',
+                    logic: 'and',
+                    items: [
+                      {
+                        kind: 'condition',
+                        path: ['status'],
+                        operator: '$eq',
+                        value: 'draft',
+                      },
+                    ],
+                  },
+                },
+                select: { kind: 'selection', includes: [] },
+              },
+            ],
+          },
+        },
+      });
+
+    expect(plan?.select?.root.includes[0]?.filter?.root.items).toEqual([
+      expect.objectContaining({
+        logic: 'and',
+        items: [expect.objectContaining({ path: ['status'], value: 'draft' })],
+      }),
+      expect.objectContaining({
+        logic: 'and',
+        items: [expect.objectContaining({ path: ['tenantId'], value: 'T1' })],
+      }),
+    ]);
+  });
+
+  it('rejects relation filters outside the relation field allowlist', async () => {
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {
+        get: async (name: string) =>
+          name === 'projects'
+            ? {
+                name,
+                fields: [
+                  { name: 'id', type: 'string' },
+                  {
+                    name: 'tasks',
+                    type: 'hasMany',
+                    target: 'tasks',
+                    foreignKey: 'projectId',
+                  },
+                ],
+              }
+            : {
+                name,
+                fields: [
+                  { name: 'id', type: 'string' },
+                  { name: 'secret', type: 'string' },
+                ],
+              },
+      },
+      adapter: {
+        assertReadable: () => undefined,
+        findMany: async () => [],
+      } as never,
+    });
+
+    await expect(
+      repository
+        .withPolicy({
+          read: {
+            scope: true,
+            fields: ['id'],
+            relations: {
+              tasks: { scope: true, fields: ['id'], relations: {} },
+            },
+          },
+          create: { scope: true },
+          update: { scope: true },
+          delete: { scope: true },
+        })
+        .findMany({
+          select: {
+            kind: 'select',
+            version: 1,
+            root: {
+              kind: 'selection',
+              fields: ['id'],
+              includes: [
+                {
+                  kind: 'include',
+                  relation: 'tasks',
+                  filter: {
+                    kind: 'filter',
+                    version: 1,
+                    root: {
+                      kind: 'group',
+                      logic: 'and',
+                      items: [
+                        {
+                          kind: 'condition',
+                          path: ['secret'],
+                          operator: '$eq',
+                          value: 'hidden',
+                        },
+                      ],
+                    },
+                  },
+                  select: { kind: 'selection', fields: ['id'], includes: [] },
+                },
+              ],
+            },
+          },
+        }),
+    ).rejects.toMatchObject({
+      code: 'FIELD_READ_FORBIDDEN',
+      field: 'secret',
+    });
+  });
+
+  it('applies the read field allowlist to mutation returning selects', async () => {
+    const collection = {
+      name: 'projects',
+      fields: [
+        { name: 'id', type: 'string' },
+        { name: 'title', type: 'string' },
+        { name: 'budget', type: 'number' },
+      ],
+    };
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: { get: async () => collection },
+      adapter: {
+        createOne: async () => ({ record: { id: 'p1' }, createdTargets: [] }),
+        updateOne: async () => ({ record: { id: 'p1' }, createdTargets: [] }),
+        deleteOne: async () => ({ record: { id: 'p1' } }),
+      } as never,
+    });
+    const scoped = repository.withPolicy({
+      read: { scope: true, fields: ['id', 'title'] },
+      create: { scope: true, fields: ['title'] },
+      update: { scope: true, fields: ['title'] },
+      delete: { scope: true },
+    });
+    const select = {
+      kind: 'select',
+      version: 1,
+      root: { kind: 'selection', fields: ['budget'], includes: [] },
+    } as const;
+
+    await expect(
+      scoped.createOne({ values: { title: 'a' }, select }),
+    ).rejects.toMatchObject({ code: 'FIELD_READ_FORBIDDEN', field: 'budget' });
+    await expect(
+      scoped.updateOne({
+        filter: { id: 'p1' },
+        values: { title: 'b' },
+        select,
+      }),
+    ).rejects.toMatchObject({ code: 'FIELD_READ_FORBIDDEN', field: 'budget' });
+    await expect(
+      scoped.deleteOne({ filter: { id: 'p1' }, select }),
+    ).rejects.toMatchObject({ code: 'FIELD_READ_FORBIDDEN', field: 'budget' });
+  });
+
+  it('applies the read relation allowlist to mutation returning selects', async () => {
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {
+        get: async (name: string) =>
+          name === 'projects'
+            ? {
+                name,
+                fields: [
+                  { name: 'id', type: 'string' },
+                  { name: 'title', type: 'string' },
+                  {
+                    name: 'tasks',
+                    type: 'hasMany',
+                    target: 'tasks',
+                    foreignKey: 'projectId',
+                  },
+                ],
+              }
+            : { name, fields: [{ name: 'id', type: 'string' }] },
+      },
+      adapter: {
+        updateOne: async () => ({ record: { id: 'p1' }, createdTargets: [] }),
+      } as never,
+    });
+
+    await expect(
+      repository
+        .withPolicy({
+          read: { scope: true, fields: ['id'], relations: {} },
+          create: { scope: true },
+          update: { scope: true, fields: ['title'] },
+          delete: { scope: true },
+        })
+        .updateOne({
+          filter: { id: 'p1' },
+          values: { title: 'b' },
+          select: {
+            kind: 'select',
+            version: 1,
+            root: {
+              kind: 'selection',
+              fields: ['id'],
+              includes: [
+                {
+                  kind: 'include',
+                  relation: 'tasks',
+                  select: { kind: 'selection', fields: ['id'], includes: [] },
+                },
+              ],
+            },
+          },
+        }),
+    ).rejects.toMatchObject({
+      code: 'RELATION_READ_FORBIDDEN',
+      relation: 'tasks',
+    });
+  });
+
+  it('keeps the findOne determinism guard when a read scope is bound', async () => {
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {
+        get: async () => ({
+          name: 'projects',
+          fields: [
+            { name: 'id', type: 'string' },
+            { name: 'tenantId', type: 'string' },
+          ],
+        }),
+      },
+      adapter: {
+        assertReadable: () => undefined,
+        findOne: async () => undefined,
+      } as never,
+    });
+
+    await expect(
+      repository
+        .withPolicy({
+          read: { scope: { tenantId: 'T1' }, fields: ['id', 'tenantId'] },
+          create: { scope: true },
+          update: { scope: true },
+          delete: { scope: true },
+        })
+        .findOne({} as never),
+    ).rejects.toMatchObject({ code: 'INVALID_FILTER' });
+  });
+
+  it('rejects query surfaces that name fields outside the read allowlist', async () => {
+    const collection = {
+      name: 'projects',
+      fields: [
+        { name: 'id', type: 'string' },
+        { name: 'title', type: 'string' },
+        { name: 'budget', type: 'integer' },
+      ],
+    };
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: { get: async () => collection },
+      adapter: {
+        assertReadable: () => undefined,
+        findMany: async () => [],
+        aggregate: async () => ({}),
+        groupBy: async () => [],
+      } as never,
+    });
+    const scoped = repository.withPolicy({
+      read: { scope: true, fields: ['id', 'title'] },
+      create: { scope: true },
+      update: { scope: true },
+      delete: { scope: true },
+    });
+    const forbidden = { code: 'FIELD_READ_FORBIDDEN', field: 'budget' };
+
+    await expect(
+      scoped.findMany({
+        sort: {
+          kind: 'sort',
+          version: 1,
+          items: [{ kind: 'field', path: ['budget'], direction: 'desc' }],
+        },
+      }),
+    ).rejects.toMatchObject(forbidden);
+
+    await expect(
+      scoped.findMany({
+        distinct: ['budget'],
+      } as never),
+    ).rejects.toMatchObject(forbidden);
+
+    await expect(
+      scoped.aggregate({
+        aggregate: {
+          kind: 'aggregate',
+          version: 1,
+          items: [{ kind: 'max', field: 'budget', alias: 'peak' }],
+        },
+      } as never),
+    ).rejects.toMatchObject(forbidden);
+
+    await expect(
+      scoped.groupBy({
+        by: ['budget'],
+        aggregate: {
+          kind: 'aggregate',
+          version: 1,
+          items: [{ kind: 'count', alias: 'total' }],
+        },
+      } as never),
+    ).rejects.toMatchObject(forbidden);
+  });
+
+  it('still sorts by the primary key it injected for determinism', async () => {
+    let plan: { sort?: { items: readonly unknown[] } } | undefined;
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {
+        get: async () => ({
+          name: 'projects',
+          fields: [
+            { name: 'id', type: 'string', nullable: false },
+            { name: 'title', type: 'string' },
+          ],
+          constraints: [{ type: 'primary', fields: ['id'] }],
+        }),
+      },
+      adapter: {
+        assertReadable: () => undefined,
+        findMany: async (nextPlan: typeof plan) => {
+          plan = nextPlan;
+          return [];
+        },
+      } as never,
+    });
+
+    // 'id' is outside the allowlist, but the sort on it is injected rather
+    // than asked for, so it must not be rejected.
+    await repository
+      .withPolicy({
+        read: { scope: true, fields: ['title'] },
+        create: { scope: true },
+        update: { scope: true },
+        delete: { scope: true },
+      })
+      .findMany({});
+
+    expect(plan?.sort?.items).toEqual([
+      expect.objectContaining({ path: ['id'] }),
+    ]);
+  });
+
+  it('judges relation filter conditions by the relation allowlist, not the root', async () => {
+    let plan: { filter?: { root: { items: unknown[] } } } | undefined;
+    const collections = {
+      get: async (name: string) =>
+        name === 'projects'
+          ? {
+              name,
+              fields: [
+                { name: 'id', type: 'string' },
+                { name: 'title', type: 'string' },
+                {
+                  name: 'tasks',
+                  type: 'hasMany',
+                  target: 'tasks',
+                  foreignKey: 'projectId',
+                },
+              ],
+            }
+          : {
+              name,
+              fields: [
+                { name: 'id', type: 'string' },
+                { name: 'projectId', type: 'string' },
+                { name: 'secret', type: 'string' },
+              ],
+            },
+    };
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: collections as never,
+      adapter: {
+        assertReadable: () => undefined,
+        count: async (nextPlan: typeof plan) => {
+          plan = nextPlan;
+          return 0;
+        },
+      } as never,
+    });
+    const someTasks = (field: string) => ({
+      kind: 'filter' as const,
+      version: 1 as const,
+      root: {
+        kind: 'group' as const,
+        logic: 'and' as const,
+        items: [
+          {
+            kind: 'relation' as const,
+            path: ['tasks'],
+            quantifier: 'some' as const,
+            filter: {
+              kind: 'group' as const,
+              logic: 'and' as const,
+              items: [
+                {
+                  kind: 'condition' as const,
+                  path: [field],
+                  operator: '$eq' as const,
+                  value: 'x',
+                },
+              ],
+            },
+          },
+        ],
+      },
+    });
+
+    // The relation authorizes 'secret' on tasks, so the root's allowlist,
+    // which has no such field, must not reject it.
+    await repository
+      .withPolicy({
+        read: {
+          scope: true,
+          fields: ['id'],
+          relations: { tasks: { scope: true, fields: ['id', 'secret'] } },
+        },
+        create: { scope: true },
+        update: { scope: true },
+        delete: { scope: true },
+      })
+      .count({ filter: someTasks('secret') as never });
+    expect(plan?.filter).toBeDefined();
+
+    // 'title' exists on the root and is allowed there, but the condition is
+    // on tasks, where it is not.
+    await expect(
+      repository
+        .withPolicy({
+          read: {
+            scope: true,
+            fields: ['id', 'title'],
+            relations: { tasks: { scope: true, fields: ['id'] } },
+          },
+          create: { scope: true },
+          update: { scope: true },
+          delete: { scope: true },
+        })
+        .count({ filter: someTasks('secret') as never }),
+    ).rejects.toMatchObject({ code: 'FIELD_READ_FORBIDDEN', field: 'secret' });
+  });
+
+  it('rejects filters that traverse a relation the read policy omits', async () => {
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {
+        get: async (name: string) =>
+          name === 'projects'
+            ? {
+                name,
+                fields: [
+                  { name: 'id', type: 'string' },
+                  { name: 'title', type: 'string' },
+                  {
+                    name: 'tasks',
+                    type: 'hasMany',
+                    target: 'tasks',
+                    foreignKey: 'projectId',
+                  },
+                ],
+              }
+            : {
+                name,
+                fields: [
+                  { name: 'id', type: 'string' },
+                  { name: 'title', type: 'string' },
+                ],
+              },
+      },
+      adapter: {
+        assertReadable: () => undefined,
+        count: async () => 0,
+      } as never,
+    });
+
+    await expect(
+      repository
+        .withPolicy({
+          read: { scope: true, fields: ['id', 'title'], relations: {} },
+          create: { scope: true },
+          update: { scope: true },
+          delete: { scope: true },
+        })
+        .count({
+          filter: {
+            kind: 'filter',
+            version: 1,
+            root: {
+              kind: 'group',
+              logic: 'and',
+              items: [
+                {
+                  kind: 'relation',
+                  path: ['tasks'],
+                  quantifier: 'some',
+                  filter: {
+                    kind: 'group',
+                    logic: 'and',
+                    items: [
+                      {
+                        kind: 'condition',
+                        path: ['title'],
+                        operator: '$eq',
+                        value: 'x',
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          } as never,
+        }),
+    ).rejects.toMatchObject({
+      code: 'RELATION_READ_FORBIDDEN',
+      relation: 'tasks',
+    });
+  });
+
+  it('adds the relation scope to a filter relation branch', async () => {
+    let plan: { filter?: { root: { items: unknown[] } } } | undefined;
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {
+        get: async (name: string) =>
+          name === 'projects'
+            ? {
+                name,
+                fields: [
+                  { name: 'id', type: 'string' },
+                  {
+                    name: 'tasks',
+                    type: 'hasMany',
+                    target: 'tasks',
+                    foreignKey: 'projectId',
+                  },
+                ],
+              }
+            : {
+                name,
+                fields: [
+                  { name: 'id', type: 'string' },
+                  { name: 'projectId', type: 'string' },
+                  { name: 'tenantId', type: 'string' },
+                  { name: 'title', type: 'string' },
+                ],
+              },
+      },
+      adapter: {
+        assertReadable: () => undefined,
+        count: async (nextPlan: typeof plan) => {
+          plan = nextPlan;
+          return 0;
+        },
+      } as never,
+    });
+
+    await repository
+      .withPolicy({
+        read: {
+          scope: true,
+          fields: ['id'],
+          relations: {
+            tasks: { scope: { tenantId: 'T1' }, fields: ['id', 'title'] },
+          },
+        },
+        create: { scope: true },
+        update: { scope: true },
+        delete: { scope: true },
+      })
+      .count({
+        filter: {
+          kind: 'filter',
+          version: 1,
+          root: {
+            kind: 'group',
+            logic: 'and',
+            items: [
+              {
+                kind: 'relation',
+                path: ['tasks'],
+                quantifier: 'some',
+                filter: {
+                  kind: 'group',
+                  logic: 'and',
+                  items: [
+                    {
+                      kind: 'condition',
+                      path: ['title'],
+                      operator: '$eq',
+                      value: 'x',
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        } as never,
+      });
+
+    expect(plan?.filter?.root.items[0]).toMatchObject({
+      kind: 'relation',
+      path: ['tasks'],
+      quantifier: 'some',
+      filter: {
+        logic: 'and',
+        items: [
+          {
+            logic: 'and',
+            items: [expect.objectContaining({ path: ['title'] })],
+          },
+          {
+            logic: 'and',
+            items: [expect.objectContaining({ path: ['tenantId'] })],
+          },
+        ],
+      },
+    });
+  });
+
+  it('refuses a create whose scope reads a field it can never set', async () => {
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {
+        get: async () => ({
+          name: 'projects',
+          fields: [
+            { name: 'id', type: 'string' },
+            { name: 'title', type: 'string' },
+            // No default, so a create that cannot submit it gets whatever the
+            // database decides — and can never influence the outcome.
+            { name: 'status', type: 'string' },
+          ],
+        }),
+      },
+      adapter: { createOne: async () => ({ record: {}, createdTargets: [] }) },
+    } as never);
+
+    await expect(
+      repository
+        .withPolicy({
+          read: { scope: true },
+          create: { scope: { status: 'draft' }, fields: ['title'] },
+          update: { scope: true },
+          delete: { scope: true },
+        })
+        .createOne({ values: { title: 'x' } }),
+    ).rejects.toMatchObject({ code: 'INVALID_POLICY', field: 'status' });
+  });
+
+  it('accepts a create scope field that defaults or is submittable', async () => {
+    const collections = {
+      get: async () => ({
+        name: 'projects',
+        fields: [
+          { name: 'id', type: 'string' },
+          { name: 'title', type: 'string' },
+          { name: 'status', type: 'string', defaultValue: 'draft' },
+          { name: 'tenantId', type: 'string' },
+        ],
+      }),
+    };
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections,
+      adapter: {
+        createOne: async () => ({
+          record: { id: 'p1' },
+          createdTargets: [],
+        }),
+      },
+    } as never);
+
+    // A column default is accepted: whether it satisfies the condition is a
+    // comparison only the database can make, and the write-back check makes it.
+    await expect(
+      repository
+        .withPolicy({
+          read: { scope: true },
+          create: { scope: { status: 'draft' }, fields: ['title'] },
+          update: { scope: true },
+          delete: { scope: true },
+        })
+        .createOne({ values: { title: 'x' } }),
+    ).resolves.toBeDefined();
+
+    // So is a field the policy assigns itself.
+    await expect(
+      repository
+        .withPolicy({
+          read: { scope: true },
+          create: {
+            scope: { tenantId: 'T1' },
+            defaults: { tenantId: 'T1' },
+            fields: ['title'],
+          },
+          update: { scope: true },
+          delete: { scope: true },
+        })
+        .createOne({ values: { title: 'x' } }),
+    ).resolves.toBeDefined();
+  });
+
+  it('normalizes a mutation scope once per repository', async () => {
+    const checks: unknown[] = [];
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {
+        get: async () => ({
+          name: 'projects',
+          fields: [
+            { name: 'id', type: 'string' },
+            { name: 'tenantId', type: 'string' },
+            { name: 'title', type: 'string' },
+          ],
+        }),
+      },
+      adapter: {
+        updateOne: async (plan: { scopeCheck?: unknown }) => {
+          checks.push(plan.scopeCheck);
+          return { record: { id: 'p1' }, createdTargets: [] };
+        },
+      },
+    } as never);
+    const scoped = repository.withPolicy({
+      read: { scope: true },
+      create: { scope: true },
+      update: { scope: { tenantId: 'T1' }, fields: ['title'] },
+      delete: { scope: true },
+    });
+
+    await scoped.updateOne({ filter: { id: 'p1' }, values: { title: 'a' } });
+    await scoped.updateOne({ filter: { id: 'p1' }, values: { title: 'b' } });
+
+    // The same object both times: a bound policy is frozen, so re-normalizing
+    // its scope against the collection on every write buys nothing.
+    expect(checks).toHaveLength(2);
+    expect(checks[0]).toBeDefined();
+    expect(checks[0]).toBe(checks[1]);
+    expect(checks[0]).toMatchObject({ fields: ['tenantId'] });
+  });
+
+  it('treats a foreign key as readable when its relation already reveals it', async () => {
+    const collections = {
+      get: async (name: string) =>
+        name === 'projects'
+          ? {
+              name,
+              fields: [
+                { name: 'id', type: 'string' },
+                { name: 'ownerId', type: 'string' },
+                { name: 'secretId', type: 'string' },
+                {
+                  name: 'owner',
+                  type: 'belongsTo',
+                  target: 'users',
+                  foreignKey: 'ownerId',
+                  targetKey: 'id',
+                },
+                {
+                  name: 'secret',
+                  type: 'belongsTo',
+                  target: 'users',
+                  foreignKey: 'secretId',
+                  targetKey: 'id',
+                },
+              ],
+            }
+          : {
+              name,
+              fields: [
+                { name: 'id', type: 'string' },
+                { name: 'name', type: 'string' },
+              ],
+            },
+    };
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: collections as never,
+      adapter: {
+        assertReadable: () => undefined,
+        findMany: async () => [],
+      } as never,
+    });
+    const scoped = repository.withPolicy({
+      read: {
+        scope: true,
+        fields: ['id'],
+        relations: {
+          // Expanding owner and reading its key hands ownerId over anyway.
+          owner: { scope: true, fields: ['id'] },
+          // secret returns no key, so secretId stays hidden.
+          secret: { scope: true, fields: ['name'] },
+        },
+      },
+      create: { scope: true },
+      update: { scope: true },
+      delete: { scope: true },
+    });
+
+    await expect(
+      scoped.findMany({
+        select: {
+          kind: 'select',
+          version: 1,
+          root: {
+            kind: 'selection',
+            fields: ['id', 'ownerId'],
+            includes: [],
+          },
+        },
+      }),
+    ).resolves.toEqual([]);
+
+    await expect(
+      scoped.findMany({
+        select: {
+          kind: 'select',
+          version: 1,
+          root: {
+            kind: 'selection',
+            fields: ['id', 'secretId'],
+            includes: [],
+          },
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: 'FIELD_READ_FORBIDDEN',
+      field: 'secretId',
+    });
+  });
+
+  it('does not return an implied foreign key when no select was given', async () => {
+    let plan: { fields?: readonly string[] } | undefined;
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {
+        get: async (name: string) =>
+          name === 'projects'
+            ? {
+                name,
+                fields: [
+                  { name: 'id', type: 'string' },
+                  { name: 'ownerId', type: 'string' },
+                  {
+                    name: 'owner',
+                    type: 'belongsTo',
+                    target: 'users',
+                    foreignKey: 'ownerId',
+                    targetKey: 'id',
+                  },
+                ],
+              }
+            : { name, fields: [{ name: 'id', type: 'string' }] },
+      } as never,
+      adapter: {
+        assertReadable: () => undefined,
+        findMany: async (nextPlan: typeof plan) => {
+          plan = nextPlan;
+          return [];
+        },
+      } as never,
+    });
+
+    await repository
+      .withPolicy({
+        read: {
+          scope: true,
+          fields: ['id'],
+          relations: { owner: { scope: true, fields: ['id'] } },
+        },
+        create: { scope: true },
+        update: { scope: true },
+        delete: { scope: true },
+      })
+      .findMany({});
+
+    // Omitting select means "the server decides", which is read.fields — the
+    // implied key is about what may be asked for, not about what comes back.
+    expect(plan?.fields).toEqual(['id']);
+  });
+
+  it('refuses to rebind a policy that is already in force', () => {
+    const scoped = new DefaultRepository({
+      collection: 'projects',
+      collections: {} as never,
+      adapter: {} as never,
+    }).withPolicy({
+      read: { scope: { tenantId: 'T1' }, fields: ['id'] },
+      create: { scope: true },
+      update: { scope: true },
+      delete: { scope: true },
+    });
+
+    // A Repository from a bound Connection is typed as `Repository`, so this
+    // method stays reachable; replacing the binding would undo the
+    // Connection's authorization.
+    expect(() =>
+      (
+        scoped as unknown as {
+          withPolicy: (policy: unknown) => unknown;
+        }
+      ).withPolicy({
+        read: true,
+        create: true,
+        update: true,
+        delete: true,
+      }),
+    ).toThrowError(/already has a bound Policy/);
+  });
+
+  it('hands out a create default that cannot be changed from outside', () => {
+    const supplied = new Date('2020-01-01T00:00:00.000Z');
+    const scoped = new DefaultRepository({
+      collection: 'projects',
+      collections: {} as never,
+      adapter: {} as never,
+    }).withPolicy({
+      read: { scope: true },
+      create: { scope: true, defaults: { startedAt: supplied } },
+      update: { scope: true },
+      delete: { scope: true },
+    });
+
+    const exposed = (
+      scoped.explainPolicy().create as { defaults: Record<string, unknown> }
+    ).defaults.startedAt as Date;
+    // Object.freeze does not reach a Date's internal time, so the only thing
+    // that keeps this immutable is handing out a copy.
+    exposed.setTime(0);
+
+    const again = (
+      scoped.explainPolicy().create as { defaults: Record<string, unknown> }
+    ).defaults.startedAt as Date;
+    expect(again.toISOString()).toBe(supplied.toISOString());
+  });
+
+  it('reports an unsatisfiable create scope from validateMutation', async () => {
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {
+        get: async () => ({
+          name: 'projects',
+          fields: [
+            { name: 'id', type: 'string' },
+            { name: 'title', type: 'string' },
+            { name: 'status', type: 'string' },
+          ],
+        }),
+      },
+      adapter: {},
+    } as never);
+
+    const result = await repository
+      .withPolicy({
+        read: { scope: true },
+        create: { scope: { status: 'draft' }, fields: ['title'] },
+        update: { scope: true },
+        delete: { scope: true },
+      })
+      .validateMutation({ operation: 'createOne', values: { title: 'x' } });
+
+    expect(result).toMatchObject({
+      valid: false,
+      errors: [expect.objectContaining({ code: 'INVALID_POLICY' })],
+    });
+  });
+
+  it('enforces create and update field allowlists', async () => {
+    const collection = {
+      name: 'projects',
+      fields: [
+        { name: 'id', type: 'string' },
+        { name: 'title', type: 'string' },
+        { name: 'secret', type: 'string' },
+      ],
+    };
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: { get: async () => collection },
+      adapter: {
+        createOne: async () => ({
+          record: { id: 'p1', title: 'Created' },
+          createdTargets: [],
+        }),
+        updateOne: async () => ({
+          record: { id: 'p1', title: 'Updated' },
+          createdTargets: [],
+        }),
+      } as never,
+    });
+    const scoped = repository.withPolicy({
+      read: { scope: true },
+      create: { scope: true, fields: ['title'] },
+      update: { scope: true, fields: ['title'] },
+      delete: { scope: true },
+    });
+
+    await expect(
+      scoped.createOne({ values: { secret: 'hidden' } }),
+    ).rejects.toMatchObject({
+      code: 'FIELD_WRITE_FORBIDDEN',
+      field: 'secret',
+    });
+    await expect(
+      scoped.updateOne({
+        filter: {
+          kind: 'filter',
+          version: 1,
+          root: { kind: 'group', logic: 'and', items: [] },
+        },
+        values: { secret: 'hidden' },
+      }),
+    ).rejects.toMatchObject({
+      code: 'FIELD_WRITE_FORBIDDEN',
+      field: 'secret',
+    });
+  });
+
+  it('applies create defaults without allowing callers to override protected defaults', async () => {
+    let values: Record<string, unknown> | undefined;
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {
+        get: async () => ({
+          name: 'projects',
+          fields: [
+            { name: 'id', type: 'string' },
+            { name: 'tenantId', type: 'string' },
+            { name: 'title', type: 'string' },
+          ],
+        }),
+      },
+      adapter: {
+        createOne: async (plan: { values: Record<string, unknown> }) => {
+          values = plan.values;
+          return {
+            record: { id: 'p1', tenantId: 'T1', title: 'Created' },
+            createdTargets: [],
+          };
+        },
+      } as never,
+    });
+    const scoped = repository.withPolicy({
+      read: { scope: true },
+      create: {
+        scope: true,
+        defaults: { tenantId: 'T1' },
+        fields: ['title'],
+      },
+      update: { scope: true },
+      delete: { scope: true },
+    });
+
+    await scoped.createOne({ values: { title: 'Created' } });
+    expect(values).toMatchObject({ tenantId: 'T1', title: 'Created' });
+    await expect(
+      scoped.createOne({ values: { title: 'Created', tenantId: 'T2' } }),
+    ).rejects.toMatchObject({
+      code: 'FIELD_WRITE_FORBIDDEN',
+      field: 'tenantId',
+    });
+  });
+
+  it('forbids create and update when their policy nodes are false', async () => {
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {
+        get: async () => ({
+          name: 'projects',
+          fields: [{ name: 'title', type: 'string' }],
+        }),
+      },
+      adapter: {} as never,
+    });
+    const scoped = repository.withPolicy({
+      read: { scope: true },
+      create: false,
+      update: false,
+      delete: { scope: true },
+    });
+
+    await expect(
+      scoped.createOne({ values: { title: 'Created' } }),
+    ).rejects.toMatchObject({
+      code: 'WRITE_FORBIDDEN',
+    });
+    await expect(
+      scoped.updateOne({
+        filter: {
+          kind: 'filter',
+          version: 1,
+          root: { kind: 'group', logic: 'and', items: [] },
+        },
+        values: { title: 'Updated' },
+      }),
+    ).rejects.toMatchObject({ code: 'WRITE_FORBIDDEN' });
+  });
+
+  it('enforces relation write actions and nested fields', async () => {
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {
+        get: async (name: string) =>
+          name === 'projects'
+            ? {
+                name,
+                fields: [
+                  { name: 'id', type: 'string' },
+                  {
+                    name: 'tasks',
+                    type: 'hasMany',
+                    target: 'tasks',
+                    foreignKey: 'projectId',
+                  },
+                ],
+              }
+            : {
+                name,
+                fields: [
+                  { name: 'id', type: 'string' },
+                  { name: 'title', type: 'string' },
+                  { name: 'secret', type: 'string' },
+                ],
+                constraints: [{ type: 'primary', fields: ['id'] }],
+              },
+      },
+      adapter: {
+        createOne: async () => ({
+          record: { id: 'p1' },
+          createdTargets: [],
+        }),
+        updateOne: async () => ({
+          record: { id: 'p1' },
+          createdTargets: [],
+        }),
+      } as never,
+    });
+    const scoped = repository.withPolicy({
+      read: { scope: true },
+      create: { scope: true, fields: [], relations: {} },
+      update: {
+        scope: true,
+        fields: [],
+        relations: {
+          tasks: {
+            create: { fields: ['title'], relations: {} },
+          },
+        },
+      },
+      delete: { scope: true },
+    });
+
+    await expect(
+      scoped.updateOne({
+        filter: {
+          kind: 'filter',
+          version: 1,
+          root: { kind: 'group', logic: 'and', items: [] },
+        },
+        values: {
+          tasks: {
+            create: [
+              {
+                kind: 'relationCreate',
+                version: 1,
+                values: { secret: 'hidden' },
+              },
+            ],
+          },
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: 'FIELD_WRITE_FORBIDDEN',
+      field: 'secret',
+    });
+    await expect(
+      scoped.createOne({
+        values: {
+          tasks: {
+            connect: { id: 't1' },
+          },
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: 'RELATION_WRITE_FORBIDDEN',
+      relation: 'tasks',
+    });
+  });
+});

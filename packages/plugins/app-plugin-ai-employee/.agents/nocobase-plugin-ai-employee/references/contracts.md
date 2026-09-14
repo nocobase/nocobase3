@@ -34,7 +34,7 @@ type AIEmployeeOptions = {
   position?: string; // role label
   bio?: string; // profile text
   greeting?: string; // empty-state greeting
-  systemPrompt?: string | null; // base behavior; prompt.md can replace it
+  systemPrompt?: string | null; // base behavior; prompt.md is not supported; use the TypeScript systemPrompt field
   skills?: string[]; // registered skill names
   tools?: { name: string; autoCall?: boolean }[];
   chatSettings?: {
@@ -125,7 +125,7 @@ Only use `repositories` and `services` members that the App runtime actually sup
 
 ## Skills
 
-`ai/skills/<name>/SKILLS.md` uses YAML frontmatter:
+`ai/skills/<name>/SKILL.md` uses YAML frontmatter:
 
 ```yaml
 scope: SPECIFIED | GENERAL | CUSTOM

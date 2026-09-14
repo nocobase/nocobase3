@@ -47,6 +47,13 @@ const routes = defineFileRepositoryApiRoutes({
       disk: 'local',
       accessPath: '/uploads/attachments',
       accessMode: 'stream',
+      policy: {
+        read: true,
+        // 空白名单而不是 false：上传走的就是 create，`false` 会连上传一起拒绝。
+        create: { scope: true },
+        update: false,
+        delete: true,
+      },
       actions: {
         findMany: { maxLimit: 100 },
         findOne: {},
@@ -54,8 +61,8 @@ const routes = defineFileRepositoryApiRoutes({
         exists: {},
         aggregate: {},
         groupBy: {},
-        createOne: { writePolicy: false },
-        updateOne: { writePolicy: false },
+        createOne: {},
+        updateOne: {},
         deleteOne: {},
         uploadOne: { maxSize: 5 * 1024 * 1024 },
         uploadMany: { maxSize: 20 * 1024 * 1024 },
@@ -67,7 +74,11 @@ const routes = defineFileRepositoryApiRoutes({
 export default routes;
 ```
 
-这是全部 action 的配置示例，实际使用只保留需要的操作。`createOne`、`updateOne` 默认拒绝写入，上例也明确保持关闭；若需修改元数据，按业务配置服务端 `writePolicy` 字段白名单。上传用 `uploadOne`、`uploadMany`，不依赖开放 `createOne`。普通 action 复用 `defineRepositoryApiRoutes()` 的协议和写策略。
+这是全部 action 的配置示例，实际使用只保留需要的操作。`actions` 只决定开哪些端点，能做什么由必填的 `policy` 决定，它同样管上传。
+
+上传不接受调用方的任何字段（`store()` 自己合成全部值），所以上传路径绑定的是从这份 Policy 派生出来的一份：继承 `create.scope` 和 `create.defaults`，字段白名单换成文件表自己的九列。由此有三条：`create: false` 会连上传一起拒绝；`create.defaults` 里的 `{ ownerId }` 会写进上传出来的记录；`create.scope` 同样对上传生效，越界的写入回滚并清理已上传对象。要允许上传但不允许调用方自己造文件记录，就写一个不含 `fields` 的 `create` 节点，像上例那样。
+
+`accessPath` 下的内容路由是有意的例外：它在 `/api` 之外、没有认证，Policy 不覆盖它。普通 action 复用 `defineRepositoryApiRoutes()` 的协议。
 
 将返回的路由贡献数组接入已有的 Server 声明。业务插件可这样组合，已有其他贡献时合并到原来的列表：
 
@@ -99,20 +110,20 @@ export default defineServerPlugin({
 
 以上完整声明生成以下路由。未声明的 action 不生成对应 POST 路由；内容 GET 路由独立存在，不要求开放 `findOne`。
 
-| 方法 | 路径                                | 行为                                        |
-| ---- | ----------------------------------- | ------------------------------------------- |
-| POST | `/api/attachments:findMany`         | 查询多条，支持现有 NDJSON 流式协议          |
-| POST | `/api/attachments:findOne`          | 查询单条                                    |
-| POST | `/api/attachments:count`            | 计数                                        |
-| POST | `/api/attachments:exists`           | 判断存在                                    |
-| POST | `/api/attachments:aggregate`        | 聚合                                        |
-| POST | `/api/attachments:groupBy`          | 分组聚合                                    |
-| POST | `/api/attachments:createOne`        | 创建元数据，不上传文件；受 writePolicy 限制 |
-| POST | `/api/attachments:updateOne`        | 修改元数据，不替换文件；受 writePolicy 限制 |
-| POST | `/api/attachments:deleteOne`        | 删除元数据，不删除物理文件                  |
-| POST | `/api/attachments:uploadOne`        | 上传单个文件并创建记录                      |
-| POST | `/api/attachments:uploadMany`       | 上传多个文件并批量创建记录                  |
-| GET  | `/uploads/attachments/<uuid>.<ext>` | 获取文件内容，无扩展名省略点号              |
+| 方法 | 路径                                | 行为                                               |
+| ---- | ----------------------------------- | -------------------------------------------------- |
+| POST | `/api/attachments:findMany`         | 查询多条，支持现有 NDJSON 流式协议                 |
+| POST | `/api/attachments:findOne`          | 查询单条                                           |
+| POST | `/api/attachments:count`            | 计数                                               |
+| POST | `/api/attachments:exists`           | 判断存在                                           |
+| POST | `/api/attachments:aggregate`        | 聚合                                               |
+| POST | `/api/attachments:groupBy`          | 分组聚合                                           |
+| POST | `/api/attachments:createOne`        | 创建元数据，不上传文件；受 Policy 的 `create` 限制 |
+| POST | `/api/attachments:updateOne`        | 修改元数据，不替换文件；受 Policy 的 `update` 限制 |
+| POST | `/api/attachments:deleteOne`        | 删除元数据，不删除物理文件                         |
+| POST | `/api/attachments:uploadOne`        | 上传单个文件并创建记录                             |
+| POST | `/api/attachments:uploadMany`       | 上传多个文件并批量创建记录                         |
+| GET  | `/uploads/attachments/<uuid>.<ext>` | 获取文件内容，无扩展名省略点号                     |
 
 没有额外的 REST 路由，也没有 `createMany`、`updateMany`、`deleteMany` HTTP action。`uploadMany` 在服务端内部调用 `createMany`。
 
@@ -273,7 +284,7 @@ export function AttachmentUpload() {
 
 ## 当前限制
 
-- 未接入路由认证、资源授权、行级权限和访问凭证。`writePolicy` 只限制写入内容，不代表用户授权。
+- 未接入路由认证和访问凭证。Policy 限制的是这个 principal 能读写什么，不代表请求已经通过认证；`accessPath` 下的内容路由完全公开。
 - stream 仅支持完整文件下载；未实现 Range/206、断点下载、ETag 和条件请求。
 - `deleteOne` 只删元数据；未实现物理文件删除策略、孤儿扫描、自动对账、断点上传和幂等重试。
 - MIME 使用上传声明与存储 metadata；未实现内容嗅探、恶意文件检测、业务类型白名单及旧 `app-plugin-file` 消费者迁移。

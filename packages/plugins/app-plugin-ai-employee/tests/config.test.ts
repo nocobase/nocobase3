@@ -40,6 +40,8 @@ async function loadAIConfig(value: unknown): Promise<AppConfig> {
       aiEmployee: { storage: {} },
       aiKnowledgeBase: { storage: {}, vectorDatabases: [], manifests: [] },
       llmServices: [],
+      skills: { paths: [] },
+      mcpServers: {},
     },
   });
   return config;
@@ -57,7 +59,9 @@ describe('AI application config', () => {
         vectorDatabases: [],
         manifests: [],
       },
+      skills: { paths: [] },
       llmServices: [],
+      mcpServers: {},
     });
   });
 

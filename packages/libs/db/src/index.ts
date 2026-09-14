@@ -266,6 +266,9 @@ export type {
   RepositorySelect,
   RepositorySort,
   RepositoryUniqueFieldSetDescription,
+  PolicyRecord,
+  RepositoryOperations,
+  ScopedRepository,
   RelationSelectBuilder,
   RelationConnectInput,
   RelationCreateInput,
@@ -310,6 +313,48 @@ export type {
   RepositoryErrorCode,
   RepositoryErrorOptions,
 } from './repository/errors.js';
+
+export { buildRepositoryPolicy } from './repository/policy/build.js';
+export type {
+  CreatePolicyNodeBuilder,
+  DeletePolicyNodeBuilder,
+  ReadPolicyNodeBuilder,
+  RelationCreateShapePolicyBuilder,
+  RelationPolicyNodeBuilder,
+  RelationShapePolicyBuilder,
+  RelationUpsertPolicyBuilder,
+  RepositoryPolicyBuilder,
+  ThroughFieldsPolicyBuilder,
+  ThroughPolicyBuilder,
+  WritePolicyNodeBuilder,
+} from './repository/policy/build.js';
+export { normalizeRepositoryPolicy } from './repository/policy/normalize.js';
+export { narrowRepositoryPolicy } from './repository/policy/narrow.js';
+export { expandPolicyRefs, ref } from './repository/policy/refs.js';
+export type { ScopedDatabaseConnection } from './database/connection.js';
+export type {
+  CreateNode,
+  DeleteNode,
+  NormalizedCreateNode,
+  NormalizedDeleteNode,
+  NormalizedReadNode,
+  NormalizedRelationShapeNode,
+  NormalizedRelationWriteNode,
+  NormalizedRepositoryPolicy,
+  NormalizedThroughNode,
+  NormalizedWriteNode,
+  PartialReadNode,
+  PartialRepositoryPolicy,
+  PolicyRef,
+  PolicyScalarValue,
+  PolicyScope,
+  ReadNode,
+  RelationCreateNode,
+  RelationShapeNode,
+  RelationWriteNode,
+  RepositoryPolicy,
+  WriteNode,
+} from './repository/policy/types.js';
 
 export {
   buildWritePolicy,

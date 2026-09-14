@@ -61,6 +61,12 @@ const fileRoutes: ReturnType<typeof defineFileRepositoryApiRoutes> =
         disk: 'local',
         accessPath: '/uploads/invoices',
         accessMode: 'stream',
+        policy: {
+          read: { scope: true, fields: ['id', 'filename', 'ext', 'size'] },
+          create: { scope: true },
+          update: false,
+          delete: { scope: true },
+        },
         actions: {
           findMany: { maxLimit: 100 },
           findOne: {},
@@ -76,11 +82,15 @@ export default fileRoutes;
 
 `name` is the Client resource; `collection` defaults to name, `connection` to the database default, and `accessPath` to `/uploads/<name>`. Disk is required. Content paths contain static alphanumeric, underscore or hyphen segments, start with `/`, and have no trailing slash.
 
-Only declared POST `/api/<name>:<action>` operations are exposed. Ordinary actions are `findMany/findOne/count/exists/aggregate/groupBy/createOne/updateOne/deleteOne`. Metadata createOne/updateOne require a server writePolicy; uploads do not require exposing createOne. There are no createMany/updateMany/deleteMany HTTP actions.
+Only declared POST `/api/<name>:<action>` operations are exposed. Ordinary actions are `findMany/findOne/count/exists/aggregate/groupBy/createOne/updateOne/deleteOne`. There are no createMany/updateMany/deleteMany HTTP actions.
+
+`policy` is required and governs every action of the exposure, uploads included. It is a Repository Policy: `read`, `create`, `update` and `delete`, each `true`, `false`, or a rule node. A node that is `false` refuses that operation; a node with no `fields` accepts no caller-supplied field, which is what a metadata `createOne` needs before it will accept anything. Pass a function of the principal — `policy: (principal) => ({ ... })` — together with a `principal(context)` resolver to scope rows to the caller; without a principal the request is refused with 403.
+
+An upload supplies no caller fields, so it binds a Policy derived from this one: the `create` scope and defaults are inherited and the field allowlist is replaced by the file columns. `create: false` therefore forbids uploading as well as creating metadata, and a `create.defaults` of `{ ownerId }` is stamped onto uploaded rows — which is what keeps an uploaded file inside the same scope `findMany` reads. The content route under `accessPath` is the exception: it is public and this Policy does not reach it.
 
 Content is GET `<accessPath>/<uuid>.<ext>` outside `/api`, omitting the dot when extensionless. Stream returns full bytes as an attachment; redirect returns a public storage URL or a five-minute signed URL. A disk without URL support requires stream mode; there is no automatic fallback.
 
-These are public routes. For restricted files, register App-owned authentication and authorization on the paths each contribution owns before mounting it — `/<name>:<action>` per exposed API action, `<accessPath>/*` for content. Never `router.use('*', ...)` in a contribution router: contributions share the mounted router, so it also guards the SPA and every contribution mounted after yours. Check the operation and record/parent-record access; a login page, private disk, Client filter or writePolicy is not authorization. If the generic routes cannot express the policy, write business routes using the public Server manager. Never trust browser-supplied ownership.
+These are public routes. For restricted files, register App-owned authentication and authorization on the paths each contribution owns before mounting it — `/<name>:<action>` per exposed API action, `<accessPath>/*` for content. Never `router.use('*', ...)` in a contribution router: contributions share the mounted router, so it also guards the SPA and every contribution mounted after yours. Check the operation and record/parent-record access; a login page, private disk, Client filter or Policy field allowlist is not authentication. If the generic routes cannot express the policy, write business routes using the public Server manager. Never trust browser-supplied ownership.
 
 ## Server and Client services
 
@@ -94,6 +104,9 @@ const files = manager.repository('invoice_files', {
   connection: 'main',
   disk: 'local',
   accessPath: '/uploads/invoices',
+  // Only the upload path binds this; the Repository itself is unrestricted,
+  // as a db.repository() call is.
+  policy: { read: true, create: true, update: false, delete: false },
 });
 const { record } = await files.uploadOne({ file });
 const url = files.getUrl(record);

@@ -1,20 +1,25 @@
 ---
 title: Write policy：字段与关系写入白名单
-description: 使用服务端 writePolicy 限制调用方可写字段、关系操作、嵌套记录和 through payload，区分内部 Repository 与 HTTP API 的默认行为。
+description: 使用服务端 writePolicy 限制调用方可写字段、关系操作、嵌套记录和 through payload；HTTP 路由已改由 Policy 承担这件事。
 ---
 
 # Write policy：字段与关系写入白名单
+
+> **`defineRepositoryApiRoutes()` 不再接受 `writePolicy`。** HTTP 路由上的字段与关系白名单已由每个 exposure 必填的 Policy 承担，见 [Policy 快速开始](./policy-quick-start.md)。本页描述的是**方法级**选项，它仍然有效，用于内部调用的单次额外收窄。
+>
+> 只需要限制**字段和关系形状**、且是在内部调用里临时收窄时用本页。还需要限制**能碰哪些行**（多租户隔离、数据归属、可见范围）时用 Policy——它把两个问题一起回答，并且绑在实例上而不是逐次调用传入。两者可以并存：绑定 Policy 之后，方法级 `writePolicy` 仍作为本次调用的额外收窄生效。
 
 `writePolicy` 是**服务端配置**，限制一次 mutation 中调用方提交的字段和关系操作。支持对象和同步 callback builder；前端 Repository、前端 options builder 和 HTTP 请求都不接受这个参数。前端提交 `values`，后端决定这些值能否写入。
 
 ## 默认值与适用范围
 
-| 使用位置                                        | 缺失时  | 允许的显式配置                                                |
-| ----------------------------------------------- | ------- | ------------------------------------------------------------- |
-| 内部 `createOne / updateOne / validateMutation` | `true`  | `true`、`false`、策略对象、callback                           |
-| 内部 `upsertOne`                                | `true`  | `true`、`false`、独立的 `create / update` 策略、分支 callback |
-| 内部 `createMany / updateMany`                  | `true`  | `true`、`false`、仅含 `fields` 的策略、字段 callback          |
-| API routes 的 `createOne / updateOne`           | `false` | `false`、策略对象、callback；不允许 `true`                    |
+| 使用位置                                        | 缺失时 | 允许的显式配置                                                |
+| ----------------------------------------------- | ------ | ------------------------------------------------------------- |
+| 内部 `createOne / updateOne / validateMutation` | `true` | `true`、`false`、策略对象、callback                           |
+| 内部 `upsertOne`                                | `true` | `true`、`false`、独立的 `create / update` 策略、分支 callback |
+| 内部 `createMany / updateMany`                  | `true` | `true`、`false`、仅含 `fields` 的策略、字段 callback          |
+
+API routes 不再有这一行：`defineRepositoryApiRoutes()` 的 action 配置里没有 `writePolicy`，写入由 exposure 的 Policy 授权。
 
 `true` 表示不增加字段和关系白名单限制，原有 Schema、只读字段、关系归属、乐观锁和数据库约束仍然生效。
 
@@ -22,7 +27,7 @@ description: 使用服务端 writePolicy 限制调用方可写字段、关系操
 
 `{}` 表示空白名单：`fields` 和 `relations` 均为 `false`。调用方不能提供字段或关系写入，但空 values 可以触发数据库默认值或自动生成字段；它与禁止整个操作的 `false` 不同。
 
-读取及根级 `deleteOne / deleteMany` 不使用 `writePolicy`。API 中声明 `deleteOne: {}` 仍然启用删除接口；关系中的 `delete` 需要单独授权。
+读取及根级 `deleteOne / deleteMany` 不使用 `writePolicy`。关系中的 `delete` 需要单独授权。API 上的删除由 Policy 的 `delete` 节点决定，声明 `deleteOne: {}` 只是开放端点。
 
 ## 字段和关系规则
 

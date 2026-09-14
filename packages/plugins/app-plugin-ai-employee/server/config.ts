@@ -1,6 +1,7 @@
 import type {
   EnabledModelsConfig,
   LLMServiceOptions,
+  MCPOptions,
 } from '@nocobase/ai-employee';
 
 export interface AIStorageConfig {
@@ -40,6 +41,9 @@ export interface AIEmployeeEnabledModelConfig {
   readonly value: string;
 }
 
+export interface AISkillsConfig {
+  readonly paths?: readonly string[];
+}
 export type AIEmployeeLLMServiceConfig = Omit<
   LLMServiceOptions,
   'enabledModels'
@@ -52,6 +56,8 @@ export interface AIApplicationConfig {
   readonly aiEmployee?: {
     readonly storage?: AIStorageConfig;
   };
+  readonly skills?: AISkillsConfig;
+  readonly mcpServers?: Readonly<Record<string, MCPOptions>>;
   readonly aiKnowledgeBase?: AIKnowledgeBaseConfig;
   readonly llmServices: AIEmployeeLLMServiceConfig[];
   readonly [key: string]: unknown;

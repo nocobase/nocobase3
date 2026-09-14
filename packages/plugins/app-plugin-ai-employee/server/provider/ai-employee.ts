@@ -5,8 +5,8 @@ import {
   type AIManager,
 } from '@nocobase/ai-employee';
 import {
-  type AppDriveConfig,
   driveManagerToken,
+  type AppDriveConfig,
 } from '@nocobase/app-server/drive';
 import { loggingToken } from '@nocobase/app-server/logging';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
@@ -16,10 +16,14 @@ import {
   type ServiceToken,
 } from '@nocobase/service-provider';
 
+import path from 'node:path';
+
+import type { AIApplicationConfig } from '../config.js';
+import { resolveAIEmployeeStorageDisk } from '../config.js';
 import {
-  type AIApplicationConfig,
-  resolveAIEmployeeStorageDisk,
-} from '../config.js';
+  AIEmployeeResources,
+  normalizeAISkillDirectories,
+} from '../ai/index.js';
 import {
   ManagerFactory,
   managerFactoryToken,
@@ -89,9 +93,22 @@ export class AIEmployeeProvider extends ServiceProvider<AppPluginApplication> {
     this.app.container.resolve(managerFactoryToken).configure({
       aiStorageDisk,
     });
+    const configuredSkillDirectories = normalizeAISkillDirectories(
+      config.skills?.paths ?? [],
+      this.app.paths.root(),
+    );
     services.configure({
-      paths: this.app.paths,
       llmServices: config.llmServices,
+      mcpServers: config.mcpServers,
+      resourceRegistrar: new AIEmployeeResources({
+        logger: this.app.container
+          .resolve(loggingToken)
+          .getLogger('ai-employee'),
+        skillsDirectories: [
+          path.resolve(this.app.paths.root(), 'ai/skills'),
+          ...configuredSkillDirectories,
+        ],
+      }),
     });
     await services.initialize();
     this.unsubscribeConfig = this.app.config.subscribe<AIApplicationConfig>(
@@ -100,6 +117,9 @@ export class AIEmployeeProvider extends ServiceProvider<AppPluginApplication> {
         await services.ready();
         await services.llmServiceConfigSynchronizer.enqueue(
           current.llmServices,
+        );
+        await services.mcpServerService.syncConfiguredMCPServers(
+          current.mcpServers,
         );
       },
     );
