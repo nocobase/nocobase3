@@ -84,7 +84,7 @@ withPolicy(input, principal?)
 
 ## 二、读路径
 
-### filter 合并与 origin 标记
+### filter 合并与来源区分
 
 所有读方法（`findMany` / `findOne` / `count` / `exists` / `aggregate` / `groupBy`）走同一段合并：
 
@@ -92,8 +92,8 @@ withPolicy(input, principal?)
 merged = {
   kind: 'group', logic: 'and',
   items: [
-    ...(调用方 filter ? [调用方 filter.root] : []),   // 节点 origin: 'caller'
-    ...(read.scope   ? [read.scope.root]   : []),     // 节点 origin: 'policy'
+    ...(调用方 filter ? [调用方 filter.root] : []),
+    ...(read.scope   ? [read.scope.root]   : []),
   ],
 }
 ```
@@ -109,7 +109,9 @@ merged = {
 // ✗ 打平：A OR B OR tenantId = 'T1'   ← 整张表
 ```
 
-`origin` 在合并时写入，不是事后推断。查询条件字段校验只遍历 `origin === 'caller'` 的节点，否则 scope 的 `tenantId` 会被 `read.fields` 拒绝——校验发生在合并之后，因为嵌套关系的局部 filter 和 `combine` 分支要到那时才展开完。
+**来源区分靠结构，不靠节点上的 `origin` 标记。** 原设计给 `FilterNode` 加 `origin: 'caller' | 'policy'`，实现改为：调用方 filter 与 policy scope 自始至终是两个独立的值，`scopeCallerFilterGroup` 只遍历前者（同时按目标集合递归、并给关系分支注入该关系的 scope），合并发生在校验之后且不再回头校验。否则 scope 的 `tenantId` 会被 `read.fields` 自己拒绝。见[实施清单](./policies-roadmap.md) 1.5 与决策 0.5。
+
+这条区分有过一次真实的失效，值得记住：关系 `combine` 分支曾把**已经合并过 scope 的** filter 当作各分支共同继承的调用方 filter 传下去，递归校验于是把 policy 条件当调用方条件判，`tenantId` 被 `FIELD_READ_FORBIDDEN` 拒绝。修法是让分支继承调用方自己的 filter——scope 由每一层递归各自重新注入，不必也不该随着继承。
 
 ### findMany 的 SQL
 
@@ -203,29 +205,17 @@ inTransaction:
 - **第 1 步的 `filter` 就是 scope 的落点。** 合并后的条件进 `lockByFilter`，`'missing'` 直接变成 `RECORD_NOT_FOUND`——不变量 3 不需要任何额外代码。
 - **第 1 步已经把整行读进内存并加了 `for update` 锁。** 前像在手，且在事务结束前不会被别人改。
 
-### 不变量 2 的零查询实现
+### 不变量 2 的判定
 
-因为前像在手、`values` 已知、而 scope 只引用本表标量字段，后像可以在内存里算出来：
+**判定在数据库里做，不在内存里。** 原设计是内存求值器 `evaluateScope`（前像 + `values` 算后像），改为事务内、行已锁定时发一条按主键的 `SELECT … WHERE <主键> AND <scope>`，命不中则抛 `SCOPE_VIOLATION` 回滚。理由见[实施清单](./policies-roadmap.md) 1.4：内存求值必须复刻数据库自己的比较语义，而列的排序规则复刻不了——同一个字符串等值比较，MySQL 默认排序规则匹配、PostgreSQL 不匹配，求值器看不见该用哪一套。
 
-```ts
-const after = { ...current, ...plan.values };
-if (!evaluateScope(policy.update.scope, after)) {
-  throw new RepositoryError('SCOPE_VIOLATION', ..., { path: ['values', field] });
-}
-```
+这同时消掉了原本要单列处理的两个例外(原子操作、写触发器)：两者都是"新值由数据库算出"，而判定本来就在数据库里,所以不再需要 `hasWriteTriggers` 这类声明。
 
-**不需要任何额外查询**，检查插在第 2 步和第 3 步之间——甚至在 UPDATE 发出之前就失败，连回滚都省了。这是 scope 限定为标量条件的第二笔回报（第一笔是不用 join）。
+**「零额外查询」基本保住了**，靠的是另一条观察：**写入没有触及 scope 引用的任何字段时，记录不可能离开 scope，判定整个跳过**。`update.scope` 是 `{ tenantId }` 而调用方只改 `title`，走的仍是原来的路径，一条语句都不多。只有触及 scope 字段的写才付一次主键索引查找。同一条观察决定了 `updateMany` 的降级时机：单条 UPDATE 事后无法得知碰了哪些行，所以只有触及 scope 字段的批量写才降级到 `lockManyByFilter`。
 
-`or` 分组这类需要看其它字段才能判定的 scope 也没问题，因为前像是**整行**：`lockByFilter` 选的是 `scalarFields(collection)` 全部，不是 `plan.fields`。
+`create` 例外——新记录没有前像可比，`create.scope` 不为 `true` 时一律判定。
 
-两个例外必须回读后再判：
-
-| 情况                                                            | 为什么                       | 处理                                                       |
-| --------------------------------------------------------------- | ---------------------------- | ---------------------------------------------------------- |
-| `values` 对 scope 字段做原子操作（`increment` / `multiply` 等） | 新值由数据库算出，内存算不出 | 第 4 步 `refreshAtomicValues` 已经回读了这些列，合并后再判 |
-| 数据库触发器改写了 scope 字段                                   | 应用层不可见                 | 无法静态处理；把判定挪到第 7 步的后像上，代价是多读一次    |
-
-触发器那条是真实的能力边界，写在文档里而不是假装不存在。默认走内存判定；Collection 上若声明了 `hasWriteTriggers`，退化到后像判定。
+**到根记录的路径不止 `values`。** 一个 to-one 关系把外键写在根表上，所以 `owner.connect` 会改 `ownerId` 而不在 `values` 里出现；判定条件因此还要问"本次写入的关系里，有没有 to-one 的外键落在 scope 读的字段上"。漏掉这一条，关系操作就能把记录带出自己的租户。
 
 ### createOne
 
@@ -235,10 +225,10 @@ inTransaction:
   2. 赋值：values = { ...defaults, ...caller values }
        defaults 来自编译期规范化的 create.defaults
   3. createRecord → { record: 后像, unique }
-  4. evaluateScope(create.scope, record) → 不满足则抛 SCOPE_VIOLATION，事务回滚
+  4. 按主键 + create.scope 回查 → 命不中则抛 SCOPE_VIOLATION，事务回滚
 ```
 
-第 3 步之后判而不是之前判，是因为数据库默认值和自增列要到插入后才有值——scope 可能引用它们。`createRecord` 返回的就是完整后像，同样不需要额外查询。
+第 3 步之后判而不是之前判，是因为数据库默认值和自增列要到插入后才有值——scope 可能引用它们。判定是一条按主键的查询，与选中该行的 WHERE 子句用的是同一套比较语义。
 
 第 2 步用 `{ ...defaults, ...caller }` 而不是反过来：调用方的值覆盖默认值，再由第 4 步把越界的挡掉。这样错误信息指向调用方实际提交的东西，比「默认值被静默保留」好排查。
 
@@ -254,9 +244,9 @@ inTransaction:
        inSavepoint: 走 create 分支（注入 + 插入 + create.scope 判定）
        插入撞唯一约束 → 回退 savepoint，重新锁定，转 update 分支
   3. 命中 →
-       evaluateScope(update.scope, 前像)
-         不满足 → RECORD_OUTSIDE_SCOPE（409）
-         满足   → 走 update 分支，含写入后重判
+       按唯一键 + update.scope 回查前像
+         命不中 → RECORD_OUTSIDE_SCOPE（409）
+         命中   → 走 update 分支，含写入后重判
 ```
 
 第 3 步是全套设计里唯一一处"存在但越权"给出可区分响应的地方。它与关系 upsert 已有的 `RELATION_UPSERT_TARGET_OUTSIDE_SCOPE` 同构，实现可以共用同一个判定函数。
