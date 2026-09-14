@@ -233,6 +233,12 @@ export class CollectionCompiler {
   ): TableSchemaDefinition {
     const tableName = this.effectiveTableName(name, definition);
     const normalized = this.normalizeCollectionDefinition(definition);
+    const indexes = deduplicatePhysicalIndexes(
+      tableName,
+      normalized.indexes.map((index) =>
+        this.compileIndex(tableName, index, normalized.fields, definition),
+      ),
+    );
 
     return {
       name: tableName,
@@ -240,11 +246,7 @@ export class CollectionCompiler {
       columns: normalized.fields.flatMap((field) =>
         this.compileFieldColumns(field, definition),
       ),
-      indexes: [
-        ...normalized.indexes.map((index) =>
-          this.compileIndex(tableName, index, normalized.fields, definition),
-        ),
-      ],
+      indexes,
       constraints: normalized.constraints.map((constraint) =>
         this.compileConstraint(
           tableName,
@@ -273,10 +275,12 @@ export class CollectionCompiler {
         ? this.compileViewQuery(definition.view.as, context)
         : undefined,
       raw: definition.view?.asRaw,
-      indexes:
+      indexes: deduplicatePhysicalIndexes(
+        tableName,
         definition.indexes?.map((index) =>
           this.compileIndex(tableName, index, fields, definition),
         ) ?? [],
+      ),
     };
   }
 
@@ -527,7 +531,11 @@ export class CollectionCompiler {
       });
     }
 
-    return { type: 'alterTable', tableName, operations };
+    return {
+      type: 'alterTable',
+      tableName,
+      operations: deduplicateAlterIndexOperations(tableName, operations),
+    };
   }
 
   private normalizeCollectionDefinition(
@@ -574,9 +582,21 @@ export class CollectionCompiler {
       }
       const relation = relationField(field);
       if (relation?.type === 'belongsTo') {
+        const relationColumn = relation.foreignKey
+          ? this.columnName(relation, {
+              ...definition,
+              fields,
+            })
+          : undefined;
         if (
           relation.index !== false &&
-          !indexes.some((index) => index.fields?.includes(relation.name))
+          relationColumn &&
+          !indexes.some((index) => {
+            const columns = index.fields?.map((fieldName) =>
+              this.resolveColumn(fieldName, fields, definition),
+            );
+            return columns?.length === 1 && columns[0] === relationColumn;
+          })
         ) {
           indexes.push({ fields: [relation.name] });
         }
@@ -950,6 +970,82 @@ function pruneUndefined<T extends Record<string, unknown>>(value: T): T {
     }
   }
   return value;
+}
+
+function deduplicatePhysicalIndexes(
+  tableName: string,
+  indexes: readonly PhysicalIndexDefinition[],
+): PhysicalIndexDefinition[] {
+  const seen = new Map<string, PhysicalIndexDefinition>();
+  const result: PhysicalIndexDefinition[] = [];
+  for (const index of indexes) {
+    if (!index.name) {
+      result.push(index);
+      continue;
+    }
+    const previous = seen.get(index.name);
+    if (!previous) {
+      seen.set(index.name, index);
+      result.push(index);
+      continue;
+    }
+
+    if (samePhysicalIndex(previous, index)) {
+      continue;
+    }
+
+    throw new Error(
+      `Collection "${tableName}" defines conflicting physical indexes with the same name "${index.name}".`,
+    );
+  }
+  return result;
+}
+
+function deduplicateAlterIndexOperations(
+  tableName: string,
+  operations: readonly TableAlterSchemaOperation[],
+): TableAlterSchemaOperation[] {
+  const seen = new Map<string, PhysicalIndexDefinition>();
+  return operations.filter((operation) => {
+    if (operation.type !== 'addIndex' || !operation.index.name) return true;
+
+    const previous = seen.get(operation.index.name);
+    if (!previous) {
+      seen.set(operation.index.name, operation.index);
+      return true;
+    }
+
+    if (samePhysicalIndex(previous, operation.index)) return false;
+
+    throw new Error(
+      `Collection "${tableName}" defines conflicting physical indexes with the same name "${operation.index.name}".`,
+    );
+  });
+}
+
+function samePhysicalIndex(
+  left: PhysicalIndexDefinition,
+  right: PhysicalIndexDefinition,
+): boolean {
+  return (
+    sameStringArray(left.columns, right.columns) &&
+    sameStringArray(left.expressions, right.expressions) &&
+    left.type === right.type &&
+    JSON.stringify(left.predicate) === JSON.stringify(right.predicate) &&
+    JSON.stringify(left.order) === JSON.stringify(right.order) &&
+    JSON.stringify(left.db) === JSON.stringify(right.db)
+  );
+}
+
+function sameStringArray(
+  left: readonly unknown[] | undefined,
+  right: readonly unknown[] | undefined,
+): boolean {
+  if (left === undefined || right === undefined) return left === right;
+  return (
+    left.length === right.length &&
+    left.every((value, index) => value === right[index])
+  );
 }
 
 function assertNever(value: never): never {

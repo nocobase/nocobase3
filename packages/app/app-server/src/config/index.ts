@@ -1,4 +1,4 @@
-export { AppConfig } from './app-config.js';
+export { AppConfig, resolveDefaultAppConfigFile } from './app-config.js';
 export {
   envBoolean,
   envInteger,

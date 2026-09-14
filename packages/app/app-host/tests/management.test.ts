@@ -159,6 +159,43 @@ describe('managed host reconciliation', () => {
     expect(await readFile(nextPath, 'utf8')).toBe('feature: published\n');
     expect(host.registry.isActive('customer')).toBe(false);
   });
+
+  it('publishes configuration before starting a registered stopped deployment', async () => {
+    const fixture = await createFixture();
+    const host = createAppHost({
+      mode: 'managed',
+      appDeploymentsDir: fixture.deploymentsDir,
+      appVolumesDir: fixture.volumesDir,
+      artifact: fsArtifact(fixture.artifactDir),
+      evictionIntervalMs: 0,
+    });
+    hosts.push(host);
+    const deployment = deploymentSet(1, fixture.artifact, {
+      activation: 'lazy',
+      config: {
+        provider: 'file',
+        revision: 'start',
+        content: 'auth:\n  secret: test-auth-secret-at-least-32-characters\n',
+      },
+    }).deployments[0]!;
+
+    await host.management.applyDeployment(deployment);
+    const originalConfigPath =
+      host.registry.definition('customer')!.configPath!;
+    await rm(originalConfigPath);
+    expect(host.registry.isActive('customer')).toBe(false);
+
+    const started = await host.management.startDeployment(deployment);
+    expect(started.deployments[0]).toMatchObject({
+      appId: 'customer',
+      observedState: 'running',
+    });
+    const startedConfigPath = host.registry.definition('customer')!.configPath!;
+    expect(await readFile(startedConfigPath, 'utf8')).toBe(
+      deployment.config!.content,
+    );
+  });
+
   it('restores local revisions without reading artifacts and fails when the revision is missing', async () => {
     const fixture = await createFixture();
     const options = {
