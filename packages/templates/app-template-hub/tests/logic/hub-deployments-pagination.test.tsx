@@ -34,17 +34,14 @@ describe('Hub deployment pagination', () => {
         loading={false}
       />,
     );
-    const getPaginationLink = (index: number): HTMLElement =>
-      screen
-        .getAllByRole('button')
-        .filter(
-          (element) => element.getAttribute('data-slot') === 'pagination-link',
-        )[index]!;
-    const previousPage = getPaginationLink(0);
-    expect(previousPage).toHaveAttribute('aria-disabled', 'true');
-    fireEvent.click(previousPage);
+    const previousPage = (): HTMLElement =>
+      screen.getByLabelText('Previous deployment page');
+    const nextPage = (): HTMLElement =>
+      screen.getByLabelText('Next deployment page');
+    expect(previousPage()).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(previousPage());
     expect(onPage).not.toHaveBeenCalled();
-    fireEvent.click(getPaginationLink(1));
+    fireEvent.click(nextPage());
     expect(onPage).toHaveBeenCalledWith(2);
     rerender(
       <Deployments
@@ -54,9 +51,8 @@ describe('Hub deployment pagination', () => {
       />,
     );
     expect(screen.getByText('vfixture')).toBeInTheDocument();
-    const loadingNextPage = getPaginationLink(1);
-    expect(loadingNextPage).toHaveAttribute('aria-disabled', 'true');
-    fireEvent.click(loadingNextPage);
+    expect(nextPage()).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(nextPage());
     expect(onPage).toHaveBeenCalledTimes(1);
     rerender(
       <Deployments
@@ -68,9 +64,8 @@ describe('Hub deployment pagination', () => {
     expect(
       screen.getByText('21 deployments · Page 2 of 2'),
     ).toBeInTheDocument();
-    const finalNextPage = getPaginationLink(1);
-    expect(finalNextPage).toHaveAttribute('aria-disabled', 'true');
-    fireEvent.click(getPaginationLink(0));
+    expect(nextPage()).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(previousPage());
     expect(onPage).toHaveBeenLastCalledWith(1);
   });
 });

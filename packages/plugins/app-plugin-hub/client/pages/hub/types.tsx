@@ -61,7 +61,9 @@ export interface AppDetail {
   readonly deployments: readonly DeploymentRecord[];
   readonly runtime: {
     readonly hostAvailable: boolean;
-    readonly state: string;
+    // Mirrors HubObservedState on the server. A wider type here let the status mapping compare against deployment
+    // statuses the runtime never reports.
+    readonly state: 'pending' | 'running' | 'stopped' | 'failed' | 'unknown';
   };
   readonly deployment: {
     readonly desiredReleaseId: string | null;

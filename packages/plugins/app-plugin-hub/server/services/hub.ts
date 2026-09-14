@@ -279,26 +279,22 @@ export class DefaultHubService implements HubService {
     if (!physical) {
       throw new Error('Hub App schema is unavailable');
     }
-    const idColumn =
-      physical.columns.find((column) => column.columnName === 'id')
-        ?.columnName ?? 'id';
-    const nameColumn =
-      physical.columns.find((column) => column.columnName === 'name')
-        ?.columnName ?? 'name';
     const knex = await connection.client<Knex>();
     // A raw query bypasses the Repository, which is what normally scopes a table to the Collection's schema; without
     // this the search fails on PostgreSQL whenever the application runs in a schema other than the connection default.
+    // The searched columns are literals rather than anything derived from the request, and knex binds them as
+    // identifiers, so the only untrusted value here is the bound search term.
     const rows = await knex(physical.tableName)
       .withSchema(physical.schema)
-      .select(idColumn)
+      .select('id')
       .whereRaw('lower(??) like lower(?) or lower(??) like lower(?)', [
-        idColumn,
+        'id',
         `%${search}%`,
-        nameColumn,
+        'name',
         `%${search}%`,
       ]);
     return (rows as Array<Record<string, unknown>>).map((row) =>
-      String(row[idColumn]),
+      String(row['id']),
     );
   }
 

@@ -37,12 +37,7 @@ export function appManagementStatus(
   app: AppSummary | AppOverview | AppDetail,
 ): AppManagementStatus {
   if (!app.runtime.hostAvailable) return 'host-unavailable';
-  if (
-    app.hasPendingDeployment ||
-    app.runtime.state === 'pending' ||
-    app.runtime.state === 'queued' ||
-    app.runtime.state === 'deploying'
-  ) {
+  if (app.hasPendingDeployment || app.runtime.state === 'pending') {
     return 'deployment-pending';
   }
   if (!app.app.currentDeploymentId) return 'not-deployed';
