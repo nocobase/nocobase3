@@ -205,6 +205,21 @@ export interface DatabaseSchemaRuntimeStrategy {
      */
     altering: boolean;
   }) => string | undefined;
+  /**
+   * Whether a JSON default has to reach Knex as encoded text rather than as
+   * the value.
+   *
+   * Knex serializes a JSON default only for a column it built as `json()`.
+   * MySQL depends on receiving the value, because an object or an array is
+   * what makes it compile the expression form `default ('{"a":1}')` that the
+   * engine requires. A dialect that builds the column as something else —
+   * because JSON has no distinct type, or because the constraint attached to
+   * that type cannot be repeated on an ALTER — loses that handling and gets
+   * `[object Object]` unless it asks for the text instead.
+   *
+   * Defaults to passing the value through.
+   */
+  readonly encodeJsonDefault?: (context: { altering: boolean }) => boolean;
   readonly configureForeignKey?: (context: {
     foreign: any;
     constraint: PhysicalConstraintDefinition & { type: 'foreignKey' };

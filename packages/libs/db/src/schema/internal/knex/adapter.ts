@@ -1,5 +1,6 @@
 import type { Knex } from 'knex';
 
+import { encodeJsonValue, type JsonValue } from '../../../json.js';
 import type { DatabaseCapabilities, SchemaAdapter } from '../../adapter.js';
 import type { DatabaseDriverRuntime } from '../../../database/runtime.js';
 import type {
@@ -332,17 +333,20 @@ export class KnexSchemaAdapter implements SchemaAdapter {
       builder.nullable();
     }
     if (column.defaultValue !== undefined) {
-      // A JSON default is handed to Knex as a value, never as encoded text.
-      // MySQL rejects every literal default on a json column, and Knex works
-      // around that by compiling an object or an array to the expression form
-      // `default ('{"a":1}')` — a branch that only fires for a non-string.
-      // Encoding here would turn that back into a literal and break every
-      // defaulted json column on MySQL.
-      //
-      // A scalar default is therefore written as given and is not valid JSON
-      // text. Nothing declares one, and a column that holds one is now
-      // reported on read rather than silently decoded.
-      builder.defaultTo(column.defaultValue as any);
+      // A JSON default normally reaches Knex as the value, because Knex
+      // serializes it for a column it built as `json()` and MySQL needs the
+      // value to compile the expression form `default ('{"a":1}')` its engine
+      // requires. A dialect that builds the column as something else loses
+      // that handling and would emit `[object Object]`, so it asks for the
+      // encoded text instead.
+      const encodeDefault =
+        column.type === 'json' &&
+        this.runtime?.schema?.encodeJsonDefault?.({ altering }) === true;
+      builder.defaultTo(
+        encodeDefault
+          ? (encodeJsonValue(column.defaultValue as JsonValue) as any)
+          : (column.defaultValue as any),
+      );
     }
     if (
       column.primaryKey &&

@@ -211,6 +211,10 @@ export const damengDriver: DatabaseDriverDefinition<'dameng'> = {
         }
         return operation;
       },
+      // A json column is a plain clob here, so Knex never applies the JSON
+      // default handling it gives a column it built as `json()` and an object
+      // would reach the column as its JavaScript string form.
+      encodeJsonDefault: () => true,
       columnType: ({ column }) => {
         if (column.autoIncrement || column.type === 'increments')
           return undefined;

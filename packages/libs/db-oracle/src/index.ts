@@ -109,6 +109,9 @@ export const oracleDriver: DatabaseDriverDefinition<'oracle'> = {
         }
         return { ...operation, operations };
       },
+      // The column is built as varchar2 while altering, which loses the JSON
+      // default handling Knex applies to a column it built as `json()`.
+      encodeJsonDefault: ({ altering }) => altering,
       columnType: ({ column, altering }) => {
         // Knex compiles a json column to `varchar2(4000) check (col is json)`.
         // Repeating that on a MODIFY asks Oracle for a second IS JSON check
