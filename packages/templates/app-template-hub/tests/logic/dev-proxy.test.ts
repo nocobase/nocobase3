@@ -21,6 +21,8 @@ interface ReceivedRequest {
   body: string;
   host: string | undefined;
   method: string;
+  origin: string | undefined;
+  referer: string | undefined;
   url: string;
 }
 
@@ -141,6 +143,68 @@ describe('remote development proxy', () => {
     expect(response.headers.get('set-cookie')).toContain('Path=/');
   });
 
+  it('maps same-origin browser headers to the remote application', async () => {
+    const backend = await startBackend();
+    const devUrl = await startVite(
+      createDevProxy('/main', `${backend.url}/remote`),
+    );
+
+    const response = await fetch(`${devUrl}/main/api/session`, {
+      headers: {
+        origin: devUrl,
+        referer: `${devUrl}/main/settings/users?tab=roles`,
+      },
+    });
+    const request = (await response.json()) as ReceivedRequest;
+
+    expect(response.status).toBe(200);
+    expect(request.origin).toBe(backend.url);
+    expect(request.referer).toBe(
+      `${backend.url}/remote/settings/users?tab=roles`,
+    );
+  });
+
+  it('preserves untrusted origins and does not invent a missing origin', async () => {
+    const backend = await startBackend();
+    const devUrl = await startVite(
+      createDevProxy('/main', `${backend.url}/remote`),
+    );
+    const origins = [
+      'https://foreign.example.com',
+      'null',
+      'not a valid origin',
+      devUrl.replace(/^http:/, 'https:'),
+    ];
+    const localReferer = `${devUrl}/main/settings/users?tab=roles`;
+
+    for (const origin of origins) {
+      const response = await fetch(`${devUrl}/main/api/session`, {
+        headers: { origin, referer: localReferer },
+      });
+      const request = (await response.json()) as ReceivedRequest;
+
+      expect(response.status).toBe(403);
+      expect(request.origin).toBe(origin);
+      expect(request.referer).toBe(localReferer);
+    }
+
+    const refererResponse = await fetch(`${devUrl}/main/api/session`, {
+      headers: { referer: localReferer },
+    });
+    const refererRequest = (await refererResponse.json()) as ReceivedRequest;
+    expect(refererResponse.status).toBe(200);
+    expect(refererRequest.origin).toBeUndefined();
+    expect(refererRequest.referer).toBe(
+      `${backend.url}/remote/settings/users?tab=roles`,
+    );
+
+    const plainResponse = await fetch(`${devUrl}/main/api/session`);
+    const plainRequest = (await plainResponse.json()) as ReceivedRequest;
+    expect(plainResponse.status).toBe(200);
+    expect(plainRequest.origin).toBeUndefined();
+    expect(plainRequest.referer).toBeUndefined();
+  });
+
   it('forwards WebSocket upgrades to the remote app base', async () => {
     const backend = await startBackend();
     const devUrl = await startVite(
@@ -149,14 +213,33 @@ describe('remote development proxy', () => {
 
     const response = await requestUpgrade(
       `${devUrl}/main/ws?channel=notifications`,
+      { Origin: devUrl },
     );
 
     expect(response).toMatch(/^HTTP\/1\.1 101 /);
     expect(backend.upgrades).toEqual([
       expect.objectContaining({
         host: new URL(backend.url).host,
+        origin: backend.url,
         url: '/remote/ws?channel=notifications',
       }),
+    ]);
+  });
+
+  it('preserves a foreign WebSocket origin for backend rejection', async () => {
+    const backend = await startBackend();
+    const devUrl = await startVite(
+      createDevProxy('/main', `${backend.url}/remote`),
+    );
+    const foreignOrigin = 'https://foreign.example.com';
+
+    const response = await requestUpgrade(`${devUrl}/main/ws`, {
+      Origin: foreignOrigin,
+    });
+
+    expect(response).toMatch(/^HTTP\/1\.1 403 /);
+    expect(backend.upgrades).toEqual([
+      expect.objectContaining({ origin: foreignOrigin, url: '/remote/ws' }),
     ]);
   });
 });
@@ -215,6 +298,7 @@ async function startBackend(): Promise<TestBackend> {
   const server = http.createServer(async (request, response) => {
     const received = await readRequest(request);
     httpRequests.push(received);
+    response.statusCode = acceptsRemoteOrigin(request) ? 200 : 403;
     response.setHeader(
       'set-cookie',
       'nocobase-session=test; Domain=remote.example.com; Path=/remote/',
@@ -237,8 +321,17 @@ async function startBackend(): Promise<TestBackend> {
       body: '',
       host: request.headers.host,
       method: request.method ?? '',
+      origin: request.headers.origin,
+      referer: request.headers.referer,
       url: request.url ?? '',
     });
+
+    if (!acceptsRemoteOrigin(request)) {
+      socket.end(
+        'HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n',
+      );
+      return;
+    }
 
     const key = request.headers['sec-websocket-key'];
     if (typeof key !== 'string') {
@@ -304,12 +397,40 @@ async function readRequest(request: IncomingMessage): Promise<ReceivedRequest> {
     body: Buffer.concat(chunks).toString('utf8'),
     host: request.headers.host,
     method: request.method ?? '',
+    origin: request.headers.origin,
+    referer: request.headers.referer,
     url: request.url ?? '',
   };
 }
 
-async function requestUpgrade(url: string): Promise<string> {
+function acceptsRemoteOrigin(request: IncomingMessage): boolean {
+  const expectedOrigin = request.headers.host
+    ? `http://${request.headers.host}`
+    : undefined;
+  if (
+    request.headers.origin !== undefined &&
+    request.headers.origin !== expectedOrigin
+  ) {
+    return false;
+  }
+  if (request.headers.referer !== undefined) {
+    try {
+      return new URL(request.headers.referer).origin === expectedOrigin;
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
+async function requestUpgrade(
+  url: string,
+  headers: Record<string, string> = {},
+): Promise<string> {
   const target = new URL(url);
+  const additionalHeaders = Object.entries(headers)
+    .map(([name, value]) => `${name}: ${value}\r\n`)
+    .join('');
 
   return new Promise((resolve, reject) => {
     const socket = net.connect(Number(target.port), target.hostname, () => {
@@ -319,7 +440,9 @@ async function requestUpgrade(url: string): Promise<string> {
           'Connection: Upgrade\r\n' +
           'Upgrade: websocket\r\n' +
           'Sec-WebSocket-Version: 13\r\n' +
-          'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n',
+          'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n' +
+          additionalHeaders +
+          '\r\n',
       );
     });
     let response = '';

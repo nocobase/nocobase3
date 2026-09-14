@@ -1,3 +1,5 @@
+import { TLSSocket } from 'node:tls';
+
 /**
  * PROXY_TARGET_URL names the remote application's public base, not its /api endpoint.
  * Validate it before dev hooks run so an invalid target cannot start a local backend.
@@ -43,6 +45,54 @@ export function createDevProxy(appBase, value) {
   const localPrefix = localBase === '/' ? '' : localBase;
   const remotePrefix = target.pathname.replace(/\/+$/, '');
   const escapedPrefix = localPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  /**
+   * Adapt browser requests from this local origin without making unrelated
+   * origins trusted. Use the actual transport and Host, not forwarded headers.
+   * @param {import('node:http').ClientRequest} proxyRequest
+   * @param {import('node:http').IncomingMessage} request
+   */
+  const rewriteBrowserOrigin = (proxyRequest, request) => {
+    const host = request.headers.host;
+    if (!host) return;
+    const protocol =
+      request.socket instanceof TLSSocket && request.socket.encrypted
+        ? 'https:'
+        : 'http:';
+    let localOrigin;
+    try {
+      localOrigin = new URL(`${protocol}//${host}`).origin;
+    } catch {
+      return;
+    }
+    const origin = request.headers.origin;
+    if (origin !== undefined && origin !== localOrigin) return;
+    if (origin !== undefined) proxyRequest.setHeader('origin', target.origin);
+
+    // Better Auth can fall back to Referer when Origin is absent. Keep that
+    // fallback on the same remote app without adding an Origin to the request.
+    const referer = request.headers.referer;
+    if (!referer) return;
+    let refererUrl;
+    try {
+      refererUrl = new URL(referer);
+    } catch {
+      return;
+    }
+    if (refererUrl.origin !== localOrigin) return;
+    if (
+      refererUrl.pathname !== localPrefix &&
+      !refererUrl.pathname.startsWith(localPrefix + '/')
+    )
+      return;
+    proxyRequest.setHeader(
+      'referer',
+      target.origin +
+        remotePrefix +
+        refererUrl.pathname.slice(localPrefix.length) +
+        refererUrl.search,
+    );
+  };
+  /** @type {import('vite').ProxyOptions} */
   const options = {
     target: target.origin,
     changeOrigin: true,
@@ -51,6 +101,10 @@ export function createDevProxy(appBase, value) {
     // Remote cookie scopes must point at the browser's local application.
     cookieDomainRewrite: '',
     cookiePathRewrite: localPrefix + '/',
+    configure(proxy) {
+      proxy.on('proxyReq', rewriteBrowserOrigin);
+      proxy.on('proxyReqWs', rewriteBrowserOrigin);
+    },
   };
   return {
     [`^${escapedPrefix}/api(?=/|\\?|$)`]: { ...options },
