@@ -4,7 +4,10 @@ import {
   fileStorageFactoryToken,
   type AIManager,
 } from '@nocobase/ai-employee';
-import { driveConfig, driveManagerToken } from '@nocobase/app-server/drive';
+import {
+  driveManagerToken,
+  type AppDriveConfig,
+} from '@nocobase/app-server/drive';
 import { loggingToken } from '@nocobase/app-server/logging';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import {
@@ -15,7 +18,8 @@ import {
 
 import path from 'node:path';
 
-import { aiConfig, resolveAIEmployeeStorageDisk } from '../config.js';
+import type { AIApplicationConfig } from '../config.js';
+import { resolveAIEmployeeStorageDisk } from '../config.js';
 import {
   AIEmployeeResources,
   normalizeAISkillDirectories,
@@ -81,10 +85,10 @@ export class AIEmployeeProvider extends ServiceProvider<AppPluginApplication> {
 
   public override async boot(): Promise<void> {
     const services = this.app.container.resolve(serviceFactoryToken);
-    const config = this.app.config.get(aiConfig);
+    const config = this.app.config.get<AIApplicationConfig>('ai')!;
     const aiStorageDisk = resolveAIEmployeeStorageDisk(
       config,
-      this.app.config.get(driveConfig).default,
+      this.app.config.get<AppDriveConfig>('drive')!.default,
     );
     this.app.container.resolve(managerFactoryToken).configure({
       aiStorageDisk,
@@ -107,8 +111,8 @@ export class AIEmployeeProvider extends ServiceProvider<AppPluginApplication> {
       }),
     });
     await services.initialize();
-    this.unsubscribeConfig = this.app.config.subscribe(
-      aiConfig,
+    this.unsubscribeConfig = this.app.config.subscribe<AIApplicationConfig>(
+      'ai',
       async ({ current }): Promise<void> => {
         await services.ready();
         await services.llmServiceConfigSynchronizer.enqueue(
