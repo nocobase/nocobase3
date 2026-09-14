@@ -38,6 +38,7 @@ server/routes/            HTTP endpoints
 server/providers/         Services and their lifecycle
 database/main/migrations/      Schema changes
 database/main/seeds/           Required initial data
+database/main/collections/     Generated Collection artifacts; regenerate, never edit
 cli/commands/             Commands this application owns
 tests/                    Tests; never beside the source
 ```
@@ -129,6 +130,8 @@ Keep HTTP concerns in the route and domain logic in a service under `server/prov
 ### Database
 
 Schema changes are migrations under `database/main/migrations/`. Data the application requires to run is a seed under `database/main/seeds/`. Seeds never create structure.
+
+`database/<connection>/collections/` holds what the database currently resolves each Collection to — `collection.json`, `metadata.json` and `schema.json` per Collection plus a `_manifest.json` — written by `pnpm collections:generate` after migrating. Every file there is derived: edit metadata through migrations or the Collection Metadata Service and regenerate, never by hand, and never import these files from a migration. `pnpm collections:generate --check` fails when they are out of date.
 
 ```ts
 const migration: MigrationDefinition = defineMigration({

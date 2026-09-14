@@ -150,6 +150,7 @@
     "format:check": "prettier . --check",
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
     "fix": "pnpm lint:fix && pnpm format",
+    "collections:generate": "NODE_OPTIONS=--openssl-legacy-provider pnpm nocobase app collections:generate",
     "migrate": "NODE_OPTIONS=--openssl-legacy-provider pnpm nocobase app migrate",
     "seed": "NODE_OPTIONS=--openssl-legacy-provider pnpm nocobase app seed",
     "nocobase": "NODE_OPTIONS=--openssl-legacy-provider tsx ./cli/index.ts",

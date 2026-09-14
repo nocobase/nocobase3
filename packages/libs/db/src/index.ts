@@ -51,6 +51,33 @@ export type {
   OptimisticLockDefinition,
 } from './collection/types.js';
 export type { CollectionBuilder } from './collection/builder/builder.js';
+export type {
+  CollectionResolutionResult,
+  CollectionResolutionWarning,
+} from './collection/resolver/types.js';
+export {
+  COLLECTION_ARTIFACT_FILE_NAMES,
+  COLLECTION_ARTIFACT_FORMAT_VERSION,
+  COLLECTION_ARTIFACT_MANIFEST_FILE_NAME,
+  assertCollectionArtifactDirectoryNames,
+  CollectionArtifactNameError,
+  findCollectionArtifactNameConflicts,
+  serializeCollectionArtifact,
+  serializeCollectionArtifactManifest,
+  validateCollectionArtifactDirectoryName,
+} from './collection/artifact/index.js';
+export type {
+  CollectionArtifactCollectionFile,
+  CollectionArtifactFileKind,
+  CollectionArtifactFiles,
+  CollectionArtifactFormatVersion,
+  CollectionArtifactInput,
+  CollectionArtifactManifest,
+  CollectionArtifactManifestInput,
+  CollectionArtifactMetadataFile,
+  CollectionArtifactNameErrorCode,
+  CollectionArtifactSchemaFile,
+} from './collection/artifact/index.js';
 
 export type {
   ComparisonOperator,
@@ -73,6 +100,7 @@ export type {
   CreateMigratorOptions,
   DatabaseMigratorOptions,
   MigrationContext,
+  MigrationHistoryRecord,
   MigrationDefinition,
   MigrationRollbackResult,
   MigrationRunResult,
