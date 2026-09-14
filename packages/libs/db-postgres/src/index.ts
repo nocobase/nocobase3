@@ -53,6 +53,8 @@ export const postgresDriver: DatabaseDriverDefinition<'postgres'> = {
               : undefined,
     },
     repository: {
+      // The driver parses json and jsonb before the row reaches us.
+      jsonResults: 'parsed',
       enumGroupKey: ({ client, field }) =>
         client.raw('convert_to(??, ?)', [field, 'UTF8']),
       compileFilterCondition: ({ query, node, field, name, boolean }) => {

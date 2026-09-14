@@ -104,7 +104,7 @@ describe('settings centre', () => {
     ).toHaveAttribute('href', '/');
   });
 
-  it('carries the application header controls, without a gear pointing at itself', async () => {
+  it('keeps both header entries visible inside settings', async () => {
     renderSettings('/settings/authorization/permission-sets');
     await screen.findByText('Permission Sets page');
 
@@ -115,10 +115,7 @@ describe('settings centre', () => {
     expect(
       await screen.findByRole('button', { name: 'Open account menu' }),
     ).toHaveAttribute('title', 'Alice');
-    expect(
-      screen.queryByRole('link', { name: 'Settings' }),
-    ).not.toBeInTheDocument();
-    // The other surface's entry stays: only the surface you are standing in withdraws its own.
+    expect(screen.getByRole('link', { name: 'Settings' })).toBeVisible();
     expect(screen.getByRole('link', { name: 'Dev tools' })).toHaveAttribute(
       'href',
       '/dev',
@@ -128,7 +125,7 @@ describe('settings centre', () => {
     ).toHaveAttribute('href', '/');
   });
 
-  it('withdraws the dev entry inside the dev tools and offers settings instead', async () => {
+  it('keeps both header entries visible inside dev tools', async () => {
     const devRoute: AppClientRegisteredSetting = {
       id: 'playground',
       navigation: true,
@@ -152,10 +149,7 @@ describe('settings centre', () => {
     );
 
     expect(await screen.findByText('Playground page')).toBeVisible();
-    // Standing in the dev tools, the dev entry has nowhere to go; the settings entry is the way out.
-    expect(
-      screen.queryByRole('link', { name: 'Dev tools' }),
-    ).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Dev tools' })).toBeVisible();
     expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute(
       'href',
       '/settings',

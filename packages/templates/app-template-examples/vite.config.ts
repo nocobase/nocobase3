@@ -2,6 +2,7 @@ import { createPortalViteConfig } from '@nocobase/dev-config/vite/portal';
 import agentAnnotations from '@gchust/agent-annotations/vite';
 import fs from 'node:fs';
 import path from 'path';
+import { createDevProxy } from './scripts/dev/proxy.mjs';
 
 const AGENT_ANNOTATIONS_DISABLED_VALUES = new Set(['false', '0', 'no', 'off']);
 
@@ -83,6 +84,32 @@ export default createPortalViteConfig(({ command }) => {
   return {
     root: __dirname,
     base: viteBase,
+    // `base` is baked into the bundle at build time, but an App Host mounts a deployed application under its own App
+    // ID rather than the path it was built for. Every URL the bundle computes at run time — the lazily imported route
+    // chunks above all — would then point at the build's path and 404, so the application loads and each lazy page
+    // fails with "could not be loaded".
+    //
+    // Only the URLs emitted into JavaScript are made runtime-relative. Every chunk sits beside the entry chunk in the
+    // same assets directory, so resolving against `import.meta.url` is correct wherever the application is mounted.
+    // The URLs in `index.html` deliberately stay absolute: the document is served at arbitrary SPA route depths, so a
+    // relative URL there would resolve against the current route instead of the application root — and the Host
+    // rewrites those root-relative attributes to the mount path, which it can only do while they start with `/`.
+    experimental: {
+      renderBuiltUrl(filename: string, { hostType }: { hostType: string }) {
+        if (hostType !== 'js') {
+          return undefined;
+        }
+
+        const assetsPrefix = 'assets/';
+        const besideEntry = filename.startsWith(assetsPrefix)
+          ? filename.slice(assetsPrefix.length)
+          : filename;
+
+        return {
+          runtime: `new URL(${JSON.stringify(besideEntry)}, import.meta.url).href`,
+        };
+      },
+    },
     define: defineEnv,
     envPrefix: ['VITE_'],
     plugins: [
@@ -98,6 +125,10 @@ export default createPortalViteConfig(({ command }) => {
         : []),
     ],
     server: {
+      proxy:
+        command === 'serve'
+          ? createDevProxy(appBase, env.PROXY_TARGET_URL)
+          : undefined,
       watch: {
         ignored: ['**/.agent-annotations/**', '**/storage/**'],
       },

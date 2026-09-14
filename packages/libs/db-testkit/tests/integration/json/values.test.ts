@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest';
 import { describeIntegrationDatabases } from '../helpers.js';
+import { jsonFixtureRows, jsonValueFixtures } from './fixtures.js';
 
 describeIntegrationDatabases('JSON field values', (context) => {
   it('creates JSON values through Repository.createOne', async () => {
@@ -12,18 +13,11 @@ describeIntegrationDatabases('JSON field values', (context) => {
     );
 
     const repository = context.database.repository('jsonRepositoryCreate');
-    const values = [
-      { id: 'object', payload: { enabled: true, labels: ['one', 'two'] } },
-      { id: 'array', payload: [1, false, { nested: 'value' }] },
-      { id: 'string', payload: 'text' },
-      { id: 'number', payload: 42.5 },
-      { id: 'boolean', payload: true },
-      { id: 'database-null', payload: null },
-    ] as const;
-
-    for (const value of values) {
-      const created = await repository.createOne({ values: value });
-      expect(created.record.payload).toEqual(value.payload);
+    for (const fixture of jsonValueFixtures) {
+      const created = await repository.createOne({ values: { ...fixture } });
+      expect(created.record.payload, `createOne ${fixture.id}`).toEqual(
+        fixture.payload,
+      );
     }
   });
 
@@ -37,25 +31,12 @@ describeIntegrationDatabases('JSON field values', (context) => {
     );
 
     const repository = context.database.repository('jsonRepositoryCreateMany');
-    const values = [
-      { id: 'object', payload: { enabled: true, labels: ['one', 'two'] } },
-      { id: 'array', payload: [1, false, { nested: 'value' }] },
-      { id: 'string', payload: 'text' },
-      { id: 'number', payload: 42.5 },
-      { id: 'boolean', payload: true },
-      { id: 'database-null', payload: null },
-    ] as const;
-
-    await expect(repository.createMany({ values })).resolves.toMatchObject({
-      createdCount: values.length,
-    });
+    await expect(
+      repository.createMany({ values: jsonFixtureRows() }),
+    ).resolves.toMatchObject({ createdCount: jsonValueFixtures.length });
     expect(
-      await repository.findMany({
-        sort: (sort) => sort.field('id').asc(),
-      }),
-    ).toEqual(
-      [...values].sort((left, right) => left.id.localeCompare(right.id)),
-    );
+      await repository.findMany({ sort: (sort) => sort.field('id').asc() }),
+    ).toEqual(jsonFixtureRows());
   });
 
   it('reads JSON values through Repository.findOne and findMany', async () => {
@@ -68,39 +49,39 @@ describeIntegrationDatabases('JSON field values', (context) => {
     );
 
     const repository = context.database.repository('jsonRepositoryRead');
-    const values = [
-      { id: 'object', payload: { enabled: true, labels: ['one', 'two'] } },
-      { id: 'array', payload: [1, false, { nested: 'value' }] },
-      { id: 'string', payload: 'text' },
-      { id: 'number', payload: 42.5 },
-      { id: 'boolean', payload: true },
-      { id: 'database-null', payload: null },
-    ] as const;
-    for (const value of values) {
-      await repository.createOne({ values: value });
+    await repository.createMany({ values: jsonFixtureRows() });
+
+    for (const fixture of jsonValueFixtures) {
+      expect(
+        await repository.findOne({ filter: { id: fixture.id } }),
+        `findOne ${fixture.id}`,
+      ).toEqual({ id: fixture.id, payload: fixture.payload });
     }
 
-    expect(await repository.findOne({ filter: { id: 'object' } })).toEqual(
-      values[0],
+    expect(
+      await repository.findMany({ sort: (s) => s.field('id').asc() }),
+    ).toEqual(jsonFixtureRows());
+  });
+
+  it('streams JSON values through Repository.findMany consumption', async () => {
+    await context.builder.createCollection(
+      'jsonRepositoryStream',
+      (collection) => {
+        collection.string('id').primary();
+        collection.json('payload').nullable();
+      },
     );
 
-    expect(
-      (
-        await repository.findMany({
-          sort: (s) => s.field('id').asc(),
-        })
-      ).map((row) => ({
-        id: row.id,
-        payload: row.payload,
-      })),
-    ).toEqual(
-      values
-        .map((value) => ({
-          id: value.id,
-          payload: value.payload,
-        }))
-        .sort((left, right) => left.id.localeCompare(right.id)),
-    );
+    const repository = context.database.repository('jsonRepositoryStream');
+    await repository.createMany({ values: jsonFixtureRows() });
+
+    const streamed: unknown[] = [];
+    for await (const row of repository.findMany({
+      sort: (sort) => sort.field('id').asc(),
+    })) {
+      streamed.push(row);
+    }
+    expect(streamed).toEqual(jsonFixtureRows());
   });
 
   it('updates JSON values through Repository.updateOne', async () => {
@@ -117,19 +98,21 @@ describeIntegrationDatabases('JSON field values', (context) => {
       values: { id: 'first', payload: { version: 1 } },
     });
 
-    const updated = await repository.updateOne({
-      filter: { id: 'first' },
-      values: { payload: { version: 2, changed: true } },
-    });
-    expect(updated.record).toEqual({
-      id: 'first',
-      payload: { version: 2, changed: true },
-    });
-
-    expect(await repository.findOne({ filter: { id: 'first' } })).toEqual({
-      id: 'first',
-      payload: { version: 2, changed: true },
-    });
+    // Every form has to survive an update, not just the one it was created as.
+    for (const fixture of jsonValueFixtures) {
+      const updated = await repository.updateOne({
+        filter: { id: 'first' },
+        values: { payload: fixture.payload },
+      });
+      expect(updated.record, `updateOne to ${fixture.id}`).toEqual({
+        id: 'first',
+        payload: fixture.payload,
+      });
+      expect(
+        await repository.findOne({ filter: { id: 'first' } }),
+        `read back ${fixture.id}`,
+      ).toEqual({ id: 'first', payload: fixture.payload });
+    }
   });
 
   it('updates multiple JSON values through Repository.updateMany', async () => {
@@ -179,5 +162,59 @@ describeIntegrationDatabases('JSON field values', (context) => {
         payload: { version: 1 },
       },
     ]);
+  });
+
+  it('upserts JSON values through Repository.upsertOne', async () => {
+    await context.builder.createCollection(
+      'jsonRepositoryUpsert',
+      (collection) => {
+        collection.string('id').primary();
+        collection.json('payload').nullable();
+      },
+    );
+
+    const repository = context.database.repository('jsonRepositoryUpsert');
+    await expect(
+      repository.upsertOne({
+        filter: { id: 'only' },
+        create: { id: 'only', payload: { created: true } },
+        update: { payload: { updated: true } },
+      }),
+    ).resolves.toMatchObject({ record: { payload: { created: true } } });
+
+    await expect(
+      repository.upsertOne({
+        filter: { id: 'only' },
+        create: { id: 'only', payload: { created: true } },
+        update: { payload: ['updated', { n: 2 }] },
+      }),
+    ).resolves.toMatchObject({ record: { payload: ['updated', { n: 2 }] } });
+  });
+
+  it('reports stored text that is not valid JSON', async () => {
+    await context.builder.createCollection(
+      'jsonRepositoryCorrupt',
+      (collection) => {
+        collection.string('id').primary();
+        collection.json('payload').nullable();
+      },
+    );
+
+    // Written outside the API, which is the only way a JSON column can hold
+    // text that does not parse. A driver that parses JSON itself rejects the
+    // write instead, so the row can only exist where the column is text.
+    try {
+      await context
+        .db(context.table('jsonRepositoryCorrupt'))
+        .insert({ id: 'broken', payload: 'not json' });
+    } catch {
+      return;
+    }
+
+    await expect(
+      context.database
+        .repository('jsonRepositoryCorrupt')
+        .findOne({ filter: { id: 'broken' } }),
+    ).rejects.toMatchObject({ code: 'INVALID_STORED_VALUE' });
   });
 });

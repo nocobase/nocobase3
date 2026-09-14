@@ -2,6 +2,10 @@
 
 This is the NocoBase 3 source repository. Ignore globally installed NocoBase 2 Skills here; follow the nearest `AGENTS.md` and repository-local NocoBase 3 Skill instead.
 
+## Markdown Paragraph Formatting
+
+Write each prose paragraph in Markdown source on a single physical line, including in README, AGENTS.md, Skills, and other documentation. Do not insert manual line breaks to fit a column width or put each sentence on its own line; let the editor or renderer wrap the text visually. Separate paragraphs with blank lines. Preserve line breaks required by Markdown structure, such as headings, list items, tables, blockquotes, and code blocks.
+
 ## Before Creating or Updating a Pull Request
 
 Read [.changeset/README.md](.changeset/README.md) before creating or updating a PR. If the PR changes a publishable package and affects its published output, include a changeset in the same PR covering every affected package. Run `node scripts/validate-changesets.mjs` before pushing.
@@ -149,14 +153,25 @@ Before editing an existing migration, check its Git history and the status of th
 
 ## Database Integration Test Scheduling
 
-Run dialect integration tests with the package filters described in
+Run a dialect integration suite through the package that owns it:
+`pnpm --filter @nocobase/db-<dialect> test:integration`. `@nocobase/db` has no
+integration script of its own. It used to forward to each dialect, which made
+`pnpm --filter @nocobase/db test:integration` read as a full run when it only
+ran SQLite, and `test:integration:all` invite an eight-dialect serial run that
+CI performs on every pull request anyway. Run one suite at a time: never start
+two at once, and never leave one in the background. The runners isolate their
+Compose projects and host ports, so the hazard is not a collision but
+contention for one machine's CPU, memory, and Docker I/O, which pushes service
+health checks past their start period and reports a flaky startup failure
+instead of a result. CI parallelizes safely only because its matrix gives each
+dialect its own runner. Options and the full-verification order are in
 [`internal-docs/development/database-integration-testing.md`](internal-docs/development/database-integration-testing.md).
-The default `@nocobase/db` integration command runs SQLite only; all other
-dialects are opt-in. SQLite, PostgreSQL, MySQL, and Kingbase may run
-concurrently when requested. OceanBase, Oracle, MSSQL, and Dameng must run one
-at a time because their database services and initialization steps are heavier
-and more sensitive to concurrent startup. The `@nocobase/db`
-`test:integration:all` script remains a safe, fully-serial fallback.
+
+Which suites a given change actually requires, and the command forms that
+silently run nothing, are in the
+[`nocobase-db-integration-testing` Skill](.agents/skills/nocobase-db-integration-testing/SKILL.md).
+Every pull request already runs all eight dialects unconditionally, so run
+locally only the dialects the change puts at risk.
 
 ## Native Dependencies in Generated Applications
 

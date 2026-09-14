@@ -1,5 +1,81 @@
 # @nocobase/app-plugin-authentication
 
+## 0.1.0-beta.11
+
+### Minor Changes
+
+- f17f3a6: Move the password authentication pages to the application. The authentication plugin keeps only the protocol, session state, guards and headless actions: it no longer declares `/login`, `/register`, `/forgot-password` or `/reset-password`, drops the `client/routes` and `client/route-contracts` entries, and removes the `loginPage`/`registerPage` route override options.
+
+  Each application template now declares those four guest routes in `client/routes.ts` and loads the application-owned pages from `client/pages/auth/`, which compose the preinstalled UI from `client/extensions/nocobase-auth-ui/`. The pages use ordinary relative links; URL handling remains with the application router and basename.
+
+- f17f3a6: Support TypeScript authentication options in application templates and use the native authentication client. Keep authentication plugins and callbacks in editable server and client configuration, with YAML as the default format for deployment settings.
+
+  Runtime assembly now prepares complete configuration before application creation. Module configuration factories use defineAppConfig and defaultAppConfigs, receive the runtime once, and retain their defaults when environment configuration reloads.
+
+### Patch Changes
+
+- 43d25b4: Publish the `nocobase-app-plugin-authentication` Agent Skill with the package. It documents the plugin's public server and client surfaces and walks an application Agent through protecting routes, reading the session and customizing the sign-in pages, adding sign-in methods including a custom Better Auth plugin, managing account lifecycle, and deploying safely. Plugin registration synchronizes it into the application's `.agents/skills/`.
+
+  The package-local `docs/` directory is removed; its content now lives in the Skill and in the NocoBase documentation site.
+
+- ceb356b: Fix published package metadata and database test driver registration.
+- 40e2d49: Name session cookies after the port an app is reached on, so two apps sharing a host no longer share a session
+
+  Cookies are scoped by host and path but never by port (RFC 6265), so two apps on one host share a cookie jar even on different ports. The cookie name was the only thing left to separate them, and it was derived from the app name alone — which every standalone app defaults to `main`. Two apps started on different ports both wrote `main.session_token` at path `/main`, so the second sign-in overwrote the first, and the overwritten side sent a token its own database had never issued.
+
+  The prefix now carries the port the app is reached on. A configured `publicOrigin` is authoritative, since it is what browsers actually see rather than the listen port a reverse proxy hides; when it carries no explicit port the prefix stays the bare app name, so an existing `https://example.com` deployment keeps its sessions. The listen port is the fallback for development, where `publicOrigin` is usually unset and the port is the only thing telling two apps apart, and it applies only to a standalone app — an embedded app is merged the same template defaults and so carries a `server.port` the host actually owns. Embedded apps keep the bare name, which their base paths already make distinct.
+
+  Development sessions of standalone apps are invalidated once on upgrade, as is any deployment whose `publicOrigin` names an explicit port. Setting `advanced.cookiePrefix` still overrides all of this.
+
+- ceb356b: Support local `Date` values for `date`, `time`, and `datetime` mutations while
+  preserving Better Auth date values when records are read through its adapter.
+- Updated dependencies [ceb356b]
+- Updated dependencies [f17f3a6]
+- Updated dependencies [f17f3a6]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [590861e]
+- Updated dependencies [e11b855]
+- Updated dependencies [72ed008]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [e11b855]
+- Updated dependencies [ceb356b]
+- Updated dependencies [e11b855]
+- Updated dependencies [ceb356b]
+- Updated dependencies [40e2d49]
+- Updated dependencies [590861e]
+- Updated dependencies [ceb356b]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+  - @nocobase/app-server@1.0.0-beta.11
+  - @nocobase/app-client@1.0.0-beta.14
+  - @nocobase/db@1.0.0-beta.5
+
 ## 0.1.0-beta.10
 
 ### Minor Changes

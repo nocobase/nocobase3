@@ -12,7 +12,7 @@
  * and https://api-docs.deepseek.com/zh-cn/guides/responses_api.
  */
 export const deepSeekThinkingModeFixture = {
-  responsesModels: ['deepseek-v4-flash', 'deepseek-v4-pro'],
+  responsesModels: ['deepseek-flash', 'deepseek-v4-flash', 'deepseek-v4-pro'],
   chatCompletionsModels: ['deepseek-chat', 'deepseek-reasoner'],
   responsesThinkingEnabled: {
     reasoning: { effort: 'high' },

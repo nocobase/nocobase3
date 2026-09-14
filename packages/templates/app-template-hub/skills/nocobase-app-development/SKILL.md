@@ -52,6 +52,8 @@ Read the relevant Skill before writing the feature. Implementing a capability by
 
 Bulk plugin Skills synchronization reads the explicit `client/plugins.ts`, `server/plugins.ts`, and `cli/plugins.ts` registrations. A package used only through imported components can have its Skills synchronized explicitly with the CLI plugin option.
 
+To update a registered plugin, use `pnpm plugin:update @nocobase/app-plugin-authentication` (or the short name `authentication`). Omit the name to update all registered plugins; add `--dry-run` to preview. `plugin:update` takes a positional name, not `--plugin`, and re-synchronizes all registered plugin Skills after a successful package update. See [plugin commands](../../README.MD#plugins) for version-range behavior and examples.
+
 ## Choose your reference
 
 Read the page for the task in front of you. Do not read all of them.
@@ -73,6 +75,8 @@ A feature with a page and an API usually needs four: migrations, server routes, 
 For creating, editing or removing theme presets, read [themes](references/themes.md). For any UI styling, read [the shared token reference](references/theme-tokens.md); prefer these tokens so AI-authored components respond to theme changes.
 
 ## Where to work
+
+Header entries stay visible on their destination pages. The Dev tools entry is development-only; the Hub has no Settings entry.
 
 Business code belongs in a small, stable set of places:
 
@@ -118,6 +122,16 @@ These cause real damage and appear in every reference:
 - **Route navigation creates sidebar entries.** Declare `navigation` in `client/routes.ts`; Refine resources are for CRUD, not menus.
 - **Reach for the built-in mechanism first.** Changing framework structure is allowed when nothing else fits — comment it and update the docs.
 - **Tests live in `tests/` or `e2e/`,** never beside the source.
+
+## Remote backend development
+
+Treat `/main` in examples as a default, never as a fixed route. Local `APP_BASE_PATH` resolves from the command-line environment, then `.env.local`, then `.env`, with `/main` as the fallback. Determine the remote application's actual public mount path separately and include it in `PROXY_TARGET_URL`; local and remote paths may differ. For example, local `APP_BASE_PATH=/local` and a target ending in `/crm` map `/local/api` to `/crm/api` and `/local/ws` to `/crm/ws`.
+
+For local client debugging against another running application, use `PROXY_TARGET_URL=<remote-application-base-url> pnpm dev` (for example, `http://127.0.0.1:13000/main`, without `/api`). This starts Vite, proxies API and WebSocket paths, and skips the local server and its watchers. Existing `beforeDev` hooks still run. Open the printed Local URL. Client edits reload locally; backend edits require running or deploying the target separately. Requests use the target's data and permissions. See README.MD for authentication and path mapping requirements. Unset the variable to develop both sides locally.
+
+The proxy maps same-origin browser HTTP and WebSocket Origin headers to the target origin, with matching Referer paths mapped to the target app base. It preserves foreign origins and does not add missing Origin headers. Test browser handshakes with an explicit Origin; an Origin-less Node WebSocket test does not verify browser compatibility. Production does not use this Vite adaptation: configure `APP_PUBLIC_ORIGIN` and preserve public Host/protocol information through the reverse proxy.
+
+Use `APP_SERVER_PORT` for the local entry port in both development modes. With `PROXY_TARGET_URL` it selects Vite's preferred port, defaulting to 5173; without it, it selects the local backend port, defaulting to 13000, and Vite still starts from 5173. If occupied, the port advances automatically. Open the printed Local URL and keep the remote service address in `PROXY_TARGET_URL`.
 
 ## Finishing
 

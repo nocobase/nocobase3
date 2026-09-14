@@ -80,4 +80,58 @@ describe('NocoBaseAIService', () => {
       json: { sessionId: 'session-1' },
     });
   });
+
+  it('reports web search support for each enabled model', async () => {
+    const { client, request } = createClient();
+    request.mockResolvedValueOnce([
+      {
+        llmService: 'deepseek',
+        llmServiceTitle: 'DeepSeek',
+        enabledModels: [
+          { label: 'DeepSeek Flash', value: 'deepseek-flash' },
+          { label: 'DeepSeek V4 Pro', value: 'deepseek-v4-pro' },
+          { label: 'DeepSeek Chat', value: 'deepseek-chat' },
+        ],
+        supportWebSearch: true,
+        webSearchModels: ['deepseek-flash', 'deepseek-v4-pro'],
+      },
+    ]);
+    const service = new NocoBaseAIService(client);
+
+    await expect(service.listModels()).resolves.toEqual([
+      expect.objectContaining({
+        value: 'deepseek-flash',
+        supportWebSearch: true,
+      }),
+      expect.objectContaining({
+        value: 'deepseek-v4-pro',
+        supportWebSearch: true,
+      }),
+      expect.objectContaining({
+        value: 'deepseek-chat',
+        supportWebSearch: false,
+      }),
+    ]);
+  });
+
+  it('treats an empty web search model list as unrestricted', async () => {
+    const { client, request } = createClient();
+    request.mockResolvedValueOnce([
+      {
+        llmService: 'openai',
+        llmServiceTitle: 'OpenAI',
+        enabledModels: [{ label: 'GPT-5', value: 'gpt-5' }],
+        supportWebSearch: true,
+        webSearchModels: [],
+      },
+    ]);
+    const service = new NocoBaseAIService(client);
+
+    await expect(service.listModels()).resolves.toEqual([
+      expect.objectContaining({
+        value: 'gpt-5',
+        supportWebSearch: true,
+      }),
+    ]);
+  });
 });

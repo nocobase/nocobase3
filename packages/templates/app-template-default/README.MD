@@ -20,6 +20,41 @@ pnpm dev
 
 `pnpm dev` starts the API server and the Vite client together, picks free ports if the defaults are taken, and prints the URL to open. Use the printed URL rather than assuming a port.
 
+### Develop against another backend
+
+Set `PROXY_TARGET_URL` to the backend application's public URL, including its mount path but excluding `/api`:
+
+```bash
+# Example only: replace /main with the backend's actual public mount path.
+PROXY_TARGET_URL=http://127.0.0.1:13000/main pnpm dev
+```
+
+**`/main` is the fallback, not a required or fixed path.** Local development reads `APP_BASE_PATH` from the command-line environment, then `.env.local`, then `.env`, falling back to `/main` when unset. The remote path comes from `PROXY_TARGET_URL`; it is not inferred from the local `APP_BASE_PATH`. Read the target application's actual public URL before constructing this value. If it is mounted at the origin root, use the origin URL without a mount path.
+
+For example, these applications can use different paths:
+
+```bash
+APP_BASE_PATH=/local PROXY_TARGET_URL=http://127.0.0.1:13000/crm pnpm dev
+# /local/api/users -> http://127.0.0.1:13000/crm/api/users
+# /local/ws        -> ws://127.0.0.1:13000/crm/ws
+```
+
+This runs Vite with your local client source and proxies API and WebSocket requests to that application. It does not start a local backend, allocate its port, wait for its health endpoint, or watch server configuration/plugins. Existing `beforeDev` hooks still run to prepare client artifacts. Open the printed **Local** URL (the Vite port); **Backend** identifies the target.
+
+The target can be another local project running `pnpm dev`, or an HTTP(S) deployment. Use its printed application URL, not its Vite URL. Local `APP_BASE_PATH` and the remote mount path may differ: local `/main/api/users` can map to remote `/crm/api/users`. Trailing slashes are accepted. Credentials, query strings, and fragments are not accepted in the target URL.
+
+Requests use the remote backend's data and permissions, including writes. Only `<APP_BASE_PATH>/api` and `<APP_BASE_PATH>/ws` are proxied; application root callbacks and absolute URLs returned by the backend keep their original routing. Cookie domain/path scopes are adapted to the local application. HTTP and WebSocket requests whose Origin matches the local request's protocol and Host are forwarded with the target Origin, so browser authentication and realtime connections pass the backend's same-origin checks. Same-origin Referer URLs within the local app base are mapped to the target app base as well; requests without Origin keep it absent. Other origins and referers remain unchanged and subject to backend validation. HTTPS-only cookie requirements remain enforced, and authentication flows using explicit callback URLs still require appropriate callback configuration.
+
+The variable can also be set in `.env` or `.env.local`; the command-line environment takes precedence. Restart `pnpm dev` after changing the target. Without this variable, development still starts both the local backend and Vite. Production builds ignore it.
+
+Use `APP_SERVER_PORT` to choose the local application port in either development mode. With `PROXY_TARGET_URL` set, it selects Vite's preferred port (5173 when unset); without a proxy target, it selects the local backend's preferred port (13000 when unset), while Vite still starts from 5173. If the preferred port is occupied, development selects the next available port and prints the actual URL. The remote backend address is always taken from `PROXY_TARGET_URL`.
+
+```bash
+APP_SERVER_PORT=13399 PROXY_TARGET_URL=http://127.0.0.1:13000/main pnpm dev
+# Local: http://127.0.0.1:13399/main/ when 13399 is available.
+# Replace /main with the remote application's actual mount path.
+```
+
 ### Review your configuration
 
 `config.yml` was written when the project was created, carrying the database you chose and a generated `auth.secret`. It gets you running; adjust it for your situation:
@@ -120,13 +155,24 @@ Database tasks support `--connection <name>` and `--all`; no argument targets `d
 
 Plugins add features to your application. Let these commands edit `package.json`, `client/plugins.ts`, and `server/plugins.ts` for you rather than editing those files by hand.
 
-| Script                          | What it does                                              |
-| ------------------------------- | --------------------------------------------------------- |
-| `pnpm plugin:register <name>`   | Install a plugin and wire it into the client and server   |
-| `pnpm plugin:unregister <name>` | Remove a plugin and its wiring                            |
-| `pnpm plugin:update`            | Upgrade registered plugins and re-sync their agent skills |
-| `pnpm plugin:inspect <name>`    | Report a plugin's registration state; read-only           |
-| `pnpm plugin:skills:sync`       | Re-copy plugin agent skills into `.agents/skills/`        |
+| Script                          | What it does                                             |
+| ------------------------------- | -------------------------------------------------------- |
+| `pnpm plugin:register <name>`   | Install a plugin and wire it into the client and server  |
+| `pnpm plugin:unregister <name>` | Remove a plugin and its wiring                           |
+| `pnpm plugin:update [name]`     | Upgrade one or all registered plugins and re-sync skills |
+| `pnpm plugin:inspect <name>`    | Report a plugin's registration state; read-only          |
+| `pnpm plugin:skills:sync`       | Re-copy plugin agent skills into `.agents/skills/`       |
+
+Use a full package name, as with `plugin:register` and `plugin:unregister`; short names such as `authentication` also work. The optional name is a positional argument, not `--plugin`.
+
+```bash
+pnpm plugin:update @nocobase/app-plugin-authentication  # Update one registered plugin
+pnpm plugin:update authentication                      # Equivalent short name
+pnpm plugin:update                                     # Update all registered plugins
+pnpm plugin:update @nocobase/app-plugin-authentication --dry-run  # Preview only
+```
+
+Without a name, the command collects registered plugins from `client/plugins.ts`, `server/plugins.ts`, and `cli/plugins.ts`. It uses the application's package manager; with pnpm, `update` follows the declared version ranges without `--latest`. An unregistered name is rejected, and an application with no registered plugins is left unchanged. After a successful package update, all registered plugins' agent skills are re-synchronized, even when only one package was selected.
 
 Ordering in `client/plugins.ts` and `server/plugins.ts` is contribution order, and a plugin is enabled by appearing in the array. Reorder entries or pass a plugin its options by hand; leave adding and removing entries to the commands.
 

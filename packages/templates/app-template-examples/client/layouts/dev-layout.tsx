@@ -4,7 +4,6 @@ import type { ReactElement } from 'react';
 import { SurfaceLayout, type SurfaceCopy } from './surface-layout.js';
 
 const DEV_COPY: SurfaceCopy = {
-  surface: 'dev',
   title: 'Dev tools',
   pathPrefix: '/dev',
   emptyTitle: 'No dev tools available',

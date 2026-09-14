@@ -8,14 +8,19 @@
  */
 
 import { createHash } from 'node:crypto';
+import { EventEmitter } from 'node:events';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import { c as createTar } from 'tar';
 import type { ArtifactReference } from '../dist/index.js';
-import { sanitizeAppHostChildNodeOptions } from '../dist/supervisor.js';
+import {
+  findAvailablePort,
+  sanitizeAppHostChildNodeOptions,
+} from '../dist/supervisor.js';
 import { AppHostSupervisor } from '../dist/supervisor.js';
 
 describe('AppHostSupervisor', () => {
@@ -57,6 +62,46 @@ describe('AppHostSupervisor', () => {
         '--preserve-symlinks --preserve-symlinks-main',
       ),
     ).toBe('');
+  });
+
+  it('stops port probing at the requested upper bound', async () => {
+    vi.spyOn(net, 'createServer').mockImplementation(() => {
+      const server = new EventEmitter() as net.Server;
+      server.listen = (() => {
+        const error = Object.assign(new Error('occupied'), {
+          code: 'EADDRINUSE',
+        });
+        queueMicrotask(() => server.emit('error', error));
+        return server;
+      }) as net.Server['listen'];
+      return server;
+    });
+
+    await expect(findAvailablePort(65_535, '127.0.0.1')).rejects.toThrow(
+      'No available app-host port found from 65535 through 65535',
+    );
+  });
+
+  it('does not treat port binding errors as occupied ports', async () => {
+    const error = Object.assign(new Error('permission denied'), {
+      code: 'EPERM',
+    });
+    vi.spyOn(net, 'createServer').mockImplementation(() => {
+      const server = new EventEmitter() as net.Server;
+      server.listen = (() => {
+        queueMicrotask(() => server.emit('error', error));
+        return server;
+      }) as net.Server['listen'];
+      return server;
+    });
+
+    await expect(findAvailablePort(13_010, '127.0.0.1')).rejects.toBe(error);
+  });
+
+  it('does not probe beyond the TCP port range', async () => {
+    await expect(findAvailablePort(65_536, '127.0.0.1')).rejects.toThrow(
+      'Invalid app-host port range start: 65536',
+    );
   });
 
   it('uses an explicit singleton lifecycle', async () => {

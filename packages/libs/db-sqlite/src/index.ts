@@ -59,6 +59,8 @@ export const sqliteDriver: DatabaseDriverDefinition<'sqlite'> = {
           : undefined,
     },
     repository: {
+      // The column is text; the stored JSON arrives unparsed.
+      jsonResults: 'text',
       compileJsonCondition: ({ client, column, node }) =>
         compileSqliteJsonCondition(client, column, node),
       encodeBoolean: (_field, value) => (value === null ? null : value ? 1 : 0),

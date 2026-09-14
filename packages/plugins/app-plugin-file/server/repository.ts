@@ -4,7 +4,9 @@ import type { ReadableStream as NodeReadableStream } from 'node:stream/web';
 import type {
   DatabaseManager,
   Repository,
+  RepositoryPolicy,
   RepositoryQuery,
+  ScopedRepository,
 } from '@nocobase/db';
 import type { driveManagerToken } from '@nocobase/app-server/drive';
 import type { ServiceToken } from '@nocobase/service-provider';
@@ -24,6 +26,11 @@ export interface FileRepositoryOptions {
   readonly connection?: string;
   readonly disk: string;
   readonly accessPath: string;
+  /**
+   * The exposure's Policy, already resolved for this request's principal. The
+   * Repository is bound to what {@link uploadPolicy} derives from it.
+   */
+  readonly policy: RepositoryPolicy;
 }
 export interface FileOperations {
   validateCollection(): Promise<void>;
@@ -33,6 +40,56 @@ export interface FileOperations {
   getStorageUrl(record: Pick<FileRecord, 'disk' | 'key'>): Promise<string>;
 }
 export type ServerFileRepository = Repository<FileRecord> & FileOperations;
+
+/**
+ * The columns a file Collection must provide, which are also the columns
+ * `store()` composes for every upload.
+ */
+export const FILE_COLUMNS = [
+  'id',
+  'disk',
+  'key',
+  'filename',
+  'ext',
+  'mimeType',
+  'size',
+  'createdAt',
+  'updatedAt',
+] as const;
+
+/**
+ * The Policy the upload path binds, derived from the exposure's own.
+ *
+ * It is derived rather than used as it stands because an upload supplies no
+ * caller fields at all — `store()` composes every value — so a field allowlist
+ * has nothing to constrain here and the plugin substitutes its own columns.
+ * What is inherited is exactly the two dimensions that do not describe caller
+ * input: which rows this principal may produce (`scope`), and what the server
+ * stamps onto them (`defaults`). A `create` that is `false` stays `false`, so
+ * an exposure that forbids creating rows forbids uploading them too.
+ *
+ * This is the only place a Policy is widened, and the reason is specific to
+ * this path. It licenses nothing elsewhere.
+ */
+export function uploadPolicy(base: RepositoryPolicy): RepositoryPolicy {
+  const create =
+    base.create === true || base.create === false
+      ? base.create
+      : {
+          scope: base.create.scope,
+          defaults: base.create.defaults,
+          fields: FILE_COLUMNS,
+          relations: {},
+        };
+  // `read` serves this path's own returning record and the public byte route,
+  // both of which need every column. `update` and `delete` never run here.
+  return {
+    create,
+    read: { scope: true, fields: FILE_COLUMNS, relations: {} },
+    update: false,
+    delete: false,
+  };
+}
 
 export class FileRepositoryError extends Error {
   constructor(
@@ -70,6 +127,15 @@ export class ServerFileRepositoryManager {
       collection,
       options.connection,
     );
+    // Only the upload path is bound. The Repository this manager hands back is
+    // the plugin's server-side API, used by application code that is already
+    // trusted the way a `db.repository()` call is; binding it would restrict
+    // that instead of the HTTP surface this Policy describes. The cast undoes
+    // the `Partial` a bound Policy degrades to, which is the right default and
+    // wrong here: the derived Policy reads every column the contract requires.
+    const writable = repository.withPolicy(
+      uploadPolicy(options.policy),
+    ) as ScopedRepository<FileRecord>;
     const validateCollection = async (): Promise<void> => {
       const definition = await this.database
         .connection(options.connection)
@@ -82,7 +148,7 @@ export class ServerFileRepositoryManager {
       };
       if (!definition) fail('*', 'collection does not exist');
       const fields = definition?.fields ?? [];
-      for (const [name, types] of Object.entries({
+      const columnTypes: Record<(typeof FILE_COLUMNS)[number], string[]> = {
         id: ['uuid', 'string', 'char', 'text'],
         disk: ['string', 'char', 'text'],
         key: ['string', 'char', 'text'],
@@ -92,7 +158,8 @@ export class ServerFileRepositoryManager {
         size: ['integer', 'bigInt'],
         createdAt: ['datetime', 'datetimeTz'],
         updatedAt: ['datetime', 'datetimeTz'],
-      })) {
+      };
+      for (const [name, types] of Object.entries(columnTypes)) {
         const field = fields.find((item) => item.name === name);
         if (!field || !types.includes(field.type))
           fail(name, `requires ${types.join(' or ')}`);
@@ -246,7 +313,7 @@ export class ServerFileRepositoryManager {
         try {
           const values = await store(file, owned);
           databaseAttempted = true;
-          result = await repository.createOne({ values });
+          result = await writable.createOne({ values });
         } catch (cause) {
           return compensate(owned, cause, databaseAttempted);
         }
@@ -276,20 +343,9 @@ export class ServerFileRepositoryManager {
           const values: FileRecord[] = [];
           for (const file of files) values.push(await store(file, owned));
           databaseAttempted = true;
-          result = await repository.createMany({
+          result = await writable.createMany({
             values: values as [FileRecord, ...FileRecord[]],
-            select: (s) =>
-              s.fields(
-                'id',
-                'disk',
-                'key',
-                'filename',
-                'ext',
-                'mimeType',
-                'size',
-                'createdAt',
-                'updatedAt',
-              ),
+            select: (s) => s.fields(...FILE_COLUMNS),
           });
         } catch (cause) {
           return compensate(owned, cause, databaseAttempted);

@@ -27,6 +27,22 @@ describe('@nocobase/app-plugin-hub', () => {
     await expect(routes.routes[0]?.componentLoader?.()).resolves.toMatchObject({
       default: expect.any(Function),
     });
+    expect(routes.routes[0]?.children?.map((route) => route.path)).toEqual([
+      ':appId',
+    ]);
+    expect(
+      routes.routes[0]?.children?.[0]?.children?.map((route) => route.path),
+    ).toEqual([
+      'deployments',
+      'releases',
+      'development',
+      'resources',
+      'configuration',
+      'settings',
+    ]);
+    await expect(
+      routes.routes[0]?.children?.[0]?.componentLoader?.(),
+    ).resolves.toMatchObject({ default: expect.any(Function) });
   });
 
   it('keeps sensitive and write controls out of the Viewer tab set', () => {

@@ -10,6 +10,7 @@ import {
   defineFileRepositoryApiRoutes,
   type FileRepositoryApiActions,
 } from '@nocobase/app-plugin-file/server';
+import { buildRepositoryPolicy, type RepositoryPolicy } from '@nocobase/db';
 
 const fileActions: FileRepositoryApiActions = {
   findMany: {},
@@ -19,6 +20,20 @@ const fileActions: FileRepositoryApiActions = {
   deleteOne: {},
   uploadOne: {},
   uploadMany: {},
+};
+
+/**
+ * Uploading and removing metadata, but no caller-supplied file record.
+ *
+ * `create` is a node rather than `false` because an upload is a create: the
+ * empty allowlist refuses a client-written row while the upload path, which
+ * supplies no caller fields at all, still works.
+ */
+const filePolicy: RepositoryPolicy = {
+  read: true,
+  create: { scope: true },
+  update: false,
+  delete: true,
 };
 
 // Three file collections share the same File Repository implementation: the
@@ -33,6 +48,7 @@ const fileRoutes = defineFileRepositoryApiRoutes({
       disk: 'local',
       accessPath: '/uploads/attachments',
       accessMode: 'stream',
+      policy: filePolicy,
       actions: fileActions,
     },
     {
@@ -42,6 +58,7 @@ const fileRoutes = defineFileRepositoryApiRoutes({
       disk: 'local',
       accessPath: '/uploads/profile-avatars',
       accessMode: 'stream',
+      policy: filePolicy,
       actions: fileActions,
     },
     {
@@ -51,6 +68,7 @@ const fileRoutes = defineFileRepositoryApiRoutes({
       disk: 'local',
       accessPath: '/uploads/order-attachments',
       accessMode: 'stream',
+      policy: filePolicy,
       actions: fileActions,
     },
   ],
@@ -61,28 +79,36 @@ const fileRoutes = defineFileRepositoryApiRoutes({
 const businessRepositories: readonly RepositoryApiExposure[] = [
   {
     name: 'fileExampleProfiles',
+    policy: buildRepositoryPolicy((policy) =>
+      policy.read(true).update((update) =>
+        update
+          .scope(true)
+          .fields('name', 'jobTitle')
+          .relation('avatar', (avatar) => avatar.connect().disconnect()),
+      ),
+    ),
     actions: {
       findMany: { maxLimit: 100 },
       findOne: {},
-      updateOne: {
-        writePolicy: (w) =>
-          w
-            .fields('name', 'jobTitle')
-            .relation('avatar', (r) => r.connect().disconnect()),
-      },
+      updateOne: {},
     },
   },
   {
     name: 'fileExampleOrders',
+    policy: buildRepositoryPolicy((policy) =>
+      policy.read(true).update((update) =>
+        update
+          .scope(true)
+          .fields('number', 'customerName', 'status', 'amountCents')
+          .relation('attachments', (attachments) =>
+            attachments.connect().disconnect(),
+          ),
+      ),
+    ),
     actions: {
       findMany: { maxLimit: 100 },
       findOne: {},
-      updateOne: {
-        writePolicy: (w) =>
-          w
-            .fields('number', 'customerName', 'status', 'amountCents')
-            .relation('attachments', (r) => r.connect().disconnect()),
-      },
+      updateOne: {},
     },
   },
 ];

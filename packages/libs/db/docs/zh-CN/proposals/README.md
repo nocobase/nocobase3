@@ -53,3 +53,13 @@ description: 保留 DB 候选方案与设计演进；Repository 已有正式使�
 - [Mutation AST](./repository/mutation-ast.md)
 - [表单到 Mutation AST](./repository/form-mutation.md)
 - [Repository 写入 API 改进](./repository/prisma-inspired-mutations.md)：参考 Prisma 的模型形状输入和 Relation Builder，讨论下一版候选契约。
+
+### Repository Policy（阶段 1–3 已实现）
+
+行级 scope 与字段关系白名单的权限模型。实现在 `src/repository/policy/`，跨方言契约测试在 `db-testkit/tests/integration/repository/policy/`；方法级 [write-policy.md](../repository/write-policy.md) 作为单次调用的额外收窄仍然有效，两者并存。按下列顺序阅读：
+
+1. [Policy 设计](./repository/policies.md)：三条不变量、四节点结构、各项规则的取舍与理由。
+2. [Policy 示例说明](./repository/policies-examples.md)：从没有 Policy 的现状出发，逐层加入每个概念。
+3. [Policy 参考](./repository/policies-reference.md)：四节点的每个参数、scope 的完整语法、绑定与收窄的每种写法。
+4. [Policy 执行细节](./repository/policies-internals.md)：在 Knex 适配器上的落点、真实 SQL、方言差异。
+5. [Policy 实施清单](./repository/policies-roadmap.md)：分阶段任务、前置决策、验收标准与迁移面。

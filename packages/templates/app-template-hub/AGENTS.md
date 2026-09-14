@@ -46,6 +46,8 @@ A feature with a page and an API touches five places: a migration for the table,
 
 ### The rest is framework structure
 
+Header entries stay visible on their destination pages. The Dev tools entry is development-only; the Hub has no Settings entry.
+
 `client/routing/`, `client/shell/`, `client/layouts/`, `client/theme/`, the server entry points, the build scripts, and the tsconfigs are the scaffolding the template provides. It is still this application's own source — it shipped to the user and they may change it — but it is the part the template evolves, so an edit there is what a future upgrade has to reconcile.
 
 Prefer the mechanism the system already provides. Declare a page in `client/routes.ts` and add `navigation` when it needs a menu entry. Refine resources are only needed for CRUD integration. A settings page uses `access` to restrict access; a plugin page is customized through an option or an override. Before editing the shell to add a menu, check the route and its `navigation` declaration.
@@ -167,6 +169,16 @@ The languages the application offers are its own locale files, not a configured 
 
 The account menu language control in `client/shell/language-switcher.tsx` uses a shadcn submenu with radio items. Render it inside `DropdownMenuContent` to preserve menu keyboard navigation and selection semantics.
 
+## Developing against another backend
+
+Do not hard-code `/main` from the examples below. It is only the fallback for an unset `APP_BASE_PATH`. Local development resolves that variable from the command-line environment, then `.env.local`, then `.env`. The remote mount path is independently supplied in `PROXY_TARGET_URL`: inspect the target application's actual public URL instead of assuming it matches the local path. For example, `APP_BASE_PATH=/local PROXY_TARGET_URL=http://127.0.0.1:13000/crm pnpm dev` forwards local `/local/api` and `/local/ws` to remote `/crm/api` and `/crm/ws`.
+
+Use `PROXY_TARGET_URL=https://backend.example.com/main pnpm dev` to run only the local Vite client against another application's API and WebSocket service. The URL is the remote application base, including its mount path, without `/api`. Open the printed Local URL. The local server and server watchers are skipped; `beforeDev` hooks still run. Requests, including writes, affect the target backend. See README.MD for path mapping and authentication requirements. Leave the variable unset for normal full-stack development.
+
+The development proxy adapts same-origin HTTP and WebSocket Origin headers to the target origin, and maps same-origin Referer paths to the target app base. Other origins remain unchanged and missing Origin headers are not added. Keep backend origin checks enabled; this adaptation belongs only to Vite development, not production deployment. Production uses `APP_PUBLIC_ORIGIN` and a reverse proxy that preserves the public Host and protocol.
+
+`APP_SERVER_PORT` selects the local application entry port: Vite in proxy development mode (default 5173), or the local backend in normal development mode (default 13000). Normal development keeps Vite's preferred port at 5173. An occupied port advances to the next available port; use the printed Local URL. This variable does not change the backend URL supplied through `PROXY_TARGET_URL`.
+
 ## The command line
 
 `pnpm nocobase` runs this application's CLI. It holds three kinds of command: `plugin *` manages the plugins this application uses, `app *` is what this application writes for itself in `cli/commands/`, and each registered plugin contributes its own commands under a topic it declares — a workflow plugin's commands appear under `workflow`.
@@ -188,6 +200,8 @@ A command that cannot work in a deployment belongs in `cli/dev-commands/` instea
 Plugins are registered in `client/plugins.ts`, `server/plugins.ts`, and `cli/plugins.ts`. Presence in the array enables a plugin and array order is contribution order. A plugin appears in the roots matching what it ships, so a plugin with only commands is listed in `cli/plugins.ts` alone. Bulk Skills synchronization and plugin updates discover plugins from these composition roots.
 
 Let `pnpm plugin:register` and `pnpm plugin:unregister` add and remove entries. Edit these files by hand only to reorder entries or to pass a plugin its options.
+
+Update one registered plugin with `pnpm plugin:update @nocobase/app-plugin-authentication`, or omit the name to update all registered plugins. Prefer the full package name; `authentication` is also accepted as a short name. The name is a positional argument, not `--plugin`. Use `--dry-run` to preview. With pnpm, updates stay within declared version ranges; after a successful update, all registered plugin Skills are re-synchronized. See [Plugins in the README](README.MD#plugins) for examples and update scope.
 
 To customize a page a plugin owns, pass an option on its registration, add a source extension under `client/extensions/*/extension.ts`, or add an entry to `client/route-overrides.ts`. Do not redeclare the plugin's route — a duplicate `/install` is a conflict, not a customization. An override replaces only `componentLoader`; route identity, path, and auth mode stay with the plugin. One route takes one override across all three mechanisms. Authentication pages are not plugin-owned: `/login`, `/register`, `/forgot-password`, and `/reset-password` are application routes declared in `client/routes.ts`.
 
