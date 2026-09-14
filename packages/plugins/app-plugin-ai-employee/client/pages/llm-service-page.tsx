@@ -87,6 +87,7 @@ export default function LLMServicePage(): ReactElement {
             <table className='w-full min-w-[64rem] text-left text-sm'>
               <thead className='border-b bg-muted/30 text-xs tracking-wide text-muted-foreground uppercase'>
                 <tr>
+                  <th className='w-12 px-5 py-3 text-center'>#</th>
                   <th className='px-5 py-3'>{t('UID')}</th>
                   <th className='px-5 py-3'>{t('Title')}</th>
                   <th className='px-5 py-3'>{t('Provider')}</th>
@@ -95,8 +96,11 @@ export default function LLMServicePage(): ReactElement {
                 </tr>
               </thead>
               <tbody className='divide-y'>
-                {services.map((service) => (
+                {services.map((service, index) => (
                   <tr key={service.name} className='hover:bg-muted/30'>
+                    <td className='px-5 py-4 text-center text-muted-foreground'>
+                      {index + 1}
+                    </td>
                     <td className='px-5 py-4 font-mono text-xs'>
                       {service.name}
                     </td>
@@ -421,7 +425,7 @@ function ModelEditor({
     <div
       role='dialog'
       aria-label={t('Edit models')}
-      className='fixed inset-0 grid place-items-center bg-black/30 p-4'
+      className='fixed inset-0 z-50 grid place-items-center bg-black/30 p-4'
     >
       <div className='w-full max-w-xl space-y-5 rounded-lg bg-background p-6 shadow-lg'>
         <div>

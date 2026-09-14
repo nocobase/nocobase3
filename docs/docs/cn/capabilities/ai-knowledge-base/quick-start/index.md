@@ -22,7 +22,8 @@ keywords: 'AI 知识库,快速开始,PGVector,上传文档,命中测试,RAG'
 ai:
   aiKnowledgeBase:
     vectorDatabases:
-      - name: pgvector-main
+      - key: pgvector-main
+        name: PGVector
         provider: NocobaseDefaultPGVectorProvider
         databaseSpec: PGVector
         enabled: true
@@ -46,7 +47,8 @@ pnpm dev
 
 其中：
 
-- `name` 是向量数据库名称，同时也是稳定的 key。创建知识库时通过这个 key 引用它
+- `key` 是向量数据库的稳定标识，必须唯一，创建知识库时通过它引用向量数据库
+- `name` 可选，只作为管理页面的显示标题，省略时回落为 `key`
 - `provider` 必须使用区分大小写的 `NocobaseDefaultPGVectorProvider`
 - `databaseSpec` 使用 `PGVector`
 - `tableName` 只能包含一个可选的 schema 前缀，并符合数据库表名规则
@@ -57,7 +59,7 @@ pnpm dev
 
 :::
 
-进入 AI 设置中的「Vector Database」页签，确认 `pgvector-main` 已出现。也可以点击手动创建的连接的「Test」按钮检查连接；配置文件管理的连接会显示为只读。
+进入 AI 设置中的「Vector Database」页签，确认 UID 为 `pgvector-main` 的记录已出现。也可以点击手动创建的连接的「Test」按钮检查连接；配置文件管理的连接会显示为只读。
 
 ## 第二步：创建知识库
 

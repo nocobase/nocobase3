@@ -17,8 +17,15 @@ export interface AIKnowledgeBaseVectorDatabaseConnectionConfig {
   readonly tableName: string;
 }
 
+/**
+ * `key` is the unique identifier of a vector database entry within one
+ * configuration, and is what synchronization matches an existing record by.
+ * `name` is an optional display title and falls back to `key` when omitted,
+ * so two entries may share the same name.
+ */
 export interface AIKnowledgeBaseVectorDatabaseConfig {
-  readonly name: string;
+  readonly key: string;
+  readonly name?: string;
   readonly provider?: string;
   readonly databaseSpec?: string;
   readonly connection: AIKnowledgeBaseVectorDatabaseConnectionConfig;
