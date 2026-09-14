@@ -10,14 +10,18 @@ import {
 import type {
   AuthorizationOptions,
   AuthorizationSubject,
-  AuthorizationUser,
   PermissionGrant,
   PermissionSet,
   PermissionSetAssignment,
 } from '../authorization-client.js';
+import {
+  canAddAssignment,
+  type UserDirectory,
+} from '../components/user-directory.js';
 import { ActionsEditor, Field } from '../components/editors.js';
 import { ErrorBox } from '../components/feedback.js';
 import {
+  canAssignSubjectType,
   permissionSetCapabilities,
   permissionSetErrorMessage as message,
   type PermissionSetCapabilities,
@@ -69,10 +73,10 @@ const authz = getAuthorizationClient();
 
 export function PermissionSetsPanel({
   options,
-  users,
+  directory,
 }: {
   options: AuthorizationOptions;
-  users: readonly AuthorizationUser[];
+  directory: UserDirectory;
 }): ReactElement {
   const [sets, setSets] = useState<readonly PermissionSet[]>([]);
   const [assignments, setAssignments] = useState<
@@ -362,9 +366,13 @@ export function PermissionSetsPanel({
       ) : null}
       {detailSection === 'assignments' ? (
         <Assignments
-          users={users}
+          directory={directory}
           assignments={assignments}
           canAssign={capabilities.canAssign}
+          canAssignAudience={canAssignSubjectType(
+            capabilities,
+            'authenticated',
+          )}
           canRevoke={capabilities.canRevoke}
           busy={busy}
           onAssign={assign}
@@ -566,18 +574,21 @@ function PermissionDetails({ grant }: { grant: GrantDraft }): ReactElement {
 }
 
 function Assignments({
-  users,
+  directory,
   assignments,
   canAssign,
+  canAssignAudience,
   canRevoke,
   busy,
   onAssign,
   onRevoke,
 }: {
-  users: readonly AuthorizationUser[];
+  directory: UserDirectory;
   assignments: readonly PermissionSetAssignment[];
   /** A protected set may still accept new assignments; adding a superuser is the recovery path. */
   canAssign: boolean;
+  /** The set's protection may name the subject types it accepts. */
+  canAssignAudience: boolean;
   canRevoke: boolean;
   busy: boolean;
   onAssign: (subjects: readonly AuthorizationSubject[]) => Promise<void>;
@@ -589,7 +600,7 @@ function Assignments({
   const [addOpen, setAddOpen] = useState(false);
   const query = search.trim().toLowerCase();
   const visible = assignments.filter((item) => {
-    const label = subjectLabel(item.subject, users).toLowerCase();
+    const label = subjectLabel(item.subject, directory).toLowerCase();
     const itemKind =
       item.subject.type === 'authenticated' ? 'audience' : 'user';
     return (
@@ -635,11 +646,19 @@ function Assignments({
               Revoke selected ({selected.length})
             </Button>
           ) : null}
-          <Button disabled={!canAssign} onClick={() => setAddOpen(true)}>
+          <Button
+            disabled={!canAssign || !canAddAssignment(directory)}
+            onClick={() => setAddOpen(true)}
+          >
             Add assignments
           </Button>
         </div>
       </div>
+      {directory.unavailable ? (
+        <p className='border-b bg-amber-50 px-4 py-2 text-xs text-amber-900'>
+          {directory.unavailable}
+        </p>
+      ) : null}
       <table className='w-full text-left text-sm'>
         <thead className='border-b bg-muted/30 text-xs text-muted-foreground uppercase'>
           <tr>
@@ -677,14 +696,14 @@ function Assignments({
             <tr key={item.id}>
               <td className='px-5 py-4'>
                 <input
-                  aria-label={`Select ${subjectLabel(item.subject, users)}`}
+                  aria-label={`Select ${subjectLabel(item.subject, directory)}`}
                   type='checkbox'
                   checked={selected.includes(item.id)}
                   onChange={(event) => toggle(item.id, event.target.checked)}
                 />
               </td>
               <td className='px-5 py-4 font-medium'>
-                {subjectLabel(item.subject, users)}
+                {subjectLabel(item.subject, directory)}
               </td>
               <td className='px-5 py-4 text-muted-foreground'>
                 {item.subject.type === 'authenticated' ? 'Audience' : 'User'}
@@ -712,8 +731,9 @@ function Assignments({
       </table>
       {addOpen ? (
         <AssignmentPicker
-          users={users}
+          directory={directory}
           assignments={assignments}
+          canAssignAudience={canAssignAudience}
           busy={busy}
           onClose={() => setAddOpen(false)}
           onAdd={(subjects) =>
@@ -726,14 +746,16 @@ function Assignments({
 }
 
 function AssignmentPicker({
-  users,
+  directory,
   assignments,
+  canAssignAudience,
   busy,
   onClose,
   onAdd,
 }: {
-  users: readonly AuthorizationUser[];
+  directory: UserDirectory;
   assignments: readonly PermissionSetAssignment[];
+  canAssignAudience: boolean;
   busy: boolean;
   onClose: () => void;
   onAdd: (subjects: readonly AuthorizationSubject[]) => void;
@@ -750,7 +772,7 @@ function AssignmentPicker({
     (item) => item.subject.type === 'authenticated',
   );
   const query = search.trim().toLowerCase();
-  const visible = users.filter(
+  const visible = directory.users.filter(
     (user) =>
       !assignedUsers.has(user.id) &&
       (!query ||
@@ -774,29 +796,31 @@ function AssignmentPicker({
       onClose={onClose}
     >
       <div className='space-y-5'>
-        <section>
-          <h3 className='text-sm font-medium'>Audience</h3>
-          <label
-            className={`mt-3 flex items-start gap-3 rounded-lg border p-4 ${audienceAssigned ? 'opacity-50' : 'cursor-pointer hover:bg-muted/20'}`}
-          >
-            <input
-              className='mt-1'
-              type='checkbox'
-              checked={audienceAssigned || audience}
-              disabled={audienceAssigned}
-              onChange={(event) => setAudience(event.target.checked)}
-            />
-            <span>
-              <span className='block text-sm font-medium'>
-                All signed-in users
+        {canAssignAudience ? (
+          <section>
+            <h3 className='text-sm font-medium'>Audience</h3>
+            <label
+              className={`mt-3 flex items-start gap-3 rounded-lg border p-4 ${audienceAssigned ? 'opacity-50' : 'cursor-pointer hover:bg-muted/20'}`}
+            >
+              <input
+                className='mt-1'
+                type='checkbox'
+                checked={audienceAssigned || audience}
+                disabled={audienceAssigned}
+                onChange={(event) => setAudience(event.target.checked)}
+              />
+              <span>
+                <span className='block text-sm font-medium'>
+                  All signed-in users
+                </span>
+                <span className='mt-0.5 block text-xs text-muted-foreground'>
+                  Everyone with a valid session. This is managed separately from
+                  individual users.
+                </span>
               </span>
-              <span className='mt-0.5 block text-xs text-muted-foreground'>
-                Everyone with a valid session. This is managed separately from
-                individual users.
-              </span>
-            </span>
-          </label>
-        </section>
+            </label>
+          </section>
+        ) : null}
         <section className='border-t pt-5'>
           <div className='flex items-end justify-between gap-3'>
             <div>
@@ -2118,10 +2142,10 @@ function readArray(value: unknown): readonly unknown[] | undefined {
 }
 function subjectLabel(
   subject: AuthorizationSubject,
-  users: readonly AuthorizationUser[],
+  directory: UserDirectory,
 ): string {
   if (subject.type === 'authenticated') return 'All signed-in users';
-  const user = users.find((item) => item.id === subject.id);
+  const user = directory.users.find((item) => item.id === subject.id);
   return user
     ? `${user.name} · ${user.username ?? user.email}`
     : `User ${subject.id}`;

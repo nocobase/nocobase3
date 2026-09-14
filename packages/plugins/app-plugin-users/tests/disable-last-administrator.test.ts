@@ -2,8 +2,14 @@ import sqlite from '@nocobase/db-sqlite';
 import { fileURLToPath } from 'node:url';
 
 import type { UserAdministrationService } from '@nocobase/app-plugin-authentication';
-import { createAppAuthorization } from '@nocobase/app-plugin-authorization';
-import { PermissionSetLastAssignmentError } from '@nocobase/authorization/permissions';
+import {
+  createAppAuthorization,
+  type Authorization,
+} from '@nocobase/app-plugin-authorization';
+import {
+  PermissionSetLastAssignmentError,
+  type PermissionSetsAuthorizationApi,
+} from '@nocobase/authorization/permissions';
 import {
   createDatabaseManager,
   createMigrator,
@@ -20,7 +26,7 @@ import type { UserManagementService } from '../server/tokens.js';
 
 describe('disabling an account that holds a protected Permission Set', () => {
   let database: DatabaseManager;
-  let authorization: ReturnType<typeof createAppAuthorization>;
+  let authorization: Authorization & PermissionSetsAuthorizationApi;
 
   beforeEach(async () => {
     database = createDatabaseManager({
@@ -38,19 +44,15 @@ describe('disabling an account that holds a protected Permission Set', () => {
       '@nocobase/app-plugin-authorization',
       '../../app-plugin-authorization/database/migrations',
     );
+    // `rootSet` declares the rule these tests drive: the root set may never
+    // lose its last assignment that can still act.
     authorization = createAppAuthorization({
       connection: database.connection(),
-    });
-    // What @nocobase/app-plugin-authorization declares at runtime.
-    authorization.permissionSets.protect({
-      owner: '@nocobase/app-plugin-authorization',
-      keys: ['system-administrator'],
-      allow: ['assign', 'revoke'],
-      requireActiveAssignment: true,
+      config: { permissionSets: { rootSet: 'root' } },
     });
     await authorization.permissionSets.create({
-      key: 'system-administrator',
-      title: 'System administrator',
+      key: 'root',
+      title: 'Root',
       grants: [],
     });
   });
@@ -91,7 +93,7 @@ describe('disabling an account that holds a protected Permission Set', () => {
 
   function createService(
     permissionSets:
-      ReturnType<typeof createAppAuthorization>['permissionSets'] | undefined,
+      PermissionSetsAuthorizationApi['permissionSets'] | undefined,
   ): UserManagementService {
     return createUserManagementService({
       database,
@@ -120,7 +122,7 @@ describe('disabling an account that holds a protected Permission Set', () => {
         .execute();
       await authorization.permissionSets.assign({
         subject: { type: 'user', id },
-        permissionSet: 'system-administrator',
+        permissionSet: 'root',
       });
     }
   }

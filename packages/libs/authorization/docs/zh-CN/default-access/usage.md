@@ -96,6 +96,23 @@ Default Access 返回 `effect: "expand"` 的访问约束。资源 Handler 决定
 以 Database Authorization 为例，默认范围会与 Grant Record Access、Sharing Rules
 一起组成正向记录范围，之后再应用 Restriction Rules。
 
+## HTTP API
+
+插件在安装时把自己的管理路由注册到 `authz.routes`，应用只需要挂载一个分发器（见
+Core 文档的 `routes`）。处理器会先用请求级 Authorization 检查
+`authorization.settings/default-access` 的相应权限，拒绝时返回 `403 FORBIDDEN`，请求体不合法时
+返回 `400 INVALID_AUTHORIZATION_INPUT`。
+
+可用端点：
+
+| Method | Path                        | 用途               |
+| ------ | --------------------------- | ------------------ |
+| GET    | `/default-access`           | 列出默认访问配置   |
+| PUT    | `/default-access`           | 新建或更新一条配置 |
+| DELETE | `/default-access/:type/:id` | 删除某个资源的配置 |
+
+`PUT` 是 upsert：配置已存在时检查 `update` 权限，不存在时检查 `create`。
+
 ## 自定义 Store
 
 测试或使用其他持久化方案时，可以实现 `DefaultAccessStore`：

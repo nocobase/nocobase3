@@ -43,7 +43,7 @@ describe('Permission Set handler', () => {
               id: context.req.header('x-test-user') ?? 'anonymous',
             },
           }),
-          basePath: '/authz',
+          path: context.req.path.slice('/authz'.length),
         }),
     );
 
@@ -190,6 +190,7 @@ describe('Permission Set handler', () => {
           authorization: authorization.for({
             principal: { type: 'user', id: 'admin' },
           }),
+          path: context.req.path,
         }),
     );
     const protectedResponse = async (response: Response): Promise<void> => {
@@ -300,6 +301,7 @@ describe('Permission Set handler', () => {
           authorization: authorization.for({
             principal: { type: 'user', id: 'admin' },
           }),
+          path: context.req.path,
         }),
     );
 

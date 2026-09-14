@@ -3,13 +3,14 @@ import { RestrictionRulesPanel } from './restriction-rules-panel.js';
 import {
   AuthorizationSettingsPage,
   useAuthorizationPageData,
+  useUserDirectory,
 } from './page-support.js';
 
 export default function RestrictionRulesPage(): ReactElement {
-  const { options, users, error } = useAuthorizationPageData(
+  const { options, error } = useAuthorizationPageData(
     'authz/restriction-rules/options',
-    'authz/restriction-rules/users',
   );
+  const users = useUserDirectory();
   return (
     <AuthorizationSettingsPage
       eyebrow='Record access'
@@ -19,7 +20,7 @@ export default function RestrictionRulesPage(): ReactElement {
       loading={!options}
     >
       {options ? (
-        <RestrictionRulesPanel options={options} users={users} />
+        <RestrictionRulesPanel options={options} directory={users} />
       ) : null}
     </AuthorizationSettingsPage>
   );

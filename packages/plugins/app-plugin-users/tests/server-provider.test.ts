@@ -1,7 +1,7 @@
 import type { UserAdministrationService } from '@nocobase/app-plugin-authentication';
 import {
   authorizationToken,
-  type AppAuthorization,
+  type Authorization,
 } from '@nocobase/app-plugin-authorization';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { createDatabaseManager, type DatabaseConnection } from '@nocobase/db';
@@ -317,7 +317,8 @@ describe('@nocobase/app-plugin-users resource authorization', () => {
     const container = new ServiceContainer();
     container.instance(authorizationToken, {
       resources: { add },
-    } as unknown as AppAuthorization);
+      subjects: { define: vi.fn() },
+    } as unknown as Authorization);
     const provider = new UsersProvider({
       appName: 'test',
       publicBasePath: '',

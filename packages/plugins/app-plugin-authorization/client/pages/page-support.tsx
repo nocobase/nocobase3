@@ -1,39 +1,45 @@
 import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
-import type {
-  AuthorizationOptions,
-  AuthorizationUser,
-} from '../authorization-client.js';
+import type { AuthorizationOptions } from '../authorization-client.js';
 import { getAuthorizationClient } from '../runtime.js';
 import { ErrorBox, errorMessage as message } from '../components/feedback.js';
+import {
+  unavailableUserDirectory,
+  userDirectory,
+  type UserDirectory,
+} from '../components/user-directory.js';
 
 const authz = getAuthorizationClient();
 
 // Shared by the independent Authorization settings pages.
 // eslint-disable-next-line react-refresh/only-export-components
-export function useAuthorizationPageData(
-  optionsPath: string,
-  usersPath?: string,
-): {
+export function useAuthorizationPageData(optionsPath: string): {
   options?: AuthorizationOptions;
-  users: readonly AuthorizationUser[];
   error?: string;
 } {
   const [options, setOptions] = useState<AuthorizationOptions>();
-  const [users, setUsers] = useState<readonly AuthorizationUser[]>([]);
   const [error, setError] = useState<string>();
   useEffect(() => {
-    void Promise.all([
-      authz.loadOptions(optionsPath),
-      usersPath ? authz.loadUsers(usersPath) : Promise.resolve([]),
-    ]).then(
-      ([nextOptions, nextUsers]) => {
-        setOptions(nextOptions);
-        setUsers(nextUsers);
-      },
-      (cause: unknown) => setError(message(cause)),
-    );
-  }, [optionsPath, usersPath]);
-  return { options, users, ...(error === undefined ? {} : { error }) };
+    void authz
+      .loadOptions(optionsPath)
+      .then(setOptions, (cause: unknown) => setError(message(cause)));
+  }, [optionsPath]);
+  return { options, ...(error === undefined ? {} : { error }) };
+}
+
+/**
+ * Users are read from the Users API, which authorizes separately from these
+ * pages, so a refusal degrades the page instead of failing it.
+ */
+// eslint-disable-next-line react-refresh/only-export-components
+export function useUserDirectory(): UserDirectory {
+  const [users, setUsers] = useState<UserDirectory>(() => userDirectory([]));
+  useEffect(() => {
+    void authz
+      .listUsers()
+      .then(userDirectory, unavailableUserDirectory)
+      .then(setUsers);
+  }, []);
+  return users;
 }
 
 export function AuthorizationSettingsPage({

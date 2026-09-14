@@ -295,8 +295,9 @@ describe('official authorization plugins', () => {
       ],
     });
     const authorization = createAuthorization({
-      plugins: [permissionSets({ store, onAssignmentsChanged: changed })],
+      plugins: [permissionSets({ store })],
     });
+    authorization.onGrantsChanged(changed);
 
     await authorization.permissionSets.replaceSubjectAssignments({
       subject: { type: 'user', id: 'alice' },
@@ -341,8 +342,9 @@ describe('official authorization plugins', () => {
       ],
     });
     const authorization = createAuthorization({
-      plugins: [permissionSets({ store, onAssignmentsChanged: changed })],
+      plugins: [permissionSets({ store })],
     });
+    authorization.onGrantsChanged(changed);
 
     await authorization.permissionSets.update('operators', {
       key: 'renamed-operators',

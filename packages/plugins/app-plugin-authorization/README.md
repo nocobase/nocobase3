@@ -8,19 +8,21 @@ The plugin currently provides:
 - `authenticated:*` as a request subject;
 - Permission Sets, page authorization, and database authorization;
 - Default Access, Sharing Rules, and Restriction Rules;
-- `GET /api/authz/permissions`;
-- independent administration APIs and permissions for each Authorization plugin;
+- `GET /api/authz/permissions`, the permission option endpoints, and the
+  record pickers behind the settings pages;
+- one dispatcher under `/api/authz` that serves whatever HTTP surface the
+  installed Authorization plugins registered, each of them checking its own
+  `authorization.settings/<id>` permission;
 - separate settings pages for Permission Sets, Default Access, Sharing Rules,
   Restriction Rules, and Database Authorization;
 - selection-based editors for resources, actions, users, and record scopes;
 - migrations for Permission Sets and access rules;
-- two built-in roles: a System Administrator Permission Set that carries no
-  grants and whose protection declares `unrestricted: true`, so its holders
-  bypass per-resource authorization including Sharing and Restriction Rules,
-  seeded onto the default `nocobase` user and assignable to any number of
-  users;
-- an `authenticated` Permission Set bound to the `authenticated:*` subject,
-  the editable baseline every signed-in user holds;
+- two built-in roles: a `root` Permission Set that carries no grants and whose
+  protection declares `unrestricted: true`, so its holders bypass per-resource
+  authorization including Sharing and Restriction Rules, seeded onto the
+  default `nocobase` user and assignable to any number of users;
+- a `member` Permission Set bound to the `authenticated:*` subject, the
+  editable set every signed-in user holds;
 - protected Permission Sets whose owner plugin controls which generic
   definition and assignment operations remain available;
 - atomic replacement of one application's assignment scope without changing a
@@ -34,7 +36,10 @@ corresponding page grant therefore blocks direct navigation as well as hiding
 the navigation entry.
 
 The plugin provider resolves the shared database capability and registers the
-authorization instance in the service container:
+authorization instance in the service container under `authorizationToken`,
+and the Permission Sets api it installs under `permissionSetsToken`. A
+consumer that manages Permission Sets resolves that token rather than probing
+the instance:
 
 ```ts
 const database = services.resolve(databaseManagerToken);
@@ -48,3 +53,64 @@ services.singleton(authorizationToken, () =>
 
 Business plugins keep their own routes and resolve `authorizationToken` from
 the shared service container before performing protected operations.
+
+`server/routes/authorization.ts` mounts the application's own endpoints first
+and then one dispatcher over `authorization.routes`, so `/sharing-rules/options`
+keeps answering while `/sharing-rules` itself is served by the library plugin.
+An application that leaves a plugin out of its list simply has no route there:
+nothing checks which plugins are installed.
+
+## Configuration
+
+What this application's authorization is belongs to the application, not to
+the plugin. The provider reads the `authorization` configuration key and hands
+it to `createAppAuthorization`, so an application states it the same way it
+states `auth`:
+
+```ts
+// server/config/authorization.ts
+const authorization: AppConfigFactory<AuthorizationConfig> = defineAppConfig(
+  (_runtime) => ({
+    permissionSets: { rootSet: 'root', defaultSet: 'member' },
+    plugins: [
+      pages(),
+      databaseAuthorization({ source: 'main' }),
+      defaultAccess(),
+      sharingRules(),
+      restrictionRules(),
+    ],
+  }),
+);
+```
+
+| Field            | Default                                     | What it decides                                                                                                                             |
+| ---------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `permissionSets` | `{ rootSet: 'root', defaultSet: 'member' }` | The keys of the two code-owned sets. The plugin installs Permission Sets itself; an application names its sets, not the plugin.             |
+| `plugins`        | none                                        | The rest of the Authorization plugins this application installs. Dropping one is deleting a line; `databaseAuthorization` takes the source. |
+
+The plugin ships no default list beyond Permission Sets: an application that
+configures nothing else installs nothing else, and the library's own errors
+say what is missing at first use.
+
+The plugin always registers the identity step that turns a session into a
+principal, and keeps Realtime permission invalidation in step with grant
+changes through `authz.onGrantsChanged`, which reaches whichever Grant
+Provider is installed rather than naming Permission Sets. Everything else is
+the application's list. An application that drops `databaseAuthorization` keeps
+working: the options endpoints then answer with no collections to grant. An
+application cannot drop Permission Sets, and an application plugin that also
+provides grants is refused as a second Grant Provider.
+
+Both code-owned sets are named in `permissionSets: { rootSet, defaultSet }`,
+which the library protects on its own behalf. The generic
+management surface may assign and revoke `rootSet` but never edit or delete
+it, and only to a `user` subject: a superuser is an account, never an
+audience. It may edit `defaultSet`'s grants but neither delete the set nor
+revoke its `authenticated:*` binding. `permissionSets.isUnrestricted(key)`
+answers which set confers unrestricted access for an application's own code —
+a role picker, for instance — rather than repeating the key.
+
+`defaultSet` names a set and its protection. It does not mean "these grants
+apply to every identity without an assignment": that comes from the
+`authenticated:*` assignment row and from the identity step that adds the
+subject.

@@ -67,6 +67,14 @@ const identity = {
 
 授权规则可以使用这组 subjects 区分用户当前生效的角色、团队或部门。
 
+Principal 本身也是一个 subject：解析时 `{ type, id }` 会被放在 subjects 列表的首位，
+因此 `user:alice` 既是执行者，也可以直接持有权限分配。`Principal` 额外带有
+`attributes`，subject 只有 `type` 和 `id`。
+
+subject 的 `type` 是开放字符串，库不认识其中任何一个：`use()` 注册的中间件想加什么
+就加什么。subject 中的 `id` 一律按字面量比较，`{ type: 'authenticated', id: '*' }`
+里的 `*` 只是这个受众的名字；只有资源 `id` 中的 `*` 才是通配符。
+
 ## 注册资源权限
 
 应用可以直接为资源注册 handler。泛型参数会传递到 `request.params`：
@@ -181,6 +189,73 @@ router.put('/posts/:id', async (context) => {
 同一个请求级实例会复用当前身份已经解析的 Grants 和 Constraints。一个请求中多次执行
 页面、按钮或数据权限判断，不会重复加载相同的基础权限配置。新请求应创建新的实例，
 从而读取最新配置。
+
+### `use()` 注册身份解析步骤
+
+`authz.use()` 注册一个解析请求 principal 与 subjects 的步骤。`authz.middleware()`
+返回的 Hono 中间件会依次执行已注册的每个步骤，再用解析结果创建请求级授权实例：
+
+```ts
+authz.use(async (request, next) => {
+  const session = request.http.var.auth;
+  request.principal = { type: 'user', id: session.user.id };
+  request.subjects.add({ type: 'authenticated', id: '*' });
+  await next();
+});
+```
+
+### `subjects.define()` 补充说明某个 subject 类型
+
+添加 subject 不需要事先声明类型，`subjects.define()` 只是为某个类型补充库无法自己知道
+的事实。目前唯一的事实是"哪些 subject 还能行使权限"：
+
+```ts
+authz.subjects.define('user', {
+  // 一次问清整批 id，而不是逐个判断
+  filterActive: (ids, transaction) => enabledUserIds(ids, transaction),
+});
+```
+
+`filterActive` 收到的是该类型自己的 id，以及调用方正在持有的事务（如果有）。未声明的
+类型一律原样通过，所以 `authenticated:*` 这样的受众始终有效。
+
+### `onGrantsChanged()` 订阅授权变更
+
+Grant Provider 知道自己的授权什么时候变了，`authz.onGrantsChanged()` 就把这件事
+转达给应用，返回解除订阅的函数。应用因此可以在不知道装的是哪个 Grant Provider 的
+情况下让缓存或 Realtime 失效：
+
+```ts
+const release = authz.onGrantsChanged((subject) => {
+  invalidatePermissions(subject);
+});
+```
+
+没有实现 `onChange` 的 Grant Provider 不会通告任何变更，此时返回的函数什么也不解除。
+
+### `routes` 插件自己的 HTTP 界面
+
+插件在 `setup` 中注册自己的管理路由，应用只挂载一个分发器，不需要按名字逐个列出插件：
+
+```ts
+// 插件侧
+setup(authz) {
+  authz.routes.add('/sharing-rules', createSharingRulesHandler(service));
+}
+
+// 应用侧
+const response = authz.routes.handle({
+  request: context.req.raw,
+  // 相对于挂载点的路径。分发器同时看得到完整路径和自己匹配到的路由模式，
+  // 因此挂载点不需要在任何地方声明。
+  path: relativePath(context),
+  authorization: context.get('authz'),
+});
+return response ? await response : context.notFound();
+```
+
+同一个路径重复注册会抛错，`authz.routes.list()` 返回已注册的路径。没有插件认领的路径
+`handle()` 返回 `undefined`，因此应用没有安装的插件天然就是 404，不需要任何存在性判断。
 
 ### 基础权限快照
 

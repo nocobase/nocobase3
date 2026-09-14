@@ -165,7 +165,8 @@ const decision = await authz
 
 ## HTTP API
 
-Permission Sets 提供 Fetch handler。应用可以自行决定路由路径：
+Permission Sets 在安装时把自己的路由注册到 `authz.routes`（路径 `/permission-sets`），
+应用挂载 Core 文档里的分发器即可。也可以直接使用它的 Fetch handler，自行决定路由路径：
 
 ```ts
 router.on(
@@ -175,7 +176,8 @@ router.on(
     authz.permissionSets.handler({
       request: context.req.raw,
       authorization: context.get('authz'),
-      basePath: '/authz',
+      // 相对于挂载点的路径，由调用方给出
+      path: context.req.path.slice('/authz'.length),
     }),
 );
 ```
@@ -257,7 +259,7 @@ protection 可以额外声明 `requireActiveAssignment: true`，表示这个 Per
 ```ts
 authz.permissionSets.protect({
   owner: '@nocobase/app-plugin-authorization',
-  keys: ['system-administrator'],
+  keys: ['root'],
   allow: ['assign', 'revoke'],
   requireActiveAssignment: true,
 });
@@ -268,15 +270,12 @@ authz.permissionSets.protect({
 （例如禁用用户）调用 `assertSubjectRemovable(subject)`，它对该 subject 持有的每个声明了此
 标记的 Permission Set 做同样的检查。
 
-“还能行使权限”由应用定义。Authorization 不掌握账号状态，因此由应用传入
-`filterActiveSubjects`；不传时每条分配都算数：
+“还能行使权限”由应用定义。Authorization 不掌握账号状态，检查时会把剩余的 subject 交给
+`authz.subjects` 过滤；没有任何类型声明 `filterActive` 时，每条分配都算数：
 
 ```ts
-permissionSets({
-  // 一次查询整批 subject，过滤掉已禁用的账号；
-  // 在事务中调用时会拿到调用方的事务句柄
-  filterActiveSubjects: (subjects, connection) =>
-    enabledSubjects(subjects, connection),
+authz.subjects.define('user', {
+  filterActive: (ids, transaction) => enabledUserIds(ids, transaction),
 });
 ```
 
@@ -284,23 +283,46 @@ permissionSets({
 “还剩一条”的快照。数据库 Store 已实现：SQLite 以一次空更新占住写锁，其他方言用
 `SELECT ... FOR UPDATE`。没有事务的 Store 可以不实现该方法。
 
+### 限制可分配的 subject 类型
+
+protection 可以声明 `assignableTo: ['user']`，表示这个 Permission Set 只能分配给这些类型的
+subject；不声明则不限制。`assign()` 和 `replaceSubjectAssignments()` 在类型不被允许时抛出
+`PermissionSetSubjectNotAllowedError`，HTTP handler 返回
+`403 PERMISSION_SET_SUBJECT_NOT_ALLOWED`。它只约束新的写入，已有分配不会被回溯检查。
+
+`permissionSets({ rootSet: { key: 'root', assignableTo: ['user'] } })` 会把它透传到 root
+set 的 protection 上。库自身不设默认值：哪些 subject 类型是账号、哪些是受众，是应用的约定。
+
 ## 超级用户（不受限访问）
 
 Permission Set 可以在代码中声明为“不受限访问”。持有该 Permission Set 的身份会跳过
 逐资源授权：不再匹配 grants，也不再应用 Sharing Rules 和 Restriction Rules。
+
+应用通常不必自己写这次 `protect()`：`permissionSets({ rootSet })` 就是这条声明。
+
+```ts
+permissionSets({ rootSet: 'root' });
+// 等价于 allow: ['assign', 'revoke']、unrestricted: true、
+// requireActiveAssignment: true 的一次 protect()，owner 属于库自身。
+
+permissionSets({
+  // 破窗使用之间允许这个 Permission Set 空着
+  rootSet: { key: 'root', requireActiveAssignment: false },
+});
+```
 
 它是 protection 上的一个字段，而不是单独的一次声明：
 
 ```ts
 const release = authz.permissionSets.protect({
   owner: '@nocobase/app-plugin-authorization',
-  keys: ['system-administrator'],
+  keys: ['root'],
   allow: ['assign', 'revoke'],
   requireActiveAssignment: true,
   unrestricted: true,
 });
 
-authz.permissionSets.isUnrestricted('system-administrator'); // true
+authz.permissionSets.isUnrestricted('root'); // true
 
 release(); // 同时解除本次注册的保护与不受限访问
 ```
@@ -323,6 +345,21 @@ owner 声明，重复注册会抛错；`protect()` 返回的函数只解除本�
 底层上，`unrestricted: true` 让 Grant Provider 实现
 `AuthorizationGrantService.unrestricted()`，Core 在命中资源 handler 之后、执行
 `authorize()` 之前据此短路。
+
+## 由代码拥有的默认 Permission Set
+
+`defaultSet` 声明另一个由代码拥有的 Permission Set：受保护，grants 仍可编辑，集合本身
+不可删除，它的分配也不可撤销。
+
+```ts
+permissionSets({ rootSet: 'root', defaultSet: 'member' });
+// defaultSet 等价于 allow: ['update'] 的一次 protect()，owner 属于库自身。
+```
+
+`defaultSet` 声明的是**一个集合和它的保护**，不是"这些 grants 对所有没有分配的身份
+生效"。后者来自把该集合绑定到受众 subject 的那条分配记录，以及宿主中间件为请求加上
+该 subject——这个含义必须留在宿主里：在存在匿名身份的宿主中，库所理解的"所有身份"
+会把匿名身份也算进去。
 
 ## 自定义存储
 
@@ -348,5 +385,11 @@ Store 没有事务，直接返回自身即可。
 
 需要在自己的事务中写入 Permission Set 时，用
 `authz.permissionSets.withTransaction(connection)` 取得绑定该事务的 API。它共享
-protection 注册表（不受限访问也在其中），并且不会触发 `onAssignmentsChanged`——由持有事务的调用方在提交
+protection 注册表（不受限访问也在其中），并且不会通知订阅者——由持有事务的调用方在提交
 之后自行发布变更。
+
+## 订阅分配变更
+
+分配变更由 Grant Provider 约定中的 `onChange` 对外通告，应用订阅
+`authz.onGrantsChanged(listener)` 即可，不必点名 Permission Sets，见
+[核心用法](../core/usage.md)。绑定事务的副本不通知任何订阅者。

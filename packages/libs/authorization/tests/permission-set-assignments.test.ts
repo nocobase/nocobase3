@@ -1,16 +1,22 @@
 import { Hono } from 'hono';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   createAuthorization,
   permissionSets,
   PermissionSetLastAssignmentError,
+  PermissionSetProtectedError,
+  PermissionSetSubjectNotAllowedError,
+  PERMISSION_SETS_PROTECTION_OWNER,
   type PermissionSetAssignment,
-  type PermissionSetSubject,
 } from '../src/index.js';
+import type { DatabaseConnection } from '@nocobase/db';
 import {
   MockPermissionSetStore,
   type MockPermissionSetStoreOptions,
 } from './mock-permission-set-store.js';
+
+/** The mock store ignores it; only its presence changes what the service does. */
+const transaction = {} as unknown as DatabaseConnection;
 
 /** Records the order of the reads the invariant depends on. */
 class RecordingPermissionSetStore extends MockPermissionSetStore {
@@ -48,20 +54,19 @@ function createProtectedAuthorization(options: {
   store: MockPermissionSetStore;
   requireActiveAssignment?: boolean;
   unrestricted?: boolean;
-  filterActiveSubjects?: (
-    subjects: readonly PermissionSetSubject[],
-  ) => Promise<readonly PermissionSetSubject[]>;
+  /** Ids of the `user` subjects that can no longer act. */
+  disabledUsers?: readonly string[];
 }) {
   const authorization = createAuthorization({
-    plugins: [
-      permissionSets({
-        store: options.store,
-        ...(options.filterActiveSubjects === undefined
-          ? {}
-          : { filterActiveSubjects: options.filterActiveSubjects }),
-      }),
-    ],
+    plugins: [permissionSets({ store: options.store })],
   });
+  if (options.disabledUsers) {
+    const disabled = new Set(options.disabledUsers);
+    authorization.subjects.define('user', {
+      filterActive: (ids) =>
+        Promise.resolve(ids.filter((id) => !disabled.has(id))),
+    });
+  }
   authorization.permissionSets.protect({
     owner: '@nocobase/test',
     keys: ['administrator'],
@@ -72,17 +77,6 @@ function createProtectedAuthorization(options: {
     ...(options.unrestricted ? { unrestricted: true } : {}),
   });
   return authorization;
-}
-
-/** Keeps every subject except the ones named, standing in for disabled accounts. */
-function withoutSubjects(
-  ...ids: readonly string[]
-): (
-  subjects: readonly PermissionSetSubject[],
-) => Promise<readonly PermissionSetSubject[]> {
-  const excluded = new Set(ids);
-  return (subjects) =>
-    Promise.resolve(subjects.filter((subject) => !excluded.has(subject.id)));
 }
 
 describe('Permission Sets that require an active assignment', () => {
@@ -107,7 +101,7 @@ describe('Permission Sets that require an active assignment', () => {
     );
     const authorization = createProtectedAuthorization({
       store,
-      filterActiveSubjects: withoutSubjects('disabled'),
+      disabledUsers: ['disabled'],
     });
 
     // Two rows remain, but only one of them belongs to an account that can
@@ -120,7 +114,7 @@ describe('Permission Sets that require an active assignment', () => {
     ).resolves.toBeUndefined();
   });
 
-  it('counts every assignment when the application supplies no filter', async () => {
+  it('counts every assignment when no subject type declares otherwise', async () => {
     const store = new MockPermissionSetStore(
       administratorOptions(['root', 'disabled']),
     );
@@ -167,6 +161,7 @@ describe('Permission Sets that require an active assignment', () => {
     ]);
     await expect(replace('root')).rejects.toBeInstanceOf(
       PermissionSetLastAssignmentError,
+      PermissionSetProtectedError,
     );
     await expect(
       authorization.permissionSets.listAssignments('administrator'),
@@ -195,6 +190,7 @@ describe('Permission Sets that require an active assignment', () => {
     await authorization.permissionSets.revoke('second-administrator');
     await expect(removable('root')).rejects.toBeInstanceOf(
       PermissionSetLastAssignmentError,
+      PermissionSetProtectedError,
     );
   });
 
@@ -230,7 +226,7 @@ describe('Permission Sets that require an active assignment', () => {
           authorization: authorization.for({
             principal: { type: 'user', id: 'root' },
           }),
-          basePath: '/authz',
+          path: context.req.path.slice('/authz'.length),
         }),
     );
 
@@ -242,5 +238,299 @@ describe('Permission Sets that require an active assignment', () => {
     await expect(response.json()).resolves.toMatchObject({
       code: 'LAST_ASSIGNMENT',
     });
+  });
+});
+
+describe('the Permission Set the library protects as the root set', () => {
+  it('protects it exactly as an explicit protect call did', () => {
+    const authorization = createAuthorization({
+      plugins: [
+        permissionSets({
+          store: new MockPermissionSetStore(administratorOptions(['root'])),
+          rootSet: 'administrator',
+        }),
+      ],
+    });
+
+    expect(authorization.permissionSets.protection('administrator')).toEqual({
+      owner: PERMISSION_SETS_PROTECTION_OWNER,
+      allow: ['assign', 'revoke'],
+      requireActiveAssignment: true,
+      unrestricted: true,
+    });
+    expect(authorization.permissionSets.isUnrestricted('administrator')).toBe(
+      true,
+    );
+  });
+
+  it('lets the application keep the set empty', async () => {
+    const authorization = createAuthorization({
+      plugins: [
+        permissionSets({
+          store: new MockPermissionSetStore(administratorOptions(['root'])),
+          rootSet: { key: 'administrator', requireActiveAssignment: false },
+        }),
+      ],
+    });
+
+    expect(authorization.permissionSets.protection('administrator')).toEqual({
+      owner: PERMISSION_SETS_PROTECTION_OWNER,
+      allow: ['assign', 'revoke'],
+      unrestricted: true,
+    });
+    await expect(
+      authorization.permissionSets.revoke('root-administrator'),
+    ).resolves.toBeUndefined();
+  });
+
+  it('protects nothing when the application declares no root set', () => {
+    const authorization = createAuthorization({
+      plugins: [
+        permissionSets({
+          store: new MockPermissionSetStore(administratorOptions(['root'])),
+        }),
+      ],
+    });
+
+    expect(
+      authorization.permissionSets.protection('administrator'),
+    ).toBeUndefined();
+  });
+});
+
+describe('the Permission Set the library protects as the default set', () => {
+  it('keeps its grants editable while the set and its binding are not', () => {
+    const authorization = createAuthorization({
+      plugins: [
+        permissionSets({
+          store: new MockPermissionSetStore(administratorOptions(['root'])),
+          defaultSet: 'member',
+        }),
+      ],
+    });
+
+    expect(authorization.permissionSets.protection('member')).toEqual({
+      owner: PERMISSION_SETS_PROTECTION_OWNER,
+      allow: ['update'],
+    });
+    expect(authorization.permissionSets.isUnrestricted('member')).toBe(false);
+    expect(() =>
+      authorization.permissionSets.assertWritable('member', 'update'),
+    ).not.toThrow();
+    for (const operation of ['delete', 'assign', 'revoke'] as const) {
+      expect(() =>
+        authorization.permissionSets.assertWritable('member', operation),
+      ).toThrow(PermissionSetProtectedError);
+    }
+  });
+
+  it('protects nothing when the application declares no default set', () => {
+    const authorization = createAuthorization({
+      plugins: [
+        permissionSets({
+          store: new MockPermissionSetStore(administratorOptions(['root'])),
+        }),
+      ],
+    });
+
+    expect(authorization.permissionSets.protection('member')).toBeUndefined();
+  });
+});
+
+describe('the subject types a Permission Set may be assigned to', () => {
+  function authorizationWithAssignableTo(
+    assignableTo?: readonly string[],
+  ): ReturnType<typeof createAuthorization> {
+    const authorization = createAuthorization({
+      plugins: [
+        permissionSets({
+          store: new MockPermissionSetStore(administratorOptions([])),
+        }),
+      ],
+    });
+    authorization.permissionSets.protect({
+      owner: '@nocobase/test',
+      keys: ['administrator'],
+      allow: ['assign', 'revoke'],
+      ...(assignableTo ? { assignableTo } : {}),
+    });
+    return authorization;
+  }
+
+  it('refuses a subject type the set does not declare', async () => {
+    const authorization = authorizationWithAssignableTo(['user']);
+
+    await expect(
+      authorization.permissionSets.assign({
+        subject: { type: 'authenticated', id: '*' },
+        permissionSet: 'administrator',
+      }),
+    ).rejects.toBeInstanceOf(PermissionSetSubjectNotAllowedError);
+    await expect(
+      authorization.permissionSets.listAssignments('administrator'),
+    ).resolves.toEqual([]);
+
+    await expect(
+      authorization.permissionSets.assign({
+        subject: { type: 'user', id: 'alice' },
+        permissionSet: 'administrator',
+      }),
+    ).resolves.toMatchObject({ permissionSet: 'administrator' });
+  });
+
+  it('refuses the same subject type when assignments are replaced', async () => {
+    const authorization = authorizationWithAssignableTo(['user']);
+
+    await expect(
+      authorization.permissionSets.replaceSubjectAssignments({
+        subject: { type: 'authenticated', id: '*' },
+        managedPermissionSets: ['administrator', 'viewer'],
+        permissionSets: ['administrator'],
+      }),
+    ).rejects.toBeInstanceOf(PermissionSetSubjectNotAllowedError);
+    await expect(
+      authorization.permissionSets.listAssignments('administrator'),
+    ).resolves.toEqual([]);
+
+    await expect(
+      authorization.permissionSets.replaceSubjectAssignments({
+        subject: { type: 'user', id: 'alice' },
+        managedPermissionSets: ['administrator', 'viewer'],
+        permissionSets: ['administrator'],
+      }),
+    ).resolves.toMatchObject([{ permissionSet: 'administrator' }]);
+  });
+
+  it('accepts any subject type when the set declares none', async () => {
+    const authorization = authorizationWithAssignableTo();
+
+    await expect(
+      authorization.permissionSets.assign({
+        subject: { type: 'authenticated', id: '*' },
+        permissionSet: 'administrator',
+      }),
+    ).resolves.toMatchObject({ subject: { type: 'authenticated' } });
+  });
+
+  it('answers 403 PERMISSION_SET_SUBJECT_NOT_ALLOWED from the handler', async () => {
+    const authorization = authorizationWithAssignableTo(['user']);
+    authorization.permissionSets.protect({
+      owner: '@nocobase/test',
+      keys: ['administrator'],
+      allow: ['assign', 'revoke'],
+      assignableTo: ['user'],
+      unrestricted: true,
+    });
+    await authorization.permissionSets.assign({
+      subject: { type: 'user', id: 'root' },
+      permissionSet: 'administrator',
+    });
+    const router = new Hono();
+    router.on(
+      ['GET', 'POST', 'PUT', 'DELETE'],
+      ['/authz/permission-sets', '/authz/permission-sets/*'],
+      (context) =>
+        authorization.permissionSets.handler({
+          request: context.req.raw,
+          authorization: authorization.for({
+            principal: { type: 'user', id: 'root' },
+          }),
+          path: context.req.path.slice('/authz'.length),
+        }),
+    );
+
+    const response = await router.request(
+      '/authz/permission-sets/administrator/assignments',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ subject: { type: 'authenticated', id: '*' } }),
+      },
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      code: 'PERMISSION_SET_SUBJECT_NOT_ALLOWED',
+    });
+  });
+
+  it('carries the root set restriction only when the application declares it', () => {
+    const restricted = createAuthorization({
+      plugins: [
+        permissionSets({
+          store: new MockPermissionSetStore(administratorOptions(['root'])),
+          rootSet: { key: 'administrator', assignableTo: ['user'] },
+        }),
+      ],
+    });
+    const unrestricted = createAuthorization({
+      plugins: [
+        permissionSets({
+          store: new MockPermissionSetStore(administratorOptions(['root'])),
+          rootSet: 'administrator',
+        }),
+      ],
+    });
+
+    expect(restricted.permissionSets.protection('administrator')).toMatchObject(
+      { assignableTo: ['user'] },
+    );
+    expect(
+      unrestricted.permissionSets.protection('administrator'),
+    ).not.toHaveProperty('assignableTo');
+  });
+});
+
+describe('subscribing to assignment changes', () => {
+  function authorizationWithAssignments(): ReturnType<
+    typeof createAuthorization
+  > {
+    return createAuthorization({
+      plugins: [
+        permissionSets({
+          store: new MockPermissionSetStore(administratorOptions(['root'])),
+        }),
+      ],
+    });
+  }
+
+  it('notifies every subscriber when an assignment changes', async () => {
+    const authorization = authorizationWithAssignments();
+    const changed = vi.fn();
+    authorization.onGrantsChanged(changed);
+
+    await authorization.permissionSets.assign({
+      subject: { type: 'user', id: 'second' },
+      permissionSet: 'administrator',
+    });
+
+    expect(changed.mock.calls).toEqual([[{ type: 'user', id: 'second' }]]);
+  });
+
+  it('notifies nobody from a service bound to a transaction', async () => {
+    const authorization = authorizationWithAssignments();
+    const changed = vi.fn();
+    authorization.onGrantsChanged(changed);
+
+    await authorization.permissionSets.withTransaction(transaction).assign({
+      subject: { type: 'user', id: 'second' },
+      permissionSet: 'administrator',
+    });
+
+    expect(changed).not.toHaveBeenCalled();
+  });
+
+  it('stops notifying once the subscription is released', async () => {
+    const authorization = authorizationWithAssignments();
+    const changed = vi.fn();
+    const release = authorization.onGrantsChanged(changed);
+
+    release();
+    await authorization.permissionSets.assign({
+      subject: { type: 'user', id: 'second' },
+      permissionSet: 'administrator',
+    });
+
+    expect(changed).not.toHaveBeenCalled();
   });
 });

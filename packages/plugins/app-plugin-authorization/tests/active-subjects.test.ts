@@ -4,16 +4,54 @@ import { fileURLToPath } from 'node:url';
 import {
   createDatabaseManager,
   createMigrator,
+  type DatabaseConnection,
   type DatabaseManager,
 } from '@nocobase/db';
 import { PermissionSetLastAssignmentError } from '@nocobase/authorization/permissions';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { createAppAuthorization } from '../server/authorization.js';
+import type { Authorization } from '@nocobase/authorization/core';
+import type { PermissionSetsAuthorizationApi } from '@nocobase/authorization/permissions';
+
+type AppAuthorizationWithPermissionSets = Authorization &
+  PermissionSetsAuthorizationApi;
+
+function appAuthorization(
+  connection: DatabaseConnection,
+): AppAuthorizationWithPermissionSets {
+  // `rootSet` is what declares the root set may never lose its last
+  // assignment that can still act, which is what these tests drive.
+  return createAppAuthorization({
+    connection,
+    config: { permissionSets: { rootSet: 'root' } },
+  });
+}
+
+/**
+ * The application decides which subjects can still act by declaring a subject
+ * type; this stands in for the one `@nocobase/app-plugin-users` declares.
+ */
+function defineEnabledUsers(
+  authorization: Authorization,
+  database: DatabaseManager,
+): void {
+  authorization.subjects.define('user', {
+    filterActive: async (ids, connection) => {
+      const rows = await (connection ?? database.connection()).query
+        .selectFrom('user')
+        .select(['id'])
+        .where('id', 'in', [...ids])
+        .where('disabledAt', 'is', null)
+        .execute();
+      return rows.map((row) => String(row.id));
+    },
+  });
+}
 
 describe('the subjects an application counts as able to act', () => {
   let database: DatabaseManager;
-  let authorization: ReturnType<typeof createAppAuthorization>;
+  let authorization: AppAuthorizationWithPermissionSets;
 
   beforeEach(async () => {
     database = createDatabaseManager({
@@ -31,19 +69,10 @@ describe('the subjects an application counts as able to act', () => {
       '@nocobase/app-plugin-authorization',
       '../database/migrations',
     );
-    authorization = createAppAuthorization({
-      connection: database.connection(),
-    });
-    // What the provider declares at runtime.
-    authorization.permissionSets.protect({
-      owner: '@nocobase/app-plugin-authorization',
-      keys: ['system-administrator'],
-      allow: ['assign', 'revoke'],
-      requireActiveAssignment: true,
-    });
+    authorization = appAuthorization(database.connection());
     await authorization.permissionSets.create({
-      key: 'system-administrator',
-      title: 'System administrator',
+      key: 'root',
+      title: 'Root',
       grants: [],
     });
   });
@@ -56,31 +85,32 @@ describe('the subjects an application counts as able to act', () => {
     await createUser(database, 'root');
     await authorization.permissionSets.assign({
       subject: { type: 'user', id: 'root' },
-      permissionSet: 'system-administrator',
+      permissionSet: 'root',
     });
 
     await expect(
-      authorization.permissionSets.revoke('user:root:system-administrator'),
+      authorization.permissionSets.revoke('user:root:root'),
     ).rejects.toBeInstanceOf(PermissionSetLastAssignmentError);
   });
 
   it('does not count a disabled account as a superuser who can act', async () => {
+    defineEnabledUsers(authorization, database);
     await createUser(database, 'root');
     await createUser(database, 'retired', { disabled: true });
     for (const id of ['root', 'retired']) {
       await authorization.permissionSets.assign({
         subject: { type: 'user', id },
-        permissionSet: 'system-administrator',
+        permissionSet: 'root',
       });
     }
 
     // Two assignments exist, but only one of them belongs to an account that
     // can still sign in.
     await expect(
-      authorization.permissionSets.revoke('user:root:system-administrator'),
+      authorization.permissionSets.revoke('user:root:root'),
     ).rejects.toBeInstanceOf(PermissionSetLastAssignmentError);
     await expect(
-      authorization.permissionSets.revoke('user:retired:system-administrator'),
+      authorization.permissionSets.revoke('user:retired:root'),
     ).resolves.toBeUndefined();
   });
 
@@ -90,12 +120,12 @@ describe('the subjects an application counts as able to act', () => {
     for (const id of ['root', 'second']) {
       await authorization.permissionSets.assign({
         subject: { type: 'user', id },
-        permissionSet: 'system-administrator',
+        permissionSet: 'root',
       });
     }
 
     await expect(
-      authorization.permissionSets.revoke('user:root:system-administrator'),
+      authorization.permissionSets.revoke('user:root:root'),
     ).resolves.toBeUndefined();
   });
 });

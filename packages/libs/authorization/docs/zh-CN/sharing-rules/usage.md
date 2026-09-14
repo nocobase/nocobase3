@@ -110,6 +110,25 @@ await authz.sharingRules.delete('share-orders-with-auditors');
 更新显式记录分享时，Store 会同步替换对应的记录 ID；删除规则时，也会删除它的记录
 明细。
 
+## HTTP API
+
+插件在安装时把自己的管理路由注册到 `authz.routes`，应用只需要挂载一个分发器（见
+Core 文档的 `routes`）。处理器会先用请求级 Authorization 检查
+`authorization.settings/sharing-rules` 的相应权限，拒绝时返回 `403 FORBIDDEN`，请求体不合法时
+返回 `400 INVALID_AUTHORIZATION_INPUT`。
+
+可用端点：
+
+| Method | Path                  | 用途              |
+| ------ | --------------------- | ----------------- |
+| GET    | `/sharing-rules`      | 列出 Sharing Rule |
+| POST   | `/sharing-rules`      | 创建（返回 201）  |
+| PUT    | `/sharing-rules/:key` | 更新              |
+| DELETE | `/sharing-rules/:key` | 删除（返回 204）  |
+
+`selection.type` 只能是 `records` 或 `policy`，且 policy 不接受 `ids`——指定记录请用
+`records`。
+
 ## 自定义 Store
 
 测试或使用其他持久化方案时，可以实现 `SharingRuleStore`：

@@ -5,7 +5,7 @@ import {
 } from '@nocobase/app-plugin-authentication';
 import {
   authorizationToken,
-  type AppAuthorization,
+  type Authorization,
 } from '@nocobase/app-plugin-authorization';
 import { loggingToken } from '@nocobase/app-server/logging';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
@@ -246,7 +246,7 @@ function createApplication(
       });
       await next();
     },
-  } as AppAuthorization);
+  } as unknown as Authorization);
   container.instance(userManagementServiceToken, service);
   if (options.logger) {
     container.instance(loggingToken, {

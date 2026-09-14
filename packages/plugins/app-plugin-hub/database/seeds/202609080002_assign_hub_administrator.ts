@@ -8,7 +8,7 @@ const HUB_PERMISSION_SET_KEYS = [
 ] as const;
 
 const seed: SeedDefinition = defineSeed({
-  name: '202609080001_assign_hub_administrator',
+  name: '202609080002_assign_hub_administrator',
 
   async run({ query }) {
     const permissionSet = await query
@@ -19,13 +19,13 @@ const seed: SeedDefinition = defineSeed({
     if (!permissionSet) return;
 
     const now = new Date();
-    const systemAdministrators = await query
+    const superusers = await query
       .selectFrom('authorizationPermissionSetAssignments')
       .select(['subjectType', 'subjectId'])
       .where('subjectType', '=', 'user')
-      .where('permissionSetKey', '=', 'system-administrator')
+      .where('permissionSetKey', '=', 'root')
       .execute();
-    for (const subject of systemAdministrators) {
+    for (const subject of superusers) {
       const subjectId = String(subject.subjectId);
       await query
         .deleteFrom('authorizationPermissionSetAssignments')

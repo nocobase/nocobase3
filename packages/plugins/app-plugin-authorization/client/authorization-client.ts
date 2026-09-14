@@ -16,6 +16,8 @@ export type PermissionSetWriteOperation =
 export interface PermissionSetProtection {
   owner: string;
   allow: readonly PermissionSetWriteOperation[];
+  /** Subject types the set may be assigned to. Absent means any. */
+  assignableTo?: readonly string[];
 }
 
 export interface PermissionSet {
@@ -134,6 +136,9 @@ interface DataResponse<T> {
   data: T;
 }
 
+/** One page is the whole picker; the Users page is where a large directory is searched. */
+const USER_PAGE_SIZE = 200;
+
 export class AuthorizationClient {
   private snapshot?: Promise<PermissionsSnapshot>;
   private readonly invalidationListeners = new Set<() => void>();
@@ -179,8 +184,18 @@ export class AuthorizationClient {
   loadOptions(path: string): Promise<AuthorizationOptions> {
     return this.get<AuthorizationOptions>(path);
   }
-  loadUsers(path: string): Promise<readonly AuthorizationUser[]> {
-    return this.get<readonly AuthorizationUser[]>(path);
+  /**
+   * Users come from the Users API rather than from Authorization, which knows
+   * subject ids and nothing about accounts. It authorizes separately, so this
+   * request can be refused while the settings page itself is allowed.
+   */
+  listUsers(): Promise<readonly AuthorizationUser[]> {
+    return this.api
+      .request<DataResponse<{ items: readonly AuthorizationUser[] }>>({
+        path: 'users',
+        query: { pageSize: USER_PAGE_SIZE },
+      })
+      .then((response) => response.data.items);
   }
   listDefaultAccess(): Promise<readonly DefaultAccessRule[]> {
     return this.get<readonly DefaultAccessRule[]>('authz/default-access');

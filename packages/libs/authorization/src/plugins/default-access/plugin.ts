@@ -8,6 +8,10 @@ import type { DatabaseConnection } from '@nocobase/db';
 import { DatabaseDefaultAccessStore } from './database-store.js';
 import type { DefaultAccessRule } from './model.js';
 import type { DefaultAccessStore } from './store.js';
+import {
+  createDefaultAccessHandler,
+  DEFAULT_ACCESS_ROUTE_PATH,
+} from './routes.js';
 
 export interface DefaultAccessApi<TTransaction = DatabaseConnection> {
   set(rule: DefaultAccessRule): Promise<DefaultAccessRule>;
@@ -65,6 +69,10 @@ export function defaultAccess(
         service.initialize(new DatabaseDefaultAccessStore(authz.connection));
       }
       authz.constraints.add(service);
+      authz.routes.add(
+        DEFAULT_ACCESS_ROUTE_PATH,
+        createDefaultAccessHandler(service),
+      );
     },
   };
 }

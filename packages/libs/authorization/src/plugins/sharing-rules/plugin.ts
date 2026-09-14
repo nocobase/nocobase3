@@ -3,6 +3,10 @@ import type { DatabaseConnection } from '@nocobase/db';
 import { DatabaseSharingRuleStore } from './database-store.js';
 import { SharingRuleService, type SharingRulesApi } from './service.js';
 import type { SharingRuleStore } from './store.js';
+import {
+  createSharingRulesHandler,
+  SHARING_RULES_ROUTE_PATH,
+} from './routes.js';
 
 export interface SharingRulesAuthorizationApi<
   TTransaction = DatabaseConnection,
@@ -45,6 +49,10 @@ export function sharingRules(
         service.initialize(new DatabaseSharingRuleStore(authz.connection));
       }
       authz.constraints.add(service);
+      authz.routes.add(
+        SHARING_RULES_ROUTE_PATH,
+        createSharingRulesHandler(service),
+      );
     },
   };
 }

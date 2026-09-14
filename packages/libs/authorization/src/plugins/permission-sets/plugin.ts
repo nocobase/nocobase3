@@ -1,7 +1,9 @@
 import type {
   AuthorizationScope,
+  AuthorizationSubjectRegistry,
   AuthorizationGrant,
   AuthorizationGrantService,
+  AuthorizationGrantsChangedListener,
   ResolveAuthorizationGrantsInput,
   ResolveAllAuthorizationGrantsInput,
   AuthorizationPlugin,
@@ -17,7 +19,10 @@ import type {
   PermissionSetSubject,
 } from './model.js';
 import type { DatabaseConnection } from '@nocobase/db';
-import { createPermissionSetHandler } from './routes.js';
+import {
+  createPermissionSetHandler,
+  PERMISSION_SETS_ROUTE_PATH,
+} from './routes.js';
 import { DatabasePermissionSetStore } from './database-store.js';
 import type { PermissionSetStore } from './store.js';
 
@@ -51,6 +56,12 @@ export interface PermissionSetsApi<TTransaction = DatabaseConnection> {
   }): Promise<readonly PermissionSetAssignment[]>;
   notifyAssignmentsChanged(subject: PermissionSetSubject): Promise<void>;
   /**
+   * The Grant Provider contract: subscribes to assignment changes and returns
+   * a function that releases the subscription. Reached through
+   * `Authorization.onGrantsChanged`, so a host does not name this plugin.
+   */
+  onChange(listener: AuthorizationGrantsChangedListener): () => void;
+  /**
    * Throws when removing this subject would leave a Permission Set that
    * requires an active assignment without one.
    */
@@ -58,7 +69,7 @@ export interface PermissionSetsApi<TTransaction = DatabaseConnection> {
   /**
    * Returns an API bound to the caller's transaction. The caller owns the
    * transaction and publishes assignment changes after it commits, so the
-   * bound API does not call onAssignmentsChanged.
+   * bound API notifies no subscriber.
    */
   withTransaction(transaction: TTransaction): PermissionSetsApi<TTransaction>;
   /**
@@ -83,6 +94,10 @@ export interface PermissionSetsApi<TTransaction = DatabaseConnection> {
 export type PermissionSetWriteOperation =
   'create' | 'update' | 'delete' | 'assign' | 'revoke';
 
+/** Owner of a protection the library declares on its own behalf. */
+export const PERMISSION_SETS_PROTECTION_OWNER: string =
+  '@nocobase/authorization/permissions';
+
 export interface PermissionSetProtection {
   /** Who registers the protection, usually a plugin package name. */
   owner: string;
@@ -102,6 +117,8 @@ export interface PermissionSetProtection {
    * well: an unprotected superuser set should not exist.
    */
   unrestricted?: boolean;
+  /** Subject types this set may be assigned to. Absent means any. */
+  assignableTo?: readonly string[];
 }
 
 export interface PermissionSetProtectionInfo {
@@ -111,6 +128,8 @@ export interface PermissionSetProtectionInfo {
   requireActiveAssignment?: boolean;
   /** Present only when holding the set grants unrestricted access. */
   unrestricted?: boolean;
+  /** Subject types this set may be assigned to. Absent means any. */
+  assignableTo?: readonly string[];
 }
 
 export class PermissionSetProtectedError extends Error {
@@ -133,6 +152,20 @@ export class PermissionSetProtectedError extends Error {
   }
 }
 
+export class PermissionSetSubjectNotAllowedError extends Error {
+  readonly key: string;
+  readonly subjectType: string;
+
+  constructor(key: string, subjectType: string) {
+    super(
+      `The ${key} Permission Set cannot be assigned to a ${subjectType} subject.`,
+    );
+    this.name = 'PermissionSetSubjectNotAllowedError';
+    this.key = key;
+    this.subjectType = subjectType;
+  }
+}
+
 export class PermissionSetLastAssignmentError extends Error {
   readonly key: string;
 
@@ -147,25 +180,44 @@ export class PermissionSetLastAssignmentError extends Error {
 
 export interface PermissionSetHandlerInput {
   request: Request;
+  /** The request path relative to where the application mounted the routes. */
+  path: string;
   authorization: Pick<AuthorizationScope, 'require'>;
-  basePath?: string;
+}
+
+export interface PermissionSetRootSet {
+  key: string;
+  /** `false` lets the set stay empty between break-glass uses. */
+  requireActiveAssignment?: boolean;
+  /**
+   * Subject types the set may be assigned to. The library declares no default:
+   * which types are accounts rather than audiences is the host's convention.
+   */
+  assignableTo?: readonly string[];
 }
 
 export interface PermissionSetsOptions<TTransaction = DatabaseConnection> {
   /** Overrides the database-backed store, primarily for custom backends and tests. */
   store?: PermissionSetStore<TTransaction>;
-  onAssignmentsChanged?(subject: PermissionSetSubject): void | Promise<void>;
   /**
-   * Narrows subjects to the ones that can still act. Authorization does not
-   * own account state, so an application that can disable a user supplies
-   * this. Without it every assignment counts. It is handed the caller's
-   * transaction when there is one, so it reads the same snapshot the check
-   * has already locked rather than blocking on it from outside.
+   * The Permission Set that confers unrestricted access. Declaring it here
+   * protects it as the library's own: it may be assigned and revoked but not
+   * edited or deleted, and it keeps an active assignment unless the
+   * application says otherwise.
    */
-  filterActiveSubjects?(
-    subjects: readonly PermissionSetSubject[],
-    transaction?: TTransaction,
-  ): Promise<readonly PermissionSetSubject[]>;
+  rootSet?: string | PermissionSetRootSet;
+  /**
+   * The Permission Set an installation keeps as its ordinary one: its grants
+   * stay editable, while the set itself and its assignments do not.
+   *
+   * This names a set and its protection. It does not mean "these grants apply
+   * to every identity without an assignment": that meaning lives in the
+   * assignment row binding the set to an audience subject, and in the host
+   * middleware that adds that subject to a request. It must stay there,
+   * because the library's "every identity" would include the anonymous ones
+   * in a host that has them.
+   */
+  defaultSet?: string;
 }
 
 export class PermissionSetNotFoundError extends Error {
@@ -206,11 +258,30 @@ export function permissionSets(
   options: PermissionSetsOptions<DatabaseConnection> = {},
 ): PermissionSetsPlugin<DatabaseConnection> {
   const service = new PermissionSetService(options);
+  const rootSet = resolveRootSet(options.rootSet);
+  if (rootSet) {
+    service.protect({
+      owner: PERMISSION_SETS_PROTECTION_OWNER,
+      keys: [rootSet.key],
+      allow: ['assign', 'revoke'],
+      requireActiveAssignment: rootSet.requireActiveAssignment ?? true,
+      unrestricted: true,
+      ...(rootSet.assignableTo ? { assignableTo: rootSet.assignableTo } : {}),
+    });
+  }
+  if (options.defaultSet) {
+    service.protect({
+      owner: PERMISSION_SETS_PROTECTION_OWNER,
+      keys: [options.defaultSet],
+      allow: ['update'],
+    });
+  }
   return {
     id: 'permission-sets',
     grants: service,
     authorizationApi: { permissionSets: service },
     setup(authz): void {
+      service.useSubjects(authz.subjects);
       if (!options.store) {
         if (!authz.connection) {
           throw new Error(
@@ -219,6 +290,9 @@ export function permissionSets(
         }
         service.initialize(new DatabasePermissionSetStore(authz.connection));
       }
+      authz.routes.add(PERMISSION_SETS_ROUTE_PATH, (input) =>
+        service.handler(input),
+      );
       authz.resources.add({
         resourceType: 'authorization.settings',
         async authorize(request, context) {
@@ -254,6 +328,20 @@ export function permissionSets(
   };
 }
 
+/** What every service derived from one plugin instance shares. */
+interface PermissionSetSharedState {
+  readonly protections: Map<string, PermissionSetProtectionInfo>;
+  readonly subscribers: Set<AuthorizationGrantsChangedListener>;
+  subjects?: AuthorizationSubjectRegistry;
+}
+
+function resolveRootSet(
+  rootSet: string | PermissionSetRootSet | undefined,
+): PermissionSetRootSet | undefined {
+  if (rootSet === undefined) return undefined;
+  return typeof rootSet === 'string' ? { key: rootSet } : rootSet;
+}
+
 class PermissionSetService<TTransaction = DatabaseConnection>
   implements AuthorizationGrantService, PermissionSetsApi<TTransaction>
 {
@@ -262,13 +350,21 @@ class PermissionSetService<TTransaction = DatabaseConnection>
   readonly handler: (input: PermissionSetHandlerInput) => Promise<Response>;
 
   constructor(
-    private readonly options: PermissionSetsOptions<TTransaction> = {},
-    protections: Map<string, PermissionSetProtectionInfo> = new Map(),
+    options: PermissionSetsOptions<TTransaction> = {},
+    private readonly shared: PermissionSetSharedState = {
+      protections: new Map(),
+      subscribers: new Set(),
+    },
     private readonly transaction?: TTransaction,
   ) {
     this.store = options.store;
-    this.protections = protections;
+    this.protections = shared.protections;
     this.handler = createPermissionSetHandler(this);
+  }
+
+  /** The registry that answers which subjects can still act. */
+  useSubjects(subjects: AuthorizationSubjectRegistry): void {
+    this.shared.subjects = subjects;
   }
 
   isUnrestricted(key: string): boolean {
@@ -297,6 +393,9 @@ class PermissionSetService<TTransaction = DatabaseConnection>
           ? { requireActiveAssignment: true }
           : {}),
         ...(protection.unrestricted ? { unrestricted: true } : {}),
+        ...(protection.assignableTo
+          ? { assignableTo: [...protection.assignableTo] }
+          : {}),
       });
       registered.push(key);
     }
@@ -465,6 +564,7 @@ class PermissionSetService<TTransaction = DatabaseConnection>
     if (!(await this.getStore().getPermissionSet(input.permissionSet))) {
       throw new PermissionSetNotFoundError(input.permissionSet);
     }
+    this.assertAssignableTo(input.permissionSet, input.subject);
     const assignment = await this.getStore().assignPermissionSet({
       id: input.id ?? this.createAssignmentId(input),
       subject: input.subject,
@@ -507,6 +607,7 @@ class PermissionSetService<TTransaction = DatabaseConnection>
       if (!(await this.getStore().getPermissionSet(key))) {
         throw new PermissionSetNotFoundError(key);
       }
+      this.assertAssignableTo(key, input.subject);
     }
     const existing = (await this.getStore().listAssignments()).filter(
       (assignment) =>
@@ -550,19 +651,23 @@ class PermissionSetService<TTransaction = DatabaseConnection>
     return [...kept, ...created];
   }
 
+  onChange(listener: AuthorizationGrantsChangedListener): () => void {
+    this.shared.subscribers.add(listener);
+    return (): void => {
+      this.shared.subscribers.delete(listener);
+    };
+  }
+
   async notifyAssignmentsChanged(subject: PermissionSetSubject): Promise<void> {
-    await this.options.onAssignmentsChanged?.(subject);
+    // The caller that owns the transaction publishes after it commits.
+    if (this.transaction !== undefined) return;
+    for (const listener of this.shared.subscribers) await listener(subject);
   }
 
   withTransaction(transaction: TTransaction): PermissionSetsApi<TTransaction> {
     return new PermissionSetService<TTransaction>(
-      {
-        ...this.options,
-        store: this.getStore().withTransaction(transaction),
-        // The caller that owns the transaction publishes after commit.
-        onAssignmentsChanged: undefined,
-      },
-      this.protections,
+      { store: this.getStore().withTransaction(transaction) },
+      this.shared,
       transaction,
     );
   }
@@ -577,6 +682,16 @@ class PermissionSetService<TTransaction = DatabaseConnection>
         await this.assertRetainsAssignment(assignment);
       }
     }
+  }
+
+  /**
+   * Enforced here rather than in the handler alone, so an application that
+   * assigns through the api is held to the same restriction.
+   */
+  private assertAssignableTo(key: string, subject: PermissionSetSubject): void {
+    const assignableTo = this.protections.get(key)?.assignableTo;
+    if (!assignableTo || assignableTo.includes(subject.type)) return;
+    throw new PermissionSetSubjectNotAllowedError(key, subject.type);
   }
 
   /**
@@ -603,12 +718,12 @@ class PermissionSetService<TTransaction = DatabaseConnection>
     }
   }
 
-  /** Every subject counts until the application says which ones can act. */
+  /** Every subject counts until a declared subject type says otherwise. */
   private async activeSubjects(
     subjects: readonly PermissionSetSubject[],
   ): Promise<readonly PermissionSetSubject[]> {
     return (
-      (await this.options.filterActiveSubjects?.(subjects, this.transaction)) ??
+      (await this.shared.subjects?.filterActive(subjects, this.transaction)) ??
       subjects
     );
   }

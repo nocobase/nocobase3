@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { AuthorizationDeniedError } from '../../core/index.js';
+import { atPath } from '../internal/http.js';
 import type { Principal } from '../../core/index.js';
 import type {
   PermissionGrant,
@@ -19,6 +20,7 @@ import {
   PermissionSetLastAssignmentError,
   PermissionSetNotFoundError,
   PermissionSetProtectedError,
+  PermissionSetSubjectNotAllowedError,
 } from './plugin.js';
 
 /**
@@ -43,6 +45,9 @@ type PermissionSetAdministrationApi = Omit<
   PermissionSetsApi,
   'handler' | 'withTransaction'
 >;
+
+/** Where the plugin registers its routes, and the prefix every path below carries. */
+export const PERMISSION_SETS_ROUTE_PATH = '/permission-sets';
 
 export function createPermissionSetHandler(
   api: PermissionSetAdministrationApi,
@@ -80,6 +85,12 @@ export function createPermissionSetHandler(
     if (error instanceof PermissionSetProtectedError) {
       return context.json(
         { code: 'PROTECTED_PERMISSION_SET', message: error.message },
+        403,
+      );
+    }
+    if (error instanceof PermissionSetSubjectNotAllowedError) {
+      return context.json(
+        { code: 'PERMISSION_SET_SUBJECT_NOT_ALLOWED', message: error.message },
         403,
       );
     }
@@ -169,7 +180,7 @@ export function createPermissionSetHandler(
 
   return (input: PermissionSetHandlerInput): Promise<Response> =>
     Promise.resolve(
-      routes.fetch(withoutBasePath(input.request, input.basePath), {
+      routes.fetch(atPath(input.request, input.path), {
         authorization: input.authorization,
       }),
     );
@@ -190,20 +201,6 @@ function summarize(
     ...(protection === undefined ? {} : { protection }),
     ...(api.isUnrestricted(permissionSet.key) ? { unrestricted: true } : {}),
   };
-}
-
-function withoutBasePath(request: Request, basePath?: string): Request {
-  if (!basePath) return request;
-  const url = new URL(request.url);
-  const normalized = `/${basePath}`.replace(/\/+/g, '/').replace(/\/$/, '');
-  if (
-    url.pathname !== normalized &&
-    !url.pathname.startsWith(`${normalized}/`)
-  ) {
-    return request;
-  }
-  url.pathname = url.pathname.slice(normalized.length) || '/';
-  return new Request(url, request);
 }
 
 function permissionSetAdministrationAction(method: string): string {

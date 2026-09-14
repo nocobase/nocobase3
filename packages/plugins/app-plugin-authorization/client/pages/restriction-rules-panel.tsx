@@ -8,9 +8,9 @@ import {
 } from 'react';
 import type {
   AuthorizationOptions,
-  AuthorizationUser,
   RestrictionRule,
 } from '../authorization-client.js';
+import type { UserDirectory } from '../components/user-directory.js';
 import {
   ActionScopesEditor,
   Field,
@@ -32,10 +32,10 @@ const authz = getAuthorizationClient();
 
 export function RestrictionRulesPanel({
   options,
-  users,
+  directory,
 }: {
   options: AuthorizationOptions;
-  users: readonly AuthorizationUser[];
+  directory: UserDirectory;
 }): ReactElement {
   const [rules, setRules] = useState<readonly RestrictionRule[]>([]);
   const [draft, setDraft] = useState<RestrictionRule>();
@@ -145,7 +145,7 @@ export function RestrictionRulesPanel({
                     {rule.reason || rule.key}
                   </p>
                 </td>
-                <td className='px-5 py-4'>{subjectLabel(rule, users)}</td>
+                <td className='px-5 py-4'>{subjectLabel(rule, directory)}</td>
                 <td className='px-5 py-4'>{resourceLabel(options, rule)}</td>
                 <td className='px-5 py-4'>
                   {rule.actions.map((item) => humanize(item.action)).join(', ')}
@@ -256,7 +256,7 @@ export function RestrictionRulesPanel({
                   </p>
                 </div>
                 <SubjectsEditor
-                  users={users}
+                  directory={directory}
                   value={draft.subjects}
                   onChange={(subjects) => setDraft({ ...draft, subjects })}
                 />
@@ -352,15 +352,13 @@ function resourceLabel(
     rule.resource.id
   );
 }
-function subjectLabel(
-  rule: RestrictionRule,
-  users: readonly AuthorizationUser[],
-): string {
+function subjectLabel(rule: RestrictionRule, directory: UserDirectory): string {
   const subject = rule.subjects[0];
   if (!subject || subject.type === 'authenticated')
     return 'All signed-in users';
   return (
-    users.find((user) => user.id === subject.id)?.name ?? `User ${subject.id}`
+    directory.users.find((user) => user.id === subject.id)?.name ??
+    `User ${subject.id}`
   );
 }
 function scopeLabel(rule: RestrictionRule): string {

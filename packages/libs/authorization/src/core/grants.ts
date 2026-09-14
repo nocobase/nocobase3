@@ -34,6 +34,10 @@ export interface ResolveAllAuthorizationGrantsInput {
   subjects?: readonly AuthorizationSubject[];
 }
 
+export type AuthorizationGrantsChangedListener = (
+  subject: AuthorizationSubject,
+) => void | Promise<void>;
+
 export interface AuthorizationGrantService {
   resolve(
     input: ResolveAuthorizationGrantsInput,
@@ -44,4 +48,6 @@ export interface AuthorizationGrantService {
   scope?(identity: AuthorizationIdentity): AuthorizationGrantService;
   /** True when the identity has unrestricted access and per-resource authorization is skipped. */
   unrestricted?(identity: AuthorizationIdentity): Promise<boolean>;
+  /** Notifies when the grants a subject resolves to may have changed. */
+  onChange?(listener: AuthorizationGrantsChangedListener): () => void;
 }

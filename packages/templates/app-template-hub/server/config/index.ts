@@ -4,6 +4,7 @@ import {
   type AppConfigFactory,
 } from '@nocobase/app-server/config';
 import auth from './auth.js';
+import authorization from './authorization.js';
 import notification from './notification.js';
 import session from './session.js';
 import server from './server.js';
@@ -22,6 +23,7 @@ import workflow from './workflow.js';
 const defaultConfigs: AppConfigFactory<{
   heartbeat: ReturnType<typeof heartbeat>;
   auth: ReturnType<typeof auth>;
+  authorization: ReturnType<typeof authorization>;
   notification: ReturnType<typeof notification>;
   session: ReturnType<typeof session>;
   server: ReturnType<typeof server>;
@@ -39,6 +41,7 @@ const defaultConfigs: AppConfigFactory<{
 }> = defaultAppConfigs({
   heartbeat,
   auth,
+  authorization,
   notification,
   session,
   server,

@@ -6,8 +6,8 @@ import type {
   AuthorizationOptions,
   AuthorizationRecordOption,
   AuthorizationSubject,
-  AuthorizationUser,
 } from '../authorization-client.js';
+import { canAddAssignment, type UserDirectory } from './user-directory.js';
 
 const selectClass =
   'h-8 w-full rounded-lg border border-input bg-background px-3 text-sm';
@@ -162,14 +162,15 @@ export function ActionsEditor({
 }
 
 export function SubjectEditor({
-  users,
+  directory,
   value,
   onChange,
 }: {
-  users: readonly AuthorizationUser[];
+  directory: UserDirectory;
   value: AuthorizationSubject;
   onChange: (value: AuthorizationSubject) => void;
 }): ReactElement {
+  const users = directory.users;
   return (
     <>
       <Field label='Who'>
@@ -216,14 +217,15 @@ export function SubjectEditor({
 }
 
 export function SubjectsEditor({
-  users,
+  directory,
   value,
   onChange,
 }: {
-  users: readonly AuthorizationUser[];
+  directory: UserDirectory;
   value: readonly AuthorizationSubject[];
   onChange: (value: readonly AuthorizationSubject[]) => void;
 }): ReactElement {
+  const users = directory.users;
   const [search, setSearch] = useState('');
   const query = search.trim().toLowerCase();
   const visible = users.filter(
@@ -262,6 +264,11 @@ export function SubjectsEditor({
           Choose an audience or multiple users.
         </p>
       </div>
+      {directory.unavailable ? (
+        <p className='rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900'>
+          {directory.unavailable}
+        </p>
+      ) : null}
       <label className='flex items-start gap-3 rounded-md border p-3'>
         <input
           className='mt-1'
@@ -278,6 +285,7 @@ export function SubjectsEditor({
       </label>
       <Input
         type='search'
+        disabled={!canAddAssignment(directory)}
         placeholder='Search name, username, or email'
         value={search}
         onChange={(event) => setSearch(event.target.value)}

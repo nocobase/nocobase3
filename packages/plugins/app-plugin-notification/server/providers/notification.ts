@@ -1,7 +1,7 @@
 import { databaseManagerToken } from '@nocobase/db';
 import {
   authorizationToken,
-  type AppAuthorization,
+  type Authorization,
 } from '@nocobase/app-plugin-authorization';
 import { loggingToken } from '@nocobase/app-server/logging';
 import { queueManagerToken } from '@nocobase/app-server/queue';
@@ -85,7 +85,7 @@ export class NotificationProvider<
 }
 
 export function registerNotificationAuthorization(
-  authorization: Pick<AppAuthorization, 'resources'>,
+  authorization: Pick<Authorization, 'resources'>,
 ): void {
   authorization.resources.add({
     resourceType: 'notification',

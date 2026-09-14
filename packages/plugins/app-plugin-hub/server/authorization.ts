@@ -1,4 +1,7 @@
-import type { AppAuthorization } from '@nocobase/app-plugin-authorization';
+import type {
+  Authorization,
+  PermissionSetsApi,
+} from '@nocobase/app-plugin-authorization';
 import {
   UserManagementError,
   type UserRoleScope,
@@ -39,15 +42,15 @@ const HUB_APP_ACTIONS = new Set([
  * only way back into a Hub that has lost its last administrator.
  */
 export function protectHubPermissionSets(
-  authorization: Pick<AppAuthorization, 'permissionSets'>,
+  permissionSets: Pick<PermissionSetsApi, 'protect'>,
 ): () => void {
   const releases = [
-    authorization.permissionSets.protect({
+    permissionSets.protect({
       owner: '@nocobase/app-plugin-hub',
       keys: [HUB_ADMINISTRATOR],
       requireActiveAssignment: true,
     }),
-    authorization.permissionSets.protect({
+    permissionSets.protect({
       owner: '@nocobase/app-plugin-hub',
       keys: HUB_PERMISSION_SET_KEYS.filter((key) => key !== HUB_ADMINISTRATOR),
     }),
@@ -58,14 +61,14 @@ export function protectHubPermissionSets(
 }
 
 export function registerHubResources(
-  authorization: Pick<AppAuthorization, 'resources'>,
+  authorization: Pick<Authorization, 'resources'>,
 ): void {
   registerGrantBackedResource(authorization, 'hub.app', HUB_APP_ACTIONS);
   registerGrantBackedResource(authorization, 'hub.host', new Set(['read']));
 }
 
 function registerGrantBackedResource(
-  authorization: Pick<AppAuthorization, 'resources'>,
+  authorization: Pick<Authorization, 'resources'>,
   resourceType: 'hub.app' | 'hub.host',
   actions: ReadonlySet<string>,
 ): void {
@@ -115,7 +118,7 @@ function registerGrantBackedResource(
 }
 
 export function createHubUserRoleScope(
-  authorization: Pick<AppAuthorization, 'permissionSets'>,
+  permissionSets: PermissionSetsApi,
 ): UserRoleScope {
   const managedPermissionSets = [...HUB_PERMISSION_SET_KEYS];
   return {
@@ -142,7 +145,7 @@ export function createHubUserRoleScope(
         },
       ]),
     async get(userId, connection) {
-      const assignments = await authorization.permissionSets
+      const assignments = await permissionSets
         .withTransaction(connection)
         .listAssignments();
       return (
@@ -159,7 +162,7 @@ export function createHubUserRoleScope(
       const roles: Record<string, string> = Object.fromEntries(
         userIds.map((userId) => [userId, '']),
       );
-      const assignments = await authorization.permissionSets
+      const assignments = await permissionSets
         .withTransaction(connection)
         .listAssignments();
       for (const assignment of assignments) {
@@ -175,7 +178,7 @@ export function createHubUserRoleScope(
     },
     async findUserIds(role, connection) {
       requireHubRole(role);
-      const assignments = await authorization.permissionSets
+      const assignments = await permissionSets
         .withTransaction(connection)
         .listAssignments(role);
       return assignments
@@ -186,7 +189,7 @@ export function createHubUserRoleScope(
       const role = singleRole(value);
       // The library refuses a replacement that would take away the last
       // administrator who can still act, so there is nothing to check here.
-      await authorization.permissionSets
+      await permissionSets
         .withTransaction(connection)
         .replaceSubjectAssignments({
           subject: { type: 'user', id: userId },

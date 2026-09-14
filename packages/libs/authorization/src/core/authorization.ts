@@ -1,5 +1,7 @@
 import type { DatabaseConnection } from '@nocobase/db';
 import { ResourceHandlerRegistry } from './registry.js';
+import { AuthorizationSubjectRegistry } from './subjects.js';
+import { AuthorizationRouteRegistry } from './routes.js';
 import { AccessConstraintRegistry } from './constraints.js';
 import type { AccessConstraintService } from './constraints.js';
 import {
@@ -7,7 +9,10 @@ import {
   type AuthorizationPluginApis,
   type AuthorizationPlugin,
 } from './plugin.js';
-import type { AuthorizationGrantService } from './grants.js';
+import type {
+  AuthorizationGrantService,
+  AuthorizationGrantsChangedListener,
+} from './grants.js';
 import {
   createAuthorizationPermissionsApi,
   type AuthorizationPermission,
@@ -85,6 +90,8 @@ export class Authorization {
   private readonly plugins: readonly AuthorizationPlugin[];
   readonly resources: ResourceHandlerRegistry;
   readonly constraints: AccessConstraintRegistry;
+  readonly subjects: AuthorizationSubjectRegistry;
+  readonly routes: AuthorizationRouteRegistry;
   readonly permissions: AuthorizationPermissionsApi;
   private readonly grants: AuthorizationGrantService;
   private readonly grantProvider?: string;
@@ -93,6 +100,8 @@ export class Authorization {
   constructor(options: AuthorizationOptions) {
     this.resources = new ResourceHandlerRegistry();
     this.constraints = new AccessConstraintRegistry();
+    this.subjects = new AuthorizationSubjectRegistry();
+    this.routes = new AuthorizationRouteRegistry();
     this.permissions = createAuthorizationPermissionsApi();
     this.plugins = sortAuthorizationPlugins(options.plugins);
     const grantProvider = this.plugins.find((plugin) => plugin.grants);
@@ -114,11 +123,31 @@ export class Authorization {
         },
         resources: this.resources,
         constraints: this.constraints,
+        subjects: this.subjects,
+        routes: this.routes,
         use: (middleware): void => {
-          this.middlewares.push(middleware);
+          this.use(middleware);
         },
       });
     }
+  }
+
+  /**
+   * Registers a step that resolves the request's principal and subjects.
+   * `middleware()` runs every registered step before it builds the
+   * request-scoped Authorization.
+   */
+  use(middleware: AuthorizationMiddleware): void {
+    this.middlewares.push(middleware);
+  }
+
+  /**
+   * Subscribes to the Grant Provider's own announcement that a subject's
+   * grants may have changed. Returns a function that releases the
+   * subscription; a provider that announces nothing releases nothing.
+   */
+  onGrantsChanged(listener: AuthorizationGrantsChangedListener): () => void {
+    return this.grants.onChange?.(listener) ?? ((): void => {});
   }
 
   async authorize<TParams = undefined>(

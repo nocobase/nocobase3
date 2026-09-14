@@ -98,6 +98,22 @@ Restriction Rules 返回 `effect: "restrict"` 的访问约束。它不能让缺�
 AND Restriction Rules
 ```
 
+## HTTP API
+
+插件在安装时把自己的管理路由注册到 `authz.routes`，应用只需要挂载一个分发器（见
+Core 文档的 `routes`）。处理器会先用请求级 Authorization 检查
+`authorization.settings/restriction-rules` 的相应权限，拒绝时返回 `403 FORBIDDEN`，请求体不合法时
+返回 `400 INVALID_AUTHORIZATION_INPUT`。
+
+可用端点：
+
+| Method | Path                      | 用途                  |
+| ------ | ------------------------- | --------------------- |
+| GET    | `/restriction-rules`      | 列出 Restriction Rule |
+| POST   | `/restriction-rules`      | 创建（返回 201）      |
+| PUT    | `/restriction-rules/:key` | 更新                  |
+| DELETE | `/restriction-rules/:key` | 删除（返回 204）      |
+
 ## 自定义 Store
 
 测试或使用其他持久化方案时，可以实现 `RestrictionRuleStore`：

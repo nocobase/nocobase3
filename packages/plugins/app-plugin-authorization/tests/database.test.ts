@@ -22,10 +22,10 @@ describe('@nocobase/app-plugin-authorization database', () => {
     ]);
     await expect(validateSeeds(seedsDirectory)).resolves.toMatchObject([
       {
-        name: '202608240001_authorization_create_system_administrator',
+        name: '202608240001_authorization_create_root_set',
       },
       {
-        name: '202608250002_authorization_create_authenticated_role',
+        name: '202608250002_authorization_create_member_set',
       },
     ]);
   });

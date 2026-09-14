@@ -1,26 +1,26 @@
 import { defineSeed, type SeedDefinition } from '@nocobase/db';
 
-const AUTHENTICATED = 'authenticated';
+const MEMBER = 'member';
 
 const seed: SeedDefinition = defineSeed({
-  name: '202608250002_authorization_create_authenticated_role',
+  name: '202608250002_authorization_create_member_set',
 
   async run({ query }) {
     const now = new Date();
     const existingSet = await query
       .selectFrom('authorizationPermissionSets')
       .select('key')
-      .where('key', '=', AUTHENTICATED)
+      .where('key', '=', MEMBER)
       .executeTakeFirst();
     if (!existingSet) {
       await query
         .insertInto('authorizationPermissionSets')
         .values({
           id: crypto.randomUUID(),
-          key: AUTHENTICATED,
-          title: 'All signed-in users',
+          key: MEMBER,
+          title: 'Member',
           // No grants. The pages every signed-in user must reach declare `access: false` on the route itself, so the
-          // baseline set carries nothing an administrator could delete and nothing a route rename could invalidate.
+          // member set carries nothing an administrator could delete and nothing a route rename could invalidate.
           grants: JSON.stringify([]),
           createdAt: now,
           updatedAt: now,
@@ -28,7 +28,7 @@ const seed: SeedDefinition = defineSeed({
         .execute();
     }
 
-    const assignmentId = `authenticated:*:${AUTHENTICATED}`;
+    const assignmentId = `authenticated:*:${MEMBER}`;
     const existingAssignment = await query
       .selectFrom('authorizationPermissionSetAssignments')
       .select('id')
@@ -41,7 +41,7 @@ const seed: SeedDefinition = defineSeed({
           id: assignmentId,
           subjectType: 'authenticated',
           subjectId: '*',
-          permissionSetKey: AUTHENTICATED,
+          permissionSetKey: MEMBER,
           createdAt: now,
           updatedAt: now,
         })

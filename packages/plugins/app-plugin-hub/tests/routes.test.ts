@@ -4,7 +4,9 @@ import {
 } from '@nocobase/app-plugin-authentication';
 import {
   authorizationToken,
-  type AppAuthorization,
+  permissionSetsToken,
+  type Authorization,
+  type PermissionSetsApi,
 } from '@nocobase/app-plugin-authorization';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { AuthorizationDeniedError } from '@nocobase/authorization/core';
@@ -412,8 +414,10 @@ function createApplication(
       await next();
     },
   } as Auth);
+  container.instance(permissionSetsToken, {
+    list: () => Promise.resolve(permissionSets),
+  } as unknown as PermissionSetsApi);
   container.instance(authorizationToken, {
-    permissionSets: { list: async () => permissionSets },
     middleware: () => async (context, next) => {
       context.set('authz', {
         identity: { principal: { type: 'user', id: role } },
@@ -433,7 +437,7 @@ function createApplication(
       });
       await next();
     },
-  } as AppAuthorization);
+  } as unknown as Authorization);
   container.instance(
     hubServiceToken,
     (typeof service === 'function'

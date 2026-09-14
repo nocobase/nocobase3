@@ -1,6 +1,9 @@
 import { fileURLToPath } from 'node:url';
 
-import { createAppAuthorization } from '@nocobase/app-plugin-authorization';
+import {
+  createAppAuthorization,
+  type Authorization,
+} from '@nocobase/app-plugin-authorization';
 import {
   createDatabaseManager,
   createMigrator,
@@ -9,7 +12,10 @@ import {
 import sqlite from '@nocobase/db-sqlite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { PermissionSetLastAssignmentError } from '@nocobase/authorization/permissions';
+import {
+  PermissionSetLastAssignmentError,
+  type PermissionSetsAuthorizationApi,
+} from '@nocobase/authorization/permissions';
 
 import {
   createHubUserRoleScope,
@@ -19,7 +25,7 @@ import {
 
 describe('Hub user role scope', () => {
   let database: DatabaseManager;
-  let authorization: ReturnType<typeof createAppAuthorization>;
+  let authorization: Authorization & PermissionSetsAuthorizationApi;
 
   beforeEach(async () => {
     database = createDatabaseManager({
@@ -44,11 +50,13 @@ describe('Hub user role scope', () => {
       '@nocobase/app-plugin-hub',
       '../database/migrations',
     );
+    // The Hub declares its own protections, so Permission Sets is the only
+    // plugin these tests drive.
     authorization = createAppAuthorization({
       connection: database.connection(),
     });
     // What HubAuthorizationProvider declares at runtime.
-    protectHubPermissionSets(authorization);
+    protectHubPermissionSets(authorization.permissionSets);
   });
 
   afterEach(async () => {
@@ -69,7 +77,7 @@ describe('Hub user role scope', () => {
       subject: { type: 'user', id: 'user-1' },
       permissionSet: 'other-role',
     });
-    const scope = createHubUserRoleScope(authorization);
+    const scope = createHubUserRoleScope(authorization.permissionSets);
 
     await database.transaction((connection) =>
       scope.replace('user-1', 'hub-operator', connection),
@@ -108,7 +116,7 @@ describe('Hub user role scope', () => {
     vi.spyOn(authorization.permissionSets, 'withTransaction').mockReturnValue(
       authorization.permissionSets,
     );
-    const scope = createHubUserRoleScope(authorization);
+    const scope = createHubUserRoleScope(authorization.permissionSets);
 
     await expect(
       scope.getMany?.(['user-1', 'user-2'], database.connection()),
@@ -125,7 +133,7 @@ describe('Hub user role scope', () => {
       subject: { type: 'user', id: 'admin-1' },
       permissionSet: HUB_ADMINISTRATOR,
     });
-    const scope = createHubUserRoleScope(authorization);
+    const scope = createHubUserRoleScope(authorization.permissionSets);
 
     await expect(assertRemovable('admin-1')).rejects.toBeInstanceOf(
       PermissionSetLastAssignmentError,
@@ -146,7 +154,7 @@ describe('Hub user role scope', () => {
         permissionSet: HUB_ADMINISTRATOR,
       });
     }
-    const scope = createHubUserRoleScope(authorization);
+    const scope = createHubUserRoleScope(authorization.permissionSets);
 
     await expect(assertRemovable('admin-1')).resolves.toBeUndefined();
     await database.transaction((connection) =>
@@ -166,7 +174,7 @@ describe('Hub user role scope', () => {
         permissionSet: HUB_ADMINISTRATOR,
       });
     }
-    const scope = createHubUserRoleScope(authorization);
+    const scope = createHubUserRoleScope(authorization.permissionSets);
 
     const results = await Promise.allSettled([
       database.transaction((connection) =>

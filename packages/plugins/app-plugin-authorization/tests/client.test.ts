@@ -15,9 +15,16 @@ import { firstActions } from '../client/components/rule-utils.js';
 import { AuthorizationClient } from '../client/authorization-client.js';
 import type { PermissionSet } from '../client/authorization-client.js';
 import {
+  canAssignSubjectType,
   permissionSetCapabilities,
   permissionSetErrorMessage,
 } from '../client/components/permission-set-access.js';
+import {
+  canAddAssignment,
+  unavailableUserDirectory,
+  userDirectory,
+  userLabel,
+} from '../client/components/user-directory.js';
 import {
   grantablePages,
   isUnknownPage,
@@ -168,7 +175,7 @@ describe('@nocobase/app-plugin-authorization client', () => {
 
   it('offers no editor and no delete for an unrestricted permission set, but keeps its assignment controls', () => {
     const superuser: PermissionSet = {
-      key: 'system-administrator',
+      key: 'root',
       grants: [],
       protection: {
         owner: '@nocobase/app-plugin-authorization',
@@ -189,8 +196,8 @@ describe('@nocobase/app-plugin-authorization client', () => {
   });
 
   it('follows protection.allow for each operation separately', () => {
-    const baseline: PermissionSet = {
-      key: 'authenticated',
+    const defaultSet: PermissionSet = {
+      key: 'member',
       grants: [],
       protection: {
         owner: '@nocobase/app-plugin-authorization',
@@ -198,7 +205,7 @@ describe('@nocobase/app-plugin-authorization client', () => {
       },
     };
 
-    expect(permissionSetCapabilities(baseline)).toEqual({
+    expect(permissionSetCapabilities(defaultSet)).toEqual({
       unrestricted: false,
       protectedSet: true,
       canUpdate: true,
@@ -224,10 +231,34 @@ describe('@nocobase/app-plugin-authorization client', () => {
     expect(permissionSetCapabilities(undefined)).toEqual(everything);
   });
 
+  it('offers only the subject types the server allows for a set', () => {
+    const superuser: PermissionSet = {
+      key: 'root',
+      grants: [],
+      protection: {
+        owner: '@nocobase/authorization/permissions',
+        allow: ['assign', 'revoke'],
+        assignableTo: ['user'],
+      },
+      unrestricted: true,
+    };
+    const ordinary: PermissionSet = { key: 'reader', grants: [] };
+
+    const root = permissionSetCapabilities(superuser);
+    expect(canAssignSubjectType(root, 'user')).toBe(true);
+    expect(canAssignSubjectType(root, 'authenticated')).toBe(false);
+
+    for (const type of ['user', 'authenticated']) {
+      expect(
+        canAssignSubjectType(permissionSetCapabilities(ordinary), type),
+      ).toBe(true);
+    }
+  });
+
   it('explains the refusal to remove the last assignment instead of showing its code', () => {
     const lastAssignment = Object.assign(
       new Error(
-        'The last active assignment of the system-administrator Permission Set cannot be removed.',
+        'The last active assignment of the root Permission Set cannot be removed.',
       ),
       { code: 'LAST_ASSIGNMENT' },
     );
@@ -246,6 +277,29 @@ describe('@nocobase/app-plugin-authorization client', () => {
     expect(permissionSetErrorMessage(new Error('Network down'))).toBe(
       'Network down',
     );
+  });
+
+  it('names an assignment from the users API and keeps the id when it is refused', () => {
+    const loaded = userDirectory([
+      { id: 'u1', name: 'Alice', email: 'alice@example.com' },
+    ]);
+    const refused = unavailableUserDirectory(
+      Object.assign(new Error('Forbidden'), { status: 403 }),
+    );
+
+    expect(userLabel(loaded, 'u1')).toBe('Alice · alice@example.com');
+    expect(canAddAssignment(loaded)).toBe(true);
+    // The assignment list comes from Authorization, so the row stays readable.
+    expect(userLabel(refused, 'u1')).toBe('User u1');
+    expect(canAddAssignment(refused)).toBe(false);
+    expect(refused.unavailable).toContain('permission to read users');
+  });
+
+  it('says a failed user request is not a permission problem', () => {
+    const offline = unavailableUserDirectory(new Error('Network down'));
+
+    expect(canAddAssignment(offline)).toBe(false);
+    expect(offline.unavailable).toContain('could not be loaded');
   });
 
   it('offers only the routes a page grant can name', () => {

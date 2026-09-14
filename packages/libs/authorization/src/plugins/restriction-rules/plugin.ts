@@ -3,6 +3,10 @@ import type { DatabaseConnection } from '@nocobase/db';
 import { DatabaseRestrictionRuleStore } from './database-store.js';
 import { RestrictionRuleService, type RestrictionRulesApi } from './service.js';
 import type { RestrictionRuleStore } from './store.js';
+import {
+  createRestrictionRulesHandler,
+  RESTRICTION_RULES_ROUTE_PATH,
+} from './routes.js';
 
 export interface RestrictionRulesAuthorizationApi<
   TTransaction = DatabaseConnection,
@@ -42,6 +46,10 @@ export function restrictionRules(
         service.initialize(new DatabaseRestrictionRuleStore(authz.connection));
       }
       authz.constraints.add(service);
+      authz.routes.add(
+        RESTRICTION_RULES_ROUTE_PATH,
+        createRestrictionRulesHandler(service),
+      );
     },
   };
 }

@@ -4,12 +4,8 @@ import { databaseManagerToken, type DatabaseManager } from '@nocobase/db';
 import { realtimeServiceToken } from '@nocobase/app-server/realtime';
 import { ServiceContainer } from '@nocobase/service-provider';
 
-const protect = vi.hoisted(() => vi.fn(() => () => undefined));
 const createAppAuthorization = vi.hoisted(() =>
-  vi.fn(() => ({
-    kind: 'authorization',
-    permissionSets: { protect },
-  })),
+  vi.fn(() => ({ kind: 'authorization' })),
 );
 
 vi.mock('../server/authorization.js', async (importOriginal) => {
@@ -19,15 +15,17 @@ vi.mock('../server/authorization.js', async (importOriginal) => {
 });
 
 import { AuthorizationProvider } from '../server/providers/authorization.js';
+import type { AuthorizationConfig } from '../server/authorization.js';
+import { pages } from '../server/pages-authorization.js';
 import { authorizationToken } from '../server/tokens.js';
 
 describe('authorization provider', () => {
   beforeEach(() => {
     createAppAuthorization.mockClear();
-    protect.mockClear();
   });
 
   it('registers authorization with the service-container database', () => {
+    const plugins = [pages()];
     const connection = { kind: 'connection' };
     const database = {
       connection: vi.fn(() => connection),
@@ -36,6 +34,7 @@ describe('authorization provider', () => {
     container.instance(databaseManagerToken, database);
     const provider = new AuthorizationProvider({
       container,
+      config: appConfig({ plugins }),
     });
 
     provider.register();
@@ -44,28 +43,26 @@ describe('authorization provider', () => {
     expect(provider.name).toBe('@nocobase/app-plugin-authorization');
     expect(createAppAuthorization).toHaveBeenCalledExactlyOnceWith({
       connection,
+      config: { plugins },
       onAuthenticatedPermissionsChanged: expect.any(Function),
       onUserPermissionsChanged: expect.any(Function),
     });
     expect(authorization).toBe(createAppAuthorization.mock.results[0]?.value);
-    expect(protect.mock.calls).toEqual([
-      [
-        {
-          owner: '@nocobase/app-plugin-authorization',
-          keys: ['system-administrator'],
-          allow: ['assign', 'revoke'],
-          requireActiveAssignment: true,
-          unrestricted: true,
-        },
-      ],
-      [
-        {
-          owner: '@nocobase/app-plugin-authorization',
-          keys: ['authenticated'],
-          allow: ['update'],
-        },
-      ],
-    ]);
+  });
+
+  // The provider hands over what the application configured and invents
+  // nothing; an application that configures nothing installs nothing.
+  it('passes no configuration when the application declares none', () => {
+    const container = new ServiceContainer();
+    const provider = new AuthorizationProvider({
+      container,
+      config: appConfig(undefined),
+    });
+
+    provider.register();
+    container.resolve(authorizationToken);
+
+    expect(createAppAuthorization.mock.calls[0]?.[0]?.config).toBeUndefined();
   });
 
   it('publishes targeted and global permission invalidations', async () => {
@@ -79,7 +76,10 @@ describe('authorization provider', () => {
       .mockReturnValueOnce({ publishFor, close: closeUser })
       .mockReturnValueOnce({ publish, close: closeGlobal });
     container.instance(realtimeServiceToken, { defineTopic } as never);
-    const provider = new AuthorizationProvider({ container });
+    const provider = new AuthorizationProvider({
+      container,
+      config: appConfig(undefined),
+    });
 
     provider.register();
     container.resolve(authorizationToken);
@@ -98,3 +98,7 @@ describe('authorization provider', () => {
     expect(closeGlobal).toHaveBeenCalledOnce();
   });
 });
+
+function appConfig(authorization: AuthorizationConfig | undefined) {
+  return { get: vi.fn(() => authorization) };
+}

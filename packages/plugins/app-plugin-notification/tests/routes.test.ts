@@ -4,7 +4,7 @@ import {
 } from '@nocobase/app-plugin-authentication';
 import {
   authorizationToken,
-  type AppAuthorization,
+  type Authorization,
 } from '@nocobase/app-plugin-authorization';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { I18nRuntime } from '@nocobase/i18n';
@@ -265,7 +265,7 @@ async function createRouter(options: RouterOptions = {}): Promise<{
       context.set('authz', { can });
       await next();
     },
-  } as unknown as AppAuthorization);
+  } as unknown as Authorization);
   container.instance(notificationRuntimeToken, {
     router: logsRouter,
     listTestTargets,

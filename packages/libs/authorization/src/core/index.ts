@@ -4,6 +4,7 @@ export * from './grants.js';
 export * from './middleware.js';
 export * from './plugin.js';
 export * from './permissions.js';
+export * from './routes.js';
 export * from './subjects.js';
 export {
   ResourceHandlerRegistry,

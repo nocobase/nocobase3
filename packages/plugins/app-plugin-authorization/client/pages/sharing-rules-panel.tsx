@@ -9,9 +9,9 @@ import {
 import type {
   AccessScope,
   AuthorizationOptions,
-  AuthorizationUser,
   SharingRule,
 } from '../authorization-client.js';
+import type { UserDirectory } from '../components/user-directory.js';
 import {
   ActionsEditor,
   Field,
@@ -34,10 +34,10 @@ const authz = getAuthorizationClient();
 
 export function SharingRulesPanel({
   options,
-  users,
+  directory,
 }: {
   options: AuthorizationOptions;
-  users: readonly AuthorizationUser[];
+  directory: UserDirectory;
 }): ReactElement {
   const [rules, setRules] = useState<readonly SharingRule[]>([]);
   const [draft, setDraft] = useState<SharingRule>();
@@ -139,7 +139,7 @@ export function SharingRulesPanel({
                 </td>
                 <td className='px-5 py-4'>{resourceLabel(options, rule)}</td>
                 <td className='px-5 py-4'>{selectionLabel(rule)}</td>
-                <td className='px-5 py-4'>{subjectLabel(rule, users)}</td>
+                <td className='px-5 py-4'>{subjectLabel(rule, directory)}</td>
                 <td className='px-5 py-4'>
                   {rule.actions.map((item) => humanize(item.action)).join(', ')}
                 </td>
@@ -263,7 +263,7 @@ export function SharingRulesPanel({
                   </p>
                 </div>
                 <SubjectsEditor
-                  users={users}
+                  directory={directory}
                   value={draft.subjects}
                   onChange={(subjects) => setDraft({ ...draft, subjects })}
                 />
@@ -574,15 +574,13 @@ function selectionLabel(rule: SharingRule): string {
     )
     .join(' · ');
 }
-function subjectLabel(
-  rule: SharingRule,
-  users: readonly AuthorizationUser[],
-): string {
+function subjectLabel(rule: SharingRule, directory: UserDirectory): string {
   const subject = rule.subjects[0];
   if (!subject || subject.type === 'authenticated')
     return 'All signed-in users';
   return (
-    users.find((user) => user.id === subject.id)?.name ?? `User ${subject.id}`
+    directory.users.find((user) => user.id === subject.id)?.name ??
+    `User ${subject.id}`
   );
 }
 function humanize(value: string): string {

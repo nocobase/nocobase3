@@ -3,9 +3,14 @@ import path from 'node:path';
 import { createDatabaseManager, databaseManagerToken } from '@nocobase/db';
 import sqlite from '@nocobase/db-sqlite';
 import {
+  appAuthorizationDatabase,
   createAppAuthorization,
+  databaseAuthorization,
+  permissionSetsToken,
+  type Authorization,
   authorizationToken,
 } from '@nocobase/app-plugin-authorization';
+import type { PermissionSetsAuthorizationApi } from '@nocobase/authorization/permissions';
 import { authenticationToken } from '@nocobase/app-plugin-authentication';
 import type { Application } from '@nocobase/app-server/application';
 import {
@@ -25,7 +30,8 @@ const database = () =>
   });
 let db: ReturnType<typeof database>;
 let router: Hono;
-let authz: ReturnType<typeof createAppAuthorization>;
+let authz: Authorization & PermissionSetsAuthorizationApi;
+let authzDatabase: NonNullable<ReturnType<typeof appAuthorizationDatabase>>;
 let app: Application;
 beforeEach(async () => {
   db = database();
@@ -56,10 +62,25 @@ beforeEach(async () => {
       ],
     })
     .latest();
-  authz = createAppAuthorization({ connection: db.connection() });
+  // Articles are a database collection granted through Permission Sets, and
+  // `rootSet` is what makes holding `root` bypass those grants.
+  const created = createAppAuthorization({
+    connection: db.connection(),
+    config: {
+      permissionSets: { rootSet: 'root' },
+      plugins: [databaseAuthorization({ source: 'main' })],
+    },
+  });
+  const resolved = appAuthorizationDatabase(created);
+  if (!resolved) {
+    throw new Error('The plugin list under test installs the database plugin');
+  }
+  authz = created;
+  authzDatabase = resolved;
   const container = new ServiceContainer();
   container.instance(databaseManagerToken, db);
   container.instance(authorizationToken, authz);
+  container.instance(permissionSetsToken, authz.permissionSets);
   const required = (): MiddlewareHandler => async (c, next) => {
     const user = c.req.header('x-test-user');
     if (!user) return c.json({ error: 'unauthenticated' }, 401);
@@ -103,7 +124,7 @@ async function grant(filter = 'allRecords') {
   await authz.permissionSets.create({
     key: 'editor',
     grants: [
-      authz.database.grant('articles', {
+      authzDatabase.grant('articles', {
         read: { fields: { output: '*' }, recordAccess: [filter] },
         create: { fields: { input: '*' } },
         update: { fields: { input: '*' }, recordAccess: [filter] },
@@ -161,7 +182,7 @@ it('applies authorized record ranges to counts, lists and updates', async () => 
   await authz.permissionSets.create({
     key: 'restricted',
     grants: [
-      authz.database.grant('articles', {
+      authzDatabase.grant('articles', {
         read: {
           fields: { output: '*' },
           recordAccess: [
@@ -230,11 +251,11 @@ it('seeds six articles once and preserves user edits', async () => {
 });
 it('initializes article permissions for administrators only and preserves later revocations', async () => {
   await authz.permissionSets.create({
-    key: 'system-administrator',
+    key: 'root',
     grants: [],
   });
   await authz.permissionSets.assign({
-    permissionSet: 'system-administrator',
+    permissionSet: 'root',
     subject: { type: 'user', id: 'admin' },
   });
   // Collection has already been registered during the first boot.
@@ -247,7 +268,14 @@ it('initializes article permissions for administrators only and preserves later 
     await authz.permissionSets.listAssignments('articles-manager');
   await authz.permissionSets.revoke(assignment.id);
   await new ArticlesProvider(app).boot();
+  // Booting again neither recreates the set nor restores the assignment.
+  await expect(
+    authz.permissionSets.listAssignments('articles-manager'),
+  ).resolves.toEqual([]);
+  // The administrator still reaches the route, because holding the superuser
+  // set bypasses authorization rather than relying on this grant.
   expect((await request('/articles', 'GET', undefined, 'admin')).status).toBe(
-    403,
+    200,
   );
+  expect((await request('/articles')).status).toBe(403);
 });

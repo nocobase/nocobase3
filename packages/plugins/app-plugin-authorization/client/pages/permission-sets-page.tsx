@@ -10,13 +10,14 @@ import { PermissionSetsPanel } from './permission-sets-panel.js';
 import {
   AuthorizationSettingsPage,
   useAuthorizationPageData,
+  useUserDirectory,
 } from './page-support.js';
 
 export default function PermissionSetsPage(): ReactElement {
-  const { options, users, error } = useAuthorizationPageData(
+  const { options, error } = useAuthorizationPageData(
     'authz/permission-sets/options',
-    'authz/permission-sets/users',
   );
+  const users = useUserDirectory();
   // Page names live in client route declarations, which the server never sees. The browser holds the registry, so the
   // grantable pages are merged in here rather than hardcoded into the options endpoint.
   const application = useClientApplication();
@@ -48,7 +49,7 @@ export default function PermissionSetsPage(): ReactElement {
       loading={!pageOptions}
     >
       {pageOptions ? (
-        <PermissionSetsPanel options={pageOptions} users={users} />
+        <PermissionSetsPanel options={pageOptions} directory={users} />
       ) : null}
     </AuthorizationSettingsPage>
   );

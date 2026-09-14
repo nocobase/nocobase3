@@ -7,6 +7,7 @@ import {
 import {
   createAppAuthorization,
   authorizationToken,
+  permissionSetsToken,
 } from '@nocobase/app-plugin-authorization';
 import usersPlugin, {
   userManagementServiceToken,
@@ -241,6 +242,8 @@ describe('Hub role API permissions', () => {
     default: 'main',
     connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
   });
+  // Hub and user resources are registered below; Permission Sets is what
+  // carries the grants each role is checked against.
   const authorization = createAppAuthorization({
     connection: database.connection(),
   });
@@ -330,6 +333,7 @@ function createRoleApplication(
     },
   } as unknown as Auth);
   container.instance(authorizationToken, authorization);
+  container.instance(permissionSetsToken, authorization.permissionSets);
   container.instance(hubServiceToken, hub);
   container.instance(userManagementServiceToken, users);
   return createApplication(container);

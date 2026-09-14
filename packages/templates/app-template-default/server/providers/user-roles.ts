@@ -1,7 +1,7 @@
 import type { Application } from '@nocobase/app-server/application';
 import {
-  authorizationToken,
-  type AppAuthorization,
+  permissionSetsToken,
+  type PermissionSetsApi,
 } from '@nocobase/app-plugin-authorization';
 import {
   UserManagementError,
@@ -14,7 +14,6 @@ import {
 import type { DatabaseConnection } from '@nocobase/db';
 import { ServiceProvider } from '@nocobase/service-provider';
 
-const SYSTEM_ADMINISTRATOR = 'system-administrator';
 const USERS_I18N_NAMESPACE = '@nocobase/app-plugin-users';
 
 export default class UserRolesProvider extends ServiceProvider<Application> {
@@ -24,17 +23,17 @@ export default class UserRolesProvider extends ServiceProvider<Application> {
   public override boot(): Promise<void> {
     if (this.unregister) return Promise.resolve();
     if (
-      !this.app.container.has(authorizationToken) ||
+      !this.app.container.has(permissionSetsToken) ||
       !this.app.container.has(userRoleScopeRegistryToken)
     ) {
       return Promise.resolve();
     }
-    const authorization = this.app.container.resolve(authorizationToken);
+    const permissionSets = this.app.container.resolve(permissionSetsToken);
     const registry = this.app.container.resolve<UserRoleScopeRegistry>(
       userRoleScopeRegistryToken,
     );
     this.unregister = registry.register(
-      createApplicationUserRoleScope(authorization),
+      createApplicationUserRoleScope(permissionSets),
     );
     return Promise.resolve();
   }
@@ -46,9 +45,16 @@ export default class UserRolesProvider extends ServiceProvider<Application> {
   }
 }
 
+/**
+ * The role picker for the Permission Sets this application assigns directly.
+ * A set that confers unrestricted access is shown but never assigned or
+ * removed here.
+ */
 export function createApplicationUserRoleScope(
-  authorization: Pick<AppAuthorization, 'permissionSets'>,
+  permissionSets: PermissionSetsApi,
 ): UserRoleScope {
+  const isUnrestricted = (key: string): boolean =>
+    permissionSets.isUnrestricted(key);
   return {
     key: 'app',
     label: 'Roles',
@@ -57,12 +63,12 @@ export function createApplicationUserRoleScope(
     selection: 'multiple',
     hasAuthenticatedDefaultAccess: true,
     async options() {
-      const state = await directRoleState(authorization);
+      const state = await directRoleState(permissionSets);
       return state.permissionSets.map((permissionSet) => {
         return {
           value: permissionSet.key,
           label: permissionSet.title?.trim() || permissionSet.key,
-          ...(permissionSet.key === SYSTEM_ADMINISTRATOR
+          ...(isUnrestricted(permissionSet.key)
             ? {
                 labelI18nKey: 'page.systemAdministrator',
                 labelI18nNs: USERS_I18N_NAMESPACE,
@@ -74,17 +80,17 @@ export function createApplicationUserRoleScope(
       });
     },
     async get(userId, connection) {
-      const state = await directRoleState(authorization, connection);
+      const state = await directRoleState(permissionSets, connection);
       return rolesForUser(userId, state);
     },
     async getMany(userIds, connection) {
-      const state = await directRoleState(authorization, connection);
+      const state = await directRoleState(permissionSets, connection);
       return Object.fromEntries(
         userIds.map((userId) => [userId, rolesForUser(userId, state)]),
       );
     },
     async findUserIds(role, connection) {
-      const state = await directRoleState(authorization, connection);
+      const state = await directRoleState(permissionSets, connection);
       requireDirectRole(
         role,
         state.permissionSets.map(({ key }) => key),
@@ -99,7 +105,7 @@ export function createApplicationUserRoleScope(
     },
     async replace(userId, value, connection) {
       const requested = multipleRoles(value);
-      const state = await directRoleState(authorization, connection);
+      const state = await directRoleState(permissionSets, connection);
       const managed = state.permissionSets.map(({ key }) => key);
       for (const role of requested) requireDirectRole(role, managed);
 
@@ -113,18 +119,19 @@ export function createApplicationUserRoleScope(
         .map((assignment) => assignment.permissionSet);
       const currentSet = new Set(current);
       const requestedSet = new Set(requested);
-      if (
-        currentSet.has(SYSTEM_ADMINISTRATOR) !==
-        requestedSet.has(SYSTEM_ADMINISTRATOR)
-      ) {
+      const changed = [...new Set([...currentSet, ...requestedSet])].find(
+        (key) =>
+          isUnrestricted(key) && currentSet.has(key) !== requestedSet.has(key),
+      );
+      if (changed !== undefined) {
         throw new UserRoleScopeError(
           'PROTECTED_ROLE_ASSIGNMENT',
-          'The system-administrator role cannot be assigned or removed from User management',
+          `The ${changed} role cannot be assigned or removed from User management`,
           409,
         );
       }
 
-      await authorization.permissionSets
+      await permissionSets
         .withTransaction(connection)
         .replaceSubjectAssignments({
           subject: { type: 'user', id: userId },
@@ -151,15 +158,15 @@ function rolesForUser(
 }
 
 async function directRoleState(
-  authorization: Pick<AppAuthorization, 'permissionSets'>,
+  permissionSets: PermissionSetsApi,
   connection?: DatabaseConnection,
 ) {
-  const permissionSets = connection
-    ? authorization.permissionSets.withTransaction(connection)
-    : authorization.permissionSets;
+  const scoped = connection
+    ? permissionSets.withTransaction(connection)
+    : permissionSets;
   const [sets, assignments] = await Promise.all([
-    permissionSets.list(),
-    permissionSets.listAssignments(),
+    scoped.list(),
+    scoped.listAssignments(),
   ]);
   const authenticatedDefaults = new Set(
     assignments
@@ -174,8 +181,8 @@ async function directRoleState(
     permissionSets: sets.filter(
       ({ key }) =>
         !authenticatedDefaults.has(key) &&
-        (key === SYSTEM_ADMINISTRATOR ||
-          authorization.permissionSets.protection(key) === undefined),
+        (permissionSets.isUnrestricted(key) ||
+          permissionSets.protection(key) === undefined),
     ),
     assignments,
   };

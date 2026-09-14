@@ -64,7 +64,9 @@ authz.database.collections.add({
 数据表，不需要把所有定义集中到应用入口：
 
 ```ts
-export function registerOrderAuthorization(authz: AppAuthorization): void {
+export function registerOrderAuthorization(
+  authz: Authorization & DatabaseAuthorizationApi,
+): void {
   authz.database.collections.add(orderCollectionAuthorization);
 }
 ```

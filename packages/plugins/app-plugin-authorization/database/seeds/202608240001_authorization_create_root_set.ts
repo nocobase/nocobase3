@@ -1,9 +1,9 @@
 import { defineSeed, type SeedDefinition } from '@nocobase/db';
 
-const SYSTEM_ADMINISTRATOR = 'system-administrator';
+const ROOT = 'root';
 
 const seed: SeedDefinition = defineSeed({
-  name: '202608240001_authorization_create_system_administrator',
+  name: '202608240001_authorization_create_root_set',
 
   async run({ query }) {
     const user = await query
@@ -18,15 +18,15 @@ const seed: SeedDefinition = defineSeed({
     const existingSet = await query
       .selectFrom('authorizationPermissionSets')
       .select('key')
-      .where('key', '=', SYSTEM_ADMINISTRATOR)
+      .where('key', '=', ROOT)
       .executeTakeFirst();
     if (!existingSet) {
       await query
         .insertInto('authorizationPermissionSets')
         .values({
           id: crypto.randomUUID(),
-          key: SYSTEM_ADMINISTRATOR,
-          title: 'System administrator',
+          key: ROOT,
+          title: 'Root',
           // Superuser access is a bypass declared in code, not a grant list.
           grants: JSON.stringify([]),
           createdAt: now,
@@ -36,7 +36,7 @@ const seed: SeedDefinition = defineSeed({
     }
 
     const userId = String(user.id);
-    const assignmentId = `user:${userId}:${SYSTEM_ADMINISTRATOR}`;
+    const assignmentId = `user:${userId}:${ROOT}`;
     const existingAssignment = await query
       .selectFrom('authorizationPermissionSetAssignments')
       .select('id')
@@ -49,7 +49,7 @@ const seed: SeedDefinition = defineSeed({
           id: assignmentId,
           subjectType: 'user',
           subjectId: userId,
-          permissionSetKey: SYSTEM_ADMINISTRATOR,
+          permissionSetKey: ROOT,
           createdAt: now,
           updatedAt: now,
         })

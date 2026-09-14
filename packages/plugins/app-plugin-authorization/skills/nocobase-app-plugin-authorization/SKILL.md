@@ -122,8 +122,8 @@ routes.use(
 ```
 
 The application must run `authz.middleware()` before the guard. It resolves the
-request principal and subjects from the authentication session and any other
-installed identity middleware.
+request principal and subjects from the authentication session and from any
+other step registered with `authz.use()`.
 
 ## Apply database conditions safely
 

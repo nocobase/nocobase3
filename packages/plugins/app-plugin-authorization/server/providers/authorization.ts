@@ -1,14 +1,21 @@
 import { databaseManagerToken } from '@nocobase/db';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
-import { ServiceProvider } from '@nocobase/service-provider';
+import {
+  ServiceProvider,
+  type ServiceResolver,
+} from '@nocobase/service-provider';
 import {
   realtimeServiceToken,
   type RealtimePublicTopic,
   type RealtimeUserTopic,
 } from '@nocobase/app-server/realtime';
 
+import type { Authorization } from '@nocobase/authorization/core';
+import type { PermissionSetsAuthorizationApi } from '@nocobase/authorization/permissions';
+
 import { createAppAuthorization } from '../authorization.js';
-import { authorizationToken } from '../tokens.js';
+import type { AuthorizationConfig } from '../authorization.js';
+import { authorizationToken, permissionSetsToken } from '../tokens.js';
 import {
   AUTHORIZATION_GLOBAL_PERMISSIONS_CHANGED_TOPIC,
   AUTHORIZATION_PERMISSIONS_CHANGED_TOPIC,
@@ -21,6 +28,7 @@ export class AuthorizationProvider<
     AuthorizationProviderApplication,
 > extends ServiceProvider<TApplication> {
   public readonly name: string = '@nocobase/app-plugin-authorization';
+  private instance?: Authorization & PermissionSetsAuthorizationApi;
   private permissionsChangedTopic?: RealtimeUserTopic<{
     readonly type: 'permissions-changed';
   }>;
@@ -29,47 +37,36 @@ export class AuthorizationProvider<
   }>;
 
   public override register(): void {
-    this.app.container.singleton(authorizationToken, (container) => {
-      const database = container.has(databaseManagerToken)
-        ? container.resolve(databaseManagerToken)
-        : undefined;
+    this.app.container.singleton(authorizationToken, (container) =>
+      this.authorization(container),
+    );
+    this.app.container.singleton(
+      permissionSetsToken,
+      (container) => this.authorization(container).permissionSets,
+    );
+  }
 
-      const authorization = createAppAuthorization({
-        connection: database?.connection(),
-        onUserPermissionsChanged: (userId) => {
-          this.permissionsChangedTopic?.publishFor(userId, {
-            type: 'permissions-changed',
-          });
-        },
-        onAuthenticatedPermissionsChanged: () => {
-          this.globalPermissionsChangedTopic?.publish({
-            type: 'permissions-changed',
-          });
-        },
-      });
-      // The System Administrator set is code-owned: the generic management
-      // API may assign and revoke administrators but never edit or delete the
-      // set. It lives as long as the instance, so nothing needs to release it.
-      // Its last assignment that can still act stays in place, because nobody
-      // else could restore it. Holding it grants unrestricted access, which is
-      // a bypass rather than an enumerated grant list, so it never goes stale
-      // when a new resource type or action appears.
-      authorization.permissionSets.protect({
-        owner: '@nocobase/app-plugin-authorization',
-        keys: ['system-administrator'],
-        allow: ['assign', 'revoke'],
-        requireActiveAssignment: true,
-        unrestricted: true,
-      });
-      // The baseline role every signed-in user holds. Its grants stay
-      // editable; the set itself and its authenticated:* binding do not.
-      authorization.permissionSets.protect({
-        owner: '@nocobase/app-plugin-authorization',
-        keys: ['authenticated'],
-        allow: ['update'],
-      });
-      return authorization;
+  /** Both tokens name one instance, so the provider owns it rather than a binding. */
+  private authorization(
+    container: ServiceResolver,
+  ): Authorization & PermissionSetsAuthorizationApi {
+    this.instance ??= createAppAuthorization({
+      connection: container.has(databaseManagerToken)
+        ? container.resolve(databaseManagerToken).connection()
+        : undefined,
+      config: this.app.config.get<AuthorizationConfig>('authorization'),
+      onUserPermissionsChanged: (userId) => {
+        this.permissionsChangedTopic?.publishFor(userId, {
+          type: 'permissions-changed',
+        });
+      },
+      onAuthenticatedPermissionsChanged: () => {
+        this.globalPermissionsChangedTopic?.publish({
+          type: 'permissions-changed',
+        });
+      },
     });
+    return this.instance;
   }
 
   public override boot(): Promise<void> {

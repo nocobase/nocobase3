@@ -18,6 +18,8 @@ export interface PermissionSetCapabilities {
   readonly canDelete: boolean;
   readonly canAssign: boolean;
   readonly canRevoke: boolean;
+  /** Subject types a new assignment may target; absent means any. */
+  readonly assignableTo?: readonly string[];
 }
 
 /** An unsaved set has no server metadata yet and behaves as an ordinary one. */
@@ -33,7 +35,22 @@ export function permissionSetCapabilities(
     canDelete: allows(set, 'delete'),
     canAssign: allows(set, 'assign'),
     canRevoke: allows(set, 'revoke'),
+    ...(set?.protection?.assignableTo
+      ? { assignableTo: set.protection.assignableTo }
+      : {}),
   };
+}
+
+/** An existing assignment of a type no longer offered still displays; this is about what can be added. */
+export function canAssignSubjectType(
+  capabilities: PermissionSetCapabilities,
+  subjectType: string,
+): boolean {
+  return (
+    capabilities.canAssign &&
+    (capabilities.assignableTo === undefined ||
+      capabilities.assignableTo.includes(subjectType))
+  );
 }
 
 function allows(
@@ -55,6 +72,8 @@ export function permissionSetErrorMessage(error: unknown): string {
       return 'This is the last assignment of a set the application must always keep someone able to use. Assign it to an enabled account before removing this one, or the application is left without an administrator.';
     case 'PROTECTED_PERMISSION_SET':
       return 'This permission set is maintained by the application and cannot be changed here.';
+    case 'PERMISSION_SET_SUBJECT_NOT_ALLOWED':
+      return 'This permission set can only be assigned to the subject types the application allows. Assign it to an individual user instead of an audience.';
     default:
       return errorMessage(error);
   }

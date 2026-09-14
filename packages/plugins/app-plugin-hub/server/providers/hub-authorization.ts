@@ -1,4 +1,7 @@
-import { authorizationToken } from '@nocobase/app-plugin-authorization';
+import {
+  authorizationToken,
+  permissionSetsToken,
+} from '@nocobase/app-plugin-authorization';
 import {
   userRoleScopeRegistryToken,
   type UserRoleScopeRegistry,
@@ -19,11 +22,12 @@ export class HubAuthorizationProvider extends ServiceProvider<AppPluginApplicati
 
   public override boot(): Promise<void> {
     const authorization = this.app.container.resolve(authorizationToken);
+    const permissionSets = this.app.container.resolve(permissionSetsToken);
     registerHubResources(authorization);
-    this.unregisterProtection = protectHubPermissionSets(authorization);
+    this.unregisterProtection = protectHubPermissionSets(permissionSets);
     this.unregisterRoleScope = this.app.container
       .resolve<UserRoleScopeRegistry>(userRoleScopeRegistryToken)
-      .register(createHubUserRoleScope(authorization));
+      .register(createHubUserRoleScope(permissionSets));
     return Promise.resolve();
   }
 

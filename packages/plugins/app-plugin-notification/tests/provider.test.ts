@@ -1,7 +1,7 @@
 import { databaseManagerToken, type DatabaseManager } from '@nocobase/db';
 import {
   authorizationToken,
-  type AppAuthorization,
+  type Authorization,
 } from '@nocobase/app-plugin-authorization';
 import { loggingToken } from '@nocobase/app-server/logging';
 import { queueManagerToken } from '@nocobase/app-server/queue';
@@ -141,6 +141,6 @@ function createContainer(withDatabase: boolean): ServiceContainer {
   } as unknown as NocoBaseQueueManager);
   container.instance(authorizationToken, {
     resources: { add: vi.fn() },
-  } as unknown as AppAuthorization);
+  } as unknown as Authorization);
   return container;
 }

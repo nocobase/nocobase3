@@ -3,12 +3,16 @@ import type { AuthorizationGrantService } from './grants.js';
 import type { ResourceHandlerRegistry } from './registry.js';
 import type { AuthorizationMiddleware } from './middleware.js';
 import type { AccessConstraintRegistry } from './constraints.js';
+import type { AuthorizationSubjectRegistry } from './subjects.js';
+import type { AuthorizationRouteRegistry } from './routes.js';
 
 export interface AuthorizationPluginSetup {
   readonly connection?: DatabaseConnection;
   readonly grants: AuthorizationGrantService;
   readonly resources: ResourceHandlerRegistry;
   readonly constraints: AccessConstraintRegistry;
+  readonly subjects: AuthorizationSubjectRegistry;
+  readonly routes: AuthorizationRouteRegistry;
   use(middleware: AuthorizationMiddleware): void;
 }
 

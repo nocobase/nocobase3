@@ -3,13 +3,14 @@ import { SharingRulesPanel } from './sharing-rules-panel.js';
 import {
   AuthorizationSettingsPage,
   useAuthorizationPageData,
+  useUserDirectory,
 } from './page-support.js';
 
 export default function SharingRulesPage(): ReactElement {
-  const { options, users, error } = useAuthorizationPageData(
+  const { options, error } = useAuthorizationPageData(
     'authz/sharing-rules/options',
-    'authz/sharing-rules/users',
   );
+  const users = useUserDirectory();
   return (
     <AuthorizationSettingsPage
       eyebrow='Record access'
@@ -18,7 +19,9 @@ export default function SharingRulesPage(): ReactElement {
       error={error}
       loading={!options}
     >
-      {options ? <SharingRulesPanel options={options} users={users} /> : null}
+      {options ? (
+        <SharingRulesPanel options={options} directory={users} />
+      ) : null}
     </AuthorizationSettingsPage>
   );
 }
