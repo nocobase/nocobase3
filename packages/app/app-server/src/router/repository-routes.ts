@@ -87,9 +87,12 @@ export interface DefineRepositoryApiRoutesOptions<P = unknown> {
    *
    * The application owns this: `app-server` does not know how a request is
    * authenticated. Returning `undefined` or `null` refuses the request with
-   * 403 rather than binding a Policy built from a principal that is not there.
+   * 403 rather than binding a Policy built from a principal that is not there,
+   * which is why the return type admits both.
    */
-  readonly principal?: (context: Context) => P | Promise<P>;
+  readonly principal?: (
+    context: Context,
+  ) => P | undefined | null | Promise<P | undefined | null>;
 }
 
 export interface RepositoryApiRoutesApplication {
@@ -549,7 +552,7 @@ function fail(status: 400 | 403 | 415, code: string, message: string): never {
  */
 async function resolvePrincipal<P>(
   context: Context,
-  resolve: ((context: Context) => P | Promise<P>) | undefined,
+  resolve: DefineRepositoryApiRoutesOptions<P>['principal'],
 ): Promise<P> {
   const principal = await resolve?.(context);
   if (principal === undefined || principal === null) {

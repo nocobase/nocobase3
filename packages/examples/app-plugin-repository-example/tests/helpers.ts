@@ -2,14 +2,25 @@ import path from 'node:path';
 import { createDatabaseManager, databaseManagerToken } from '@nocobase/db';
 import sqlite from '@nocobase/db-sqlite';
 import { Auth, authenticationToken } from '@nocobase/app-plugin-authentication';
+import {
+  authorizationToken,
+  createAppAuthorization,
+  databaseAuthorization,
+} from '@nocobase/app-plugin-authorization';
 import { createConfigPaths } from '@nocobase/app-server/config';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { createApiClient } from '@nocobase/app-client';
 import { Hono } from 'hono';
 import { vi } from 'vitest';
+import grantSeed from '../database/seeds/202609140001_repository_example_grant_members.js';
 import { apiRoutes } from '../server/routes/index.js';
 
-export async function createFixture() {
+export interface FixtureOptions {
+  /** Leave the example's Permission Set unseeded to test an ungranted caller. */
+  grant?: boolean;
+}
+
+export async function createFixture(options: FixtureOptions = {}) {
   const database = createDatabaseManager({
     drivers: { sqlite },
     connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
@@ -19,8 +30,31 @@ export async function createFixture() {
     packageName: '@nocobase/app-plugin-repository-example',
   });
   await migrator.latest();
+  // The routes are authorized, so the tables the grants live in and the seed
+  // that writes them have to be in place before a request reaches them.
+  await database
+    .createMigrator({
+      directory: path.resolve(
+        import.meta.dirname,
+        '../../../plugins/app-plugin-authorization/database/migrations',
+      ),
+      packageName: '@nocobase/app-plugin-authorization',
+      // Its own ledger, so this example's migrator never sees these entries.
+      tableName: 'authorizationMigrations',
+    })
+    .latest();
+  const connection = database.connection();
+  if (options.grant !== false)
+    await grantSeed.run({ query: connection.query, connection });
   const container = new ServiceContainer();
   container.instance(databaseManagerToken, database);
+  container.instance(
+    authorizationToken,
+    createAppAuthorization({
+      connection,
+      config: { plugins: [databaseAuthorization()] },
+    }),
+  );
   const authentication = new Auth({
     connection: database.connection(),
     secret: 'repository-example-test-secret-at-least-32-characters',

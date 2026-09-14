@@ -3,11 +3,15 @@ import {
   type ServiceToken,
 } from '@nocobase/service-provider';
 
-import type { Authorization } from '@nocobase/authorization/core';
 import type { PermissionSetsApi } from '@nocobase/authorization/permissions';
 
-export const authorizationToken: ServiceToken<Authorization> =
-  createServiceToken<Authorization>('@nocobase/app/authorization');
+import type { createAppAuthorization } from './authorization.js';
+
+/** What the application registers: the composed object, `repositories` included. */
+export type AppAuthorizationService = ReturnType<typeof createAppAuthorization>;
+
+export const authorizationToken: ServiceToken<AppAuthorizationService> =
+  createServiceToken<AppAuthorizationService>('@nocobase/app/authorization');
 
 export const permissionSetsToken: ServiceToken<PermissionSetsApi> =
   createServiceToken<PermissionSetsApi>(

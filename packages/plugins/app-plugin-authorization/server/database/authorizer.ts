@@ -7,7 +7,7 @@ import type {
   AuthorizationRequest,
   Principal,
 } from '@nocobase/authorization/core';
-import { DatabaseCollectionRegistry } from './collection-registry.js';
+import { databaseCollectionName, databaseResourceId } from './collections.js';
 import {
   databaseCollectionFieldsKnown,
   databaseFieldsAllowed,
@@ -15,13 +15,14 @@ import {
   resolveActionFields,
 } from './field-access.js';
 import type {
+  AuthorizationCollection,
   DatabaseActionGrant,
   DatabaseAuthorizationPolicy,
   DatabaseAuthorizationParams,
-  DatabaseCollectionDefinition,
   DatabaseAuthorizationConditions,
   DatabaseRecordAccess,
   DatabaseRecordAccessConfig,
+  ResolveAuthorizationCollection,
 } from './model.js';
 import {
   allScopes,
@@ -36,18 +37,49 @@ import { RecordAccessPolicyRegistry } from './record-access-registry.js';
 /** A decision that names this reason bypassed grants and constraints entirely. */
 export const UNRESTRICTED_ACCESS = 'UNRESTRICTED_ACCESS';
 
+/** What a Collection can be granted. db exposes no action of its own. */
+const actions: readonly string[] = ['read', 'create', 'update', 'delete'];
+
 export interface DatabaseResourceAuthorizerOptions {
-  collections: DatabaseCollectionRegistry;
+  source: string;
   recordAccess: RecordAccessPolicyRegistry;
+  /** Absent when the application installed the plugin without a connection. */
+  resolveCollection?: ResolveAuthorizationCollection;
 }
 
 export class DatabaseResourceAuthorizer {
-  private readonly collections: DatabaseCollectionRegistry;
+  private readonly source: string;
   private readonly recordAccess: RecordAccessPolicyRegistry;
+  private readonly resolveCollection:
+    ResolveAuthorizationCollection | undefined;
 
   constructor(options: DatabaseResourceAuthorizerOptions) {
-    this.collections = options.collections;
+    this.source = options.source;
     this.recordAccess = options.recordAccess;
+    this.resolveCollection = options.resolveCollection;
+  }
+
+  /** db owns the metadata, so an unknown Collection is whatever db does not hold. */
+  private async collection(
+    resourceId: string,
+    action: string,
+  ): Promise<AuthorizationCollection | AuthorizationDecision> {
+    if (!this.resolveCollection) {
+      return this.deny(
+        'DATABASE_UNAVAILABLE',
+        'Database authorization was installed without a database connection',
+      );
+    }
+    const collection = actions.includes(action)
+      ? await this.resolveCollection(databaseCollectionName(resourceId))
+      : undefined;
+    return (
+      collection ??
+      this.deny(
+        'UNKNOWN_DATABASE_RESOURCE_OR_ACTION',
+        `Unknown database resource or action: ${resourceId}.${action}`,
+      )
+    );
   }
 
   async authorize(
@@ -55,14 +87,10 @@ export class DatabaseResourceAuthorizer {
     grantsService: AuthorizationGrantService,
     constraintsService: AccessConstraintService,
   ): Promise<AuthorizationDecision> {
-    const resourceId = this.collections.resolveName(request.resource.id);
-    const resource = this.collections.get(resourceId);
-    if (!resource || !resource.actions.includes(request.action)) {
-      return this.deny(
-        'UNKNOWN_DATABASE_RESOURCE_OR_ACTION',
-        `Unknown database resource or action: ${resourceId}.${request.action}`,
-      );
-    }
+    const resourceId = databaseResourceId(this.source, request.resource.id);
+    const resolved = await this.collection(resourceId, request.action);
+    if ('effect' in resolved) return resolved;
+    const resource = resolved;
     const params = request.params;
     if (!databaseCollectionFieldsKnown(resource, params?.fields)) {
       return this.deny(
@@ -122,7 +150,9 @@ export class DatabaseResourceAuthorizer {
         collection: resourceId,
         action: request.action,
         scope:
-          scope === true ? true : scopeAst(collectionName(resourceId), scope),
+          scope === true
+            ? true
+            : scopeAst(databaseCollectionName(resourceId), scope),
         fields: resolveActionFields(request.action, fields, resource),
       };
       return {
@@ -150,14 +180,10 @@ export class DatabaseResourceAuthorizer {
   async authorizeUnrestricted(
     request: AuthorizationRequest<DatabaseAuthorizationParams>,
   ): Promise<AuthorizationDecision> {
-    const resourceId = this.collections.resolveName(request.resource.id);
-    const resource = this.collections.get(resourceId);
-    if (!resource || !resource.actions.includes(request.action)) {
-      return this.deny(
-        'UNKNOWN_DATABASE_RESOURCE_OR_ACTION',
-        `Unknown database resource or action: ${resourceId}.${request.action}`,
-      );
-    }
+    const resourceId = databaseResourceId(this.source, request.resource.id);
+    const resolved = await this.collection(resourceId, request.action);
+    if ('effect' in resolved) return resolved;
+    const resource = resolved;
     if (!databaseCollectionFieldsKnown(resource, request.params?.fields)) {
       return this.deny(
         'UNKNOWN_DATABASE_FIELD',
@@ -186,7 +212,7 @@ export class DatabaseResourceAuthorizer {
 
   private async resolveEffectiveScope(
     principal: Principal,
-    resource: DatabaseCollectionDefinition,
+    resource: AuthorizationCollection,
     action: string,
     configs: readonly DatabaseActionGrant[],
     constraints: readonly AccessConstraint[],
@@ -218,7 +244,7 @@ export class DatabaseResourceAuthorizer {
   private async compileConstraints(
     constraints: readonly AccessConstraint[],
     principal: Principal,
-    resource: DatabaseCollectionDefinition,
+    resource: AuthorizationCollection,
     action: string,
   ): Promise<DatabaseScope[]> {
     const scopes: DatabaseScope[] = [];
@@ -233,9 +259,7 @@ export class DatabaseResourceAuthorizer {
         if (!Array.isArray(ids) || ids.some((id) => typeof id !== 'string')) {
           throw new Error('Invalid IDs access scope');
         }
-        scopes.push(
-          idsScope(resource.attributes?.identifier ?? 'id', ids as string[]),
-        );
+        scopes.push(idsScope(resource.primaryKey, ids as string[]));
         continue;
       }
       if (value.type !== 'database') {
@@ -256,7 +280,7 @@ export class DatabaseResourceAuthorizer {
 
   private async compileScopes(
     principal: Principal,
-    resource: DatabaseCollectionDefinition,
+    resource: AuthorizationCollection,
     action: string,
     scopes: readonly DatabaseRecordAccess[],
   ): Promise<DatabaseScope[]> {
@@ -285,12 +309,6 @@ export class DatabaseResourceAuthorizer {
       reasons: [{ code, message, plugin: 'database' }],
     };
   }
-}
-
-/** A resource is registered as `<source>.<collection>`; a scope names the Collection. */
-function collectionName(resourceId: string): string {
-  const separator = resourceId.indexOf('.');
-  return separator === -1 ? resourceId : resourceId.slice(separator + 1);
 }
 
 function toDatabaseGrant(grant: AuthorizationGrant): DatabaseActionGrant[] {

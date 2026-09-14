@@ -1,6 +1,6 @@
 ---
 name: nocobase-app-plugin-authorization
-description: 'Add authorization to a NocoBase 3 application or plugin: register resources and collections, protect routes and APIs, apply database field and record conditions to queries, configure Permission Sets, and diagnose a permission decision.'
+description: 'Add authorization to a NocoBase 3 application or plugin: register resources, protect routes and Repository API endpoints, apply database field and record conditions to queries, configure Permission Sets, and diagnose a permission decision.'
 metadata:
   short-description: Add authorization to a NocoBase 3 application
   domain-owner: '@nocobase/app-plugin-authorization'
@@ -15,16 +15,15 @@ boundary of that API.
 
 For a complete end-to-end implementation, read
 [references/orders-module.md](references/orders-module.md). It is a compact
-Orders module example covering schema, service, routes, resource registration,
-and all four database access-range features.
+Orders module example covering schema, service, routes, and all four database
+access-range features.
 
 ## Choose the right layer
 
 - Use `authz.resources.add()` when a module owns a new resource type and needs
   to define how that resource is authorized.
-- Use `authz.database.collections.add()` when a module exposes a database
-  collection. Register its actions and fields so Permission Sets, Default
-  Access, Sharing Rules, and Restriction Rules can configure it.
+- Use `authz.repositories()` when a module exposes collections through
+  `defineRepositoryApiRoutes()`. It authorizes each endpoint in place.
 - Use `authz.guard()` for an HTTP route or action that needs one authorization
   check before the handler runs.
 - Use `authz.database.policyFor()` when the handler reads or writes a
@@ -39,40 +38,36 @@ Do not add a second permission system inside a module. The module should keep
 its normal service/repository API and add an authorization check immediately
 before the operation.
 
-## Register a database resource
+## Collection metadata comes from db
 
-Register the collection while creating the application authorization instance.
-The `name` must match the resource id used by authorization requests. Actions
-are the operations the module supports; fields are used by field-level policy
-configuration.
+There is no collection registry to populate. Field names, the primary key, and
+whether the database generates it are read from `connection.collections`, so
+any collection db knows about can be granted on.
 
 ```ts
-const authz = createAuthorization({
+const authz = createAppAuthorization({
   connection,
-  plugins: [
-    permissionSets(),
-    databaseAuthorization(),
-    defaultAccess(),
-    sharingRules(),
-    restrictionRules(),
-  ],
-});
-
-authz.database.collections.add({
-  name: 'orders',
-  title: 'Orders',
-  actions: ['read', 'create', 'update', 'delete'],
-  fields: ['id', 'number', 'amount', 'status', 'ownerId'],
-  attributes: {
-    identifier: 'id',
-    owner: 'ownerId',
+  config: {
+    plugins: [
+      databaseAuthorization(),
+      defaultAccess(),
+      sharingRules(),
+      restrictionRules(),
+    ],
   },
 });
 ```
 
-Keep this registration close to the module's resource setup. A collection that
-is not registered cannot be selected by the authorization configuration UI and
-will not be accepted by the database authorizer.
+- The resource id is `<source>.<collection>`; the default source is `main`, so
+  `orders` is `main.orders`.
+- The actions are fixed: `read`, `create`, `update`, `delete`.
+- Fields are the collection's own columns. Relations are governed by a
+  Repository Policy's `relations`, not by a field list.
+- `recordsIOwn` and `recordsICreated` take the column to compare as
+  `params.field`, defaulting to `ownerId` and `createdById`.
+
+A collection db does not hold, an action outside those four, and a field the
+collection does not have are each denied.
 
 ## Protect a module API
 
@@ -91,8 +86,8 @@ routes.get('/orders', async (context) => {
 });
 ```
 
-The registered collection belongs to the `main` source by default, so the
-authorization resource id in this example is `main.orders`:
+A collection belongs to the `main` source by default, so the authorization
+resource id in this example is `main.orders`:
 
 ```ts
 resource: { type: 'database.collection', id: 'main.orders' }
@@ -141,11 +136,44 @@ A row outside the scope raises `RECORD_NOT_FOUND`, which a route turns into a 40
 included; a generated primary key is not writable, so list the columns rather
 than granting `input: '*'`.
 
+## Protect Repository API routes
+
+When the module exposes collections with `defineRepositoryApiRoutes()`,
+`authz.repositories()` authorizes them without a handler of its own. Each
+exposure that names a `resource` declares the static Policy it offers; the
+middleware narrows that shape with the caller's grants per request.
+
+```ts
+const authorize = authorization.repositories(repositories);
+router.use('/orders:findMany', authentication.required(), authorize);
+router.route(
+  '/',
+  await defineRepositoryApiRoutes({
+    principal: authorize.principal,
+    repositories: authorize.repositories,
+  }).createRouter(app),
+);
+```
+
+- Mount the middleware on every action of every exposure that names a
+  `resource`. An action it did not run on resolves no principal, and
+  app-server answers `403 PRINCIPAL_REQUIRED` rather than falling back to the
+  shape.
+- A grant carries no relation model, and a member the grant does not mention
+  stays as it was — so relation rules come from the shape while scope and
+  fields are intersected with the grant. Write `read` out as a node with its
+  `fields` and `relations`; `read: true` narrows to a node with no readable
+  relations.
+- An exposure that names a `resource` needs a static `policy`. A function
+  throws a `TypeError` where the routes are defined.
+- An exposure with no `resource` is passed through and never consults
+  authorization.
+
 ## Configure business permissions
 
 Permission configuration has two parts:
 
-1. The module registers resources and supported actions in code.
+1. The module declares the resources and endpoints it authorizes in code.
 2. An administrator assigns Permission Sets and configures database rules.
 
 Use a Permission Set when the same access should be reused for several users,
@@ -210,8 +238,9 @@ route or service performs the authorization request before invoking it.
 
 When a permission does not behave as expected, inspect in this order:
 
-1. Confirm the resource type and id exactly match the registered resource.
-2. Confirm the action is registered for that resource.
+1. Confirm the resource type and id exactly match the resource, and that db
+   holds the collection a `database.collection` id names.
+2. Confirm the action is one the resource supports.
 3. Confirm the request principal and subjects were resolved by middleware.
 4. Check the user's Permission Set assignments.
 5. Check Default Access, Sharing Rules, and Restriction Rules for that action.

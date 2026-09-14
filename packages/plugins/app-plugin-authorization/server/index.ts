@@ -5,11 +5,11 @@ export {
   type CreateAppAuthorizationOptions,
 } from './authorization.js';
 export type {
+  AuthorizationCollection,
   DatabaseApi,
   DatabaseAuthorizationApi,
   DatabaseAuthorizationConditions,
   DatabaseAuthorizationParams,
-  DatabaseCollectionDefinition,
   DatabaseGrantDefinition,
   DatabaseRecordAccess,
   DatabaseScope,
@@ -45,5 +45,15 @@ export {
   type SharingRulesOptions,
 } from './rules.js';
 export type { AuthorizationPlugin } from '@nocobase/authorization/core';
-export { authorizationToken, permissionSetsToken } from './tokens.js';
+export {
+  authorizationToken,
+  permissionSetsToken,
+  type AppAuthorizationService,
+} from './tokens.js';
+export type {
+  RepositoryAuthorization,
+  RepositoryAuthorizationApi,
+  RepositoryAuthorizationExposure,
+  RepositoryAuthorizationPrincipal,
+} from './repositories.js';
 export { AuthorizationProvider } from './providers/authorization.js';

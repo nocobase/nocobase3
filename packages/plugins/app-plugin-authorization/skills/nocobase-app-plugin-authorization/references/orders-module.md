@@ -38,42 +38,30 @@ export default defineMigration({
 } satisfies MigrationDefinition);
 ```
 
-The authorization registry describes the fields the module exposes; it does
-not create the table.
+That migration is the whole of the setup. Authorization reads the field list,
+the primary key, and whether the database generates it from
+`connection.collections`, so there is nothing to register.
 
-## 2. Register the collection
+## 2. Know what the resource is called
 
 `orders` resolves to `main.orders` when the database plugin uses its default
-source.
+source, and the actions are the fixed `read`, `create`, `update` and `delete`.
 
 ```ts
-authz.database.collections.add({
-  name: 'orders',
-  title: 'Orders',
-  actions: ['read', 'create', 'update', 'delete'],
-  fields: [
-    'id',
-    'number',
-    'customerName',
-    'amount',
-    'status',
-    'region',
-    'ownerId',
-    'createdById',
-    'createdAt',
-    'updatedAt',
-  ],
-  attributes: {
-    identifier: 'id',
-    owner: 'ownerId',
-    creator: 'createdById',
-  },
-});
+const ordersResource = {
+  type: 'database.collection',
+  id: 'main.orders',
+} as const;
 ```
 
-`recordsIOwn` reads `attributes.owner` and `recordsICreated` reads
-`attributes.creator`. A module with different column names registers the
-mapping rather than writing another copy of the policy.
+`recordsIOwn` compares `params.field`, defaulting to `ownerId`, and
+`recordsICreated` defaults to `createdById`. A module whose columns are named
+differently passes the column in the grant rather than writing another copy of
+the policy:
+
+```ts
+recordAccess: [{ key: 'recordsIOwn', params: { field: 'salesRepId' } }];
+```
 
 ## 3. Bind the Policy to a Repository
 
@@ -132,13 +120,52 @@ false` is a 403 — and let a `RECORD_NOT_FOUND` error from `updateOne` or
 row that does not exist, which is the point.
 
 A write grant must name every column the route stores, including the
-timestamps the server stamps itself. A generated primary key is not writable,
-so `fields: { input: '*' }` — which expands to every registered field — is
-wrong for a write; list the columns instead.
+timestamps the server stamps itself. `fields: { input: '*' }` expands to the
+collection's columns minus a primary key the database generates, so it is safe
+for a create; list the columns when the route should write fewer.
+
+### Or expose the Repository directly
+
+When the module has no handler of its own, `authz.repositories()` authorizes
+`defineRepositoryApiRoutes()` endpoints in place. Each exposure names the
+`resource` its rows belong to and declares the static Policy shape it offers;
+the middleware narrows that shape with the caller's grants.
+
+```ts
+const authorize = authz.repositories([
+  {
+    name: 'orders',
+    resource: 'orders',
+    policy: {
+      read: { scope: true, fields: ['id', 'number', 'amount', 'ownerId'] },
+      create: { scope: true, fields: ['number', 'amount', 'ownerId'] },
+      update: { scope: true, fields: ['amount', 'status'] },
+      delete: true,
+    },
+    actions: { findMany: {}, count: {}, createOne: {}, updateOne: {} },
+  },
+]);
+for (const action of ['findMany', 'count', 'createOne', 'updateOne'])
+  routes.use(`/orders:${action}`, auth.required(), authorize);
+routes.route(
+  '/',
+  await defineRepositoryApiRoutes({
+    principal: authorize.principal,
+    repositories: authorize.repositories,
+  }).createRouter(app),
+);
+```
+
+Mount it on every action: one it did not run on resolves no principal, and
+app-server answers `403 PRINCIPAL_REQUIRED` rather than falling back to the
+shape. Relation rules come from the shape, because a grant carries no relation
+model and a member the grant does not mention stays as it was — so write
+`read` out as a node rather than `true` when relations must stay readable.
 
 ## 4. Grant actions in a Permission Set
 
-The module registers what is possible; a Permission Set grants it to subjects.
+The shape a route exposes is what is possible; a Permission Set grants it to
+subjects.
 Configure each action separately, because create, read, update and delete
 usually have different fields and record scopes.
 

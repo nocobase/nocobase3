@@ -1,7 +1,7 @@
 import type {
+  AuthorizationCollection,
   DatabaseActionGrant,
   DatabaseAuthorizationFieldRequest,
-  DatabaseCollectionDefinition,
 } from './model.js';
 
 export interface ResolvedDatabaseFields {
@@ -20,16 +20,20 @@ export function resolveDatabaseFields(
 
 /**
  * The field allowlist one action's Policy node carries: what a read returns,
- * and what a write accepts. `'*'` becomes the registered list because a Policy
- * node reads an absent allowlist as no fields rather than as every field.
+ * and what a write accepts. `'*'` becomes the Collection's fields because a
+ * Policy node reads an absent allowlist as no fields rather than as every one.
+ * A generated primary key is the database's to assign, so a create omits it.
  */
 export function resolveActionFields(
   action: string,
   fields: ResolvedDatabaseFields,
-  collection: DatabaseCollectionDefinition,
+  collection: AuthorizationCollection,
 ): readonly string[] {
   const allowed = action === 'read' ? fields.output : fields.input;
-  return allowed === '*' ? collection.fields : allowed;
+  if (allowed !== '*') return allowed;
+  return action === 'create' && collection.generatedPrimaryKey
+    ? collection.fields.filter((field) => field !== collection.primaryKey)
+    : collection.fields;
 }
 
 export function databaseFieldsAllowed(
@@ -53,7 +57,7 @@ export function databaseFieldsAllowed(
 }
 
 export function databaseCollectionFieldsKnown(
-  collection: DatabaseCollectionDefinition,
+  collection: AuthorizationCollection,
   requested: DatabaseAuthorizationFieldRequest | undefined,
 ): boolean {
   const registered = new Set(collection.fields);

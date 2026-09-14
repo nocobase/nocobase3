@@ -106,7 +106,28 @@ return context.json({ data: await customers.findMany() });
 
 A denied action is `false` on its node, so a route reads the Policy for its own status code rather than re-deriving the decision.
 
-This is a summary. Registering a collection with its actions, fields, and owner attribute, configuring Permission Sets, and binding the Repository Policy that `policyFor()` returns are all covered by the authorization plugin's own Skill — read `nocobase-app-plugin-authorization` in `.agents/skills/` before building ownership rules, and its `references/orders-module.md` for a complete worked example with an `ownerId`.
+Nothing registers the collection. Field names, the primary key, and whether the database generates it are read from db's own Collection metadata, so any collection a migration created can be granted on. `recordsIOwn` and `recordsICreated` take the column to compare as `params.field`, defaulting to `ownerId` and `createdById`.
+
+### Repository API endpoints
+
+When a route exposes a collection through `defineRepositoryApiRoutes()` rather than a handler of its own, `authorization.repositories()` authorizes it in place. Each exposure names the `resource` its rows belong to and declares the static Policy shape it offers; the middleware narrows that shape with the caller's grants:
+
+```ts
+const authorize = authorization.repositories(repositories);
+for (const action of ['findMany', 'createOne'])
+  router.use(`/orders:${action}`, auth.required(), authorize);
+router.route(
+  '/',
+  await defineRepositoryApiRoutes({
+    principal: authorize.principal,
+    repositories: authorize.repositories,
+  }).createRouter(app),
+);
+```
+
+Mount it on every action of every exposure that names a `resource`. An action it did not run on resolves no principal, and app-server answers `403 PRINCIPAL_REQUIRED` rather than falling back to the shape. Relation rules come from the shape — a grant carries no relation model, and a member it does not mention stays as it was — so write `read` out as a node with its `fields` and `relations` rather than `true` when relations must stay readable.
+
+This is a summary. Configuring Permission Sets and binding the Repository Policy that `policyFor()` returns are covered by the authorization plugin's own Skill — read `nocobase-app-plugin-authorization` in `.agents/skills/` before building ownership rules, and its `references/orders-module.md` for a complete worked example with an `ownerId`.
 
 ## Scope middleware to paths you own
 

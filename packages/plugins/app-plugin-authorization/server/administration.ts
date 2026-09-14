@@ -6,10 +6,10 @@ export interface AuthorizationRecordOption {
   description?: string;
 }
 
-/** The collection metadata `databaseAuthorization` registered for a resource. */
+/** The collection metadata a record picker needs, read from db. */
 export interface AuthorizationRecordCollection {
-  name: string;
-  fields: readonly string[];
+  readonly name: string;
+  readonly fields: readonly string[];
 }
 
 export interface AuthorizationAdministration {
@@ -20,7 +20,9 @@ export interface AuthorizationAdministration {
 
 export interface CreateAuthorizationAdministrationOptions {
   connection?: DatabaseConnection;
-  resolveCollection(name: string): AuthorizationRecordCollection | undefined;
+  resolveCollection(
+    name: string,
+  ): Promise<AuthorizationRecordCollection | undefined>;
 }
 
 /** How many records the settings pages offer to pick from. */
@@ -28,9 +30,8 @@ const RECORD_LIMIT = 100;
 
 /**
  * Answers the record pickers on the Authorization settings pages. Only
- * collections `databaseAuthorization` knows about can be read, so a resource
- * the application never registered returns nothing rather than reaching the
- * database.
+ * Collections db holds can be read, so a resource that names none returns
+ * nothing rather than reaching the database.
  */
 export function createAuthorizationAdministration(
   options: CreateAuthorizationAdministrationOptions,
@@ -40,7 +41,7 @@ export function createAuthorizationAdministration(
       name: string,
     ): Promise<readonly AuthorizationRecordOption[]> {
       const { connection } = options;
-      const collection = options.resolveCollection(name);
+      const collection = await options.resolveCollection(collectionName(name));
       if (!connection || !collection) return [];
       const idField = collection.fields.includes('id')
         ? 'id'
@@ -53,12 +54,10 @@ export function createAuthorizationAdministration(
           collection.fields.includes(field),
         ) ?? idField;
       const fields = idField === labelField ? [idField] : [idField, labelField];
-      const rows = await connection
-        .repository(collectionName(collection.name))
-        .findMany({
-          select: (select) => select.fields(...fields),
-          limit: RECORD_LIMIT,
-        });
+      const rows = await connection.repository(collection.name).findMany({
+        select: (select) => select.fields(...fields),
+        limit: RECORD_LIMIT,
+      });
       return rows.map((row) => ({
         id: text(Reflect.get(row, idField)),
         label: text(Reflect.get(row, labelField)),

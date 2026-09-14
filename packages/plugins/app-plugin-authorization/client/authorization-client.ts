@@ -62,11 +62,7 @@ export interface ResourceTypeOption {
 }
 export interface DatabaseCollectionOption {
   name: string;
-  title?: string;
-  description?: string;
-  actions: readonly string[];
   fields: readonly string[];
-  attributes?: Readonly<Record<string, string>>;
 }
 export interface AuthorizationOptions {
   plugins: readonly string[];

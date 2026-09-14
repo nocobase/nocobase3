@@ -105,8 +105,12 @@ interpret. It produces db's filter AST directly, and
 `authz.database.policyFor(collection, scope)` folds a request's read, create,
 update and delete decisions into one `RepositoryPolicy` that
 `repository.withPolicy()` binds, so a route runs plain `findMany` and
-`createOne` instead of compiling a filter by hand. See
-[docs/database-usage.md](./docs/database-usage.md).
+`createOne` instead of compiling a filter by hand. Collection metadata — field
+names, the primary key, whether the database generates it — is read from db
+rather than registered here, so anything db holds can be granted on.
+`authz.repositories()` applies the same fold to `defineRepositoryApiRoutes()`
+endpoints, narrowing each exposure's declared shape with the caller's grants.
+See [docs/database-usage.md](./docs/database-usage.md).
 
 The plugin always registers the identity step that turns a session into a
 principal, and keeps Realtime permission invalidation in step with grant

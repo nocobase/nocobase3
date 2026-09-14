@@ -1,14 +1,23 @@
 import type { AuthorizationConditions } from '@nocobase/authorization/core';
 import type { FilterAst } from '@nocobase/db';
 
-export interface DatabaseCollectionDefinition {
-  name: string;
-  title?: string;
-  description?: string;
-  actions: readonly string[];
-  fields: readonly string[];
-  attributes?: Readonly<Record<string, string>>;
+/**
+ * What authorization needs to know about a Collection, read from db.
+ *
+ * db owns this metadata, so nothing registers it here. The primary key names
+ * the column an identifier scope compares against, and `generatedPrimaryKey`
+ * says the database assigns it rather than the caller.
+ */
+export interface AuthorizationCollection {
+  readonly name: string;
+  readonly fields: readonly string[];
+  readonly primaryKey: string;
+  readonly generatedPrimaryKey: boolean;
 }
+
+export type ResolveAuthorizationCollection = (
+  name: string,
+) => Promise<AuthorizationCollection | undefined>;
 
 export type DatabaseRecordAccess =
   | string

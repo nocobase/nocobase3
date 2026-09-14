@@ -10,6 +10,12 @@ import {
   type PermissionSetsAuthorizationApi,
   type PermissionSetsPlugin,
 } from '@nocobase/authorization/permissions';
+import {
+  createRepositoryAuthorization,
+  type RepositoryAuthorization,
+  type RepositoryAuthorizationApi,
+  type RepositoryAuthorizationExposure,
+} from './repositories.js';
 import { DatabaseConnectionHandle } from './stores/connection.js';
 import { DatabasePermissionSetStore } from './stores/permission-sets.js';
 
@@ -46,7 +52,9 @@ export interface CreateAppAuthorizationOptions {
 
 export function createAppAuthorization(
   options: CreateAppAuthorizationOptions,
-): Authorization & PermissionSetsAuthorizationApi<DatabaseConnection> {
+): Authorization &
+  PermissionSetsAuthorizationApi<DatabaseConnection> &
+  RepositoryAuthorizationApi {
   const sets = options.config?.permissionSets;
   const connection = new DatabaseConnectionHandle(
     'Permission Sets',
@@ -86,7 +94,12 @@ export function createAppAuthorization(
       await options.onAuthenticatedPermissionsChanged?.();
     }
   });
-  return authz;
+  return Object.assign(authz, {
+    repositories: (
+      exposures: readonly RepositoryAuthorizationExposure[],
+    ): RepositoryAuthorization =>
+      createRepositoryAuthorization(authz, exposures),
+  });
 }
 
 /**
@@ -104,7 +117,7 @@ export function appAuthorizationDatabase(
 function isDatabaseApi(
   value: unknown,
 ): value is DatabaseAuthorizationApi['database'] {
-  return isRecord(value) && 'collections' in value && 'recordAccess' in value;
+  return isRecord(value) && 'policyFor' in value && 'recordAccess' in value;
 }
 
 function readAuthSession(value: unknown): AuthSession {

@@ -12,11 +12,7 @@ import {
   createAuthorizationAdministration,
   type AuthorizationAdministration,
 } from '../server/administration.js';
-import {
-  appAuthorizationDatabase,
-  createAppAuthorization,
-} from '../server/authorization.js';
-import { databaseAuthorization } from '../server/database/index.js';
+import { describeCollection } from '../server/database/index.js';
 
 describe('the records an application offers to a settings page', () => {
   let database: DatabaseManager;
@@ -38,26 +34,12 @@ describe('the records an application offers to a settings page', () => {
         ),
       ),
     }).latest();
-    // The records a settings page offers come from the collections the
-    // database plugin registers; nothing here resolves a grant.
-    const authorization = createAppAuthorization({
-      connection: database.connection(),
-      config: { plugins: [databaseAuthorization({ source: 'main' })] },
-    });
-    const collections = appAuthorizationDatabase(authorization)?.collections;
-    if (!collections) {
-      throw new Error(
-        'The plugin list under test installs the database plugin',
-      );
-    }
-    collections.add({
-      name: 'user',
-      actions: ['read'],
-      fields: ['id', 'name', 'email'],
-    });
+    // The records a settings page offers come from db's own Collection
+    // metadata; nothing here resolves a grant.
+    const connection = database.connection();
     administration = createAuthorizationAdministration({
-      connection: database.connection(),
-      resolveCollection: (name) => collections.get(name),
+      connection,
+      resolveCollection: (name) => describeCollection(connection, name),
     });
   });
 
@@ -75,7 +57,7 @@ describe('the records an application offers to a settings page', () => {
     ]);
   });
 
-  it('offers nothing for a collection the application never registered', async () => {
+  it('offers nothing for a collection the database does not hold', async () => {
     await expect(administration.listRecords('main.orders')).resolves.toEqual(
       [],
     );

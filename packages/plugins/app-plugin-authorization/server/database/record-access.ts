@@ -1,10 +1,10 @@
 import type { Principal } from '@nocobase/authorization/core';
-import type { DatabaseCollectionDefinition } from './model.js';
+import type { AuthorizationCollection } from './model.js';
 import { condition, type DatabaseScope } from './scope.js';
 
 export interface RecordAccessPolicyContext<P> {
   principal: Principal;
-  collection: DatabaseCollectionDefinition;
+  collection: AuthorizationCollection;
   action: string;
   params: P;
 }
@@ -41,21 +41,38 @@ export function allRecords(): RecordAccessPolicy {
   });
 }
 
-export function recordsIOwn(): RecordAccessPolicy {
-  return defineRecordAccessPolicy({
+/** Which column carries the principal. The default suits most Collections. */
+export interface RecordOwnerParams {
+  field?: string;
+}
+
+export function recordsIOwn(): RecordAccessPolicy<
+  RecordOwnerParams | undefined
+> {
+  return defineRecordAccessPolicy<RecordOwnerParams | undefined>({
     key: 'recordsIOwn',
     title: 'Records I Own',
-    resolve: ({ principal, collection }) =>
-      condition(requiredAttribute(collection, 'owner'), '$eq', principal.id),
+    resolve: ({ principal, collection, params }) =>
+      condition(
+        ownerField(collection, params?.field ?? 'ownerId'),
+        '$eq',
+        principal.id,
+      ),
   });
 }
 
-export function recordsICreated(): RecordAccessPolicy {
-  return defineRecordAccessPolicy({
+export function recordsICreated(): RecordAccessPolicy<
+  RecordOwnerParams | undefined
+> {
+  return defineRecordAccessPolicy<RecordOwnerParams | undefined>({
     key: 'recordsICreated',
     title: 'Records I Created',
-    resolve: ({ principal, collection }) =>
-      condition(requiredAttribute(collection, 'creator'), '$eq', principal.id),
+    resolve: ({ principal, collection, params }) =>
+      condition(
+        ownerField(collection, params?.field ?? 'createdById'),
+        '$eq',
+        principal.id,
+      ),
   });
 }
 
@@ -78,14 +95,13 @@ export function customFilter(): RecordAccessPolicy<CustomFilterParams> {
   });
 }
 
-function requiredAttribute(
-  collection: DatabaseCollectionDefinition,
-  attribute: string,
+function ownerField(
+  collection: AuthorizationCollection,
+  field: string,
 ): string {
-  const field = collection.attributes?.[attribute];
-  if (!field) {
+  if (!collection.fields.includes(field)) {
     throw new Error(
-      `Collection "${collection.name}" does not declare the "${attribute}" attribute`,
+      `Collection "${collection.name}" has no field "${field}" to own records by`,
     );
   }
   return field;

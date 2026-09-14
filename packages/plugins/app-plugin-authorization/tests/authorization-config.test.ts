@@ -9,7 +9,11 @@ import {
   type PermissionSetsApi,
   type PermissionSetsAuthorizationApi,
 } from '@nocobase/authorization/permissions';
-import type { DatabaseConnection } from '@nocobase/db';
+import {
+  databaseManagerToken,
+  type DatabaseConnection,
+  type DatabaseManager,
+} from '@nocobase/db';
 import { createConfigPaths } from '@nocobase/app-server/config';
 import {
   authenticationToken,
@@ -17,7 +21,8 @@ import {
 } from '@nocobase/app-plugin-authentication';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { createOrdersDatabase, orderFields } from './orders-database.js';
 
 import {
   appAuthorizationDatabase,
@@ -34,8 +39,18 @@ import { pages } from '../server/pages-authorization.js';
 import { apiRoutes } from '../server/routes/index.js';
 import { authorizationToken } from '../server/tokens.js';
 
-/** Permission Sets need a connection to build their store; nothing here queries. */
-const connection = { query: {} } as unknown as DatabaseConnection;
+/** Collection metadata comes from db, so the options endpoints need a real one. */
+let database: DatabaseManager;
+let connection: DatabaseConnection;
+
+beforeAll(async () => {
+  database = await createOrdersDatabase();
+  connection = database.connection();
+});
+
+afterAll(async () => {
+  await database.destroy();
+});
 
 /** The plugin list all three templates ship; the plugin adds Permission Sets. */
 const templatePlugins = (): AuthorizationPlugin[] => [
@@ -130,18 +145,20 @@ describe('what an application configures about its own authorization', () => {
     ).toEqual(['permission-sets', 'pages']);
   });
 
-  it('resolves database collections against the source the application passes', () => {
-    const authorization = authorizationWith({
+  it('resolves database resources against the source the application passes', () => {
+    const named = authorizationWith({
       plugins: [pages(), databaseAuthorization({ source: 'analytics' })],
     });
+    const unnamed = authorizationWith({ plugins: [databaseAuthorization()] });
 
-    expect(collectionsOf(authorization).resolveName('orders')).toBe(
-      'analytics.orders',
-    );
-    const unnamed = authorizationWith({
-      plugins: [databaseAuthorization()],
+    expect(databaseOf(named).grant('orders', { read: {} }).resource).toEqual({
+      type: 'database.collection',
+      id: 'analytics.orders',
     });
-    expect(collectionsOf(unnamed).resolveName('orders')).toBe('main.orders');
+    expect(databaseOf(unnamed).grant('orders', { read: {} }).resource).toEqual({
+      type: 'database.collection',
+      id: 'main.orders',
+    });
   });
 
   it('tells the application whose permissions an assignment changed', async () => {
@@ -212,7 +229,11 @@ describe('what an application configures about its own authorization', () => {
 
     expect([options.status, records.status]).toEqual([200, 200]);
     await expect(options.json()).resolves.toMatchObject({
-      data: { plugins: ['database'] },
+      data: {
+        plugins: ['database'],
+        // The Collections db holds, not a list the application registered.
+        collections: [{ name: 'orders', fields: orderFields }],
+      },
     });
     await expect(records.json()).resolves.toEqual({ data: [] });
   });
@@ -277,22 +298,23 @@ describe('what an application configures about its own authorization', () => {
   });
 });
 
-/** The collection registry of an authorization that installed the database plugin. */
-function collectionsOf(
+/** The database api of an authorization that installed the database plugin. */
+function databaseOf(
   authorization: Authorization,
-): NonNullable<ReturnType<typeof appAuthorizationDatabase>>['collections'] {
-  const database = appAuthorizationDatabase(authorization);
-  if (!database) {
+): NonNullable<ReturnType<typeof appAuthorizationDatabase>> {
+  const api = appAuthorizationDatabase(authorization);
+  if (!api) {
     throw new Error(
       'The configuration under test installs the database plugin',
     );
   }
-  return database.collections;
+  return api;
 }
 
 /** The plugin routes where an application mounts them, under `/api`. */
 async function mountedRouter(authorization: Authorization): Promise<Hono> {
   const container = new ServiceContainer();
+  container.instance(databaseManagerToken, database);
   container.instance(authenticationToken, {
     required: () => async (_context, next) => next(),
   } as unknown as Auth);

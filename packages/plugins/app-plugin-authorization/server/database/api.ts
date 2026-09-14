@@ -5,7 +5,7 @@ import type {
 import type { PermissionGrant } from '@nocobase/authorization/permissions';
 import type { RepositoryPolicy } from '@nocobase/db';
 import { UNRESTRICTED_ACCESS } from './authorizer.js';
-import { DatabaseCollectionRegistry } from './collection-registry.js';
+import { databaseResourceId } from './collections.js';
 import type {
   DatabaseAccessScope,
   DatabaseAuthorizationConditions,
@@ -15,7 +15,6 @@ import type {
 import { RecordAccessPolicyRegistry } from './record-access-registry.js';
 
 export interface DatabaseApi {
-  readonly collections: DatabaseCollectionRegistry;
   readonly recordAccess: RecordAccessPolicyRegistry;
   grant(resource: string, definition: DatabaseGrantDefinition): PermissionGrant;
   scope(recordAccess: DatabaseRecordAccess): DatabaseAccessScope;
@@ -30,14 +29,11 @@ export interface DatabaseAuthorizationApi {
 }
 
 export class DatabaseAuthorizationService implements DatabaseApi {
-  readonly collections: DatabaseCollectionRegistry;
   readonly recordAccess: RecordAccessPolicyRegistry;
+  private readonly source: string;
 
-  constructor(
-    collections: DatabaseCollectionRegistry,
-    recordAccess: RecordAccessPolicyRegistry,
-  ) {
-    this.collections = collections;
+  constructor(source: string, recordAccess: RecordAccessPolicyRegistry) {
+    this.source = source;
     this.recordAccess = recordAccess;
   }
 
@@ -48,7 +44,7 @@ export class DatabaseAuthorizationService implements DatabaseApi {
     return {
       resource: {
         type: 'database.collection',
-        id: this.collections.resolveName(resource),
+        id: databaseResourceId(this.source, resource),
       },
       actions: Object.entries(definition).map(([action, config]) => ({
         action,
@@ -78,7 +74,7 @@ export class DatabaseAuthorizationService implements DatabaseApi {
   ): Promise<RepositoryPolicy> {
     const resource = {
       type: 'database.collection',
-      id: this.collections.resolveName(collection),
+      id: databaseResourceId(this.source, collection),
     };
     const decide = async (
       action: string,

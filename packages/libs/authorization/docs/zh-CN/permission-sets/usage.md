@@ -11,15 +11,12 @@ import { permissionSets } from '@nocobase/authorization/permissions';
 import { databaseAuthorization } from '@nocobase/app-plugin-authorization/server';
 
 const authz = createAuthorization({
+  connection,
   plugins: [permissionSets({ store }), databaseAuthorization()],
 });
-
-authz.database.collections.add({
-  name: 'orders',
-  actions: ['read'],
-  fields: ['id', 'number', 'amount'],
-});
 ```
+
+数据库插件从 `connection.collections` 读取 Collection 元数据，不需要另行注册。
 
 本包只定义 Store 契约 `PermissionSetStore`，插件必须由调用方提供一个 Store，本包不带
 任何存储实现，也不依赖 `@nocobase/db`。`@nocobase/app-plugin-authorization` 提供数据库

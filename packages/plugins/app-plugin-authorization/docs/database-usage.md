@@ -7,10 +7,10 @@ Database Authorization 是应用插件里的资源插件：它把 Authorization 
 一个完整的接入过程包括：
 
 1. 安装 Database Authorization 插件；
-2. 注册需要保护的数据表；
-3. 通过 Permission Set、Role 或其他 Grant Provider 提供动作权限；
-4. 在数据访问入口用 `policyFor()` 得到 Repository Policy；
-5. 用 `repository.withPolicy(policy)` 绑定后照常读写。
+2. 通过 Permission Set、Role 或其他 Grant Provider 提供动作权限；
+3. 在数据访问入口用 `policyFor()` 得到 Repository Policy；
+4. 用 `repository.withPolicy(policy)` 绑定后照常读写，或者用
+   `authz.repositories()` 保护 Repository API 路由。
 
 ## 安装插件
 
@@ -29,45 +29,19 @@ const authz = createAppAuthorization({
 Database Authorization 需要一个 Grant Provider。应用插件默认安装 Permission Sets；
 应用也可以安装自己的 Role Grant Provider。
 
-## 注册数据表
+## Collection 元数据来自 db
 
-Database 插件不会自动把所有 Collection 变成授权资源。业务模块应当按需注册自己需要
-保护的数据表：
+插件不再维护自己的 Collection 注册表：字段清单、主键以及主键是否由数据库生成，都由
+`connection.collections` 提供。应用只需要保证 db 认识这张表，授权就能用它。
 
-```ts
-authz.database.collections.add({
-  name: 'orders',
-  actions: ['create', 'read', 'update', 'delete', 'approve'],
-  fields: [
-    'id',
-    'number',
-    'amount',
-    'status',
-    'ownerId',
-    'createdById',
-    'createdAt',
-  ],
-  attributes: {
-    identifier: 'id',
-    owner: 'ownerId',
-    creator: 'createdById',
-  },
-});
-```
+- 资源 ID 是 `<source>.<collection>`，默认数据源为 `main`，所以 `orders` 对应
+  `main.orders`。
+- 动作固定为 `read`、`create`、`update`、`delete`。
+- 字段是 Collection 的直接列；关系由 Repository Policy 的 `relations` 管辖，不出现在
+  字段清单里。
+- 记录标识使用主键；`recordsIOwn` 与 `recordsICreated` 通过 `params.field` 指定列。
 
-- `name` 是 Collection 名称。默认数据源为 `main`，最终资源 ID 是 `main.orders`。
-- `actions` 是该表允许参与授权的动作，也可以包含 `approve` 等业务动作。
-- `fields` 是能够出现在输入、输出、筛选、排序和分组中的字段。
-- `attributes.identifier` 用于显式记录分享，未设置时使用 `id`。
-- `attributes.owner` 供 `recordsIOwn` 使用。
-- `attributes.creator` 供 `recordsICreated` 使用。
-
-未注册的数据表、动作和字段都会被拒绝。
-
-```ts
-const orders = authz.database.collections.get('orders');
-const collections = authz.database.collections.list();
-```
+db 不认识的 Collection、四个动作之外的动作、以及不属于该表的字段都会被拒绝。
 
 ## 定义数据表权限
 
@@ -92,11 +66,10 @@ await authz.permissionSets.create({
 });
 ```
 
-`read` 使用 `fields.output`，写动作使用 `fields.input`。`"*"` 表示 `collections.add()`
-中登记的全部字段——Policy 节点把缺省的字段清单读作“没有任何字段”，所以 `"*"` 会
-在生成 Policy 时展开成真实清单。写动作要注意：自增主键这类数据库不接受写入的列
-即使登记在 `fields` 里，也不能出现在写入字段清单中，因此写授权应当明确列出该动作
-真正写入的列。
+`read` 使用 `fields.output`，写动作使用 `fields.input`。`"*"` 表示 db 报告的全部字段
+——Policy 节点把缺省的字段清单读作“没有任何字段”，所以 `"*"` 会在生成 Policy 时展开
+成真实清单。`create` 会自动排除由数据库生成的主键（自增或带默认值），因为调用方
+本来就写不进去。
 
 ## 得到 Repository Policy
 
@@ -144,9 +117,15 @@ if (policy.read === false) return c.json({ code: 'FORBIDDEN' }, 403);
 Database 插件内置三个 Policy：
 
 - `allRecords`：所有记录；
-- `recordsIOwn`：`attributes.owner` 等于 Principal ID；
-- `recordsICreated`：`attributes.creator` 等于 Principal ID；
+- `recordsIOwn`：`params.field`（缺省 `ownerId`）等于 Principal ID；
+- `recordsICreated`：`params.field`（缺省 `createdById`）等于 Principal ID；
 - `customFilter`：直接使用 `params.filter` 给出的节点。
+
+字段必须属于该 Collection，否则这次授权以 `DATABASE_AUTHORIZATION_FAILED` 拒绝：
+
+```ts
+recordAccess: [{ key: 'recordsIOwn', params: { field: 'salesRepId' } }];
+```
 
 业务模块也可以定义自己的 Policy。`resolve()` 返回 `true`（全部记录）、`false`
 （没有记录）或一个 Filter 节点：
@@ -163,11 +142,11 @@ authz.database.recordAccess.add<{ field: string }>({
 ```
 
 节点是字面量构造的，不走 `FilterBuilder`：Builder 需要按字段类型选择 `string()` 还是
-`number()`，而 Collection 注册表只记录字段名。一个条件节点是
+`number()`，而授权只看字段名。一个条件节点是
 `{ kind: 'condition', path: [field], operator, value }`，分组是
 `{ kind: 'group', logic: 'and' | 'or', items }`。
 
-Policy 返回的节点只能引用当前注册 Collection 的字段，不能穿越关系，也不能使用 JSON
+Policy 返回的节点只能引用当前 Collection 的字段，不能穿越关系，也不能使用 JSON
 操作符；违反时该次授权以 `DATABASE_AUTHORIZATION_FAILED` 拒绝。
 
 在 Grant 中引用：
@@ -214,12 +193,43 @@ await authz.restrictionRules.create({
 });
 ```
 
+## 保护 Repository API 路由
+
+`authz.repositories()` 把一组 `defineRepositoryApiRoutes` 的 exposure 变成中间件：每个
+声明了 `resource` 的 exposure 都会在请求时用调用方的授权结果收窄它自己的静态 Policy。
+
+```ts
+const authentication = app.container.resolve(authenticationToken);
+const authorization = app.container.resolve(authorizationToken);
+const authorize = authorization.repositories(repositories);
+router.use('/orders:findMany', authentication.required(), authorize);
+router.route(
+  '/',
+  await defineRepositoryApiRoutes({
+    principal: authorize.principal,
+    repositories: authorize.repositories,
+  }).createRouter(app),
+);
+```
+
+- `resource` 接受 `'main.orders'` 或裸名 `'orders'`，后者按插件的数据源补全。
+- 声明了 `resource` 的 exposure 必须给出静态 `policy`：它是这个端点开放的形状，函数
+  形式会在定义时抛出 `TypeError`。
+- 收窄方向是「形状 ∩ 授权」。`policyFor()` 不产出 `relations`，而 patch 没提到的成员
+  保持原样，所以关系规则来自形状，`scope` 与 `fields` 与授权取交集。
+- 形状里 `read: true` 表示整表开放，收窄后会退化成没有关系可读；需要读关系时把
+  `read` 写成显式节点，列出字段与 `relations`。
+- 没有挂上中间件的动作解析不到 principal，app-server 直接以
+  `403 PRINCIPAL_REQUIRED` 拒绝——不会回落到静态形状。
+- 没有 `resource` 的 exposure 原样透传，不经过授权。
+
 ## 常见拒绝原因
 
 | Code                                  | 含义                                         |
 | ------------------------------------- | -------------------------------------------- |
-| `UNKNOWN_DATABASE_RESOURCE_OR_ACTION` | 数据表未注册，或没有声明该 Action            |
-| `UNKNOWN_DATABASE_FIELD`              | 请求使用了未注册字段                         |
+| `UNKNOWN_DATABASE_RESOURCE_OR_ACTION` | db 里没有这张表，或动作不在四个之内          |
+| `UNKNOWN_DATABASE_FIELD`              | 请求使用了该表没有的字段                     |
+| `DATABASE_UNAVAILABLE`                | 安装插件时没有提供数据库连接                 |
 | `NO_OBJECT_PERMISSION`                | Grant Provider 没有返回匹配的 Database Grant |
 | `FIELD_NOT_ALLOWED`                   | Grant 不允许使用请求中的一个或多个字段       |
 | `NO_RECORD_ACCESS`                    | 没有任何正向记录范围                         |

@@ -9,7 +9,7 @@ import { Hono } from 'hono';
 
 import { createAuthorizationRoutes } from './authorization.js';
 import { createAuthorizationAdministration } from '../administration.js';
-import { appAuthorizationDatabase } from '../authorization.js';
+import { describeCollection } from '../database/index.js';
 import { authorizationToken } from '../tokens.js';
 
 export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
@@ -19,18 +19,20 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
     const database = container.has(databaseManagerToken)
       ? container.resolve(databaseManagerToken)
       : undefined;
+    const connection = database?.connection();
     router.route(
       '/authz',
       createAuthorizationRoutes(
         container.resolve(authenticationToken),
         authorization,
         createAuthorizationAdministration({
-          ...(database === undefined
-            ? {}
-            : { connection: database.connection() }),
-          resolveCollection: (name) =>
-            appAuthorizationDatabase(authorization)?.collections.get(name),
+          ...(connection === undefined ? {} : { connection }),
+          resolveCollection: async (name) =>
+            connection === undefined
+              ? undefined
+              : await describeCollection(connection, name),
         }),
+        connection,
       ),
     );
     return router;

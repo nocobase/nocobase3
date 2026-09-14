@@ -4,14 +4,21 @@ import {
   type AuthorizationEnv,
 } from '@nocobase/authorization/core';
 import type { Auth } from '@nocobase/app-plugin-authentication';
+import type { DatabaseConnection } from '@nocobase/db';
 import { Hono, type Context } from 'hono';
 import { appAuthorizationDatabase } from '../authorization.js';
+import {
+  describeCollection,
+  listCollectionNames,
+  type AuthorizationCollection,
+} from '../database/index.js';
 import type { AuthorizationAdministration } from '../administration.js';
 
 export function createAuthorizationRoutes(
   auth: Auth,
   authorization: Authorization,
   administration: AuthorizationAdministration,
+  connection?: DatabaseConnection,
 ): Hono<AuthorizationEnv> {
   const routes = new Hono<AuthorizationEnv>();
   routes.onError((error, context) => {
@@ -32,7 +39,9 @@ export function createAuthorizationRoutes(
   // `/sharing-rules` cannot swallow `/sharing-rules/options`.
   routes.get('/permission-sets/options', async (context) => {
     await admin(context, 'permission-sets', 'read');
-    return context.json({ data: permissionSetOptions(authorization) });
+    return context.json({
+      data: await permissionSetOptions(authorization, connection),
+    });
   });
   for (const settings of [
     'default-access',
@@ -41,7 +50,9 @@ export function createAuthorizationRoutes(
   ] as const) {
     routes.get(`/${settings}/options`, async (context) => {
       await admin(context, settings, 'read');
-      return context.json({ data: databaseScopeRuleOptions(authorization) });
+      return context.json({
+        data: await databaseScopeRuleOptions(authorization, connection),
+      });
     });
     routes.get(`/${settings}/records/:collection`, async (context) => {
       await admin(context, settings, 'read');
@@ -88,7 +99,11 @@ const administrationResources = [
   settingsResource('restriction-rules', crudActions),
 ] as const;
 
-function permissionSetOptions(authz: Authorization): object {
+async function permissionSetOptions(
+  authz: Authorization,
+  connection: DatabaseConnection | undefined,
+): Promise<object> {
+  const collections = await databaseCollections(authz, connection);
   return {
     plugins: ['permission-sets', 'pages', 'database'],
     resourceTypes: [
@@ -110,15 +125,19 @@ function permissionSetOptions(authz: Authorization): object {
         actions: [{ value: 'access', label: 'Access' }],
       },
       administrationOptions(),
-      databaseResourceOptions(authz),
+      databaseResourceOptions(collections),
     ],
     subjectTypes: subjectTypeOptions(),
-    ...databaseOptions(authz),
+    ...databaseOptions(authz, collections),
   };
 }
 
-function databaseScopeRuleOptions(authz: Authorization): object {
-  const collection = databaseResourceOptions(authz);
+async function databaseScopeRuleOptions(
+  authz: Authorization,
+  connection: DatabaseConnection | undefined,
+): Promise<object> {
+  const collections = await databaseCollections(authz, connection);
+  const collection = databaseResourceOptions(collections);
   const withoutCreate = (
     actions: readonly { value: string; label: string }[],
   ): readonly { value: string; label: string }[] =>
@@ -136,7 +155,7 @@ function databaseScopeRuleOptions(authz: Authorization): object {
       },
     ],
     subjectTypes: subjectTypeOptions(),
-    ...databaseOptions(authz),
+    ...databaseOptions(authz, collections),
   };
 }
 
@@ -152,33 +171,48 @@ function administrationOptions(): object {
   };
 }
 
-function databaseResourceOptions(authz: Authorization): {
+/**
+ * The Collections an application can grant on. db holds them, so an
+ * application without the database plugin, or without a connection, grants
+ * none of them.
+ */
+async function databaseCollections(
+  authz: Authorization,
+  connection: DatabaseConnection | undefined,
+): Promise<readonly AuthorizationCollection[]> {
+  if (!connection || !appAuthorizationDatabase(authz)) return [];
+  const names = await listCollectionNames(connection);
+  const described = await Promise.all(
+    names.map((name) => describeCollection(connection, name)),
+  );
+  return described.filter((item) => item !== undefined);
+}
+
+function databaseResourceOptions(
+  collections: readonly AuthorizationCollection[],
+): {
   value: string;
   label: string;
   resources: readonly {
     value: string;
     label: string;
-    description?: string;
     actions: readonly { value: string; label: string }[];
   }[];
   actions: readonly { value: string; label: string }[];
 } {
-  const collections = appAuthorizationDatabase(authz)?.collections.list() ?? [];
+  const actions = crudActions.map((value) => ({
+    value,
+    label: sentenceCase(value),
+  }));
   return {
     value: 'database.collection',
     label: 'Database collections',
     resources: collections.map((collection) => ({
       value: collection.name,
-      label: collection.title ?? collection.name,
-      description: collection.description,
-      actions: collection.actions.map((value) => ({
-        value,
-        label: sentenceCase(value),
-      })),
+      label: collection.name,
+      actions,
     })),
-    actions: unique(
-      collections.flatMap((collection) => collection.actions),
-    ).map((value) => ({ value, label: sentenceCase(value) })),
+    actions,
   };
 }
 
@@ -200,12 +234,15 @@ function settingsResource(
   };
 }
 
-function databaseOptions(authz: Authorization): object {
+function databaseOptions(
+  authz: Authorization,
+  collections: readonly AuthorizationCollection[],
+): object {
   // An application may leave `databaseAuthorization` out of its plugin list;
   // the endpoint then answers with nothing to grant rather than failing.
   const database = appAuthorizationDatabase(authz);
   return {
-    collections: database?.collections.list() ?? [],
+    collections: collections.map(({ name, fields }) => ({ name, fields })),
     recordAccessPolicies: (database?.recordAccess.list() ?? []).map(
       (policy) => ({
         value: policy.key,
@@ -247,10 +284,6 @@ async function admin(
     resource: { type: 'authorization.settings', id: resourceId },
     action,
   });
-}
-
-function unique(values: readonly string[]): readonly string[] {
-  return [...new Set(values)].sort();
 }
 
 function sentenceCase(value: string): string {
