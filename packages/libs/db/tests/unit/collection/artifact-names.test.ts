@@ -23,6 +23,8 @@ describe('validateCollectionArtifactDirectoryName', () => {
       'order_items',
       'v2-events',
       '文章',
+      'console',
+      'nullable',
     ]) {
       expect(() => validateCollectionArtifactDirectoryName(name)).not.toThrow();
     }
@@ -42,6 +44,10 @@ describe('validateCollectionArtifactDirectoryName', () => {
     ['what?', 'Windows forbids'],
     ['CON', 'reserved device name'],
     ['lpt3', 'reserved device name'],
+    ['CON.txt', 'reserved device name'],
+    ['lpt1.schema', 'reserved device name'],
+    ['com0', 'reserved device name'],
+    ['COM¹', 'reserved device name'],
   ])('rejects %j (%s)', (name, reason) => {
     expect(() => validateCollectionArtifactDirectoryName(name)).toThrow(
       new RegExp(reason.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),

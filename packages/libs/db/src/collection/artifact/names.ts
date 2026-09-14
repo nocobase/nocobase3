@@ -15,13 +15,18 @@ export class CollectionArtifactNameError extends Error {
 // eslint-disable-next-line no-control-regex -- control characters are exactly what this rejects
 const CONTROL_CHARACTERS = /[\x00-\x1f\x7f]/;
 const WINDOWS_INVALID_CHARACTERS = /[<>:"|?*]/;
+// CON, PRN, AUX, NUL, COM0–COM9 and LPT0–LPT9, plus the superscript-digit
+// forms Windows also reserves. Reserved regardless of extension: `CON.txt`
+// cannot be created either, so the check looks at the part before the first
+// dot rather than at the whole name.
 const WINDOWS_RESERVED_NAMES = new Set([
   'con',
   'prn',
   'aux',
   'nul',
-  ...Array.from({ length: 9 }, (_, index) => `com${index + 1}`),
-  ...Array.from({ length: 9 }, (_, index) => `lpt${index + 1}`),
+  ...['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '¹', '²', '³'].flatMap(
+    (digit) => [`com${digit}`, `lpt${digit}`],
+  ),
 ]);
 
 /**
@@ -50,7 +55,7 @@ export function validateCollectionArtifactDirectoryName(name: string): void {
   if (CONTROL_CHARACTERS.test(name)) reject('it contains control characters');
   if (WINDOWS_INVALID_CHARACTERS.test(name))
     reject('it contains a character Windows forbids in file names');
-  if (WINDOWS_RESERVED_NAMES.has(name.toLowerCase()))
+  if (WINDOWS_RESERVED_NAMES.has(name.split('.')[0].toLowerCase()))
     reject('it is a reserved device name on Windows');
 }
 
