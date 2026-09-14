@@ -1,5 +1,5 @@
 ---
-title: 'AI employees'
+title: 'Quick start'
 description: 'This page is being written.'
 ---
 

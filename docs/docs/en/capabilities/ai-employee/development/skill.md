@@ -1,5 +1,5 @@
 ---
-title: 'AI employees'
+title: 'Register a Skill'
 description: 'This page is being written.'
 ---
 

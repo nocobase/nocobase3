@@ -1,5 +1,5 @@
 ---
-title: 'AI employees'
+title: 'LLM service configuration'
 description: 'This page is being written.'
 ---
 

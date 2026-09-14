@@ -1,5 +1,5 @@
 ---
-title: 'AI employees'
+title: 'Manage MCP servers'
 description: 'This page is being written.'
 ---
 
