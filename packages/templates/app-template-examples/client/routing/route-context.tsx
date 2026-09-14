@@ -131,6 +131,21 @@ export function RouteMetadataBoundary({
   );
 }
 
+/**
+ * Whether a child *page* has taken over from the page asking.
+ *
+ * A page and an overlay both render through the same outlet, so a page with children needs to tell them apart: an
+ * overlay floats above and leaves the page beneath it on screen, while a child page replaces it. The answer follows
+ * from the same rule breadcrumbs use — the deepest titled level is the page the user considers themselves to be on.
+ */
+export function useChildPageActive(): boolean {
+  const route = useContext(CurrentRouteContext);
+  const trail = useRouteTrail();
+  const deepestPage = trail.filter((entry) => entry.title !== undefined).at(-1);
+
+  return Boolean(route && deepestPage && deepestPage.route.id !== route.id);
+}
+
 export interface CurrentRouteProviderProps extends PropsWithChildren {
   readonly route: AppClientRegisteredRoute;
 }

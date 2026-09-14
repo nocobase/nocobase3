@@ -156,6 +156,31 @@ Omit `navigation` for details, Tab content, or another page that should not appe
 
 The route renderer supplies outlets for pure groups. Business pages place their own outlet; no outlet is inserted automatically into a page, and the route overlay wrappers below insert none either. Put it where the next page belongs.
 
+## Child pages that replace the parent
+
+A child route reaches the screen through the parent's outlet either way, so the parent has to know which of two things it is. An overlay floats above and the parent stays on screen beneath it. A child page takes over, and the parent should stop rendering its own content.
+
+The declaration that tells them apart is the same one breadcrumbs read: a child page declares a `title`, an overlay declares none. The parent then hands over:
+
+```tsx
+export default function OrdersPage() {
+  const childPageActive = useChildPageActive();
+
+  if (childPageActive) return <Outlet />;
+
+  return (
+    <section className='mx-auto w-full max-w-6xl space-y-6 p-6 md:p-8'>
+      <Breadcrumbs />
+      <PageHeader title={t('orders.title')} />
+      {/* the page's own content */}
+      <Outlet />
+    </section>
+  );
+}
+```
+
+`useChildPageActive()`, from `client/routing/route-context.js`, answers whether the deepest titled level is still this page. An overlay adds no titled level, so it reads `false` and the parent keeps rendering — which is exactly what puts the page behind the dialog.
+
 ## Child pages shown as dialogs or drawers
 
 When a feature needs a dialog or drawer that represents a page, form, editor, details view, or another URL-addressable state, implement it as a child route. Do not use local `open` state for this case.

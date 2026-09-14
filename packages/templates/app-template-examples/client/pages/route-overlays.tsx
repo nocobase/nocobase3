@@ -3,6 +3,7 @@ import {
   ArrowRight,
   Check,
   Code2,
+  FileStack,
   Layers3,
   MessageSquare,
   PanelRight,
@@ -12,6 +13,7 @@ import {
 } from 'lucide-react';
 import { Link, Outlet, useLocation } from 'react-router';
 import { Breadcrumbs } from '@/components/breadcrumbs';
+import { useChildPageActive } from '../routing/route-context.js';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/page-header';
@@ -19,6 +21,8 @@ import { PageHeader } from '@/components/page-header';
 export default function RouteOverlaysPage() {
   const { t } = useTranslation();
   const location = useLocation();
+  // An overlay leaves this page on screen beneath it; a child page takes over from it.
+  const childPageActive = useChildPageActive();
   const currentRoute = `${location.pathname}${location.search}`;
   const patterns = [
     {
@@ -65,6 +69,8 @@ export default function RouteOverlaysPage() {
       description: t('routeOverlays.stepThreeDescription'),
     },
   ] as const;
+
+  if (childPageActive) return <Outlet />;
 
   return (
     <section className='mx-auto w-full max-w-6xl space-y-6 p-6 md:p-8'>
@@ -133,6 +139,29 @@ export default function RouteOverlaysPage() {
           ),
         )}
       </div>
+      <section className='flex flex-col gap-4 rounded-xl border bg-card p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between md:p-6'>
+        <div className='flex items-start gap-3'>
+          <div className='flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary'>
+            <FileStack className='size-5' />
+          </div>
+          <div>
+            <h2 className='font-heading text-lg font-semibold'>
+              {t('routeOverlays.childPagesCardTitle')}
+            </h2>
+            <p className='mt-1 text-sm leading-6 text-muted-foreground'>
+              {t('routeOverlays.childPagesCardDescription')}
+            </p>
+          </div>
+        </div>
+        <Button
+          className='shrink-0'
+          nativeButton={false}
+          render={<Link to={{ pathname: 'pages', search: location.search }} />}
+        >
+          {t('routeOverlays.openChildPages')}
+          <ArrowRight />
+        </Button>
+      </section>
       <div className='grid gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(18rem,0.75fr)]'>
         <section className='rounded-xl border bg-card p-5 md:p-6'>
           <div className='flex items-start gap-3'>

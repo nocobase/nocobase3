@@ -23,4 +23,8 @@ A page places `<Breadcrumbs />` itself and keeps its own container and spacing. 
 the surface rather than the call site, so the same usage is correct in the application and inside the settings
 centre, where no Home crumb belongs.
 
+`useChildPageActive` tells a page whether a child *page* has taken over from it or an overlay is merely floating
+above it, which is the same distinction the trail draws. The examples application demonstrates both: its overlays
+leave the page and the trail untouched, while a chain of nested pages beside them adds a level each.
+
 Also adds the `PageHeader` component for a page title, description and action slots.

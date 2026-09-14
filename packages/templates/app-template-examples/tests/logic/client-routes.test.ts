@@ -1,3 +1,4 @@
+import type { AppClientRouteDefinition } from '@nocobase/app-client/plugins';
 import { describe, expect, it } from 'vitest';
 
 import applicationRoutes from '../../client/routes.ts';
@@ -35,6 +36,19 @@ describe('app client routes', () => {
               path: 'drawer',
               children: [{ name: 'routeDrawerDialogExample', path: 'dialog' }],
             },
+            {
+              name: 'routeChildPages',
+              path: 'pages',
+              title: 'routeOverlays.childPagesTitle',
+              children: [
+                {
+                  name: 'routeChildPageDetail',
+                  path: ':recordId',
+                  title: 'routeOverlays.childPageDetailTitle',
+                  children: [{ name: 'routeChildPageDialog', path: 'dialog' }],
+                },
+              ],
+            },
           ],
         },
         { auth: 'required', name: 'articles', path: '/articles' },
@@ -63,13 +77,14 @@ describe('app client routes', () => {
     const overlays = routes.find((route) => route.name === 'routeOverlays');
     expect(overlays).toBeDefined();
     const dialogs = overlays?.children ?? [];
-    expect(dialogs).toHaveLength(2);
-    const pages = [
-      ...routes,
-      ...dialogs,
-      ...dialogs.flatMap((route) => route.children ?? []),
-    ];
-    for (const route of pages) {
+    // Two overlays and the nested page chain.
+    expect(dialogs).toHaveLength(3);
+    const collect = (
+      nodes: readonly AppClientRouteDefinition[],
+    ): AppClientRouteDefinition[] =>
+      nodes.flatMap((node) => [node, ...collect(node.children ?? [])]);
+    for (const route of collect(routes)) {
+      if (!route.componentLoader) continue;
       await expect(route.componentLoader()).resolves.toMatchObject({
         default: expect.any(Function),
       });

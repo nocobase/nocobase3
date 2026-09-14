@@ -39,6 +39,34 @@ const enUS = {
       'Every layer is a real route. Use browser back and forward to move through the same flow.',
     preview: 'Preview',
     newExample: 'New example',
+    childPagesCardTitle: 'Nested pages',
+    childPagesCardDescription:
+      'Open a page instead of an overlay and watch the breadcrumb gain a level for each one.',
+    openChildPages: 'Open nested pages',
+    childPagesTitle: 'Nested pages',
+    childPagesDescription:
+      'Each of these is a page rather than a layer, so opening one replaces this content and adds a breadcrumb level.',
+    childPageDetailTitle: 'Record',
+    childPageDetailHint:
+      'This page is named after the record it loaded, not after its route. Open the dialog above and the breadcrumb stays put, because an overlay is not another destination.',
+    openRecord: 'Open record',
+    openRecordDialog: 'Open dialog',
+    recordQuotation: 'Quotation routing',
+    recordQuotationSummary:
+      'Route a quotation to the reviewer who owns the account.',
+    recordOnboarding: 'Onboarding checklist',
+    recordOnboardingSummary:
+      'Track the steps a new teammate works through in their first week.',
+    recordRenewal: 'Renewal reminder',
+    recordRenewalSummary:
+      'Notify the owner before a subscription reaches its renewal date.',
+    recordMissingTitle: 'Unknown record',
+    recordMissing: 'No record matches this address.',
+    recordDialogTitle: 'A layer above the record',
+    recordDialogDescription:
+      'This dialog is a child route of the record page, and names no destination.',
+    recordDialogHint:
+      'The address bar changed, but the breadcrumb did not: the record page is still where you are.',
     dialogTitle: 'Dialog example',
     drawerTitle: 'Drawer example',
     hint: 'Type a draft and open a child layer to try keeping your work in place.',

@@ -46,6 +46,32 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
           },
         ],
       },
+      // The overlays above name no destination and stay out of the breadcrumb. These are pages, so each declares a
+      // title and adds a level to the trail — which is the contrast the page is there to show.
+      {
+        name: 'routeChildPages',
+        path: 'pages',
+        title: 'routeOverlays.childPagesTitle',
+        componentLoader: () => import('./pages/route-child-pages.js'),
+        children: [
+          {
+            name: 'routeChildPageDetail',
+            path: ':recordId',
+            // A parameterised route cannot carry navigation, so this is the only name it has until the page
+            // reports the record's own through usePageTitle.
+            title: 'routeOverlays.childPageDetailTitle',
+            componentLoader: () => import('./pages/route-child-page-detail.js'),
+            children: [
+              {
+                name: 'routeChildPageDialog',
+                path: 'dialog',
+                componentLoader: () =>
+                  import('./pages/route-child-page-dialog.js'),
+              },
+            ],
+          },
+        ],
+      },
     ],
   },
   {
