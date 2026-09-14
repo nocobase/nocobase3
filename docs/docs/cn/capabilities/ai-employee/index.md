@@ -28,26 +28,28 @@ keywords: 'NocoBase,AI 员工,LLM,Agent,AI 插件'
 AI 员工插件提供几类能力：
 
 - 通过 `config.yml` 声明 LLM 服务和可用模型
-- 从应用的 `ai/` 目录加载 AI 员工、技能、工具和 MCP 配置
-- 在管理后台统一管理模型和 AI 员工
-- 通过 `@nocobase/app-plugin-ai-employee/registry/nocobase-ai` 提供聊天、员工快捷入口、页面上下文和前端工具组件
-- 在服务端通过 `AIConversationsManager` 和 `AgentServiceFactory` 创建带持久化会话的 Agent
+- 通过 `ai/skills` 和 `config.yml` 加载 Skill；
+- 在 `server/ai` 中显式注册 Employee 和 Tool；
+- 在 `ai/mcp` 中由 MCP loader 加载 MCP 配置；
+- 在管理后台统一管理模型和 AI 员工；
+- 通过 `@nocobase/app-plugin-ai-employee/registry/nocobase-ai` 提供聊天、员工快捷入口、页面上下文和前端工具组件；
+- 在服务端通过 `AIConversationsManager` 和 `AgentServiceFactory` 创建带持久化会话的 Agent。
 
 ## 目录约定
 
-应用源码中的 AI 资源放在应用根目录的 `ai/` 下：
+应用源码中的 AI 资源按职责放置：
 
 ```text
-ai/
-├── employees/<name>/index.ts   # AI 员工定义
-├── employees/<name>/prompt.md  # 可选的长提示词
-├── skills/<name>/SKILLS.md     # 自定义技能
-├── skills/<name>/tools/        # 技能专属工具，可选
+server/ai/
+├── employees/<name>/index.ts   # AI 员工定义，prompt 写在 systemPrompt 字段
 ├── tools/<name>.ts             # 应用级后端工具
-└── mcp/<name>.ts               # MCP 配置，可选
+└── index.ts                    # 静态聚合并实现 AIResourceRegistrar
+ai/
+├── skills/<name>/SKILL.md     # Skill loader 加载的技能
+└── mcp/<name>.ts              # MCP loader 加载的配置
 ```
 
-其中 AI 员工使用复数目录名 `ai/employees/`。员工的 `username` 是稳定标识，声明发布后不要随意修改。
+Employee 和 Tool 定义在 `server/ai` 中，由应用 Provider 使用当前 AI Manager 显式注册。
 
 ## 相关链接
 

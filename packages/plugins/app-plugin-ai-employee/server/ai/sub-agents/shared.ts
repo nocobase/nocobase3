@@ -9,8 +9,8 @@ import type {
   AIConversationRepository,
   AIMessageRepository,
   AIToolMessageRepository,
-} from '../../server/repository/index.js';
-import type { AgentBuiltInService } from '../../server/agent/contracts.js';
+} from '../../repository/index.js';
+import type { AgentBuiltInService } from '../../agent/contracts.js';
 
 type EmployeeLookupContext = AgentContext<
   { aiEmployees: AIEmployeeRepository },

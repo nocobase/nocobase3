@@ -64,7 +64,7 @@ pnpm dev
 
 ## 第三步：在源码中声明 AI 员工
 
-AI 员工不能通过管理界面创建，必须在应用源码的 `ai/employees/` 目录中使用 `defineAIEmployee` 声明。可以让 Agent 按照应用的业务目标创建员工定义，并完成加载检查。
+AI 员工不能通过管理界面创建，必须在应用源码的 `server/ai/employees/` 目录中使用 `defineAIEmployee` 声明。可以让 Agent 按照应用的业务目标创建员工定义，并完成加载检查。
 
 员工定义通常包括：
 

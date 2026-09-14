@@ -16,6 +16,8 @@ export default createClientLibraryConfig({
     'server/manager/llm-stream-cached-manager.ts',
     'server/manager/sub-agents/**',
     'server/manager/work-context/**',
+    // Built-in AI resources are relocated server-side but retain their existing lint scope.
+    'server/ai/**',
     'ai/**',
     'server/repository/**',
     'server/route/*.ts',

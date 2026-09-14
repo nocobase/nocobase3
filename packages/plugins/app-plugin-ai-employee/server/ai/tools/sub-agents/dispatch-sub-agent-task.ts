@@ -8,14 +8,14 @@ import type {
   AIConversationRepository,
   AIMessageRepository,
   AIToolMessageRepository,
-} from '../../../server/repository/index.js';
-import type { ModelRef } from '../../../server/types.js';
+} from '../../../repository/index.js';
+import type { ModelRef } from '../../../types.js';
 import type {
   AgentBuiltInService,
   AgentConversationService,
   AgentEmployeeService,
   AgentSubAgentService,
-} from '../../../server/agent/contracts.js';
+} from '../../../agent/contracts.js';
 import {
   getAccessibleAIEmployee,
   getSkillSettingsFromMain,

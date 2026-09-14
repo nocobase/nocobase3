@@ -1,6 +1,6 @@
 import { defineTools, type AgentContext } from '@nocobase/ai-employee';
 import { z } from 'zod';
-import type { AIMessageRepository } from '../../server/repository/index.js';
+import type { AIMessageRepository } from '../../repository/index.js';
 import packageMetadata from '@nocobase/app-plugin-ai-employee/package.json' with { type: 'json' };
 
 type SuggestionsContext = AgentContext<{ aiMessages: AIMessageRepository }, {}>;

@@ -1,16 +1,17 @@
 ---
-title: '声明 AI 员工并添加技能和工具'
-description: '在 ai/employees、ai/skills 和 ai/tools 目录添加应用专属的 AI 资源。'
-keywords: 'ai/employees,ai/skills,ai/tools,defineAIEmployee,defineTools'
+title: '显式注册 AI 员工并添加技能和工具'
+description: '在 server/ai 中静态定义并注册 AI 员工和工具，并使用 SKILL.md 加载技能。'
+keywords: 'server/ai/employees,server/ai/tools,ai/skills,SKILL.md,AIResourceRegistrar'
 ---
 
-# 声明 AI 员工并添加技能和工具
+# 显式注册 AI 员工并添加技能和工具
 
-应用资源应该放在应用自己的 `ai/` 目录，不要修改 `@nocobase/ai-employee` 或 `@nocobase/app-plugin-ai-employee` 的源码。Agent 可以根据 `nocobase-plugin-ai-employee` 技能自动选择资源类型。
+应用自定义 Employee 和 Tool 定义在应用源码的 `server/ai/` 下，由聚合文件静态导入，并通过 `AIResourceRegistrar` 在应用 Server Provider 的 `boot()` 中注册。
 
-## 在 `ai/employees` 添加员工
+## 定义 Employee
 
 ```ts
+// server/ai/employees/customer-support.ts
 import { defineAIEmployee } from '@nocobase/ai-employee';
 
 export default defineAIEmployee({
@@ -24,35 +25,14 @@ export default defineAIEmployee({
 });
 ```
 
-每个员工都要有唯一且稳定的 `username`。技能和工具名称必须和实际注册的资源一致。
+Employee prompt 直接写在 TypeScript 定义的 `systemPrompt` 字段中，Employee 所需的 Skill 和 Tool 通过定义中的名称显式配置。
 
-## 在 `ai/skills` 添加技能
+## 定义 Tool
 
-技能目录包含一个 `SKILLS.md`：
-
-```markdown
----
-scope: SPECIFIED
-name: return-policy
-description: 根据公司退货政策判断请求需要哪些材料和下一步。
-tools: []
----
-
-处理退货问题时：
-
-1. 先读取订单状态和购买时间
-2. 区分退款、换货和补寄
-3. 缺少信息时向用户提问
-4. 不要直接承诺超出政策的结果
-```
-
-技能适合放稳定的业务规则和工作步骤。需要调用应用数据时，给技能绑定工具，不要把数据库查询写成模型可以猜测的文本。
-
-## 在 `ai/tools` 添加工具
-
-后端工具应该显式声明作用域、执行位置和默认权限：
+Tool 放在 `server/ai/tools/`，名称和描述都来自 `defineTools()` 定义，不使用文件名或 `description.md` 推断。
 
 ```ts
+// server/ai/tools/lookup-order.ts
 import { defineTools } from '@nocobase/ai-employee';
 import { z } from 'zod';
 
@@ -72,24 +52,48 @@ export default defineTools({
 });
 ```
 
-工具代码必须自行做业务授权，不能只依赖 system prompt。只读查询可以考虑 `ALLOW`，修改数据、发送通知、删除记录等操作默认使用 `ASK`。
+Tool 必须自行执行业务授权，不能只依赖 `systemPrompt`。
 
-## 让 Agent 做什么检查
+## 聚合并注册资源
 
-把下面的要求追加到任务末尾，能让 Agent 的结果更容易验收：
+```ts
+// server/ai/index.ts
+import { AIResourceRegistrar } from '@nocobase/app-plugin-ai-employee/server';
+import type { AIEmployeeManager, ToolsManager } from '@nocobase/ai-employee';
+import employee from './employees/customer-support.js';
+import tool from './tools/lookup-order.js';
 
-```text
-请确认：
-- 员工、技能和工具都是默认导出
-- 工具的 schema 和 invoke 参数一致
-- 工具返回值可以序列化
-- 工具内部检查当前 actor 的权限
-- 没有复制内置员工或导入私有模块
-- 运行 pnpm lint、pnpm typecheck、pnpm test 和 pnpm build
+export default class AppAIResources extends AIResourceRegistrar {
+  protected override async registerAIEmployees(
+    aiEmployeeManager: AIEmployeeManager,
+  ): Promise<void> {
+    await aiEmployeeManager.registerEmployee(employee);
+  }
+
+  protected override async registerTools(
+    toolsManager: ToolsManager,
+  ): Promise<void> {
+    await toolsManager.registerTools(tool);
+  }
+}
 ```
 
-## 相关链接
+在应用自己的 Server Provider `boot()` 中解析当前 App 的 `aiManagerToken`，然后调用 `new AppAIResources().registerAIResources(ai)`。不要创建第二个 `AIManager`。生命周期顺序固定为：
 
-- [使用 Agent 开发](./index.md) — 选择资源类型
-- [在前端使用 AI 员工](./frontend.md) — 把员工接入页面
-- [管理 AI 员工](../management/index.md) — 检查员工是否启用
+```text
+Tool -> MCP -> Skill -> AI Employee
+```
+
+同名资源的覆盖策略必须由显式注册顺序或明确的 Manager API 表达。
+
+## 定义 Skill
+
+Skill 仍由 `SkillsLoader` 加载。每个 Skill 目录使用严格命名的 `SKILL.md`：
+
+```text
+ai/skills/return-policy/SKILL.md
+```
+
+Skill 的 frontmatter 契约保持不变，Skill 下的局部 `tools/` 属于 Skill loader 能力，不是 Employee 的自动发现能力。
+
+插件默认加载发布包根目录的 `ai/skills`，随后加载 App 根目录的 `ai/skills`，最后加载 `config.yml` 中 `ai.skills.paths` 指定的目录。配置路径支持绝对路径和相对于 App root 的路径，空白项和重复项会被忽略，不存在的目录只记录 warning。

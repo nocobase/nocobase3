@@ -25,6 +25,12 @@ import {
 } from '../llm-service-service.js';
 import { useT } from '../locales/index.js';
 
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '../../registry/nocobase-ai/shared/ui/card.js';
 export default function LLMServicePage(): ReactElement {
   const api = useService(apiClientToken);
   const t = useT();
@@ -57,58 +63,74 @@ export default function LLMServicePage(): ReactElement {
   };
   return (
     <main className='px-3 py-4 sm:px-4'>
-      {error && (
-        <div
-          role='alert'
-          className='mb-3 rounded-md border border-destructive p-3 text-sm'
-        >
-          {error}
-        </div>
-      )}
-      <div className='overflow-hidden rounded-lg border'>
-        <table className='w-full text-left text-sm'>
-          <thead className='bg-muted/40'>
-            <tr>
-              <th className='px-3 py-2.5'>{t('UID')}</th>
-              <th className='px-3 py-2.5'>{t('Title')}</th>
-              <th className='px-3 py-2.5'>{t('Provider')}</th>
-              <th className='px-3 py-2.5'>{t('Models')}</th>
-              <th className='px-3 py-2.5'>{t('Enabled')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {services.map((service) => (
-              <tr key={service.name} className='border-t'>
-                <td className='px-3 py-2.5 font-mono text-xs'>
-                  {service.name}
-                </td>
-                <td className='px-3 py-2.5'>{service.title}</td>
-                <td className='px-3 py-2.5'>
-                  <ProviderCell
-                    name={service.provider}
-                    provider={providers.find(
-                      (item) => item.name === service.provider,
-                    )}
-                  />
-                </td>
-                <td className='px-3 py-2.5'>
-                  <ModelsCell
-                    service={service}
-                    onEdit={() => setEditing(service)}
-                  />
-                </td>
-                <td className='px-3 py-2.5'>
-                  <Switch
-                    checked={service.enabled}
-                    label={t('Enable {{name}}', { name: service.name })}
-                    onCheckedChange={(enabled) => void toggle(service, enabled)}
-                  />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <Card className='gap-0 shadow-sm'>
+        <CardHeader className='border-b px-4 py-4 sm:px-5'>
+          <CardTitle className='text-lg'>{t('LLM Service')}</CardTitle>
+          <p className='mt-1 flex items-start gap-1.5 text-sm text-muted-foreground'>
+            <CircleAlert
+              className='mt-0.5 h-4 w-4 shrink-0'
+              aria-hidden='true'
+            />
+            <span>{t('LLM services are configured in config.yml.')}</span>
+          </p>
+        </CardHeader>
+        <CardContent className='p-0'>
+          {error && (
+            <div
+              role='alert'
+              className='mb-3 rounded-md border border-destructive p-3 text-sm'
+            >
+              {error}
+            </div>
+          )}
+          <div className='overflow-x-auto'>
+            <table className='w-full min-w-[64rem] text-left text-sm'>
+              <thead className='border-b bg-muted/30 text-xs tracking-wide text-muted-foreground uppercase'>
+                <tr>
+                  <th className='px-5 py-3'>{t('UID')}</th>
+                  <th className='px-5 py-3'>{t('Title')}</th>
+                  <th className='px-5 py-3'>{t('Provider')}</th>
+                  <th className='px-5 py-3'>{t('Models')}</th>
+                  <th className='px-5 py-3'>{t('Enabled')}</th>
+                </tr>
+              </thead>
+              <tbody className='divide-y'>
+                {services.map((service) => (
+                  <tr key={service.name} className='hover:bg-muted/30'>
+                    <td className='px-5 py-4 font-mono text-xs'>
+                      {service.name}
+                    </td>
+                    <td className='px-5 py-4'>{service.title}</td>
+                    <td className='px-5 py-4'>
+                      <ProviderCell
+                        name={service.provider}
+                        provider={providers.find(
+                          (item) => item.name === service.provider,
+                        )}
+                      />
+                    </td>
+                    <td className='px-5 py-4'>
+                      <ModelsCell
+                        service={service}
+                        onEdit={() => setEditing(service)}
+                      />
+                    </td>
+                    <td className='px-5 py-4'>
+                      <Switch
+                        checked={service.enabled}
+                        label={t('Enable {{name}}', { name: service.name })}
+                        onCheckedChange={(enabled) =>
+                          void toggle(service, enabled)
+                        }
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
       {editing && (
         <ModelEditor
           api={api}
