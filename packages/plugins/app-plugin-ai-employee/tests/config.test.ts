@@ -120,7 +120,8 @@ describe('AI application config', () => {
           storage: { disk: ['local', 'archive'] },
           vectorDatabases: [
             {
-              name: 'pgvector1',
+              key: 'pgvector1',
+              name: 'Primary PGVector',
               provider: 'NocobaseDefaultPGVectorProvider',
               databaseSpec: 'PGVector',
               connection: {
@@ -134,7 +135,7 @@ describe('AI application config', () => {
               enabled: true,
             },
             {
-              name: 'normalized-by-knowledge-base',
+              key: 'normalized-by-knowledge-base',
               connection: {
                 host: 'database.internal',
                 port: 5432,
@@ -161,7 +162,8 @@ describe('AI application config', () => {
       storage: { disk: ['local', 'archive'] },
       vectorDatabases: [
         {
-          name: 'pgvector1',
+          key: 'pgvector1',
+          name: 'Primary PGVector',
           provider: 'NocobaseDefaultPGVectorProvider',
           databaseSpec: 'PGVector',
           connection: {
@@ -175,7 +177,7 @@ describe('AI application config', () => {
           enabled: true,
         },
         {
-          name: 'normalized-by-knowledge-base',
+          key: 'normalized-by-knowledge-base',
           connection: {
             host: 'database.internal',
             port: 5432,
