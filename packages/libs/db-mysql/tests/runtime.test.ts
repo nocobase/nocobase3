@@ -23,12 +23,14 @@ describe('mysql runtime strategy', () => {
       runtime.schema!.columnType!({
         column: { type: 'datetimeTz' } as never,
         tablePrimaryKey: false,
+        altering: false,
       }),
     ).toBe('datetime(3)');
     expect(
       runtime.schema!.columnType!({
         column: { type: 'time' } as never,
         tablePrimaryKey: false,
+        altering: false,
       }),
     ).toBe('time(3)');
     expect(runtime.repository!.encodeBoolean!({} as never, true)).toBe(1);

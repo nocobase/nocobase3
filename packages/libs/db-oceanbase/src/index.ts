@@ -43,6 +43,8 @@ export const oceanbaseDriver: DatabaseDriverDefinition<'oceanbase'> = {
             : undefined,
     },
     repository: {
+      // The driver parses json and jsonb before the row reaches us.
+      jsonResults: 'parsed',
       enumGroupKey: ({ client, field }) => client.raw('binary ??', [field]),
       compileFilterCondition: ({ query, node, field, name, boolean }) => {
         if (

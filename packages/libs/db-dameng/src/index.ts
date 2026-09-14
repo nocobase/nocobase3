@@ -271,6 +271,8 @@ export const damengDriver: DatabaseDriverDefinition<'dameng'> = {
       },
     },
     repository: {
+      // The column is text; the stored JSON arrives unparsed.
+      jsonResults: 'text',
       emptyInsertValue: ({ client, collection, column }) => {
         const field = (collection.fields ?? []).find(
           (item) =>

@@ -92,6 +92,8 @@ export const mssqlDriver: DatabaseDriverDefinition<'mssql'> = {
       },
     },
     repository: {
+      // The column is text; the stored JSON arrives unparsed.
+      jsonResults: 'text',
       enumGroupKey: ({ client, field }) =>
         client.raw('cast(?? as varbinary(max))', [field]),
       compileFilterCondition: ({ query, node, field, name, boolean }) => {

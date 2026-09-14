@@ -196,6 +196,8 @@ export class KnexSchemaAdapter implements SchemaAdapter {
         this.buildColumn(
           table,
           operation.changes as ColumnSchemaDefinition,
+          false,
+          true,
         ).alter();
         break;
       case 'dropColumn':
@@ -238,6 +240,7 @@ export class KnexSchemaAdapter implements SchemaAdapter {
     table: Knex.CreateTableBuilder | Knex.AlterTableBuilder,
     column: ColumnSchemaDefinition,
     tablePrimaryKey: boolean = false,
+    altering: boolean = false,
   ): Knex.ColumnBuilder {
     let builder: Knex.ColumnBuilder;
     const nativeType = column.db?.nativeType;
@@ -245,6 +248,7 @@ export class KnexSchemaAdapter implements SchemaAdapter {
     const runtimeType = this.runtime?.schema?.columnType?.({
       column,
       tablePrimaryKey,
+      altering,
     });
     if (runtimeType) {
       builder = table.specificType(column.name, runtimeType);
@@ -328,6 +332,16 @@ export class KnexSchemaAdapter implements SchemaAdapter {
       builder.nullable();
     }
     if (column.defaultValue !== undefined) {
+      // A JSON default is handed to Knex as a value, never as encoded text.
+      // MySQL rejects every literal default on a json column, and Knex works
+      // around that by compiling an object or an array to the expression form
+      // `default ('{"a":1}')` — a branch that only fires for a non-string.
+      // Encoding here would turn that back into a literal and break every
+      // defaulted json column on MySQL.
+      //
+      // A scalar default is therefore written as given and is not valid JSON
+      // text. Nothing declares one, and a column that holds one is now
+      // reported on read rather than silently decoded.
       builder.defaultTo(column.defaultValue as any);
     }
     if (
