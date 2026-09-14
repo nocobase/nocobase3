@@ -202,67 +202,83 @@ describe('mail API routes', () => {
     expect(cancelSyncRun).toHaveBeenCalledWith({ actorId: 'user-1' }, 'sync-1');
   });
 
-  it('maps unread counts, signatures, and labels onto the Mail service', async () => {
+  it('maps unread counts, signatures, and local labels onto the Mail service', async () => {
     const getUnreadCount = vi.fn<MailService['getUnreadCount']>(async () => 7);
     const listSignatures = vi.fn<MailService['listSignatures']>(async () => []);
     const saveSignature = vi.fn<MailService['saveSignature']>(
       async (_context, input) => ({
         id: 'signature-1',
         accountId: input.accountId,
-        identityId: input.identityId,
         name: input.name,
         text: input.text,
         html: input.html,
         isDefault: input.isDefault ?? false,
       }),
     );
+    const listLabels = vi.fn<MailService['listLabels']>(async () => []);
     const createLabel = vi.fn<MailService['createLabel']>(async () => ({
-      id: 'folder-1',
-      accountId: 'account-1',
-      providerFolderId: 'Label_1',
+      id: 'label-1',
       name: 'Customers',
-      path: 'Customers',
-      type: 'custom',
-      selectable: true,
+      color: 'green',
+      createdAt: '2026-09-14T00:00:00.000Z',
+      updatedAt: '2026-09-14T00:00:00.000Z',
     }));
+    const updateLabel = vi.fn<MailService['updateLabel']>(
+      async (_context, input) => ({
+        id: input.id,
+        name: input.name,
+        color: input.color ?? 'blue',
+        createdAt: '2026-09-14T00:00:00.000Z',
+        updatedAt: '2026-09-14T00:00:00.000Z',
+      }),
+    );
+    const deleteLabel = vi.fn<MailService['deleteLabel']>(async () => {});
     const router = await createRouter(
       true,
-      service({ getUnreadCount, listSignatures, saveSignature, createLabel }),
+      service({
+        getUnreadCount,
+        listSignatures,
+        saveSignature,
+        listLabels,
+        createLabel,
+        updateLabel,
+        deleteLabel,
+      }),
     );
 
     const unreadResponse = await router.request('/api/mail/unread-count');
-    await router.request(
-      '/api/mail/accounts/account-1/identities/identity-1/signatures',
-    );
-    await router.request(
-      '/api/mail/accounts/account-1/identities/identity-1/signatures',
-      {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          name: 'Sales',
-          text: 'Regards',
-          isDefault: true,
-        }),
-      },
-    );
-    await router.request('/api/mail/accounts/account-1/labels', {
+    await router.request('/api/mail/accounts/account-1/signatures');
+    await router.request('/api/mail/accounts/account-1/signatures', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name: 'Customers' }),
+      body: JSON.stringify({
+        name: 'Sales',
+        text: 'Regards',
+        isDefault: true,
+      }),
     });
+    await router.request('/api/mail/labels');
+    await router.request('/api/mail/labels', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Customers', color: 'green' }),
+    });
+    await router.request('/api/mail/labels/label-1', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Customers renamed', color: 'violet' }),
+    });
+    await router.request('/api/mail/labels/label-1', { method: 'DELETE' });
 
     expect(await unreadResponse.json()).toEqual({ data: 7 });
     expect(listSignatures).toHaveBeenCalledWith(
       { actorId: 'user-1' },
       'account-1',
-      'identity-1',
     );
     expect(saveSignature).toHaveBeenCalledWith(
       { actorId: 'user-1' },
       {
         accountId: 'account-1',
-        identityId: 'identity-1',
         name: 'Sales',
         text: 'Regards',
         html: undefined,
@@ -271,9 +287,14 @@ describe('mail API routes', () => {
     );
     expect(createLabel).toHaveBeenCalledWith(
       { actorId: 'user-1' },
-      'account-1',
-      'Customers',
+      { name: 'Customers', color: 'green' },
     );
+    expect(updateLabel).toHaveBeenCalledWith(
+      { actorId: 'user-1' },
+      { id: 'label-1', name: 'Customers renamed', color: 'violet' },
+    );
+    expect(deleteLabel).toHaveBeenCalledWith({ actorId: 'user-1' }, 'label-1');
+    expect(listLabels).toHaveBeenCalledWith({ actorId: 'user-1' });
   });
 
   it('lists send logs for the authenticated user', async () => {
@@ -309,7 +330,11 @@ describe('mail API routes', () => {
     const response = await router.request('/api/mail/authorizations', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ type: 'gmail', name: 'google' }),
+      body: JSON.stringify({
+        type: 'gmail',
+        name: 'google',
+        initialSyncReceivedAfter: '2026-02-01T00:00:00.000Z',
+      }),
     });
 
     expect(response.status).toBe(200);
@@ -318,7 +343,68 @@ describe('mail API routes', () => {
       {
         provider: { type: 'gmail', name: 'google' },
         redirectUri: 'https://mail.example.com/test/mail/oauth/callback',
+        initialSyncReceivedAfter: '2026-02-01T00:00:00.000Z',
       },
+    );
+  });
+
+  it('uses a Mail-configured OAuth callback URL', async () => {
+    const startAuthorization = vi.fn<MailService['startAuthorization']>(
+      async () => ({
+        authorizationUrl: 'https://accounts.example.com/authorize',
+        state: 'state-1',
+      }),
+    );
+    const router = await createRouter(
+      true,
+      service({ startAuthorization }),
+      true,
+      'https://oauth.example.com/test/mail/oauth/callback',
+    );
+    const response = await router.request('/api/mail/authorizations', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ type: 'gmail', name: 'google' }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(startAuthorization).toHaveBeenCalledWith(
+      { actorId: 'user-1' },
+      expect.objectContaining({
+        redirectUri: 'https://oauth.example.com/test/mail/oauth/callback',
+      }),
+    );
+  });
+
+  it('uses the request host when development public origins use loopback aliases', async () => {
+    const startAuthorization = vi.fn<MailService['startAuthorization']>(
+      async () => ({
+        authorizationUrl: 'https://accounts.example.com/authorize',
+        state: 'state-1',
+      }),
+    );
+    const router = await createRouter(
+      true,
+      service({ startAuthorization }),
+      true,
+      undefined,
+      'http://127.0.0.1:13000',
+    );
+    const response = await router.request(
+      'http://localhost:13000/api/mail/authorizations',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ type: 'microsoft', name: 'microsoft-365' }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    expect(startAuthorization).toHaveBeenCalledWith(
+      { actorId: 'user-1' },
+      expect.objectContaining({
+        redirectUri: 'http://localhost:13000/test/mail/oauth/callback',
+      }),
     );
   });
 
@@ -343,6 +429,7 @@ describe('mail API routes', () => {
         name: 'company-mail',
         address: 'user@example.com',
         password: 'secret',
+        initialSyncReceivedAfter: '2026-02-01T00:00:00.000Z',
       }),
     });
 
@@ -354,6 +441,7 @@ describe('mail API routes', () => {
         address: 'user@example.com',
         username: 'user@example.com',
         password: 'secret',
+        initialSyncReceivedAfter: '2026-02-01T00:00:00.000Z',
       },
     );
   });
@@ -373,7 +461,7 @@ describe('mail API routes', () => {
 
     await router.request('/api/mail/accounts/account-1/folders');
     await router.request(
-      '/api/mail/messages?accountId=account-1&folderId=inbox&conversationId=thread-1&unread=true&limit=25',
+      '/api/mail/messages?accountId=account-1&folderId=inbox&labelId=label-1&conversationId=thread-1&unread=true&limit=25',
     );
     await router.request(
       '/api/mail/accounts/account-1/conversations/thread-1/messages?cursor=25&limit=25',
@@ -388,6 +476,7 @@ describe('mail API routes', () => {
       {
         accountIds: ['account-1'],
         folderIds: ['inbox'],
+        labelIds: ['label-1'],
         conversationId: 'thread-1',
         query: undefined,
         cursor: undefined,
@@ -676,6 +765,8 @@ async function createRouter(
   authenticated: boolean,
   mail: MailService,
   allowed: boolean | ((resource: string) => boolean) = true,
+  oauthCallbackUrl?: string,
+  publicOrigin = 'https://mail.example.com',
 ): Promise<Hono> {
   const container = new ServiceContainer();
   container.instance(authenticationToken, {
@@ -712,7 +803,8 @@ async function createRouter(
       get: () => ({
         name: 'test',
         publicBasePath: '/test',
-        publicOrigin: 'https://mail.example.com',
+        publicOrigin,
+        oauthCallbackUrl,
       }),
     },
     paths: createConfigPaths({ rootDir: '/missing' }),
@@ -774,6 +866,7 @@ function service(overrides: Partial<MailService> = {}): MailService {
       submissions: [],
     }),
     listFolders: async () => [],
+    listLabels: async () => [],
     listIdentities: async () => [],
     updateIdentity: async () => {
       throw new Error('Not implemented');
@@ -786,6 +879,10 @@ function service(overrides: Partial<MailService> = {}): MailService {
     createLabel: async () => {
       throw new Error('Not implemented');
     },
+    updateLabel: async () => {
+      throw new Error('Not implemented');
+    },
+    deleteLabel: async () => {},
     updateMessageLabels: async () => messageView(),
     getUnreadCount: async () => 0,
     startSync: async (_context, input) => syncRun(input.accountId, 'user-1'),
@@ -824,6 +921,7 @@ function messageView(): import('../server/types.js').MailMessage {
     accountId: 'account-1',
     providerMessageId: 'provider-message-1',
     folderIds: ['inbox'],
+    labelIds: [],
     to: [],
     cc: [],
     bcc: [],

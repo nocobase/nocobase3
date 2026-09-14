@@ -26,8 +26,16 @@ Use the Mail plugin's public Client, Server, and HTTP contracts. The plugin owns
    type, and complete its OAuth redirect or enter the IMAP/SMTP mailbox
    credentials. The page defaults to the connected-account table; the
    association drawer also contains the initial sync date, while account
-   signatures and reusable templates are managed there as well.
+   signatures, colored NocoBase-owned labels, and reusable templates are managed there as
+   well.
 5. Verify that the account appears without credential references or token material in the API response.
+
+The Mail OAuth callback defaults to the app-local `/mail/oauth/callback` path,
+which becomes `<public-origin><app-base-path>/mail/oauth/callback`. Set
+`mail.oauthCallbackUrl` or `MAIL_OAUTH_CALLBACK_URL` to override it. Relative
+values are prefixed with the app public base path; an absolute URL must include
+that base path so the mounted callback route matches the URL registered with
+Google or Microsoft.
 
 For push synchronization, set `MAIL_PUSH_WEBHOOK_URL` to the public Mail
 webhook base URL and `MAIL_PUSH_WEBHOOK_SECRET` to a random 32–128 character
@@ -38,8 +46,8 @@ by Mail Core.
 
 `/dev/mail/accounts` manages the authenticated user's accounts, including
 default selection, suspend/resume, disconnect, manual synchronization, the
-received-after date in the account association drawer, signature management in
-an account drawer, and reusable templates. The account
+received-after date in the account association drawer, signature and NocoBase-owned
+label management, and reusable templates. The account
 association control lists registered Providers; a Provider without a
 `mail.providers` entry is shown as unavailable until the server endpoint or
 OAuth configuration is added. `/settings/mail/accounts` and
@@ -53,15 +61,15 @@ for another user's account.
 
 ## Read synchronized mail
 
-Open `/mail` to filter, refresh, and inspect the authenticated user's synchronized mail. The application header and top-level resource expose the same route with a cross-account unread badge. Opening a message loads its complete Provider conversation when a stable conversation identifier exists. The workspace can update read/starred state, maintain NocoBase-only notes and follow-up markers, move or delete messages, manage Gmail custom-label membership, and securely download inbound attachments. Notes and follow-up markers are local metadata and are preserved when Provider messages are synchronized again. Development diagnostics remain available under `/dev/mail`.
+Open `/dev/mail/center` to filter, refresh, and inspect the authenticated user's synchronized mail. The page header exposes the cross-account unread badge. The badge treats `GET /api/mail/unread-count` as authoritative and refetches it after user-scoped realtime invalidations, WebSocket recovery, and browser focus. Opening a message loads its complete Provider conversation when a stable conversation identifier exists. The workspace can update read/starred state, maintain NocoBase-only notes and follow-up markers, move or delete messages, manage colored NocoBase-owned label membership, and securely download inbound attachments. Notes, follow-up markers, and labels are local metadata and are preserved when Provider messages are synchronized again. Development diagnostics remain available under `/dev/mail`.
 
-Do not group unrelated messages by normalized subject. Gmail `threadId` and Microsoft Graph `conversationId` are normalized to `conversationId`; messages without one remain standalone. Folder filtering uses the indexed message-folder relation rather than scanning the JSON projection stored on each message.
+Do not group unrelated messages by normalized subject. Gmail `threadId` and Microsoft Graph `conversationId` are normalized to `conversationId`; messages without one remain standalone. Provider-folder and NocoBase-label filtering use indexed relations rather than scanning a JSON projection stored on each message.
 
 OAuth callback state is short-lived and single-use. Never bypass it, persist raw tokens in App collections, or expose the Mail Core tables directly.
 
 The generic `imap-smtp` Provider verifies both endpoints before storing the
 username and password in Mail's credential vault. It uses periodic sync and
-does not provide push notifications, labels, drafts, aliases, or move-to-folder
+does not provide push notifications, Provider-native labels, drafts, aliases, or move-to-folder
 operations in the MVP. Its incremental cursor discovers new IMAP UID ranges;
 external flag, deletion, and move reconciliation, plus provider-side Sent
 append, are not guaranteed by this MVP.
@@ -72,7 +80,7 @@ Call `MailService.sendMessage()` through `mailServiceToken`, or `POST /api/mail/
 
 Review the authenticated user's recent submission results through `MailService.listSubmissions()`, `GET /api/mail/submissions`, or the development-only `/dev/mail/send-logs` page. The public view excludes idempotency fingerprints, leases, and Provider error messages.
 
-Sending supports plain text plus safe rich-text HTML, replies, forwards, Provider-backed draft creation and editing, automatic draft saving, outbound attachments, identities and multiple named signatures, reusable templates, durable scheduled delivery, and bounded per-recipient bulk delivery. Each identity may have a default signature; the composer can choose another signature or send without one. When embedding `MailWorkspacePage` in a record-aware surface, pass `{ record }` through `templateVariables`; variables such as `{{record.customer.name}}` are resolved when a template is applied. Unknown variables remain visible so the sender can correct the template before sending.
+Sending supports plain text plus safe rich-text HTML, replies, forwards, Provider-backed draft creation and editing, automatic draft saving, outbound attachments, identities and multiple named account-level signatures, reusable templates, durable scheduled delivery, and bounded per-recipient bulk delivery. Each account may have a default signature shared by all its sending addresses; the composer can choose another signature or send without one. When embedding `MailWorkspacePage` in a record-aware surface, pass `{ record }` through `templateVariables`; variables such as `{{record.customer.name}}` are resolved when a template is applied. Unknown variables remain visible so the sender can correct the template before sending.
 
 ## Synchronize a mailbox
 

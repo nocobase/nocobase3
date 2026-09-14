@@ -1,4 +1,4 @@
-import { FileText, Link2, Mail, RefreshCw } from 'lucide-react';
+import { FileText, Link2, Mail, PenLine, RefreshCw, Tag } from 'lucide-react';
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
 import { useTranslation } from '@nocobase/i18n/client';
@@ -6,6 +6,7 @@ import { useTranslation } from '@nocobase/i18n/client';
 import {
   MailAccountConnector,
   MailDevPageShell,
+  MailLabelManager,
   MailStatusBadge,
   MailSyncPolicyFields,
   MailSignatureManager,
@@ -35,7 +36,6 @@ import {
   mailErrorMessage,
   type MailAccountView,
   type MailProviderView,
-  type MailIdentity,
   type MailSyncRunView,
 } from '../mail-client.js';
 import { getMailClient } from '../runtime.js';
@@ -58,13 +58,11 @@ export default function MailAccountsDevPage(): ReactElement {
   }));
   const [showConnector, setShowConnector] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
+  const [showLabels, setShowLabels] = useState(false);
+  const [showSignatures, setShowSignatures] = useState(false);
   const [accountToRemove, setAccountToRemove] = useState<MailAccountView>();
   const [removingAccountId, setRemovingAccountId] = useState<string>();
-  const [signatureAccountId, setSignatureAccountId] = useState<string>();
   const [error, setError] = useState<string>();
-  const [accountIdentities, setAccountIdentities] = useState<
-    Readonly<Record<string, readonly MailIdentity[]>>
-  >({});
   const authorizationNotice = readAuthorizationNotice();
 
   const refresh = useCallback((): void => {
@@ -74,26 +72,6 @@ export default function MailAccountsDevPage(): ReactElement {
       .then(([nextProviders, nextAccounts]) => {
         setProviders(nextProviders);
         setAccounts(nextAccounts);
-        void Promise.all(
-          nextAccounts.map(
-            async (account) =>
-              [account.id, await mail.listIdentities(account.id)] as const,
-          ),
-        ).then(
-          (entries) => {
-            setAccountIdentities(Object.fromEntries(entries));
-          },
-          (cause: unknown) => {
-            setError(
-              mailErrorMessage(
-                cause,
-                t('errors.requestFailed', {
-                  defaultValue: 'Mail request failed.',
-                }),
-              ),
-            );
-          },
-        );
       })
       .catch((cause: unknown) => {
         setError(
@@ -164,15 +142,15 @@ export default function MailAccountsDevPage(): ReactElement {
       ),
     [providers],
   );
-  const signatureAccount = accounts.find(
-    (account) => account.id === signatureAccountId,
-  );
-
   const connect = (provider: MailProviderView): void => {
     setConnectingProviderName(provider.name);
     setError(undefined);
     void mail
-      .startAuthorization({ type: provider.type, name: provider.name })
+      .startAuthorization({
+        type: provider.type,
+        name: provider.name,
+        initialSyncReceivedAfter: toSyncDate(policy.receivedAfter),
+      })
       .then((authorization) => {
         window.location.assign(authorization.authorizationUrl);
       })
@@ -199,6 +177,7 @@ export default function MailAccountsDevPage(): ReactElement {
       .connectAccount({
         type: provider.type,
         name: provider.name,
+        initialSyncReceivedAfter: toSyncDate(policy.receivedAfter),
         ...credentials,
       })
       .then(() => {
@@ -224,9 +203,8 @@ export default function MailAccountsDevPage(): ReactElement {
     void mail
       .startSync({
         accountId: account.id,
-        receivedAfter: policy.receivedAfter
-          ? new Date(`${policy.receivedAfter}T00:00:00Z`).toISOString()
-          : undefined,
+        receivedAfter:
+          account.initialSyncReceivedAfter ?? toSyncDate(policy.receivedAfter),
       })
       .then((run) =>
         setSyncRuns((current) => ({ ...current, [account.id]: run })),
@@ -301,6 +279,8 @@ export default function MailAccountsDevPage(): ReactElement {
             onClick={() => {
               setShowConnector(true);
               setShowTemplates(false);
+              setShowLabels(false);
+              setShowSignatures(false);
             }}
             type='button'
             variant={showConnector ? 'default' : 'outline'}
@@ -314,6 +294,8 @@ export default function MailAccountsDevPage(): ReactElement {
             onClick={() => {
               setShowTemplates((current) => !current);
               setShowConnector(false);
+              setShowLabels(false);
+              setShowSignatures(false);
             }}
             type='button'
             variant={showTemplates ? 'default' : 'outline'}
@@ -322,6 +304,33 @@ export default function MailAccountsDevPage(): ReactElement {
             {t('dev.templateManagement', {
               defaultValue: showTemplates ? 'Close templates' : 'Templates',
             })}
+          </Button>
+          <Button
+            onClick={() => {
+              setShowSignatures((current) => !current);
+              setShowConnector(false);
+              setShowTemplates(false);
+              setShowLabels(false);
+              setError(undefined);
+            }}
+            type='button'
+            variant={showSignatures ? 'default' : 'outline'}
+          >
+            <PenLine aria-hidden='true' className='size-4' />
+            {t('dev.signatureManagement', { defaultValue: 'Signatures' })}
+          </Button>
+          <Button
+            onClick={() => {
+              setShowLabels((current) => !current);
+              setShowConnector(false);
+              setShowTemplates(false);
+              setShowSignatures(false);
+            }}
+            type='button'
+            variant={showLabels ? 'default' : 'outline'}
+          >
+            <Tag aria-hidden='true' className='size-4' />
+            {t('dev.labelManagement', { defaultValue: 'Labels' })}
           </Button>
           <Button disabled={loading} onClick={refresh} variant='outline'>
             <RefreshCw
@@ -333,9 +342,6 @@ export default function MailAccountsDevPage(): ReactElement {
         </>
       }
       badge={t('nav.settings', { defaultValue: 'Mail' })}
-      category={t('dev.accountsCategory', {
-        defaultValue: 'Account access',
-      })}
       description={t('dev.accountsDescription', {
         defaultValue:
           'Connect Gmail, Microsoft, or IMAP/SMTP accounts, configure initial sync limits, and synchronize current-user mailboxes.',
@@ -367,12 +373,7 @@ export default function MailAccountsDevPage(): ReactElement {
         <Card className='overflow-hidden rounded-2xl bg-background shadow-sm'>
           <div className='flex flex-wrap items-start justify-between gap-4 border-b bg-muted/20 px-6 py-5'>
             <div>
-              <p className='text-xs font-medium tracking-wide text-muted-foreground uppercase'>
-                {t('dev.accountInventory', {
-                  defaultValue: 'Account inventory',
-                })}
-              </p>
-              <h2 className='mt-2 font-semibold'>
+              <h2 className='font-semibold'>
                 {t('dev.connectedAccountsTitle', {
                   defaultValue: 'Connected accounts',
                 })}
@@ -380,7 +381,7 @@ export default function MailAccountsDevPage(): ReactElement {
               <p className='mt-1 max-w-2xl text-sm leading-6 text-muted-foreground'>
                 {t('dev.connectedAccountsDescription', {
                   defaultValue:
-                    'Manage and synchronize the mail accounts connected by the current user.',
+                    'Manage mail accounts and their saved initial synchronization dates.',
                 })}
               </p>
             </div>
@@ -426,6 +427,11 @@ export default function MailAccountsDevPage(): ReactElement {
                     <th className='px-4 py-3 font-medium'>
                       {t('dev.defaultColumn', { defaultValue: 'Default' })}
                     </th>
+                    <th className='px-4 py-3 font-medium'>
+                      {t('dev.initialSyncColumn', {
+                        defaultValue: 'Initial sync start date',
+                      })}
+                    </th>
                     <th className='px-4 py-3 text-right font-medium'>
                       {t('dev.actionsColumn', { defaultValue: 'Actions' })}
                     </th>
@@ -434,7 +440,6 @@ export default function MailAccountsDevPage(): ReactElement {
                 <tbody className='divide-y'>
                   {accounts.map((account) => {
                     const run = syncRuns[account.id];
-                    const signaturesOpen = signatureAccountId === account.id;
                     return (
                       <Fragment key={account.id}>
                         <ConnectedAccountRow
@@ -447,14 +452,6 @@ export default function MailAccountsDevPage(): ReactElement {
                             updateAccount(account, { isDefault: true })
                           }
                           onRemove={requestRemoveAccount}
-                          onToggleSignatures={(account) => {
-                            setShowConnector(false);
-                            setShowTemplates(false);
-                            setError(undefined);
-                            setSignatureAccountId((current) =>
-                              current === account.id ? undefined : account.id,
-                            );
-                          }}
                           onToggleStatus={(account) =>
                             updateAccount(account, {
                               status:
@@ -467,10 +464,6 @@ export default function MailAccountsDevPage(): ReactElement {
                             providerLabels.get(providerKey(account.provider)) ??
                             account.provider.name
                           }
-                          signaturesOpen={signaturesOpen}
-                          signaturesLabel={t('dev.manageSignatures', {
-                            defaultValue: 'Signatures',
-                          })}
                           statusLabel={t(`status.account.${account.status}`, {
                             defaultValue: account.status,
                           })}
@@ -508,7 +501,7 @@ export default function MailAccountsDevPage(): ReactElement {
                         />
                         {run ? (
                           <tr>
-                            <td className='px-6 py-3' colSpan={5}>
+                            <td className='px-6 py-3' colSpan={6}>
                               <SyncProgress run={run} />
                             </td>
                           </tr>
@@ -529,13 +522,8 @@ export default function MailAccountsDevPage(): ReactElement {
           closeLabel={t('dev.closePanel', { defaultValue: 'Close' })}
           side='right'
         >
-          <SheetHeader className='border-b bg-muted/20 pr-14'>
-            <p className='text-xs font-medium tracking-wide text-muted-foreground uppercase'>
-              {t('dev.accountConnectionStep', {
-                defaultValue: 'Account connection',
-              })}
-            </p>
-            <SheetTitle className='mt-2'>
+          <SheetHeader className='shrink-0 border-b bg-muted/20 pr-14'>
+            <SheetTitle>
               {t('settings.providers.title', {
                 defaultValue: 'Add mail account',
               })}
@@ -627,12 +615,7 @@ export default function MailAccountsDevPage(): ReactElement {
 
             <section className='space-y-4 border-t pt-6'>
               <div>
-                <p className='text-xs font-medium tracking-wide text-muted-foreground uppercase'>
-                  {t('dev.syncPolicyCategory', {
-                    defaultValue: 'Synchronization policy',
-                  })}
-                </p>
-                <h2 className='mt-2 font-semibold'>
+                <h2 className='font-semibold'>
                   {t('settings.initialSync.title', {
                     defaultValue: 'Initial sync limits',
                   })}
@@ -640,7 +623,7 @@ export default function MailAccountsDevPage(): ReactElement {
                 <p className='mt-1 text-sm leading-6 text-muted-foreground'>
                   {t('settings.initialSync.description', {
                     defaultValue:
-                      'Choose the date for the next initial mailbox sync. Page size is managed by the server configuration.',
+                      'Choose the default date for a newly connected account. Each account’s saved date is shown in the account list.',
                   })}
                 </p>
               </div>
@@ -658,19 +641,38 @@ export default function MailAccountsDevPage(): ReactElement {
         </SheetContent>
       </Sheet>
 
-      <Sheet open={showTemplates} onOpenChange={setShowTemplates}>
+      <Sheet open={showLabels} onOpenChange={setShowLabels}>
         <SheetContent
-          className='overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-4xl'
+          className='overflow-hidden data-[side=right]:w-full data-[side=right]:sm:max-w-4xl'
           closeLabel={t('dev.closePanel', { defaultValue: 'Close' })}
           side='right'
         >
-          <SheetHeader className='border-b bg-muted/20 pr-14'>
-            <p className='text-xs font-medium tracking-wide text-muted-foreground uppercase'>
-              {t('dev.templateManagementCategory', {
-                defaultValue: 'Reusable content',
+          <SheetHeader className='shrink-0 border-b bg-muted/20 pr-14'>
+            <SheetTitle>
+              {t('dev.labelManagementTitle', {
+                defaultValue: 'Label management',
               })}
-            </p>
-            <SheetTitle className='mt-2'>
+            </SheetTitle>
+            <SheetDescription>
+              {t('dev.labelManagementDescription', {
+                defaultValue: 'Create and review labels stored in NocoBase.',
+              })}
+            </SheetDescription>
+          </SheetHeader>
+          <div className='min-h-0 min-w-0 flex-1 overflow-y-auto p-4 pb-6 lg:overflow-hidden'>
+            <MailLabelManager />
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      <Sheet open={showTemplates} onOpenChange={setShowTemplates}>
+        <SheetContent
+          className='overflow-hidden data-[side=right]:w-full data-[side=right]:sm:max-w-4xl'
+          closeLabel={t('dev.closePanel', { defaultValue: 'Close' })}
+          side='right'
+        >
+          <SheetHeader className='shrink-0 border-b bg-muted/20 pr-14'>
+            <SheetTitle>
               {t('dev.templateManagementTitle', {
                 defaultValue: 'Template management',
               })}
@@ -682,33 +684,26 @@ export default function MailAccountsDevPage(): ReactElement {
               })}
             </SheetDescription>
           </SheetHeader>
-          <div className='min-w-0 p-4 pb-6'>
+          <div className='min-h-0 min-w-0 flex-1 overflow-y-auto p-4 pb-6 lg:overflow-hidden'>
             <MailTemplateManager />
           </div>
         </SheetContent>
       </Sheet>
 
       <Sheet
-        open={signatureAccount !== undefined}
+        open={showSignatures}
         onOpenChange={(open) => {
-          if (!open) {
-            setSignatureAccountId(undefined);
-            setError(undefined);
-          }
+          setShowSignatures(open);
+          if (!open) setError(undefined);
         }}
       >
         <SheetContent
-          className='overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-2xl'
+          className='overflow-hidden data-[side=right]:w-full data-[side=right]:sm:max-w-4xl'
           closeLabel={t('dev.closePanel', { defaultValue: 'Close' })}
           side='right'
         >
-          <SheetHeader className='border-b bg-muted/20 pr-14'>
-            <p className='text-xs font-medium tracking-wide text-muted-foreground uppercase'>
-              {t('dev.signatureManagementCategory', {
-                defaultValue: 'Account settings',
-              })}
-            </p>
-            <SheetTitle className='mt-2'>
+          <SheetHeader className='shrink-0 border-b bg-muted/20 pr-14'>
+            <SheetTitle>
               {t('dev.signatureManagementTitle', {
                 defaultValue: 'Signature management',
               })}
@@ -716,63 +711,31 @@ export default function MailAccountsDevPage(): ReactElement {
             <SheetDescription>
               {t('dev.signatureManagementDescription', {
                 defaultValue:
-                  'Manage sending identities and signatures for this connected account.',
+                  'Manage shared signatures for connected accounts.',
               })}
             </SheetDescription>
           </SheetHeader>
 
-          {signatureAccount ? (
-            <div className='space-y-5 px-4 pb-6'>
-              <div className='rounded-xl border bg-muted/20 p-4'>
-                <p className='font-semibold'>{signatureAccount.address}</p>
-                {signatureAccount.displayName ? (
-                  <p className='mt-1 text-sm text-muted-foreground'>
-                    {signatureAccount.displayName}
-                  </p>
-                ) : null}
+          <div className='flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto p-4 pb-6 lg:overflow-hidden'>
+            {error ? (
+              <div className='mb-4 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive'>
+                {error}
               </div>
-
-              {error ? (
-                <div className='rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive'>
-                  {error}
-                </div>
-              ) : null}
-
-              {(accountIdentities[signatureAccount.id] ?? []).length === 0 ? (
-                <p className='rounded-xl border border-dashed p-5 text-sm text-muted-foreground'>
-                  {t('dev.noIdentities', {
-                    defaultValue:
-                      'No sending identities are available for this account.',
-                  })}
-                </p>
-              ) : (
-                (accountIdentities[signatureAccount.id] ?? []).map(
-                  (identity) => (
-                    <section
-                      className='space-y-3 rounded-xl border bg-background p-4'
-                      key={identity.id}
-                    >
-                      <div className='flex items-center gap-2 text-sm'>
-                        <span className='font-medium'>{identity.address}</span>
-                        {identity.isPrimary ? (
-                          <MailStatusBadge
-                            label={t('settings.identities.primary', {
-                              defaultValue: 'Primary',
-                            })}
-                            tone='info'
-                          />
-                        ) : null}
-                      </div>
-                      <MailSignatureManager
-                        identity={identity}
-                        onError={setError}
-                      />
-                    </section>
-                  ),
-                )
-              )}
-            </div>
-          ) : null}
+            ) : null}
+            {accounts.length === 0 ? (
+              <EmptyState
+                description={t('dev.connectedAccountsEmptyDescription', {
+                  defaultValue:
+                    'Use Associate account to connect your first mailbox.',
+                })}
+                title={t('settings.accounts.emptyTitle', {
+                  defaultValue: 'No accounts connected',
+                })}
+              />
+            ) : (
+              <MailSignatureManager accounts={accounts} onError={setError} />
+            )}
+          </div>
         </SheetContent>
       </Sheet>
 
@@ -858,11 +821,8 @@ function ConnectedAccountRow({
   onSync,
   onDefault,
   onRemove,
-  onToggleSignatures,
   onToggleStatus,
   providerLabel,
-  signaturesLabel,
-  signaturesOpen,
   statusLabel,
   syncLabel,
   syncing,
@@ -876,11 +836,8 @@ function ConnectedAccountRow({
   readonly onSync: (account: MailAccountView) => void;
   readonly onDefault: (account: MailAccountView) => void;
   readonly onRemove: (account: MailAccountView) => void;
-  readonly onToggleSignatures: (account: MailAccountView) => void;
   readonly onToggleStatus: (account: MailAccountView) => void;
   readonly providerLabel: string;
-  readonly signaturesLabel: string;
-  readonly signaturesOpen: boolean;
   readonly statusLabel: string;
   readonly syncLabel: string;
   readonly syncing: boolean;
@@ -928,15 +885,16 @@ function ConnectedAccountRow({
         )}
       </td>
       <td className='px-4 py-4'>
+        {account.initialSyncReceivedAfter ? (
+          <time dateTime={account.initialSyncReceivedAfter}>
+            {account.initialSyncReceivedAfter.slice(0, 10)}
+          </time>
+        ) : (
+          <span className='text-muted-foreground'>—</span>
+        )}
+      </td>
+      <td className='px-4 py-4'>
         <div className='flex min-w-max justify-end gap-2'>
-          <Button
-            aria-expanded={signaturesOpen}
-            onClick={() => onToggleSignatures(account)}
-            type='button'
-            variant='outline'
-          >
-            {signaturesLabel}
-          </Button>
           <Button
             disabled={syncing || account.status !== 'active'}
             onClick={() => onSync(account)}
@@ -1052,4 +1010,8 @@ function readAuthorizationNotice(): 'success' | 'failure' | undefined {
 function dateDaysAgo(days: number): string {
   const value = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
   return value.toISOString().slice(0, 10);
+}
+
+function toSyncDate(value: string | undefined): string | undefined {
+  return value ? new Date(`${value}T00:00:00Z`).toISOString() : undefined;
 }

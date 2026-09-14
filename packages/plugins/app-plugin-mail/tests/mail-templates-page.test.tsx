@@ -63,7 +63,17 @@ describe('MailTemplatesPage', () => {
       }),
     );
 
-    fireEvent.click(await screen.findByRole('button', { name: /Follow up/ }));
+    const selectedTemplate = await screen.findByRole('button', {
+      name: /Follow up/,
+    });
+    expect(screen.getByRole('region', { name: 'Templates' })).toHaveClass(
+      'min-h-0',
+      'flex-1',
+      'overflow-y-auto',
+    );
+    fireEvent.click(selectedTemplate);
+    expect(selectedTemplate).toHaveAttribute('aria-current', 'true');
+    expect(selectedTemplate).toHaveClass('border-primary', 'bg-primary/10');
     fireEvent.change(screen.getByLabelText('Subject'), {
       target: { value: 'Updated next steps' },
     });

@@ -10,12 +10,17 @@ import type {
   MailStore,
   MailSubmission,
 } from '../types.js';
+import {
+  notifyMailMessageChange,
+  type MailMessageChangeNotifier,
+} from '../realtime.js';
 
 export interface SendMailOperationDependencies {
   readonly store: MailStore;
   readonly adapters: MailProviderAdapterResolver;
   readonly outbox?: { kick(): void };
   readonly outboundAttachments?: MailOutboundAttachmentStorage;
+  readonly messageChangeNotifier?: MailMessageChangeNotifier;
 }
 
 export interface SendMailExecutionOptions {
@@ -187,10 +192,16 @@ export class SendMailOperation {
       });
       if (result.status === 'accepted') {
         if (input.draftMessageId) {
-          await this.dependencies.store.deleteMessage(
+          const deleted = await this.dependencies.store.deleteMessage(
             account.id,
             input.draftMessageId,
           );
+          if (deleted) {
+            notifyMailMessageChange(
+              this.dependencies.messageChangeNotifier,
+              context.actorId,
+            );
+          }
         }
         return this.dependencies.store.finishSubmission(
           {
@@ -205,10 +216,9 @@ export class SendMailOperation {
         result.error.category === 'authentication' &&
         !result.error.retryable
       ) {
-        await this.dependencies.store.saveAccount({
-          ...account,
-          status: 'reauthorizationRequired',
-        });
+        await this.dependencies.store.markAccountReauthorizationRequired(
+          account.id,
+        );
       }
       return this.dependencies.store.finishSubmission(
         {
@@ -252,7 +262,7 @@ export class SendMailOperation {
       throw new Error('Mail sending identity is not available.');
     }
     const configuredSignatures = await this.dependencies.store.listSignatures(
-      identity.id,
+      input.accountId,
     );
     const signature =
       input.signatureId === null
@@ -262,7 +272,7 @@ export class SendMailOperation {
           : configuredSignatures.find((item) => item.isDefault);
     if (
       input.signatureId &&
-      (!signature || signature.identityId !== identity.id)
+      (!signature || signature.accountId !== input.accountId)
     ) {
       throw new Error('Mail signature was not found.');
     }

@@ -1,9 +1,11 @@
 import {
   Bold,
   Eraser,
+  FileText,
   Italic,
   List,
   ListOrdered,
+  PenLine,
   Redo2,
   Underline,
   Undo2,
@@ -13,6 +15,12 @@ import type { ReactElement } from 'react';
 
 import { htmlToPlainText, sanitizeMailHtml } from '../lib/mail-template.js';
 import { Button } from './ui/button.js';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from './ui/dropdown-menu.js';
 
 export interface MailRichTextValue {
   readonly html: string;
@@ -31,8 +39,26 @@ export interface MailRichTextEditorLabels {
   readonly clearFormatting: string;
 }
 
+export interface MailRichTextEditorInsertOption {
+  readonly id: string;
+  readonly label: string;
+}
+
+export interface MailRichTextEditorInsertMenu {
+  readonly label: string;
+  readonly options: readonly MailRichTextEditorInsertOption[];
+  readonly onSelect: (id: string) => void;
+  readonly selectedId?: string;
+}
+
+export interface MailRichTextEditorInsertActions {
+  readonly signature?: MailRichTextEditorInsertMenu;
+  readonly template?: MailRichTextEditorInsertMenu;
+}
+
 export interface MailRichTextEditorProps {
   readonly ariaLabel: string;
+  readonly insertActions?: MailRichTextEditorInsertActions;
   readonly labels: MailRichTextEditorLabels;
   readonly onChange: (value: MailRichTextValue) => void;
   readonly placeholder?: string;
@@ -52,6 +78,7 @@ const COMMANDS = [
 
 export function MailRichTextEditor({
   ariaLabel,
+  insertActions,
   labels,
   onChange,
   placeholder,
@@ -100,6 +127,21 @@ export function MailRichTextEditor({
             <Icon aria-hidden='true' className='size-4' />
           </Button>
         ))}
+        {insertActions ? (
+          <span aria-hidden='true' className='mx-1 h-5 w-px bg-border' />
+        ) : null}
+        {insertActions?.signature ? (
+          <MailRichTextInsertMenu
+            icon={<PenLine aria-hidden='true' className='size-3.5' />}
+            menu={insertActions.signature}
+          />
+        ) : null}
+        {insertActions?.template ? (
+          <MailRichTextInsertMenu
+            icon={<FileText aria-hidden='true' className='size-3.5' />}
+            menu={insertActions.template}
+          />
+        ) : null}
       </div>
       <div
         aria-label={ariaLabel}
@@ -119,5 +161,51 @@ export function MailRichTextEditor({
         suppressContentEditableWarning
       />
     </div>
+  );
+}
+
+function MailRichTextInsertMenu({
+  icon,
+  menu,
+}: {
+  readonly icon: ReactElement;
+  readonly menu: MailRichTextEditorInsertMenu;
+}): ReactElement {
+  const disabled = menu.options.length === 0;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        onMouseDown={(event) => event.preventDefault()}
+        render={
+          <Button
+            aria-label={menu.label}
+            className='h-8 px-2 text-xs'
+            disabled={disabled}
+            title={menu.label}
+            type='button'
+            variant='ghost'
+          />
+        }
+      >
+        {icon}
+        <span>{menu.label}</span>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align='start' className='max-w-72'>
+        {menu.options.map((option) => (
+          <DropdownMenuItem
+            key={option.id}
+            onClick={() => menu.onSelect(option.id)}
+          >
+            <span
+              aria-hidden='true'
+              className='flex size-4 shrink-0 items-center justify-center text-primary'
+            >
+              {menu.selectedId === option.id ? '✓' : null}
+            </span>
+            <span className='truncate'>{option.label}</span>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

@@ -1,17 +1,54 @@
+import { resolve } from 'node:path';
+
 import {
   createDatabaseManager,
   InMemoryCollectionMetadataStore,
   type DatabaseManager,
+  type Row,
 } from '@nocobase/db';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import migration from '../database/migrations/202609030001_create_mail_tables.js';
+import signatureScopeMigration from '../database/migrations/202609140004_move_mail_signatures_to_account_scope.js';
 
 interface SqliteClient {
   readonly schema: {
     hasTable(name: string): Promise<boolean>;
+    hasColumn(table: string, column: string): Promise<boolean>;
   };
   raw(sql: string): Promise<readonly { readonly name: string }[]>;
+}
+
+interface LegacyMailAccountRow extends Row {
+  id: string;
+  userId: string;
+  providerType: string;
+  providerName: string;
+  address: string;
+  credentialReference: string;
+  scopes: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface LegacyMailIdentityRow extends Row {
+  id: string;
+  accountId: string;
+  address: string;
+  primaryForAccountId?: string | null;
+  canSend: boolean;
+}
+
+interface MigratedMailSignatureRow extends Row {
+  id: string;
+  identityId: string;
+  accountId?: string | null;
+  name: string;
+  text: string;
+  defaultForIdentityId?: string | null;
+  defaultForAccountId?: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 const COLLECTIONS = [
@@ -31,7 +68,10 @@ const COLLECTIONS = [
   ['mailSubmissions', 'mail_submissions'],
   ['mailOutbox', 'mail_outbox'],
   ['mailSignatures', 'mail_signatures'],
+  ['mailLabels', 'mail_labels'],
+  ['mailMessageLabels', 'mail_message_labels'],
 ] as const;
+const MIGRATIONS_DIRECTORY = resolve(process.cwd(), 'database/migrations');
 
 describe('mail database migration', () => {
   let database: DatabaseManager;
@@ -125,7 +165,10 @@ describe('mail database migration', () => {
     await expect(
       metadataStore.get('mailAccounts').then((stored) => stored?.document),
     ).resolves.toMatchObject({
-      fields: { defaultForUserId: { type: 'string' } },
+      fields: {
+        defaultForUserId: { type: 'string' },
+        initialSyncReceivedAfter: { type: 'datetime' },
+      },
     });
     await expect(
       metadataStore
@@ -145,7 +188,11 @@ describe('mail database migration', () => {
     await expect(
       metadataStore.get('mailSignatures').then((stored) => stored?.document),
     ).resolves.toMatchObject({
-      fields: { defaultForIdentityId: { type: 'uuid' } },
+      fields: {
+        accountId: { type: 'uuid' },
+        defaultForAccountId: { type: 'uuid' },
+        defaultForIdentityId: { type: 'uuid' },
+      },
     });
     await expect(
       metadataStore
@@ -156,6 +203,12 @@ describe('mail database migration', () => {
       client.raw('PRAGMA index_list(mail_signatures)'),
     ).resolves.toEqual(
       expect.arrayContaining([
+        expect.objectContaining({
+          name: 'mail_signatures_account_name_unique',
+        }),
+        expect.objectContaining({
+          name: 'mail_signatures_default_account_unique',
+        }),
         expect.objectContaining({
           name: 'mail_signatures_identity_name_unique',
         }),
@@ -233,11 +286,263 @@ describe('mail database migration', () => {
     ).resolves.toEqual(
       expect.arrayContaining([
         expect.objectContaining({
+          table: 'mail_accounts',
+          on_delete: 'CASCADE',
+        }),
+        expect.objectContaining({
           table: 'mail_identities',
           on_delete: 'CASCADE',
         }),
       ]),
     );
+    await expect(client.raw('PRAGMA index_list(mail_labels)')).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'mail_labels_owner_name_unique',
+        }),
+      ]),
+    );
+    await expect(
+      client.raw('PRAGMA foreign_key_list(mail_message_labels)'),
+    ).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          table: 'mail_messages',
+          on_delete: 'CASCADE',
+        }),
+        expect.objectContaining({
+          table: 'mail_labels',
+          on_delete: 'CASCADE',
+        }),
+      ]),
+    );
+    await expect(
+      metadataStore.get('mailLabels').then((stored) => stored?.document),
+    ).resolves.toMatchObject({
+      fields: {
+        ownerId: { type: 'string' },
+        name: { type: 'string' },
+        color: { type: 'string' },
+      },
+    });
+  });
+
+  it('applies label color as a follow-up migration', async () => {
+    const migrator = database.createMigrator({
+      directory: MIGRATIONS_DIRECTORY,
+      packageName: '@nocobase/app-plugin-mail',
+    });
+
+    await expect(
+      migrator.upTo('202609140001_add_local_mail_labels'),
+    ).resolves.toMatchObject({
+      executed: [
+        '202609030001_create_mail_tables',
+        '202609140001_add_local_mail_labels',
+      ],
+    });
+    await expect(
+      migrator.upTo('202609140002_add_mail_label_color'),
+    ).resolves.toMatchObject({
+      executed: ['202609140002_add_mail_label_color'],
+      skipped: [
+        '202609030001_create_mail_tables',
+        '202609140001_add_local_mail_labels',
+      ],
+    });
+
+    const client = await database.connection().client<SqliteClient>();
+    await expect(client.schema.hasColumn('mail_labels', 'color')).resolves.toBe(
+      true,
+    );
+  });
+
+  it('persists the initial sync date on accounts and OAuth state', async () => {
+    const migrator = database.createMigrator({
+      directory: MIGRATIONS_DIRECTORY,
+      packageName: '@nocobase/app-plugin-mail',
+    });
+
+    await expect(
+      migrator.upTo('202609140003_add_account_initial_sync_date'),
+    ).resolves.toMatchObject({
+      executed: [
+        '202609030001_create_mail_tables',
+        '202609140001_add_local_mail_labels',
+        '202609140002_add_mail_label_color',
+        '202609140003_add_account_initial_sync_date',
+      ],
+    });
+
+    const client = await database.connection().client<SqliteClient>();
+    await expect(
+      client.schema.hasColumn('mail_accounts', 'initial_sync_received_after'),
+    ).resolves.toBe(true);
+    await expect(
+      client.schema.hasColumn(
+        'mail_authorization_states',
+        'initial_sync_received_after',
+      ),
+    ).resolves.toBe(true);
+  });
+
+  it('moves existing signatures to account scope and rolls the fields back', async () => {
+    const connection = database.connection();
+    const migrator = database.createMigrator({
+      directory: MIGRATIONS_DIRECTORY,
+      packageName: '@nocobase/app-plugin-mail',
+    });
+    await migrator.upTo('202609140003_add_account_initial_sync_date');
+
+    await connection.query
+      .insertInto<LegacyMailAccountRow>('mailAccounts')
+      .values([
+        {
+          id: 'account-1',
+          userId: 'user-1',
+          providerType: 'gmail',
+          providerName: 'google',
+          address: 'primary@example.com',
+          credentialReference: 'credential-1',
+          scopes: JSON.stringify([]),
+          status: 'active',
+          createdAt: '2026-09-01T00:00:00.000Z',
+          updatedAt: '2026-09-01T00:00:00.000Z',
+        },
+        {
+          id: 'account-2',
+          userId: 'user-1',
+          providerType: 'gmail',
+          providerName: 'google',
+          address: 'other@example.com',
+          credentialReference: 'credential-2',
+          scopes: JSON.stringify([]),
+          status: 'active',
+          createdAt: '2026-09-01T00:00:00.000Z',
+          updatedAt: '2026-09-01T00:00:00.000Z',
+        },
+      ])
+      .execute();
+    await connection.query
+      .insertInto<LegacyMailIdentityRow>('mailIdentities')
+      .values([
+        {
+          id: 'identity-1',
+          accountId: 'account-1',
+          address: 'primary@example.com',
+          primaryForAccountId: 'account-1',
+          canSend: true,
+        },
+        {
+          id: 'identity-2',
+          accountId: 'account-1',
+          address: 'alias@example.com',
+          primaryForAccountId: null,
+          canSend: true,
+        },
+        {
+          id: 'identity-3',
+          accountId: 'account-2',
+          address: 'other@example.com',
+          primaryForAccountId: 'account-2',
+          canSend: true,
+        },
+      ])
+      .execute();
+    await connection.query
+      .insertInto<MigratedMailSignatureRow>('mailSignatures')
+      .values([
+        {
+          id: 'signature-primary',
+          identityId: 'identity-1',
+          name: 'Work',
+          text: 'Primary',
+          defaultForIdentityId: 'identity-1',
+          createdAt: '2026-09-01T00:00:00.000Z',
+          updatedAt: '2026-09-01T00:00:00.000Z',
+        },
+        {
+          id: 'signature-alias',
+          identityId: 'identity-2',
+          name: 'Work',
+          text: 'Alias',
+          defaultForIdentityId: 'identity-2',
+          createdAt: '2026-09-02T00:00:00.000Z',
+          updatedAt: '2026-09-02T00:00:00.000Z',
+        },
+        {
+          id: 'signature-support',
+          identityId: 'identity-2',
+          name: 'Support',
+          text: 'Support',
+          defaultForIdentityId: null,
+          createdAt: '2026-09-03T00:00:00.000Z',
+          updatedAt: '2026-09-03T00:00:00.000Z',
+        },
+        {
+          id: 'signature-other',
+          identityId: 'identity-3',
+          name: 'Work',
+          text: 'Other',
+          defaultForIdentityId: 'identity-3',
+          createdAt: '2026-09-01T00:00:00.000Z',
+          updatedAt: '2026-09-01T00:00:00.000Z',
+        },
+      ])
+      .execute();
+
+    await signatureScopeMigration.up({
+      builder: connection.builder,
+      query: connection.query,
+      connection,
+    });
+
+    await expect(
+      connection.query
+        .selectFrom<MigratedMailSignatureRow>('mailSignatures')
+        .select(['id', 'accountId', 'identityId', 'defaultForAccountId'])
+        .orderBy('id', 'asc')
+        .execute(),
+    ).resolves.toEqual([
+      {
+        id: 'signature-other',
+        accountId: 'account-2',
+        identityId: 'identity-3',
+        defaultForAccountId: 'account-2',
+      },
+      {
+        id: 'signature-primary',
+        accountId: 'account-1',
+        identityId: 'identity-1',
+        defaultForAccountId: 'account-1',
+      },
+      {
+        id: 'signature-support',
+        accountId: 'account-1',
+        identityId: 'identity-2',
+        defaultForAccountId: null,
+      },
+    ]);
+    const client = await connection.client<SqliteClient>();
+    await expect(
+      client.schema.hasColumn('mail_signatures', 'account_id'),
+    ).resolves.toBe(true);
+    await expect(
+      client.schema.hasColumn('mail_signatures', 'default_for_account_id'),
+    ).resolves.toBe(true);
+
+    await signatureScopeMigration.down({
+      builder: connection.builder,
+      query: connection.query,
+      connection,
+    });
+
+    await expect(
+      client.schema.hasColumn('mail_signatures', 'account_id'),
+    ).resolves.toBe(false);
+    await expect(
+      client.schema.hasColumn('mail_signatures', 'default_for_account_id'),
+    ).resolves.toBe(false);
   });
 
   it('drops all Mail schema and metadata', async () => {
@@ -256,19 +561,19 @@ describe('mail database migration', () => {
 });
 
 async function migrateUp(database: DatabaseManager): Promise<void> {
-  const connection = database.connection();
-  await migration.up({
-    builder: connection.builder,
-    query: connection.query,
-    connection,
-  });
+  await database
+    .createMigrator({
+      directory: MIGRATIONS_DIRECTORY,
+      packageName: '@nocobase/app-plugin-mail',
+    })
+    .latest();
 }
 
 async function migrateDown(database: DatabaseManager): Promise<void> {
-  const connection = database.connection();
-  await migration.down?.({
-    builder: connection.builder,
-    query: connection.query,
-    connection,
-  });
+  await database
+    .createMigrator({
+      directory: MIGRATIONS_DIRECTORY,
+      packageName: '@nocobase/app-plugin-mail',
+    })
+    .rollback();
 }

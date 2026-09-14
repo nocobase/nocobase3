@@ -10,11 +10,16 @@ import type {
   MailSyncMailboxTaskPayload,
   MailSyncRun,
 } from '../types.js';
+import {
+  notifyMailMessageChange,
+  type MailMessageChangeNotifier,
+} from '../realtime.js';
 
 export interface SyncMailboxOperationDependencies {
   readonly store: MailStore;
   readonly adapters: MailProviderAdapterResolver;
   readonly leaseMs?: number;
+  readonly messageChangeNotifier?: MailMessageChangeNotifier;
 }
 
 export class SyncMailboxOperation {
@@ -50,7 +55,7 @@ export class SyncMailboxOperation {
 
     const account = await this.dependencies.store.getAccount(run.accountId);
     if (!account || account.status !== 'active') {
-      await this.dependencies.store.failSyncRun(
+      await this.failSyncRun(
         run,
         terminalError(
           account ? 'MAIL_ACCOUNT_INACTIVE' : 'MAIL_ACCOUNT_NOT_FOUND',
@@ -66,7 +71,7 @@ export class SyncMailboxOperation {
     try {
       adapter = await this.dependencies.adapters.resolve(account);
     } catch (error) {
-      await this.dependencies.store.failSyncRun(
+      await this.failSyncRun(
         run,
         terminalError(
           'MAIL_PROVIDER_UNAVAILABLE',
@@ -83,33 +88,69 @@ export class SyncMailboxOperation {
       leaseMs,
     );
     try {
-      await this.executeStep(run, adapter);
+      const changed = await this.executeStep(run, adapter);
+      if (changed) {
+        notifyMailMessageChange(
+          this.dependencies.messageChangeNotifier,
+          account.userId,
+        );
+      }
     } catch (error) {
+      if (await this.isCancelledOrRemoved(run)) return;
       const normalized = normalizeError(error);
       if (isCursorInvalid(normalized)) {
         await this.dependencies.store.clearSyncCursor(account.id);
       }
       if (normalized.category === 'authentication' && !normalized.retryable) {
-        await this.dependencies.store.saveAccount({
-          ...account,
-          status: 'reauthorizationRequired',
-        });
+        await this.dependencies.store.markAccountReauthorizationRequired(
+          account.id,
+        );
       }
       if (normalized.retryable) {
-        await this.dependencies.store.releaseSyncRun(
-          run,
-          normalized,
-          new Date(
-            Date.now() + (normalized.retryAfterMs ?? 30_000),
-          ).toISOString(),
-        );
+        try {
+          await this.dependencies.store.releaseSyncRun(
+            run,
+            normalized,
+            new Date(
+              Date.now() + (normalized.retryAfterMs ?? 30_000),
+            ).toISOString(),
+          );
+        } catch (releaseError) {
+          if (!(await this.isCancelledOrRemoved(run))) throw releaseError;
+        }
         return;
       }
-      await this.dependencies.store.failSyncRun(run, normalized);
+      await this.failSyncRun(run, normalized);
     } finally {
       stopLeaseHeartbeat();
       await closeQuietly(adapter);
     }
+  }
+
+  private async failSyncRun(
+    run: MailSyncRun,
+    error: MailProviderError,
+  ): Promise<void> {
+    try {
+      await this.dependencies.store.failSyncRun(run, error);
+    } catch (failureError) {
+      if (!(await this.isCancelledOrRemoved(run))) throw failureError;
+    }
+  }
+
+  private async isCancelledOrRemoved(
+    run: Pick<MailSyncRun, 'id' | 'accountId'>,
+  ): Promise<boolean> {
+    const [currentRun, currentAccount] = await Promise.all([
+      this.dependencies.store.getSyncRun(run.id),
+      this.dependencies.store.getAccount(run.accountId),
+    ]);
+    return Boolean(
+      !currentRun ||
+      currentRun.status === 'cancelled' ||
+      !currentAccount ||
+      currentAccount.status === 'removing',
+    );
   }
 
   private startLeaseHeartbeat(
@@ -136,24 +177,23 @@ export class SyncMailboxOperation {
   private async executeStep(
     run: MailSyncRun,
     adapter: MailProviderAdapter,
-  ): Promise<void> {
+  ): Promise<boolean> {
     if (run.phase === 'preparing') {
-      await this.prepare(run, adapter);
-      return;
+      return this.prepare(run, adapter);
     }
     if (run.phase === 'history') {
-      await this.importHistoryPage(run, adapter);
-      return;
+      return this.importHistoryPage(run, adapter);
     }
     if (run.phase === 'catchUp' || run.phase === 'incremental') {
-      await this.importChangePage(run, adapter);
+      return this.importChangePage(run, adapter);
     }
+    return false;
   }
 
   private async prepare(
     run: MailSyncRun,
     adapter: MailProviderAdapter,
-  ): Promise<void> {
+  ): Promise<boolean> {
     if (
       run.mode === 'initial' &&
       (!adapter.listMessages || !adapter.getCurrentSyncCursor)
@@ -188,7 +228,7 @@ export class SyncMailboxOperation {
         baselineCursor: baseline,
         createNextTask: true,
       });
-      return;
+      return false;
     }
     const currentCursor =
       run.mode === 'initial'
@@ -211,12 +251,13 @@ export class SyncMailboxOperation {
       changeCursor: run.mode === 'incremental' ? changeCursor : undefined,
       createNextTask: true,
     });
+    return false;
   }
 
   private async importHistoryPage(
     run: MailSyncRun,
     adapter: MailProviderAdapter,
-  ): Promise<void> {
+  ): Promise<boolean> {
     if (!adapter.listMessages) {
       throw new MailOperationError(
         terminalError(
@@ -230,8 +271,7 @@ export class SyncMailboxOperation {
       run.policy.maxMessages - run.processedMessages,
     );
     if (remaining === 0) {
-      await this.completeHistory(run);
-      return;
+      return this.completeHistory(run);
     }
     const page = unwrap(
       await adapter.listMessages({
@@ -263,9 +303,10 @@ export class SyncMailboxOperation {
         : (page.syncCursor ?? run.baselineCursor),
       createNextTask: true,
     });
+    return imported.length > 0;
   }
 
-  private async completeHistory(run: MailSyncRun): Promise<void> {
+  private async completeHistory(run: MailSyncRun): Promise<boolean> {
     await this.dependencies.store.commitSyncStep({
       run,
       messages: [],
@@ -275,12 +316,13 @@ export class SyncMailboxOperation {
       changeCursor: run.baselineCursor,
       createNextTask: true,
     });
+    return false;
   }
 
   private async importChangePage(
     run: MailSyncRun,
     adapter: MailProviderAdapter,
-  ): Promise<void> {
+  ): Promise<boolean> {
     if (!adapter.listChanges) {
       throw new MailOperationError(
         terminalError(
@@ -318,6 +360,11 @@ export class SyncMailboxOperation {
       changeCursor: page.nextCursor,
       createNextTask: page.hasMore,
     });
+    return (
+      page.messages.length > 0 ||
+      (page.removedFromFolders?.length ?? 0) > 0 ||
+      (page.deletedProviderMessageIds?.length ?? 0) > 0
+    );
   }
 }
 

@@ -35,6 +35,29 @@ export interface MailProviderCapabilities {
   readonly aliases: boolean;
 }
 
+export const MAIL_LABEL_COLORS = [
+  'slate',
+  'red',
+  'orange',
+  'amber',
+  'green',
+  'sky',
+  'blue',
+  'violet',
+  'pink',
+] as const;
+
+export type MailLabelColor = (typeof MAIL_LABEL_COLORS)[number];
+
+export const DEFAULT_MAIL_LABEL_COLOR: MailLabelColor = 'blue';
+
+export function isMailLabelColor(value: unknown): value is MailLabelColor {
+  return (
+    typeof value === 'string' &&
+    (MAIL_LABEL_COLORS as readonly string[]).includes(value)
+  );
+}
+
 export interface MailProviderIdentity {
   /** Provider implementation type, for example `gmail` or `microsoft`. */
   readonly type: string;
@@ -70,6 +93,8 @@ export interface MailAccount {
   readonly authorizationSubject?: string;
   readonly scopes: readonly string[];
   readonly status: MailAccountStatus;
+  /** Date boundary recorded when the account was first connected. */
+  readonly initialSyncReceivedAfter?: string;
   readonly syncCursor?: MailSyncCursor;
   readonly isDefault: boolean;
 }
@@ -95,7 +120,8 @@ export interface MailIdentity {
 
 export interface MailSignature {
   readonly id: string;
-  readonly identityId: string;
+  /** Signatures are shared by every sending address in the account. */
+  readonly accountId: string;
   readonly name: string;
   readonly text: string;
   readonly html?: string;
@@ -104,10 +130,24 @@ export interface MailSignature {
   readonly updatedAt: string;
 }
 
+/** A NocoBase-owned label that is independent of any mail Provider. */
+export interface MailLabel {
+  readonly id: string;
+  readonly name: string;
+  readonly color: MailLabelColor;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface MailSaveLabelInput {
+  readonly id?: string;
+  readonly name: string;
+  readonly color?: MailLabelColor;
+}
+
 export interface MailSaveSignatureInput {
   readonly id?: string;
   readonly accountId: string;
-  readonly identityId: string;
   readonly name: string;
   readonly text: string;
   readonly html?: string | null;
@@ -159,6 +199,8 @@ export interface MailMessageSummary {
   readonly internetMessageId?: string;
   readonly conversationId?: string;
   readonly folderIds: readonly string[];
+  /** User-owned labels stored in NocoBase, never synchronized to a Provider. */
+  readonly labelIds: readonly string[];
   readonly from?: MailAddress;
   readonly to: readonly MailAddress[];
   readonly cc: readonly MailAddress[];
@@ -338,6 +380,7 @@ export interface MailStartAuthorizationInput {
   readonly provider: MailProviderIdentity;
   readonly redirectUri: string;
   readonly scopes?: readonly string[];
+  readonly initialSyncReceivedAfter?: string | null;
 }
 
 export interface MailConnectAccountInput {
@@ -346,6 +389,7 @@ export interface MailConnectAccountInput {
   readonly displayName?: string;
   readonly username: string;
   readonly password: string;
+  readonly initialSyncReceivedAfter?: string | null;
 }
 
 export interface MailCompleteAuthorizationInput {
@@ -365,6 +409,7 @@ export interface MailAuthorizationCallbackInput {
 export interface MailListMessagesInput {
   readonly accountIds?: readonly string[];
   readonly folderIds?: readonly string[];
+  readonly labelIds?: readonly string[];
   readonly conversationId?: string;
   readonly query?: string;
   readonly unread?: boolean;
@@ -570,6 +615,7 @@ export interface MailService {
     context: MailOperationContext,
     accountId: string,
   ): Promise<readonly MailFolder[]>;
+  listLabels(context: MailOperationContext): Promise<readonly MailLabel[]>;
   listIdentities(
     context: MailOperationContext,
     accountId: string,
@@ -581,7 +627,6 @@ export interface MailService {
   listSignatures(
     context: MailOperationContext,
     accountId: string,
-    identityId: string,
   ): Promise<readonly MailSignature[]>;
   saveSignature(
     context: MailOperationContext,
@@ -590,14 +635,17 @@ export interface MailService {
   deleteSignature(
     context: MailOperationContext,
     accountId: string,
-    identityId: string,
     signatureId: string,
   ): Promise<void>;
   createLabel(
     context: MailOperationContext,
-    accountId: string,
-    name: string,
-  ): Promise<MailFolder>;
+    input: MailSaveLabelInput,
+  ): Promise<MailLabel>;
+  updateLabel(
+    context: MailOperationContext,
+    input: MailSaveLabelInput & { readonly id: string },
+  ): Promise<MailLabel>;
+  deleteLabel(context: MailOperationContext, labelId: string): Promise<void>;
   updateMessageLabels(
     context: MailOperationContext,
     input: MailUpdateMessageLabelsInput,
@@ -1137,6 +1185,7 @@ export interface MailAuthorizationTransaction {
   readonly redirectUri: string;
   readonly verifierCredentialReference: string;
   readonly scopes: readonly string[];
+  readonly initialSyncReceivedAfter?: string | null;
   readonly expiresAt: string;
 }
 
@@ -1251,6 +1300,7 @@ export interface MailStore {
   listAllAccounts(): Promise<readonly MailAccount[]>;
   saveAccount(account: MailAccount): Promise<MailAccount>;
   markAccountRemoving(accountId: string, userId: string): Promise<boolean>;
+  markAccountReauthorizationRequired(accountId: string): Promise<boolean>;
   setDefaultAccount(userId: string, accountId: string): Promise<MailAccount>;
   deleteAccount(accountId: string): Promise<boolean>;
   getPushSubscription(
@@ -1305,11 +1355,23 @@ export interface MailStore {
     identityId: string,
     patch: Pick<MailIdentity, 'displayName'>,
   ): Promise<MailIdentity | undefined>;
-  listSignatures(identityId: string): Promise<readonly MailSignature[]>;
+  listSignatures(accountId: string): Promise<readonly MailSignature[]>;
   getSignature(signatureId: string): Promise<MailSignature | undefined>;
   saveSignature(signature: MailSignature): Promise<MailSignature>;
-  deleteSignature(identityId: string, signatureId: string): Promise<boolean>;
+  deleteSignature(accountId: string, signatureId: string): Promise<boolean>;
   listFolders(accountId: string): Promise<readonly MailFolder[]>;
+  listLabels(ownerId: string): Promise<readonly MailLabel[]>;
+  createLabel(
+    ownerId: string,
+    name: string,
+    color: MailLabelColor,
+  ): Promise<MailLabel>;
+  updateLabel(
+    ownerId: string,
+    labelId: string,
+    patch: Pick<MailLabel, 'name' | 'color'>,
+  ): Promise<MailLabel | undefined>;
+  deleteLabel(ownerId: string, labelId: string): Promise<boolean>;
   saveFolder(
     accountId: string,
     folder: NormalizedMailFolder,

@@ -6,9 +6,12 @@ import type {
   MailComposeInput,
   MailBulkComposeInput,
   MailFolder,
+  MailLabel,
+  MailLabelColor,
   MailIdentity,
   MailSignature,
   MailSaveSignatureInput,
+  MailSaveLabelInput,
   MailListMessagesInput,
   MailManagedAccountView,
   MailManagedOperationLogsView,
@@ -39,9 +42,12 @@ export type {
   MailComposeInput,
   MailBulkComposeInput,
   MailFolder,
+  MailLabel,
+  MailLabelColor,
   MailIdentity,
   MailSignature,
   MailSaveSignatureInput,
+  MailSaveLabelInput,
   MailInitialSyncPolicy,
   MailManagedAccountView,
   MailManagedOperationLogsView,
@@ -71,6 +77,7 @@ export interface MailAuthorizationRequest {
   readonly type: string;
   readonly name: string;
   readonly scopes?: readonly string[];
+  readonly initialSyncReceivedAfter?: string | null;
 }
 
 export type MailConnectAccountRequest = Omit<
@@ -87,6 +94,7 @@ export interface MailMessagesQuery extends Pick<
 > {
   readonly accountId?: string;
   readonly folderId?: string;
+  readonly labelId?: string;
   readonly unread?: boolean;
   readonly starred?: boolean;
 }
@@ -191,22 +199,19 @@ export class MailClient {
       .then((response) => response.data);
   }
 
-  public listSignatures(
-    accountId: string,
-    identityId: string,
-  ): Promise<readonly MailSignature[]> {
+  public listSignatures(accountId: string): Promise<readonly MailSignature[]> {
     return this.client
       .request<DataResponse<readonly MailSignature[]>>({
-        path: `mail/accounts/${encodeURIComponent(accountId)}/identities/${encodeURIComponent(identityId)}/signatures`,
+        path: `mail/accounts/${encodeURIComponent(accountId)}/signatures`,
       })
       .then((response) => response.data);
   }
 
   public saveSignature(input: MailSaveSignatureInput): Promise<MailSignature> {
-    const { id, accountId, identityId, ...json } = input;
+    const { id, accountId, ...json } = input;
     return this.client
       .request<DataResponse<MailSignature>>({
-        path: `mail/accounts/${encodeURIComponent(accountId)}/identities/${encodeURIComponent(identityId)}/signatures${id ? `/${encodeURIComponent(id)}` : ''}`,
+        path: `mail/accounts/${encodeURIComponent(accountId)}/signatures${id ? `/${encodeURIComponent(id)}` : ''}`,
         method: id ? 'PATCH' : 'POST',
         json,
       })
@@ -215,11 +220,10 @@ export class MailClient {
 
   public deleteSignature(
     accountId: string,
-    identityId: string,
     signatureId: string,
   ): Promise<void> {
     return this.client.request<void>({
-      path: `mail/accounts/${encodeURIComponent(accountId)}/identities/${encodeURIComponent(identityId)}/signatures/${encodeURIComponent(signatureId)}`,
+      path: `mail/accounts/${encodeURIComponent(accountId)}/signatures/${encodeURIComponent(signatureId)}`,
       method: 'DELETE',
     });
   }
@@ -232,11 +236,36 @@ export class MailClient {
       .then((response) => response.data);
   }
 
-  public createLabel(accountId: string, name: string): Promise<MailFolder> {
-    return this.post<MailFolder>(
-      `mail/accounts/${encodeURIComponent(accountId)}/labels`,
-      { name },
-    );
+  public listLabels(): Promise<readonly MailLabel[]> {
+    return this.client
+      .request<DataResponse<readonly MailLabel[]>>({
+        path: 'mail/labels',
+      })
+      .then((response) => response.data);
+  }
+
+  public createLabel(name: string, color?: MailLabelColor): Promise<MailLabel> {
+    return this.post<MailLabel>('mail/labels', { name, color });
+  }
+
+  public updateLabel(
+    input: MailSaveLabelInput & { readonly id: string },
+  ): Promise<MailLabel> {
+    const { id, ...json } = input;
+    return this.client
+      .request<DataResponse<MailLabel>>({
+        path: `mail/labels/${encodeURIComponent(id)}`,
+        method: 'PATCH',
+        json,
+      })
+      .then((response) => response.data);
+  }
+
+  public deleteLabel(labelId: string): Promise<void> {
+    return this.client.request<void>({
+      path: `mail/labels/${encodeURIComponent(labelId)}`,
+      method: 'DELETE',
+    });
   }
 
   public startSync(input: MailStartSyncInput): Promise<MailSyncRunView> {

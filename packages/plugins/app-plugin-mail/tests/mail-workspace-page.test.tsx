@@ -16,6 +16,7 @@ const mail = vi.hoisted(() => ({
   listProviders: vi.fn(),
   listConversationMessages: vi.fn(),
   listFolders: vi.fn(),
+  listLabels: vi.fn(),
   listIdentities: vi.fn(),
   listSignatures: vi.fn(),
   listMessages: vi.fn(),
@@ -73,6 +74,7 @@ describe('MailWorkspacePage', () => {
       },
     ]);
     mail.listFolders.mockResolvedValue([]);
+    mail.listLabels.mockResolvedValue([]);
     mail.listIdentities.mockResolvedValue([
       {
         id: 'identity-1',
@@ -186,6 +188,7 @@ describe('MailWorkspacePage', () => {
           providerMessageId: 'provider-message-1',
           conversationId: 'conversation-1',
           folderIds: ['INBOX'],
+          labelIds: [],
           from: { address: 'latest@example.com' },
           to: [{ address: 'user@example.com' }],
           cc: [],
@@ -205,6 +208,7 @@ describe('MailWorkspacePage', () => {
           providerMessageId: 'provider-message-2',
           conversationId: 'conversation-1',
           folderIds: ['INBOX'],
+          labelIds: [],
           from: { address: 'older@example.com' },
           to: [{ address: 'user@example.com' }],
           cc: [],
@@ -253,7 +257,7 @@ describe('MailWorkspacePage', () => {
     mail.listSignatures.mockResolvedValue([
       {
         id: 'signature-1',
-        identityId: 'identity-1',
+        accountId: 'account-1',
         name: 'Support signature',
         text: 'Regards, Support',
         isDefault: false,
@@ -264,9 +268,10 @@ describe('MailWorkspacePage', () => {
     render(<MailWorkspacePage />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Compose' }));
-    fireEvent.change(await screen.findByLabelText('Signature'), {
-      target: { value: 'signature-1' },
-    });
+    fireEvent.click(await screen.findByRole('button', { name: 'Signature' }));
+    fireEvent.click(
+      await screen.findByRole('menuitem', { name: 'Support signature' }),
+    );
     fireEvent.change(screen.getByLabelText('TO'), {
       target: { value: 'recipient@example.com' },
     });
@@ -314,12 +319,13 @@ describe('MailWorkspacePage', () => {
     await waitFor(() => expect(send).toBeEnabled());
   });
 
-  it('hides unsupported draft, label, and archive actions for IMAP', async () => {
+  it('keeps local labels available even when IMAP has no Provider label support', async () => {
     const message = {
       id: 'message-1',
       accountId: 'account-1',
       providerMessageId: 'imap-message-1',
       folderIds: ['INBOX'],
+      labelIds: [],
       from: { address: 'sender@example.com' },
       to: [{ address: 'user@example.com' }],
       cc: [],
@@ -374,6 +380,15 @@ describe('MailWorkspacePage', () => {
         kind: 'folder',
       },
     ]);
+    mail.listLabels.mockResolvedValue([
+      {
+        id: 'local-label-1',
+        name: 'Local label',
+        color: 'green',
+        createdAt: '2026-09-08T00:00:00.000Z',
+        updatedAt: '2026-09-08T00:00:00.000Z',
+      },
+    ]);
     mail.listMessages.mockResolvedValue({ items: [message] });
     mail.getMessage.mockResolvedValue(message);
 
@@ -392,6 +407,17 @@ describe('MailWorkspacePage', () => {
     expect(
       within(conversation).queryByRole('button', { name: 'Archive' }),
     ).toBe(null);
+    fireEvent.click(
+      within(conversation).getByRole('button', { name: 'Labels' }),
+    );
+    expect(
+      within(screen.getByRole('dialog')).getByRole('checkbox', {
+        name: 'Local label',
+      }),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: 'Close' }),
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Compose' }));
     expect(screen.queryByRole('button', { name: 'Save draft' })).toBeNull();
   });
@@ -508,9 +534,10 @@ describe('MailWorkspacePage', () => {
     );
 
     fireEvent.click(await screen.findByRole('button', { name: 'Compose' }));
-    fireEvent.change(await screen.findByLabelText('Apply template'), {
-      target: { value: 'template-1' },
-    });
+    fireEvent.click(await screen.findByRole('button', { name: 'Template' }));
+    fireEvent.click(
+      await screen.findByRole('menuitem', { name: 'Order update' }),
+    );
     expect(screen.getByLabelText('Subject')).toHaveValue('Order SO-1001');
     expect(screen.getByLabelText('Message body')).toHaveTextContent(
       'Hello Ada',
@@ -619,6 +646,7 @@ describe('MailWorkspacePage', () => {
       providerMessageId: 'provider-draft-1',
       providerDraftId: 'provider-draft-resource-1',
       folderIds: ['DRAFT'],
+      labelIds: [],
       from: { address: 'user@example.com' },
       to: [{ address: 'recipient@example.com' }],
       cc: [],
@@ -671,6 +699,7 @@ describe('MailWorkspacePage', () => {
           accountId: 'account-1',
           providerMessageId: 'provider-message-1',
           folderIds: ['INBOX'],
+          labelIds: [],
           from: { address: 'sender@example.com' },
           to: [{ address: 'user@example.com' }],
           cc: [],

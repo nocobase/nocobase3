@@ -226,6 +226,81 @@ describe('Microsoft Mail Provider', () => {
     });
   });
 
+  it('follows baseline delta pages before saving the checkpoint', async () => {
+    const credentials = memoryVault();
+    await credentials.putAt('credential-1', {
+      provider: 'microsoft',
+      accessToken: 'access-1',
+      refreshToken: 'refresh-1',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+      scopes: [],
+      tokenType: 'Bearer',
+    });
+    const nextLink =
+      'https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages/delta?$skiptoken=baseline-page-2';
+    const deltaLink =
+      'https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages/delta?$deltatoken=baseline';
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        Response.json({ value: [], '@odata.nextLink': nextLink }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({ value: [], '@odata.deltaLink': deltaLink }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          value: [],
+        }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    const adapter = new MicrosoftMailProviderAdapter(
+      context(credentials),
+      config(),
+      account(),
+    );
+
+    const first = await adapter.listMessages({
+      providerFolderIds: ['inbox'],
+      limit: 100,
+    });
+    expect(first).toMatchObject({
+      ok: true,
+      value: { messages: [], nextCursor: expect.any(String) },
+    });
+
+    const second = await adapter.listMessages({
+      cursor: first.ok ? first.value.nextCursor : undefined,
+      limit: 100,
+    });
+    expect(second).toMatchObject({
+      ok: true,
+      value: {
+        messages: [],
+        nextCursor: expect.any(String),
+        syncCursor: {
+          value: {
+            checkpoints: expect.stringContaining(deltaLink),
+          },
+        },
+      },
+    });
+    expect(fetchMock.mock.calls[1][0]).toBe(nextLink);
+
+    const history = await adapter.listMessages({
+      cursor: second.ok ? second.value.nextCursor : undefined,
+      limit: 100,
+    });
+    expect(history).toMatchObject({
+      ok: true,
+      value: { messages: [] },
+    });
+    expect(fetchMock.mock.calls[2][0]).toContain(
+      '/me/mailFolders/inbox/messages?',
+    );
+    expect(fetchMock.mock.calls[2][0]).not.toBe(nextLink);
+  });
+
   it('rejects Provider paging URLs outside the configured Graph endpoint', async () => {
     const credentials = memoryVault();
     await credentials.putAt('credential-1', {

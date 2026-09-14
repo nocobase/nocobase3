@@ -12,7 +12,9 @@ Gmail History becomes available again.
 
 Configure an entry under `mail.providers` with `type: gmail`, a Google OAuth
 web client ID, and its client secret. Register the callback URL
-`<public-origin><app-base-path>/mail/oauth/callback` in Google Cloud Console.
+`<public-origin><app-base-path>/mail/oauth/callback` in Google Cloud Console by
+default. Override it with Mail Core's `mail.oauthCallbackUrl` or
+`MAIL_OAUTH_CALLBACK_URL` and register that exact URL instead.
 
 Push delivery additionally requires a fully qualified `pushTopicName` in the
 Provider entry and Mail Core's `MAIL_PUSH_WEBHOOK_URL` and

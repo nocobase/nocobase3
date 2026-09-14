@@ -19,7 +19,7 @@ The first runnable vertical slice provides:
 - a production Mail workspace at `/mail`, plus current-user account connection
   and development diagnostics under `/dev/mail`; `/dev/mail/accounts` defaults
   to a connected-account table and also exposes account association (including
-  the initial sync date), signature management in an account drawer, and
+  the initial sync date), signature and NocoBase-owned label management, and
   reusable-template management;
 - account and folder filtering, refresh, message
   search, conversation detail, account connection, synchronization controls,
@@ -38,7 +38,7 @@ The first runnable vertical slice provides:
 - resumable Provider folder discovery with cursor reconciliation for folder
   additions and removals;
 - idempotent message upserts by `(accountId, providerMessageId)`;
-- indexed message-folder relations and Provider-native conversation lookup;
+- indexed Provider message-folder and NocoBase message-label relations;
 - reply and forward behavior using Provider-native conversation APIs;
 - Provider-backed draft creation from the production composer;
 - Provider-backed editing and sending of existing drafts;
@@ -50,16 +50,19 @@ The first runnable vertical slice provides:
 - automatic Gmail watch and Microsoft Graph subscription creation and renewal;
 - read/unread, star, move, archive, soft-delete, and permanent-delete actions;
 - private message notes and todo markers that survive Provider resynchronization;
-- Gmail custom-label creation plus per-message label assignment and removal;
+- NocoBase-owned colored label creation, editing, and deletion plus per-message
+  label assignment and removal;
 - ownership-checked inbound attachment streaming and workspace downloads;
 - ownership-checked outbound attachment uploads with Gmail MIME and Microsoft Graph delivery;
-- Provider-discovered sending aliases and multiple selectable signatures per identity;
+- Provider-discovered sending aliases and multiple selectable signatures shared by
+  every address in an account;
 - current-user reusable mail templates with composer integration;
 - rich-text composition with safe HTML, plain-text fallback, and current-record
   template variable binding;
 - debounced Provider draft auto-save, unsaved-change protection, and
   session-scoped recovery after a page reload;
-- a top-level Mail navigation entry with a cross-account unread badge;
+- a Mail center at `/dev/mail/center` with a cross-account unread badge that
+  refreshes on user-scoped realtime mail invalidations and WebSocket recovery;
 - filterable operation logs with safe synchronization cancellation and retry;
 - bounded bulk delivery as separate per-recipient submissions;
 - current-user account default selection, account deactivation/reactivation, and
@@ -72,7 +75,7 @@ Provider plugins. Mail Core owns OAuth and credential-connection account
 lifecycle, plus a default plain-JSON credential store, while Provider plugins
 own protocol calls and token refresh behavior. The generic IMAP/SMTP MVP uses
 periodic sync, discovers new UID ranges, and intentionally leaves push
-notifications, labels, drafts, aliases, move-to-folder, and complete external
+notifications, Provider-native labels, drafts, aliases, move-to-folder, and complete external
 flag/deletion reconciliation disabled. SMTP providers that do not automatically
 copy submitted messages to Sent will not get a local Sent copy until the
 mailbox exposes one through IMAP. Another plugin can register
@@ -81,6 +84,7 @@ store.
 
 ## Documentation
 
+- [Configuration](./docs/zh-CN/configuration.md)
 - [Complete feature list and v2 comparison](./docs/zh-CN/feature-list.md)
 
 ## Runtime flow
@@ -114,6 +118,20 @@ page size is configured through `mail.syncBatchSize` or
 `MAIL_SYNC_BATCH_SIZE` and is constrained to 1–200; API callers may choose the
 received-after date and maximum message count. Provider cursors are opaque and
 are never returned by the HTTP API as standalone Queue payloads.
+
+## OAuth callback URL
+
+The default `mail.oauthCallbackUrl` is the app-local path
+`/mail/oauth/callback`. Mail Core prefixes it with the app's public base path
+and resolves it against `app.publicOrigin` (or the request origin when no public
+origin is configured). For example, an app mounted at `/main` produces
+`https://mail.example.com/main/mail/oauth/callback`.
+
+Override the callback with `mail.oauthCallbackUrl` or
+`MAIL_OAUTH_CALLBACK_URL`. Relative values are app-local paths and are prefixed
+with `app.publicBasePath`; absolute `http` or `https` URLs must include the
+application public base path so the mounted Root Route can receive the request.
+Register the resulting exact URL with the Provider's OAuth application.
 
 ## Push notifications
 
@@ -185,12 +203,15 @@ POST /api/mail/authorizations
 POST /api/mail/accounts/connect
 GET  /api/mail/accounts/:accountId/identities
 PATCH /api/mail/accounts/:accountId/identities/:identityId
-GET  /api/mail/accounts/:accountId/identities/:identityId/signatures
-POST /api/mail/accounts/:accountId/identities/:identityId/signatures
-PATCH /api/mail/accounts/:accountId/identities/:identityId/signatures/:signatureId
-DELETE /api/mail/accounts/:accountId/identities/:identityId/signatures/:signatureId
+GET  /api/mail/accounts/:accountId/signatures
+POST /api/mail/accounts/:accountId/signatures
+PATCH /api/mail/accounts/:accountId/signatures/:signatureId
+DELETE /api/mail/accounts/:accountId/signatures/:signatureId
 GET  /api/mail/accounts/:accountId/folders
-POST /api/mail/accounts/:accountId/labels
+GET  /api/mail/labels
+POST /api/mail/labels
+PATCH /api/mail/labels/:labelId
+DELETE /api/mail/labels/:labelId
 POST /api/mail/attachments
 POST /api/mail/messages/send
 POST /api/mail/messages/bulk
@@ -211,11 +232,11 @@ DELETE /api/mail/accounts/:accountId/messages/:messageId
 GET  /api/mail/accounts/:accountId/conversations/:conversationId/messages
 ```
 
-`GET /mail/oauth/callback` is intentionally public because Google and
-Microsoft redirect the browser to it. It accepts only a short-lived,
-single-use state created by the authenticated start endpoint and redirects the
-browser to `/dev/mail/accounts` after completion; state and PKCE verifiers are
-never returned by account APIs.
+The configured OAuth callback route is intentionally public because Google and
+Microsoft redirect the browser to it. It accepts only a short-lived, single-use
+state created by the authenticated start endpoint and redirects the browser to
+`/dev/mail/accounts` after completion; state and PKCE verifiers are never
+returned by account APIs.
 
 `POST /mail/webhooks/:providerType/:providerName/:secret` is intentionally
 public because Gmail Pub/Sub and Microsoft Graph cannot use an application

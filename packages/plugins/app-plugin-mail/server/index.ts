@@ -8,6 +8,7 @@ export * from './outbound-attachments.js';
 export * from './registry.js';
 export * from './runtime.js';
 export * from './service.js';
+export * from './realtime.js';
 export * from './store.js';
 export * from './tokens.js';
 export * from './types.js';

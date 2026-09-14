@@ -8,7 +8,6 @@ import {
 } from '@nocobase/app-plugin-authorization';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { appConfig } from '@nocobase/app-server/config';
-import { joinBasePath } from '@nocobase/app-server/support';
 import {
   defineApiRoutes,
   type AppApiRouteContribution,
@@ -17,13 +16,20 @@ import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { getRequestTranslator } from '@nocobase/i18n/server';
 
+import {
+  mailConfig,
+  resolveMailOAuthCallbackUrl,
+  resolveMailOAuthOrigin,
+} from '../config.js';
 import { mailServiceToken } from '../tokens.js';
 import { MailIdempotencyConflictError } from '../operations/send-mail.js';
+import { isMailLabelColor } from '../types.js';
 import type {
   MailAddress,
   MailBulkComposeInput,
   MailComposeInput,
   MailListMessagesInput,
+  MailLabelColor,
   MailStartSyncInput,
 } from '../types.js';
 
@@ -186,18 +192,32 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
     routes.post('/authorizations', async (context) => {
       const value = await readObject(context.req.raw);
       const identity = config.get(appConfig);
-      const origin = identity.publicOrigin ?? new URL(context.req.url).origin;
+      const requestOrigin = new URL(context.req.url).origin;
+      const origin = resolveMailOAuthOrigin(
+        identity.publicOrigin,
+        requestOrigin,
+      );
+      const configuredMail = config.get(mailConfig);
       return context.json({
         data: await mail.startAuthorization(operationContext(context), {
           provider: {
             type: requiredString(value.type, 'type'),
             name: requiredString(value.name, 'name'),
           },
-          redirectUri: new URL(
-            joinBasePath(publicBasePath, '/mail/oauth/callback'),
+          redirectUri: resolveMailOAuthCallbackUrl(
+            configuredMail.oauthCallbackUrl,
             origin,
+            publicBasePath,
           ).toString(),
           scopes: optionalStringArray(value.scopes, 'scopes'),
+          ...(value.initialSyncReceivedAfter !== undefined
+            ? {
+                initialSyncReceivedAfter: optionalNullableString(
+                  value.initialSyncReceivedAfter,
+                  'initialSyncReceivedAfter',
+                ),
+              }
+            : {}),
         }),
       });
     });
@@ -214,6 +234,14 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
           displayName: optionalString(value.displayName, 'displayName'),
           username: optionalString(value.username, 'username') ?? address,
           password: requiredString(value.password, 'password'),
+          ...(value.initialSyncReceivedAfter !== undefined
+            ? {
+                initialSyncReceivedAfter: optionalNullableString(
+                  value.initialSyncReceivedAfter,
+                  'initialSyncReceivedAfter',
+                ),
+              }
+            : {}),
         }),
       });
     });
@@ -241,42 +269,34 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
         });
       },
     );
-    routes.get(
-      '/accounts/:accountId/identities/:identityId/signatures',
-      async (context) =>
-        context.json({
-          data: await mail.listSignatures(
-            operationContext(context),
-            context.req.param('accountId'),
-            context.req.param('identityId'),
-          ),
+    routes.get('/accounts/:accountId/signatures', async (context) =>
+      context.json({
+        data: await mail.listSignatures(
+          operationContext(context),
+          context.req.param('accountId'),
+        ),
+      }),
+    );
+    routes.post('/accounts/:accountId/signatures', async (context) => {
+      const value = await readObject(context.req.raw);
+      return context.json({
+        data: await mail.saveSignature(operationContext(context), {
+          accountId: context.req.param('accountId'),
+          name: requiredString(value.name, 'name'),
+          text: optionalString(value.text, 'text') ?? '',
+          html: optionalNullableString(value.html, 'html'),
+          isDefault: optionalBoolean(value.isDefault, 'isDefault'),
         }),
-    );
-    routes.post(
-      '/accounts/:accountId/identities/:identityId/signatures',
-      async (context) => {
-        const value = await readObject(context.req.raw);
-        return context.json({
-          data: await mail.saveSignature(operationContext(context), {
-            accountId: context.req.param('accountId'),
-            identityId: context.req.param('identityId'),
-            name: requiredString(value.name, 'name'),
-            text: optionalString(value.text, 'text') ?? '',
-            html: optionalNullableString(value.html, 'html'),
-            isDefault: optionalBoolean(value.isDefault, 'isDefault'),
-          }),
-        });
-      },
-    );
+      });
+    });
     routes.patch(
-      '/accounts/:accountId/identities/:identityId/signatures/:signatureId',
+      '/accounts/:accountId/signatures/:signatureId',
       async (context) => {
         const value = await readObject(context.req.raw);
         return context.json({
           data: await mail.saveSignature(operationContext(context), {
             id: context.req.param('signatureId'),
             accountId: context.req.param('accountId'),
-            identityId: context.req.param('identityId'),
             name: requiredString(value.name, 'name'),
             text: optionalString(value.text, 'text') ?? '',
             html: optionalNullableString(value.html, 'html'),
@@ -286,12 +306,11 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
       },
     );
     routes.delete(
-      '/accounts/:accountId/identities/:identityId/signatures/:signatureId',
+      '/accounts/:accountId/signatures/:signatureId',
       async (context) => {
         await mail.deleteSignature(
           operationContext(context),
           context.req.param('accountId'),
-          context.req.param('identityId'),
           context.req.param('signatureId'),
         );
         return context.body(null, 204);
@@ -305,15 +324,36 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
         ),
       }),
     );
-    routes.post('/accounts/:accountId/labels', async (context) => {
+    routes.get('/labels', async (context) =>
+      context.json({
+        data: await mail.listLabels(operationContext(context)),
+      }),
+    );
+    routes.post('/labels', async (context) => {
       const value = await readObject(context.req.raw);
       return context.json({
-        data: await mail.createLabel(
-          operationContext(context),
-          context.req.param('accountId'),
-          requiredString(value.name, 'name'),
-        ),
+        data: await mail.createLabel(operationContext(context), {
+          name: requiredString(value.name, 'name'),
+          color: optionalLabelColor(value.color, 'color'),
+        }),
       });
+    });
+    routes.patch('/labels/:labelId', async (context) => {
+      const value = await readObject(context.req.raw);
+      return context.json({
+        data: await mail.updateLabel(operationContext(context), {
+          id: context.req.param('labelId'),
+          name: requiredString(value.name, 'name'),
+          color: optionalLabelColor(value.color, 'color'),
+        }),
+      });
+    });
+    routes.delete('/labels/:labelId', async (context) => {
+      await mail.deleteLabel(
+        operationContext(context),
+        context.req.param('labelId'),
+      );
+      return context.body(null, 204);
     });
     routes.post(
       '/attachments',
@@ -429,9 +469,11 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
     routes.get('/messages', async (context) => {
       const accountId = context.req.query('accountId');
       const folderId = context.req.query('folderId');
+      const labelId = context.req.query('labelId');
       const input: MailListMessagesInput = {
         accountIds: accountId ? [accountId] : undefined,
         folderIds: folderId ? [folderId] : undefined,
+        labelIds: labelId ? [labelId] : undefined,
         conversationId: context.req.query('conversationId'),
         query: context.req.query('query'),
         cursor: context.req.query('cursor'),
@@ -761,6 +803,17 @@ function optionalString(value: unknown, field: string): string | undefined {
   if (value === undefined) return undefined;
   if (typeof value !== 'string')
     throw new TypeError(`Mail field "${field}" must be a string.`);
+  return value;
+}
+
+function optionalLabelColor(
+  value: unknown,
+  field: string,
+): MailLabelColor | undefined {
+  if (value === undefined) return undefined;
+  if (!isMailLabelColor(value)) {
+    throw new TypeError(`Mail field "${field}" contains an invalid color.`);
+  }
   return value;
 }
 

@@ -6,11 +6,13 @@ import {
   MailAccountConnector,
   MailboxSidebar,
   MailConversationView,
+  MailMessageList,
   MailProviderCard,
   MailSyncPolicyFields,
 } from '../client/components/index.js';
 import type {
   MailAccountView,
+  MailMessageSummary,
   MailProviderView,
 } from '../client/mail-client.js';
 
@@ -27,6 +29,88 @@ const capabilities: MailProviderView['capabilities'] = {
 };
 
 describe('Mail client components', () => {
+  it('fills the available message list height and enables vertical scrolling', () => {
+    const message: MailMessageSummary = {
+      id: 'message-1',
+      accountId: 'account-1',
+      providerMessageId: 'provider-message-1',
+      folderIds: ['INBOX'],
+      labelIds: [],
+      to: [],
+      cc: [],
+      bcc: [],
+      subject: 'A message',
+      read: true,
+      starred: false,
+      draft: false,
+      hasAttachments: false,
+      todo: false,
+    };
+
+    render(
+      <MailMessageList
+        labels={{
+          empty: 'No messages',
+          loadMore: 'Load more',
+          noSubject: '(no subject)',
+          unknownSender: 'Unknown sender',
+        }}
+        messages={[message]}
+        onLoadMore={vi.fn()}
+        onSelect={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('region', { name: 'Messages' })).toHaveClass(
+      'h-full',
+      'overflow-y-auto',
+    );
+  });
+
+  it('renders local message labels as colored tags', () => {
+    const message: MailMessageSummary = {
+      id: 'message-1',
+      accountId: 'account-1',
+      providerMessageId: 'provider-message-1',
+      folderIds: ['INBOX'],
+      labelIds: ['label-1'],
+      to: [],
+      cc: [],
+      bcc: [],
+      subject: 'A message',
+      read: true,
+      starred: false,
+      draft: false,
+      hasAttachments: false,
+      todo: false,
+    };
+
+    render(
+      <MailMessageList
+        availableLabels={[
+          {
+            id: 'label-1',
+            name: 'Customers',
+            color: 'orange',
+            createdAt: '2026-09-08T00:00:00.000Z',
+            updatedAt: '2026-09-08T00:00:00.000Z',
+          },
+        ]}
+        labels={{
+          empty: 'No messages',
+          loadMore: 'Load more',
+          noSubject: '(no subject)',
+          unknownSender: 'Unknown sender',
+        }}
+        messages={[message]}
+        onLoadMore={vi.fn()}
+        onSelect={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTitle('Customers')).toHaveClass('bg-orange-50');
+  });
+
   it('connects the mail account type selected by the user', () => {
     const onConnect = vi.fn();
     const providers: readonly MailProviderView[] = [
@@ -62,12 +146,108 @@ describe('Mail client components', () => {
 
     const connect = screen.getByRole('button', { name: 'Connect account' });
     expect(connect).toBeDisabled();
-    fireEvent.change(screen.getByLabelText('Mail account type'), {
+    const accountType = screen.getByLabelText('Mail account type');
+    expect(accountType.closest('label')).toHaveClass(
+      'flex',
+      'flex-col',
+      'gap-1.5',
+    );
+    fireEvent.change(accountType, {
       target: { value: 'microsoft:work' },
     });
     expect(connect).toBeEnabled();
     fireEvent.click(connect);
     expect(onConnect).toHaveBeenCalledWith(providers[1]);
+  });
+
+  it('renders the provider-specific capability matrix in account type cards', () => {
+    const providers: readonly MailProviderView[] = [
+      {
+        type: 'gmail',
+        name: 'google',
+        label: 'Gmail',
+        capabilities: {
+          receive: true,
+          send: true,
+          incrementalSync: true,
+          pushNotifications: true,
+          folders: true,
+          labels: true,
+          drafts: true,
+          moveMessage: true,
+          aliases: true,
+        },
+      },
+      {
+        type: 'microsoft',
+        name: 'work',
+        label: 'Microsoft 365',
+        capabilities: {
+          receive: true,
+          send: true,
+          incrementalSync: true,
+          pushNotifications: true,
+          folders: true,
+          labels: false,
+          drafts: true,
+          moveMessage: true,
+          aliases: true,
+        },
+      },
+      {
+        type: 'imap-smtp',
+        name: 'imap-smtp',
+        label: 'IMAP / SMTP',
+        capabilities: {
+          receive: true,
+          send: true,
+          incrementalSync: true,
+          pushNotifications: false,
+          folders: true,
+          labels: false,
+          drafts: false,
+          moveMessage: false,
+          aliases: false,
+        },
+      },
+    ];
+
+    for (const provider of providers) {
+      const { unmount } = render(
+        <MailAccountConnector
+          connectedAccountCount={() => 0}
+          labels={{
+            accountType: 'Mail account type',
+            chooseAccountType: 'Select an account type',
+            connect: 'Connect account',
+            connecting: 'Connecting',
+            connectedAccounts: (count) => `${count} connected`,
+            capability: (capability) =>
+              capability === 'labels' ? 'provider labels' : capability,
+            configurationRequired: 'Server setup required',
+          }}
+          onConnect={vi.fn()}
+          providers={[provider]}
+        />,
+      );
+
+      fireEvent.change(screen.getByLabelText('Mail account type'), {
+        target: { value: `${provider.type}:${provider.name}` },
+      });
+
+      for (const [capability, enabled] of Object.entries(
+        provider.capabilities,
+      )) {
+        const label = capability === 'labels' ? 'provider labels' : capability;
+        if (enabled) {
+          expect(screen.getByText(label)).toBeInTheDocument();
+        } else {
+          expect(screen.queryByText(label)).not.toBeInTheDocument();
+        }
+      }
+
+      unmount();
+    }
   });
 
   it('collects credentials for a credential-based Provider', () => {
@@ -289,29 +469,63 @@ describe('Mail client components', () => {
         ]}
         folders={[
           {
-            id: 'folder-1',
+            id: 'folder-sent',
+            accountId: 'account-1',
+            providerFolderId: 'SENT',
+            type: 'sent',
+            name: 'Sent',
+            unreadCount: 0,
+            kind: 'label',
+          },
+          {
+            id: 'folder-archive',
+            accountId: 'account-1',
+            providerFolderId: 'ARCHIVE',
+            type: 'archive',
+            name: 'Archive',
+            unreadCount: 0,
+            kind: 'folder',
+          },
+          {
+            id: 'folder-inbox',
             accountId: 'account-1',
             providerFolderId: 'INBOX',
             type: 'inbox',
             name: 'Inbox',
-            unreadCount: 3,
+            unreadCount: 0,
             kind: 'label',
           },
         ]}
+        customLabels={[]}
+        labelId={undefined}
         labels={{
           account: 'Account',
           allMail: 'All mail',
           unread: 'Unread',
           starred: 'Starred',
           folders: 'Folders',
+          labels: 'Labels',
         }}
         onAccountChange={vi.fn()}
         onFolderChange={onFolderChange}
+        onLabelChange={vi.fn()}
         onSmartViewChange={onSmartViewChange}
         smartView='all'
       />,
     );
 
+    expect(screen.getByRole('complementary')).toHaveClass(
+      'h-full',
+      'overflow-y-auto',
+    );
+    const folderNavigation = screen.getAllByRole('navigation', {
+      name: 'Folders',
+    })[1];
+    expect(
+      within(folderNavigation)
+        .getAllByRole('button')
+        .map((button) => button.textContent),
+    ).toEqual(['Inbox', 'Sent', 'Archive']);
     fireEvent.click(screen.getByRole('button', { name: /Inbox/ }));
     expect(onSmartViewChange).toHaveBeenCalledWith('all');
     expect(onFolderChange).toHaveBeenCalledWith('INBOX');
@@ -337,6 +551,10 @@ describe('Mail client components', () => {
       />,
     );
 
+    expect(screen.getByText('2 messages').closest('section')).toHaveClass(
+      'h-full',
+      'overflow-y-auto',
+    );
     expect(screen.getByText('2 messages')).toBeInTheDocument();
     expect(screen.getByText('First message')).toBeInTheDocument();
     expect(screen.getByText('Second message')).toBeInTheDocument();
@@ -348,7 +566,7 @@ describe('Mail client components', () => {
     const message = {
       ...conversationMessage('message-1', 'Alice', 'Message body'),
       note: 'Existing note',
-      folderIds: ['INBOX', 'label-customers'],
+      labelIds: ['label-1'],
     };
     render(
       <MailConversationView
@@ -363,11 +581,10 @@ describe('Mail client components', () => {
         availableLabels={[
           {
             id: 'label-1',
-            accountId: 'account-1',
-            providerFolderId: 'label-customers',
-            type: 'custom',
             name: 'Customers',
-            kind: 'label',
+            color: 'blue',
+            createdAt: '2026-09-08T00:00:00.000Z',
+            updatedAt: '2026-09-08T00:00:00.000Z',
           },
         ]}
         labels={{
@@ -413,7 +630,7 @@ describe('Mail client components', () => {
     fireEvent.click(
       within(labelsDialog).getByRole('checkbox', { name: 'Customers' }),
     );
-    expect(toggleLabel).toHaveBeenCalledWith(message, 'label-customers', false);
+    expect(toggleLabel).toHaveBeenCalledWith(message, 'label-1', false);
   });
 
   it('renders sanitized HTML-only messages as HTML', () => {
@@ -531,6 +748,7 @@ function conversationMessage(id: string, name: string, text: string) {
     providerMessageId: id,
     conversationId: 'conversation-1',
     folderIds: ['INBOX'],
+    labelIds: [],
     from: { name, address: `${name.toLowerCase()}@example.com` },
     to: [],
     cc: [],

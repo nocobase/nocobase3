@@ -30,8 +30,6 @@ describe('Mail client ServiceProvider', () => {
     expect(appClient.request).toHaveBeenCalledWith({
       path: 'mail/accounts',
     });
-    expect(app.refine.addResources).toHaveBeenCalledWith([
-      expect.objectContaining({ name: 'mail', list: '/mail' }),
-    ]);
+    expect(app.refine.addResources).not.toHaveBeenCalled();
   });
 });

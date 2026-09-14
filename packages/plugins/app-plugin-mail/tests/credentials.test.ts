@@ -7,6 +7,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import migration from '../database/migrations/202609030001_create_mail_tables.js';
+import initialSyncMigration from '../database/migrations/202609140003_add_account_initial_sync_date.js';
 import {
   createDatabaseMailCredentialVault,
   DatabaseMailCredentialVault,
@@ -26,6 +27,11 @@ describe('Mail OAuth persistence', () => {
     });
     const connection = database.connection();
     await migration.up({
+      builder: connection.builder,
+      query: connection.query,
+      connection,
+    });
+    await initialSyncMigration.up({
       builder: connection.builder,
       query: connection.query,
       connection,
@@ -154,6 +160,7 @@ describe('Mail OAuth persistence', () => {
       redirectUri: 'https://example.com/main/mail/oauth/callback',
       verifierCredentialReference: 'mail-credential:verifier',
       scopes: ['gmail.modify'],
+      initialSyncReceivedAfter: '2026-02-01T00:00:00.000Z',
       expiresAt: '2099-01-01T00:00:00.000Z',
     } as const;
 

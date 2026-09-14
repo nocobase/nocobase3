@@ -5,6 +5,7 @@ import { I18nRuntime } from '@nocobase/i18n';
 import { createI18nMiddleware } from '@nocobase/i18n/server';
 import { describe, expect, it, vi } from 'vitest';
 
+import { DEFAULT_MAIL_OAUTH_CALLBACK_PATH } from '../server/config.js';
 import { mailOAuthCallbackRoutes } from '../server/routes/oauth-callback.js';
 import { mailServiceToken } from '../server/tokens.js';
 import type { MailService } from '../server/types.js';
@@ -59,15 +60,46 @@ describe('Mail OAuth callback route', () => {
       '/test/dev/mail/accounts?mailAuthorization=failure',
     );
   });
+
+  it('uses the configured callback path', async () => {
+    const completeAuthorization = vi.fn<MailService['completeAuthorization']>(
+      async () => ({
+        id: 'account-1',
+        userId: 'user-1',
+        provider: { type: 'gmail', name: 'google' },
+        address: 'user@example.com',
+        scopes: [],
+        status: 'active',
+        isDefault: true,
+      }),
+    );
+    const router = await createRouter(
+      service({ completeAuthorization }),
+      'https://mail.example.com/test/mail/oauth/complete',
+    );
+
+    const response = await router.request(
+      '/mail/oauth/complete?state=state-1&code=code-1',
+    );
+
+    expect(response.status).toBe(302);
+    expect(completeAuthorization).toHaveBeenCalledWith({
+      state: 'state-1',
+      code: 'code-1',
+    });
+  });
 });
 
-async function createRouter(mail: MailService): Promise<Hono> {
+async function createRouter(
+  mail: MailService,
+  oauthCallbackUrl: string = DEFAULT_MAIL_OAUTH_CALLBACK_PATH,
+): Promise<Hono> {
   const container = new ServiceContainer();
   container.instance(mailServiceToken, mail);
   const contribution = await mailOAuthCallbackRoutes.createRouter({
     appName: 'test',
     publicBasePath: '/test',
-    config: { app: { name: 'test', publicBasePath: '/test' } },
+    config: { get: () => ({ oauthCallbackUrl }) },
     paths: createConfigPaths({ rootDir: '/missing' }),
     router: new Hono(),
     container,
@@ -109,7 +141,20 @@ function service(overrides: Partial<MailService> = {}): MailService {
       submissions: [],
     }),
     listFolders: async () => [],
+    listLabels: async () => [],
     listIdentities: async () => [],
+    listSignatures: async () => [],
+    saveSignature: async () => {
+      throw new Error('Not implemented.');
+    },
+    deleteSignature: async () => {},
+    createLabel: async () => {
+      throw new Error('Not implemented.');
+    },
+    updateLabel: async () => {
+      throw new Error('Not implemented.');
+    },
+    deleteLabel: async () => {},
     startSync: async () => {
       throw new Error('Not implemented.');
     },

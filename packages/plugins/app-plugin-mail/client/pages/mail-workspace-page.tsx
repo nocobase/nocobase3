@@ -1,4 +1,4 @@
-import { Paperclip, PenLine, RefreshCw, Search, Tag, X } from 'lucide-react';
+import { Paperclip, PenLine, RefreshCw, Search, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { useTranslation } from '@nocobase/i18n/client';
@@ -27,6 +27,7 @@ import {
   type MailClient,
   type MailComposeInput,
   type MailFolder,
+  type MailLabel,
   type MailMessage,
   type MailMessageSummary,
   type MailIdentity,
@@ -94,6 +95,8 @@ export default function MailWorkspacePage({
   const [accountId, setAccountId] = useState('');
   const [folders, setFolders] = useState<readonly MailFolder[]>([]);
   const [folderId, setFolderId] = useState<string>();
+  const [customLabels, setCustomLabels] = useState<readonly MailLabel[]>([]);
+  const [labelId, setLabelId] = useState<string>();
   const [smartView, setSmartView] = useState<MailboxSmartView>('all');
   const [query, setQuery] = useState('');
   const [messages, setMessages] = useState<readonly MailMessageSummary[]>([]);
@@ -166,15 +169,17 @@ export default function MailWorkspacePage({
   const canMove = Boolean(
     accountIsActive && currentProviderCapabilities?.moveMessage,
   );
-  const canUseLabels = Boolean(
-    accountIsActive && currentProviderCapabilities?.labels,
-  );
+  const canUseLabels = Boolean(accountIsActive);
 
   const loadAccounts = useCallback((): void => {
     setLoadingAccounts(true);
     setError(undefined);
-    void Promise.all([mail.listAccounts(), mail.listProviders()])
-      .then(([nextAccounts, nextProviders]) => {
+    void Promise.all([
+      mail.listAccounts(),
+      mail.listProviders(),
+      mail.listLabels(),
+    ])
+      .then(([nextAccounts, nextProviders, nextLabels]) => {
         const nextAccountId = nextAccounts.some(
           (account) => account.id === accountIdRef.current,
         )
@@ -184,12 +189,14 @@ export default function MailWorkspacePage({
             '');
         setProviders(nextProviders);
         setAccounts(nextAccounts);
+        setCustomLabels(nextLabels);
         if (nextAccountId !== accountIdRef.current) {
           messageRequestIdRef.current += 1;
           conversationRequestIdRef.current += 1;
           accountIdRef.current = nextAccountId;
           setAccountId(nextAccountId);
           setFolders([]);
+          setLabelId(undefined);
           setMessages([]);
           setNextCursor(undefined);
           setSelected(undefined);
@@ -247,12 +254,13 @@ export default function MailWorkspacePage({
     () => ({
       accountId,
       folderId,
+      labelId,
       query: debouncedQuery.trim() || undefined,
       unread: smartView === 'unread' ? true : undefined,
       starred: smartView === 'starred' ? true : undefined,
       limit: 50,
     }),
-    [accountId, debouncedQuery, folderId, smartView],
+    [accountId, debouncedQuery, folderId, labelId, smartView],
   );
 
   useEffect(() => {
@@ -261,7 +269,7 @@ export default function MailWorkspacePage({
     void mail.listFolders(accountId).then(
       (nextFolders) => {
         if (!active) return;
-        setFolders(nextFolders);
+        setFolders(nextFolders.filter((folder) => folder.type !== 'custom'));
       },
       (cause: unknown) => {
         if (active) requestError(cause);
@@ -398,19 +406,6 @@ export default function MailWorkspacePage({
     void mail.startSync({ accountId }).then(finishSync).catch(requestError);
   };
 
-  const createLabel = (): void => {
-    if (!accountId || !canUseLabels) return;
-    const name = window.prompt(
-      t('workspace.newLabelPrompt', { defaultValue: 'Label name' }),
-    );
-    if (!name?.trim()) return;
-    setError(undefined);
-    void mail
-      .createLabel(accountId, name)
-      .then((label) => setFolders((current) => [...current, label]))
-      .catch(requestError);
-  };
-
   const updateVisibleMessage = (updated: MailMessage): void => {
     setConversation((current) =>
       current.map((message) => (message.id === updated.id ? updated : message)),
@@ -466,6 +461,12 @@ export default function MailWorkspacePage({
     setIndividualDelivery(false);
     setError(undefined);
     void mail.listTemplates().then(setTemplates, requestError);
+    void mail.listSignatures(accountId).then((items) => {
+      setSignatures(items);
+      if (!recovery?.signatureId) {
+        setSignatureId(items.find((item) => item.isDefault)?.id ?? '');
+      }
+    }, requestError);
     void mail.listIdentities(accountId).then((items) => {
       setIdentities(items);
       const nextIdentityId =
@@ -482,14 +483,6 @@ export default function MailWorkspacePage({
         items.find((identity) => identity.canSend)?.id ??
         '';
       setIdentityId(nextIdentityId);
-      if (nextIdentityId) {
-        void mail.listSignatures(accountId, nextIdentityId).then((items) => {
-          setSignatures(items);
-          if (!recovery?.signatureId) {
-            setSignatureId(items.find((item) => item.isDefault)?.id ?? '');
-          }
-        }, requestError);
-      }
       if (!recovery) {
         setLastSavedFingerprint(
           composerFingerprint(
@@ -857,7 +850,7 @@ export default function MailWorkspacePage({
     syncRun?.status === 'pending' || syncRun?.status === 'running';
 
   return (
-    <section className='flex min-h-[38rem] flex-col bg-background'>
+    <section className='flex h-full min-h-[38rem] min-w-0 flex-col bg-background lg:min-h-0'>
       <header className='flex flex-wrap items-center gap-3 border-b bg-muted/20 px-4 py-3'>
         <label className='relative min-w-0 w-full sm:w-80'>
           <Search
@@ -880,12 +873,6 @@ export default function MailWorkspacePage({
             <PenLine aria-hidden='true' className='size-4' />
             {t('workspace.compose', { defaultValue: 'Compose' })}
           </Button>
-          {canUseLabels ? (
-            <Button onClick={createLabel} type='button' variant='outline'>
-              <Tag aria-hidden='true' className='size-4' />
-              {t('workspace.newLabel', { defaultValue: 'New label' })}
-            </Button>
-          ) : null}
           <Button
             aria-label={t('workspace.incrementalRefresh', {
               defaultValue: 'Sync mailbox',
@@ -928,18 +915,21 @@ export default function MailWorkspacePage({
           })}
         </div>
       ) : (
-        <div className='grid min-h-0 flex-1 grid-cols-1 grid-rows-[auto_minmax(18rem,40svh)_minmax(22rem,1fr)] lg:grid-cols-[15rem_22rem_minmax(0,1fr)] lg:grid-rows-1'>
+        <div className='grid min-h-0 flex-1 grid-cols-1 grid-rows-[auto_minmax(18rem,40svh)_minmax(22rem,1fr)] overflow-hidden lg:grid-cols-[15rem_22rem_minmax(0,1fr)] lg:grid-rows-1'>
           <MailboxSidebar
             accountId={accountId}
             accounts={accounts}
+            customLabels={customLabels}
             folderId={folderId}
             folders={folders}
+            labelId={labelId}
             labels={{
               account: t('dev.account', { defaultValue: 'Account' }),
               allMail: t('workspace.allMail', { defaultValue: 'All mail' }),
               unread: t('workspace.unreadOnly', { defaultValue: 'Unread' }),
               starred: t('workspace.starredOnly', { defaultValue: 'Starred' }),
               folders: t('workspace.folders', { defaultValue: 'Folders' }),
+              labels: t('workspace.labels', { defaultValue: 'Labels' }),
             }}
             onAccountChange={(value) => {
               if (value === accountId) return;
@@ -948,6 +938,7 @@ export default function MailWorkspacePage({
               accountIdRef.current = value;
               setAccountId(value);
               setFolderId(undefined);
+              setLabelId(undefined);
               setSmartView('all');
             }}
             onFolderChange={(value) => {
@@ -955,16 +946,27 @@ export default function MailWorkspacePage({
               messageRequestIdRef.current += 1;
               conversationRequestIdRef.current += 1;
               setFolderId(value);
+              setLabelId(undefined);
+            }}
+            onLabelChange={(value) => {
+              if (value === labelId) return;
+              messageRequestIdRef.current += 1;
+              conversationRequestIdRef.current += 1;
+              setLabelId(value);
+              setFolderId(undefined);
             }}
             onSmartViewChange={(value) => {
               if (value === smartView) return;
               messageRequestIdRef.current += 1;
               conversationRequestIdRef.current += 1;
               setSmartView(value);
+              setFolderId(undefined);
+              setLabelId(undefined);
             }}
             smartView={smartView}
           />
           <MailMessageList
+            availableLabels={canUseLabels ? customLabels : []}
             labels={{
               empty: t('workspace.empty', {
                 defaultValue: 'No messages match this mailbox view.',
@@ -990,7 +992,7 @@ export default function MailWorkspacePage({
             selectedMessageId={selected?.id}
           />
           <MailConversationView
-            availableLabels={canUseLabels ? folders : []}
+            availableLabels={canUseLabels ? customLabels : []}
             actions={
               accountIsActive
                 ? {
@@ -1252,18 +1254,6 @@ export default function MailWorkspacePage({
               onChange={(event) => {
                 const nextIdentityId = event.target.value;
                 setIdentityId(nextIdentityId);
-                setSignatures([]);
-                setSignatureId('');
-                if (nextIdentityId) {
-                  void mail
-                    .listSignatures(accountId, nextIdentityId)
-                    .then((items) => {
-                      setSignatures(items);
-                      setSignatureId(
-                        items.find((item) => item.isDefault)?.id ?? '',
-                      );
-                    }, requestError);
-                }
               }}
               value={identityId}
             >
@@ -1282,31 +1272,6 @@ export default function MailWorkspacePage({
                   </option>
                 ))}
             </NativeSelect>
-            {signatures.length > 0 ? (
-              <NativeSelect
-                aria-label={t('workspace.signature', {
-                  defaultValue: 'Signature',
-                })}
-                onChange={(event) => setSignatureId(event.target.value)}
-                value={signatureId}
-              >
-                <option value=''>
-                  {t('workspace.defaultSignature', {
-                    defaultValue: 'Default signature',
-                  })}
-                </option>
-                <option value='__none__'>
-                  {t('workspace.noSignature', {
-                    defaultValue: 'No signature',
-                  })}
-                </option>
-                {signatures.map((signature) => (
-                  <option key={signature.id} value={signature.id}>
-                    {signature.name}
-                  </option>
-                ))}
-              </NativeSelect>
-            ) : null}
             {(['to', 'cc', 'bcc'] as const).map((field) => (
               <Input
                 aria-label={t(`workspace.${field}`, {
@@ -1360,6 +1325,62 @@ export default function MailWorkspacePage({
               ariaLabel={t('workspace.messageBodyLabel', {
                 defaultValue: 'Message body',
               })}
+              insertActions={{
+                signature: {
+                  label: t('workspace.signature', {
+                    defaultValue: 'Signature',
+                  }),
+                  options: [
+                    {
+                      id: '',
+                      label: t('workspace.defaultSignature', {
+                        defaultValue: 'Default signature',
+                      }),
+                    },
+                    {
+                      id: '__none__',
+                      label: t('workspace.noSignature', {
+                        defaultValue: 'No signature',
+                      }),
+                    },
+                    ...signatures.map((signature) => ({
+                      id: signature.id,
+                      label: signature.name,
+                    })),
+                  ],
+                  onSelect: setSignatureId,
+                  selectedId: signatureId,
+                },
+                template: {
+                  label: t('workspace.template', {
+                    defaultValue: 'Template',
+                  }),
+                  options: templates.map((template) => ({
+                    id: template.id,
+                    label: template.name,
+                  })),
+                  onSelect: (templateId) => {
+                    const template = templates.find(
+                      (item) => item.id === templateId,
+                    );
+                    if (!template) return;
+                    const rendered = renderMailTemplate(
+                      template,
+                      templateVariables,
+                    );
+                    setComposer((current) =>
+                      current
+                        ? {
+                            ...current,
+                            subject: rendered.subject,
+                            text: rendered.text,
+                            html: rendered.html,
+                          }
+                        : current,
+                    );
+                  },
+                },
+              }}
               labels={{
                 toolbar: t('workspace.editor.toolbar', {
                   defaultValue: 'Formatting',
@@ -1395,46 +1416,6 @@ export default function MailWorkspacePage({
               })}
               value={composer.html}
             />
-            {templates.length > 0 ? (
-              <NativeSelect
-                aria-label={t('workspace.applyTemplate', {
-                  defaultValue: 'Apply template',
-                })}
-                onChange={(event) => {
-                  const template = templates.find(
-                    (item) => item.id === event.target.value,
-                  );
-                  if (!template) return;
-                  const rendered = renderMailTemplate(
-                    template,
-                    templateVariables,
-                  );
-                  setComposer((current) =>
-                    current
-                      ? {
-                          ...current,
-                          subject: rendered.subject,
-                          text: rendered.text,
-                          html: rendered.html,
-                        }
-                      : current,
-                  );
-                  event.target.value = '';
-                }}
-                value=''
-              >
-                <option value=''>
-                  {t('workspace.applyTemplate', {
-                    defaultValue: 'Apply template',
-                  })}
-                </option>
-                {templates.map((template) => (
-                  <option key={template.id} value={template.id}>
-                    {template.name}
-                  </option>
-                ))}
-              </NativeSelect>
-            ) : null}
             <div className='space-y-2'>
               <input
                 className='sr-only'

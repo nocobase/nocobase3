@@ -607,10 +607,27 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
       }
       const folderId = cursor.folders[cursor.folderIndex];
       const page = await this.request<GraphPage<GraphMessage>>(
-        this.latestDeltaUrl(folderId),
+        cursor.nextLink ?? this.latestDeltaUrl(folderId),
         { signal: input.signal },
       );
       if (!page.ok) return page;
+      const nextLink = page.value['@odata.nextLink'];
+      if (nextLink) {
+        return {
+          ok: true,
+          value: {
+            messages: [],
+            nextCursor: encode({
+              ...cursor,
+              nextLink,
+            } satisfies InitialCursor),
+            syncCursor: graphCursor({
+              checkpoints: cursor.checkpoints,
+              folders: cursor.folders,
+            }),
+          },
+        };
+      }
       const deltaLink = page.value['@odata.deltaLink'];
       if (!deltaLink)
         return failure(
@@ -629,11 +646,14 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
         value: {
           messages: [],
           nextCursor: encode({
-            ...cursor,
             phase:
               folderIndex >= cursor.folders.length ? 'history' : 'baseline',
             folderIndex: folderIndex >= cursor.folders.length ? 0 : folderIndex,
+            folders: cursor.folders,
             checkpoints,
+            ...(cursor.receivedAfter
+              ? { receivedAfter: cursor.receivedAfter }
+              : {}),
           } satisfies InitialCursor),
           syncCursor: graphCursor({ checkpoints, folders: cursor.folders }),
         },

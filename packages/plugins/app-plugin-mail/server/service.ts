@@ -11,6 +11,8 @@ import type {
   MailListConversationMessagesInput,
   MailManagedAccountView,
   MailFolder,
+  MailLabel,
+  MailLabelColor,
   MailMessage,
   MailMessageSummary,
   MailOperationContext,
@@ -32,11 +34,17 @@ import type {
   MailProviderView,
   MailOutboundAttachmentStorage,
   MailOutboundAttachmentView,
+  MailSaveLabelInput,
   MailUploadAttachmentInput,
 } from './types.js';
+import { DEFAULT_MAIL_LABEL_COLOR, isMailLabelColor } from './types.js';
 import { SendMailOperation } from './operations/send-mail.js';
 import { toMailAccountView } from './store.js';
 import { resolveMailSyncBatchSize } from './config.js';
+import {
+  notifyMailMessageChange,
+  type MailMessageChangeNotifier,
+} from './realtime.js';
 import type {
   MailProviderAdapter,
   MailProviderAdapterResolver,
@@ -59,6 +67,7 @@ export interface DefaultMailServiceDependencies {
   ) => MailProviderConfig;
   readonly listProviderConfigs?: () => readonly MailProviderConfig[];
   readonly outboundAttachments?: MailOutboundAttachmentStorage;
+  readonly messageChangeNotifier?: MailMessageChangeNotifier;
 }
 
 export class DefaultMailService implements MailService {
@@ -151,6 +160,7 @@ export class DefaultMailService implements MailService {
       context.actorId,
       input.provider,
       result.value,
+      input.initialSyncReceivedAfter,
     );
   }
 
@@ -195,6 +205,7 @@ export class DefaultMailService implements MailService {
         redirectUri: input.redirectUri,
         verifierCredentialReference,
         scopes: input.scopes ?? [],
+        initialSyncReceivedAfter: input.initialSyncReceivedAfter,
         expiresAt,
       });
       return { ...result.value, state, expiresAt };
@@ -245,6 +256,7 @@ export class DefaultMailService implements MailService {
         transaction.userId,
         transaction.provider,
         result.value,
+        transaction.initialSyncReceivedAfter,
       );
     } finally {
       await credentials.delete(transaction.verifierCredentialReference);
@@ -267,29 +279,29 @@ export class DefaultMailService implements MailService {
     if (!account || account.userId !== context.actorId) {
       throw new Error('Mail account was not found.');
     }
+
+    let updated = account;
     if (input.isDefault) {
-      return toMailAccountView(
-        await this.dependencies.store.setDefaultAccount(
-          context.actorId,
-          account.id,
-        ),
+      updated = await this.dependencies.store.setDefaultAccount(
+        context.actorId,
+        account.id,
       );
     }
     if (input.status) {
       if (
         input.status === 'active' &&
-        !['active', 'suspended'].includes(account.status)
+        !['active', 'suspended'].includes(updated.status)
       ) {
         throw new Error('This Mail account must be reauthorized.');
       }
-      return toMailAccountView(
-        await this.dependencies.store.saveAccount({
-          ...account,
-          status: input.status,
-        }),
-      );
     }
-    return toMailAccountView(account);
+    if (input.status !== undefined) {
+      updated = await this.dependencies.store.saveAccount({
+        ...updated,
+        ...(input.status ? { status: input.status } : {}),
+      });
+    }
+    return toMailAccountView(updated);
   }
 
   public async removeAccount(
@@ -300,9 +312,6 @@ export class DefaultMailService implements MailService {
     if (!account || account.userId !== context.actorId) {
       throw new Error('Mail account was not found.');
     }
-    if (await this.dependencies.store.findActiveSyncRun(accountId)) {
-      throw new Error('Wait for mailbox synchronization to finish first.');
-    }
     if (
       !(await this.dependencies.store.markAccountRemoving(
         account.id,
@@ -310,6 +319,14 @@ export class DefaultMailService implements MailService {
       ))
     ) {
       throw new Error('Mail account was not found.');
+    }
+    const activeSyncRun =
+      await this.dependencies.store.findActiveSyncRun(accountId);
+    if (activeSyncRun) {
+      // Removing the account also cancels its queued or running local sync.
+      // Marking the account first prevents another sync from being scheduled
+      // while the account's records are being deleted.
+      await this.dependencies.store.cancelSyncRun(activeSyncRun.id);
     }
     const pushSubscription =
       await this.dependencies.store.getPushSubscription(accountId);
@@ -322,9 +339,13 @@ export class DefaultMailService implements MailService {
       }
     }
     if (!(await this.dependencies.store.deleteAccount(accountId))) {
-      await pushAdapter?.close?.();
+      if (pushAdapter) await closeAdapter(pushAdapter);
       throw new Error('Mail account was not found.');
     }
+    notifyMailMessageChange(
+      this.dependencies.messageChangeNotifier,
+      context.actorId,
+    );
     try {
       if (pushAdapter && pushSubscription) {
         await pushAdapter.deletePushSubscription?.(
@@ -335,7 +356,7 @@ export class DefaultMailService implements MailService {
     } catch {
       // Local disconnect remains authoritative if Provider cleanup fails.
     } finally {
-      await pushAdapter?.close?.();
+      if (pushAdapter) await closeAdapter(pushAdapter);
     }
     try {
       await this.dependencies.credentials?.delete(account.credentialReference);
@@ -381,6 +402,12 @@ export class DefaultMailService implements MailService {
     return this.dependencies.store.listFolders(accountId);
   }
 
+  public listLabels(
+    context: MailOperationContext,
+  ): Promise<readonly MailLabel[]> {
+    return this.dependencies.store.listLabels(context.actorId);
+  }
+
   public async listIdentities(
     context: MailOperationContext,
     accountId: string,
@@ -416,32 +443,31 @@ export class DefaultMailService implements MailService {
   public async listSignatures(
     context: MailOperationContext,
     accountId: string,
-    identityId: string,
   ): Promise<readonly MailSignature[]> {
-    await this.requireOwnedIdentity(context, accountId, identityId);
-    return this.dependencies.store.listSignatures(identityId);
+    await this.requireOwnedAccount(context, accountId);
+    return this.dependencies.store.listSignatures(accountId);
   }
 
   public async saveSignature(
     context: MailOperationContext,
     input: import('./types.js').MailSaveSignatureInput,
   ): Promise<MailSignature> {
-    await this.requireOwnedIdentity(context, input.accountId, input.identityId);
+    await this.requireOwnedAccount(context, input.accountId);
     const name = input.name.trim();
     if (!name) throw new TypeError('Mail signature name is required.');
     const existing = input.id
       ? await this.dependencies.store.getSignature(input.id)
       : undefined;
-    if (input.id && (!existing || existing.identityId !== input.identityId)) {
+    if (input.id && (!existing || existing.accountId !== input.accountId)) {
       throw new Error('Mail signature was not found.');
     }
     const current = await this.dependencies.store.listSignatures(
-      input.identityId,
+      input.accountId,
     );
     const now = new Date().toISOString();
     return this.dependencies.store.saveSignature({
       id: input.id ?? randomUUID(),
-      identityId: input.identityId,
+      accountId: input.accountId,
       name,
       text: input.text,
       html: input.html ?? undefined,
@@ -454,21 +480,20 @@ export class DefaultMailService implements MailService {
   public async deleteSignature(
     context: MailOperationContext,
     accountId: string,
-    identityId: string,
     signatureId: string,
   ): Promise<void> {
-    await this.requireOwnedIdentity(context, accountId, identityId);
+    await this.requireOwnedAccount(context, accountId);
     const signature = await this.dependencies.store.getSignature(signatureId);
     if (
       !signature ||
-      signature.identityId !== identityId ||
-      !(await this.dependencies.store.deleteSignature(identityId, signatureId))
+      signature.accountId !== accountId ||
+      !(await this.dependencies.store.deleteSignature(accountId, signatureId))
     ) {
       throw new Error('Mail signature was not found.');
     }
     if (signature.isDefault) {
       const replacement = (
-        await this.dependencies.store.listSignatures(identityId)
+        await this.dependencies.store.listSignatures(accountId)
       )[0];
       if (replacement) {
         await this.dependencies.store.saveSignature({
@@ -482,26 +507,55 @@ export class DefaultMailService implements MailService {
 
   public async createLabel(
     context: MailOperationContext,
-    accountId: string,
-    name: string,
-  ): Promise<MailFolder> {
-    const account = await this.requireActiveAccount(context, accountId);
-    const labelName = name.trim();
+    input: MailSaveLabelInput,
+  ): Promise<MailLabel> {
+    const labelName = input.name.trim();
     if (!labelName) throw new TypeError('Mail label name is required.');
-    const adapter = await this.dependencies.adapters.resolve(
-      account,
-      context.signal,
+    const labels = await this.dependencies.store.listLabels(context.actorId);
+    if (labels.some((label) => label.name === labelName)) {
+      throw new TypeError('Mail label name is already in use.');
+    }
+    return this.dependencies.store.createLabel(
+      context.actorId,
+      labelName,
+      normalizeMailLabelColor(input.color),
     );
-    try {
-      if (!adapter.capabilities.labels || !adapter.createLabel) {
-        throw new Error('The selected Mail Provider cannot create labels.');
-      }
-      const label = assertProviderResult(
-        await adapter.createLabel(labelName, context.signal),
-      );
-      return this.dependencies.store.saveFolder(account.id, label);
-    } finally {
-      await closeAdapter(adapter);
+  }
+
+  public async updateLabel(
+    context: MailOperationContext,
+    input: MailSaveLabelInput & { readonly id: string },
+  ): Promise<MailLabel> {
+    const labelName = input.name.trim();
+    if (!labelName) throw new TypeError('Mail label name is required.');
+    const labels = await this.dependencies.store.listLabels(context.actorId);
+    const existing = labels.find((label) => label.id === input.id);
+    if (!existing) throw new Error('Mail label was not found.');
+    if (
+      labels.some((label) => label.id !== input.id && label.name === labelName)
+    ) {
+      throw new TypeError('Mail label name is already in use.');
+    }
+    const updated = await this.dependencies.store.updateLabel(
+      context.actorId,
+      input.id,
+      {
+        name: labelName,
+        color: normalizeMailLabelColor(input.color, existing.color),
+      },
+    );
+    if (!updated) throw new Error('Mail label was not found.');
+    return updated;
+  }
+
+  public async deleteLabel(
+    context: MailOperationContext,
+    labelId: string,
+  ): Promise<void> {
+    if (
+      !(await this.dependencies.store.deleteLabel(context.actorId, labelId))
+    ) {
+      throw new Error('Mail label was not found.');
     }
   }
 
@@ -509,7 +563,7 @@ export class DefaultMailService implements MailService {
     context: MailOperationContext,
     input: import('./types.js').MailUpdateMessageLabelsInput,
   ): Promise<MailMessage> {
-    const { account, message } = await this.requireOwnedMessage(
+    const { message } = await this.requireOwnedMessage(
       context,
       input.accountId,
       input.messageId,
@@ -518,42 +572,27 @@ export class DefaultMailService implements MailService {
     const remove = [...new Set(input.removeLabelIds ?? [])].filter(
       (id) => !add.includes(id),
     );
-    const folders = await this.dependencies.store.listFolders(account.id);
     const labels = new Set(
-      folders
-        .filter((folder) => folder.kind === 'label' && folder.type === 'custom')
-        .map((folder) => folder.providerFolderId),
+      (await this.dependencies.store.listLabels(context.actorId)).map(
+        (label) => label.id,
+      ),
     );
     if ([...add, ...remove].some((id) => !labels.has(id))) {
       throw new TypeError('Mail label was not found.');
     }
     if (add.length === 0 && remove.length === 0) return message;
-    const adapter = await this.dependencies.adapters.resolve(
-      account,
-      context.signal,
+    const updated = await this.dependencies.store.updateMessageLabels(
+      input.accountId,
+      message.id,
+      add,
+      remove,
     );
-    try {
-      if (!adapter.capabilities.labels || !adapter.updateLabels) {
-        throw new Error('The selected Mail Provider cannot update labels.');
-      }
-      assertProviderResult(
-        await adapter.updateLabels(message.providerMessageId, {
-          addLabelIds: add,
-          removeLabelIds: remove,
-          signal: context.signal,
-        }),
-      );
-      const updated = await this.dependencies.store.updateMessageLabels(
-        account.id,
-        message.id,
-        add,
-        remove,
-      );
-      if (!updated) throw new Error('Mail message was not found after update.');
-      return updated;
-    } finally {
-      await closeAdapter(adapter);
-    }
+    if (!updated) throw new Error('Mail message was not found after update.');
+    notifyMailMessageChange(
+      this.dependencies.messageChangeNotifier,
+      context.actorId,
+    );
+    return updated;
   }
 
   public getUnreadCount(context: MailOperationContext): Promise<number> {
@@ -564,7 +603,7 @@ export class DefaultMailService implements MailService {
     context: MailOperationContext,
     input: MailStartSyncInput,
   ): Promise<MailSyncRunView> {
-    await this.requireActiveAccount(context, input.accountId);
+    const account = await this.requireActiveAccount(context, input.accountId);
     const active = await this.dependencies.store.findActiveSyncRun(
       input.accountId,
     );
@@ -582,7 +621,9 @@ export class DefaultMailService implements MailService {
       requestedBy: context.actorId,
       mode,
       policy: {
-        receivedAfter: input.receivedAfter,
+        receivedAfter:
+          input.receivedAfter ??
+          (mode === 'initial' ? account.initialSyncReceivedAfter : undefined),
         maxMessages: boundedInteger(input.maxMessages, 10_000, 1, 100_000),
         batchSize: this.syncBatchSize,
       },
@@ -793,10 +834,15 @@ export class DefaultMailService implements MailService {
               signal: context.signal,
             }),
       );
-      return this.dependencies.store.saveMessage(account.id, {
+      const saved = await this.dependencies.store.saveMessage(account.id, {
         ...draft,
         draft: true,
       });
+      notifyMailMessageChange(
+        this.dependencies.messageChangeNotifier,
+        context.actorId,
+      );
+      return saved;
     } finally {
       await closeAdapter(adapter);
     }
@@ -878,6 +924,10 @@ export class DefaultMailService implements MailService {
         { note: input.note, todo: input.todo },
       );
       if (!updated) throw new Error('Mail message was not found after update.');
+      notifyMailMessageChange(
+        this.dependencies.messageChangeNotifier,
+        context.actorId,
+      );
       return updated;
     }
     const adapter = await this.dependencies.adapters.resolve(
@@ -922,23 +972,14 @@ export class DefaultMailService implements MailService {
         },
       );
       if (!updated) throw new Error('Mail message was not found after update.');
+      notifyMailMessageChange(
+        this.dependencies.messageChangeNotifier,
+        context.actorId,
+      );
       return updated;
     } finally {
       await closeAdapter(adapter);
     }
-  }
-
-  private async requireOwnedIdentity(
-    context: MailOperationContext,
-    accountId: string,
-    identityId: string,
-  ): Promise<import('./types.js').MailIdentity> {
-    await this.requireOwnedAccount(context, accountId);
-    const identity = await this.dependencies.store.getIdentity(identityId);
-    if (!identity || identity.accountId !== accountId) {
-      throw new Error('Mail sending identity was not found.');
-    }
-    return identity;
   }
 
   private async requireOwnedSyncRun(
@@ -986,6 +1027,10 @@ export class DefaultMailService implements MailService {
         input.providerFolderId,
       );
       if (!updated) throw new Error('Mail message was not found after move.');
+      notifyMailMessageChange(
+        this.dependencies.messageChangeNotifier,
+        context.actorId,
+      );
       return updated;
     } finally {
       await closeAdapter(adapter);
@@ -1026,6 +1071,10 @@ export class DefaultMailService implements MailService {
           );
           if (!updated)
             throw new Error('Mail message was not found after delete.');
+          notifyMailMessageChange(
+            this.dependencies.messageChangeNotifier,
+            context.actorId,
+          );
           return;
         }
       }
@@ -1039,7 +1088,16 @@ export class DefaultMailService implements MailService {
           context.signal,
         ),
       );
-      await this.dependencies.store.deleteMessage(account.id, message.id);
+      const deleted = await this.dependencies.store.deleteMessage(
+        account.id,
+        message.id,
+      );
+      if (deleted) {
+        notifyMailMessageChange(
+          this.dependencies.messageChangeNotifier,
+          context.actorId,
+        );
+      }
     } finally {
       await closeAdapter(adapter);
     }
@@ -1152,9 +1210,11 @@ export class DefaultMailService implements MailService {
     userId: string,
     provider: import('./types.js').MailProviderIdentity,
     authorized: import('./types.js').MailAuthorizedAccount,
+    initialSyncReceivedAfter?: string | null,
   ): Promise<MailAccountView> {
     const { credentials } = this.authorizationDependencies();
     let account: MailAccount;
+    let isNewAccount: boolean | undefined;
     let previousCredentialReference: string | undefined;
     try {
       const existing =
@@ -1166,6 +1226,7 @@ export class DefaultMailService implements MailService {
       if (existing && existing.userId !== userId) {
         throw new Error('Mail account is already connected to another user.');
       }
+      isNewAccount = existing === undefined;
       const accounts = await this.dependencies.store.listAccounts(userId);
       account = {
         id: existing?.id ?? randomUUID(),
@@ -1177,6 +1238,9 @@ export class DefaultMailService implements MailService {
         authorizationSubject: authorized.authorizationSubject,
         scopes: authorized.scopes,
         status: 'active',
+        initialSyncReceivedAfter: existing
+          ? existing.initialSyncReceivedAfter
+          : (initialSyncReceivedAfter ?? undefined),
         isDefault: existing?.isDefault ?? accounts.length === 0,
       };
       const previousIdentities = existing
@@ -1208,22 +1272,25 @@ export class DefaultMailService implements MailService {
         };
       });
       const signatures: MailSignature[] = [];
-      for (const [index, item] of authorizedIdentities.entries()) {
-        if (!item.signatureText && !item.signatureHtml) continue;
-        const identity = identities[index];
-        const existingSignatures = previousByAddress.has(
-          item.address.toLowerCase(),
-        )
-          ? await this.dependencies.store.listSignatures(identity.id)
-          : [];
-        if (existingSignatures.length > 0) continue;
+      const providerSignature =
+        authorizedIdentities.find(
+          (item) =>
+            item.isPrimary && (item.signatureText || item.signatureHtml),
+        ) ??
+        authorizedIdentities.find(
+          (item) => item.signatureText || item.signatureHtml,
+        );
+      const existingSignatures = existing
+        ? await this.dependencies.store.listSignatures(account.id)
+        : [];
+      if (providerSignature && existingSignatures.length === 0) {
         const now = new Date().toISOString();
         signatures.push({
           id: randomUUID(),
-          identityId: identity.id,
+          accountId: account.id,
           name: 'Provider signature',
-          text: item.signatureText ?? '',
-          html: item.signatureHtml,
+          text: providerSignature.signatureText ?? '',
+          html: providerSignature.signatureHtml,
           isDefault: true,
           createdAt: now,
           updatedAt: now,
@@ -1244,6 +1311,9 @@ export class DefaultMailService implements MailService {
       previousCredentialReference !== authorized.credentialReference
     ) {
       await credentials.delete(previousCredentialReference);
+    }
+    if (isNewAccount) {
+      await this.startSync({ actorId: userId }, { accountId: account.id });
     }
     return toMailAccountView(account);
   }
@@ -1315,6 +1385,17 @@ async function closeAdapter(adapter: {
   } catch {
     // Provider cleanup cannot change the result of a completed command.
   }
+}
+
+function normalizeMailLabelColor(
+  value: unknown,
+  fallback: MailLabelColor = DEFAULT_MAIL_LABEL_COLOR,
+): MailLabelColor {
+  if (value === undefined || value === null) return fallback;
+  if (!isMailLabelColor(value)) {
+    throw new TypeError('Mail label color is invalid.');
+  }
+  return value;
 }
 
 function hashState(state: string): string {

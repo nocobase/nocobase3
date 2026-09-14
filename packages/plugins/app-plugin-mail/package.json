@@ -44,6 +44,10 @@
       "types": "./client/components/index.ts",
       "import": "./client/components/index.ts"
     },
+    "./realtime": {
+      "types": "./shared/realtime.ts",
+      "import": "./shared/realtime.ts"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -87,6 +91,10 @@
       "./client/components": {
         "types": "./dist/client/components/index.d.ts",
         "import": "./dist/client/components/index.js"
+      },
+      "./realtime": {
+        "types": "./dist/shared/realtime.d.ts",
+        "import": "./dist/shared/realtime.js"
       },
       "./package.json": "./package.json"
     }

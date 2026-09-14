@@ -9,7 +9,8 @@ change-notification subscriptions to `@nocobase/app-plugin-mail`.
 Configure an entry under `mail.providers` with `type: microsoft`, a Microsoft
 Entra application client ID, client secret, and optional tenant. Register the
 callback URL `<public-origin><app-base-path>/mail/oauth/callback` as a Web
-redirect URI.
+redirect URI by default. Override it with Mail Core's `mail.oauthCallbackUrl`
+or `MAIL_OAUTH_CALLBACK_URL` and register that exact URL instead.
 
 Push delivery additionally requires Mail Core's `MAIL_PUSH_WEBHOOK_URL` and a
 random 32–128 character `MAIL_PUSH_WEBHOOK_SECRET`. Mail Core creates and

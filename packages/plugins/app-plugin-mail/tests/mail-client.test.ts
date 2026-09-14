@@ -65,12 +65,13 @@ describe('MailClient', () => {
       accountId: 'account/1',
       query: 'from:alice',
       folderId: 'inbox',
+      labelId: 'label/1',
       conversationId: 'thread/1',
       unread: true,
       limit: 20,
     });
     expect(request).toHaveBeenLastCalledWith({
-      path: 'mail/messages?accountId=account%2F1&query=from%3Aalice&folderId=inbox&conversationId=thread%2F1&unread=true&limit=20',
+      path: 'mail/messages?accountId=account%2F1&query=from%3Aalice&folderId=inbox&labelId=label%2F1&conversationId=thread%2F1&unread=true&limit=20',
     });
 
     await client.startSync({
@@ -106,22 +107,40 @@ describe('MailClient', () => {
     await client.saveSignature({
       id: 'signature/1',
       accountId: 'account/1',
-      identityId: 'identity/1',
       name: 'Sales',
       text: 'Regards',
       isDefault: true,
     });
     expect(request).toHaveBeenLastCalledWith({
-      path: 'mail/accounts/account%2F1/identities/identity%2F1/signatures/signature%2F1',
+      path: 'mail/accounts/account%2F1/signatures/signature%2F1',
       method: 'PATCH',
       json: { name: 'Sales', text: 'Regards', isDefault: true },
     });
 
-    await client.createLabel('account/1', 'Customers');
+    await client.listLabels();
     expect(request).toHaveBeenLastCalledWith({
-      path: 'mail/accounts/account%2F1/labels',
+      path: 'mail/labels',
+    });
+    await client.createLabel('Customers', 'green');
+    expect(request).toHaveBeenLastCalledWith({
+      path: 'mail/labels',
       method: 'POST',
-      json: { name: 'Customers' },
+      json: { name: 'Customers', color: 'green' },
+    });
+    await client.updateLabel({
+      id: 'label/1',
+      name: 'Customers',
+      color: 'violet',
+    });
+    expect(request).toHaveBeenLastCalledWith({
+      path: 'mail/labels/label%2F1',
+      method: 'PATCH',
+      json: { name: 'Customers', color: 'violet' },
+    });
+    await client.deleteLabel('label/1');
+    expect(request).toHaveBeenLastCalledWith({
+      path: 'mail/labels/label%2F1',
+      method: 'DELETE',
     });
     await client.updateMessageLabels({
       accountId: 'account/1',

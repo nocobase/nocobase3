@@ -1,9 +1,10 @@
 import { CheckSquare2, Paperclip, Star, StickyNote } from 'lucide-react';
 import type { ReactElement } from 'react';
 
-import type { MailMessageSummary } from '../mail-client.js';
+import type { MailLabel, MailMessageSummary } from '../mail-client.js';
 import { cn } from '../lib/utils.js';
 import { Button } from './ui/button.js';
+import { MailLabelTag } from './mail-label-tag.js';
 
 export interface MailMessageListLabels {
   readonly empty: string;
@@ -14,6 +15,7 @@ export interface MailMessageListLabels {
 }
 
 export interface MailMessageListProps {
+  readonly availableLabels?: readonly MailLabel[];
   readonly labels: MailMessageListLabels;
   readonly loading?: boolean;
   readonly messages: readonly MailMessageSummary[];
@@ -24,6 +26,7 @@ export interface MailMessageListProps {
 }
 
 export function MailMessageList({
+  availableLabels = [],
   labels,
   loading = false,
   messages,
@@ -33,12 +36,13 @@ export function MailMessageList({
   selectedMessageId,
 }: MailMessageListProps): ReactElement {
   const groupedMessages = groupMessagesByConversation(messages);
+  const labelsById = new Map(availableLabels.map((label) => [label.id, label]));
 
   return (
     <section
       aria-busy={loading}
       aria-label='Messages'
-      className='min-h-0 overflow-y-auto border-b lg:border-r lg:border-b-0'
+      className='h-full min-h-0 overflow-y-auto border-b lg:border-r lg:border-b-0'
     >
       {groupedMessages.length === 0 && !loading ? (
         <p className='p-8 text-center text-sm text-muted-foreground'>
@@ -48,6 +52,9 @@ export function MailMessageList({
       <div className='divide-y'>
         {groupedMessages.map(({ message, subjectCount }) => {
           const sender = message.from?.name ?? message.from?.address;
+          const messageLabels = message.labelIds
+            .map((labelId) => labelsById.get(labelId))
+            .filter((label): label is MailLabel => Boolean(label));
           return (
             <button
               aria-current={
@@ -120,6 +127,13 @@ export function MailMessageList({
                   />
                 ) : null}
               </div>
+              {messageLabels.length > 0 ? (
+                <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
+                  {messageLabels.map((label) => (
+                    <MailLabelTag key={label.id} label={label} />
+                  ))}
+                </div>
+              ) : null}
               {message.preview ? (
                 <p className='mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground'>
                   {message.preview}
@@ -196,6 +210,7 @@ function mergeGroupedMessage(
     read: representative.read && message.read,
     starred: representative.starred || message.starred,
     todo: representative.todo || message.todo,
+    labelIds: [...new Set([...representative.labelIds, ...message.labelIds])],
   };
 }
 

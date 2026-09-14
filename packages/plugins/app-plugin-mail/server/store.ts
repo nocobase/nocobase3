@@ -9,6 +9,7 @@ import type {
   MailAttachment,
   MailCreateSyncRunInput,
   MailFolder,
+  MailLabel,
   MailIdentity,
   MailSignature,
   MailListMessagesInput,
@@ -38,7 +39,9 @@ import type {
   MailProviderIdentity,
   MailProviderPushSubscription,
   MailTemplate,
+  MailLabelColor,
 } from './types.js';
+import { DEFAULT_MAIL_LABEL_COLOR, isMailLabelColor } from './types.js';
 
 interface AuthorizationStateRow extends Row {
   stateHash: string;
@@ -48,6 +51,7 @@ interface AuthorizationStateRow extends Row {
   redirectUri: string;
   verifierCredentialReference: string;
   scopes: readonly string[] | string;
+  initialSyncReceivedAfter?: string | null;
   expiresAt: string;
   consumedAt?: string | null;
   createdAt: string;
@@ -76,6 +80,15 @@ interface TemplateRow extends Row {
   updatedAt: string;
 }
 
+interface LabelRow extends Row {
+  id: string;
+  ownerId: string;
+  name: string;
+  color?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface AccountRow extends Row {
   id: string;
   userId: string;
@@ -87,6 +100,7 @@ interface AccountRow extends Row {
   authorizationSubject?: string | null;
   scopes: readonly string[] | string;
   status: MailAccount['status'];
+  initialSyncReceivedAfter?: string | null;
   defaultForUserId?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -122,10 +136,13 @@ interface IdentityRow extends Row {
 
 interface SignatureRow extends Row {
   id: string;
+  accountId: string;
+  /** Retained only for compatibility with the original identity-scoped schema. */
   identityId: string;
   name: string;
   text: string;
   html?: string | null;
+  defaultForAccountId?: string | null;
   defaultForIdentityId?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -180,6 +197,11 @@ interface MessageFolderRow extends Row {
   accountId: string;
   messageId: string;
   providerFolderId: string;
+}
+
+interface MessageLabelRow extends Row {
+  messageId: string;
+  labelId: string;
 }
 
 interface SyncStateRow extends Row {
@@ -261,6 +283,7 @@ export class DatabaseMailStore implements MailStore {
         redirectUri: transaction.redirectUri,
         verifierCredentialReference: transaction.verifierCredentialReference,
         scopes: JSON.stringify(transaction.scopes),
+        initialSyncReceivedAfter: transaction.initialSyncReceivedAfter ?? null,
         expiresAt: transaction.expiresAt,
         createdAt: new Date().toISOString(),
       })
@@ -300,6 +323,7 @@ export class DatabaseMailStore implements MailStore {
               row.scopes,
               'authorization scopes',
             ),
+            initialSyncReceivedAfter: row.initialSyncReceivedAfter,
             expiresAt: row.expiresAt,
           }
         : undefined;
@@ -799,6 +823,31 @@ export class DatabaseMailStore implements MailStore {
       .where('userId', '=', userId)
       .where('status', '!=', 'removing')
       .execute();
+    if (result.updatedCount === 1) return true;
+    const removing = await this.database
+      .query()
+      .selectFrom<AccountRow>('mailAccounts')
+      .select('id')
+      .where('id', '=', accountId)
+      .where('userId', '=', userId)
+      .where('status', '=', 'removing')
+      .executeTakeFirst<Pick<AccountRow, 'id'>>();
+    return Boolean(removing);
+  }
+
+  public async markAccountReauthorizationRequired(
+    accountId: string,
+  ): Promise<boolean> {
+    const result = await this.database
+      .query()
+      .updateTable<AccountRow>('mailAccounts')
+      .set({
+        status: 'reauthorizationRequired',
+        updatedAt: new Date().toISOString(),
+      })
+      .where('id', '=', accountId)
+      .where('status', '=', 'active')
+      .execute();
     return result.updatedCount === 1;
   }
 
@@ -950,13 +999,13 @@ export class DatabaseMailStore implements MailStore {
   }
 
   public async listSignatures(
-    identityId: string,
+    accountId: string,
   ): Promise<readonly MailSignature[]> {
     const rows = await this.database
       .query()
       .selectFrom<SignatureRow>('mailSignatures')
       .selectAll()
-      .where('identityId', '=', identityId)
+      .where('accountId', '=', accountId)
       .orderBy('name', 'asc')
       .execute<SignatureRow>();
     return rows
@@ -984,14 +1033,14 @@ export class DatabaseMailStore implements MailStore {
   }
 
   public async deleteSignature(
-    identityId: string,
+    accountId: string,
     signatureId: string,
   ): Promise<boolean> {
     const result = await this.database
       .query()
       .deleteFrom<SignatureRow>('mailSignatures')
       .where('id', '=', signatureId)
-      .where('identityId', '=', identityId)
+      .where('accountId', '=', accountId)
       .execute();
     return result.deletedCount === 1;
   }
@@ -1005,6 +1054,76 @@ export class DatabaseMailStore implements MailStore {
       .orderBy('name', 'asc')
       .execute<FolderRow>();
     return rows.map(fromFolderRow);
+  }
+
+  public async listLabels(ownerId: string): Promise<readonly MailLabel[]> {
+    const rows = await this.database
+      .query()
+      .selectFrom<LabelRow>('mailLabels')
+      .selectAll()
+      .where('ownerId', '=', ownerId)
+      .orderBy('name', 'asc')
+      .execute<LabelRow>();
+    return rows.map(fromLabelRow);
+  }
+
+  public async createLabel(
+    ownerId: string,
+    name: string,
+    color: MailLabelColor,
+  ): Promise<MailLabel> {
+    const now = new Date().toISOString();
+    const row: LabelRow = {
+      id: randomUUID(),
+      ownerId,
+      name,
+      color,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await this.database
+      .query()
+      .insertInto<LabelRow>('mailLabels')
+      .values(row)
+      .execute();
+    return fromLabelRow(row);
+  }
+
+  public async updateLabel(
+    ownerId: string,
+    labelId: string,
+    patch: Pick<MailLabel, 'name' | 'color'>,
+  ): Promise<MailLabel | undefined> {
+    const result = await this.database
+      .query()
+      .updateTable<LabelRow>('mailLabels')
+      .set({
+        name: patch.name,
+        color: patch.color,
+        updatedAt: new Date().toISOString(),
+      })
+      .where('id', '=', labelId)
+      .where('ownerId', '=', ownerId)
+      .execute();
+    if (result.updatedCount !== 1) return undefined;
+    const row = await this.database
+      .query()
+      .selectFrom<LabelRow>('mailLabels')
+      .selectAll()
+      .where('id', '=', labelId)
+      .where('ownerId', '=', ownerId)
+      .executeTakeFirst<LabelRow>();
+    return row ? fromLabelRow(row) : undefined;
+  }
+
+  public async deleteLabel(ownerId: string, labelId: string): Promise<boolean> {
+    const result = await this.database
+      .query()
+      .deleteFrom<LabelRow>('mailLabels')
+      .where('id', '=', labelId)
+      .where('ownerId', '=', ownerId)
+      .execute();
+    return result.deletedCount === 1;
   }
 
   public async saveFolder(
@@ -1091,6 +1210,16 @@ export class DatabaseMailStore implements MailStore {
           'mailMessageFolders.messageId',
         )
         .where('mailMessageFolders.providerFolderId', 'in', input.folderIds)
+        .distinct();
+    }
+    if (input.labelIds?.length) {
+      query = query
+        .innerJoin(
+          'mailMessageLabels',
+          'mailMessages.id',
+          'mailMessageLabels.messageId',
+        )
+        .where('mailMessageLabels.labelId', 'in', input.labelIds)
         .distinct();
     }
     if (input.conversationId)
@@ -1276,25 +1405,24 @@ export class DatabaseMailStore implements MailStore {
         .execute();
       if (removeLabelIds.length > 0) {
         await connection.query
-          .deleteFrom<MessageFolderRow>('mailMessageFolders')
+          .deleteFrom<MessageLabelRow>('mailMessageLabels')
           .where('messageId', '=', messageId)
-          .where('providerFolderId', 'in', removeLabelIds)
+          .where('labelId', 'in', removeLabelIds)
           .execute();
       }
-      for (const providerFolderId of addLabelIds) {
+      for (const labelId of addLabelIds) {
         const exists = await connection.query
-          .selectFrom<MessageFolderRow>('mailMessageFolders')
+          .selectFrom<MessageLabelRow>('mailMessageLabels')
           .select('messageId')
           .where('messageId', '=', messageId)
-          .where('providerFolderId', '=', providerFolderId)
+          .where('labelId', '=', labelId)
           .executeTakeFirst();
         if (!exists) {
           await connection.query
-            .insertInto<MessageFolderRow>('mailMessageFolders')
+            .insertInto<MessageLabelRow>('mailMessageLabels')
             .values({
-              accountId,
               messageId,
-              providerFolderId,
+              labelId,
             })
             .execute();
         }
@@ -1380,6 +1508,10 @@ export class DatabaseMailStore implements MailStore {
       await connection.query
         .deleteFrom<MessageFolderRow>('mailMessageFolders')
         .where('accountId', '=', accountId)
+        .where('messageId', '=', messageId)
+        .execute();
+      await connection.query
+        .deleteFrom<MessageLabelRow>('mailMessageLabels')
         .where('messageId', '=', messageId)
         .execute();
       const deleted = await connection.query
@@ -1516,6 +1648,17 @@ export class DatabaseMailStore implements MailStore {
     };
     try {
       await this.database.transaction(async (connection): Promise<void> => {
+        const account = await connection.query
+          .updateTable<AccountRow>('mailAccounts')
+          // This conditional update serializes sync creation with account
+          // removal while keeping the account status unchanged.
+          .set({ status: 'active' })
+          .where('id', '=', input.accountId)
+          .where('status', '=', 'active')
+          .execute();
+        if (account.updatedCount !== 1) {
+          throw new Error('Mail account is not active.');
+        }
         await connection.query
           .insertInto<SyncRunRow>('mailSyncRuns')
           .values(toSyncRunRow(run))
@@ -1523,7 +1666,11 @@ export class DatabaseMailStore implements MailStore {
         await insertOutbox(connection.query, run, 0, now);
       });
     } catch (error) {
-      const active = await this.findActiveSyncRun(input.accountId);
+      const account = await this.getAccount(input.accountId);
+      const active =
+        account?.status === 'active'
+          ? await this.findActiveSyncRun(input.accountId)
+          : undefined;
       if (active) return active;
       throw error;
     }
@@ -2239,12 +2386,6 @@ async function replaceAccountIdentities(
     .pluck<string>('id');
   const nextIds = new Set(identities.map((identity) => identity.id));
   const staleIds = existingIds.filter((id) => !nextIds.has(id));
-  if (staleIds.length > 0) {
-    await query
-      .deleteFrom<IdentityRow>('mailIdentities')
-      .where('id', 'in', staleIds)
-      .execute();
-  }
   for (const identity of identities) {
     const row = toIdentityRow(identity);
     if (existingIds.includes(identity.id)) {
@@ -2260,34 +2401,66 @@ async function replaceAccountIdentities(
         .execute();
     }
   }
+  if (staleIds.length > 0 && identities.length > 0) {
+    const fallbackIdentityId =
+      identities.find((identity) => identity.isPrimary)?.id ?? identities[0].id;
+    await query
+      .updateTable<SignatureRow>('mailSignatures')
+      .set({
+        identityId: fallbackIdentityId,
+        defaultForIdentityId: null,
+      })
+      .where('accountId', '=', accountId)
+      .where('identityId', 'in', staleIds)
+      .execute();
+    await query
+      .deleteFrom<IdentityRow>('mailIdentities')
+      .where('id', 'in', staleIds)
+      .execute();
+  }
 }
 
 async function saveSignature(
   query: QueryAdapter,
   signature: MailSignature,
 ): Promise<void> {
+  const existing = await query
+    .selectFrom<SignatureRow>('mailSignatures')
+    .select(['id', 'identityId'])
+    .where('id', '=', signature.id)
+    .executeTakeFirst<Pick<SignatureRow, 'id' | 'identityId'>>();
+  const legacyIdentityId =
+    existing?.identityId ??
+    (await findPrimaryIdentityId(query, signature.accountId));
+  if (!legacyIdentityId) {
+    throw new Error('Mail account has no sending identity.');
+  }
+
   if (signature.isDefault) {
     await query
       .updateTable<SignatureRow>('mailSignatures')
       .set({
+        defaultForAccountId: null,
         defaultForIdentityId: null,
         updatedAt: signature.updatedAt,
       })
-      .where('identityId', '=', signature.identityId)
+      .where('accountId', '=', signature.accountId)
+      .execute();
+    await query
+      .updateTable<SignatureRow>('mailSignatures')
+      .set({ defaultForIdentityId: null })
+      .where('identityId', '=', legacyIdentityId)
       .execute();
   }
-  const existing = await query
-    .selectFrom<SignatureRow>('mailSignatures')
-    .select('id')
-    .where('id', '=', signature.id)
-    .executeTakeFirst<Pick<SignatureRow, 'id'>>();
   const row: SignatureRow = {
     id: signature.id,
-    identityId: signature.identityId,
+    accountId: signature.accountId,
+    identityId: legacyIdentityId,
     name: signature.name,
     text: signature.text,
     html: signature.html,
-    defaultForIdentityId: signature.isDefault ? signature.identityId : null,
+    defaultForAccountId: signature.isDefault ? signature.accountId : null,
+    defaultForIdentityId: signature.isDefault ? legacyIdentityId : null,
     createdAt: signature.createdAt,
     updatedAt: signature.updatedAt,
   };
@@ -2303,6 +2476,26 @@ async function saveSignature(
       .values(row)
       .execute();
   }
+}
+
+async function findPrimaryIdentityId(
+  query: QueryAdapter,
+  accountId: string,
+): Promise<string | undefined> {
+  const primary = await query
+    .selectFrom<IdentityRow>('mailIdentities')
+    .select('id')
+    .where('accountId', '=', accountId)
+    .where('primaryForAccountId', '=', accountId)
+    .executeTakeFirst<Pick<IdentityRow, 'id'>>();
+  if (primary) return primary.id;
+  const first = await query
+    .selectFrom<IdentityRow>('mailIdentities')
+    .select('id')
+    .where('accountId', '=', accountId)
+    .orderBy('address', 'asc')
+    .executeTakeFirst<Pick<IdentityRow, 'id'>>();
+  return first?.id;
 }
 
 async function upsertMessages(
@@ -2457,6 +2650,14 @@ async function deleteMessages(
         messages.map((message) => message.id),
       )
       .execute();
+    await query
+      .deleteFrom<MessageLabelRow>('mailMessageLabels')
+      .where(
+        'messageId',
+        'in',
+        messages.map((message) => message.id),
+      )
+      .execute();
   }
   await query
     .deleteFrom<MessageRow>('mailMessages')
@@ -2559,6 +2760,7 @@ function toAccountRow(
     authorizationSubject: account.authorizationSubject,
     scopes: JSON.stringify(account.scopes),
     status: account.status,
+    initialSyncReceivedAfter: account.initialSyncReceivedAfter ?? null,
     defaultForUserId: account.isDefault ? account.userId : null,
     createdAt: createdAt ?? updatedAt,
     updatedAt,
@@ -2576,6 +2778,7 @@ function fromAccountRow(row: AccountRow): MailAccount {
     authorizationSubject: row.authorizationSubject ?? undefined,
     scopes: parseJson<readonly string[]>(row.scopes, 'account scopes'),
     status: row.status,
+    initialSyncReceivedAfter: row.initialSyncReceivedAfter ?? undefined,
     isDefault: Boolean(row.defaultForUserId),
   };
 }
@@ -2589,6 +2792,7 @@ export function toMailAccountView(account: MailAccount): MailAccountView {
     displayName: account.displayName,
     scopes: account.scopes,
     status: account.status,
+    initialSyncReceivedAfter: account.initialSyncReceivedAfter,
     isDefault: account.isDefault,
   };
 }
@@ -2622,11 +2826,11 @@ function fromIdentityRow(row: IdentityRow): MailIdentity {
 function fromSignatureRow(row: SignatureRow): MailSignature {
   return {
     id: row.id,
-    identityId: row.identityId,
+    accountId: row.accountId,
     name: row.name,
     text: row.text,
     html: row.html ?? undefined,
-    isDefault: Boolean(row.defaultForIdentityId),
+    isDefault: Boolean(row.defaultForAccountId),
     createdAt: toIsoString(row.createdAt),
     updatedAt: toIsoString(row.updatedAt),
   };
@@ -2652,6 +2856,16 @@ function fromFolderRow(row: FolderRow): MailFolder {
     name: row.name,
     unreadCount: row.unreadCount ?? undefined,
     kind: row.kind,
+  };
+}
+
+function fromLabelRow(row: LabelRow): MailLabel {
+  return {
+    id: row.id,
+    name: row.name,
+    color: isMailLabelColor(row.color) ? row.color : DEFAULT_MAIL_LABEL_COLOR,
+    createdAt: toIsoString(row.createdAt),
+    updatedAt: toIsoString(row.updatedAt),
   };
 }
 
@@ -2758,29 +2972,44 @@ async function loadMailMessages(
   rows: readonly MessageRow[],
 ): Promise<MailMessage[]> {
   if (rows.length === 0) return [];
-  const folderRows = await query
-    .selectFrom<MessageFolderRow>('mailMessageFolders')
-    .select(['messageId', 'providerFolderId'])
-    .where(
-      'messageId',
-      'in',
-      rows.map((row) => row.id),
-    )
-    .execute<Pick<MessageFolderRow, 'messageId' | 'providerFolderId'>>();
+  const messageIds = rows.map((row) => row.id);
+  const [folderRows, labelRows] = await Promise.all([
+    query
+      .selectFrom<MessageFolderRow>('mailMessageFolders')
+      .select(['messageId', 'providerFolderId'])
+      .where('messageId', 'in', messageIds)
+      .execute<Pick<MessageFolderRow, 'messageId' | 'providerFolderId'>>(),
+    query
+      .selectFrom<MessageLabelRow>('mailMessageLabels')
+      .select(['messageId', 'labelId'])
+      .where('messageId', 'in', messageIds)
+      .execute<Pick<MessageLabelRow, 'messageId' | 'labelId'>>(),
+  ]);
   const folderIdsByMessageId = new Map<string, string[]>();
   for (const folderRow of folderRows) {
     const folderIds = folderIdsByMessageId.get(folderRow.messageId) ?? [];
     folderIds.push(folderRow.providerFolderId);
     folderIdsByMessageId.set(folderRow.messageId, folderIds);
   }
+  const labelIdsByMessageId = new Map<string, string[]>();
+  for (const labelRow of labelRows) {
+    const labelIds = labelIdsByMessageId.get(labelRow.messageId) ?? [];
+    labelIds.push(labelRow.labelId);
+    labelIdsByMessageId.set(labelRow.messageId, labelIds);
+  }
   return rows.map((row) =>
-    toMailMessage(row, folderIdsByMessageId.get(row.id) ?? []),
+    toMailMessage(
+      row,
+      folderIdsByMessageId.get(row.id) ?? [],
+      labelIdsByMessageId.get(row.id) ?? [],
+    ),
   );
 }
 
 function toMailMessage(
   row: MessageRow,
   folderIds: readonly string[],
+  labelIds: readonly string[],
 ): MailMessage {
   const recipients = parseJson<{
     readonly to: MailMessage['to'];
@@ -2803,6 +3032,7 @@ function toMailMessage(
     internetMessageId: row.internetMessageId ?? undefined,
     conversationId: row.providerConversationId ?? undefined,
     folderIds,
+    labelIds,
     from: row.sender
       ? parseJson<NonNullable<MailMessage['from']>>(
           row.sender,

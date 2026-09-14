@@ -5,6 +5,7 @@ import { useTranslation } from '@nocobase/i18n/client';
 
 import {
   MailDevPageShell,
+  MailNavigationIcon,
   MailStatusBadge,
   MailRichTextEditor,
 } from '../components/index.js';
@@ -44,8 +45,17 @@ export function MailCenterDevPage(): ReactElement {
           'Filter, refresh, and inspect locally stored mail components.',
       })}
       title={t('dev.centerTitle', { defaultValue: 'Mail center' })}
+      actions={
+        <span
+          aria-label={t('nav.mail', { defaultValue: 'Mail' })}
+          className='inline-flex size-9 items-center justify-center rounded-lg border bg-background text-muted-foreground'
+          role='img'
+        >
+          <MailNavigationIcon />
+        </span>
+      }
     >
-      <Card className='overflow-hidden rounded-2xl bg-background shadow-sm'>
+      <Card className='flex h-full min-h-0 flex-col overflow-hidden rounded-2xl bg-background shadow-sm lg:max-h-[calc(100svh-18rem)]'>
         <MailWorkspacePage />
       </Card>
     </MailDevPageShell>
@@ -117,6 +127,31 @@ function MailDevPage(): ReactElement {
   }, []);
 
   useEffect(() => {
+    if (!accountId) {
+      void Promise.resolve().then(() => {
+        setSignatures([]);
+        setSignatureId('');
+      });
+      return;
+    }
+    void mail.listSignatures(accountId).then(
+      (items) => {
+        setSignatures(items);
+        setSignatureId(items.find((item) => item.isDefault)?.id ?? '');
+      },
+      (cause: unknown) =>
+        setError(
+          mailErrorMessage(
+            cause,
+            t('errors.requestFailed', {
+              defaultValue: 'Mail request failed.',
+            }),
+          ),
+        ),
+    );
+  }, [accountId, t]);
+
+  useEffect(() => {
     if (!accountId) return;
     let active = true;
     void mail.listIdentities(accountId).then(
@@ -128,10 +163,6 @@ function MailDevPage(): ReactElement {
             nextIdentities[0]?.id ??
             '',
         );
-        const primary =
-          nextIdentities.find((i) => i.isPrimary) ?? nextIdentities[0];
-        if (primary)
-          void mail.listSignatures(accountId, primary.id).then(setSignatures);
       },
       (cause: unknown) => {
         if (active)
@@ -307,27 +338,41 @@ function MailDevPage(): ReactElement {
                   value={compose.subject}
                 />
               </label>
-              <div className='space-y-2'>
-                <div className='flex gap-2'>
-                  <NativeSelect
-                    value={signatureId}
-                    onChange={(e) => setSignatureId(e.target.value)}
-                  >
-                    <option value=''>
-                      {t('workspace.noSignature', {
-                        defaultValue: 'No signature',
-                      })}
-                    </option>
-                    {signatures.map((signature) => (
-                      <option key={signature.id} value={signature.id}>
-                        {signature.name}
-                      </option>
-                    ))}
-                  </NativeSelect>
-                  <NativeSelect
-                    onChange={(e) => {
+              <MailRichTextEditor
+                ariaLabel={t('dev.send.body', {
+                  defaultValue: 'Message body',
+                })}
+                insertActions={{
+                  signature: {
+                    label: t('workspace.signature', {
+                      defaultValue: 'Signature',
+                    }),
+                    options: [
+                      {
+                        id: '',
+                        label: t('workspace.noSignature', {
+                          defaultValue: 'No signature',
+                        }),
+                      },
+                      ...signatures.map((signature) => ({
+                        id: signature.id,
+                        label: signature.name,
+                      })),
+                    ],
+                    onSelect: setSignatureId,
+                    selectedId: signatureId,
+                  },
+                  template: {
+                    label: t('workspace.template', {
+                      defaultValue: 'Template',
+                    }),
+                    options: templates.map((template) => ({
+                      id: template.id,
+                      label: template.name,
+                    })),
+                    onSelect: (templateId) => {
                       const template = templates.find(
-                        (item) => item.id === e.target.value,
+                        (item) => item.id === templateId,
                       );
                       if (!template) return;
                       const rendered = renderMailTemplate(template);
@@ -337,45 +382,28 @@ function MailDevPage(): ReactElement {
                         text: rendered.text,
                         html: rendered.html,
                       }));
-                    }}
-                    defaultValue=''
-                  >
-                    <option value=''>
-                      {t('workspace.applyTemplate', {
-                        defaultValue: 'Apply template',
-                      })}
-                    </option>
-                    {templates.map((template) => (
-                      <option key={template.id} value={template.id}>
-                        {template.name}
-                      </option>
-                    ))}
-                  </NativeSelect>
-                </div>
-                <MailRichTextEditor
-                  ariaLabel={t('dev.send.body', {
-                    defaultValue: 'Message body',
-                  })}
-                  labels={{
-                    toolbar: 'Formatting',
-                    bold: 'Bold',
-                    italic: 'Italic',
-                    underline: 'Underline',
-                    bulletList: 'Bulleted list',
-                    numberedList: 'Numbered list',
-                    undo: 'Undo',
-                    redo: 'Redo',
-                    clearFormatting: 'Clear formatting',
-                  }}
-                  onChange={(value) =>
-                    setCompose((current) => ({ ...current, ...value }))
-                  }
-                  placeholder={t('dev.send.bodyPlaceholder', {
-                    defaultValue: 'Write your message.',
-                  })}
-                  value={compose.html || compose.text}
-                />
-              </div>
+                    },
+                  },
+                }}
+                labels={{
+                  toolbar: 'Formatting',
+                  bold: 'Bold',
+                  italic: 'Italic',
+                  underline: 'Underline',
+                  bulletList: 'Bulleted list',
+                  numberedList: 'Numbered list',
+                  undo: 'Undo',
+                  redo: 'Redo',
+                  clearFormatting: 'Clear formatting',
+                }}
+                onChange={(value) =>
+                  setCompose((current) => ({ ...current, ...value }))
+                }
+                placeholder={t('dev.send.bodyPlaceholder', {
+                  defaultValue: 'Write your message.',
+                })}
+                value={compose.html || compose.text}
+              />
               <Button
                 disabled={!accountId || !identityId || busy === 'sending'}
                 type='submit'

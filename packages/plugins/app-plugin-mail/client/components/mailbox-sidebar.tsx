@@ -12,8 +12,9 @@ import {
 } from 'lucide-react';
 import type { ReactElement } from 'react';
 
-import type { MailAccountView, MailFolder } from '../mail-client.js';
+import type { MailAccountView, MailFolder, MailLabel } from '../mail-client.js';
 import { cn } from '../lib/utils.js';
+import { MailLabelColorDot } from './mail-label-tag.js';
 import { NativeSelect } from './ui/native-select.js';
 
 export type MailboxSmartView = 'all' | 'unread' | 'starred';
@@ -24,6 +25,7 @@ export interface MailboxSidebarLabels {
   readonly unread: string;
   readonly starred: string;
   readonly folders: string;
+  readonly labels: string;
 }
 
 export interface MailboxSidebarProps {
@@ -31,9 +33,12 @@ export interface MailboxSidebarProps {
   readonly accountId: string;
   readonly folderId?: string;
   readonly folders: readonly MailFolder[];
+  readonly labelId?: string;
+  readonly customLabels: readonly MailLabel[];
   readonly labels: MailboxSidebarLabels;
   readonly onAccountChange: (accountId: string) => void;
   readonly onFolderChange: (folderId?: string) => void;
+  readonly onLabelChange: (labelId?: string) => void;
   readonly onSmartViewChange: (view: MailboxSmartView) => void;
   readonly smartView: MailboxSmartView;
 }
@@ -53,14 +58,25 @@ export function MailboxSidebar({
   accountId,
   folderId,
   folders,
+  labelId,
+  customLabels,
   labels,
   onAccountChange,
   onFolderChange,
+  onLabelChange,
   onSmartViewChange,
   smartView,
 }: MailboxSidebarProps): ReactElement {
+  const orderedFolders = [
+    ...folders.filter((folder) => folder.type === 'inbox'),
+    ...folders.filter((folder) => folder.type === 'sent'),
+    ...folders.filter(
+      (folder) => folder.type !== 'inbox' && folder.type !== 'sent',
+    ),
+  ];
+
   return (
-    <aside className='flex min-h-0 flex-col border-b bg-muted/20 p-3 lg:border-r lg:border-b-0'>
+    <aside className='flex h-full min-h-0 flex-col overflow-y-auto border-b bg-muted/20 p-3 lg:border-r lg:border-b-0'>
       <label className='text-xs font-medium text-muted-foreground'>
         {labels.account}
         <NativeSelect
@@ -78,29 +94,32 @@ export function MailboxSidebar({
 
       <nav aria-label={labels.folders} className='mt-4 space-y-1'>
         <SidebarButton
-          active={!folderId && smartView === 'all'}
+          active={!folderId && !labelId && smartView === 'all'}
           icon={Inbox}
           label={labels.allMail}
           onClick={() => {
             onFolderChange(undefined);
+            onLabelChange(undefined);
             onSmartViewChange('all');
           }}
         />
         <SidebarButton
-          active={!folderId && smartView === 'unread'}
+          active={!folderId && !labelId && smartView === 'unread'}
           icon={MailOpen}
           label={labels.unread}
           onClick={() => {
             onFolderChange(undefined);
+            onLabelChange(undefined);
             onSmartViewChange('unread');
           }}
         />
         <SidebarButton
-          active={!folderId && smartView === 'starred'}
+          active={!folderId && !labelId && smartView === 'starred'}
           icon={Star}
           label={labels.starred}
           onClick={() => {
             onFolderChange(undefined);
+            onLabelChange(undefined);
             onSmartViewChange('starred');
           }}
         />
@@ -109,15 +128,12 @@ export function MailboxSidebar({
       <p className='mt-6 px-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase'>
         {labels.folders}
       </p>
-      <nav
-        aria-label={labels.folders}
-        className='mt-2 min-h-0 space-y-1 overflow-y-auto'
-      >
-        {folders.map((folder) => {
+      <nav aria-label={labels.folders} className='mt-2 space-y-1'>
+        {orderedFolders.map((folder) => {
           const Icon = folderIcons[folder.type];
           return (
             <SidebarButton
-              active={folderId === folder.providerFolderId}
+              active={!labelId && folderId === folder.providerFolderId}
               count={folder.unreadCount}
               icon={Icon}
               key={folder.id}
@@ -125,11 +141,34 @@ export function MailboxSidebar({
               onClick={() => {
                 onSmartViewChange('all');
                 onFolderChange(folder.providerFolderId);
+                onLabelChange(undefined);
               }}
             />
           );
         })}
       </nav>
+      {customLabels.length > 0 ? (
+        <>
+          <p className='mt-6 px-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase'>
+            {labels.labels}
+          </p>
+          <nav aria-label={labels.labels} className='mt-2 space-y-1'>
+            {customLabels.map((label) => (
+              <SidebarButton
+                active={labelId === label.id}
+                color={label.color}
+                key={label.id}
+                label={label.name}
+                onClick={() => {
+                  onSmartViewChange('all');
+                  onFolderChange(undefined);
+                  onLabelChange(label.id);
+                }}
+              />
+            ))}
+          </nav>
+        </>
+      ) : null}
     </aside>
   );
 }
@@ -137,7 +176,8 @@ export function MailboxSidebar({
 interface SidebarButtonProps {
   readonly active: boolean;
   readonly count?: number;
-  readonly icon: LucideIcon;
+  readonly color?: MailLabel['color'];
+  readonly icon?: LucideIcon;
   readonly label: string;
   readonly onClick: () => void;
 }
@@ -145,6 +185,7 @@ interface SidebarButtonProps {
 function SidebarButton({
   active,
   count,
+  color,
   icon: Icon,
   label,
   onClick,
@@ -159,7 +200,11 @@ function SidebarButton({
       onClick={onClick}
       type='button'
     >
-      <Icon aria-hidden='true' className='size-4 shrink-0' />
+      {color ? (
+        <MailLabelColorDot color={color} />
+      ) : Icon ? (
+        <Icon aria-hidden='true' className='size-4 shrink-0' />
+      ) : null}
       <span className='min-w-0 flex-1 truncate'>{label}</span>
       {count ? (
         <span className='text-xs tabular-nums text-muted-foreground'>

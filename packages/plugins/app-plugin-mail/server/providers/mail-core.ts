@@ -4,6 +4,10 @@ import { databaseManagerToken } from '@nocobase/db';
 import { loggingToken } from '@nocobase/app-server/logging';
 import { queueManagerToken } from '@nocobase/app-server/queue';
 import { driveConfig, driveManagerToken } from '@nocobase/app-server/drive';
+import {
+  realtimeServiceToken,
+  type RealtimeUserTopic,
+} from '@nocobase/app-server/realtime';
 
 import { createMailProviderAdapterResolver } from '../adapter-resolver.js';
 import { mailConfig } from '../config.js';
@@ -12,6 +16,12 @@ import { createMailProviderRegistry } from '../registry.js';
 import { createMailRuntime } from '../runtime.js';
 import { DefaultMailService } from '../service.js';
 import { DriveMailOutboundAttachmentStorage } from '../outbound-attachments.js';
+import {
+  createMailMessageChangeNotifier,
+  MAIL_REALTIME_TOPIC,
+  type MailMessageChangeNotifier,
+  type MailRealtimeEvent,
+} from '../realtime.js';
 import { createDatabaseMailStore } from '../store.js';
 import {
   mailProviderAdapterResolverToken,
@@ -27,6 +37,8 @@ export type MailCoreProviderApplication = AppPluginApplication;
 
 export class MailCoreProvider extends ServiceProvider<MailCoreProviderApplication> {
   public readonly name: string = '@nocobase/app-plugin-mail';
+  private realtimeTopic?: RealtimeUserTopic<MailRealtimeEvent>;
+  private messageChangeNotifier?: MailMessageChangeNotifier;
 
   public override register(): void {
     const registry = createMailProviderRegistry();
@@ -73,6 +85,7 @@ export class MailCoreProvider extends ServiceProvider<MailCoreProviderApplicatio
           .resolve(loggingToken)
           .getLogger()
           .child({ module: 'mail' }),
+        messageChangeNotifier: this.messageChangeNotifier,
       }),
     );
     this.app.container.singleton(
@@ -104,8 +117,23 @@ export class MailCoreProvider extends ServiceProvider<MailCoreProviderApplicatio
           outboundAttachments: container.resolve(
             mailOutboundAttachmentStorageToken,
           ),
+          messageChangeNotifier: this.messageChangeNotifier,
         }),
     );
+  }
+
+  public override boot(): Promise<void> {
+    if (this.app.container.has(realtimeServiceToken)) {
+      this.realtimeTopic = this.app.container
+        .resolve(realtimeServiceToken)
+        .defineTopic<MailRealtimeEvent, 'user'>(MAIL_REALTIME_TOPIC, {
+          audience: 'user',
+        });
+      this.messageChangeNotifier = createMailMessageChangeNotifier(
+        this.realtimeTopic,
+      );
+    }
+    return Promise.resolve();
   }
 
   private listProviderConfigs(): readonly import('../types.js').MailProviderConfig[] {
@@ -133,5 +161,8 @@ export class MailCoreProvider extends ServiceProvider<MailCoreProviderApplicatio
 
   public override async shutdown(): Promise<void> {
     await this.app.container.resolveIfCreated(mailRuntimeToken)?.close();
+    this.realtimeTopic?.close();
+    this.realtimeTopic = undefined;
+    this.messageChangeNotifier = undefined;
   }
 }

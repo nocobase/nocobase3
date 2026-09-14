@@ -17,8 +17,9 @@ import type { ReactElement } from 'react';
 import { useState } from 'react';
 
 import { sanitizeMailHtml } from '../lib/mail-template.js';
-import type { MailFolder, MailMessage } from '../mail-client.js';
+import type { MailLabel, MailMessage } from '../mail-client.js';
 import { Button } from './ui/button.js';
+import { MailLabelTag } from './mail-label-tag.js';
 import {
   Dialog,
   DialogContent,
@@ -50,7 +51,7 @@ export interface MailConversationViewProps {
   readonly nextCursor?: string;
   readonly onLoadMore: () => void;
   readonly subject?: string;
-  readonly availableLabels?: readonly MailFolder[];
+  readonly availableLabels?: readonly MailLabel[];
   readonly actions?: {
     readonly archive?: (message: MailMessage) => void;
     readonly delete: (message: MailMessage) => void;
@@ -98,14 +99,14 @@ export function MailConversationView({
 }: MailConversationViewProps): ReactElement {
   if (messages.length === 0) {
     return (
-      <section className='grid min-h-0 place-items-center p-8 text-sm text-muted-foreground'>
+      <section className='grid h-full min-h-0 place-items-center overflow-y-auto p-8 text-sm text-muted-foreground'>
         {loading ? null : labels.selectMessage}
       </section>
     );
   }
 
   return (
-    <section aria-busy={loading} className='min-h-0 overflow-y-auto'>
+    <section aria-busy={loading} className='h-full min-h-0 overflow-y-auto'>
       <header className='sticky top-0 z-10 border-b bg-background/95 px-5 py-4 backdrop-blur'>
         <h1 className='text-lg font-semibold'>{subject || labels.noSubject}</h1>
         <p className='mt-1 text-xs text-muted-foreground'>
@@ -125,6 +126,9 @@ export function MailConversationView({
         ) : null}
         {messages.map((message) => {
           const sender = message.from?.name ?? message.from?.address;
+          const messageLabels = availableLabels.filter((label) =>
+            message.labelIds.includes(label.id),
+          );
           return (
             <article
               className='rounded-xl border bg-card p-4 shadow-xs'
@@ -229,6 +233,13 @@ export function MailConversationView({
                   </div>
                 ) : null}
               </header>
+              {messageLabels.length > 0 ? (
+                <div className='mt-3 flex flex-wrap gap-1.5'>
+                  {messageLabels.map((label) => (
+                    <MailLabelTag key={label.id} label={label} size='md' />
+                  ))}
+                </div>
+              ) : null}
               <MessageBody message={message} />
               {message.attachments.length > 0 ? (
                 <div className='mt-4 border-t pt-3 text-xs text-muted-foreground'>
@@ -271,10 +282,7 @@ export function MailConversationView({
               {actions ? (
                 <MessageMetadata
                   actions={actions}
-                  availableLabels={availableLabels.filter(
-                    (folder) =>
-                      folder.kind === 'label' && folder.type === 'custom',
-                  )}
+                  availableLabels={availableLabels}
                   key={`${message.id}:${message.note ?? ''}`}
                   labels={labels}
                   message={message}
@@ -295,7 +303,7 @@ function MessageMetadata({
   message,
 }: {
   readonly actions: NonNullable<MailConversationViewProps['actions']>;
-  readonly availableLabels: readonly MailFolder[];
+  readonly availableLabels: readonly MailLabel[];
   readonly labels: MailConversationViewLabels;
   readonly message: MailMessage;
 }): ReactElement {
@@ -303,7 +311,7 @@ function MessageMetadata({
   const [noteOpen, setNoteOpen] = useState(false);
   const [labelsOpen, setLabelsOpen] = useState(false);
   const assignedLabelCount = availableLabels.filter((label) =>
-    message.folderIds.includes(label.providerFolderId),
+    message.labelIds.includes(label.id),
   ).length;
 
   return (
@@ -395,9 +403,7 @@ function MessageMetadata({
               <fieldset className='mt-4 grid gap-2'>
                 <legend className='sr-only'>{labels.labels}</legend>
                 {availableLabels.map((label) => {
-                  const assigned = message.folderIds.includes(
-                    label.providerFolderId,
-                  );
+                  const assigned = message.labelIds.includes(label.id);
                   return (
                     <label
                       className='flex items-center gap-2 rounded-lg border px-3 py-2 text-sm hover:bg-muted/50'
@@ -408,13 +414,13 @@ function MessageMetadata({
                         onChange={(event) =>
                           actions.toggleLabel?.(
                             message,
-                            label.providerFolderId,
+                            label.id,
                             event.target.checked,
                           )
                         }
                         type='checkbox'
                       />
-                      {label.name}
+                      <MailLabelTag label={label} size='md' />
                     </label>
                   );
                 })}

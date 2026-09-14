@@ -1,3 +1,5 @@
+import { resolve } from 'node:path';
+
 import {
   createDatabaseManager,
   InMemoryCollectionMetadataStore,
@@ -6,16 +8,18 @@ import {
 import { createQueueManager, type NocoBaseQueueManager } from '@nocobase/queue';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import migration from '../database/migrations/202609030001_create_mail_tables.js';
 import { SyncMailboxOperation } from '../server/operations/sync-mailbox.js';
+import { createMailProviderRegistry } from '../server/registry.js';
 import { createMailRuntime, type MailRuntime } from '../server/runtime.js';
 import { DefaultMailService } from '../server/service.js';
 import { createDatabaseMailStore } from '../server/store.js';
 import type {
   MailAccount,
   MailCredentialVault,
+  MailProviderConfig,
   MailProviderAdapter,
   MailProviderAdapterResolver,
+  MailProviderDefinition,
   MailStore,
   NormalizedMailMessage,
 } from '../server/types.js';
@@ -34,12 +38,12 @@ describe('mail MVP runtime', () => {
         main: { dialect: 'sqlite', filename: ':memory:' },
       },
     });
-    const connection = database.connection();
-    await migration.up({
-      builder: connection.builder,
-      query: connection.query,
-      connection,
-    });
+    await database
+      .createMigrator({
+        directory: resolve(process.cwd(), 'database/migrations'),
+        packageName: '@nocobase/app-plugin-mail',
+      })
+      .latest();
     store = createDatabaseMailStore(database);
     await store.saveAccount(account());
     await store.replaceIdentities('account-1', [
@@ -162,7 +166,6 @@ describe('mail MVP runtime', () => {
       { actorId: 'user-1' },
       {
         accountId: 'account-1',
-        identityId: 'identity-1',
         name: 'Scheduled',
         text: 'Original signature',
       },
@@ -189,7 +192,6 @@ describe('mail MVP runtime', () => {
       {
         id: signature.id,
         accountId: 'account-1',
-        identityId: 'identity-1',
         name: signature.name,
         text: 'Changed after scheduling',
       },
@@ -258,6 +260,88 @@ describe('mail MVP runtime', () => {
       mode: 'initial',
       policy: { batchSize: 37 },
     });
+  });
+
+  it('schedules the initial sync after completing Microsoft OAuth', async () => {
+    const values = new Map<string, unknown>();
+    let nextReference = 0;
+    const credentials: MailCredentialVault = {
+      put: async (value) => {
+        const reference = `mail-credential-${++nextReference}`;
+        values.set(reference, value);
+        return reference;
+      },
+      get: async <T>(reference: string) => {
+        const value = values.get(reference);
+        if (value === undefined) throw new Error('Mail credential not found.');
+        return value as T;
+      },
+      replace: async (reference, value) => {
+        values.set(reference, value);
+      },
+      getOrRefresh: async <T>(reference, isFresh, refresh) => {
+        const value = await credentials.get<T>(reference);
+        return isFresh(value) ? value : refresh(value);
+      },
+      delete: async (reference) => {
+        values.delete(reference);
+      },
+    };
+    const microsoft: MailProviderDefinition = {
+      type: 'microsoft',
+      label: 'Microsoft 365',
+      capabilities: baseAdapter().capabilities,
+      authorization: {
+        start: async () => ({
+          ok: true,
+          value: {
+            authorizationUrl: 'https://login.microsoftonline.com/authorize',
+            state: 'provider-state',
+          },
+        }),
+        complete: async () => ({
+          ok: true,
+          value: {
+            address: 'outlook@example.com',
+            authorizationSubject: 'outlook-subject',
+            credentialReference: 'mail-account-credential',
+            scopes: ['Mail.ReadWrite'],
+          },
+        }),
+      },
+      createAdapter: vi.fn(),
+    };
+    const kick = vi.fn();
+    const service = new DefaultMailService({
+      store,
+      adapters: resolver(baseAdapter()),
+      outbox: { kick },
+      credentials,
+      providerContext: { publicBasePath: '/main', credentials },
+      registry: createMailProviderRegistry().register(microsoft),
+      resolveProviderConfig: (provider): MailProviderConfig => provider,
+    });
+
+    const authorization = await service.startAuthorization(
+      { actorId: 'user-1' },
+      {
+        provider: { type: 'microsoft', name: 'work' },
+        redirectUri: 'https://app.example.com/main/mail/oauth/callback',
+        initialSyncReceivedAfter: '2026-09-01T00:00:00.000Z',
+      },
+    );
+    const account = await service.completeAuthorization({
+      state: authorization.state,
+      code: 'authorization-code',
+    });
+
+    expect(await store.findActiveSyncRun(account.id)).toMatchObject({
+      accountId: account.id,
+      requestedBy: 'user-1',
+      mode: 'initial',
+      policy: { receivedAfter: '2026-09-01T00:00:00.000Z' },
+    });
+    expect(kick).toHaveBeenCalledTimes(1);
   });
 
   it('creates and renews push subscriptions during the automatic sweep', async () => {
@@ -666,7 +750,7 @@ describe('mail MVP runtime', () => {
     );
   });
 
-  it('creates and applies Provider labels while maintaining local membership', async () => {
+  it('creates and applies NocoBase labels without calling a Provider', async () => {
     await store.commitSyncBatch({
       accountId: 'account-1',
       folders: [],
@@ -675,54 +759,66 @@ describe('mail MVP runtime', () => {
       nextCursor: { value: 'label-test' },
     });
     const stored = (await store.listMessages('user-1', {})).items[0];
-    const createLabel = vi.fn<NonNullable<MailProviderAdapter['createLabel']>>(
-      async (name) => ({
-        ok: true,
-        value: {
-          providerFolderId: 'label-project',
-          type: 'custom',
-          name,
-          kind: 'label',
-        },
-      }),
-    );
-    const updateLabels = vi.fn<
-      NonNullable<MailProviderAdapter['updateLabels']>
-    >(async () => ({ ok: true, value: undefined }));
     const service = new DefaultMailService({
       store,
-      adapters: resolver({
-        ...baseAdapter(),
-        capabilities: { ...baseAdapter().capabilities, labels: true },
-        createLabel,
-        updateLabels,
-      }),
+      adapters: resolver(baseAdapter()),
       outbox: { kick: vi.fn() },
     });
 
+    const label = await service.createLabel(
+      { actorId: 'user-1' },
+      { name: 'Project', color: 'violet' },
+    );
+    expect(label).toMatchObject({ name: 'Project', color: 'violet' });
     await expect(
-      service.createLabel({ actorId: 'user-1' }, 'account-1', 'Project'),
-    ).resolves.toMatchObject({ providerFolderId: 'label-project' });
+      service.updateLabel(
+        { actorId: 'user-1' },
+        { id: label.id, name: 'Projects', color: 'red' },
+      ),
+    ).resolves.toMatchObject({ name: 'Projects', color: 'red' });
     await expect(
       service.updateMessageLabels(
         { actorId: 'user-1' },
         {
           accountId: 'account-1',
           messageId: stored.id,
-          addLabelIds: ['label-project'],
+          addLabelIds: [label.id],
         },
       ),
     ).resolves.toMatchObject({
-      folderIds: expect.arrayContaining(['inbox', 'label-project']),
+      folderIds: ['inbox'],
+      labelIds: [label.id],
     });
-    expect(updateLabels).toHaveBeenCalledWith('provider-label', {
-      addLabelIds: ['label-project'],
-      removeLabelIds: [],
-      signal: undefined,
+    await expect(store.listLabels('user-1')).resolves.toEqual([
+      expect.objectContaining({
+        id: label.id,
+        name: 'Projects',
+        color: 'red',
+      }),
+    ]);
+    await service.deleteLabel({ actorId: 'user-1' }, label.id);
+    await expect(store.listMessages('user-1', {})).resolves.toMatchObject({
+      items: [expect.objectContaining({ labelIds: [] })],
     });
   });
 
   it('selects a managed signature and supports cancelling and retrying sync', async () => {
+    await store.replaceIdentities('account-1', [
+      {
+        id: 'identity-1',
+        accountId: 'account-1',
+        address: 'sender@example.com',
+        isPrimary: true,
+        canSend: true,
+      },
+      {
+        id: 'identity-2',
+        accountId: 'account-1',
+        address: 'support@example.com',
+        isPrimary: false,
+        canSend: true,
+      },
+    ]);
     const setupService = new DefaultMailService({
       store,
       adapters: resolver(baseAdapter()),
@@ -732,7 +828,6 @@ describe('mail MVP runtime', () => {
       { actorId: 'user-1' },
       {
         accountId: 'account-1',
-        identityId: 'identity-1',
         name: 'Sales',
         text: 'Sales team',
       },
@@ -753,7 +848,7 @@ describe('mail MVP runtime', () => {
       { actorId: 'user-1' },
       {
         accountId: 'account-1',
-        identityId: 'identity-1',
+        identityId: 'identity-2',
         signatureId: signature.id,
         to: [{ address: 'reader@example.com' }],
         subject: 'Signed',
@@ -770,7 +865,6 @@ describe('mail MVP runtime', () => {
       { actorId: 'user-1' },
       {
         accountId: 'account-1',
-        identityId: 'identity-1',
         name: 'Support',
         text: 'Support team',
       },
@@ -793,6 +887,21 @@ describe('mail MVP runtime', () => {
           text: 'Hello\n\n-- \nSupport team',
         }),
       }),
+    );
+    await store.replaceIdentities('account-1', [
+      {
+        id: 'identity-1',
+        accountId: 'account-1',
+        address: 'sender@example.com',
+        isPrimary: true,
+        canSend: true,
+      },
+    ]);
+    await expect(store.listSignatures('account-1')).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: signature.id, accountId: 'account-1' }),
+        expect.objectContaining({ id: alternate.id, accountId: 'account-1' }),
+      ]),
     );
 
     const run = await service.startSync(
@@ -1031,6 +1140,15 @@ describe('mail MVP runtime', () => {
         { accountId: 'account-1', status: 'active' },
       ),
     ).resolves.toMatchObject({ status: 'active' });
+    await store.saveAccount({
+      ...account(),
+      initialSyncReceivedAfter: '2026-02-01T00:00:00.000Z',
+    });
+    const accountSync = await service.startSync(
+      { actorId: 'user-1' },
+      { accountId: 'account-1' },
+    );
+    expect(accountSync.policy.receivedAfter).toBe('2026-02-01T00:00:00.000Z');
     await expect(
       service.updateAccount(
         { actorId: 'user-1' },
@@ -1058,6 +1176,158 @@ describe('mail MVP runtime', () => {
     await expect(service.listAccounts({ actorId: 'user-1' })).resolves.toEqual([
       expect.objectContaining({ id: 'account-1', isDefault: true }),
     ]);
+  });
+
+  it('removes an account while cancelling its pending synchronization', async () => {
+    const run = await store.createSyncRun({
+      id: 'remove-account-sync',
+      accountId: 'account-1',
+      requestedBy: 'user-1',
+      mode: 'initial',
+      policy: { maxMessages: 100, batchSize: 10 },
+    });
+    const cancelSyncRun = vi.spyOn(store, 'cancelSyncRun');
+    const deleteCredential = vi.fn(async () => undefined);
+    const credentials = {
+      delete: deleteCredential,
+    } as unknown as MailCredentialVault;
+    const service = new DefaultMailService({
+      store,
+      adapters: resolver(baseAdapter()),
+      outbox: { kick: vi.fn() },
+      credentials,
+    });
+
+    await expect(
+      service.removeAccount({ actorId: 'user-1' }, 'account-1'),
+    ).resolves.toBeUndefined();
+
+    expect(cancelSyncRun).toHaveBeenCalledWith(run.id);
+    const cancellation = cancelSyncRun.mock.results[0];
+    expect(cancellation?.type).toBe('return');
+    if (cancellation?.type === 'return') {
+      await expect(cancellation.value).resolves.toMatchObject({
+        status: 'cancelled',
+      });
+    }
+    await expect(store.getAccount('account-1')).resolves.toBeUndefined();
+    await expect(store.getSyncRun(run.id)).resolves.toBeUndefined();
+    expect(deleteCredential).toHaveBeenCalledWith('secret:test');
+  });
+
+  it('does not schedule synchronization after account removal starts', async () => {
+    await expect(
+      store.markAccountRemoving('account-1', 'user-1'),
+    ).resolves.toBe(true);
+    await expect(
+      store.markAccountRemoving('account-1', 'user-1'),
+    ).resolves.toBe(true);
+
+    await expect(
+      store.createSyncRun({
+        id: 'sync-after-removal',
+        accountId: 'account-1',
+        requestedBy: 'user-1',
+        mode: 'initial',
+        policy: { maxMessages: 100, batchSize: 10 },
+      }),
+    ).rejects.toThrow('Mail account is not active.');
+  });
+
+  it('lets an in-flight synchronization finish quietly after account removal', async () => {
+    const entered = Promise.withResolvers<void>();
+    const providerGate = Promise.withResolvers<void>();
+    const adapters = resolver({
+      ...baseAdapter(),
+      getCurrentSyncCursor: async () => {
+        entered.resolve();
+        await providerGate.promise;
+        return { ok: true, value: { value: 'watermark-after-removal' } };
+      },
+      listMessages: async () => ({ ok: true, value: { messages: [] } }),
+    });
+    const service = new DefaultMailService({
+      store,
+      adapters,
+      outbox: { kick: vi.fn() },
+    });
+    const created = await service.startSync(
+      { actorId: 'user-1' },
+      { accountId: 'account-1' },
+    );
+    const outbox = await store.claimOutbox(
+      new Date().toISOString(),
+      'remove-in-flight-lease',
+      new Date(Date.now() + 10_000).toISOString(),
+      1,
+    );
+    await store.markOutboxPublished(
+      outbox[0].id,
+      outbox[0].leaseToken ?? '',
+      new Date().toISOString(),
+    );
+    const operation = new SyncMailboxOperation({ store, adapters });
+    const running = operation.execute(outbox[0].payload);
+
+    await entered.promise;
+    await service.removeAccount({ actorId: 'user-1' }, 'account-1');
+    providerGate.resolve();
+
+    await expect(running).resolves.toBeUndefined();
+    await expect(store.getAccount('account-1')).resolves.toBeUndefined();
+    await expect(store.getSyncRun(created.id)).resolves.toBeUndefined();
+  });
+
+  it('does not resurrect a removed account after an in-flight auth failure', async () => {
+    const entered = Promise.withResolvers<void>();
+    const providerGate = Promise.withResolvers<void>();
+    const adapters = resolver({
+      ...baseAdapter(),
+      getCurrentSyncCursor: async () => {
+        entered.resolve();
+        await providerGate.promise;
+        return {
+          ok: false,
+          error: {
+            code: 'TEST_OAUTH_INVALID_GRANT',
+            message: 'The refresh token was revoked.',
+            category: 'authentication',
+            retryable: false,
+          },
+        } as const;
+      },
+      listMessages: async () => ({ ok: true, value: { messages: [] } }),
+    });
+    const service = new DefaultMailService({
+      store,
+      adapters,
+      outbox: { kick: vi.fn() },
+    });
+    const created = await service.startSync(
+      { actorId: 'user-1' },
+      { accountId: 'account-1' },
+    );
+    const outbox = await store.claimOutbox(
+      new Date().toISOString(),
+      'remove-auth-failure-lease',
+      new Date(Date.now() + 10_000).toISOString(),
+      1,
+    );
+    await store.markOutboxPublished(
+      outbox[0].id,
+      outbox[0].leaseToken ?? '',
+      new Date().toISOString(),
+    );
+    const operation = new SyncMailboxOperation({ store, adapters });
+    const running = operation.execute(outbox[0].payload);
+
+    await entered.promise;
+    await service.removeAccount({ actorId: 'user-1' }, 'account-1');
+    providerGate.resolve();
+
+    await expect(running).resolves.toBeUndefined();
+    await expect(store.getAccount('account-1')).resolves.toBeUndefined();
+    await expect(store.getSyncRun(created.id)).resolves.toBeUndefined();
   });
 
   it('lists every account for management without granting cross-user sync', async () => {

@@ -14,6 +14,7 @@ import SendScheduledMailJob, {
 import { SendMailOperation } from './operations/send-mail.js';
 import { SyncMailboxOperation } from './operations/sync-mailbox.js';
 import { resolveMailSyncBatchSize } from './config.js';
+import type { MailMessageChangeNotifier } from './realtime.js';
 import type { MailOutboxPublisher } from './service.js';
 import type {
   MailProviderAdapterResolver,
@@ -42,6 +43,7 @@ export interface MailRuntimeOptions {
   readonly credentials?: MailCredentialVault;
   readonly pushWebhookUrl?: string;
   readonly pushWebhookSecret?: string;
+  readonly messageChangeNotifier?: MailMessageChangeNotifier;
 }
 
 export class MailRuntime implements MailOutboxPublisher {
@@ -251,6 +253,7 @@ export class MailRuntime implements MailOutboxPublisher {
       requestedBy: account.userId,
       mode: cursor ? 'incremental' : 'initial',
       policy: {
+        receivedAfter: cursor ? undefined : account.initialSyncReceivedAfter,
         maxMessages: 10_000,
         batchSize: this.syncBatchSize,
       },
