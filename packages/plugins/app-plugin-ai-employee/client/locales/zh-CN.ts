@@ -4,6 +4,9 @@ export default {
   'LLM Service': 'LLM 服务',
   MCP: 'MCP',
   'MCP servers': 'MCP 服务',
+  'LLM services are configured in config.yml.': 'LLM 服务配置于 config.yml。',
+  'Manage AI employees, LLM services, and MCP services.':
+    '管理 AI 员工、LLM 服务和 MCP 服务。',
   'Connect AI employees to external tools through Model Context Protocol servers.':
     '通过模型上下文协议服务器将 AI 员工连接到外部工具。',
   'Add MCP server': '添加 MCP 服务',

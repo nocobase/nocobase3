@@ -4,6 +4,10 @@ export default {
   'LLM Service': 'LLM Service',
   MCP: 'MCP',
   'MCP servers': 'MCP servers',
+  'LLM services are configured in config.yml.':
+    'LLM services are configured in config.yml.',
+  'Manage AI employees, LLM services, and MCP services.':
+    'Manage AI employees, LLM services, and MCP services.',
   'Connect AI employees to external tools through Model Context Protocol servers.':
     'Connect AI employees to external tools through Model Context Protocol servers.',
   'Add MCP server': 'Add MCP server',

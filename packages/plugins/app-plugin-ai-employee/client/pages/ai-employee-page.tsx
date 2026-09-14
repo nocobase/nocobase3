@@ -778,7 +778,7 @@ export default function AIEmployeePage(): ReactElement {
             {t('Loading employee details…')}
           </p>
         ) : (
-          <div className='mx-auto flex min-h-[calc(100vh-9rem)] max-w-5xl flex-col gap-6'>
+          <div className='flex min-h-[calc(100vh-9rem)] flex-col gap-6'>
             <header className='flex flex-col gap-4 rounded-xl border p-5 sm:flex-row sm:items-center'>
               <AIEmployeeAvatar
                 src={selected.avatar}

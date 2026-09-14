@@ -98,7 +98,7 @@ export default function MCPPage(): ReactElement {
 
   return (
     <main className='px-3 py-4 sm:px-4'>
-      <Card className='shadow-sm'>
+      <Card className='gap-0 shadow-sm'>
         <CardHeader className='border-b px-4 py-4 sm:px-5'>
           <CardTitle className='text-lg'>{t('MCP servers')}</CardTitle>
           <p className='mt-1 flex items-start gap-1.5 text-sm text-muted-foreground'>
@@ -118,19 +118,19 @@ export default function MCPPage(): ReactElement {
               {error}
             </div>
           ) : null}
-          <div className='overflow-x-auto px-4 pb-4 pt-4 sm:px-5'>
-            <table className='w-full min-w-[760px] text-left text-sm'>
-              <thead className='bg-muted/40'>
+          <div className='overflow-x-auto'>
+            <table className='w-full min-w-[48rem] text-left text-sm'>
+              <thead className='border-b bg-muted/30 text-xs tracking-wide text-muted-foreground uppercase'>
                 <tr>
-                  <th className='w-12 px-3 py-2.5 text-center'>#</th>
-                  <th className='px-3 py-2.5'>{t('UID')}</th>
-                  <th className='px-3 py-2.5'>{t('Title')}</th>
-                  <th className='px-3 py-2.5'>{t('Transport')}</th>
-                  <th className='px-3 py-2.5'>{t('Enabled')}</th>
-                  <th className='px-3 py-2.5'>{t('Actions')}</th>
+                  <th className='w-12 px-5 py-3 text-center'>#</th>
+                  <th className='px-5 py-3'>{t('UID')}</th>
+                  <th className='px-5 py-3'>{t('Title')}</th>
+                  <th className='px-5 py-3'>{t('Transport')}</th>
+                  <th className='px-5 py-3'>{t('Enabled')}</th>
+                  <th className='px-5 py-3'>{t('Actions')}</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className='divide-y'>
                 {loading ? (
                   <tr>
                     <td
@@ -153,25 +153,22 @@ export default function MCPPage(): ReactElement {
                 ) : null}
                 {!loading
                   ? servers.map((server, index) => (
-                      <tr
-                        key={server.name}
-                        className='border-t transition-colors hover:bg-muted/20'
-                      >
-                        <td className='px-3 py-3 text-center text-muted-foreground'>
+                      <tr key={server.name} className='hover:bg-muted/30'>
+                        <td className='px-5 py-4 text-center text-muted-foreground'>
                           {index + 1}
                         </td>
-                        <td className='px-3 py-3 font-mono text-xs'>
+                        <td className='px-5 py-4 font-mono text-xs'>
                           {server.name}
                         </td>
-                        <td className='px-3 py-3'>{server.title || '—'}</td>
-                        <td className='px-3 py-3'>
+                        <td className='px-5 py-4'>{server.title || '—'}</td>
+                        <td className='px-5 py-4'>
                           <span
                             className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${transportColors[server.transport]}`}
                           >
                             {t(transportLabels[server.transport])}
                           </span>
                         </td>
-                        <td className='px-3 py-3'>
+                        <td className='px-5 py-4'>
                           <Switch
                             checked={server.enabled}
                             disabled={updatingName === server.name}
@@ -179,7 +176,7 @@ export default function MCPPage(): ReactElement {
                             aria-label={`${t('Enabled')}: ${server.name}`}
                           />
                         </td>
-                        <td className='px-3 py-3'>
+                        <td className='px-5 py-4'>
                           <Button
                             type='button'
                             size='sm'
