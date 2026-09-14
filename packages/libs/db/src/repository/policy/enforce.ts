@@ -107,7 +107,13 @@ export function applyCreateDefaults(
   const protectedFields = Object.keys(node.defaults).filter(
     (field) => !node.fields.includes(field) && !Object.hasOwn(input, field),
   );
-  return { values: { ...node.defaults, ...input }, protectedFields };
+  const defaults = Object.fromEntries(
+    Object.entries(node.defaults).map(([field, value]) => [
+      field,
+      value instanceof Date ? new Date(value) : value,
+    ]),
+  );
+  return { values: { ...defaults, ...input }, protectedFields };
 }
 
 /** Intersect the caller filter with a Policy scope without flattening either side. */
@@ -410,4 +416,36 @@ export function assertCreateScopeSatisfiable(
       },
     );
   }
+}
+
+/**
+ * Hand a Policy out without a live reference to anything mutable.
+ *
+ * Every other value in a normalized Policy is frozen or a primitive, but
+ * `Object.freeze` does not reach a Date's internal time: `setTime` still works
+ * on one. Since `explainPolicy` returns the very object `applyCreateDefaults`
+ * reads from, a caller could change a server-assigned default after binding.
+ * Copying on the way out is what actually closes that.
+ */
+export function detachPolicy(
+  policy: NormalizedRepositoryPolicy,
+): NormalizedRepositoryPolicy {
+  const node = policy.create;
+  if (node === true || node === false) return policy;
+  const entries = Object.entries(node.defaults);
+  if (!entries.some(([, value]) => value instanceof Date)) return policy;
+  return Object.freeze({
+    ...policy,
+    create: Object.freeze({
+      ...node,
+      defaults: Object.freeze(
+        Object.fromEntries(
+          entries.map(([field, value]) => [
+            field,
+            value instanceof Date ? new Date(value) : value,
+          ]),
+        ),
+      ),
+    }),
+  });
 }

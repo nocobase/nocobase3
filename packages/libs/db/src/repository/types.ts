@@ -419,11 +419,19 @@ export interface Repository<
  * fields would need the literal list to survive inference at every call site,
  * and a `Partial` that is honest beats a precise type that silently widens
  * when someone stores the policy in a variable.
+ *
+ * The test asks whether the `read` union *contains* a rule object rather than
+ * whether the whole union is one. A policy held in a variable of type
+ * `RepositoryPolicy<T>` has `read: true | false | ReadNode`, which is not
+ * itself an object — testing the union directly returned the complete record
+ * for exactly the policies most likely to restrict it.
  */
 export type PolicyRecord<
   TRecord extends object,
   TPolicy extends { readonly read: unknown },
-> = TPolicy['read'] extends object ? Partial<TRecord> : TRecord;
+> = [Extract<TPolicy['read'], object>] extends [never]
+  ? TRecord
+  : Partial<TRecord>;
 
 /**
  * The operations a Repository performs, without the derivation methods.

@@ -166,8 +166,7 @@ function normalizeDefaults(
       typeof item === 'boolean' ||
       item instanceof Date
     ) {
-      defaults[field] =
-        item instanceof Date ? deepFreeze(new Date(item)) : item;
+      defaults[field] = item instanceof Date ? new Date(item) : item;
       continue;
     } else {
       invalid('defaults values must be scalar values.', [...path, field]);
@@ -231,15 +230,29 @@ function normalizeThrough(
   assertObject(value, path);
   assertKeys(value, ['through'], path);
   return Object.freeze({
-    through:
-      value.through === undefined || value.through === false
-        ? false
-        : Object.freeze({
-            fields: normalizeFields(
-              isObject(value.through) ? value.through.fields : undefined,
-              [...path, 'through', 'fields'],
-            ),
-          }),
+    through: normalizeThroughFields(value.through, [...path, 'through']),
+  });
+}
+
+/**
+ * `through` is `false` or a rule object, and nothing else.
+ *
+ * Anything truthy used to be read as an empty allowlist, so `through: true` —
+ * the obvious way to write "allow a payload" — quietly became "allow a payload
+ * with no fields", which is a different permission. A malformed rule is
+ * refused rather than reinterpreted.
+ */
+function normalizeThroughFields(
+  value: unknown,
+  path: PolicyPath,
+): false | { readonly fields: readonly string[] } {
+  if (value === undefined || value === false) return false;
+  if (!isObject(value)) {
+    invalid('through must be false or an object of through options.', path);
+  }
+  assertKeys(value, ['fields'], path);
+  return Object.freeze({
+    fields: normalizeFields(value.fields, [...path, 'fields']),
   });
 }
 
@@ -277,7 +290,10 @@ function normalizeRelationShape(
       relations: Object.freeze(relations),
       ...(allowThrough
         ? {
-            through: normalizeThrough({ through: value.through }, path).through,
+            through: normalizeThroughFields(value.through, [
+              ...path,
+              'through',
+            ]),
           }
         : {}),
     });

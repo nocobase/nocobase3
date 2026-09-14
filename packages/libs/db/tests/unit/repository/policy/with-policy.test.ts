@@ -1443,6 +1443,92 @@ describe('DefaultRepository.withPolicy', () => {
     expect(plan?.fields).toEqual(['id']);
   });
 
+  it('refuses to rebind a policy that is already in force', () => {
+    const scoped = new DefaultRepository({
+      collection: 'projects',
+      collections: {} as never,
+      adapter: {} as never,
+    }).withPolicy({
+      read: { scope: { tenantId: 'T1' }, fields: ['id'] },
+      create: { scope: true },
+      update: { scope: true },
+      delete: { scope: true },
+    });
+
+    // A Repository from a bound Connection is typed as `Repository`, so this
+    // method stays reachable; replacing the binding would undo the
+    // Connection's authorization.
+    expect(() =>
+      (
+        scoped as unknown as {
+          withPolicy: (policy: unknown) => unknown;
+        }
+      ).withPolicy({
+        read: true,
+        create: true,
+        update: true,
+        delete: true,
+      }),
+    ).toThrowError(/already has a bound Policy/);
+  });
+
+  it('hands out a create default that cannot be changed from outside', () => {
+    const supplied = new Date('2020-01-01T00:00:00.000Z');
+    const scoped = new DefaultRepository({
+      collection: 'projects',
+      collections: {} as never,
+      adapter: {} as never,
+    }).withPolicy({
+      read: { scope: true },
+      create: { scope: true, defaults: { startedAt: supplied } },
+      update: { scope: true },
+      delete: { scope: true },
+    });
+
+    const exposed = (
+      scoped.explainPolicy().create as { defaults: Record<string, unknown> }
+    ).defaults.startedAt as Date;
+    // Object.freeze does not reach a Date's internal time, so the only thing
+    // that keeps this immutable is handing out a copy.
+    exposed.setTime(0);
+
+    const again = (
+      scoped.explainPolicy().create as { defaults: Record<string, unknown> }
+    ).defaults.startedAt as Date;
+    expect(again.toISOString()).toBe(supplied.toISOString());
+  });
+
+  it('reports an unsatisfiable create scope from validateMutation', async () => {
+    const repository = new DefaultRepository({
+      collection: 'projects',
+      collections: {
+        get: async () => ({
+          name: 'projects',
+          fields: [
+            { name: 'id', type: 'string' },
+            { name: 'title', type: 'string' },
+            { name: 'status', type: 'string' },
+          ],
+        }),
+      },
+      adapter: {},
+    } as never);
+
+    const result = await repository
+      .withPolicy({
+        read: { scope: true },
+        create: { scope: { status: 'draft' }, fields: ['title'] },
+        update: { scope: true },
+        delete: { scope: true },
+      })
+      .validateMutation({ operation: 'createOne', values: { title: 'x' } });
+
+    expect(result).toMatchObject({
+      valid: false,
+      errors: [expect.objectContaining({ code: 'INVALID_POLICY' })],
+    });
+  });
+
   it('enforces create and update field allowlists', async () => {
     const collection = {
       name: 'projects',

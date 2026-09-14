@@ -190,4 +190,33 @@ describe('normalizeRepositoryPolicy', () => {
     expect(startedAt.toISOString()).toBe(supplied.toISOString());
     expect(Object.isFrozen(startedAt)).toBe(true);
   });
+
+  it('refuses a malformed through rule instead of reinterpreting it', () => {
+    const withThrough = (through: unknown) => () =>
+      normalizeRepositoryPolicy({
+        read: { scope: true },
+        create: { scope: true },
+        update: {
+          scope: true,
+          relations: { tags: { connect: { through } } },
+        },
+        delete: { scope: true },
+      } as never);
+
+    // `through: true` is the obvious way to write "allow a payload", and it
+    // used to become "allow a payload with no fields" — a different rule.
+    expect(withThrough(true)).toThrowError(
+      /through must be false or an object/,
+    );
+    expect(withThrough(7)).toThrowError(/through must be false or an object/);
+    expect(withThrough(['id'])).toThrowError(
+      /through must be false or an object/,
+    );
+    expect(withThrough({ fields: ['id'], extra: 1 })).toThrowError(
+      /Unsupported Policy option: extra/,
+    );
+
+    expect(withThrough(false)()).toBeDefined();
+    expect(withThrough({ fields: ['role'] })()).toBeDefined();
+  });
 });

@@ -14,6 +14,7 @@ import {
   applyCreateDefaults,
   assertCreateScopeSatisfiable,
   assertReadableField,
+  detachPolicy,
   combinePolicyFilter,
   readableFields,
   relationReadContext,
@@ -188,6 +189,19 @@ export class DefaultRepository<
     policy: TPolicy | ((principal: P) => TPolicy),
     principal?: P,
   ): ScopedRepository<PolicyRecord<TRecord, TPolicy>, TCreate, TUpdate> {
+    // A Repository handed out by a policy-bound Connection is still a
+    // DefaultRepository, and the Connection types it as `Repository`, so this
+    // method stays reachable. Replacing the binding there would hand back an
+    // unrestricted Repository and undo the Connection's authorization, so
+    // rebinding is refused rather than allowed to widen. Tightening further
+    // is what `narrow` is for.
+    if (this.options.policy) {
+      invalid(
+        'INVALID_POLICY',
+        'This Repository already has a bound Policy. Use narrow() to tighten it; a Policy cannot be replaced.',
+        { collection: this.options.collection },
+      );
+    }
     const input =
       typeof policy === 'function' ? policy(principal as P) : policy;
     return new DefaultRepository<
@@ -217,7 +231,7 @@ export class DefaultRepository<
         { collection: this.options.collection },
       );
     }
-    return this.options.policy;
+    return detachPolicy(this.options.policy);
   }
 
   findMany(options: FindManyOptions<TRecord> = {}): RepositoryQuery<TRecord> {
@@ -599,6 +613,12 @@ export class DefaultRepository<
           'update',
         );
         validateIfVersion(collection, options.ifVersion);
+      } else {
+        // A create whose scope reads a field it can never set is invalid, and
+        // saying so here is the whole point of this method: otherwise it
+        // reports valid and the caller finds out from an insert that rolls
+        // back on every attempt.
+        await this.scopeCheck(collection, 'create');
       }
       return { valid: true, errors: [] };
     } catch (error) {
