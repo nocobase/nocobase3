@@ -7,8 +7,6 @@
     "prettier/**/*.ts",
     "scripts/**/*.ts",
     "vite/**/*.ts",
-    "vitest/**/*.ts",
-    "vitest.config.ts",
-    "tests/**/*.ts"
+    "vitest/**/*.ts"
   ]
 }
