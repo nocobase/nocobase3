@@ -128,6 +128,11 @@ describe('normalizeRepositoryPolicy', () => {
       }),
     ).toThrowError(/direct Field/);
 
+    // The shorthand spelling of the same thing. It keeps the dotted name as
+    // one segment, so a length check alone would have let it through to fail
+    // much later as an unknown field.
+    expect(withScope({ 'owner.tenantId': 'T1' })).toThrowError(/direct Field/);
+
     expect(
       withScope({
         kind: 'filter',

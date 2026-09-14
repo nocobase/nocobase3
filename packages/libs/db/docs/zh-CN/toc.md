@@ -115,6 +115,8 @@ Collection-aware 记录和关系访问请优先阅读下一节 Repository；本�
 - [context](./repository/context.md)
 - [relation-mutations](./repository/relation-mutations.md)
 - [transactions](./repository/transactions.md)
+- [Policy 快速开始](./repository/policy-quick-start.md)：行范围与字段关系白名单，绑定、越权表现与常见坑。
+- [write-policy](./repository/write-policy.md)：方法级的字段与关系写入白名单。
 - [Repository API 参考](./reference/repository-api.md)：选项、返回结构与公开类型。
 - [Repository Agent 任务指南](./agent/implement-repository-data-access.md)：最小阅读路由、实施步骤与验证。
 

@@ -122,7 +122,10 @@ function assertScopeNodes(node: FilterNode, path: PolicyPath): void {
       path,
     );
   }
-  if (node.path.length !== 1) {
+  // Both spellings of a relation path end up here: `['owner', 'tenantId']`
+  // from an AST, and `'owner.tenantId'` from the shorthand, which keeps the
+  // dotted name as one segment rather than splitting it.
+  if (node.path.length !== 1 || node.path[0].includes('.')) {
     invalid('scope conditions must name a direct Field of this Collection.', [
       ...path,
       'path',

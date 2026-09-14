@@ -5,6 +5,8 @@ description: 使用服务端 writePolicy 限制调用方可写字段、关系操
 
 # Write policy：字段与关系写入白名单
 
+> 只需要限制**字段和关系形状**时用本页。还需要限制**能碰哪些行**（多租户隔离、数据归属、可见范围）时看 [Policy 快速开始](./policy-quick-start.md)——Policy 把两个问题一起回答，并且绑在实例上而不是逐次调用传入。两者可以并存：绑定 Policy 之后，方法级 `writePolicy` 仍作为本次调用的额外收窄生效。
+
 `writePolicy` 是**服务端配置**，限制一次 mutation 中调用方提交的字段和关系操作。支持对象和同步 callback builder；前端 Repository、前端 options builder 和 HTTP 请求都不接受这个参数。前端提交 `values`，后端决定这些值能否写入。
 
 ## 默认值与适用范围
