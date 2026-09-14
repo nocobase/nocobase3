@@ -156,6 +156,14 @@ export interface BaseConnectionConfig {
   metadataStore?: CollectionMetadataStore | CollectionMetadataStoreConfig;
   onCollectionMetadataInvalidationError?: (error: unknown) => void;
   schemaManagement?: SchemaManagementMode;
+  /**
+   * Physical tables on this connection that are NocoBase bookkeeping rather
+   * than Collections — a migration or seed history or lock table given a
+   * custom name. Tables under the `__nocobase_` prefix are recognised without
+   * being listed; anything else the application names has to be declared here
+   * or `collections.list()` and `scan()` report it as a Collection.
+   */
+  internalTables?: readonly string[];
   debug?: boolean;
   pool?: unknown;
   driverOptions?: Record<string, unknown>;

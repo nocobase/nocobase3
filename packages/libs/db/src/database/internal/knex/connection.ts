@@ -159,6 +159,7 @@ export class KnexDatabaseConnection implements DatabaseConnection {
       naming: this.config.naming,
       isInternalPhysicalCollection: (identity) =>
         isNocoBaseInternalTable(identity.tableName) ||
+        (this.config.internalTables?.includes(identity.tableName) ?? false) ||
         (this.metadataStore instanceof DatabaseCollectionMetadataStore &&
           this.metadataStore.isInternalPhysicalCollection(identity)),
     });

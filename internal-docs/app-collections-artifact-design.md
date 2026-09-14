@@ -106,7 +106,7 @@ pnpm nocobase app collections generate --all
 
 生成只读取已有数据库，不隐式执行 migrations 或 seeds。反方向同样不隐式：`app migrate` 成功后不会自动刷新这些文件。两个命令保持正交，开发流程是"migrate，然后 generate，然后提交"，遗漏由 `--check` 在 CI 里捕获。
 
-通过 `connection.collections.scan()` 枚举 Collection。registry 把所有 `__nocobase_` 前缀的表视为 NocoBase 自己的记账表并跳过，包括 migration 和 seed 的历史表与锁表以及 Collection 元数据表，生成器不需要自己维护排除列表。实现这一步时发现原来只排除了元数据表，任何跑过 migration 的库上 `list()` 和 `scan()` 都会在第一张记账表上抛错，已在 `@nocobase/db` 修复。
+通过 `connection.collections.scan()` 枚举 Collection。registry 把所有 `__nocobase_` 前缀的表视为 NocoBase 自己的记账表并跳过，包括 migration 和 seed 的历史表与锁表以及 Collection 元数据表，生成器不需要自己维护排除列表。改了名的历史表或锁表不带这个前缀，连接层无从得知，由 app-server 在解析连接配置时把 `migrations`、`seeds` 的 `tableName`、`lockTableName` 收进连接的 `internalTables` 一并跳过。实现这一步时发现原来只排除了元数据表，任何跑过 migration 的库上 `list()` 和 `scan()` 都会在第一张记账表上抛错，已在 `@nocobase/db` 修复。
 
 ### 确定性输出
 

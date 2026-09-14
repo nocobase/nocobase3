@@ -472,6 +472,36 @@ describe('generateAppCollectionsArtifact', () => {
     });
   });
 
+  it('does not snapshot a custom-named migration history table', async () => {
+    const { config, paths } = fixture();
+    const renamed: AppDatabaseConfig = {
+      ...config,
+      connections: {
+        ...config.connections,
+        main: {
+          ...config.connections.main,
+          migrations: {
+            autoRun: true,
+            tableName: 'legacy_history',
+            lockTableName: 'legacy_lock',
+          },
+        },
+      },
+    };
+    migration(paths.database('main/migrations'), '001_main', 'mainRows');
+    await migrate(renamed, paths);
+
+    const result = await generateAppCollectionsArtifact(renamed, { paths });
+    expect(result.results[0]).toMatchObject({
+      status: 'completed',
+      manifest: { migrationHead: '001_main', collections: ['mainRows'] },
+    });
+    expect(readdirSync(paths.database('main/collections')).sort()).toEqual([
+      '_manifest.json',
+      'mainRows',
+    ]);
+  });
+
   it('refuses conflicting flags and unknown connections', async () => {
     const { config, paths } = fixture();
     await expect(

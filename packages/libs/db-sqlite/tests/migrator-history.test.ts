@@ -106,4 +106,37 @@ describe('Migrator.history()', () => {
       await db.destroy();
     }
   });
+
+  it('skips custom-named history and lock tables that the connection declares as internal', async () => {
+    const db = createDatabaseManager({
+      drivers: { sqlite },
+      connections: {
+        main: {
+          dialect: 'sqlite',
+          filename: ':memory:',
+          internalTables: ['legacy_history', 'legacy_lock'],
+        },
+      },
+    });
+    const directory = migrationDirectory();
+    try {
+      writeMigration(directory, '001_create_orders', 'orders');
+      await db
+        .createMigrator({
+          directory,
+          tableName: 'legacy_history',
+          lockTableName: 'legacy_lock',
+        })
+        .latest();
+      const listed = await db.collections().list();
+      expect(listed.items.map((item) => item.name)).toEqual(['orders']);
+      const scanned: string[] = [];
+      for await (const collection of db.collections().scan()) {
+        scanned.push(collection.name!);
+      }
+      expect(scanned).toEqual(['orders']);
+    } finally {
+      await db.destroy();
+    }
+  });
 });
