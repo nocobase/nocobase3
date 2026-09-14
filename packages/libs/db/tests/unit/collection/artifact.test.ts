@@ -137,6 +137,7 @@ describe('serializeCollectionArtifactManifest', () => {
     const text = serializeCollectionArtifactManifest({
       connection: 'main',
       dialect: 'sqlite',
+      schemaManagement: 'managed',
       migrationHead: '202609080001_create_articles',
       collections: ['orders', 'articles'],
     });
@@ -145,6 +146,7 @@ describe('serializeCollectionArtifactManifest', () => {
       formatVersion: 1,
       connection: 'main',
       dialect: 'sqlite',
+      schemaManagement: 'managed',
       migrationHead: '202609080001_create_articles',
       collections: ['articles', 'orders'],
     });
@@ -157,6 +159,7 @@ describe('serializeCollectionArtifactManifest', () => {
       serializeCollectionArtifactManifest({
         connection: 'external',
         dialect: 'postgres',
+        schemaManagement: 'external',
         migrationHead: null,
         collections: [],
       }),

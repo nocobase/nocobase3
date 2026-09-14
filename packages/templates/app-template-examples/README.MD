@@ -126,9 +126,11 @@ database/
 ├── main/
 │   ├── migrations/      Schema history for the main connection
 │   └── seeds/           Initial example data
-└── analytics/
-    ├── migrations/      Independent analytics schema
-    └── seeds/           Channel, campaign and daily metric examples
+├── analytics/
+│   ├── migrations/      Independent analytics schema
+│   └── seeds/           Channel, campaign and daily metric examples
+└── externalCrm/
+    └── metadata.ts      Supplemental metadata for the external CRM example
 
 tests/                   Unit and integration tests
 e2e/                     Browser tests needing a real server
@@ -226,6 +228,70 @@ Requests use `POST <app-base>/api/<repository>:<action>`, for example
 
 The response is wrapped in `{ "data": ... }`. Use the application's authenticated
 API client, for example `api.repository('analyticsChannels').findMany({ limit: 10 })`.
+
+### External database example
+
+Not every database an application reads is one it owns. The `externalCrm`
+connection in `server/config/database.ts` shows the shape of one that is not:
+`schemaManagement: 'external'` tells NocoBase to read the schema and never
+change it, `naming` strips the CRM's `crm_` table prefix when mapping tables to
+logical Collection names, and a `ModuleCollectionMetadataStore` supplies what
+the schema cannot say — titles, descriptions, and which column is a relation —
+from `database/externalCrm/metadata.ts`. No migrations or seeds run against it,
+and the Builder refuses DDL on it.
+
+The connection points at `storage/external-crm.sqlite` so the example runs
+without a real CRM. `server/providers/external-crm.ts` plays the part of the
+foreign system: when the connection is the SQLite stand-in and the tables are
+missing, it creates `crm_customers` and `crm_orders` with the raw client and
+inserts three customers and four orders. Point the connection at an actual
+database in `config.yml` and the provider does nothing.
+
+`server/routes/external-crm.ts` exposes the two Collections read-only through
+`defineRepositoryApiRoutes`, bound to `externalCrm`:
+
+| Repository API name | Collection  |
+| ------------------- | ----------- |
+| `crmCustomers`      | `customers` |
+| `crmOrders`         | `orders`    |
+
+Each supports `findMany` (maximum 100), `findOne`, `count`, `exists`,
+`aggregate` and `groupBy` for signed-in users; write actions are not exposed.
+Logical names work as they do for managed tables — filter on `status`, sort by
+`id`, select `orderNo` and include the `customer` relation — because the
+Repository resolves them through the connection's naming and metadata. For
+example, `POST /main/api/crmOrders:findMany` with:
+
+```json
+{
+  "filter": { "status": "paid" },
+  "sort": {
+    "kind": "sort",
+    "version": 1,
+    "items": [{ "kind": "field", "path": ["id"], "direction": "asc" }]
+  },
+  "select": {
+    "kind": "select",
+    "version": 1,
+    "root": {
+      "kind": "selection",
+      "fields": ["id", "orderNo", "totalAmount"],
+      "includes": [
+        {
+          "kind": "include",
+          "relation": "customer",
+          "select": { "kind": "selection", "fields": ["id", "displayName"] }
+        }
+      ]
+    }
+  }
+}
+```
+
+`pnpm collections:generate --connection externalCrm` writes the resolved
+Collections under `database/externalCrm/collections/`; the manifest records
+`schemaManagement: external` and no migration head, since the CRM has no
+migration history this application knows about.
 
 ### Checks
 

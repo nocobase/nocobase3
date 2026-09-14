@@ -43,6 +43,7 @@ server/providers/         Services and their lifecycle
 database/main/migrations/      Schema changes
 database/main/seeds/           Required initial data
 database/main/collections/     Generated Collection artifacts; regenerate, never edit
+database/externalCrm/metadata.ts Supplemental metadata for the external CRM example
 cli/commands/             Commands this application owns
 tests/                    Tests; never beside the source
 ```
@@ -159,7 +160,7 @@ Edit an existing migration only while the branch that introduced it is unmerged.
 
 The exported `name` must match the filename. Apply with `pnpm migrate` and verify against a real database.
 
-At runtime, resolve `databaseManagerToken` from the container and use `database.query()` to read and write the default connection. Use `database.query('analytics')` for another connection. Application tasks use `database/<connectionName>/{migrations,seeds}` and bind to that connection explicitly; plugin tasks and default runtime access stay on `database.default`. Only managed connections run migrations or seeds. See the migrations reference for execution and upgrade rules.
+At runtime, resolve `databaseManagerToken` from the container and use `database.query()` to read and write the default connection. Use `database.query('analytics')` for another connection. Application tasks use `database/<connectionName>/{migrations,seeds}` and bind to that connection explicitly; plugin tasks and default runtime access stay on `database.default`. Only managed connections run migrations or seeds. See the migrations reference for execution and upgrade rules. An `external` connection such as `externalCrm` reads a database another system owns: declare its supplemental metadata in `database/<connectionName>/metadata.ts`, never write migrations for it, and expose it read-only unless the owning system has agreed otherwise.
 
 ### User-facing text
 

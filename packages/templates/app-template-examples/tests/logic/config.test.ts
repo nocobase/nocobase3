@@ -19,6 +19,7 @@ import {
   type AppQueueConfig,
   type AppSessionConfigInput,
 } from '@nocobase/app-server';
+import { ModuleCollectionMetadataStore } from '@nocobase/db';
 import { describe, expect, it } from 'vitest';
 
 import appRuntime from '../../server/runtime.ts';
@@ -50,6 +51,16 @@ describe('application config', () => {
         migrations: { autoRun: true },
         seeds: { autoRun: true },
       });
+      expect(database.connections.externalCrm).toMatchObject({
+        dialect: 'sqlite',
+        filename: path.join(templateRootDir, 'storage/external-crm.sqlite'),
+        schemaManagement: 'external',
+        naming: { underscored: true, tablePrefix: 'crm_' },
+      });
+      // A class instance passes through configuration merging untouched.
+      expect(database.connections.externalCrm.metadataStore).toBeInstanceOf(
+        ModuleCollectionMetadataStore,
+      );
       const analytics = planAppDatabaseTasks(
         database,
         ['migrations', 'seeds'],

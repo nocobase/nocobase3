@@ -83,6 +83,7 @@ schema.json + metadata.json + connection naming = collection.json
 - `formatVersion`：文件格式版本，见下文。
 - `connection`：连接名。
 - `dialect`：生成时连接的方言标识。
+- `schemaManagement`：`managed` 或 `external`。
 - `migrationHead`：生成时该连接已执行的最后一个 migration 名称；没有 migration 表的连接为 `null`。
 - `collections`：按名称排序的 Collection 名列表。
 
@@ -95,11 +96,11 @@ schema.json + metadata.json + connection naming = collection.json
 ## 生成命令
 
 ```bash
-pnpm nocobase app collections:generate --connection main
-pnpm nocobase app collections:generate --all
+pnpm nocobase app collections generate --connection main
+pnpm nocobase app collections generate --all
 ```
 
-命令形态与 `app migrate`、`app seed` 一致。默认作用于默认连接；`--connection` 指定一个受管连接；`--all` 遍历全部受管连接，external 连接报告为跳过。
+命令形态与 `app migrate`、`app seed` 一致。默认作用于默认连接；`--connection` 指定一个连接；`--all` 遍历全部连接。external 连接同样生成：它的 Schema 由别的系统拥有，但"不连库就能看到结构"恰恰是对它最有价值的事。external 连接没有 migration 表，`migrationHead` 记为 `null`，`_manifest.json` 的 `schemaManagement` 字段区分两种连接。
 
 生成只读取已有数据库，不隐式执行 migrations 或 seeds。反方向同样不隐式：`app migrate` 成功后不会自动刷新这些文件。两个命令保持正交，开发流程是"migrate，然后 generate，然后提交"，遗漏由 `--check` 在 CI 里捕获。
 
@@ -127,7 +128,7 @@ pnpm nocobase app collections:generate --all
 ### `--check`
 
 ```bash
-pnpm nocobase app collections:generate --connection main --check
+pnpm nocobase app collections generate --connection main --check
 ```
 
 只读模式，供 CI 和提交前检查使用。它在内存中生成结果，与磁盘文件逐字节比较，把每个差异归为三类之一：`missing`（应有而无）、`stale`（内容不同）、`unexpected`（磁盘上多出来的，包括生成器不认识的条目）。有任何差异时返回非零退出码并列出，不修改任何文件。写入模式下 `unexpected` 中生成器不认识的条目会让命令失败，而属于已删除 Collection 的三个文件会被清理。
@@ -195,4 +196,3 @@ migrations 负责 Schema 演进，是不可变的历史记录。每个 migration
 ## 未决问题
 
 - `collection.json` 里的字段类型在不同方言下是否完全一致，需要用 db-testkit 的多方言套件实际生成一次对比，才能确定"规范方言"约束是只针对 `schema.json` 还是两个文件都需要。
-- external 连接是否需要生成。它们没有 migration 表，`migrationHead` 为 `null`，`--check` 只能做内容比较。第一阶段跳过，但有 external 连接的应用可能恰恰最需要一份可读的结构快照。

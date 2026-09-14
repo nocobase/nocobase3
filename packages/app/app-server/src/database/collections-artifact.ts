@@ -38,7 +38,7 @@ export interface AppCollectionsArtifactOptions {
   readonly drivers?: Record<string, DatabaseDriverRegistration>;
   /** One connection; defaults to the default connection. Exclusive with `all`. */
   readonly connection?: string;
-  /** Every managed connection; external connections are reported as skipped. */
+  /** Every configured connection, external ones included. */
   readonly all?: boolean;
   /** Compare the generated result with the files on disk and write nothing. */
   readonly check?: boolean;
@@ -57,6 +57,8 @@ export interface AppCollectionsArtifactDifference {
 
 export interface AppCollectionsArtifactManifestSummary {
   dialect: string;
+  /** An `external` connection has no migration history, so `migrationHead` is always `null` there. */
+  schemaManagement: 'managed' | 'external';
   migrationHead: string | null;
   collections: string[];
 }
@@ -65,8 +67,7 @@ export interface AppCollectionsArtifactConnectionResult {
   connection: string;
   /** Absolute path of `database/<connection>/collections`. */
   directory: string;
-  status: 'completed' | 'skipped' | 'stale' | 'failed';
-  reason?: 'external';
+  status: 'completed' | 'stale' | 'failed';
   manifest?: AppCollectionsArtifactManifestSummary;
   /** Files created or rewritten, relative to `directory`. Empty in check mode. */
   written?: string[];
@@ -118,15 +119,6 @@ export async function generateAppCollectionsArtifact(
   try {
     for (const name of names) {
       const directory = path.join(root, name, 'collections');
-      if (config.connections[name].schemaManagement === 'external') {
-        results.push({
-          connection: name,
-          directory,
-          status: 'skipped',
-          reason: 'external',
-        });
-        continue;
-      }
       try {
         results.push(
           await generateForConnection(database.connection(name), directory, {
@@ -155,7 +147,12 @@ export async function generateAppCollectionsArtifact(
   return { ok: status === 'completed', status, check, results };
 }
 
-/** Mirrors the selection rules of `planAppDatabaseTasks` so the two commands read the same flags the same way. */
+/**
+ * Mirrors the selection rules of `planAppDatabaseTasks` so the two commands
+ * read the same flags the same way — except that external connections take
+ * part: their schema is owned elsewhere, but a snapshot of what it resolves to
+ * is exactly what a reader without database access needs from them.
+ */
 function selectConnections(
   config: AppDatabaseConfig,
   options: AppCollectionsArtifactOptions,
@@ -178,14 +175,6 @@ function selectConnections(
   for (const name of names) {
     if (!Object.hasOwn(config.connections, name)) {
       throw new Error(`Unknown database connection "${name}".`);
-    }
-    if (
-      !options.all &&
-      config.connections[name].schemaManagement === 'external'
-    ) {
-      throw new Error(
-        `Database connection "${name}" is external; Collection artifacts are generated for managed connections only.`,
-      );
     }
   }
   return names;
@@ -269,6 +258,7 @@ async function generateForConnection(
   }
   const manifest: AppCollectionsArtifactManifestSummary = {
     dialect: connection.dialect,
+    schemaManagement: connection.schemaManagement,
     migrationHead: await options.migrationHead(),
     collections: names,
   };

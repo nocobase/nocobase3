@@ -1,3 +1,4 @@
+import type { SchemaManagementMode } from '../../database/config.js';
 import type { CollectionMetadataDocument } from '../../metadata/document.js';
 import type { PhysicalCollectionSchema } from '../../schema/inspector/types.js';
 import type { CollectionResolutionWarning } from '../resolver/types.js';
@@ -60,6 +61,8 @@ export interface CollectionArtifactManifest {
   readonly formatVersion: CollectionArtifactFormatVersion;
   readonly connection: string;
   readonly dialect: string;
+  /** `managed` connections run migrations; an `external` one is owned by another system and has no history. */
+  readonly schemaManagement: SchemaManagementMode;
   /** Name of the last applied migration, or `null` when the connection has no history table. */
   readonly migrationHead: string | null;
   readonly collections: readonly string[];

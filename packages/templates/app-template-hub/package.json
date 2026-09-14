@@ -147,7 +147,7 @@
     "format:check": "prettier . --check",
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
     "fix": "pnpm lint:fix && pnpm format",
-    "collections:generate": "pnpm nocobase app collections:generate",
+    "collections:generate": "pnpm nocobase app collections generate",
     "migrate": "pnpm nocobase app migrate",
     "seed": "pnpm nocobase app seed",
     "nocobase": "tsx ./cli/index.ts",

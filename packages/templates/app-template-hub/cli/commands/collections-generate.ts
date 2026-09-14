@@ -13,7 +13,7 @@ import appRuntime from '../../server/runtime.js';
 export default class AppCollectionsGenerate extends Command {
   static override summary = 'Write Collection artifacts from the database.';
   static override description =
-    'Reads every Collection of a managed connection and writes collection.json, metadata.json and schema.json under database/<connection>/collections/<name>/, plus one _manifest.json per connection. The files are derived: migrations stay the only authority on schema and nothing reads them back at runtime. Runs the default connection unless --connection or --all is specified.';
+    'Reads every Collection of a managed connection and writes collection.json, metadata.json and schema.json under database/<connection>/collections/<name>/, plus one _manifest.json per connection. The files are derived: migrations stay the only authority on schema and nothing reads them back at runtime. Runs the default connection unless --connection or --all is specified; external connections are included and record no migration head.';
 
   static override examples: Command.Example[] = [
     '<%= config.bin %> <%= command.id %>',
@@ -34,12 +34,11 @@ export default class AppCollectionsGenerate extends Command {
     all: Flags.boolean({
       default: false,
       exclusive: ['connection'],
-      description:
-        'Run all managed connections; report external connections as skipped.',
+      description: 'Run every configured connection, external ones included.',
     }),
     connection: Flags.string({
       exclusive: ['all'],
-      description: 'Target a named managed connection.',
+      description: 'Target a named connection.',
     }),
     check: Flags.boolean({
       default: false,
@@ -85,10 +84,12 @@ export default class AppCollectionsGenerate extends Command {
     }
     for (const entry of result.results) {
       this.log(
-        `[${entry.connection}] collections: ${entry.status}${entry.reason ? ` (${entry.reason})` : ''}${entry.error ? `: ${entry.error}` : ''}`,
+        `[${entry.connection}] collections: ${entry.status}${entry.error ? `: ${entry.error}` : ''}`,
       );
       if (entry.manifest) {
-        this.log(`  Migration head: ${entry.manifest.migrationHead ?? 'none'}`);
+        this.log(
+          `  Schema management: ${entry.manifest.schemaManagement}; migration head: ${entry.manifest.migrationHead ?? 'none'}`,
+        );
         this.log(
           `  Collections: ${entry.manifest.collections.join(', ') || 'none'}`,
         );

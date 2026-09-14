@@ -1,3 +1,4 @@
+import type { SchemaManagementMode } from '../../database/config.js';
 import type { CollectionMetadataDocument } from '../../metadata/document.js';
 import type { PhysicalCollectionSchema } from '../../schema/inspector/types.js';
 import type {
@@ -61,6 +62,7 @@ export function serializeCollectionArtifact(
 export interface CollectionArtifactManifestInput {
   readonly connection: string;
   readonly dialect: string;
+  readonly schemaManagement: SchemaManagementMode;
   readonly migrationHead: string | null;
   readonly collections: readonly string[];
 }
@@ -72,6 +74,7 @@ export function serializeCollectionArtifactManifest(
     formatVersion: COLLECTION_ARTIFACT_FORMAT_VERSION,
     connection: input.connection,
     dialect: input.dialect,
+    schemaManagement: input.schemaManagement,
     migrationHead: input.migrationHead,
     collections: [...input.collections].sort(),
   };

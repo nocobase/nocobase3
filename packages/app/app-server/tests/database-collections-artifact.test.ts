@@ -9,6 +9,7 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import type { Knex } from 'knex';
 import sqlite from '@nocobase/db-sqlite';
 import {
   InMemoryCollectionMetadataStore,
@@ -45,6 +46,9 @@ function fixture() {
   const root = mkdtempSync(path.join(parent, 'collections-artifact-'));
   roots.push(root);
   const paths = createConfigPaths({ rootDir: root });
+  // An external database exists before the application does; nothing here
+  // prepares storage for it, so the fixture stands in for the foreign system.
+  mkdirSync(paths.storage('external'), { recursive: true });
   const config: AppDatabaseConfig = {
     drivers,
     default: 'main',
@@ -101,7 +105,7 @@ function readJson<T>(file: string): T {
 }
 
 describe('generateAppCollectionsArtifact', () => {
-  it('writes three files per Collection and a manifest per managed connection, skipping external ones', async () => {
+  it('writes three files per Collection and a manifest per connection, external ones included', async () => {
     const { config, paths } = fixture();
     migration(paths.database('main/migrations'), '001_main', 'mainRows');
     migration(
@@ -122,7 +126,7 @@ describe('generateAppCollectionsArtifact', () => {
     ).toEqual([
       ['main', 'completed'],
       ['analytics', 'completed'],
-      ['external', 'skipped'],
+      ['external', 'completed'],
     ]);
     const main = result.results[0];
     expect(main.written).toEqual([
@@ -133,6 +137,7 @@ describe('generateAppCollectionsArtifact', () => {
     ]);
     expect(main.manifest).toEqual({
       dialect: 'sqlite',
+      schemaManagement: 'managed',
       migrationHead: '001_main',
       collections: ['mainRows'],
     });
@@ -149,6 +154,7 @@ describe('generateAppCollectionsArtifact', () => {
       formatVersion: 1,
       connection: 'main',
       dialect: 'sqlite',
+      schemaManagement: 'managed',
       migrationHead: '001_main',
       collections: ['mainRows'],
     });
@@ -184,7 +190,16 @@ describe('generateAppCollectionsArtifact', () => {
         paths.database('analytics/collections/events/collection.json'),
       ),
     ).toBe(true);
-    expect(existsSync(paths.database('external/collections'))).toBe(false);
+    // An external connection owns no tables yet, so only its manifest exists.
+    expect(result.results[2].manifest).toEqual({
+      dialect: 'sqlite',
+      schemaManagement: 'external',
+      migrationHead: null,
+      collections: [],
+    });
+    expect(readdirSync(paths.database('external/collections'))).toEqual([
+      '_manifest.json',
+    ]);
   });
 
   it('is idempotent and its check mode agrees', async () => {
@@ -296,11 +311,51 @@ describe('generateAppCollectionsArtifact', () => {
     }
   });
 
-  it('refuses an explicitly selected external connection and conflicting flags', async () => {
+  it('snapshots the tables another system created on an external connection', async () => {
     const { config, paths } = fixture();
-    await expect(
-      generateAppCollectionsArtifact(config, { paths, connection: 'external' }),
-    ).rejects.toThrow(/external/);
+    const database = createAppDatabaseManager(config, paths)!;
+    try {
+      // The schema belongs to the foreign system: create it as that system
+      // would, with the raw client rather than the Builder.
+      const knex = await database.connection('external').client<Knex>();
+      await knex.schema.createTable('legacy_accounts', (table) => {
+        table.increments('id');
+        table.string('code', 32).notNullable();
+      });
+
+      const result = await generateAppCollectionsArtifact(config, {
+        paths,
+        connection: 'external',
+        database,
+      });
+      expect(result.results[0]).toMatchObject({
+        status: 'completed',
+        manifest: {
+          schemaManagement: 'external',
+          migrationHead: null,
+          collections: ['legacyAccounts'],
+        },
+        written: [
+          '_manifest.json',
+          'legacyAccounts/collection.json',
+          'legacyAccounts/metadata.json',
+          'legacyAccounts/schema.json',
+        ],
+      });
+      const collection = readJson<CollectionArtifactCollectionFile>(
+        paths.database('external/collections/legacyAccounts/collection.json'),
+      );
+      expect(collection.collection.fields?.map((field) => field.name)).toEqual([
+        'id',
+        'code',
+      ]);
+    } finally {
+      await database.destroy();
+    }
+  });
+
+  it('refuses conflicting flags and unknown connections', async () => {
+    const { config, paths } = fixture();
     await expect(
       generateAppCollectionsArtifact(config, {
         paths,
