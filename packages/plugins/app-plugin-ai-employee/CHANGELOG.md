@@ -1,5 +1,107 @@
 # @nocobase/app-plugin-ai-employee
 
+## 0.1.0-beta.6
+
+### Minor Changes
+
+- f17f3a6: Provide editable TypeScript defaults for application modules, assembled by the runtime before services start. Module factories receive the runtime with application paths and plugin metadata; deployment files and environment variables override defaults, and configuration reload preserves code defaults.
+
+  Keep deployment settings in YAML examples and reserve explicit environment overrides for secrets and startup integration. Simplify application configuration loading, merging and reload subscriptions.
+
+  Align client configuration assembly with the server: runtime merges application TypeScript defaults beneath public configuration before services start. Client inspection reports the application configuration entry.
+
+### Patch Changes
+
+- d566dde: Add a read-only MCP settings page backed by declarative `config.yml` configuration, with connection testing and tool inspection.
+- c8f8a93: Keep assistant messages, tool messages, and tool-call persistence atomic behind encapsulated conversation provider implementations.
+- d566dde: Register AI Employees and Tools explicitly from server-side resource aggregators, and load plugin and configured Skills from `SKILL.md` directories.
+- c8f8a93: Expose `AIConversationsManager` through the server service container and allow conversation creation without an AI employee for AgentServiceFactory integrations.
+- ceb356b: Fix published package metadata and database test driver registration.
+- c8f8a93: Simplify AI employee chat message converters and expose the renamed conversion contract.
+- c8f8a93: Resolve and authorize message attachments once at the provider formatting boundary, and remove the obsolete message normalization contract.
+- c8f8a93: Keep conversation thread updates private to the conversation message store implementation.
+- c8f8a93: Consolidate AI employee tool policy behavior into the chat context provider.
+- c8f8a93: Avoid redundant message conversions when resuming an interrupted sub-agent conversation.
+- c8f8a93: Consolidate AI employee tool-call persistence behind the conversation tool-call handler.
+- 28132fd: Forward web search selections, complete execution context for AI employee tools, and recognize DeepSeek's `deepseek-flash` model as web-search capable.
+- d566dde: Fix the AI employee custom Skill menu and include App-root custom Skills for verification.
+- 28132fd: Fix AI employee tool-call resume by loading persisted human decisions correctly and forwarding frontend tool results through the request execution context.
+- c8f8a93: Declare AI employee chat context dependencies explicitly and inject direct repository contracts.
+- c8f8a93: Consolidate conversation thread operations into the message store contract and use explicit method names.
+- c8f8a93: Simplify agent provider boundaries by calculating request-derived details at their use sites and moving conversation persistence ownership out of the employee runtime.
+- c8f8a93: Merge tool-call persistence into the conversation message store and clarify its operation names.
+- c8f8a93: Refine AI employee conversation dependencies around concrete repositories, checkpoint savers, and default message and tool-call handlers.
+- c8f8a93: Persist normalized LLM usage events with AI conversation messages in the same transaction.
+- c8f8a93: Use the concrete LLM stream cache contract and inject logging directly into agent providers and middleware.
+- c8f8a93: Refactor agent execution around request-local LLM resolution, dedicated chat context and message converter providers, dynamically activated skill tools, and a unified tool-call policy.
+- c8f8a93: Consolidate AI employee server types and colocate the AI employee runtime under the agent module.
+- c8f8a93: Remove the unused agent provider override layer and require explicit provider composition.
+- c8f8a93: Remove the empty recommended-model mechanism and use explicit provider or custom model configuration.
+- c8f8a93: Simplify the AI employee agent service API and preserve cancelled tool-call continuation messages.
+- c8f8a93: Refactor AI employee execution around an execution-scoped `DiscoveredTools` result, request-selected LLM models, and a simplified system prompt contract.
+- c8f8a93: Move response metadata collection and cleanup into each AgentService stream execution and narrow the chat context and resolved LLM contracts.
+- c8f8a93: Encapsulate conversation thread reads and updates in AIChatConversation while preserving transactional message persistence.
+- Updated dependencies [d566dde]
+- Updated dependencies [d566dde]
+- Updated dependencies [ceb356b]
+- Updated dependencies [f17f3a6]
+- Updated dependencies [f17f3a6]
+- Updated dependencies [f17f3a6]
+- Updated dependencies [43d25b4]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [40e2d49]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [590861e]
+- Updated dependencies [e11b855]
+- Updated dependencies [72ed008]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [28132fd]
+- Updated dependencies [e11b855]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [e11b855]
+- Updated dependencies [ceb356b]
+- Updated dependencies [40e2d49]
+- Updated dependencies [590861e]
+- Updated dependencies [ceb356b]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [c960d07]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [c960d07]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [ceb356b]
+- Updated dependencies [c8f8a93]
+  - @nocobase/ai-employee@0.2.0-beta.4
+  - @nocobase/app-server@1.0.0-beta.11
+  - @nocobase/app-client@1.0.0-beta.14
+  - @nocobase/app-plugin-authentication@0.1.0-beta.11
+  - @nocobase/db@1.0.0-beta.5
+  - @nocobase/logging@0.1.0-beta.4
+
 ## 0.1.0-beta.5
 
 ### Patch Changes

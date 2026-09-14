@@ -1,5 +1,5 @@
 ---
-"@nocobase/db": patch
+'@nocobase/db': patch
 ---
 
 Return DECIMAL fields as database-formatted decimal strings across Query and Repository,

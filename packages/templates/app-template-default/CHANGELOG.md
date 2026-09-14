@@ -1,5 +1,184 @@
 # @nocobase/app-template-default
 
+## 1.0.0-beta.23
+
+### Minor Changes
+
+- 0f80d52: Support PROXY_TARGET_URL during development to run the local Vite client against another application's API and WebSocket service, including browser origin handling for authentication, without starting a local backend.
+- 3bb34a3: Add RouteDialog and RouteDrawer with guarded closing and a shared useRouteOverlay hook. The wrappers insert no child outlet: the page that owns a child route places one itself, so an overlay can render its next child wherever the page needs it. Include route overlay examples and application development guidance.
+
+### Patch Changes
+
+- ceb356b: Declare database dialect drivers on the application's own database config.
+
+  An application lists the dialect packages it installs under `database.drivers`,
+  next to the connections that use them, and the runtime, the CLI commands and the
+  tests all resolve a dialect from that one place. The app-server runtime stays
+  independent of every concrete database driver.
+
+  This replaces the process-wide `registerAppDatabaseDrivers` registry and the
+  `databaseDrivers` option on `Application`, both of which are removed. An
+  application that used either one moves its drivers into `database.drivers` and
+  drops the module it imported only for the registration side effect.
+
+- f17f3a6: Provide editable TypeScript defaults for application modules, assembled by the runtime before services start. Module factories receive the runtime with application paths and plugin metadata; deployment files and environment variables override defaults, and configuration reload preserves code defaults.
+
+  Keep deployment settings in YAML examples and reserve explicit environment overrides for secrets and startup integration. Simplify application configuration loading, merging and reload subscriptions.
+
+  Align client configuration assembly with the server: runtime merges application TypeScript defaults beneath public configuration before services start. Client inspection reports the application configuration entry.
+
+- f17f3a6: Move the password authentication pages to the application. The authentication plugin keeps only the protocol, session state, guards and headless actions: it no longer declares `/login`, `/register`, `/forgot-password` or `/reset-password`, drops the `client/routes` and `client/route-contracts` entries, and removes the `loginPage`/`registerPage` route override options.
+
+  Each application template now declares those four guest routes in `client/routes.ts` and loads the application-owned pages from `client/pages/auth/`, which compose the preinstalled UI from `client/extensions/nocobase-auth-ui/`. The pages use ordinary relative links; URL handling remains with the application router and basename.
+
+- f17f3a6: Support TypeScript authentication options in application templates and use the native authentication client. Keep authentication plugins and callbacks in editable server and client configuration, with YAML as the default format for deployment settings.
+
+  Runtime assembly now prepares complete configuration before application creation. Module configuration factories use defineAppConfig and defaultAppConfigs, receive the runtime once, and retain their defaults when environment configuration reloads.
+
+- ceb356b: Supply plugin migration and seed sources to database planning directly instead
+  of through the database configuration.
+
+  `AppDatabaseConfig.taskSources` is removed. It held the application's package
+  name and the migration and seed directories contributed by registered server
+  plugins — values the runtime derives from resolved plugins rather than values
+  anyone configures. Carrying them in the `database` namespace put them where a
+  `config.yml` deep-merges: `database.taskSources.migrations: []` silently
+  dropped every plugin's migrations, and the application still started.
+
+  They now travel as an `AppDatabaseTaskContributions` value alongside the
+  configuration. `planAppDatabaseTasks`, `runAppDatabaseTasks`, `runAppMigrations`
+  and `runAppSeeds` take an options object carrying it, with `paths`, `drivers`
+  and the task selection, in place of their positional parameters.
+  `createAppPluginDatabaseConfig` and `resolveAppPluginDatabaseConfig` are
+  replaced by `createAppDatabaseTaskContributions`, which maps resolved plugins to
+  that value. `contributions` is required, so a call site that has not been
+  updated fails to compile rather than quietly planning without its plugins.
+
+  An application's `server/config/database.ts` keeps only what it configures —
+  drivers and connections — and no longer calls into the plugin resolver. Its
+  `cli/database-command.ts` builds the contributions from the runtime it already
+  resolves; `cli/commands/migrate.ts` and `cli/commands/seed.ts` are unchanged.
+
+- d566dde: Fix the AI employee custom Skill menu and include App-root custom Skills for verification.
+- e11b855: Locate a built application's `config.yml` next to `dist/` when none exists inside it, build the client against the same `.env` files the server loads, and prefer the compiled dependency tree when resolving plugins from a production build.
+- ceb356b: Add the destructive `pnpm migrate --fresh --force` workflow for managed
+  connections. It clears dialect-owned schema objects, reruns visible migrations,
+  requires confirmation in interactive terminals, and rejects external
+  connections.
+- bf0f05b: Replace the `plugin update --plugin` flag with an optional plugin name argument, supporting full package names and short names while preserving updates of all registered plugins when no name is supplied.
+
+  Document the positional plugin update command, version-range behavior, and Skills synchronization in all three application templates' README, agent guidelines, and development Skill.
+
+- f718a90: Honor APP_SERVER_PORT as the local Vite port during remote-backend development while retaining local backend port configuration in normal development.
+- f5b066d: Keep header navigation entries visible on their destination pages while retaining the development-only Dev tools entry.
+- e11b855: Use consistent medium-weight typography for sidebar navigation items, so an item's weight no longer changes as the selection moves.
+- Updated dependencies [d566dde]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [d566dde]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [f17f3a6]
+- Updated dependencies [f17f3a6]
+- Updated dependencies [f17f3a6]
+- Updated dependencies [43d25b4]
+- Updated dependencies [027d13d]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [027d13d]
+- Updated dependencies [027d13d]
+- Updated dependencies [40e2d49]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [590861e]
+- Updated dependencies [e11b855]
+- Updated dependencies [72ed008]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [22b9672]
+- Updated dependencies [5e17578]
+- Updated dependencies [28132fd]
+- Updated dependencies [d566dde]
+- Updated dependencies [28132fd]
+- Updated dependencies [e11b855]
+- Updated dependencies [ceb356b]
+- Updated dependencies [e11b855]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [ceb356b]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [40e2d49]
+- Updated dependencies [e11b855]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [590861e]
+- Updated dependencies [35f9722]
+- Updated dependencies [ceb356b]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [bf0f05b]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [ceb356b]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [c960d07]
+- Updated dependencies [027d13d]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [c960d07]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [ceb356b]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [ceb356b]
+- Updated dependencies [027d13d]
+- Updated dependencies [0867612]
+- Updated dependencies [027d13d]
+- Updated dependencies [72ed008]
+- Updated dependencies [027d13d]
+  - @nocobase/app-plugin-ai-employee@0.1.0-beta.6
+  - @nocobase/db-sqlite@0.1.0-beta.0
+  - @nocobase/app-server@1.0.0-beta.11
+  - @nocobase/app-plugin-notification@0.1.0-beta.8
+  - @nocobase/app-plugin-workflow@0.1.0-beta.14
+  - @nocobase/app-plugin-authentication@0.1.0-beta.11
+  - @nocobase/config@0.1.0-beta.1
+  - @nocobase/app-plugin-install@0.1.0-beta.7
+  - @nocobase/db@1.0.0-beta.5
+  - @nocobase/app-plugin-notification-in-app@0.2.0-beta.9
+  - @nocobase/app-plugin-file@0.1.0-beta.10
+  - @nocobase/nb3-cli@1.0.0-beta.7
+  - @nocobase/app-plugin-users@0.0.2-beta.1
+
 ## 1.0.0-beta.22
 
 ### Minor Changes
