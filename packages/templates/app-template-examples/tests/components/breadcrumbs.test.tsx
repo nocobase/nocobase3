@@ -159,7 +159,36 @@ describe('Breadcrumbs', () => {
     );
   });
 
-  it('omits Home inside a surface that has its own root', () => {
+  it('takes the root from the surface the page is rendered in', () => {
+    const automation = route('automation', '/settings/automation', {
+      title: 'Automation',
+      componentLoader: undefined,
+    });
+    const workflows = route('workflows', '/settings/automation/workflows', {
+      title: 'Workflows',
+    });
+    const tree = [{ ...automation, children: [workflows] }];
+
+    render(
+      <MemoryRouter initialEntries={['/settings/automation/workflows']}>
+        {/* A surface states that it has no root crumb; the page inside it passes nothing. */}
+        <RouteMetadataBoundary home={null} routes={tree}>
+          <Breadcrumbs />
+        </RouteMetadataBoundary>
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.queryByRole('link', { name: 'Home' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText('Automation')).toBeVisible();
+    expect(screen.getByText('Workflows')).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+  });
+
+  it('omits Home when the page asks for no root crumb', () => {
     render(
       <MemoryRouter initialEntries={['/settings/automation/workflows']}>
         <RouteTrailProvider
@@ -179,7 +208,7 @@ describe('Breadcrumbs', () => {
             },
           ])}
         >
-          <Breadcrumbs home={false} />
+          <Breadcrumbs home={null} />
         </RouteTrailProvider>
       </MemoryRouter>,
     );

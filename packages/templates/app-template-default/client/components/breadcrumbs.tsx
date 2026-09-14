@@ -3,16 +3,16 @@ import { ChevronRight, Home } from 'lucide-react';
 import type { ReactElement } from 'react';
 import { Link } from 'react-router';
 
-import { useRouteTrail } from '../routing/route-context.js';
+import { useNavigationRoot, useRouteTrail } from '../routing/route-context.js';
 
 export interface BreadcrumbsProps {
   readonly className?: string;
   /**
-   * Whether the trail starts at the application root. A surface such as the settings centre is its own navigation
-   * space and already offers a way back to the application, so a Home crumb there points out of the trail rather
-   * than up it.
+   * Where the trail starts, overriding the navigation space the page is in. `null` drops the root crumb entirely.
+   * Leave it unset: the surface the page is rendered in already states this, so a page that passes nothing is
+   * correct both in the application and inside the settings centre.
    */
-  readonly home?: boolean;
+  readonly home?: string | null;
 }
 
 /**
@@ -29,10 +29,12 @@ export interface BreadcrumbsProps {
  */
 export function Breadcrumbs({
   className,
-  home = true,
+  home,
 }: BreadcrumbsProps = {}): ReactElement | null {
   const trail = useRouteTrail();
+  const navigationRoot = useNavigationRoot();
   const { t } = useTranslation();
+  const root = home === undefined ? navigationRoot : home;
   const levels = trail.filter(
     (entry) => entry.pathname !== '/' && entry.title !== undefined,
   );
@@ -40,9 +42,11 @@ export function Breadcrumbs({
   if (levels.length < 2) return null;
 
   const items = [
-    ...(home
-      ? [{ href: '/', label: t('navigation.home', { defaultValue: 'Home' }) }]
-      : []),
+    ...(root === null
+      ? []
+      : [
+          { href: root, label: t('navigation.home', { defaultValue: 'Home' }) },
+        ]),
     ...levels.map((entry) => ({
       href: entry.route.componentLoader ? entry.pathname : undefined,
       label: t(entry.title!, {
@@ -62,7 +66,7 @@ export function Breadcrumbs({
           <BreadcrumbItem
             current={index === items.length - 1}
             href={item.href}
-            isHome={home && index === 0}
+            isHome={root !== null && index === 0}
             key={`${item.href ?? index}-${item.label}`}
             label={item.label}
           />

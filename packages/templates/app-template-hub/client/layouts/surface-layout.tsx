@@ -4,7 +4,6 @@ import { ArrowLeft, PanelLeft, X } from 'lucide-react';
 import { useState, type ReactElement } from 'react';
 import { Link, Navigate, Routes, useLocation, useNavigate } from 'react-router';
 
-import { Breadcrumbs } from '@/components/breadcrumbs';
 import { Loading } from '@/components/loading';
 import { Button } from '@/components/ui/button';
 
@@ -197,13 +196,9 @@ export function SurfaceLayout({
               </option>
             ))}
           </select>
-          <RouteMetadataBoundary routes={allRoutes}>
-            {/* A surface is where a trail earns its place: its pages nest under navigation groups. The container
-                matches the padding settings pages use, so the trail lines up with the heading below it. */}
-            <Breadcrumbs
-              className='mx-auto w-full max-w-6xl px-5 pt-5 sm:px-8 sm:pt-8'
-              home={false}
-            />
+          {/* A surface is its own navigation space, and the header already offers the way back to the application,
+              so a trail rendered on one of its pages starts at the page's own group rather than at Home. */}
+          <RouteMetadataBoundary home={null} routes={allRoutes}>
             <Routes>
               {renderRouteTree(routeTree, copy.pathPrefix, false, true)}
               {renderRouteTree(routes, copy.pathPrefix)}

@@ -17,6 +17,8 @@ so tabs, overlays and layers that exist only to share a layout are skipped; a le
 rather than to its route pattern, and a menu group with no page behind it reads as plain text instead of a dead
 link. Nothing renders until the page actually sits under a parent, since a lone `Home` crumb only repeats the
 sidebar. A page names itself at runtime through `usePageTitle` once it knows the record it is showing, with the
-declared title holding the level until then. Layouts render the trail, so pages no longer repeat it.
+declared title holding the level until then.
 
-Also adds the `PageHeader` component for a page title, description and action slots.
+Also adds the `PageHeader` component for a page title, description and action slots. It renders the trail above the
+heading by default, so the gap between the two is the same on every page while the page keeps its own container and
+width; `breadcrumbs={false}` leaves the placement to the page.

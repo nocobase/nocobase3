@@ -3,8 +3,6 @@ import { useState, type ReactElement } from 'react';
 import type { AppClientRegisteredRoute } from '@nocobase/app-client/plugins';
 import { Outlet } from 'react-router';
 
-import { Breadcrumbs } from '@/components/breadcrumbs';
-
 import { AppHeader } from './app-header.js';
 import { AppSidebar } from './app-sidebar.js';
 
@@ -35,9 +33,6 @@ export function AppShell({
           }
         />
         <main className='min-w-0 flex-1'>
-          {/* The trail is a function of the route, so the shell owns it rather than every page repeating it. The
-              container matches what the pages use, so the trail lines up with the heading below it. */}
-          <Breadcrumbs className='mx-auto w-full max-w-6xl px-6 pt-6 md:px-8 md:pt-8' />
           <Outlet />
         </main>
       </div>
