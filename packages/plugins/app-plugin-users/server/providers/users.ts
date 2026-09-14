@@ -64,9 +64,12 @@ export class UsersProvider extends ServiceProvider<AppPluginApplication> {
     if (!this.app.container.has(authorizationToken)) return Promise.resolve();
     const authorization = this.app.container.resolve(authorizationToken);
     // A disabled account can no longer act, so it holds nothing any more.
-    this.releaseSubjectType = authorization.subjects.define('user', {
-      filterActive: (ids, connection) => this.enabledUserIds(ids, connection),
-    });
+    this.releaseSubjectType = authorization.subjects.define<DatabaseConnection>(
+      'user',
+      {
+        filterActive: (ids, connection) => this.enabledUserIds(ids, connection),
+      },
+    );
     authorization.resources.add({
       resourceType: 'user',
       async authorize(request, context) {

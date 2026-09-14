@@ -1,24 +1,28 @@
 import type { DatabaseConnection } from '@nocobase/db';
-import type { SharingRule, SharingRuleAction } from './model.js';
-import type { SharingRuleStore } from './store.js';
+import type { DatabaseConnectionSource } from './connection.js';
+import type {
+  SharingRule,
+  SharingRuleAction,
+} from '@nocobase/authorization/sharing-rules';
+import type { SharingRuleStore } from '@nocobase/authorization/sharing-rules';
 
 const RULES = 'authorizationSharingRules';
 const RECORDS = 'authorizationSharingRuleRecords';
 const ASSIGNMENTS = 'authorizationSharingRuleAssignments';
 
 export class DatabaseSharingRuleStore implements SharingRuleStore<DatabaseConnection> {
-  constructor(private readonly connection: DatabaseConnection) {}
+  constructor(private readonly connection: DatabaseConnectionSource) {}
 
   withTransaction(
     connection: DatabaseConnection,
   ): SharingRuleStore<DatabaseConnection> {
-    return new DatabaseSharingRuleStore(connection);
+    return new DatabaseSharingRuleStore(() => connection);
   }
 
   async create(rule: SharingRule): Promise<SharingRule> {
     const id = crypto.randomUUID();
     const now = new Date();
-    await this.connection.transaction(async (connection): Promise<void> => {
+    await this.connection().transaction(async (connection): Promise<void> => {
       await connection.query
         .insertInto(RULES)
         .values(this.toValues(rule, id, now, now))
@@ -30,7 +34,7 @@ export class DatabaseSharingRuleStore implements SharingRuleStore<DatabaseConnec
   }
 
   async update(key: string, rule: SharingRule): Promise<SharingRule> {
-    await this.connection.transaction(async (connection): Promise<void> => {
+    await this.connection().transaction(async (connection): Promise<void> => {
       const current = await connection.query
         .selectFrom(RULES)
         .select('id')
@@ -58,7 +62,7 @@ export class DatabaseSharingRuleStore implements SharingRuleStore<DatabaseConnec
   }
 
   async delete(key: string): Promise<void> {
-    await this.connection.transaction(async (connection): Promise<void> => {
+    await this.connection().transaction(async (connection): Promise<void> => {
       const current = await connection.query
         .selectFrom(RULES)
         .select('id')
@@ -79,8 +83,8 @@ export class DatabaseSharingRuleStore implements SharingRuleStore<DatabaseConnec
   }
 
   async get(key: string): Promise<SharingRule | undefined> {
-    const row = await this.connection.query
-      .selectFrom(RULES)
+    const row = await this.connection()
+      .query.selectFrom(RULES)
       .select([
         'id',
         'key',
@@ -99,8 +103,8 @@ export class DatabaseSharingRuleStore implements SharingRuleStore<DatabaseConnec
   }
 
   async list(): Promise<readonly SharingRule[]> {
-    const rows = await this.connection.query
-      .selectFrom(RULES)
+    const rows = await this.connection()
+      .query.selectFrom(RULES)
       .select([
         'id',
         'key',
@@ -152,8 +156,8 @@ export class DatabaseSharingRuleStore implements SharingRuleStore<DatabaseConnec
     ruleIds: readonly string[],
   ): Promise<ReadonlyMap<string, readonly string[]>> {
     if (ruleIds.length === 0) return new Map();
-    const rows = await this.connection.query
-      .selectFrom(RECORDS)
+    const rows = await this.connection()
+      .query.selectFrom(RECORDS)
       .select(['sharingRuleId', 'action', 'recordId'])
       .where('sharingRuleId', 'in', ruleIds)
       .orderBy('recordId', 'asc')
@@ -190,8 +194,8 @@ export class DatabaseSharingRuleStore implements SharingRuleStore<DatabaseConnec
     ids: readonly string[],
   ): Promise<ReadonlyMap<string, SharingRule['subjects']>> {
     if (ids.length === 0) return new Map();
-    const rows = await this.connection.query
-      .selectFrom(ASSIGNMENTS)
+    const rows = await this.connection()
+      .query.selectFrom(ASSIGNMENTS)
       .select(['sharingRuleId', 'subjectType', 'subjectId'])
       .where('sharingRuleId', 'in', ids)
       .execute();

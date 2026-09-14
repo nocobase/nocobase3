@@ -9,14 +9,13 @@ Default Access 为资源和动作设置默认对象范围。它只扩大已经�
 import { defaultAccess } from '@nocobase/authorization/default-access';
 
 const authz = createAuthorization({
-  connection,
-  plugins: [grantProvider, defaultAccess(), resourceAuthorization],
+  plugins: [grantProvider, defaultAccess({ store }), resourceAuthorization],
 });
 ```
 
-使用默认数据库 Store 时，需要提供 `connection`。默认 Store 读写下面的表，表结构由宿主应用
-的 migration 创建和维护，本包不包含 migration；`@nocobase/app-plugin-authorization`
-自带一份与默认 Store 匹配的 migration：
+本包只定义 Store 契约 `DefaultAccessStore`，插件必须由调用方提供一个 Store，本包不带任何存储
+实现，也不依赖 `@nocobase/db`。`@nocobase/app-plugin-authorization` 提供数据库 Store，
+并与创建下面这些表的 migration 一起发布：
 
 - `authorizationDefaultAccessRules`
 - `authorizationDefaultAccessRuleRecords`
@@ -123,10 +122,10 @@ const plugin = defaultAccess({
 });
 ```
 
-提供自定义 Store 时不需要 `connection`，但应用需要自行负责数据结构和生命周期。
+`store` 是必填项，应用需要自行负责数据结构和生命周期。
 
 Store 接口都要求实现 `withTransaction(transaction)`：它返回一个绑定到调用方事务的
-Store，事务由调用方开启并提交。数据库 Store 的事务句柄是 `DatabaseConnection`；内存
-Store 没有事务，直接返回自身即可。
+Store，事务由调用方开启并提交。事务句柄的类型由 Store 自己声明——数据库 Store 用它自己的
+连接类型，内存 Store 没有事务，直接返回自身即可。
 
 对应的 API 同样提供 `authz.defaultAccess.withTransaction(connection)`，返回绑定该事务的 API。

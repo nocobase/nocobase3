@@ -1,5 +1,5 @@
-import type { AuthorizationConditions } from '../../core/index.js';
-import type { DatabaseFilter } from './filter.js';
+import type { AuthorizationConditions } from '@nocobase/authorization/core';
+import type { FilterAst } from '@nocobase/db';
 
 export interface DatabaseCollectionDefinition {
   name: string;
@@ -57,13 +57,18 @@ export interface DatabaseAuthorizationFieldRequest {
   group?: readonly string[];
 }
 
+/**
+ * One action's node of a Repository Policy.
+ *
+ * `fields` is a list even when the grant says `'*'`, because a Policy node
+ * treats an absent or `false` allowlist as no fields at all rather than as a
+ * free pass. A grant with no record restriction carries `scope: true`; no rows
+ * at all is a denial, not a scope, so it never reaches this shape.
+ */
 export interface DatabaseAuthorizationConditions extends AuthorizationConditions {
   type: 'database';
   collection: string;
   action: string;
-  filter: DatabaseFilter;
-  fields: {
-    input: '*' | readonly string[];
-    output: '*' | readonly string[];
-  };
+  scope: true | FilterAst;
+  fields: readonly string[];
 }

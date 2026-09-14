@@ -5,14 +5,15 @@ import permissionSetMigration from '../database/migrations/202608210001_create_p
 import defaultAccessMigration from '../database/migrations/202608210002_create_default_access_rules.js';
 import sharingRulesMigration from '../database/migrations/202608210003_create_sharing_rules.js';
 import restrictionRulesMigration from '../database/migrations/202608210004_create_restriction_rules.js';
+import { createAuthorization } from '@nocobase/authorization/core';
+import { permissionSets } from '@nocobase/authorization/permissions';
+import { databaseAuthorization } from '../server/database/index.js';
 import {
-  createAuthorization,
-  databaseAuthorization,
   defaultAccess,
-  permissionSets,
   restrictionRules,
   sharingRules,
-} from '@nocobase/authorization';
+} from '../server/rules.js';
+import { DatabasePermissionSetStore } from '../server/stores/permission-sets.js';
 
 describe('authorization plugin database stores', () => {
   const database = createDatabaseManager({
@@ -42,9 +43,15 @@ describe('authorization plugin database stores', () => {
 
   it('persists Permission Sets independently from database access rules', async () => {
     const databasePlugin = databaseAuthorization();
+    const connection = database.connection();
     const authorization = createAuthorization({
-      connection: database.connection(),
-      plugins: [permissionSets(), databasePlugin],
+      connection,
+      plugins: [
+        permissionSets({
+          store: new DatabasePermissionSetStore(() => connection),
+        }),
+        databasePlugin,
+      ],
     });
 
     await authorization.permissionSets.create({

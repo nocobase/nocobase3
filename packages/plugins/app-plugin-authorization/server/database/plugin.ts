@@ -1,4 +1,4 @@
-import type { AuthorizationPlugin } from '../../core/index.js';
+import type { AuthorizationPlugin } from '@nocobase/authorization/core';
 import {
   DatabaseAuthorizationService,
   type DatabaseAuthorizationApi,

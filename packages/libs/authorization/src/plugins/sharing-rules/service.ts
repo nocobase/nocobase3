@@ -5,11 +5,10 @@ import type {
   ResolveAccessConstraintsInput,
 } from '../../core/index.js';
 import { resolveAuthorizationSubjects } from '../../core/index.js';
-import type { DatabaseConnection } from '@nocobase/db';
 import type { SharingRule } from './model.js';
 import type { SharingRuleStore } from './store.js';
 
-export interface SharingRulesApi<TTransaction = DatabaseConnection> {
+export interface SharingRulesApi<TTransaction = unknown> {
   create(rule: SharingRule): Promise<SharingRule>;
   update(key: string, rule: SharingRule): Promise<SharingRule>;
   delete(key: string): Promise<void>;
@@ -34,51 +33,44 @@ function sharesWithSubject(
   );
 }
 
-export class SharingRuleService<TTransaction = DatabaseConnection>
+export class SharingRuleService<TTransaction = unknown>
   implements SharingRulesApi<TTransaction>, AccessConstraintResolver
 {
   readonly id = 'sharing-rules';
-  private store?: SharingRuleStore<TTransaction>;
 
-  constructor(store?: SharingRuleStore<TTransaction>) {
-    this.store = store;
-  }
-
-  initialize(store: SharingRuleStore<TTransaction>): void {
-    this.store = store;
-  }
+  constructor(private readonly store: SharingRuleStore<TTransaction>) {}
 
   withTransaction(transaction: TTransaction): SharingRulesApi<TTransaction> {
     return new SharingRuleService<TTransaction>(
-      this.getStore().withTransaction(transaction),
+      this.store.withTransaction(transaction),
     );
   }
 
   create(rule: SharingRule): Promise<SharingRule> {
-    return this.getStore().create(rule);
+    return this.store.create(rule);
   }
 
   update(key: string, rule: SharingRule): Promise<SharingRule> {
-    return this.getStore().update(key, rule);
+    return this.store.update(key, rule);
   }
 
   delete(key: string): Promise<void> {
-    return this.getStore().delete(key);
+    return this.store.delete(key);
   }
 
   get(key: string): Promise<SharingRule | undefined> {
-    return this.getStore().get(key);
+    return this.store.get(key);
   }
 
   list(): Promise<readonly SharingRule[]> {
-    return this.getStore().list();
+    return this.store.list();
   }
 
   async resolve(
     input: ResolveAccessConstraintsInput,
   ): Promise<readonly AccessConstraint[]> {
     const subjects = resolveAuthorizationSubjects(input);
-    const rules = await this.getStore().list();
+    const rules = await this.store.list();
     return rules
       .flatMap((rule) => {
         const configured = rule.actions.find(
@@ -100,10 +92,5 @@ export class SharingRuleService<TTransaction = DatabaseConnection>
             ? { type: 'ids' as const, ids: configured.selection.ids }
             : configured.selection.policy,
       }));
-  }
-
-  private getStore(): SharingRuleStore<TTransaction> {
-    if (!this.store) throw new Error('Sharing Rules has not been initialized');
-    return this.store;
   }
 }

@@ -1,4 +1,3 @@
-import type { DatabaseConnection } from '@nocobase/db';
 import type { AuthorizationGrantService } from './grants.js';
 import type { ResourceHandlerRegistry } from './registry.js';
 import type { AuthorizationMiddleware } from './middleware.js';
@@ -6,8 +5,9 @@ import type { AccessConstraintRegistry } from './constraints.js';
 import type { AuthorizationSubjectRegistry } from './subjects.js';
 import type { AuthorizationRouteRegistry } from './routes.js';
 
-export interface AuthorizationPluginSetup {
-  readonly connection?: DatabaseConnection;
+export interface AuthorizationPluginSetup<TConnection = unknown> {
+  /** The handle the host passed to `createAuthorization`, never inspected here. */
+  readonly connection?: TConnection;
   readonly grants: AuthorizationGrantService;
   readonly resources: ResourceHandlerRegistry;
   readonly constraints: AccessConstraintRegistry;
@@ -18,6 +18,7 @@ export interface AuthorizationPluginSetup {
 
 export interface AuthorizationPlugin<
   TAuthorizationApi extends object = object,
+  TConnection = unknown,
 > {
   id: string;
   dependencies?: readonly string[];
@@ -27,7 +28,7 @@ export interface AuthorizationPlugin<
   requiresGrants?: boolean;
   /** Adds an authorization-owned API to the created Authorization instance. */
   authorizationApi?: TAuthorizationApi;
-  setup?(authz: AuthorizationPluginSetup): void;
+  setup?(authz: AuthorizationPluginSetup<TConnection>): void;
 }
 
 export type AuthorizationPluginApi<TPlugin> =

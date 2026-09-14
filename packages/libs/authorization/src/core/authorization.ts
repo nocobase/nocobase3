@@ -1,4 +1,3 @@
-import type { DatabaseConnection } from '@nocobase/db';
 import { ResourceHandlerRegistry } from './registry.js';
 import { AuthorizationSubjectRegistry } from './subjects.js';
 import { AuthorizationRouteRegistry } from './routes.js';
@@ -76,13 +75,15 @@ export type AuthorizationGuardResolver<
 
 export interface CreateAuthorizationOptions<
   TPlugins extends readonly AuthorizationPlugin[],
+  TConnection = unknown,
 > {
-  connection?: DatabaseConnection;
+  /** Passed through to every plugin's setup; the library never inspects it. */
+  connection?: TConnection;
   plugins: TPlugins;
 }
 
 interface AuthorizationOptions {
-  connection?: DatabaseConnection;
+  connection?: unknown;
   plugins: readonly AuthorizationPlugin[];
 }
 
@@ -385,8 +386,9 @@ export class Authorization {
 
 export function createAuthorization<
   const TPlugins extends readonly AuthorizationPlugin[],
+  TConnection = unknown,
 >(
-  options: CreateAuthorizationOptions<TPlugins>,
+  options: CreateAuthorizationOptions<TPlugins, TConnection>,
 ): Authorization & AuthorizationPluginApis<TPlugins> {
   return new Authorization(options) as Authorization &
     AuthorizationPluginApis<TPlugins>;

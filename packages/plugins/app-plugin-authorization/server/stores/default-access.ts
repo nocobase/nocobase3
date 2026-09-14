@@ -1,19 +1,20 @@
 import type { DatabaseConnection } from '@nocobase/db';
-import type { DefaultAccessRule } from './model.js';
-import type { DefaultAccessStore } from './store.js';
+import type { DatabaseConnectionSource } from './connection.js';
+import type { DefaultAccessRule } from '@nocobase/authorization/default-access';
+import type { DefaultAccessStore } from '@nocobase/authorization/default-access';
 
 export class DatabaseDefaultAccessStore implements DefaultAccessStore<DatabaseConnection> {
-  constructor(private readonly connection: DatabaseConnection) {}
+  constructor(private readonly connection: DatabaseConnectionSource) {}
 
   withTransaction(
     connection: DatabaseConnection,
   ): DefaultAccessStore<DatabaseConnection> {
-    return new DatabaseDefaultAccessStore(connection);
+    return new DatabaseDefaultAccessStore(() => connection);
   }
 
   async list(): Promise<readonly DefaultAccessRule[]> {
-    const rows = await this.connection.query
-      .selectFrom('authorizationDefaultAccessRules')
+    const rows = await this.connection()
+      .query.selectFrom('authorizationDefaultAccessRules')
       .select(['id', 'resourceType', 'resourceId', 'actions'])
       .orderBy('resourceType', 'asc')
       .orderBy('resourceId', 'asc')
@@ -26,8 +27,8 @@ export class DatabaseDefaultAccessStore implements DefaultAccessStore<DatabaseCo
     resourceType: string,
     resourceId: string,
   ): Promise<DefaultAccessRule | undefined> {
-    const row = await this.connection.query
-      .selectFrom('authorizationDefaultAccessRules')
+    const row = await this.connection()
+      .query.selectFrom('authorizationDefaultAccessRules')
       .select(['id', 'resourceType', 'resourceId', 'actions'])
       .where('resourceType', '=', resourceType)
       .where('resourceId', '=', resourceId)
@@ -38,7 +39,7 @@ export class DatabaseDefaultAccessStore implements DefaultAccessStore<DatabaseCo
 
   async set(rule: DefaultAccessRule): Promise<DefaultAccessRule> {
     const now = new Date();
-    await this.connection.transaction(async (connection): Promise<void> => {
+    await this.connection().transaction(async (connection): Promise<void> => {
       const existing = await connection.query
         .selectFrom('authorizationDefaultAccessRules')
         .select('id')
@@ -84,7 +85,7 @@ export class DatabaseDefaultAccessStore implements DefaultAccessStore<DatabaseCo
   }
 
   async delete(resourceType: string, resourceId: string): Promise<void> {
-    await this.connection.transaction(async (connection): Promise<void> => {
+    await this.connection().transaction(async (connection): Promise<void> => {
       const row = await connection.query
         .selectFrom('authorizationDefaultAccessRules')
         .select('id')
@@ -107,8 +108,8 @@ export class DatabaseDefaultAccessStore implements DefaultAccessStore<DatabaseCo
     ids: readonly string[],
   ): Promise<ReadonlyMap<string, readonly string[]>> {
     if (ids.length === 0) return new Map();
-    const rows = await this.connection.query
-      .selectFrom('authorizationDefaultAccessRuleRecords')
+    const rows = await this.connection()
+      .query.selectFrom('authorizationDefaultAccessRuleRecords')
       .select(['defaultAccessRuleId', 'action', 'recordId'])
       .where('defaultAccessRuleId', 'in', ids)
       .execute();

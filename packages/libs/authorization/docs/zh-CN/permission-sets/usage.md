@@ -8,11 +8,10 @@ Permission Set 是一组可以重复分配的权限声明。它适合把“订�
 ```ts
 import { createAuthorization } from '@nocobase/authorization/core';
 import { permissionSets } from '@nocobase/authorization/permissions';
-import { databaseAuthorization } from '@nocobase/authorization/database';
+import { databaseAuthorization } from '@nocobase/app-plugin-authorization/server';
 
 const authz = createAuthorization({
-  connection,
-  plugins: [permissionSets(), databaseAuthorization()],
+  plugins: [permissionSets({ store }), databaseAuthorization()],
 });
 
 authz.database.collections.add({
@@ -22,16 +21,17 @@ authz.database.collections.add({
 });
 ```
 
-Permission Sets 使用数据库保存配置。默认 Store 读写下面的表，表结构由宿主应用
-的 migration 创建和维护，本包不包含 migration；`@nocobase/app-plugin-authorization`
-自带一份与默认 Store 匹配的 migration：
+本包只定义 Store 契约 `PermissionSetStore`，插件必须由调用方提供一个 Store，本包不带
+任何存储实现，也不依赖 `@nocobase/db`。`@nocobase/app-plugin-authorization` 提供数据库
+Store，并与创建下面这些表的 migration 一起发布：
 
 - `authorizationPermissionSets`
 - `authorizationPermissionSetAssignments`
 
 ## 创建 Permission Set
 
-Database 插件安装后，通过 `authz.database.grant()` 定义数据库权限：
+数据库资源插件由 `@nocobase/app-plugin-authorization` 提供；安装后通过
+`authz.database.grant()` 定义数据库权限：
 
 ```ts
 await authz.permissionSets.create({
@@ -280,7 +280,7 @@ authz.subjects.define('user', {
 ```
 
 检查在读取分配之前调用 `PermissionSetStore.lock(key)`，让并发的两次撤销不会读到同一份
-“还剩一条”的快照。数据库 Store 已实现：SQLite 以一次空更新占住写锁，其他方言用
+“还剩一条”的快照。`@nocobase/app-plugin-authorization` 的数据库 Store 已实现：SQLite 以一次空更新占住写锁，其他方言用
 `SELECT ... FOR UPDATE`。没有事务的 Store 可以不实现该方法。
 
 ### 限制可分配的 subject 类型
@@ -363,7 +363,7 @@ permissionSets({ rootSet: 'root', defaultSet: 'member' });
 
 ## 自定义存储
 
-默认配置使用数据库 Store。需要接入其他存储时，实现 `PermissionSetStore` 并传入：
+`store` 是必填项。接入数据库以外的存储时，实现 `PermissionSetStore` 并传入：
 
 ```ts
 const authz = createAuthorization({
@@ -380,8 +380,8 @@ const authz = createAuthorization({
 ```
 
 Store 接口都要求实现 `withTransaction(transaction)`：它返回一个绑定到调用方事务的
-Store，事务由调用方开启并提交。数据库 Store 的事务句柄是 `DatabaseConnection`；内存
-Store 没有事务，直接返回自身即可。
+Store，事务由调用方开启并提交。事务句柄的类型由 Store 自己声明——数据库 Store 用它自己的
+连接类型，内存 Store 没有事务，直接返回自身即可。
 
 需要在自己的事务中写入 Permission Set 时，用
 `authz.permissionSets.withTransaction(connection)` 取得绑定该事务的 API。它共享

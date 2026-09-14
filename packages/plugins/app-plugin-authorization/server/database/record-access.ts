@@ -1,6 +1,6 @@
-import type { Principal } from '../../core/index.js';
+import type { Principal } from '@nocobase/authorization/core';
 import type { DatabaseCollectionDefinition } from './model.js';
-import { allRecordsFilter, type DatabaseFilter } from './filter.js';
+import { condition, type DatabaseScope } from './scope.js';
 
 export interface RecordAccessPolicyContext<P> {
   principal: Principal;
@@ -16,7 +16,7 @@ export interface RecordAccessPolicy<P = unknown> {
   paramsSchema?: unknown;
   resolve(
     context: RecordAccessPolicyContext<P>,
-  ): DatabaseFilter | Promise<DatabaseFilter>;
+  ): DatabaseScope | Promise<DatabaseScope>;
 }
 
 export interface DefineRecordAccessPolicyOptions<P = unknown> {
@@ -37,7 +37,7 @@ export function allRecords(): RecordAccessPolicy {
   return defineRecordAccessPolicy({
     key: 'allRecords',
     title: 'All Records',
-    resolve: () => allRecordsFilter(),
+    resolve: () => true,
   });
 }
 
@@ -45,13 +45,8 @@ export function recordsIOwn(): RecordAccessPolicy {
   return defineRecordAccessPolicy({
     key: 'recordsIOwn',
     title: 'Records I Own',
-    resolve: ({ principal, collection }) => ({
-      $and: [
-        {
-          [requiredAttribute(collection, 'owner')]: { $eq: principal.id },
-        },
-      ],
-    }),
+    resolve: ({ principal, collection }) =>
+      condition(requiredAttribute(collection, 'owner'), '$eq', principal.id),
   });
 }
 
@@ -59,18 +54,13 @@ export function recordsICreated(): RecordAccessPolicy {
   return defineRecordAccessPolicy({
     key: 'recordsICreated',
     title: 'Records I Created',
-    resolve: ({ principal, collection }) => ({
-      $and: [
-        {
-          [requiredAttribute(collection, 'creator')]: { $eq: principal.id },
-        },
-      ],
-    }),
+    resolve: ({ principal, collection }) =>
+      condition(requiredAttribute(collection, 'creator'), '$eq', principal.id),
   });
 }
 
 export interface CustomFilterParams {
-  filter: DatabaseFilter;
+  filter: DatabaseScope;
 }
 
 export function customFilter(): RecordAccessPolicy<CustomFilterParams> {
@@ -78,7 +68,7 @@ export function customFilter(): RecordAccessPolicy<CustomFilterParams> {
     key: 'customFilter',
     title: 'Custom Filter',
     description: 'Select records with a custom filter condition.',
-    paramsSchema: { type: 'database-filter' },
+    paramsSchema: { type: 'filter-node' },
     resolve: ({ params }) => {
       if (!params || typeof params !== 'object' || !('filter' in params)) {
         throw new Error('Custom Filter requires filter params');

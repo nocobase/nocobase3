@@ -21,10 +21,6 @@
       "types": "./src/plugins/permission-sets/index.ts",
       "import": "./src/plugins/permission-sets/index.ts"
     },
-    "./database": {
-      "types": "./src/plugins/database/index.ts",
-      "import": "./src/plugins/database/index.ts"
-    },
     "./default-access": {
       "types": "./src/plugins/default-access/index.ts",
       "import": "./src/plugins/default-access/index.ts"
@@ -51,10 +47,6 @@
       "./permissions": {
         "types": "./dist/plugins/permission-sets/index.d.ts",
         "import": "./dist/plugins/permission-sets/index.js"
-      },
-      "./database": {
-        "types": "./dist/plugins/database/index.d.ts",
-        "import": "./dist/plugins/database/index.js"
       },
       "./default-access": {
         "types": "./dist/plugins/default-access/index.d.ts",
@@ -89,11 +81,9 @@
     "hono": "catalog:"
   },
   "devDependencies": {
-    "@nocobase/db": "workspace:^",
     "@nocobase/dev-config": "workspace:*",
     "@types/node": "catalog:",
     "eslint": "catalog:",
-    "knex": "catalog:",
     "prettier": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

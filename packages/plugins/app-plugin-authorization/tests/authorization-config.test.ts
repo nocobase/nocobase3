@@ -1,7 +1,9 @@
-import { databaseAuthorization } from '@nocobase/authorization/database';
-import { defaultAccess } from '@nocobase/authorization/default-access';
-import { sharingRules } from '@nocobase/authorization/sharing-rules';
-import { restrictionRules } from '@nocobase/authorization/restriction-rules';
+import { databaseAuthorization } from '../server/database/index.js';
+import {
+  defaultAccess,
+  restrictionRules,
+  sharingRules,
+} from '../server/rules.js';
 import {
   PERMISSION_SETS_PROTECTION_OWNER,
   type PermissionSetsApi,

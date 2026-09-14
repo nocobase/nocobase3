@@ -5,12 +5,20 @@ export {
   type CreateAppAuthorizationOptions,
 } from './authorization.js';
 export type {
+  DatabaseApi,
+  DatabaseAuthorizationApi,
   DatabaseAuthorizationConditions,
   DatabaseAuthorizationParams,
-  DatabaseFieldFilter,
-  DatabaseFilter,
-  DatabaseFilterOperator,
-} from '@nocobase/authorization/database';
+  DatabaseCollectionDefinition,
+  DatabaseGrantDefinition,
+  DatabaseRecordAccess,
+  DatabaseScope,
+} from './database/index.js';
+export {
+  condition,
+  defineRecordAccessPolicy,
+  type RecordAccessPolicy,
+} from './database/index.js';
 export type {
   Authorization,
   AuthorizationEnv,
@@ -24,10 +32,18 @@ export type {
 // reads `AuthorizationConfig` from.
 export { pages } from './pages-authorization.js';
 export type { PermissionSetsApi } from '@nocobase/authorization/permissions';
-export { databaseAuthorization } from '@nocobase/authorization/database';
-export { defaultAccess } from '@nocobase/authorization/default-access';
-export { sharingRules } from '@nocobase/authorization/sharing-rules';
-export { restrictionRules } from '@nocobase/authorization/restriction-rules';
+export {
+  databaseAuthorization,
+  type DatabaseAuthorizationOptions,
+} from './database/index.js';
+export {
+  defaultAccess,
+  restrictionRules,
+  sharingRules,
+  type DefaultAccessOptions,
+  type RestrictionRulesOptions,
+  type SharingRulesOptions,
+} from './rules.js';
 export type { AuthorizationPlugin } from '@nocobase/authorization/core';
 export { authorizationToken, permissionSetsToken } from './tokens.js';
 export { AuthorizationProvider } from './providers/authorization.js';

@@ -27,8 +27,11 @@ and all four database access-range features.
   Access, Sharing Rules, and Restriction Rules can configure it.
 - Use `authz.guard()` for an HTTP route or action that needs one authorization
   check before the handler runs.
-- Use `context.get('authz').authorize()` when the handler needs the resulting
-  database conditions or field limits before building a query.
+- Use `authz.database.policyFor()` when the handler reads or writes a
+  registered collection: it returns a Repository Policy to bind with
+  `repository.withPolicy()`.
+- Use `context.get('authz').authorize()` when a handler needs one action's raw
+  decision rather than a Policy.
 - Use Permission Sets and the authorization settings API/UI for business
   configuration. Do not hard-code end-user assignments in a feature route.
 
@@ -78,22 +81,13 @@ the constraints used by that service; it does not replace the service.
 
 ```ts
 routes.get('/orders', async (context) => {
-  const decision = await context.get('authz').authorize({
-    resource: { type: 'database.collection', id: 'main.orders' },
-    action: 'read',
-    params: { fields: { output: ['id', 'number', 'amount'] } },
-  });
-
-  if (
-    decision.effect !== 'conditional' ||
-    decision.conditions?.type !== 'database'
-  ) {
-    return context.json({ code: 'FORBIDDEN' }, 403);
-  }
-
-  return context.json({
-    data: await orders.list(decision.conditions),
-  });
+  const policy = await authz.database.policyFor(
+    'main.orders',
+    context.get('authz'),
+  );
+  if (policy.read === false) return context.json({ code: 'FORBIDDEN' }, 403);
+  const orders = database.repository('orders').withPolicy(policy);
+  return context.json({ data: await orders.findMany() });
 });
 ```
 
@@ -127,31 +121,25 @@ other step registered with `authz.use()`.
 
 ## Apply database conditions safely
 
-For `read`, `create`, and `update`, pass the requested field sets and use the
-returned database conditions when constructing the query. For `update` and
-`delete`, put the returned record filter in the same SQL `WHERE` clause as the
-record id. Never fetch a record first and apply the filter only in memory.
+`policyFor()` folds this request's read, create, update and delete decisions
+into one `RepositoryPolicy`: a denied action is `false`, an unconditional one
+`true`, and a conditional one `{ scope, fields }`. Binding it with
+`withPolicy()` is what makes the record scope and the field allowlist part of
+every statement — there is nothing left for the service to compile or check by
+hand, and no window in which a record is fetched, checked in memory, and then
+written without its scope.
 
 ```ts
-const decision = await authz.authorize({
-  resource: { type: 'database.collection', id: 'main.orders' },
-  action: 'update',
-  params: { fields: { input: Object.keys(input) } },
-});
+const orders = database
+  .repository('orders')
+  .withPolicy(await authz.database.policyFor('main.orders', scope));
 
-if (
-  decision.effect !== 'conditional' ||
-  decision.conditions?.type !== 'database'
-) {
-  throw new AuthorizationDeniedError(decision);
-}
-
-await orders.update(id, input, decision.conditions);
+await orders.updateOne({ filter: { id }, values: input });
 ```
 
-The module's service is responsible for compiling the conditions into its
-query builder and for rejecting fields outside `conditions.fields.input` or
-`conditions.fields.output`.
+A row outside the scope raises `RECORD_NOT_FOUND`, which a route turns into a 404. A write grant must name every column the route stores, timestamps
+included; a generated primary key is not writable, so list the columns rather
+than granting `input: '*'`.
 
 ## Configure business permissions
 
@@ -233,15 +221,15 @@ When a permission does not behave as expected, inspect in this order:
 
 Do not treat a successful permission snapshot as proof that a database query
 is safe: a snapshot contains grants, while database authorization may still
-return field and record conditions.
+narrow the rows and fields a Policy allows.
 
 ## Implementation checklist
 
 - Register the resource or collection in the module setup.
 - Keep the module's service/repository API unchanged.
 - Run authorization middleware before route guards.
-- Use `authorize()` when query conditions are needed.
-- Apply record filters and field limits inside the database query path.
+- Use `policyFor()` and `withPolicy()` for collection reads and writes.
+- Never re-implement a record filter or a field allowlist outside the Policy.
 - Add a Permission Set only when the business access is reusable or needs
   administrator configuration.
 - Test both an allowed request and a request denied by a record or field rule.

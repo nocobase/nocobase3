@@ -5,11 +5,10 @@ import type {
   ResolveAccessConstraintsInput,
 } from '../../core/index.js';
 import { resolveAuthorizationSubjects } from '../../core/index.js';
-import type { DatabaseConnection } from '@nocobase/db';
 import type { RestrictionRule } from './model.js';
 import type { RestrictionRuleStore } from './store.js';
 
-export interface RestrictionRulesApi<TTransaction = DatabaseConnection> {
+export interface RestrictionRulesApi<TTransaction = unknown> {
   create(rule: RestrictionRule): Promise<RestrictionRule>;
   update(key: string, rule: RestrictionRule): Promise<RestrictionRule>;
   delete(key: string): Promise<void>;
@@ -22,46 +21,40 @@ export interface RestrictionRulesApi<TTransaction = DatabaseConnection> {
   withTransaction(transaction: TTransaction): RestrictionRulesApi<TTransaction>;
 }
 
-export class RestrictionRuleService<TTransaction = DatabaseConnection>
+export class RestrictionRuleService<TTransaction = unknown>
   implements RestrictionRulesApi<TTransaction>, AccessConstraintResolver
 {
   readonly id = 'restriction-rules';
-  private store?: RestrictionRuleStore<TTransaction>;
 
-  constructor(store?: RestrictionRuleStore<TTransaction>) {
-    this.store = store;
-  }
-  initialize(store: RestrictionRuleStore<TTransaction>): void {
-    this.store = store;
-  }
+  constructor(private readonly store: RestrictionRuleStore<TTransaction>) {}
   withTransaction(
     transaction: TTransaction,
   ): RestrictionRulesApi<TTransaction> {
     return new RestrictionRuleService<TTransaction>(
-      this.getStore().withTransaction(transaction),
+      this.store.withTransaction(transaction),
     );
   }
   create(rule: RestrictionRule): Promise<RestrictionRule> {
-    return this.getStore().create(rule);
+    return this.store.create(rule);
   }
   update(key: string, rule: RestrictionRule): Promise<RestrictionRule> {
-    return this.getStore().update(key, rule);
+    return this.store.update(key, rule);
   }
   delete(key: string): Promise<void> {
-    return this.getStore().delete(key);
+    return this.store.delete(key);
   }
   get(key: string): Promise<RestrictionRule | undefined> {
-    return this.getStore().get(key);
+    return this.store.get(key);
   }
   list(): Promise<readonly RestrictionRule[]> {
-    return this.getStore().list();
+    return this.store.list();
   }
 
   async resolve(
     input: ResolveAccessConstraintsInput,
   ): Promise<readonly AccessConstraint[]> {
     const subjects = resolveAuthorizationSubjects(input);
-    const rules = await this.getStore().list();
+    const rules = await this.store.list();
     return rules
       .flatMap((rule) => {
         const configured = rule.actions.find(
@@ -78,12 +71,6 @@ export class RestrictionRuleService<TTransaction = DatabaseConnection>
         effect: 'restrict' as const,
         value: configured.scope,
       }));
-  }
-
-  private getStore(): RestrictionRuleStore<TTransaction> {
-    if (!this.store)
-      throw new Error('Restriction Rules has not been initialized');
-    return this.store;
   }
 }
 

@@ -9,14 +9,13 @@ import {
   PERMISSION_SETS_PROTECTION_OWNER,
   type PermissionSetAssignment,
 } from '../src/index.js';
-import type { DatabaseConnection } from '@nocobase/db';
 import {
   MockPermissionSetStore,
   type MockPermissionSetStoreOptions,
 } from './mock-permission-set-store.js';
 
 /** The mock store ignores it; only its presence changes what the service does. */
-const transaction = {} as unknown as DatabaseConnection;
+const transaction = {};
 
 /** Records the order of the reads the invariant depends on. */
 class RecordingPermissionSetStore extends MockPermissionSetStore {

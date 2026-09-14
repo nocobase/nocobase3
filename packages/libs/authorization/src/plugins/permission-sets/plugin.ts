@@ -18,13 +18,12 @@ import type {
   PermissionSetAssignment,
   PermissionSetSubject,
 } from './model.js';
-import type { DatabaseConnection } from '@nocobase/db';
 import {
   createPermissionSetHandler,
   PERMISSION_SETS_ROUTE_PATH,
 } from './routes.js';
-import { DatabasePermissionSetStore } from './database-store.js';
 import type { PermissionSetStore } from './store.js';
+import { requireStore } from '../internal/store.js';
 
 export interface CreatePermissionSetInput {
   key: string;
@@ -38,7 +37,7 @@ export interface AssignPermissionSetInput {
   permissionSet: string;
 }
 
-export interface PermissionSetsApi<TTransaction = DatabaseConnection> {
+export interface PermissionSetsApi<TTransaction = unknown> {
   create(input: CreatePermissionSetInput): Promise<PermissionSet>;
   update(key: string, input: CreatePermissionSetInput): Promise<PermissionSet>;
   delete(key: string): Promise<void>;
@@ -196,9 +195,9 @@ export interface PermissionSetRootSet {
   assignableTo?: readonly string[];
 }
 
-export interface PermissionSetsOptions<TTransaction = DatabaseConnection> {
-  /** Overrides the database-backed store, primarily for custom backends and tests. */
-  store?: PermissionSetStore<TTransaction>;
+export interface PermissionSetsOptions<TTransaction = unknown> {
+  /** Where Permission Sets and their assignments are read and written. */
+  store: PermissionSetStore<TTransaction>;
   /**
    * The Permission Set that confers unrestricted access. Declaring it here
    * protects it as the library's own: it may be assigned and revoked but not
@@ -234,30 +233,20 @@ export class PermissionSetConflictError extends Error {
   }
 }
 
-export interface PermissionSetsAuthorizationApi<
-  TTransaction = DatabaseConnection,
-> {
+export interface PermissionSetsAuthorizationApi<TTransaction = unknown> {
   permissionSets: PermissionSetsApi<TTransaction>;
 }
 
-export type PermissionSetsPlugin<TTransaction = DatabaseConnection> =
-  AuthorizationPlugin<PermissionSetsAuthorizationApi<TTransaction>>;
+export type PermissionSetsPlugin<TTransaction = unknown> = AuthorizationPlugin<
+  PermissionSetsAuthorizationApi<TTransaction>
+>;
 
-/**
- * The default store binds transactions to a DatabaseConnection, so the
- * transaction handle is a DatabaseConnection unless a custom store declares
- * another one.
- */
-export function permissionSets(
-  options?: PermissionSetsOptions<DatabaseConnection>,
-): PermissionSetsPlugin<DatabaseConnection>;
-export function permissionSets<TTransaction>(
+export function permissionSets<TTransaction = unknown>(
   options: PermissionSetsOptions<TTransaction>,
-): PermissionSetsPlugin<TTransaction>;
-export function permissionSets(
-  options: PermissionSetsOptions<DatabaseConnection> = {},
-): PermissionSetsPlugin<DatabaseConnection> {
-  const service = new PermissionSetService(options);
+): PermissionSetsPlugin<TTransaction> {
+  const service = new PermissionSetService(
+    requireStore(options.store, 'Permission Sets'),
+  );
   const rootSet = resolveRootSet(options.rootSet);
   if (rootSet) {
     service.protect({
@@ -282,14 +271,6 @@ export function permissionSets(
     authorizationApi: { permissionSets: service },
     setup(authz): void {
       service.useSubjects(authz.subjects);
-      if (!options.store) {
-        if (!authz.connection) {
-          throw new Error(
-            'Permission Sets requires createAuthorization({ connection }) or an explicit store',
-          );
-        }
-        service.initialize(new DatabasePermissionSetStore(authz.connection));
-      }
       authz.routes.add(PERMISSION_SETS_ROUTE_PATH, (input) =>
         service.handler(input),
       );
@@ -342,22 +323,20 @@ function resolveRootSet(
   return typeof rootSet === 'string' ? { key: rootSet } : rootSet;
 }
 
-class PermissionSetService<TTransaction = DatabaseConnection>
+class PermissionSetService<TTransaction = unknown>
   implements AuthorizationGrantService, PermissionSetsApi<TTransaction>
 {
-  private store?: PermissionSetStore<TTransaction>;
   private readonly protections: Map<string, PermissionSetProtectionInfo>;
   readonly handler: (input: PermissionSetHandlerInput) => Promise<Response>;
 
   constructor(
-    options: PermissionSetsOptions<TTransaction> = {},
+    private readonly store: PermissionSetStore<TTransaction>,
     private readonly shared: PermissionSetSharedState = {
       protections: new Map(),
       subscribers: new Set(),
     },
     private readonly transaction?: TTransaction,
   ) {
-    this.store = options.store;
     this.protections = shared.protections;
     this.handler = createPermissionSetHandler(this);
   }
@@ -416,13 +395,6 @@ class PermissionSetService<TTransaction = DatabaseConnection>
     const protection = this.protections.get(key);
     if (!protection || protection.allow.includes(operation)) return;
     throw new PermissionSetProtectedError(key, protection.owner, operation);
-  }
-
-  initialize(store: PermissionSetStore<TTransaction>): void {
-    if (this.store) {
-      throw new Error('Permission Sets store has already been initialized');
-    }
-    this.store = store;
   }
 
   async resolve(
@@ -509,31 +481,28 @@ class PermissionSetService<TTransaction = DatabaseConnection>
   }
 
   async create(input: CreatePermissionSetInput): Promise<PermissionSet> {
-    if (await this.getStore().getPermissionSet(input.key)) {
+    if (await this.store.getPermissionSet(input.key)) {
       throw new PermissionSetConflictError(
         `Permission Set already exists: ${input.key}`,
       );
     }
-    return this.getStore().createPermissionSet(this.toPermissionSet(input));
+    return this.store.createPermissionSet(this.toPermissionSet(input));
   }
 
   async update(
     key: string,
     input: CreatePermissionSetInput,
   ): Promise<PermissionSet> {
-    if (!(await this.getStore().getPermissionSet(key))) {
+    if (!(await this.store.getPermissionSet(key))) {
       throw new PermissionSetNotFoundError(key);
     }
-    if (
-      key !== input.key &&
-      (await this.getStore().getPermissionSet(input.key))
-    ) {
+    if (key !== input.key && (await this.store.getPermissionSet(input.key))) {
       throw new PermissionSetConflictError(
         `Permission Set already exists: ${input.key}`,
       );
     }
     const affectedSubjects = await this.assignedSubjects(key);
-    const permissionSet = await this.getStore().updatePermissionSet(
+    const permissionSet = await this.store.updatePermissionSet(
       key,
       this.toPermissionSet(input),
     );
@@ -542,30 +511,30 @@ class PermissionSetService<TTransaction = DatabaseConnection>
   }
 
   async delete(key: string): Promise<void> {
-    if (!(await this.getStore().getPermissionSet(key))) {
+    if (!(await this.store.getPermissionSet(key))) {
       throw new PermissionSetNotFoundError(key);
     }
     const affectedSubjects = await this.assignedSubjects(key);
-    await this.getStore().deletePermissionSet(key);
+    await this.store.deletePermissionSet(key);
     await this.notifySubjectsChanged(affectedSubjects);
   }
 
   get(key: string): Promise<PermissionSet | undefined> {
-    return this.getStore().getPermissionSet(key);
+    return this.store.getPermissionSet(key);
   }
 
   list(): Promise<readonly PermissionSet[]> {
-    return this.getStore().listPermissionSets();
+    return this.store.listPermissionSets();
   }
 
   async assign(
     input: AssignPermissionSetInput,
   ): Promise<PermissionSetAssignment> {
-    if (!(await this.getStore().getPermissionSet(input.permissionSet))) {
+    if (!(await this.store.getPermissionSet(input.permissionSet))) {
       throw new PermissionSetNotFoundError(input.permissionSet);
     }
     this.assertAssignableTo(input.permissionSet, input.subject);
-    const assignment = await this.getStore().assignPermissionSet({
+    const assignment = await this.store.assignPermissionSet({
       id: input.id ?? this.createAssignmentId(input),
       subject: input.subject,
       permissionSet: input.permissionSet,
@@ -575,11 +544,11 @@ class PermissionSetService<TTransaction = DatabaseConnection>
   }
 
   async revoke(id: string): Promise<void> {
-    const assignment = (await this.getStore().listAssignments()).find(
+    const assignment = (await this.store.listAssignments()).find(
       (item) => item.id === id,
     );
     if (assignment) await this.assertRetainsAssignment(assignment);
-    await this.getStore().revokeAssignment(id);
+    await this.store.revokeAssignment(id);
     if (assignment) {
       await this.notifyAssignmentsChanged(assignment.subject);
     }
@@ -588,7 +557,7 @@ class PermissionSetService<TTransaction = DatabaseConnection>
   listAssignments(
     permissionSet?: string,
   ): Promise<readonly PermissionSetAssignment[]> {
-    return this.getStore().listAssignments(permissionSet);
+    return this.store.listAssignments(permissionSet);
   }
 
   async replaceSubjectAssignments(input: {
@@ -604,12 +573,12 @@ class PermissionSetService<TTransaction = DatabaseConnection>
       );
     }
     for (const key of requested) {
-      if (!(await this.getStore().getPermissionSet(key))) {
+      if (!(await this.store.getPermissionSet(key))) {
         throw new PermissionSetNotFoundError(key);
       }
       this.assertAssignableTo(key, input.subject);
     }
-    const existing = (await this.getStore().listAssignments()).filter(
+    const existing = (await this.store.listAssignments()).filter(
       (assignment) =>
         assignment.subject.type === input.subject.type &&
         assignment.subject.id === input.subject.id &&
@@ -624,7 +593,7 @@ class PermissionSetService<TTransaction = DatabaseConnection>
       await this.assertRetainsAssignment(assignment);
     }
     for (const assignment of removed) {
-      await this.getStore().revokeAssignment(assignment.id);
+      await this.store.revokeAssignment(assignment.id);
     }
     const existingKeys = new Set(
       existing.map((assignment) => assignment.permissionSet),
@@ -640,7 +609,7 @@ class PermissionSetService<TTransaction = DatabaseConnection>
         subject: input.subject,
         permissionSet,
       };
-      created.push(await this.getStore().assignPermissionSet(assignment));
+      created.push(await this.store.assignPermissionSet(assignment));
     }
     if (created.length > 0 || removed.length > 0) {
       await this.notifyAssignmentsChanged(input.subject);
@@ -666,14 +635,14 @@ class PermissionSetService<TTransaction = DatabaseConnection>
 
   withTransaction(transaction: TTransaction): PermissionSetsApi<TTransaction> {
     return new PermissionSetService<TTransaction>(
-      { store: this.getStore().withTransaction(transaction) },
+      this.store.withTransaction(transaction),
       this.shared,
       transaction,
     );
   }
 
   async assertSubjectRemovable(subject: PermissionSetSubject): Promise<void> {
-    const assignments = await this.getStore().listAssignments();
+    const assignments = await this.store.listAssignments();
     for (const assignment of assignments) {
       if (
         assignment.subject.type === subject.type &&
@@ -706,8 +675,8 @@ class PermissionSetService<TTransaction = DatabaseConnection>
     if (!this.protections.get(key)?.requireActiveAssignment) return;
     // Lock before reading, so two concurrent removals cannot both see the
     // other assignment that each of them is about to take away.
-    await this.getStore().lock?.(key);
-    const remaining = (await this.getStore().listAssignments(key)).filter(
+    await this.store.lock?.(key);
+    const remaining = (await this.store.listAssignments(key)).filter(
       (assignment) => assignment.id !== removing.id,
     );
     const active = await this.activeSubjects(
@@ -728,17 +697,10 @@ class PermissionSetService<TTransaction = DatabaseConnection>
     );
   }
 
-  private getStore(): PermissionSetStore<TTransaction> {
-    if (!this.store) {
-      throw new Error('Permission Sets has not been initialized');
-    }
-    return this.store;
-  }
-
   private async assignedSubjects(
     permissionSet: string,
   ): Promise<readonly PermissionSetSubject[]> {
-    const assignments = await this.getStore().listAssignments(permissionSet);
+    const assignments = await this.store.listAssignments(permissionSet);
     const subjects = new Map<string, PermissionSetSubject>();
     for (const assignment of assignments) {
       subjects.set(
@@ -770,13 +732,13 @@ class PermissionSetService<TTransaction = DatabaseConnection>
     subjects?: readonly AuthorizationSubject[];
   }): Promise<readonly PermissionSet[]> {
     const subjects = resolveAuthorizationSubjects(input);
-    const assignments = await this.getStore().findAssignments(subjects);
+    const assignments = await this.store.findAssignments(subjects);
     const keys = new Set(
       assignments.map((assignment) => assignment.permissionSet),
     );
     const requested = [...keys];
     const sets = await Promise.all(
-      requested.map((key) => this.getStore().getPermissionSet(key)),
+      requested.map((key) => this.store.getPermissionSet(key)),
     );
     const missing = sets.findIndex((set) => set === undefined);
     if (missing >= 0) {

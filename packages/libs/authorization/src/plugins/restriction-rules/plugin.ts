@@ -1,50 +1,31 @@
 import type { AuthorizationPlugin } from '../../core/index.js';
-import type { DatabaseConnection } from '@nocobase/db';
-import { DatabaseRestrictionRuleStore } from './database-store.js';
 import { RestrictionRuleService, type RestrictionRulesApi } from './service.js';
 import type { RestrictionRuleStore } from './store.js';
+import { requireStore } from '../internal/store.js';
 import {
   createRestrictionRulesHandler,
   RESTRICTION_RULES_ROUTE_PATH,
 } from './routes.js';
 
-export interface RestrictionRulesAuthorizationApi<
-  TTransaction = DatabaseConnection,
-> {
+export interface RestrictionRulesAuthorizationApi<TTransaction = unknown> {
   restrictionRules: RestrictionRulesApi<TTransaction>;
 }
-export interface RestrictionRulesOptions<TTransaction = DatabaseConnection> {
-  store?: RestrictionRuleStore<TTransaction>;
+export interface RestrictionRulesOptions<TTransaction = unknown> {
+  store: RestrictionRuleStore<TTransaction>;
 }
-export type RestrictionRulesPlugin<TTransaction = DatabaseConnection> =
+export type RestrictionRulesPlugin<TTransaction = unknown> =
   AuthorizationPlugin<RestrictionRulesAuthorizationApi<TTransaction>>;
 
-/**
- * The default store binds transactions to a DatabaseConnection, so the
- * transaction handle is a DatabaseConnection unless a custom store declares
- * another one.
- */
-export function restrictionRules(
-  options?: RestrictionRulesOptions<DatabaseConnection>,
-): RestrictionRulesPlugin<DatabaseConnection>;
-export function restrictionRules<TTransaction>(
+export function restrictionRules<TTransaction = unknown>(
   options: RestrictionRulesOptions<TTransaction>,
-): RestrictionRulesPlugin<TTransaction>;
-export function restrictionRules(
-  options: RestrictionRulesOptions<DatabaseConnection> = {},
-): RestrictionRulesPlugin<DatabaseConnection> {
-  const service = new RestrictionRuleService(options.store);
+): RestrictionRulesPlugin<TTransaction> {
+  const service = new RestrictionRuleService(
+    requireStore(options.store, 'Restriction Rules'),
+  );
   return {
     id: 'restriction-rules',
     authorizationApi: { restrictionRules: service },
     setup(authz): void {
-      if (!options.store) {
-        if (!authz.connection)
-          throw new Error(
-            'Restriction Rules requires createAuthorization({ connection }) or an explicit store',
-          );
-        service.initialize(new DatabaseRestrictionRuleStore(authz.connection));
-      }
       authz.constraints.add(service);
       authz.routes.add(
         RESTRICTION_RULES_ROUTE_PATH,

@@ -219,6 +219,22 @@ authz.subjects.define('user', {
 `filterActive` 收到的是该类型自己的 id，以及调用方正在持有的事务（如果有）。未声明的
 类型一律原样通过，所以 `authenticated:*` 这样的受众始终有效。
 
+### `connection` 透传给插件的句柄
+
+`createAuthorization({ connection })` 是一个透传通道：本库不读它、不判断它的类型，只把
+它交给每个插件的 `setup(authz)`，由插件自己决定怎么用。它的类型由调用方决定：
+
+```ts
+const authz = createAuthorization({
+  connection: databaseConnection,
+  plugins: [permissionSets({ store }), databaseAuthorization()],
+});
+```
+
+因此本库不依赖任何数据库包。需要读写数据的插件自带 Store，或者从这里拿到宿主的连接
+再自己建 Store——`@nocobase/app-plugin-authorization` 就是这样把数据库 Store 和建表的
+migration 一起提供的。
+
 ### `onGrantsChanged()` 订阅授权变更
 
 Grant Provider 知道自己的授权什么时候变了，`authz.onGrantsChanged()` 就把这件事

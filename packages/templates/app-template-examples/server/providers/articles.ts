@@ -48,11 +48,32 @@ export default class ArticlesProvider extends ServiceProvider<Application> {
       grants: [
         database.grant('articles', {
           read: { fields: { output: '*' }, recordAccess: ['allRecords'] },
+          // The route composes the timestamps it stores, so a write grant has
+          // to cover them as well as the fields a caller sends.
           create: {
-            fields: { input: ['title', 'summary', 'content', 'status'] },
+            fields: {
+              input: [
+                'title',
+                'summary',
+                'content',
+                'status',
+                'publishedAt',
+                'createdAt',
+                'updatedAt',
+              ],
+            },
           },
           update: {
-            fields: { input: ['title', 'summary', 'content', 'status'] },
+            fields: {
+              input: [
+                'title',
+                'summary',
+                'content',
+                'status',
+                'publishedAt',
+                'updatedAt',
+              ],
+            },
             recordAccess: ['allRecords'],
           },
         }),

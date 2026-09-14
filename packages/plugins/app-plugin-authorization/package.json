@@ -106,6 +106,7 @@
     "@types/react-dom": "catalog:",
     "better-sqlite3": "catalog:",
     "eslint": "catalog:",
+    "knex": "catalog:",
     "prettier": "catalog:",
     "react-dom": "catalog:",
     "typescript": "catalog:",

@@ -16,7 +16,10 @@ The plugin currently provides:
 - separate settings pages for Permission Sets, Default Access, Sharing Rules,
   Restriction Rules, and Database Authorization;
 - selection-based editors for resources, actions, users, and record scopes;
-- migrations for Permission Sets and access rules;
+- migrations for Permission Sets and access rules, together with the database
+  stores those migrations create the tables for: the library defines the store
+  contracts and requires one, and the implementations ship here beside the
+  migration rather than in a storage-agnostic library;
 - two built-in roles: a `root` Permission Set that carries no grants and whose
   protection declares `unrestricted: true`, so its holders bypass per-resource
   authorization including Sharing and Restriction Rules, seeded onto the
@@ -91,6 +94,19 @@ const authorization: AppConfigFactory<AuthorizationConfig> = defineAppConfig(
 The plugin ships no default list beyond Permission Sets: an application that
 configures nothing else installs nothing else, and the library's own errors
 say what is missing at first use.
+
+## The database resource plugin
+
+`databaseAuthorization` lives here rather than in `@nocobase/authorization`. It
+is the adapter between the library's grant model and `@nocobase/db`'s Repository
+Policy, and an adapter belongs on the side that knows both — the library stays
+storage-agnostic and hands out opaque scope references for a resource plugin to
+interpret. It produces db's filter AST directly, and
+`authz.database.policyFor(collection, scope)` folds a request's read, create,
+update and delete decisions into one `RepositoryPolicy` that
+`repository.withPolicy()` binds, so a route runs plain `findMany` and
+`createOne` instead of compiling a filter by hand. See
+[docs/database-usage.md](./docs/database-usage.md).
 
 The plugin always registers the identity step that turns a session into a
 principal, and keeps Realtime permission invalidation in step with grant

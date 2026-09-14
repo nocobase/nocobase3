@@ -6,12 +6,13 @@ import type {
   AuthorizationGrantService,
   AuthorizationRequest,
   Principal,
-} from '../../core/index.js';
+} from '@nocobase/authorization/core';
 import { DatabaseCollectionRegistry } from './collection-registry.js';
 import {
   databaseCollectionFieldsKnown,
   databaseFieldsAllowed,
   resolveDatabaseFields,
+  resolveActionFields,
 } from './field-access.js';
 import type {
   DatabaseActionGrant,
@@ -23,14 +24,17 @@ import type {
   DatabaseRecordAccessConfig,
 } from './model.js';
 import {
-  andFilters,
-  allRecordsFilter,
-  assertDatabaseFilter,
-  isNoRecordsFilter,
-  orFilters,
-  type DatabaseFilter,
-} from './filter.js';
+  allScopes,
+  anyScope,
+  assertDatabaseScope,
+  idsScope,
+  scopeAst,
+  type DatabaseScope,
+} from './scope.js';
 import { RecordAccessPolicyRegistry } from './record-access-registry.js';
+
+/** A decision that names this reason bypassed grants and constraints entirely. */
+export const UNRESTRICTED_ACCESS = 'UNRESTRICTED_ACCESS';
 
 export interface DatabaseResourceAuthorizerOptions {
   collections: DatabaseCollectionRegistry;
@@ -92,10 +96,10 @@ export class DatabaseResourceAuthorizer {
       plugin: 'database',
     }));
     try {
-      const filter =
+      const scope =
         request.action === 'create'
-          ? allRecordsFilter()
-          : await this.resolveEffectiveFilter(
+          ? true
+          : await this.resolveEffectiveScope(
               request.principal,
               resource,
               request.action,
@@ -107,7 +111,7 @@ export class DatabaseResourceAuthorizer {
                 action: request.action,
               }),
             );
-      if (isNoRecordsFilter(filter)) {
+      if (scope === false) {
         return this.deny(
           'NO_RECORD_ACCESS',
           'No Record Access allows this action',
@@ -117,8 +121,9 @@ export class DatabaseResourceAuthorizer {
         type: 'database',
         collection: resourceId,
         action: request.action,
-        filter,
-        fields,
+        scope:
+          scope === true ? true : scopeAst(collectionName(resourceId), scope),
+        fields: resolveActionFields(request.action, fields, resource),
       };
       return {
         effect: 'conditional',
@@ -137,10 +142,10 @@ export class DatabaseResourceAuthorizer {
 
   /**
    * An identity with unrestricted access skips grants, Sharing Rules and
-   * Restriction Rules. Callers still build queries from the returned
-   * conditions, so the decision stays conditional with an unrestricted filter
-   * and every field allowed. The two validity checks remain: they report a
-   * malformed request, not a permission.
+   * Restriction Rules. Callers still bind a Policy from the returned
+   * conditions, so the decision stays conditional with an unrestricted scope
+   * and every registered field allowed. The two validity checks remain: they
+   * report a malformed request, not a permission.
    */
   async authorizeUnrestricted(
     request: AuthorizationRequest<DatabaseAuthorizationParams>,
@@ -163,15 +168,15 @@ export class DatabaseResourceAuthorizer {
       type: 'database',
       collection: resourceId,
       action: request.action,
-      filter: allRecordsFilter(),
-      fields: { input: '*', output: '*' },
+      scope: true,
+      fields: resource.fields,
     };
     return {
       effect: 'conditional',
       conditions,
       reasons: [
         {
-          code: 'UNRESTRICTED_ACCESS',
+          code: UNRESTRICTED_ACCESS,
           message: `Unrestricted access allows ${resourceId}.${request.action}`,
           plugin: 'database',
         },
@@ -179,13 +184,13 @@ export class DatabaseResourceAuthorizer {
     };
   }
 
-  private async resolveEffectiveFilter(
+  private async resolveEffectiveScope(
     principal: Principal,
     resource: DatabaseCollectionDefinition,
     action: string,
     configs: readonly DatabaseActionGrant[],
     constraints: readonly AccessConstraint[],
-  ): Promise<DatabaseFilter> {
+  ): Promise<DatabaseScope> {
     const scopes = configs.flatMap((config) => config.recordAccess ?? []);
     const positive = await this.compileScopes(
       principal,
@@ -207,7 +212,7 @@ export class DatabaseResourceAuthorizer {
       resource,
       action,
     );
-    return andFilters([orFilters(positive), ...restrictions]);
+    return allScopes([anyScope(positive), ...restrictions]);
   }
 
   private async compileConstraints(
@@ -215,12 +220,12 @@ export class DatabaseResourceAuthorizer {
     principal: Principal,
     resource: DatabaseCollectionDefinition,
     action: string,
-  ): Promise<DatabaseFilter[]> {
-    const filters: DatabaseFilter[] = [];
+  ): Promise<DatabaseScope[]> {
+    const scopes: DatabaseScope[] = [];
     for (const constraint of constraints) {
       const value = constraint.value;
       if (value.type === 'all') {
-        filters.push({ $and: [] });
+        scopes.push(true);
         continue;
       }
       if (value.type === 'ids') {
@@ -228,13 +233,9 @@ export class DatabaseResourceAuthorizer {
         if (!Array.isArray(ids) || ids.some((id) => typeof id !== 'string')) {
           throw new Error('Invalid IDs access scope');
         }
-        filters.push({
-          $and: [
-            {
-              [resource.attributes?.identifier ?? 'id']: { $in: ids },
-            },
-          ],
-        });
+        scopes.push(
+          idsScope(resource.attributes?.identifier ?? 'id', ids as string[]),
+        );
         continue;
       }
       if (value.type !== 'database') {
@@ -244,13 +245,13 @@ export class DatabaseResourceAuthorizer {
       if (!isDatabaseRecordAccess(recordAccess)) {
         throw new Error('Invalid database Record Access scope');
       }
-      filters.push(
+      scopes.push(
         ...(await this.compileScopes(principal, resource, action, [
           recordAccess,
         ])),
       );
     }
-    return filters;
+    return scopes;
   }
 
   private async compileScopes(
@@ -258,24 +259,24 @@ export class DatabaseResourceAuthorizer {
     resource: DatabaseCollectionDefinition,
     action: string,
     scopes: readonly DatabaseRecordAccess[],
-  ): Promise<DatabaseFilter[]> {
-    const filters: DatabaseFilter[] = [];
+  ): Promise<DatabaseScope[]> {
+    const resolved: DatabaseScope[] = [];
     for (const scope of scopes) {
       const config = normalizeRecordAccess(scope);
       const policy = this.recordAccess.get(config.key);
       if (!policy) {
         throw new Error(`Unknown Record Access policy: ${config.key}`);
       }
-      const filter = await policy.resolve({
+      const value: unknown = await policy.resolve({
         principal,
         collection: resource,
         action,
         params: config.params,
       });
-      assertDatabaseFilter(filter, resource.fields);
-      filters.push(filter);
+      assertDatabaseScope(value, resource.fields);
+      resolved.push(value);
     }
-    return filters;
+    return resolved;
   }
 
   private deny(code: string, message: string): AuthorizationDecision {
@@ -284,6 +285,12 @@ export class DatabaseResourceAuthorizer {
       reasons: [{ code, message, plugin: 'database' }],
     };
   }
+}
+
+/** A resource is registered as `<source>.<collection>`; a scope names the Collection. */
+function collectionName(resourceId: string): string {
+  const separator = resourceId.indexOf('.');
+  return separator === -1 ? resourceId : resourceId.slice(separator + 1);
 }
 
 function toDatabaseGrant(grant: AuthorizationGrant): DatabaseActionGrant[] {

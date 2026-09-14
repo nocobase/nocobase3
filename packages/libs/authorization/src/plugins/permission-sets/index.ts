@@ -5,4 +5,3 @@ export {
   type PermissionSetSummary,
 } from './routes.js';
 export * from './store.js';
-export * from './database-store.js';

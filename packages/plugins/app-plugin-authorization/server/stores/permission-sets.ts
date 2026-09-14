@@ -1,25 +1,26 @@
 import type { DatabaseConnection } from '@nocobase/db';
+import type { DatabaseConnectionSource } from './connection.js';
 import type { Knex } from 'knex';
 import type {
   PermissionGrant,
   PermissionSet,
   PermissionSetAssignment,
   PermissionSetSubject,
-} from './model.js';
-import type { PermissionSetStore } from './store.js';
+} from '@nocobase/authorization/permissions';
+import type { PermissionSetStore } from '@nocobase/authorization/permissions';
 
 export class DatabasePermissionSetStore implements PermissionSetStore<DatabaseConnection> {
-  constructor(private readonly connection: DatabaseConnection) {}
+  constructor(private readonly connection: DatabaseConnectionSource) {}
 
   withTransaction(
     connection: DatabaseConnection,
   ): PermissionSetStore<DatabaseConnection> {
-    return new DatabasePermissionSetStore(connection);
+    return new DatabasePermissionSetStore(() => connection);
   }
 
   async listPermissionSets(): Promise<readonly PermissionSet[]> {
-    const rows = await this.connection.query
-      .selectFrom('authorizationPermissionSets')
+    const rows = await this.connection()
+      .query.selectFrom('authorizationPermissionSets')
       .select(['key', 'title', 'grants'])
       .orderBy('key', 'asc')
       .execute();
@@ -30,8 +31,8 @@ export class DatabasePermissionSetStore implements PermissionSetStore<DatabaseCo
     subjects: readonly PermissionSetSubject[],
   ): Promise<readonly PermissionSetAssignment[]> {
     if (subjects.length === 0) return [];
-    const rows = await this.connection.query
-      .selectFrom('authorizationPermissionSetAssignments')
+    const rows = await this.connection()
+      .query.selectFrom('authorizationPermissionSetAssignments')
       .select(['id', 'subjectType', 'subjectId', 'permissionSetKey'])
       .where((builder) =>
         builder.or(
@@ -55,8 +56,8 @@ export class DatabasePermissionSetStore implements PermissionSetStore<DatabaseCo
   }
 
   async getPermissionSet(key: string): Promise<PermissionSet | undefined> {
-    const row = await this.connection.query
-      .selectFrom('authorizationPermissionSets')
+    const row = await this.connection()
+      .query.selectFrom('authorizationPermissionSets')
       .select(['key', 'title', 'grants'])
       .where('key', '=', key)
       .executeTakeFirst();
@@ -66,8 +67,8 @@ export class DatabasePermissionSetStore implements PermissionSetStore<DatabaseCo
 
   async createPermissionSet(input: PermissionSet): Promise<PermissionSet> {
     const now = new Date();
-    await this.connection.query
-      .insertInto('authorizationPermissionSets')
+    await this.connection()
+      .query.insertInto('authorizationPermissionSets')
       .values({
         id: crypto.randomUUID(),
         key: input.key,
@@ -84,7 +85,7 @@ export class DatabasePermissionSetStore implements PermissionSetStore<DatabaseCo
     key: string,
     input: PermissionSet,
   ): Promise<PermissionSet> {
-    await this.connection.transaction(async (connection): Promise<void> => {
+    await this.connection().transaction(async (connection): Promise<void> => {
       await connection.query
         .updateTable('authorizationPermissionSets')
         .set({
@@ -107,7 +108,7 @@ export class DatabasePermissionSetStore implements PermissionSetStore<DatabaseCo
   }
 
   async deletePermissionSet(key: string): Promise<void> {
-    await this.connection.transaction(async (connection): Promise<void> => {
+    await this.connection().transaction(async (connection): Promise<void> => {
       await connection.query
         .deleteFrom('authorizationPermissionSetAssignments')
         .where('permissionSetKey', '=', key)
@@ -123,8 +124,8 @@ export class DatabasePermissionSetStore implements PermissionSetStore<DatabaseCo
     input: PermissionSetAssignment,
   ): Promise<PermissionSetAssignment> {
     const now = new Date();
-    await this.connection.query
-      .insertInto('authorizationPermissionSetAssignments')
+    await this.connection()
+      .query.insertInto('authorizationPermissionSetAssignments')
       .values({
         id: input.id,
         subjectType: input.subject.type,
@@ -138,8 +139,8 @@ export class DatabasePermissionSetStore implements PermissionSetStore<DatabaseCo
   }
 
   async revokeAssignment(id: string): Promise<void> {
-    await this.connection.query
-      .deleteFrom('authorizationPermissionSetAssignments')
+    await this.connection()
+      .query.deleteFrom('authorizationPermissionSetAssignments')
       .where('id', '=', id)
       .execute();
   }
@@ -150,30 +151,30 @@ export class DatabasePermissionSetStore implements PermissionSetStore<DatabaseCo
    * transaction is about to invalidate.
    */
   async lock(key: string): Promise<void> {
-    if (this.connection.dialect === 'sqlite') {
+    if (this.connection().dialect === 'sqlite') {
       // SQLite has no row locks; writing the row takes the write lock instead.
-      await this.connection.query
-        .updateTable('authorizationPermissionSets')
+      await this.connection()
+        .query.updateTable('authorizationPermissionSets')
         .set({ updatedAt: new Date() })
         .where('key', '=', key)
         .execute();
       return;
     }
-    const physical = await this.connection.collections.getPhysical(
+    const physical = await this.connection().collections.getPhysical(
       'authorizationPermissionSets',
     );
     if (!physical) {
       throw new Error('Permission Set schema is unavailable');
     }
-    const knex = await this.connection.client<Knex>();
+    const knex = await this.connection().client<Knex>();
     await knex(physical.tableName).where({ key }).select('id').forUpdate();
   }
 
   async listAssignments(
     permissionSet?: string,
   ): Promise<readonly PermissionSetAssignment[]> {
-    let query = this.connection.query
-      .selectFrom('authorizationPermissionSetAssignments')
+    let query = this.connection()
+      .query.selectFrom('authorizationPermissionSetAssignments')
       .select(['id', 'subjectType', 'subjectId', 'permissionSetKey']);
     if (permissionSet !== undefined) {
       query = query.where('permissionSetKey', '=', permissionSet);

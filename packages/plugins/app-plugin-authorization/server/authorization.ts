@@ -4,12 +4,14 @@ import {
   type Authorization,
   type AuthorizationPlugin,
 } from '@nocobase/authorization/core';
-import type { DatabaseAuthorizationApi } from '@nocobase/authorization/database';
+import type { DatabaseAuthorizationApi } from './database/index.js';
 import {
   permissionSets,
   type PermissionSetsAuthorizationApi,
   type PermissionSetsPlugin,
 } from '@nocobase/authorization/permissions';
+import { DatabaseConnectionHandle } from './stores/connection.js';
+import { DatabasePermissionSetStore } from './stores/permission-sets.js';
 
 export interface AppPermissionSetsConfig {
   /** The Permission Set that confers unrestricted access. */
@@ -44,11 +46,19 @@ export interface CreateAppAuthorizationOptions {
 
 export function createAppAuthorization(
   options: CreateAppAuthorizationOptions,
-): Authorization & PermissionSetsAuthorizationApi {
+): Authorization & PermissionSetsAuthorizationApi<DatabaseConnection> {
   const sets = options.config?.permissionSets;
+  const connection = new DatabaseConnectionHandle(
+    'Permission Sets',
+    options.connection,
+  );
   // Permission Sets leads the tuple so the api is inferred rather than asserted.
-  const plugins: readonly [PermissionSetsPlugin, ...AuthorizationPlugin[]] = [
-    permissionSets({
+  const plugins: readonly [
+    PermissionSetsPlugin<DatabaseConnection>,
+    ...AuthorizationPlugin[],
+  ] = [
+    permissionSets<DatabaseConnection>({
+      store: new DatabasePermissionSetStore(connection.resolve),
       rootSet: {
         key: sets?.rootSet ?? DEFAULT_ROOT_SET,
         // The identity middleware below makes `user` this host's principal

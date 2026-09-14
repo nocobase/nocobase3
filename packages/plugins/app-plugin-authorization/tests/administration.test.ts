@@ -16,7 +16,7 @@ import {
   appAuthorizationDatabase,
   createAppAuthorization,
 } from '../server/authorization.js';
-import { databaseAuthorization } from '@nocobase/authorization/database';
+import { databaseAuthorization } from '../server/database/index.js';
 
 describe('the records an application offers to a settings page', () => {
   let database: DatabaseManager;

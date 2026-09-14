@@ -120,14 +120,24 @@ const request = (
     },
     ...(input ? { body: JSON.stringify(input) } : {}),
   });
+// `id` is generated, so a write grant names the columns the route stores.
+const writableFields = [
+  'title',
+  'summary',
+  'content',
+  'status',
+  'publishedAt',
+  'createdAt',
+  'updatedAt',
+];
 async function grant(filter = 'allRecords') {
   await authz.permissionSets.create({
     key: 'editor',
     grants: [
       authzDatabase.grant('articles', {
         read: { fields: { output: '*' }, recordAccess: [filter] },
-        create: { fields: { input: '*' } },
-        update: { fields: { input: '*' }, recordAccess: [filter] },
+        create: { fields: { input: writableFields } },
+        update: { fields: { input: writableFields }, recordAccess: [filter] },
       }),
     ],
   });
@@ -188,16 +198,30 @@ it('applies authorized record ranges to counts, lists and updates', async () => 
           recordAccess: [
             {
               key: 'customFilter',
-              params: { filter: { $and: [{ status: { $eq: 'published' } }] } },
+              params: {
+                filter: {
+                  kind: 'condition',
+                  path: ['status'],
+                  operator: '$eq',
+                  value: 'published',
+                },
+              },
             },
           ],
         },
         update: {
-          fields: { input: '*' },
+          fields: { input: writableFields },
           recordAccess: [
             {
               key: 'customFilter',
-              params: { filter: { $and: [{ status: { $eq: 'published' } }] } },
+              params: {
+                filter: {
+                  kind: 'condition',
+                  path: ['status'],
+                  operator: '$eq',
+                  value: 'published',
+                },
+              },
             },
           ],
         },

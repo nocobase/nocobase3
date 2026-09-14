@@ -1,23 +1,24 @@
 import type { DatabaseConnection } from '@nocobase/db';
-import type { RestrictionRule } from './model.js';
-import type { RestrictionRuleStore } from './store.js';
+import type { DatabaseConnectionSource } from './connection.js';
+import type { RestrictionRule } from '@nocobase/authorization/restriction-rules';
+import type { RestrictionRuleStore } from '@nocobase/authorization/restriction-rules';
 
 const COLLECTION = 'authorizationRestrictionRules';
 const RECORDS = 'authorizationRestrictionRuleRecords';
 const ASSIGNMENTS = 'authorizationRestrictionRuleAssignments';
 
 export class DatabaseRestrictionRuleStore implements RestrictionRuleStore<DatabaseConnection> {
-  constructor(private readonly connection: DatabaseConnection) {}
+  constructor(private readonly connection: DatabaseConnectionSource) {}
 
   withTransaction(
     connection: DatabaseConnection,
   ): RestrictionRuleStore<DatabaseConnection> {
-    return new DatabaseRestrictionRuleStore(connection);
+    return new DatabaseRestrictionRuleStore(() => connection);
   }
   async create(rule: RestrictionRule): Promise<RestrictionRule> {
     const now = new Date();
     const id = crypto.randomUUID();
-    await this.connection.transaction(async (connection): Promise<void> => {
+    await this.connection().transaction(async (connection): Promise<void> => {
       await connection.query
         .insertInto(COLLECTION)
         .values(this.toValues(rule, id, now, now))
@@ -28,7 +29,7 @@ export class DatabaseRestrictionRuleStore implements RestrictionRuleStore<Databa
     return rule;
   }
   async update(key: string, rule: RestrictionRule): Promise<RestrictionRule> {
-    await this.connection.transaction(async (connection): Promise<void> => {
+    await this.connection().transaction(async (connection): Promise<void> => {
       const row = await connection.query
         .selectFrom(COLLECTION)
         .select('id')
@@ -55,7 +56,7 @@ export class DatabaseRestrictionRuleStore implements RestrictionRuleStore<Databa
     return rule;
   }
   async delete(key: string): Promise<void> {
-    await this.connection.transaction(async (connection): Promise<void> => {
+    await this.connection().transaction(async (connection): Promise<void> => {
       const row = await connection.query
         .selectFrom(COLLECTION)
         .select('id')
@@ -77,8 +78,8 @@ export class DatabaseRestrictionRuleStore implements RestrictionRuleStore<Databa
     });
   }
   async get(key: string): Promise<RestrictionRule | undefined> {
-    const row = await this.connection.query
-      .selectFrom(COLLECTION)
+    const row = await this.connection()
+      .query.selectFrom(COLLECTION)
       .select([
         'id',
         'key',
@@ -98,8 +99,8 @@ export class DatabaseRestrictionRuleStore implements RestrictionRuleStore<Databa
     );
   }
   async list(): Promise<readonly RestrictionRule[]> {
-    const rows = await this.connection.query
-      .selectFrom(COLLECTION)
+    const rows = await this.connection()
+      .query.selectFrom(COLLECTION)
       .select([
         'id',
         'key',
@@ -158,8 +159,8 @@ export class DatabaseRestrictionRuleStore implements RestrictionRuleStore<Databa
     ids: readonly string[],
   ): Promise<ReadonlyMap<string, readonly string[]>> {
     if (ids.length === 0) return new Map();
-    const rows = await this.connection.query
-      .selectFrom(RECORDS)
+    const rows = await this.connection()
+      .query.selectFrom(RECORDS)
       .select(['restrictionRuleId', 'action', 'recordId'])
       .where('restrictionRuleId', 'in', ids)
       .execute();
@@ -195,8 +196,8 @@ export class DatabaseRestrictionRuleStore implements RestrictionRuleStore<Databa
     ids: readonly string[],
   ): Promise<ReadonlyMap<string, RestrictionRule['subjects']>> {
     if (ids.length === 0) return new Map();
-    const rows = await this.connection.query
-      .selectFrom(ASSIGNMENTS)
+    const rows = await this.connection()
+      .query.selectFrom(ASSIGNMENTS)
       .select(['restrictionRuleId', 'subjectType', 'subjectId'])
       .where('restrictionRuleId', 'in', ids)
       .execute();

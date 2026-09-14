@@ -18,6 +18,20 @@ export function resolveDatabaseFields(
   };
 }
 
+/**
+ * The field allowlist one action's Policy node carries: what a read returns,
+ * and what a write accepts. `'*'` becomes the registered list because a Policy
+ * node reads an absent allowlist as no fields rather than as every field.
+ */
+export function resolveActionFields(
+  action: string,
+  fields: ResolvedDatabaseFields,
+  collection: DatabaseCollectionDefinition,
+): readonly string[] {
+  const allowed = action === 'read' ? fields.output : fields.input;
+  return allowed === '*' ? collection.fields : allowed;
+}
+
 export function databaseFieldsAllowed(
   requested: DatabaseAuthorizationFieldRequest | undefined,
   allowed: ResolvedDatabaseFields,

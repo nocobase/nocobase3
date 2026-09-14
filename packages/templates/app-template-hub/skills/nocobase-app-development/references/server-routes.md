@@ -89,29 +89,24 @@ Use a stable `resource`/`action` pair per operation — `read` and `create` are 
 
 `can()` answers whether the caller may perform the action at all. Many real requirements are narrower than that: _a salesperson may only see the customers they own_. There the answer is neither yes nor no — it is "yes, for these rows, and these fields".
 
-`authorize()` returns that. Its decision carries `conditions` describing the row filter and the readable and writable field sets, which you pass into the query:
+`policyFor()` returns that. It folds this request's read, create, update and delete decisions into one Repository Policy, and `withPolicy()` binds it:
 
 ```ts
-const decision = await context.get('authz').authorize({
-  resource: { type: 'database.collection', id: 'main.customers' },
-  action: 'read',
-});
+const policy = await authz.database.policyFor(
+  'main.customers',
+  context.get('authz'),
+);
+if (policy.read === false) return context.json({ code: 'FORBIDDEN' }, 403);
 
-if (
-  decision.effect !== 'conditional' ||
-  decision.conditions?.type !== 'database'
-) {
-  return context.json({ code: 'FORBIDDEN' }, 403);
-}
-
-return context.json({ data: await customers.list(decision.conditions) });
+const customers = database.repository('customers').withPolicy(policy);
+return context.json({ data: await customers.findMany() });
 ```
 
-**Apply the conditions inside the query, in the same `WHERE` clause as everything else.** Fetching rows and filtering them in memory afterwards is not an implementation detail — it is a data leak whenever a bug, an early return, or a later refactor skips the filter, and it sends rows the caller may not see across the process boundary in the first place. The same applies to `update` and `delete`: the returned filter goes in the `WHERE` alongside the record id, so a record the caller does not own simply does not match.
+**Let the Policy do the filtering.** The bound Repository puts the row scope in the same `WHERE` clause as everything else and refuses a field outside the allowlist, on reads and on writes alike. Fetching rows and filtering them in memory afterwards is not an implementation detail — it is a data leak whenever a bug, an early return, or a later refactor skips the filter. A row outside the scope makes `updateOne` raise `RECORD_NOT_FOUND`, which is a 404: indistinguishable from a row that does not exist, which is the point.
 
-Honour the field sets too. `conditions.fields.output` limits what you may return, and `conditions.fields.input` limits what you may write.
+A denied action is `false` on its node, so a route reads the Policy for its own status code rather than re-deriving the decision.
 
-This is a summary. Registering a collection with its actions, fields, and owner attribute, configuring Permission Sets, and compiling a `DatabaseFilter` into a query builder are all covered by the authorization plugin's own Skill — read `nocobase-app-plugin-authorization` in `.agents/skills/` before building ownership rules, and its `references/orders-module.md` for a complete worked example with an `ownerId`.
+This is a summary. Registering a collection with its actions, fields, and owner attribute, configuring Permission Sets, and binding the Repository Policy that `policyFor()` returns are all covered by the authorization plugin's own Skill — read `nocobase-app-plugin-authorization` in `.agents/skills/` before building ownership rules, and its `references/orders-module.md` for a complete worked example with an `ownerId`.
 
 ## Scope middleware to paths you own
 

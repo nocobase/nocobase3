@@ -1,15 +1,11 @@
-import type {
-  DatabaseAuthorizationConditions,
-  DatabaseFilter,
-  DatabaseFilterOperator,
-} from '@nocobase/app-plugin-authorization';
-import type {
-  DatabaseManager,
-  ComparisonOperator,
-  Expression,
-  ExpressionBuilder,
-  SqlBool,
-  Row,
+import {
+  RepositoryError,
+  type DatabaseManager,
+  type FilterBuilder,
+  type RepositoryPolicy,
+  type RepositoryRecord,
+  type Row,
+  type ScopedRepository,
 } from '@nocobase/db';
 
 interface ArticleInput {
@@ -18,139 +14,95 @@ interface ArticleInput {
   content: string;
   status: string;
 }
-const fields = [
-  'id',
-  'title',
-  'summary',
-  'content',
-  'status',
-  'publishedAt',
-  'createdAt',
-  'updatedAt',
-];
+
+const PAGE_SIZE = 12;
 
 export class ArticlesService {
   constructor(private readonly database: DatabaseManager) {}
 
   async list(
     options: { page: number; search: string; status?: string },
-    allowed: string[],
-    conditions: DatabaseAuthorizationConditions,
+    allowed: readonly string[],
+    policy: RepositoryPolicy,
   ): Promise<{ data: Row[]; total: number; page: number }> {
     const { page, search, status } = options;
-    let query = this.database
-      .query()
-      .selectFrom('articles')
-      .where((eb) => compileFilter(eb, conditions.filter));
-    if (search) query = query.where('title', 'like', `%${search}%`);
-    if (status) query = query.where('status', '=', status);
-    const count = await query
-      .select((eb) => [eb.fn.countAll().as('total')])
-      .executeTakeFirst();
-    const data = await query
-      .select(allowed)
-      .orderBy('updatedAt', 'desc')
-      .orderBy('id', 'desc')
-      .limit(12)
-      .offset((page - 1) * 12)
-      .execute();
-    return {
-      data: data.map(serializeArticle),
-      total: Number(count?.total ?? 0),
-      page,
-    };
+    const repository = this.scoped(policy);
+    const filter =
+      search || status
+        ? {
+            filter: (f: FilterBuilder) =>
+              f.and([
+                ...(search ? [f.string('title').includes(search)] : []),
+                ...(status ? [f.string('status').eq(status)] : []),
+              ]),
+          }
+        : {};
+    const [total, data] = await Promise.all([
+      repository.count(filter),
+      repository.findMany({
+        ...filter,
+        select: (select) => select.fields(...allowed),
+        sort: (sort) => [
+          sort.field('updatedAt').desc(),
+          sort.field('id').desc(),
+        ],
+        limit: PAGE_SIZE,
+        offset: (page - 1) * PAGE_SIZE,
+      }),
+    ]);
+    return { data: data.map(serializeArticle), total, page };
   }
 
-  async create(input: ArticleInput): Promise<void> {
+  async create(input: ArticleInput, policy: RepositoryPolicy): Promise<void> {
     const now = new Date();
-    await this.database
-      .query()
-      .insertInto('articles')
-      .values({
+    await this.scoped(policy).createOne({
+      values: {
         ...input,
         publishedAt: input.status === 'published' ? now : null,
         createdAt: now,
         updatedAt: now,
-      })
-      .execute();
+      },
+    });
   }
 
   async update(
     id: number,
     input: ArticleInput,
-    conditions: DatabaseAuthorizationConditions,
+    policy: RepositoryPolicy,
   ): Promise<boolean> {
-    const now = new Date();
-    const current = await this.database
-      .query()
-      .selectFrom('articles')
-      .select('publishedAt')
-      .where('id', '=', id)
-      .where((eb) => compileFilter(eb, conditions.filter))
-      .executeTakeFirst();
+    const repository = this.scoped(policy);
+    const current = await repository.findOne({ filter: { id } });
     if (!current) return false;
-    const result = await this.database
-      .query()
-      .updateTable('articles')
-      .set({
-        ...input,
-        updatedAt: now,
-        publishedAt:
-          input.status === 'published'
-            ? (current.publishedAt ?? now)
-            : current.publishedAt,
-      })
-      .where('id', '=', id)
-      .where((eb) => compileFilter(eb, conditions.filter))
-      .execute();
-    return Boolean(result.updatedCount);
-  }
-}
-
-const operators: Record<DatabaseFilterOperator, ComparisonOperator> = {
-  $eq: '=',
-  $ne: '!=',
-  $in: 'in',
-  $notIn: 'not in',
-  $gt: '>',
-  $gte: '>=',
-  $lt: '<',
-  $lte: '<=',
-};
-
-function compileFilter(
-  eb: ExpressionBuilder,
-  filter: DatabaseFilter,
-): Expression<SqlBool> {
-  return eb.and(
-    Object.entries(filter).map(([field, value]) => {
-      if (field === '$and' || field === '$or') {
-        if (!Array.isArray(value))
-          throw new Error('Invalid authorization filter.');
-        const nested = (value as readonly DatabaseFilter[]).map((item) =>
-          compileFilter(eb, item),
-        );
-        return field === '$and' ? eb.and(nested) : eb.or(nested);
+    const now = new Date();
+    const published = current.publishedAt ?? null;
+    try {
+      await repository.updateOne({
+        filter: { id },
+        values: {
+          ...input,
+          updatedAt: now,
+          publishedAt:
+            input.status === 'published' ? (published ?? now) : published,
+        },
+      });
+    } catch (error) {
+      // The update scope may be narrower than the read scope that found it.
+      if (
+        error instanceof RepositoryError &&
+        error.code === 'RECORD_NOT_FOUND'
+      ) {
+        return false;
       }
-      if (!value || Array.isArray(value) || !fields.includes(field))
-        throw new Error('Invalid authorization field.');
-      return eb.and(
-        Object.entries(value).map(([operator, expected]) => {
-          const comparison = operators[operator as DatabaseFilterOperator];
-          if (!comparison) throw new Error('Unsupported authorization filter.');
-          return eb(
-            field,
-            expected === null && operator === '$eq'
-              ? 'is'
-              : expected === null && operator === '$ne'
-                ? 'is not'
-                : comparison,
-            expected,
-          );
-        }),
-      );
-    }),
-  );
+      throw error;
+    }
+    return true;
+  }
+
+  private scoped(
+    policy: RepositoryPolicy,
+  ): ScopedRepository<Partial<RepositoryRecord>> {
+    return this.database.repository('articles').withPolicy(policy);
+  }
 }
 
 function serializeArticle(row: Row): Row {
