@@ -16,7 +16,6 @@ const storageMigrationName =
   '202608310001_replace_ai_file_storage_id_with_disk';
 const removeRecommendedModelsMigrationName =
   '202609010001_remove_recommended_llm_models';
-const normalizeJsonMigrationName = '202609130001_normalize_double_encoded_json';
 const collectionNames = [
   'aiEmployees',
   'aiMcpClients',
@@ -48,7 +47,7 @@ describe('AI employee migration', () => {
       directory,
     });
 
-    expect(migrations).toHaveLength(4);
+    expect(migrations).toHaveLength(3);
     expect(migrations[0]).toMatchObject({
       packageName: '@nocobase/app-plugin-ai-employee',
       fileName: migrationFileName,
@@ -67,13 +66,6 @@ describe('AI employee migration', () => {
     });
     expect(migrations[2].migration.irreversible).toBe(true);
     expect(migrations[2].migration.down).toBeUndefined();
-    expect(migrations[3]).toMatchObject({
-      packageName: '@nocobase/app-plugin-ai-employee',
-      fileName: `${normalizeJsonMigrationName}.ts`,
-      name: normalizeJsonMigrationName,
-    });
-    expect(migrations[3].migration.irreversible).toBe(true);
-    expect(migrations[3].migration.down).toBeUndefined();
   });
 
   it('creates all AI employee collections and drops them in reverse dependency order', async () => {

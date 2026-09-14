@@ -8,6 +8,8 @@ import type {
 } from '../ai-usage-event.js';
 import { BaseCollectionRepository } from './base-collection-repository.js';
 
+const JSON_FIELDS = new Set(['rawUsageMetadata', 'rawResponseMetadata']);
+
 export class DatabaseAIUsageEventRepository
   extends BaseCollectionRepository<AIUsageEventEntity>
   implements AIUsageEventRepository
@@ -16,7 +18,7 @@ export class DatabaseAIUsageEventRepository
     private readonly databaseConnection: DatabaseConnection,
     generateId: () => string | number | bigint,
   ) {
-    super(databaseConnection, 'aiUsageEvents', generateId);
+    super(databaseConnection, 'aiUsageEvents', generateId, JSON_FIELDS);
   }
 
   public async upsert(

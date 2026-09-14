@@ -72,6 +72,7 @@ export class BaseCollectionRepository<
     private readonly connection: DatabaseConnection,
     private readonly table: string,
     private readonly generateId: () => string | number | bigint = randomUUID,
+    private readonly jsonFields: ReadonlySet<string> = new Set(),
   ) {}
   async findOne(
     query: CollectionQuery<T> = {},
@@ -94,7 +95,7 @@ export class BaseCollectionRepository<
       );
     if (query.limit !== undefined) statement = statement.limit(query.limit);
     if (query.offset !== undefined) statement = statement.offset(query.offset);
-    return await statement.execute<T>();
+    return (await statement.execute<T>()).map((row) => this.decodeRow(row));
   }
   create(
     input: { values: Partial<T> },
@@ -187,6 +188,12 @@ export class BaseCollectionRepository<
   }
   private encodeRow(value: Partial<T>): Partial<T> {
     const encoded: Record<string, unknown> = { ...value };
+    for (const field of this.jsonFields) {
+      const fieldValue = encoded[field];
+      if (fieldValue != null) {
+        encoded[field] = JSON.stringify(fieldValue);
+      }
+    }
     for (const field of BIGINT_TIMESTAMP_FIELDS[this.table] ?? []) {
       const fieldValue = encoded[field];
       if (fieldValue instanceof Date) {
@@ -205,5 +212,18 @@ export class BaseCollectionRepository<
       }
     }
     return encoded as Partial<T>;
+  }
+  private decodeRow(value: T): T {
+    const decoded = { ...value } as Record<string, unknown>;
+    for (const field of this.jsonFields) {
+      const fieldValue = decoded[field];
+      if (typeof fieldValue !== 'string') continue;
+      try {
+        decoded[field] = JSON.parse(fieldValue);
+      } catch {
+        // Preserve invalid legacy values rather than making the record unreadable.
+      }
+    }
+    return decoded as T;
   }
 }

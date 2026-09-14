@@ -41,6 +41,24 @@ import { DatabaseAIEmployeeRepository } from '../repository/database/ai-employee
 import { DatabaseAIUsageEventRepository } from '../repository/database/ai-usage-event.js';
 import { BaseCollectionRepository } from '../repository/database/base-collection-repository.js';
 
+const JSON_FIELDS: Readonly<Record<string, ReadonlySet<string>>> = {
+  aiConversations: new Set(['options']),
+  aiFiles: new Set(['meta']),
+  aiMcpClients: new Set(['args', 'env', 'headers', 'restart']),
+  aiMessages: new Set([
+    'content',
+    'toolCalls',
+    'attachments',
+    'workContext',
+    'metadata',
+  ]),
+  aiSettings: new Set(['options']),
+  aiToolMessages: new Set(['content', 'interruptAction', 'userDecision']),
+  aiUsageEvents: new Set(['rawUsageMetadata', 'rawResponseMetadata']),
+  lcCheckpoints: new Set(['checkpoint', 'metadata']),
+  llmServices: new Set(['options', 'enabledModels', 'modelOptions']),
+};
+
 export const repositoryFactoryToken: ServiceToken<RepositoryFactory> =
   createServiceToken<RepositoryFactory>(
     '@nocobase/app-plugin-ai-employee/internal/repositories',
@@ -87,6 +105,7 @@ export class RepositoryFactory implements DatabaseRepositoryFactory {
         this.connection,
         name,
         this.generateId,
+        JSON_FIELDS[name] ?? new Set(),
       );
       this.records.set(name, repository);
     }
