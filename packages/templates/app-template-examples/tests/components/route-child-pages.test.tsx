@@ -54,10 +54,6 @@ describe('nested example pages', () => {
   it('adds a level for each page in the chain', () => {
     render(trailAt('/route-overlays/pages/quotation'));
 
-    expect(screen.getByRole('link', { name: 'Home' })).toHaveAttribute(
-      'href',
-      '/',
-    );
     expect(
       screen.getByRole('link', { name: 'navigation.routeOverlays' }),
     ).toHaveAttribute('href', '/route-overlays');

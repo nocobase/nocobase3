@@ -26,7 +26,6 @@ export interface RouteTrailEntry {
 }
 
 const RouteTrailContext = createContext<readonly RouteTrailEntry[]>([]);
-const NavigationRootContext = createContext<string | null>('/');
 const CurrentRouteContext = createContext<AppClientRegisteredRoute | undefined>(
   undefined,
 );
@@ -51,21 +50,8 @@ export function useRouteTrail(): readonly RouteTrailEntry[] {
   return useContext(RouteTrailContext);
 }
 
-/**
- * Where the navigation space the current page belongs to begins, or `null` when it has no root crumb of its own.
- *
- * A surface such as the settings centre is its own space and already offers a way back to the application, so a
- * Home crumb there leads out of the trail rather than up it. Reading this from context is what lets a page — a
- * plugin's page included — render a trail that is correct in either place without being told which one it is in.
- */
-export function useNavigationRoot(): string | null {
-  return useContext(NavigationRootContext);
-}
-
 export interface RouteMetadataBoundaryProps extends PropsWithChildren {
   readonly routes: readonly AppClientRegisteredRoute[];
-  /** The path this navigation space starts at. `null` for a surface that has no root crumb of its own. */
-  readonly home?: string | null;
 }
 
 /**
@@ -76,7 +62,6 @@ export interface RouteMetadataBoundaryProps extends PropsWithChildren {
  */
 export function RouteMetadataBoundary({
   children,
-  home = '/',
   routes,
 }: RouteMetadataBoundaryProps): ReactElement {
   const { pathname } = useLocation();
@@ -92,11 +77,7 @@ export function RouteMetadataBoundary({
     [pathname, routes],
   );
 
-  return (
-    <NavigationRootContext.Provider value={home}>
-      <RouteTrailProvider trail={trail}>{children}</RouteTrailProvider>
-    </NavigationRootContext.Provider>
-  );
+  return <RouteTrailProvider trail={trail}>{children}</RouteTrailProvider>;
 }
 
 /**

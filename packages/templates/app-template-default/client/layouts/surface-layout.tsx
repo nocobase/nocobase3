@@ -196,9 +196,7 @@ export function SurfaceLayout({
               </option>
             ))}
           </select>
-          {/* A surface is its own navigation space, and the header already offers the way back to the application,
-              so a trail rendered on one of its pages starts at the page's own group rather than at Home. */}
-          <RouteMetadataBoundary home={null} routes={allRoutes}>
+          <RouteMetadataBoundary routes={allRoutes}>
             <Routes>
               {renderRouteTree(routeTree, copy.pathPrefix, false, true)}
               {renderRouteTree(routes, copy.pathPrefix)}

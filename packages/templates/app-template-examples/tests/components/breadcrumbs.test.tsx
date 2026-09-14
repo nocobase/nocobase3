@@ -62,10 +62,6 @@ describe('Breadcrumbs', () => {
     expect(
       screen.getByRole('navigation', { name: 'Breadcrumb' }),
     ).toBeVisible();
-    expect(screen.getByRole('link', { name: 'Home' })).toHaveAttribute(
-      'href',
-      '/',
-    );
     expect(screen.getByRole('link', { name: 'Orders' })).toHaveAttribute(
       'href',
       '/orders',
@@ -149,70 +145,6 @@ describe('Breadcrumbs', () => {
 
     expect(
       screen.queryByRole('link', { name: 'Automation' }),
-    ).not.toBeInTheDocument();
-    expect(screen.getByText('Automation')).toBeVisible();
-    expect(screen.getByText('Workflows')).toHaveAttribute(
-      'aria-current',
-      'page',
-    );
-  });
-
-  it('takes the root from the surface the page is rendered in', () => {
-    const automation = route('automation', '/settings/automation', {
-      title: 'Automation',
-      componentLoader: undefined,
-    });
-    const workflows = route('workflows', '/settings/automation/workflows', {
-      title: 'Workflows',
-    });
-    const tree = [{ ...automation, children: [workflows] }];
-
-    render(
-      <MemoryRouter initialEntries={['/settings/automation/workflows']}>
-        {/* A surface states that it has no root crumb; the page inside it passes nothing. */}
-        <RouteMetadataBoundary home={null} routes={tree}>
-          <Breadcrumbs />
-        </RouteMetadataBoundary>
-      </MemoryRouter>,
-    );
-
-    expect(
-      screen.queryByRole('link', { name: 'Home' }),
-    ).not.toBeInTheDocument();
-    expect(screen.getByText('Automation')).toBeVisible();
-    expect(screen.getByText('Workflows')).toHaveAttribute(
-      'aria-current',
-      'page',
-    );
-  });
-
-  it('omits Home when the page asks for no root crumb', () => {
-    render(
-      <MemoryRouter initialEntries={['/settings/automation/workflows']}>
-        <RouteTrailProvider
-          trail={inTrail([
-            {
-              route: route('automation', '/settings/automation', {
-                title: 'Automation',
-                componentLoader: undefined,
-              }),
-              pathname: '/settings/automation',
-            },
-            {
-              route: route('workflows', '/settings/automation/workflows', {
-                title: 'Workflows',
-              }),
-              pathname: '/settings/automation/workflows',
-            },
-          ])}
-        >
-          <Breadcrumbs home={null} />
-        </RouteTrailProvider>
-      </MemoryRouter>,
-    );
-
-    expect(
-      screen.queryByRole('link', { name: 'Home' }),
     ).not.toBeInTheDocument();
     expect(screen.getByText('Automation')).toBeVisible();
     expect(screen.getByText('Workflows')).toHaveAttribute(

@@ -1,18 +1,12 @@
 import { useTranslation } from '@nocobase/i18n/client';
-import { ChevronRight, Home } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import type { ReactElement } from 'react';
 import { Link } from 'react-router';
 
-import { useNavigationRoot, useRouteTrail } from '../routing/route-context.js';
+import { useRouteTrail } from '../routing/route-context.js';
 
 export interface BreadcrumbsProps {
   readonly className?: string;
-  /**
-   * Where the trail starts, overriding the navigation space the page is in. `null` drops the root crumb entirely.
-   * Leave it unset: the surface the page is rendered in already states this, so a page that passes nothing is
-   * correct both in the application and inside the settings centre.
-   */
-  readonly home?: string | null;
 }
 
 /**
@@ -24,37 +18,18 @@ export interface BreadcrumbsProps {
  * links somewhere only when a page sits behind it, so a menu group reads as plain text rather than a dead link.
  *
  * Nothing renders until there are at least two levels to show — that is, until the current page actually sits under
- * a parent the user can return to. On a top-level page the sidebar already says where the user is, so a `Home /
- * Articles` trail only repeats the sidebar and the heading below it.
+ * a parent the user can return to. A single level would only repeat the heading below it.
  */
 export function Breadcrumbs({
   className,
-  home,
 }: BreadcrumbsProps = {}): ReactElement | null {
   const trail = useRouteTrail();
-  const navigationRoot = useNavigationRoot();
   const { t } = useTranslation();
-  const root = home === undefined ? navigationRoot : home;
   const levels = trail.filter(
     (entry) => entry.pathname !== '/' && entry.title !== undefined,
   );
 
   if (levels.length < 2) return null;
-
-  const items = [
-    ...(root === null
-      ? []
-      : [
-          { href: root, label: t('navigation.home', { defaultValue: 'Home' }) },
-        ]),
-    ...levels.map((entry) => ({
-      href: entry.route.componentLoader ? entry.pathname : undefined,
-      label: t(entry.title!, {
-        ns: entry.route.packageName,
-        defaultValue: entry.title!,
-      }),
-    })),
-  ];
 
   return (
     <nav
@@ -62,13 +37,15 @@ export function Breadcrumbs({
       className={className}
     >
       <ol className='flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground'>
-        {items.map((item, index) => (
+        {levels.map((entry, index) => (
           <BreadcrumbItem
-            current={index === items.length - 1}
-            href={item.href}
-            isHome={root !== null && index === 0}
-            key={`${item.href ?? index}-${item.label}`}
-            label={item.label}
+            current={index === levels.length - 1}
+            href={entry.route.componentLoader ? entry.pathname : undefined}
+            key={entry.pathname}
+            label={t(entry.title!, {
+              ns: entry.route.packageName,
+              defaultValue: entry.title!,
+            })}
           />
         ))}
       </ol>
@@ -79,23 +56,12 @@ export function Breadcrumbs({
 function BreadcrumbItem({
   current,
   href,
-  isHome,
   label,
 }: {
   readonly current: boolean;
   readonly href: string | undefined;
-  readonly isHome: boolean;
   readonly label: string;
 }): ReactElement {
-  const content = isHome ? (
-    <>
-      <Home aria-hidden className='size-4' />
-      <span className='sr-only'>{label}</span>
-    </>
-  ) : (
-    label
-  );
-
   return (
     <>
       <li className='inline-flex items-center gap-1'>
@@ -104,11 +70,11 @@ function BreadcrumbItem({
             {...(current ? { 'aria-current': 'page' as const } : {})}
             className={current ? 'font-normal text-foreground' : undefined}
           >
-            {content}
+            {label}
           </span>
         ) : (
           <Link className='transition-colors hover:text-foreground' to={href}>
-            {content}
+            {label}
           </Link>
         )}
       </li>
