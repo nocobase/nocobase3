@@ -30,6 +30,7 @@ import type {
   AppDetail,
   ConfigChangeSummary,
   DiffLine,
+  ReleaseRecord,
 } from './types.js';
 import { AppDialog } from './shared.js';
 import { shortId, formatDate, readError } from './utils.js';
@@ -360,6 +361,13 @@ export function DeploymentDialog({
     'both' | 'current' | 'new'
   >('both');
   const release = app.releases.find((item) => item.id === releaseId);
+  // Releases may share a version string — a rebuilt beta uploaded twice looks identical apart from its checksum — so
+  // the picker marks which one is running and which one is the newest upload.
+  const currentReleaseId =
+    app.deployment.observedReleaseId ?? app.deployment.desiredReleaseId;
+  const latestReleaseId = app.releases[0]?.id;
+  const releaseLabel = (item: ReleaseRecord | undefined): string =>
+    item ? `v${item.version} · ${item.checksum.slice(0, 12)}` : '—';
   const validationError =
     mode === 'file' ? validateConfigDocument(content, t) : null;
   const summary = summarizeConfigChanges(
@@ -410,8 +418,19 @@ export function DeploymentDialog({
                     ) : null}
                   </span>
                   <span>
-                    <span className='block text-sm font-medium'>
+                    <span className='flex items-center gap-2 text-sm font-medium'>
                       v{item.version}
+                      {item.id === currentReleaseId ? (
+                        <Badge className='bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'>
+                          {t('deployments.current', {
+                            defaultValue: 'Current',
+                          })}
+                        </Badge>
+                      ) : item.id === latestReleaseId ? (
+                        <Badge className='bg-sky-500/10 text-sky-700 dark:text-sky-300'>
+                          {t('releases.latest', { defaultValue: 'Latest' })}
+                        </Badge>
+                      ) : null}
                     </span>
                     <span className='font-mono text-[11px] text-muted-foreground'>
                       {item.checksum.slice(0, 12)}
@@ -466,9 +485,7 @@ export function DeploymentDialog({
                 <span className='text-muted-foreground'>
                   {t('deployments.release', { defaultValue: 'Release' })}
                 </span>
-                <span className='font-medium'>
-                  {release ? `v${release.version}` : '—'}
-                </span>
+                <span className='font-medium'>{releaseLabel(release)}</span>
               </div>
             ) : null}
             {rollback ? (
@@ -706,9 +723,7 @@ export function DeploymentDialog({
               <span className='text-muted-foreground'>
                 {t('deployments.release', { defaultValue: 'Release' })}
               </span>
-              <span className='font-medium'>
-                {release ? `v${release.version}` : '—'}
-              </span>
+              <span className='font-medium'>{releaseLabel(release)}</span>
             </div>
             <div className='grid grid-cols-[9rem_minmax(0,1fr)] gap-4 border-b px-4 py-3 text-sm'>
               <span className='text-muted-foreground'>

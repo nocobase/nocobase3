@@ -181,6 +181,7 @@ const enUS = {
     upload: 'Upload release',
     noReleases: 'No releases uploaded',
     active: 'Active',
+    latest: 'Latest',
     uploadTitle: 'Upload release',
     uploadDescription:
       'Upload a built application artifact. Version and config.example.yml or config.example.yaml are detected automatically.',

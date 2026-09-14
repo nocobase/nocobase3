@@ -7,6 +7,7 @@ import type {
   AppOverview,
   AppPageResponse,
   AppSummary,
+  ReleaseRecord,
 } from '../client/pages/hub/types.js';
 
 const mocks = vi.hoisted(() => ({
@@ -47,6 +48,7 @@ vi.mock('@nocobase/i18n/client', () => ({
 }));
 
 import AppPage from '../client/pages/hub/app-page.js';
+import DeploymentsPage from '../client/pages/hub/tabs/deployments-page.js';
 import { Detail } from '../client/pages/hub/detail.js';
 import { ApplicationsCatalog } from '../client/pages/hub-page.js';
 import { ErrorBanner } from '../client/pages/hub/shared.js';
@@ -425,6 +427,61 @@ describe('Hub client pages', () => {
     expect(screen.getByTestId('location')).toHaveTextContent(
       '/apps/customer/deployments?filter=recent',
     );
+  });
+
+  it('defaults the deploy dialog to the newest release rather than the running one', async () => {
+    // Two uploads of the same version: "release-2" is newer, "release-1" is what the App is running (see detail()).
+    const release = (id: string, createdAt: string): ReleaseRecord => ({
+      id,
+      version: '1.0.0-beta.22',
+      size: 1,
+      checksum: `${id}-checksum-abcdef`,
+      hasConfigTemplate: false,
+      createdAt,
+    });
+    mocks.client.request.mockImplementation(({ path }: { path: string }) => {
+      if (path === 'hub/apps/customer') {
+        return Promise.resolve({ data: detail() });
+      }
+      if (path === 'hub/apps/customer/deployments') {
+        return Promise.resolve({
+          data: { items: [], page: 1, pageSize: 20, total: 0 },
+        });
+      }
+      if (path === 'hub/apps/customer/releases') {
+        return Promise.resolve({
+          data: [
+            release('release-2', '2026-09-14T00:00:00Z'),
+            release('release-1', '2026-09-13T00:00:00Z'),
+          ],
+        });
+      }
+      if (path === 'hub/apps/customer/config') {
+        return Promise.resolve({ data: { mode: 'external', content: null } });
+      }
+      return Promise.reject(new Error(`Unexpected request: ${path}`));
+    });
+    render(
+      <MemoryRouter initialEntries={['/apps/customer/deployments']}>
+        <Routes>
+          <Route path='/apps/:appId' element={<AppPage />}>
+            <Route path='deployments' element={<DeploymentsPage />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Deploy' }));
+
+    const rows = await screen.findAllByRole('button', {
+      name: /v1\.0\.0-beta\.22/,
+    });
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toHaveTextContent('release-2-ch');
+    expect(rows[0]).toHaveTextContent('Latest');
+    expect(rows[0]).toHaveClass('bg-primary/5');
+    expect(rows[1]).toHaveTextContent('Current');
+    expect(rows[1]).not.toHaveClass('bg-primary/5');
   });
 
   it('renders an unavailable state for an explicit Tab without access', async () => {

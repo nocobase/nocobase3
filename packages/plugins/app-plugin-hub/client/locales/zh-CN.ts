@@ -171,6 +171,7 @@ const zhCN: HubResource = {
     upload: '上传版本',
     noReleases: '暂无上传版本',
     active: '当前版本',
+    latest: '最新上传',
     uploadTitle: '上传版本',
     uploadDescription:
       '上传构建好的应用制品，版本号和 config.example.yml 或 config.example.yaml 会自动识别。',

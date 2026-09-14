@@ -469,10 +469,13 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
       ])
         .then(([response, config]) => {
           setReleases(response.data);
+          // Deploying moves forward, so default to the newest upload rather than the release already running. The
+          // list is newest first. An explicit choice made in the Releases tab still wins; the running release is only
+          // the fallback when nothing has been uploaded at all.
           const targetId =
             selectedReleaseId ??
-            selectedApp.deployment.desiredReleaseId ??
-            response.data[0]?.id;
+            response.data[0]?.id ??
+            selectedApp.deployment.desiredReleaseId;
           if (!targetId) return;
           setDeploymentReleaseId(targetId);
           setDeploymentMode(config.mode);
