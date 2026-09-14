@@ -1,12 +1,9 @@
-import type { DatabaseConnection } from '@nocobase/db';
 import type { AppAuthorization } from '@nocobase/app-plugin-authorization';
 import {
   UserManagementError,
-  UserRoleScopeError,
   type UserRoleScope,
   type UserRoleValue,
 } from '@nocobase/app-plugin-users/server/tokens';
-import type { Knex } from 'knex';
 
 export const HUB_PERMISSION_SET_KEYS: readonly [
   'hub-administrator',
@@ -35,6 +32,30 @@ const HUB_APP_ACTIONS = new Set([
   'stop',
   'restart',
 ]);
+
+/**
+ * Hub owns its three Permission Sets: the generic management API may not
+ * change them. The administrator set carries one rule more, because it is the
+ * only way back into a Hub that has lost its last administrator.
+ */
+export function protectHubPermissionSets(
+  authorization: Pick<AppAuthorization, 'permissionSets'>,
+): () => void {
+  const releases = [
+    authorization.permissionSets.protect({
+      owner: '@nocobase/app-plugin-hub',
+      keys: [HUB_ADMINISTRATOR],
+      requireActiveAssignment: true,
+    }),
+    authorization.permissionSets.protect({
+      owner: '@nocobase/app-plugin-hub',
+      keys: HUB_PERMISSION_SET_KEYS.filter((key) => key !== HUB_ADMINISTRATOR),
+    }),
+  ];
+  return (): void => {
+    for (const release of releases) release();
+  };
+}
 
 export function registerHubResources(
   authorization: Pick<AppAuthorization, 'resources'>,
@@ -122,7 +143,7 @@ export function createHubUserRoleScope(
       ]),
     async get(userId, connection) {
       const assignments = await authorization.permissionSets
-        .withConnection(connection)
+        .withTransaction(connection)
         .listAssignments();
       return (
         assignments.find(
@@ -139,7 +160,7 @@ export function createHubUserRoleScope(
         userIds.map((userId) => [userId, '']),
       );
       const assignments = await authorization.permissionSets
-        .withConnection(connection)
+        .withTransaction(connection)
         .listAssignments();
       for (const assignment of assignments) {
         if (
@@ -155,7 +176,7 @@ export function createHubUserRoleScope(
     async findUserIds(role, connection) {
       requireHubRole(role);
       const assignments = await authorization.permissionSets
-        .withConnection(connection)
+        .withTransaction(connection)
         .listAssignments(role);
       return assignments
         .filter((assignment) => assignment.subject.type === 'user')
@@ -163,27 +184,15 @@ export function createHubUserRoleScope(
     },
     async replace(userId, value, connection) {
       const role = singleRole(value);
-      // Serialize every Hub role change on one stable row before taking the
-      // snapshot used by the final-administrator check.
-      await lockAdministratorRole(connection);
-      const current = await currentHubRole(authorization, userId, connection);
-      if (current === HUB_ADMINISTRATOR && role !== HUB_ADMINISTRATOR) {
-        await assertAdministratorCanBeRemoved(userId, connection);
-      }
+      // The library refuses a replacement that would take away the last
+      // administrator who can still act, so there is nothing to check here.
       await authorization.permissionSets
-        .withConnection(connection)
+        .withTransaction(connection)
         .replaceSubjectAssignments({
           subject: { type: 'user', id: userId },
           managedPermissionSets,
           permissionSets: [role],
         });
-    },
-    async assertCanDisable(userId, connection) {
-      await lockAdministratorRole(connection);
-      const current = await currentHubRole(authorization, userId, connection);
-      if (current === HUB_ADMINISTRATOR) {
-        await assertAdministratorCanBeRemoved(userId, connection);
-      }
     },
   };
 }
@@ -210,86 +219,4 @@ function singleRole(value: UserRoleValue): string {
   }
   requireHubRole(value);
   return value;
-}
-
-async function currentHubRole(
-  authorization: Pick<AppAuthorization, 'permissionSets'>,
-  userId: string,
-  connection: DatabaseConnection,
-): Promise<string | undefined> {
-  const assignments = await authorization.permissionSets
-    .withConnection(connection)
-    .listAssignments();
-  return assignments.find(
-    (assignment) =>
-      assignment.subject.type === 'user' &&
-      assignment.subject.id === userId &&
-      isHubPermissionSet(assignment.permissionSet),
-  )?.permissionSet;
-}
-
-async function assertAdministratorCanBeRemoved(
-  userId: string,
-  connection: DatabaseConnection,
-): Promise<void> {
-  const user = await connection.query
-    .selectFrom('user')
-    .select(['id', 'disabledAt'])
-    .where('id', '=', userId)
-    .executeTakeFirst();
-  if (!user || user.disabledAt != null) return;
-  const count = await enabledAdministratorCount(connection);
-  if (count <= 1) {
-    throw new UserRoleScopeError(
-      'LAST_HUB_ADMIN',
-      'The last enabled Hub Administrator cannot be disabled or assigned another role',
-      409,
-    );
-  }
-}
-
-async function lockAdministratorRole(
-  connection: DatabaseConnection,
-): Promise<void> {
-  if (connection.dialect === 'sqlite') {
-    await connection.query
-      .updateTable('authorizationPermissionSets')
-      .set({ updatedAt: new Date() })
-      .where('key', '=', HUB_ADMINISTRATOR)
-      .execute();
-    return;
-  }
-  const physical = await connection.collections.getPhysical(
-    'authorizationPermissionSets',
-  );
-  if (!physical) {
-    throw new Error('Authorization Permission Set schema is unavailable');
-  }
-  const knex = await connection.client<Knex>();
-  await knex(physical.tableName)
-    .where({ key: HUB_ADMINISTRATOR })
-    .select('id')
-    .forUpdate();
-}
-
-async function enabledAdministratorCount(
-  connection: DatabaseConnection,
-): Promise<number> {
-  const row = await connection.query
-    .selectFrom('authorizationPermissionSetAssignments')
-    .innerJoin(
-      'user',
-      'user.id',
-      'authorizationPermissionSetAssignments.subjectId',
-    )
-    .select(({ fn }) => [fn.countAll().as('count')])
-    .where('authorizationPermissionSetAssignments.subjectType', '=', 'user')
-    .where(
-      'authorizationPermissionSetAssignments.permissionSetKey',
-      '=',
-      HUB_ADMINISTRATOR,
-    )
-    .where('user.disabledAt', 'is', null)
-    .executeTakeFirst<{ readonly count: number | string }>();
-  return Number(row?.count ?? 0);
 }

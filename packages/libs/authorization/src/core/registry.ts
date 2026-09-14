@@ -13,19 +13,28 @@ export interface ResourceAuthorizationHandler<TParams = undefined> {
     request: AuthorizationRequest<TParams>,
     context: AuthorizationRuntimeContext,
   ): Promise<AuthorizationDecision>;
+  /** Decision for an identity with unrestricted access. Omit it to permit the action outright. */
+  authorizeUnrestricted?(
+    request: AuthorizationRequest<TParams>,
+  ): Promise<AuthorizationDecision>;
+}
+
+interface StoredResourceAuthorizationRequest {
+  principal: AuthorizationRequest['principal'];
+  subjects?: AuthorizationRequest['subjects'];
+  resource: AuthorizationRequest['resource'];
+  action: string;
+  params?: unknown;
 }
 
 interface StoredResourceAuthorizationHandler {
   resourceType: string;
   authorize(
-    request: {
-      principal: AuthorizationRequest['principal'];
-      subjects?: AuthorizationRequest['subjects'];
-      resource: AuthorizationRequest['resource'];
-      action: string;
-      params?: unknown;
-    },
+    request: StoredResourceAuthorizationRequest,
     context: AuthorizationRuntimeContext,
+  ): Promise<AuthorizationDecision>;
+  authorizeUnrestricted?(
+    request: StoredResourceAuthorizationRequest,
   ): Promise<AuthorizationDecision>;
 }
 
@@ -43,6 +52,7 @@ export class ResourceHandlerRegistry {
         `Authorization resource handler already registered: ${handler.resourceType}`,
       );
     }
+    const authorizeUnrestricted = handler.authorizeUnrestricted?.bind(handler);
     this.handlers.set(handler.resourceType, {
       resourceType: handler.resourceType,
       authorize(request, context): Promise<AuthorizationDecision> {
@@ -54,6 +64,16 @@ export class ResourceHandlerRegistry {
           context,
         );
       },
+      ...(authorizeUnrestricted === undefined
+        ? {}
+        : {
+            authorizeUnrestricted(request): Promise<AuthorizationDecision> {
+              return authorizeUnrestricted({
+                ...request,
+                params: request.params as TParams,
+              } as AuthorizationRequest<TParams>);
+            },
+          }),
     });
   }
 

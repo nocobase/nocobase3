@@ -8,6 +8,8 @@ export interface AuthorizationPermission {
 
 export interface AuthorizationPermissionsSnapshot {
   permissions: readonly AuthorizationPermission[];
+  /** True when the identity has unrestricted access and every action is permitted. */
+  readonly unrestricted: boolean;
 }
 
 export interface AuthorizationPermissionsHandlerInput {

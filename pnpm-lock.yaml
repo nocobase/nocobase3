@@ -1279,25 +1279,25 @@ importers:
 
   packages/libs/authorization:
     dependencies:
-      '@nocobase/db':
-        specifier: workspace:^
-        version: link:../db
       hono:
         specifier: 'catalog:'
         version: 4.13.2
     devDependencies:
+      '@nocobase/db':
+        specifier: workspace:^
+        version: link:../db
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
       '@types/node':
         specifier: 'catalog:'
         version: 24.13.3
-      better-sqlite3:
-        specifier: 'catalog:'
-        version: 12.11.1
       eslint:
         specifier: 'catalog:'
         version: 10.8.1(jiti@2.7.0)
+      knex:
+        specifier: 'catalog:'
+        version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(tedious@20.0.0)
       prettier:
         specifier: 'catalog:'
         version: 3.9.6
@@ -1996,6 +1996,9 @@ importers:
       '@nocobase/db':
         specifier: workspace:^
         version: link:../../libs/db
+      '@nocobase/i18n':
+        specifier: workspace:^
+        version: link:../../libs/i18n
       '@nocobase/service-provider':
         specifier: workspace:^
         version: link:../../libs/service-provider
@@ -2021,6 +2024,9 @@ importers:
       '@types/react-dom':
         specifier: 'catalog:'
         version: 19.2.4(@types/react@19.2.18)
+      better-sqlite3:
+        specifier: 'catalog:'
+        version: 12.11.1
       eslint:
         specifier: 'catalog:'
         version: 10.8.1(jiti@2.7.0)
@@ -2212,9 +2218,6 @@ importers:
       eslint:
         specifier: 'catalog:'
         version: 10.8.1(jiti@2.7.0)
-      knex:
-        specifier: 'catalog:'
-        version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(tedious@20.0.0)
       prettier:
         specifier: 'catalog:'
         version: 3.9.6

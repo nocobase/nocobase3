@@ -8,9 +8,12 @@ import {
 } from '@nocobase/db';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { PermissionSetLastAssignmentError } from '@nocobase/authorization/permissions';
+
 import {
   createHubUserRoleScope,
   HUB_ADMINISTRATOR,
+  protectHubPermissionSets,
 } from '../server/authorization.js';
 
 describe('Hub user role scope', () => {
@@ -42,6 +45,8 @@ describe('Hub user role scope', () => {
     authorization = createAppAuthorization({
       connection: database.connection(),
     });
+    // What HubAuthorizationProvider declares at runtime.
+    protectHubPermissionSets(authorization);
   });
 
   afterEach(async () => {
@@ -98,7 +103,7 @@ describe('Hub user role scope', () => {
       authorization.permissionSets,
       'listAssignments',
     );
-    vi.spyOn(authorization.permissionSets, 'withConnection').mockReturnValue(
+    vi.spyOn(authorization.permissionSets, 'withTransaction').mockReturnValue(
       authorization.permissionSets,
     );
     const scope = createHubUserRoleScope(authorization);
@@ -120,16 +125,14 @@ describe('Hub user role scope', () => {
     });
     const scope = createHubUserRoleScope(authorization);
 
-    await expect(
-      database.transaction((connection) =>
-        scope.assertCanDisable!('admin-1', connection),
-      ),
-    ).rejects.toMatchObject({ code: 'LAST_HUB_ADMIN', status: 409 });
+    await expect(assertRemovable('admin-1')).rejects.toBeInstanceOf(
+      PermissionSetLastAssignmentError,
+    );
     await expect(
       database.transaction((connection) =>
         scope.replace('admin-1', 'hub-viewer', connection),
       ),
-    ).rejects.toMatchObject({ code: 'LAST_HUB_ADMIN', status: 409 });
+    ).rejects.toBeInstanceOf(PermissionSetLastAssignmentError);
   });
 
   it('allows one administrator to be disabled or demoted when another is enabled', async () => {
@@ -143,19 +146,13 @@ describe('Hub user role scope', () => {
     }
     const scope = createHubUserRoleScope(authorization);
 
-    await expect(
-      database.transaction((connection) =>
-        scope.assertCanDisable!('admin-1', connection),
-      ),
-    ).resolves.toBeUndefined();
+    await expect(assertRemovable('admin-1')).resolves.toBeUndefined();
     await database.transaction((connection) =>
       scope.replace('admin-1', 'hub-viewer', connection),
     );
-    await expect(
-      database.transaction((connection) =>
-        scope.assertCanDisable!('admin-2', connection),
-      ),
-    ).rejects.toMatchObject({ code: 'LAST_HUB_ADMIN' });
+    await expect(assertRemovable('admin-2')).rejects.toBeInstanceOf(
+      PermissionSetLastAssignmentError,
+    );
   });
 
   it('keeps one enabled administrator when demotion and disable compete', async () => {
@@ -174,7 +171,9 @@ describe('Hub user role scope', () => {
         scope.replace('admin-1', 'hub-viewer', connection),
       ),
       database.transaction(async (connection) => {
-        await scope.assertCanDisable!('admin-2', connection);
+        await authorization.permissionSets
+          .withTransaction(connection)
+          .assertSubjectRemovable({ type: 'user', id: 'admin-2' });
         await connection.query
           .updateTable('user')
           .set({ disabledAt: new Date() })
@@ -190,7 +189,9 @@ describe('Hub user role scope', () => {
       (result): result is PromiseRejectedResult => result.status === 'rejected',
     );
     expect(failures).toHaveLength(1);
-    expect(failures[0]?.reason).toMatchObject({ code: 'LAST_HUB_ADMIN' });
+    expect(failures[0]?.reason).toBeInstanceOf(
+      PermissionSetLastAssignmentError,
+    );
     const enabledAdministrators = await database
       .connection()
       .query.selectFrom('authorizationPermissionSetAssignments')
@@ -210,6 +211,15 @@ describe('Hub user role scope', () => {
       .execute();
     expect(enabledAdministrators).toHaveLength(1);
   });
+
+  /** What the user management service asks before disabling an account. */
+  function assertRemovable(userId: string): Promise<void> {
+    return database.transaction((connection) =>
+      authorization.permissionSets
+        .withTransaction(connection)
+        .assertSubjectRemovable({ type: 'user', id: userId }),
+    );
+  }
 });
 
 async function migratePackage(

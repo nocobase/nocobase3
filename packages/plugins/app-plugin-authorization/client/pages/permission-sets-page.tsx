@@ -1,4 +1,11 @@
-import type { ReactElement } from 'react';
+import { useClientApplication } from '@nocobase/app-client';
+import { useTranslation } from '@nocobase/i18n/client';
+import { useMemo, type ReactElement } from 'react';
+import type { AuthorizationOptions } from '../authorization-client.js';
+import {
+  grantablePages,
+  withPageResources,
+} from '../components/page-options.js';
 import { PermissionSetsPanel } from './permission-sets-panel.js';
 import {
   AuthorizationSettingsPage,
@@ -10,15 +17,39 @@ export default function PermissionSetsPage(): ReactElement {
     'authz/permission-sets/options',
     'authz/permission-sets/users',
   );
+  // Page names live in client route declarations, which the server never sees. The browser holds the registry, so the
+  // grantable pages are merged in here rather than hardcoded into the options endpoint.
+  const application = useClientApplication();
+  const { t } = useTranslation();
+  const pageOptions = useMemo<AuthorizationOptions | undefined>(
+    () =>
+      options &&
+      withPageResources(
+        options,
+        grantablePages(application.runtime.routes).map((page) => ({
+          value: page.name,
+          label:
+            page.title === undefined
+              ? page.name
+              : t(page.title, {
+                  ns: page.packageName,
+                  defaultValue: page.title,
+                }),
+        })),
+      ),
+    [application, options, t],
+  );
   return (
     <AuthorizationSettingsPage
       eyebrow='Authorization'
       title='Permission Sets'
       description='Create reusable permission bundles and assign them to users.'
       error={error}
-      loading={!options}
+      loading={!pageOptions}
     >
-      {options ? <PermissionSetsPanel options={options} users={users} /> : null}
+      {pageOptions ? (
+        <PermissionSetsPanel options={pageOptions} users={users} />
+      ) : null}
     </AuthorizationSettingsPage>
   );
 }

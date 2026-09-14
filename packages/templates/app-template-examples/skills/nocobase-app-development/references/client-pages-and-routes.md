@@ -60,6 +60,26 @@ Never write the deployment base path into a route. The application is mounted so
 
 Descendants inherit their entry route’s auth mode and cannot switch it. App pages without a page ancestor retain the default `resource: name, action: access` check; nested pages add a check only when they declare `access`. Every parent check must pass before its children render.
 
+### Opting a page out of authorization
+
+`access: false` on an app route means being signed in is enough. The page is not authorized at all: every signed-in user reaches it, and no permission change can take it away.
+
+```ts
+defineAppRoutes([
+  {
+    access: false,
+    auth: 'required',
+    name: 'home',
+    path: '/',
+    componentLoader: () => import('./pages/home.js'),
+  },
+]);
+```
+
+Use it for a page that must never be lockable — the landing page a signed-in user has to land on. It is not a way to postpone adding permissions to a page. Removing `access: false` later takes the page away from everyone who holds no grant for it, so a page that should be restricted eventually is declared restricted now.
+
+A route's `name` is the stable identifier page grants are stored against, and the Permission Sets page lists the grantable pages from these route declarations. Renaming a route is therefore a data change rather than a refactor: stored grants naming the old name have to be migrated, or they silently stop granting anything.
+
 `auth` governs browser navigation. It is not server security: an endpoint the page calls must authenticate independently. See [server routes](server-routes.md).
 
 ## The three route kinds

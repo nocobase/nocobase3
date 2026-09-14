@@ -7,13 +7,12 @@ import {
   type Auth,
 } from '@nocobase/app-plugin-authentication';
 
-import {
-  authorizationToken,
-  protectedPermissionSetRegistryToken,
-  type AppAuthorization,
-} from '../server/index.js';
-import { createProtectedPermissionSetRegistry } from '../server/protected-permission-sets.js';
+import { createAuthorization, permissionSets } from '@nocobase/authorization';
+import type { AuthorizationPlugin } from '@nocobase/authorization/core';
+
+import { authorizationToken, type AppAuthorization } from '../server/index.js';
 import { apiRoutes } from '../server/routes/index.js';
+import { MockPermissionSetStore } from './mock-permission-set-store.js';
 
 describe('@nocobase/app-plugin-authorization routes', () => {
   it('protects its HTTP routes with authentication', async () => {
@@ -30,10 +29,6 @@ describe('@nocobase/app-plugin-authorization routes', () => {
     container.instance(authorizationToken, {
       middleware: () => async (_context, next) => next(),
     } as unknown as AppAuthorization);
-    container.instance(
-      protectedPermissionSetRegistryToken,
-      createProtectedPermissionSetRegistry(),
-    );
 
     const router = await apiRoutes.createRouter({
       appName: 'main',
@@ -81,10 +76,6 @@ describe('@nocobase/app-plugin-authorization routes', () => {
           set,
         },
       } as unknown as AppAuthorization);
-      container.instance(
-        protectedPermissionSetRegistryToken,
-        createProtectedPermissionSetRegistry(),
-      );
       const router = await apiRoutes.createRouter({
         appName: 'main',
         publicBasePath: '/main',
@@ -113,121 +104,199 @@ describe('@nocobase/app-plugin-authorization routes', () => {
   );
 
   it('rejects generic writes to protected Permission Sets and assignments', async () => {
-    const container = new ServiceContainer();
-    const update = vi.fn();
-    const assign = vi.fn();
-    const handler = vi.fn();
-    const registry = createProtectedPermissionSetRegistry();
-    registry.register('@nocobase/app-plugin-hub', ['hub-viewer']);
-    container.instance(authenticationToken, {
-      required: () => async (_context, next) => next(),
-    } as unknown as Auth);
-    container.instance(authorizationToken, {
-      middleware: () => async (context, next) => {
-        context.set('authz', { require: vi.fn(() => Promise.resolve()) });
-        await next();
-      },
-      permissionSets: {
-        update,
-        assign,
-        handler,
-        listAssignments: vi.fn(() =>
-          Promise.resolve([
-            {
-              id: 'protected-assignment',
-              subject: { type: 'user', id: 'alice' },
-              permissionSet: 'hub-viewer',
-            },
-          ]),
-        ),
-      },
-    } as unknown as AppAuthorization);
-    container.instance(protectedPermissionSetRegistryToken, registry);
-    const router = await apiRoutes.createRouter({
-      appName: 'main',
-      publicBasePath: '',
-      config: { app: { name: 'main', publicBasePath: '' } },
-      paths: createConfigPaths({ rootDir: '/missing' }),
-      router: new Hono(),
-      container,
+    const { container, authorization } = await protectedFixture();
+    authorization.permissionSets.protect({
+      owner: '@nocobase/app-plugin-hub',
+      keys: ['hub-viewer'],
     });
+    const router = await protectedRouter(container);
 
     const responses = await Promise.all([
-      router.request('/authz/permission-sets/hub-viewer', {
+      router.request('/api/authz/permission-sets/hub-viewer', {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ key: 'hub-viewer', grants: [] }),
       }),
-      router.request('/authz/permission-sets/hub-viewer/assignments', {
+      router.request('/api/authz/permission-sets/hub-viewer/assignments', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          subject: { type: 'user', id: 'alice' },
+          subject: { type: 'user', id: 'bob' },
         }),
       }),
       router.request(
-        '/authz/permission-sets/assignments/protected-assignment',
-        { method: 'DELETE' },
+        '/api/authz/permission-sets/assignments/hub-viewer-alice',
+        {
+          method: 'DELETE',
+        },
       ),
+      router.request('/api/authz/permission-sets/hub-viewer', {
+        method: 'DELETE',
+      }),
     ]);
 
-    expect(responses.map(({ status }) => status)).toEqual([403, 403, 403]);
+    expect(responses.map(({ status }) => status)).toEqual([403, 403, 403, 403]);
     for (const response of responses) {
       await expect(response.json()).resolves.toMatchObject({
         code: 'PROTECTED_PERMISSION_SET',
       });
     }
-    expect(update).not.toHaveBeenCalled();
-    expect(assign).not.toHaveBeenCalled();
-    expect(handler).not.toHaveBeenCalled();
+    expect(
+      (await authorization.permissionSets.listAssignments('hub-viewer')).map(
+        ({ id }) => id,
+      ),
+    ).toEqual(['hub-viewer-alice']);
   });
 
-  it('preserves the existing ability to add a System Administrator', async () => {
-    const container = new ServiceContainer();
-    const assign = vi.fn(() =>
-      Promise.resolve({
-        id: 'system-admin-assignment',
-        subject: { type: 'user', id: 'alice' },
-        permissionSet: 'system-administrator',
-      }),
-    );
-    const registry = createProtectedPermissionSetRegistry();
-    registry.register('@nocobase/app-plugin-authorization', [
-      'system-administrator',
-    ]);
-    container.instance(authenticationToken, {
-      required: () => async (_context, next) => next(),
-    } as unknown as Auth);
-    container.instance(authorizationToken, {
-      middleware: () => async (context, next) => {
-        context.set('authz', { require: vi.fn(() => Promise.resolve()) });
-        await next();
-      },
-      permissionSets: { assign },
-    } as unknown as AppAuthorization);
-    container.instance(protectedPermissionSetRegistryToken, registry);
-    const router = await apiRoutes.createRouter({
-      appName: 'main',
-      publicBasePath: '',
-      config: { app: { name: 'main', publicBasePath: '' } },
-      paths: createConfigPaths({ rootDir: '/missing' }),
-      router: new Hono(),
-      container,
+  it('assigns and revokes System Administrators but keeps the last one', async () => {
+    const { container, authorization } = await protectedFixture();
+    authorization.permissionSets.protect({
+      owner: '@nocobase/app-plugin-authorization',
+      keys: ['system-administrator'],
+      allow: ['assign', 'revoke'],
+      requireActiveAssignment: true,
+      unrestricted: true,
     });
+    const router = await protectedRouter(container);
 
     const response = await router.request(
-      '/authz/permission-sets/system-administrator/assignments',
+      '/api/authz/permission-sets/system-administrator/assignments',
       {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ subject: { type: 'user', id: 'alice' } }),
       },
     );
-
     expect(response.status).toBe(201);
-    expect(assign).toHaveBeenCalledWith({
-      subject: { type: 'user', id: 'alice' },
+    await expect(response.json()).resolves.toMatchObject({
+      data: { permissionSet: 'system-administrator' },
+    });
+
+    const revoked = await router.request(
+      '/api/authz/permission-sets/assignments/user:alice:system-administrator',
+      { method: 'DELETE' },
+    );
+    expect(revoked.status).toBe(204);
+
+    const last = await router.request(
+      '/api/authz/permission-sets/assignments/user:admin:system-administrator',
+      { method: 'DELETE' },
+    );
+    expect(last.status).toBe(409);
+    await expect(last.json()).resolves.toMatchObject({
+      code: 'LAST_ASSIGNMENT',
+    });
+  });
+
+  it('lets the seeded superuser administer without holding any grant', async () => {
+    const identity: AuthorizationPlugin = {
+      id: 'test-identity',
+      setup(authz) {
+        authz.use(async (request, next) => {
+          request.principal = { type: 'user', id: 'root' };
+          await next();
+        });
+      },
+    };
+    const authorization = createAuthorization({
+      plugins: [
+        identity,
+        permissionSets({ store: new MockPermissionSetStore() }),
+      ],
+    }) as unknown as AppAuthorization;
+    // Exactly what the seed writes: the superuser set carries no grants.
+    await authorization.permissionSets.create({
+      key: 'system-administrator',
+      title: 'System administrator',
+      grants: [],
+    });
+    await authorization.permissionSets.assign({
       permissionSet: 'system-administrator',
+      subject: { type: 'user', id: 'root' },
+    });
+    const container = new ServiceContainer();
+    container.instance(authenticationToken, {
+      required: () => async (_context, next) => next(),
+    } as unknown as Auth);
+    container.instance(authorizationToken, authorization);
+    const router = await protectedRouter(container);
+
+    const denied = await router.request('/api/authz/permission-sets');
+    expect(denied.status).toBe(403);
+
+    authorization.permissionSets.protect({
+      owner: '@nocobase/app-plugin-authorization',
+      keys: ['system-administrator'],
+      unrestricted: true,
+    });
+    const permitted = await router.request('/api/authz/permission-sets');
+
+    expect(permitted.status).toBe(200);
+    await expect(permitted.json()).resolves.toMatchObject({
+      data: [{ key: 'system-administrator', grants: [] }],
     });
   });
 });
+
+/** The plugin routes mounted under /api, where the Permission Set handler expects them. */
+async function protectedRouter(container: ServiceContainer): Promise<Hono> {
+  const routes = await apiRoutes.createRouter({
+    appName: 'main',
+    publicBasePath: '',
+    config: { app: { name: 'main', publicBasePath: '' } },
+    paths: createConfigPaths({ rootDir: '/missing' }),
+    router: new Hono(),
+    container,
+  });
+  return new Hono().route('/api', routes);
+}
+
+/** A real Permission Sets plugin behind the routes, with 'admin' holding every settings grant. */
+async function protectedFixture(): Promise<{
+  container: ServiceContainer;
+  authorization: AppAuthorization;
+}> {
+  const identity: AuthorizationPlugin = {
+    id: 'test-identity',
+    setup(authz) {
+      authz.use(async (request, next) => {
+        request.principal = { type: 'user', id: 'admin' };
+        await next();
+      });
+    },
+  };
+  const authorization = createAuthorization({
+    plugins: [
+      identity,
+      permissionSets({ store: new MockPermissionSetStore() }),
+    ],
+  }) as unknown as AppAuthorization;
+  await authorization.permissionSets.create({
+    key: 'system-administrator',
+    grants: [
+      {
+        resource: { type: 'authorization.settings', id: '*' },
+        actions: ['read', 'create', 'update', 'delete'].map((action) => ({
+          action,
+        })),
+      },
+    ],
+  });
+  await authorization.permissionSets.create({ key: 'hub-viewer', grants: [] });
+  await authorization.permissionSets.assign({
+    id: 'user:admin:system-administrator',
+    permissionSet: 'system-administrator',
+    subject: { type: 'user', id: 'admin' },
+  });
+  await authorization.permissionSets.assign({
+    id: 'hub-viewer-alice',
+    permissionSet: 'hub-viewer',
+    subject: { type: 'user', id: 'alice' },
+  });
+  const container = new ServiceContainer();
+  container.instance(authenticationToken, {
+    required: () => async (_context, next) => next(),
+  } as unknown as Auth);
+  container.instance(authorizationToken, authorization);
+  return { container, authorization };
+}

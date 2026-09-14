@@ -17,7 +17,6 @@ Authorization 由 Core 和插件组成。Grant Provider 提供基础授权，资
   判断，以及开发授权插件。
 - [Permission Sets](./permission-sets/usage.md)：创建和分配权限集合、查询有效权限、
   挂载 HTTP API，以及自定义存储。
-- [页面权限](./pages/usage.md)：授予页面访问权限，并通过基础权限快照提供给客户端。
 - [Database Authorization](./database/usage.md)：注册受保护的数据表，定义字段和记录
   权限，并在数据访问层应用授权执行计划。
 - [Default Access](./default-access/usage.md)：为资源和动作设置默认对象范围。
@@ -29,7 +28,6 @@ Authorization 由 Core 和插件组成。Grant Provider 提供基础授权，资
 ```ts
 import { createAuthorization } from '@nocobase/authorization/core';
 import { permissionSets } from '@nocobase/authorization/permissions';
-import { pages } from '@nocobase/authorization/pages';
 import { databaseAuthorization } from '@nocobase/authorization/database';
 import { defaultAccess } from '@nocobase/authorization/default-access';
 import { sharingRules } from '@nocobase/authorization/sharing-rules';

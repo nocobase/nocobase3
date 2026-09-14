@@ -22,9 +22,12 @@ export function describeRoutePage(
   defaultAccess = true,
 ): ClientPageDescriptor {
   return {
-    access: route.access ?? { resource: route.name, action: 'access' },
+    // `||` rather than `??`: a route that declared `access: false` opted out of authorization, so it still needs a
+    // placeholder resource here while `checkAccess` stays false.
+    access: route.access || { resource: route.name, action: 'access' },
     checkAccess:
       route.auth === 'required' &&
+      route.access !== false &&
       (defaultAccess || route.access !== undefined),
     componentLoader: route.componentLoader!,
     kind: 'page',

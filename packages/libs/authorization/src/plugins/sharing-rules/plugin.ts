@@ -1,22 +1,36 @@
 import type { AuthorizationPlugin } from '../../core/index.js';
+import type { DatabaseConnection } from '@nocobase/db';
 import { DatabaseSharingRuleStore } from './database-store.js';
 import { SharingRuleService, type SharingRulesApi } from './service.js';
 import type { SharingRuleStore } from './store.js';
 
-export interface SharingRulesAuthorizationApi {
-  sharingRules: SharingRulesApi;
+export interface SharingRulesAuthorizationApi<
+  TTransaction = DatabaseConnection,
+> {
+  sharingRules: SharingRulesApi<TTransaction>;
 }
 
-export interface SharingRulesOptions {
-  store?: SharingRuleStore;
+export interface SharingRulesOptions<TTransaction = DatabaseConnection> {
+  store?: SharingRuleStore<TTransaction>;
 }
 
-export type SharingRulesPlugin =
-  AuthorizationPlugin<SharingRulesAuthorizationApi>;
+export type SharingRulesPlugin<TTransaction = DatabaseConnection> =
+  AuthorizationPlugin<SharingRulesAuthorizationApi<TTransaction>>;
 
+/**
+ * The default store binds transactions to a DatabaseConnection, so the
+ * transaction handle is a DatabaseConnection unless a custom store declares
+ * another one.
+ */
 export function sharingRules(
-  options: SharingRulesOptions = {},
-): SharingRulesPlugin {
+  options?: SharingRulesOptions<DatabaseConnection>,
+): SharingRulesPlugin<DatabaseConnection>;
+export function sharingRules<TTransaction>(
+  options: SharingRulesOptions<TTransaction>,
+): SharingRulesPlugin<TTransaction>;
+export function sharingRules(
+  options: SharingRulesOptions<DatabaseConnection> = {},
+): SharingRulesPlugin<DatabaseConnection> {
   const service = new SharingRuleService(options.store);
   return {
     id: 'sharing-rules',

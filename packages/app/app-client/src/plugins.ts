@@ -20,6 +20,14 @@ const RESERVED_APPLICATION_ROUTE_PATHS = new Set([
 
 export type AppClientRouteAuth = 'required' | 'guest' | 'optional';
 
+/**
+ * Authorization for an application route. An object names the resource and action checked before the page loads.
+ * `false` opts the page out of authorization entirely: every signed-in user reaches it, and no permission change can
+ * take it away. Omitting the field leaves the page on the default `resource: name, action: 'access'` check.
+ */
+export type AppClientRouteAccess =
+  { readonly resource: string; readonly action: string } | false;
+
 export type AppClientContributionSource = 'application' | 'plugin';
 
 export type AppClientReactProviderLayer = 'root' | 'application' | 'extension';
@@ -35,7 +43,7 @@ export interface AppClientRoutePageDefinition {
   readonly name: string;
   readonly path: string;
   readonly auth?: AppClientRouteAuth;
-  readonly access?: { readonly resource: string; readonly action: string };
+  readonly access?: AppClientRouteAccess;
   readonly navigation?: AppClientSettingsRouteNavigation;
   readonly componentLoader: AppClientRouteComponentLoader;
   readonly children?: readonly AppClientRouteDefinition[];
@@ -57,7 +65,7 @@ export interface AppClientRegisteredRoute {
   readonly name: string;
   readonly path: string;
   readonly auth: AppClientRouteAuth;
-  readonly access?: { readonly resource: string; readonly action: string };
+  readonly access?: AppClientRouteAccess;
   readonly navigation?: AppClientSettingsRouteNavigation;
   readonly componentLoader?: AppClientRouteComponentLoader;
   readonly children?: readonly AppClientRegisteredRoute[];
@@ -627,7 +635,12 @@ export function resolveAppClientContributions(
               packageName,
               source,
               pageLoader: node.componentLoader,
-              ...(node.access ? { access: node.access } : {}),
+              // A settings page is never declared with `access: false`; the route-level opt-out belongs to the
+              // application surface, where a page is authorized by default. Test for both so a missing rule and an
+              // opt-out are told apart rather than collapsed by falsiness.
+              ...(node.access !== undefined && node.access !== false
+                ? { access: node.access }
+                : {}),
               ...(node.navigation?.icon ? { icon: node.navigation.icon } : {}),
               ...(groupId ? { groupId } : {}),
             });
@@ -981,7 +994,11 @@ function resolveRouteTree(
         packageName,
         source,
         ...(navigation ? { navigation } : {}),
-        ...('access' in route && route.access ? { access: route.access } : {}),
+        // `access: false` is a declaration, not an absence: testing for truthiness here would drop it and put the
+        // page back on the default check it opted out of.
+        ...('access' in route && route.access !== undefined
+          ? { access: route.access }
+          : {}),
         ...(isPage
           ? {
               componentLoader: wrapRouteComponentLoader(

@@ -7,10 +7,7 @@ import {
 import { Hono } from 'hono';
 
 import { createAuthorizationRoutes } from './authorization.js';
-import {
-  authorizationToken,
-  protectedPermissionSetRegistryToken,
-} from '../tokens.js';
+import { authorizationToken } from '../tokens.js';
 
 export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
   defineApiRoutes(({ container }) => {
@@ -20,7 +17,6 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       createAuthorizationRoutes(
         container.resolve(authenticationToken),
         container.resolve(authorizationToken),
-        container.resolve(protectedPermissionSetRegistryToken),
       ),
     );
     return router;

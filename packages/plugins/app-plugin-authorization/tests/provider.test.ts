@@ -4,8 +4,12 @@ import { databaseManagerToken, type DatabaseManager } from '@nocobase/db';
 import { realtimeServiceToken } from '@nocobase/app-server/realtime';
 import { ServiceContainer } from '@nocobase/service-provider';
 
+const protect = vi.hoisted(() => vi.fn(() => () => undefined));
 const createAppAuthorization = vi.hoisted(() =>
-  vi.fn(() => ({ kind: 'authorization' })),
+  vi.fn(() => ({
+    kind: 'authorization',
+    permissionSets: { protect },
+  })),
 );
 
 vi.mock('../server/authorization.js', async (importOriginal) => {
@@ -20,6 +24,7 @@ import { authorizationToken } from '../server/tokens.js';
 describe('authorization provider', () => {
   beforeEach(() => {
     createAppAuthorization.mockClear();
+    protect.mockClear();
   });
 
   it('registers authorization with the service-container database', () => {
@@ -43,6 +48,24 @@ describe('authorization provider', () => {
       onUserPermissionsChanged: expect.any(Function),
     });
     expect(authorization).toBe(createAppAuthorization.mock.results[0]?.value);
+    expect(protect.mock.calls).toEqual([
+      [
+        {
+          owner: '@nocobase/app-plugin-authorization',
+          keys: ['system-administrator'],
+          allow: ['assign', 'revoke'],
+          requireActiveAssignment: true,
+          unrestricted: true,
+        },
+      ],
+      [
+        {
+          owner: '@nocobase/app-plugin-authorization',
+          keys: ['authenticated'],
+          allow: ['update'],
+        },
+      ],
+    ]);
   });
 
   it('publishes targeted and global permission invalidations', async () => {

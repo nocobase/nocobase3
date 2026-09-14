@@ -191,6 +191,7 @@ router.put('/posts/:id', async (context) => {
 const snapshot = await authz.permissions();
 
 // {
+//   unrestricted: false,
 //   permissions: [
 //     {
 //       resource: { type: "report", id: "sales-summary" },
@@ -199,6 +200,9 @@ const snapshot = await authz.permissions();
 //   ],
 // }
 ```
+
+快照中的 `unrestricted` 表示当前身份拥有不受限访问。此时 `permissions` 通常为空，客户端
+应当直接放行，而不是去匹配列表。
 
 Core 同时提供 Fetch handler，应用可以自行决定挂载路径：
 
@@ -213,6 +217,20 @@ router.get('/authz/permissions', (context) =>
 
 这个接口适合在客户端启动或身份切换后请求一次。它主要服务于页面入口、功能入口等
 静态判断，不能代替实际业务 API 的服务端授权。
+
+### 不受限访问
+
+Grant Provider 可以实现可选的 `unrestricted(identity)`，用来声明某个身份拥有不受限访问。
+返回 `true` 时，Core 跳过该请求的逐资源授权。
+
+资源 handler 可以实现可选的 `authorizeUnrestricted(request)` 来给出这种情况下的判定；不
+实现时 Core 直接放行，理由码为 `UNRESTRICTED_ACCESS`。需要返回条件（例如数据库查询用的
+filter 和字段范围）的 handler 应当实现它，同时保留自身的合法性校验——未知资源、未知
+动作或未注册字段仍然应当拒绝，因为那是请求本身有问题，而不是权限问题。
+
+Permission Sets 插件即是这样一个 Grant Provider：在
+`authz.permissionSets.protect({ ..., unrestricted: true })` 中声明的 Permission Set，其持有者
+就拥有不受限访问。详见 Permission Sets 的“超级用户（不受限访问）”一节。
 
 ### 路由 Guard
 

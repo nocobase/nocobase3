@@ -140,6 +140,26 @@ export class Authorization {
       );
     }
     try {
+      const unrestricted = await grants.unrestricted?.({
+        principal: request.principal,
+        ...(request.subjects === undefined
+          ? {}
+          : { subjects: request.subjects }),
+      });
+      if (unrestricted === true) {
+        return handler.authorizeUnrestricted
+          ? await handler.authorizeUnrestricted(request)
+          : {
+              effect: 'permit',
+              reasons: [
+                {
+                  code: 'UNRESTRICTED_ACCESS',
+                  message: `Unrestricted access allows ${request.resource.type}.${request.action}`,
+                  plugin: handler.resourceType,
+                },
+              ],
+            };
+      }
       const decision = await handler.authorize(request, {
         grants,
         constraints,
@@ -277,6 +297,8 @@ export class Authorization {
     identity: AuthorizationIdentity,
     grantsService: AuthorizationGrantService = this.grants,
   ): Promise<AuthorizationPermissionsSnapshot> {
+    const unrestricted =
+      (await grantsService.unrestricted?.(identity)) === true;
     const grants = await grantsService.resolveAll(identity);
     const grouped = new Map<
       string,
@@ -293,6 +315,7 @@ export class Authorization {
       grouped.set(key, permission);
     }
     return {
+      unrestricted,
       permissions: [...grouped.values()]
         .sort((left, right) => {
           const leftKey = `${left.resource.type}\u0000${left.resource.id}`;

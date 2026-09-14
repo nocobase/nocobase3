@@ -16,7 +16,6 @@ import {
   type RestrictionRule,
   type RestrictionRuleStore,
   defineRecordAccessPolicy,
-  pages,
 } from '../src/index.js';
 import { MockPermissionSetStore } from './mock-permission-set-store.js';
 
@@ -38,6 +37,10 @@ class MockDefaultAccessStore implements DefaultAccessStore {
   delete(): Promise<void> {
     return Promise.resolve();
   }
+  /** In-memory stores have no transactions. */
+  withTransaction(): DefaultAccessStore {
+    return this;
+  }
 }
 
 class MockSharingRuleStore implements SharingRuleStore {
@@ -57,6 +60,10 @@ class MockSharingRuleStore implements SharingRuleStore {
   list(): Promise<readonly SharingRule[]> {
     return Promise.resolve(this.rules);
   }
+  /** In-memory stores have no transactions. */
+  withTransaction(): SharingRuleStore {
+    return this;
+  }
 }
 
 class MockRestrictionRuleStore implements RestrictionRuleStore {
@@ -75,6 +82,10 @@ class MockRestrictionRuleStore implements RestrictionRuleStore {
   }
   list(): Promise<readonly RestrictionRule[]> {
     return Promise.resolve(this.rules);
+  }
+  /** In-memory stores have no transactions. */
+  withTransaction(): RestrictionRuleStore {
+    return this;
   }
 }
 
@@ -419,37 +430,37 @@ describe('official authorization plugins', () => {
     const store = new MockPermissionSetStore({
       permissionSets: [
         {
-          key: 'pages',
+          key: 'settings',
           grants: [
             {
-              resource: { type: 'page', id: '*' },
-              actions: [{ action: 'access' }],
+              resource: { type: 'authorization.settings', id: '*' },
+              actions: [{ action: 'read' }],
             },
           ],
         },
       ],
       assignments: [
         {
-          id: 'pages-alice',
+          id: 'settings-alice',
           subject: { type: 'user', id: 'alice' },
-          permissionSet: 'pages',
+          permissionSet: 'settings',
         },
       ],
     });
     const authorization = createAuthorization({
-      plugins: [permissionSets({ store }), pages()],
+      plugins: [permissionSets({ store })],
     });
     const authz = authorization.for({
       principal: { type: 'user', id: 'alice' },
     });
 
     await authz.can({
-      resource: { type: 'page', id: 'home' },
-      action: 'access',
+      resource: { type: 'authorization.settings', id: 'permission-sets' },
+      action: 'read',
     });
     await authz.can({
-      resource: { type: 'page', id: 'settings' },
-      action: 'access',
+      resource: { type: 'authorization.settings', id: 'sharing-rules' },
+      action: 'read',
     });
     await authz.permissions();
 

@@ -32,13 +32,18 @@ export class UsersProvider extends ServiceProvider<AppPluginApplication> {
       createUserRoleScopeRegistry(),
     );
     this.app.container.singleton(userManagementServiceToken, (resolver) => {
-      const authorization = resolver.resolve(authorizationToken);
+      // An application may be assembled without authorization; user
+      // management still works, it just has no assignments to protect.
+      const permissionSets = resolver.has(authorizationToken)
+        ? resolver.resolve(authorizationToken).permissionSets
+        : undefined;
       return createUserManagementService({
         database: resolver.resolve(databaseManagerToken),
         users: resolver.resolve(userAdministrationServiceToken),
         roleScopes: resolver.resolve(userRoleScopeRegistryToken),
+        ...(permissionSets === undefined ? {} : { permissionSets }),
         onRoleScopesChanged: (userId) =>
-          authorization.permissionSets.notifyAssignmentsChanged({
+          permissionSets?.notifyAssignmentsChanged({
             type: 'user',
             id: userId,
           }),

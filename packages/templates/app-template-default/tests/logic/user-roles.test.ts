@@ -40,6 +40,15 @@ describe('default application user role scope', () => {
       grants: [],
     });
     await authorization.permissionSets.create({
+      key: 'authenticated',
+      title: 'All signed-in users',
+      grants: [],
+    });
+    await authorization.permissionSets.assign({
+      subject: { type: 'authenticated', id: '*' },
+      permissionSet: 'authenticated',
+    });
+    await authorization.permissionSets.create({
       key: 'content-editor',
       title: 'Content editor',
       grants: [],
@@ -49,6 +58,10 @@ describe('default application user role scope', () => {
       title: 'Plugin internal',
       grants: [],
     });
+    authorization.permissionSets.protect({
+      owner: '@nocobase/test',
+      keys: ['system-administrator', 'plugin-internal'],
+    });
   });
 
   afterEach(async () => {
@@ -56,7 +69,7 @@ describe('default application user role scope', () => {
   });
 
   it('shows direct application roles but not authenticated defaults or other protected sets', async () => {
-    const scope = createApplicationUserRoleScope(authorization, protection());
+    const scope = createApplicationUserRoleScope(authorization);
 
     await expect(scope.options()).resolves.toEqual([
       {
@@ -85,9 +98,9 @@ describe('default application user role scope', () => {
     await createUser(database, 'user-1');
     await authorization.permissionSets.assign({
       subject: { type: 'user', id: 'user-1' },
-      permissionSet: 'default-pages',
+      permissionSet: 'authenticated',
     });
-    const scope = createApplicationUserRoleScope(authorization, protection());
+    const scope = createApplicationUserRoleScope(authorization);
 
     await database.transaction((connection) =>
       scope.replace('user-1', ['content-editor'], connection),
@@ -104,7 +117,7 @@ describe('default application user role scope', () => {
         .filter(({ subject }) => subject.id === 'user-1')
         .map(({ permissionSet }) => permissionSet)
         .sort(),
-    ).toEqual(['content-editor', 'default-pages']);
+    ).toEqual(['authenticated', 'content-editor']);
   });
 
   it('rejects changes to the protected system administrator assignment', async () => {
@@ -114,7 +127,7 @@ describe('default application user role scope', () => {
       subject: { type: 'user', id: 'admin-1' },
       permissionSet: 'system-administrator',
     });
-    const scope = createApplicationUserRoleScope(authorization, protection());
+    const scope = createApplicationUserRoleScope(authorization);
 
     await expect(
       database.transaction((connection) =>
@@ -128,13 +141,6 @@ describe('default application user role scope', () => {
     ).rejects.toMatchObject({ code: 'PROTECTED_ROLE_ASSIGNMENT', status: 409 });
   });
 });
-
-function protection() {
-  return {
-    isProtected: (key: string) =>
-      key === 'system-administrator' || key === 'plugin-internal',
-  };
-}
 
 async function migratePackage(
   database: DatabaseManager,

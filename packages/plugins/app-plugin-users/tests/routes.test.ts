@@ -10,6 +10,7 @@ import {
 import { loggingToken } from '@nocobase/app-server/logging';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { AuthorizationDeniedError } from '@nocobase/authorization/core';
+import { PermissionSetLastAssignmentError } from '@nocobase/authorization/permissions';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -131,6 +132,26 @@ describe('@nocobase/app-plugin-users API routes', () => {
     await expect(response.json()).resolves.toEqual({
       code: 'USER_EMAIL_CONFLICT',
       message: 'A user with this email already exists',
+    });
+  });
+
+  it('answers 409 when disabling would remove the last assignment', async () => {
+    const service = userService();
+    vi.mocked(service.disable).mockRejectedValue(
+      new PermissionSetLastAssignmentError('system-administrator'),
+    );
+    const router = await apiRoutes.createRouter(
+      createApplication('allowed', service),
+    );
+
+    const response = await router.request('/users/user-1/disable', {
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      code: 'LAST_ASSIGNMENT',
+      message: expect.stringContaining('system-administrator'),
     });
   });
 

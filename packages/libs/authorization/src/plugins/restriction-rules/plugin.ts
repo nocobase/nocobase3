@@ -1,20 +1,34 @@
 import type { AuthorizationPlugin } from '../../core/index.js';
+import type { DatabaseConnection } from '@nocobase/db';
 import { DatabaseRestrictionRuleStore } from './database-store.js';
 import { RestrictionRuleService, type RestrictionRulesApi } from './service.js';
 import type { RestrictionRuleStore } from './store.js';
 
-export interface RestrictionRulesAuthorizationApi {
-  restrictionRules: RestrictionRulesApi;
+export interface RestrictionRulesAuthorizationApi<
+  TTransaction = DatabaseConnection,
+> {
+  restrictionRules: RestrictionRulesApi<TTransaction>;
 }
-export interface RestrictionRulesOptions {
-  store?: RestrictionRuleStore;
+export interface RestrictionRulesOptions<TTransaction = DatabaseConnection> {
+  store?: RestrictionRuleStore<TTransaction>;
 }
-export type RestrictionRulesPlugin =
-  AuthorizationPlugin<RestrictionRulesAuthorizationApi>;
+export type RestrictionRulesPlugin<TTransaction = DatabaseConnection> =
+  AuthorizationPlugin<RestrictionRulesAuthorizationApi<TTransaction>>;
 
+/**
+ * The default store binds transactions to a DatabaseConnection, so the
+ * transaction handle is a DatabaseConnection unless a custom store declares
+ * another one.
+ */
 export function restrictionRules(
-  options: RestrictionRulesOptions = {},
-): RestrictionRulesPlugin {
+  options?: RestrictionRulesOptions<DatabaseConnection>,
+): RestrictionRulesPlugin<DatabaseConnection>;
+export function restrictionRules<TTransaction>(
+  options: RestrictionRulesOptions<TTransaction>,
+): RestrictionRulesPlugin<TTransaction>;
+export function restrictionRules(
+  options: RestrictionRulesOptions<DatabaseConnection> = {},
+): RestrictionRulesPlugin<DatabaseConnection> {
   const service = new RestrictionRuleService(options.store);
   return {
     id: 'restriction-rules',

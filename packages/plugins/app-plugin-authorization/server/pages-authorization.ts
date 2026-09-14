@@ -2,7 +2,7 @@ import type {
   AuthorizationGrant,
   AuthorizationPlugin,
   AuthorizationReason,
-} from '../../core/index.js';
+} from '@nocobase/authorization/core';
 
 export type PagesPlugin = AuthorizationPlugin;
 

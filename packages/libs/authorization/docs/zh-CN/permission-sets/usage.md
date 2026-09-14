@@ -22,11 +22,12 @@ authz.database.collections.add({
 });
 ```
 
-Permission Sets 使用数据库保存配置。应用初始化时执行包内 migration：
+Permission Sets 使用数据库保存配置。默认 Store 读写下面的表，表结构由宿主应用
+的 migration 创建和维护，本包不包含 migration；`@nocobase/app-plugin-authorization`
+自带一份与默认 Store 匹配的 migration：
 
-```text
-@nocobase/authorization/permissions/migrations/202608210001_create_permission_set_tables
-```
+- `authorizationPermissionSets`
+- `authorizationPermissionSetAssignments`
 
 ## 创建 Permission Set
 
@@ -213,6 +214,116 @@ await authz.permissionSets.create({
 | DELETE | `/assignments/:id`     | 撤销分配                 |
 | GET    | `/effective/:type/:id` | 查询有效 Permission Sets |
 
+两个读取端点（`GET /` 和 `GET /:key`）在存储的 Permission Set 之外，还会报告它当前的
+保护状态与是否授予不受限访问，字段来自代码中的注册表而不是数据库：
+
+| 字段           | 含义                                                                                    |
+| -------------- | --------------------------------------------------------------------------------------- |
+| `protection`   | 该 Permission Set 受保护时出现，形如 `{ owner, allow }`，`allow` 是通用接口仍允许的操作 |
+| `unrestricted` | 该 Permission Set 为超级用户集合时为 `true`，即持有它即拥有不受限访问                   |
+
+两个字段在不适用时都会被省略，因此普通 Permission Set 的返回结构保持不变。管理界面据此
+决定是否提供编辑、删除、分配和撤销入口，不需要把某个 key 写死在前端。`GET /effective/:type/:id`
+和所有写入端点的返回结构不受影响。
+
+## 受保护的 Permission Set
+
+由代码创建和维护的 Permission Set 可以标记为受保护。HTTP handler 会拒绝对它的创建、
+修改、删除和分配变更；注册方自己的代码通过 `authz.permissionSets` 直接调用不受影响。
+
+```ts
+const release = authz.permissionSets.protect({
+  owner: '@nocobase/app-plugin-hub',
+  keys: ['hub-administrator', 'hub-operator'],
+  allow: ['assign'], // 可选：通用管理接口仍允许的操作
+});
+
+authz.permissionSets.protection('hub-administrator');
+// { owner: '@nocobase/app-plugin-hub', allow: ['assign'] }
+
+release(); // 解除本次注册的保护
+```
+
+同一个 key 只能由一个 owner 保护，重复注册会抛错。handler 对受保护的写操作返回
+`403 PROTECTED_PERMISSION_SET`；直接调用 `authz.permissionSets.assertWritable(key, operation)`
+会抛出 `PermissionSetProtectedError`，业务代码可以用它复用同一条规则。
+
+### 必须保留一个有效分配
+
+protection 可以额外声明 `requireActiveAssignment: true`，表示这个 Permission Set 任何时候
+都必须保留至少一条“还能行使权限”的分配。它与“不受限访问”相互独立：Hub 的管理员角色
+并不具备不受限访问，同样需要这条规则。
+
+```ts
+authz.permissionSets.protect({
+  owner: '@nocobase/app-plugin-authorization',
+  keys: ['system-administrator'],
+  allow: ['assign', 'revoke'],
+  requireActiveAssignment: true,
+});
+```
+
+`revoke()` 和 `replaceSubjectAssignments()` 在会移除最后一条有效分配时抛出
+`PermissionSetLastAssignmentError`，HTTP handler 返回 `409 LAST_ASSIGNMENT`。账号生命周期
+（例如禁用用户）调用 `assertSubjectRemovable(subject)`，它对该 subject 持有的每个声明了此
+标记的 Permission Set 做同样的检查。
+
+“还能行使权限”由应用定义。Authorization 不掌握账号状态，因此由应用传入
+`filterActiveSubjects`；不传时每条分配都算数：
+
+```ts
+permissionSets({
+  // 一次查询整批 subject，过滤掉已禁用的账号；
+  // 在事务中调用时会拿到调用方的事务句柄
+  filterActiveSubjects: (subjects, connection) =>
+    enabledSubjects(subjects, connection),
+});
+```
+
+检查在读取分配之前调用 `PermissionSetStore.lock(key)`，让并发的两次撤销不会读到同一份
+“还剩一条”的快照。数据库 Store 已实现：SQLite 以一次空更新占住写锁，其他方言用
+`SELECT ... FOR UPDATE`。没有事务的 Store 可以不实现该方法。
+
+## 超级用户（不受限访问）
+
+Permission Set 可以在代码中声明为“不受限访问”。持有该 Permission Set 的身份会跳过
+逐资源授权：不再匹配 grants，也不再应用 Sharing Rules 和 Restriction Rules。
+
+它是 protection 上的一个字段，而不是单独的一次声明：
+
+```ts
+const release = authz.permissionSets.protect({
+  owner: '@nocobase/app-plugin-authorization',
+  keys: ['system-administrator'],
+  allow: ['assign', 'revoke'],
+  requireActiveAssignment: true,
+  unrestricted: true,
+});
+
+authz.permissionSets.isUnrestricted('system-administrator'); // true
+
+release(); // 同时解除本次注册的保护与不受限访问
+```
+
+这样一次调用就说完了代码对这个 Permission Set 的全部主张，也意味着**不受限访问必须
+连同保护一起声明**：不存在一个不受保护的超级用户 Permission Set。同一个 key 只能由一个
+owner 声明，重复注册会抛错；`protect()` 返回的函数只解除本次注册的部分，连同它带来的
+不受限访问一并解除。
+
+几点需要注意：
+
+- **成员关系写在代码里，不写在数据里。** 不受限访问由 `protect({ unrestricted: true })`
+  声明，Permission Set 本身的 grants 保持原样（通常为空）。这样新增资源类型或动作时，
+  不会出现一份需要同步维护的管理员授权清单。
+- **谁是超级用户仍然由分配关系决定。** 把这个 Permission Set 分配给用户即授予超级用户
+  身份，撤销分配即收回。
+- **最后一个分配是否受保护与不受限访问无关。** 由 protection 上的
+  `requireActiveAssignment` 单独声明，见上文“必须保留一个有效分配”。
+
+底层上，`unrestricted: true` 让 Grant Provider 实现
+`AuthorizationGrantService.unrestricted()`，Core 在命中资源 handler 之后、执行
+`authorize()` 之前据此短路。
+
 ## 自定义存储
 
 默认配置使用数据库 Store。需要接入其他存储时，实现 `PermissionSetStore` 并传入：
@@ -230,3 +341,12 @@ const authz = createAuthorization({
   plugins: [permissionSets({ store: new MockPermissionSetStore() })],
 });
 ```
+
+Store 接口都要求实现 `withTransaction(transaction)`：它返回一个绑定到调用方事务的
+Store，事务由调用方开启并提交。数据库 Store 的事务句柄是 `DatabaseConnection`；内存
+Store 没有事务，直接返回自身即可。
+
+需要在自己的事务中写入 Permission Set 时，用
+`authz.permissionSets.withTransaction(connection)` 取得绑定该事务的 API。它共享
+protection 注册表（不受限访问也在其中），并且不会触发 `onAssignmentsChanged`——由持有事务的调用方在提交
+之后自行发布变更。

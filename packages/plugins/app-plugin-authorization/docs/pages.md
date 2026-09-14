@@ -5,16 +5,9 @@ Pages 插件把应用页面作为可授权资源。页面 ID 使用应用定义�
 
 ## 安装
 
-```ts
-import { createAuthorization } from '@nocobase/authorization/core';
-import { pages } from '@nocobase/authorization/pages';
-import { permissionSets } from '@nocobase/authorization/permissions';
-
-const authz = createAuthorization({
-  connection,
-  plugins: [permissionSets(), pages()],
-});
-```
+Pages 插件由 `@nocobase/app-plugin-authorization` 提供，`createAppAuthorization()` 已经
+把它和 Permission Sets 一起装进应用的 Authorization 实例，应用代码不需要单独安装。它的
+实现在本包的 `server/pages-authorization.ts`，依赖 Permission Sets 作为 Grant Provider。
 
 ## 授予页面访问权限
 

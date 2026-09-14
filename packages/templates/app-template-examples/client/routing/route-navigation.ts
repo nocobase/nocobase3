@@ -70,13 +70,16 @@ export function useRouteNavigation(
       hasPageAncestor = false,
     ): { id: string; resource: string; action: string }[] =>
       nodes.flatMap((route) => [
+        // `access: false` means the page is reachable by every signed-in user, so it takes no guard. Without this
+        // the page would open while its navigation entry was filtered away.
         ...(route.componentLoader &&
         route.auth === 'required' &&
+        route.access !== false &&
         (route.access || (!surface && !hasPageAncestor))
           ? [
               {
                 id: routeKey(route),
-                ...(route.access ?? { resource: route.name, action: 'access' }),
+                ...(route.access || { resource: route.name, action: 'access' }),
               },
             ]
           : []),

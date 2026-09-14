@@ -135,6 +135,50 @@ export class DatabaseResourceAuthorizer {
     }
   }
 
+  /**
+   * An identity with unrestricted access skips grants, Sharing Rules and
+   * Restriction Rules. Callers still build queries from the returned
+   * conditions, so the decision stays conditional with an unrestricted filter
+   * and every field allowed. The two validity checks remain: they report a
+   * malformed request, not a permission.
+   */
+  async authorizeUnrestricted(
+    request: AuthorizationRequest<DatabaseAuthorizationParams>,
+  ): Promise<AuthorizationDecision> {
+    const resourceId = this.collections.resolveName(request.resource.id);
+    const resource = this.collections.get(resourceId);
+    if (!resource || !resource.actions.includes(request.action)) {
+      return this.deny(
+        'UNKNOWN_DATABASE_RESOURCE_OR_ACTION',
+        `Unknown database resource or action: ${resourceId}.${request.action}`,
+      );
+    }
+    if (!databaseCollectionFieldsKnown(resource, request.params?.fields)) {
+      return this.deny(
+        'UNKNOWN_DATABASE_FIELD',
+        `One or more requested fields are not registered for ${resourceId}`,
+      );
+    }
+    const conditions: DatabaseAuthorizationConditions = {
+      type: 'database',
+      collection: resourceId,
+      action: request.action,
+      filter: allRecordsFilter(),
+      fields: { input: '*', output: '*' },
+    };
+    return {
+      effect: 'conditional',
+      conditions,
+      reasons: [
+        {
+          code: 'UNRESTRICTED_ACCESS',
+          message: `Unrestricted access allows ${resourceId}.${request.action}`,
+          plugin: 'database',
+        },
+      ],
+    };
+  }
+
   private async resolveEffectiveFilter(
     principal: Principal,
     resource: DatabaseCollectionDefinition,

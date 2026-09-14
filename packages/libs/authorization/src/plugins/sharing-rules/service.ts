@@ -5,15 +5,21 @@ import type {
   ResolveAccessConstraintsInput,
 } from '../../core/index.js';
 import { resolveAuthorizationSubjects } from '../../core/index.js';
+import type { DatabaseConnection } from '@nocobase/db';
 import type { SharingRule } from './model.js';
 import type { SharingRuleStore } from './store.js';
 
-export interface SharingRulesApi {
+export interface SharingRulesApi<TTransaction = DatabaseConnection> {
   create(rule: SharingRule): Promise<SharingRule>;
   update(key: string, rule: SharingRule): Promise<SharingRule>;
   delete(key: string): Promise<void>;
   get(key: string): Promise<SharingRule | undefined>;
   list(): Promise<readonly SharingRule[]>;
+  /**
+   * Returns an API bound to the caller's transaction. The caller opens and
+   * commits the transaction.
+   */
+  withTransaction(transaction: TTransaction): SharingRulesApi<TTransaction>;
 }
 
 function sharesWithSubject(
@@ -28,18 +34,24 @@ function sharesWithSubject(
   );
 }
 
-export class SharingRuleService
-  implements SharingRulesApi, AccessConstraintResolver
+export class SharingRuleService<TTransaction = DatabaseConnection>
+  implements SharingRulesApi<TTransaction>, AccessConstraintResolver
 {
   readonly id = 'sharing-rules';
-  private store?: SharingRuleStore;
+  private store?: SharingRuleStore<TTransaction>;
 
-  constructor(store?: SharingRuleStore) {
+  constructor(store?: SharingRuleStore<TTransaction>) {
     this.store = store;
   }
 
-  initialize(store: SharingRuleStore): void {
+  initialize(store: SharingRuleStore<TTransaction>): void {
     this.store = store;
+  }
+
+  withTransaction(transaction: TTransaction): SharingRulesApi<TTransaction> {
+    return new SharingRuleService<TTransaction>(
+      this.getStore().withTransaction(transaction),
+    );
   }
 
   create(rule: SharingRule): Promise<SharingRule> {
@@ -90,7 +102,7 @@ export class SharingRuleService
       }));
   }
 
-  private getStore(): SharingRuleStore {
+  private getStore(): SharingRuleStore<TTransaction> {
     if (!this.store) throw new Error('Sharing Rules has not been initialized');
     return this.store;
   }

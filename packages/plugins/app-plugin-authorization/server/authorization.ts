@@ -12,9 +12,10 @@ import {
   defaultAccess,
   type DefaultAccessAuthorizationApi,
 } from '@nocobase/authorization/default-access';
-import { pages } from '@nocobase/authorization/pages';
+import { pages } from './pages-authorization.js';
 import {
   permissionSets,
+  type PermissionSetSubject,
   type PermissionSetsAuthorizationApi,
 } from '@nocobase/authorization/permissions';
 import {
@@ -84,6 +85,10 @@ export function createAppAuthorization(
     plugins: [
       authenticationIdentity(),
       permissionSets({
+        // Inside a transaction the caller's connection is the only one that
+        // sees the rows it has already locked.
+        filterActiveSubjects: (subjects, connection) =>
+          activeSubjects(subjects, connection ?? options.connection),
         onAssignmentsChanged: async (subject) => {
           if (subject.type === 'user') {
             await options.onUserPermissionsChanged?.(subject.id);
@@ -104,6 +109,32 @@ export function createAppAuthorization(
   });
   resolveCollection = (name) => authz.database.collections.get(name);
   return authz;
+}
+
+/**
+ * Answers which of these subjects can still act. Only a user account can be
+ * disabled, so every other subject passes through; an application created
+ * without a connection cannot tell and keeps them all.
+ */
+async function activeSubjects(
+  subjects: readonly PermissionSetSubject[],
+  connection?: DatabaseConnection,
+): Promise<readonly PermissionSetSubject[]> {
+  const userIds = subjects
+    .filter((subject) => subject.type === 'user')
+    .map((subject) => subject.id);
+  if (!connection || userIds.length === 0) return subjects;
+  // One query for the whole batch rather than one per subject.
+  const rows = await connection.query
+    .selectFrom('user')
+    .select(['id'])
+    .where('id', 'in', userIds)
+    .where('disabledAt', 'is', null)
+    .execute();
+  const enabled = new Set(rows.map((row) => String(row.id)));
+  return subjects.filter(
+    (subject) => subject.type !== 'user' || enabled.has(subject.id),
+  );
 }
 
 function applicationAdministration(

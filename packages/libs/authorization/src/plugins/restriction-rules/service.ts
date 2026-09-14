@@ -5,28 +5,41 @@ import type {
   ResolveAccessConstraintsInput,
 } from '../../core/index.js';
 import { resolveAuthorizationSubjects } from '../../core/index.js';
+import type { DatabaseConnection } from '@nocobase/db';
 import type { RestrictionRule } from './model.js';
 import type { RestrictionRuleStore } from './store.js';
 
-export interface RestrictionRulesApi {
+export interface RestrictionRulesApi<TTransaction = DatabaseConnection> {
   create(rule: RestrictionRule): Promise<RestrictionRule>;
   update(key: string, rule: RestrictionRule): Promise<RestrictionRule>;
   delete(key: string): Promise<void>;
   get(key: string): Promise<RestrictionRule | undefined>;
   list(): Promise<readonly RestrictionRule[]>;
+  /**
+   * Returns an API bound to the caller's transaction. The caller opens and
+   * commits the transaction.
+   */
+  withTransaction(transaction: TTransaction): RestrictionRulesApi<TTransaction>;
 }
 
-export class RestrictionRuleService
-  implements RestrictionRulesApi, AccessConstraintResolver
+export class RestrictionRuleService<TTransaction = DatabaseConnection>
+  implements RestrictionRulesApi<TTransaction>, AccessConstraintResolver
 {
   readonly id = 'restriction-rules';
-  private store?: RestrictionRuleStore;
+  private store?: RestrictionRuleStore<TTransaction>;
 
-  constructor(store?: RestrictionRuleStore) {
+  constructor(store?: RestrictionRuleStore<TTransaction>) {
     this.store = store;
   }
-  initialize(store: RestrictionRuleStore): void {
+  initialize(store: RestrictionRuleStore<TTransaction>): void {
     this.store = store;
+  }
+  withTransaction(
+    transaction: TTransaction,
+  ): RestrictionRulesApi<TTransaction> {
+    return new RestrictionRuleService<TTransaction>(
+      this.getStore().withTransaction(transaction),
+    );
   }
   create(rule: RestrictionRule): Promise<RestrictionRule> {
     return this.getStore().create(rule);
@@ -67,7 +80,7 @@ export class RestrictionRuleService
       }));
   }
 
-  private getStore(): RestrictionRuleStore {
+  private getStore(): RestrictionRuleStore<TTransaction> {
     if (!this.store)
       throw new Error('Restriction Rules has not been initialized');
     return this.store;

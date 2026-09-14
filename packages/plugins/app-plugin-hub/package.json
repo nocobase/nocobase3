@@ -116,7 +116,6 @@
     "tw-animate-css": "catalog:",
     "typescript": "catalog:",
     "@nocobase/logging": "workspace:*",
-    "knex": "catalog:",
     "vitest": "catalog:"
   }
 }

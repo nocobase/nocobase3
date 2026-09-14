@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createAuthorization, pages, permissionSets } from '../src/index.js';
+import { createAuthorization, permissionSets } from '@nocobase/authorization';
+import { pages } from '../server/pages-authorization.js';
 import { MockPermissionSetStore } from './mock-permission-set-store.js';
 
 function setup() {
@@ -78,6 +79,7 @@ describe('Pages', () => {
     const { authz } = setup();
 
     await expect(authz.permissions()).resolves.toEqual({
+      unrestricted: false,
       permissions: [
         { resource: { type: 'page', id: 'home' }, actions: ['access'] },
         { resource: { type: 'page', id: 'orders' }, actions: ['access'] },
@@ -95,6 +97,7 @@ describe('Pages', () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
       data: {
+        unrestricted: false,
         permissions: [
           { resource: { type: 'page', id: 'home' }, actions: ['access'] },
           { resource: { type: 'page', id: 'orders' }, actions: ['access'] },

@@ -4,20 +4,18 @@ import {
 } from '@nocobase/authorization/core';
 import type { SharingRule } from '@nocobase/authorization/sharing-rules';
 import type { RestrictionRule } from '@nocobase/authorization/restriction-rules';
-import type { PermissionGrant } from '@nocobase/authorization/permissions';
 import type { Auth } from '@nocobase/app-plugin-authentication';
 import { Hono } from 'hono';
 import type { AppAuthorization } from '../authorization.js';
-import type { ProtectedPermissionSetRegistry } from '../protected-permission-sets.js';
 import {
   PermissionSetConflictError,
+  PermissionSetLastAssignmentError,
   PermissionSetNotFoundError,
 } from '@nocobase/authorization/permissions';
 
 export function createAuthorizationRoutes(
   auth: Auth,
   authorization: AppAuthorization,
-  protectedPermissionSets: ProtectedPermissionSetRegistry,
 ): Hono<AuthorizationEnv> {
   const routes = new Hono<AuthorizationEnv>();
   routes.onError((error, context) => {
@@ -36,6 +34,11 @@ export function createAuthorizationRoutes(
     if (error instanceof PermissionSetConflictError)
       return context.json(
         { code: 'PERMISSION_SET_CONFLICT', message: error.message },
+        409,
+      );
+    if (error instanceof PermissionSetLastAssignmentError)
+      return context.json(
+        { code: 'LAST_ASSIGNMENT', message: error.message },
         409,
       );
     throw error;
@@ -58,95 +61,10 @@ export function createAuthorizationRoutes(
       data: await authorization.administration.listUsers(),
     });
   });
-  routes.put('/permission-sets/system-administrator', async (context) => {
-    await admin(context, 'permission-sets', 'update');
-    const input = parsePermissionSet(await context.req.json());
-    return context.json({
-      data: await authorization.permissionSets.update('system-administrator', {
-        ...input,
-        key: 'system-administrator',
-        grants: mergeRequiredAdministratorGrants(input.grants),
-      }),
-    });
-  });
-  routes.delete('/permission-sets/system-administrator', (context) =>
-    protectedPermissionSet(context, 'system-administrator'),
-  );
-  routes.delete('/permission-sets/assignments/:id', async (context, next) => {
-    const assignment = (
-      await authorization.permissionSets.listAssignments()
-    ).find((item) => item.id === context.req.param('id'));
-    if (
-      assignment &&
-      protectedPermissionSets.isProtected(assignment.permissionSet)
-    ) {
-      return protectedPermissionSet(context, assignment.permissionSet);
-    }
-    await next();
-  });
-  routes.post('/permission-sets', async (context) => {
-    await admin(context, 'permission-sets', 'create');
-    const input = parsePermissionSet(await context.req.json());
-    if (protectedPermissionSets.isProtected(input.key)) {
-      return protectedPermissionSet(context, input.key);
-    }
-    return context.json(
-      { data: await authorization.permissionSets.create(input) },
-      201,
-    );
-  });
-  routes.put('/permission-sets/:key', async (context) => {
-    await admin(context, 'permission-sets', 'update');
-    const key = context.req.param('key');
-    const input = parsePermissionSet(await context.req.json());
-    if (
-      protectedPermissionSets.isProtected(key) ||
-      protectedPermissionSets.isProtected(input.key)
-    ) {
-      return protectedPermissionSet(context, key);
-    }
-    return context.json({
-      data: await authorization.permissionSets.update(key, input),
-    });
-  });
-  routes.delete('/permission-sets/:key', async (context) => {
-    await admin(context, 'permission-sets', 'delete');
-    const key = context.req.param('key');
-    if (protectedPermissionSets.isProtected(key)) {
-      return protectedPermissionSet(context, key);
-    }
-    await authorization.permissionSets.delete(key);
-    return context.body(null, 204);
-  });
-  routes.post('/permission-sets/:key/assignments', async (context) => {
-    await admin(context, 'permission-sets', 'create');
-    const key = context.req.param('key');
-    // Preserve the existing administrator workflow: new System Administrators
-    // may be added, while revoking them and changing the required grants stays
-    // protected by the dedicated routes above.
-    if (
-      key !== 'system-administrator' &&
-      protectedPermissionSets.isProtected(key)
-    ) {
-      return protectedPermissionSet(context, key);
-    }
-    const input = object(await context.req.json(), 'Permission Set assignment');
-    const subject = object(input.subject, 'Permission Set subject');
-    return context.json(
-      {
-        data: await authorization.permissionSets.assign({
-          subject: {
-            type: string(subject.type, 'Permission Set subject type'),
-            id: string(subject.id, 'Permission Set subject id'),
-          },
-          permissionSet: key,
-        }),
-      },
-      201,
-    );
-  });
+  // Every other Permission Set operation goes through the library handler,
+  // which also enforces protected Permission Sets registered by plugins.
   routes.on(
-    ['GET', 'DELETE'],
+    ['GET', 'POST', 'PUT', 'DELETE'],
     ['/permission-sets', '/permission-sets/*'],
     (context) =>
       authorization.permissionSets.handler({
@@ -290,83 +208,6 @@ export function createAuthorizationRoutes(
   return routes;
 }
 
-function protectedPermissionSet(
-  context: {
-    json(value: { code: string; message: string }, status: 403): Response;
-  },
-  key: string,
-): Response {
-  return context.json(
-    {
-      code: 'PROTECTED_PERMISSION_SET',
-      message: `The ${key} Permission Set and its assignments are protected.`,
-    },
-    403,
-  );
-}
-
-function parsePermissionSet(value: unknown): {
-  key: string;
-  title?: string;
-  grants: readonly PermissionGrant[];
-} {
-  const input = object(value, 'Permission Set');
-  if (!Array.isArray(input.grants))
-    throw new TypeError('Permission Set grants must be an array');
-  return {
-    key: string(input.key, 'Permission Set key'),
-    ...(input.title
-      ? { title: string(input.title, 'Permission Set title') }
-      : {}),
-    grants: input.grants.map((value) => {
-      const grant = object(value, 'Permission Grant');
-      if (!Array.isArray(grant.actions))
-        throw new TypeError('Permission Grant actions must be an array');
-      return {
-        resource: resource(grant.resource),
-        actions: grant.actions.map((value) => {
-          const action = object(value, 'Permission Grant action');
-          const policy = action.policy;
-          const parsedPolicy =
-            policy === undefined
-              ? undefined
-              : object(policy, 'Permission Grant policy');
-          return {
-            action: string(action.action, 'Permission Grant action'),
-            ...(parsedPolicy === undefined
-              ? {}
-              : {
-                  policy: {
-                    ...parsedPolicy,
-                    type: string(
-                      parsedPolicy.type,
-                      'Permission Grant policy type',
-                    ),
-                  },
-                }),
-          };
-        }),
-      };
-    }),
-  };
-}
-
-function mergeRequiredAdministratorGrants(
-  grants: readonly PermissionGrant[],
-): readonly PermissionGrant[] {
-  const optional = grants.filter(
-    (grant) => grant.resource.type !== 'authorization.settings',
-  );
-  return [...optional, ...requiredAdministratorGrants()];
-}
-
-function requiredAdministratorGrants(): readonly PermissionGrant[] {
-  return administrationResources.map((resource) => ({
-    resource: { type: 'authorization.settings', id: resource.value },
-    actions: resource.actions.map((action) => ({ action: action.value })),
-  }));
-}
-
 const crudActions = ['read', 'create', 'update', 'delete'] as const;
 const administrationResources = [
   settingsResource('permission-sets', crudActions),
@@ -383,16 +224,14 @@ function permissionSetOptions(authz: AppAuthorization): object {
         value: 'page',
         label: 'Pages',
         resources: [
+          // The page inventory is declared in client route files, which the server never sees. The browser merges the
+          // grantable pages into these options from its own route registry; only the wildcard is meaningful without
+          // knowing the inventory.
           {
             value: '*',
             label: 'All pages',
             description:
               'Allow access to every page, including pages added later.',
-            actions: [{ value: 'access', label: 'Access' }],
-          },
-          {
-            value: 'home',
-            label: 'Home',
             actions: [{ value: 'access', label: 'Access' }],
           },
         ],

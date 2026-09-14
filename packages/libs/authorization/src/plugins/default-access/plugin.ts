@@ -4,11 +4,12 @@ import type {
   AuthorizationPlugin,
   ResolveAccessConstraintsInput,
 } from '../../core/index.js';
+import type { DatabaseConnection } from '@nocobase/db';
 import { DatabaseDefaultAccessStore } from './database-store.js';
 import type { DefaultAccessRule } from './model.js';
 import type { DefaultAccessStore } from './store.js';
 
-export interface DefaultAccessApi {
+export interface DefaultAccessApi<TTransaction = DatabaseConnection> {
   set(rule: DefaultAccessRule): Promise<DefaultAccessRule>;
   get(
     resourceType: string,
@@ -16,22 +17,40 @@ export interface DefaultAccessApi {
   ): Promise<DefaultAccessRule | undefined>;
   list(): Promise<readonly DefaultAccessRule[]>;
   delete(resourceType: string, resourceId: string): Promise<void>;
+  /**
+   * Returns an API bound to the caller's transaction. The caller opens and
+   * commits the transaction.
+   */
+  withTransaction(transaction: TTransaction): DefaultAccessApi<TTransaction>;
 }
 
-export interface DefaultAccessAuthorizationApi {
-  defaultAccess: DefaultAccessApi;
+export interface DefaultAccessAuthorizationApi<
+  TTransaction = DatabaseConnection,
+> {
+  defaultAccess: DefaultAccessApi<TTransaction>;
 }
 
-export interface DefaultAccessOptions {
-  store?: DefaultAccessStore;
+export interface DefaultAccessOptions<TTransaction = DatabaseConnection> {
+  store?: DefaultAccessStore<TTransaction>;
 }
 
-export type DefaultAccessPlugin =
-  AuthorizationPlugin<DefaultAccessAuthorizationApi>;
+export type DefaultAccessPlugin<TTransaction = DatabaseConnection> =
+  AuthorizationPlugin<DefaultAccessAuthorizationApi<TTransaction>>;
 
+/**
+ * The default store binds transactions to a DatabaseConnection, so the
+ * transaction handle is a DatabaseConnection unless a custom store declares
+ * another one.
+ */
 export function defaultAccess(
-  options: DefaultAccessOptions = {},
-): DefaultAccessPlugin {
+  options?: DefaultAccessOptions<DatabaseConnection>,
+): DefaultAccessPlugin<DatabaseConnection>;
+export function defaultAccess<TTransaction>(
+  options: DefaultAccessOptions<TTransaction>,
+): DefaultAccessPlugin<TTransaction>;
+export function defaultAccess(
+  options: DefaultAccessOptions<DatabaseConnection> = {},
+): DefaultAccessPlugin<DatabaseConnection> {
   const service = new DefaultAccessService(options.store);
   return {
     id: 'default-access',
@@ -50,18 +69,24 @@ export function defaultAccess(
   };
 }
 
-class DefaultAccessService
-  implements DefaultAccessApi, AccessConstraintResolver
+class DefaultAccessService<TTransaction = DatabaseConnection>
+  implements DefaultAccessApi<TTransaction>, AccessConstraintResolver
 {
   readonly id = 'default-access';
-  private store?: DefaultAccessStore;
+  private store?: DefaultAccessStore<TTransaction>;
 
-  constructor(store?: DefaultAccessStore) {
+  constructor(store?: DefaultAccessStore<TTransaction>) {
     this.store = store;
   }
 
-  initialize(store: DefaultAccessStore): void {
+  initialize(store: DefaultAccessStore<TTransaction>): void {
     this.store = store;
+  }
+
+  withTransaction(transaction: TTransaction): DefaultAccessApi<TTransaction> {
+    return new DefaultAccessService<TTransaction>(
+      this.getStore().withTransaction(transaction),
+    );
   }
 
   set(rule: DefaultAccessRule): Promise<DefaultAccessRule> {
@@ -109,7 +134,7 @@ class DefaultAccessService
       }));
   }
 
-  private getStore(): DefaultAccessStore {
+  private getStore(): DefaultAccessStore<TTransaction> {
     if (!this.store) throw new Error('Default Access has not been initialized');
     return this.store;
   }

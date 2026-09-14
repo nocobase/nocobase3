@@ -16,7 +16,13 @@ import type {
   PermissionSetAssignment,
 } from '../authorization-client.js';
 import { ActionsEditor, Field } from '../components/editors.js';
-import { ErrorBox, errorMessage as message } from '../components/feedback.js';
+import { ErrorBox } from '../components/feedback.js';
+import {
+  permissionSetCapabilities,
+  permissionSetErrorMessage as message,
+  type PermissionSetCapabilities,
+} from '../components/permission-set-access.js';
+import { isUnknownPage } from '../components/page-options.js';
 import {
   DetailHeader,
   DetailTabs,
@@ -91,6 +97,15 @@ export function PermissionSetsPanel({
     void Promise.resolve().then(load);
   }, [load]);
 
+  const current = useMemo(
+    () => sets.find((set) => set.key === draft?.originalKey),
+    [sets, draft],
+  );
+  const capabilities = useMemo(
+    () => permissionSetCapabilities(current),
+    [current],
+  );
+
   const visibleSets = useMemo(() => {
     const query = search.trim().toLowerCase();
     if (!query) return sets;
@@ -104,7 +119,8 @@ export function PermissionSetsPanel({
   async function open(set: PermissionSet): Promise<void> {
     setDraft(fromSet(set));
     setEditorDraft(undefined);
-    setSection('permissions');
+    setSection(set.unrestricted === true ? 'assignments' : 'permissions');
+    setError(undefined);
     setAssignments(await authz.listAssignments(set.key));
   }
   function create(): void {
@@ -119,7 +135,8 @@ export function PermissionSetsPanel({
     setEditorDraft(undefined);
   }
   function edit(): void {
-    if (!draft) return;
+    // An unrestricted or otherwise locked set is never editable through the generic API.
+    if (!draft || !capabilities.canUpdate) return;
     setEditorDraft(cloneDraft(draft));
     setEditorOpen(true);
   }
@@ -238,14 +255,8 @@ export function PermissionSetsPanel({
                     </p>
                   </td>
                   <td className='px-5 py-4'>
-                    <Badge
-                      tone={
-                        set.key === 'system-administrator'
-                          ? 'protected'
-                          : 'neutral'
-                      }
-                    >
-                      {set.key === 'system-administrator' ? 'System' : 'Custom'}
+                    <Badge tone={isSystemSet(set) ? 'protected' : 'neutral'}>
+                      {isSystemSet(set) ? 'System' : 'Custom'}
                     </Badge>
                   </td>
                   <td className='px-5 py-4 tabular-nums'>
@@ -287,27 +298,28 @@ export function PermissionSetsPanel({
     );
   }
 
-  const protectedSet = draft.originalKey === 'system-administrator';
+  // An unrestricted set has no permissions to configure, so its detail view is the assignments alone.
+  const detailSection = capabilities.unrestricted ? 'assignments' : section;
   return (
     <div className='space-y-5'>
       {error ? <ErrorBox value={error} /> : null}
       <DetailHeader
         onBack={() => setDraft(undefined)}
         title={draft.title || humanize(draft.key) || 'New permission set'}
-        subtitle={detailSummary(draft, assignments)}
+        subtitle={detailSummary(draft, assignments, capabilities.unrestricted)}
         badge={
-          protectedSet ? (
-            <Badge tone='protected'>Protected system set</Badge>
-          ) : (
-            <Badge tone='neutral'>Custom</Badge>
-          )
+          <Badge tone={detailBadgeTone(capabilities)}>
+            {detailBadgeLabel(capabilities)}
+          </Badge>
         }
         actions={
           <>
-            <Button variant='outline' onClick={edit}>
-              Edit
-            </Button>
-            {draft.originalKey && !protectedSet ? (
+            {capabilities.canUpdate ? (
+              <Button variant='outline' onClick={edit}>
+                Edit
+              </Button>
+            ) : null}
+            {draft.originalKey && capabilities.canDelete ? (
               <Button
                 className='text-destructive hover:text-destructive'
                 variant='ghost'
@@ -320,42 +332,46 @@ export function PermissionSetsPanel({
           </>
         }
       />
-      {protectedSet ? (
+      {capabilities.protectedSet && !capabilities.unrestricted ? (
         <div className='rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900'>
           Required administration permissions and assignments are preserved so
           administrators cannot be locked out.
         </div>
       ) : null}
-      <DetailTabs
-        value={section}
-        onChange={(value) => setSection(value as DetailSection)}
-        items={[
-          {
-            value: 'permissions',
-            label: 'Permissions',
-            count: permissionCountFromDraft(draft),
-          },
-          {
-            value: 'assignments',
-            label: 'Assignments',
-            count: assignments.length,
-          },
-        ]}
-      />
-      {section === 'permissions' ? (
+      {capabilities.unrestricted ? null : (
+        <DetailTabs
+          value={detailSection}
+          onChange={(value) => setSection(value as DetailSection)}
+          items={[
+            {
+              value: 'permissions',
+              label: 'Permissions',
+              count: permissionCountFromDraft(draft),
+            },
+            {
+              value: 'assignments',
+              label: 'Assignments',
+              count: assignments.length,
+            },
+          ]}
+        />
+      )}
+      {capabilities.unrestricted ? <UnrestrictedAccessNotice /> : null}
+      {!capabilities.unrestricted && detailSection === 'permissions' ? (
         <PermissionsSummary options={options} draft={draft} onEdit={edit} />
       ) : null}
-      {section === 'assignments' ? (
+      {detailSection === 'assignments' ? (
         <Assignments
           users={users}
           assignments={assignments}
-          protectedSet={protectedSet}
+          canAssign={capabilities.canAssign}
+          canRevoke={capabilities.canRevoke}
           busy={busy}
           onAssign={assign}
           onRevoke={revoke}
         />
       ) : null}
-      {editorOpen && editorDraft ? (
+      {editorOpen && editorDraft && capabilities.canUpdate ? (
         <PermissionSetEditor
           options={options}
           draft={editorDraft}
@@ -365,6 +381,22 @@ export function PermissionSetsPanel({
           onClose={closeEditor}
         />
       ) : null}
+    </div>
+  );
+}
+
+function UnrestrictedAccessNotice(): ReactElement {
+  return (
+    <div className='rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900'>
+      <p className='font-medium'>
+        This permission set grants unrestricted access.
+      </p>
+      <p className='mt-1'>
+        Anyone holding it can read and change everything in this application,
+        regardless of any other permission set, sharing rule, or restriction
+        rule. It has no permissions to configure, so only its assignments are
+        managed here.
+      </p>
     </div>
   );
 }
@@ -447,6 +479,11 @@ function PermissionsSummary({
               </td>
               <td className='px-5 py-4 font-medium'>
                 {resourceLabel(options, grant.resource)}
+                {isUnknownPage(options, grant.resource) ? (
+                  <span className='ml-2 rounded-md bg-destructive/10 px-2 py-0.5 text-[0.6875rem] font-normal text-destructive'>
+                    Unknown page
+                  </span>
+                ) : null}
               </td>
               <td className='px-5 py-4'>
                 <div className='flex flex-wrap gap-1.5'>
@@ -531,14 +568,17 @@ function PermissionDetails({ grant }: { grant: GrantDraft }): ReactElement {
 function Assignments({
   users,
   assignments,
-  protectedSet,
+  canAssign,
+  canRevoke,
   busy,
   onAssign,
   onRevoke,
 }: {
   users: readonly AuthorizationUser[];
   assignments: readonly PermissionSetAssignment[];
-  protectedSet: boolean;
+  /** A protected set may still accept new assignments; adding a superuser is the recovery path. */
+  canAssign: boolean;
+  canRevoke: boolean;
   busy: boolean;
   onAssign: (subjects: readonly AuthorizationSubject[]) => Promise<void>;
   onRevoke: (ids: readonly string[]) => Promise<void>;
@@ -587,7 +627,7 @@ function Assignments({
           {selected.length > 0 ? (
             <Button
               variant='outline'
-              disabled={busy || protectedSet}
+              disabled={busy || !canRevoke}
               onClick={() =>
                 void onRevoke(selected).then(() => setSelected([]))
               }
@@ -595,7 +635,7 @@ function Assignments({
               Revoke selected ({selected.length})
             </Button>
           ) : null}
-          <Button disabled={protectedSet} onClick={() => setAddOpen(true)}>
+          <Button disabled={!canAssign} onClick={() => setAddOpen(true)}>
             Add assignments
           </Button>
         </div>
@@ -653,7 +693,7 @@ function Assignments({
                 <Button
                   size='sm'
                   variant='ghost'
-                  disabled={protectedSet}
+                  disabled={!canRevoke}
                   onClick={() => void onRevoke([item.id])}
                 >
                   Revoke
@@ -988,6 +1028,11 @@ function PermissionSetEditor({
                     <span className='rounded-md bg-muted px-2 py-0.5 text-[0.6875rem] text-muted-foreground'>
                       {resourceTypeLabel(options, grant.resource.type)}
                     </span>
+                    {isUnknownPage(options, grant.resource) ? (
+                      <span className='rounded-md bg-destructive/10 px-2 py-0.5 text-[0.6875rem] text-destructive'>
+                        Unknown page
+                      </span>
+                    ) : null}
                   </span>
                   <span className='mt-1 block truncate text-xs text-muted-foreground'>
                     {grant.resource.id} ·{' '}
@@ -1007,6 +1052,13 @@ function PermissionSetEditor({
               </button>
               {expanded === grant.id ? (
                 <div className='space-y-4 border-t p-4'>
+                  {isUnknownPage(options, grant.resource) ? (
+                    <p className='rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-muted-foreground'>
+                      No route declares this page any more, so this permission
+                      grants nothing. It was renamed or removed — remove the
+                      permission, or add one for the page that replaced it.
+                    </p>
+                  ) : null}
                   <div className='flex justify-end'>
                     <Button
                       size='sm'
@@ -1994,17 +2046,34 @@ function permissionCount(set: PermissionSet): number {
 function permissionCountFromDraft(draft: Draft): number {
   return draft.grants.reduce((sum, grant) => sum + grant.actions.length, 0);
 }
+function isSystemSet(set: PermissionSet): boolean {
+  return set.unrestricted === true || set.protection !== undefined;
+}
 function describeSet(set: PermissionSet): string {
-  return set.key === 'system-administrator'
-    ? 'Protected access to Authorization administration'
+  return set.unrestricted === true
+    ? 'Unrestricted access to everything in this application'
     : `${set.grants.length} configured resource${set.grants.length === 1 ? '' : 's'}`;
+}
+function detailBadgeTone(
+  capabilities: PermissionSetCapabilities,
+): 'neutral' | 'protected' {
+  return capabilities.unrestricted || capabilities.protectedSet
+    ? 'protected'
+    : 'neutral';
+}
+function detailBadgeLabel(capabilities: PermissionSetCapabilities): string {
+  if (capabilities.unrestricted) return 'Unrestricted access';
+  return capabilities.protectedSet ? 'Protected system set' : 'Custom';
 }
 function detailSummary(
   draft: Draft,
   assignments: readonly PermissionSetAssignment[],
+  unrestricted: boolean,
 ): string {
+  const assignmentCount = `${assignments.length} ${assignments.length === 1 ? 'assignment' : 'assignments'}`;
+  if (unrestricted) return `Key: ${draft.key} · ${assignmentCount}`;
   const categories = new Set(draft.grants.map((grant) => grant.resource.type));
-  return `Key: ${draft.key} · ${permissionCountFromDraft(draft)} permissions · ${categories.size} resource ${categories.size === 1 ? 'type' : 'types'} · ${assignments.length} ${assignments.length === 1 ? 'assignment' : 'assignments'}`;
+  return `Key: ${draft.key} · ${permissionCountFromDraft(draft)} permissions · ${categories.size} resource ${categories.size === 1 ? 'type' : 'types'} · ${assignmentCount}`;
 }
 function humanize(value: string): string {
   return value

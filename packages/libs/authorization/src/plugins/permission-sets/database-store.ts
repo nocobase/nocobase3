@@ -1,4 +1,5 @@
 import type { DatabaseConnection } from '@nocobase/db';
+import type { Knex } from 'knex';
 import type {
   PermissionGrant,
   PermissionSet,
@@ -7,8 +8,14 @@ import type {
 } from './model.js';
 import type { PermissionSetStore } from './store.js';
 
-export class DatabasePermissionSetStore implements PermissionSetStore {
+export class DatabasePermissionSetStore implements PermissionSetStore<DatabaseConnection> {
   constructor(private readonly connection: DatabaseConnection) {}
+
+  withTransaction(
+    connection: DatabaseConnection,
+  ): PermissionSetStore<DatabaseConnection> {
+    return new DatabasePermissionSetStore(connection);
+  }
 
   async listPermissionSets(): Promise<readonly PermissionSet[]> {
     const rows = await this.connection.query
@@ -135,6 +142,31 @@ export class DatabasePermissionSetStore implements PermissionSetStore {
       .deleteFrom('authorizationPermissionSetAssignments')
       .where('id', '=', id)
       .execute();
+  }
+
+  /**
+   * Serializes changes to one Permission Set on its own row, so a check that
+   * counts the assignments left cannot run against a snapshot another
+   * transaction is about to invalidate.
+   */
+  async lock(key: string): Promise<void> {
+    if (this.connection.dialect === 'sqlite') {
+      // SQLite has no row locks; writing the row takes the write lock instead.
+      await this.connection.query
+        .updateTable('authorizationPermissionSets')
+        .set({ updatedAt: new Date() })
+        .where('key', '=', key)
+        .execute();
+      return;
+    }
+    const physical = await this.connection.collections.getPhysical(
+      'authorizationPermissionSets',
+    );
+    if (!physical) {
+      throw new Error('Permission Set schema is unavailable');
+    }
+    const knex = await this.connection.client<Knex>();
+    await knex(physical.tableName).where({ key }).select('id').forUpdate();
   }
 
   async listAssignments(

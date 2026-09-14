@@ -1,9 +1,7 @@
 import type { Application } from '@nocobase/app-server/application';
 import {
   authorizationToken,
-  protectedPermissionSetRegistryToken,
   type AppAuthorization,
-  type ProtectedPermissionSetRegistry,
 } from '@nocobase/app-plugin-authorization';
 import {
   UserManagementError,
@@ -27,20 +25,16 @@ export default class UserRolesProvider extends ServiceProvider<Application> {
     if (this.unregister) return Promise.resolve();
     if (
       !this.app.container.has(authorizationToken) ||
-      !this.app.container.has(protectedPermissionSetRegistryToken) ||
       !this.app.container.has(userRoleScopeRegistryToken)
     ) {
       return Promise.resolve();
     }
     const authorization = this.app.container.resolve(authorizationToken);
-    const protectedPermissionSets = this.app.container.resolve(
-      protectedPermissionSetRegistryToken,
-    );
     const registry = this.app.container.resolve<UserRoleScopeRegistry>(
       userRoleScopeRegistryToken,
     );
     this.unregister = registry.register(
-      createApplicationUserRoleScope(authorization, protectedPermissionSets),
+      createApplicationUserRoleScope(authorization),
     );
     return Promise.resolve();
   }
@@ -54,7 +48,6 @@ export default class UserRolesProvider extends ServiceProvider<Application> {
 
 export function createApplicationUserRoleScope(
   authorization: Pick<AppAuthorization, 'permissionSets'>,
-  protectedPermissionSets: Pick<ProtectedPermissionSetRegistry, 'isProtected'>,
 ): UserRoleScope {
   return {
     key: 'app',
@@ -64,10 +57,7 @@ export function createApplicationUserRoleScope(
     selection: 'multiple',
     hasAuthenticatedDefaultAccess: true,
     async options() {
-      const state = await directRoleState(
-        authorization,
-        protectedPermissionSets,
-      );
+      const state = await directRoleState(authorization);
       return state.permissionSets.map((permissionSet) => {
         return {
           value: permissionSet.key,
@@ -84,29 +74,17 @@ export function createApplicationUserRoleScope(
       });
     },
     async get(userId, connection) {
-      const state = await directRoleState(
-        authorization,
-        protectedPermissionSets,
-        connection,
-      );
+      const state = await directRoleState(authorization, connection);
       return rolesForUser(userId, state);
     },
     async getMany(userIds, connection) {
-      const state = await directRoleState(
-        authorization,
-        protectedPermissionSets,
-        connection,
-      );
+      const state = await directRoleState(authorization, connection);
       return Object.fromEntries(
         userIds.map((userId) => [userId, rolesForUser(userId, state)]),
       );
     },
     async findUserIds(role, connection) {
-      const state = await directRoleState(
-        authorization,
-        protectedPermissionSets,
-        connection,
-      );
+      const state = await directRoleState(authorization, connection);
       requireDirectRole(
         role,
         state.permissionSets.map(({ key }) => key),
@@ -121,11 +99,7 @@ export function createApplicationUserRoleScope(
     },
     async replace(userId, value, connection) {
       const requested = multipleRoles(value);
-      const state = await directRoleState(
-        authorization,
-        protectedPermissionSets,
-        connection,
-      );
+      const state = await directRoleState(authorization, connection);
       const managed = state.permissionSets.map(({ key }) => key);
       for (const role of requested) requireDirectRole(role, managed);
 
@@ -151,7 +125,7 @@ export function createApplicationUserRoleScope(
       }
 
       await authorization.permissionSets
-        .withConnection(connection)
+        .withTransaction(connection)
         .replaceSubjectAssignments({
           subject: { type: 'user', id: userId },
           managedPermissionSets: managed,
@@ -178,11 +152,10 @@ function rolesForUser(
 
 async function directRoleState(
   authorization: Pick<AppAuthorization, 'permissionSets'>,
-  protectedPermissionSets: Pick<ProtectedPermissionSetRegistry, 'isProtected'>,
   connection?: DatabaseConnection,
 ) {
   const permissionSets = connection
-    ? authorization.permissionSets.withConnection(connection)
+    ? authorization.permissionSets.withTransaction(connection)
     : authorization.permissionSets;
   const [sets, assignments] = await Promise.all([
     permissionSets.list(),
@@ -202,7 +175,7 @@ async function directRoleState(
       ({ key }) =>
         !authenticatedDefaults.has(key) &&
         (key === SYSTEM_ADMINISTRATOR ||
-          !protectedPermissionSets.isProtected(key)),
+          authorization.permissionSets.protection(key) === undefined),
     ),
     assignments,
   };

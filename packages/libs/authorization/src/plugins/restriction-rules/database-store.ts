@@ -6,8 +6,14 @@ const COLLECTION = 'authorizationRestrictionRules';
 const RECORDS = 'authorizationRestrictionRuleRecords';
 const ASSIGNMENTS = 'authorizationRestrictionRuleAssignments';
 
-export class DatabaseRestrictionRuleStore implements RestrictionRuleStore {
+export class DatabaseRestrictionRuleStore implements RestrictionRuleStore<DatabaseConnection> {
   constructor(private readonly connection: DatabaseConnection) {}
+
+  withTransaction(
+    connection: DatabaseConnection,
+  ): RestrictionRuleStore<DatabaseConnection> {
+    return new DatabaseRestrictionRuleStore(connection);
+  }
   async create(rule: RestrictionRule): Promise<RestrictionRule> {
     const now = new Date();
     const id = crypto.randomUUID();

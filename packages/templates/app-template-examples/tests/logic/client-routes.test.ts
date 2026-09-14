@@ -1,3 +1,7 @@
+import {
+  resolveAppClientContributions,
+  type AppClientRegisteredRoute,
+} from '@nocobase/app-client/plugins';
 import { describe, expect, it } from 'vitest';
 
 import applicationRoutes from '../../client/routes.ts';
@@ -70,4 +74,60 @@ describe('app client routes', () => {
       });
     }
   });
+
+  it('pins the route names page grants are stored against', () => {
+    // A route's `name` is the identifier a stored page grant records. Renaming one is a data change that has to
+    // migrate the grants that name it, not a refactor — so changing this list deliberately is the point.
+    const resolved = resolveAppClientContributions([
+      {
+        packageName: '@nocobase/app-template-examples',
+        routes: applicationRoutes,
+        source: 'application',
+      },
+    ]);
+
+    expect(pageAuthorizations(resolved.routes)).toEqual([
+      // The landing page opted out of page authorization, so it is reachable by every signed-in user.
+      { name: 'home', authorizedAs: null },
+      { name: 'routeOverlays', authorizedAs: 'routeOverlays' },
+      // Overlay children are nested under a page, so the parent's check is the only one.
+      { name: 'routeDialogExample', authorizedAs: null },
+      { name: 'routeDialogDrawerExample', authorizedAs: null },
+      { name: 'routeDrawerExample', authorizedAs: null },
+      { name: 'routeDrawerDialogExample', authorizedAs: null },
+      { name: 'articles', authorizedAs: 'articles' },
+    ]);
+  });
 });
+
+/**
+ * Every `auth: 'required'` page and the page-grant identifier it is authorized as: the route name when the page takes
+ * the default check, the resource an explicit `access` names, or `null` when the page is not authorized at all —
+ * either because it declared `access: false` or because it is nested under another page.
+ */
+function pageAuthorizations(
+  routes: readonly AppClientRegisteredRoute[],
+  hasPageAncestor = false,
+): { name: string; authorizedAs: string | null }[] {
+  return routes.flatMap((route) => [
+    ...(route.componentLoader && route.auth === 'required'
+      ? [
+          {
+            name: route.name,
+            authorizedAs:
+              route.access === false
+                ? null
+                : route.access
+                  ? route.access.resource
+                  : hasPageAncestor
+                    ? null
+                    : route.name,
+          },
+        ]
+      : []),
+    ...pageAuthorizations(
+      route.children ?? [],
+      hasPageAncestor || Boolean(route.componentLoader),
+    ),
+  ]);
+}

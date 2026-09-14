@@ -2,8 +2,14 @@ import type { DatabaseConnection } from '@nocobase/db';
 import type { DefaultAccessRule } from './model.js';
 import type { DefaultAccessStore } from './store.js';
 
-export class DatabaseDefaultAccessStore implements DefaultAccessStore {
+export class DatabaseDefaultAccessStore implements DefaultAccessStore<DatabaseConnection> {
   constructor(private readonly connection: DatabaseConnection) {}
+
+  withTransaction(
+    connection: DatabaseConnection,
+  ): DefaultAccessStore<DatabaseConnection> {
+    return new DatabaseDefaultAccessStore(connection);
+  }
 
   async list(): Promise<readonly DefaultAccessRule[]> {
     const rows = await this.connection.query

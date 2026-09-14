@@ -10,10 +10,22 @@ export interface PermissionGrant {
   actions: readonly PermissionGrantAction[];
 }
 
+export type PermissionSetWriteOperation =
+  'create' | 'update' | 'delete' | 'assign' | 'revoke';
+
+export interface PermissionSetProtection {
+  owner: string;
+  allow: readonly PermissionSetWriteOperation[];
+}
+
 export interface PermissionSet {
   key: string;
   title?: string;
   grants: readonly PermissionGrant[];
+  /** Present when the set is protected; `allow` lists the operations the generic API still performs. */
+  readonly protection?: PermissionSetProtection;
+  /** True when holding this set grants unrestricted access. */
+  readonly unrestricted?: boolean;
 }
 
 export interface PermissionSetAssignment {
@@ -114,6 +126,8 @@ interface PermissionsSnapshot {
     resource: { type: string; id: string };
     actions: readonly string[];
   }[];
+  /** True when the identity has unrestricted access; an unrestricted set has no grants. */
+  unrestricted: boolean;
 }
 
 interface DataResponse<T> {
@@ -131,6 +145,7 @@ export class AuthorizationClient {
     action: string,
   ): Promise<boolean> {
     const snapshot = await this.permissions();
+    if (snapshot.unrestricted) return true;
     return snapshot.permissions.some(
       (permission) =>
         permission.resource.type === resource.type &&

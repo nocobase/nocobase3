@@ -1,9 +1,9 @@
 import { createDatabaseManager } from '@nocobase/db';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import permissionSetMigration from '../src/plugins/permission-sets/migrations/202608210001_create_permission_set_tables.js';
-import defaultAccessMigration from '../src/plugins/default-access/migrations/202608210002_create_default_access_rules.js';
-import sharingRulesMigration from '../src/plugins/sharing-rules/migrations/202608210003_create_sharing_rules.js';
-import restrictionRulesMigration from '../src/plugins/restriction-rules/migrations/202608210004_create_restriction_rules.js';
+import permissionSetMigration from '../database/migrations/202608210001_create_permission_set_tables.js';
+import defaultAccessMigration from '../database/migrations/202608210002_create_default_access_rules.js';
+import sharingRulesMigration from '../database/migrations/202608210003_create_sharing_rules.js';
+import restrictionRulesMigration from '../database/migrations/202608210004_create_restriction_rules.js';
 import {
   createAuthorization,
   databaseAuthorization,
@@ -11,7 +11,7 @@ import {
   permissionSets,
   restrictionRules,
   sharingRules,
-} from '../src/index.js';
+} from '@nocobase/authorization';
 
 describe('authorization plugin database stores', () => {
   const database = createDatabaseManager({

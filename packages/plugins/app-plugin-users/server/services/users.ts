@@ -1,4 +1,5 @@
-import type { DatabaseManager } from '@nocobase/db';
+import type { DatabaseConnection, DatabaseManager } from '@nocobase/db';
+import type { PermissionSetsApi } from '@nocobase/authorization/permissions';
 import type {
   AdministratedUser,
   UserAdministrationService,
@@ -37,6 +38,12 @@ export interface CreateUserManagementServiceOptions {
   readonly database: DatabaseManager;
   readonly users: UserAdministrationService;
   readonly roleScopes: UserRoleScopeRegistry;
+  /**
+   * Absent in an application assembled without authorization. When present,
+   * disabling an account asks it whether that account is the last one able to
+   * use a Permission Set the application must always keep in use.
+   */
+  readonly permissionSets?: PermissionSetsApi<DatabaseConnection>;
   readonly onRoleScopesChanged?: (userId: string) => void | Promise<void>;
 }
 
@@ -130,6 +137,11 @@ class DefaultUserManagementService implements UserManagementService {
         for (const scope of this.services.roleScopes.list()) {
           await scope.assertCanDisable?.(userId, connection);
         }
+        // A disabled account can no longer act, so disabling it removes the
+        // subject from every Permission Set as surely as revoking would.
+        await this.services.permissionSets
+          ?.withTransaction(connection)
+          .assertSubjectRemovable({ type: 'user', id: userId });
         return this.services.users.withConnection(connection).disable(userId);
       },
     );

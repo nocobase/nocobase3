@@ -21,10 +21,6 @@
       "types": "./src/plugins/permission-sets/index.ts",
       "import": "./src/plugins/permission-sets/index.ts"
     },
-    "./permissions/migrations/*": {
-      "types": "./src/plugins/permission-sets/migrations/*.ts",
-      "import": "./src/plugins/permission-sets/migrations/*.ts"
-    },
     "./database": {
       "types": "./src/plugins/database/index.ts",
       "import": "./src/plugins/database/index.ts"
@@ -40,22 +36,6 @@
     "./restriction-rules": {
       "types": "./src/plugins/restriction-rules/index.ts",
       "import": "./src/plugins/restriction-rules/index.ts"
-    },
-    "./pages": {
-      "types": "./src/plugins/pages/index.ts",
-      "import": "./src/plugins/pages/index.ts"
-    },
-    "./default-access/migrations/*": {
-      "types": "./src/plugins/default-access/migrations/*.ts",
-      "import": "./src/plugins/default-access/migrations/*.ts"
-    },
-    "./sharing-rules/migrations/*": {
-      "types": "./src/plugins/sharing-rules/migrations/*.ts",
-      "import": "./src/plugins/sharing-rules/migrations/*.ts"
-    },
-    "./restriction-rules/migrations/*": {
-      "types": "./src/plugins/restriction-rules/migrations/*.ts",
-      "import": "./src/plugins/restriction-rules/migrations/*.ts"
     }
   },
   "publishConfig": {
@@ -72,10 +52,6 @@
         "types": "./dist/plugins/permission-sets/index.d.ts",
         "import": "./dist/plugins/permission-sets/index.js"
       },
-      "./permissions/migrations/*": {
-        "types": "./dist/plugins/permission-sets/migrations/*.d.ts",
-        "import": "./dist/plugins/permission-sets/migrations/*.js"
-      },
       "./database": {
         "types": "./dist/plugins/database/index.d.ts",
         "import": "./dist/plugins/database/index.js"
@@ -91,22 +67,6 @@
       "./restriction-rules": {
         "types": "./dist/plugins/restriction-rules/index.d.ts",
         "import": "./dist/plugins/restriction-rules/index.js"
-      },
-      "./pages": {
-        "types": "./dist/plugins/pages/index.d.ts",
-        "import": "./dist/plugins/pages/index.js"
-      },
-      "./default-access/migrations/*": {
-        "types": "./dist/plugins/default-access/migrations/*.d.ts",
-        "import": "./dist/plugins/default-access/migrations/*.js"
-      },
-      "./sharing-rules/migrations/*": {
-        "types": "./dist/plugins/sharing-rules/migrations/*.d.ts",
-        "import": "./dist/plugins/sharing-rules/migrations/*.js"
-      },
-      "./restriction-rules/migrations/*": {
-        "types": "./dist/plugins/restriction-rules/migrations/*.d.ts",
-        "import": "./dist/plugins/restriction-rules/migrations/*.js"
       }
     },
     "access": "public"
@@ -126,14 +86,14 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "@nocobase/db": "workspace:^",
     "hono": "catalog:"
   },
   "devDependencies": {
+    "@nocobase/db": "workspace:^",
     "@nocobase/dev-config": "workspace:*",
     "@types/node": "catalog:",
-    "better-sqlite3": "catalog:",
     "eslint": "catalog:",
+    "knex": "catalog:",
     "prettier": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

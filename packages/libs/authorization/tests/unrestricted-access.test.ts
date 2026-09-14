@@ -1,0 +1,255 @@
+import { describe, expect, it } from 'vitest';
+import {
+  createAuthorization,
+  databaseAuthorization,
+  permissionSets,
+  restrictionRules,
+  type RestrictionRule,
+  type RestrictionRuleStore,
+} from '../src/index.js';
+import { MockPermissionSetStore } from './mock-permission-set-store.js';
+
+class MockRestrictionRuleStore implements RestrictionRuleStore {
+  constructor(private readonly rules: readonly RestrictionRule[]) {}
+  create(rule: RestrictionRule): Promise<RestrictionRule> {
+    return Promise.resolve(rule);
+  }
+  update(_key: string, rule: RestrictionRule): Promise<RestrictionRule> {
+    return Promise.resolve(rule);
+  }
+  delete(): Promise<void> {
+    return Promise.resolve();
+  }
+  get(key: string): Promise<RestrictionRule | undefined> {
+    return Promise.resolve(this.rules.find((rule) => rule.key === key));
+  }
+  list(): Promise<readonly RestrictionRule[]> {
+    return Promise.resolve(this.rules);
+  }
+  /** In-memory stores have no transactions. */
+  withTransaction(): RestrictionRuleStore {
+    return this;
+  }
+}
+
+const orders = {
+  name: 'orders',
+  actions: ['read', 'create', 'update', 'delete'],
+  fields: ['id', 'ownerId', 'amount'],
+  attributes: { owner: 'ownerId' },
+};
+
+function superuserStore(
+  assignments: readonly { id: string; subjectId: string }[] = [
+    { id: 'root-superuser', subjectId: 'root' },
+  ],
+): MockPermissionSetStore {
+  return new MockPermissionSetStore({
+    permissionSets: [{ key: 'superuser', title: 'Superuser', grants: [] }],
+    assignments: assignments.map((assignment) => ({
+      id: assignment.id,
+      subject: { type: 'user', id: assignment.subjectId },
+      permissionSet: 'superuser',
+    })),
+  });
+}
+
+describe('unrestricted access', () => {
+  it('permits a resource type whose handler has no authorizeUnrestricted', async () => {
+    const authorization = createAuthorization({
+      plugins: [permissionSets({ store: superuserStore() })],
+    });
+    const request = {
+      principal: { type: 'user', id: 'root' },
+      resource: { type: 'authorization.settings', id: 'permission-sets' },
+      action: 'delete',
+    } as const;
+
+    await expect(authorization.authorize(request)).resolves.toMatchObject({
+      effect: 'deny',
+    });
+
+    authorization.permissionSets.protect({
+      owner: '@nocobase/test',
+      keys: ['superuser'],
+      unrestricted: true,
+    });
+
+    await expect(authorization.authorize(request)).resolves.toMatchObject({
+      effect: 'permit',
+      reasons: [{ code: 'UNRESTRICTED_ACCESS' }],
+    });
+  });
+
+  it('ignores a Restriction Rule that would otherwise narrow database access', async () => {
+    const restrictions = new MockRestrictionRuleStore([
+      {
+        key: 'owned-only',
+        resource: { type: 'database.collection', id: 'main.orders' },
+        actions: [
+          {
+            action: 'read',
+            scope: { type: 'database', recordAccess: 'recordsIOwn' },
+          },
+        ],
+        subjects: [{ type: 'user', id: 'root' }],
+      },
+    ]);
+    const authorization = createAuthorization({
+      plugins: [
+        permissionSets({ store: superuserStore() }),
+        restrictionRules({ store: restrictions }),
+        databaseAuthorization(),
+      ],
+    });
+    authorization.database.collections.add(orders);
+    authorization.permissionSets.protect({
+      owner: '@nocobase/test',
+      keys: ['superuser'],
+      unrestricted: true,
+    });
+
+    await expect(
+      authorization.authorize({
+        principal: { type: 'user', id: 'root' },
+        resource: { type: 'database.collection', id: 'main.orders' },
+        action: 'read',
+        params: { fields: { output: ['id', 'ownerId'] } },
+      }),
+    ).resolves.toEqual({
+      effect: 'conditional',
+      conditions: {
+        type: 'database',
+        collection: 'main.orders',
+        action: 'read',
+        filter: { $and: [] },
+        fields: { input: '*', output: '*' },
+      },
+      reasons: [
+        {
+          code: 'UNRESTRICTED_ACCESS',
+          message: 'Unrestricted access allows main.orders.read',
+          plugin: 'database',
+        },
+      ],
+    });
+  });
+
+  it('still denies an unknown collection, action, or field', async () => {
+    const authorization = createAuthorization({
+      plugins: [
+        permissionSets({ store: superuserStore() }),
+        databaseAuthorization(),
+      ],
+    });
+    authorization.database.collections.add(orders);
+    authorization.permissionSets.protect({
+      owner: '@nocobase/test',
+      keys: ['superuser'],
+      unrestricted: true,
+    });
+    const principal = { type: 'user', id: 'root' } as const;
+
+    await expect(
+      authorization.authorize({
+        principal,
+        resource: { type: 'database.collection', id: 'main.invoices' },
+        action: 'read',
+      }),
+    ).resolves.toMatchObject({
+      effect: 'deny',
+      reasons: [{ code: 'UNKNOWN_DATABASE_RESOURCE_OR_ACTION' }],
+    });
+    await expect(
+      authorization.authorize({
+        principal,
+        resource: { type: 'database.collection', id: 'main.orders' },
+        action: 'archive',
+      }),
+    ).resolves.toMatchObject({
+      effect: 'deny',
+      reasons: [{ code: 'UNKNOWN_DATABASE_RESOURCE_OR_ACTION' }],
+    });
+    await expect(
+      authorization.authorize({
+        principal,
+        resource: { type: 'database.collection', id: 'main.orders' },
+        action: 'read',
+        params: { fields: { output: ['secret'] } },
+      }),
+    ).resolves.toMatchObject({
+      effect: 'deny',
+      reasons: [{ code: 'UNKNOWN_DATABASE_FIELD' }],
+    });
+    await expect(
+      authorization.authorize({
+        principal,
+        resource: { type: 'unregistered.resource', id: 'anything' },
+        action: 'read',
+      }),
+    ).resolves.toMatchObject({
+      effect: 'deny',
+      reasons: [{ code: 'UNKNOWN_RESOURCE_TYPE' }],
+    });
+  });
+
+  it('reports unrestricted in the permissions snapshot', async () => {
+    const authorization = createAuthorization({
+      plugins: [permissionSets({ store: superuserStore() })],
+    });
+    const scope = authorization.for({
+      principal: { type: 'user', id: 'root' },
+    });
+
+    await expect(scope.permissions()).resolves.toEqual({
+      unrestricted: false,
+      permissions: [],
+    });
+
+    authorization.permissionSets.protect({
+      owner: '@nocobase/test',
+      keys: ['superuser'],
+      unrestricted: true,
+    });
+
+    await expect(
+      authorization
+        .for({ principal: { type: 'user', id: 'root' } })
+        .permissions(),
+    ).resolves.toEqual({ unrestricted: true, permissions: [] });
+  });
+
+  it('rejects a conflicting owner and releases only its own declaration', () => {
+    const authorization = createAuthorization({
+      plugins: [permissionSets({ store: superuserStore() })],
+    });
+    const release = authorization.permissionSets.protect({
+      owner: '@nocobase/first',
+      keys: ['superuser'],
+      unrestricted: true,
+    });
+
+    expect(authorization.permissionSets.isUnrestricted('superuser')).toBe(true);
+    expect(() =>
+      authorization.permissionSets.protect({
+        owner: '@nocobase/second',
+        keys: ['superuser'],
+        unrestricted: true,
+      }),
+    ).toThrow('already protected by @nocobase/first');
+
+    const other = authorization.permissionSets.protect({
+      owner: '@nocobase/second',
+      keys: ['another'],
+      unrestricted: true,
+    });
+    other();
+    expect(authorization.permissionSets.isUnrestricted('another')).toBe(false);
+    expect(authorization.permissionSets.isUnrestricted('superuser')).toBe(true);
+
+    release();
+    expect(authorization.permissionSets.isUnrestricted('superuser')).toBe(
+      false,
+    );
+  });
+});

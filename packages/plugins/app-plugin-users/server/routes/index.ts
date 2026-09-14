@@ -13,6 +13,7 @@ import {
   type AppApiRouteContribution,
 } from '@nocobase/app-server/router';
 import { AuthorizationDeniedError } from '@nocobase/authorization/core';
+import { PermissionSetLastAssignmentError } from '@nocobase/authorization/permissions';
 import { Hono } from 'hono';
 
 import {
@@ -42,6 +43,14 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
         return context.json(
           { code: error.code, message: error.message },
           error.status,
+        );
+      }
+      // Disabling an account can take away the last assignment of a
+      // Permission Set the application must keep someone able to use.
+      if (error instanceof PermissionSetLastAssignmentError) {
+        return context.json(
+          { code: 'LAST_ASSIGNMENT', message: error.message },
+          409,
         );
       }
       if (error instanceof UserRoleScopeError) {

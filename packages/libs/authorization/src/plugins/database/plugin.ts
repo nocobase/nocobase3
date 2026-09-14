@@ -35,6 +35,8 @@ export function databaseAuthorization(
         resourceType: 'database.collection',
         authorize: (request, context) =>
           authorizer.authorize(request, context.grants, context.constraints),
+        authorizeUnrestricted: (request) =>
+          authorizer.authorizeUnrestricted(request),
       });
     },
   };

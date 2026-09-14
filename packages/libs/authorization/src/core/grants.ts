@@ -42,4 +42,6 @@ export interface AuthorizationGrantService {
     input: ResolveAllAuthorizationGrantsInput,
   ): Promise<readonly AuthorizationGrant[]>;
   scope?(identity: AuthorizationIdentity): AuthorizationGrantService;
+  /** True when the identity has unrestricted access and per-resource authorization is skipped. */
+  unrestricted?(identity: AuthorizationIdentity): Promise<boolean>;
 }

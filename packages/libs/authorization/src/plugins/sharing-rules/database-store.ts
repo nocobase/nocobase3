@@ -6,8 +6,14 @@ const RULES = 'authorizationSharingRules';
 const RECORDS = 'authorizationSharingRuleRecords';
 const ASSIGNMENTS = 'authorizationSharingRuleAssignments';
 
-export class DatabaseSharingRuleStore implements SharingRuleStore {
+export class DatabaseSharingRuleStore implements SharingRuleStore<DatabaseConnection> {
   constructor(private readonly connection: DatabaseConnection) {}
+
+  withTransaction(
+    connection: DatabaseConnection,
+  ): SharingRuleStore<DatabaseConnection> {
+    return new DatabaseSharingRuleStore(connection);
+  }
 
   async create(rule: SharingRule): Promise<SharingRule> {
     const id = crypto.randomUUID();

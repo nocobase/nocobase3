@@ -14,17 +14,13 @@ const authz = createAuthorization({
 });
 ```
 
-使用默认数据库 Store 时，需要提供 `connection`，并执行 migration：
+使用默认数据库 Store 时，需要提供 `connection`。默认 Store 读写下面的表，表结构由宿主应用
+的 migration 创建和维护，本包不包含 migration；`@nocobase/app-plugin-authorization`
+自带一份与默认 Store 匹配的 migration：
 
-```text
-@nocobase/authorization/sharing-rules/migrations/202608210003_create_sharing_rules
-```
-
-Migration 创建两张表：
-
-- `authorizationSharingRules` 保存规则和条件范围；
-- `authorizationSharingRuleAssignments` 保存接收主体；
-- `authorizationSharingRuleRecords` 保存显式选择的记录 ID。
+- `authorizationSharingRules` 保存规则和条件范围
+- `authorizationSharingRuleAssignments` 保存接收主体
+- `authorizationSharingRuleRecords` 保存显式选择的记录 ID
 
 ## 分享指定对象
 
@@ -125,3 +121,9 @@ const plugin = sharingRules({
 ```
 
 提供自定义 Store 时不需要 `connection`。
+
+Store 接口都要求实现 `withTransaction(transaction)`：它返回一个绑定到调用方事务的
+Store，事务由调用方开启并提交。数据库 Store 的事务句柄是 `DatabaseConnection`；内存
+Store 没有事务，直接返回自身即可。
+
+对应的 API 同样提供 `authz.sharingRules.withTransaction(connection)`，返回绑定该事务的 API。

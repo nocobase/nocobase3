@@ -14,10 +14,13 @@ The plugin currently provides:
   Restriction Rules, and Database Authorization;
 - selection-based editors for resources, actions, users, and record scopes;
 - migrations for Permission Sets and access rules;
-- an initial System Administrator Permission Set assigned to the default
-  `nocobase` user.
-- a separate Default Pages Permission Set, so page access can be changed without
-  changing administrator capabilities.
+- two built-in roles: a System Administrator Permission Set that carries no
+  grants and whose protection declares `unrestricted: true`, so its holders
+  bypass per-resource authorization including Sharing and Restriction Rules,
+  seeded onto the default `nocobase` user and assignable to any number of
+  users;
+- an `authenticated` Permission Set bound to the `authenticated:*` subject,
+  the editable baseline every signed-in user holds;
 - protected Permission Sets whose owner plugin controls which generic
   definition and assignment operations remain available;
 - atomic replacement of one application's assignment scope without changing a

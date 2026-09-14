@@ -119,6 +119,33 @@ describe('client plugin definitions', () => {
     ]);
   });
 
+  it('keeps `access: false` on the registered route instead of dropping it as absent', () => {
+    const resolved = resolveAppClientContributions([
+      {
+        packageName: '@nocobase/app-plugin-feature',
+        routes: defineAppRoutes([
+          {
+            name: 'landing',
+            path: '/feature/landing',
+            access: false,
+            componentLoader: async () => ({ default: () => null }),
+          },
+          {
+            name: 'reports',
+            path: '/feature/reports',
+            componentLoader: async () => ({ default: () => null }),
+          },
+        ]),
+      },
+    ]);
+
+    // `false` is a declaration, not an absence: copying the field with a truthiness test would turn the opt-out back
+    // into "not declared", which is the default `resource: name, action: 'access'` check it exists to avoid.
+    expect(resolved.routes[0].access).toBe(false);
+    expect(resolved.routes[0]).toHaveProperty('access');
+    expect(resolved.routes[1]).not.toHaveProperty('access');
+  });
+
   it('supports guest and optional routes while protecting reserved paths', () => {
     const resolved = resolveAppClientContributions([
       {
