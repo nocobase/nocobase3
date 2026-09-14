@@ -10,17 +10,21 @@ integration suites in the `@nocobase/db-*` packages. Each suite starts (or
 reuses) a database service through its package-local `docker-compose.yml`, then
 runs the shared integration contract with the dialect-specific adapter.
 
-## Default behavior
+## The dialect package is the entry point
 
-The default `@nocobase/db` integration command runs **SQLite only**:
+Each suite is owned by its dialect package, and that package is the only way to
+run it:
 
 ```bash
-pnpm --filter @nocobase/db test:integration
+pnpm --filter @nocobase/db-sqlite test:integration
 ```
 
-PostgreSQL, MySQL, Kingbase, Oracle, MSSQL, Dameng, and OceanBase are opt-in.
-Run their package-specific command only when that database is available and the
-suite is needed.
+`@nocobase/db` carries no integration script. It used to forward to each dialect
+through `test:integration` and `test:integration:<dialect>`, but the first ran
+SQLite while reading as a full run, so the aliases were removed.
+
+Nothing runs by default. Name the dialect you need, and run it only when that
+database is available.
 
 ## Run one dialect
 
@@ -80,75 +84,42 @@ Replace `mysql` with `sqlite`, `postgres`, `kingbase`, `oceanbase`, `oracle`,
 `mssql`, or `dameng` as needed. SQLite runs directly through Vitest; the other
 dialects use the package's integration runner and Docker Compose.
 
-## Suites that may run concurrently when requested
+## Run one suite at a time
 
-These suites can be started at the same time:
-
-- `sqlite`
-- `postgres`
-- `mysql`
-- `kingbase`
-
-From the repository root:
+Start a suite, wait for it to finish, then start the next one. Never run two
+integration suites at once, and never leave one in the background:
 
 ```bash
-pnpm --filter @nocobase/db-sqlite test:integration &
-sqlite_pid=$!
-pnpm --filter @nocobase/db-postgres test:integration &
-postgres_pid=$!
-pnpm --filter @nocobase/db-mysql test:integration &
-mysql_pid=$!
-pnpm --filter @nocobase/db-kingbase test:integration &
-kingbase_pid=$!
-
-wait "$sqlite_pid" "$postgres_pid" "$mysql_pid" "$kingbase_pid"
+pnpm --filter @nocobase/db-postgres test:integration && \
+  pnpm --filter @nocobase/db-mysql test:integration
 ```
 
-The commands use separate package-level configurations. The Docker-backed
-runners generate an isolated Compose project name and a dynamically published
-host port, so these suites do not need to share a database container or port.
-Kingbase is the slowest of this group: its service declares a 30 second health
-check start period, so expect it to finish after the other three.
+Collisions are not the reason. Each Docker-backed runner generates an isolated
+Compose project name and a dynamically published host port, so two suites never
+share a container, a network, or a port. What they do share is one machine:
+concurrent runs compete for the same Docker daemon's CPU, memory, and disk I/O,
+which pushes service health checks past their start period and turns a passing
+suite into an intermittent startup failure. The heavier services show it first
+— Kingbase declares a 30 second health check start period, and MSSQL and Dameng
+run additional init services before their tests — but the result is a flaky run
+rather than a clean signal for any of the dialects involved.
 
-## Suites that must run one at a time
-
-Run these suites serially, waiting for each command to finish before starting
-the next one:
-
-- `oceanbase`
-- `oracle`
-- `mssql`
-- `dameng`
-
-Example:
-
-```bash
-pnpm --filter @nocobase/db-oceanbase test:integration && \
-pnpm --filter @nocobase/db-oracle test:integration && \
-pnpm --filter @nocobase/db-mssql test:integration && \
-pnpm --filter @nocobase/db-dameng test:integration
-```
-
-Keeping these suites serial avoids competing for the heavier or more sensitive
-database services and their initialization steps. In particular, MSSQL and
-Dameng run additional init services before the tests; Oracle and OceanBase also
-have substantially higher startup and resource requirements than the lightweight
-parallel group.
+CI parallelizes safely because it does not share a machine: the `db-integration`
+matrix gives every dialect its own runner.
 
 ## Running the complete set
 
-The existing `@nocobase/db` `test:integration:all` script is intentionally
-conservative and runs every dialect serially:
+Every pull request runs all eight dialects, one per CI runner, so a local full
+run is rarely worth the wall clock. When one is genuinely required, chain the
+commands and let it take the time it takes:
 
 ```bash
-pnpm --filter @nocobase/db test:integration:all
+for dialect in sqlite postgres mysql kingbase oceanbase oracle mssql dameng; do
+  pnpm --filter "@nocobase/db-$dialect" test:integration || break
+done
 ```
 
-When a full verification is required, run the
-`sqlite`/`postgres`/`mysql`/`kingbase` group in parallel first, then run
-`oracle`/`mssql`/`dameng`/`oceanbase` using the serial chain above. Do not append the serial-only suites to background jobs from
-the parallel group. For normal development, prefer the default SQLite command
-and opt into only the dialect under change.
+For normal development, run only the dialect under change.
 
 ## Environment and cleanup
 
@@ -156,4 +127,4 @@ The integration runner chooses a random Compose project name and removes its
 containers, volumes, and orphan services when the suite exits. Set
 `KEEP_TEST_DB=1` only when debugging and you need to inspect the database after
 the run. If a run is interrupted, verify that no leftover Compose services are
-still using resources before starting another serial-only suite.
+still using resources before starting the next suite.

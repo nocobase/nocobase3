@@ -109,7 +109,16 @@ export const oracleDriver: DatabaseDriverDefinition<'oracle'> = {
         }
         return { ...operation, operations };
       },
-      columnType: ({ column }) => {
+      // The column is built as varchar2 while altering, which loses the JSON
+      // default handling Knex applies to a column it built as `json()`.
+      encodeJsonDefault: ({ altering }) => altering,
+      columnType: ({ column, altering }) => {
+        // Knex compiles a json column to `varchar2(4000) check (col is json)`.
+        // Repeating that on a MODIFY asks Oracle for a second IS JSON check
+        // constraint on the same column, which it refuses with ORA-40664. The
+        // MODIFY does not drop the constraint the original definition created,
+        // so redefining the column without it leaves the validation in place.
+        if (altering && column.type === 'json') return 'varchar2(4000)';
         // Oracle 12c+ supports identity columns directly. Do not delegate
         // auto-increment columns to Knex's legacy sequence/trigger compiler:
         // its trigger looks up the primary key from the data dictionary
@@ -141,6 +150,8 @@ export const oracleDriver: DatabaseDriverDefinition<'oracle'> = {
       },
     },
     repository: {
+      // The column is text; the stored JSON arrives unparsed.
+      jsonResults: 'text',
       enumGroupKey: ({ client, field }) =>
         client.raw('utl_raw.cast_to_raw(??)', [field]),
       compileFilterCondition: ({ query, node, field, name, boolean }) => {

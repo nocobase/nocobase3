@@ -50,24 +50,20 @@ pnpm --filter @nocobase/db-dameng test:integration
 Oracle、SQL Server 和 Dameng 镜像较大，启动时间更长。SQL Server 和
 Dameng 的入口会在数据库健康后自动运行各自的初始化 service。
 
-每次运行使用随机 host port，因此多个 dialect 或多个相同 dialect 的
-测试进程可以同时运行，互不共享容器、网络和 volume。
+每次运行使用随机 Compose project 名和随机 host port，互不共享容器、网络和
+volume，但它们共享同一个 Docker daemon。集成测试必须一个一个跑：并发运行会争抢
+CPU、内存和磁盘 I/O，把 service health check 拖过 start period，得到的是启动阶段
+的偶发失败而不是测试结果。
 
 ## 全矩阵测试
 
-```bash
-pnpm --filter @nocobase/db test:integration:all
-```
-
-`all` 依次调用 SQLite、PostgreSQL、MySQL、Oracle、SQL Server 和 Dameng
-各自的 `test:integration` 入口。每个入口都只清理自己创建的 Compose
-project。
+CI 的 `db-integration` matrix 每个方言一个 runner，在每个 PR 上跑完八个，本地
+通常不需要重跑一遍。确实需要时，八个方言依次串行执行，不要并发，约束见[集成测试调度](../../../../../../internal-docs/development/database-integration-testing.md)。
 
 ## 指定数据库
 
-`@nocobase/db` 中的 `test:integration:<database>` 命令只是转发到对应
-dialect package。优先直接调用 dialect package；临时组合多个数据库时，
-可以直接向 Vitest 传递连接矩阵：
+`@nocobase/db` 没有集成测试脚本，直接调用 dialect package 的
+`test:integration`。临时组合多个数据库时，可以直接向 Vitest 传递连接矩阵：
 
 ```bash
 INTEGRATION_DB_CONNECTIONS=postgres,mysql pnpm exec vitest run tests/integration
@@ -153,6 +149,6 @@ Query 真实测试覆盖：
 
 ## 维护注意事项
 
-- 修改 Builder 编译或 adapter 行为后，应跑 `pnpm --filter @nocobase/db test:integration:all`。
+- 修改 Builder 编译或 adapter 行为后，依次覆盖 `sqlite`、`postgres`、`mysql`、`kingbase`；其余方言由 CI matrix 覆盖。
 - SQLite 通过不代表 PostgreSQL、MySQL、Oracle、SQL Server 或 Dameng 一定通过。
 - 方言问题应优先通过真实集成测试验证。

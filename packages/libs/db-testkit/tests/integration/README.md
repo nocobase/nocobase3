@@ -101,13 +101,12 @@ Start and test KingbaseES in PostgreSQL-compatible mode:
 pnpm --filter @nocobase/db-kingbase test:integration
 ```
 
-Run the complete database matrix through the owning package entrypoints:
-
-```bash
-pnpm --filter @nocobase/db test:integration:all
-```
-
-Each dialect package exposes its own `test:integration` command; use those entrypoints when selecting a single backend or the full matrix.
+Each dialect package exposes its own `test:integration` command, and that is the
+only entry point; `@nocobase/db` carries no integration script. Run the complete
+matrix by invoking each dialect in turn. Suites must run one at a time: they
+isolate their Compose projects and host ports, but share one Docker daemon, and
+concurrent runs fail health checks during startup. See
+[`internal-docs/development/database-integration-testing.md`](../../../../../internal-docs/development/database-integration-testing.md).
 
 Set `KEEP_TEST_DB=1` to retain a failed run for debugging. The runner prints
 the Compose project name; remove that project manually after investigation.
@@ -130,15 +129,9 @@ tests, on SQLite, PostgreSQL, MySQL, Oracle, SQL Server, and Dameng. A
 SQLite-only or Repository-only run is useful while iterating, but is not final
 acceptance.
 
-Run the matrix through the owning package entrypoints:
-
-```bash
-pnpm --filter @nocobase/db test:integration:all
-```
-
-The all-database invocation runs shared unit/type-test files once and repeats
-the integration scenarios per configured database. Type assertions additionally
-require `typecheck`. Missing drivers or unavailable services are failures, not
+Acceptance is the CI `db-integration` matrix, which runs every dialect on each
+pull request. Locally, run the dialects the change puts at risk through their
+own packages. Type assertions additionally require `typecheck`. Missing drivers or unavailable services are failures, not
 reasons to skip a database. A database-specific scenario may be conditional
 only when its contract explicitly belongs to that database; the PostgreSQL
 bigint-string transport scenario is one such case.
