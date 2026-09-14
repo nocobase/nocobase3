@@ -38,15 +38,18 @@ interface CollectionMetadataStore {
 ## 配置位置
 
 ```ts
+import sqlite from '@nocobase/db-sqlite';
+import { createDatabaseManager } from '@nocobase/db';
+
 const db = createDatabaseManager({
   metadataStore: sharedStore,
+  drivers: { sqlite },
   connections: {
-    main: { dialect: 'sqlite', filename: 'app.sqlite' },
-    crm: {
-      dialect: 'sqlite',
+    main: sqlite({ filename: 'app.sqlite' }),
+    crm: sqlite({
       filename: 'crm.sqlite',
       metadataStore: crmStore,
-    },
+    }),
   },
 });
 ```

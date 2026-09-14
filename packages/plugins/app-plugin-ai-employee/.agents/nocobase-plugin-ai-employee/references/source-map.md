@@ -32,14 +32,12 @@ Read these App-local files when present:
 ## App AI resources
 
 - `config.yml` `ai.llmServices`: LLM service application config with environment placeholders.
-- `ai/employees/<name>/index.ts`: App employee definition.
-- `ai/employees/<name>/prompt.md`: optional long prompt.
-- `ai/tools/<name>.ts`: App backend tool.
-- `ai/skills/<name>/SKILLS.md`: App skill.
-- `ai/skills/<name>/tools/`: skill-local tools.
-- `ai/mcp/<name>.ts`: MCP server definition; filename is the resource name.
+- `config.yml` `ai.mcpServers`: MCP server connection configuration with environment placeholders.
+- `server/ai/employees/<name>/index.ts`: App Employee definition with an inline `systemPrompt`.
+- `server/ai/tools/<name>.ts`: App backend Tool definition.
+- `ai/skills/<name>/SKILL.md`: App Skill; optional Skill-local `tools/` remain Skill-loader behavior.
 
-Use any existing validation/example resources in these directories as local examples. Keep App resources separate from package built-ins; built-ins are loaded by the enabled plugin.
+Aggregate Employees and Tools through static imports in `server/ai/index.ts`, subclass the public `AIResourceRegistrar` from `@nocobase/app-plugin-ai-employee/server`, and invoke it from the App Provider `boot()` with the existing `aiManagerToken`. There is no Employee/Tool filesystem scan and no Employee-local prompt, Skill, or Tool auto-binding.
 
 ## App frontend
 
@@ -99,6 +97,8 @@ Relevant public areas include:
 - repositories;
 - LLM providers and helpers;
 - knowledge/vector feature contracts.
+
+The enabled `@nocobase/app-plugin-ai-employee` also exposes its server integration entry at `@nocobase/app-plugin-ai-employee/server`. Import only the documented `aiConversationsManagerToken` and `agentServiceFactoryToken` from that entry for trusted App server integrations; read `agent-service.md` before using them.
 
 Never import `@nocobase/ai-employee/src/...` or plugin-private server/agent paths.
 

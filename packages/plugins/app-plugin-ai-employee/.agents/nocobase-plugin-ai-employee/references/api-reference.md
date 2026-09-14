@@ -478,7 +478,7 @@ Managed metadata body:
 }
 ```
 
-A managed backend tool cannot be created from JSON alone without an existing executable `invoke` function. Define executable App tools in `ai/tools`; use management APIs primarily to edit registered metadata/frontend tools.
+A managed backend tool cannot be created from JSON alone without an existing executable `invoke` function. Define executable App tools in `server/ai/tools`; use management APIs primarily to edit registered metadata/frontend tools.
 
 ### MCP servers
 
@@ -512,13 +512,10 @@ Actions: `list`, `get?key`, `create`, `update?key`, `destroy?key` on resource `l
   title?: string;
   provider?: string;
   options?: Record<string, unknown>;
-  enabledModels?:
-    | string[]
-    | {
-        mode: 'recommended' | 'provider' | 'custom';
-        models: { label: string; value: string }[];
-      }
-    | null;
+  enabledModels?: {
+    mode: 'provider' | 'custom';
+    models: { label: string; value: string }[];
+  };
   modelOptions?: Record<string, unknown>;
   enabled?: boolean;
   sort?: number;

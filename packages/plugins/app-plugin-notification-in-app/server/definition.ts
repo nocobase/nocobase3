@@ -96,10 +96,10 @@ export function createInAppChannelDefinition(): NotificationChannelDefinition<
       return {
         type: 'in-app',
         resolveRecipient(input: {
-          readonly recipient: NotificationRecipient;
+          readonly recipient?: NotificationRecipient;
         }): InAppRecipient | undefined {
           const { recipient } = input;
-          return recipient.type === 'user'
+          return recipient?.type === 'user'
             ? { userId: recipient.id }
             : undefined;
         },
@@ -140,12 +140,18 @@ export function createDatabaseProviderDefinition(options: {
 }): NotificationProviderDefinition<InAppProviderConfig, PreparedInAppMessage> {
   return {
     type: 'database',
-    label: inAppNotificationText('test.providers.database', 'Database'),
+    capabilities: {
+      idempotency: { supported: true },
+    },
+    label: inAppNotificationText('test.providers.builtIn', 'Built-in'),
     async createProvider(context, config) {
       const { store } = options;
       return {
         name: config.name,
         type: 'database',
+        capabilities: {
+          idempotency: { supported: true },
+        },
         async send({ message }) {
           try {
             await store.deliver({

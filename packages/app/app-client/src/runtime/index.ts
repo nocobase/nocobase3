@@ -1,9 +1,16 @@
-import type { I18nRuntime } from '@nocobase/i18n';
+import { resolveSupportedLocale, type I18nRuntime } from '@nocobase/i18n';
 
 import type { ClientApplication } from '../application.js';
-import type { AppClientConfig, AppClientConfigFactory } from '../config.js';
+import type {
+  AppClientConfig,
+  AppClientConfigFactory,
+  AppConfigFactory,
+  AppClientConfigMap,
+} from '../config.js';
 import {
   createAppI18nRuntime,
+  DEFAULT_LOCALE,
+  readStoredLocale,
   type AppClientLocaleContribution,
 } from '../i18n.js';
 import {
@@ -42,7 +49,8 @@ export type AppRuntimeValidator = (
 
 export interface AppRuntimeDefinition {
   readonly packageName: string;
-  readonly config: AppClientConfigFactory;
+  readonly createAppConfig: AppClientConfigFactory;
+  readonly defaultConfigs?: AppConfigFactory<AppClientConfigMap>;
   readonly serviceProviders?: AppClientServiceProviders;
   readonly reactProviders?: AppClientReactProviders;
   readonly routes?: AppClientRoutes;
@@ -58,7 +66,8 @@ export interface ResolveAppRuntimeOptions {
   readonly rawConfig?: unknown;
 }
 
-export interface ResolvedAppRuntime {
+export interface AppRuntimeContext {
+  app?: ClientApplication;
   readonly config: AppClientConfig;
   readonly i18n: I18nRuntime;
   readonly basename: string;
@@ -74,6 +83,8 @@ export interface ResolvedAppRuntime {
   readonly devRouteGroups: readonly AppClientRegisteredDevRouteGroup[];
   readonly validate?: AppRuntimeValidator;
 }
+
+export type ResolvedAppRuntime = AppRuntimeContext;
 
 export function defineAppRuntime(
   definition: AppRuntimeDefinition,
@@ -97,14 +108,11 @@ export async function resolveAppRuntime(
   definition: AppRuntimeDefinition,
   options: ResolveAppRuntimeOptions = {},
 ): Promise<ResolvedAppRuntime> {
-  const config = await definition.config({
+  const config = await definition.createAppConfig({
     rawConfig:
       options.rawConfig === undefined
         ? readAppClientRuntimeConfig()
         : options.rawConfig,
-    configs: Object.freeze(
-      definition.plugins.plugins.flatMap((plugin) => plugin.config),
-    ),
   });
   const applicationContribution = createApplicationContribution(definition);
   const pluginContributions = definition.plugins.plugins.map((plugin) => ({
@@ -117,14 +125,37 @@ export async function resolveAppRuntime(
     applicationContribution,
     ...pluginContributions,
   ]);
+  const localeContributions = collectLocaleContributions(definition);
+  const applicationLocales = localeContributions
+    .filter(({ source }) => source === 'application')
+    .flatMap(({ locales }) =>
+      Object.keys('default' in locales ? locales.default : locales),
+    );
+  const configuredLocale = config.get<unknown>('i18n.defaultLocale');
+  const defaultLocale =
+    (typeof configuredLocale === 'string'
+      ? resolveSupportedLocale(configuredLocale, [
+          DEFAULT_LOCALE,
+          ...applicationLocales,
+        ])
+      : undefined) ?? DEFAULT_LOCALE;
+  const supportedLocales = [...applicationLocales, defaultLocale];
+  const storedLocale = readStoredLocale();
+  const initialLocale =
+    (storedLocale === undefined
+      ? undefined
+      : resolveSupportedLocale(storedLocale, supportedLocales)) ??
+    defaultLocale;
   const i18n = await createAppI18nRuntime({
-    contributions: collectLocaleContributions(definition),
+    contributions: localeContributions,
+    defaultLocale,
+    initialLocale,
   });
   const extensionOverrides = collectSourceExtensionRouteOverrides(
     definition.sourceExtensions ?? [],
   );
 
-  return Object.freeze({
+  const runtime: AppRuntimeContext = {
     config,
     i18n,
     basename: definition.basename ?? '/',
@@ -157,7 +188,11 @@ export async function resolveAppRuntime(
     devRoutes: contributions.devRoutes,
     devRouteGroups: contributions.devRouteGroups,
     validate: definition.validate,
-  });
+  };
+  if (definition.defaultConfigs) {
+    runtime.config.mergeDefaults(definition.defaultConfigs(runtime));
+  }
+  return runtime;
 }
 
 function createApplicationContribution(definition: AppRuntimeDefinition): {

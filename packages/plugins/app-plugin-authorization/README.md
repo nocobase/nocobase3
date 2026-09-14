@@ -18,6 +18,12 @@ The plugin currently provides:
   `nocobase` user.
 - a separate Default Pages Permission Set, so page access can be changed without
   changing administrator capabilities.
+- protected Permission Sets whose owner plugin controls which generic
+  definition and assignment operations remain available;
+- atomic replacement of one application's assignment scope without changing a
+  user's unrelated Permission Sets;
+- a public Client service token and Realtime cache invalidation for individual
+  user assignments and grants shared by all authenticated users.
 
 Every authenticated client route is authorized as `page:<route name>/access`
 unless the route declares an explicit authorization resource. Removing the

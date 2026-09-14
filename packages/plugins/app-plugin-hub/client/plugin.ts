@@ -4,12 +4,19 @@ import {
 } from '@nocobase/app-client/plugins';
 
 import locales from './locales/index.js';
-import routes from './routes.js';
+import { createHubRoutes } from './routes.js';
 
-const hub: AppClientPluginFactory = defineClientPlugin({
+export interface HubClientOptions {
+  /** App-relative path for application management. Defaults to `/hub`. */
+  readonly applicationsPath?: string;
+  /** App-relative path for the read-only Hub role matrix. Omit to disable it. */
+  readonly rolesPath?: string;
+}
+
+const hub: AppClientPluginFactory<HubClientOptions> = defineClientPlugin({
   packageName: '@nocobase/app-plugin-hub',
   locales,
-  routes,
+  routes: (options) => createHubRoutes(options),
 });
 
 export default hub;

@@ -1,102 +1,47 @@
 ---
 name: nocobase-app-plugin-scheduler
-description: Use the Scheduler plugin to declare code-owned Cron schedules, register allowlisted Job targets, or synchronize schedule manifests in a NocoBase App.
+description: Develop scheduled tasks in NocoBase 3 that business administrators need to view and track through the application UI. Define schedules in code, choose ordinary Jobs or Workflow Jobs, integrate execution status, and extend target types. Do not use Scheduler to manage tasks that do not need UI visibility.
 metadata:
-  short-description: Declare and synchronize scheduled automation
+  short-description: Define scheduled tasks with administrator-facing execution history
 ---
 
-# Scheduler App Plugin
+# Develop Scheduled Tasks in an Application
 
-Use this Skill when the user wants an App or plugin to run an allowlisted Job
-or Workflow on a Cron schedule. Do not use it to create database-owned or
-administrator-editable schedules; Scheduler v1 is code-defined and read-only.
+Use the installed version's public exports, without importing plugin internals. The application owns business logic, schedule declarations, Providers, permissions, and deployment timing. Scheduler owns scheduling projections, trigger history, and execution state. The plugin's `skills/` directory is the source of truth; do not edit the synchronized application copy under `.agents/skills/`.
 
-## Public surfaces
+## Decide Whether to Use Scheduler
 
-- Definition APIs: `defineSchedule`, `ScheduleDefinition`, and the target and
-  Job registration contracts from `@nocobase/app-plugin-scheduler/server`.
-- App services: `scheduleTargetRegistryToken` and
-  `jobDispatchRegistryToken` from
-  `@nocobase/app-plugin-scheduler/server/tokens`.
-- Server contribution: `schedules: { definitions: './server/schedules' }` on
-  the declaring plugin's `defineServerPlugin()` declaration.
-- Operations: the globally registered `pnpm nocobase schedule sync` command, with optional
-  `--finalize`.
-- Product surface: the authenticated and authorized read-only Scheduled Tasks
-  Settings page and `/api/schedules` endpoints.
+The primary reason to define tasks through Scheduler is **UI observability for business administrators**. Developers define schedules and execution logic in code. Business administrators use the application's task list and detail pages to view schedules, track individual executions, and enable or disable tasks when authorized.
 
-## Declare a schedule
+Tasks that do not need to be viewed and tracked through the UI must not be managed by the Scheduler plugin. Use the application's Queue or existing background scheduling mechanism for those tasks. For administrator-visible tasks, deliver Client registration, access permissions, meaningful task names, and accurate final execution status together; successful server-side dispatch alone is incomplete.
 
-1. Add the Scheduler package as a peer and development dependency of a plugin,
-   then register Scheduler Client and Server contributions in the App.
-2. Create a plugin-owned module that default-exports an array of
-   `defineSchedule(...)` results. Use a stable `key`, a five- or six-field Cron
-   expression, and `UTC` or an IANA timezone.
-3. Expose that module from the declaring Server plugin with
-   `schedules: { definitions: './server/schedules' }`.
-4. Select an installed target type. The Workflow plugin owns `workflow`; the
-   Scheduler plugin owns `job`.
-5. Run `pnpm nocobase schedule sync`, then verify the schedule in the read-only
-   Scheduled Tasks page.
+## Then Choose the Execution Model
 
-`from` and `to` are inclusive. `limit` counts Queue schedule claims, not target
-completion. Never put passwords, tokens, API keys, or other secrets anywhere
-inside `target.config`: definitions with fields that may contain credentials
-are rejected, and target config must not contain credentials.
+After deciding to use Scheduler, choose according to business complexity:
 
-## Register an allowlisted Job target
+| Scenario                                                                                  | Choice             | Implementation boundary                                                                                    |
+| ----------------------------------------------------------------------------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------- |
+| Periodic cleanup, cache refresh, a single report, or one business Service call            | Ordinary `job`     | Short operations may complete directly; dispatch lengthy, batch, or retryable work to a business Queue Job |
+| Staged processing, branches, persisted node state, or node-level diagnostics              | `workflow`         | Scheduler determines when to trigger; Workflow orchestrates the process and nodes call typed business code |
+| A simple operation that happens hourly                                                    | Ordinary `job`     | Cron alone is not a reason to introduce Workflow                                                           |
+| Immediate asynchronous execution or a one-time delay                                      | Queue              | No Cron Schedule is needed                                                                                 |
+| Another execution system with its own references, status queries, and completion protocol | Custom target type | Extend `ScheduleTargetRegistry`; a new business Job does not require a new target type                     |
 
-During the owning plugin Provider's `boot()` lifecycle, resolve the original
-`jobDispatchRegistryToken` and register a stable Job name, title, payload
-validator, and dispatch function. The dispatch function should use the
-Schedule execution context's `occurrenceId` as the downstream Queue dispatch
-dedup/idempotency key. Synchronous operations return a `completed` result;
-Queue dispatchers return `accepted` with a stable `queue-job` reference and a
-controlled receipt. The Queue integration owner should also register one
-`queue-job` observer with `registerObserver(referenceType, inspect)` so
-Scheduler can repair a missed completion notification after a worker or
-process failure. Reference types identify observer domains and can only have
-one observer; do not register one observer per business Job name.
-Do not expose arbitrary Queue Job names and do not resolve a private Scheduler
-implementation.
+Here, “Workflow Job” means `target.type: 'workflow'`, not an additional Queue Job wrapping a workflow. Ordinary Jobs do not depend on the Workflow plugin. Neither approach guarantees exactly-once external business effects; design business idempotency for both.
 
-Registration belongs in `boot()` so all Providers have registered their
-services before target types are assembled. A Job target works without the
-Workflow plugin. The fixed `ScheduleDispatchJob` and its Database schedule are
-Scheduler infrastructure and must not be replaced by a business Job name.
+## Read by Task
 
-## Synchronize safely
+- To create or change a schedule, read [Definitions, Registration, and Synchronization](references/definitions.md), including ordinary Job and Workflow declarations.
+- To add a business Job, integrate Queue, or extend target types, read [Target Extensions and Execution Protocol](references/targets.md).
+- To integrate the UI/API, verify behavior, or diagnose failures, read [Operations and Verification](references/operations.md).
+- To author the workflow itself, use the installed Workflow plugin's `nocobase-app-plugin-workflow` skill. Confirm supported Instructions instead of inventing nodes from business terminology.
 
-- `pnpm nocobase schedule sync` validates the complete loaded manifest and performs
-  non-destructive upserts. Normal App startup also follows this path before
-  starting the Schedule worker.
-- Run `pnpm nocobase schedule sync --finalize` once per App during a production
-  deployment only when the process sees the complete manifest. It additionally
-  soft-deactivates missing code definitions.
-- The one-shot sync command does not start the Schedule worker. A validation,
-  import, or write failure rolls back the reconciliation and must not
-  deactivate missing definitions.
+## Development Loop
 
-Do not edit `schedule_definitions`, `queue_schedules`, or
-`schedule_occurrences` directly. The plugin owns those projections and trigger
-history. The App owns plugin registration, schedule declaration
-modules, business Job payloads, and deployment timing for finalize.
+1. Establish which tasks and execution records administrators need to see. Check Server/Client/CLI registration, page permissions, Database Queue configuration, and target availability, then choose `job` or `workflow`.
+2. Implement business logic and Providers in application source, declare a `defineSchedule()` array with stable keys, and register its module as a Server contribution.
+3. Validate payload/input, timezone, idempotency, and asynchronous completion reporting. Obtain credentials through secure business Service configuration, never `target.config`.
+4. Run application type checks, relevant tests, and build. Synchronize definitions and, in development, use an administrator account to find the task in the UI and track a real execution to its final state. Confirm the business result.
+5. Report the schedule key, execution model, timezone, validation evidence, and unverified runtime boundaries. Use `--finalize` in production only when the complete manifest is visible.
 
-## Permissions and observable results
-
-Schedule APIs require authentication and `scheduler.schedules:access`.
-Responses expose controlled scheduling data, while the Settings UI shows
-localized schedule descriptions, trigger counts, and trigger history. Neither
-surface exposes raw Job payloads or Workflow input. New asynchronous executions
-move through `waiting` to a final outcome. A historical `triggered` record only
-means the old target accepted the request, so its final result is unknown.
-
-Verify that synchronization succeeds, the Settings page shows the expected
-next run, a due schedule creates one trigger record, and stalled execution
-reuses the same occurrence record. For a Job registration, verify the Queue
-dispatch receives `occurrenceId` as its dedup key. Use composition inspectors
-only to diagnose missing declarations or registration; they do not execute a
-schedule.
-
-The plugin's `skills/` directory is the source of truth. Never edit the
-synchronized App copy under `.agents/skills/`.
+Schedules are defined in code. There is no management API for creating or editing Cron definitions, but the UI and API support enabling and disabling tasks. Do not modify `schedule_definitions`, `queue_schedules`, or `schedule_occurrences` directly, or replace the infrastructure `ScheduleDispatchJob`.

@@ -6,7 +6,7 @@ You own everything in this directory. Add pages, API routes, database tables, an
 
 ## Default and Examples
 
-Default provides the application shell and product capabilities without example plugins or business demo pages. Its application-owned server route/provider lists start empty, and new databases receive no article sample data. Use `app-template-examples` for article management and runnable plugin demonstrations.
+Default provides the application shell and product capabilities without example plugins or business demo pages. Application-owned routes start empty, and new databases receive no article sample data. Its built-in Users integration lists direct Authorization Permission Sets as application roles, while access assigned to all authenticated users remains separate. Use `app-template-examples` for article management and runnable plugin demonstrations.
 
 Existing Default installations retain their data when example plugins are unregistered. If an installation already ran the article migration, retain its original migration sources as described in `MIGRATION.md` before upgrading. Do not erase migration history or delete existing data to make an upgrade start.
 
@@ -20,13 +20,48 @@ pnpm dev
 
 `pnpm dev` starts the API server and the Vite client together, picks free ports if the defaults are taken, and prints the URL to open. Use the printed URL rather than assuming a port.
 
+### Develop against another backend
+
+Set `PROXY_TARGET_URL` to the backend application's public URL, including its mount path but excluding `/api`:
+
+```bash
+# Example only: replace /main with the backend's actual public mount path.
+PROXY_TARGET_URL=http://127.0.0.1:13000/main pnpm dev
+```
+
+**`/main` is the fallback, not a required or fixed path.** Local development reads `APP_BASE_PATH` from the command-line environment, then `.env.local`, then `.env`, falling back to `/main` when unset. The remote path comes from `PROXY_TARGET_URL`; it is not inferred from the local `APP_BASE_PATH`. Read the target application's actual public URL before constructing this value. If it is mounted at the origin root, use the origin URL without a mount path.
+
+For example, these applications can use different paths:
+
+```bash
+APP_BASE_PATH=/local PROXY_TARGET_URL=http://127.0.0.1:13000/crm pnpm dev
+# /local/api/users -> http://127.0.0.1:13000/crm/api/users
+# /local/ws        -> ws://127.0.0.1:13000/crm/ws
+```
+
+This runs Vite with your local client source and proxies API and WebSocket requests to that application. It does not start a local backend, allocate its port, wait for its health endpoint, or watch server configuration/plugins. Existing `beforeDev` hooks still run to prepare client artifacts. Open the printed **Local** URL (the Vite port); **Backend** identifies the target.
+
+The target can be another local project running `pnpm dev`, or an HTTP(S) deployment. Use its printed application URL, not its Vite URL. Local `APP_BASE_PATH` and the remote mount path may differ: local `/main/api/users` can map to remote `/crm/api/users`. Trailing slashes are accepted. Credentials, query strings, and fragments are not accepted in the target URL.
+
+Requests use the remote backend's data and permissions, including writes. Only `<APP_BASE_PATH>/api` and `<APP_BASE_PATH>/ws` are proxied; application root callbacks and absolute URLs returned by the backend keep their original routing. Cookie domain/path scopes are adapted to the local application. HTTP and WebSocket requests whose Origin matches the local request's protocol and Host are forwarded with the target Origin, so browser authentication and realtime connections pass the backend's same-origin checks. Same-origin Referer URLs within the local app base are mapped to the target app base as well; requests without Origin keep it absent. Other origins and referers remain unchanged and subject to backend validation. HTTPS-only cookie requirements remain enforced, and authentication flows using explicit callback URLs still require appropriate callback configuration.
+
+The variable can also be set in `.env` or `.env.local`; the command-line environment takes precedence. Restart `pnpm dev` after changing the target. Without this variable, development still starts both the local backend and Vite. Production builds ignore it.
+
+Use `APP_SERVER_PORT` to choose the local application port in either development mode. With `PROXY_TARGET_URL` set, it selects Vite's preferred port (5173 when unset); without a proxy target, it selects the local backend's preferred port (13000 when unset), while Vite still starts from 5173. If the preferred port is occupied, development selects the next available port and prints the actual URL. The remote backend address is always taken from `PROXY_TARGET_URL`.
+
+```bash
+APP_SERVER_PORT=13399 PROXY_TARGET_URL=http://127.0.0.1:13000/main pnpm dev
+# Local: http://127.0.0.1:13399/main/ when 13399 is available.
+# Replace /main with the remote application's actual mount path.
+```
+
 ### Review your configuration
 
 `config.yml` was written when the project was created, carrying the database you chose and a generated `auth.secret`. It gets you running; adjust it for your situation:
 
 - **Database.** Point the connection at the database you actually intend to use — dialect, host, port, and credentials.
 - **Where the application is served.** `APP_BASE_PATH` is the public mount path, `/main` by default, so the development URL looks like `http://127.0.0.1:13000/main/`. `APP_SERVER_PORT` and `APP_SERVER_HOST` change what the server binds to.
-- **Anything a feature you enable requires** — mail delivery, IM webhooks, storage. `config.example.yml` documents every available option, including sections your `config.yml` does not yet have.
+- **Anything a feature you enable requires** — mail delivery, IM webhooks, storage. `config.example.yml` documents common deployment options, including sections your `config.yml` does not yet have.
 
 `config.yml` is gitignored because it holds your `auth.secret`. Deploy it through your secret management rather than committing it.
 
@@ -73,7 +108,7 @@ database/
 
 tests/                   Unit and integration tests
 e2e/                     Browser tests needing a real server
-config.yml               Your configuration, generated at setup; gitignored
+config.yml              Your configuration, generated at setup; gitignored
 config.example.yml       Documented configuration template
 skills/                  In-depth development guides for AI agents
 ```
@@ -84,18 +119,19 @@ The three files named `runtime.ts`, `plugins.ts`, and `routes.ts` are compositio
 
 ### Everyday development
 
-| Script       | What it does                                      |
-| ------------ | ------------------------------------------------- |
-| `pnpm dev`   | Start the API server and client with hot reload   |
-| `pnpm build` | Build the client and server into `dist/`          |
-| `pnpm start` | Run the built server; requires `pnpm build` first |
+| Script             | What it does                                                                 |
+| ------------------ | ---------------------------------------------------------------------------- |
+| `pnpm dev`         | Start the API server and client with hot reload                              |
+| `pnpm build`       | Build the client and server into `dist/`                                     |
+| `pnpm start`       | Run the built server; requires `pnpm build` first                            |
+| `pnpm build --tar` | Build, then pack `dist/` and `config.example.yml` into `storage/dist.tar.gz` |
 
 ### Database
 
-| Script         | What it does                                                                                    |
-| -------------- | ----------------------------------------------------------------------------------------------- |
-| `pnpm migrate` | Apply pending migrations from your `database/main/migrations/` and from every registered plugin |
-| `pnpm seed`    | Run seeds from `database/main/seeds/` and from registered plugins                               |
+| Script         | What it does                                                                                                                                                                                    |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm migrate` | Apply pending migrations from your `database/main/migrations/` and from every registered plugin; `pnpm migrate --fresh --force` clears managed schema objects and rebuilds them from migrations |
+| `pnpm seed`    | Run seeds from `database/main/seeds/` and from registered plugins                                                                                                                               |
 
 Migrations also run automatically on startup while `database.connections.main.migrations.autoRun` is `true` in `config.yml`. Run `pnpm migrate` explicitly when you want to apply a schema change without restarting.
 
@@ -113,17 +149,30 @@ Database tasks support `--connection <name>` and `--all`; no argument targets `d
 | `pnpm fix`           | Fix lint problems, then format                               |
 | `pnpm check`         | Everything above plus a build; what to run before committing |
 
+`pnpm nocobase app i18n:check` reports a language declared in `client/locales/` but not `server/locales/`, or the reverse. The browser builds its language picker from one and the server decides what it answers in from the other, so a language on only one side is one the interface offers and the server then rejects.
+
 ### Plugins
 
 Plugins add features to your application. Let these commands edit `package.json`, `client/plugins.ts`, and `server/plugins.ts` for you rather than editing those files by hand.
 
-| Script                          | What it does                                              |
-| ------------------------------- | --------------------------------------------------------- |
-| `pnpm plugin:register <name>`   | Install a plugin and wire it into the client and server   |
-| `pnpm plugin:unregister <name>` | Remove a plugin and its wiring                            |
-| `pnpm plugin:update`            | Upgrade registered plugins and re-sync their agent skills |
-| `pnpm plugin:inspect <name>`    | Report a plugin's registration state; read-only           |
-| `pnpm plugin:skills:sync`       | Re-copy plugin agent skills into `.agents/skills/`        |
+| Script                          | What it does                                             |
+| ------------------------------- | -------------------------------------------------------- |
+| `pnpm plugin:register <name>`   | Install a plugin and wire it into the client and server  |
+| `pnpm plugin:unregister <name>` | Remove a plugin and its wiring                           |
+| `pnpm plugin:update [name]`     | Upgrade one or all registered plugins and re-sync skills |
+| `pnpm plugin:inspect <name>`    | Report a plugin's registration state; read-only          |
+| `pnpm plugin:skills:sync`       | Re-copy plugin agent skills into `.agents/skills/`       |
+
+Use a full package name, as with `plugin:register` and `plugin:unregister`; short names such as `authentication` also work. The optional name is a positional argument, not `--plugin`.
+
+```bash
+pnpm plugin:update @nocobase/app-plugin-authentication  # Update one registered plugin
+pnpm plugin:update authentication                      # Equivalent short name
+pnpm plugin:update                                     # Update all registered plugins
+pnpm plugin:update @nocobase/app-plugin-authentication --dry-run  # Preview only
+```
+
+Without a name, the command collects registered plugins from `client/plugins.ts`, `server/plugins.ts`, and `cli/plugins.ts`. It uses the application's package manager; with pnpm, `update` follows the declared version ranges without `--latest`. An unregistered name is rejected, and an application with no registered plugins is left unchanged. After a successful package update, all registered plugins' agent skills are re-synchronized, even when only one package was selected.
 
 Ordering in `client/plugins.ts` and `server/plugins.ts` is contribution order, and a plugin is enabled by appearing in the array. Reorder entries or pass a plugin its options by hand; leave adding and removing entries to the commands.
 
@@ -161,6 +210,30 @@ A `.node` binary is compiled for one platform, architecture, C library, and Node
 Every build prints the platform it produced and records it in `dist/package.json` under `nocobase.buildTarget`, so a `dist/` built for the wrong machine can be identified rather than guessed at.
 
 If your application has no native modules — `pg`, `mysql2`, and `tedious` are all plain JavaScript — none of this applies and `dist/` is portable as built.
+
+#### Packing the build
+
+`pnpm build --tar` writes `storage/dist.tar.gz`, the artifact you upload to a Hub to deploy this application.
+
+The archive has two levels: `config.example.yml` and `dist/` sit at the root, and the build is inside `dist/`. What `dist/` holds varies with the application; this is the shape:
+
+```text
+dist.tar.gz
+├── config.example.yml
+└── dist/
+    ├── cli/
+    ├── client/
+    ├── node_modules/
+    ├── server/
+    ├── package.json
+    └── pnpm-workspace.yaml
+```
+
+Combine it with `--target` when the archive is for another machine:
+
+```bash
+pnpm build --target linux-x64 --tar
+```
 
 #### Adding a dependency
 
@@ -203,7 +276,7 @@ Rebuild with a matching `--target` and `--node-version`. ABI 115 is Node 20, 127
 
 ## Configuration
 
-`config.yml` is the single source of configuration, written for you at generation time and yours to edit from there. It is gitignored because it carries your `auth.secret`; deploy it through your secret management rather than committing it. `config.example.yml` documents every available option, including sections the generated file leaves out.
+`server/config/` and `client/config/` contain editable TypeScript defaults. `config.yml` holds environment-specific overrides, written for you at generation time and yours to edit from there. It is gitignored because it carries your `auth.secret`; deploy it through your secret management rather than committing it. `config.example.yml` documents common deployment options, including sections the generated file leaves out.
 
 Two settings decide where the application is reachable:
 
@@ -222,9 +295,9 @@ After signing in with the `notification:test` `send` permission, use the
 notification logs settings page to send a real message through the durable
 Notification Manager. The form is generated from safe Channel test metadata;
 Email tests require an address and IM tests use the configured logical target.
-The button is unavailable unless the protected targets endpoint is authorized,
-and testing is disabled unless `notification.test.enabled` is explicitly set
-to `true` in `config.yml`.
+The button remains visible so configuration problems are discoverable. The
+server enforces the `notification:test` `send` permission only when the message
+is submitted.
 
 ## Working with an AI agent
 

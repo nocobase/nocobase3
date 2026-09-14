@@ -50,6 +50,8 @@ describe('AIConversationsManager', () => {
       userId: 'user-1',
       aiEmployee: { username: 'atlas' },
     });
+
+    await manager.create({ userId: 'user-1' });
     await expect(
       manager.getConversation({
         sessionId: 'historical-task',
@@ -65,6 +67,53 @@ describe('AIConversationsManager', () => {
     );
     expect(findOne).toHaveBeenCalledWith({
       filter: { sessionId: 'historical-task', category: 'chat' },
+    });
+  });
+
+  it('loads persisted decisions for interrupted tool calls', async () => {
+    const findToolMessages = vi.fn().mockResolvedValue([
+      {
+        invokeStatus: 'waiting',
+        interruptActionOrder: 0,
+        userDecision: {
+          type: 'edit',
+          editedAction: {
+            name: 'suggestions',
+            args: { option: 'Draft email' },
+          },
+        },
+      },
+    ]);
+    const manager = new AIConversationsManager(
+      {} as any,
+      {
+        aiMessages: {
+          findOne: vi.fn().mockResolvedValue({
+            metadata: { interruptId: 'interrupt-1' },
+          }),
+        },
+        aiToolMessages: { find: findToolMessages },
+      } as any,
+    );
+
+    await expect(manager.getUserDecisions('message-1')).resolves.toEqual({
+      interruptId: 'interrupt-1',
+      decisions: [
+        {
+          type: 'edit',
+          editedAction: {
+            name: 'suggestions',
+            args: { option: 'Draft email' },
+          },
+        },
+      ],
+    });
+    expect(findToolMessages).toHaveBeenCalledWith({
+      filter: {
+        messageId: 'message-1',
+        interruptActionOrder: { $ne: null },
+      },
+      sort: ['interruptActionOrder'],
     });
   });
 });

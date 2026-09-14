@@ -1,14 +1,7 @@
-import fs from 'node:fs';
-import path from 'node:path';
-
-import {
-  AIEmployeeLoader,
-  MCPLoader,
-  SkillsLoader,
-  ToolsLoader,
-  type AIManager,
-} from '@nocobase/ai-employee';
+import { type AIManager } from '@nocobase/ai-employee';
 import type { Logger } from '@nocobase/logging';
+
+import type { AIResourceRegistrar } from '../ai/index.js';
 
 export interface ResourceLoadSummary {
   readonly employees: number;
@@ -21,48 +14,15 @@ export interface ResourceLoadSummary {
 export interface ResourceLoadOptions {
   readonly ai: AIManager;
   readonly logger: Logger;
-  readonly aiDirectory: string;
-  readonly overrideTools?: boolean;
+  readonly resourceRegistrar: AIResourceRegistrar;
 }
 
+/** Runs the explicit registrar and reports the resulting manager state. */
 export async function loadResources(
   options: ResourceLoadOptions,
 ): Promise<ResourceLoadSummary> {
-  const { ai, logger, aiDirectory, overrideTools = false } = options;
-  const scan = (sub: string, pattern: string[]) => ({
-    basePath: path.join(aiDirectory, sub),
-    pattern,
-  });
-
-  await new ToolsLoader(ai, {
-    overrideExisting: overrideTools,
-    scan: scan('.', [
-      '**/tools/**/*.ts',
-      '**/tools/**/*.js',
-      '!**/tools/**/*.d.ts',
-      '**/tools/**/*/description.md',
-    ]),
-    logger,
-  }).load();
-  await new MCPLoader(ai, {
-    scan: scan('.', ['mcp/*.ts', 'mcp/*.js', '!mcp/*.d.ts']),
-    logger,
-  }).load();
-  await new SkillsLoader(ai, {
-    scan: scan('.', ['**/skills/**/SKILLS.md']),
-    logger,
-  }).load();
-  await new AIEmployeeLoader(ai, {
-    scan: scan('.', [
-      '**/employees/*.ts',
-      '**/employees/*/index.ts',
-      '**/employees/*.js',
-      '**/employees/*/index.js',
-      '**/employees/*/prompt.md',
-      '!**/employees/**/*.d.ts',
-    ]),
-    logger,
-  }).load();
+  const { ai, logger, resourceRegistrar } = options;
+  await resourceRegistrar.registerAIResources(ai);
   await ai.mcpServerManager.rebuildClient();
 
   const summary: ResourceLoadSummary = {
@@ -74,16 +34,4 @@ export async function loadResources(
   };
   logger.info?.(summary, 'AI resources loaded');
   return summary;
-}
-
-export function resolveAIDirectory(explicit: string): string {
-  const source = path.resolve(explicit);
-  const dist = path.resolve(source, '..', 'dist', 'ai');
-  if (
-    fs.existsSync(path.join(dist, 'package.json')) &&
-    fs.existsSync(path.join(dist, 'employees'))
-  ) {
-    return dist;
-  }
-  return source;
 }

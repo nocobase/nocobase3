@@ -1,22 +1,18 @@
 export { default } from './plugin.js';
-export { createFileRoute } from './create-file-route.js';
-export { FILE_INVENTORY_RESOURCE } from '../shared/settings/inventory.js';
+export { serverFileRepositoryManagerToken } from './token.js';
 export {
-  DEFAULT_FILE_ROUTE_VISIBILITY,
-  type CreateFileRouteOptions,
-  type CustomFileRouteSource,
-  type DatabaseFileOrder,
-  type DatabaseFileRouteSource,
-  type DatabaseFileOrderField,
-  type DatabaseFileScope,
-  type DatabaseFileScopeResolver,
-  type DatabaseFileScopeValue,
-  type FileRecord,
-  type FileRouteAction,
-  type FileRouteAuthorizer,
-  type FileRouteLimits,
-  type FileRouteVisibilityOptions,
-  type FileStore,
-  type FileVisibility,
-  type NewFileRecord,
-} from './types.js';
+  ServerFileRepositoryManager,
+  FileRepositoryError,
+} from './repository.js';
+export type {
+  ServerFileRepository,
+  FileRepositoryOptions,
+  FileOperations,
+} from './repository.js';
+export { defineFileRepositoryApiRoutes } from './routes.js';
+export type {
+  DefineFileRepositoryApiRoutesOptions,
+  FileRepositoryApiExposure,
+  FileRepositoryApiActions,
+} from './routes.js';
+export type * from '../shared/types.js';

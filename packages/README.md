@@ -25,7 +25,7 @@ These packages know what a NocoBase application is, which is what separates them
 
 ## `plugins/`
 
-Plugins that contribute real product functionality: a feature is enabled by installing one. `app-plugin-file` adds file storage with its routes and UI; `app-plugin-authentication` adds sign-in.
+Plugins that contribute real product functionality: a feature is enabled by installing one. `app-plugin-file` provides file Repository services, route factories, and editable Registry UI; `app-plugin-authentication` adds sign-in.
 
 Create one with `pnpm plugin:create`, which scaffolds it here.
 
@@ -40,6 +40,16 @@ They are published and installable like any other plugin — the difference is i
 Complete, runnable applications. `create-app` downloads one and scaffolds a project from it, so a template is published as its own source rather than as a built library.
 
 `app-template-default` is what `pnpm create @nocobase/app` produces. `app-template-hub` is the application hub. `app-template-examples` combines application-owned article management with installable capability examples and demonstration data.
+
+For everyday development and exploring examples in this repository, run `pnpm examples:dev` from the repository root. Each template has explicit root commands:
+
+| Template | Development         | Build                 | Start the built application |
+| -------- | ------------------- | --------------------- | --------------------------- |
+| Examples | `pnpm examples:dev` | `pnpm examples:build` | `pnpm examples:start`       |
+| Default  | `pnpm default:dev`  | `pnpm default:build`  | `pnpm default:start`        |
+| Hub      | `pnpm hub:dev`      | `pnpm hub:build`      | `pnpm hub:start`            |
+
+Inside a template's own directory, use `pnpm dev`, `pnpm build`, and `pnpm start`.
 
 ## `tools/`
 

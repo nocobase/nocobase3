@@ -1,5 +1,106 @@
 # @nocobase/app-plugin-notification
 
+## 0.1.0-beta.8
+
+### Minor Changes
+
+- f17f3a6: Provide editable TypeScript defaults for application modules, assembled by the runtime before services start. Module factories receive the runtime with application paths and plugin metadata; deployment files and environment variables override defaults, and configuration reload preserves code defaults.
+
+  Keep deployment settings in YAML examples and reserve explicit environment overrides for secrets and startup integration. Simplify application configuration loading, merging and reload subscriptions.
+
+  Align client configuration assembly with the server: runtime merges application TypeScript defaults beneath public configuration before services start. Client inspection reports the application configuration entry.
+
+### Patch Changes
+
+- ceb356b: Fix published package metadata and database test driver registration.
+- ceb356b: Store notification timestamps as UTC instants so database reads and writes preserve the same time across dialects and host time zones.
+- Updated dependencies [ceb356b]
+- Updated dependencies [f17f3a6]
+- Updated dependencies [f17f3a6]
+- Updated dependencies [f17f3a6]
+- Updated dependencies [43d25b4]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [40e2d49]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [590861e]
+- Updated dependencies [e11b855]
+- Updated dependencies [72ed008]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [e11b855]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [e11b855]
+- Updated dependencies [ceb356b]
+- Updated dependencies [40e2d49]
+- Updated dependencies [590861e]
+- Updated dependencies [ceb356b]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+  - @nocobase/app-server@1.0.0-beta.11
+  - @nocobase/app-client@1.0.0-beta.14
+  - @nocobase/app-plugin-authentication@0.1.0-beta.11
+  - @nocobase/db@1.0.0-beta.5
+  - @nocobase/logging@0.1.0-beta.4
+
+## 0.1.0-beta.7
+
+### Minor Changes
+
+- 426bd48: Remove logical IM `target` recipients and make `send().to` optional so Webhook Providers can be selected directly by Provider name or fan-out strategy.
+
+### Patch Changes
+
+- Updated dependencies [a009e2d]
+  - @nocobase/app-server@1.0.0-beta.10
+  - @nocobase/app-client@1.0.0-beta.13
+  - @nocobase/i18n@1.0.0-beta.3
+
+## 0.1.0-beta.6
+
+### Minor Changes
+
+- 0a3fa83: Ship package changelogs, return stable localized error envelopes for notification-owned failures, and show user-facing Channel and Provider labels in notification logs.
+- 0a3fa83: Require stable send idempotency keys, expose ordered notification status observation and reason-required Delivery retry APIs, persist inferred retry resolutions and Provider idempotency windows, and declare built-in Provider idempotency capabilities.
+
+### Patch Changes
+
+- 0a3fa83: Always show the notification test action, use user-facing delivery method labels, and enforce its permission only when a test message is submitted.
+- Updated dependencies [e3fa827]
+- Updated dependencies [c3e02bf]
+- Updated dependencies [0a3fa83]
+- Updated dependencies [1d042c0]
+  - @nocobase/app-server@1.0.0-beta.9
+  - @nocobase/app-plugin-authentication@0.1.0-beta.10
+  - @nocobase/app-plugin-authorization@0.2.0-beta.9
+  - @nocobase/app-client@1.0.0-beta.12
+  - @nocobase/db@1.0.0-beta.4
+
 ## 0.1.0-beta.5
 
 ### Patch Changes

@@ -4,15 +4,14 @@ import { describe, expect, it } from 'vitest';
 import { ServiceContainer } from '@nocobase/service-provider';
 
 import { AppConfig, createConfigPaths } from '../src/config/index.js';
-import { nodeServerConfig } from '../src/node/index.js';
+
 import type { AppPluginApplication } from '../src/plugins/index.js';
-import type { ResolvedAppRuntimeConfigContext } from '../src/runtime/index.js';
+
 import {
   SessionProvider,
   resolveAppSessionConfig,
-  sessionConfig,
-  sessionManagerToken,
   type AppSessionConfigInput,
+  sessionManagerToken,
 } from '../src/session/index.js';
 
 describe('SessionProvider', () => {
@@ -45,11 +44,7 @@ describe('SessionProvider', () => {
       gcLottery: { hits: 1, total: 10 },
     });
 
-    const resolved = resolveAppSessionConfig(
-      configured,
-      'ephemeral-secret',
-      true,
-    );
+    const resolved = resolveAppSessionConfig(configured, 'ephemeral-secret');
 
     expect(resolved.secret).toBe(
       'configured-session-secret-at-least-32-characters',
@@ -64,26 +59,33 @@ describe('SessionProvider', () => {
     });
 
     expect(() =>
-      resolveAppSessionConfig(configured, 'ephemeral-secret', false),
+      resolveAppSessionConfig(configured, 'ephemeral-secret'),
     ).toThrow('session.gcLottery.hits must not exceed');
   });
 });
 
 async function createSessionAppConfig(
   environment: Readonly<Record<string, string>>,
-): Promise<AppConfig<ResolvedAppRuntimeConfigContext>> {
-  const paths = createConfigPaths({ rootDir: process.cwd() });
-  const context = { paths } as ResolvedAppRuntimeConfigContext;
-  const config = new AppConfig([sessionConfig, nodeServerConfig], {
-    context,
-    environment,
-  });
+): Promise<AppConfig> {
+  const config = new AppConfig();
   await config.loadAll();
+  config.mergeDefaults({
+    session: createRuntimeConfig({
+      cookie: {
+        name: 'session',
+        secure: environment.NODE_ENV === 'production',
+      },
+      gcLottery: {
+        hits: Number(environment.SESSION_GC_LOTTERY_HITS),
+        total: Number(environment.SESSION_GC_LOTTERY_TOTAL),
+      },
+    }),
+  });
   return config;
 }
 
 function createProviderApplication(
-  config: AppConfig<ResolvedAppRuntimeConfigContext>,
+  config: AppConfig,
   container: ServiceContainer,
 ): AppPluginApplication {
   return {

@@ -6,11 +6,12 @@ Business server code resolves `notificationServiceToken` from the application's 
 
 ## Build the input
 
-Every send needs at least one recipient, one Channel, and the required `body` field. Validate Channel-specific non-empty content rules before sending. Add a stable business source when later correlation matters:
+Every send needs one Channel and the required `body` field. A recipient is required only by Channels that address a recipient; IM Webhook can omit `to`. Validate Channel-specific non-empty content rules before sending. Add a stable business source when later correlation matters:
 
 ```ts
 const notification = app.container.resolve(notificationServiceToken);
 const result = await notification.send({
+  idempotencyKey: `approval:${approval.id}:approver:${approver.id}:in-app`,
   source: { type: 'approval', referenceId: approval.id },
   to: { type: 'user', id: approver.id },
   channels: ['in-app'],
@@ -30,10 +31,10 @@ Use the most direct supported identity:
 
 - Personal inbox: `{ type: 'user', id: userId }` with `in-app`.
 - Direct Email: `{ type: 'email', address }` with `email`.
-- Webhook group: `{ type: 'target', id: configuredTarget }` with `im`.
+- Webhook Provider: omit `to` with `im`; the selected Provider's Webhook is the destination.
 - User-to-Email/IM sends require resolver functions registered in those Channel definitions.
 
-For multiple recipients and Channels, the manager expands the Cartesian product. Confirm the expected Delivery count before a large send. If one Channel cannot resolve all recipients, split the send or accept explicit failed Deliveries for unsupported combinations.
+For multiple recipients and Channels, the manager expands the Cartesian product. A recipientless Channel contributes one recipientless combination per selected Provider. Confirm the expected Delivery count before a large send. If one Channel cannot resolve all recipients, split the send or accept explicit failed Deliveries for unsupported combinations.
 
 ## Select Providers deliberately
 
@@ -41,6 +42,7 @@ Omitting `routing` selects the first enabled Provider for each Channel. Select a
 
 ```ts
 await notification.send({
+  idempotencyKey: `approval:${approval.id}:alice:email`,
   to: { type: 'email', address: 'alice@example.com' },
   channels: ['email'],
   routing: {
@@ -54,21 +56,50 @@ To fan out one IM message, use `strategy: 'all'`. Add `providers: ['feishu', 'di
 
 ## Interpret the result
 
-`send()` persists the Notification and Deliveries and dispatches queue work. Its result contains Notification and Delivery ids plus their initial status. Usually that status is pending. It does not prove a Provider call or final delivery.
+`send()` persists the Notification and Deliveries and dispatches queue work. Its result contains `notificationId`, the caller's `idempotencyKey`, whether this was a `deduplicated` call, and current Delivery snapshots. With a synchronous queue the current status may already be terminal; with an asynchronous queue it is usually pending or processing. `accepted` proves only Provider acceptance, not final delivery or reading.
 
-Read back the audit record:
+Query the public service by business key or Notification id:
 
 ```ts
-const details = await notification.logs.get(result.notificationId);
+const byBusinessKey = await notification.getByIdempotencyKey(idempotencyKey);
+const byNotificationId = await notification.getNotification(
+  result.notificationId,
+);
 ```
 
-For a synchronous operator task, poll with a bounded interval until the Notification is `completed`, `partial`, `failed`, or `unknown`, or until the agreed observation window ends. Report the last observed state on timeout; do not call it a failure without Delivery evidence.
+For in-process observation, subscribe without blocking the caller. The listener immediately receives the current snapshot when it exists and then best-effort changes from this manager process. Always keep a query path because listeners are not durable and do not replay changes from another process:
+
+```ts
+const unsubscribe = notification.onStatusChanged(
+  { idempotencyKey },
+  async (state) => {
+    renderStatus(state);
+    if (state.terminal) unsubscribe();
+  },
+);
+```
+
+For an operator task, use bounded polling when a process-local listener cannot cover the execution topology. Report the last observed state on timeout; do not call it a failure without Delivery evidence.
 
 ## Idempotency and retries
 
-The public send contract has no caller-supplied idempotency key. Repeating `send()` creates a new Notification. Business callers must prevent duplicate logical sends using their own transactional/outbox state or source-level idempotency.
+`idempotencyKey` is required. Build it from the stable business event, recipient scope (or Channel scope when `to` is omitted), and—when one event intentionally selects more than one Provider—the Provider scope. A retry or recovery must reuse exactly the same key. The server stores a `requestFingerprint`; the same key and equivalent input return the original Notification with `deduplicated: true`, while the same key with different input raises `IDEMPOTENCY_KEY_CONFLICT`. There is no expiry field in this contract.
 
 The runtime retries only failures whose Provider returns `disposition: 'same_provider'`, bounded by manager retry settings. It never switches Providers automatically. A `submission_unknown` outcome is terminal `unknown` and is not retried automatically.
+
+A terminal `failed` Delivery can be retried after correcting the cause, except when its recipient was unsupported and must be corrected in a new logical send. Every manual retry requires a non-empty reason. For an `unknown` Delivery without valid Provider idempotency, invoking retry explicitly accepts possible duplication; write the evidence and business decision in the reason:
+
+```ts
+await notification.retryDelivery({
+  deliveryId,
+  reason:
+    'The Provider dashboard has no matching submission; the business owner approved resending.',
+});
+```
+
+The server derives the internal audit type as `terminal_failure`, `safe_provider_idempotency`, or `duplicate_risk_accepted`. Never retry a failed Delivery that already has `nextRunAt`; it is already scheduled for an automatic retry. `retryDelivery` first writes an immutable Retry Audit on the same Delivery. It creates another Attempt only after preparation succeeds and Provider submission starts, so a pre-submission failure retains the decision without claiming that a Provider call occurred. If an idempotency window expires after the request is accepted but before Provider submission, the manual retry still proceeds and the actual Attempt is marked `duplicate_risk_accepted`.
+
+In a status snapshot, `retry.allowed` means the server accepts a manual retry request. An `unknown` Delivery without safe Provider idempotency still reports `allowed: true`; its `duplicate_risk_confirmation_required` mode tells the caller to surface the risk and collect the required reason before invoking `retryDelivery`.
 
 ## Send verification
 

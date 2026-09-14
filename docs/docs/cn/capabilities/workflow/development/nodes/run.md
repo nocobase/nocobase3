@@ -27,7 +27,6 @@ RunInstruction.create({
     properties: { score: { type: 'number' } },
     additionalProperties: false,
   },
-  options: { timeout: 30000 },
 });
 ```
 
@@ -82,9 +81,9 @@ export const run: WorkflowRunFunction = (
 
 返回 `{ status: 'failed' }` 只是普通成功数据，不会让节点失败。需要表示执行错误时抛出异常；可预期的业务结果也可以作为结构化数据返回，再由 Condition 判断。
 
-## 日志、超时和取消
+## 日志和取消
 
-使用 `options.logger` 记录必要的业务定位信息，不记录密码、令牌或完整敏感数据。设置 `options.timeout` 后，运行超时会触发取消信号；脚本应在开始、耗时步骤之间调用 `throwIfAborted()`，并把 signal 传给支持取消的 I/O。
+使用 `options.logger` 记录必要的业务定位信息，不记录密码、令牌或完整敏感数据。脚本应在开始和耗时步骤之间调用 `throwIfAborted()`，并把 signal 传给支持取消的 I/O。
 
 取消无法自动撤销已经提交的数据库事务、已发送的消息或外部请求。
 
@@ -105,7 +104,3 @@ Run 返回值属于业务数据，运行时不会解释其中的 `status` 字段
 ### 为什么节点结果无法保存
 
 检查是否返回 BigInt、非有限数字、循环对象、函数、Symbol、Date、Map 或 ORM 模型。先转换为普通 JSON 数据。
-
-### 超时是否会自动撤销外部副作用
-
-不会。超时会发出取消信号并中止工作流状态，但已完成的外部操作需要业务幂等或补偿方案。

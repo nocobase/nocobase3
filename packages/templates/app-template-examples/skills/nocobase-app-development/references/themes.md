@@ -12,7 +12,7 @@ Theme presets belong to the App, not a plugin. Read [the token reference](theme-
 
 ## Edit or remove
 
-Edit the existing preset's CSS instead of changing component styles or `components.json`. Do not add shared tokens or change component APIs without design approval. Keep its ID when changing its look or label. To remove a non-default preset, remove its registry entry, CSS import/file and locale labels together. Unknown saved IDs fall back to default. Do not add development-data migrations.
+Edit the existing preset's CSS instead of changing component styles or `components.json`. Do not add shared tokens or change component APIs without design approval. Keep its ID when changing its look or label. To remove a non-default preset, remove its registry entry, CSS import/file and locale labels together. Unknown saved IDs fall back to the configured default, or the default preset. Do not add development-data migrations.
 
 ## Runtime invariants
 
@@ -23,3 +23,13 @@ Storage keys come from `resolveAppBase()`, not the current route or the first pa
 ## Verify
 
 Run the theme token, preference and client-theme tests when available, then the App's checks. Verify distinctly different font, size, spacing and shadow values in a browser; a compiled CSS check cannot prove layout correctness. In a browser, verify saved preferences are restored after client startup, all mode/preset combinations, narrow screens, keyboard selection/Escape/focus return, same-App cross-tab sync and isolation from a second App on the same origin. Test unavailable storage and a removed preset. In the source monorepo, apply template framework changes to Default and Hub together.
+
+## Application defaults
+
+Set optional `client.app.defaultColorScheme` (`light`, `dark`, or `system`) and
+`client.app.defaultTheme` (an ID in `client/theme/theme-presets.ts`) in `config.yml`.
+Startup and the theme provider read the same injected configuration. Each valid saved
+browser preference overrides its configured default independently; missing or invalid
+configuration falls back to `system` and the first registered preset (`default`).
+Clearing preferences, including in another tab, restores the configured defaults.
+Defaults are not saved as user choices. Refresh after changing configuration.

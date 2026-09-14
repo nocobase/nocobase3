@@ -1,18 +1,24 @@
-import type {
-  NotificationAttemptRecord,
-  NotificationDeliveryRecord,
-  NotificationDeliveryStatus,
-  NotificationErrorRecord,
-  NotificationLogBundle,
-  NotificationLogRecord,
-  NotificationLogStatus,
-  NotificationStore,
+import {
+  summarizeNotificationDeliveries,
+  type NotificationAttemptRecord,
+  type NotificationDeliveryRecord,
+  type NotificationDeliveryStatus,
+  type NotificationErrorRecord,
+  type NotificationLogBundle,
+  type NotificationLogRecord,
+  type NotificationRetryAuditRecord,
+  type NotificationRetryResolutionRecord,
+  type NotificationStore,
 } from '../../server/store.js';
 
 export class FakeNotificationStore implements NotificationStore {
   private readonly logs = new Map<string, NotificationLogRecord>();
   private readonly deliveries = new Map<string, NotificationDeliveryRecord>();
   private readonly attempts = new Map<string, NotificationAttemptRecord[]>();
+  private readonly retryAudits = new Map<
+    string,
+    NotificationRetryAuditRecord[]
+  >();
 
   async now(): Promise<string> {
     return new Date().toISOString();
@@ -25,8 +31,40 @@ export class FakeNotificationStore implements NotificationStore {
     }
   }
 
+  async createOrGetByIdempotency(
+    bundle: NotificationLogBundle,
+  ): Promise<
+    | { readonly outcome: 'created'; readonly bundle: NotificationLogBundle }
+    | { readonly outcome: 'existing'; readonly bundle: NotificationLogBundle }
+    | { readonly outcome: 'conflict'; readonly bundle: NotificationLogBundle }
+  > {
+    const existing = [...this.logs.values()].find(
+      (log) => log.idempotencyKey === bundle.log.idempotencyKey,
+    );
+    if (existing) {
+      const existingBundle = {
+        log: await this.withSummary(existing),
+        deliveries: await this.listDeliveries(existing.id),
+      };
+      return existing.requestFingerprint === bundle.log.requestFingerprint
+        ? { outcome: 'existing', bundle: existingBundle }
+        : { outcome: 'conflict', bundle: existingBundle };
+    }
+    await this.create(bundle);
+    return { outcome: 'created', bundle };
+  }
+
   async getLog(id: string): Promise<NotificationLogRecord | undefined> {
     const log = this.logs.get(id);
+    return log ? this.withSummary(log) : undefined;
+  }
+
+  async getLogByIdempotencyKey(
+    idempotencyKey: string,
+  ): Promise<NotificationLogRecord | undefined> {
+    const log = [...this.logs.values()].find(
+      (candidate) => candidate.idempotencyKey === idempotencyKey,
+    );
     return log ? this.withSummary(log) : undefined;
   }
 
@@ -74,6 +112,12 @@ export class FakeNotificationStore implements NotificationStore {
     deliveryId: string,
   ): Promise<readonly NotificationAttemptRecord[]> {
     return this.attempts.get(deliveryId) ?? [];
+  }
+
+  async listRetryAudits(
+    deliveryId: string,
+  ): Promise<readonly NotificationRetryAuditRecord[]> {
+    return this.retryAudits.get(deliveryId) ?? [];
   }
 
   async claimDelivery(
@@ -128,6 +172,36 @@ export class FakeNotificationStore implements NotificationStore {
       attemptCount: attempt.sequence,
       status: 'submitting',
       leaseExpiresAt,
+      retryResolution: delivery.retryResolution,
+      providerIdempotency: delivery.providerIdempotency,
+      updatedAt: await this.now(),
+    };
+    this.deliveries.set(next.id, next);
+    return next;
+  }
+
+  async updateAttemptRetryResolution(
+    delivery: NotificationDeliveryRecord,
+    attempt: NotificationAttemptRecord,
+  ): Promise<NotificationDeliveryRecord | undefined> {
+    const current = this.deliveries.get(delivery.id);
+    const attempts = this.attempts.get(delivery.id) ?? [];
+    const currentAttempt = attempts.find((item) => item.id === attempt.id);
+    if (
+      !current ||
+      current.status !== 'submitting' ||
+      current.leaseToken !== delivery.leaseToken ||
+      currentAttempt?.status !== 'submitting'
+    ) {
+      return undefined;
+    }
+    this.attempts.set(
+      delivery.id,
+      attempts.map((item) => (item.id === attempt.id ? attempt : item)),
+    );
+    const next = {
+      ...current,
+      retryResolution: delivery.retryResolution,
       updatedAt: await this.now(),
     };
     this.deliveries.set(next.id, next);
@@ -171,6 +245,7 @@ export class FakeNotificationStore implements NotificationStore {
       nextRunAt,
       leaseToken: undefined,
       leaseExpiresAt: undefined,
+      retryResolution: undefined,
       updatedAt: await this.now(),
     };
     this.deliveries.set(finished.id, finished);
@@ -216,14 +291,54 @@ export class FakeNotificationStore implements NotificationStore {
       nextRunAt: undefined,
       leaseToken: undefined,
       leaseExpiresAt: undefined,
+      retryResolution: undefined,
       updatedAt: await this.now(),
     };
     this.deliveries.set(finished.id, finished);
     return finished;
   }
 
-  async recoverExpired(now: string): Promise<number> {
-    let recovered = 0;
+  async retryDelivery(
+    id: string,
+    expectedStatus: 'failed' | 'unknown',
+    resolution: NotificationRetryResolutionRecord,
+  ): Promise<NotificationDeliveryRecord | undefined> {
+    const delivery = this.deliveries.get(id);
+    if (
+      !delivery ||
+      delivery.status !== expectedStatus ||
+      delivery.nextRunAt !== undefined
+    )
+      return undefined;
+    const retried: NotificationDeliveryRecord = {
+      ...delivery,
+      status: 'pending',
+      lastError: undefined,
+      retryResolution: resolution,
+      providerIdempotency:
+        resolution.type === 'safe_provider_idempotency'
+          ? delivery.providerIdempotency
+          : undefined,
+      updatedAt: await this.now(),
+    };
+    this.retryAudits.set(id, [
+      ...(this.retryAudits.get(id) ?? []),
+      {
+        id: `retry-audit-${id}-${(this.retryAudits.get(id)?.length ?? 0) + 1}`,
+        deliveryId: id,
+        resolution,
+        providerIdempotency: delivery.providerIdempotency,
+        createdAt: resolution.requestedAt,
+      },
+    ]);
+    this.deliveries.set(id, retried);
+    return retried;
+  }
+
+  async recoverExpired(
+    now: string,
+  ): Promise<readonly NotificationDeliveryRecord[]> {
+    const recovered: NotificationDeliveryRecord[] = [];
     for (const delivery of this.deliveries.values()) {
       if (
         !['preparing', 'submitting'].includes(delivery.status) ||
@@ -248,7 +363,7 @@ export class FakeNotificationStore implements NotificationStore {
         updatedAt: now,
       };
       this.deliveries.set(next.id, next);
-      recovered += 1;
+      recovered.push(next);
     }
     return recovered;
   }
@@ -259,7 +374,7 @@ export class FakeNotificationStore implements NotificationStore {
     const deliveries = await this.listDeliveries(log.id);
     return {
       ...log,
-      status: summarize(deliveries),
+      status: summarizeNotificationDeliveries(deliveries),
       updatedAt: deliveries.reduce(
         (latest, delivery) =>
           delivery.updatedAt > latest ? delivery.updatedAt : latest,
@@ -267,29 +382,4 @@ export class FakeNotificationStore implements NotificationStore {
       ),
     };
   }
-}
-
-function summarize(
-  deliveries: readonly NotificationDeliveryRecord[],
-): NotificationLogStatus {
-  if (deliveries.some((delivery) => delivery.status === 'unknown'))
-    return 'unknown';
-  if (deliveries.every((delivery) => delivery.status === 'pending'))
-    return 'pending';
-  if (
-    deliveries.some(
-      (delivery) =>
-        delivery.status === 'pending' ||
-        delivery.status === 'preparing' ||
-        delivery.status === 'submitting' ||
-        (delivery.status === 'failed' && delivery.nextRunAt !== undefined),
-    )
-  ) {
-    return 'processing';
-  }
-  if (deliveries.every((delivery) => delivery.status === 'accepted'))
-    return 'completed';
-  if (deliveries.every((delivery) => delivery.status === 'failed'))
-    return 'failed';
-  return 'partial';
 }

@@ -15,7 +15,6 @@ export interface FeishuWebhookProviderConfig {
   readonly type: 'feishu-webhook';
   readonly name: string;
   readonly enabled?: boolean;
-  readonly target?: string;
   readonly webhookUrl: string;
   readonly secret?: string;
 }

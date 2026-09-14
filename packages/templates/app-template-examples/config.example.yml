@@ -4,10 +4,18 @@
 #   Public origin used for callbacks and redirects in production.
 #   publicOrigin: https://apps.example.com
 
+# The language the application starts in, for the browser and the server alike. Which languages it offers follows
+# from the files in client/locales and server/locales, not from configuration.
+# i18n:
+#   defaultLocale: zh-CN
+
 # Values under client are public and embedded in the SPA HTML.
 client:
   app:
     title: NocoBase Examples
+    # Defaults apply only when no valid browser-local choice is saved.
+    # defaultColorScheme: system # light | dark | system
+    # defaultTheme: compact # ID from client/theme/theme-presets.ts
 
 auth:
   # Generate a unique secret, for example with: openssl rand -hex 32
@@ -28,7 +36,7 @@ notification:
       enabled: true
       providers:
         - type: database
-          name: primary
+          name: default
 
     # Uncomment and configure this channel to send email notifications.
     # - type: email
@@ -55,13 +63,11 @@ notification:
     #   providers:
     #     - type: feishu-webhook
     #       name: feishu
-    #       target: default
     #       webhookUrl: https://open.feishu.cn/open-apis/bot/v2/hook/replace-me
     #       secret: replace-with-the-feishu-secret
     #
     #     - type: dingtalk-webhook
     #       name: dingtalk
-    #       target: default
     #       webhookUrl: https://oapi.dingtalk.com/robot/send?access_token=replace-me
     #       secret: replace-with-the-dingtalk-secret
 
@@ -94,18 +100,16 @@ database:
         autoRun: true
       seeds:
         autoRun: true
-    # Additional managed databases use database/<connectionName>/{migrations,seeds}.
-    # analytics:
-    #   dialect: postgres
-    #   host: localhost
-    #   database: analytics
-    #   username: postgres
-    #   password: ${ANALYTICS_DB_PASSWORD}
-    #   schemaManagement: managed
-    #   migrations:
-    #     autoRun: false
-    #   seeds:
-    #     autoRun: false
+    # Application-owned analytics examples; also supplied as application defaults.
+    # Sources live in database/analytics/{migrations,seeds}.
+    analytics:
+      dialect: sqlite
+      database: analytics.sqlite
+      schemaManagement: managed
+      migrations:
+        autoRun: true
+      seeds:
+        autoRun: true
     # Existing external databases require a runtime metadataStore and do not run tasks.
 
 snowflake:

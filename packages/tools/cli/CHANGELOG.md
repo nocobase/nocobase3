@@ -1,5 +1,25 @@
 # @nocobase/nb3-cli
 
+## 1.0.0-beta.7
+
+### Patch Changes
+
+- bf0f05b: Replace the `plugin update --plugin` flag with an optional plugin name argument, supporting full package names and short names while preserving updates of all registered plugins when no name is supplied.
+
+  Document the positional plugin update command, version-range behavior, and Skills synchronization in all three application templates' README, agent guidelines, and development Skill.
+
+## 1.0.0-beta.6
+
+### Minor Changes
+
+- e9f796d: Let a plugin register commands for an application's build and dev runs
+
+  A plugin declares `buildHooks` and `devHooks` on `defineCliPlugin`, and the new `nocobase plugin cli-hooks` command reports what the registered plugins ask for. An application's `pnpm build` and `pnpm dev` read that list and run the commands, so a step belonging to a plugin no longer has to be written into every application's build script.
+
+  Build stages are `beforeBuild`, `afterClientBuild`, `afterServerBuild`, and `afterBuild`, named for what exists in `dist` when the hook runs. `pnpm dev` has one stage, `beforeDev`, because it starts concurrent long-running processes rather than finishing steps.
+
+  A plugin contributing hooks alone is now valid: `commands` is optional, and declaring neither commands nor hooks warns rather than throwing.
+
 ## 1.0.0-beta.5
 
 ### Major Changes

@@ -9,7 +9,6 @@ export default createClientLibraryConfig({
     'client/dev/**',
     'tests/**',
     'server/agent/**',
-    'server/ai-employees/**',
     // Relocated legacy manager implementations retain their existing lint scope.
     'server/manager/ai-*.ts',
     'server/manager/built-in-manager.ts',
@@ -17,6 +16,8 @@ export default createClientLibraryConfig({
     'server/manager/llm-stream-cached-manager.ts',
     'server/manager/sub-agents/**',
     'server/manager/work-context/**',
+    // Built-in AI resources are relocated server-side but retain their existing lint scope.
+    'server/ai/**',
     'ai/**',
     'server/repository/**',
     'server/route/*.ts',

@@ -1,6 +1,5 @@
 import type { ServiceFactory } from '../factory/service-factory.js';
 import type { Hono } from 'hono';
-import type { AIMCPServerResourceInput } from './contracts.js';
 import { requiredString } from './utils.js';
 
 export function createAIMCPServersRouter(
@@ -19,29 +18,28 @@ export function createAIMCPServersRouter(
     return context.json(result as never);
   });
 
-  app.post('/aiMcpServers:create', async (context) => {
-    const result = await services.mcpServerService.upsert({
-      input: await context.req.json<AIMCPServerResourceInput>(),
+  app.post('/aiMcpServers:testConnection', async (context) => {
+    const result = await services.mcpServerService.testConnection({
+      input: await context.req.json(),
     });
     return context.json(result as never);
   });
 
-  app.put('/aiMcpServers:update', async (context) => {
-    const input = await context.req.json<AIMCPServerResourceInput>();
-    const key = requiredString(context.req.query('key'), 'key');
-    const result = await services.mcpServerService.upsert({
-      input: {
-        ...input,
-        name: key,
-      },
+  app.post('/aiMcpServers:updateEnabled', async (context) => {
+    await services.mcpServerService.updateEnabled({
+      input: await context.req.json(),
     });
-    return context.json(result as never);
+    return context.json({});
   });
 
-  app.delete('/aiMcpServers:destroy', async (context) => {
-    await services.mcpServerService.delete({
-      name: requiredString(context.req.query('key'), 'key'),
+  app.post('/aiMcpServers:updateToolPermission', async (context) => {
+    await services.mcpServerService.updateToolPermission({
+      input: await context.req.json(),
     });
-    return context.json(null as never);
+    return context.json({});
+  });
+  app.get('/aiMcpServers:listTools', async (context) => {
+    const result = await services.mcpServerService.listTools();
+    return context.json(result as never);
   });
 }

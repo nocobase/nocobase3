@@ -29,7 +29,7 @@ A namespace is a package name. Nothing is declared and nothing collides, because
 
 ### The fallback chain
 
-A key resolves in this order:
+A key falls back along two axes, and they are independent. Across namespaces:
 
 ```
 the current namespace  →  the application's  →  @nocobase/i18n
@@ -46,6 +46,14 @@ t('save', { ns: APP_NS });
 ```
 
 The chain is passed to `getFixedT` as an ordered namespace list rather than through i18next's `fallbackNS`, which is read from instance options only — one instance serves every namespace here, and each needs its own chain. This is invisible to callers.
+
+And across languages:
+
+```
+the language in use  →  the application's defaultLocale  →  en-US
+```
+
+The second step matters once an application offers a language its plugins have not translated. An application defaulting to `zh-CN` that adds `es-ES` leaves a plugin with neither, and falling back to the application's default alone would show a Spanish speaker Chinese; English is the one language that plugin almost certainly ships. Both fallback languages are loaded alongside the one in use, since a fallback only produces a translation when its resources are present to be read.
 
 ### Overriding a plugin's wording
 
@@ -128,7 +136,7 @@ const enUS: WorkflowResource = {
 t('trigger.types.schedule'); // 'Schedule'
 ```
 
-`pnpm i18n:check` reports keys a locale is missing, without blocking development.
+`pnpm i18n:check` reports keys a locale is missing, without blocking development. It is this monorepo's own script and reads every `locales/` directory under `packages/`; an application built from a template runs `pnpm nocobase app i18n:check` instead, which compares the languages its `client/locales/` and `server/locales/` declare.
 
 ### Loading
 
@@ -152,6 +160,24 @@ Loading is per **language**, not per namespace: the navigation renders labels ow
 
 The key indexing the map must be a runtime value. `locales['en-US']()` written as a literal lets a bundler tree-shake the other languages away, leaving their chunks out of the build entirely.
 
+### Which languages an application offers
+
+**The application's own locale files are the list.** Whichever locales its `client/locales/index.ts` and `server/locales/index.ts` declare loaders for are the languages it offers, on each side respectively. There is no configured list to keep in step with them: adding a language means adding its file.
+
+A plugin's locale file supplies translations, not languages. A plugin shipping `ja-JP` to an application that does not offer Japanese contributes nothing selectable — which is what keeps an installed plugin from putting an unexpected language in the picker. Conversely, an application offering a language does not mean every plugin has translated it; an untranslated namespace falls back.
+
+Configuration names only the language the application starts in:
+
+```yaml
+# config.yml
+i18n:
+  defaultLocale: zh-CN
+```
+
+It defaults to `en-US`, and `APP_DEFAULT_LOCALE` overrides it. The default is always on offer, so a default the application does not translate still resolves — it simply falls back on every key. The browser reads this same value: there is one default locale for the application, not one per side.
+
+On the server the list settles when the application's locale module registers during boot, which is after the i18n service is constructed. `getLocales()` is correct from that point on; a provider reading it during `register()` sees only the default.
+
 ## Server
 
 ### Request locale
@@ -162,7 +188,7 @@ The key indexing the map must be a runtime value. `locales['en-US']()` written a
 app.addHttpMiddleware(i18nHttpMiddleware);
 ```
 
-Resolution order: the session's stored locale → `Accept-Language` → the configured default. The middleware awaits the locale's resources, so a handler can translate synchronously:
+Resolution order: the session's stored locale → `Accept-Language` → `i18n.defaultLocale`. Each candidate is matched against the languages the application offers, so a browser asking for one it does not falls through rather than being honoured. The middleware awaits the locale's resources, so a handler can translate synchronously:
 
 ```ts
 import { getRequestTranslator } from '@nocobase/i18n/server';

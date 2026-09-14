@@ -7,6 +7,7 @@ import {
   createSeeder,
   type DatabaseManager,
 } from '@nocobase/db';
+import sqlite from '@nocobase/db-sqlite';
 import type { RunExampleOptions } from '../shared/types.js';
 import { createExampleTempDirectory } from '../shared/temp-directory.js';
 
@@ -206,6 +207,7 @@ export async function runManagedCollectionLifecycle(
 function createManagedDatabase(filename: string): DatabaseManager {
   return createDatabaseManager({
     default: 'managedExample',
+    drivers: { sqlite },
     connections: {
       managedExample: {
         dialect: 'sqlite',

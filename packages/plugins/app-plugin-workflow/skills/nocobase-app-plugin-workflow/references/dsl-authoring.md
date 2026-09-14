@@ -36,6 +36,8 @@ Only use Instruction classes exported by an installed plugin and registered in t
 
 ## Complete current example
 
+若应用需要可复用的流程控制能力（例如发邮件节点），请先阅读文档中的“可运行示例：发邮件节点”。示例覆盖公开导入、异步 Provider 注册、checker/build 的同一 Instruction 合同、隔离 Artifact 输出和运行时注册；不要只在 `boot()` 中注册后就直接编写 DSL。
+
 Create all of these files; the DSL alone is not a complete package:
 
 ```text
@@ -213,7 +215,7 @@ From `packages/templates/app-template-default` (or the corresponding initialized
    pnpm nocobase workflow check server/workflows/<stable-key>
    ```
 
-   Expect `Workflow check passed: ... (<n> nodes)`. This is only the five-phase DSL/IR check described below.
+   Expect `Workflow check passed: ... (<n> nodes)`. This is only the five-phase DSL/IR check described below. Add `--ir` to print the compiled flat IR instead, which is the definition an Artifact would carry.
 
 3. Run the target application's typecheck and focused tests for every `run` module and application service. Cover representative branches, result shapes, cancellation where relevant, and business idempotency for side effects. A passing DSL check does not prove this behavior.
 4. Run the target application's normal server build, then build the complete Workflow Artifacts:
@@ -223,6 +225,8 @@ From `packages/templates/app-template-default` (or the corresponding initialized
    ```
 
    The normal `pnpm build` also invokes this step. The standalone command scans every direct Workflow package and replaces the configured Artifact output tree, so do not point `--dist-root` at source or an unrelated directory.
+
+   A running development server does not need this. It compiles the workflow source root on demand and produces the same content-addressed digest, so an edited definition is already listed and enableable there without a build and without a restart. Build to produce a deployable Artifact or to verify what a deployment will receive, not to see a change in development.
 
 5. Verify `dist/server/workflows/<stable-key>/<digest>/workflow.json` and the package-relative run modules. Development artifacts contain `.ts`; production artifacts contain the default server build's `.js` at the same relative paths. The digest is the deployed hash used by management concurrency checks.
 6. Only when runtime mutation is authorized, start an isolated application/runtime and invoke by the DSL package directory key after obtaining the bound runtime. Do not assume Artifact build itself writes database definitions.
@@ -285,7 +289,7 @@ Use an exact template such as `{{$parameters.approvalLimit}}` or JSON Logic `{ v
 - Keep node keys stable across revisions. Titles/descriptions may change; keys connect history, diagnostics, and result references.
 - Only call `.branch()` on a branching node, and only use branch names declared by that instruction contract.
 
-Every node source has `key`, optional `title`/`description`, required `config`, optional `options: { timeout }`, and optional `result`. `timeout` must be a finite positive number. Config is an instruction-owned namespace; never flatten config fields onto the node.
+Every node source has `key`, optional `title`/`description`, required `config`, and optional `result`. Node-level timeout is not currently enforced by the runtime; configure a workflow-level timeout instead. Config is an instruction-owned namespace; never flatten config fields onto the node.
 
 ## Condition nodes
 

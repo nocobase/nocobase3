@@ -1,5 +1,5 @@
 import type { AIEmployee } from '@nocobase/ai-employee';
-import type { Translate } from '../domain/contracts.js';
+import type { Translate } from '../types.js';
 
 export class BuiltInManager {
   public constructor(private readonly i18nNamespace = 'app') {}

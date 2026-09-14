@@ -5,7 +5,7 @@ export function resolveConfigWatch(rootDir, configuredPath) {
   const extension = path.extname(configPath);
   const filenames = extension
     ? [path.basename(configPath)]
-    : ['.yml', '.yaml', '.json'].map((candidateExtension) =>
+    : ['.yml', '.yaml', '.toml', '.json'].map((candidateExtension) =>
         path.basename(`${configPath}${candidateExtension}`),
       );
 

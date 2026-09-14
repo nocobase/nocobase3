@@ -11,18 +11,18 @@ import {
   defineApiRoutes,
   type AppApiRouteContribution,
 } from '@nocobase/app-server/router';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import {
   getRequestTranslator,
   isAppI18nError,
   type Translator,
 } from '@nocobase/i18n/server';
 
-import { notificationConfig } from '../config.js';
 import { notificationRuntimeToken } from '../runtime.js';
+import { notificationErrorBody } from '../http-errors.js';
 import { isNotificationTestSendRequest } from '../test-contract.js';
 import type { NotificationProviderApplicationConfig } from '../providers/notification.js';
-import { notificationTestError } from '../types.js';
+import { NOTIFICATION_NAMESPACE, notificationTestError } from '../types.js';
 import type {
   NotificationI18nText,
   NotificationTestTargetDescriptor,
@@ -36,7 +36,7 @@ const TEST_HEADER = 'x-nocobase-notification-test';
 
 export const apiRoutes: AppApiRouteContribution<
   AppPluginApplication<NotificationProviderApplicationConfig>
-> = defineApiRoutes(({ config, container }) => {
+> = defineApiRoutes(({ container }) => {
   const router = new Hono();
   const notification = container.resolve(notificationRuntimeToken);
   const auth = container.resolve(authenticationToken);
@@ -51,7 +51,12 @@ export const apiRoutes: AppApiRouteContribution<
     });
     if (!allowed) {
       return context.json(
-        { error: 'Notification logs access is required.' },
+        notificationErrorBody(
+          getRequestTranslator(context as Context, NOTIFICATION_NAMESPACE),
+          'NOTIFICATION_LOGS_FORBIDDEN',
+          'errors.logsForbidden',
+          'Notification logs access is required.',
+        ),
         403,
       );
     }
@@ -78,13 +83,6 @@ export const apiRoutes: AppApiRouteContribution<
   });
   tests.use('*', auth.required(), authorization.middleware());
   tests.use('*', async (context, next) => {
-    if (!config.get(notificationConfig).test?.enabled) {
-      throw notificationTestError(
-        'NOTIFICATION_TEST_DISABLED',
-        'errors.testDisabled',
-        { status: 404 },
-      );
-    }
     if (context.req.header(TEST_HEADER) !== '1') {
       throw notificationTestError(
         'NOTIFICATION_TEST_HEADER_REQUIRED',
@@ -92,6 +90,9 @@ export const apiRoutes: AppApiRouteContribution<
         { status: 403 },
       );
     }
+    await next();
+  });
+  tests.use('/send', async (context, next) => {
     const allowed = await context.get('authz').can({
       resource: { type: 'notification', id: 'test' },
       action: 'send',

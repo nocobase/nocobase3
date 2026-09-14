@@ -439,6 +439,10 @@ export function databaseAdapter(
         supportsDates: true,
         supportsBooleans: true,
         supportsNumericIds: false,
+        customTransformOutput: ({ data, fieldAttributes }) =>
+          fieldAttributes.type === 'date' && typeof data === 'string'
+            ? new Date(data)
+            : data,
         transaction: async (callback) => {
           if (!betterAuthOptions) {
             throw new Error('Better Auth adapter is not initialized');

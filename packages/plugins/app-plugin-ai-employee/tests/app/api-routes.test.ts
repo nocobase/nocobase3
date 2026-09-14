@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 
 import { createAIEmployeeRoutes } from '../../server/route/index.js';
 import { createTestAIEmployeeFixture } from './test-context.js';
-import { createTestAppDeps } from './test-app-deps.js';
 
 const methods: Record<string, string> = {
   'ai:listProviderModels': 'POST',
@@ -24,6 +23,7 @@ const methods: Record<string, string> = {
   'aiConversations:abort': 'POST',
   'aiConversations:updateToolArgs': 'POST',
   'aiFiles:create': 'POST',
+  'aiMcpServers:testConnection': 'POST',
 };
 
 const expectedActions = [
@@ -62,14 +62,20 @@ const expectedActions = [
   ...managedActions('aiTools'),
   ...managedActions('aiSkills'),
   ...managedActions('llmServices'),
-  ...managedActions('aiMcpServers'),
+  'aiMcpServers:list',
+  'aiMcpServers:get',
+  'aiMcpServers:testConnection',
+  'aiMcpServers:updateEnabled',
+  'aiMcpServers:updateToolPermission',
+  'aiMcpServers:listTools',
 ];
-
-for (const resource of ['aiTools', 'aiSkills', 'llmServices', 'aiMcpServers']) {
+for (const resource of ['aiTools', 'aiSkills', 'llmServices']) {
   methods[`${resource}:create`] = 'POST';
   methods[`${resource}:update`] = 'PUT';
   methods[`${resource}:destroy`] = 'DELETE';
 }
+methods['aiMcpServers:updateEnabled'] = 'POST';
+methods['aiMcpServers:updateToolPermission'] = 'POST';
 
 describe('AI action routers', () => {
   it('registers each supported local action once under /api/ai with a precise method', () => {

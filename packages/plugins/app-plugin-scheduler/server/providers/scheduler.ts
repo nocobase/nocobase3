@@ -6,7 +6,7 @@ import {
   type AppScheduleDefinitionContribution,
 } from '@nocobase/app-server/plugins';
 import {
-  queueConfig,
+  type AppQueueConfig,
   queueJobFactoryRegistryToken,
   queueManagerToken,
 } from '@nocobase/app-server/queue';
@@ -85,7 +85,7 @@ export class SchedulerProvider extends ServiceProvider<AppPluginApplication> {
   }
 
   public override async boot(): Promise<void> {
-    const config = this.app.config.get(queueConfig);
+    const config = this.app.config.get<AppQueueConfig>('queue')!;
     if (config.connections.database?.driver !== 'database')
       throw new Error(
         'Scheduler requires a Database Queue connection named "database".',

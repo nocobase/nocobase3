@@ -1,0 +1,187 @@
+# Development database services used by the examples application.
+# SQLite is file-based and is already available as storage/database.sqlite;
+# the services below cover the server-backed dialects supported by NocoBase.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - '${POSTGRES_PORT:-15432}:5432'
+    environment:
+      POSTGRES_USER: nocobase
+      POSTGRES_PASSWORD: nocobase
+      POSTGRES_DB: nocobase_collection_builder
+    healthcheck:
+      test:
+        ['CMD-SHELL', 'pg_isready -U nocobase -d nocobase_collection_builder']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  mysql:
+    image: mysql:8.4
+    ports:
+      - '${MYSQL_PORT:-3306}:3306'
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_USER: nocobase
+      MYSQL_PASSWORD: nocobase
+      MYSQL_DATABASE: nocobase_collection_builder
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'mysqladmin ping -h 127.0.0.1 -unocobase -pnocobase --silent',
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  oracle:
+    image: gvenzl/oracle-free:23-slim-faststart
+    ports:
+      - '${ORACLE_PORT:-1521}:1521'
+    environment:
+      ORACLE_PASSWORD: nocobase
+      APP_USER: nocobase
+      APP_USER_PASSWORD: nocobase
+    healthcheck:
+      test: ['CMD-SHELL', 'healthcheck.sh']
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 90s
+
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    platform: linux/amd64
+    ports:
+      - '${MSSQL_PORT:-1433}:1433'
+    environment:
+      ACCEPT_EULA: 'Y'
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: NocoBase_Mssql_2026
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$$MSSQL_SA_PASSWORD" -Q "SELECT 1" -C',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  mssql-init:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    platform: linux/amd64
+    depends_on:
+      mssql:
+        condition: service_healthy
+    environment:
+      MSSQL_SA_PASSWORD: NocoBase_Mssql_2026
+    command:
+      - /bin/bash
+      - -c
+      - >-
+        /opt/mssql-tools18/bin/sqlcmd
+        -S mssql -U sa -P "$$MSSQL_SA_PASSWORD" -C
+        -Q "IF DB_ID(N'nocobase_collection_builder') IS NULL CREATE DATABASE nocobase_collection_builder"
+
+  oceanbase:
+    image: oceanbase/oceanbase-ce:4.4.2-lts
+    init: true
+    restart: 'no'
+    ports:
+      - '${OCEANBASE_PORT:-2881}:2881'
+    environment:
+      MODE: mini
+      OB_TENANT_NAME: test
+      OB_SYS_PASSWORD: ObSys_123456
+      OB_TENANT_PASSWORD: ${OCEANBASE_PASSWORD:-ObTest_123456}
+      OB_MEMORY_LIMIT: 6G
+      OB_SYSTEM_MEMORY: 1G
+      OB_DATAFILE_SIZE: 5G
+      OB_LOG_DISK_SIZE: 5G
+      OB_DATABASE: nocobase_collection_builder
+    mem_limit: 8g
+    stop_grace_period: 30s
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          obclient -h127.0.0.1 -P2881
+          -u"root@$${OB_TENANT_NAME}"
+          -p"$${OB_TENANT_PASSWORD}"
+          -e 'select 1' >/dev/null 2>&1
+      interval: 15s
+      timeout: 10s
+      start_period: 5m
+      retries: 20
+
+  kingbase:
+    image: registry.cn-shanghai.aliyuncs.com/nocobase/kingbase:v009r001c001b0030_single_x86
+    platform: linux/amd64
+    ports:
+      - '${KINGBASE_PORT:-54321}:54321'
+    environment:
+      ENABLE_CI: 'no'
+      DB_USER: nocobase
+      DB_PASSWORD: nocobase
+      DB_MODE: pg
+      NEED_START: 'yes'
+    command: ['/usr/sbin/init']
+    healthcheck:
+      test: ['CMD-SHELL', 'bash -c "</dev/tcp/127.0.0.1/54321"']
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  dameng:
+    image: xuxuclassmate/dameng:latest
+    platform: linux/amd64
+    ports:
+      - '${DAMENG_PORT:-5236}:5236'
+    environment:
+      INSTANCE_NAME: instance
+      SYSDBA_PWD: SYSDBA001
+      PAGE_SIZE: '8'
+      CASE_SENSITIVE: '1'
+      UNICODE_FLAG: '0'
+      LENGTH_IN_CHAR: '0'
+    healthcheck:
+      test: ['CMD-SHELL', 'bash -c "</dev/tcp/127.0.0.1/5236"']
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  dameng-init:
+    image: xuxuclassmate/dameng:latest
+    platform: linux/amd64
+    depends_on:
+      dameng:
+        condition: service_healthy
+    environment:
+      SYSDBA_PWD: SYSDBA001
+      NOCOBASE_PWD: NocoBase_Dameng_2026
+    entrypoint:
+      - /bin/bash
+      - -c
+    command:
+      - >-
+        set -eu;
+        export LD_LIBRARY_PATH=/opt/dmdbms/bin;
+        /opt/dmdbms/bin/disql -L -S
+        "SYSDBA/$${SYSDBA_PWD}@dameng:5236"
+        -e "select 1" >/dev/null;
+        if ! /opt/dmdbms/bin/disql -L -S
+        "SYSDBA/$${SYSDBA_PWD}@dameng:5236"
+        -e "select username from dba_users where username = 'NOCOBASE'"
+        | grep -q NOCOBASE; then
+        printf "create user NOCOBASE identified by %s;\ngrant RESOURCE to NOCOBASE;\n"
+        "$${NOCOBASE_PWD}" |
+        /opt/dmdbms/bin/disql -L -S
+        "SYSDBA/$${SYSDBA_PWD}@dameng:5236";
+        fi

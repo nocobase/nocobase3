@@ -1,5 +1,6 @@
 import { Job, QueueSchemaService } from '@boringnode/queue';
 import { createDatabaseManager } from '@nocobase/db';
+import sqlite from '@nocobase/db-sqlite';
 import type { Knex } from 'knex';
 import { describe, expect, it } from 'vitest';
 
@@ -84,6 +85,7 @@ describe('createQueueManager', () => {
 
   it('hydrates the claimed Schedule id into Job context', async () => {
     const database = createDatabaseManager({
+      drivers: { sqlite },
       connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
     });
     const connection = await database.connect();
@@ -114,26 +116,26 @@ describe('createQueueManager', () => {
       { database },
     );
     queueManager.registerJob(ScheduleContextJob);
-    await database
-      .query()
-      .insertInto('queue_schedules')
-      .values({
-        id: 'schedule-context',
-        status: 'active',
-        name: 'QueueManagerScheduleContext',
-        payload: JSON.stringify({}),
-        cronExpression: '* * * * * *',
-        everyMs: null,
-        timezone: 'UTC',
-        fromDate: null,
-        toDate: null,
-        runLimit: 10,
-        runCount: 4,
-        nextRunAt: dueAt,
-        lastRunAt: null,
-        createdAt: new Date(),
-      })
-      .execute();
+    // Staged through the same Knex client `@boringnode/queue` polls with. The
+    // Repository writes a temporal column as a naive ISO-8601 string, which the
+    // transport's own `next_run_at <= ?` comparison against a bound Date never
+    // matches, so the schedule would simply never come due.
+    await client('queue_schedules').insert({
+      id: 'schedule-context',
+      status: 'active',
+      name: 'QueueManagerScheduleContext',
+      payload: JSON.stringify({}),
+      cron_expression: '* * * * * *',
+      every_ms: null,
+      timezone: 'UTC',
+      from_date: null,
+      to_date: null,
+      run_limit: 10,
+      run_count: 4,
+      next_run_at: dueAt,
+      last_run_at: null,
+      created_at: new Date(),
+    });
     const worker = queueManager.createWorker({
       connection: 'database',
       queues: ['schedule'],

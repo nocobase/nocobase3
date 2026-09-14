@@ -10,11 +10,21 @@ export const PLUGIN_CAPABILITIES = [
   'client.service-providers',
   'client.react-providers',
   'client.locales',
+  'cli',
   'registry',
   'skills',
 ] as const;
 
 export type PluginCapability = (typeof PLUGIN_CAPABILITIES)[number];
+
+/**
+ * Selects every capability at once.
+ *
+ * Not a capability itself: it never reaches `PluginCapabilities`, and asking whether a plugin "has all" is not a
+ * question the generated plugin answers. It exists because naming twelve capabilities to get a plugin that does
+ * everything is a list nobody wants to type or keep current as capabilities are added.
+ */
+export const ALL_PLUGIN_CAPABILITIES = 'all';
 
 export interface PluginCapabilities {
   readonly database: boolean;
@@ -31,6 +41,7 @@ export interface PluginCapabilities {
     readonly reactProviders: boolean;
     readonly locales: boolean;
   };
+  readonly cli: boolean;
   readonly registry: boolean;
   readonly skills: boolean;
 }
@@ -54,6 +65,7 @@ export function normalizePluginCapabilities(
       reactProviders: selected.has('client.react-providers'),
       locales: selected.has('client.locales'),
     },
+    cli: selected.has('cli'),
     registry: selected.has('registry'),
     skills: selected.has('skills'),
   };

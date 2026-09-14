@@ -54,6 +54,34 @@ describe('LocaleResource', () => {
 
     expectTypeOf(zhCN).toMatchTypeOf<AppResource>();
   });
+
+  // The one key an application adds that the source locale does not declare: it reroutes a plugin's wording rather
+  // than translating the application's own.
+  it('accepts an overrides block keyed by a plugin package name', () => {
+    const zhCN: AppResource = {
+      language: { label: '语言', switchError: '无法切换语言。' },
+      actions: { save: '保存' },
+      overrides: {
+        '@nocobase/app-plugin-workflow': { nav: { title: '审批流程' } },
+      },
+    };
+
+    expectTypeOf(zhCN).toMatchTypeOf<AppResource>();
+  });
+
+  it('keeps overrides to the top level', () => {
+    const zhCN: AppResource = {
+      language: {
+        label: '语言',
+        switchError: '无法切换语言。',
+        // @ts-expect-error a nested overrides block is a misplacement, not a translation
+        overrides: {},
+      },
+      actions: { save: '保存' },
+    };
+
+    expectTypeOf(zhCN).toMatchTypeOf<AppResource>();
+  });
 });
 
 describe('PartialLocaleResource', () => {
@@ -69,6 +97,16 @@ describe('PartialLocaleResource', () => {
     const zhCN: PartialLocaleResource<typeof enUS> = {
       // @ts-expect-error an unknown key is a typo whether or not the locale is complete
       typo: '拼错的键',
+    };
+
+    expectTypeOf(zhCN).toMatchTypeOf<PartialLocaleResource<typeof enUS>>();
+  });
+
+  it('accepts an overrides block too', () => {
+    const zhCN: PartialLocaleResource<typeof enUS> = {
+      overrides: {
+        '@nocobase/app-plugin-workflow': { nav: { title: '审批流程' } },
+      },
     };
 
     expectTypeOf(zhCN).toMatchTypeOf<PartialLocaleResource<typeof enUS>>();

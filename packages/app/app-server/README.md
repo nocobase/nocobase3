@@ -20,11 +20,17 @@ const repositoryRoutes = defineRepositoryApiRoutes({
         findOne: {},
         count: {},
         exists: {},
-        createOne: { writePolicy: { fields: ['id', 'status'] } },
-        updateOne: { writePolicy: { fields: ['status'] } },
+        createOne: {},
+        updateOne: {},
         deleteOne: {},
         aggregate: {},
         groupBy: {},
+      },
+      policy: {
+        read: true,
+        create: { scope: true, fields: ['id', 'status'] },
+        update: { scope: true, fields: ['status'] },
+        delete: true,
       },
     },
     {
@@ -34,6 +40,7 @@ const repositoryRoutes = defineRepositoryApiRoutes({
         findMany: { maxLimit: 100 },
         findOne: {},
       },
+      policy: { read: true, create: false, update: false, delete: false },
     },
   ],
 });
@@ -60,70 +67,126 @@ while an omitted action registers no endpoint. Boolean values and the former act
 arrays are rejected. Unknown configuration keys fail at declaration time. Configure
 pagination only in `actions.findMany.maxLimit`.
 
-`createOne` and `updateOne` default to `writePolicy: false`, including when the
-option is missing. They require explicit server-owned field and relation allowlists
-to accept writes; API route policies cannot be `true`.
+Every entry declares a `policy`, and it governs every action of that exposure.
+It is a Repository Policy from `@nocobase/db`: `read`, `create`, `update` and
+`delete`, each `true`, `false`, or a rule node. All four are required — an
+exposure with a half-written Policy reads as configured while leaving the rest
+open — so the shape is spelled out rather than defaulted. `buildRepositoryPolicy`
+denies each node you do not mention, which is the compact way to write one.
 
 ```ts
+import { buildRepositoryPolicy } from '@nocobase/db';
+
 defineRepositoryApiRoutes({
   repositories: [
     {
       name: 'projects',
-      actions: {
-        findMany: { maxLimit: 100 },
-        findOne: {},
-        count: {},
-        exists: {},
-        createOne: {
-          writePolicy: {
-            fields: ['id', 'name', 'status'],
-            relations: {
-              tasks: { create: { fields: ['id', 'title'] } },
-            },
-          },
-        },
-        updateOne: {
-          writePolicy: (write) =>
-            write
-              .fields('name', 'status')
-              .relation('tasks', (tasks) =>
-                tasks.update((task) =>
-                  task
-                    .fields('title')
-                    .relation('assignee', (a) => a.connect().disconnect()),
+      policy: buildRepositoryPolicy(
+        (policy) =>
+          policy
+            .read((read) => read.scope(true).fields('id', 'name', 'status'))
+            .create((create) =>
+              create
+                .scope(true)
+                .fields('id', 'name', 'status')
+                .relation('tasks', (tasks) =>
+                  tasks.create((task) => task.fields('id', 'title')),
                 ),
-              ),
-        },
-      },
+            )
+            .update((update) =>
+              update
+                .scope(true)
+                .fields('name', 'status')
+                .relation('tasks', (tasks) =>
+                  tasks
+                    .update((task) => task.fields('title'))
+                    .connect((edge) =>
+                      edge.through((through) => through.fields('role')),
+                    ),
+                ),
+            ),
+        // `delete` is not mentioned, so deleting is refused.
+      ),
+      actions: { findMany: {}, createOne: {}, updateOne: {} },
     },
   ],
 });
 ```
 
-`writePolicy` accepts an object or synchronous callback returning its own builder.
-Callbacks run once at declaration and produce detached, frozen snapshots. Policies
-can be reused with `buildWritePolicy` from `@nocobase/db`. Missing `fields` and
-`relations` each mean `false`. There are no wildcards, inherited grants or implicit
-merges. Each nested `create` and `update` has its own field and relation rules.
-Relation `upsert` is independent and requires both `create` and `update` branch
-policies. `connect`, `disconnect`, `set` and `delete` use operation objects; many-to-many
-`create`, `connect` and `set` can allow through payload with
-`through: { fields: ['role'] }`. `createOne` only allows `create` and `connect`
-relations throughout its create tree.
+A node that is `false` refuses that operation with 403 before the request body
+is read, so an empty or malformed payload is reported as forbidden rather than
+as invalid input. A node with no `fields` is not the same thing: it accepts no
+caller-supplied field while still allowing a create composed entirely of
+`defaults`. Missing `fields` and `relations` each mean "nothing". There are no
+wildcards and no implicit merges. Each nested `create` and `update` carries its
+own field and relation rules, relation `upsert` requires both branches, and
+many-to-many `create`, `connect` and `set` may allow a join payload with
+`through: { fields: ['role'] }`. A `create` node's relations accept only
+`create` and `connect`, because a create performs nothing else.
 
-`false` rejects the whole write, even empty values. An empty object policy `{}`
-allows no caller-supplied fields or relations but can allow default-only creation.
-Scalar foreign keys are covered by `fields`; JSON fields are controlled as a whole.
-Managed relation keys, defaults and versions do not require client field grants.
-Read actions and root `deleteOne` have no write policy; `deleteOne: {}` enables deletion.
+`read` governs reading everywhere it happens, which includes the record a write
+returns: a `select` naming a field outside `read.fields` is refused rather than
+quietly trimmed, and omitting `select` trims the result to what `read` allows.
 
-HTTP input rejects client-supplied `writePolicy`; the adapter always injects its
-server configuration. `WRITE_FORBIDDEN`, `FIELD_WRITE_FORBIDDEN` and
-`RELATION_WRITE_FORBIDDEN` return HTTP 403 with diagnostic `path` and `details`.
-The entire mutation is checked before writes. Internal `db.repository` calls default
-to `writePolicy: true`; custom HTTP handlers must supply their own explicit policy.
-User authorization, row-level access, target access and database cascades remain
-separate concerns. See the [complete write policy reference](../../libs/db/docs/zh-CN/repository/write-policy.md).
+### Scoping a Policy to the caller
+
+Declare `policy` as a function of a principal and pass a resolver:
+
+```ts
+defineRepositoryApiRoutes<Session>({
+  principal: (context) => context.get('auth'),
+  repositories: [
+    {
+      name: 'projects',
+      policy: (session) => ({
+        read: { scope: { ownerId: session.userId }, fields: ['id', 'name'] },
+        create: {
+          scope: { ownerId: session.userId },
+          fields: ['name'],
+          defaults: { ownerId: session.userId },
+        },
+        update: { scope: { ownerId: session.userId }, fields: ['name'] },
+        delete: false,
+      }),
+      actions: { findMany: {}, createOne: {}, updateOne: {} },
+    },
+  ],
+});
+```
+
+The resolver is the application's: this router installs no authentication and
+does not know how a request carries identity. It runs once per request; a
+resolver returning `undefined` or `null` refuses the request with 403
+`PRINCIPAL_REQUIRED` rather than binding a Policy built from a principal that is
+not there. Declaring a Policy function without a resolver fails at declaration.
+
+The two shapes differ in when they are checked. A fixed Policy is normalized
+once, when the routes are defined, so a malformed one fails where it is written.
+A Policy function cannot be — it is evaluated per request, and so is its
+validation. Such a failure is `INVALID_POLICY`, and it propagates to the host
+error handler as a server error rather than a 400, because a Policy is
+server-owned and its mistakes are the server's.
+
+`ref()` is rejected at declaration: a reference resolves against a
+`withPolicies` map, and these routes bind one Policy per exposure. Write the
+relation's rules out, or bind the Policies on the connection.
+
+HTTP input cannot supply a Policy. `readInput` validates the body key by key
+against a per-action allowlist and neither `policy` nor `scope` appears on any
+of them, so both are refused with 400. `WRITE_FORBIDDEN`,
+`FIELD_WRITE_FORBIDDEN` and `RELATION_WRITE_FORBIDDEN` return 403 with a
+diagnostic `path` and `details`; `READ_FORBIDDEN`, `FIELD_READ_FORBIDDEN`,
+`RELATION_READ_FORBIDDEN` and `SCOPE_VIOLATION` return 403;
+`RECORD_OUTSIDE_SCOPE` returns 409. The entire mutation is checked before any
+write. A scope that simply does not match is a different thing and never reaches
+those codes: it is a 404 or an empty result, so forbidden and absent stay
+indistinguishable.
+
+Internal `db.repository()` calls are unaffected — they bind no Policy, as
+before. The method-level `writePolicy` option remains available there for a
+single call; it is no longer part of a route declaration. User authentication
+and database cascades remain separate concerns. See the
+[Policy quick start](../../libs/db/docs/zh-CN/repository/policy-quick-start.md).
 
 The application adds `/api`. Each action uses
 `POST /api/<encodeURIComponent(name)>:<action>` with a JSON object containing

@@ -4,7 +4,10 @@ import {
   fileStorageFactoryToken,
   type AIManager,
 } from '@nocobase/ai-employee';
-import { driveConfig, driveManagerToken } from '@nocobase/app-server/drive';
+import {
+  driveManagerToken,
+  type AppDriveConfig,
+} from '@nocobase/app-server/drive';
 import { loggingToken } from '@nocobase/app-server/logging';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import {
@@ -13,7 +16,14 @@ import {
   type ServiceToken,
 } from '@nocobase/service-provider';
 
-import { aiConfig, resolveAIEmployeeStorageDisk } from '../config.js';
+import path from 'node:path';
+
+import type { AIApplicationConfig } from '../config.js';
+import { resolveAIEmployeeStorageDisk } from '../config.js';
+import {
+  AIEmployeeResources,
+  normalizeAISkillDirectories,
+} from '../ai/index.js';
 import {
   ManagerFactory,
   managerFactoryToken,
@@ -22,6 +32,11 @@ import {
   RepositoryFactory,
   repositoryFactoryToken,
 } from '../factory/repository-factory.js';
+import {
+  AgentServiceFactory,
+  agentServiceFactoryToken,
+} from '../agent/service/agent-service-factory.js';
+import { aiConversationsManagerToken } from '../manager/ai-conversations-manager.js';
 import {
   ServiceFactory,
   serviceFactoryToken,
@@ -53,32 +68,58 @@ export class AIEmployeeProvider extends ServiceProvider<AppPluginApplication> {
       (resolver) => new ManagerFactory({ container: resolver }),
     );
     this.app.container.singleton(
+      aiConversationsManagerToken,
+      (resolver) =>
+        resolver.resolve(managerFactoryToken).aiConversationsManager,
+    );
+    this.app.container.singleton(
       serviceFactoryToken,
       () => new ServiceFactory({ container: this.app.container }),
+    );
+
+    this.app.container.singleton(
+      agentServiceFactoryToken,
+      (resolver) => new AgentServiceFactory({ container: resolver }),
     );
   }
 
   public override async boot(): Promise<void> {
     const services = this.app.container.resolve(serviceFactoryToken);
-    const config = this.app.config.get(aiConfig);
+    const config = this.app.config.get<AIApplicationConfig>('ai')!;
     const aiStorageDisk = resolveAIEmployeeStorageDisk(
       config,
-      this.app.config.get(driveConfig).default,
+      this.app.config.get<AppDriveConfig>('drive')!.default,
     );
     this.app.container.resolve(managerFactoryToken).configure({
       aiStorageDisk,
     });
+    const configuredSkillDirectories = normalizeAISkillDirectories(
+      config.skills?.paths ?? [],
+      this.app.paths.root(),
+    );
     services.configure({
-      paths: this.app.paths,
       llmServices: config.llmServices,
+      mcpServers: config.mcpServers,
+      resourceRegistrar: new AIEmployeeResources({
+        logger: this.app.container
+          .resolve(loggingToken)
+          .getLogger('ai-employee'),
+        skillsDirectories: [
+          path.resolve(this.app.paths.root(), 'ai/skills'),
+          ...configuredSkillDirectories,
+        ],
+      }),
     });
     await services.initialize();
-    this.unsubscribeConfig = this.app.config.subscribe(
-      aiConfig,
+    this.unsubscribeConfig = this.app.config.subscribe<AIApplicationConfig>(
+      'ai',
       async ({ current }): Promise<void> => {
         await services.ready();
         await services.llmServiceConfigSynchronizer.enqueue(
           current.llmServices,
+        );
+        await services.mcpServerService.syncConfiguredMCPServers(
+          current.mcpServers,
         );
       },
     );

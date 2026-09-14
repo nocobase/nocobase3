@@ -1,6 +1,6 @@
 import type { ExecutionContext, Hono } from 'hono';
 import type { AppConfigAccessor } from '../config/index.js';
-import { appConfig } from '../config/index.js';
+import { type AppIdentityConfig } from '../config/index.js';
 
 import type { ConfigPaths } from '../config/index.js';
 import {
@@ -22,14 +22,14 @@ import {
   registerRealtimeWebSocketRoutes,
 } from '../realtime/websocket.js';
 import { RealtimeProvider } from '../realtime/provider.js';
-import type {
-  AppServerPluginLocalesLoader,
-  ResolvedAppServerPlugins,
-} from '../plugins/index.js';
 import {
   AppScheduleDefinitionContributions,
   appScheduleDefinitionContributionsToken,
+  createAppDatabaseTaskContributions,
+  type AppServerPluginLocalesLoader,
+  type ResolvedAppServerPlugins,
 } from '../plugins/index.js';
+import type { AppDatabaseTaskContributions } from '../database/types.js';
 import { i18nToken, registerAppLocales } from '../i18n/index.js';
 
 export type ApplicationFetchHandler = (
@@ -67,6 +67,7 @@ export interface ApplicationRuntimeContributions<
   readonly plugins: ResolvedAppServerPlugins;
   readonly serviceProviders: readonly ApplicationServiceProviderConstructor<TConfig>[];
   readonly routes: readonly AppRouteContribution<Application<TConfig>>[];
+  readonly locales?: AppServerPluginLocalesLoader;
 }
 
 /**
@@ -105,10 +106,17 @@ export class Application<
   private startPromise: Promise<void> | undefined;
   private websocketHandler: AppWebSocketHandler | undefined;
   private appPackageName: string | undefined;
+  /** Defaults match an application that registered no server plugins. */
+  private databaseTaskContributionsValue: AppDatabaseTaskContributions = {
+    appPackageName: 'app',
+    migrations: [],
+    seeds: [],
+  };
   private readonly localeContributions: {
     packageName: string;
     load: AppServerPluginLocalesLoader;
   }[] = [];
+  private applicationLocales: AppServerPluginLocalesLoader | undefined;
 
   public constructor(options: ApplicationOptions<TConfig>) {
     this.config = options.config;
@@ -132,11 +140,13 @@ export class Application<
   }
 
   public get appName(): string {
-    return resolveAppName(this.config.get(appConfig).name);
+    return resolveAppName(this.config.get<AppIdentityConfig>('app')!.name);
   }
 
   public get publicBasePath(): string {
-    return normalizeBasePath(this.config.get(appConfig).publicBasePath);
+    return normalizeBasePath(
+      this.config.get<AppIdentityConfig>('app')!.publicBasePath,
+    );
   }
 
   public get router(): Hono {
@@ -158,8 +168,14 @@ export class Application<
     }
   }
 
+  public get databaseTaskContributions(): AppDatabaseTaskContributions {
+    return this.databaseTaskContributionsValue;
+  }
+
   public addServerPlugins(serverPlugins: ResolvedAppServerPlugins): void {
     this.appPackageName = serverPlugins.appPackageName;
+    this.databaseTaskContributionsValue =
+      createAppDatabaseTaskContributions(serverPlugins);
     for (const plugin of serverPlugins.plugins) {
       for (const Provider of plugin.definition.serviceProviders) {
         this.addServiceProvider(Provider);
@@ -186,10 +202,17 @@ export class Application<
     runtime: ApplicationRuntimeContributions<TConfig>,
   ): void {
     this.addServerPlugins(runtime.plugins);
+    if (runtime.locales) {
+      this.addApplicationLocales(runtime.locales);
+    }
     this.addServiceProviders(runtime.serviceProviders);
     for (const routes of runtime.routes) {
       this.addRoutes(routes);
     }
+  }
+
+  public addApplicationLocales(load: AppServerPluginLocalesLoader): void {
+    this.applicationLocales = load;
   }
 
   public addRoutes(routes: AppRouteContribution<Application<TConfig>>): void {
@@ -249,8 +272,19 @@ export class Application<
     }
 
     const runtime = this.container.resolve(i18nToken);
+    const sources = [
+      ...(this.applicationLocales
+        ? [
+            {
+              packageName: this.appPackageName ?? '',
+              load: this.applicationLocales,
+            },
+          ]
+        : []),
+      ...this.localeContributions,
+    ];
     const contributions = await Promise.all(
-      this.localeContributions.map(async (contribution) => ({
+      sources.map(async (contribution) => ({
         packageName: contribution.packageName,
         locales: await contribution.load(),
       })),

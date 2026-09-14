@@ -1,4 +1,3 @@
-import { driveConfig } from '@nocobase/app-server/drive';
 import { queueManagerToken } from '@nocobase/app-server/queue';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { databaseManagerToken } from '@nocobase/db';
@@ -7,7 +6,7 @@ import { ServiceProvider } from '@nocobase/service-provider';
 import { WorkflowScheduleTarget } from './schedule-target.js';
 import { EXECUTION_STATUS } from './engine/constants.js';
 
-import { workflowConfig } from './config.js';
+import { type WorkflowRuntimeConfig } from './config.js';
 import { WorkflowService } from './service.js';
 import {
   internalWorkflowServiceToken,
@@ -40,8 +39,8 @@ export class WorkflowProvider<
 
   public override register(): void {
     if (!this.app.container.has(databaseManagerToken)) return;
-    const workflow = this.app.config.get(workflowConfig);
-    const drive = this.app.config.get(driveConfig);
+    const workflow = this.app.config.get<WorkflowRuntimeConfig>('workflow')!;
+    const drive = this.app.config.get<AppDriveConfig>('drive')!;
 
     this.app.container.singleton(
       internalWorkflowServiceToken,

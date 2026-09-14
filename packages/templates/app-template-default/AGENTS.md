@@ -6,7 +6,7 @@ Do not create a plugin to add a feature. Plugins are separately published packag
 
 ## Default template scope
 
-Default is the clean application starting point. It registers product capabilities but no `app-plugin-*-example` plugins, example pages, application sample services, or sample APIs. Keep runnable demonstrations in `app-template-examples`. Application-owned server route and provider lists start empty; the only application page is a localized homepage.
+Default is the clean application starting point. It registers product capabilities but no `app-plugin-*-example` plugins, example pages, application sample services, or sample APIs. Keep runnable demonstrations in `app-template-examples`. Application-owned server routes start empty; the only built-in application provider exposes Authorization Permission Sets as direct roles in the Users page. The only application page is a localized homepage.
 
 `database/main/` starts empty for application-owned migrations and seeds. Do not add article history, demo seeds, or compatibility copies from Examples to this template. Existing installations retain their own executed migration sources when upgrading; see `MIGRATION.md`.
 
@@ -26,6 +26,8 @@ Default is the clean application starting point. It registers product capabiliti
 | Write tests and verify                           | `references/testing.md`                 |
 
 Read the one page your task needs, not the whole directory.
+
+`skills/nocobase-app-upgrade/` is a separate Skill for a separate job: merging a newer release of the template this application was generated from. Read it when the task is upgrading the template rather than building a feature, and read it before touching anything — an upgrade done by copying the newest template over this application destroys the work that made it this application.
 
 ## Where things go
 
@@ -49,6 +51,8 @@ tests/                    Tests; never beside the source
 A feature with a page and an API touches five places: a migration for the table, a route in `server/routes/`, a page in `client/pages/` declared in `client/routes.ts`, navigation on the page route, and strings in `client/locales/`.
 
 ### The rest is framework structure
+
+The Settings and Dev tools header entries stay visible on their destination pages. The Dev tools entry is development-only and must remain absent from production builds.
 
 `client/routing/`, `client/shell/`, `client/layouts/`, `client/theme/`, the server entry points, the build scripts, and the tsconfigs are the scaffolding the template provides. It is still this application's own source — it shipped to the user and they may change it — but it is the part the template evolves, so an edit there is what a future upgrade has to reconcile.
 
@@ -167,7 +171,19 @@ t('orders.title');
 
 To reword a plugin's string, add an `overrides` block keyed by that plugin's package name in your locale file. Do not edit the plugin.
 
+The languages the application offers are its own locale files, not a configured list, and the two sides are read separately: `client/locales/` decides what the picker shows, `server/locales/` what the server will answer in. Adding a language means adding its file to both. `pnpm nocobase app i18n:check` reports one declared on a single side.
+
 The account menu language control in `client/shell/language-switcher.tsx` uses a shadcn submenu with radio items. Render it inside `DropdownMenuContent` to preserve menu keyboard navigation and selection semantics.
+
+## Developing against another backend
+
+Do not hard-code `/main` from the examples below. It is only the fallback for an unset `APP_BASE_PATH`. Local development resolves that variable from the command-line environment, then `.env.local`, then `.env`. The remote mount path is independently supplied in `PROXY_TARGET_URL`: inspect the target application's actual public URL instead of assuming it matches the local path. For example, `APP_BASE_PATH=/local PROXY_TARGET_URL=http://127.0.0.1:13000/crm pnpm dev` forwards local `/local/api` and `/local/ws` to remote `/crm/api` and `/crm/ws`.
+
+Use `PROXY_TARGET_URL=https://backend.example.com/main pnpm dev` to run only the local Vite client against another application's API and WebSocket service. The URL is the remote application base, including its mount path, without `/api`. Open the printed Local URL. The local server and server watchers are skipped; `beforeDev` hooks still run. Requests, including writes, affect the target backend. See README.MD for path mapping and authentication requirements. Leave the variable unset for normal full-stack development.
+
+The development proxy adapts same-origin HTTP and WebSocket Origin headers to the target origin, and maps same-origin Referer paths to the target app base. Other origins remain unchanged and missing Origin headers are not added. Keep backend origin checks enabled; this adaptation belongs only to Vite development, not production deployment. Production uses `APP_PUBLIC_ORIGIN` and a reverse proxy that preserves the public Host and protocol.
+
+`APP_SERVER_PORT` selects the local application entry port: Vite in proxy development mode (default 5173), or the local backend in normal development mode (default 13000). Normal development keeps Vite's preferred port at 5173. An occupied port advances to the next available port; use the printed Local URL. This variable does not change the backend URL supplied through `PROXY_TARGET_URL`.
 
 ## The command line
 
@@ -176,6 +192,7 @@ The account menu language control in `client/shell/language-switcher.tsx` uses a
 ```bash
 pnpm nocobase --help          # every topic and command
 pnpm nocobase app info        # a command this application owns
+pnpm nocobase app i18n:check  # languages declared on only one side
 ```
 
 Add a command of your own as an oclif `Command` subclass in `cli/commands/`, then list it in `cli/commands/index.ts`; the key becomes its name under `app`. These commands are static tooling — they read and write files and packages. They do not start the application, so nothing in them may resolve a service or query the database. Anything needing the running application is a server route or a job, not a command.
@@ -190,20 +207,23 @@ Plugins are registered in `client/plugins.ts`, `server/plugins.ts`, and `cli/plu
 
 Let `pnpm plugin:register` and `pnpm plugin:unregister` add and remove entries. Edit these files by hand only to reorder entries or to pass a plugin its options.
 
-To customize a plugin's page, pass an option on its registration, add a source extension under `client/extensions/*/extension.ts`, or add an entry to `client/route-overrides.ts`. Do not redeclare the plugin's route — a duplicate `/login` is a conflict, not a customization. An override replaces only `componentLoader`; route identity, path, and auth mode stay with the plugin. One route takes one override across all three mechanisms.
+Update one registered plugin with `pnpm plugin:update @nocobase/app-plugin-authentication`, or omit the name to update all registered plugins. Prefer the full package name; `authentication` is also accepted as a short name. The name is a positional argument, not `--plugin`. Use `--dry-run` to preview. With pnpm, updates stay within declared version ranges; after a successful update, all registered plugin Skills are re-synchronized. See [Plugins in the README](README.MD#plugins) for examples and update scope.
+
+To customize a page a plugin owns, pass an option on its registration, add a source extension under `client/extensions/*/extension.ts`, or add an entry to `client/route-overrides.ts`. Do not redeclare the plugin's route — a duplicate `/install` is a conflict, not a customization. An override replaces only `componentLoader`; route identity, path, and auth mode stay with the plugin. One route takes one override across all three mechanisms. Authentication pages are not plugin-owned: `/login`, `/register`, `/forgot-password`, and `/reset-password` are application routes declared in `client/routes.ts`.
 
 ### Read a plugin's Skill before building what it already does
 
 **You are not starting from scratch.** This application ships with plugins that already solve whole categories of requirement, and each one publishes a Skill explaining how to use it. Registration copies those Skills into `.agents/skills/`. Before implementing a feature, check whether a plugin already covers it:
 
-| The requirement sounds like                                                                       | Read the Skill for                     |
-| ------------------------------------------------------------------------------------------------- | -------------------------------------- |
-| Approvals, multi-step processes, "when X happens then Y", business rules that outlive one request | `@nocobase/app-plugin-workflow`        |
-| Email, IM, or in-app messages; notifying someone that something happened                          | `@nocobase/app-plugin-notification`    |
-| Roles, permissions, "user A may only see their own records", field-level or row-level access      | `@nocobase/app-plugin-authorization`   |
-| Sign-in, registration, sessions, password reset                                                   | `@nocobase/app-plugin-authentication`  |
-| File upload and metadata through Repository                                                       | `@nocobase/app-plugin-file-repository` |
-| Translated text and language switching                                                            | `@nocobase/app-plugin-i18n`            |
+| The requirement sounds like                                                                       | Read the Skill for                    |
+| ------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| Approvals, multi-step processes, "when X happens then Y", business rules that outlive one request | `@nocobase/app-plugin-workflow`       |
+| Email, IM, or in-app messages; notifying someone that something happened                          | `@nocobase/app-plugin-notification`   |
+| Roles, permissions, "user A may only see their own records", field-level or row-level access      | `@nocobase/app-plugin-authorization`  |
+| Sign-in, registration, sessions, password reset                                                   | `@nocobase/app-plugin-authentication` |
+| User listing, account state, password reset, and application-owned role assignment                | `@nocobase/app-plugin-users`          |
+| File upload and metadata through Repository                                                       | `@nocobase/app-plugin-file`           |
+| Translated text and language switching                                                            | `@nocobase/app-plugin-i18n`           |
 
 Run `pnpm plugin:skills:sync` if `.agents/skills/` is missing or looks out of date, then read the Skill for the plugin you need. It documents that plugin's public entries, the ownership boundary, and how to verify the result — which is faster and more correct than inferring an API from its source.
 
@@ -243,6 +263,14 @@ await import(`${name}/index.js`); // invisible to the check
 
 Declare such a package in `dependencies` when you write the code; nothing will remind you later.
 
+### Packing the build for a deployment
+
+`pnpm build --tar` writes `storage/dist.tar.gz` after the build. The archive holds `dist/` as a directory next to `config.example.yml`, so extracting it produces exactly those two paths rather than scattering `server/` and `node_modules/` into whatever directory you unpacked in.
+
+`config.example.yml` travels with it because a deployment has to write a `config.yml` before it can start, and the example is the only statement of what may go in it. Directories of executable shims are left out: a `.bin` entry points at a path on the machine that installed it, and a dangling one makes `pnpm install` in the extracted tree report a corrupt store rather than repair it.
+
+Without `--tar` no archive is produced, which is what you want when the build is only going to be run locally.
+
 ### Building for another platform
 
 `pnpm build` targets the machine it runs on, so `pnpm build && pnpm start` works. A deployment build says where it is going: `--target linux-x64`, `--target linux-arm64`, `--target linux-x64-musl`, plus `--node-version` when the server's Node major differs. Every build prints the platform it produced and records it in `dist/package.json` under `nocobase.buildTarget`.
@@ -276,3 +304,5 @@ Add tests for what you changed: a route's authenticated, unauthenticated, and un
 For creating or editing theme presets, read `skills/nocobase-app-development/references/themes.md` (from the application root).
 
 For UI styling, use the shared color, font, size, spacing, radius and shadow contract in `skills/nocobase-app-development/references/theme-tokens.md` (from the application root). Prefer its Tailwind utilities so components respond to theme changes; keep deliberate fixed-size exceptions explicit.
+
+Application startup defaults belong in `config.yml`: `i18n.defaultLocale` for the language, and `client.app.defaultColorScheme` and `client.app.defaultTheme` for appearance. Valid browser-local choices take precedence. Which languages the application offers is not configured — its own `client/locales/` and `server/locales/` are that list. See the i18n and themes references.

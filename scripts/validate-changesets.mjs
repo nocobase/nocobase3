@@ -2,7 +2,7 @@
 // 确定判断，没有让它流到发版时才炸的理由。
 //
 // 只检查已经存在的文件是否合法，不判断「该不该有 changeset」——那是
-// advise-changesets.mjs 的职责，且只提醒不阻塞。
+// require-changesets.mjs 的职责。
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -66,6 +66,18 @@ for (const full of files) {
   const body = raw.slice(match[0].length).trim();
   if (!body) {
     errors.push(`${file}: 缺少变更说明正文`);
+  }
+
+  // changesets 只解析第一个 frontmatter 块。正文里再出现一个包声明块时，
+  // 那半截会被当作说明文字塞进前一个包的 CHANGELOG，而它声明的包根本不会
+  // 被发布——不报错，只是静默失效，所以在这里挡住。
+  const strayBlock = body.match(
+    /^---\r?\n\s*(?:"[^"]+"|'[^']+'|[^:\n]+)\s*:\s*(?:patch|minor|major)\b/m,
+  );
+  if (strayBlock) {
+    errors.push(
+      `${file}: 正文里出现了第二个 frontmatter 块。changesets 只解析第一个，多出来的声明会被当成说明文字而不会发布；请把所有包合并进同一个块`,
+    );
   }
 
   const lines = match[1].split(/\r?\n/).filter((l) => l.trim());

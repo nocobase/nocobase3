@@ -97,6 +97,31 @@ describe('DeploymentCatalog', () => {
     ]);
   });
 
+  it('reads the manifest from dist for pnpm build --tar archives', async () => {
+    const { deploymentsDir, appDir } = await createAppWorkspace(
+      ['dist/package.json', 'dist/server/embedded.js'],
+      null,
+    );
+    await writeFile(
+      path.join(appDir, 'dist/package.json'),
+      JSON.stringify({
+        name: 'ts',
+        version: '1.0.0-beta.22',
+        type: 'module',
+      }),
+    );
+    const catalog = new DeploymentCatalog({ deploymentsDir });
+
+    await expect(catalog.discover()).resolves.toMatchObject([
+      {
+        id: 'customer',
+        desiredVersion: '1.0.0-beta.22',
+        code: { version: '1.0.0-beta.22' },
+        release: { version: '1.0.0-beta.22' },
+      },
+    ]);
+  });
+
   it('always points standalone apps at their volume config and storage', async () => {
     const { deploymentsDir } = await createAppWorkspace([
       'dist/server/embedded.js',

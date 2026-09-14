@@ -5,8 +5,8 @@ description: 说明 NocoBase v3 插件 ServiceProvider 的职责、生命周期�
 
 # ServiceProvider 生命周期与装配
 
-本页深入说明插件 `ServiceProvider` 的生命周期和 Application 装配边界。先阅读
-[Services、Tokens 与 ServiceProviders](./server-services-and-providers.md) 决定是否需要容器服务；只想查看对象、函数、普通值和测试替代示例时，阅读
+本页深入说明插件 `ServiceProvider` 的生命周期和 Application 装配边界。首次实现可从 [ServiceProvider 使用指南](./service-provider-guide.md) 的完整示例开始。需要设计容器服务契约时，阅读
+[Services、Tokens 与 ServiceProviders](./server-services-and-providers.md)；只想查看对象、函数、普通值和测试替代示例时，阅读
 [ServiceToken 与 ServiceContainer 示例](./service-token-examples.md)。
 
 ## Provider 只负责注册和生命周期

@@ -12,6 +12,15 @@ export type DetailTab =
   | 'configuration'
   | 'settings';
 
+export const DETAIL_TABS: readonly DetailTab[] = [
+  'deployments',
+  'releases',
+  'development',
+  'resources',
+  'configuration',
+  'settings',
+];
+
 export interface ReleaseRecord {
   readonly id: string;
   readonly version: string;
@@ -52,7 +61,9 @@ export interface AppDetail {
   readonly deployments: readonly DeploymentRecord[];
   readonly runtime: {
     readonly hostAvailable: boolean;
-    readonly state: string;
+    // Mirrors HubObservedState on the server. A wider type here let the status mapping compare against deployment
+    // statuses the runtime never reports.
+    readonly state: 'pending' | 'running' | 'stopped' | 'failed' | 'unknown';
   };
   readonly deployment: {
     readonly desiredReleaseId: string | null;
@@ -76,9 +87,18 @@ export interface AppSummary {
   readonly currentVersion: string | null;
   readonly hasReleases: boolean;
   readonly hasPendingDeployment: boolean;
+  readonly enabled: boolean;
+  readonly startupMode: ActivationPolicy;
 }
 
 export type AppOverview = Omit<AppDetail, 'releases' | 'deployments'>;
+
+export interface AppPageResponse {
+  readonly items: readonly AppSummary[];
+  readonly total: number;
+  readonly page: number;
+  readonly pageSize: number;
+}
 
 export interface ConfigResponse {
   readonly mode: 'file' | 'external';

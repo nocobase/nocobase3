@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import {
   chmod,
   lstat,
@@ -24,8 +24,13 @@ import {
   type AppDriveDiskConfig,
   type NocoBaseDriveDisk,
 } from '@nocobase/drive';
+import type { Knex } from 'knex';
 import { x as extractTar } from 'tar';
-import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
+import {
+  parse as parseYaml,
+  parseDocument as parseYamlDocument,
+  stringify as stringifyYaml,
+} from 'yaml';
 
 import type { HubPluginConfig } from '../config.js';
 import type {
@@ -35,6 +40,7 @@ import type {
   HubAppDetail,
   HubAppSummary,
   HubAppRecord,
+  HubAppPage,
   HubConfigBinding,
   HubConfigDocument,
   HubConfigMode,
@@ -43,6 +49,7 @@ import type {
   HubDeploymentPage,
   HubRuntimeStatus,
   HubReleaseRecord,
+  ListHubAppsOptions,
   RollbackHubAppInput,
   HubService,
   SaveHubConfigInput,
@@ -51,18 +58,31 @@ import type {
 } from '../tokens.js';
 
 const MAX_ARTIFACT_SIZE = 256 * 1024 * 1024;
+const AUTH_SECRET_BYTES = 32;
 const APP_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
 const RELEASE_VERSION_PATTERN = /^[0-9A-Za-z][0-9A-Za-z._+-]{0,254}$/;
 const CONFIG_TEMPLATE_PATHS = [
   'config.example.yml',
   'config.example.yaml',
 ] as const;
+const ARTIFACT_MANIFEST_PATHS = ['dist/package.json', 'package.json'] as const;
 const EMBEDDED_ENTRY_PATH = 'dist/server/embedded.js';
+/**
+ * How long a read waits for startup restoration before answering with what the Host knows so far.
+ *
+ * Restoration starts every eager App in turn, so it lasts as long as the slowest one takes to come up — or forever,
+ * when one hangs on its database. Readers wait a little so the catalog does not flash every App as stopped in the
+ * first moments after a Hub restart, then answer anyway; an App the Host has not reached yet is reported as pending
+ * rather than stopped, and the client keeps polling until the picture settles.
+ */
+const DEFAULT_STARTUP_RESTORATION_WAIT_MS = 5_000;
 
 export interface DefaultHubServiceOptions {
   readonly database: DatabaseManager;
   readonly config: HubPluginConfig;
   readonly hostController: HubHostController;
+  /** Upper bound on how long reads wait for startup restoration. Defaults to five seconds. */
+  readonly startupRestorationWaitMs?: number;
 }
 
 export interface HubHostController {
@@ -130,18 +150,106 @@ export class DefaultHubService implements HubService {
       .selectAll('hubApps')
       .select('release.version as currentVersion')
       .orderBy('hubApps.createdAt', 'desc')
+      .orderBy('hubApps.id', 'desc')
       .execute<Row>();
+    return await this.summarizeApps(apps);
+  }
+
+  public async listAppsPage(
+    options: ListHubAppsOptions = {},
+  ): Promise<HubAppPage> {
+    const requestedPage = options.page ?? 1;
+    const pageSize = options.pageSize ?? 24;
+    if (
+      !Number.isSafeInteger(requestedPage) ||
+      requestedPage < 1 ||
+      !Number.isSafeInteger(pageSize) ||
+      pageSize < 1 ||
+      pageSize > 100
+    ) {
+      throw new HubError(
+        'Page must be a positive integer and pageSize must be between 1 and 100.',
+        'INVALID_PAGINATION',
+        400,
+      );
+    }
+    const search = options.search?.trim() ?? '';
+    if (search.length > 100) {
+      throw new HubError(
+        'Search must be 100 characters or fewer.',
+        'INVALID_SEARCH',
+        400,
+      );
+    }
+    const matchingIds = search
+      ? await this.findAppIdsBySearch(search)
+      : undefined;
+    if (matchingIds && matchingIds.length === 0) {
+      return { items: [], total: 0, page: 1, pageSize };
+    }
+
+    let countQuery = this.query()
+      .selectFrom('hubApps')
+      .select((eb) => [eb.fn.countAll().as('total')]);
+    if (matchingIds) {
+      countQuery = countQuery.where('id', 'in', matchingIds);
+    }
+    const count = await countQuery.executeTakeFirstOrThrow();
+    const total = Number(count.total);
+    const page = Math.min(
+      requestedPage,
+      Math.max(1, Math.ceil(total / pageSize)),
+    );
+    let appsQuery = this.query()
+      .selectFrom('hubApps')
+      .leftJoin(
+        'hubAppDeployments as current',
+        'hubApps.currentDeploymentId',
+        'current.id',
+      )
+      .leftJoin('hubAppReleases as release', 'current.releaseId', 'release.id')
+      .selectAll('hubApps')
+      .select('release.version as currentVersion')
+      .orderBy('hubApps.createdAt', 'desc')
+      .orderBy('hubApps.id', 'desc')
+      .limit(pageSize)
+      .offset((page - 1) * pageSize);
+    if (matchingIds) {
+      appsQuery = appsQuery.where('hubApps.id', 'in', matchingIds);
+    }
+    const apps = await appsQuery.execute<Row>();
+    return {
+      items: await this.summarizeApps(apps),
+      total,
+      page,
+      pageSize,
+    };
+  }
+
+  private async summarizeApps(
+    apps: readonly Row[],
+  ): Promise<readonly HubAppSummary[]> {
     if (!apps.length) return [];
     const [releases, pending] = await Promise.all([
       this.query()
         .selectFrom('hubAppReleases')
         .select('appId')
         .distinct()
+        .where(
+          'appId',
+          'in',
+          apps.map((row) => String(row.id)),
+        )
         .execute<Row>(),
       this.query()
         .selectFrom('hubAppDeployments')
         .select('appId')
         .distinct()
+        .where(
+          'appId',
+          'in',
+          apps.map((row) => String(row.id)),
+        )
         .where('status', 'in', ['queued', 'deploying'])
         .execute<Row>(),
     ]);
@@ -158,8 +266,35 @@ export class DefaultHubService implements HubService {
             typeof row.currentVersion === 'string' ? row.currentVersion : null,
           hasReleases: releasedApps.has(app.id),
           hasPendingDeployment: pendingApps.has(app.id),
+          enabled: app.enabled,
+          startupMode: app.startupMode,
         };
       }),
+    );
+  }
+
+  private async findAppIdsBySearch(search: string): Promise<readonly string[]> {
+    const connection = this.options.database.connection();
+    const physical = await connection.collections.getPhysical('hubApps');
+    if (!physical) {
+      throw new Error('Hub App schema is unavailable');
+    }
+    const knex = await connection.client<Knex>();
+    // A raw query bypasses the Repository, which is what normally scopes a table to the Collection's schema; without
+    // this the search fails on PostgreSQL whenever the application runs in a schema other than the connection default.
+    // The searched columns are literals rather than anything derived from the request, and knex binds them as
+    // identifiers, so the only untrusted value here is the bound search term.
+    const rows = await knex(physical.tableName)
+      .withSchema(physical.schema)
+      .select('id')
+      .whereRaw('lower(??) like lower(?) or lower(??) like lower(?)', [
+        'id',
+        `%${search}%`,
+        'name',
+        `%${search}%`,
+      ]);
+    return (rows as Array<Record<string, unknown>>).map((row) =>
+      String(row['id']),
     );
   }
 
@@ -310,11 +445,23 @@ export class DefaultHubService implements HubService {
           409,
         );
       }
+      // `readConfig` answers an absent file with empty content, so the editor opens on an App whose `config.yml`
+      // is gone and the save that follows has to write one rather than fail on reading what is not there.
+      let currentContent: string | undefined;
+      try {
+        currentContent = await readFile(this.configPath(deployment), 'utf8');
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      }
       validateYamlConfig(input.content);
-      await writeTextAtomic(this.configPath(deployment), input.content);
+      const publishedContent = ensureAuthSecret(
+        input.content,
+        extractAuthSecret(currentContent),
+      );
+      await writeTextAtomic(this.configPath(deployment), publishedContent);
       try {
         const management = await this.hostController.getManagementClient();
-        await management.publishAppConfig(appId, input.content);
+        await management.publishAppConfig(appId, publishedContent);
       } catch (error) {
         throw new HubError(
           `Configuration was saved, but runtime configuration reload failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -382,7 +529,7 @@ export class DefaultHubService implements HubService {
   ): Promise<HubAppDetail> {
     return await this.withLock(appId, async () => {
       assertActivation(input.activation);
-      await this.startupReconciliation;
+      await this.awaitStartupRestoration();
       await this.requireApp(appId);
       await this.updateApp(appId, { startupMode: input.activation });
       return await this.getApp(appId);
@@ -531,7 +678,37 @@ export class DefaultHubService implements HubService {
   }
 
   public async hostStatus(): Promise<HostStatus> {
+    await this.awaitStartupRestoration();
     return await (await this.hostController.getManagementClient()).getStatus();
+  }
+
+  /**
+   * Wait for startup restoration, but only up to the configured bound.
+   *
+   * Resolves `true` when no restoration is running or it finished in time, `false` when it is still going and the
+   * caller should answer with the Host's current picture instead of blocking on it.
+   */
+  private async awaitStartupRestoration(): Promise<boolean> {
+    const restoration = this.startupReconciliation;
+    if (!restoration) return true;
+    const waitMs =
+      this.options.startupRestorationWaitMs ??
+      DEFAULT_STARTUP_RESTORATION_WAIT_MS;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        restoration.then(() => true),
+        new Promise<boolean>((resolve) => {
+          timer = setTimeout(() => resolve(false), waitMs);
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
+  private isRestoringStartupState(): boolean {
+    return this.startupReconciliation !== null;
   }
 
   public async restoreDesiredState(): Promise<void> {
@@ -834,7 +1011,9 @@ export class DefaultHubService implements HubService {
       if (!item)
         return {
           hostAvailable: true,
-          state: 'stopped',
+          // The Host knows nothing about this App yet. During startup restoration that means it simply has not been
+          // reached in the eager start sequence, so it is pending rather than stopped.
+          state: this.isRestoringStartupState() ? 'pending' : 'stopped',
           version: null,
           startedAt: null,
           lastAccessedAt: null,
@@ -920,18 +1099,23 @@ export class DefaultHubService implements HubService {
     assertConfigMode(mode);
     if (mode === 'external') return { mode };
     let content = input?.content;
-    content ??= release.configTemplate ?? undefined;
-    if (content === undefined && app.currentDeploymentId) {
+    let currentContent: string | undefined;
+    if (app.currentDeploymentId) {
       const current = await this.getDeployment(app.id, app.currentDeploymentId);
       if (current.config.mode === 'file') {
         try {
-          content = await readFile(this.configPath(current), 'utf8');
+          currentContent = await readFile(this.configPath(current), 'utf8');
+          content ??= currentContent;
         } catch (error) {
           if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
         }
       }
     }
+    // A Release template initializes a new App; it must never replace a
+    // configuration that the App is already using.
+    content ??= release.configTemplate ?? undefined;
     content ??= '';
+    content = ensureAuthSecret(content, extractAuthSecret(currentContent));
     validateYamlConfig(content);
     const configPath = path.join(
       path.dirname(this.options.config.host.configPath),
@@ -1115,7 +1299,9 @@ async function inspectArtifact(bytes: Uint8Array): Promise<{
           );
         }
         return (
-          normalized === 'package.json' ||
+          ARTIFACT_MANIFEST_PATHS.includes(
+            normalized as (typeof ARTIFACT_MANIFEST_PATHS)[number],
+          ) ||
           CONFIG_TEMPLATE_PATHS.includes(
             normalized as (typeof CONFIG_TEMPLATE_PATHS)[number],
           ) ||
@@ -1123,10 +1309,10 @@ async function inspectArtifact(bytes: Uint8Array): Promise<{
         );
       },
     });
-    await assertRegularArtifactFile(directory, 'package.json');
+    const manifestPath = await findArtifactManifest(directory);
     await assertRegularArtifactFile(directory, EMBEDDED_ENTRY_PATH);
     const packageMetadata = JSON.parse(
-      await readFile(path.join(directory, 'package.json'), 'utf8'),
+      await readFile(path.join(directory, manifestPath), 'utf8'),
     ) as Record<string, unknown>;
     const appMetadata = isRecord(packageMetadata.app)
       ? packageMetadata.app
@@ -1161,6 +1347,34 @@ async function inspectArtifact(bytes: Uint8Array): Promise<{
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+}
+
+async function findArtifactManifest(directory: string): Promise<string> {
+  for (const manifestPath of ARTIFACT_MANIFEST_PATHS) {
+    try {
+      const stats = await lstat(path.join(directory, manifestPath));
+      if (!stats.isFile()) {
+        throw new HubError(
+          `Artifact entry "${manifestPath}" must be a regular file.`,
+          'INVALID_ARTIFACT',
+          422,
+        );
+      }
+      return manifestPath;
+    } catch (error) {
+      if (
+        error instanceof HubError ||
+        (error as NodeJS.ErrnoException).code !== 'ENOENT'
+      ) {
+        throw error;
+      }
+    }
+  }
+  throw new HubError(
+    'Artifact must contain dist/package.json or package.json.',
+    'INVALID_ARTIFACT',
+    422,
+  );
 }
 
 async function writeStructuredConfigAtomic(
@@ -1257,6 +1471,60 @@ function validateYamlConfig(content: string): void {
       422,
     );
   }
+}
+
+function ensureAuthSecret(content: string, fallbackSecret?: string): string {
+  const document = parseYamlDocument(content);
+  if (document.errors.length > 0) {
+    throw new HubError(
+      `Invalid config.yml: ${document.errors[0]?.message ?? 'Invalid YAML.'}`,
+      'INVALID_CONFIG_FILE',
+      422,
+    );
+  }
+  const value: unknown =
+    content.trim() === '' ? {} : (document.toJS() as unknown);
+  if (!isRecord(value)) {
+    throw new HubError(
+      'Invalid config.yml: the YAML root must be an object.',
+      'INVALID_CONFIG_FILE',
+      422,
+    );
+  }
+
+  const auth = value.auth;
+  if (
+    isRecord(auth) &&
+    typeof auth.secret === 'string' &&
+    auth.secret.trim().length > 0
+  ) {
+    return content;
+  }
+  if (
+    isRecord(auth) &&
+    auth.secret !== undefined &&
+    !(typeof auth.secret === 'string' && auth.secret.trim().length === 0)
+  ) {
+    return content;
+  }
+  if (auth !== undefined && !isRecord(auth)) return content;
+
+  document.setIn(['auth', 'secret'], fallbackSecret ?? generateAuthSecret());
+  return ensureTrailingNewline(document.toString());
+}
+
+function extractAuthSecret(content: string | undefined): string | undefined {
+  if (!content) return undefined;
+  const value: unknown = parseYaml(content) as unknown;
+  if (!isRecord(value) || !isRecord(value.auth)) return undefined;
+  const secret = value.auth.secret;
+  return typeof secret === 'string' && secret.trim().length > 0
+    ? secret
+    : undefined;
+}
+
+function generateAuthSecret(): string {
+  return randomBytes(AUTH_SECRET_BYTES).toString('base64url');
 }
 
 function assertConfigMode(mode: unknown): asserts mode is HubConfigMode {

@@ -1,3 +1,4 @@
+import { createApp } from '../../client/app.js';
 import { ServiceProvider } from '@nocobase/service-provider';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -14,7 +15,6 @@ import {
 } from '@nocobase/app-client/runtime';
 import type { ClientApplication as ClientApplicationType } from '@nocobase/app-client';
 
-import { createApp } from '../../client/app.ts';
 import appRuntime from '../../client/runtime.ts';
 
 describe('app client runtime', () => {
@@ -31,7 +31,7 @@ describe('app client runtime', () => {
     const runtime = await resolveAppRuntime(
       defineAppRuntime({
         packageName: '@example/app',
-        config: createAppClientConfig,
+        createAppConfig: createAppClientConfig,
         serviceProviders: [Provider],
         reactProviders: [],
         routes: [],
@@ -66,7 +66,7 @@ describe('app client runtime', () => {
     const runtime = await resolveAppRuntime(
       defineAppRuntime({
         packageName: '@example/app',
-        config: createAppClientConfig,
+        createAppConfig: createAppClientConfig,
         serviceProviders: [Provider],
         plugins: defineClientPlugins([]),
       }),
@@ -93,12 +93,40 @@ describe('app client runtime', () => {
     expect(app.refineConfig.options?.title).toEqual({
       text: 'Configured application',
     });
-    expect(app.refineConfig.authProvider).toBeDefined();
+    expect(
+      runtime.routes
+        .filter((route) => route.navigation)
+        .map((route) => ({
+          name: route.name,
+          path: route.path,
+          access: route.access,
+          title: route.navigation?.title,
+        })),
+    ).toEqual([
+      {
+        name: 'hub',
+        path: '/apps',
+        access: { resource: 'hub', action: 'access' },
+        title: 'navigation.applications',
+      },
+      {
+        name: 'hub-roles',
+        path: '/roles',
+        access: { resource: 'users', action: 'access' },
+        title: 'navigation.roles',
+      },
+      {
+        name: 'users',
+        path: '/users',
+        access: { resource: 'users', action: 'access' },
+        title: 'nav.users',
+      },
+    ]);
     await app.shutdown();
   });
 
   it('requires a Client config factory in the breaking static Runtime protocol', async () => {
-    const { config: _config, ...withoutConfig } = appRuntime;
+    const { createAppConfig: _createAppConfig, ...withoutConfig } = appRuntime;
     await expect(
       resolveAppRuntime(withoutConfig as AppRuntimeDefinition),
     ).rejects.toThrow();

@@ -10,7 +10,7 @@ import {
   type AppAgentContext,
 } from '../../server/agent/context.js';
 import type { ConversationExecution } from '../../server/agent/contracts.js';
-import type { Actor } from '../../server/domain/contracts.js';
+import type { Actor } from '../../server/types.js';
 import {
   ManagerFactory,
   managerFactoryToken,
@@ -24,7 +24,13 @@ import {
   serviceFactoryToken,
 } from '../../server/factory/service-factory.js';
 import { aiManagerToken } from '../../server/provider/ai-employee.js';
+import {
+  AgentServiceFactory,
+  agentServiceFactoryToken,
+} from '../../server/agent/service/agent-service-factory.js';
 import { createTestAppDeps } from './test-app-deps.js';
+import { AIResourceRegistrar } from '../../server/ai/index.js';
+import type { AIEmployeeManager, ToolsManager } from '@nocobase/ai-employee';
 
 export function createTestActor(overrides: Partial<Actor> = {}): Actor {
   return {
@@ -39,6 +45,16 @@ export function createTestConversationExecution(
   overrides: ConversationExecution = {},
 ): ConversationExecution {
   return { ...overrides };
+}
+
+export class TestAIResourceRegistrar extends AIResourceRegistrar {
+  protected override async registerAIEmployees(
+    _aiEmployeeManager: AIEmployeeManager,
+  ): Promise<void> {}
+
+  protected override async registerTools(
+    _toolsManager: ToolsManager,
+  ): Promise<void> {}
 }
 
 export function createTestAIEmployeeFixture() {
@@ -62,13 +78,17 @@ export function createTestAIEmployeeFixture() {
     serviceFactoryToken,
     () => new ServiceFactory({ container }),
   );
+  container.singleton(
+    agentServiceFactoryToken,
+    (resolver) => new AgentServiceFactory({ container: resolver }),
+  );
   const services = container.resolve(serviceFactoryToken);
   container.resolve(managerFactoryToken).configure({
     aiStorageDisk: deps.aiStorageDisk,
   });
   services.configure({
-    paths: deps.paths,
-    loadResources: false,
+    llmServices: [],
+    resourceRegistrar: new TestAIResourceRegistrar(),
   });
   const managers = container.resolve(managerFactoryToken);
   const repositories = container.resolve(repositoryFactoryToken);
@@ -87,8 +107,22 @@ export function createTestAgentContext({
   const fixture = createTestAIEmployeeFixture();
   return createAgentContext({
     actor,
-    execution,
-    state,
+    state: {
+      sessionId: execution.sessionId,
+      messageId: execution.messageId,
+      messages: execution.messages ? [...execution.messages] : undefined,
+      model: execution.model ? { ...execution.model } : undefined,
+      webSearch: execution.webSearch,
+      important: execution.important,
+      frontendTools: execution.frontendTools
+        ? [...execution.frontendTools]
+        : undefined,
+      toolCallResults: execution.toolCallResults
+        ? [...execution.toolCallResults]
+        : undefined,
+      timezone: execution.timezone,
+      ...state,
+    },
     ai: fixture.deps.ai,
     database: fixture.deps.database,
     logger: fixture.deps.logging.getLogger('ai-employee-test'),

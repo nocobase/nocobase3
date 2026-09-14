@@ -6,13 +6,125 @@ import path from 'node:path';
 import test from 'node:test';
 
 import {
+  deduplicateDependencyUpdates,
   extractChangelogSection,
   findPackageDirectories,
+  fitReleaseNotes,
   parseAggregateTag,
   parsePackageTag,
   readPackagesFromTags,
+  RELEASE_BODY_LIMIT,
   resolveDirectories,
 } from '../../scripts/release-notes.mjs';
+
+test('deduplicates dependency commits and preserves their dependency/version list', () => {
+  const section = [
+    '### Patch Changes',
+    '',
+    '- ceb356b: First fix.',
+    '- ceb356b: A different fix from the same commit.',
+    '- Updated dependencies [ceb356b]',
+    '- Updated dependencies [c960d07]',
+    '- Updated dependencies [ceb356b]',
+    '- Updated dependencies [c960d07]',
+    '  - @example/alpha@1.0.0',
+    '  - @example/beta@2.0.0',
+  ];
+  const expected = [
+    ...section.slice(0, 4),
+    '- Updated dependencies [ceb356b], [c960d07]',
+    ...section.slice(8),
+  ].join('\n');
+  assert.equal(deduplicateDependencyUpdates(section.join('\n')), expected);
+  assert.equal(deduplicateDependencyUpdates(expected), expected);
+});
+
+test('handles a dependency run at the end and keeps deduplication local to each section', () => {
+  const section =
+    '- Updated dependencies [ceb356b]\n- Updated dependencies [ceb356b]';
+  for (const heading of ['## Alpha', '## Beta']) {
+    assert.equal(
+      deduplicateDependencyUpdates(`${heading}\n\n${section}`),
+      `${heading}\n\n- Updated dependencies [ceb356b]`,
+    );
+  }
+});
+
+test('preserves code examples, ordinary changes and nested dependency entries', () => {
+  for (const fence of ['```', '~~~~']) {
+    const section = [
+      '- A change.',
+      '- A change.',
+      `${fence}markdown`,
+      '- Updated dependencies [ceb356b]',
+      '- Updated dependencies [ceb356b]',
+      fence,
+      '  - Updated dependencies [ceb356b]',
+      '  - Updated dependencies [ceb356b]',
+      '',
+    ].join('\n');
+    assert.equal(deduplicateDependencyUpdates(section), section);
+  }
+});
+
+test('preserves notes exactly at the body limit, including the final newline', () => {
+  const header = 'Packages';
+  const full = 'x'.repeat(RELEASE_BODY_LIMIT - header.length - 3);
+  assert.equal(
+    fitReleaseNotes(header, [{ full, compact: 'Changelog link' }]),
+    `${header}\n\n${full}\n`,
+  );
+});
+
+test('replaces whole long sections with links while preserving order and small entries', () => {
+  const header = '| Package | Version |\n| --- | --- |\n| alpha | 1 |';
+  const small = '## Small\n\n- Keep this fix.';
+  const link = '## Large\n\n[Full changelog](https://example.com/changelog)';
+  const notes = fitReleaseNotes(header, [
+    { full: small, compact: 'Small link' },
+    {
+      full: `## Large\n\n\`\`\`\n${'修复😀'.repeat(40_000)}\n\`\`\``,
+      compact: link,
+    },
+    { full: '## Last\n\n- Keep this too.', compact: 'Last link' },
+  ]);
+  assert.ok(notes.length <= RELEASE_BODY_LIMIT);
+  assert.ok(notes.startsWith(header));
+  assert.match(notes, /Some long package entries/u);
+  assert.ok(
+    notes.endsWith(`${small}\n\n${link}\n\n## Last\n\n- Keep this too.\n`),
+  );
+  assert.ok(!notes.includes('```'));
+});
+
+test('compacts multiple entries when one replacement is insufficient', () => {
+  const sections = Array.from({ length: 4 }, (_, index) => ({
+    full: `## ${index}\n\n${'x'.repeat(60_000)}`,
+    compact: `## ${index}\n\nChangelog link ${index}`,
+  }));
+  const notes = fitReleaseNotes('Packages', sections);
+  assert.ok(notes.length <= RELEASE_BODY_LIMIT);
+  assert.equal(notes.match(/Changelog link/gu)?.length, 3);
+  assert.ok(notes.includes(sections[3].full));
+});
+
+test('includes the compaction notice in the length budget', () => {
+  const full = 'x'.repeat(RELEASE_BODY_LIMIT);
+  assert.throws(
+    () => fitReleaseNotes('Packages', [{ full, compact: full.slice(0, -20) }]),
+    /even with compact changelog links/u,
+  );
+});
+
+test('fails clearly when even the package summary cannot fit', () => {
+  assert.throws(
+    () =>
+      fitReleaseNotes('x'.repeat(RELEASE_BODY_LIMIT), [
+        { full: 'abc', compact: 'a' },
+      ]),
+    /even with compact changelog links/u,
+  );
+});
 
 test('parses beta and stable aggregate tags', () => {
   assert.deepEqual(parseAggregateTag('release-beta/2026-08-26.5'), {

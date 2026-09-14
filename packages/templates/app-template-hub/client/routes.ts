@@ -6,10 +6,42 @@ import {
 
 const appRoutes: AppClientRouteContribution = defineAppRoutes([
   {
+    access: { resource: 'hub', action: 'access' },
     auth: 'required',
     componentLoader: () => import('./pages/applications-redirect.js'),
     name: 'applications-root',
     path: '/',
+  },
+  {
+    access: { resource: 'hub', action: 'access' },
+    auth: 'required',
+    componentLoader: () => import('./pages/applications-redirect.js'),
+    name: 'applications-legacy',
+    path: '/hub',
+  },
+  {
+    auth: 'guest',
+    componentLoader: () => import('./pages/auth/login.js'),
+    name: 'login',
+    path: '/login',
+  },
+  {
+    auth: 'guest',
+    componentLoader: () => import('./pages/auth/register.js'),
+    name: 'register',
+    path: '/register',
+  },
+  {
+    auth: 'guest',
+    componentLoader: () => import('./pages/auth/forgot-password.js'),
+    name: 'forgot-password',
+    path: '/forgot-password',
+  },
+  {
+    auth: 'guest',
+    componentLoader: () => import('./pages/auth/reset-password.js'),
+    name: 'reset-password',
+    path: '/reset-password',
   },
 ]);
 

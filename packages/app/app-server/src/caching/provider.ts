@@ -2,14 +2,14 @@ import { createCaching } from '@nocobase/caching';
 import { ServiceProvider } from '@nocobase/service-provider';
 
 import type { AppPluginApplication } from '../plugins/index.js';
-import { cachingConfig } from './config.js';
+import { type CachingConfig } from './config.js';
 import { cachingToken } from './token.js';
 
 export class CachingProvider extends ServiceProvider<AppPluginApplication> {
   public readonly name: string = '@nocobase/app-server/caching';
 
   public override register(): void {
-    const config = this.app.config.get(cachingConfig);
+    const config = this.app.config.get<CachingConfig>('caching')!;
     this.app.container.singleton(cachingToken, () => createCaching(config));
   }
 

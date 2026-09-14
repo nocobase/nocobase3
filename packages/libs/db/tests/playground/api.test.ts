@@ -65,10 +65,10 @@ describe.sequential('@nocobase/db playground API', () => {
         orderNo: 'TEST-1001',
         customerNameSnapshot: 'Ada Lovelace',
         status: 'draft',
-        totalAmount: 447.5,
+        totalAmount: '447.5',
         items: [
-          { productId: 1, quantity: 2, subtotal: 258 },
-          { productId: 2, quantity: 1, subtotal: 189.5 },
+          { productId: 1, quantity: 2, subtotal: '258' },
+          { productId: 2, quantity: 1, subtotal: '189.5' },
         ],
       },
     });

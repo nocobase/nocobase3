@@ -1,40 +1,24 @@
-import { Type, type TSchema } from '@sinclair/typebox';
-import { envString } from '@nocobase/config/providers/env';
+import type { AppRuntimeContext } from '../runtime/definition.js';
+export type AppConfigFactory<T extends object = object> = (
+  runtime: AppRuntimeContext,
+) => T;
 
-import type {
-  AppConfigDefinition,
-  AppConfigDefinitionOptions,
-  AppConfigVariantDefinition,
-  AppConfigVariantDefinitionOptions,
-  AppConfigSchemaValue,
-} from './app-config-types.js';
-import type { ResolvedAppRuntimeConfigContext } from '../runtime/definition.js';
-import {
-  joinBasePath,
-  normalizeBasePath,
-  resolveAppNameFromBasePath,
-} from '../support/index.js';
-
-export function defineAppConfig<
-  TSchemaType extends TSchema,
-  TContext = unknown,
->(
-  definition: AppConfigDefinitionOptions<TSchemaType, TContext>,
-): AppConfigDefinition<
-  AppConfigSchemaValue<TSchemaType>,
-  TContext,
-  TSchemaType
-> {
-  return Object.freeze({ kind: 'config', ...definition });
+export function defineAppConfig<T extends object>(
+  factory: AppConfigFactory<T>,
+): AppConfigFactory<T> {
+  return factory;
 }
 
-export function defineAppConfigVariant<
-  TSchemaType extends TSchema,
-  TValue = AppConfigSchemaValue<TSchemaType>,
->(
-  definition: AppConfigVariantDefinitionOptions<TSchemaType>,
-): AppConfigVariantDefinition<TValue, TSchemaType> {
-  return Object.freeze({ kind: 'variant', ...definition });
+export function defaultAppConfigs<T extends Record<string, AppConfigFactory>>(
+  configs: T,
+): AppConfigFactory<{ [K in keyof T]: ReturnType<T[K]> }> {
+  return (runtime) =>
+    Object.fromEntries(
+      Object.entries(configs).map(([key, configure]) => [
+        key,
+        configure(runtime),
+      ]),
+    ) as { [K in keyof T]: ReturnType<T[K]> };
 }
 
 export interface AppIdentityConfig {
@@ -44,32 +28,3 @@ export interface AppIdentityConfig {
   readonly internalBasePath: string;
   readonly publicApiUrl: string;
 }
-
-export const appConfig: AppConfigDefinition<
-  AppIdentityConfig,
-  ResolvedAppRuntimeConfigContext
-> = defineAppConfig({
-  namespace: 'app',
-  schema: Type.Object(
-    {
-      name: Type.String(),
-      publicOrigin: Type.Optional(Type.String({ format: 'uri' })),
-      publicBasePath: Type.String(),
-      internalBasePath: Type.String(),
-      publicApiUrl: Type.String(),
-    },
-    { additionalProperties: false },
-  ),
-  defaults: ({ routing }: ResolvedAppRuntimeConfigContext) => {
-    const publicBasePath = normalizeBasePath(routing.publicBasePath || '/main');
-    return {
-      name: routing.name || resolveAppNameFromBasePath(publicBasePath, 'main'),
-      publicBasePath,
-      internalBasePath: routing.internalBasePath,
-      publicApiUrl: joinBasePath(publicBasePath, '/api'),
-    };
-  },
-  envMappings: {
-    APP_PUBLIC_ORIGIN: envString('publicOrigin'),
-  },
-});

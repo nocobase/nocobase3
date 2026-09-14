@@ -7,18 +7,54 @@ description: 选择默认连接、数据库方言、Schema 管理模式、命名
 
 `DatabaseConfig` 描述一个 Manager 及其命名连接。配置从 `createDatabaseManager()` 或 `defineDatabase()` 进入；精确字段、方言联合类型和回调签名以 TypeScript 声明为准。
 
+## 安装和注册 Dialect
+
+每个数据库方言都有独立的包。应用可以把工厂放入 `drivers` 注册表，供普通
+`ConnectionConfig` 使用：
+
+```ts
+import postgres from '@nocobase/db-postgres';
+import { createDatabaseManager } from '@nocobase/db';
+
+const db = createDatabaseManager({
+  drivers: { postgres },
+  connections: {
+    main: {
+      dialect: 'postgres',
+      host: '127.0.0.1',
+      database: 'app',
+      username: 'app',
+      password: process.env.DB_PASSWORD,
+    },
+  },
+});
+```
+
+也可以直接把同一个包的工厂结果作为连接：
+
+```ts
+const db = createDatabaseManager({
+  connections: {
+    main: postgres({ host: '127.0.0.1', database: 'app' }),
+  },
+});
+```
+
+可用包名是 `@nocobase/db-postgres`、`@nocobase/db-mysql`、
+`@nocobase/db-sqlite`、`@nocobase/db-oracle` 和 `@nocobase/db-mssql`。
+`knex` 由 `@nocobase/db` 提供；native driver 和 PostgreSQL 的
+`pg-query-stream` 由对应 dialect 包提供。
+
 ## 创建最小配置
 
 ```ts
+import sqlite from '@nocobase/db-sqlite';
 import { createDatabaseManager } from '@nocobase/db';
 
 const db = createDatabaseManager({
   default: 'main',
   connections: {
-    main: {
-      dialect: 'sqlite',
-      filename: ':memory:',
-    },
+    main: sqlite({ filename: ':memory:' }),
   },
 });
 ```
@@ -67,16 +103,14 @@ import {
   createDatabaseManager,
   InMemoryCollectionMetadataStore,
 } from '@nocobase/db';
+import sqlite from '@nocobase/db-sqlite';
 
 const metadataStore = new InMemoryCollectionMetadataStore();
 
 const db = createDatabaseManager({
   metadataStore,
   connections: {
-    main: {
-      dialect: 'sqlite',
-      filename: ':memory:',
-    },
+    main: sqlite({ filename: ':memory:' }),
   },
 });
 ```
@@ -93,11 +127,13 @@ Store 的选择和读写边界见 [Collection Metadata](../collection-metadata/o
 
 ```ts
 import { createDatabaseManager, defineDatabase } from '@nocobase/db';
+import sqlite from '@nocobase/db-sqlite';
 
 const config = defineDatabase({
   default: 'main',
+  drivers: { sqlite },
   connections: {
-    main: { dialect: 'sqlite', filename: ':memory:' },
+    main: sqlite({ filename: ':memory:' }),
   },
 });
 

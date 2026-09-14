@@ -473,6 +473,11 @@
           "target": "client/extensions/nocobase-ai/shared/error-boundary.tsx"
         },
         {
+          "path": "registry/nocobase-ai/shared/icons/nocobase-ai-chat-icon.tsx",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai/shared/icons/nocobase-ai-chat-icon.tsx"
+        },
+        {
           "path": "registry/nocobase-ai/shared/loading-state.tsx",
           "type": "registry:file",
           "target": "client/extensions/nocobase-ai/shared/loading-state.tsx"

@@ -6,7 +6,7 @@ keywords: 'NocoBase,NotificationManager,通知接入,站内信,SMTP,Resend,飞�
 
 # 手动接入通知
 
-通知包通过插件的 `ServiceProvider` 接入 NocoBase Application。启用插件后，Provider 从共享容器解析数据库、队列和日志服务，创建 `NotificationManager`，并负责启动与关闭。默认模板同时注册内置 Email 与 IM Provider，通常只需要参考[配置通知 Provider](../../../app-plugin-notification-providers/docs/zh-CN/configuration.md)填写环境变量；自定义宿主仍可按本文后半部分手动组合这些能力。
+`@nocobase/app-plugin-notification` 通过插件的 `ServiceProvider` 接入 NocoBase Application。启用插件后，Provider 从共享容器解析数据库、队列和日志服务，创建并激活 `NotificationManager`，注册队列任务和 reconciliation，并负责关闭运行时。Channel runtime 默认在首次使用时按需创建。默认模板同时注册内置 Email 与 IM Provider，通常只需要参考[配置通知 Provider](../../../app-plugin-notification-providers/docs/zh-CN/configuration.md)填写环境变量；自定义宿主仍可按本文后半部分手动组合这些能力。
 
 这套方式会让宿主明确决定启用哪些通知能力。只需要邮件时，不必创建站内信 store 和 router。
 
@@ -49,7 +49,7 @@ export const notificationConfig: NotificationConfig = {
   channels: [
     defineInAppChannelConfig({
       enabled: true,
-      providers: [{ type: 'database', name: 'in-app' }],
+      providers: [{ type: 'database', name: 'default' }],
     }),
     defineEmailChannelConfig({
       enabled: true,
@@ -71,7 +71,7 @@ export const notificationConfig: NotificationConfig = {
 };
 ```
 
-Provider 的 `name` 和 `type` 会写入 Delivery。应用重启或更新配置后，应保持这两个字段稳定。
+Provider 的 `type` 是实现类型，用于匹配已注册的 Provider definition；`name` 是当前 Channel 内这条 Provider 配置的唯一名称，发送路由通过它选择 Provider。两者都会写入 Delivery，应用重启或更新配置后应保持稳定。Webhook Provider 不需要业务收件人；发送时省略 `to` 即可把消息交给选中的 Provider。
 
 ## 第三步：创建运行时并注册 definitions
 
@@ -175,6 +175,48 @@ export function createAppNotificationRuntime(options: {
 
 如果不需要站内信，可以删除 `inAppStore`、`in-app` Channel 和 database Provider。Email 与 IM definitions 也可以按需移除。只注册 definitions 不会发送消息；只有配置中启用相应 Provider，并调用 `send()` 后才会发生外部请求。
 
+### 自定义 Provider 的幂等契约
+
+自定义 Provider 可以通过 `capabilities.idempotency` 声明重复提交是否安全。省略该配置或设置为 `{ supported: false }` 时，通知服务会认为 Provider 不支持幂等。
+
+只有当相同 `deliveryId` 的重复提交不会产生重复消息时，才能设置 `{ supported: true }`。通知服务会在同一条 Delivery 的每次重试中复用 `deliveryId`，但不会替 Provider 实现查重。Provider 需要把它作为外部服务的幂等键，或者在自己的存储中建立唯一约束：
+
+```ts
+return {
+  name: config.name,
+  type: config.type,
+  capabilities: {
+    idempotency: { supported: true },
+  },
+  async send(input) {
+    await client.send({
+      message: input.message,
+      idempotencyKey: input.deliveryId,
+    });
+    return { status: 'accepted' };
+  },
+};
+```
+
+如果外部服务只在固定时间内保留幂等键，还需要按它承诺的有效期设置 `retentionMs`：
+
+```ts
+capabilities: {
+  idempotency: {
+    supported: true,
+    retentionMs: 24 * 60 * 60 * 1000,
+  },
+},
+```
+
+`retentionMs` 省略时，表示 Provider 能在该 Delivery 的整个生命周期内保证幂等。不要使用 `attemptId` 作为幂等键——每次实际提交都会创建新的 Attempt，因此重试时它会变化。
+
+:::warning 注意
+
+`supported: true` 只是能力声明，不会触发任何自动查重逻辑。如果 Provider 没有基于 `deliveryId` 实现幂等，通知服务会把存在重复风险的 `unknown` 重试错误地判断为安全重试。
+
+:::
+
 ## 第四步：挂载路由
 
 `manager.router` 提供 Delivery 和 Attempt 日志。站内信的收件箱 router 由 `@nocobase/app-plugin-notification-in-app` 提供，需要使用第三步创建的同一个 store：
@@ -216,6 +258,31 @@ app.route(
 ```
 
 `resolveRequestUserId` 必须从当前请求中得到登录用户 ID。不要接受客户端直接提交的用户 ID 作为当前用户身份。
+通知日志和站内信 router 会从请求上下文取得 translator，以返回包含
+`code/message/ns/key/params` 的结构化错误。自定义宿主需要把公开的 locale loaders
+注册到自己的 `I18nRuntime`，再在这些 router 之前挂载请求 i18n middleware：
+
+```ts
+import {
+  NOTIFICATION_NAMESPACE,
+  notificationServerLocales,
+} from '@nocobase/app-plugin-notification';
+import {
+  IN_APP_NOTIFICATION_NAMESPACE,
+  inAppNotificationServerLocales,
+} from '@nocobase/app-plugin-notification-in-app';
+import { createI18nMiddleware } from '@nocobase/i18n/server';
+
+i18n.registerNamespace(NOTIFICATION_NAMESPACE, notificationServerLocales);
+i18n.registerNamespace(
+  IN_APP_NOTIFICATION_NAMESPACE,
+  inAppNotificationServerLocales,
+);
+await i18n.init();
+app.use('*', createI18nMiddleware(i18n));
+```
+
+这里的 `i18n` 是宿主拥有的 `I18nRuntime`。认证 middleware 自己产生的错误仍遵循认证插件的契约。
 
 ## 第五步：接入生命周期
 

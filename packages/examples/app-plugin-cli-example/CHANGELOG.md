@@ -1,5 +1,18 @@
 # @nocobase/app-plugin-cli-example
 
+## 0.1.0-beta.2
+
+### Minor Changes
+
+- e9f796d: Demonstrate a build hook
+
+  The plugin now registers a `beforeBuild` hook alongside its commands, showing that a hook command is any executable rather than one of the plugin's own oclif commands.
+
+### Patch Changes
+
+- Updated dependencies [e9f796d]
+  - @nocobase/nb3-cli@1.0.0-beta.6
+
 ## 0.1.0-beta.1
 
 ### Patch Changes

@@ -20,6 +20,13 @@ import type {
   Repository,
   RepositoryRecord,
 } from '../../../repository/types.js';
+import { normalizeRepositoryPolicy } from '../../../repository/policy/normalize.js';
+import { expandPolicyRefs } from '../../../repository/policy/refs.js';
+import { PolicyBoundConnection } from './policy-bound-connection.js';
+import type {
+  NormalizedRepositoryPolicy,
+  RepositoryPolicy,
+} from '../../../repository/policy/types.js';
 import { KnexSchemaAdapter } from '../../../schema/internal/knex/adapter.js';
 import type {
   DatabaseCapabilities,
@@ -27,26 +34,35 @@ import type {
 } from '../../../schema/adapter.js';
 import type { SchemaInspector } from '../../../schema/inspector/types.js';
 import { resolveDatabaseCapabilities } from '../../capabilities.js';
+import {
+  attachDatabaseDriverRuntime,
+  createDefaultDatabaseDriverRuntime,
+  type DatabaseDriverRuntime,
+} from '../../runtime.js';
 import type {
   ConnectionConfig,
   DatabaseDialect,
   DatabaseDriver,
+  DatabaseDriverDefinition,
   SchemaManagementMode,
 } from '../../config.js';
-import type { DatabaseConnection } from '../../connection.js';
+import type {
+  DatabaseConnection,
+  ScopedDatabaseConnection,
+} from '../../connection.js';
 import { SchemaManagementSchemaAdapter } from '../../schema-management.js';
 import { createKnexClient } from './client.js';
 import {
   resolveKnexConnectionConfig,
   type KnexConnectionConfig,
 } from './config.js';
-import { resolveKnexDatabaseDialectAdapter } from './dialect-adapters.js';
 
 export class KnexDatabaseConnection implements DatabaseConnection {
   readonly driver: DatabaseDriver;
   readonly dialect: DatabaseDialect;
   readonly schemaManagement: SchemaManagementMode;
   readonly capabilities: DatabaseCapabilities;
+  readonly runtime: DatabaseDriverRuntime;
   readonly schema: SchemaAdapter;
   readonly schemaInspector: SchemaInspector;
   readonly builder: CollectionBuilder;
@@ -64,9 +80,11 @@ export class KnexDatabaseConnection implements DatabaseConnection {
     metadataStore?: CollectionMetadataStore,
     knexInstance?: Knex,
     transactionInvalidations?: TransactionInvalidationCollector,
+    private readonly dialectDriver:
+      DatabaseDriverDefinition | undefined = undefined,
   ) {
     this.knexInstance = knexInstance;
-    this.config = resolveKnexConnectionConfig(sourceConfig);
+    this.config = resolveKnexConnectionConfig(sourceConfig, dialectDriver);
     this.metadataStore =
       metadataStore ??
       new DatabaseCollectionMetadataStore({
@@ -75,13 +93,35 @@ export class KnexDatabaseConnection implements DatabaseConnection {
     this.driver = this.config.driver;
     this.dialect = this.config.dialect;
     this.schemaManagement = this.config.schemaManagement;
-    this.capabilities = resolveDatabaseCapabilities(
-      this.dialect,
-      this.config.capabilities,
-    );
-    this.schemaInspector = resolveKnexDatabaseDialectAdapter(
-      this.dialect,
-    ).createSchemaInspector({
+    this.capabilities = resolveDatabaseCapabilities({
+      ...dialectDriver?.capabilities,
+      ...this.config.capabilities,
+    });
+    const runtimeContext = {
+      dialect: this.dialect,
+      sourceConfig: this.sourceConfig,
+      config: this.config,
+      capabilities: this.capabilities,
+      getClient: () => this.getClient(),
+      resolveClient: () => this.resolveClient(),
+    };
+    this.runtime = dialectDriver?.createRuntime
+      ? dialectDriver.createRuntime(runtimeContext)
+      : createDefaultDatabaseDriverRuntime(runtimeContext);
+    if (this.runtime.dialect !== this.dialect) {
+      throw new Error(
+        `Database driver runtime for dialect "${this.dialect}" resolved to "${this.runtime.dialect}".`,
+      );
+    }
+    if (this.knexInstance) {
+      attachDatabaseDriverRuntime(this.knexInstance, this.runtime);
+    }
+    if (!dialectDriver?.createSchemaInspector) {
+      throw new Error(
+        `Database driver for dialect "${this.dialect}" must create a schema inspector.`,
+      );
+    }
+    this.schemaInspector = dialectDriver.createSchemaInspector({
       connectionName: this.name,
       config: this.config,
       resolveClient: () => this.resolveClient(),
@@ -93,6 +133,7 @@ export class KnexDatabaseConnection implements DatabaseConnection {
           new KnexSchemaAdapter(client, {
             dialect: this.dialect,
             capabilities: this.capabilities,
+            runtime: this.runtime,
           }),
         this.dialect,
         this.capabilities,
@@ -108,6 +149,8 @@ export class KnexDatabaseConnection implements DatabaseConnection {
         underscored: this.config.naming?.underscored,
         tablePrefix: this.config.naming?.tablePrefix,
       }),
+      (name) => this.collections.get(name),
+      this.runtime,
     );
     const collections = new CollectionRegistry({
       inspector: this.schemaInspector,
@@ -164,14 +207,52 @@ export class KnexDatabaseConnection implements DatabaseConnection {
     TCreate extends object = Partial<TRecord>,
     TUpdate extends object = Partial<TRecord>,
   >(collection: string): Repository<TRecord, TCreate, TUpdate> {
+    return this.createRepository<TRecord, TCreate, TUpdate>(
+      collection,
+      undefined,
+    );
+  }
+
+  /**
+   * Build a Repository with a pre-normalized Policy already attached. Used by
+   * {@link PolicyBoundConnection} so binding does not have to re-normalize on
+   * every call.
+   */
+  createRepository<
+    TRecord extends object = RepositoryRecord,
+    TCreate extends object = Partial<TRecord>,
+    TUpdate extends object = Partial<TRecord>,
+  >(
+    collection: string,
+    policy: NormalizedRepositoryPolicy | undefined,
+  ): Repository<TRecord, TCreate, TUpdate> {
     return new DefaultRepository<TRecord, TCreate, TUpdate>({
       collection,
       collections: this.collections,
+      policy,
       adapter: new KnexRepositoryExecutionAdapter(
         () => this.getClient(),
         (name) => this.collections.get(name),
+        this.runtime,
       ),
     });
+  }
+
+  withPolicies<P>(
+    policies: Readonly<
+      Record<string, RepositoryPolicy | ((principal: P) => RepositoryPolicy)>
+    >,
+    principal: P,
+  ): ScopedDatabaseConnection {
+    const normalized = Object.fromEntries(
+      Object.entries(policies).map(([collection, policy]) => [
+        collection,
+        normalizeRepositoryPolicy(
+          typeof policy === 'function' ? policy(principal) : policy,
+        ),
+      ]),
+    );
+    return new PolicyBoundConnection(this, expandPolicyRefs(normalized));
   }
 
   async disconnect(): Promise<void> {
@@ -188,6 +269,30 @@ export class KnexDatabaseConnection implements DatabaseConnection {
     await this.disconnect();
     await this.connect();
     return this;
+  }
+
+  async resetManagedSchema(): Promise<void> {
+    if (this.schemaManagement === 'external') {
+      throw new Error(
+        `Connection "${this.name}" uses external schema management and cannot be reset.`,
+      );
+    }
+    if (!this.dialectDriver?.resetManagedSchema) {
+      throw new Error(
+        `Database driver for dialect "${this.dialect}" does not support managed schema reset.`,
+      );
+    }
+    await this.dialectDriver.resetManagedSchema({
+      connectionName: this.name,
+      config: this.sourceConfig,
+      resolveClient: () => this.resolveClient(),
+    });
+    if (this.metadataStore instanceof DatabaseCollectionMetadataStore) {
+      await this.metadataStore.reinitialize();
+    } else {
+      await this.metadataStore.initialize();
+    }
+    this.collections.invalidate();
   }
 
   async transaction<T>(
@@ -211,6 +316,7 @@ export class KnexDatabaseConnection implements DatabaseConnection {
           metadataStore,
           trx,
           invalidations,
+          this.dialectDriver,
         );
         const transactionResult = await fn(connection);
         await invalidations.validateRelations(connection.collections);
@@ -229,6 +335,7 @@ export class KnexDatabaseConnection implements DatabaseConnection {
   private getClient(): Knex {
     if (!this.knexInstance) {
       this.knexInstance = createKnexClient(this.config);
+      attachDatabaseDriverRuntime(this.knexInstance, this.runtime);
     }
     return this.knexInstance;
   }

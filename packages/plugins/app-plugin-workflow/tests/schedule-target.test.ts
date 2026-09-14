@@ -1,4 +1,5 @@
 import { createDatabaseManager, type DatabaseManager } from '@nocobase/db';
+import sqlite from '@nocobase/db-sqlite';
 import { describe, expect, it, vi } from 'vitest';
 
 import { WorkflowInvocationError } from '../server/engine/invocation.js';
@@ -13,6 +14,7 @@ const context = {
 describe('WorkflowScheduleTarget', () => {
   it('describes workflows with their route id, not the workflow key', async () => {
     const database = createDatabaseManager({
+      drivers: { sqlite },
       connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
     });
     try {
@@ -71,6 +73,7 @@ describe('WorkflowScheduleTarget', () => {
 
   it('does not trigger a second Workflow Run for the same occurrence', async () => {
     const database = createDatabaseManager({
+      drivers: { sqlite },
       connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
     });
     try {

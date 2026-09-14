@@ -1,3 +1,4 @@
+import sqlite from '@nocobase/db-sqlite';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
@@ -11,6 +12,7 @@ const managers: DatabaseManager[] = [];
 
 async function createDatabase(): Promise<DatabaseManager> {
   const database = createDatabaseManager({
+    drivers: { sqlite },
     default: 'main',
     connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
   });
@@ -100,6 +102,60 @@ describe('native AI employee persistence', () => {
     ).toMatchObject({ content: { type: 'text', content: 'hello' } });
   });
 
+  it('filters nullable fields with SQL null semantics', async () => {
+    const database = await createDatabase();
+    const repositories = new RepositoryFactory({
+      connection: database.connection(),
+    });
+    const messageId = '9007199254740993';
+    await repositories.aiToolMessages.create({
+      values: [
+        {
+          messageId,
+          toolCallId: 'not-interrupted',
+          toolName: 'exampleTool',
+          invokeStatus: 'done',
+          interruptActionOrder: null,
+        },
+        {
+          messageId,
+          toolCallId: 'interrupt-0',
+          toolName: 'exampleTool',
+          invokeStatus: 'waiting',
+          interruptActionOrder: 0,
+        },
+        {
+          messageId,
+          toolCallId: 'interrupt-1',
+          toolName: 'exampleTool',
+          invokeStatus: 'waiting',
+          interruptActionOrder: 1,
+        },
+      ],
+    });
+
+    await expect(
+      repositories.aiToolMessages.find({
+        filter: {
+          messageId,
+          interruptActionOrder: { $ne: null as unknown as number },
+        },
+        sort: ['interruptActionOrder'],
+      }),
+    ).resolves.toMatchObject([
+      { toolCallId: 'interrupt-0', interruptActionOrder: 0 },
+      { toolCallId: 'interrupt-1', interruptActionOrder: 1 },
+    ]);
+    await expect(
+      repositories.aiToolMessages.find({
+        filter: {
+          messageId,
+          interruptActionOrder: null as unknown as number,
+        },
+      }),
+    ).resolves.toMatchObject([{ toolCallId: 'not-interrupted' }]);
+  });
+
   it('sorts AI employee lists by sort ascending by default', async () => {
     const database = await createDatabase();
     const repositories = new RepositoryFactory({
@@ -168,8 +224,8 @@ describe('native AI employee persistence', () => {
       invokeStatus: 'confirmed',
       status: 'success',
       content,
-      invokeStartTime: invokeStartTime.getTime(),
-      invokeEndTime: Date.parse(invokeEndTime),
+      invokeStartTime: String(invokeStartTime.getTime()),
+      invokeEndTime: String(Date.parse(invokeEndTime)),
     });
   });
 

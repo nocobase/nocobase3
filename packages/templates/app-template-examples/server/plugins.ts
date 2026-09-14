@@ -14,15 +14,15 @@ import serviceProviderExample from '@nocobase/app-plugin-service-provider-exampl
 import workflow from '@nocobase/app-plugin-workflow/server';
 import skillsExample from '@nocobase/app-plugin-skills-example/server';
 import {
+  defineServerPlugin,
   defineServerPlugins,
   type AppServerPlugins,
 } from '@nocobase/app-server/plugins';
 import repositoryExample from '@nocobase/app-plugin-repository-example/server';
-import fileRepository from '@nocobase/app-plugin-file-repository/server';
-import fileRepositoryExample from '@nocobase/app-plugin-file-repository-example/server';
 import scheduler from '@nocobase/app-plugin-scheduler/server';
+import file from '@nocobase/app-plugin-file/server';
+import fileExample from '@nocobase/app-plugin-file-example/server';
 import packageMetadata from '../package.json' with { type: 'json' };
-import { defineServerPlugin } from '@nocobase/app-server/plugins';
 
 const exampleSchedules = defineServerPlugin({
   packageName: packageMetadata.name,
@@ -46,8 +46,8 @@ const serverPlugins: AppServerPlugins = defineServerPlugins([
   workflow,
   skillsExample,
   repositoryExample,
-  fileRepository,
-  fileRepositoryExample,
+  file,
+  fileExample,
   scheduler,
   exampleSchedules,
 ]);

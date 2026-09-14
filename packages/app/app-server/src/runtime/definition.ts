@@ -1,4 +1,6 @@
-import { AppConfig, type AppConfigContribution } from '../config/index.js';
+import type { AppConfigFactory } from '../config/index.js';
+import type { ConfigMap } from '@nocobase/config';
+import { AppConfig } from '../config/index.js';
 
 import type {
   Application,
@@ -11,6 +13,7 @@ import {
 } from '../config/index.js';
 import {
   resolveAppServerPlugins,
+  type AppServerPluginLocalesLoader,
   type AppServerPlugins,
   type ResolvedAppServerPlugins,
 } from '../plugins/index.js';
@@ -40,26 +43,31 @@ export interface ResolvedAppRuntimeConfigContext extends AppRuntimeConfigContext
   readonly plugins: ResolvedAppServerPlugins;
   readonly appPackageName: string;
   readonly configPath: string | undefined;
-  readonly configs: readonly AppConfigContribution<ResolvedAppRuntimeConfigContext>[];
 }
 
 export interface AppRuntimeDefinition {
-  readonly config: (
+  readonly defaultConfigs?: AppConfigFactory<ConfigMap>;
+  readonly createAppConfig: (
     context: ResolvedAppRuntimeConfigContext,
-  ) => AppConfig | Promise<AppConfig>;
+  ) => AppConfig;
   readonly plugins: AppServerPlugins;
   readonly serviceProviders: readonly ApplicationServiceProviderConstructor[];
   readonly routes: readonly AppRouteContribution<Application>[];
+  readonly locales?: AppServerPluginLocalesLoader;
 }
 
-export interface ResolvedAppRuntime extends ResolvedAppScopeRuntime {
+export interface AppRuntimeContext extends ResolvedAppScopeRuntime {
+  app?: Application;
   readonly scope: AppScope;
   readonly configPaths: ConfigPaths;
   readonly plugins: ResolvedAppServerPlugins;
   readonly serviceProviders: readonly ApplicationServiceProviderConstructor[];
   readonly routes: readonly AppRouteContribution<Application>[];
-  readonly appConfig: AppConfig;
+  readonly config: AppConfig;
+  readonly locales?: AppServerPluginLocalesLoader;
 }
+
+export type ResolvedAppRuntime = AppRuntimeContext;
 
 export function defineAppRuntime(
   definition: AppRuntimeDefinition,
@@ -77,18 +85,23 @@ export async function resolveAppRuntime(
 ): Promise<ResolvedAppRuntime> {
   const base = resolveAppScopeRuntime(scope);
   const context = createAppRuntimeConfigContext(definition, scope, base);
-  const appConfig = await definition.config(context);
+  const appConfig = definition.createAppConfig(context);
   await appConfig.loadAll();
 
-  return {
+  const runtime: AppRuntimeContext = {
     ...base,
     scope,
     configPaths: context.paths,
     plugins: context.plugins,
     serviceProviders: definition.serviceProviders,
     routes: definition.routes,
-    appConfig,
+    config: appConfig,
+    locales: definition.locales,
   };
+  if (definition.defaultConfigs) {
+    runtime.config.mergeDefaults(definition.defaultConfigs(runtime));
+  }
+  return runtime;
 }
 
 function createAppRuntimeConfigContext(
@@ -100,10 +113,8 @@ function createAppRuntimeConfigContext(
   const plugins = resolveAppServerPlugins(
     runtime.paths.rootDir,
     definition.plugins,
+    { preferBuiltPackages: isCompiledRuntime() },
   );
-  const configs = plugins.plugins.flatMap(
-    (plugin) => plugin.definition.config,
-  ) as unknown as readonly AppConfigContribution<ResolvedAppRuntimeConfigContext>[];
 
   return {
     ...createConfigContext({ env: runtime.env, paths: configPaths }),
@@ -113,6 +124,9 @@ function createAppRuntimeConfigContext(
     plugins,
     appPackageName: plugins.appPackageName,
     configPath: scope.configPath,
-    configs,
   };
+}
+
+function isCompiledRuntime(): boolean {
+  return !import.meta.url.includes('/src/');
 }

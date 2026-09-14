@@ -11,6 +11,7 @@ import type {
   NotificationChannel,
   NotificationContent,
   NotificationProvider,
+  NotificationProviderCapabilities,
   NotificationProviderErrorCategory,
   NotificationProviderIdentity,
   NotificationProviderSendError,
@@ -27,6 +28,7 @@ export interface ChannelManagerOptions {
   readonly logger: Logger;
   readonly store: NotificationStore;
   readonly resolveRuntime?: (type: string) => Promise<void>;
+  readonly onDeliveryChanged?: (delivery: NotificationDeliveryRecord) => void;
   readonly leaseMs?: number;
   readonly providerTimeoutMs?: number;
   readonly retry?: {
@@ -57,7 +59,7 @@ export class ChannelManager {
 
   async resolveRecipient(
     type: string,
-    recipient: NotificationRecipient,
+    recipient: NotificationRecipient | undefined,
     provider: NotificationProviderIdentity,
   ): Promise<object | undefined> {
     const channel = this.runtimes.get(type)?.channel;
@@ -114,6 +116,21 @@ export class ChannelManager {
     ];
   }
 
+  providerCapabilities(
+    channel: string,
+    provider: NotificationProviderIdentity,
+  ): NotificationProviderCapabilities {
+    return (
+      this.runtimes
+        .get(channel)
+        ?.providers.find(
+          (candidate) =>
+            candidate.name === provider.name &&
+            candidate.type === provider.type,
+        )?.capabilities ?? { idempotency: { supported: false } }
+    );
+  }
+
   async send(
     deliveryId: string,
   ): Promise<NotificationDeliveryRecord | undefined> {
@@ -131,16 +148,13 @@ export class ChannelManager {
       await this.leaseExpiry(),
     );
     if (!claimed) return undefined;
+    this.changed(claimed);
 
     const stopHeartbeat = this.startHeartbeat(claimed.id, leaseToken);
     try {
       const prepared = await this.prepare(runtime.channel, claimed);
       if (!prepared.ok)
-        return this.options.store.finishDelivery(
-          claimed,
-          'failed',
-          prepared.error,
-        );
+        return this.finishDelivery(claimed, 'failed', prepared.error);
       return await this.submit(runtime, claimed, prepared.value);
     } finally {
       stopHeartbeat();
@@ -227,33 +241,72 @@ export class ChannelManager {
         candidate.type === claimed.providerType,
     );
     if (!provider)
-      return this.options.store.finishDelivery(claimed, 'failed', {
+      return this.finishDelivery(claimed, 'failed', {
         code: 'PROVIDER_UNAVAILABLE',
         message: `Notification Provider "${claimed.providerName}" (${claimed.providerType}) is unavailable.`,
         category: 'configuration',
       });
 
-    const attempt: NotificationAttemptRecord = {
+    const startedAt = await this.options.store.now();
+    const retryResolution = retryResolutionForAttempt(
+      provider,
+      claimed,
+      startedAt,
+    );
+    const delivery = {
+      ...claimed,
+      retryResolution,
+      providerIdempotency: providerIdempotencyForAttempt(
+        provider,
+        claimed,
+        startedAt,
+      ),
+    };
+    let attempt: NotificationAttemptRecord = {
       id: randomUUID(),
       deliveryId: claimed.id,
       sequence: claimed.attemptCount + 1,
       providerName: provider.name,
       providerType: provider.type,
       status: 'submitting',
-      startedAt: await this.options.store.now(),
+      startedAt,
+      retryResolution,
     };
     const started = await this.options.store.startAttempt(
-      claimed,
+      delivery,
       attempt,
       await this.leaseExpiry(),
     );
     if (!started) return undefined;
-    const current = started;
+    let current = started;
 
-    const result = await this.invoke(provider, prepared, current, attempt.id);
+    const submittedAt = await this.options.store.now();
+    const submittedResolution = retryResolutionForAttempt(
+      provider,
+      current,
+      submittedAt,
+    );
+    if (submittedResolution?.type !== current.retryResolution?.type) {
+      attempt = { ...attempt, retryResolution: submittedResolution };
+      const updated = await this.options.store.updateAttemptRetryResolution(
+        { ...current, retryResolution: submittedResolution },
+        attempt,
+      );
+      if (!updated) return undefined;
+      current = updated;
+    }
+    this.changed(current);
+
+    const result = await this.invoke(
+      provider,
+      prepared,
+      current,
+      attempt.id,
+      submittedAt,
+    );
     const finishedAt = await this.options.store.now();
     if (result.status === 'accepted') {
-      const finished = await this.options.store.finishAttemptAndDelivery(
+      const finished = await this.finishAttemptAndDelivery(
         {
           ...attempt,
           status: 'accepted',
@@ -278,7 +331,7 @@ export class ChannelManager {
       return finished;
     }
     if (result.status === 'submission_unknown') {
-      return this.options.store.finishAttemptAndDelivery(
+      return this.finishAttemptAndDelivery(
         {
           ...attempt,
           status: 'unknown',
@@ -306,7 +359,7 @@ export class ChannelManager {
           Date.parse(finishedAt) +
             this.retryDelay(providerAttempts, result.retryAfterMs),
         ).toISOString();
-        return this.options.store.finishAttemptAndDelivery(
+        return this.finishAttemptAndDelivery(
           failedAttempt,
           current,
           'failed',
@@ -315,7 +368,7 @@ export class ChannelManager {
         );
       }
     }
-    return this.options.store.finishAttemptAndDelivery(
+    return this.finishAttemptAndDelivery(
       failedAttempt,
       current,
       'failed',
@@ -328,10 +381,11 @@ export class ChannelManager {
     message: object,
     delivery: NotificationDeliveryRecord,
     attemptId: string,
+    submittedAt: string,
   ): Promise<ProviderSendResult> {
     const controller = new AbortController();
     const deadline = new Date(
-      Date.parse(await this.options.store.now()) + this.providerTimeoutMs,
+      Date.parse(submittedAt) + this.providerTimeoutMs,
     ).toISOString();
     let timeout: ReturnType<typeof setTimeout> | undefined;
     const timeoutResult = new Promise<ProviderSendResult>((resolve) => {
@@ -362,13 +416,48 @@ export class ChannelManager {
       ]);
     } catch (error) {
       return {
-        status: 'failed',
+        status: 'submission_unknown',
         error: normalizeError(error, 'provider'),
-        disposition: 'never',
       };
     } finally {
       if (timeout) clearTimeout(timeout);
     }
+  }
+
+  private async finishAttemptAndDelivery(
+    attempt: NotificationAttemptRecord,
+    delivery: NotificationDeliveryRecord,
+    status: 'accepted' | 'failed' | 'unknown',
+    error?: NotificationProviderSendError,
+    nextRunAt?: string,
+  ): Promise<NotificationDeliveryRecord | undefined> {
+    const result = await this.options.store.finishAttemptAndDelivery(
+      attempt,
+      delivery,
+      status,
+      error,
+      nextRunAt,
+    );
+    if (result) this.changed(result);
+    return result;
+  }
+
+  private async finishDelivery(
+    delivery: NotificationDeliveryRecord,
+    status: 'accepted' | 'failed' | 'unknown',
+    error?: NotificationProviderSendError,
+  ): Promise<NotificationDeliveryRecord | undefined> {
+    const result = await this.options.store.finishDelivery(
+      delivery,
+      status,
+      error,
+    );
+    if (result) this.changed(result);
+    return result;
+  }
+
+  private changed(delivery: NotificationDeliveryRecord): void {
+    this.options.onDeliveryChanged?.(delivery);
   }
 
   private startHeartbeat(deliveryId: string, leaseToken: string): () => void {
@@ -429,6 +518,61 @@ export class ChannelManager {
   private get maxAttemptsPerProvider(): number {
     return this.options.retry?.maxAttemptsPerProvider ?? 3;
   }
+}
+
+function retryResolutionForAttempt(
+  provider: NotificationProvider,
+  delivery: NotificationDeliveryRecord,
+  startedAt: string,
+): NotificationDeliveryRecord['retryResolution'] {
+  const resolution = delivery.retryResolution;
+  if (
+    resolution?.type !== 'safe_provider_idempotency' ||
+    (providerSupportsIdempotency(provider, delivery.providerIdempotency) &&
+      isProviderIdempotencyActive(delivery.providerIdempotency, startedAt))
+  ) {
+    return resolution;
+  }
+  return { ...resolution, type: 'duplicate_risk_accepted' };
+}
+
+function providerIdempotencyForAttempt(
+  provider: NotificationProvider,
+  delivery: NotificationDeliveryRecord,
+  startedAt: string,
+): NotificationDeliveryRecord['providerIdempotency'] {
+  if (isProviderIdempotencyActive(delivery.providerIdempotency, startedAt))
+    return delivery.providerIdempotency;
+  const idempotency = provider.capabilities?.idempotency;
+  if (!idempotency?.supported) return undefined;
+  return {
+    startedAt,
+    ...(idempotency.retentionMs === undefined
+      ? {}
+      : {
+          expiresAt: new Date(
+            Date.parse(startedAt) + idempotency.retentionMs,
+          ).toISOString(),
+        }),
+  };
+}
+
+function providerSupportsIdempotency(
+  provider: NotificationProvider,
+  record: NotificationDeliveryRecord['providerIdempotency'],
+): boolean {
+  const idempotency = provider.capabilities?.idempotency;
+  return Boolean(record && idempotency?.supported);
+}
+
+function isProviderIdempotencyActive(
+  record: NotificationDeliveryRecord['providerIdempotency'],
+  now: string,
+): boolean {
+  return (
+    record !== undefined &&
+    (record.expiresAt === undefined || record.expiresAt > now)
+  );
 }
 
 function isRunnable(

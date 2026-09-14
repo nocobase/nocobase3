@@ -86,6 +86,7 @@ import {
   validateMigrations,
   type DatabaseManager,
 } from '@nocobase/db';
+import sqlite from '@nocobase/db-sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 const migrationsDirectory = fileURLToPath(
@@ -104,11 +105,9 @@ describe('example plugin migrations', () => {
   beforeEach(() => {
     database = createDatabaseManager({
       default: 'main',
+      drivers: { sqlite },
       connections: {
-        main: {
-          dialect: 'sqlite',
-          filename: ':memory:',
-        },
+        main: sqlite({ filename: ':memory:' }),
       },
     });
   });
@@ -319,9 +318,9 @@ it('installs all current migrations', async () => {
   });
 
   // Verify invariants of the current latest version, not a historical version.
-  await expect(
-    database.connection().collections.get('users'),
-  ).resolves.toMatchObject({ name: 'users' });
+  await expect(database.collections().get('users')).resolves.toMatchObject({
+    name: 'users',
+  });
 });
 ```
 

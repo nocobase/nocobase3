@@ -11,7 +11,7 @@ import {
 
 import { loggingToken } from '../logging/index.js';
 import type { AppPluginApplication } from '../plugins/index.js';
-import { queueConfig } from './config.js';
+import { type AppQueueConfig } from './config.js';
 import { queueJobFactoryRegistryToken, queueManagerToken } from './token.js';
 
 export class QueueProvider extends ServiceProvider<AppPluginApplication> {
@@ -47,7 +47,7 @@ export class QueueProvider extends ServiceProvider<AppPluginApplication> {
       .resolve(loggingToken)
       .getLogger()
       .child({ module: 'queue' });
-    return createQueueManager(this.app.config.get(queueConfig), {
+    return createQueueManager(this.app.config.get<AppQueueConfig>('queue')!, {
       database,
       logger,
       jobFactory: (JobClass) =>

@@ -1,5 +1,196 @@
 # @nocobase/app-server
 
+## 1.0.0-beta.11
+
+### Minor Changes
+
+- ceb356b: Declare database dialect drivers on the application's own database config.
+
+  An application lists the dialect packages it installs under `database.drivers`,
+  next to the connections that use them, and the runtime, the CLI commands and the
+  tests all resolve a dialect from that one place. The app-server runtime stays
+  independent of every concrete database driver.
+
+  This replaces the process-wide `registerAppDatabaseDrivers` registry and the
+  `databaseDrivers` option on `Application`, both of which are removed. An
+  application that used either one moves its drivers into `database.drivers` and
+  drops the module it imported only for the registration side effect.
+
+- f17f3a6: Provide editable TypeScript defaults for application modules, assembled by the runtime before services start. Module factories receive the runtime with application paths and plugin metadata; deployment files and environment variables override defaults, and configuration reload preserves code defaults.
+
+  Keep deployment settings in YAML examples and reserve explicit environment overrides for secrets and startup integration. Simplify application configuration loading, merging and reload subscriptions.
+
+  Align client configuration assembly with the server: runtime merges application TypeScript defaults beneath public configuration before services start. Client inspection reports the application configuration entry.
+
+- f17f3a6: Support TypeScript authentication options in application templates and use the native authentication client. Keep authentication plugins and callbacks in editable server and client configuration, with YAML as the default format for deployment settings.
+
+  Runtime assembly now prepares complete configuration before application creation. Module configuration factories use defineAppConfig and defaultAppConfigs, receive the runtime once, and retain their defaults when environment configuration reloads.
+
+- ceb356b: Supply plugin migration and seed sources to database planning directly instead
+  of through the database configuration.
+
+  `AppDatabaseConfig.taskSources` is removed. It held the application's package
+  name and the migration and seed directories contributed by registered server
+  plugins — values the runtime derives from resolved plugins rather than values
+  anyone configures. Carrying them in the `database` namespace put them where a
+  `config.yml` deep-merges: `database.taskSources.migrations: []` silently
+  dropped every plugin's migrations, and the application still started.
+
+  They now travel as an `AppDatabaseTaskContributions` value alongside the
+  configuration. `planAppDatabaseTasks`, `runAppDatabaseTasks`, `runAppMigrations`
+  and `runAppSeeds` take an options object carrying it, with `paths`, `drivers`
+  and the task selection, in place of their positional parameters.
+  `createAppPluginDatabaseConfig` and `resolveAppPluginDatabaseConfig` are
+  replaced by `createAppDatabaseTaskContributions`, which maps resolved plugins to
+  that value. `contributions` is required, so a call site that has not been
+  updated fails to compile rather than quietly planning without its plugins.
+
+  An application's `server/config/database.ts` keeps only what it configures —
+  drivers and connections — and no longer calls into the plugin resolver. Its
+  `cli/database-command.ts` builds the contributions from the runtime it already
+  resolves; `cli/commands/migrate.ts` and `cli/commands/seed.ts` are unchanged.
+
+- ceb356b: Add the destructive `pnpm migrate --fresh --force` workflow for managed
+  connections. It clears dialect-owned schema objects, reruns visible migrations,
+  requires confirmation in interactive terminals, and rejects external
+  connections.
+- c960d07: Let a Repository API action declare a `policy`, normalized when the routes are
+  defined and bound to the Repository the handler uses. `@nocobase/db` gains
+  `RepositoryOperations`, the operation methods a plain and a policy-bound
+  Repository share, so code that only runs queries can accept either.
+- c960d07: Replace the Repository API's per-action `writePolicy` with a Repository Policy
+  declared once per exposure.
+
+  **Breaking.** `defineRepositoryApiRoutes()` no longer accepts `writePolicy` on
+  an action, and every exposure must declare a `policy`. An action configuration
+  now says only that an endpoint exists; what it may do is the exposure's Policy,
+  which governs reading, creating, updating and deleting together. Declaring one
+  is required rather than optional because `writePolicy` defaulted to refusing
+  writes while an absent Policy restricts nothing — making it optional would have
+  turned every existing declaration from "refuse every write" into "allow
+  everything" without a word of warning.
+
+  Declare `policy` as a function of a principal, together with a
+  `principal(context)` resolver, to scope rows to the caller. The resolver belongs
+  to the application, since this router installs no authentication; one that
+  returns nothing refuses the request with 403 `PRINCIPAL_REQUIRED` rather than
+  binding a Policy built from a principal that is not there. A fixed Policy is
+  still normalized when the routes are defined, so a malformed one fails where it
+  is written; a Policy function cannot be, and its `INVALID_POLICY` now reaches
+  the host error handler as a server error instead of being reported to the caller
+  as a 400.
+
+  `@nocobase/db` gains `buildRepositoryPolicy`, a builder whose unmentioned nodes
+  are denied, so the four-node requirement costs nothing to satisfy while the
+  default stays refusal. Two related fixes travel with it: `create`, `update` and
+  `delete` nodes that are `false` now refuse a write before its payload is read,
+  so an empty body is reported as forbidden rather than as invalid input; and a
+  `create` node whose relations grant `update`, `upsert`, `disconnect`, `set` or
+  `delete` is refused during normalization, since a root create performs none of
+  them.
+
+  `@nocobase/app-plugin-file` exposures declare a Policy too, and it reaches
+  uploads: the upload path binds a Policy derived from the exposure's, inheriting
+  `create.scope` and `create.defaults` and substituting the file columns for the
+  field allowlist. A file uploaded under a scoped Policy therefore lands inside
+  the scope the same exposure reads from. The public content route under
+  `accessPath` is unchanged and deliberately outside it.
+
+  The method-level `writePolicy` option on `db.repository()` calls is unaffected
+  and remains available for narrowing a single call.
+
+- ceb356b: Register the split database dialect packages in the application server database manager.
+
+### Patch Changes
+
+- ceb356b: Expose the dialect runtime strategy contract used by database connections and
+  the Knex-backed query, repository, schema, and application composition
+  adapters. Dialect packages now own connection defaults, ownership identity, and
+  local storage preparation, while the database configuration API accepts
+  additional dialect identifiers without core changes.
+- e11b855: Locate a built application's `config.yml` next to `dist/` when none exists inside it, build the client against the same `.env` files the server loads, and prefer the compiled dependency tree when resolving plugins from a production build.
+- 40e2d49: Expose the application mode to plugin service providers
+
+  `AppPluginApplication` carried no way to tell whether the app owns the process it runs in or is one of several an app host mounted, so a provider that needs the distinction had to infer it from configuration that cannot carry it. A template's defaults are merged in both modes, which means an embedded app holds a `server.port` it does not own — enough to mislead any provider reading it.
+
+  The field is optional, so an application composed by hand need not state it, and absent means embedded, matching what `Application` itself defaults to.
+
+- c960d07: Map the Repository Policy error codes to their HTTP status: the read and scope
+  refusals answer 403 rather than 400, and an upsert onto a record outside the
+  scope answers 409.
+- Updated dependencies [f17f3a6]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [590861e]
+- Updated dependencies [e11b855]
+- Updated dependencies [72ed008]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [e11b855]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [590861e]
+- Updated dependencies [ceb356b]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+  - @nocobase/config@0.1.0-beta.1
+  - @nocobase/db@1.0.0-beta.5
+  - @nocobase/logging@0.1.0-beta.4
+
+## 1.0.0-beta.10
+
+### Minor Changes
+
+- a009e2d: Derive the languages an application offers from its own locale files, and configure the default language in one place.
+
+  `i18n.defaultLocale` in `config.yml` now names the language the application starts in, for the browser and the server alike. The `i18n.locales` setting and its `APP_LOCALES` environment variable are removed, along with `client.app.defaultLocale`: an application offers whichever languages its own `client/locales/index.ts` and `server/locales/index.ts` declare loaders for, so adding a language means adding its file rather than editing a second list. A plugin's locale file supplies translations for those languages and no longer adds one, which keeps an installed plugin from putting an unexpected language in the picker.
+
+  The browser resolves its startup language as the visitor's stored choice, then `i18n.defaultLocale`, then `en-US`. `navigator.language` is no longer consulted. Switching language in the interface remains a user-level choice and does not change the configured default.
+
+  An untranslated key now falls back through `i18n.defaultLocale` and then `en-US`, rather than through the default alone. An application that defaults to Chinese and adds Spanish leaves its plugins translated in neither, and English is the language they are most likely to ship; the fallback languages are loaded alongside the one in use so the fallback has resources to read. `pnpm nocobase app i18n:check` reports a language declared in `client/locales/` but not `server/locales/`, or the reverse — the case where the interface offers a language the server then rejects.
+
+  `LocaleResource` and `PartialLocaleResource` now accept an `overrides` block at the top level. The shape is derived from the source locale, which never declares that key, so annotating a locale file with it and adding the block documented for rewording a plugin's copy was a compile error — the documented example did not compile.
+
+  To migrate, replace `i18n.locales` and `client.app.defaultLocale` with `i18n.defaultLocale`, and make sure every language the application offers has a file in its own `client/locales/` and `server/locales/`.
+
+### Patch Changes
+
+- Updated dependencies [a009e2d]
+  - @nocobase/i18n@1.0.0-beta.3
+
+## 1.0.0-beta.9
+
+### Minor Changes
+
+- e3fa827: Add reusable user administration and Hub-scoped role-based authorization. Authentication now supports disabled accounts, transaction-aware administration, stable duplicate-identity conflicts, Session revocation, and immediate Realtime disconnects. Authorization supports protected Permission Sets, atomic scoped assignment replacement, and Client permission invalidation. The Users page supports protected role options, readable multi-role editing, explicit unassigned states, and a distinction between direct roles and authenticated-user defaults; password reset and database Session revocation share one transaction. The default App exposes its direct Authorization Permission Sets as application roles while keeping System administrator changes in Authorization. The Hub defines Administrator, Operator, and Viewer roles, batch-loads their user assignments, enforces every Hub and user-management action on the server, protects the final enabled Administrator, and hides unauthorized Client controls. Both templates register the reusable Users plugin; Hub exposes Applications, User management, and a read-only role matrix directly in its control-plane navigation, while the default App keeps Users in Settings. Only the Hub template receives Hub roles, disables public sign-up, and omits ordinary App Settings, workflows, notifications, and example plugins.
+
+### Patch Changes
+
+- Updated dependencies [0a3fa83]
+  - @nocobase/db@1.0.0-beta.4
+
 ## 1.0.0-beta.8
 
 ### Minor Changes

@@ -1,3 +1,5 @@
+import { readAppClientRuntimeConfig } from '@nocobase/app-client/runtime';
+
 // Shared preference helpers for normal client startup and the React provider.
 export function themeStorageKeys(base: string): {
   mode: string;
@@ -23,13 +25,18 @@ export function initializeTheme(
   base: string,
   presets: readonly string[],
 ): void {
+  const defaults = readThemeDefaults(presets);
   const keys = themeStorageKeys(base);
   const savedMode = readThemePreference(keys.mode);
   const mode =
-    savedMode === 'light' || savedMode === 'dark' ? savedMode : 'system';
+    savedMode && ['light', 'dark', 'system'].includes(savedMode)
+      ? savedMode
+      : defaults.mode;
   const savedPreset = readThemePreference(keys.preset);
   const preset =
-    savedPreset && presets.includes(savedPreset) ? savedPreset : presets[0];
+    savedPreset && presets.includes(savedPreset)
+      ? savedPreset
+      : defaults.preset;
   const resolved =
     mode === 'system'
       ? window.matchMedia('(prefers-color-scheme: dark)').matches
@@ -48,4 +55,30 @@ export function initializeTheme(
       /* Storage can be unavailable. */
     }
   }
+}
+
+// Read the same server-injected config at startup and Provider mount without
+// coupling the shared client runtime to application-owned theme presets.
+export function readThemeDefaults(presets: readonly string[]): {
+  mode: string;
+  preset: string;
+} {
+  const config = readAppClientRuntimeConfig() as { app?: unknown };
+  const app = config.app;
+  const values =
+    typeof app === 'object' && app !== null
+      ? (app as Record<string, unknown>)
+      : {};
+  const mode = values.defaultColorScheme;
+  const preset = values.defaultTheme;
+  return {
+    mode:
+      mode === 'light' || mode === 'dark' || mode === 'system'
+        ? mode
+        : 'system',
+    preset:
+      typeof preset === 'string' && presets.includes(preset)
+        ? preset
+        : presets[0],
+  };
 }

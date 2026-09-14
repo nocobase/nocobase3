@@ -7,6 +7,7 @@ import {
   validateMigrations,
   validateSeeds,
 } from '@nocobase/db';
+import sqlite from '@nocobase/db-sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import migration from '../database/migrations/202609020001_scheduler_create_definitions.js';
@@ -32,6 +33,7 @@ describe('@nocobase/app-plugin-scheduler database', () => {
   beforeEach(() => {
     metadataStore = new InMemoryCollectionMetadataStore();
     database = createDatabaseManager({
+      drivers: { sqlite },
       default: 'main',
       metadataStore,
       connections: { main: { dialect: 'sqlite', filename: ':memory:' } },

@@ -3,6 +3,7 @@ import {
   type DatabaseManager,
   type Row,
 } from '@nocobase/db';
+import sqlite from '@nocobase/db-sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import migration from '../database/migrations/202609020001_scheduler_create_definitions.js';
@@ -20,6 +21,7 @@ describe('ScheduleStore reconciliation', () => {
 
   beforeEach(async () => {
     database = createDatabaseManager({
+      drivers: { sqlite },
       connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
     });
     const connection = database.connection();

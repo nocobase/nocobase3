@@ -5,6 +5,14 @@ import type {
   AppClientSettingIcon,
 } from '@nocobase/app-client/plugins';
 import {
+  ClientApplicationContext,
+  type ClientApplication,
+} from '@nocobase/app-client';
+import {
+  AuthenticationProvider,
+  authenticationClientToken,
+} from '@nocobase/app-plugin-authentication/client';
+import {
   Refine,
   type AccessControlProvider,
   type AuthProvider,
@@ -96,19 +104,18 @@ describe('settings centre', () => {
     ).toHaveAttribute('href', '/');
   });
 
-  it('carries the application header controls, without a gear pointing at itself', async () => {
+  it('keeps both header entries visible inside settings', async () => {
     renderSettings('/settings/authorization/permission-sets');
     await screen.findByText('Permission Sets page');
 
-    expect(screen.getByRole('button', { name: 'Appearance' })).toBeVisible();
+    expect(
+      await screen.findByRole('button', { name: 'Appearance' }),
+    ).toBeVisible();
     // The account menu is a real dropdown, so its contents exist only once opened; the trigger carries the name.
     expect(
       await screen.findByRole('button', { name: 'Open account menu' }),
     ).toHaveAttribute('title', 'Alice');
-    expect(
-      screen.queryByRole('link', { name: 'Settings' }),
-    ).not.toBeInTheDocument();
-    // The other surface's entry stays: only the surface you are standing in withdraws its own.
+    expect(screen.getByRole('link', { name: 'Settings' })).toBeVisible();
     expect(screen.getByRole('link', { name: 'Dev tools' })).toHaveAttribute(
       'href',
       '/dev',
@@ -118,7 +125,7 @@ describe('settings centre', () => {
     ).toHaveAttribute('href', '/');
   });
 
-  it('withdraws the dev entry inside the dev tools and offers settings instead', async () => {
+  it('keeps both header entries visible inside dev tools', async () => {
     const devRoute: AppClientRegisteredSetting = {
       id: 'playground',
       navigation: true,
@@ -142,10 +149,7 @@ describe('settings centre', () => {
     );
 
     expect(await screen.findByText('Playground page')).toBeVisible();
-    // Standing in the dev tools, the dev entry has nowhere to go; the settings entry is the way out.
-    expect(
-      screen.queryByRole('link', { name: 'Dev tools' }),
-    ).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Dev tools' })).toBeVisible();
     expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute(
       'href',
       '/settings',
@@ -492,7 +496,7 @@ function renderSettings(
   routes: readonly AppClientRegisteredRoute[] = [],
   tree?: readonly AppClientRegisteredRoute[],
 ): void {
-  render(
+  renderWithAuthentication(
     <MemoryRouter initialEntries={[initialEntry]}>
       <AppThemeProvider>
         <Refine
@@ -526,7 +530,7 @@ function renderSettings(
 
 /** Renders a router subtree the way renderSettings does, for a surface other than the settings centre. */
 function renderApp(element: ReactElement, initialEntry: string): void {
-  render(
+  renderWithAuthentication(
     <MemoryRouter initialEntries={[initialEntry]}>
       <AppThemeProvider>
         <Refine
@@ -561,6 +565,37 @@ function createAuthProvider(): AuthProvider {
     logout: vi.fn().mockResolvedValue({ success: true }),
     onError: async (error) => ({ error }),
   };
+}
+
+function renderWithAuthentication(element: ReactElement): void {
+  const authClient = {
+    getSession: vi.fn().mockResolvedValue({
+      data: {
+        session: null,
+        user: {
+          email: 'alice@example.com',
+          id: '1',
+          image: null,
+          name: 'Alice',
+        },
+      },
+    }),
+    signOut: vi.fn().mockResolvedValue({ data: null }),
+  };
+  const app = {
+    services: {
+      resolve: (token: unknown) => {
+        if (token === authenticationClientToken) return authClient;
+        throw new Error(`Unexpected service token: ${String(token)}`);
+      },
+    },
+  } as unknown as ClientApplication;
+
+  render(
+    <ClientApplicationContext.Provider value={app}>
+      <AuthenticationProvider>{element}</AuthenticationProvider>
+    </ClientApplicationContext.Provider>,
+  );
 }
 
 function createSetting(

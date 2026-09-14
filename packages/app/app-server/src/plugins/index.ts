@@ -11,14 +11,12 @@ export {
   type AppServerSchedulesSnapshot,
 } from './inspect.js';
 export {
-  createAppPluginDatabaseConfig,
+  createAppDatabaseTaskContributions,
   createPluginJobLocations,
   createPluginMigrationSources,
   createPluginSeedSources,
-  resolveAppPluginDatabaseConfig,
   resolveAppServerPlugins,
   type ResolveAppServerPluginsOptions,
-  type ResolvedAppPluginDatabaseConfig,
 } from './resolve.js';
 export type * from './types.js';
 export * from './schedules.js';

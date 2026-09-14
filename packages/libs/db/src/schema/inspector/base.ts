@@ -267,8 +267,7 @@ export abstract class BaseSchemaInspector implements SchemaInspector {
         return await action();
       } catch (error) {
         if (
-          this.dialect === 'mssql' &&
-          isMssqlDeadlock(error) &&
+          this.isRetryableError(error) &&
           attempt < 4 &&
           (await this.canRetryDeadlock())
         ) {
@@ -295,14 +294,14 @@ export abstract class BaseSchemaInspector implements SchemaInspector {
   protected async canRetryDeadlock(): Promise<boolean> {
     return true;
   }
-}
 
-function isMssqlDeadlock(error: unknown): boolean {
-  return (
-    Boolean(error) &&
-    typeof error === 'object' &&
-    Number((error as Record<string, unknown>).number) === 1205
-  );
+  protected isRetryableError(error: unknown): boolean {
+    return (
+      Boolean(error) &&
+      typeof error === 'object' &&
+      Number((error as Record<string, unknown>).number) === 1205
+    );
+  }
 }
 
 function delay(milliseconds: number): Promise<void> {

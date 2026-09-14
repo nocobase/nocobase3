@@ -1,4 +1,7 @@
-import { Authenticated } from '@refinedev/core';
+import {
+  GuestAuthentication,
+  RequiredAuthentication,
+} from '@nocobase/app-plugin-authentication/client';
 import type { AppClientRegisteredRoute } from '@nocobase/app-client/plugins';
 import { lazy, Suspense, useMemo, type ReactElement } from 'react';
 import { Navigate, Outlet, Route, Routes } from 'react-router';
@@ -8,12 +11,6 @@ import { Loading } from '@/components/loading';
 import { AppShell } from '../shell/index.js';
 import { renderRouteTree } from './route-tree.js';
 import { StandalonePageLayout } from './standalone-page-layout.js';
-
-// The settings centre brings its own chrome and navigation, none of which the application needs until someone opens
-// it. Loading it lazily keeps it out of the entry chunk, the same way every page it hosts stays out.
-const SettingsLayout = lazy(async () => ({
-  default: (await import('../layouts/settings-layout.js')).SettingsLayout,
-}));
 
 // The dev tools exist only while developing the application. Resolving the import inside an `import.meta.env.DEV`
 // branch lets a production build prove the module is unreachable and drop it, along with every dev page and any
@@ -31,19 +28,9 @@ export interface AppRouterProps {
 }
 
 export function AppRouter({
-  settingsRouteTree,
   devRouteTree,
   clientRoutes,
 }: AppRouterProps): ReactElement {
-  const settingsRoutes = useMemo(
-    () =>
-      filterRouteTree(
-        clientRoutes,
-        (route) =>
-          route.auth === 'required' && route.path.startsWith('/settings/'),
-      ),
-    [clientRoutes],
-  );
   const devRoutes = useMemo(
     () =>
       filterRouteTree(
@@ -71,32 +58,17 @@ export function AppRouter({
     <Routes>
       <Route
         element={
-          <Authenticated
-            key='authenticated-inner'
-            fallback={<Navigate to='/login' replace />}
-          >
+          <RequiredAuthentication>
             <Outlet />
-          </Authenticated>
+          </RequiredAuthentication>
         }
       >
         <Route element={<AppShell routes={routeGroups.required} />}>
           {renderRouteTree(routeGroups.required)}
         </Route>
-        <Route
-          path='/settings/*'
-          element={
-            <Suspense
-              fallback={
-                <Loading className='min-h-svh' label='Loading settings' />
-              }
-            >
-              <SettingsLayout
-                routeTree={settingsRouteTree}
-                routes={settingsRoutes}
-              />
-            </Suspense>
-          }
-        />
+        {/* Hub is a control-plane App. Its administration pages live in the
+            primary console, so the ordinary App settings centre is disabled. */}
+        <Route path='/settings/*' element={<Navigate to='/apps' replace />} />
         {import.meta.env.DEV && DevLayout ? (
           <Route
             path='/dev/*'
@@ -115,9 +87,9 @@ export function AppRouter({
 
       <Route
         element={
-          <Authenticated key='authenticated-outer' fallback={<Outlet />}>
-            <Navigate to='/' replace />
-          </Authenticated>
+          <GuestAuthentication>
+            <Outlet />
+          </GuestAuthentication>
         }
       >
         <Route element={<StandalonePageLayout />}>

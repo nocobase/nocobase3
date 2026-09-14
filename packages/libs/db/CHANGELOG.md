@@ -1,5 +1,210 @@
 # @nocobase/db
 
+## 1.0.0-beta.5
+
+### Major Changes
+
+- ceb356b: Move all concrete dialect connection resolution, schema inspectors, native
+  driver loading, pool hooks, precise integer codecs, and capability profiles into
+  the corresponding dialect packages. `@nocobase/db` now requires an explicitly
+  registered dialect driver and no longer exports concrete dialect inspectors or
+  native-driver fallbacks.
+- ceb356b: Expose the dialect runtime strategy contract used by database connections and
+  the Knex-backed query, repository, schema, and application composition
+  adapters. Dialect packages now own connection defaults, ownership identity, and
+  local storage preparation, while the database configuration API accepts
+  additional dialect identifiers without core changes.
+
+### Minor Changes
+
+- ceb356b: Add dialect driver registration support and the initial PostgreSQL dialect package.
+- ceb356b: Add the destructive `pnpm migrate --fresh --force` workflow for managed
+  connections. It clears dialect-owned schema objects, reruns visible migrations,
+  requires confirmation in interactive terminals, and rejects external
+  connections.
+- c960d07: Add `narrow` to a policy-bound Repository, and publish the policy types and
+  `ScopedDatabaseConnection` from the package entry. Narrowing intersects scopes,
+  field lists and relations, and `false` on either side wins, so no patch can
+  widen what is already in force.
+- c960d07: Add `ref(target)` for reusing another Collection's read node inside
+  `read.relations`. References resolve against the same `withPolicies` map and
+  are expanded when the map is bound, so a cycle or a missing target is a
+  configuration error rather than a failure at request time.
+- c960d07: Constrain relation write targets by `RelationWriteNode.scope`. A `connect`,
+  `disconnect`, `set`, `delete`, or relation `update`/`upsert` now locates its
+  target within that scope, so a caller confined to their own rows can no longer
+  attach or modify somebody else's through a relation.
+- c960d07: Degrade the record type a policy-bound Repository returns: binding a `read`
+  node makes reads come back as `Partial<TRecord>`, since a query with no select
+  returns `read.fields` alone. `read: true` keeps the complete record type.
+- c960d07: Enforce the Repository Policy write-back invariant: a created or updated record
+  must still satisfy that operation's scope once the write lands, or the
+  transaction rolls back with `SCOPE_VIOLATION`. An upsert whose target exists
+  outside `update.scope` raises `RECORD_OUTSIDE_SCOPE` instead of degrading to an
+  insert, and no longer merges the scope into the unique selector that locates
+  the target.
+- c960d07: Add the Repository Policy read model: policy types, scope normalization, scope
+  pushdown into the query, and field and relation allowlists enforced across
+  every read surface — select, filter, sort, distinct, cursor, aggregate and
+  group by, including the returning select of a write and each relation branch,
+  which is judged by its own collection's allowlist and narrowed by its own
+  scope.
+- c960d07: Replace the Repository API's per-action `writePolicy` with a Repository Policy
+  declared once per exposure.
+
+  **Breaking.** `defineRepositoryApiRoutes()` no longer accepts `writePolicy` on
+  an action, and every exposure must declare a `policy`. An action configuration
+  now says only that an endpoint exists; what it may do is the exposure's Policy,
+  which governs reading, creating, updating and deleting together. Declaring one
+  is required rather than optional because `writePolicy` defaulted to refusing
+  writes while an absent Policy restricts nothing — making it optional would have
+  turned every existing declaration from "refuse every write" into "allow
+  everything" without a word of warning.
+
+  Declare `policy` as a function of a principal, together with a
+  `principal(context)` resolver, to scope rows to the caller. The resolver belongs
+  to the application, since this router installs no authentication; one that
+  returns nothing refuses the request with 403 `PRINCIPAL_REQUIRED` rather than
+  binding a Policy built from a principal that is not there. A fixed Policy is
+  still normalized when the routes are defined, so a malformed one fails where it
+  is written; a Policy function cannot be, and its `INVALID_POLICY` now reaches
+  the host error handler as a server error instead of being reported to the caller
+  as a 400.
+
+  `@nocobase/db` gains `buildRepositoryPolicy`, a builder whose unmentioned nodes
+  are denied, so the four-node requirement costs nothing to satisfy while the
+  default stays refusal. Two related fixes travel with it: `create`, `update` and
+  `delete` nodes that are `false` now refuse a write before its payload is read,
+  so an empty body is reported as forbidden rather than as invalid input; and a
+  `create` node whose relations grant `update`, `upsert`, `disconnect`, `set` or
+  `delete` is refused during normalization, since a root create performs none of
+  them.
+
+  `@nocobase/app-plugin-file` exposures declare a Policy too, and it reaches
+  uploads: the upload path binds a Policy derived from the exposure's, inheriting
+  `create.scope` and `create.defaults` and substituting the file columns for the
+  field allowlist. A file uploaded under a scoped Policy therefore lands inside
+  the scope the same exposure reads from. The public content route under
+  `accessPath` is unchanged and deliberately outside it.
+
+  The method-level `writePolicy` option on `db.repository()` calls is unaffected
+  and remains available for narrowing a single call.
+
+### Patch Changes
+
+- ceb356b: Normalize JSON field values at the Repository and Query API boundaries so
+  direct JSON columns accept and return structured `JsonValue` values across
+  database drivers.
+- ceb356b: Improve Dameng integration compatibility for typed numeric query results, streaming rows, temporal projections, default-only inserts, schema capability warnings, and native constraint error messages.
+- ceb356b: Decode Dameng LOB values returned by mutation returning queries before exposing records.
+- ceb356b: Return DECIMAL fields as database-formatted decimal strings across Query and Repository,
+  including aliases, scalar subqueries, grouped fields, relation records, streaming,
+  mutation results, and MIN/MAX. Preserve PostgreSQL/MySQL native strings and
+  avoid numeric metadata lookups and redundant text projections on these drivers.
+  Use PostgreSQL RETURNING without a decimal-specific reload. Enforce mysql2
+  `decimalNumbers: false` to preserve precision, including when driverOptions requests numbers. Other drivers project
+  decimal text before number conversion while preserving numeric filtering and ordering. Avoid SQLite
+  text formatting truncating stored significant digits; SQLite REAL storage remains
+  approximate. Synchronous Query.compile does not resolve field metadata and may
+  omit decimal result projections added during execution on other drivers.
+
+  Preserve the declared logical type of implicitly generated belongsTo foreign
+  keys so Oracle integer references are not decoded as decimal strings.
+
+- 590861e: Remove the integration test scripts from `@nocobase/db`.
+
+  `test:integration`, `test:integration:<dialect>` and `test:integration:all` only
+  forwarded to the dialect packages, and the indirection misled more than it
+  helped: `pnpm --filter @nocobase/db test:integration` read as a full run while
+  it ran SQLite alone, and `test:integration:all` invited an eight-dialect serial
+  run that CI already performs on every pull request. Run a suite through the
+  package that owns it, as CI does:
+  `pnpm --filter @nocobase/db-<dialect> test:integration`.
+
+- e11b855: Read temporal columns that still hold epoch milliseconds from before the query builder normalized temporal Fields, so an application upgraded in place on SQLite can read its existing users, sessions, and records instead of failing with `FIELD_CAPABILITY_NOT_SUPPORTED`.
+- 72ed008: Stop reporting a MySQL expression default as a generated column
+
+  MySQL describes a column whose default has to be written as an expression with `EXTRA = 'DEFAULT_GENERATED'`, and the schema inspector matched on the word `GENERATED`. That is the wrong signal: `DEFAULT_GENERATED` describes a default, while a generated column reports `VIRTUAL GENERATED` or `STORED GENERATED` and is the only kind that carries a `GENERATION_EXPRESSION`. The inspector now derives it from that expression.
+
+  Two things were wrong while it did not. The column's default was dropped from the introspected schema, and the Repository refused to write the column at all — `createOne` and `updateOne` rejected it as `FIELD_NOT_WRITABLE`, "managed by the database or Repository".
+
+  Every defaulted `json` column on MySQL was affected, because MySQL accepts no literal default on `json` and the builder therefore emits `DEFAULT (json_object())` for one. A Collection declaring `collection.json('options').notNull().defaultTo({})` could not have its `options` written on MySQL, while the same Collection worked on every other database.
+
+- ceb356b: Return BIGINT columns as exact strings before driver number conversion in Query and Repository reads. Preserve precision through aliases, relationships, streaming, transaction clients, and mutation results across the five supported databases, while normalizing Repository integer and increment fields to safe numbers.
+
+  Align the file Repository size type with exact string results from BIGINT-backed collections.
+
+- ceb356b: Avoid issuing a second SELECT after creating a record when no relations need to be loaded.
+- ceb356b: Support exact BIGINT and DECIMAL string filters, validate plain integer writes before SQL execution, and preserve numeric atomic-update operands without floating-point promotion. Reject SQLite int64 arithmetic overflow before storage and retain native PostgreSQL/MySQL read and aggregate behavior.
+- e11b855: Prevent relation indexes from colliding with an explicitly indexed foreign-key field, and report conflicting physical index names before schema execution.
+
+  A `belongsTo` relation's automatic index is now suppressed by an index on the relation's foreign-key **column** rather than on the relation's field name, which is what removes the collision: `collection.index('productId')` alongside a `product` relation used to compile to the same physical index twice.
+
+  Suppression is also narrower than it was. Only a single-column index on that foreign key stands in for the automatic one; a composite index no longer does, even when it already leads with the same column. An application that indexed `['productId', 'scannedAt']` and relied on it to suppress the relation index will therefore see a single-column index on `productId` appear at its next schema synchronization. Declaring the same physical index name twice with different definitions now fails before execution rather than silently taking one of them.
+
+- ceb356b: Preserve SQL `NULL` values when Query writes nullable temporal fields.
+- 590861e: Decode JSON columns according to a result form the dialect declares instead of guessing from the value.
+
+  A driver either parses a JSON column before returning the row or hands back the stored text, and the returned value carries no evidence of which. Decoding by attempting to parse any string therefore corrupted a JSON string whose content is itself JSON: writing `'{"a":1}'` and reading it back produced the object `{ a: 1 }` on PostgreSQL, Kingbase, MySQL, and OceanBase, whose drivers parse JSON themselves. Each dialect now declares `jsonResults`, and a value that a text driver cannot parse is reported as `INVALID_STORED_VALUE` rather than returned as the raw string.
+
+  Where the driver can be told to behave the other way, the declaration is derived from the resolved connection rather than fixed: mysql2 returns a json column as text under `jsonStrings`, which reaches it through `driverOptions`, and the Dameng driver decodes the column under `parseJson`. A fixed declaration would be wrong for exactly those connections, which is the failure this change exists to remove.
+
+  Query and Repository also no longer disagree about a column holding the JSON literal `null`: Query fell back to the raw value whenever a decoder legitimately returned `null`, so the stored text leaked back to the caller.
+
+  Altering a JSON column on Oracle no longer fails with `ORA-40664`. Knex compiles a JSON column to `varchar2(4000) check (col is json)`, and repeating that definition on a MODIFY asks Oracle for a second IS JSON check constraint on the same column. A dialect now learns whether a column is being created or redefined, and Oracle omits the constraint while altering; the MODIFY leaves the constraint the original definition created in place.
+
+  A dialect that builds a JSON column as something other than Knex's `json()` also loses the JSON default handling that comes with it, and an object default would reach the column as `[object Object]` — on Oracle that is text its own IS JSON constraint then rejects. Such a dialect now asks for the default as encoded text, while MySQL keeps receiving the value because that is what makes it compile the expression form its engine requires. A JSON default consequently works on Dameng, where the column is a plain clob and the default was silently stored as something that could not be read back.
+
+- ceb356b: Support local `Date` values for `date`, `time`, and `datetime` mutations while
+  preserving Better Auth date values when records are read through its adapter.
+- c960d07: Fix two Policy configurations that were refused although they are legitimate: a
+  relation `combine` branch judged the relation's own scope as if the caller had
+  written it, and narrowing a `create` node with `defaults` was rejected as an
+  unsupported update option.
+- c960d07: Treat a foreign key as readable when the relation it points through is
+  authorized and returns the key it points at. Refusing `ownerId` while allowing
+  `owner { id }` hid nothing, since the same value came back by the other route.
+- c960d07: Close four ways a Policy claimed more than it enforced: a bound Repository can
+  no longer have its Policy replaced by another `withPolicy` call, the degraded
+  read type survives a Policy held in a variable of its declared type, a
+  malformed `through` rule is refused instead of reinterpreted as an empty
+  allowlist, and `explainPolicy` hands out a copy of a Date default rather than
+  the instance the writes read from. `validateMutation` also reports an
+  unsatisfiable `create.scope` instead of deferring it to the first insert.
+- c960d07: Let a Repository API action declare a `policy`, normalized when the routes are
+  defined and bound to the Repository the handler uses. `@nocobase/db` gains
+  `RepositoryOperations`, the operation methods a plain and a policy-bound
+  Repository share, so code that only runs queries can accept either.
+- c960d07: Close five ways a relation write escaped its Policy scope: a to-one
+  `connect`/`disconnect` writing the root foreign key now triggers the root
+  write-back check, the relation scope reaches the to-one target resolved before
+  an insert, `disconnect` and `set` may only detach targets the scope can locate,
+  and a relation `update` is judged again after its values are applied.
+- c960d07: Reject a dotted field name in a Policy scope when the Policy is bound, the same
+  way an explicit relation path already was. `{ 'owner.tenantId': 'T1' }` kept the
+  dotted name as one path segment, so it slipped past the relation check and
+  failed much later as an unknown field.
+- ceb356b: Unify aggregate result types using native PostgreSQL/MySQL behavior. COUNT returns a safe integer number and rejects values above Number.MAX_SAFE_INTEGER. SUM/AVG of integer, BIGINT and DECIMAL fields return database-formatted strings; FLOAT/DOUBLE SUM/AVG return numbers. MIN/MAX preserve field result types. Do not strip trailing zeros. Preserve nulls, numeric filtering, ordering, grouping, aliases and relation aggregates.
+
+  Remove PostgreSQL AVG input casts and accept native computation and rounding. SQL Server promotes integral SUM/AVG inputs to DECIMAL(38,0), retains native DECIMAL precision rules, and preserves exact outputs before driver conversion. SQLite retains exact aggregates for integral/decimal fields while floating fields use native aggregation. Prepare aggregate field information only on adapters that need it, once per execution; PostgreSQL/MySQL do not load collections for numeric adaptation. Broaden shared SUM/AVG TypeScript results to string | number | null.
+
+- ceb356b: Make dialect integration tests own their disposable Docker Compose environments
+  with random host ports and automatic cleanup.
+- ceb356b: Add the `@nocobase/db/testing` subpath for dialect packages to exercise shared database internals without importing core source files directly.
+- ceb356b: Normalize boolean field values at the Repository and Query API boundaries so
+  direct boolean columns accept and return JavaScript booleans consistently
+  across database drivers.
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [c960d07]
+  - @nocobase/repository-input@0.1.0-beta.1
+
+## 1.0.0-beta.4
+
+### Patch Changes
+
+- 0a3fa83: Compile constraint removal according to the stored constraint type so unique, primary, check, and foreign-key constraints use the correct dialect operation.
+
 ## 1.0.0-beta.3
 
 ### Major Changes

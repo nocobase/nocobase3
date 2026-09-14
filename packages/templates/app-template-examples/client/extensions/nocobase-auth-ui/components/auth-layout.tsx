@@ -1,38 +1,42 @@
-import type { PropsWithChildren, ReactElement, ReactNode } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 
-import { AuthBrand } from './auth-brand';
-import { AuthMarketingPanel } from './auth-marketing-panel';
+import { AuthFormTabs, type AuthFormTab } from './auth-form-tabs';
 
-export interface AuthLayoutProps extends PropsWithChildren {
-  readonly description: string;
-  readonly footer?: ReactNode;
-  readonly title: string;
+export interface AuthLayoutProps {
+  readonly description: ReactNode;
+  readonly form?: ReactNode;
+  readonly forms?: readonly AuthFormTab[];
+  readonly logo: ReactNode;
+  readonly marketing?: ReactNode;
+  readonly sso?: ReactNode;
+  readonly title: ReactNode;
 }
 
 export function AuthLayout({
-  children,
+  logo,
   description,
-  footer,
+  form,
+  forms,
+  marketing,
+  sso,
   title,
 }: AuthLayoutProps): ReactElement {
   return (
     <div className='grid min-h-svh bg-background text-foreground md:grid-cols-[minmax(420px,44%)_1fr]'>
       <main className='grid place-items-center bg-card px-6 py-10 text-card-foreground sm:px-12'>
         <section className='w-full max-w-sm'>
-          <div className='mb-14'>
-            <AuthBrand />
-          </div>
+          <div className='mb-14'>{logo}</div>
           <header className='mb-8'>
             <h1 className='text-3xl font-semibold tracking-[-0.035em]'>
               {title}
             </h1>
             <p className='mt-2 text-sm text-muted-foreground'>{description}</p>
           </header>
-          {children}
-          {footer ? <footer className='mt-8 text-sm'>{footer}</footer> : null}
+          {forms?.length ? <AuthFormTabs tabs={forms} /> : form}
+          {sso ? <div className='mt-8'>{sso}</div> : null}
         </section>
       </main>
-      <AuthMarketingPanel />
+      {marketing}
     </div>
   );
 }

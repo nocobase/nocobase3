@@ -1,8 +1,8 @@
 import type { ServiceFactory } from '../factory/service-factory.js';
 import type { Context as HonoContext, Hono } from 'hono';
 import type { ConversationExecution } from '../agent/contracts.js';
-import type { ConversationStreamTarget } from '../domain/stream.js';
-import { identityTranslate } from '../domain/contracts.js';
+import type { ConversationStreamTarget } from '../types.js';
+import { identityTranslate } from '../types.js';
 import { createAISSEStreamResponse, requiredString } from './utils.js';
 
 export function createAIConversationsRouter(

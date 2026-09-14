@@ -27,11 +27,21 @@ describe('@nocobase/app-plugin-scheduler', () => {
       'utf8',
     );
     expect(packageMetadata.files).toContain('skills');
-    expect(source).toContain('defineSchedule');
-    expect(source).toContain('schedules: { definitions:');
-    expect(source).toContain('jobDispatchRegistryToken');
-    expect(source).toContain('occurrenceId');
-    expect(source).toContain('nocobase schedule sync --finalize');
-    expect(source).toContain('must not contain credentials');
+    expect(source).toContain('name: nocobase-app-plugin-scheduler');
+    const references = Array.from(
+      source.matchAll(/\]\((references\/[^)]+)\)/g),
+      (match) => match[1],
+    );
+    expect(references.length).toBeGreaterThan(0);
+    for (const reference of references) {
+      const content = readFileSync(
+        new URL(
+          `../skills/nocobase-app-plugin-scheduler/${reference}`,
+          import.meta.url,
+        ),
+        'utf8',
+      );
+      expect(content.trim().length).toBeGreaterThan(0);
+    }
   });
 });

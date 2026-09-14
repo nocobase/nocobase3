@@ -4,11 +4,7 @@ import { databaseManagerToken, type DatabaseManager } from '@nocobase/db';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { type Caching } from '@nocobase/caching';
 import { cachingToken } from '@nocobase/app-server/caching';
-import {
-  appConfig,
-  AppConfig,
-  createConfigPaths,
-} from '@nocobase/app-server/config';
+import { AppConfig, createConfigPaths } from '@nocobase/app-server/config';
 import { idGeneratorToken } from '@nocobase/app-server/id-generator';
 import { realtimePrincipalResolverToken } from '@nocobase/app-server/realtime';
 import { Hono } from 'hono';
@@ -33,7 +29,6 @@ import {
   toPublicRequest,
 } from '../providers/authentication.js';
 import { authenticationToken } from '../tokens.js';
-import { authenticationConfig } from '../config.js';
 
 describe('authentication provider', () => {
   it('registers authentication with the application runtime and dependencies', async () => {
@@ -129,30 +124,156 @@ describe('authentication provider', () => {
     expect(publicRequest.headers.get('x-test')).toBe('value');
     await expect(publicRequest.json()).resolves.toEqual({ username: 'admin' });
   });
+
+  it('separates cookies of apps that share a host but not a port', () => {
+    // A portless public origin is authoritative: production keeps the bare
+    // name so deployments that already hold sessions keep them.
+    expect(
+      createCookiePrefix('main', {
+        publicOrigin: 'https://example.com',
+        listenPort: 13000,
+      }),
+    ).toBe('main');
+    // An explicit public port wins over the listen port a proxy hides.
+    expect(
+      createCookiePrefix('main', {
+        publicOrigin: 'https://example.com:8443',
+        listenPort: 13000,
+      }),
+    ).toBe('main-8443');
+    // Development: no public origin, so the listen port is what separates
+    // two copies of the same app.
+    expect(createCookiePrefix('main', { listenPort: 13000 })).toBe(
+      'main-13000',
+    );
+    expect(createCookiePrefix('main', { listenPort: 13001 })).toBe(
+      'main-13001',
+    );
+    // An embedded app owns neither, and is separated by its cookie path.
+    expect(createCookiePrefix('main', {})).toBe('main');
+    // A malformed origin falls back rather than throwing.
+    expect(
+      createCookiePrefix('main', {
+        publicOrigin: 'not a url',
+        listenPort: 13000,
+      }),
+    ).toBe('main-13000');
+  });
+
+  it('names cookies after the port when the app knows no public origin', async () => {
+    const container = createDependencies();
+    createAuthentication.mockClear();
+
+    new AuthenticationProvider({
+      appName: 'main app',
+      mode: 'standalone',
+      publicBasePath: '/main',
+      config: await createConfig({
+        server: { host: '127.0.0.1', port: 13001, startLog: true },
+      }),
+      container,
+      paths: createConfigPaths({ rootDir: '/test/app' }),
+      router: new Hono(),
+    }).register();
+    container.resolve(authenticationToken);
+
+    expect(createAuthentication).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        advanced: expect.objectContaining({ cookiePrefix: 'main-app-13001' }),
+      }),
+    );
+  });
+
+  it('ignores the port an embedded app does not own', async () => {
+    // An embedded app is merged the same template defaults as a standalone
+    // one, so it carries `server.port` without owning the port: the host does.
+    // Its name already comes from its own base path, so the bare name is
+    // distinct, and appending a port it is not reached on would only
+    // invalidate the sessions it already holds.
+    const container = createDependencies();
+    createAuthentication.mockClear();
+
+    new AuthenticationProvider({
+      appName: 'main app',
+      mode: 'embedded',
+      publicBasePath: '/main',
+      config: await createConfig({
+        server: { host: '127.0.0.1', port: 13000, startLog: true },
+      }),
+      container,
+      paths: createConfigPaths({ rootDir: '/test/app' }),
+      router: new Hono(),
+    }).register();
+    container.resolve(authenticationToken);
+
+    expect(createAuthentication).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        advanced: expect.objectContaining({ cookiePrefix: 'main-app' }),
+      }),
+    );
+  });
 });
 
-async function createConfig(): Promise<AppConfig> {
-  const config = new AppConfig([
-    {
-      ...appConfig,
-      defaults: {
-        name: 'main app',
-        publicOrigin: 'https://example.com',
-        publicBasePath: '/main',
-        internalBasePath: '',
-        publicApiUrl: '/main/api',
+function createDependencies(): ServiceContainer {
+  const container = new ServiceContainer();
+  container.instance(databaseManagerToken, {
+    connection: vi.fn(() => ({ kind: 'connection' })),
+  } as unknown as DatabaseManager);
+  container.instance(cachingToken, {
+    getCache: vi.fn(() => ({
+      get: vi.fn(),
+      set: vi.fn(),
+      delete: vi.fn(),
+      take: vi.fn(),
+    })),
+    getCounter: vi.fn(() => ({ increment: vi.fn() })),
+  } as unknown as Caching);
+  container.instance(idGeneratorToken, {
+    generate: vi.fn(() => 1),
+    generateString: vi.fn(() => 'generated-id'),
+  });
+  return container;
+}
+
+interface ConfigOverrides {
+  readonly publicOrigin?: string;
+  readonly server?: { host: string; port: number; startLog: boolean };
+}
+
+async function createConfig(
+  overrides: ConfigOverrides = { publicOrigin: 'https://example.com' },
+): Promise<AppConfig> {
+  const config = new AppConfig();
+  config.load({
+    name: 'app',
+    read: async () => ({
+      kind: 'map',
+      value: {
+        app: {
+          name: 'main app',
+          publicOrigin: overrides.publicOrigin,
+          publicBasePath: '/main',
+          internalBasePath: '',
+          publicApiUrl: '/main/api',
+        },
+        ...(overrides.server ? { server: overrides.server } : {}),
       },
-    },
-    {
-      ...authenticationConfig,
-      defaults: {
-        emailAndPassword: { enabled: true, autoSignIn: false },
-        session: { storeSessionInDatabase: true },
-        secret: 'test-auth-secret-at-least-32-characters',
-        advanced: { useSecureCookies: true },
+    }),
+  });
+  config.load({
+    name: 'test-auth-options',
+    read: async () => ({
+      kind: 'map',
+      value: {
+        auth: {
+          emailAndPassword: { enabled: true, autoSignIn: false },
+          session: { storeSessionInDatabase: true },
+          secret: 'test-auth-secret-at-least-32-characters',
+          advanced: { useSecureCookies: true },
+        },
       },
-    },
-  ]);
+    }),
+  });
   await config.loadAll();
   return config;
 }

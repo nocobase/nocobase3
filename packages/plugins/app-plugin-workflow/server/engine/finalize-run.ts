@@ -1,15 +1,13 @@
-import type { QueryAdapter, Row } from '@nocobase/db';
-
-import { WORKFLOW_COLLECTIONS } from '../collections/names.js';
+import type { WorkflowStore } from '../collections/store.js';
 import type {
   WorkflowId,
   WorkflowTerminalEvent,
   WorkflowTerminalObserver,
 } from './types.js';
-import { serializeJson } from './utils.js';
+import { asIdFilter, nowInstant, serializeJson } from './utils.js';
 
 export interface FinalizeWorkflowRunOptions {
-  readonly query: QueryAdapter;
+  readonly store: WorkflowStore;
   readonly runId: WorkflowId;
   readonly expectedStatus: number | null;
   readonly status: number;
@@ -22,28 +20,24 @@ export interface FinalizeWorkflowRunOptions {
 export async function finalizeWorkflowRun(
   options: FinalizeWorkflowRunOptions,
 ): Promise<WorkflowTerminalEvent | null> {
-  const finishedAt = options.finishedAt ?? new Date().toISOString();
-  const result = await options.query
-    .updateTable(WORKFLOW_COLLECTIONS.runs)
-    .set({
+  const finishedAt = options.finishedAt ?? nowInstant();
+  const result = await options.store.runs.updateMany({
+    filter: {
+      id: asIdFilter(options.runId),
+      status: options.expectedStatus,
+    },
+    values: {
       status: options.status,
       output: serializeJson(options.output),
       reason: options.reason,
       finishedAt,
-    })
-    .where('id', '=', options.runId)
-    .where(
-      'status',
-      options.expectedStatus === null ? 'is' : '=',
-      options.expectedStatus,
-    )
-    .execute();
-  if ((result.updatedCount ?? 0) === 0) return null;
-  const row = await options.query
-    .selectFrom(WORKFLOW_COLLECTIONS.runs)
-    .select(['sourceType', 'sourceId'])
-    .where('id', '=', options.runId)
-    .executeTakeFirst<Row>();
+    },
+  });
+  if (result.updatedCount === 0) return null;
+  const row = await options.store.runs.findOne({
+    filter: { id: asIdFilter(options.runId) },
+    select: (select) => select.fields('sourceType', 'sourceId'),
+  });
   const event: WorkflowTerminalEvent = {
     runId: options.runId,
     status: options.status,

@@ -10,15 +10,13 @@ description: 创建 DatabaseManager，用 Migration 建表、Seed 初始化数�
 ## 1. 创建 DatabaseManager
 
 ```ts
+import sqlite from '@nocobase/db-sqlite';
 import { createDatabaseManager } from '@nocobase/db';
 
 const db = createDatabaseManager({
   default: 'main',
   connections: {
-    main: {
-      dialect: 'sqlite',
-      filename: 'app.sqlite',
-    },
+    main: sqlite({ filename: 'app.sqlite' }),
   },
 });
 ```
@@ -132,7 +130,7 @@ await db.transaction(async (connection) => {
 ## 6. 读取完整 Collection
 
 ```ts
-const ordersCollection = await db.connection().collections.get('orders');
+const ordersCollection = await db.collections().get('orders');
 ```
 
 `collections` 合并物理 Schema、补充 Metadata 和 Connection naming。检查物理数据库对象时改用 `connection.schemaInspector`。

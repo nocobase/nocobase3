@@ -1,0 +1,176 @@
+# @nocobase/app-plugin-file-example
+
+## 0.1.0-beta.3
+
+### Minor Changes
+
+- 22b9672: Add one-to-one and one-to-many file relation examples
+
+  The example now owns `fileExampleProfiles` with a single avatar file (unique
+  `profileId`) and `fileExampleOrders` with any number of attachments, each with
+  its own File Repository resource and seeded demo rows. `/file-repository` became
+  a navigation group with three pages: the flat repository page, profile avatars
+  (one-to-one) and order attachments (one-to-many).
+
+  Both relation pages upload through a file repository, then connect the returned
+  record through the owning business repository's write policy; replacing an
+  avatar clears the previous link, and unlinking an attachment leaves the file
+  record in the repository. Uploads, lists and previews reuse small App-owned
+  components that render images, PDFs and text inline and reject active content.
+  The example no longer ships an Agent Skill; its README documents the pages,
+  tables and routes, and the core plugin's Skill covers the file services.
+
+### Patch Changes
+
+- ceb356b: Fix published package metadata and database test driver registration.
+- 22b9672: Serve the File Repository example at /file-repository
+
+  The example no longer contributes a development-only `/dev/file-repository` page. It now declares `/file-repository` through `defineAppRoutes()` with `auth: 'required'`, so the page shows up in the application navigation, matches the Examples template home card, and is part of a production build. Page access follows the application's page permissions, while the example's Server routes stay public. The File plugin's documentation points at the new path, and its Agent Skill no longer describes the example package; that guidance lives in the example's own Skill.
+
+- ceb356b: Accept string-backed file sizes when formatting attachment metadata.
+- ceb356b: Remove the Dameng/DMDB driver from the examples application so its default development configuration uses SQLite without requiring a local DMDB service, and provide a development Docker Compose file for the supported server-backed database dialects. Improve Oracle schema normalization so repeated nullable column changes are skipped across all column types, map integers with enough precision for the full 32-bit range, and accept the application's ISO timestamp seed format.
+- c960d07: Replace the Repository API's per-action `writePolicy` with a Repository Policy
+  declared once per exposure.
+
+  **Breaking.** `defineRepositoryApiRoutes()` no longer accepts `writePolicy` on
+  an action, and every exposure must declare a `policy`. An action configuration
+  now says only that an endpoint exists; what it may do is the exposure's Policy,
+  which governs reading, creating, updating and deleting together. Declaring one
+  is required rather than optional because `writePolicy` defaulted to refusing
+  writes while an absent Policy restricts nothing — making it optional would have
+  turned every existing declaration from "refuse every write" into "allow
+  everything" without a word of warning.
+
+  Declare `policy` as a function of a principal, together with a
+  `principal(context)` resolver, to scope rows to the caller. The resolver belongs
+  to the application, since this router installs no authentication; one that
+  returns nothing refuses the request with 403 `PRINCIPAL_REQUIRED` rather than
+  binding a Policy built from a principal that is not there. A fixed Policy is
+  still normalized when the routes are defined, so a malformed one fails where it
+  is written; a Policy function cannot be, and its `INVALID_POLICY` now reaches
+  the host error handler as a server error instead of being reported to the caller
+  as a 400.
+
+  `@nocobase/db` gains `buildRepositoryPolicy`, a builder whose unmentioned nodes
+  are denied, so the four-node requirement costs nothing to satisfy while the
+  default stays refusal. Two related fixes travel with it: `create`, `update` and
+  `delete` nodes that are `false` now refuse a write before its payload is read,
+  so an empty body is reported as forbidden rather than as invalid input; and a
+  `create` node whose relations grant `update`, `upsert`, `disconnect`, `set` or
+  `delete` is refused during normalization, since a root create performs none of
+  them.
+
+  `@nocobase/app-plugin-file` exposures declare a Policy too, and it reaches
+  uploads: the upload path binds a Policy derived from the exposure's, inheriting
+  `create.scope` and `create.defaults` and substituting the file columns for the
+  field allowlist. A file uploaded under a scoped Policy therefore lands inside
+  the scope the same exposure reads from. The public content route under
+  `accessPath` is unchanged and deliberately outside it.
+
+  The method-level `writePolicy` option on `db.repository()` calls is unaffected
+  and remains available for narrowing a single call.
+
+- Updated dependencies [ceb356b]
+- Updated dependencies [f17f3a6]
+- Updated dependencies [f17f3a6]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [590861e]
+- Updated dependencies [e11b855]
+- Updated dependencies [72ed008]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [22b9672]
+- Updated dependencies [5e17578]
+- Updated dependencies [e11b855]
+- Updated dependencies [ceb356b]
+- Updated dependencies [e11b855]
+- Updated dependencies [ceb356b]
+- Updated dependencies [40e2d49]
+- Updated dependencies [590861e]
+- Updated dependencies [ceb356b]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+  - @nocobase/app-server@1.0.0-beta.11
+  - @nocobase/app-client@1.0.0-beta.14
+  - @nocobase/db@1.0.0-beta.5
+  - @nocobase/app-plugin-file@0.1.0-beta.10
+
+## 0.0.2-beta.2
+
+### Patch Changes
+
+- 5a891d7: Replace the File plugin's legacy backend and client protocol with File Repository services, multipart uploads, and configurable content routes. Preserve its editable Registry components and adapt them to ClientFileRepository and contentUrl. Remove the separate File Repository package, rename its example to app-plugin-file-example, and update application registration and Agent integration guidance.
+
+  This is a breaking replacement of the old File API: access-token routes, inventory settings, FilesClient, and runtime component exports are removed. Applications own file collections and route security; metadata deletion retains storage objects. The example migration remains unchanged.
+
+  Keep the File core in Default and the core plus app-plugin-file-example in Examples. Preserve Hub without a default File registration.
+
+  Require the unified API version for Registry components, preserve PDF previews across cross-origin storage redirects, and normalize database file sizes to safe numeric values without treating custom record or records fields as response envelopes.
+
+- Updated dependencies [e3fa827]
+- Updated dependencies [c3e02bf]
+- Updated dependencies [0a3fa83]
+- Updated dependencies [1d042c0]
+- Updated dependencies [5a891d7]
+  - @nocobase/app-server@1.0.0-beta.9
+  - @nocobase/app-client@1.0.0-beta.12
+  - @nocobase/db@1.0.0-beta.4
+  - @nocobase/app-plugin-file@0.1.0-beta.9
+
+## 0.0.2-beta.1
+
+### Patch Changes
+
+- 52d1107: Declare each peer dependency once, dropping the devDependency that used to accompany it.
+
+  The pairing was required on the grounds that a peer range is wide enough for development to drift off this repository's copy. It is not: pnpm installs a peer and links it into the plugin's own `node_modules`, resolving `workspace:^` to the same package `workspace:*` would. A plugin with the devDependency removed still links, typechecks, builds, and tests against it — verified against a clean install with every plugin's `node_modules` deleted first.
+
+  What remained was a second declaration that changed nothing and had to be kept in step with the first. `pnpm peers:check` no longer asks for it, and `create-plugin` no longer emits it.
+
+- Updated dependencies [52d1107]
+  - @nocobase/app-plugin-file-repository@0.0.2-beta.1
+
+## 0.0.2-beta.0
+
+### Patch Changes
+
+- 5281fd1: Add File Repository Client and Server services, multipart uploads and configurable stream/redirect route helpers. Keep the attachments migration, concrete API configuration and development page in a separate example plugin, and register both plugins in the default application.
+- Updated dependencies [d29d1fe]
+- Updated dependencies [5281fd1]
+  - @nocobase/app-server@1.0.0-beta.8
+  - @nocobase/app-plugin-file-repository@0.0.2-beta.0
+  - @nocobase/app-client@1.0.0-beta.11
+  - @nocobase/db@1.0.0-beta.3
+  - @nocobase/i18n@1.0.0-beta.2
+  - @nocobase/service-provider@0.0.2-beta.1
+
+## 0.0.1
+
+### Patch Changes
+
+- Demonstrate the File Repository core plugin with an attachments migration, concrete upload/content routes, and a development page.

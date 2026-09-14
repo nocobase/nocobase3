@@ -18,6 +18,10 @@ Use NocoBase 3's source-managed Workflow implementation where business behavior 
 
 The application owns workflow source packages, business services, trigger timing, authentication and authorization, business idempotency, and compensation policy. The plugin owns the DSL and core Instructions, Artifact and execution lifecycle, persisted history, management API, and diagnostic views. Use public package exports and APIs; do not bypass them through plugin internals or materialized tables.
 
+For an initialized application, configuration is read from the application-root
+`config.yml`; use that file in setup instructions and examples. Environment
+variables may be used as secret placeholders referenced by this file.
+
 # Choose the Task Path
 
 - Before designing a new business feature, creating a workflow, or moving existing behavior into Workflow, read [Workflow Architecture Decisions](references/workflow-concepts.md) and decide whether the behavior belongs in Workflow, ordinary typed code, or a combination of both. Apply this decision even when the user did not explicitly ask about Workflow, but do not expand the requested implementation scope without a concrete architectural reason.
@@ -39,7 +43,8 @@ Use only the path relevant to the request. Ask a question only when the target, 
 - Keep one workflow package directly below the configured source root. Define invocation `inputSchema` separately from administrator `parameters`, and use stable, globally unique node keys.
 - Bind the `defineWorkflow()` result to a `WorkflowSourceAst`-annotated const and default-export that const. A bare default-exported call does not pass the application's `isolatedDeclarations` build.
 - Express sequencing with arrays and supported branches. Put executable work in typed `run` modules, use a named `run` export, and declare accurate result schemas for values referenced by later nodes.
-- Run `pnpm nocobase workflow check <package>` before loading or publishing. It performs `typecheck`, `evaluate`, `schema`, `semantic`, and `compile` checks on `workflow.ts`; it does not validate run-script compilation or package resources.
+- Run `pnpm nocobase workflow check <package>` before loading or publishing. It performs `typecheck`, `evaluate`, `schema`, `semantic`, and `compile` checks on `workflow.ts`; it does not validate run-script compilation or package resources. Add `--ir` to print the compiled flat IR, which is the definition an Artifact carries.
+- A running development server compiles the workflow source root on demand and produces the same digest a build would, so an edited `workflow.ts` is already loadable there. Do not run a build merely to look at or exercise a definition in development; run one to produce a deployable Artifact.
 - Validate run scripts and business behavior with target-application typecheck, tests, and build, then build the Workflow Artifact through the application's normal workflow build. Preserve package-relative resource paths. Artifact build, synchronization, enablement, and invocation are separate stages.
 - Never author a source-managed workflow by directly editing materialized workflow tables.
 
