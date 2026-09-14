@@ -3,11 +3,11 @@ import {
   type AppClientRegisteredRoute,
 } from '@nocobase/app-client/plugins';
 import { render, screen } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router';
+import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 
 import { Breadcrumbs } from '../../client/components/breadcrumbs.js';
-import RouteChildPageDetailPage from '../../client/pages/route-child-page-detail.js';
+import RouteChildPageQuotationPage from '../../client/pages/route-child-page-quotation.js';
 import RouteOverlaysPage from '../../client/pages/route-overlays.js';
 import applicationRoutes from '../../client/routes.js';
 import {
@@ -64,19 +64,32 @@ describe('nested example pages', () => {
     expect(
       screen.getByRole('link', { name: 'routeOverlays.childPagesTitle' }),
     ).toHaveAttribute('href', '/route-overlays/pages');
-    // The parameterised level links to the record the user opened, not to `:recordId`.
+    expect(screen.getByText('routeOverlays.topicQuotation')).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+  });
+
+  it('names each sibling page separately', () => {
+    render(trailAt('/route-overlays/pages/renewal'));
+
+    expect(screen.getByText('routeOverlays.topicRenewal')).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
     expect(
-      screen.getByText('routeOverlays.childPageDetailTitle'),
-    ).toHaveAttribute('aria-current', 'page');
+      screen.queryByText('routeOverlays.topicQuotation'),
+    ).not.toBeInTheDocument();
   });
 
   it('leaves the trail alone when an overlay opens over a page', () => {
     render(trailAt('/route-overlays/pages/quotation/dialog'));
 
-    expect(
-      screen.getByText('routeOverlays.childPageDetailTitle'),
-    ).toHaveAttribute('aria-current', 'page');
-    expect(screen.queryByText('dialog')).not.toBeInTheDocument();
+    // The deepest level is still the page, because the dialog below it names no destination.
+    expect(screen.getByText('routeOverlays.topicQuotation')).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
   });
 
   it('shows no trail while only overlays are open', () => {
@@ -109,17 +122,12 @@ describe('nested example pages', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('names the detail page after the record it loaded', () => {
+  it('heads a child page with the same title its route declares', () => {
     render(
       <MemoryRouter initialEntries={['/route-overlays/pages/quotation']}>
         <RouteMetadataBoundary routes={registered}>
-          <CurrentRouteProvider route={routeNamed('routeChildPageDetail')}>
-            <Routes>
-              <Route
-                element={<RouteChildPageDetailPage />}
-                path='/route-overlays/pages/:recordId/*'
-              />
-            </Routes>
+          <CurrentRouteProvider route={routeNamed('routeChildPageQuotation')}>
+            <RouteChildPageQuotationPage />
           </CurrentRouteProvider>
         </RouteMetadataBoundary>
       </MemoryRouter>,
@@ -128,12 +136,11 @@ describe('nested example pages', () => {
     expect(
       screen.getByRole('heading', {
         level: 1,
-        name: 'routeOverlays.recordQuotation',
+        name: 'routeOverlays.topicQuotation',
       }),
     ).toBeVisible();
-    // The reported title replaces the route's declared one in the trail.
     expect(
-      screen.getByText('routeOverlays.recordQuotation', { selector: 'span' }),
+      screen.getByText('routeOverlays.topicQuotation', { selector: 'span' }),
     ).toHaveAttribute('aria-current', 'page');
   });
 });

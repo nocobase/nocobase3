@@ -23,7 +23,7 @@ export function ClientRoute({
   defaultAccess,
 }: ClientRouteProps): ReactElement {
   return (
-    // The page is told which route rendered it, so `usePageTitle` knows the trail level it names.
+    // The page is told which route rendered it, so it can ask whether a child page has taken over from it.
     <CurrentRouteProvider route={route}>
       <ClientPage page={describeRoutePage(route, defaultAccess)} />
     </CurrentRouteProvider>

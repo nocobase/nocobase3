@@ -42,10 +42,20 @@ describe('app client routes', () => {
               title: 'routeOverlays.childPagesTitle',
               children: [
                 {
-                  name: 'routeChildPageDetail',
-                  path: ':recordId',
-                  title: 'routeOverlays.childPageDetailTitle',
+                  name: 'routeChildPageQuotation',
+                  path: 'quotation',
+                  title: 'routeOverlays.topicQuotation',
                   children: [{ name: 'routeChildPageDialog', path: 'dialog' }],
+                },
+                {
+                  name: 'routeChildPageOnboarding',
+                  path: 'onboarding',
+                  title: 'routeOverlays.topicOnboarding',
+                },
+                {
+                  name: 'routeChildPageRenewal',
+                  path: 'renewal',
+                  title: 'routeOverlays.topicRenewal',
                 },
               ],
             },

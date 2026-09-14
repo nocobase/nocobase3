@@ -25,12 +25,12 @@ export default function RouteChildPageDialogPage() {
 
   return (
     <RouteDialog
-      description={t('routeOverlays.recordDialogDescription')}
+      description={t('routeOverlays.topicDialogDescription')}
       footer={<CloseAction />}
-      title={t('routeOverlays.recordDialogTitle')}
+      title={t('routeOverlays.topicDialogTitle')}
     >
       <p className='text-sm leading-6 text-muted-foreground'>
-        {t('routeOverlays.recordDialogHint')}
+        {t('routeOverlays.topicDialogHint')}
       </p>
     </RouteDialog>
   );

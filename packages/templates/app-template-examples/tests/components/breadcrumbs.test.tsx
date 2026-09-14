@@ -1,14 +1,12 @@
 import type { AppClientRegisteredRoute } from '@nocobase/app-client/plugins';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 
 import { Breadcrumbs } from '../../client/components/breadcrumbs.js';
 import {
-  CurrentRouteProvider,
   RouteMetadataBoundary,
   RouteTrailProvider,
-  usePageTitle,
 } from '../../client/routing/route-context.js';
 
 vi.mock('@nocobase/i18n/client', () => ({
@@ -240,48 +238,5 @@ describe('Breadcrumbs', () => {
     );
 
     expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
-  });
-
-  it('lets a page replace its declared title once it knows the record', async () => {
-    const orders = route('orders', '/orders', { title: 'Orders' });
-    const detail = route('orderDetail', '/orders/:id', {
-      title: 'Order detail',
-    });
-    const tree = [{ ...orders, children: [detail] }];
-
-    // The page knows no name until its record arrives, which is what `undefined` stands for here.
-    function OrderDetailPage({ reference }: { readonly reference?: string }) {
-      usePageTitle(reference);
-      return null;
-    }
-
-    const view = (reference?: string) => (
-      <MemoryRouter initialEntries={['/orders/42']}>
-        <RouteMetadataBoundary routes={tree}>
-          <Breadcrumbs />
-          <CurrentRouteProvider route={detail}>
-            <OrderDetailPage reference={reference} />
-          </CurrentRouteProvider>
-        </RouteMetadataBoundary>
-      </MemoryRouter>
-    );
-
-    const { rerender } = render(view());
-
-    // The declared title holds the level while the record loads, so the trail does not gain one mid-load.
-    expect(screen.getByText('Order detail')).toHaveAttribute(
-      'aria-current',
-      'page',
-    );
-
-    rerender(view('Order #42'));
-
-    await waitFor(() =>
-      expect(screen.getByText('Order #42')).toHaveAttribute(
-        'aria-current',
-        'page',
-      ),
-    );
-    expect(screen.queryByText('Order detail')).not.toBeInTheDocument();
   });
 });

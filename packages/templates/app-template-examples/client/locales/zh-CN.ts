@@ -42,24 +42,24 @@ const zhCN: AppResource = {
     openChildPages: '打开子页面',
     childPagesTitle: '多级子页面',
     childPagesDescription:
-      '这里的每一项都是页面而不是弹层，打开后会替换当前内容，并为面包屑增加一层。',
-    childPageDetailTitle: '记录',
-    childPageDetailHint:
-      '这个页面的标题来自它加载的记录，而不是路由。打开上方的弹窗后面包屑不会变化，因为弹层并不是另一个目的地。',
-    openRecord: '打开记录',
-    openRecordDialog: '打开弹窗',
-    recordQuotation: '报价单流转',
-    recordQuotationSummary: '把报价单流转给负责该客户的审核人。',
-    recordOnboarding: '入职清单',
-    recordOnboardingSummary: '跟踪新同事第一周需要完成的步骤。',
-    recordRenewal: '续费提醒',
-    recordRenewalSummary: '在订阅到期之前通知负责人。',
-    recordMissingTitle: '未知记录',
-    recordMissing: '没有与该地址匹配的记录。',
-    recordDialogTitle: '记录之上的弹层',
-    recordDialogDescription:
-      '这个弹窗是记录页面的子路由，它没有命名任何目的地。',
-    recordDialogHint: '地址栏变了，但面包屑没有变：你仍然停留在记录页面上。',
+      '这里的每一项都是独立的页面而不是弹层，打开后会替换当前内容，并为面包屑增加一层。',
+    openTopic: '打开页面',
+    openTopicDialog: '打开弹窗',
+    topicQuotation: '报价单流转',
+    topicQuotationSummary: '把报价单流转给负责该客户的审核人。',
+    topicOnboarding: '入职清单',
+    topicOnboardingSummary: '跟踪新同事第一周需要完成的步骤。',
+    topicRenewal: '续费提醒',
+    topicRenewalSummary: '在订阅到期之前通知负责人。',
+    topicHint:
+      '打开这个页面后，上方的面包屑增加了一层，因为它是一个可以返回的位置。',
+    topicOverlayHint:
+      '打开上方的弹窗后面包屑不会变化：地址栏变了，但弹层并不是另一个目的地。',
+    topicDialogTitle: '页面之上的弹层',
+    topicDialogDescription:
+      '这个弹窗是它背后页面的子路由，它没有命名任何目的地。',
+    topicDialogHint:
+      '地址栏变了，但面包屑没有变：你仍然停留在弹层背后的页面上。',
     dialogTitle: '弹窗示例',
     drawerTitle: '抽屉示例',
     hint: '输入草稿后打开子层，关闭子层即可继续编辑。',

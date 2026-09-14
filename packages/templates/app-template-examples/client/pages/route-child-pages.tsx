@@ -6,7 +6,7 @@ import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 
 import { useChildPageActive } from '../routing/route-context.js';
-import { routeChildPageRecords } from './route-child-page-records.js';
+import { routeChildPageTopics } from './route-child-page-topics.js';
 
 export default function RouteChildPagesPage() {
   const { t } = useTranslation();
@@ -23,28 +23,28 @@ export default function RouteChildPagesPage() {
         title={t('routeOverlays.childPagesTitle')}
       />
       <ul className='grid gap-3 sm:grid-cols-3'>
-        {routeChildPageRecords.map((record) => (
+        {routeChildPageTopics.map((topic) => (
           <li
             className='flex flex-col rounded-xl border bg-card p-5 shadow-sm transition-shadow hover:shadow-md'
-            key={record.id}
+            key={topic.id}
           >
             <div className='flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary'>
               <FileStack className='size-5' />
             </div>
             <h2 className='mt-5 font-heading text-lg font-semibold'>
-              {t(record.name)}
+              {t(topic.name)}
             </h2>
             <p className='mt-2 flex-1 text-sm leading-6 text-muted-foreground'>
-              {t(record.summary)}
+              {t(topic.summary)}
             </p>
             <Button
               className='mt-5 self-start'
               nativeButton={false}
-              render={<Link to={record.id} />}
+              render={<Link to={topic.id} />}
               size='sm'
               variant='outline'
             >
-              {t('routeOverlays.openRecord')}
+              {t('routeOverlays.openTopic')}
               <ArrowRight />
             </Button>
           </li>

@@ -55,13 +55,13 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
         componentLoader: () => import('./pages/route-child-pages.js'),
         children: [
           {
-            name: 'routeChildPageDetail',
-            path: ':recordId',
-            // A parameterised route cannot carry navigation, so this is the only name it has until the page
-            // reports the record's own through usePageTitle.
-            title: 'routeOverlays.childPageDetailTitle',
-            componentLoader: () => import('./pages/route-child-page-detail.js'),
+            name: 'routeChildPageQuotation',
+            path: 'quotation',
+            title: 'routeOverlays.topicQuotation',
+            componentLoader: () =>
+              import('./pages/route-child-page-quotation.js'),
             children: [
+              // An overlay below a page. It names no destination, so the trail stops at the page above it.
               {
                 name: 'routeChildPageDialog',
                 path: 'dialog',
@@ -69,6 +69,20 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
                   import('./pages/route-child-page-dialog.js'),
               },
             ],
+          },
+          {
+            name: 'routeChildPageOnboarding',
+            path: 'onboarding',
+            title: 'routeOverlays.topicOnboarding',
+            componentLoader: () =>
+              import('./pages/route-child-page-onboarding.js'),
+          },
+          {
+            name: 'routeChildPageRenewal',
+            path: 'renewal',
+            title: 'routeOverlays.topicRenewal',
+            componentLoader: () =>
+              import('./pages/route-child-page-renewal.js'),
           },
         ],
       },

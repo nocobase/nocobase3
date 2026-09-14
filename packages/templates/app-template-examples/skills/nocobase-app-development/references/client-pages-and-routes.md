@@ -146,17 +146,7 @@ What the trail shows is the sequence of destinations rather than the sequence of
 - Nothing renders until the page actually sits under a parent, because a lone `Home` crumb only repeats what the sidebar already shows.
 - The trail starts at the navigation space the page is rendered in. A settings or dev page needs no Home crumb, because that surface already offers its own way back. The surface states this, so the same `<Breadcrumbs />` is correct in either place and the page never passes `home` itself.
 
-When the name depends on data, report it once the data arrives. The declared title holds the level until then, so the trail does not gain one mid-load and push the page down:
-
-```tsx
-import { usePageTitle } from '../routing/route-context.js';
-
-export default function OrderDetailPage() {
-  const { data } = useOne({ resource: 'orders', id });
-
-  usePageTitle(data?.data.reference);
-}
-```
+A title names the kind of page rather than the record it is showing. `/orders/:orderId` is called "Order detail", not "Order #42": the trail states where in the structure the user is, and the page's own heading already identifies the record. Keeping it static is also what lets the whole trail be known before the page loads anything, so it never changes while the user waits.
 
 ## Customizing a plugin's page
 

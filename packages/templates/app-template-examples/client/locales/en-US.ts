@@ -45,28 +45,27 @@ const enUS = {
     openChildPages: 'Open nested pages',
     childPagesTitle: 'Nested pages',
     childPagesDescription:
-      'Each of these is a page rather than a layer, so opening one replaces this content and adds a breadcrumb level.',
-    childPageDetailTitle: 'Record',
-    childPageDetailHint:
-      'This page is named after the record it loaded, not after its route. Open the dialog above and the breadcrumb stays put, because an overlay is not another destination.',
-    openRecord: 'Open record',
-    openRecordDialog: 'Open dialog',
-    recordQuotation: 'Quotation routing',
-    recordQuotationSummary:
+      'Each of these is its own page rather than a layer, so opening one replaces this content and adds a breadcrumb level.',
+    openTopic: 'Open page',
+    openTopicDialog: 'Open dialog',
+    topicQuotation: 'Quotation routing',
+    topicQuotationSummary:
       'Route a quotation to the reviewer who owns the account.',
-    recordOnboarding: 'Onboarding checklist',
-    recordOnboardingSummary:
+    topicOnboarding: 'Onboarding checklist',
+    topicOnboardingSummary:
       'Track the steps a new teammate works through in their first week.',
-    recordRenewal: 'Renewal reminder',
-    recordRenewalSummary:
+    topicRenewal: 'Renewal reminder',
+    topicRenewalSummary:
       'Notify the owner before a subscription reaches its renewal date.',
-    recordMissingTitle: 'Unknown record',
-    recordMissing: 'No record matches this address.',
-    recordDialogTitle: 'A layer above the record',
-    recordDialogDescription:
-      'This dialog is a child route of the record page, and names no destination.',
-    recordDialogHint:
-      'The address bar changed, but the breadcrumb did not: the record page is still where you are.',
+    topicHint:
+      'The breadcrumb above gained a level when this page opened, because this page is somewhere you can return to.',
+    topicOverlayHint:
+      'Open the dialog above and the breadcrumb stays put: the address bar changes, but an overlay is not another destination.',
+    topicDialogTitle: 'A layer above the page',
+    topicDialogDescription:
+      'This dialog is a child route of the page behind it, and names no destination.',
+    topicDialogHint:
+      'The address bar changed, but the breadcrumb did not: the page behind this layer is still where you are.',
     dialogTitle: 'Dialog example',
     drawerTitle: 'Drawer example',
     hint: 'Type a draft and open a child layer to try keeping your work in place.',
