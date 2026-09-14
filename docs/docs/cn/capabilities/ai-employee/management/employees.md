@@ -1,56 +1,60 @@
 ---
-title: 'AI 员工配置项'
-description: '了解 AI 员工简介、模型、技能、工具和启用状态的管理方式。'
-keywords: 'AI 员工配置,username,skills,tools,modelSettings'
+title: 'AI 员工管理'
+description: '在设置页启用 AI 员工并维护角色、模型、Skill、Tool 和知识库。'
+keywords: 'AI Employee,Role settings,Model settings,Skills,Tools,Knowledge Base'
 ---
 
-# AI 员工配置项
+# AI 员工管理
 
-打开一个员工详情后，通常可以看到身份信息、职责描述、模型和能力配置。配置时优先保持员工身份稳定，只调整它实际需要的能力。
+在 `/settings/ai` 的「AI Employee」Tab 中，左侧显示已经注册的员工，右侧显示当前员工的配置。绿色状态点和顶部 Enabled 开关表示员工是否可用。
 
-## 身份信息
+![AI 员工管理](https://static-docs.nocobase.com/20260914111142-ai-employee-settings.png)
 
-- `username`：员工的稳定标识，会被聊天任务和前端组件引用
-- 显示名称：给业务用户看的名称
-- 简介：说明员工负责什么
-- `category`：区分业务员工和开发用途员工
-- `avatar`：员工头像
+## Profile
 
-不要通过修改 `username` 来“重命名”一个已经被会话和页面引用的员工。需要改显示名称时，只修改展示字段。
+Profile 显示 `Username`、`Nickname`、`Position`、`Bio` 和 `Greeting`。这些字段来自员工源码定义，在管理页中只读。需要修改员工身份或展示信息时，修改 `defineAIEmployee()` 并重启应用。
 
-## 模型
+## Role settings
 
-默认模型决定员工在没有其他覆盖时使用哪个模型。模型限制可以缩小员工可用范围，但不能绕过服务启用状态和用户权限。
+内置员工可以在「System default」和「Custom」之间切换；自定义员工直接编辑角色内容。角色设定应说明员工职责、可以依据哪些事实、何时询问用户以及哪些行为禁止执行。
 
-推荐做法是：
+修改角色设定不会给员工增加数据权限。员工能否读写业务数据仍由当前用户权限和 Tool 的服务端检查决定。
 
-- 对高风险操作使用稳定、可控的模型
-- 对摘要和分类任务使用成本更低的模型
-- 对需要 web search 的员工确认模型支持该能力
-- 生产环境不要频繁修改员工的默认模型
+## Model settings
 
-## 技能
+开启「Enable dedicated model configuration」后，可以限制这个员工使用哪些 `{ llmService, model }`。列表只包含已启用 LLM 服务开放的模型。关闭专用配置后，员工使用当前运行时允许的通用模型集合。
 
-技能提供稳定的业务步骤和知识。技能可以引用工具，但员工是否能使用工具仍由工具权限和运行时策略决定。
+## Skills
 
-如果技能内容发生变化，应该重新测试员工的正常路径、缺少信息路径和权限拒绝路径。
+Skill 按 Scope 分成三组：
 
-## 工具
+| 分组                     | 管理方式                     |
+| ------------------------ | ---------------------------- |
+| General skills           | 所有员工共享，只读展示       |
+| Employee-specific skills | 源码绑定给这个员工，只读展示 |
+| Custom skills            | 管理员可以为员工添加或移除   |
 
-工具让员工访问业务数据或执行操作。配置工具时确认：
+管理页只能选择已经由 `SkillsLoader` 加载的 Skill，不能在这里创建或编辑 `SKILL.md`。
 
-- 工具名称和源码注册名称一致
-- 工具参数和 schema 一致
-- 工具内部检查 actor 权限
-- 业务写操作使用 `ASK`
-- 工具结果不包含无关的敏感数据
+## Tools
 
-## 启用状态
+Tool 同样分成 General、Employee-specific 和 Custom。General 和 Employee-specific Tool 展示当前权限；Custom Tool 可以添加、移除，并在 `Ask` 与 `Allow` 之间切换。
 
-启用前完成一次最小验证：配置模型、发送测试消息、检查工具调用和读取权限。停用或修改模型前，先确认业务页面和快捷入口不会继续指向旧配置。
+`Allow` 只表示运行时不再要求这一步人工确认，不代表跳过 Tool 自己的 ACL、参数校验或业务约束。对写入和外部副作用操作保持 `Ask`。
+
+## Knowledge Base
+
+启用知识库后，可以选择一个或多个当前已启用的知识库，选择按需检索或每个问题都检索，并设置提示词、Top K 和最低相似度 Score。提示词必须包含 `{knowledgeBaseData}` 占位符。
+
+用户实际检索范围仍受其角色能访问的知识库限制。员工配置中选中了知识库，不会提升使用者权限。
+
+## 保存和切换
+
+修改后页面底部出现 Save 与 Cancel。存在未保存内容时切换员工会弹出确认，不会静默丢弃修改。保存失败时保留当前草稿，先处理错误再重试。
 
 ## 相关链接
 
-- [管理 AI 员工](./index.md) — 后台操作流程
-- [可见性和权限](./permissions.md) — 控制哪些用户可以使用员工
-- [声明 AI 员工并添加技能和工具](../agent-development/resources.md) — 从源码扩展能力
+- [注册 AI 员工](../development/employee.md) — 修改员工源码定义
+- [注册 Skill](../development/skill.md) — 创建可选择的 Skill
+- [注册 Tool](../development/tool.md) — 创建可选择的 Tool
+- [LLM 服务管理](./llm-services.md) — 准备员工可用模型
