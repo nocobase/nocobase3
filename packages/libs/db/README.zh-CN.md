@@ -95,7 +95,7 @@ pnpm --filter @nocobase/db example external
 
 ```bash
 pnpm --filter @nocobase/db check
-pnpm --filter @nocobase/db test:integration
+pnpm --filter @nocobase/db-sqlite test:integration
 ```
 
 完整验证和多方言选择见[验证指南](./docs/zh-CN/agent/verification.md)。

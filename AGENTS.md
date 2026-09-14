@@ -149,14 +149,25 @@ Before editing an existing migration, check its Git history and the status of th
 
 ## Database Integration Test Scheduling
 
-Run dialect integration tests with the package filters described in
+Run a dialect integration suite through the package that owns it:
+`pnpm --filter @nocobase/db-<dialect> test:integration`. `@nocobase/db` has no
+integration script of its own. It used to forward to each dialect, which made
+`pnpm --filter @nocobase/db test:integration` read as a full run when it only
+ran SQLite, and `test:integration:all` invite an eight-dialect serial run that
+CI performs on every pull request anyway. Run one suite at a time: never start
+two at once, and never leave one in the background. The runners isolate their
+Compose projects and host ports, so the hazard is not a collision but
+contention for one machine's CPU, memory, and Docker I/O, which pushes service
+health checks past their start period and reports a flaky startup failure
+instead of a result. CI parallelizes safely only because its matrix gives each
+dialect its own runner. Options and the full-verification order are in
 [`internal-docs/development/database-integration-testing.md`](internal-docs/development/database-integration-testing.md).
-The default `@nocobase/db` integration command runs SQLite only; all other
-dialects are opt-in. SQLite, PostgreSQL, MySQL, and Kingbase may run
-concurrently when requested. OceanBase, Oracle, MSSQL, and Dameng must run one
-at a time because their database services and initialization steps are heavier
-and more sensitive to concurrent startup. The `@nocobase/db`
-`test:integration:all` script remains a safe, fully-serial fallback.
+
+Which suites a given change actually requires, and the command forms that
+silently run nothing, are in the
+[`nocobase-db-integration-testing` Skill](.agents/skills/nocobase-db-integration-testing/SKILL.md).
+Every pull request already runs all eight dialects unconditionally, so run
+locally only the dialects the change puts at risk.
 
 ## Native Dependencies in Generated Applications
 
