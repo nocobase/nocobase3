@@ -282,6 +282,7 @@ export class NocoBaseAIService implements AIService {
         llmServiceTitle: string;
         enabledModels?: Array<{ label: string; value: string }>;
         supportWebSearch?: boolean;
+        webSearchModels?: string[];
         isToolConflict?: boolean;
       }>
     >('ai', 'listAllEnabledModels', { method: 'GET' });
@@ -291,7 +292,10 @@ export class NocoBaseAIService implements AIService {
         label: model.label,
         llmService: service.llmService,
         llmServiceTitle: service.llmServiceTitle,
-        supportWebSearch: service.supportWebSearch,
+        supportWebSearch:
+          service.supportWebSearch === true &&
+          (!service.webSearchModels?.length ||
+            service.webSearchModels.includes(model.value)),
         isToolConflict: service.isToolConflict,
       })),
     );

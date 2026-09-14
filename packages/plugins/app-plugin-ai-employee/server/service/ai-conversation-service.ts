@@ -711,6 +711,13 @@ export class AIConversationService {
       );
       const agentContext = this.createAgentContext({
         actor,
+        execution,
+        state: {
+          sessionId,
+          messages,
+          model: { ...resolvedModel },
+          webSearch,
+        },
         translate,
         getHeader,
       });
@@ -1038,6 +1045,14 @@ export class AIConversationService {
       );
       const agentContext = this.createAgentContext({
         actor,
+        execution,
+        state: {
+          sessionId,
+          messageId,
+          messages: resendMessages.length ? resendMessages : undefined,
+          model: { ...resolvedModel },
+          webSearch,
+        },
         translate,
         getHeader,
       });
@@ -1330,6 +1345,12 @@ export class AIConversationService {
       const agentContext = this.createAgentContext({
         actor,
         execution,
+        state: {
+          sessionId,
+          messageId: message.messageId,
+          model: { ...resolvedModel },
+          webSearch,
+        },
         translate,
         getHeader,
       });
