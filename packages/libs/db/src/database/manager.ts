@@ -1,4 +1,5 @@
 import type { CollectionBuilder } from '../collection/builder/builder.js';
+import type { ConnectionCollections } from '../collection/registry/types.js';
 import { createMigrator, type Migrator } from '../migration/migrator.js';
 import type { DatabaseMigratorOptions } from '../migration/types.js';
 import type { QueryAdapter } from '../query/types.js';
@@ -19,12 +20,29 @@ import type { DatabaseConnection } from './connection.js';
 import { DefaultConnectionFactory, type ConnectionFactory } from './factory.js';
 import { KnexConnectionAdapter } from './internal/knex/adapter.js';
 
+/**
+ * Application-level entry to every named connection.
+ *
+ * Besides `connection()`, the Manager mirrors the four Connection handles that
+ * work in logical Collection and Field names — `builder`, `query`,
+ * `repository` and `collections` — each taking the connection name as its last
+ * parameter and returning the very object the Connection holds. Nothing else is
+ * mirrored: `schema`, `schemaInspector` and `collectionMetadata` work in
+ * physical names or write supplemental metadata, and stay on the Connection.
+ */
 export interface DatabaseManager {
   connection(name?: string): DatabaseConnection;
   /** Collection schema and metadata builder. Uses Collection and Field logical names. */
   builder(name?: string): CollectionBuilder;
   /** Database-layer query builder. Does not read Collection metadata or collection table prefixes. */
   query(name?: string): QueryAdapter;
+  /**
+   * Resolved Collections of one connection, by logical name. Same object as
+   * `connection(name).collections`, so its cache is shared with every Builder,
+   * Repository and Migration on that connection: `invalidate()` and
+   * `refresh()` affect all of them.
+   */
+  collections(name?: string): ConnectionCollections;
   repository<
     TRecord extends object = RepositoryRecord,
     TCreate extends object = Partial<TRecord>,
@@ -123,6 +141,10 @@ export class DefaultDatabaseManager implements DatabaseManager {
 
   query(name?: string): QueryAdapter {
     return this.connection(name).query;
+  }
+
+  collections(name?: string): ConnectionCollections {
+    return this.connection(name).collections;
   }
 
   repository<
