@@ -150,6 +150,40 @@ describe('CollectionBuilder createCollection', () => {
     ).toHaveLength(1);
   });
 
+  it('still indexes a relation that only a composite index covers', async () => {
+    const builder = new CollectionBuilder();
+
+    const result = await builder.createCollection(
+      'productBarcodes',
+      (collection) => {
+        collection.string('productId');
+        collection.datetime('scannedAt');
+        collection
+          .belongsTo('product', 'products')
+          .targetKey('id')
+          .foreignKey('productId')
+          .foreignKeyType('string')
+          .index();
+        collection.index(['productId', 'scannedAt']);
+      },
+      { dryRun: true },
+    );
+
+    // Only a single-column index on the relation's own foreign key stands in for the automatic one. A composite index
+    // leaves it in place, even when the composite already leads with that column as this one does, because whether the
+    // composite serves a lookup on the relation depends on the column staying leftmost and the collection is free to
+    // reorder it. The cost is a redundant index; the alternative is silently losing the index on a foreign key.
+    const indexes = (
+      result.schemaOperations?.[0] as {
+        table: { indexes: readonly { columns: string[] }[] };
+      }
+    ).table.indexes;
+    expect(indexes.map((index) => index.columns)).toEqual([
+      ['product_id'],
+      ['product_id', 'scanned_at'],
+    ]);
+  });
+
   it('rejects conflicting physical index names before schema execution', async () => {
     const builder = new CollectionBuilder();
 
