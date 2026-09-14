@@ -1,5 +1,13 @@
 # @nocobase/nb3-cli
 
+## 1.0.0-beta.7
+
+### Patch Changes
+
+- bf0f05b: Replace the `plugin update --plugin` flag with an optional plugin name argument, supporting full package names and short names while preserving updates of all registered plugins when no name is supplied.
+
+  Document the positional plugin update command, version-range behavior, and Skills synchronization in all three application templates' README, agent guidelines, and development Skill.
+
 ## 1.0.0-beta.6
 
 ### Minor Changes

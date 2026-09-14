@@ -1,6 +1,6 @@
 ---
-"@nocobase/db": patch
-"@nocobase/repository-input": patch
+'@nocobase/db': patch
+'@nocobase/repository-input': patch
 ---
 
 Unify aggregate result types using native PostgreSQL/MySQL behavior. COUNT returns a safe integer number and rejects values above Number.MAX_SAFE_INTEGER. SUM/AVG of integer, BIGINT and DECIMAL fields return database-formatted strings; FLOAT/DOUBLE SUM/AVG return numbers. MIN/MAX preserve field result types. Do not strip trailing zeros. Preserve nulls, numeric filtering, ordering, grouping, aliases and relation aggregates.
