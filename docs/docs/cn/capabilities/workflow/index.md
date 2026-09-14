@@ -90,5 +90,5 @@ NocoBase 3 的应用开发以 Agent 为主要实现者。应用开发者负责�
 ## 下一步
 
 - [快速开始](./quick-start.md)
-- [工作流开发](./development/index.md)
+- [应用开发中的工作流](./development/index.md)
 - [工作流管理](./management/index.md)
