@@ -17,7 +17,7 @@ export default function RouteChildPagesPage() {
   if (childPageActive) return <Outlet />;
 
   return (
-    <section className='mx-auto w-full max-w-6xl space-y-6 p-6 md:p-8'>
+    <section className='w-full space-y-6 p-6 md:p-8'>
       <Breadcrumbs />
       <PageHeader
         description={t('routeOverlays.childPagesDescription')}
