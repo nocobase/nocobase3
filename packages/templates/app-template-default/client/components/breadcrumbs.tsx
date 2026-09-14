@@ -8,18 +8,21 @@ import { useRouteMetadata } from '../routing/route-context.js';
 export function Breadcrumbs(): ReactElement {
   const routes = useRouteMetadata();
   const { t } = useTranslation();
-  const navigableRoutes = routes.filter(
-    (route) => route.navigation && route.path !== '/',
+  const breadcrumbRoutes = routes.filter(
+    (route) =>
+      route.path !== '/' && (route.navigation || route.componentLoader),
   );
-  const hasCurrentRoute = navigableRoutes.length > 0;
+  const hasCurrentRoute = breadcrumbRoutes.length > 0;
   const items = [
     { href: '/', label: t('navigation.home', { defaultValue: 'Home' }) },
-    ...navigableRoutes.map((route) => ({
+    ...breadcrumbRoutes.map((route) => ({
       href: route.path,
-      label: t(route.navigation!.title, {
-        ns: route.packageName,
-        defaultValue: route.navigation!.title,
-      }),
+      label: route.navigation
+        ? t(route.navigation.title, {
+            ns: route.packageName,
+            defaultValue: route.navigation.title,
+          })
+        : formatRouteLabel(route.path),
     })),
   ];
 
@@ -87,3 +90,16 @@ function BreadcrumbItem({
 }
 
 Breadcrumbs.displayName = 'Breadcrumbs';
+
+function formatRouteLabel(path: string): string {
+  const segment =
+    path
+      .split('/')
+      .filter(Boolean)
+      .filter((value) => !value.startsWith(':'))
+      .at(-1) ?? 'Page';
+  return segment
+    .replace(/[-_]+/g, ' ')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/^\w/, (value) => value.toUpperCase());
+}

@@ -106,4 +106,31 @@ describe('Breadcrumbs', () => {
       'page',
     );
   });
+
+  it('includes component routes without navigation metadata in deep trails', () => {
+    const parent = route(
+      'routeOverlays',
+      '/route-overlays',
+      'Route dialogs and drawers',
+    );
+    const dialog = route('routeDialogExample', 'dialog');
+    const drawer = route('routeDialogDrawerExample', 'drawer');
+    const tree = [{ ...parent, children: [{ ...dialog, children: [drawer] }] }];
+
+    render(
+      <MemoryRouter initialEntries={['/route-overlays/dialog/drawer']}>
+        <RouteMetadataBoundary routes={tree}>
+          <Routes>
+            <Route path='/route-overlays/*' element={<Breadcrumbs />} />
+          </Routes>
+        </RouteMetadataBoundary>
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.getByRole('link', { name: 'Route dialogs and drawers' }),
+    ).toHaveAttribute('href', '/route-overlays');
+    expect(screen.getByText('Dialog')).toBeInTheDocument();
+    expect(screen.getByText('Drawer')).toHaveAttribute('aria-current', 'page');
+  });
 });
