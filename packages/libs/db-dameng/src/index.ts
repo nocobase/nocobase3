@@ -4,6 +4,8 @@ import type {
   ConnectionConfig,
   DatabaseCapabilities,
   DatabaseDriverDefinition,
+  DatabaseDriverRuntimeContext,
+  JsonResultForm,
   RepositoryRecord,
 } from '@nocobase/db';
 import { rawRows } from '@nocobase/db';
@@ -150,7 +152,7 @@ export const damengDriver: DatabaseDriverDefinition<'dameng'> = {
       connectionName: context.connectionName,
       resolveClient: context.resolveClient,
     }),
-  createRuntime: ({ dialect, capabilities }) => ({
+  createRuntime: ({ dialect, capabilities, config }) => ({
     dialect,
     capabilities,
     numeric: {
@@ -271,8 +273,7 @@ export const damengDriver: DatabaseDriverDefinition<'dameng'> = {
       },
     },
     repository: {
-      // The column is text; the stored JSON arrives unparsed.
-      jsonResults: 'text',
+      jsonResults: resolveJsonResults(config),
       emptyInsertValue: ({ client, collection, column }) => {
         const field = (collection.fields ?? []).find(
           (item) =>
@@ -547,4 +548,17 @@ function escapeDamengLiteral(value: string): string {
 
 function asDamengConfig(source: unknown): DamengConnectionConfig {
   return source as DamengConnectionConfig;
+}
+
+/**
+ * A json column is a plain clob here, so the stored JSON normally arrives as
+ * text. `parseJson` asks the driver to decode it instead, and the decoder has
+ * to be told which of the two it is looking at: a JSON string scalar decoded
+ * twice comes back as the wrong value.
+ */
+function resolveJsonResults(
+  config: DatabaseDriverRuntimeContext['config'],
+): JsonResultForm {
+  const connection = config.connection as { parseJson?: unknown } | undefined;
+  return connection?.parseJson === true ? 'parsed' : 'text';
 }

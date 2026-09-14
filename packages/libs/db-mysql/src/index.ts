@@ -4,6 +4,8 @@ import type {
   ConnectionConfig,
   DatabaseCapabilities,
   DatabaseDriverDefinition,
+  DatabaseDriverRuntimeContext,
+  JsonResultForm,
   MysqlConnectionConfig,
 } from '@nocobase/db';
 import { rawRows } from '@nocobase/db';
@@ -27,7 +29,7 @@ export const mysqlDriver: DatabaseDriverDefinition<'mysql'> = {
     comments: true,
     nativeTypes: true,
   } satisfies Partial<DatabaseCapabilities>,
-  createRuntime: ({ dialect, capabilities }) => ({
+  createRuntime: ({ dialect, capabilities, config }) => ({
     dialect,
     capabilities,
     numeric: {
@@ -43,8 +45,7 @@ export const mysqlDriver: DatabaseDriverDefinition<'mysql'> = {
             : undefined,
     },
     repository: {
-      // The driver parses json and jsonb before the row reaches us.
-      jsonResults: 'parsed',
+      jsonResults: resolveJsonResults(config),
       enumGroupKey: ({ client, field }) => client.raw('binary ??', [field]),
       compileFilterCondition: ({ query, node, field, name, boolean }) => {
         if (
@@ -330,3 +331,18 @@ function compactObject(
 }
 
 export { mysqlTypes, mysqlNumeric } from './inspectors/mysql.js';
+
+/**
+ * mysql2 parses a json column before the row reaches us, so the decoder is
+ * told the value is already decoded. That is only true while the driver is
+ * left alone: `jsonStrings` makes it return the stored text instead, and it
+ * reaches the driver through `driverOptions`. Reading the resolved connection
+ * keeps the declaration true for the connection it describes rather than for
+ * the default one.
+ */
+function resolveJsonResults(
+  config: DatabaseDriverRuntimeContext['config'],
+): JsonResultForm {
+  const connection = config.connection as { jsonStrings?: unknown } | undefined;
+  return connection?.jsonStrings === true ? 'text' : 'parsed';
+}

@@ -150,6 +150,7 @@
         "GroupBySelectionResult",
         "InsertQuery",
         "JsonFilterOperators",
+        "JsonResultForm",
         "JsonValue",
         "MigrationContext",
         "MigrationDefinition",
