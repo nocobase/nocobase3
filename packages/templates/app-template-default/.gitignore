@@ -25,6 +25,12 @@ dist-ssr
 # Local application configuration
 /config.yml
 
+# Local SQLite database, at the path config.example.yml gives the default connection
+/database.sqlite
+/database.sqlite-journal
+/database.sqlite-wal
+/database.sqlite-shm
+
 # E2E credentials
 .env.e2e
 .env.e2e.local

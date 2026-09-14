@@ -17,9 +17,10 @@ interface AppSummaryResponse {
   currentVersion: string | null;
   hasReleases: boolean;
   hasPendingDeployment: boolean;
+  enabled: boolean;
+  startupMode: 'lazy' | 'eager';
 }
 interface AppDetailResponse extends AppSummaryResponse {
-  enabled: boolean;
   deployment: Pick<
     HubAppDetail['deployment'],
     | 'desiredReleaseId'
@@ -66,6 +67,8 @@ export function appSummaryResponse(
     currentVersion: value.currentVersion,
     hasReleases: value.hasReleases,
     hasPendingDeployment: value.hasPendingDeployment,
+    enabled: value.app.enabled,
+    startupMode: value.app.startupMode,
   };
 }
 

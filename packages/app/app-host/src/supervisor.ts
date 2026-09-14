@@ -100,6 +100,7 @@ const DEFAULT_HEALTH_PATH = '/__live';
 const DEFAULT_MAX_AUTOMATIC_RESTARTS = 5;
 const DEFAULT_AUTOMATIC_RESTART_WINDOW_MS = 60_000;
 const DEFAULT_AUTOMATIC_RESTART_BASE_DELAY_MS = 250;
+const MAX_TCP_PORT = 65_535;
 const APP_HOST_CHILD_DENIED_NODE_OPTIONS = [
   '--preserve-symlinks',
   '--preserve-symlinks-main',
@@ -713,22 +714,42 @@ export function sanitizeAppHostChildNodeOptions(value: unknown): string {
     .join(' ');
 }
 
-async function findAvailablePort(
+export async function findAvailablePort(
   startPort: number,
   host: string,
 ): Promise<number> {
-  let port = startPort;
-  while (!(await isPortAvailable(port, host))) {
-    port += 1;
+  if (
+    !Number.isInteger(startPort) ||
+    startPort < 1 ||
+    startPort > MAX_TCP_PORT
+  ) {
+    throw new RangeError(
+      `Invalid app-host port range start: ${String(startPort)}`,
+    );
   }
 
-  return port;
+  for (let port = startPort; port <= MAX_TCP_PORT; port += 1) {
+    if (await isPortAvailable(port, host)) {
+      return port;
+    }
+  }
+
+  throw new Error(
+    `No available app-host port found from ${startPort} through ${MAX_TCP_PORT}`,
+  );
 }
 
 function isPortAvailable(port: number, host: string): Promise<boolean> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const server = net.createServer();
-    server.once('error', () => resolve(false));
+    server.once('error', (error: NodeJS.ErrnoException) => {
+      if (error.code === 'EADDRINUSE') {
+        resolve(false);
+        return;
+      }
+
+      reject(error);
+    });
     server.once('listening', () => {
       server.close(() => resolve(true));
     });

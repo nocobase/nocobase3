@@ -11,6 +11,12 @@ import type { AppRouteContribution } from '../router/index.js';
 
 export interface AppPluginApplication<TConfig = object> {
   readonly appName: string;
+  /**
+   * Whether this app owns the process it runs in, or is one of several an
+   * app host mounted. Optional so an app composed by hand need not state it,
+   * and absent means embedded, matching what `Application` itself defaults to.
+   */
+  readonly mode?: 'standalone' | 'embedded';
   readonly publicBasePath: string;
   readonly config: AppConfigAccessor & Partial<Record<never, TConfig>>;
   readonly paths: ConfigPaths;
