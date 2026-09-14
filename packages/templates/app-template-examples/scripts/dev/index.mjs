@@ -135,10 +135,14 @@ process.once('SIGTERM', () => shutdown(0));
 const env = loadEnv();
 const proxyTarget = parseProxyTarget(env.PROXY_TARGET_URL);
 const viteDevHost = env.APP_VITE_DEV_HOST || '0.0.0.0';
+// In proxy mode Vite is the public app server, so it owns APP_SERVER_PORT.
+const configuredVitePort = proxyTarget
+  ? numberFromEnv(env.APP_SERVER_PORT, viteDevPreferredPort)
+  : viteDevPreferredPort;
 const vitePort = await findAvailablePort({
   host: viteDevHost,
   label: 'Vite dev',
-  preferredPort: viteDevPreferredPort,
+  preferredPort: configuredVitePort,
 });
 const initialEnv = {
   ...env,
@@ -300,6 +304,11 @@ if (!shuttingDown) {
   console.log(`\n  App dev server ready`);
   console.log(`  Local:     ${appUrl}`);
   if (proxyTarget) console.log(`  Backend:   ${proxyTarget.href}`);
+  if (proxyTarget && vitePort !== configuredVitePort) {
+    console.log(
+      `  Vite port ${configuredVitePort} is unavailable; using ${vitePort}.`,
+    );
+  }
   if (!proxyTarget && appServerPort !== configuredAppServerPort) {
     console.log(
       `  App server port ${configuredAppServerPort} is unavailable; using ${appServerPort}.`,

@@ -245,8 +245,82 @@ describe('remote development proxy', () => {
 });
 
 describe('remote development runner', () => {
+  it('uses APP_SERVER_PORT for the local Vite entry in proxy mode', async () => {
+    const run = await runDevMode('http://remote.example.com/remote', {
+      appServerPort: '13399',
+    });
+
+    expect(run.findAvailablePort).toHaveBeenCalledExactlyOnceWith({
+      host: '0.0.0.0',
+      label: 'Vite dev',
+      preferredPort: 13399,
+    });
+    expect(run.spawnDevProcess).toHaveBeenCalledWith(
+      'client',
+      'vite',
+      ['--host', '0.0.0.0', '--port', '13399', '--strictPort'],
+      expect.objectContaining({
+        APP_VITE_DEV_PORT: '13399',
+        APP_VITE_DEV_URL: 'http://127.0.0.1:13399',
+        PROXY_TARGET_URL: 'http://remote.example.com/remote',
+      }),
+      expect.anything(),
+    );
+    expect(run.waitForHttpReady).toHaveBeenCalledWith(
+      expect.objectContaining({ url: 'http://127.0.0.1:13399/main/' }),
+    );
+    expect(run.log).toHaveBeenCalledWith(
+      '  Local:     http://127.0.0.1:13399/main/',
+    );
+  });
+
+  it('uses the allocated Vite port everywhere when the preferred port is busy', async () => {
+    const run = await runDevMode('http://remote.example.com/remote', {
+      appServerPort: '13399',
+      vitePortOffset: 1,
+    });
+
+    expect(run.spawnDevProcess.mock.calls[0]?.[2]).toContain('13400');
+    expect(run.spawnDevProcess.mock.calls[0]?.[3]).toMatchObject({
+      APP_VITE_DEV_PORT: '13400',
+      APP_VITE_DEV_URL: 'http://127.0.0.1:13400',
+    });
+    expect(run.waitForHttpReady).toHaveBeenCalledWith(
+      expect.objectContaining({ url: 'http://127.0.0.1:13400/main/' }),
+    );
+    expect(run.log).toHaveBeenCalledWith(
+      '  Local:     http://127.0.0.1:13400/main/',
+    );
+    expect(run.log).toHaveBeenCalledWith(
+      '  Vite port 13399 is unavailable; using 13400.',
+    );
+  });
+
+  it('keeps APP_SERVER_PORT on the backend in normal development', async () => {
+    const run = await runDevMode(undefined, { appServerPort: '13399' });
+
+    expect(
+      run.findAvailablePort.mock.calls.map(
+        ([options]) => options.preferredPort,
+      ),
+    ).toEqual([5173, 13399]);
+    expect(run.spawnDevProcess.mock.calls[0]?.[3]).toMatchObject({
+      APP_VITE_DEV_PORT: '5173',
+    });
+    expect(run.spawnDevProcess.mock.calls[1]?.[3]).toMatchObject({
+      APP_SERVER_PORT: '13399',
+    });
+    expect(run.log).toHaveBeenCalledWith(
+      '  Local:     http://127.0.0.1:13399/main/',
+    );
+  });
+
   it('keeps preflight hooks but omits the local backend lifecycle', async () => {
     const run = await runDevMode('http://remote.example.com/remote');
+
+    expect(run.findAvailablePort).toHaveBeenCalledWith(
+      expect.objectContaining({ preferredPort: 5173 }),
+    );
 
     expect(
       run.findAvailablePort.mock.calls.map(([options]) => options.label),
@@ -473,12 +547,27 @@ interface DevHook {
   label: string;
 }
 
-async function runDevMode(proxyTarget: string | undefined) {
+async function runDevMode(
+  proxyTarget: string | undefined,
+  options: { appServerPort?: string; vitePortOffset?: number } = {},
+) {
+  const helpersSource = devEntrySource.slice(
+    devEntrySource.indexOf('const toUrlHost ='),
+    devEntrySource.indexOf('const pipeViteOutput ='),
+  );
   const runtimeSource = devEntrySource.slice(
     devEntrySource.indexOf('const env = loadEnv();'),
   );
-  const findAvailablePort = vi.fn(async ({ label }: { label: string }) =>
-    label === 'Vite dev' ? 5173 : 13000,
+  const findAvailablePort = vi.fn(
+    async ({
+      label,
+      preferredPort,
+    }: {
+      label: string;
+      preferredPort: number;
+    }) =>
+      preferredPort +
+      (label === 'Vite dev' ? (options.vitePortOffset ?? 0) : 0),
   );
   const resolvePluginWatchIncludes = vi.fn(() => ['plugins/**']);
   const resolveConfigWatch = vi.fn(() => ({
@@ -486,9 +575,17 @@ async function runDevMode(proxyTarget: string | undefined) {
     filenames: new Set(['config.yml']),
   }));
   const serverStdin = { write: vi.fn() };
-  const spawnDevProcess = vi.fn((label: string, _command: string) => ({
-    stdin: label === 'server' ? serverStdin : undefined,
-  }));
+  const spawnDevProcess = vi.fn(
+    (
+      label: string,
+      _command: string,
+      _args: string[],
+      _env: Record<string, string | undefined>,
+      _options: unknown,
+    ) => ({
+      stdin: label === 'server' ? serverStdin : undefined,
+    }),
+  );
   const sync = vi.fn(
     (_command: string, _args: string[], _options: unknown) => ({ status: 0 }),
   );
@@ -500,45 +597,48 @@ async function runDevMode(proxyTarget: string | undefined) {
     command: ['pnpm', 'nocobase', 'demo', 'build'],
     label: 'Build plugin artifacts',
   };
-  const execution = runInNewContext(`(async () => {${runtimeSource}})()`, {
-    console: { error: vi.fn(), log: vi.fn() },
-    findAvailablePort,
-    fs: { watch },
-    loadEnv: () => ({
-      APP_BASE_PATH: '/main',
-      PROXY_TARGET_URL: proxyTarget,
-    }),
-    numberFromEnv: (value: string | undefined, fallback: number) =>
-      value ? Number(value) : fallback,
-    parseProxyTarget: (value: string | undefined) =>
-      value ? new URL(value) : undefined,
-    process: {
-      exit: vi.fn(),
-      stdin: { pipe: vi.fn() },
+  const log = vi.fn();
+  const execution = runInNewContext(
+    `(async () => {${helpersSource}\n${runtimeSource}})()`,
+    {
+      console: { error: vi.fn(), log },
+      findAvailablePort,
+      fs: { watch },
+      loadEnv: () => ({
+        APP_BASE_PATH: '/main',
+        APP_SERVER_PORT: options.appServerPort,
+        PROXY_TARGET_URL: proxyTarget,
+      }),
+      parseProxyTarget: (value: string | undefined) =>
+        value ? new URL(value) : undefined,
+      process: {
+        exit: vi.fn(),
+        stdin: { pipe: vi.fn() },
+      },
+      readCliHooks: () => ({ dev: { beforeDev: [hook] } }),
+      resolveConfigWatch,
+      resolvePluginWatchIncludes,
+      rootDir: '/app',
+      runHookStage: (
+        hooks: { beforeDev: DevHook[] },
+        stage: 'beforeDev',
+        run: (label: string, command: string, args: string[]) => void,
+      ) => {
+        for (const entry of hooks[stage]) {
+          run(entry.label, entry.command[0], entry.command.slice(1));
+        }
+      },
+      shuttingDown: false,
+      spawn: { sync },
+      spawnDevProcess,
+      viteDevPreferredPort: 5173,
+      waitForHttpReady,
     },
-    readCliHooks: () => ({ dev: { beforeDev: [hook] } }),
-    resolveConfigWatch,
-    resolvePluginWatchIncludes,
-    rootDir: '/app',
-    runHookStage: (
-      hooks: { beforeDev: DevHook[] },
-      stage: 'beforeDev',
-      run: (label: string, command: string, args: string[]) => void,
-    ) => {
-      for (const entry of hooks[stage]) {
-        run(entry.label, entry.command[0], entry.command.slice(1));
-      }
-    },
-    shuttingDown: false,
-    spawn: { sync },
-    spawnDevProcess,
-    toUrlHost: (host: string) => host,
-    viteDevPreferredPort: 5173,
-    waitForHttpReady,
-  }) as Promise<void>;
+  ) as Promise<void>;
   await execution;
 
   return {
+    log,
     findAvailablePort,
     resolveConfigWatch,
     resolvePluginWatchIncludes,
