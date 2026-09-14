@@ -182,7 +182,7 @@ export default function OrdersPage() {
 }
 ```
 
-`useChildPageActive()`, from `client/routing/route-context.js`, answers whether the deepest titled level is still this page. An overlay adds no titled level, so it reads `false` and the parent keeps rendering — which is exactly what puts the page behind the dialog.
+`useChildPageActive()`, from `client/routing/route-context.js`, answers whether the deepest titled level is still this page. An overlay adds no titled level, so it reads `false` and the parent keeps rendering — which is exactly what puts the page behind the dialog. It is a question only a page with a title can ask: on a route that declares none it always answers `false`, because such a route is never a level the trail can move past.
 
 ## Child pages shown as dialogs or drawers
 

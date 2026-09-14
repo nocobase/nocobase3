@@ -13,6 +13,7 @@ import applicationRoutes from '../../client/routes.js';
 import {
   CurrentRouteProvider,
   RouteMetadataBoundary,
+  useChildPageActive,
 } from '../../client/routing/route-context.js';
 
 vi.mock('@nocobase/i18n/client', () => ({
@@ -116,6 +117,25 @@ describe('nested example pages', () => {
     expect(
       screen.queryByRole('heading', { name: 'routeOverlays.title' }),
     ).not.toBeInTheDocument();
+  });
+
+  it('reports no takeover on a page that names no destination', () => {
+    function Probe() {
+      return <span>{String(useChildPageActive())}</span>;
+    }
+
+    render(
+      <MemoryRouter initialEntries={['/route-overlays/dialog']}>
+        <RouteMetadataBoundary routes={registered}>
+          {/* The dialog is an overlay: it declares no title, so nothing has taken over from it. */}
+          <CurrentRouteProvider route={routeNamed('routeDialogExample')}>
+            <Probe />
+          </CurrentRouteProvider>
+        </RouteMetadataBoundary>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText('false')).toBeInTheDocument();
   });
 
   it('heads a child page with the same title its route declares', () => {

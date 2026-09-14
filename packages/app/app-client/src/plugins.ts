@@ -948,9 +948,10 @@ function resolveRouteTree(
       // A menu entry needs a static path; a destination title does not. `title` is therefore the only way a detail
       // page such as `/orders/:id` can name itself, and it falls back to the menu title so a route that already
       // declares `navigation` needs no second declaration.
-      const title = route.title
-        ? normalizeSettingTitle(route.title, id, packageName, kind)
-        : navigation?.title;
+      const title =
+        route.title === undefined
+          ? navigation?.title
+          : normalizeSettingTitle(route.title, id, packageName, kind);
       if (isPage) {
         const signature = createRoutePathSignature(path);
         const previous = claimed.get(signature);

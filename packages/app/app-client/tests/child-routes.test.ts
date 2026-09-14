@@ -339,3 +339,22 @@ it('rejects a blank title', () => {
     ]),
   ).toThrow(/must define a non-empty title/);
 });
+
+it('rejects an empty title rather than falling back to the menu title', () => {
+  expect(() =>
+    resolveAppClientContributions([
+      {
+        packageName: 'example',
+        routes: defineAppRoutes([
+          {
+            name: 'orders',
+            path: '/orders',
+            title: '',
+            navigation: { title: 'Orders' },
+            componentLoader,
+          },
+        ]),
+      },
+    ]),
+  ).toThrow(/must define a non-empty title/);
+});

@@ -16,35 +16,18 @@ import { matchRouteTree } from './route-navigation.js';
  * One level of the trail leading to the current page.
  *
  * `pathname` is the resolved URL rather than the registered pattern, so a level such as `/orders/:id` links to where
- * the user actually is. `title` is absent when the route is structure rather than a destination — a tab, an overlay,
- * or a layer that exists only to share a layout — and consumers skip those levels.
+ * the user actually is. The route names itself: a level with no `title` is structure rather than a destination — a
+ * tab, an overlay, or a layer that exists only to share a layout — and consumers skip it.
  */
 export interface RouteTrailEntry {
   readonly route: AppClientRegisteredRoute;
   readonly pathname: string;
-  readonly title?: string;
 }
 
 const RouteTrailContext = createContext<readonly RouteTrailEntry[]>([]);
 const CurrentRouteContext = createContext<AppClientRegisteredRoute | undefined>(
   undefined,
 );
-
-export interface RouteTrailProviderProps extends PropsWithChildren {
-  readonly trail: readonly RouteTrailEntry[];
-}
-
-/** Supplies a trail directly. `RouteMetadataBoundary` derives one; tests and embedders may state one. */
-export function RouteTrailProvider({
-  children,
-  trail,
-}: RouteTrailProviderProps): ReactElement {
-  return (
-    <RouteTrailContext.Provider value={trail}>
-      {children}
-    </RouteTrailContext.Provider>
-  );
-}
 
 export function useRouteTrail(): readonly RouteTrailEntry[] {
   return useContext(RouteTrailContext);
@@ -59,6 +42,8 @@ export interface RouteMetadataBoundaryProps extends PropsWithChildren {
  *
  * Every level is named by its route. A title states what kind of page a level is rather than which record it is
  * showing, so it is known before the page loads anything and the trail never changes while the user waits.
+ *
+ * `routes` has to keep its identity between renders for the trail to be reused; callers pass a memoised array.
  */
 export function RouteMetadataBoundary({
   children,
@@ -71,13 +56,16 @@ export function RouteMetadataBoundary({
         ({ route, pathname: resolvedPathname }) => ({
           route,
           pathname: resolvedPathname,
-          title: route.title,
         }),
       ) ?? [],
     [pathname, routes],
   );
 
-  return <RouteTrailProvider trail={trail}>{children}</RouteTrailProvider>;
+  return (
+    <RouteTrailContext.Provider value={trail}>
+      {children}
+    </RouteTrailContext.Provider>
+  );
 }
 
 /**
@@ -90,9 +78,16 @@ export function RouteMetadataBoundary({
 export function useChildPageActive(): boolean {
   const route = useContext(CurrentRouteContext);
   const trail = useRouteTrail();
-  const deepestPage = trail.filter((entry) => entry.title !== undefined).at(-1);
 
-  return Boolean(route && deepestPage && deepestPage.route.id !== route.id);
+  // Only a page that names a destination can be taken over from. An overlay or a tab never joins the titled levels,
+  // so without this it would read its own ancestor as a child page and hand its content away.
+  if (!route?.title) return false;
+
+  const deepest = trail
+    .filter((entry) => entry.route.title !== undefined)
+    .at(-1);
+
+  return Boolean(deepest && deepest.route.id !== route.id);
 }
 
 export interface CurrentRouteProviderProps extends PropsWithChildren {

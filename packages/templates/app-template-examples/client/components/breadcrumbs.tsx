@@ -25,8 +25,20 @@ export function Breadcrumbs({
 }: BreadcrumbsProps = {}): ReactElement | null {
   const trail = useRouteTrail();
   const { t } = useTranslation();
-  const levels = trail.filter(
-    (entry) => entry.pathname !== '/' && entry.title !== undefined,
+  // Projecting here rather than filtering keeps the title's narrowing, so nothing below asserts it is present.
+  const levels = trail.flatMap((entry) =>
+    entry.route.title === undefined
+      ? []
+      : [
+          {
+            href: entry.route.componentLoader ? entry.pathname : undefined,
+            key: entry.pathname,
+            label: t(entry.route.title, {
+              ns: entry.route.packageName,
+              defaultValue: entry.route.title,
+            }),
+          },
+        ],
   );
 
   if (levels.length < 2) return null;
@@ -37,15 +49,12 @@ export function Breadcrumbs({
       className={className}
     >
       <ol className='flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground'>
-        {levels.map((entry, index) => (
+        {levels.map((level, index) => (
           <BreadcrumbItem
             current={index === levels.length - 1}
-            href={entry.route.componentLoader ? entry.pathname : undefined}
-            key={entry.pathname}
-            label={t(entry.title!, {
-              ns: entry.route.packageName,
-              defaultValue: entry.title!,
-            })}
+            href={level.href}
+            key={level.key}
+            label={level.label}
           />
         ))}
       </ol>

@@ -56,10 +56,14 @@ export function AppRouter({
     [clientRoutes],
   );
 
+  // The boundary memoises the trail on this array, so it has to keep its identity between renders.
+  const knownRoutes = useMemo(
+    () => [...clientRoutes, ...settingsRouteTree, ...devRouteTree],
+    [clientRoutes, devRouteTree, settingsRouteTree],
+  );
+
   return (
-    <RouteMetadataBoundary
-      routes={[...clientRoutes, ...settingsRouteTree, ...devRouteTree]}
-    >
+    <RouteMetadataBoundary routes={knownRoutes}>
       <Routes>
         <Route
           element={

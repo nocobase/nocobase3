@@ -12,7 +12,6 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { Link, Outlet, useLocation } from 'react-router';
-import { Breadcrumbs } from '@/components/breadcrumbs';
 import { useChildPageActive } from '@/routing/route-context';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -74,7 +73,6 @@ export default function RouteOverlaysPage() {
 
   return (
     <section className='w-full space-y-6 p-6 md:p-8'>
-      <Breadcrumbs />
       <PageHeader
         actions={
           <>

@@ -4,10 +4,7 @@ import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 
 import { Breadcrumbs } from '../../client/components/breadcrumbs.js';
-import {
-  RouteMetadataBoundary,
-  RouteTrailProvider,
-} from '../../client/routing/route-context.js';
+import { RouteMetadataBoundary } from '../../client/routing/route-context.js';
 
 vi.mock('@nocobase/i18n/client', () => ({
   useTranslation: () => ({
@@ -32,30 +29,22 @@ const route = (
   ...extra,
 });
 
-const inTrail = (
-  entries: readonly { route: AppClientRegisteredRoute; pathname: string }[],
-) => entries.map((entry) => ({ ...entry, title: entry.route.title }));
-
 describe('Breadcrumbs', () => {
   it('renders one level per titled destination', () => {
     render(
       <MemoryRouter initialEntries={['/orders/archived']}>
-        <RouteTrailProvider
-          trail={inTrail([
+        <RouteMetadataBoundary
+          routes={[
             {
-              route: route('orders', '/orders', { title: 'Orders' }),
-              pathname: '/orders',
+              ...route('orders', '/orders', { title: 'Orders' }),
+              children: [
+                route('archived', '/orders/archived', { title: 'Archived' }),
+              ],
             },
-            {
-              route: route('archived', '/orders/archived', {
-                title: 'Archived',
-              }),
-              pathname: '/orders/archived',
-            },
-          ])}
+          ]}
         >
           <Breadcrumbs />
-        </RouteTrailProvider>
+        </RouteMetadataBoundary>
       </MemoryRouter>,
     );
 
@@ -121,25 +110,23 @@ describe('Breadcrumbs', () => {
   it('renders a group as plain text because no page sits behind it', () => {
     render(
       <MemoryRouter initialEntries={['/settings/automation/workflows']}>
-        <RouteTrailProvider
-          trail={inTrail([
+        <RouteMetadataBoundary
+          routes={[
             {
-              route: route('automation', '/settings/automation', {
+              ...route('automation', '/settings/automation', {
                 title: 'Automation',
                 componentLoader: undefined,
               }),
-              pathname: '/settings/automation',
+              children: [
+                route('workflows', '/settings/automation/workflows', {
+                  title: 'Workflows',
+                }),
+              ],
             },
-            {
-              route: route('workflows', '/settings/automation/workflows', {
-                title: 'Workflows',
-              }),
-              pathname: '/settings/automation/workflows',
-            },
-          ])}
+          ]}
         >
           <Breadcrumbs />
-        </RouteTrailProvider>
+        </RouteMetadataBoundary>
       </MemoryRouter>,
     );
 
@@ -153,19 +140,37 @@ describe('Breadcrumbs', () => {
     );
   });
 
+  it('counts the root route as a level when a page sits under it', () => {
+    render(
+      <MemoryRouter initialEntries={['/detail']}>
+        <RouteMetadataBoundary
+          routes={[
+            {
+              ...route('home', '/', { title: 'Home' }),
+              children: [route('detail', '/detail', { title: 'Detail' })],
+            },
+          ]}
+        >
+          <Breadcrumbs />
+        </RouteMetadataBoundary>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole('link', { name: 'Home' })).toHaveAttribute(
+      'href',
+      '/',
+    );
+    expect(screen.getByText('Detail')).toHaveAttribute('aria-current', 'page');
+  });
+
   it('stays hidden on a top-level page', () => {
     render(
       <MemoryRouter initialEntries={['/articles']}>
-        <RouteTrailProvider
-          trail={inTrail([
-            {
-              route: route('articles', '/articles', { title: 'Articles' }),
-              pathname: '/articles',
-            },
-          ])}
+        <RouteMetadataBoundary
+          routes={[route('articles', '/articles', { title: 'Articles' })]}
         >
           <Breadcrumbs />
-        </RouteTrailProvider>
+        </RouteMetadataBoundary>
       </MemoryRouter>,
     );
 

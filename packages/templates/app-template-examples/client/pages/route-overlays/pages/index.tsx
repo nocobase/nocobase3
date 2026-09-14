@@ -24,10 +24,10 @@ export default function RouteChildPagesPage() {
         title={t('routeOverlays.childPagesTitle')}
       />
       <ul className='grid gap-3 sm:grid-cols-3'>
-        {routeChildPageTopics.map((topic) => (
+        {Object.entries(routeChildPageTopics).map(([segment, topic]) => (
           <li
             className='flex flex-col rounded-xl border bg-card p-5 shadow-sm transition-shadow hover:shadow-md'
-            key={topic.id}
+            key={segment}
           >
             <div className='flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary'>
               <FileStack className='size-5' />
@@ -41,7 +41,7 @@ export default function RouteChildPagesPage() {
             <Button
               className='mt-5 self-start'
               nativeButton={false}
-              render={<Link to={topic.id} />}
+              render={<Link to={segment} />}
               size='sm'
               variant='outline'
             >

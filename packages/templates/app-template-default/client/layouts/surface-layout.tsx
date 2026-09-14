@@ -1,7 +1,7 @@
 import { useTranslation } from '@nocobase/i18n/client';
 import type { AppClientRegisteredRoute } from '@nocobase/app-client/plugins';
 import { ArrowLeft, PanelLeft, X } from 'lucide-react';
-import { useState, type ReactElement } from 'react';
+import { useMemo, useState, type ReactElement } from 'react';
 import { Link, Navigate, Routes, useLocation, useNavigate } from 'react-router';
 
 import { Loading } from '@/components/loading';
@@ -67,7 +67,11 @@ export function SurfaceLayout({
     denied,
   );
   const visible = navigationPages(navEntries);
-  const allRoutes = [...routeTree, ...routes];
+  // Both the match below and the boundary's memo key off this, so it keeps its identity between renders.
+  const allRoutes = useMemo(
+    () => [...routeTree, ...routes],
+    [routeTree, routes],
+  );
   const matches = matchRouteTree(allRoutes, location.pathname);
   if (loading)
     return <Loading className='min-h-svh' label={`Loading ${copy.title}`} />;
