@@ -52,7 +52,7 @@ describe('ScheduleStore reconciliation', () => {
     ]);
   });
 
-  it('preserves Queue counters and next time for unchanged, content-only, and enabled updates', async () => {
+  it('preserves Queue counters, next time, and the enabled state for unchanged and content-only updates', async () => {
     await store.reconcile([entry(baseDefinition())]);
     const id = scheduleId('main', 'plugin-a', 'daily');
     await database
@@ -65,10 +65,11 @@ describe('ScheduleStore reconciliation', () => {
       })
       .where('id', '=', id)
       .execute();
+    // `enabled` is owned by the database rather than by the code definition, so
+    // reconciling a redeployed manifest must not undo an administrator's pause.
+    await store.setEnabled(id, false);
 
-    await store.reconcile([
-      entry(baseDefinition({ title: 'Renamed', enabled: false })),
-    ]);
+    await store.reconcile([entry(baseDefinition({ title: 'Renamed' }))]);
     await expect(queueRow(id)).resolves.toMatchObject({
       status: 'paused',
       runCount: 9,

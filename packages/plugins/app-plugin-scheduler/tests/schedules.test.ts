@@ -15,7 +15,6 @@ describe('schedule definitions and registries', () => {
       target: { type: 'job', config: {} },
     });
     expect(definition.schedule.timezone).toBe('Asia/Singapore');
-    expect(definition.enabled).toBe(true);
     expect(definition.definitionHash).toMatch(/^[a-f0-9]{64}$/);
     expect(Object.isFrozen(definition)).toBe(true);
   });

@@ -36,6 +36,9 @@ const mocks = vi.hoisted(() => {
     'page.columns.scheduleTimezone': 'Schedule / timezone',
     'page.columns.triggered': 'Triggered',
     'page.columns.nextRun': 'Next trigger',
+    'page.columns.status': 'Status',
+    'page.actions.enable': 'Enable',
+    'page.actions.disable': 'Disable',
     'page.loading': 'Loading scheduled tasks…',
     'page.empty': 'No scheduled tasks are defined.',
     'page.noMatches': 'No scheduled tasks match these filters.',
@@ -132,6 +135,7 @@ const schedules = [
     lastRunAt: '2026-09-01T02:00:00.000Z',
     nextRunAt: '2026-09-02T02:00:00.000Z',
     targetType: 'workflow',
+    targetState: 'ready',
     targetSummary: {
       targetLabel: 'Customer sync',
       description: 'Published workflow',
@@ -149,6 +153,7 @@ const schedules = [
     runCount: 2,
     completedCount: 0,
     targetType: 'job',
+    targetState: 'ready',
     targetSummary: { targetLabel: 'Cleanup job', state: 'ready' },
   },
 ] as const;
@@ -399,6 +404,7 @@ describe('SchedulesPage', () => {
     ).toEqual([
       'Name',
       'Target',
+      'Status',
       'Schedule / timezone',
       'Triggered',
       'Next trigger',
@@ -406,7 +412,7 @@ describe('SchedulesPage', () => {
 
     const row = screen.getByText('Daily customer sync').closest('tr');
     expect(row).not.toBeNull();
-    const triggered = within(row!).getAllByRole('cell')[3];
+    const triggered = within(row!).getAllByRole('cell')[4];
     expect(triggered?.textContent).toContain('4');
     expect(triggered?.textContent).toContain(
       formatClientRelativeTime(
@@ -416,40 +422,36 @@ describe('SchedulesPage', () => {
     );
     // A schedule that has never triggered still occupies the same cell shape.
     const never = screen.getByText('Archive cleanup').closest('tr');
-    expect(within(never!).getAllByRole('cell')[3]?.textContent).toContain('—');
+    expect(within(never!).getAllByRole('cell')[4]?.textContent).toContain('—');
   });
 
-  it('carries the status with the task name instead of its own column', async () => {
+  it('carries the enabled state as a switch of its own, named by the action it performs', async () => {
     mocks.request.mockResolvedValueOnce({ data: schedules });
     renderList();
 
     await screen.findByText('Daily customer sync');
     const syncRow = screen.getByText('Daily customer sync').closest('tr');
     expect(syncRow).not.toBeNull();
-    const [name, ...rest] = within(syncRow!).getAllByRole('cell');
-    const link = within(name!).getByRole('link', {
-      name: 'Daily customer sync',
-    });
-    // The status is the name cell's second line, in a block of its own after
-    // the title link, so clicking the badge still follows the title's link.
-    const badge = within(name!).getAllByText('Active');
-    expect(badge).toHaveLength(1);
-    expect(within(link).queryByText('Active')).toBeNull();
-    expect(badge[0]?.parentElement?.previousElementSibling).toBe(link);
-    // The status no longer occupies a trailing column of its own.
-    expect(rest).toHaveLength(4);
-    expect(rest.at(-1)?.textContent).not.toContain('Active');
-
-    // A paused schedule reports that state in the same cell.
-    const cleanupRow = screen.getByText('Archive cleanup').closest('tr');
-    const cleanupName = within(cleanupRow!).getAllByRole('cell')[0];
+    const [name, , status] = within(syncRow!).getAllByRole('cell');
+    // The title cell carries the link alone; `enabled` is database-owned state
+    // an administrator toggles, so it reads as a control rather than a label.
     expect(
-      within(cleanupName!).getByRole('link', { name: 'Archive cleanup' }),
+      within(name!).getByRole('link', { name: 'Daily customer sync' }),
     ).toBeTruthy();
-    expect(within(cleanupName!).getByText('Paused')).toBeTruthy();
+    expect(within(name!).queryByRole('switch')).toBeNull();
+    const enabledSwitch = within(status!).getByRole('switch');
+    // The switch is named for what it would do, not for the state it is in.
+    expect(enabledSwitch.getAttribute('aria-label')).toBe('Disable');
+    expect(enabledSwitch.getAttribute('aria-checked')).toBe('true');
+
+    // A paused schedule reports that state through the same control.
+    const cleanupRow = screen.getByText('Archive cleanup').closest('tr');
+    const cleanupSwitch = within(cleanupRow!).getByRole('switch');
+    expect(cleanupSwitch.getAttribute('aria-label')).toBe('Enable');
+    expect(cleanupSwitch.getAttribute('aria-checked')).toBe('false');
   });
 
-  it('navigates to the detail page from anywhere on the row', async () => {
+  it('navigates to the detail page from the title rather than from the whole row', async () => {
     mocks.request.mockImplementation(({ path }: { path: string }) =>
       Promise.resolve({ data: path === 'schedules' ? schedules : [] }),
     );
@@ -468,10 +470,18 @@ describe('SchedulesPage', () => {
       </MemoryRouter>,
     );
 
-    const row = (await screen.findByText('Daily customer sync')).closest('tr');
+    const title = await screen.findByText('Daily customer sync');
+    const row = title.closest('tr');
     expect(row).not.toBeNull();
-    expect(row?.className).toContain('cursor-pointer');
+    // The row carries a switch, so a row-wide click target would swallow the
+    // toggle. Only the title navigates.
+    expect(row?.className).not.toContain('cursor-pointer');
     fireEvent.click(within(row!).getAllByRole('cell')[1]!);
+    expect(
+      screen.queryByRole('link', { name: 'Back to scheduled tasks' }),
+    ).toBeNull();
+
+    fireEvent.click(title);
     expect(
       await screen.findByRole('link', { name: 'Back to scheduled tasks' }),
     ).toBeTruthy();
