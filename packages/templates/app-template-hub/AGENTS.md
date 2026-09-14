@@ -177,6 +177,8 @@ Use `PROXY_TARGET_URL=https://backend.example.com/main pnpm dev` to run only the
 
 The development proxy adapts same-origin HTTP and WebSocket Origin headers to the target origin, and maps same-origin Referer paths to the target app base. Other origins remain unchanged and missing Origin headers are not added. Keep backend origin checks enabled; this adaptation belongs only to Vite development, not production deployment. Production uses `APP_PUBLIC_ORIGIN` and a reverse proxy that preserves the public Host and protocol.
 
+`APP_SERVER_PORT` selects the local application entry port: Vite in proxy development mode (default 5173), or the local backend in normal development mode (default 13000). Normal development keeps Vite's preferred port at 5173. An occupied port advances to the next available port; use the printed Local URL. This variable does not change the backend URL supplied through `PROXY_TARGET_URL`.
+
 ## The command line
 
 `pnpm nocobase` runs this application's CLI. It holds three kinds of command: `plugin *` manages the plugins this application uses, `app *` is what this application writes for itself in `cli/commands/`, and each registered plugin contributes its own commands under a topic it declares — a workflow plugin's commands appear under `workflow`.
