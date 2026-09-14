@@ -214,6 +214,50 @@ describe('AgentService tool snapshots', () => {
     );
     expect(fixture.activeTools).toHaveBeenCalledOnce();
   });
+
+  it('targets the persisted interrupt when resuming a tool decision', async () => {
+    const fixture = createFixture([
+      new Map([['review', tool('review', false)]]),
+    ]);
+    let receivedInput: unknown;
+    mocks.createAgent.mockReset().mockReturnValue({
+      stream: vi.fn(async (input: unknown) => {
+        receivedInput = input;
+        return {
+          async *[Symbol.asyncIterator]() {
+            yield ['messages', [{ type: 'ai', content: 'resumed' }, {}]];
+          },
+        };
+      }),
+    });
+
+    for await (const _event of fixture.service.resumeStream({
+      userDecisions: {
+        interruptId: 'interrupt-1',
+        decisions: [
+          {
+            type: 'edit',
+            editedAction: { name: 'review', args: { approved: true } },
+          },
+        ],
+      },
+    })) {
+      // Drain the resumed stream.
+    }
+
+    expect(receivedInput).toMatchObject({
+      resume: {
+        'interrupt-1': {
+          decisions: [
+            {
+              type: 'edit',
+              editedAction: { name: 'review', args: { approved: true } },
+            },
+          ],
+        },
+      },
+    });
+  });
   it('uses empty snapshots without discovering when tools are disabled', async () => {
     const fixture = createFixture([]);
     (fixture.providers as any).features.tools = false;
