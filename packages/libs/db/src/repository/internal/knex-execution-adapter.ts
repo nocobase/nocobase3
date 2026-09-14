@@ -680,7 +680,15 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       incrementVersion(versionQuery, plan.collection);
       if (affectedCount(await versionQuery) === 0) return 'conflict';
     }
-    if (this.scopeCheckApplies(plan.scopeCheck, plan.values)) {
+    if (
+      plan.scopeCheck &&
+      (await this.scopeCheckApplies(
+        plan.collection,
+        plan.scopeCheck,
+        plan.values,
+        plan.relations,
+      ))
+    ) {
       await this.assertWithinScope(
         plan.collection,
         [unique],
@@ -762,7 +770,15 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
   async updateMany(
     plan: RepositoryUpdateManyPlan,
   ): Promise<RepositoryExecutedManyMutation> {
-    if (plan.fields || this.scopeCheckApplies(plan.scopeCheck, plan.values)) {
+    if (
+      plan.fields ||
+      (await this.scopeCheckApplies(
+        plan.collection,
+        plan.scopeCheck,
+        plan.values,
+        undefined,
+      ))
+    ) {
       // A single UPDATE never learns which rows it touched, so judging them
       // afterwards means locking them first. Only a write that touches a
       // field the scope reads pays for that.
@@ -809,7 +825,15 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     incrementVersion(query, plan.collection);
     const count = affectedCount(await query);
     assertBulkMutationCount('updateMany', count, selected.length);
-    if (this.scopeCheckApplies(plan.scopeCheck, plan.values)) {
+    if (
+      plan.scopeCheck &&
+      (await this.scopeCheckApplies(
+        plan.collection,
+        plan.scopeCheck,
+        plan.values,
+        undefined,
+      ))
+    ) {
       await this.assertWithinScope(
         plan.collection,
         selected.map((item) => item.unique),
@@ -1135,13 +1159,29 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     );
   }
 
-  /** Whether a write touching these fields could move a record out of the scope. */
-  private scopeCheckApplies(
+  /**
+   * Whether this write could move a record out of the scope.
+   *
+   * The submitted values are not the only way a root column changes: a to-one
+   * relation stores its foreign key on the root table, so `owner.connect`
+   * writes `ownerId` without ever naming it. Missing that was how a relation
+   * operation could carry a record out of its own tenant and commit.
+   */
+  private async scopeCheckApplies(
+    collection: CollectionDefinition,
     check: RepositoryScopeCheck | undefined,
     values: RepositoryRecord,
-  ): check is RepositoryScopeCheck {
+    relations: RelationMutationAst | undefined,
+  ): Promise<boolean> {
     if (!check) return false;
-    return check.fields.some((field) => Object.hasOwn(values, field));
+    if (check.fields.some((field) => Object.hasOwn(values, field))) return true;
+    for (const node of relations?.items ?? []) {
+      const resolved = await this.resolveRelation(collection, node.field);
+      if (resolved.type !== 'belongsTo') continue;
+      const foreignKey = resolved.relation.foreignKey;
+      if (foreignKey && check.fields.includes(foreignKey)) return true;
+    }
+    return false;
   }
 
   /**
@@ -1328,6 +1368,9 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
           resolved.target,
           node.target,
           createdTargets,
+          undefined,
+          undefined,
+          scopes?.[node.field],
         );
         physicalValues[resolved.sourceColumn] = relationKeyValue(
           this.getClient(),
@@ -1478,7 +1521,12 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       return;
     }
     if (node.action === 'clear') {
-      await this.clearRelation(resolved, source, sourceUnique);
+      await this.clearRelation(
+        resolved,
+        source,
+        sourceUnique,
+        scopeNode?.scope,
+      );
       return;
     }
     if (node.action === 'modify') {
@@ -1532,7 +1580,13 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       });
     }
     if (node.action === 'replace') {
-      await this.replaceRelation(resolved, source, sourceUnique, desired);
+      await this.replaceRelation(
+        resolved,
+        source,
+        sourceUnique,
+        desired,
+        scopeNode?.scope,
+      );
       return;
     }
     for (const target of desired) {
@@ -1603,6 +1657,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       target,
       createdTargets,
       scopeNode?.relations,
+      scopeNode?.scope,
     );
   }
 
@@ -1628,6 +1683,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
         target.update,
         createdTargets,
         scopeNode?.relations,
+        scopeNode?.scope,
       );
       return;
     }
@@ -1717,6 +1773,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     target: RelationUpdateTarget,
     createdTargets: CreatedTargetReference[],
     scopes?: Readonly<Record<string, RelationScopeNode>>,
+    scope?: FilterAst,
   ): Promise<void> {
     if (Object.keys(target.values).length > 0) {
       const query = tableQuery(this.getClient(), collection).update(
@@ -1758,6 +1815,16 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       applyUnique(versionQuery, collection, selected.unique);
       incrementVersion(versionQuery, collection);
       await versionQuery;
+    }
+    // Invariant 2 applies to a relation target too: locating it inside the
+    // scope says nothing about where the submitted values leave it.
+    if (scope) {
+      await this.assertWithinScope(
+        collection,
+        [selected.unique],
+        { scope, fields: [] },
+        'update',
+      );
     }
   }
 
@@ -2060,10 +2127,27 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     resolved: ResolvedRepositoryRelation,
     source: RepositoryRecord,
     sourceUnique: UniqueSelector,
+    scope?: FilterAst,
   ): Promise<void> {
     if (resolved.type === 'belongsTo') {
       if (resolved.relation.nullable === false)
         relationActionNotAllowed(resolved, 'clear');
+      // Detaching is still reaching for a row. A target the relation scope
+      // cannot locate raises the same error as one that is not there, so a
+      // caller cannot learn what they are attached to by trying to let go.
+      const foreignKey = resolved.relation.foreignKey;
+      const attached = foreignKey ? source[foreignKey] : undefined;
+      if (scope && attached !== null && attached !== undefined) {
+        await this.findTarget(
+          resolved.target,
+          {
+            kind: 'unique',
+            fields: [resolved.targetKey],
+            values: { [resolved.targetKey]: attached },
+          },
+          scope,
+        );
+      }
       const query = tableQuery(this.getClient(), resolved.source).update({
         [resolved.sourceColumn]: null,
       });
@@ -2074,17 +2158,39 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     if (resolved.type !== 'hasOne') relationActionNotAllowed(resolved, 'clear');
     if (!relationForeignKeyNullable(resolved))
       relationActionNotAllowed(resolved, 'clear');
-    await tableQuery(this.getClient(), resolved.target)
-      .where(
-        column(resolved.target, resolved.targetForeignKey),
-        relationKeyValue(
-          this.getClient(),
-          resolved.source,
-          resolved.sourceKey,
-          source[resolved.sourceKey],
-        ),
-      )
-      .update({ [column(resolved.target, resolved.targetForeignKey)]: null });
+    const clearQuery = tableQuery(this.getClient(), resolved.target).where(
+      column(resolved.target, resolved.targetForeignKey),
+      relationKeyValue(
+        this.getClient(),
+        resolved.source,
+        resolved.sourceKey,
+        source[resolved.sourceKey],
+      ),
+    );
+    // Only the rows the relation scope can locate are detached; one it cannot
+    // see stays attached rather than being silently let go.
+    await this.applyRelationScope(clearQuery, resolved.target, scope);
+    await clearQuery.update({
+      [column(resolved.target, resolved.targetForeignKey)]: null,
+    });
+  }
+
+  /** Narrow a relation query by the Policy scope that governs its target. */
+  private async applyRelationScope(
+    query: Knex.QueryBuilder,
+    target: CollectionDefinition,
+    scope: FilterAst | undefined,
+  ): Promise<void> {
+    if (!scope) return;
+    const graph = await this.prepareFilterGraph(target, scope.root);
+    applyFilter(
+      query,
+      target,
+      scope.root,
+      graph,
+      tableName(target),
+      this.getClient(),
+    );
   }
 
   private async disconnectRelation(
@@ -2146,6 +2252,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       record: RepositoryRecord;
       through?: RepositoryRecord;
     }[],
+    scope?: FilterAst,
   ): Promise<void> {
     if (resolved.type === 'belongsTo')
       relationActionNotAllowed(resolved, 'replace');
@@ -2156,7 +2263,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
           target[resolved.targetKey],
         ]),
       );
-      const current = (await tableQuery(this.getClient(), resolved.through)
+      const edges = tableQuery(this.getClient(), resolved.through)
         .select(
           this.getClient()
             .ref(column(resolved.through, resolved.throughTargetForeignKey))
@@ -2170,7 +2277,20 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
             resolved.sourceKey,
             source[resolved.sourceKey],
           ),
-        )) as Array<{ target: unknown }>;
+        );
+      // An edge to a target the scope cannot locate is left alone: replacing a
+      // set may only let go of what the caller could have named.
+      if (scope) {
+        const visible = tableQuery(this.getClient(), resolved.target).select(
+          column(resolved.target, resolved.targetKey),
+        );
+        await this.applyRelationScope(visible, resolved.target, scope);
+        edges.whereIn(
+          column(resolved.through, resolved.throughTargetForeignKey),
+          visible,
+        );
+      }
+      const current = (await edges) as Array<{ target: unknown }>;
       for (const edge of current) {
         const keyField = scalarFields(resolved.target).find(
           (field) => field.name === resolved.targetKey,
@@ -2210,6 +2330,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
           source[resolved.sourceKey],
         ),
       );
+      await this.applyRelationScope(remaining, resolved.target, scope);
       if (selectors.length) {
         remaining.whereNot((query) =>
           applySelectors(query, resolved.target, selectors),

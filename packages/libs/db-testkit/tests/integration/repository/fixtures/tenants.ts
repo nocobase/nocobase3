@@ -21,6 +21,14 @@ export async function createTenantFixture(
       },
     },
     {
+      name: 'policyOwners',
+      definition: (collection) => {
+        collection.string('id').primary();
+        collection.string('tenantId').notNull();
+        collection.string('name').notNull();
+      },
+    },
+    {
       name: 'policyProjects',
       definition: (collection) => {
         collection.string('id').primary();
@@ -29,20 +37,48 @@ export async function createTenantFixture(
         collection.integer('budget').notNull().defaultTo(0);
         collection.integer('version').notNull().defaultTo(1);
         collection.optimisticLock('version');
+        collection.string('ownerId').nullable();
         collection
           .hasMany('tasks', 'policyTasks')
           .sourceKey('id')
           .foreignKey('projectId');
+        // A to-one relation writes its foreign key on this table, which is
+        // what makes a relation operation able to move the root record.
+        collection
+          .belongsTo('owner', 'policyOwners')
+          .targetKey('id')
+          .foreignKey('ownerId')
+          .constraints(false);
       },
     },
   ]);
+  await context.database.repository('policyOwners').createMany({
+    values: [
+      { id: 'o1', tenantId: 'T1', name: 'Mine' },
+      { id: 'o2', tenantId: 'T2', name: 'Theirs' },
+    ],
+  });
   // Seeded through the Repository rather than raw SQL so the fixture does not
   // have to know each dialect's physical column names.
   await context.database.repository('policyProjects').createMany({
     values: [
-      { id: 'p1', tenantId: 'T1', name: 'Mine one', budget: 100 },
-      { id: 'p2', tenantId: 'T1', name: 'Mine two', budget: 200 },
-      { id: 'p3', tenantId: 'T2', name: 'Theirs', budget: 300 },
+      {
+        id: 'p1',
+        tenantId: 'T1',
+        name: 'Mine one',
+        budget: 100,
+        ownerId: 'o1',
+      },
+      // A record of this tenant pointing at another tenant's owner: the root
+      // scope admits it, the relation scope does not.
+      {
+        id: 'p2',
+        tenantId: 'T1',
+        name: 'Mine two',
+        budget: 200,
+        ownerId: 'o2',
+      },
+      { id: 'p3', tenantId: 'T2', name: 'Theirs', budget: 300, ownerId: 'o2' },
     ],
   });
   await context.database.repository('policyTasks').createMany({
@@ -86,11 +122,9 @@ export async function createTenantFixture(
 export async function allProjects(
   context: IntegrationTestContext,
 ): Promise<Array<Record<string, unknown>>> {
-  return context.database
-    .repository('policyProjects')
-    .findMany({ select: selection(['id', 'tenantId', 'budget']) }) as Promise<
-    Array<Record<string, unknown>>
-  >;
+  return context.database.repository('policyProjects').findMany({
+    select: selection(['id', 'tenantId', 'budget', 'ownerId']),
+  }) as Promise<Array<Record<string, unknown>>>;
 }
 
 export const TENANT_FIELDS = ['id', 'tenantId', 'name', 'budget'] as const;
