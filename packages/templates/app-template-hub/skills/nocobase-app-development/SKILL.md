@@ -76,6 +76,8 @@ For creating, editing or removing theme presets, read [themes](references/themes
 
 ## Where to work
 
+Header entries stay visible on their destination pages. The Dev tools entry is development-only; the Hub has no Settings entry.
+
 Business code belongs in a small, stable set of places:
 
 ```text
