@@ -8,7 +8,7 @@ import {
   type RepositoryApiExposure,
 } from '@nocobase/app-server/router';
 import { Hono } from 'hono';
-import { databaseManagerToken } from '@nocobase/db';
+import { buildRepositoryPolicy, databaseManagerToken } from '@nocobase/db';
 
 const actions: RepositoryApiActions = {
   findMany: { maxLimit: 100 },
@@ -17,6 +17,8 @@ const actions: RepositoryApiActions = {
   exists: {},
   aggregate: {},
   groupBy: {},
+  createOne: {},
+  updateOne: {},
   deleteOne: {},
 };
 const repositories: readonly RepositoryApiExposure[] = [
@@ -24,41 +26,48 @@ const repositories: readonly RepositoryApiExposure[] = [
     name: 'analyticsChannels',
     collection: 'channels',
     connection: 'analytics',
-    actions: {
-      ...actions,
-      createOne: { writePolicy: (w) => w.fields('id', 'name', 'code') },
-      updateOne: { writePolicy: (w) => w.fields('name', 'code') },
-    },
+    policy: buildRepositoryPolicy((policy) =>
+      policy
+        .read(true)
+        .create((create) => create.scope(true).fields('id', 'name', 'code'))
+        .update((update) => update.scope(true).fields('name', 'code'))
+        .delete(true),
+    ),
+    actions,
   },
   {
     name: 'analyticsCampaigns',
     collection: 'campaigns',
     connection: 'analytics',
-    actions: {
-      ...actions,
-      createOne: {
-        writePolicy: (w) =>
-          w
+    policy: buildRepositoryPolicy((policy) =>
+      policy
+        .read(true)
+        .create((create) =>
+          create
+            .scope(true)
             .fields('id', 'name', 'status', 'budgetCents')
-            .relation('channel', (r) => r.connect()),
-      },
-      updateOne: {
-        writePolicy: (w) =>
-          w
+            .relation('channel', (channel) => channel.connect()),
+        )
+        .update((update) =>
+          update
+            .scope(true)
             .fields('name', 'status', 'budgetCents')
-            .relation('channel', (r) => r.connect()),
-      },
-    },
+            .relation('channel', (channel) => channel.connect()),
+        )
+        .delete(true),
+    ),
+    actions,
   },
   {
     name: 'analyticsDailyMetrics',
     collection: 'dailyMetrics',
     connection: 'analytics',
-    actions: {
-      ...actions,
-      createOne: {
-        writePolicy: (w) =>
-          w
+    policy: buildRepositoryPolicy((policy) =>
+      policy
+        .read(true)
+        .create((create) =>
+          create
+            .scope(true)
             .fields(
               'id',
               'date',
@@ -68,11 +77,11 @@ const repositories: readonly RepositoryApiExposure[] = [
               'spendCents',
               'revenueCents',
             )
-            .relation('campaign', (r) => r.connect()),
-      },
-      updateOne: {
-        writePolicy: (w) =>
-          w
+            .relation('campaign', (campaign) => campaign.connect()),
+        )
+        .update((update) =>
+          update
+            .scope(true)
             .fields(
               'date',
               'impressions',
@@ -81,16 +90,19 @@ const repositories: readonly RepositoryApiExposure[] = [
               'spendCents',
               'revenueCents',
             )
-            .relation('campaign', (r) => r.connect()),
-      },
-    },
+            .relation('campaign', (campaign) => campaign.connect()),
+        )
+        .delete(true),
+    ),
+    actions,
   },
 ];
 const repositoryRoutes = defineRepositoryApiRoutes({ repositories });
 
 // Like the Repository example plugin, this is a shared demonstration workspace:
-// every signed-in user may manage sample records. Policies restrict writable
-// fields and relation operations; middleware guards only these owned endpoints.
+// every signed-in user may manage sample records. Each exposure's Policy
+// restricts writable fields and relation operations; middleware guards only
+// these owned endpoints.
 export const analyticsRoutes: AppApiRouteContribution<Application> =
   defineApiRoutes(async (app) => {
     const router = new Hono();
