@@ -1,0 +1,21 @@
+{
+  "document": {
+    "description": "Customers owned by the external CRM database.",
+    "fields": {
+      "createdAt": {
+        "title": "Created at"
+      },
+      "displayName": {
+        "title": "Display name"
+      },
+      "email": {
+        "title": "Email address"
+      }
+    },
+    "name": "customers",
+    "title": "CRM customers",
+    "version": 1
+  },
+  "formatVersion": 1,
+  "name": "customers"
+}

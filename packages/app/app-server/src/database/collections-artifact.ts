@@ -22,6 +22,11 @@ import {
 } from '@nocobase/db';
 
 import type { ConfigPaths } from '../config/index.js';
+import {
+  isCollectionMetadataStoreInstance,
+  resolveAppCollectionsDirectory,
+  resolveAppMetadataStore,
+} from './collections-directory.js';
 import { createAppDatabaseManager } from './manager.js';
 import { defaultConnectionName, planAppDatabaseTasks } from './plan.js';
 import type { AppDatabaseConfig } from './types.js';
@@ -77,6 +82,12 @@ export interface AppCollectionsArtifactConnectionResult {
   unchanged?: number;
   /** Check mode only. */
   differences?: AppCollectionsArtifactDifference[];
+  /**
+   * Collections whose `metadata.json` is this connection's metadata source
+   * but which the database no longer has. The file is kept — it is the only
+   * copy — and reported here for a person to decide about.
+   */
+  orphans?: string[];
   error?: string;
 }
 
@@ -114,15 +125,20 @@ export async function generateAppCollectionsArtifact(
     return { ok: true, status: 'not-configured', check, results: [] };
   }
   const migrationTables = migrationTableNames(config, options);
-  const root = options.paths?.database() ?? path.resolve('database');
   const results: AppCollectionsArtifactConnectionResult[] = [];
   try {
     for (const name of names) {
-      const directory = path.join(root, name, 'collections');
+      const directory = resolveAppCollectionsDirectory(name, options.paths);
       try {
         results.push(
           await generateForConnection(database.connection(name), directory, {
             check,
+            metadataIsSource: metadataReadFromDirectory(
+              config,
+              name,
+              directory,
+              options.paths,
+            ),
             migrationHead: () =>
               readMigrationHead(database, name, migrationTables.get(name)),
           }),
@@ -211,7 +227,36 @@ async function readMigrationHead(
 
 interface ConnectionRunOptions {
   readonly check: boolean;
+  /** True when the connection reads its metadata from this very directory, so `metadata.json` is input, not output. */
+  readonly metadataIsSource: boolean;
   readonly migrationHead: () => Promise<string | null>;
+}
+
+/**
+ * A connection whose metadata store is a directory store on its own
+ * collections directory reads `metadata.json` from the files the generator
+ * writes. Regenerating then only normalizes their formatting, and a Collection
+ * the database has dropped must keep its file: nothing else holds it.
+ */
+function metadataReadFromDirectory(
+  config: AppDatabaseConfig,
+  name: string,
+  directory: string,
+  paths: ConfigPaths | undefined,
+): boolean {
+  const connection = config.connections[name];
+  const store = resolveAppMetadataStore(connection.metadataStore, {
+    name,
+    external: connection.schemaManagement === 'external',
+    shared: config.metadataStore,
+    paths,
+  });
+  return (
+    store !== undefined &&
+    !isCollectionMetadataStoreInstance(store) &&
+    store.type === 'directory' &&
+    path.resolve(store.directory) === path.resolve(directory)
+  );
 }
 
 async function generateForConnection(
@@ -271,8 +316,24 @@ async function generateForConnection(
   );
 
   const disk = readDirectory(directory);
-  const differences = diff(expected, disk);
-  const base = { connection: connection.name, directory, manifest };
+  const metadataFile = (name: string) =>
+    path.posix.join(name, COLLECTION_ARTIFACT_FILE_NAMES.metadata);
+  const orphans = options.metadataIsSource
+    ? disk.collections.filter(
+        (name) =>
+          !perCollection.has(name) && disk.files.has(metadataFile(name)),
+      )
+    : [];
+  const orphanMetadata = new Set(orphans.map(metadataFile));
+  const differences = diff(expected, disk).filter(
+    (entry) => !(entry.kind === 'unexpected' && orphanMetadata.has(entry.path)),
+  );
+  const base = {
+    connection: connection.name,
+    directory,
+    manifest,
+    ...(options.metadataIsSource ? { orphans } : {}),
+  };
 
   if (options.check) {
     return {
@@ -314,10 +375,18 @@ async function generateForConnection(
     }
     for (const name of disk.collections) {
       if (perCollection.has(name)) continue;
+      const keepMetadata = orphans.includes(name);
       for (const relative of disk.files.keys()) {
-        if (relative.startsWith(`${name}/`)) deleted.push(relative);
+        if (!relative.startsWith(`${name}/`)) continue;
+        if (keepMetadata && relative === metadataFile(name)) continue;
+        deleted.push(relative);
+        if (keepMetadata) {
+          rmSync(path.join(directory, relative), { force: true });
+        }
       }
-      rmSync(path.join(directory, name), { recursive: true, force: true });
+      if (!keepMetadata) {
+        rmSync(path.join(directory, name), { recursive: true, force: true });
+      }
     }
     if (changed.has(COLLECTION_ARTIFACT_MANIFEST_FILE_NAME)) {
       const stagingManifest = path.join(

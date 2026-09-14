@@ -22,6 +22,8 @@ export type {
   PostgresConnectionConfig,
   SchemaManagementMode,
   SqliteConnectionConfig,
+  CollectionMetadataStoreConfig,
+  DirectoryCollectionMetadataStoreConfig,
 } from './database/config.js';
 export type { DatabaseConnection } from './database/connection.js';
 export type { DatabaseManager } from './database/manager.js';
@@ -132,6 +134,8 @@ export { defineCollectionMetadata } from './metadata/define.js';
 export { extractLegacyCollectionMetadata } from './metadata/legacy-extraction.js';
 export { InMemoryCollectionMetadataStore } from './metadata/in-memory-document-store.js';
 export { ModuleCollectionMetadataStore } from './metadata/module-document-store.js';
+export { DirectoryCollectionMetadataStore } from './metadata/directory-document-store.js';
+export type { DirectoryCollectionMetadataStoreOptions } from './metadata/directory-document-store.js';
 export { validateCollectionMetadataDocument } from './metadata/validation.js';
 export type {
   CollectionMetadataDocument,

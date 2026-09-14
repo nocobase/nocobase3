@@ -3,32 +3,38 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
-  createDatabaseManager,
   databaseManagerToken,
-  ModuleCollectionMetadataStore,
   SchemaManagementNotAllowedError,
 } from '@nocobase/db';
 import sqlite from '@nocobase/db-sqlite';
 import { Auth, authenticationToken } from '@nocobase/app-plugin-authentication';
 import type { Application } from '@nocobase/app-server/application';
+import { createConfigPaths } from '@nocobase/app-server/config';
+import {
+  createAppDatabaseManager,
+  type AppDatabaseConfig,
+} from '@nocobase/app-server/database';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  externalCrmMetadataDocuments,
-  externalCrmMetadataSource,
-} from '../../database/externalCrm/metadata.js';
 import { ensureExternalCrmSampleDatabase } from '../../server/providers/external-crm-sample.js';
 import { externalCrmRoutes } from '../../server/routes/external-crm.js';
 
 let directory: string;
-let database: ReturnType<typeof createDatabaseManager>;
+let database: NonNullable<ReturnType<typeof createAppDatabaseManager>>;
+
+// Resolving paths against the template root is what makes the default
+// metadata source database/externalCrm/collections/*/metadata.json — the
+// committed files — apply, exactly as it does for the running application.
+const paths = createConfigPaths({
+  rootDir: path.resolve(import.meta.dirname, '../..'),
+});
 
 beforeEach(async () => {
   directory = mkdtempSync(
     path.join(tmpdir(), 'nocobase-examples-external-crm-'),
   );
-  database = createDatabaseManager({
+  const config: AppDatabaseConfig = {
     default: 'main',
     drivers: { sqlite },
     connections: {
@@ -38,13 +44,10 @@ beforeEach(async () => {
         filename: path.join(directory, 'crm.sqlite'),
         schemaManagement: 'external',
         naming: { underscored: true, tablePrefix: 'crm_' },
-        metadataStore: new ModuleCollectionMetadataStore({
-          documents: externalCrmMetadataDocuments,
-          source: externalCrmMetadataSource,
-        }),
       },
     },
-  });
+  };
+  database = createAppDatabaseManager(config, paths)!;
   // The provider does this at boot; here the test plays the foreign system.
   const created = await ensureExternalCrmSampleDatabase(
     database.connection('externalCrm'),
@@ -75,6 +78,8 @@ describe('external CRM example', () => {
 
   it('resolves the CRM tables to Collections through naming and metadata', async () => {
     const orders = await database.collections('externalCrm').get('orders');
+    // Title, field titles and the relation all come from the committed
+    // database/externalCrm/collections/orders/metadata.json.
     expect(orders).toMatchObject({
       name: 'orders',
       title: 'CRM orders',

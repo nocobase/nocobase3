@@ -8,6 +8,7 @@ import path from 'node:path';
 import { type AppIdentityConfig } from '@nocobase/app-server/config';
 import {
   planAppDatabaseTasks,
+  resolveAppMetadataStore,
   type AppDatabaseConfig,
 } from '@nocobase/app-server/database';
 import { createAppDatabaseTaskContributions } from '@nocobase/app-server/plugins';
@@ -19,7 +20,6 @@ import {
   type AppQueueConfig,
   type AppSessionConfigInput,
 } from '@nocobase/app-server';
-import { ModuleCollectionMetadataStore } from '@nocobase/db';
 import { describe, expect, it } from 'vitest';
 
 import appRuntime from '../../server/runtime.ts';
@@ -57,10 +57,22 @@ describe('application config', () => {
         schemaManagement: 'external',
         naming: { underscored: true, tablePrefix: 'crm_' },
       });
-      // A class instance passes through configuration merging untouched.
-      expect(database.connections.externalCrm.metadataStore).toBeInstanceOf(
-        ModuleCollectionMetadataStore,
-      );
+      // No store is configured: an external connection reads
+      // database/externalCrm/collections/*/metadata.json by default.
+      expect(database.connections.externalCrm.metadataStore).toBeUndefined();
+      expect(
+        resolveAppMetadataStore(undefined, {
+          name: 'externalCrm',
+          external: true,
+          paths: runtime.configPaths,
+        }),
+      ).toEqual({
+        type: 'directory',
+        directory: path.join(
+          templateRootDir,
+          'database/externalCrm/collections',
+        ),
+      });
       const analytics = planAppDatabaseTasks(
         database,
         ['migrations', 'seeds'],

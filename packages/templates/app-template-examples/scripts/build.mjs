@@ -14,6 +14,50 @@ const distDir = path.join(rootDir, 'dist');
 const appPackageName = JSON.parse(
   fs.readFileSync(path.join(rootDir, 'package.json'), 'utf8'),
 ).name;
+
+function copyCollectionMetadata() {
+  const databaseDir = path.join(rootDir, 'database');
+  if (!fs.existsSync(databaseDir)) return;
+  let copied = 0;
+  for (const connection of fs.readdirSync(databaseDir, {
+    withFileTypes: true,
+  })) {
+    if (!connection.isDirectory()) continue;
+    const collectionsDir = path.join(
+      databaseDir,
+      connection.name,
+      'collections',
+    );
+    if (!fs.existsSync(collectionsDir)) continue;
+    for (const entry of fs.readdirSync(collectionsDir, {
+      withFileTypes: true,
+    })) {
+      if (
+        !entry.isDirectory() ||
+        entry.name.startsWith('.') ||
+        entry.name.startsWith('_')
+      )
+        continue;
+      const source = path.join(collectionsDir, entry.name, 'metadata.json');
+      if (!fs.existsSync(source)) continue;
+      const target = path.join(
+        distDir,
+        'database',
+        connection.name,
+        'collections',
+        entry.name,
+        'metadata.json',
+      );
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.copyFileSync(source, target);
+      copied += 1;
+    }
+  }
+  console.log(
+    `Copied ${copied} Collection metadata file${copied === 1 ? '' : 's'} into dist/database`,
+  );
+}
+
 const envOutputPath = path.join(distDir, '.env');
 const serverEnvKeys = new Set([
   'NODE_ENV',
@@ -241,6 +285,11 @@ run('Rewrite server path aliases', 'pnpm', [
   '-p',
   'tsconfig.server.json',
 ]);
+// tsc emits only TypeScript. An external connection reads its supplemental metadata from
+// `database/<connection>/collections/*/metadata.json` at runtime, so those files have to travel with the server or a
+// deployment resolves every external Collection without titles or relations and reports nothing wrong. Only
+// `metadata.json` is copied: `collection.json` and `schema.json` are derived output nothing reads back.
+copyCollectionMetadata();
 runHookStage(buildHooks, 'afterServerBuild', run);
 writeDistEnv();
 run('Generate server package', 'node', [

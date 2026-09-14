@@ -8,6 +8,7 @@ import {
 } from '@nocobase/db';
 
 import type { ConfigPaths } from '../config/index.js';
+import { resolveAppMetadataStore } from './collections-directory.js';
 import type { AppDatabaseConfig } from './types.js';
 
 /**
@@ -34,11 +35,20 @@ export function createAppDatabaseManager(
         ...config.drivers,
         ...drivers,
       },
-      connections: resolveConnections(config.connections, paths, {
-        ...config.drivers,
-        ...drivers,
+      connections: resolveConnections(
+        config.connections,
+        paths,
+        {
+          ...config.drivers,
+          ...drivers,
+        },
+        config.metadataStore,
+      ),
+      metadataStore: resolveAppMetadataStore(config.metadataStore, {
+        name: '',
+        external: false,
+        paths,
       }),
-      metadataStore: config.metadataStore,
     }),
   );
 }
@@ -47,11 +57,32 @@ export function resolveConnections(
   connections: AppDatabaseConfig['connections'],
   paths: ConfigPaths | undefined,
   drivers?: Record<string, DatabaseDriverRegistration>,
+  sharedMetadataStore?: AppDatabaseConfig['metadataStore'],
 ): Record<string, ConnectionConfig> {
   return Object.fromEntries(
     Object.entries(connections).map(([name, config]) => {
-      const { migrations: _migrations, seeds: _seeds, ...connection } = config;
-      return [name, normalizeConnection(connection, paths, drivers)];
+      const {
+        migrations: _migrations,
+        seeds: _seeds,
+        metadataStore,
+        ...connection
+      } = config;
+      const resolved = resolveAppMetadataStore(metadataStore, {
+        name,
+        external: connection.schemaManagement === 'external',
+        shared: sharedMetadataStore,
+        paths,
+      });
+      return [
+        name,
+        normalizeConnection(
+          resolved === undefined
+            ? connection
+            : { ...connection, metadataStore: resolved },
+          paths,
+          drivers,
+        ),
+      ];
     }),
   );
 }

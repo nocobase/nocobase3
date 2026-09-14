@@ -12,7 +12,6 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { Knex } from 'knex';
 import sqlite from '@nocobase/db-sqlite';
 import {
-  InMemoryCollectionMetadataStore,
   type CollectionArtifactCollectionFile,
   type CollectionArtifactManifest,
   type CollectionArtifactMetadataFile,
@@ -63,8 +62,9 @@ function fixture() {
       external: {
         dialect: 'sqlite',
         filename: paths.storage('external/data.sqlite'),
+        // No metadataStore: an external connection reads
+        // database/external/collections/*/metadata.json by default.
         schemaManagement: 'external',
-        metadataStore: new InMemoryCollectionMetadataStore(),
       },
     },
   };
@@ -311,47 +311,125 @@ describe('generateAppCollectionsArtifact', () => {
     }
   });
 
-  it('snapshots the tables another system created on an external connection', async () => {
+  it('treats metadata.json as the source for an external connection: scaffold, edit, regenerate, keep on drop', async () => {
     const { config, paths } = fixture();
-    const database = createAppDatabaseManager(config, paths)!;
+    const directory = paths.database('external/collections');
+    // The schema belongs to the foreign system: create it as that system
+    // would, with the raw client rather than the Builder.
+    const setup = createAppDatabaseManager(config, paths)!;
     try {
-      // The schema belongs to the foreign system: create it as that system
-      // would, with the raw client rather than the Builder.
-      const knex = await database.connection('external').client<Knex>();
+      const knex = await setup.connection('external').client<Knex>();
       await knex.schema.createTable('legacy_accounts', (table) => {
         table.increments('id');
         table.string('code', 32).notNullable();
       });
-
-      const result = await generateAppCollectionsArtifact(config, {
-        paths,
-        connection: 'external',
-        database,
-      });
-      expect(result.results[0]).toMatchObject({
-        status: 'completed',
-        manifest: {
-          schemaManagement: 'external',
-          migrationHead: null,
-          collections: ['legacyAccounts'],
-        },
-        written: [
-          '_manifest.json',
-          'legacyAccounts/collection.json',
-          'legacyAccounts/metadata.json',
-          'legacyAccounts/schema.json',
-        ],
-      });
-      const collection = readJson<CollectionArtifactCollectionFile>(
-        paths.database('external/collections/legacyAccounts/collection.json'),
-      );
-      expect(collection.collection.fields?.map((field) => field.name)).toEqual([
-        'id',
-        'code',
-      ]);
     } finally {
-      await database.destroy();
+      await setup.destroy();
     }
+
+    // Each run opens its own manager, as the CLI does, so the directory store
+    // re-reads the files.
+    const first = await generateAppCollectionsArtifact(config, {
+      paths,
+      connection: 'external',
+    });
+    expect(first.results[0]).toMatchObject({
+      status: 'completed',
+      orphans: [],
+      manifest: {
+        schemaManagement: 'external',
+        migrationHead: null,
+        collections: ['legacyAccounts'],
+      },
+    });
+    const metadataFile = path.join(directory, 'legacyAccounts/metadata.json');
+    expect(readJson<CollectionArtifactMetadataFile>(metadataFile)).toEqual({
+      formatVersion: 1,
+      name: 'legacyAccounts',
+      document: null,
+    });
+
+    // A person fills in the scaffold, in whatever formatting they like.
+    writeFileSync(
+      metadataFile,
+      JSON.stringify({
+        name: 'legacyAccounts',
+        formatVersion: 1,
+        document: {
+          version: 1,
+          name: 'legacyAccounts',
+          title: 'Legacy accounts',
+          fields: { code: { title: 'Account code' } },
+        },
+      }),
+    );
+    const second = await generateAppCollectionsArtifact(config, {
+      paths,
+      connection: 'external',
+    });
+    // collection.json picks the metadata up and metadata.json is only
+    // reformatted; a changed Collection is rewritten as a unit, so schema.json
+    // is written too even though its content is the same.
+    expect(second.results[0].written).toEqual([
+      'legacyAccounts/collection.json',
+      'legacyAccounts/metadata.json',
+      'legacyAccounts/schema.json',
+    ]);
+    const collection = readJson<CollectionArtifactCollectionFile>(
+      path.join(directory, 'legacyAccounts/collection.json'),
+    );
+    expect(collection.collection).toMatchObject({ title: 'Legacy accounts' });
+    expect(
+      collection.collection.fields?.find((field) => field.name === 'code'),
+    ).toMatchObject({ title: 'Account code' });
+    expect(
+      readJson<CollectionArtifactMetadataFile>(metadataFile).document,
+    ).toMatchObject({
+      title: 'Legacy accounts',
+    });
+    const check = await generateAppCollectionsArtifact(config, {
+      paths,
+      connection: 'external',
+      check: true,
+    });
+    expect(check.results[0]).toMatchObject({
+      status: 'completed',
+      differences: [],
+    });
+
+    // The foreign system drops the table. The generated files go; the
+    // metadata, which nothing else holds, stays and is reported.
+    const teardown = createAppDatabaseManager(config, paths)!;
+    try {
+      const knex = await teardown.connection('external').client<Knex>();
+      await knex.schema.dropTable('legacy_accounts');
+    } finally {
+      await teardown.destroy();
+    }
+    const third = await generateAppCollectionsArtifact(config, {
+      paths,
+      connection: 'external',
+    });
+    expect(third.results[0]).toMatchObject({
+      status: 'completed',
+      deleted: ['legacyAccounts/collection.json', 'legacyAccounts/schema.json'],
+      orphans: ['legacyAccounts'],
+      manifest: { collections: [] },
+    });
+    expect(existsSync(metadataFile)).toBe(true);
+    expect(
+      existsSync(path.join(directory, 'legacyAccounts/collection.json')),
+    ).toBe(false);
+    const afterDrop = await generateAppCollectionsArtifact(config, {
+      paths,
+      connection: 'external',
+      check: true,
+    });
+    expect(afterDrop.results[0]).toMatchObject({
+      status: 'completed',
+      differences: [],
+      orphans: ['legacyAccounts'],
+    });
   });
 
   it('refuses conflicting flags and unknown connections', async () => {

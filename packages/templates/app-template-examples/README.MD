@@ -130,7 +130,7 @@ database/
 │   ├── migrations/      Independent analytics schema
 │   └── seeds/           Channel, campaign and daily metric examples
 └── externalCrm/
-    └── metadata.ts      Supplemental metadata for the external CRM example
+    └── collections/     metadata.json per Collection: the external CRM's metadata source
 
 tests/                   Unit and integration tests
 e2e/                     Browser tests needing a real server
@@ -234,11 +234,20 @@ API client, for example `api.repository('analyticsChannels').findMany({ limit: 1
 Not every database an application reads is one it owns. The `externalCrm`
 connection in `server/config/database.ts` shows the shape of one that is not:
 `schemaManagement: 'external'` tells NocoBase to read the schema and never
-change it, `naming` strips the CRM's `crm_` table prefix when mapping tables to
-logical Collection names, and a `ModuleCollectionMetadataStore` supplies what
-the schema cannot say — titles, descriptions, and which column is a relation —
-from `database/externalCrm/metadata.ts`. No migrations or seeds run against it,
-and the Builder refuses DDL on it.
+change it, and `naming` strips the CRM's `crm_` table prefix when mapping
+tables to logical Collection names. No migrations or seeds run against it, and
+the Builder refuses DDL on it.
+
+What the schema cannot say — titles, descriptions, and which column is a
+relation — comes from `database/externalCrm/collections/<name>/metadata.json`.
+That is the default metadata source for an external connection, so nothing has
+to be configured; `metadataStore` can point at another collections directory
+when metadata is kept elsewhere. The files are the source, not generated
+output: the workflow is `pnpm collections:generate --connection externalCrm`
+to scaffold one `metadata.json` per table with an empty document, fill in the
+documents by hand, and generate again so `collection.json` reflects them.
+Dropping a table removes its generated files but keeps its `metadata.json`,
+which the command reports as an orphan.
 
 The connection points at `storage/external-crm.sqlite` so the example runs
 without a real CRM. `server/providers/external-crm.ts` plays the part of the
@@ -288,10 +297,12 @@ example, `POST /main/api/crmOrders:findMany` with:
 }
 ```
 
-`pnpm collections:generate --connection externalCrm` writes the resolved
-Collections under `database/externalCrm/collections/`; the manifest records
+`pnpm collections:generate --connection externalCrm` writes `collection.json`
+and `schema.json` next to each `metadata.json` under
+`database/externalCrm/collections/`; the manifest records
 `schemaManagement: external` and no migration head, since the CRM has no
-migration history this application knows about.
+migration history this application knows about. Only the `metadata.json` files
+are committed here.
 
 ### Checks
 

@@ -110,15 +110,21 @@ database:
         autoRun: true
       seeds:
         autoRun: true
-    # Existing external databases require a runtime metadataStore and do not run tasks.
-    # The externalCrm connection in server/config/database.ts is the example: point it at
-    # a real database here to replace the SQLite stand-in.
+    # An existing database another system owns: NocoBase reads its schema and never changes it, and no
+    # migrations or seeds run against it. Titles, descriptions and relations the schema cannot express are
+    # read from database/<connection>/collections/<name>/metadata.json — edit those files and rerun
+    # `pnpm collections:generate`. The externalCrm connection in server/config/database.ts is the example;
+    # point it at the real database here to replace the SQLite stand-in.
     # externalCrm:
     #   dialect: postgres
     #   host: crm.internal
     #   database: crm
     #   username: crm_reader
     #   password: ${CRM_DATABASE_PASSWORD}
+    #   schemaManagement: external
+    #   naming: { underscored: true, tablePrefix: crm_ }
+    #   # Optional: read metadata from another collections directory instead of this connection's own.
+    #   # metadataStore: database/shared-crm/collections
 
 snowflake:
   # Assign a unique worker ID to each concurrently running instance.

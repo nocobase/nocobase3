@@ -1,6 +1,6 @@
 # 应用 Collection 文件设计
 
-状态：第一阶段实施中（`@nocobase/db` 序列化模块与 `@nocobase/app-server` 的 `generateAppCollectionsArtifact()` 已落地，模板命令入口待补）
+状态：第一阶段已实施；第二阶段（external 连接以目录里的 `metadata.json` 为元数据源）已实施
 
 ## 目的
 
@@ -66,7 +66,9 @@ schema.json + metadata.json + connection naming = collection.json
 
 `connection.collectionMetadata.get(name)` 返回的存储文档写入 `document` 字段，即数据库里 `__nocobase_collection_metadata` 表中该 Collection 的补充元数据：标题、描述、字段标题、逻辑字段类型、枚举值、关系描述、乐观锁配置等。
 
-第一阶段它是快照，不是编辑入口。要修改标题或描述，通过 Builder 的 `collection.title()` 之类的调用写进 migration，或者调用 Metadata Service，然后重新生成。对这个文件的手工编辑会在下次生成时被覆盖，`--check` 也会把手工编辑报告为过期。
+在 managed 连接上它是快照，不是编辑入口。要修改标题或描述，通过 Builder 的 `collection.title()` 之类的调用写进 migration，或者调用 Metadata Service，然后重新生成。对这个文件的手工编辑会在下次生成时被覆盖，`--check` 也会把手工编辑报告为过期。
+
+在 external 连接上它是源。external 连接的元数据只可能来自应用侧，默认的 metadata store 就是 `DirectoryCollectionMetadataStore`，读取本连接 collections 目录下每个 `metadata.json`。生成器读到什么就写回什么，只做格式归一化；表消失时保留这个文件并报告为孤儿，因为没有别处存着它。工作流是先生成拿到 `document: null` 的骨架，填好再生成。
 
 没有补充元数据的 Collection 也写入这个文件，`document` 为 `null`，而不是省略文件。存储层的 `revision` 不写入：它随每次写入变化，不属于内容。三个文件始终同时存在，读者不需要处理"文件可能不在"的情况。
 
@@ -139,12 +141,12 @@ pnpm nocobase app collections generate --connection main --check
 
 migrations 负责 Schema 演进，是不可变的历史记录。每个 migration 必须显式声明表和字段操作，不能引用本文的任何文件、运行时 Collection 定义或之后可能变化的 metadata 模块。这条规则已经写在各模板的 `AGENTS.md` 里，本文不改变它。
 
-三个 Collection 文件和 `_manifest.json` 在第一阶段全部是派生文件，没有一个需要人工编辑。应用在两种提交策略中选一种，并用 `--check` 强制执行：
+在 managed 连接上，三个 Collection 文件和 `_manifest.json` 全部是派生文件，没有一个需要人工编辑；在 external 连接上，`metadata.json` 是源，必须提交，另外两个和 manifest 仍是派生。应用在两种提交策略中选一种，并用 `--check` 强制执行：
 
 - **全部提交。** 工具和 AI 直接读仓库里的文件，不需要数据库。这是本文的目的所在，是推荐策略。
 - **全部不提交。** 把目录加入 `.gitignore`，需要时本地或 CI 生成。适合团队内方言不统一、无法接受方言差异带来的 diff 的情况。
 
-"只提交 metadata"在第一阶段没有意义，因为 metadata 也是派生的。它在"文件为源头"阶段才成为选项。
+"只提交 metadata"对 managed 连接没有意义，因为它也是派生的；对 external 连接则是最小可用策略，examples 模板的 `externalCrm` 就只提交了两份 `metadata.json`。
 
 ### 方言约束
 
@@ -181,7 +183,9 @@ migrations 负责 Schema 演进，是不可变的历史记录。每个 migration
 
 **第一阶段：生成与检查。** 本文的全部内容。产物是只读快照，运行时不参与。
 
-**第二阶段（可选）：文件为元数据源头。** 让 `metadata.json` 成为可编辑文件，运行时通过目录型 `CollectionMetadataStore` 读取它。`ModuleCollectionMetadataStore` 已实现 `put` 和 `delete`，可以作为起点。进入这一阶段前必须回答：migration 里 `collection.title()` 写入的元数据去哪里；`--check` 如何区分"人工编辑"和"过期"；生成器对 `metadata.json` 是只创建骨架还是完全不碰。这些问题在第一阶段不存在，所以先不引入。
+**第二阶段（已实施，限 external 连接）：文件为元数据源头。** `@nocobase/db` 新增 `DirectoryCollectionMetadataStore`，只读，文件格式复用 artifact 的 `metadata.json`。连接配置与全局配置的 `metadataStore` 接受声明式 `{ type: 'directory', directory }`，由 `DatabaseManager.connection()` 在现有两级优先级之后解析；app-server 额外接受字符串简写、把相对路径解析到应用根目录，并为两级都未配置的 external 连接默认指向 `database/<connection>/collections`。生成器据此区分源与派生：directory store 指向本目录时 `metadata.json` 只做格式归一化，表消失时保留并报告孤儿。三个问题的答案：managed 连接不走这条路，migration 写的元数据仍在数据库；`--check` 对源文件永远不报 stale，格式差异会被下一次生成抹平；生成器创建骨架并归一化，不改内容。构建把 `database/**/collections/*/metadata.json` 复制进 `dist/`，因为 tsc 只产出 TypeScript 编译结果。
+
+managed 连接刻意不默认目录 store：它的元数据源头是数据库，文件当源就成了第二份事实。显式配置目录 store 的 managed 连接要知道 migration 写入的元数据会被忽略。
 
 **第三阶段（可选）：运行时快照。** 用 `schema.json` 预填 `CollectionRegistry` 的缓存，省掉冷启动的 catalog 查询。解析本身是同步纯函数，贵的只是物理检查，所以运行时只需要 `schema.json` 加元数据，`collection.json` 不参与。这需要 registry 增加一个快照选项并从连接配置透传，以及用 `migrationHead` 做的过期校验。它改变"物理 Schema 是 Collection 是否存在的唯一依据"这条不变量的表述，要连同 `packages/libs/db` 的文档一起改。
 
