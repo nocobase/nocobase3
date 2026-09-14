@@ -70,8 +70,8 @@ features:
   - title: '内置能力'
     details: '登录、权限、审批、通知这些常见需求，装上就有。'
     items:
-      - title: '登录注册'
-        details: '账号密码、会话。'
+      - title: '认证'
+        details: '登录、注册、会话与当前用户。'
         link: /capabilities/auth
       - title: '权限'
         details: '角色，谁能看哪个菜单、哪条数据。'
