@@ -5,8 +5,9 @@ import { Breadcrumbs } from '@/components/breadcrumbs';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 
-import { useChildPageActive } from '../routing/route-context.js';
-import { routeChildPageTopics } from './route-child-page-topics.js';
+import { useChildPageActive } from '@/routing/route-context';
+
+import { routeChildPageTopics } from './topics.js';
 
 export default function RouteChildPagesPage() {
   const { t } = useTranslation();

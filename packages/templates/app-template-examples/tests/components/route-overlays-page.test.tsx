@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 
-import RouteOverlaysPage from '../../client/pages/route-overlays.js';
+import RouteOverlaysPage from '../../client/pages/route-overlays/index.js';
 
 vi.mock('@nocobase/i18n/client', () => ({
   useTranslation: () => ({

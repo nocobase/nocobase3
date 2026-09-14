@@ -7,8 +7,8 @@ import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 
 import { Breadcrumbs } from '../../client/components/breadcrumbs.js';
-import RouteChildPageQuotationPage from '../../client/pages/route-child-page-quotation.js';
-import RouteOverlaysPage from '../../client/pages/route-overlays.js';
+import RouteChildPageQuotationPage from '../../client/pages/route-overlays/pages/quotation/index.js';
+import RouteOverlaysPage from '../../client/pages/route-overlays/index.js';
 import applicationRoutes from '../../client/routes.js';
 import {
   CurrentRouteProvider,

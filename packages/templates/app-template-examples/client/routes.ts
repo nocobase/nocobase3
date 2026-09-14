@@ -18,31 +18,31 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
     name: 'routeOverlays',
     path: '/route-overlays',
     navigation: { title: 'navigation.routeOverlays', icon: PanelsTopLeft },
-    componentLoader: () => import('./pages/route-overlays.js'),
+    componentLoader: () => import('./pages/route-overlays/index.js'),
     children: [
       {
         name: 'routeDialogExample',
         path: 'dialog',
-        componentLoader: () => import('./pages/route-dialog-example.js'),
+        componentLoader: () => import('./pages/route-overlays/dialog/index.js'),
         children: [
           {
             name: 'routeDialogDrawerExample',
             path: 'drawer',
             componentLoader: () =>
-              import('./pages/route-drawer-child-example.js'),
+              import('./pages/route-overlays/dialog/drawer.js'),
           },
         ],
       },
       {
         name: 'routeDrawerExample',
         path: 'drawer',
-        componentLoader: () => import('./pages/route-drawer-example.js'),
+        componentLoader: () => import('./pages/route-overlays/drawer/index.js'),
         children: [
           {
             name: 'routeDrawerDialogExample',
             path: 'dialog',
             componentLoader: () =>
-              import('./pages/route-dialog-child-example.js'),
+              import('./pages/route-overlays/drawer/dialog.js'),
           },
         ],
       },
@@ -52,21 +52,21 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
         name: 'routeChildPages',
         path: 'pages',
         title: 'routeOverlays.childPagesTitle',
-        componentLoader: () => import('./pages/route-child-pages.js'),
+        componentLoader: () => import('./pages/route-overlays/pages/index.js'),
         children: [
           {
             name: 'routeChildPageQuotation',
             path: 'quotation',
             title: 'routeOverlays.topicQuotation',
             componentLoader: () =>
-              import('./pages/route-child-page-quotation.js'),
+              import('./pages/route-overlays/pages/quotation/index.js'),
             children: [
               // An overlay below a page. It names no destination, so the trail stops at the page above it.
               {
                 name: 'routeChildPageDialog',
                 path: 'dialog',
                 componentLoader: () =>
-                  import('./pages/route-child-page-dialog.js'),
+                  import('./pages/route-overlays/pages/quotation/dialog.js'),
               },
             ],
           },
@@ -75,14 +75,14 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
             path: 'onboarding',
             title: 'routeOverlays.topicOnboarding',
             componentLoader: () =>
-              import('./pages/route-child-page-onboarding.js'),
+              import('./pages/route-overlays/pages/onboarding.js'),
           },
           {
             name: 'routeChildPageRenewal',
             path: 'renewal',
             title: 'routeOverlays.topicRenewal',
             componentLoader: () =>
-              import('./pages/route-child-page-renewal.js'),
+              import('./pages/route-overlays/pages/renewal.js'),
           },
         ],
       },

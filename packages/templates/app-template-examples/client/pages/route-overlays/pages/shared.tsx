@@ -5,7 +5,7 @@ import { Breadcrumbs } from '@/components/breadcrumbs';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 
-import type { RouteChildPageTopic } from '../pages/route-child-page-topics.js';
+import type { RouteChildPageTopic } from './topics.js';
 
 /**
  * What each nested page renders. The three pages differ in their content, not in their structure, so they share

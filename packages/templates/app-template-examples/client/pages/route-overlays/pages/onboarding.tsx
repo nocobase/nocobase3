@@ -1,6 +1,5 @@
-import { ChildPageExample } from '@/components/child-page-example';
-
-import { routeChildPageTopics } from './route-child-page-topics.js';
+import { ChildPageExample } from './shared.js';
+import { routeChildPageTopics } from './topics.js';
 
 const topic = routeChildPageTopics.find((entry) => entry.id === 'onboarding')!;
 

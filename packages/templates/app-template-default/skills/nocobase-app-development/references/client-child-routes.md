@@ -23,8 +23,11 @@ Implement the parent-only redirect in the parent page with existing React Router
 | `client/routes.ts`             | Declare pages, navigation and recursive children |
 | Parent page in `client/pages/` | Add navigation and manually place `Outlet`       |
 | Child page in `client/pages/`  | Default-export its content component             |
+| The parent's folder            | Hold the children, mirroring the route paths     |
 | `client/locales/`              | Translate navigation and page copy               |
 | `tests/`                       | Verify actual navigation and access              |
+
+A page that gains children becomes a folder: the page itself moves to `index.tsx` and each child sits beside it under the name of its path segment, so `/orders/archived` is `client/pages/orders/archived.tsx`. A child with children of its own becomes a folder in turn. Anything only these pages use goes in the same folder rather than in `client/components/`, which is for what the whole application shares: a shared component in `shared.tsx`, and constants or fixtures in a module of their own, since Fast Refresh stops working on a file that exports both a component and a constant.
 
 Do not change the shell, route renderer, or ServiceProvider to add a menu. Keep CRUD resources if business code uses them; resources no longer add sidebar entries.
 

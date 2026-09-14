@@ -35,7 +35,7 @@ Business code goes in these places. This is where you work, and where you should
 
 ```text
 client/routes.ts          Declare a page route
-client/pages/             The page component
+client/pages/             The page component; a folder when a page has children or files of its own
 client/components/        Your components
 client/components/ui/     shadcn/ui primitives; add with the CLI, do not hand-write
 client/locales/           Every user-visible string
@@ -47,6 +47,8 @@ database/main/seeds/           Required initial data
 cli/commands/             Commands this application owns
 tests/                    Tests; never beside the source
 ```
+
+One entry under `client/pages/` is one page. A page with nothing but itself is a file; a page that owns child routes, or components and data only it uses, is a folder holding `index.tsx` plus those files, and its child pages follow the same rule inside it. The folders then mirror the route paths: a page at `/orders` is `client/pages/orders/index.tsx` and its child at `/orders/archived` is `client/pages/orders/archived.tsx`, so the file tree reads as the URL tree. What several pages in one folder share goes beside them rather than in `client/components/`, which is for what the whole application shares: components in a `shared.tsx`, the way `client/pages/auth/` already does, and constants or data in a module of their own — Fast Refresh stops working on a file that exports both.
 
 A feature with a page and an API touches five places: a migration for the table, a route in `server/routes/`, a page in `client/pages/` declared in `client/routes.ts`, navigation on the page route, and strings in `client/locales/`.
 
