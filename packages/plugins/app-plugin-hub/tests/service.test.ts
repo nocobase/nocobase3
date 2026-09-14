@@ -801,6 +801,38 @@ describe('@nocobase/app-plugin-hub service', () => {
     });
   });
 
+  // `readConfig` answers an absent file with empty content, so the editor opens on an App whose `config.yml` is
+  // gone and the save that follows has to write one back rather than fail on reading what is not there.
+  it('writes the active file configuration back when it is missing from disk', async () => {
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    const release = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '1.2.3'),
+    });
+    const queued = await service.deploy('customer', {
+      releaseId: release.id,
+      config: { mode: 'file', content: 'feature: false\n' },
+    });
+    const deployment = await waitForDeployment(service, 'customer', queued.id);
+    await rm(deployment.config.path!, { force: true });
+
+    expect(await service.readConfig('customer')).toEqual({
+      mode: 'file',
+      content: '',
+    });
+
+    const updated = await service.updateConfig('customer', {
+      content: 'feature: true\n',
+    });
+
+    expect(parseYaml(updated.content!)).toMatchObject({
+      auth: { secret: expect.any(String) },
+      feature: true,
+    });
+    expect(
+      parseYaml(await readFile(deployment.config.path!, 'utf8')),
+    ).toMatchObject({ feature: true });
+  });
+
   it('rejects invalid updates to the active file configuration', async () => {
     await service.createApp({ id: 'customer', name: 'Customer' });
     const release = await service.createRelease('customer', {

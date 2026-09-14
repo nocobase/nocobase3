@@ -449,10 +449,14 @@ export class DefaultHubService implements HubService {
           409,
         );
       }
-      const currentContent = await readFile(
-        this.configPath(deployment),
-        'utf8',
-      );
+      // `readConfig` answers an absent file with empty content, so the editor opens on an App whose `config.yml`
+      // is gone and the save that follows has to write one rather than fail on reading what is not there.
+      let currentContent: string | undefined;
+      try {
+        currentContent = await readFile(this.configPath(deployment), 'utf8');
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      }
       validateYamlConfig(input.content);
       const publishedContent = ensureAuthSecret(
         input.content,
