@@ -1329,6 +1329,7 @@ export class AIConversationService {
       );
       const agentContext = this.createAgentContext({
         actor,
+        execution,
         translate,
         getHeader,
       });
