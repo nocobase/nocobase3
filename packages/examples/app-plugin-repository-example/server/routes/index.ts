@@ -1,19 +1,12 @@
 import { authenticationToken } from '@nocobase/app-plugin-authentication';
 import {
-  authorizationToken,
-  type RepositoryAuthorizationExposure,
-} from '@nocobase/app-plugin-authorization';
-import {
   defineApiRoutes,
   defineRepositoryApiRoutes,
   type AppApiRouteContribution,
   type RepositoryApiActions,
+  type RepositoryApiExposure,
 } from '@nocobase/app-server/router';
-import {
-  buildRepositoryPolicy,
-  type ReadNode,
-  type RepositoryPolicy,
-} from '@nocobase/db';
+import { buildRepositoryPolicy, type RepositoryPolicy } from '@nocobase/db';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { Hono } from 'hono';
 
@@ -38,9 +31,9 @@ const relationActions: RepositoryApiActions = {
 /**
  * Read whatever the sample data holds, write only the named fields.
  *
- * This is the shape the exposure offers. What a caller actually gets is this
- * narrowed by the grants `authorization.repositories()` resolves for them, so
- * scopes and field lists come from the Permission Set rather than from here.
+ * This example uses a shared workspace, so nothing here is scoped to a
+ * principal. A real application declares `policy` as a function of one and
+ * gives the scopes that keep each caller to their own rows.
  */
 function fieldsPolicy(
   create: readonly string[],
@@ -55,103 +48,9 @@ function fieldsPolicy(
   };
 }
 
-/** Readable columns and relations, per Collection. */
-const readable: Readonly<
-  Record<
-    string,
-    { fields: readonly string[]; relations: Readonly<Record<string, string>> }
-  >
-> = {
-  repositoryExampleCustomers: {
-    fields: ['id', 'name', 'company', 'email', 'status'],
-    relations: {
-      contacts: 'repositoryExampleContacts',
-      orders: 'repositoryExampleOrders',
-    },
-  },
-  repositoryExampleContacts: {
-    fields: ['id', 'name', 'email', 'phone', 'customerId'],
-    relations: { customer: 'repositoryExampleCustomers' },
-  },
-  repositoryExampleProducts: {
-    fields: ['id', 'name', 'sku', 'unitPriceCents'],
-    relations: { items: 'repositoryExampleOrderItems' },
-  },
-  repositoryExampleOrders: {
-    fields: ['id', 'number', 'status', 'version', 'customerId'],
-    relations: {
-      customer: 'repositoryExampleCustomers',
-      items: 'repositoryExampleOrderItems',
-    },
-  },
-  repositoryExampleOrderItems: {
-    fields: ['id', 'orderId', 'productId', 'quantity', 'unitPriceCents'],
-    relations: {
-      order: 'repositoryExampleOrders',
-      product: 'repositoryExampleProducts',
-    },
-  },
-  repositoryExampleAtomicCounters: {
-    fields: ['id', 'name', 'value'],
-    relations: {},
-  },
-  repositoryExampleRelationUsers: {
-    fields: ['id', 'name', 'email'],
-    relations: {},
-  },
-  repositoryExampleRelationProjectProfiles: {
-    fields: ['id', 'summary', 'projectId'],
-    relations: {},
-  },
-  repositoryExampleRelationTasks: {
-    fields: ['id', 'title', 'status', 'points', 'projectId', 'assigneeId'],
-    relations: { assignee: 'repositoryExampleRelationUsers' },
-  },
-  repositoryExampleRelationTags: { fields: ['id', 'label'], relations: {} },
-  repositoryExampleRelationProjectTags: {
-    fields: ['projectId', 'tagId', 'role'],
-    relations: {},
-  },
-  repositoryExampleRelationProjects: {
-    fields: ['id', 'name', 'status', 'ownerId'],
-    relations: {
-      owner: 'repositoryExampleRelationUsers',
-      profile: 'repositoryExampleRelationProjectProfiles',
-      tasks: 'repositoryExampleRelationTasks',
-      tags: 'repositoryExampleRelationTags',
-    },
-  },
-  repositoryExampleFindManyRecords: {
-    fields: ['id', 'sequence', 'title', 'category', 'description'],
-    relations: {},
-  },
-};
-
-/** Deep enough for customers → orders → items → product; relations cycle. */
-const readDepth = 3;
-
-function readNode(name: string, depth: number = readDepth): ReadNode {
-  const shape = readable[name];
-  if (!shape) throw new Error(`No read shape for ${name}`);
-  return {
-    scope: true,
-    fields: shape.fields,
-    relations:
-      depth === 0
-        ? {}
-        : Object.fromEntries(
-            Object.entries(shape.relations).map(([relation, target]) => [
-              relation,
-              readNode(target, depth - 1),
-            ]),
-          ),
-  };
-}
-
-const exposures: readonly RepositoryAuthorizationExposure[] = [
+const repositories: readonly RepositoryApiExposure[] = [
   {
     name: 'repositoryExampleCustomers',
-    resource: 'repositoryExampleCustomers',
     policy: fieldsPolicy(
       ['id', 'name', 'company', 'email', 'status'],
       ['name', 'company', 'email', 'status'],
@@ -160,7 +59,6 @@ const exposures: readonly RepositoryAuthorizationExposure[] = [
   },
   {
     name: 'repositoryExampleContacts',
-    resource: 'repositoryExampleContacts',
     policy: buildRepositoryPolicy((policy) =>
       policy
         .read(true)
@@ -182,7 +80,6 @@ const exposures: readonly RepositoryAuthorizationExposure[] = [
   },
   {
     name: 'repositoryExampleProducts',
-    resource: 'repositoryExampleProducts',
     policy: fieldsPolicy(
       ['id', 'name', 'sku', 'unitPriceCents'],
       ['name', 'sku', 'unitPriceCents'],
@@ -191,7 +88,6 @@ const exposures: readonly RepositoryAuthorizationExposure[] = [
   },
   {
     name: 'repositoryExampleOrders',
-    resource: 'repositoryExampleOrders',
     policy: buildRepositoryPolicy((policy) =>
       policy
         .read(true)
@@ -220,7 +116,6 @@ const exposures: readonly RepositoryAuthorizationExposure[] = [
   },
   {
     name: 'repositoryExampleOrderItems',
-    resource: 'repositoryExampleOrderItems',
     policy: buildRepositoryPolicy((policy) =>
       policy
         .read(true)
@@ -244,25 +139,21 @@ const exposures: readonly RepositoryAuthorizationExposure[] = [
   },
   {
     name: 'repositoryExampleAtomicCounters',
-    resource: 'repositoryExampleAtomicCounters',
     policy: fieldsPolicy(['id', 'name', 'value'], ['name', 'value']),
     actions,
   },
   {
     name: 'repositoryExampleRelationUsers',
-    resource: 'repositoryExampleRelationUsers',
     policy: fieldsPolicy(['id', 'name', 'email'], ['name', 'email'], false),
     actions: relationActions,
   },
   {
     name: 'repositoryExampleRelationProjectProfiles',
-    resource: 'repositoryExampleRelationProjectProfiles',
     policy: fieldsPolicy(['id', 'summary'], ['summary'], false),
     actions: relationActions,
   },
   {
     name: 'repositoryExampleRelationTasks',
-    resource: 'repositoryExampleRelationTasks',
     policy: buildRepositoryPolicy((policy) =>
       policy
         .read(true)
@@ -280,19 +171,16 @@ const exposures: readonly RepositoryAuthorizationExposure[] = [
   },
   {
     name: 'repositoryExampleRelationTags',
-    resource: 'repositoryExampleRelationTags',
     policy: fieldsPolicy(['id', 'label'], ['label'], false),
     actions: relationActions,
   },
   {
     name: 'repositoryExampleRelationProjectTags',
-    resource: 'repositoryExampleRelationProjectTags',
     policy: fieldsPolicy(['projectId', 'tagId', 'role'], ['role'], false),
     actions: relationActions,
   },
   {
     name: 'repositoryExampleRelationProjects',
-    resource: 'repositoryExampleRelationProjects',
     policy: buildRepositoryPolicy((policy) =>
       policy
         .read(true)
@@ -381,47 +269,22 @@ const exposures: readonly RepositoryAuthorizationExposure[] = [
   },
   {
     name: 'repositoryExampleFindManyRecords',
-    resource: 'repositoryExampleFindManyRecords',
     policy: { read: true, create: false, update: false, delete: false },
     actions: { findMany: { maxLimit: 100 } },
   },
 ];
-/**
- * A read shape has to name its relations. Authorization narrows this shape
- * with the caller's grant, and a grant carries no relation model — so what the
- * shape leaves out is what a narrowed read cannot reach.
- */
-const repositories: readonly RepositoryAuthorizationExposure[] = exposures.map(
-  (exposure) => ({
-    ...exposure,
-    policy: {
-      ...(exposure.policy as RepositoryPolicy),
-      read: readNode(exposure.name),
-    },
-  }),
-);
+const repositoryRoutes = defineRepositoryApiRoutes({ repositories });
 
-// Every owned endpoint is authenticated and then authorized: the middleware
-// resolves the caller's grants for the exposure's resource and narrows the
-// shape above to what they hold. The seed grants signed-in users this
-// example's sample data. Guard each path by name; a wildcard would reach
-// contributions mounted alongside this one.
+// This example uses a shared workspace: every signed-in user can manage its
+// sample records. Guard each owned endpoint; unrelated contributions stay untouched.
 export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
   defineApiRoutes(async (app) => {
     const router = new Hono();
     const authentication = app.container.resolve(authenticationToken);
-    const authorization = app.container.resolve(authorizationToken);
-    const authorize = authorization.repositories(repositories);
-    for (const { name, actions: enabled } of repositories)
-      for (const action of Object.keys(enabled))
-        router.use(`/${name}:${action}`, authentication.required(), authorize);
-    router.route(
-      '/',
-      await defineRepositoryApiRoutes({
-        principal: authorize.principal,
-        repositories: authorize.repositories,
-      }).createRouter(app),
-    );
+    for (const { name, actions: enabledActions } of repositories)
+      for (const action of Object.keys(enabledActions))
+        router.use(`/${name}:${action}`, authentication.required());
+    router.route('/', await repositoryRoutes.createRouter(app));
     return router;
   });
 const routes: readonly AppApiRouteContribution<AppPluginApplication>[] = [

@@ -156,6 +156,9 @@ routes.route(
 );
 ```
 
+`@nocobase/app-plugin-authorization-example` is this section built for real,
+small enough to read end to end.
+
 Mount it on every action: one it did not run on resolves no principal, and
 app-server answers `403 PRINCIPAL_REQUIRED` rather than falling back to the
 shape. Relation rules come from the shape, because a grant carries no relation

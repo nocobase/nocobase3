@@ -93,6 +93,11 @@ const zhCN: AppResource = {
       title: '订单与商品',
       description: '通过订单、明细和商品，体验关联业务数据的管理方式。',
     },
+    authorization: {
+      title: '权限控制',
+      description:
+        '体验由权限集授权的路由：每个用户只处理自己的任务，超级用户可以看到全部。',
+    },
     files: {
       title: '文件管理',
       description: '体验文件仓库示例中的上传入口和文件管理界面。',

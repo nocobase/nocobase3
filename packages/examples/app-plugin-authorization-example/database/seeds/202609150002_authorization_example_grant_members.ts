@@ -4,46 +4,57 @@ import {
   type SeedDefinition,
 } from '@nocobase/db';
 
-const SET = 'repository-example';
-
-/** The Collections this example exposes over HTTP. */
-const collections: readonly string[] = [
-  'repositoryExampleCustomers',
-  'repositoryExampleContacts',
-  'repositoryExampleProducts',
-  'repositoryExampleOrders',
-  'repositoryExampleOrderItems',
-  'repositoryExampleAtomicCounters',
-  'repositoryExampleRelationUsers',
-  'repositoryExampleRelationProjectProfiles',
-  'repositoryExampleRelationTasks',
-  'repositoryExampleRelationTags',
-  'repositoryExampleRelationProjectTags',
-  'repositoryExampleRelationProjects',
-  'repositoryExampleFindManyRecords',
-];
-
-const actions: readonly string[] = ['read', 'create', 'update', 'delete'];
+const SET = 'authorization-example-member';
+const RESOURCE = 'main.authorizationExampleTasks';
 
 /**
- * A shared workspace: every signed-in user may work with the sample records.
- * The grants are what `authz.database.grant()` produces, written out because a
- * seed reaches the tables rather than the running authorization.
+ * What `authz.database.grant()` emits, written out: a seed reaches the tables
+ * rather than the running authorization.
+ *
+ * `recordsIOwn` compares `ownerId`, so a signed-in user reads, updates and
+ * deletes their own rows and nobody else's. `create` carries no record access
+ * — a create selects no rows — and has to name every column the route stores,
+ * timestamps included.
  */
-const grants = collections.map((name) => ({
-  resource: { type: 'database.collection', id: `main.${name}` },
-  actions: actions.map((action) => ({
-    action,
-    policy: {
-      type: 'database',
-      fields: { input: '*', output: '*' },
-      recordAccess: ['allRecords'],
-    },
-  })),
-}));
+const grants = [
+  {
+    resource: { type: 'database.collection', id: RESOURCE },
+    actions: [
+      {
+        action: 'read',
+        policy: {
+          type: 'database',
+          fields: { output: '*' },
+          recordAccess: ['recordsIOwn'],
+        },
+      },
+      {
+        action: 'create',
+        policy: {
+          type: 'database',
+          fields: {
+            input: ['title', 'status', 'ownerId', 'createdAt', 'updatedAt'],
+          },
+        },
+      },
+      {
+        action: 'update',
+        policy: {
+          type: 'database',
+          fields: { input: ['title', 'status', 'updatedAt'] },
+          recordAccess: ['recordsIOwn'],
+        },
+      },
+      {
+        action: 'delete',
+        policy: { type: 'database', recordAccess: ['recordsIOwn'] },
+      },
+    ],
+  },
+];
 
 const seed: SeedDefinition = defineSeed({
-  name: '202609140001_repository_example_grant_members',
+  name: '202609150002_authorization_example_grant_members',
 
   async run({ query }) {
     if (!(await authorizationInstalled(query))) return;
@@ -59,7 +70,7 @@ const seed: SeedDefinition = defineSeed({
         .values({
           id: crypto.randomUUID(),
           key: SET,
-          title: 'Repository example',
+          title: 'Authorization example: my tasks',
           grants: JSON.stringify(grants),
           createdAt: now,
           updatedAt: now,

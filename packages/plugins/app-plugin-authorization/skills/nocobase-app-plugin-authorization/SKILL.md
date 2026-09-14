@@ -169,6 +169,10 @@ router.route(
 - An exposure with no `resource` is passed through and never consults
   authorization.
 
+`@nocobase/app-plugin-authorization-example` is the runnable reference: one
+owned collection, its Repository API endpoints authorized by name, and a
+hand-written create route that stamps the owner from the principal.
+
 ## Configure business permissions
 
 Permission configuration has two parts:

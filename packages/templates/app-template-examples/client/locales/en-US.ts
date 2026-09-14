@@ -97,6 +97,11 @@ const enUS = {
       description:
         'Explore orders, line items and products in a connected business example.',
     },
+    authorization: {
+      title: 'Authorization',
+      description:
+        'See a route authorized by Permission Sets: each user works with the tasks they own, and a superuser sees them all.',
+    },
     files: {
       title: 'File management',
       description:

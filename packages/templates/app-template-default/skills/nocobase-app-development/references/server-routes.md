@@ -127,7 +127,7 @@ router.route(
 
 Mount it on every action of every exposure that names a `resource`. An action it did not run on resolves no principal, and app-server answers `403 PRINCIPAL_REQUIRED` rather than falling back to the shape. Relation rules come from the shape — a grant carries no relation model, and a member it does not mention stays as it was — so write `read` out as a node with its `fields` and `relations` rather than `true` when relations must stay readable.
 
-This is a summary. Configuring Permission Sets and binding the Repository Policy that `policyFor()` returns are covered by the authorization plugin's own Skill — read `nocobase-app-plugin-authorization` in `.agents/skills/` before building ownership rules, and its `references/orders-module.md` for a complete worked example with an `ownerId`.
+This is a summary. Configuring Permission Sets and binding the Repository Policy that `policyFor()` returns are covered by the authorization plugin's own Skill — read `nocobase-app-plugin-authorization` in `.agents/skills/` before building ownership rules, and its `references/orders-module.md` for a complete worked example with an `ownerId`. `@nocobase/app-plugin-authorization-example` is the same thing as an installable plugin you can run.
 
 ## Scope middleware to paths you own
 

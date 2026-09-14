@@ -140,6 +140,11 @@ describe('client inspection', () => {
         path: '/reset-password',
       },
       {
+        auth: 'required',
+        id: '@nocobase/app-plugin-authorization-example:authorization-example',
+        path: '/authorization-example',
+      },
+      {
         auth: 'guest',
         id: '@nocobase/app-plugin-install:install',
         path: '/install',

@@ -223,6 +223,9 @@ router.route(
   `403 PRINCIPAL_REQUIRED` 拒绝——不会回落到静态形状。
 - 没有 `resource` 的 exposure 原样透传，不经过授权。
 
+`@nocobase/app-plugin-authorization-example` 是可运行的参考实现：一张归属到人的任务表，
+一边是被授权的 Repository API 端点，一边是自己写的创建路由（owner 由服务端按身份写入）。
+
 ## 常见拒绝原因
 
 | Code                                  | 含义                                         |

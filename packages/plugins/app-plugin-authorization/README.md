@@ -110,7 +110,10 @@ names, the primary key, whether the database generates it — is read from db
 rather than registered here, so anything db holds can be granted on.
 `authz.repositories()` applies the same fold to `defineRepositoryApiRoutes()`
 endpoints, narrowing each exposure's declared shape with the caller's grants.
-See [docs/database-usage.md](./docs/database-usage.md).
+See [docs/database-usage.md](./docs/database-usage.md), and
+`@nocobase/app-plugin-authorization-example` for a runnable reference that puts
+both an authorized Repository API and an owner-stamping route over one
+collection.
 
 The plugin always registers the identity step that turns a session into a
 principal, and keeps Realtime permission invalidation in step with grant
