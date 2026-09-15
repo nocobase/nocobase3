@@ -23,8 +23,8 @@ import type {
  * `database.drivers`, which is what every entry point — the runtime, the CLI
  * commands and the tests — resolves a dialect from.
  */
-export function createAppDatabaseManager(
-  config: AppDatabaseConfig,
+export function createAppDatabaseManager<TConfig extends AppDatabaseConfig>(
+  config: TConfig,
   paths?: ConfigPaths,
   drivers?: Record<string, DatabaseDriverRegistration>,
 ): DatabaseManager | undefined {
@@ -135,7 +135,7 @@ function normalizeConnection(
     resolveStoragePath: paths
       ? (filename) => paths.storage(filename)
       : undefined,
-  }) as ConnectionConfig;
+  });
 }
 
 export function resolveAppDatabaseDriver(

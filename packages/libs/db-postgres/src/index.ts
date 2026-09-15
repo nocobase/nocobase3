@@ -1,13 +1,14 @@
 import { createRequire } from 'node:module';
 import type {
-  ConnectionConfig,
   DatabaseCapabilities,
   DatabaseDriverDefinition,
-  PostgresConnectionConfig,
 } from '@nocobase/db';
 import { rawRows } from '@nocobase/db';
 import { PostgresSchemaInspector } from './inspectors/postgres.js';
 import { compilePostgresJsonCondition } from './json.js';
+
+import type { PostgresConnectionConfig } from './config.js';
+export type { PostgresConnectionConfig } from './config.js';
 
 const require = createRequire(import.meta.url);
 const Pg: unknown = require('pg') as unknown;
@@ -133,13 +134,12 @@ export const postgresDriver: DatabaseDriverDefinition<
     return PostgresClientWithQueryStream;
   },
   resolveConnection: (
-    source: ConnectionConfig,
+    config: PostgresConnectionConfig,
   ): {
     connection: unknown;
     searchPath?: string[];
     useNullAsDefault?: boolean;
   } => {
-    const config = source as PostgresConnectionConfig;
     assertDriverOptions(config.driverOptions, [
       'host',
       'port',

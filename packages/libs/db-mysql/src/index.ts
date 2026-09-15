@@ -1,23 +1,26 @@
 import { createRequire } from 'node:module';
 import { RepositoryError } from '@nocobase/db';
 import type {
-  ConnectionConfig,
   DatabaseCapabilities,
   DatabaseDriverDefinition,
   DatabaseDriverRuntimeContext,
   JsonResultForm,
-  MysqlConnectionConfig,
 } from '@nocobase/db';
 import { rawRows } from '@nocobase/db';
 import { MysqlSchemaInspector } from './inspectors/mysql.js';
 import { compileMysqlJsonCondition } from './json.js';
 
+import type { MysqlConnectionConfig } from './config.js';
+export type { MysqlConnectionConfig } from './config.js';
+
 const require = createRequire(import.meta.url);
 const Mysql2: unknown = require('mysql2') as unknown;
-export type MysqlOptions = Omit<
-  MysqlConnectionConfig,
-  'dialect' | 'driver' | 'databaseDriver'
->;
+/** Preserve the mutually exclusive host and socket targets when omitting driver fields. */
+type ConnectionOptions<T> = T extends unknown
+  ? Omit<T, 'dialect' | 'driver' | 'databaseDriver'>
+  : never;
+
+export type MysqlOptions = ConnectionOptions<MysqlConnectionConfig>;
 export const mysqlDriver: DatabaseDriverDefinition<
   'mysql',
   MysqlConnectionConfig
@@ -155,8 +158,7 @@ export const mysqlDriver: DatabaseDriverDefinition<
     }
     return MysqlClientWithDriver;
   },
-  resolveConnection: (source: ConnectionConfig) => {
-    const config = source as MysqlConnectionConfig;
+  resolveConnection: (config: MysqlConnectionConfig) => {
     assertSocketPathExclusive(config, ['host', 'port']);
     assertDriverOptions(config.driverOptions, [
       'host',

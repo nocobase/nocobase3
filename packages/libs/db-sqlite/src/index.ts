@@ -3,13 +3,15 @@ import path from 'node:path';
 import type {
   DatabaseCapabilities,
   DatabaseDriverDefinition,
-  SqliteConnectionConfig,
 } from '@nocobase/db';
 import { rawRows } from '@nocobase/db';
 import { installDecimalAggregates } from './numeric.js';
 import { preciseIntegerClient } from './precise-integers.js';
 import { SqliteSchemaInspector } from './inspectors/sqlite.js';
 import { compileSqliteJsonCondition } from './json.js';
+
+import type { SqliteConnectionConfig } from './config.js';
+export type { SqliteConnectionConfig } from './config.js';
 
 const require = createRequire(import.meta.url);
 const BetterSqlite3: unknown = require('better-sqlite3') as unknown;

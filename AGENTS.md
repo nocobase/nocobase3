@@ -374,33 +374,31 @@ The workflow files under `.github/workflows/` still carry Chinese comments writt
 
 ## TypeScript Requirements for Library Development
 
-Every package that emits `.d.ts` files (`declaration: true`) enables both `isolatedDeclarations: true` and `isolatedModules: true`. This currently covers:
+Library packages that emit `.d.ts` files (`declaration: true`) enable both `isolatedDeclarations: true` and `isolatedModules: true`. The three application templates keep declaration emission and `isolatedModules`, but set `isolatedDeclarations: false` in `tsconfig.server.json`: their full TypeScript build infers application configuration exports such as `export default defineAppDatabaseConfig(...)`. Do not apply this application exception to library packages. The library requirement currently covers:
 
-| Configuration                                                  | Purpose                    |
-| -------------------------------------------------------------- | -------------------------- |
-| `packages/app/app-portal-sdk/tsconfig.json`                    | Portal SDK                 |
-| `packages/plugins/app-plugin-authentication/tsconfig.json`     | Authentication library     |
-| `packages/libs/authorization/tsconfig.json`                    | Authorization library      |
-| `packages/libs/db/tsconfig.json`                               | Database package           |
-| `packages/libs/db-testkit/tsconfig.json`                       | Database test contract     |
-| `packages/libs/db-sqlite/tsconfig.json`                        | SQLite dialect             |
-| `packages/libs/db-postgres/tsconfig.json`                      | PostgreSQL dialect         |
-| `packages/libs/db-mysql/tsconfig.json`                         | MySQL dialect              |
-| `packages/libs/db-kingbase/tsconfig.json`                      | Kingbase dialect           |
-| `packages/libs/db-oceanbase/tsconfig.json`                     | OceanBase dialect          |
-| `packages/libs/db-oracle/tsconfig.json`                        | Oracle dialect             |
-| `packages/libs/db-mssql/tsconfig.json`                         | MSSQL dialect              |
-| `packages/libs/db-dameng/tsconfig.json`                        | Dameng dialect             |
-| `packages/app/app-host/tsconfig.json`                          | Application host           |
-| `packages/app/app-server/tsconfig.json`                        | Application server library |
-| `packages/libs/caching/tsconfig.json`                          | Caching library            |
-| `packages/libs/drive/tsconfig.json`                            | File storage library       |
-| `packages/libs/snowflake/tsconfig.json`                        | Snowflake ID library       |
-| `packages/libs/logging/tsconfig.json`                          | Logging library            |
-| `packages/libs/queue/tsconfig.json`                            | Queue library              |
-| `packages/libs/session/tsconfig.json`                          | Session library            |
-| `packages/templates/app-template-default/tsconfig.server.json` | Default template server    |
-| `packages/templates/app-template-hub/tsconfig.server.json`     | Hub server                 |
+| Configuration                                              | Purpose                    |
+| ---------------------------------------------------------- | -------------------------- |
+| `packages/app/app-portal-sdk/tsconfig.json`                | Portal SDK                 |
+| `packages/plugins/app-plugin-authentication/tsconfig.json` | Authentication library     |
+| `packages/libs/authorization/tsconfig.json`                | Authorization library      |
+| `packages/libs/db/tsconfig.json`                           | Database package           |
+| `packages/libs/db-testkit/tsconfig.json`                   | Database test contract     |
+| `packages/libs/db-sqlite/tsconfig.json`                    | SQLite dialect             |
+| `packages/libs/db-postgres/tsconfig.json`                  | PostgreSQL dialect         |
+| `packages/libs/db-mysql/tsconfig.json`                     | MySQL dialect              |
+| `packages/libs/db-kingbase/tsconfig.json`                  | Kingbase dialect           |
+| `packages/libs/db-oceanbase/tsconfig.json`                 | OceanBase dialect          |
+| `packages/libs/db-oracle/tsconfig.json`                    | Oracle dialect             |
+| `packages/libs/db-mssql/tsconfig.json`                     | MSSQL dialect              |
+| `packages/libs/db-dameng/tsconfig.json`                    | Dameng dialect             |
+| `packages/app/app-host/tsconfig.json`                      | Application host           |
+| `packages/app/app-server/tsconfig.json`                    | Application server library |
+| `packages/libs/caching/tsconfig.json`                      | Caching library            |
+| `packages/libs/drive/tsconfig.json`                        | File storage library       |
+| `packages/libs/snowflake/tsconfig.json`                    | Snowflake ID library       |
+| `packages/libs/logging/tsconfig.json`                      | Logging library            |
+| `packages/libs/queue/tsconfig.json`                        | Queue library              |
+| `packages/libs/session/tsconfig.json`                      | Session library            |
 
 Within these scopes, every exported API must be declarable from the current file alone, without relying on cross-file type inference.
 

@@ -5,28 +5,23 @@ import type {
   DatabaseDriverDefinition,
   DatabaseDriverRuntimeContext,
   JsonResultForm,
-  MysqlConnectionConfig,
 } from '@nocobase/db';
 import { rawRows } from '@nocobase/db';
 import { MysqlSchemaInspector } from './inspectors/mysql.js';
 import { compileMysqlJsonCondition } from './json.js';
 
+import type { OceanbaseConnectionConfig } from './config.js';
+export type { OceanbaseConnectionConfig } from './config.js';
+
 const require = createRequire(import.meta.url);
 const Mysql2: unknown = require('mysql2') as unknown;
-export type OceanbaseOptions = Omit<
-  MysqlConnectionConfig,
-  'dialect' | 'driver' | 'databaseDriver'
->;
+/** Preserve the mutually exclusive host and socket targets when omitting driver fields. */
+type ConnectionOptions<T> = T extends unknown
+  ? Omit<T, 'dialect' | 'driver' | 'databaseDriver'>
+  : never;
 
-/**
- * OceanBase speaks the MySQL protocol, so its options are MySQL's. The dialect is its own, which is
- * what a connection is resolved by — reusing `MysqlConnectionConfig` whole would declare this
- * driver's connections as `dialect: 'mysql'`.
- */
-export type OceanbaseConnectionConfig = OceanbaseOptions & {
-  dialect: 'oceanbase';
-  driver?: string;
-};
+export type OceanbaseOptions = ConnectionOptions<OceanbaseConnectionConfig>;
+
 export const oceanbaseDriver: DatabaseDriverDefinition<
   'oceanbase',
   OceanbaseConnectionConfig
@@ -215,7 +210,7 @@ export const oceanbaseDriver: DatabaseDriverDefinition<
       password: '',
       charset: 'utf8mb4',
       ...config,
-    };
+    } as OceanbaseConnectionConfig;
   },
   resolveOwnershipTarget: (config) => {
     return [
@@ -328,7 +323,7 @@ function assertDriverOptions(
 }
 
 function normalizeMysqlSsl(
-  ssl: MysqlConnectionConfig['ssl'],
+  ssl: OceanbaseConnectionConfig['ssl'],
 ): boolean | Record<string, unknown> | undefined {
   return ssl === true ? {} : ssl;
 }

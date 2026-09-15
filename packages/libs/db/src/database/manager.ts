@@ -84,7 +84,7 @@ export function createDatabaseManager<
   TConnection extends AnyConnectionConfig = ConnectionConfig,
 >(config: ExtensibleDatabaseConfig<TConnection>): DatabaseManager {
   return new DefaultDatabaseManager(
-    config as DatabaseConfig,
+    config,
     new DefaultConnectionFactory({
       knex: new KnexConnectionAdapter(),
     }),

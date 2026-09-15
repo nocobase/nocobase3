@@ -1,3 +1,4 @@
+export { defineAppDatabaseConfig } from './define-app-database-config.js';
 export {
   createAppDatabaseManager,
   resolveAppDatabaseDriver,
@@ -54,6 +55,7 @@ export {
 } from './plan.js';
 export type {
   AppDatabaseConfig,
+  AppDatabaseConfigFromDrivers,
   AppDatabaseConnectionConfig,
   AppMetadataStoreConfig,
   AppDatabaseMigrationConfig,

@@ -1,11 +1,12 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import type { BaseConnectionConfig, ConnectionConfig } from '@nocobase/db';
+import type { SqliteConnectionConfig } from '@nocobase/db-sqlite';
 
 import type {
   AppDatabaseConfig,
   AppDatabaseConnectionConfig,
-} from '../src/database/index.js';
+} from '../../src/database/index.js';
 
 /**
  * A dialect contributed by a package `@nocobase/db` knows nothing about, which is what
@@ -31,20 +32,19 @@ type ContributedOptions = Omit<
 type ContributedConnection = ContributedOptions & { dialect: 'cockroach' };
 
 describe('AppDatabaseConfig', () => {
-  /** Every existing application writes the bare form, so the default parameter has to keep meaning what it meant. */
-  it('defaults to the dialects @nocobase/db declares', () => {
+  /** Runtime consumers share a dialect-independent contract. */
+  it('defaults to a dialect-independent connection contract', () => {
     const config: AppDatabaseConfig = {
       default: 'main',
       connections: {
         main: {
-          dialect: 'sqlite',
-          filename: 'app.sqlite',
+          dialect: 'custom',
           migrations: { autoRun: true },
         },
       },
     };
 
-    expect(config.connections.main.dialect).toBe('sqlite');
+    expect(config.connections.main.dialect).toBe('custom');
     expectTypeOf<AppDatabaseConfig>().toMatchTypeOf<
       AppDatabaseConfig<ConnectionConfig>
     >();
@@ -55,14 +55,15 @@ describe('AppDatabaseConfig', () => {
    * parameter existed the type could not say so, and configuring one needed an assertion.
    */
   it('accepts a connection shape contributed by a dialect package', () => {
-    const config: AppDatabaseConfig<ConnectionConfig | ContributedConnection> =
-      {
-        default: 'main',
-        connections: {
-          main: { dialect: 'cockroach', host: 'db.example.test', port: 26257 },
-          cache: { dialect: 'sqlite', filename: 'cache.sqlite' },
-        },
-      };
+    const config: AppDatabaseConfig<
+      SqliteConnectionConfig | ContributedConnection
+    > = {
+      default: 'main',
+      connections: {
+        main: { dialect: 'cockroach', host: 'db.example.test', port: 26257 },
+        cache: { dialect: 'sqlite', filename: 'cache.sqlite' },
+      },
+    };
 
     expect(config.connections.main.dialect).toBe('cockroach');
     expect(config.connections.cache.dialect).toBe('sqlite');
@@ -87,17 +88,23 @@ describe('AppDatabaseConfig', () => {
     expectTypeOf<{
       dialect: 'cockroach';
       host: string;
-    }>().not.toMatchTypeOf<AppDatabaseConnectionConfig>();
+    }>().not.toMatchTypeOf<
+      AppDatabaseConnectionConfig<SqliteConnectionConfig>
+    >();
 
     expectTypeOf<{ dialect: 'sqlite' }>().not.toMatchTypeOf<
-      AppDatabaseConnectionConfig<ConnectionConfig | ContributedConnection>
+      AppDatabaseConnectionConfig<
+        SqliteConnectionConfig | ContributedConnection
+      >
     >();
 
     expectTypeOf<{
       dialect: 'postgres';
       serviceName: string;
     }>().not.toMatchTypeOf<
-      AppDatabaseConnectionConfig<ConnectionConfig | ContributedConnection>
+      AppDatabaseConnectionConfig<
+        SqliteConnectionConfig | ContributedConnection
+      >
     >();
   });
 });

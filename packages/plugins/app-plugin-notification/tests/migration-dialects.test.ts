@@ -1,9 +1,10 @@
+import type { MysqlConnectionConfig } from '@nocobase/db-mysql';
+import type { OracleConnectionConfig } from '@nocobase/db-oracle';
 import { resolve } from 'node:path';
 
 import {
   createDatabaseManager,
   InMemoryCollectionMetadataStore,
-  type ConnectionConfig,
   type DatabaseManager,
   type Row,
 } from '@nocobase/db';
@@ -191,7 +192,9 @@ function selectedDialect(): TestedDialect | undefined {
   );
 }
 
-function connectionConfig(selected: TestedDialect): ConnectionConfig {
+function connectionConfig(
+  selected: TestedDialect,
+): MysqlConnectionConfig | OracleConnectionConfig {
   if (selected === 'mysql') {
     return {
       dialect: 'mysql',

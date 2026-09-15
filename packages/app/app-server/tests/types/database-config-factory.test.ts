@@ -1,0 +1,114 @@
+import { expect, expectTypeOf, it, vi } from 'vitest';
+import sqlite from '@nocobase/db-sqlite';
+import postgres from '@nocobase/db-postgres';
+import mysql from '@nocobase/db-mysql';
+import type {
+  BaseConnectionConfig,
+  DatabaseDriverDefinition,
+} from '@nocobase/db';
+import {
+  createConfigPaths,
+  type AppConfigFactory,
+} from '../../src/config/index.js';
+import {
+  defineAppDatabaseConfig,
+  type AppDatabaseConfig,
+} from '../../src/database/index.js';
+import type { AppRuntimeContext } from '../../src/runtime/definition.js';
+
+interface CustomConnection extends BaseConnectionConfig {
+  dialect: 'custom';
+  endpoint: string;
+}
+
+const custom: DatabaseDriverDefinition<'custom', CustomConnection> = {
+  dialect: 'custom',
+};
+
+it('infers returned drivers and evaluates the configuration only when invoked', () => {
+  const called = vi.fn();
+  const factory = defineAppDatabaseConfig((runtime) => {
+    called();
+    return {
+      drivers: { sqlite, postgres, custom, mysql },
+      default: 'main',
+      connections: {
+        main: {
+          dialect: 'sqlite',
+          filename: runtime.configPaths.storage('database.sqlite'),
+          metadataStore: 'database/main/collections',
+          migrations: { autoRun: false },
+          seeds: { autoRun: true },
+        },
+        reporting: { dialect: 'postgres', host: 'localhost', port: 5432 },
+        custom: { dialect: 'custom', endpoint: 'localhost' },
+        socket: { dialect: 'mysql', socketPath: '/tmp/mysql.sock' },
+      },
+    };
+  });
+  expectTypeOf(factory).toEqualTypeOf<AppConfigFactory<AppDatabaseConfig>>();
+  expect(called).not.toHaveBeenCalled();
+  const paths = createConfigPaths({ rootDir: '/tmp/database-config-factory' });
+  // Only the path service is used by this callback.
+  const runtime = { configPaths: paths } as AppRuntimeContext;
+  const config = factory(runtime);
+  expect(called).toHaveBeenCalledOnce();
+  expect(config.drivers?.sqlite).toBe(sqlite);
+  expect(config.connections.main).toMatchObject({
+    filename: paths.storage('database.sqlite'),
+    migrations: { autoRun: false },
+  });
+});
+
+it('rejects missing, unrelated, and incorrectly typed connection fields', () => {
+  defineAppDatabaseConfig(() => ({
+    drivers: { sqlite },
+    // @ts-expect-error SQLite requires its filename.
+    connections: { main: { dialect: 'sqlite' } },
+  }));
+  defineAppDatabaseConfig(() => ({
+    drivers: { sqlite },
+    // @ts-expect-error Only registered dialects may be configured.
+    connections: { main: { dialect: 'postgres' } },
+  }));
+  // @ts-expect-error SQLite does not have a host option.
+  defineAppDatabaseConfig(() => ({
+    drivers: { sqlite },
+    connections: {
+      main: {
+        dialect: 'sqlite',
+        filename: ':memory:',
+        host: 'localhost',
+      },
+    },
+  }));
+  defineAppDatabaseConfig(() => ({
+    drivers: { postgres },
+    // @ts-expect-error Driver option value types are preserved.
+    connections: { main: { dialect: 'postgres', port: '5432' } },
+  }));
+  defineAppDatabaseConfig(() => ({
+    drivers: { custom },
+    // @ts-expect-error Third-party connection fields remain required.
+    connections: { main: { dialect: 'custom' } },
+  }));
+  defineAppDatabaseConfig(() => ({
+    drivers: { mysql },
+    connections: {
+      main: {
+        // @ts-expect-error Conflicting targets make the connection invalid.
+        dialect: 'mysql',
+        // @ts-expect-error Host and socket targets are mutually exclusive.
+        host: 'localhost',
+        // @ts-expect-error Socket and host targets are mutually exclusive.
+        socketPath: '/tmp/mysql.sock',
+      },
+    },
+  }));
+  // @ts-expect-error Unknown top-level configuration fields are rejected.
+  defineAppDatabaseConfig(() => ({
+    drivers: { sqlite },
+    connections: {},
+    typo: true,
+  }));
+});

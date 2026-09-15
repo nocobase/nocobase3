@@ -24,15 +24,14 @@ export type CollectionMetadataStoreConfig =
  * Any connection, whichever dialect declares it. The constraint every
  * connection-shaped type parameter in this package is written against.
  */
-export type AnyConnectionConfig = BaseConnectionConfig & { dialect: string };
+export interface ConnectionConfig extends BaseConnectionConfig {
+  dialect: string;
+}
 
-/**
- * Configuration shape for a database, over the connections it accepts.
- *
- * The parameter is what lets a dialect package contribute its own connection
- * options without this package extending a union for it. `DatabaseConfig` is
- * the same shape closed over the dialects declared here.
- */
+/** Alias for the dialect-independent connection constraint. */
+export type AnyConnectionConfig = ConnectionConfig;
+
+/** Configuration over connection shapes supplied by dialect packages. */
 export interface ExtensibleDatabaseConfig<
   TConnection extends AnyConnectionConfig = AnyConnectionConfig,
 > {
@@ -43,16 +42,31 @@ export interface ExtensibleDatabaseConfig<
   metadataStore?: CollectionMetadataStore | CollectionMetadataStoreConfig;
 }
 
-/**
- * Configuration over the dialects this package declares a connection type for.
- *
- * An alias rather than a second interface: the two were written out separately
- * and stayed field-for-field identical, which left every consumer choosing
- * between two names for one shape — and `AppDatabaseConfig` in
- * `@nocobase/app-server` chose the closed one, which is why an application
- * could not configure a dialect a package contributed.
- */
-export type DatabaseConfig = ExtensibleDatabaseConfig<ConnectionConfig>;
+/** Core configuration; use a connection type or drivers for dialect-specific checking. */
+export type DatabaseConfig<
+  TConnection extends ConnectionConfig = ConnectionConfig,
+> = ExtensibleDatabaseConfig<TConnection>;
+
+/** Extract the connection shape carried by a driver factory or descriptor. */
+export type DriverConnectionConfig<TDriver> = TDriver extends {
+  readonly driver: infer TDefinition;
+}
+  ? DriverConnectionConfig<TDefinition>
+  : TDriver extends DatabaseDriverDefinition<string, infer TConnection>
+    ? TConnection
+    : never;
+
+/** Connection shapes accepted by the registered driver factories or descriptors. */
+export type ConnectionConfigFromDrivers<
+  TDrivers extends Record<string, DatabaseDriverRegistration>,
+> = DriverConnectionConfig<TDrivers[keyof TDrivers]>;
+
+/** Declarative configuration checked against the application's registered drivers. */
+export type DatabaseConfigFromDrivers<
+  TDrivers extends Record<string, DatabaseDriverRegistration>,
+> = Omit<DatabaseConfig<ConnectionConfigFromDrivers<TDrivers>>, 'drivers'> & {
+  drivers: TDrivers;
+};
 
 /**
  * A Dialect package's public driver descriptor. Core owns orchestration while
@@ -152,7 +166,7 @@ export interface DatabaseDriverFactory<
   TOptions extends object = object,
   TConfig extends AnyConnectionConfig = AnyConnectionConfig,
 > {
-  (options?: TOptions): AnyConnectionConfig & {
+  (options?: TOptions): TConfig & {
     dialect: TDialect;
     databaseDriver: DatabaseDriverDefinition<TDialect, TConfig>;
   };
@@ -167,17 +181,14 @@ export type DatabaseDriverRegistration<
   | DatabaseDriverDefinition<TDialect, TConfig>
   | DatabaseDriverFactory<TDialect, object, TConfig>;
 
-/**
- * Dialect identifiers are open ended. The connection config aliases below give
- * strict fields for the dialects this package declares, while a driver package
- * contributes its own dialect literal and its own connection shape — see
- * `DatabaseDriverDefinition`'s `TConfig` — without changing this package.
- */
+/** Dialect identifiers are supplied by driver packages. */
 export type DatabaseDialect = string;
 
 export type SchemaManagementMode = 'managed' | 'external';
 
 export interface BaseConnectionConfig {
+  /** Optional native driver name, checked against the registered descriptor. */
+  driver?: string;
   naming?: NamingOptions;
   capabilities?: Partial<DatabaseCapabilities>;
   metadataStore?: CollectionMetadataStore | CollectionMetadataStoreConfig;
@@ -198,78 +209,8 @@ export interface BaseConnectionConfig {
   databaseDriver?: DatabaseDriverDefinition;
 }
 
-export interface SqliteConnectionConfig extends BaseConnectionConfig {
-  dialect: 'sqlite';
-  driver?: string;
-  filename: string;
-}
-
-export type PostgresConnectionConfig = BaseConnectionConfig & {
-  dialect: 'postgres';
-  driver?: string;
-  schema?: string | readonly string[];
-  ssl?: boolean | Record<string, unknown>;
-} & HostConnectionConfig;
-
-export type MysqlConnectionConfig = BaseConnectionConfig & {
-  dialect: 'mysql';
-  driver?: string;
-  charset?: string;
-  timezone?: string;
-  ssl?: boolean | Record<string, unknown>;
-} & MysqlConnectionTargetConfig;
-
-export type OracleConnectionConfig = BaseConnectionConfig & {
-  dialect: 'oracle';
-  driver?: string;
-  serviceName: string;
-  host?: string;
-  port?: number;
-  username?: string;
-  password?: string;
-};
-
-export type MssqlConnectionConfig = BaseConnectionConfig & {
-  dialect: 'mssql';
-  driver?: string;
-  host?: string;
-  port?: number;
-  database?: string;
-  username?: string;
-  password?: string;
-  encrypt?: boolean;
-  trustServerCertificate?: boolean;
-};
-
-export type ConnectionConfig =
-  | SqliteConnectionConfig
-  | PostgresConnectionConfig
-  | MysqlConnectionConfig
-  | OracleConnectionConfig
-  | MssqlConnectionConfig;
-
 /** Native driver identifier supplied by a dialect package. */
 export type DatabaseDriver = string;
-
-type MysqlConnectionTargetConfig =
-  (HostConnectionConfig & { socketPath?: never }) | SocketConnectionConfig;
-
-interface HostConnectionConfig {
-  host?: string;
-  port?: number;
-  database?: string;
-  username?: string;
-  password?: string;
-}
-
-interface SocketConnectionConfig {
-  host?: never;
-  port?: never;
-  socketPath: string;
-  database?: string;
-  username?: string;
-  password?: string;
-}
 
 export function defineDatabase<
   T extends ExtensibleDatabaseConfig<AnyConnectionConfig>,

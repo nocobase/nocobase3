@@ -1,14 +1,15 @@
 import { createRequire } from 'node:module';
 import type {
-  ConnectionConfig,
   DatabaseCapabilities,
   DatabaseDriverDefinition,
-  OracleConnectionConfig,
 } from '@nocobase/db';
 import { rawRows } from '@nocobase/db';
 import type { Knex } from 'knex';
 import { preciseIntegerClient } from './precise-integers.js';
 import { OracleSchemaInspector } from './inspectors/oracle.js';
+
+import type { OracleConnectionConfig } from './config.js';
+export type { OracleConnectionConfig } from './config.js';
 
 const require = createRequire(import.meta.url);
 const Oracledb: unknown = require('oracledb') as unknown;
@@ -343,8 +344,7 @@ export const oracleDriver: DatabaseDriverDefinition<
     }
     return NocobaseOracleClient;
   },
-  resolveConnection: (source: ConnectionConfig) => {
-    const config = source as OracleConnectionConfig;
+  resolveConnection: (config: OracleConnectionConfig) => {
     assertDriverOptions(config.driverOptions, [
       'host',
       'port',

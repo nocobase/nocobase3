@@ -73,6 +73,10 @@
     "prettier": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "@nocobase/db-postgres": "workspace:*",
+    "@nocobase/db-mysql": "workspace:*",
+    "@nocobase/db-oracle": "workspace:*",
+    "@nocobase/db-mssql": "workspace:*"
   }
 }

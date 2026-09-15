@@ -1,3 +1,4 @@
+import type { ConnectionConfigFromDrivers } from '@nocobase/db';
 import {
   mkdirSync,
   mkdtempSync,
@@ -20,7 +21,7 @@ import mssql from '@nocobase/db-mssql';
 import { AppConfig, createConfigPaths } from '../src/config/index.js';
 import {
   createAppDatabaseManager,
-  type AppDatabaseConfig,
+  type AppDatabaseConfig as GenericAppDatabaseConfig,
   type AppDatabaseTaskContributions,
   planAppDatabaseTasks,
   runAppDatabaseTasks,
@@ -29,6 +30,9 @@ import { executeAppDatabasePlan } from '../src/database/tasks.js';
 import { createAppDatabaseTaskContributions } from '../src/plugins/resolve.js';
 
 const drivers = { postgres, mysql, sqlite, oracle, mssql };
+type AppDatabaseConfig = GenericAppDatabaseConfig<
+  ConnectionConfigFromDrivers<typeof drivers>
+>;
 
 const roots: string[] = [];
 afterEach(() => {

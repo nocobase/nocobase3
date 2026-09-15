@@ -1,6 +1,5 @@
 import { createRequire } from 'node:module';
 import type {
-  BaseConnectionConfig,
   DatabaseCapabilities,
   DatabaseDriverDefinition,
 } from '@nocobase/db';
@@ -8,22 +7,13 @@ import { rawRows } from '@nocobase/db';
 import { KingbaseSchemaInspector } from './inspectors/kingbase.js';
 import { compileKingbaseJsonCondition } from './json.js';
 
+import type { KingbaseConnectionConfig } from './config.js';
+export type { KingbaseConnectionConfig } from './config.js';
+
 const require = createRequire(import.meta.url);
 const Pg: unknown = require('pg') as unknown;
 const PgQueryStream =
   require('pg-query-stream') as typeof import('pg-query-stream');
-
-export interface KingbaseConnectionConfig extends BaseConnectionConfig {
-  dialect: 'kingbase';
-  driver?: string;
-  schema?: string | readonly string[];
-  ssl?: boolean | Record<string, unknown>;
-  host?: string;
-  port?: number;
-  database?: string;
-  username?: string;
-  password?: string;
-}
 
 export type KingbaseOptions = Omit<
   KingbaseConnectionConfig,
