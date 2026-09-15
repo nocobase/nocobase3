@@ -1,4 +1,4 @@
-import { FileText, Home, Hash, PanelsTopLeft } from 'lucide-react';
+import { FileText, Home, Hash, PanelsTopLeft, Plug } from 'lucide-react';
 import {
   defineAppRoutes,
   defineSettingsRoutes,
@@ -64,6 +64,13 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
     name: 'numeric-examples',
     navigation: { title: 'navigation.numbers', icon: Hash },
     path: '/numeric-examples',
+  },
+  {
+    auth: 'required',
+    componentLoader: () => import('./pages/external-crm.js'),
+    name: 'external-crm',
+    navigation: { title: 'navigation.externalCrm', icon: Plug },
+    path: '/external-crm',
   },
   {
     auth: 'guest',

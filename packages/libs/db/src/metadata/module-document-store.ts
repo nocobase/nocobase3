@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import type {
   CollectionMetadataStore,
   CollectionMetadataPage,
@@ -13,6 +12,7 @@ import {
 } from './document-store-errors.js';
 import {
   cloneStoredCollectionMetadata,
+  contentRevision,
   paginateCollectionMetadata,
   validateCollectionMetadataStoreName,
 } from './document-store-helpers.js';
@@ -88,24 +88,4 @@ export class ModuleCollectionMetadataStore implements CollectionMetadataStore {
       this.options.source,
     );
   }
-}
-
-function contentRevision(document: CollectionMetadataDocument): string {
-  return `sha256-${createHash('sha256')
-    .update(canonicalJson(document))
-    .digest('base64url')}`;
-}
-
-function canonicalJson(value: unknown): string {
-  if (Array.isArray(value)) {
-    return `[${value.map(canonicalJson).join(',')}]`;
-  }
-  if (value && typeof value === 'object') {
-    const record = value as Record<string, unknown>;
-    return `{${Object.keys(record)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`)
-      .join(',')}}`;
-  }
-  return JSON.stringify(value);
 }

@@ -726,9 +726,7 @@ describeIntegrationDatabases('schema inspector', (context) => {
       const created = await repository.createOne({
         values: { payload: { enabled: false } },
       });
-      const decode = (value: unknown): unknown =>
-        typeof value === 'string' ? JSON.parse(value) : value;
-      expect(decode(created.record.payload)).toEqual({ enabled: false });
+      expect(created.record.payload).toEqual({ enabled: false });
     },
   );
 });

@@ -34,6 +34,7 @@ import type {
 } from '../../../schema/adapter.js';
 import type { SchemaInspector } from '../../../schema/inspector/types.js';
 import { resolveDatabaseCapabilities } from '../../capabilities.js';
+import { isNocoBaseInternalTable } from '../internal-tables.js';
 import {
   attachDatabaseDriverRuntime,
   createDefaultDatabaseDriverRuntime,
@@ -156,12 +157,11 @@ export class KnexDatabaseConnection implements DatabaseConnection {
       inspector: this.schemaInspector,
       metadataStore: this.metadataStore,
       naming: this.config.naming,
-      isInternalPhysicalCollection:
-        this.metadataStore instanceof DatabaseCollectionMetadataStore
-          ? (identity) =>
-              this.metadataStore instanceof DatabaseCollectionMetadataStore &&
-              this.metadataStore.isInternalPhysicalCollection(identity)
-          : undefined,
+      isInternalPhysicalCollection: (identity) =>
+        isNocoBaseInternalTable(identity.tableName) ||
+        (this.config.internalTables?.includes(identity.tableName) ?? false) ||
+        (this.metadataStore instanceof DatabaseCollectionMetadataStore &&
+          this.metadataStore.isInternalPhysicalCollection(identity)),
     });
     this.collections = collections;
     const invalidator = transactionInvalidations

@@ -1,4 +1,4 @@
-import { Command, Flags } from '@oclif/core';
+import { Args, Command, Flags } from '@oclif/core';
 import path from 'node:path';
 
 import { planPluginUpdate } from '../../lib/plugin-update.ts';
@@ -19,23 +19,26 @@ import {
 export default class PluginUpdate extends Command {
   static override summary = 'Upgrade plugins and re-synchronize their skills.';
   static override description =
-    'Upgrades the plugin packages through the package manager the app already uses, then copies the skills the upgraded plugins ship into .agents/skills. Without --plugin every registered plugin is upgraded. The skills copy is the reason to prefer this over upgrading by hand: skills live in the app, so an upgrade leaves a stale copy behind until something re-runs the sync.';
+    "Upgrades the plugin packages through the package manager the app already uses, then re-synchronizes all registered plugins' skills into .agents/skills. Specify a full package name or a short name. Without a name every registered plugin is upgraded. The skills copy is the reason to prefer this over upgrading by hand: skills live in the app, so an upgrade leaves a stale copy behind until something re-runs the sync.";
 
   static override examples = [
     '<%= config.bin %> <%= command.id %>',
-    '<%= config.bin %> <%= command.id %> --plugin audit-log',
-    '<%= config.bin %> <%= command.id %> --plugin audit-log --plugin workflow',
+    '<%= config.bin %> <%= command.id %> @nocobase/app-plugin-workflow',
+    '<%= config.bin %> <%= command.id %> workflow',
     '<%= config.bin %> <%= command.id %> --dry-run',
   ];
+
+  static override args = {
+    name: Args.string({
+      description:
+        'Plugin to upgrade: a full @nocobase/app-plugin-* package name or a short name such as workflow. Omit to upgrade every registered plugin.',
+      required: false,
+    }),
+  };
 
   static override flags = {
     dir: Flags.string({
       description: 'App directory. Defaults to the current directory.',
-    }),
-    plugin: Flags.string({
-      description:
-        'Plugin to upgrade. Repeat for several. Defaults to every registered plugin.',
-      multiple: true,
     }),
     'dry-run': Flags.boolean({
       default: false,
@@ -64,11 +67,14 @@ export default class PluginUpdate extends Command {
   }
 
   private async runUnsafe(): Promise<void> {
-    const { flags } = await this.parse(PluginUpdate);
+    const { args, flags } = await this.parse(PluginUpdate);
     const appRoot = path.resolve(flags.dir ?? process.cwd());
     const dryRun = flags['dry-run'];
 
-    const plan = await planPluginUpdate({ appRoot, plugins: flags.plugin });
+    const plan = await planPluginUpdate({
+      appRoot,
+      plugins: args.name === undefined ? [] : [args.name],
+    });
     if (plan.packageNames.length === 0) {
       if (flags.json) {
         this.logJson(

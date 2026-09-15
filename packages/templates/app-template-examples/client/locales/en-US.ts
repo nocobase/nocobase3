@@ -69,6 +69,11 @@ const enUS = {
       description:
         'Compare INTEGER, BIGINT, DECIMAL, FLOAT and DOUBLE values, return types and aggregates.',
     },
+    externalCrm: {
+      title: 'External database',
+      description:
+        'Read orders and customers from a database another system owns, through an external connection and its metadata files.',
+    },
     eyebrow: 'NocoBase Examples',
     title: 'Explore working examples',
     description:
@@ -171,6 +176,37 @@ const enUS = {
     confirm: 'Confirm',
     language: 'Language',
   },
+  externalCrm: {
+    eyebrow: 'External database example',
+    title: 'CRM orders',
+    description:
+      'These rows live in a database this application does not own. The externalCrm connection reads its schema, never changes it, and layers titles and the customer relation on top from database/externalCrm/collections/*/metadata.json. The page addresses everything by logical name; the crm_ table prefix never appears here.',
+    readOnly: 'Read-only',
+    customers: '{{count}} customers',
+    filter: 'Filter by status',
+    status: {
+      all: 'All orders',
+      paid: 'Paid',
+      shipped: 'Shipped',
+      draft: 'Draft',
+    },
+    refresh: 'Refresh',
+    loading: 'Loading orders…',
+    loadError:
+      'Unable to load orders. Check that you are signed in and that the external CRM database is reachable.',
+    retry: 'Retry',
+    empty: 'No matching orders',
+    emptyHint:
+      'The SQLite stand-in is filled with sample orders on startup; a real CRM shows whatever it holds.',
+    columns: {
+      orderNo: 'Order number',
+      customer: 'Customer',
+      status: 'Status',
+      totalAmount: 'Total amount',
+      placedAt: 'Placed at',
+    },
+    note: 'Writes are not exposed: the CRM owns this data, so the routes register only query actions and the Policy grants reads alone.',
+  },
   account: {
     openMenu: 'Open account menu',
     fallback: 'Account',
@@ -179,6 +215,7 @@ const enUS = {
   },
   navigation: {
     numbers: 'Numeric types',
+    externalCrm: 'External CRM',
     routeOverlays: 'Route dialogs and drawers',
     articles: 'Articles',
     home: 'Home',

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type {
   CollectionMetadataPage,
   CollectionMetadataSummary,
@@ -9,7 +10,10 @@ import {
   CollectionMetadataStoreCursorError,
   CollectionMetadataStoreOptionsError,
 } from './document-store-errors.js';
-import type { StoredCollectionMetadata } from './document.js';
+import type {
+  CollectionMetadataDocument,
+  StoredCollectionMetadata,
+} from './document.js';
 import { validateCollectionMetadataDocument } from './validation.js';
 
 const DEFAULT_LIMIT = 100;
@@ -204,4 +208,29 @@ function pruneUndefined<T extends object>(value: T): T {
     if (value[key] === undefined) delete value[key];
   }
   return value;
+}
+
+/**
+ * A revision derived from the document itself, so two stores holding the same
+ * document — or one store re-initialized from unchanged files — report the
+ * same revision without anything having to be written down.
+ */
+export function contentRevision(document: CollectionMetadataDocument): string {
+  return `sha256-${createHash('sha256')
+    .update(canonicalJson(document))
+    .digest('base64url')}`;
+}
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(canonicalJson).join(',')}]`;
+  }
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value);
 }

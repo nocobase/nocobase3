@@ -1,5 +1,19 @@
 import type { NamingOptions } from '../collection/types.js';
 import type { CollectionMetadataStore } from '../metadata/document-store.js';
+
+/**
+ * Declarative form of a Collection metadata store, for configuration that
+ * cannot carry an instance — a YAML file, or a literal in a test. The Manager
+ * resolves it once when the connection is first created.
+ */
+export interface DirectoryCollectionMetadataStoreConfig {
+  readonly type: 'directory';
+  /** Absolute path; a relative path resolves against the process working directory, so resolve it first. */
+  readonly directory: string;
+}
+
+export type CollectionMetadataStoreConfig =
+  DirectoryCollectionMetadataStoreConfig;
 import type { DatabaseCapabilities } from '../schema/adapter.js';
 import type { Knex } from 'knex';
 import type { SchemaInspector } from '../schema/inspector/types.js';
@@ -10,7 +24,7 @@ export interface DatabaseConfig {
   /** Database drivers available to connections that use declarative configs. */
   drivers?: Record<string, DatabaseDriverRegistration>;
   connections: Record<string, ConnectionConfig>;
-  metadataStore?: CollectionMetadataStore;
+  metadataStore?: CollectionMetadataStore | CollectionMetadataStoreConfig;
 }
 
 /**
@@ -27,7 +41,7 @@ export interface ExtensibleDatabaseConfig<
   default?: string;
   drivers?: Record<string, DatabaseDriverRegistration>;
   connections: Record<string, TConnection>;
-  metadataStore?: CollectionMetadataStore;
+  metadataStore?: CollectionMetadataStore | CollectionMetadataStoreConfig;
 }
 
 /**
@@ -139,9 +153,17 @@ export type SchemaManagementMode = 'managed' | 'external';
 export interface BaseConnectionConfig {
   naming?: NamingOptions;
   capabilities?: Partial<DatabaseCapabilities>;
-  metadataStore?: CollectionMetadataStore;
+  metadataStore?: CollectionMetadataStore | CollectionMetadataStoreConfig;
   onCollectionMetadataInvalidationError?: (error: unknown) => void;
   schemaManagement?: SchemaManagementMode;
+  /**
+   * Physical tables on this connection that are NocoBase bookkeeping rather
+   * than Collections — a migration or seed history or lock table given a
+   * custom name. Tables under the `__nocobase_` prefix are recognised without
+   * being listed; anything else the application names has to be declared here
+   * or `collections.list()` and `scan()` report it as a Collection.
+   */
+  internalTables?: readonly string[];
   debug?: boolean;
   pool?: unknown;
   driverOptions?: Record<string, unknown>;

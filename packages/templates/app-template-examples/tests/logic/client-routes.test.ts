@@ -47,6 +47,7 @@ describe('app client routes', () => {
           name: 'numeric-examples',
           path: '/numeric-examples',
         },
+        { auth: 'required', name: 'external-crm', path: '/external-crm' },
         { auth: 'guest', name: 'login', path: '/login' },
         { auth: 'guest', name: 'register', path: '/register' },
         {
@@ -102,6 +103,7 @@ describe('app client routes', () => {
       { name: 'routeDrawerDialogExample', authorizedAs: null },
       { name: 'articles', authorizedAs: 'articles' },
       { name: 'numeric-examples', authorizedAs: 'numeric-examples' },
+      { name: 'external-crm', authorizedAs: 'external-crm' },
     ]);
   });
 });

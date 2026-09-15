@@ -1,5 +1,9 @@
 import { assertManagedSchema } from '../database/schema-management.js';
-import { createMigrationContext } from './internal/context.js';
+import type { Knex } from 'knex';
+import {
+  createMigrationConnection,
+  createMigrationContext,
+} from './internal/context.js';
 import {
   DEFAULT_MIGRATION_TABLE,
   deleteMigrationHistoryRecord,
@@ -29,6 +33,12 @@ export interface Migrator {
   upTo(name: string): Promise<MigrationRunResult>;
   /** Rolls back the most recently applied migration batch. */
   rollback(): Promise<MigrationRollbackResult>;
+  /**
+   * Migrations already applied on the connection, oldest first. Reads only:
+   * a connection without a history table yields an empty list rather than
+   * getting one created.
+   */
+  history(): Promise<MigrationHistoryRecord[]>;
 }
 
 /** Creates a migration runner backed by the supplied database manager. */
@@ -109,6 +119,17 @@ class DefaultMigrator implements Migrator {
     );
     if (result.executed.length > 0) connection.collections.invalidate();
     return result;
+  }
+
+  async history(): Promise<MigrationHistoryRecord[]> {
+    const connection = this.options.database.connection(
+      this.options.connection,
+    );
+    const tableName = this.options.tableName ?? DEFAULT_MIGRATION_TABLE;
+    const migrationConnection = createMigrationConnection(connection);
+    const knex = await migrationConnection.client<Knex>();
+    if (!(await knex.schema.hasTable(tableName))) return [];
+    return readMigrationHistory(migrationConnection, tableName);
   }
 
   async rollback(): Promise<MigrationRollbackResult> {

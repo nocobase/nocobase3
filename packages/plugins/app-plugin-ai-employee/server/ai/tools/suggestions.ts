@@ -31,7 +31,7 @@ export default defineTools<SuggestionsContext>({
     const { messageId } = ctx.state;
     if (messageId) {
       const messageRepo = ctx.repositories.aiMessages;
-      const message = await messageRepo.findOne({ filter: { id: messageId } });
+      const message = await messageRepo.findOne({ filter: { messageId } });
       const toolCalls = message?.toolCalls || [];
       const index = toolCalls.findIndex(
         (toolCall: { id: string }) => toolCall.id === runtime.toolCallId,

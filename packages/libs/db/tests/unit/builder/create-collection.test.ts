@@ -115,6 +115,94 @@ describe('CollectionBuilder createCollection', () => {
     });
   });
 
+  it('does not duplicate a relation index when the foreign-key field is indexed explicitly', async () => {
+    const builder = new CollectionBuilder();
+
+    const result = await builder.createCollection(
+      'productBarcodes',
+      (collection) => {
+        collection.string('productId');
+        collection
+          .belongsTo('product', 'products')
+          .targetKey('id')
+          .foreignKey('productId')
+          .foreignKeyType('string')
+          .index();
+        collection.index('productId');
+      },
+      { dryRun: true },
+    );
+
+    expect(result.schemaOperations?.[0]).toMatchObject({
+      type: 'createTable',
+      table: {
+        indexes: [
+          {
+            columns: ['product_id'],
+            name: 'idx_product_barcodes_product_id',
+          },
+        ],
+      },
+    });
+    expect(
+      (result.schemaOperations?.[0] as { table: { indexes: unknown[] } }).table
+        .indexes,
+    ).toHaveLength(1);
+  });
+
+  it('still indexes a relation that only a composite index covers', async () => {
+    const builder = new CollectionBuilder();
+
+    const result = await builder.createCollection(
+      'productBarcodes',
+      (collection) => {
+        collection.string('productId');
+        collection.datetime('scannedAt');
+        collection
+          .belongsTo('product', 'products')
+          .targetKey('id')
+          .foreignKey('productId')
+          .foreignKeyType('string')
+          .index();
+        collection.index(['productId', 'scannedAt']);
+      },
+      { dryRun: true },
+    );
+
+    // Only a single-column index on the relation's own foreign key stands in for the automatic one. A composite index
+    // leaves it in place, even when the composite already leads with that column as this one does, because whether the
+    // composite serves a lookup on the relation depends on the column staying leftmost and the collection is free to
+    // reorder it. The cost is a redundant index; the alternative is silently losing the index on a foreign key.
+    const indexes = (
+      result.schemaOperations?.[0] as {
+        table: { indexes: readonly { columns: string[] }[] };
+      }
+    ).table.indexes;
+    expect(indexes.map((index) => index.columns)).toEqual([
+      ['product_id'],
+      ['product_id', 'scanned_at'],
+    ]);
+  });
+
+  it('rejects conflicting physical index names before schema execution', async () => {
+    const builder = new CollectionBuilder();
+
+    await expect(
+      builder.createCollection(
+        'orders',
+        (collection) => {
+          collection.string('customerId');
+          collection.string('status');
+          collection.index('customerId', { name: 'orders_lookup' });
+          collection.index('status', { name: 'orders_lookup' });
+        },
+        { dryRun: true },
+      ),
+    ).rejects.toThrow(
+      'Collection "orders" defines conflicting physical indexes with the same name "orders_lookup".',
+    );
+  });
+
   it('creates a collection from object input', async () => {
     const builder = new CollectionBuilder();
 

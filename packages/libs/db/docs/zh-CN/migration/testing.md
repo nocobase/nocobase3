@@ -318,9 +318,9 @@ it('installs all current migrations', async () => {
   });
 
   // Verify invariants of the current latest version, not a historical version.
-  await expect(
-    database.connection().collections.get('users'),
-  ).resolves.toMatchObject({ name: 'users' });
+  await expect(database.collections().get('users')).resolves.toMatchObject({
+    name: 'users',
+  });
 });
 ```
 

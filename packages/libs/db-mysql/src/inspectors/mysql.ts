@@ -268,7 +268,7 @@ export class MysqlSchemaInspector extends BaseSchemaInspector {
           nullable: column.is_nullable === 'YES',
           default: generated
             ? undefined
-            : parseColumnDefault(column.column_default),
+            : parseColumnDefault(mysqlDefaultLiteral(column)),
           autoIncrement: column.extra.toLowerCase().includes('auto_increment'),
           unsigned: /\bunsigned\b/i.test(column.column_type),
           length: numberValue(column.character_maximum_length),
@@ -576,6 +576,29 @@ interface GroupedMysqlConstraint {
   readonly referencedColumns: readonly string[];
   readonly onUpdate?: string;
   readonly onDelete?: string;
+}
+
+/**
+ * MySQL reports an expression default — `EXTRA = 'DEFAULT_GENERATED'`, which
+ * every defaulted `json` column has because MySQL accepts no literal default
+ * on `json` — as the expression it will evaluate rather than as a value:
+ * `_utf8mb4\'{"enabled":true}\'`, a character-set introducer followed by a
+ * string whose quotes are backslash-escaped. The shared literal parser
+ * understands `'...'`, so reduce the expression form to that. A literal
+ * default arrives as the bare value and passes through untouched.
+ */
+export function mysqlDefaultLiteral(column: {
+  readonly column_default: unknown;
+  readonly extra: string;
+}): unknown {
+  const raw = column.column_default;
+  if (typeof raw !== 'string' || !/\bDEFAULT_GENERATED\b/i.test(column.extra)) {
+    return raw;
+  }
+  return raw
+    .trim()
+    .replace(/^_[A-Za-z0-9]+\s*/u, '')
+    .replace(/\\(['"\\])/gu, '$1');
 }
 
 function groupMysqlConstraints(

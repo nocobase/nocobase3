@@ -8,6 +8,7 @@ import { databaseManagerToken } from '@nocobase/db';
 import { cachingToken } from '@nocobase/app-server/caching';
 import { idGeneratorToken } from '@nocobase/app-server/id-generator';
 import { type AppIdentityConfig } from '@nocobase/app-server/config';
+import type { NodeServerConfig } from '@nocobase/app-server/node';
 import {
   realtimePrincipalResolverToken,
   realtimeServiceToken,
@@ -106,7 +107,17 @@ export class AuthenticationProvider<
       baseURL: app.publicOrigin,
       basePath: resolvePublicPath('/api/auth', app.publicBasePath),
       advanced: {
-        cookiePrefix: createCookiePrefix(app.name),
+        cookiePrefix: createCookiePrefix(app.name, {
+          publicOrigin: app.publicOrigin,
+          // Only a standalone app owns its port. An embedded app carries a
+          // `server` config all the same, because the template's defaults are
+          // merged in both modes, but there the port belongs to the host and
+          // says nothing about which app a cookie belongs to.
+          listenPort:
+            this.app.mode === 'standalone'
+              ? this.app.config.get<NodeServerConfig>('server')?.port
+              : undefined,
+        }),
         ...authConfig.advanced,
         database: {
           ...authConfig.advanced?.database,
@@ -127,13 +138,70 @@ export class AuthenticationProvider<
   }
 }
 
-export function createCookiePrefix(appName: string): string {
+export interface CookiePrefixOptions {
+  /** The origin browsers reach this app on, when the app knows it. */
+  readonly publicOrigin?: string;
+  /** The port this app listens on, when it owns one. */
+  readonly listenPort?: number;
+}
+
+/**
+ * Names this app's cookies so they cannot collide with another app's.
+ *
+ * Cookies are scoped by host and path but never by port (RFC 6265), so two
+ * apps on one host share a cookie jar even on different ports. The name is
+ * the only thing left to separate them, and the app name alone does not:
+ * every standalone app defaults to `main`. Appending the port the app is
+ * reached on restores the distinction, and is stable for as long as the app
+ * stays where it is. An app that owns no port of its own passes none, and
+ * keeps the bare name.
+ */
+export function createCookiePrefix(
+  appName: string,
+  options: CookiePrefixOptions = {},
+): string {
   const normalized = appName
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
-  return normalized || 'nocobase3';
+  const base = normalized || 'nocobase3';
+  const port = resolveCookieScopePort(options);
+  return port === undefined ? base : `${base}-${port}`;
+}
+
+/**
+ * Resolves the port that distinguishes this app within its host's cookie jar.
+ *
+ * A configured `publicOrigin` is what browsers actually see, so it wins over
+ * the listen port a reverse proxy hides. It deliberately yields nothing when
+ * it carries no explicit port: a production `https://example.com` keeps the
+ * bare app name, so deployments that already have sessions keep them.
+ *
+ * The listen port is the fallback for development, where `publicOrigin` is
+ * usually unset and the port is the only thing telling two apps apart. The
+ * caller passes it only for a standalone app, which is the one case where the
+ * app owns the port it is reached on; embedded apps take their names from
+ * their base paths and are already distinct without it.
+ */
+function resolveCookieScopePort(
+  options: CookiePrefixOptions,
+): number | undefined {
+  const publicOrigin = options.publicOrigin
+    ? parseOrigin(options.publicOrigin)
+    : undefined;
+  if (publicOrigin) {
+    return publicOrigin.port ? Number(publicOrigin.port) : undefined;
+  }
+  return options.listenPort;
+}
+
+function parseOrigin(publicOrigin: string): URL | undefined {
+  try {
+    return new URL(publicOrigin);
+  } catch {
+    return undefined;
+  }
 }
 
 /** Resolves an app-local pathname to the path exposed by the app runtime. */

@@ -28,6 +28,7 @@ import type { AIEmployeeEntity } from '@nocobase/ai-employee';
 import type { AIMessageEntity } from '../../repository/index.js';
 import type { ModelRef } from '../../types.js';
 import { agentServiceFactoryToken } from '../../agent/service/agent-service-factory.js';
+import { createAgentContext } from '../../agent/context.js';
 import type { ServiceResolver } from '@nocobase/service-provider';
 import type {
   SubAgentConversationMetadata,
@@ -256,6 +257,40 @@ export class SubAgentsDispatcher {
       employee,
       model,
     );
+    const execution = options.execution;
+    const agentContext = createAgentContext({
+      actor: options.actor,
+      state: {
+        sessionId,
+        messageId: execution?.messageId,
+        messages: messages
+          ? [...messages]
+          : execution?.messages
+            ? [...execution.messages]
+            : undefined,
+        model: { ...resolvedModel },
+        webSearch: webSearch ?? execution?.webSearch,
+        important: execution?.important,
+        frontendTools: execution?.frontendTools
+          ? [...execution.frontendTools]
+          : undefined,
+        toolCallResults: execution?.toolCallResults
+          ? [...execution.toolCallResults]
+          : undefined,
+        timezone: execution?.timezone,
+      },
+      ai: this.ai,
+      database: this.databaseManager,
+      logger: this.logger,
+      repositories: this.repositories,
+      aiEmployeesManager: this.aiEmployeesManager,
+      aiConversationsManager: this.aiConversationsManager,
+      builtInManager: this.builtInManager,
+      knowledgeBaseManager: this.knowledgeBaseManager,
+      subAgentsDispatcher: this,
+      translate: options.translate,
+      getHeader: options.getHeader,
+    });
     if (!this.container) {
       throw new Error('SubAgentsDispatcher requires an App container');
     }
@@ -284,7 +319,7 @@ export class SubAgentsDispatcher {
           lastMessage.messageId,
         )
       : null;
-    let context;
+    const context: Record<string, unknown> = { agentContext };
     if (
       messages &&
       decisions?.decisions?.some(
@@ -292,9 +327,7 @@ export class SubAgentsDispatcher {
           decision.type === 'reject',
       )
     ) {
-      context = {
-        appendMessages: messages,
-      };
+      context.appendMessages = messages;
     }
 
     const result = await agent.invoke({

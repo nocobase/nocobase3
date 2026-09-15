@@ -3004,11 +3004,17 @@ function mapResultRow(
   return Object.fromEntries(
     Object.entries(row)
       .filter(([key]) => !resultMap.hidden?.has(key))
-      .map(([key, value]) => [
-        resultMap.explicit.get(key) ??
-          (shouldCamelCaseUnmatched ? camelCase(key) : key),
-        resultMap.scalarDecoders?.get(key)?.(value) ?? value,
-      ]),
+      .map(([key, value]) => {
+        // A decoder that legitimately returns null must not fall back to the
+        // raw value: a JSON column holding the literal `null` decodes to null
+        // and would otherwise leak the stored text back to the caller.
+        const decode = resultMap.scalarDecoders?.get(key);
+        return [
+          resultMap.explicit.get(key) ??
+            (shouldCamelCaseUnmatched ? camelCase(key) : key),
+          decode ? decode(value) : value,
+        ];
+      }),
   );
 }
 
@@ -3029,7 +3035,11 @@ function addScalarDecoder(
     ?.decodeScalarResult;
   if (!field) return;
   if (field.type === 'json') {
-    resultMap.scalarDecoders?.set(physicalKey, decodeJsonValue);
+    const jsonResults = getDatabaseDriverRuntime(context.client)?.repository
+      ?.jsonResults;
+    resultMap.scalarDecoders?.set(physicalKey, (value) =>
+      decodeJsonValue(value, jsonResults, field),
+    );
     return;
   }
   if (field.type === 'boolean') {

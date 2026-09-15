@@ -26,7 +26,8 @@ keywords: '向量数据库,PGVector,NocobaseDefaultPGVectorProvider,Embedding,Po
 ai:
   aiKnowledgeBase:
     vectorDatabases:
-      - name: pgvector-main
+      - key: pgvector-main
+        name: PGVector
         provider: NocobaseDefaultPGVectorProvider
         databaseSpec: PGVector
         enabled: true
@@ -39,7 +40,7 @@ ai:
           tableName: nocobase_ai_vectors
 ```
 
-`name` 必须唯一，并且会同时作为稳定 key。`provider` 和 `databaseSpec` 默认值分别是 `NocobaseDefaultPGVectorProvider` 和 `PGVector`，不过建议在配置中明确写出。
+`key` 必须唯一，作为记录的稳定标识，管理页面的列表中显示为 UID。`name` 可选，仅作为显示标题（列表中显示为 Title），省略时回落为 `key`。`provider` 和 `databaseSpec` 默认值分别是 `NocobaseDefaultPGVectorProvider` 和 `PGVector`，不过建议在配置中明确写出。
 
 环境变量引用会递归展开。不要把真实密码提交到 Git。
 

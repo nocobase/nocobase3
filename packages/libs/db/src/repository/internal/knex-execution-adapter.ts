@@ -2,6 +2,7 @@ import { decimalString } from '../../numeric/decimal.js';
 import {
   decodeJsonValue,
   encodeJsonValue,
+  type JsonResultForm,
   type JsonValue,
 } from '../../json.js';
 import {
@@ -114,6 +115,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       plan.collection,
       plan.fields,
       this.runtime?.repository?.trimCharResults,
+      this.runtime?.repository?.jsonResults,
     );
     const { query } = await this.buildRead(plan);
     const rows = (await query) as RepositoryRecord[];
@@ -132,6 +134,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       plan.collection,
       plan.fields,
       this.runtime?.repository?.trimCharResults,
+      this.runtime?.repository?.jsonResults,
     );
     const includes = plan.select?.root.includes?.length;
     const source = this.streamRoots(plan);
@@ -491,7 +494,12 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       );
     }
     const rows = (await query) as RepositoryRecord[];
-    const decodeRow = prepareScalarRowDecoder(outputCollection);
+    const decodeRow = prepareScalarRowDecoder(
+      outputCollection,
+      undefined,
+      this.runtime?.repository?.trimCharResults,
+      this.runtime?.repository?.jsonResults,
+    );
     const fieldsByName = new Map(
       scalarFields(outputCollection).map((field) => [field.name, field]),
     );
@@ -1238,7 +1246,14 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     query.forUpdate();
     const rows = (await query) as RepositoryRecord[];
     return rows[0]
-      ? { record: decodeBooleanRow(collection, rows[0]), unique }
+      ? {
+          record: decodeBooleanRow(
+            collection,
+            rows[0],
+            this.runtime?.repository?.jsonResults,
+          ),
+          unique,
+        }
       : 'missing';
   }
 
@@ -1265,7 +1280,11 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     const rows = (await query) as RepositoryRecord[];
     if (rows.length === 0) return 'missing';
     if (rows.length > 1) return 'multiple';
-    const record = decodeBooleanRow(collection, rows[0]);
+    const record = decodeBooleanRow(
+      collection,
+      rows[0],
+      this.runtime?.repository?.jsonResults,
+    );
     return { record, unique: selectorFromRecord(collection, record) };
   }
 
@@ -1296,7 +1315,13 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     query.forUpdate();
     const rows = (await query) as RepositoryRecord[];
     return rows
-      .map((row) => decodeBooleanRow(collection, row))
+      .map((row) =>
+        decodeBooleanRow(
+          collection,
+          row,
+          this.runtime?.repository?.jsonResults,
+        ),
+      )
       .map((record) => ({
         record,
         unique: selectorFromFields(
@@ -1459,7 +1484,12 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
         if (!record) throw new Error('Created record could not be reloaded.');
         return record;
       }
-      const mapped = mapRow(collection, fields, decodedReturnedRow);
+      const mapped = mapRow(
+        collection,
+        fields,
+        decodedReturnedRow,
+        this.runtime?.repository?.jsonResults,
+      );
       // Supplied temporal identities are already canonical; raw RETURNING values
       // may have been converted to a host-zone Date by the driver.
       for (const field of scalarFields(collection)) {
@@ -1921,7 +1951,11 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
     const rows = (await query) as RepositoryRecord[];
     if (rows.length === 0) return 'missing';
     if (rows.length > 1) return 'multiple';
-    const record = decodeBooleanRow(resolved.target, rows[0]);
+    const record = decodeBooleanRow(
+      resolved.target,
+      rows[0],
+      this.runtime?.repository?.jsonResults,
+    );
     return { record, unique: selectorFromRecord(resolved.target, record) };
   }
 
@@ -2763,6 +2797,7 @@ export class KnexRepositoryExecutionAdapter implements RepositoryExecutionAdapte
       resolved.target,
       requested,
       this.runtime?.repository?.trimCharResults,
+      this.runtime?.repository?.jsonResults,
     );
     for (const parent of parents) {
       const group =
@@ -2981,6 +3016,7 @@ function selectColumn(
 function decodeBooleanRow(
   collection: CollectionDefinition,
   row: RepositoryRecord,
+  jsonResults?: JsonResultForm,
 ): RepositoryRecord {
   const result = { ...row };
   for (const field of scalarFields(collection)) {
@@ -3001,7 +3037,11 @@ function decodeBooleanRow(
         ['select', field.name],
       );
     if (field.type === 'json' && Object.hasOwn(result, field.name))
-      result[field.name] = decodeJsonValue(result[field.name]);
+      result[field.name] = decodeJsonValue(
+        result[field.name],
+        jsonResults,
+        field,
+      );
   }
   return result;
 }
@@ -3394,6 +3434,7 @@ function mapRow(
   collection: CollectionDefinition,
   fields: readonly string[],
   row: RepositoryRecord,
+  jsonResults?: JsonResultForm,
 ): RepositoryRecord {
   return decodeBooleanRow(
     collection,
@@ -3403,6 +3444,7 @@ function mapRow(
         Object.hasOwn(row, field) ? row[field] : row[column(collection, field)],
       ]),
     ),
+    jsonResults,
   );
 }
 

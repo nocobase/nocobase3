@@ -85,6 +85,7 @@ describe('Hub response field allowlists', () => {
       'name',
       'updatedAt',
     ]);
+    expect(response).toMatchObject({ enabled: true, startupMode: 'eager' });
     expect(response.runtime).toEqual({ hostAvailable: true, state: 'running' });
     expect(response.deployment).not.toHaveProperty('config');
     expect(response.deployment).not.toHaveProperty('desiredState');

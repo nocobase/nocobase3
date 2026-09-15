@@ -28,7 +28,9 @@ export interface CollectionResolutionInput {
 export type CollectionResolutionWarningCode =
   | 'COLLECTION_INSPECTION_WARNING'
   | 'COLLECTION_INSPECTION_PARTIAL'
-  | 'COLLECTION_INSPECTION_UNSUPPORTED';
+  | 'COLLECTION_INSPECTION_UNSUPPORTED'
+  /** A json column's default literal is not valid JSON; `db.defaultExpression` keeps the text. */
+  | 'COLLECTION_JSON_DEFAULT_INVALID';
 
 export interface CollectionResolutionWarning {
   readonly code: CollectionResolutionWarningCode;

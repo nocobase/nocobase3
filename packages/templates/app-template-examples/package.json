@@ -1,7 +1,7 @@
 {
   "name": "@nocobase/app-template-examples",
   "displayName": "NocoBase Examples",
-  "version": "0.1.0-beta.4",
+  "version": "0.1.0-beta.5",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -10,7 +10,7 @@
   "packageManager": "pnpm@11.7.0",
   "nocobase": {
     "templateKind": "app",
-    "defaultTemplateVersion": "0.1.0-beta.4"
+    "defaultTemplateVersion": "0.1.0-beta.5"
   },
   "devDependencies": {
     "@ai-sdk/react": "2.0.0",
@@ -150,6 +150,7 @@
     "format:check": "prettier . --check",
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
     "fix": "pnpm lint:fix && pnpm format",
+    "collections:generate": "NODE_OPTIONS=--openssl-legacy-provider pnpm nocobase app collections generate",
     "migrate": "NODE_OPTIONS=--openssl-legacy-provider pnpm nocobase app migrate",
     "seed": "NODE_OPTIONS=--openssl-legacy-provider pnpm nocobase app seed",
     "nocobase": "NODE_OPTIONS=--openssl-legacy-provider tsx ./cli/index.ts",

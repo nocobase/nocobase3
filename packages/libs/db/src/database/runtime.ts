@@ -1,4 +1,5 @@
 import type { Knex } from 'knex';
+import type { JsonResultForm } from '../json.js';
 import type { DatabaseCapabilities } from '../schema/adapter.js';
 import type { ConnectionConfig } from './config.js';
 import type { KnexConnectionConfig } from './internal/knex/config.js';
@@ -88,6 +89,16 @@ export interface DatabaseRepositoryRuntimeStrategy {
     row: RepositoryRecord,
   ) => Promise<RepositoryRecord> | RepositoryRecord;
   readonly trimCharResults?: boolean;
+  /**
+   * How the driver hands back a `json` column.
+   *
+   * A driver that parses JSON itself returns the decoded value; everything
+   * else returns the stored text. The value alone cannot tell the two apart:
+   * a JSON string whose content is itself JSON decodes to a string under one
+   * assumption and to an object under the other, so the dialect declares
+   * which it is rather than letting the decoder guess. Defaults to `'text'`.
+   */
+  readonly jsonResults?: JsonResultForm;
   readonly groupAggregateOrder?: (context: {
     client: Knex;
     value: string | Knex.Raw;
@@ -186,7 +197,29 @@ export interface DatabaseSchemaRuntimeStrategy {
   readonly columnType?: (context: {
     column: ColumnSchemaDefinition;
     tablePrimaryKey: boolean;
+    /**
+     * True while the column is being redefined by an ALTER rather than
+     * created. A type whose definition carries a constraint has to omit it
+     * here, because the constraint the original definition created is still
+     * in place and the engine may refuse a second one.
+     */
+    altering: boolean;
   }) => string | undefined;
+  /**
+   * Whether a JSON default has to reach Knex as encoded text rather than as
+   * the value.
+   *
+   * Knex serializes a JSON default only for a column it built as `json()`.
+   * MySQL depends on receiving the value, because an object or an array is
+   * what makes it compile the expression form `default ('{"a":1}')` that the
+   * engine requires. A dialect that builds the column as something else —
+   * because JSON has no distinct type, or because the constraint attached to
+   * that type cannot be repeated on an ALTER — loses that handling and gets
+   * `[object Object]` unless it asks for the text instead.
+   *
+   * Defaults to passing the value through.
+   */
+  readonly encodeJsonDefault?: (context: { altering: boolean }) => boolean;
   readonly configureForeignKey?: (context: {
     foreign: any;
     constraint: PhysicalConstraintDefinition & { type: 'foreignKey' };

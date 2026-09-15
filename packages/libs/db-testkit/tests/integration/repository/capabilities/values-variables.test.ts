@@ -12,10 +12,6 @@ interface Entry {
   metadata: Record<string, unknown> | null;
 }
 
-function jsonValue(value: unknown): unknown {
-  return typeof value === 'string' ? JSON.parse(value) : value;
-}
-
 async function fixture(
   context: IntegrationTestContext,
 ): Promise<Repository<Entry>> {
@@ -51,7 +47,7 @@ describeIntegrationDatabases('Repository values variables', (context) => {
         context: inputContext,
       })
     ).record;
-    expect({ ...created, metadata: jsonValue(created.metadata) }).toEqual({
+    expect(created).toEqual({
       code: 'A',
       title: 'First',
       points: 2,
@@ -75,13 +71,7 @@ describeIntegrationDatabases('Repository values variables', (context) => {
       select: (s) => s.fields('code', 'metadata'),
       context: inputContext,
     });
-    expect({
-      ...batch,
-      records: batch.records.map((r) => ({
-        ...r,
-        metadata: jsonValue(r.metadata),
-      })),
-    }).toEqual({
+    expect(batch).toEqual({
       createdCount: 2,
       records: [
         { code: 'B', metadata: marker },
@@ -89,22 +79,20 @@ describeIntegrationDatabases('Repository values variables', (context) => {
       ],
     });
     expect(
-      jsonValue(
-        (
-          await entries.createOne({
-            values: {
-              code: 'D',
-              title: { kind: 'variable', path: '$title' },
-              points: 1,
-              metadata: {
-                kind: 'literal',
-                value: { kind: 'literal', value: marker },
-              },
+      (
+        await entries.createOne({
+          values: {
+            code: 'D',
+            title: { kind: 'variable', path: '$title' },
+            points: 1,
+            metadata: {
+              kind: 'literal',
+              value: { kind: 'literal', value: marker },
             },
-            context: { title: 'JSON input' },
-          })
-        ).record.metadata,
-      ),
+          },
+          context: { title: 'JSON input' },
+        })
+      ).record.metadata,
     ).toEqual({ kind: 'literal', value: marker });
     expect(
       await entries.validateMutation({

@@ -38,7 +38,17 @@ const db = createDatabaseManager({
 });
 ```
 
-External Connection 必须显式提供 Metadata Store。Module Store 适合源码管理的静态文档，并且在运行时只读。
+External Connection 必须显式提供 Metadata Store。Module Store 适合代码里声明的静态文档；`DirectoryCollectionMetadataStore` 从一个 Collection 产物目录读取每个 `<name>/metadata.json`，文件格式与 `serializeCollectionArtifact()` 写出的一致，适合放进仓库、由人或 agent 编辑。两者在运行时都只读。目录 store 也可以用声明式配置表示，`createDatabaseManager` 会在创建连接时解析：
+
+```ts
+externalCrm: {
+  // ...
+  schemaManagement: 'external',
+  metadataStore: { type: 'directory', directory: '/abs/app/database/externalCrm/collections' },
+},
+```
+
+`directory` 应为绝对路径；相对路径按进程工作目录解析。在 NocoBase 应用里，app-server 会把 `config.yml` 中的字符串路径解析到应用根目录，并为没有任何 `metadataStore` 的 external 连接默认使用 `database/<connection>/collections`，所以应用层通常不需要写这一项。
 
 ## 声明补充 Metadata
 

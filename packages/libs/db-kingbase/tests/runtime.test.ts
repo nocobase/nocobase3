@@ -24,6 +24,7 @@ describe('kingbase runtime strategy', () => {
       runtime.schema!.columnType!({
         column: { type: 'datetimeTz' } as never,
         tablePrimaryKey: false,
+        altering: false,
       }),
     ).toBe('timestamp(3) with time zone');
 

@@ -120,6 +120,11 @@ describe('client inspection', () => {
         path: '/numeric-examples',
       },
       {
+        auth: 'required',
+        id: '@nocobase/app-template-examples:external-crm',
+        path: '/external-crm',
+      },
+      {
         auth: 'guest',
         id: '@nocobase/app-template-examples:login',
         path: '/login',

@@ -4,6 +4,7 @@ import {
 } from '@nocobase/app-client/plugins';
 import { describe, expect, it } from 'vitest';
 
+import hub from '@nocobase/app-plugin-hub/client';
 import applicationRoutes from '../../client/routes.ts';
 import routeComponentOverrides from '../../client/route-overrides.ts';
 import sourceExtensions from '../../client/source-extensions.ts';
@@ -69,6 +70,31 @@ describe('app client routes', () => {
       { name: 'applications-root', authorizedAs: 'hub' },
       { name: 'applications-legacy', authorizedAs: 'hub' },
     ]);
+  });
+
+  it('keeps configured Hub App details and Tabs addressable under Applications', () => {
+    const registration = hub({
+      applicationsPath: '/apps',
+      rolesPath: '/roles',
+    });
+    const applications = registration.routes[0]?.routes[0];
+    expect(applications).toMatchObject({
+      path: '/apps',
+      children: [
+        {
+          name: 'hub-app-detail',
+          path: ':appId',
+          children: [
+            { path: 'deployments' },
+            { path: 'releases' },
+            { path: 'development' },
+            { path: 'resources' },
+            { path: 'configuration' },
+            { path: 'settings' },
+          ],
+        },
+      ],
+    });
   });
 });
 

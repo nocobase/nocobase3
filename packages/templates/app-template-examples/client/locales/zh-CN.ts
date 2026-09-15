@@ -68,6 +68,11 @@ const zhCN: AppResource = {
       description:
         '对比 INTEGER、BIGINT、DECIMAL、FLOAT、DOUBLE 的读取值、返回类型及聚合结果。',
     },
+    externalCrm: {
+      title: '外部数据库',
+      description:
+        '通过 external 连接和元数据文件，读取另一个系统拥有的数据库中的订单和客户。',
+    },
     eyebrow: 'NocoBase 示例中心',
     title: '从可运行的示例开始',
     description:
@@ -163,6 +168,36 @@ const zhCN: AppResource = {
     confirm: '确认',
     language: '语言',
   },
+  externalCrm: {
+    eyebrow: '外部数据库示例',
+    title: 'CRM 订单',
+    description:
+      '这些数据存放在一个不属于本应用的数据库里。externalCrm 连接只读取它的结构、从不修改，并从 database/externalCrm/collections/*/metadata.json 叠加标题和客户关系。页面全部按逻辑名访问，crm_ 表前缀不会出现在这里。',
+    readOnly: '只读',
+    customers: '{{count}} 位客户',
+    filter: '按状态筛选',
+    status: {
+      all: '全部订单',
+      paid: '已支付',
+      shipped: '已发货',
+      draft: '草稿',
+    },
+    refresh: '刷新',
+    loading: '正在加载订单…',
+    loadError: '无法加载订单。请确认已登录，且外部 CRM 数据库可以访问。',
+    retry: '重试',
+    empty: '没有符合条件的订单',
+    emptyHint:
+      'SQLite 替身库会在启动时写入样例订单；接到真实 CRM 后显示的是它的数据。',
+    columns: {
+      orderNo: '订单号',
+      customer: '客户',
+      status: '状态',
+      totalAmount: '金额',
+      placedAt: '下单时间',
+    },
+    note: '不开放写入：这份数据归 CRM 所有，路由只注册查询动作，Policy 也只授予读取。',
+  },
   account: {
     openMenu: '打开账户菜单',
     fallback: '账户',
@@ -171,6 +206,7 @@ const zhCN: AppResource = {
   },
   navigation: {
     numbers: '数字类型',
+    externalCrm: '外部 CRM',
     routeOverlays: '路由弹窗与抽屉',
     articles: '文章',
     home: '首页',

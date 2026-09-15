@@ -2,17 +2,26 @@
 
 The first-party control plane for applications run by a managed NocoBase App Host.
 
+The application catalog is searched and paginated on the server.
+`GET /api/hub/apps?search=customer&page=1&pageSize=24` returns
+`{ data: { items, total, page, pageSize } }`; search matches App IDs and names
+case-insensitively, page size defaults to 24, and page size is limited to 100.
 Deployment history is paginated on the server. `GET /api/hub/apps/:appId/deployments?page=1&pageSize=20` returns `{ data: { items, total, page, pageSize } }`; page size defaults to 20 and is limited to 100. The workspace refreshes only the selected page and returns to the first page after submitting a deployment or rollback.
 
 The initial implementation supports a single Hub-spawned Host and in-process Apps. Its application catalog supports card and list views; each App opens into an operational detail workspace with runtime and deployment facts in the header plus Releases, Resources, post-deployment Configuration, and Settings tabs. Resources uses vertical navigation for Databases, Drives, Caching, and LLM services; safe summaries for the first three are discovered by configuration key, while LLM services remain reserved for a management API. Apps without a Release show Development first with the `create-app` bootstrap command. Release upload and deployment are separate actions; deployment uses a three-step Release, Configuration, and Review flow. Settings choose whether the App activates with Hub (`eager`, the default) or registers for activation on its first visit (`lazy`); deployments do not change this policy. The workspace also provides live Host status refresh, App access, start, stop, and removal. Runtime state always comes from App Host and is reported as unknown when Host is unavailable. Interactive operations reconcile only the selected App; complete deployment sets are reserved for Host startup recovery. Stop sets the persisted `enabled` policy to false while preserving the current deployment so Start can reactivate it. Remove permanently deletes the App record, Releases, deployment history, configuration, and App volume.
 
 Releases accept a root `config.example.yml` or `config.example.yaml` as an editable template. Real `config.yml` files are not imported. Hub persists desired configuration privately under `storage/hub/app-configs/<appId>/configs/config.<deploymentId>.yml` and sends content and revision to Host. Host owns a separate runtime file under `storage/app-volumes/<appId>/configs/config.<deploymentId>.yml`, including atomic writes, replacement cleanup and publishing to the active runtime. These files are not configuration version history. Rollback preserves the target mode, not its old path. On Host readiness, Hub rebuilds recovery targets from its database and desired configuration files; the process supervisor does not retain an application deployment snapshot. The Host expands Releases into `storage/app-deployments/<appId>/revisions/<sha256>` directories.
 
+For Config file deployments, Hub adds a random 32-byte authentication secret when `auth.secret` is missing or empty. A secret supplied by the user, or already present in the current Config file, is preserved and reused by later deployments and configuration publications. External configuration does not create or modify a file secret.
+
 Deploy and rollback requests persist a queued operation and return HTTP 202. The in-process runner serializes operations for one App while allowing different Apps to deploy concurrently. The page polls active operations and exposes deployment history with rollback actions. Rollback creates a new record from a previously successful deployment; whether its expanded revision is cached changes only deployment speed. The current deployment pointer changes only after Host reports success, so a failure leaves the active deployment untouched. Reconciliation reuses an expanded directory when the Release checksum matches. The Host currently uses stop-first Runtime replacement to avoid overlapping process-global queue state, restores the previous Runtime when replacement fails, retains the three most recently used expanded revisions per App, and logs artifact, activation, and cache-pruning phase durations.
 
 During Hub startup, only managed Host availability is awaited. Restoring the complete deployment set runs in the background, so eager App activation does not delay Hub readiness. App Host currently reconciles that startup set through its existing serial operation queue; this bounds startup load and preserves deployment revision ordering.
 
-The Client plugin defaults to its compatible `/hub` page. Applications can
+The Client plugin defaults to its compatible `/hub` page. App details are
+addressable at `<applicationsPath>/:appId/<tab>`; the detail Tabs are child
+routes so direct links, refresh, and browser history preserve the selected App
+and Tab. Applications can
 configure the Client factory with `applicationsPath` and `rolesPath` to expose
 a control-plane console. The Hub template uses
 `/apps`, `/users`, and `/roles`; the roles page is a read-only product view of
