@@ -89,6 +89,7 @@
   },
   "dependencies": {
     "@nocobase/session": "workspace:^",
+    "better-auth": "catalog:",
     "hono": "catalog:"
   },
   "devDependencies": {

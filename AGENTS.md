@@ -82,6 +82,8 @@ Every package under `packages/` is published to npm, so none of them set `privat
 
 A new package therefore starts at version `0.0.1`, sets `publishConfig.access` to `"public"` — scoped packages default to restricted and would otherwise fail to publish — and declares `files`. Without `files` the package ships its sources, tests, and configs; libraries ship `dist` alone, while template packages that users are meant to read and edit ship their sources instead.
 
+"Libraries ship `dist` alone" is stricter than it sounds, and `pack:check` now enforces it: a package that publishes `dist` must not also publish `database` or `server`. The runtime resolves a plugin's declared `database/migrations`, `database/seeds` and `server/jobs` against the package directory before its `dist`, so publishing both hands an installed application the TypeScript sources — and Node refuses to strip types from a file under `node_modules`. `@nocobase/app-plugin-ai-employee` shipped this way and failed every application start with `Stripping types is currently unsupported for files under node_modules`, while every development checkout kept working, because a workspace link resolves the same sources outside `node_modules`. Templates are unaffected: they publish their sources instead of a `dist`, so there is nothing to shadow.
+
 Check npm before settling on a package name. A name the v2 line still publishes under is off limits — `@nocobase/database` is releasing `3.0.0-alpha` versions as this is written, so `@nocobase/db` is the v3 database package.
 
 A name whose v2 releases have stopped may be reused, provided every version v3 publishes sorts above the last one published under the old name. `@nocobase/app-server` is the case to reason from: the abandoned package ends at `0.11.1-alpha.5`, so the v3 package starts at `1.0.0-beta.0` rather than continuing the `0.1.0-beta` line it had while it was called `@nocobase/app-server-kit`. Note that `0.1.0` sorts below `0.11.1`, which is exactly the mistake this rule exists to catch. Confirm the old package is genuinely dormant before taking its name; a name still in use cannot be claimed this way at any version.
@@ -164,8 +166,7 @@ Compose projects and host ports, so the hazard is not a collision but
 contention for one machine's CPU, memory, and Docker I/O, which pushes service
 health checks past their start period and reports a flaky startup failure
 instead of a result. CI parallelizes safely only because its matrix gives each
-dialect its own runner. Options and the full-verification order are in
-[`internal-docs/development/database-integration-testing.md`](internal-docs/development/database-integration-testing.md).
+dialect its own runner.
 
 Which suites a given change actually requires, and the command forms that
 silently run nothing, are in the
@@ -279,7 +280,7 @@ The rule applies to plugins, which are guests in an application someone else ass
 
 It does not apply to `packages/app` and `packages/libs`. They compose the runtime and are what puts the single copy in place — `app-server` depending on `@nocobase/db` is precisely how the one copy comes to exist. Nor does it apply to `packages/templates`, which are applications, and therefore the side that satisfies a peer range rather than declaring one. A new group under `packages/` needs a deliberate decision about which side of this line it sits on before it is added to `CHECKED_GROUPS`.
 
-A plugin that contributes CLI commands declares `@oclif/core` as a peer for a related but distinct reason: not module identity, but one shared version, so help rendering and flag parsing behave the same in the plugin and in the application that assembles its commands. See [internal-docs/cli/plugin-cli.md](internal-docs/cli/plugin-cli.md).
+A plugin that contributes CLI commands declares `@oclif/core` as a peer for a related but distinct reason: not module identity, but one shared version, so help rendering and flag parsing behave the same in the plugin and in the application that assembles its commands.
 
 `pnpm plugin:create` emits this shape, so a generated plugin satisfies the rule without further edits. When the list changes, update `packages/tools/create-plugin/src/lib/template.ts` and its tests in the same change — a generator that emits the old shape reintroduces the problem in every plugin created afterwards.
 
@@ -365,14 +366,11 @@ Write in English:
 
 Chinese is fine for:
 
-- Documents under `internal-docs/`
 - Feishu notification titles and bodies, which only reach an internal group
 
 The distinction is the audience, not the file type. A comment inside a workflow is read by maintainers and stays English along with the rest of the code; the Feishu message that same workflow sends never leaves the team, so it stays Chinese.
 
 The workflow files under `.github/workflows/` still carry Chinese comments written before this rule existed. Translate the ones you touch; there is no need to convert the rest in a single pass.
-
-`internal-docs/` is also excluded from Prettier in the root `.prettierignore`. It is prose written for the team to read and argue with, not an artefact, and reflowing a hand-written Chinese paragraph or realigning a table it wrote by hand buys nothing while filling a review with diff unrelated to the change. Write it however reads best.
 
 ## TypeScript Requirements for Library Development
 

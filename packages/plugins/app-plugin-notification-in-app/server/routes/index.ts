@@ -1,4 +1,5 @@
 import { authenticationToken } from '@nocobase/app-plugin-authentication';
+import { APIError } from 'better-auth';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import {
   defineApiRoutes,
@@ -20,8 +21,14 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       '/',
       createInAppRouter(store, {
         resolveUserId: async (request): Promise<string | undefined> => {
-          const session = await auth.getSession(request.headers);
-          return session?.user.id;
+          try {
+            const session = await auth.getSession(request.headers);
+            return session?.user.id;
+          } catch (error) {
+            // A refused credential (Better Auth APIError) is not signed in, here.
+            if (error instanceof APIError) return undefined;
+            throw error;
+          }
         },
       }),
     );

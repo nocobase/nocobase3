@@ -23,6 +23,7 @@ describe('Server inspection', () => {
       '@nocobase/app-plugin-authentication',
       '@nocobase/app-plugin-authorization',
       '@nocobase/app-plugin-users',
+      '@nocobase/app-plugin-api-keys',
       '@nocobase/app-plugin-i18n',
       '@nocobase/app-plugin-install',
       '@nocobase/app-plugin-hub',

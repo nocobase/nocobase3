@@ -1,5 +1,6 @@
 [
-  { "type": "file", "name": "index", "label": "管理入口" },
-  { "type": "file", "name": "employees", "label": "员工配置项" },
-  { "type": "file", "name": "permissions", "label": "可见性和权限" }
+  { "type": "file", "name": "index", "label": "管理页概览" },
+  { "type": "file", "name": "employees", "label": "AI 员工" },
+  { "type": "file", "name": "llm-services", "label": "LLM 服务" },
+  { "type": "file", "name": "mcp-services", "label": "MCP 服务" }
 ]

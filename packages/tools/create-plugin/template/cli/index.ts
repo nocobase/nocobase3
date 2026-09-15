@@ -11,8 +11,7 @@ import PluginInfo from './info.ts';
  *
  * A plugin may also register commands for an application to run during `pnpm build` or `pnpm dev`, through
  * `buildHooks` and `devHooks`. Use them when the plugin has to produce something before the application can start,
- * rather than asking every application to add the step to its own build script. See
- * `internal-docs/development/plugin-development/cli.md`.
+ * rather than asking every application to add the step to its own build script.
  */
 const cliPlugin: AppCliPlugin = defineCliPlugin({
   packageName: __NOCOBASE_PACKAGE_NAME_LITERAL__,

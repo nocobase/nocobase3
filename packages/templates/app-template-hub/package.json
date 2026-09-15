@@ -1,7 +1,7 @@
 {
   "name": "@nocobase/app-template-hub",
   "displayName": "NocoBase Hub",
-  "version": "1.0.0-beta.13",
+  "version": "1.0.0-beta.14",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -10,7 +10,7 @@
   "packageManager": "pnpm@11.7.0",
   "nocobase": {
     "templateKind": "hub",
-    "defaultTemplateVersion": "1.0.0-beta.13"
+    "defaultTemplateVersion": "1.0.0-beta.14"
   },
   "devDependencies": {
     "@ai-sdk/react": "2.0.0",
@@ -182,6 +182,7 @@
     ]
   },
   "dependencies": {
+    "@nocobase/app-plugin-api-keys": "workspace:^",
     "@nocobase/app-plugin-authentication": "workspace:^",
     "@nocobase/app-plugin-authorization": "workspace:^",
     "@nocobase/app-plugin-hub": "workspace:^",

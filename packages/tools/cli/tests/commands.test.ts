@@ -7,8 +7,7 @@ import { loadTestConfig, runCommand } from './helpers.ts';
  * rather than something that drifts in unnoticed.
  *
  * All of it is plugin registration, and all of it is reached through a `pnpm` script rather than by typing `nb3`: the
- * repository root and both application templates map these to `plugin:register`, `plugin:inspect`, and so on. See
- * internal-docs/cli.
+ * repository root and application templates map these to `plugin:register`, `plugin:inspect`, and so on.
  */
 const EXPECTED_IDS = [
   'plugin:cli-hooks',
@@ -74,8 +73,8 @@ describe('command tree', () => {
 describe('documented argument contract', () => {
   /**
    * `--dir` and `--json` are the two flags the plugin management commands share: each one has to find the application
-   * it acts on, and each may be driven by an agent that needs machine-readable output. `internal-docs/cli` documents
-   * them as a table covering that surface, so a command that quietly dropped one would make that documentation wrong.
+   * it acts on, and each may be driven by an agent that needs machine-readable output. A command that quietly drops
+   * either flag breaks that shared contract.
    *
    * `build-hooks` is the exception, and takes `--json` alone. The others act on an application's files and can act on
    * any directory; this one reports the plugins the running CLI actually assembled, which are the ones its own

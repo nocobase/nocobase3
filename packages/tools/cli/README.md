@@ -6,8 +6,6 @@ NocoBase 3 的命令行工具，bin 名为 `nocobase`。
 
 创建项目不走这里，走 `pnpm create @nocobase/app`。
 
-命令文档见 [internal-docs/cli](../../../internal-docs/cli/README.md)，插件如何贡献命令见 [plugin-cli.md](../../../internal-docs/cli/plugin-cli.md)。
-
 ## 内置命令
 
 | 命令                          | 说明                                                    |
