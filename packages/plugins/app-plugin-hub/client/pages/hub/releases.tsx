@@ -111,6 +111,18 @@ export function UploadReleaseDialog({
           'Upload a built application artifact. Version and config.example.yml or config.example.yaml are detected automatically.',
       })}
       onClose={onClose}
+      footer={
+        <>
+          <Button onClick={onClose} variant='outline'>
+            {t('releases.cancel', { defaultValue: 'Cancel' })}
+          </Button>
+          <Button disabled={!artifact || busy} onClick={onUpload}>
+            {busy
+              ? t('releases.uploading', { defaultValue: 'Uploading…' })
+              : t('releases.upload', { defaultValue: 'Upload release' })}
+          </Button>
+        </>
+      }
     >
       <Button
         className='h-auto min-h-28 w-full flex-col gap-2 border-dashed'
@@ -133,16 +145,6 @@ export function UploadReleaseDialog({
           type='file'
         />
       </Button>
-      <div className='mt-6 flex justify-end gap-2'>
-        <Button onClick={onClose} variant='outline'>
-          {t('releases.cancel', { defaultValue: 'Cancel' })}
-        </Button>
-        <Button disabled={!artifact || busy} onClick={onUpload}>
-          {busy
-            ? t('releases.uploading', { defaultValue: 'Uploading…' })
-            : t('releases.upload', { defaultValue: 'Upload release' })}
-        </Button>
-      </div>
     </AppDialog>
   );
 }
