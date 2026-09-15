@@ -54,9 +54,7 @@ Then `pnpm install && pnpm plugin:skills:sync`, in that order: the sync reads th
 
 An older application may also carry a `nocobase.plugins` array in `package.json`. It is obsolete — remove it if the target's `MIGRATION.md` says so.
 
-## `app-dist/` and migrations
-
-`app-dist/` is created empty by the generator and holds deployment output rather than source. It is in no diff and an upgrade never touches it.
+## Migrations
 
 A release can ship a migration under `database/`. Copy it in like any added file, then `pnpm migrate`.
 
@@ -68,7 +66,7 @@ Never edit a migration that arrives this way, and never edit one already run —
 
 `.agents/skills/` is generated, gitignored, and replaced wholesale by `pnpm plugin:skills:sync`. Never merge into it.
 
-`config.yml`, `.env`, `.gitignore`, `pnpm-workspace.yaml`, and `app-dist/` were written by the generator and appear in no diff at all.
+`config.yml`, `.env`, `.gitignore`, and `pnpm-workspace.yaml` were written by the generator and appear in no diff at all.
 
 ## Where the user's code lives
 

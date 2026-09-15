@@ -1,6 +1,5 @@
 import { Args, Flags } from '@oclif/core';
 import { parse } from '@oclif/core/parser';
-import { DATABASE_DIALECTS } from './database.ts';
 import {
   DEFAULT_TEMPLATE,
   DEFAULT_TEMPLATE_TAG,
@@ -9,8 +8,8 @@ import {
 } from './template.ts';
 
 /**
- * `pnpm create @nocobase/app crm --db-dialect=postgres` passes every argument after the package name through verbatim,
- * so this parses the same argv shape a direct `npx @nocobase/create-app` invocation would produce.
+ * `pnpm create @nocobase/app crm --template=hub` passes every argument after the package name through verbatim, so
+ * this parses the same argv shape a direct `npx @nocobase/create-app` invocation would produce.
  */
 export const CREATE_ARGS = {
   directory: Args.string({
@@ -21,9 +20,6 @@ export const CREATE_ARGS = {
 };
 
 export const CREATE_FLAGS = {
-  'db-dialect': Flags.string({
-    description: `Database type: ${DATABASE_DIALECTS.join(', ')}. Aliases such as postgresql, pg, sqlite3, oracledb, sqlserver, and tedious are accepted. Prompted for when omitted.`,
-  }),
   install: Flags.boolean({
     allowNo: true,
     default: true,
@@ -55,7 +51,6 @@ export const CREATE_FLAGS = {
 export interface ParsedInput {
   directory?: string;
   flags: {
-    'db-dialect'?: string;
     install: boolean;
     template: string;
     'template-tag': string;
@@ -97,15 +92,15 @@ export function formatHelp(binary: string): string {
     '',
     'EXAMPLES',
     `  $ ${binary} crm`,
-    `  $ ${binary} crm --db-dialect=postgres`,
-    `  $ ${binary} crm --db-dialect=sqlite --no-install`,
+    `  $ ${binary} crm --no-install`,
+    `  $ ${binary} crm --template=hub`,
     `  $ ${binary} crm --template-tag=beta`,
     '',
     'NOTES',
     '  The template is downloaded from https://npm.nocobase.ai by default.',
     '  Override it with --registry, or set the NOCOBASE_REGISTRY environment variable.',
     '',
-    '  Database connection settings are written to config.yml with defaults.',
-    '  For postgres, mysql, oracle, and mssql, edit that file before starting the app.',
+    "  config.yml is generated from the template's config.example.yml, with generated secrets.",
+    '  The application starts on SQLite; change the database in server/config/database.ts.',
   ].join('\n');
 }

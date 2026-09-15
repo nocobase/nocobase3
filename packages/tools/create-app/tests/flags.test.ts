@@ -3,27 +3,33 @@ import { formatHelp, parseInput } from '../src/lib/flags.ts';
 
 describe('parseInput', () => {
   /**
-   * `pnpm create @nocobase/app crm --db-dialect=postgres` forwards everything after the package name verbatim, so this
-   * is the exact argv the command receives in the documented invocation.
+   * `pnpm create @nocobase/app crm --template=hub` forwards everything after the package name verbatim, so this is the
+   * exact argv the command receives in the documented invocation.
    */
-  it('parses the directory argument and the dialect flag', async () => {
-    const input = await parseInput(['crm', '--db-dialect=postgres']);
+  it('parses the directory argument and the template flag', async () => {
+    const input = await parseInput(['crm', '--template=hub']);
 
     expect(input.directory).toBe('crm');
-    expect(input.flags['db-dialect']).toBe('postgres');
+    expect(input.flags.template).toBe('hub');
   });
 
   it('accepts the space-separated flag form', async () => {
-    const input = await parseInput(['crm', '--db-dialect', 'sqlite']);
+    const input = await parseInput(['crm', '--template', 'hub']);
 
-    expect(input.flags['db-dialect']).toBe('sqlite');
+    expect(input.flags.template).toBe('hub');
   });
 
   it('leaves the directory unset when it is omitted, so it can be prompted for', async () => {
     const input = await parseInput([]);
 
     expect(input.directory).toBeUndefined();
-    expect(input.flags['db-dialect']).toBeUndefined();
+  });
+
+  /** The database is chosen in the generated application rather than here, so there is no flag for it. */
+  it('rejects the removed dialect flag', async () => {
+    await expect(
+      parseInput(['crm', '--db-dialect=postgres']),
+    ).rejects.toThrow();
   });
 
   it('installs by default and honours --no-install', async () => {
@@ -82,7 +88,7 @@ describe('formatHelp', () => {
   it('documents the flags and the registry default', () => {
     const help = formatHelp('create-app');
 
-    expect(help).toContain('--db-dialect');
+    expect(help).not.toContain('--db-dialect');
     expect(help).toContain('--template-tag');
     expect(help).toContain('default');
     expect(help).toContain('--[no-]install');
