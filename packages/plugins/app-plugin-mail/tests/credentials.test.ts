@@ -8,7 +8,7 @@ import sqlite from '@nocobase/db-sqlite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import migration from '../database/migrations/202609030001_create_mail_tables.js';
-import initialSyncMigration from '../database/migrations/202609140003_add_account_initial_sync_date.js';
+import syncIntervalMigration from '../database/migrations/202609150001_add_mail_account_sync_interval.js';
 import {
   createDatabaseMailCredentialVault,
   DatabaseMailCredentialVault,
@@ -33,7 +33,7 @@ describe('Mail OAuth persistence', () => {
       query: connection.query,
       connection,
     });
-    await initialSyncMigration.up({
+    await syncIntervalMigration.up({
       builder: connection.builder,
       query: connection.query,
       connection,

@@ -13,7 +13,10 @@ import {
 } from '@nocobase/app-server/realtime';
 
 import { createMailProviderAdapterResolver } from '../adapter-resolver.js';
-import type { MailConfig } from '../config.js';
+import {
+  resolveMailAutomaticSyncIntervalFromMs,
+  type MailConfig,
+} from '../config.js';
 import { createDatabaseMailCredentialVault } from '../credentials.js';
 import { createMailProviderRegistry } from '../registry.js';
 import { createMailRuntime } from '../runtime.js';
@@ -109,6 +112,10 @@ export class MailCoreProvider extends ServiceProvider<MailCoreProviderApplicatio
           adapters: container.resolve(mailProviderAdapterResolverToken),
           outbox: container.resolve(mailRuntimeToken),
           syncBatchSize: this.app.config.get<MailConfig>('mail')!.syncBatchSize,
+          defaultAutomaticSyncIntervalMinutes:
+            resolveMailAutomaticSyncIntervalFromMs(
+              this.app.config.get<MailConfig>('mail')!.automaticSyncIntervalMs,
+            ),
           registry,
           providerContext: {
             publicBasePath: this.app.publicBasePath,

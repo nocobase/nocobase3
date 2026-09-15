@@ -20,6 +20,9 @@ export const MAIL_PROVIDER_CAPABILITIES: readonly [
   'aliases',
 ];
 
+/** Folder relation used for drafts that are owned by Mail rather than a Provider. */
+export const MAIL_LOCAL_DRAFT_FOLDER_ID = '__nocobase_local_drafts__';
+
 export type MailProviderCapability =
   (typeof MAIL_PROVIDER_CAPABILITIES)[number];
 
@@ -95,6 +98,8 @@ export interface MailAccount {
   readonly status: MailAccountStatus;
   /** Date boundary recorded when the account was first connected. */
   readonly initialSyncReceivedAfter?: string;
+  /** Minimum time between automatic synchronization sweeps for this account. */
+  readonly automaticSyncIntervalMinutes?: number;
   readonly syncCursor?: MailSyncCursor;
 }
 
@@ -195,6 +200,8 @@ export interface MailMessageSummary {
   readonly accountId: string;
   readonly providerMessageId: string;
   readonly providerDraftId?: string;
+  /** Provider message identifier for an optional remote draft mirror. */
+  readonly providerDraftMessageId?: string;
   readonly internetMessageId?: string;
   readonly conversationId?: string;
   readonly folderIds: readonly string[];
@@ -213,6 +220,7 @@ export interface MailMessageSummary {
   readonly read: boolean;
   readonly starred: boolean;
   readonly draft: boolean;
+  readonly draftConflict?: MailDraftConflict;
   readonly hasAttachments: boolean;
   /** User-owned metadata that is never synchronized to the Provider. */
   readonly note?: string;
@@ -226,6 +234,25 @@ export interface MailMessage extends MailMessageSummary {
   readonly text?: string;
   readonly html?: string;
   readonly attachments: readonly MailAttachment[];
+}
+
+export interface MailDraftRemoteVersion {
+  readonly providerMessageId: string;
+  readonly providerDraftId?: string;
+  readonly providerConversationId?: string;
+  readonly from?: MailAddress;
+  readonly to: readonly MailAddress[];
+  readonly cc: readonly MailAddress[];
+  readonly bcc: readonly MailAddress[];
+  readonly subject: string;
+  readonly text?: string;
+  readonly html?: string;
+  readonly attachments: readonly NormalizedMailAttachment[];
+}
+
+export interface MailDraftConflict {
+  readonly detectedAt: string;
+  readonly remote: MailDraftRemoteVersion;
 }
 
 export interface MailConversation {
@@ -334,6 +361,7 @@ export interface MailStartSyncInput {
 export interface MailUpdateAccountInput {
   readonly accountId: string;
   readonly status?: 'active' | 'suspended';
+  readonly automaticSyncIntervalMinutes?: number;
 }
 
 export type MailCommandType =
@@ -459,6 +487,14 @@ export interface MailComposeInput {
   readonly idempotencyKey: string;
 }
 
+export type MailDraftConflictAction = 'useRemote' | 'keepLocal';
+
+export interface MailResolveDraftConflictInput {
+  readonly accountId: string;
+  readonly messageId: string;
+  readonly action: MailDraftConflictAction;
+}
+
 export interface MailBulkComposeInput extends Omit<
   MailComposeInput,
   'to' | 'cc' | 'bcc'
@@ -492,6 +528,34 @@ export interface MailDeleteMessageInput {
   readonly accountId: string;
   readonly messageId: string;
   readonly permanently?: boolean;
+}
+
+export type MailManagementMessageAction =
+  'markRead' | 'markUnread' | 'star' | 'unstar' | 'archive' | 'move' | 'delete';
+
+export interface MailManagementMessageTarget {
+  readonly accountId: string;
+  readonly messageId: string;
+}
+
+export interface MailManagementMessageActionInput {
+  readonly action: MailManagementMessageAction;
+  readonly items: readonly MailManagementMessageTarget[];
+  readonly providerFolderId?: string;
+  readonly permanently?: boolean;
+}
+
+export interface MailManagementMessageActionItemResult {
+  readonly accountId: string;
+  readonly messageId: string;
+  readonly status: 'succeeded' | 'failed';
+  readonly error?: MailPublicError;
+}
+
+export interface MailManagementMessageActionResult {
+  readonly items: readonly MailManagementMessageActionItemResult[];
+  readonly succeeded: number;
+  readonly failed: number;
 }
 
 export interface MailDraftResult {
@@ -609,6 +673,18 @@ export interface MailService {
   listManagedOperationLogs(
     context: MailOperationContext,
   ): Promise<MailManagedOperationLogsView>;
+  listManagedFolders(
+    context: MailOperationContext,
+    accountId: string,
+  ): Promise<readonly MailFolder[]>;
+  listManagedMessages(
+    context: MailOperationContext,
+    input: MailListMessagesInput,
+  ): Promise<MailPage<MailMessageSummary>>;
+  manageMessages(
+    context: MailOperationContext,
+    input: MailManagementMessageActionInput,
+  ): Promise<MailManagementMessageActionResult>;
   listFolders(
     context: MailOperationContext,
     accountId: string,
@@ -703,6 +779,10 @@ export interface MailService {
   saveDraft(
     context: MailOperationContext,
     input: MailComposeInput,
+  ): Promise<MailMessage>;
+  resolveDraftConflict(
+    context: MailOperationContext,
+    input: MailResolveDraftConflictInput,
   ): Promise<MailMessage>;
   uploadAttachment(
     context: MailOperationContext,
@@ -927,6 +1007,7 @@ export interface NormalizedMailAttachment {
 export interface NormalizedMailMessage {
   readonly providerMessageId: string;
   readonly providerDraftId?: string;
+  readonly providerDraftMessageId?: string;
   readonly internetMessageId?: string;
   readonly providerConversationId?: string;
   readonly providerFolderIds: readonly string[];
@@ -946,6 +1027,7 @@ export interface NormalizedMailMessage {
   readonly read: boolean;
   readonly starred: boolean;
   readonly draft: boolean;
+  readonly draftConflict?: MailDraftConflict;
   readonly attachments: readonly NormalizedMailAttachment[];
 }
 
@@ -1402,8 +1484,15 @@ export interface MailStore {
     userId: string,
     input: MailListMessagesInput,
   ): Promise<MailPage<MailMessageSummary>>;
+  listAllMessages(
+    input: MailListMessagesInput,
+  ): Promise<MailPage<MailMessageSummary>>;
   getMessage(
     userId: string,
+    accountId: string,
+    messageId: string,
+  ): Promise<MailMessage | undefined>;
+  getMessageForAccount(
     accountId: string,
     messageId: string,
   ): Promise<MailMessage | undefined>;
@@ -1438,6 +1527,7 @@ export interface MailStore {
   ): Promise<MailMessage | undefined>;
   deleteMessage(accountId: string, messageId: string): Promise<boolean>;
   getSyncCursor(accountId: string): Promise<MailSyncCursor | undefined>;
+  getLastSyncedAt?(accountId: string): Promise<string | undefined>;
   clearSyncCursor(accountId: string): Promise<void>;
   markPushSyncPending(accountId: string, requestToken: string): Promise<void>;
   markPushSyncPendingBatch(

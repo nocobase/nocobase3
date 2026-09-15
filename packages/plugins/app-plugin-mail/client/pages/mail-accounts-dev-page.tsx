@@ -17,6 +17,7 @@ import {
 } from '../components/index.js';
 import { Button } from '../components/ui/button.js';
 import { Card } from '../components/ui/card.js';
+import { Input } from '../components/ui/input.js';
 import {
   Dialog,
   DialogContent,
@@ -50,6 +51,7 @@ export default function MailAccountsDevPage(): ReactElement {
   const [connectingProviderName, setConnectingProviderName] =
     useState<string>();
   const [syncing, setSyncing] = useState<string>();
+  const [updatingAccountId, setUpdatingAccountId] = useState<string>();
   const [syncRuns, setSyncRuns] = useState<
     Readonly<Record<string, MailSyncRunView>>
   >({});
@@ -224,19 +226,24 @@ export default function MailAccountsDevPage(): ReactElement {
 
   const updateAccount = (
     account: MailAccountView,
-    change: { readonly status?: 'active' | 'suspended' },
+    change: {
+      readonly status?: 'active' | 'suspended';
+      readonly automaticSyncIntervalMinutes?: number;
+    },
   ): void => {
     setError(undefined);
+    setUpdatingAccountId(account.id);
     void mail
       .updateAccount({ accountId: account.id, ...change })
-      .then(refresh, (cause: unknown) =>
+      .then(refresh, (cause: unknown) => {
         setError(
           mailErrorMessage(
             cause,
             t('errors.requestFailed', { defaultValue: 'Mail request failed.' }),
           ),
-        ),
-      );
+        );
+      })
+      .finally(() => setUpdatingAccountId(undefined));
   };
 
   const requestRemoveAccount = (account: MailAccountView): void => {
@@ -426,6 +433,11 @@ export default function MailAccountsDevPage(): ReactElement {
                         defaultValue: 'Initial sync start date',
                       })}
                     </th>
+                    <th className='px-4 py-3 font-medium'>
+                      {t('dev.automaticSyncColumn', {
+                        defaultValue: 'Automatic sync',
+                      })}
+                    </th>
                     <th className='px-4 py-3 text-right font-medium'>
                       {t('dev.actionsColumn', { defaultValue: 'Actions' })}
                     </th>
@@ -446,6 +458,11 @@ export default function MailAccountsDevPage(): ReactElement {
                                 account.status === 'suspended'
                                   ? 'active'
                                   : 'suspended',
+                            })
+                          }
+                          onUpdateSyncInterval={(account, minutes) =>
+                            updateAccount(account, {
+                              automaticSyncIntervalMinutes: minutes,
                             })
                           }
                           providerLabel={
@@ -477,6 +494,7 @@ export default function MailAccountsDevPage(): ReactElement {
                                 })
                           }
                           removing={removingAccountId === account.id}
+                          updating={updatingAccountId === account.id}
                           syncing={
                             syncing === account.id ||
                             (run !== undefined &&
@@ -485,7 +503,7 @@ export default function MailAccountsDevPage(): ReactElement {
                         />
                         {run ? (
                           <tr>
-                            <td className='px-6 py-3' colSpan={5}>
+                            <td className='px-6 py-3' colSpan={6}>
                               <SyncProgress run={run} />
                             </td>
                           </tr>
@@ -804,26 +822,40 @@ function ConnectedAccountRow({
   onSync,
   onRemove,
   onToggleStatus,
+  onUpdateSyncInterval,
   providerLabel,
   statusLabel,
   syncLabel,
   syncing,
   removeLabel,
   removing,
+  updating,
   toggleStatusLabel,
 }: {
   readonly account: MailAccountView;
   readonly onSync: (account: MailAccountView) => void;
   readonly onRemove: (account: MailAccountView) => void;
   readonly onToggleStatus: (account: MailAccountView) => void;
+  readonly onUpdateSyncInterval: (
+    account: MailAccountView,
+    minutes: number,
+  ) => void;
   readonly providerLabel: string;
   readonly statusLabel: string;
   readonly syncLabel: string;
   readonly syncing: boolean;
   readonly removeLabel: string;
   readonly removing: boolean;
+  readonly updating: boolean;
   readonly toggleStatusLabel: string;
 }): ReactElement {
+  const [intervalInput, setIntervalInput] = useState(
+    String(account.automaticSyncIntervalMinutes ?? 5),
+  );
+  const intervalMinutes = Number(intervalInput);
+  const intervalValid =
+    Number.isSafeInteger(intervalMinutes) && intervalMinutes >= 1;
+
   return (
     <tr className='transition-colors hover:bg-muted/20'>
       <td className='px-4 py-4'>
@@ -865,6 +897,29 @@ function ConnectedAccountRow({
         )}
       </td>
       <td className='px-4 py-4'>
+        <div className='flex min-w-40 items-center gap-2'>
+          <Input
+            aria-label='Automatic sync interval in minutes'
+            className='h-9 w-20'
+            disabled={updating || removing}
+            min={1}
+            onChange={(event) => setIntervalInput(event.target.value)}
+            step={1}
+            type='number'
+            value={intervalInput}
+          />
+          <span className='text-xs text-muted-foreground'>min</span>
+          <Button
+            disabled={!intervalValid || updating || removing}
+            onClick={() => onUpdateSyncInterval(account, intervalMinutes)}
+            type='button'
+            variant='outline'
+          >
+            {updating ? 'Saving…' : 'Save'}
+          </Button>
+        </div>
+      </td>
+      <td className='px-4 py-4'>
         <div className='flex min-w-max justify-end gap-2'>
           <Button
             disabled={syncing || account.status !== 'active'}
@@ -875,7 +930,7 @@ function ConnectedAccountRow({
             {syncLabel}
           </Button>
           <Button
-            disabled={syncing || removing}
+            disabled={syncing || removing || updating}
             onClick={() => onToggleStatus(account)}
             type='button'
             variant='outline'
@@ -883,7 +938,7 @@ function ConnectedAccountRow({
             {toggleStatusLabel}
           </Button>
           <Button
-            disabled={syncing || removing}
+            disabled={syncing || removing || updating}
             onClick={() => onRemove(account)}
             type='button'
             variant='destructive'

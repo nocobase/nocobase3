@@ -36,7 +36,7 @@ describe('Mail client routes', () => {
             },
             {
               name: 'operation-logs',
-              path: '/send-logs',
+              path: '/operation-logs',
               navigation: { title: 'nav.operationLogs' },
               access: { resource: 'mail.admin', action: 'access' },
               componentLoader: expect.any(Function),
@@ -71,13 +71,20 @@ describe('Mail client routes', () => {
               name: 'management',
               path: '/management',
               navigation: { title: 'nav.devManagement' },
-              access: { resource: 'mail.workspace', action: 'access' },
+              access: { resource: 'mail.management', action: 'access' },
               componentLoader: expect.any(Function),
             },
             {
               name: 'send',
               path: '/send',
               navigation: { title: 'nav.devSend' },
+              access: { resource: 'mail.workspace', action: 'access' },
+              componentLoader: expect.any(Function),
+            },
+            {
+              name: 'bulk-send',
+              path: '/bulk-send',
+              navigation: { title: 'nav.devBulkSend' },
               access: { resource: 'mail.workspace', action: 'access' },
               componentLoader: expect.any(Function),
             },
@@ -136,6 +143,9 @@ describe('Mail client routes', () => {
     await expect(
       dev.routes[0]?.children?.[5]?.componentLoader(),
     ).resolves.toMatchObject({ default: expect.any(Function) });
+    await expect(
+      dev.routes[0]?.children?.[6]?.componentLoader(),
+    ).resolves.toMatchObject({ default: expect.any(Function) });
 
     const resolved = resolveAppClientContributions([
       { packageName: '@nocobase/app-plugin-mail', routes },
@@ -146,13 +156,14 @@ describe('Mail client routes', () => {
     ]);
     expect(resolved.settings.map((route) => route.path)).toEqual([
       '/settings/mail/accounts',
-      '/settings/mail/send-logs',
+      '/settings/mail/operation-logs',
     ]);
     expect(resolved.devRoutes.map((route) => route.path)).toEqual([
       '/dev/mail/accounts',
       '/dev/mail/center',
       '/dev/mail/management',
       '/dev/mail/send',
+      '/dev/mail/bulk-send',
       '/dev/mail/sync-logs',
       '/dev/mail/send-logs',
     ]);

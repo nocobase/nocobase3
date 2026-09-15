@@ -1,6 +1,8 @@
 import type {
   MailCredentialVault,
+  MailProviderAdapter,
   MailProviderContext,
+  MailProviderDefinition,
 } from '@nocobase/app-plugin-mail/server/types';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -12,6 +14,15 @@ import {
 
 describe('Microsoft Mail Provider', () => {
   afterEach(() => vi.unstubAllGlobals());
+
+  it('satisfies the Mail core Provider compatibility contract', async () => {
+    const adapter = await microsoftMailProviderDefinition.createAdapter(
+      context(memoryVault()),
+      config(),
+      account(),
+    );
+    expectMailProviderCompatibility(microsoftMailProviderDefinition, adapter);
+  });
 
   it('uses PKCE, requests offline access, and rotates credentials into the vault', async () => {
     const credentials = memoryVault();
@@ -1352,4 +1363,31 @@ function config(): MicrosoftMailProviderConfig {
     clientSecret: 'client-secret',
     tenant: 'common',
   };
+}
+
+function expectMailProviderCompatibility(
+  definition: MailProviderDefinition,
+  adapter: MailProviderAdapter,
+): void {
+  expect(definition.type).toBeTruthy();
+  expect(definition.label.trim()).not.toBe('');
+  expect(
+    Number(Boolean(definition.authorization)) +
+      Number(Boolean(definition.connection)),
+  ).toBe(1);
+  expect(adapter.identity.type).toBe(definition.type);
+  expect(adapter.capabilities).toEqual(definition.capabilities);
+  expect(adapter.listMessages).toEqual(expect.any(Function));
+  expect(adapter.getMessage).toEqual(expect.any(Function));
+  expect(adapter.getAttachment).toEqual(expect.any(Function));
+  expect(adapter.listChanges).toEqual(expect.any(Function));
+  expect(adapter.getCurrentSyncCursor).toEqual(expect.any(Function));
+  expect(adapter.sendMessage).toEqual(expect.any(Function));
+  expect(adapter.listFolders).toEqual(expect.any(Function));
+  expect(adapter.saveDraft).toEqual(expect.any(Function));
+  expect(adapter.updateDraft).toEqual(expect.any(Function));
+  expect(adapter.moveMessage).toEqual(expect.any(Function));
+  expect(definition.push).toBeDefined();
+  expect(adapter.upsertPushSubscription).toEqual(expect.any(Function));
+  expect(adapter.deletePushSubscription).toEqual(expect.any(Function));
 }

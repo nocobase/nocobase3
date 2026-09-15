@@ -14,14 +14,14 @@ Use the Mail plugin's public Client, Server, and HTTP contracts. The plugin owns
 - Import public UI from `@nocobase/app-plugin-mail/client/components`, or
   `MailWorkspacePage` and template helpers from
   `@nocobase/app-plugin-mail/client`.
-- Require an authenticated identity with `page:mail.workspace/access` for personal Mail APIs and `page:mail.admin/access` for cross-user administration APIs.
+- Require an authenticated identity with `page:mail.workspace/access` for personal Mail APIs, `page:mail.admin/access` for cross-user account and operation-log APIs, and `page:mail.management/access` for all-user message management APIs.
 - Configure concrete Providers through the Gmail, Microsoft, or IMAP/SMTP Provider plugins; do not instantiate their adapters from App code.
 
 ## Configure and connect an account
 
 1. Add an enabled `mail.providers` entry with a stable `type` and `name` plus the Provider OAuth client or IMAP/SMTP endpoint configuration.
 2. Register the matching Gmail, Microsoft, or IMAP/SMTP Server Provider plugin.
-3. Grant intended users access to `mail.workspace`; grant only administrators access to `mail.admin`.
+3. Grant intended users access to `mail.workspace`; grant only administrators access to `mail.admin` and, when they need the message table or batch actions, `mail.management`.
 4. Open `/dev/mail/accounts`, use Associate account to select the mail account
    type, and complete its OAuth redirect or enter the IMAP/SMTP mailbox
    credentials. The page defaults to the connected-account table; the
@@ -46,7 +46,7 @@ by Mail Core.
 
 `/dev/mail/accounts` manages the authenticated user's accounts, including suspend/resume, disconnect, manual synchronization, the received-after date in the account association drawer, signature and NocoBase-owned label management, and reusable templates. The account association control lists registered Providers; a Provider without a `mail.providers` entry is shown as unavailable until the server endpoint or OAuth configuration is added. `/settings/mail/accounts` and `GET /api/mail/settings/accounts` show every connected account to administrators granted `page:mail.admin/access`. The ordinary `GET /api/mail/accounts` endpoint remains scoped to the authenticated user and requires `page:mail.workspace/access`. Do not bypass Mail Core ownership checks for another user's account.
 
-`/settings/mail/send-logs` and `GET /api/mail/settings/operation-logs` provide an all-user administration view of synchronization and delivery operations. The UI filters by owner or operation text, account, status, and start time. Failed or cancelled synchronization runs can be retried, and active synchronization runs can be cancelled by their account owner. Do not automatically retry a delivery with an unknown Provider result because that may create a duplicate message. The response includes API-safe account metadata for resolving each operation to its owner; it never includes credentials, idempotency fingerprints, leases, Provider cursors, or internal Provider error messages. The development log pages remain scoped to the authenticated user.
+`/settings/mail/operation-logs` and `GET /api/mail/settings/operation-logs` provide an all-user administration view of synchronization and delivery operations. `/dev/mail/management` and `GET /api/mail/management/*` provide an all-user message table and batch actions only to identities granted `page:mail.management/access`; the current implementation does not apply department or organization scope. The UI filters by owner or operation text, account, status, and start time. Failed or cancelled synchronization runs can be retried, and active synchronization runs can be cancelled by their account owner. Do not automatically retry a delivery with an unknown Provider result because that may create a duplicate message. The response includes API-safe account metadata for resolving each operation to its owner; it never includes credentials, idempotency fingerprints, leases, Provider cursors, or internal Provider error messages. The development log pages remain scoped to the authenticated user.
 
 ## Read synchronized mail
 
@@ -69,7 +69,7 @@ Call `MailService.sendMessage()` through `mailServiceToken`, or `POST /api/mail/
 
 Review the authenticated user's recent submission results through `MailService.listSubmissions()`, `GET /api/mail/submissions`, or the development-only `/dev/mail/send-logs` page. The public view excludes idempotency fingerprints, leases, and Provider error messages.
 
-Sending supports plain text plus safe rich-text HTML, replies, forwards, Provider-backed draft creation and editing, automatic draft saving, outbound attachments, identities and multiple named account-level signatures, reusable templates, durable scheduled delivery, and bounded per-recipient bulk delivery. Each account may have a default signature shared by all its sending addresses; the composer can choose another signature or send without one. When embedding `MailWorkspacePage` in a record-aware surface, pass `{ record }` through `templateVariables`; variables such as `{{record.customer.name}}` are resolved when a template is applied. Unknown variables remain visible so the sender can correct the template before sending.
+Sending supports plain text plus safe rich-text HTML, replies, forwards, local-first draft creation and editing with optional Gmail/Microsoft mirrors, automatic draft saving, outbound attachments, identities and multiple named account-level signatures, reusable templates, durable scheduled delivery, and bounded per-recipient bulk delivery. Each account may have a default signature shared by all its sending addresses; the composer can choose another signature or send without one. When embedding `MailWorkspacePage` in a record-aware surface, pass `{ record }` through `templateVariables`; variables such as `{{record.customer.name}}` are resolved when a template is applied. Unknown variables remain visible so the sender can correct the template before sending.
 
 ## Synchronize a mailbox
 

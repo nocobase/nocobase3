@@ -18,6 +18,14 @@ const ALLOWED_TAGS = new Set([
   'BR',
   'DIV',
   'EM',
+  'FONT',
+  'H1',
+  'H2',
+  'H3',
+  'H4',
+  'H5',
+  'H6',
+  'IMG',
   'I',
   'LI',
   'OL',
@@ -102,7 +110,19 @@ function sanitizeChildren(parent: Element): void {
       const allowed =
         child.tagName === 'A' &&
         ['href', 'rel', 'target', 'title'].includes(attribute.name);
-      if (!allowed) child.removeAttribute(attribute.name);
+      const fontSize =
+        child.tagName === 'FONT' &&
+        attribute.name === 'size' &&
+        /^[1-7]$/u.test(attribute.value);
+      const imageAttribute =
+        child.tagName === 'IMG' &&
+        ['alt', 'title', 'src'].includes(attribute.name);
+      const signatureClass =
+        child.tagName === 'DIV' &&
+        attribute.name === 'class' &&
+        attribute.value === 'nocobase-mail-signature';
+      if (!allowed && !fontSize && !imageAttribute && !signatureClass)
+        child.removeAttribute(attribute.name);
     }
     if (child.tagName === 'A') {
       const href = child.getAttribute('href');
@@ -113,6 +133,10 @@ function sanitizeChildren(parent: Element): void {
         child.removeAttribute('target');
         child.removeAttribute('rel');
       }
+    }
+    if (child.tagName === 'IMG') {
+      const src = child.getAttribute('src');
+      if (!src || !isSafeImageSource(src)) child.removeAttribute('src');
     }
     sanitizeChildren(child);
   }
@@ -162,6 +186,12 @@ function escapeHtml(value: string): string {
 
 function isSafeLink(href: string): boolean {
   return /^(?:https?:|mailto:|tel:|#)/iu.test(href.trim());
+}
+
+function isSafeImageSource(src: string): boolean {
+  return /^(?:https?:|\/(?!\/)|data:image\/(?:gif|jpe?g|png|webp);base64,)/iu.test(
+    src.trim(),
+  );
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {

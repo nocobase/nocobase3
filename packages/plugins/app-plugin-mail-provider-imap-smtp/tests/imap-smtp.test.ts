@@ -39,6 +39,8 @@ import type { ImapSmtpMailProviderConfig } from '../server/config.js';
 import type {
   MailAccount,
   MailProviderContext,
+  MailProviderAdapter,
+  MailProviderDefinition,
   MailProviderSendInput,
 } from '@nocobase/app-plugin-mail/server/types';
 
@@ -74,6 +76,15 @@ describe('IMAP/SMTP mail Provider', () => {
       aliases: false,
     });
     expect(imapSmtpMailProviderDefinition.connection).toBeDefined();
+  });
+
+  it('satisfies the Mail core Provider compatibility contract', async () => {
+    const adapter = await imapSmtpMailProviderDefinition.createAdapter(
+      context(),
+      config(),
+      account(),
+    );
+    expectMailProviderCompatibility(imapSmtpMailProviderDefinition, adapter);
   });
 
   it('rejects incomplete credential connections before opening a socket', async () => {
@@ -395,4 +406,35 @@ function fetchedMessage(uid: number): {
       `From: Alice <alice@example.com>\r\nTo: User <user@example.com>\r\nSubject: Message ${uid}\r\nMessage-ID: <message-${uid}@example.com>\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nHello ${uid}`,
     ),
   };
+}
+
+function expectMailProviderCompatibility(
+  definition: MailProviderDefinition,
+  adapter: MailProviderAdapter,
+): void {
+  expect(definition.type).toBeTruthy();
+  expect(definition.label.trim()).not.toBe('');
+  expect(
+    Number(Boolean(definition.authorization)) +
+      Number(Boolean(definition.connection)),
+  ).toBe(1);
+  expect(adapter.identity.type).toBe(definition.type);
+  expect(adapter.capabilities).toEqual(definition.capabilities);
+  expect(adapter.listMessages).toEqual(expect.any(Function));
+  expect(adapter.getMessage).toEqual(expect.any(Function));
+  expect(adapter.getAttachment).toEqual(expect.any(Function));
+  expect(adapter.listChanges).toEqual(expect.any(Function));
+  expect(adapter.getCurrentSyncCursor).toEqual(expect.any(Function));
+  expect(adapter.sendMessage).toEqual(expect.any(Function));
+  expect(adapter.listFolders).toEqual(expect.any(Function));
+  expect(adapter.close).toEqual(expect.any(Function));
+  expect(definition.authorization).toBeUndefined();
+  expect(definition.push).toBeUndefined();
+  expect(adapter.upsertPushSubscription).toBeUndefined();
+  expect(adapter.deletePushSubscription).toBeUndefined();
+  expect(adapter.createLabel).toBeUndefined();
+  expect(adapter.updateLabels).toBeUndefined();
+  expect(adapter.saveDraft).toBeUndefined();
+  expect(adapter.updateDraft).toBeUndefined();
+  expect(adapter.moveMessage).toBeUndefined();
 }

@@ -68,6 +68,7 @@ const migration: MigrationDefinition = defineMigration({
       collection.json('scopes', { nullable: false });
       collection.datetimeTz('expiresAt', { nullable: false });
       collection.datetimeTz('consumedAt');
+      collection.datetimeTz('initialSyncReceivedAfter');
       collection.datetimeTz('createdAt', { nullable: false });
       collection.index(['expiresAt', 'consumedAt'], {
         name: 'mail_authorization_states_expiry_idx',
@@ -88,7 +89,7 @@ const migration: MigrationDefinition = defineMigration({
       collection.string('authorizationSubject', { length: 255 });
       collection.json('scopes', { nullable: false });
       collection.string('status', { length: 50, nullable: false });
-      collection.string('defaultForUserId', { length: 255 });
+      collection.datetimeTz('initialSyncReceivedAfter');
       collection.datetimeTz('createdAt', { nullable: false });
       collection.datetimeTz('updatedAt', { nullable: false });
       collection.index(['userId', 'status'], {
@@ -101,9 +102,6 @@ const migration: MigrationDefinition = defineMigration({
         ['providerType', 'providerName', 'authorizationSubject'],
         { name: 'mail_accounts_provider_subject_unique' },
       );
-      collection.unique('defaultForUserId', {
-        name: 'mail_accounts_default_user_unique',
-      });
     });
 
     await builder.createCollection('mailPushSubscriptions', (collection) => {
@@ -169,18 +167,34 @@ const migration: MigrationDefinition = defineMigration({
 
     await builder.createCollection('mailSignatures', (collection) => {
       collection.uuid('id').primary();
+      collection.uuid('accountId', { nullable: false });
       collection.uuid('identityId', { nullable: false });
       collection.string('name', { length: 255, nullable: false });
       collection.text('text', { nullable: false });
       collection.text('html');
       collection.uuid('defaultForIdentityId');
+      collection.uuid('defaultForAccountId');
       collection.datetimeTz('createdAt', { nullable: false });
       collection.datetimeTz('updatedAt', { nullable: false });
+      collection.unique(['accountId', 'name'], {
+        name: 'mail_signatures_account_name_unique',
+      });
       collection.unique(['identityId', 'name'], {
         name: 'mail_signatures_identity_name_unique',
       });
+      collection.unique('defaultForAccountId', {
+        name: 'mail_signatures_default_account_unique',
+      });
       collection.unique('defaultForIdentityId', {
         name: 'mail_signatures_default_identity_unique',
+      });
+      collection.foreignKey('accountId', {
+        name: 'mail_signatures_account_fk',
+        references: {
+          collection: 'mailAccounts',
+          fields: ['id'],
+        },
+        onDelete: 'cascade',
       });
       collection
         .belongsTo('identity', 'mailIdentities')
@@ -214,6 +228,7 @@ const migration: MigrationDefinition = defineMigration({
       collection.uuid('accountId', { nullable: false });
       collection.string('providerMessageId', { length: 500, nullable: false });
       collection.string('providerDraftId', { length: 500 });
+      collection.string('providerDraftMessageId', { length: 500 });
       collection.string('internetMessageId', { length: 1000 });
       collection.string('providerConversationId', { length: 500 });
       collection.json('sender');
@@ -234,6 +249,7 @@ const migration: MigrationDefinition = defineMigration({
       collection.boolean('draft', { nullable: false, defaultValue: false });
       collection.boolean('todo', { nullable: false, defaultValue: false });
       collection.json('attachments', { nullable: false });
+      collection.json('draftConflict');
       collection.datetimeTz('createdAt', { nullable: false });
       collection.datetimeTz('updatedAt', { nullable: false });
       collection.unique(['accountId', 'providerMessageId'], {
@@ -251,6 +267,12 @@ const migration: MigrationDefinition = defineMigration({
           name: 'mail_messages_account_conversation_idx',
         },
       );
+      collection.index(['accountId', 'read', 'sortAt', 'id'], {
+        name: 'mail_messages_account_read_sort_idx',
+      });
+      collection.index(['accountId', 'starred', 'sortAt', 'id'], {
+        name: 'mail_messages_account_starred_sort_idx',
+      });
       collection
         .belongsTo('account', 'mailAccounts')
         .targetKey('id')
@@ -323,6 +345,9 @@ const migration: MigrationDefinition = defineMigration({
       collection.datetimeTz('createdAt', { nullable: false });
       collection.datetimeTz('updatedAt', { nullable: false });
       collection.datetimeTz('completedAt');
+      collection.index(['accountId', 'createdAt'], {
+        name: 'mail_sync_runs_account_created_idx',
+      });
       collection.index(['accountId', 'status'], {
         name: 'mail_sync_runs_account_status_idx',
       });
@@ -352,6 +377,9 @@ const migration: MigrationDefinition = defineMigration({
       collection.datetimeTz('leaseExpiresAt');
       collection.datetimeTz('createdAt', { nullable: false });
       collection.datetimeTz('updatedAt', { nullable: false });
+      collection.index(['accountId', 'createdAt'], {
+        name: 'mail_submissions_account_created_idx',
+      });
       collection.index(['status', 'leaseExpiresAt'], {
         name: 'mail_submissions_expired_idx',
       });
@@ -389,8 +417,49 @@ const migration: MigrationDefinition = defineMigration({
         name: 'mail_outbox_retention_idx',
       });
     });
+
+    await builder.createCollection('mailLabels', (collection) => {
+      collection.uuid('id').primary();
+      collection.string('ownerId', { length: 255, nullable: false });
+      collection.string('name', { length: 255, nullable: false });
+      collection.string('color', {
+        length: 30,
+        nullable: false,
+        defaultValue: 'blue',
+      });
+      collection.datetimeTz('createdAt', { nullable: false });
+      collection.datetimeTz('updatedAt', { nullable: false });
+      collection.unique(['ownerId', 'name'], {
+        name: 'mail_labels_owner_name_unique',
+      });
+    });
+
+    await builder.createCollection('mailMessageLabels', (collection) => {
+      collection.uuid('messageId', { nullable: false });
+      collection.uuid('labelId', { nullable: false });
+      collection.primary(['messageId', 'labelId'], {
+        name: 'mail_message_labels_pk',
+      });
+      collection.index(['labelId', 'messageId'], {
+        name: 'mail_message_labels_label_idx',
+      });
+      collection
+        .belongsTo('message', 'mailMessages')
+        .targetKey('id')
+        .foreignKey('messageId')
+        .constraints(true)
+        .onDelete('cascade');
+      collection
+        .belongsTo('label', 'mailLabels')
+        .targetKey('id')
+        .foreignKey('labelId')
+        .constraints(true)
+        .onDelete('cascade');
+    });
   },
   async down({ builder }) {
+    await builder.dropCollection('mailMessageLabels');
+    await builder.dropCollection('mailLabels');
     await builder.dropCollection('mailOutbox');
     await builder.dropCollection('mailSubmissions');
     await builder.dropCollection('mailSyncRuns');

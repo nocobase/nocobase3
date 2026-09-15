@@ -46,4 +46,14 @@ describe('mail template rendering', () => {
       ),
     ).toBe('<a target="_blank" rel="noopener noreferrer">open</a>');
   });
+
+  it('keeps supported rich text controls while removing unsafe attributes and images', () => {
+    expect(
+      sanitizeMailHtml(
+        '<h2>Title</h2><font size="5">Large</font><img src="https://example.com/image.png" alt="Preview" onerror="steal()"><img src="javascript:alert(1)"><div class="nocobase-mail-signature" data-extra="removed">Sign</div>',
+      ),
+    ).toBe(
+      '<h2>Title</h2><font size="5">Large</font><img src="https://example.com/image.png" alt="Preview"><img><div class="nocobase-mail-signature">Sign</div>',
+    );
+  });
 });

@@ -12,6 +12,9 @@ export interface MailProviderConfigEntry {
 export const DEFAULT_MAIL_SYNC_BATCH_SIZE = 100;
 export const MAX_MAIL_SYNC_BATCH_SIZE = 200;
 export const DEFAULT_MAIL_OAUTH_CALLBACK_PATH = '/mail/oauth/callback';
+export const DEFAULT_MAIL_AUTOMATIC_SYNC_INTERVAL_MS = 300_000;
+export const DEFAULT_MAIL_AUTOMATIC_SYNC_INTERVAL_MINUTES = 5;
+export const MIN_MAIL_AUTOMATIC_SYNC_INTERVAL_MINUTES = 1;
 
 const MAIL_CALLBACK_URL_BASE = 'https://mail-callback.invalid';
 const MAIL_LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost']);
@@ -27,7 +30,7 @@ export interface MailConfig {
 
 export const DEFAULT_MAIL_CONFIG: MailConfig = Object.freeze({
   oauthCallbackUrl: DEFAULT_MAIL_OAUTH_CALLBACK_PATH,
-  automaticSyncIntervalMs: 300_000,
+  automaticSyncIntervalMs: DEFAULT_MAIL_AUTOMATIC_SYNC_INTERVAL_MS,
   syncBatchSize: DEFAULT_MAIL_SYNC_BATCH_SIZE,
   providers: {},
 });
@@ -159,4 +162,29 @@ export function resolveMailSyncBatchSize(value?: number): number {
     );
   }
   return resolved;
+}
+
+export function resolveMailAutomaticSyncIntervalMinutes(
+  value?: number,
+): number {
+  const resolved = value ?? DEFAULT_MAIL_AUTOMATIC_SYNC_INTERVAL_MINUTES;
+  if (
+    !Number.isSafeInteger(resolved) ||
+    resolved < MIN_MAIL_AUTOMATIC_SYNC_INTERVAL_MINUTES
+  ) {
+    throw new TypeError(
+      `Mail automatic sync interval must be a safe integer of at least ${MIN_MAIL_AUTOMATIC_SYNC_INTERVAL_MINUTES} minute.`,
+    );
+  }
+  return resolved;
+}
+
+export function resolveMailAutomaticSyncIntervalFromMs(value?: number): number {
+  const resolved = value ?? DEFAULT_MAIL_AUTOMATIC_SYNC_INTERVAL_MS;
+  if (!Number.isSafeInteger(resolved) || resolved < 60_000) {
+    throw new TypeError(
+      'Mail automaticSyncIntervalMs must be a safe integer of at least 60000 milliseconds.',
+    );
+  }
+  return resolveMailAutomaticSyncIntervalMinutes(Math.ceil(resolved / 60_000));
 }

@@ -15,6 +15,8 @@ import type {
   MailListMessagesInput,
   MailManagedAccountView,
   MailManagedOperationLogsView,
+  MailManagementMessageActionInput,
+  MailManagementMessageActionResult,
   MailMessage,
   MailMessageSummary,
   MailUpdateMessageInput,
@@ -31,6 +33,7 @@ import type {
   MailOutboundAttachmentView,
   MailTemplate,
   MailSaveTemplateInput,
+  MailResolveDraftConflictInput,
 } from '../server/types.js';
 
 export type {
@@ -51,6 +54,10 @@ export type {
   MailInitialSyncPolicy,
   MailManagedAccountView,
   MailManagedOperationLogsView,
+  MailManagementMessageAction,
+  MailManagementMessageActionInput,
+  MailManagementMessageActionItemResult,
+  MailManagementMessageActionResult,
   MailMessage,
   MailMessageSummary,
   MailPage,
@@ -67,6 +74,9 @@ export type {
   MailOutboundAttachmentView,
   MailTemplate,
   MailSaveTemplateInput,
+  MailDraftConflict,
+  MailDraftConflictAction,
+  MailResolveDraftConflictInput,
 } from '../server/types.js';
 
 interface DataResponse<T> {
@@ -142,6 +152,22 @@ export class MailClient {
     return this.client
       .request<DataResponse<readonly MailManagedAccountView[]>>({
         path: 'mail/settings/accounts',
+      })
+      .then((response) => response.data);
+  }
+
+  public listManagementAccounts(): Promise<readonly MailManagedAccountView[]> {
+    return this.client
+      .request<DataResponse<readonly MailManagedAccountView[]>>({
+        path: 'mail/management/accounts',
+      })
+      .then((response) => response.data);
+  }
+
+  public listManagedFolders(accountId: string): Promise<readonly MailFolder[]> {
+    return this.client
+      .request<DataResponse<readonly MailFolder[]>>({
+        path: `mail/management/accounts/${encodeURIComponent(accountId)}/folders`,
       })
       .then((response) => response.data);
   }
@@ -329,6 +355,30 @@ export class MailClient {
       .then((response) => response.data);
   }
 
+  public listManagedMessages(
+    input: MailMessagesQuery = {},
+  ): Promise<MailPage<MailMessageSummary>> {
+    const parameters = new URLSearchParams();
+    for (const [key, value] of Object.entries(input)) {
+      if (value !== undefined) parameters.set(key, String(value));
+    }
+    const query = parameters.size > 0 ? `?${parameters.toString()}` : '';
+    return this.client
+      .request<DataResponse<MailPage<MailMessageSummary>>>({
+        path: `mail/management/messages${query}`,
+      })
+      .then((response) => response.data);
+  }
+
+  public manageMessages(
+    input: MailManagementMessageActionInput,
+  ): Promise<MailManagementMessageActionResult> {
+    return this.post<MailManagementMessageActionResult>(
+      'mail/management/messages/actions',
+      input,
+    );
+  }
+
   public getMessage(
     accountId: string,
     messageId: string,
@@ -424,6 +474,16 @@ export class MailClient {
 
   public saveDraft(input: MailComposeInput): Promise<MailMessage> {
     return this.post<MailMessage>('mail/messages/drafts', input);
+  }
+
+  public resolveDraftConflict(
+    input: MailResolveDraftConflictInput,
+  ): Promise<MailMessage> {
+    const { accountId, messageId, action } = input;
+    return this.post<MailMessage>(
+      `mail/accounts/${encodeURIComponent(accountId)}/messages/${encodeURIComponent(messageId)}/draft-conflict`,
+      { action },
+    );
   }
 
   public updateMessage(input: MailUpdateMessageInput): Promise<MailMessage> {

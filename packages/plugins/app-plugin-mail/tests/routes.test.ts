@@ -54,6 +54,125 @@ describe('mail API routes', () => {
     expect(checkedResources).toEqual(['mail.workspace', 'mail.admin']);
   });
 
+  it('requires independent management access for cross-user mail data', async () => {
+    const checkedResources: string[] = [];
+    const router = await createRouter(true, service(), (resource) => {
+      checkedResources.push(resource);
+      return resource === 'mail.management';
+    });
+
+    await expect(
+      router.request('/api/mail/management/messages'),
+    ).resolves.toMatchObject({ status: 200 });
+    await expect(router.request('/api/mail/messages')).resolves.toMatchObject({
+      status: 403,
+    });
+    await expect(
+      router.request('/api/mail/settings/accounts'),
+    ).resolves.toMatchObject({ status: 403 });
+    expect(checkedResources).toEqual([
+      'mail.management',
+      'mail.workspace',
+      'mail.admin',
+    ]);
+  });
+
+  it('maps management account, folder, and message queries to the service', async () => {
+    const listManagedAccounts = vi.fn<MailService['listManagedAccounts']>(
+      async () => [],
+    );
+    const listManagedFolders = vi.fn<MailService['listManagedFolders']>(
+      async () => [],
+    );
+    const listManagedMessages = vi.fn<MailService['listManagedMessages']>(
+      async () => ({ items: [] }),
+    );
+    const router = await createRouter(
+      true,
+      service({ listManagedAccounts, listManagedFolders, listManagedMessages }),
+      (resource) => resource === 'mail.management',
+    );
+
+    await router.request('/api/mail/management/accounts');
+    await router.request('/api/mail/management/accounts/account%2F1/folders');
+    await router.request(
+      '/api/mail/management/messages?accountId=account%2F1&folderId=folder%2F1&query=alice&limit=20',
+    );
+
+    expect(listManagedAccounts).toHaveBeenCalledWith(
+      expect.objectContaining({ actorId: 'user-1' }),
+    );
+    expect(listManagedFolders).toHaveBeenCalledWith(
+      expect.objectContaining({ actorId: 'user-1' }),
+      'account/1',
+    );
+    expect(listManagedMessages).toHaveBeenCalledWith(
+      expect.objectContaining({ actorId: 'user-1' }),
+      {
+        accountIds: ['account/1'],
+        folderIds: ['folder/1'],
+        query: 'alice',
+        cursor: undefined,
+        limit: 20,
+        unread: undefined,
+        starred: undefined,
+      },
+    );
+  });
+
+  it('maps management message actions and validates their item targets', async () => {
+    const manageMessages = vi.fn<MailService['manageMessages']>(async () => ({
+      items: [
+        {
+          accountId: 'account-1',
+          messageId: 'message-1',
+          status: 'succeeded',
+        },
+      ],
+      succeeded: 1,
+      failed: 0,
+    }));
+    const router = await createRouter(
+      true,
+      service({ manageMessages }),
+      (resource) => resource === 'mail.management',
+    );
+
+    const response = await router.request(
+      '/api/mail/management/messages/actions',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          action: 'markRead',
+          items: [{ accountId: 'account-1', messageId: 'message-1' }],
+        }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    expect(manageMessages).toHaveBeenCalledWith(
+      expect.objectContaining({ actorId: 'user-1' }),
+      {
+        action: 'markRead',
+        items: [{ accountId: 'account-1', messageId: 'message-1' }],
+        providerFolderId: undefined,
+        permanently: undefined,
+      },
+    );
+
+    const invalidResponse = await router.request(
+      '/api/mail/management/messages/actions',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'markRead', items: [] }),
+      },
+    );
+    expect(invalidResponse.status).toBe(400);
+    expect(manageMessages).toHaveBeenCalledTimes(1);
+  });
+
   it('translates API errors from the request locale', async () => {
     const router = await createRouter(true, service(), false);
     const response = await router.request('/api/mail/accounts', {
@@ -917,6 +1036,9 @@ function service(overrides: Partial<MailService> = {}): MailService {
       syncRuns: [],
       submissions: [],
     }),
+    listManagedFolders: async () => [],
+    listManagedMessages: async () => ({ items: [] }),
+    manageMessages: async () => ({ items: [], succeeded: 0, failed: 0 }),
     listFolders: async () => [],
     listLabels: async () => [],
     listIdentities: async () => [],

@@ -14,8 +14,10 @@ The first runnable vertical slice provides:
 - authenticated OAuth start plus a public one-time-state callback;
 - a permission-protected Mail Settings group with `/settings/mail/accounts`
   for read-only all-user account visibility, plus
-  `/settings/mail/send-logs` for all-user synchronization and delivery
+  `/settings/mail/operation-logs` for all-user synchronization and delivery
   operation logs;
+- a separately permissioned `/dev/mail/management` table for all-user message
+  search and per-message batch actions;
 - a production Mail workspace at `/mail`, plus current-user account connection and development diagnostics under `/dev/mail`; `/dev/mail/accounts` defaults to a connected-account table and also exposes account association (including the initial sync date), signature and NocoBase-owned label management, and reusable-template management;
 - an all-account workspace view with account and folder filtering, refresh, message search, conversation detail, account connection, synchronization controls, sending, synchronization logs, and delivery submission logs; the composer remembers its last selected account in browser storage and the default synchronization action covers every active account;
 - database-backed OAuth credential storage with token-rotation support;
@@ -34,11 +36,12 @@ The first runnable vertical slice provides:
 - idempotent message upserts by `(accountId, providerMessageId)`;
 - indexed Provider message-folder and NocoBase message-label relations;
 - reply and forward behavior using Provider-native conversation APIs;
-- Provider-backed draft creation from the production composer;
-- Provider-backed editing and sending of existing drafts;
+- local-first draft creation, editing, automatic saving, recovery, and sending for every Provider that supports sending;
+- optional Gmail and Microsoft remote draft mirrors with local conflict protection;
 - scheduled delivery persisted through the Outbox and Queue;
 - automatic mailbox synchronization every five minutes by default, configurable
   with `MAIL_AUTOMATIC_SYNC_INTERVAL_MS`;
+- per-account automatic synchronization intervals configured from the connected-account table;
 - authenticated Provider push webhooks that coalesce notifications into the
   existing incremental synchronization pipeline;
 - automatic Gmail watch and Microsoft Graph subscription creation and renewal;
@@ -51,9 +54,10 @@ The first runnable vertical slice provides:
 - Provider-discovered sending aliases and multiple selectable signatures shared by
   every address in an account;
 - current-user reusable mail templates with composer integration;
+- rich signature editing with safe HTML formatting and inline image references in synchronized message bodies;
 - rich-text composition with safe HTML, plain-text fallback, and current-record
   template variable binding;
-- debounced Provider draft auto-save, unsaved-change protection, and
+- debounced local draft auto-save, optional remote mirroring, unsaved-change protection, and
   session-scoped recovery after a page reload;
 - a Mail center at `/dev/mail/center` with a cross-account unread badge that
   refreshes on user-scoped realtime mail invalidations and WebSocket recovery;
@@ -79,6 +83,7 @@ store.
 
 - [Configuration](./docs/zh-CN/configuration.md)
 - [Complete feature list and v2 comparison](./docs/zh-CN/feature-list.md)
+- [Third-party Provider development guide](./docs/zh-CN/provider-development.md)
 
 ## Runtime flow
 
@@ -124,25 +129,13 @@ Register the resulting exact URL with the Provider's OAuth application.
 
 ## Push notifications
 
-Push delivery is opt-in. Configure both `MAIL_PUSH_WEBHOOK_URL` (the public URL
-ending in `/mail/webhooks`) and a random 32–128 character
-`MAIL_PUSH_WEBHOOK_SECRET`. The runtime appends the Provider type, configured
-Provider name, and secret to that URL. Notifications schedule the same
-idempotent incremental sync used by polling; the five-minute sweep remains a
-fallback for delayed or dropped notifications.
+Push delivery is opt-in. Configure both `MAIL_PUSH_WEBHOOK_URL` (the public URL ending in `/mail/webhooks`) and a random 32–128 character `MAIL_PUSH_WEBHOOK_SECRET`. The runtime appends the Provider type, configured Provider name, and secret to that URL. The same base URL and secret can be shared by multiple Provider instances because each instance gets a distinct callback path. Notifications schedule the same idempotent incremental sync used by polling; the five-minute sweep remains a fallback for delayed or dropped notifications.
 
-For Gmail, set `pushTopicName` on the Provider configuration and configure that
-Google Cloud Pub/Sub topic's push subscription endpoint to the generated Gmail
-webhook URL. Mail Core calls `users.watch` daily and stores its expiry. Optional
-`pushLabelIds` restrict the watch. The topic must already exist and allow the
-Gmail push service account to publish.
+For Gmail, manually configure the Google Cloud Pub/Sub topic's push subscription endpoint to the generated Gmail webhook URL, and set `pushTopicName` on the Provider configuration. Mail Core calls `users.watch` daily and stores its expiry. Optional `pushLabelIds` restrict the watch. The topic must already exist and allow the Gmail push service account to publish.
 
-For Microsoft 365, Mail Core creates the Graph subscription itself, handles the
-plain-text `validationToken` challenge, verifies `clientState`, and renews the
-subscription before expiry. Removing an account attempts to remove its Provider
-subscription and credential, then deletes its local synchronized data; the
-local removal still completes if remote cleanup fails and never deletes mail
-from the Provider mailbox.
+For Microsoft 365, no manual webhook URL registration in Microsoft Graph or Microsoft Entra is required. After an account is connected, Mail Core creates the Graph subscription, handles the plain-text `validationToken` challenge, verifies `clientState`, and renews the subscription before expiry. Removing an account attempts to remove its Provider subscription and credential, then deletes its local synchronized data; the local removal still completes if remote cleanup fails and never deletes mail from the Provider mailbox.
+
+The Push callback URL is separate from the OAuth callback URL. Register the OAuth callback URL with the Provider's OAuth application as described above.
 
 ## Provider integration
 
@@ -212,6 +205,10 @@ GET  /api/mail/sync-runs/:syncRunId
 POST /api/mail/sync-runs/:syncRunId/retry
 POST /api/mail/sync-runs/:syncRunId/cancel
 GET  /api/mail/messages
+GET  /api/mail/management/accounts
+GET  /api/mail/management/accounts/:accountId/folders
+GET  /api/mail/management/messages
+POST /api/mail/management/messages/actions
 GET  /api/mail/accounts/:accountId/messages/:messageId
 GET  /api/mail/accounts/:accountId/messages/:messageId/attachments/:attachmentId
 PATCH /api/mail/accounts/:accountId/messages/:messageId
@@ -233,9 +230,7 @@ session. The route validates the configured high-entropy URL secret before
 parsing the body, limits request size, validates Microsoft `clientState`, maps
 only known active accounts, and returns no mailbox data.
 
-Personal Mail APIs require `page:mail.workspace/access`; cross-user account and operation-log
-APIs under `/api/mail/settings/*` require `page:mail.admin/access`. Account ownership is enforced again in
-`MailService`; Route authentication is not treated as ownership authorization.
+Personal Mail APIs require `page:mail.workspace/access`; cross-user account and operation-log APIs under `/api/mail/settings/*` require `page:mail.admin/access`; the all-user message management APIs under `/api/mail/management/*` require `page:mail.management/access`. Account ownership is enforced again in `MailService`; Route authentication is not treated as ownership authorization.
 Inactive accounts cannot send or synchronize. Public responses omit credential
 references, Provider cursors, leases, and internal error messages.
 

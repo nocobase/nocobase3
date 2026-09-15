@@ -11,9 +11,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SyncMailboxOperation } from '../server/operations/sync-mailbox.js';
 import { createMailProviderRegistry } from '../server/registry.js';
-import { createMailRuntime, type MailRuntime } from '../server/runtime.js';
+import {
+  createMailRuntime,
+  isAutomaticSyncDue,
+  type MailRuntime,
+} from '../server/runtime.js';
 import { DefaultMailService } from '../server/service.js';
 import { createDatabaseMailStore } from '../server/store.js';
+import { MAIL_LOCAL_DRAFT_FOLDER_ID } from '../server/types.js';
 import type {
   MailAccount,
   MailCredentialVault,
@@ -262,6 +267,34 @@ describe('mail MVP runtime', () => {
       mode: 'initial',
       policy: { batchSize: 37 },
     });
+  });
+
+  it('only schedules an automatic sync after the account interval elapses', () => {
+    const now = Date.parse('2026-09-15T00:00:00.000Z');
+    expect(isAutomaticSyncDue('2026-09-15T00:00:00.000Z', 30, now)).toBe(false);
+    expect(isAutomaticSyncDue('2026-09-14T23:30:00.000Z', 30, now)).toBe(true);
+    expect(isAutomaticSyncDue(undefined, 30, now)).toBe(true);
+  });
+
+  it('updates and validates an account automatic sync interval', async () => {
+    const service = new DefaultMailService({
+      store,
+      adapters: resolver(baseAdapter()),
+      outbox: { kick: vi.fn() },
+    });
+
+    await expect(
+      service.updateAccount(
+        { actorId: 'user-1' },
+        { accountId: 'account-1', automaticSyncIntervalMinutes: 45 },
+      ),
+    ).resolves.toMatchObject({ automaticSyncIntervalMinutes: 45 });
+    await expect(
+      service.updateAccount(
+        { actorId: 'user-1' },
+        { accountId: 'account-1', automaticSyncIntervalMinutes: 0 },
+      ),
+    ).rejects.toThrow('Mail automatic sync interval');
   });
 
   it('schedules the initial sync after completing Microsoft OAuth', async () => {
@@ -737,6 +770,83 @@ describe('mail MVP runtime', () => {
     });
   });
 
+  it('executes management actions per message and preserves partial failures', async () => {
+    await store.commitSyncBatch({
+      accountId: 'account-1',
+      folders: [],
+      messages: [
+        message('provider-management-success', 'Success'),
+        message('provider-management-failure', 'Failure'),
+      ],
+      deletedProviderMessageIds: [],
+      nextCursor: { value: 'management-action-test' },
+    });
+    const stored = await store.listMessages('user-1', {});
+    const setRead = vi.fn<NonNullable<MailProviderAdapter['setRead']>>(
+      async (providerMessageId) =>
+        providerMessageId === 'provider-management-failure'
+          ? {
+              ok: false,
+              error: {
+                code: 'MAIL_PROVIDER_TEMPORARY_FAILURE',
+                message: 'Provider unavailable',
+                category: 'network',
+                retryable: true,
+              },
+            }
+          : { ok: true, value: undefined },
+    );
+    const service = new DefaultMailService({
+      store,
+      adapters: resolver({ ...baseAdapter(), setRead }),
+      outbox: { kick: vi.fn() },
+    });
+
+    const result = await service.manageMessages(
+      { actorId: 'admin-1' },
+      {
+        action: 'markRead',
+        items: [...stored.items]
+          .sort((left, right) =>
+            right.providerMessageId.localeCompare(left.providerMessageId),
+          )
+          .map((item) => ({
+            accountId: item.accountId,
+            messageId: item.id,
+          })),
+      },
+    );
+
+    expect(result).toMatchObject({ succeeded: 1, failed: 1 });
+    expect(result.items).toEqual([
+      expect.objectContaining({
+        status: 'succeeded',
+        messageId: expect.any(String),
+      }),
+      expect.objectContaining({
+        status: 'failed',
+        error: {
+          code: 'MAIL_PROVIDER_TEMPORARY_FAILURE',
+          category: 'network',
+          retryable: true,
+        },
+      }),
+    ]);
+    const updated = await store.listMessages('user-1', {});
+    expect(updated.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          providerMessageId: 'provider-management-success',
+          read: true,
+        }),
+        expect.objectContaining({
+          providerMessageId: 'provider-management-failure',
+          read: false,
+        }),
+      ]),
+    );
+  });
+
   it('stores private notes and todo state without losing them on Provider sync', async () => {
     await store.commitSyncBatch({
       accountId: 'account-1',
@@ -1132,15 +1242,175 @@ describe('mail MVP runtime', () => {
     );
 
     expect(draft).toMatchObject({
-      providerMessageId: 'provider-draft-1',
+      providerMessageId: expect.stringMatching(/^local-draft:/u),
+      providerDraftMessageId: 'provider-draft-1',
       subject: 'Draft subject',
       draft: true,
     });
     await expect(store.listMessages('user-1', {})).resolves.toMatchObject({
       items: [
-        expect.objectContaining({ providerMessageId: 'provider-draft-1' }),
+        expect.objectContaining({
+          providerDraftMessageId: 'provider-draft-1',
+          providerMessageId: expect.stringMatching(/^local-draft:/u),
+        }),
       ],
     });
+  });
+
+  it('keeps a local draft when the Provider has no draft capability', async () => {
+    const service = new DefaultMailService({
+      store,
+      adapters: resolver(baseAdapter()),
+      outbox: { kick: vi.fn() },
+    });
+
+    const draft = await service.saveDraft(
+      { actorId: 'user-1' },
+      {
+        accountId: 'account-1',
+        identityId: 'identity-1',
+        to: [],
+        subject: 'Local draft',
+        text: 'Saved locally',
+        idempotencyKey: 'local-draft-request-1',
+      },
+    );
+
+    expect(draft.providerMessageId).toMatch(/^local-draft:/u);
+    expect(draft.folderIds).toEqual([MAIL_LOCAL_DRAFT_FOLDER_ID]);
+    await expect(
+      store.listMessages('user-1', { folderIds: [MAIL_LOCAL_DRAFT_FOLDER_ID] }),
+    ).resolves.toMatchObject({
+      items: [expect.objectContaining({ id: draft.id })],
+    });
+  });
+
+  it('does not lose the local draft when remote mirroring fails', async () => {
+    const saveDraft = vi.fn<NonNullable<MailProviderAdapter['saveDraft']>>(
+      async () => ({
+        ok: false,
+        error: {
+          code: 'TEST_DRAFT_MIRROR_FAILED',
+          message: 'Remote drafts are temporarily unavailable.',
+          category: 'network',
+          retryable: true,
+        },
+      }),
+    );
+    const adapter = {
+      ...baseAdapter(),
+      capabilities: { ...baseAdapter().capabilities, drafts: true },
+      saveDraft,
+    };
+    const service = new DefaultMailService({
+      store,
+      adapters: resolver(adapter),
+      outbox: { kick: vi.fn() },
+    });
+
+    const draft = await service.saveDraft(
+      { actorId: 'user-1' },
+      {
+        accountId: 'account-1',
+        identityId: 'identity-1',
+        to: [],
+        subject: 'Mirror failure',
+        text: 'Keep this locally',
+        idempotencyKey: 'local-draft-request-2',
+      },
+    );
+
+    expect(draft.providerMessageId).toMatch(/^local-draft:/u);
+    expect(draft.text).toBe('Keep this locally');
+    expect(saveDraft).toHaveBeenCalledTimes(1);
+  });
+
+  it('retains local changes and exposes a remote version when a draft conflicts', async () => {
+    const saveDraft = vi.fn<NonNullable<MailProviderAdapter['saveDraft']>>(
+      async (input) => ({
+        ok: true,
+        value: {
+          providerMessageId: 'remote-draft-message-1',
+          providerDraftId: 'remote-draft-1',
+          providerFolderIds: ['drafts'],
+          from: input.identity,
+          to: input.message.to,
+          cc: input.message.cc,
+          bcc: input.message.bcc,
+          replyTo: [],
+          references: [],
+          subject: input.message.subject,
+          text: input.message.text,
+          read: true,
+          starred: false,
+          draft: true,
+          attachments: [],
+        },
+      }),
+    );
+    const updateDraft = vi.fn<NonNullable<MailProviderAdapter['updateDraft']>>(
+      async () => {
+        throw new Error('should not overwrite the remote conflict');
+      },
+    );
+    const getMessage = vi.fn<NonNullable<MailProviderAdapter['getMessage']>>(
+      async () => ({
+        ok: true,
+        value: {
+          ...message('remote-draft-message-1', 'Remote subject'),
+          providerDraftId: 'remote-draft-1',
+          draft: true,
+          text: 'Remote body',
+        },
+      }),
+    );
+    const adapter = {
+      ...baseAdapter(),
+      capabilities: { ...baseAdapter().capabilities, drafts: true },
+      saveDraft,
+      updateDraft,
+      getMessage,
+    };
+    const service = new DefaultMailService({
+      store,
+      adapters: resolver(adapter),
+      outbox: { kick: vi.fn() },
+    });
+    const initial = await service.saveDraft(
+      { actorId: 'user-1' },
+      {
+        accountId: 'account-1',
+        identityId: 'identity-1',
+        to: [],
+        subject: 'Local subject',
+        text: 'Local body',
+        idempotencyKey: 'conflict-initial',
+      },
+    );
+
+    const conflicted = await service.saveDraft(
+      { actorId: 'user-1' },
+      {
+        accountId: 'account-1',
+        identityId: 'identity-1',
+        to: [],
+        subject: 'New local subject',
+        text: 'New local body',
+        draftMessageId: initial.id,
+        idempotencyKey: 'conflict-update',
+      },
+    );
+
+    expect(conflicted.subject).toBe('New local subject');
+    expect(conflicted.draftConflict?.remote.subject).toBe('Remote subject');
+    expect(updateDraft).not.toHaveBeenCalled();
+    const resolved = await service.resolveDraftConflict(
+      { actorId: 'user-1' },
+      { accountId: 'account-1', messageId: initial.id, action: 'useRemote' },
+    );
+    expect(resolved.subject).toBe('Remote subject');
+    expect(resolved.text).toBe('Remote body');
+    expect(resolved.draftConflict).toBeUndefined();
   });
 
   it('updates account lifecycle and removes an account without account defaults', async () => {
@@ -1821,6 +2091,10 @@ describe('mail MVP runtime', () => {
       accountIds: ['account-1'],
       folderIds: ['inbox'],
     });
+    const syntheticInbox = await store.listMessages('user-1', {
+      accountIds: ['account-1'],
+      folderIds: ['__nocobase_default_inbox__'],
+    });
     const conversation = await store.listConversationMessages(
       'user-1',
       'account-1',
@@ -1831,6 +2105,9 @@ describe('mail MVP runtime', () => {
       expect.arrayContaining(['thread-message-1', 'standalone-message']),
     );
     expect(inbox.items).toHaveLength(2);
+    expect(syntheticInbox.items.map((item) => item.providerMessageId)).toEqual(
+      expect.arrayContaining(['thread-message-1', 'standalone-message']),
+    );
     expect(
       inbox.items.find((item) => item.providerMessageId === 'thread-message-1')
         ?.subjectCount,
@@ -1840,6 +2117,61 @@ describe('mail MVP runtime', () => {
       'thread-message-2',
       'thread-message-3',
     ]);
+  });
+
+  it('searches subject, preview, sender, and recipient fields without searching the body', async () => {
+    await store.commitSyncBatch({
+      accountId: 'account-1',
+      folders: [
+        {
+          providerFolderId: 'inbox',
+          type: 'inbox',
+          name: 'Inbox',
+          kind: 'folder',
+        },
+      ],
+      messages: [
+        {
+          ...message('sender-fields', 'Ordinary subject'),
+          from: { name: 'Alice Sender', address: 'alice@example.com' },
+          text: 'secret-body-only',
+        },
+        {
+          ...message('recipient-fields', 'Recipient subject'),
+          to: [{ name: 'Bob Recipient', address: 'bob@example.com' }],
+        },
+      ],
+      deletedProviderMessageIds: [],
+      nextCursor: { value: 'cursor-search-fields' },
+    });
+
+    await expect(
+      store.listMessages('user-1', { query: 'Alice Sender' }),
+    ).resolves.toMatchObject({
+      items: [expect.objectContaining({ providerMessageId: 'sender-fields' })],
+    });
+    await expect(
+      store.listMessages('user-1', { query: 'alice@example.com' }),
+    ).resolves.toMatchObject({
+      items: [expect.objectContaining({ providerMessageId: 'sender-fields' })],
+    });
+    await expect(
+      store.listMessages('user-1', { query: 'Bob Recipient' }),
+    ).resolves.toMatchObject({
+      items: [
+        expect.objectContaining({ providerMessageId: 'recipient-fields' }),
+      ],
+    });
+    await expect(
+      store.listMessages('user-1', { query: 'bob@example.com' }),
+    ).resolves.toMatchObject({
+      items: [
+        expect.objectContaining({ providerMessageId: 'recipient-fields' }),
+      ],
+    });
+    await expect(
+      store.listMessages('user-1', { query: 'secret-body-only' }),
+    ).resolves.toMatchObject({ items: [] });
   });
 
   it('uses stable keyset cursors for mailbox and conversation pages', async () => {

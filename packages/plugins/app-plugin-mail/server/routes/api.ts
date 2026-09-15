@@ -30,6 +30,8 @@ import type {
   MailComposeInput,
   MailListMessagesInput,
   MailLabelColor,
+  MailManagementMessageActionInput,
+  MailDraftConflictAction,
   MailStartSyncInput,
 } from '../types.js';
 
@@ -50,6 +52,7 @@ const MAX_MAIL_ARRAY_ITEMS = 100;
 const MAX_MAIL_ATTACHMENT_IDS = 100;
 const MAIL_WORKSPACE_RESOURCE = 'mail.workspace';
 const MAIL_ADMIN_RESOURCE = 'mail.admin';
+const MAIL_MANAGEMENT_RESOURCE = 'mail.management';
 
 export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
   defineApiRoutes(({ container, config, publicBasePath }) => {
@@ -68,7 +71,9 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
           context.req.path,
         )
           ? MAIL_ADMIN_RESOURCE
-          : MAIL_WORKSPACE_RESOURCE;
+          : /(?:^|\/)mail\/management(?:\/|$)/u.test(context.req.path)
+            ? MAIL_MANAGEMENT_RESOURCE
+            : MAIL_WORKSPACE_RESOURCE;
         const allowed = await context.get('authz').can({
           resource: { type: 'page', id: resource },
           action: 'access',
@@ -163,6 +168,10 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
         data: await mail.updateAccount(operationContext(context), {
           accountId: context.req.param('accountId'),
           status,
+          automaticSyncIntervalMinutes: optionalInteger(
+            value.automaticSyncIntervalMinutes,
+            'automaticSyncIntervalMinutes',
+          ),
         }),
       });
     });
@@ -181,6 +190,19 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
     routes.get('/settings/operation-logs', async (context) =>
       context.json({
         data: await mail.listManagedOperationLogs(operationContext(context)),
+      }),
+    );
+    routes.get('/management/accounts', async (context) =>
+      context.json({
+        data: await mail.listManagedAccounts(operationContext(context)),
+      }),
+    );
+    routes.get('/management/accounts/:accountId/folders', async (context) =>
+      context.json({
+        data: await mail.listManagedFolders(
+          operationContext(context),
+          context.req.param('accountId'),
+        ),
       }),
     );
     routes.get('/unread-count', async (context) =>
@@ -477,6 +499,19 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
         data: await mail.saveDraft(operationContext(context), input),
       });
     });
+    routes.post(
+      '/accounts/:accountId/messages/:messageId/draft-conflict',
+      async (context) => {
+        const value = await readObject(context.req.raw);
+        return context.json({
+          data: await mail.resolveDraftConflict(operationContext(context), {
+            accountId: context.req.param('accountId'),
+            messageId: context.req.param('messageId'),
+            action: requiredDraftConflictAction(value.action),
+          }),
+        });
+      },
+    );
     routes.post('/accounts/:accountId/sync', async (context) => {
       const input = await readSyncInput(
         context.req.raw,
@@ -553,6 +588,31 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
         data: await mail.listMessages(operationContext(context), input),
       });
     });
+    routes.get('/management/messages', async (context) => {
+      const accountId = context.req.query('accountId');
+      const input: MailListMessagesInput = {
+        accountIds: accountId ? [accountId] : undefined,
+        folderIds: context.req.query('folderId')
+          ? [context.req.query('folderId')!]
+          : undefined,
+        query: context.req.query('query'),
+        cursor: context.req.query('cursor'),
+        limit: optionalInteger(context.req.query('limit'), 'limit'),
+        unread: optionalBoolean(context.req.query('unread'), 'unread'),
+        starred: optionalBoolean(context.req.query('starred'), 'starred'),
+      };
+      return context.json({
+        data: await mail.listManagedMessages(operationContext(context), input),
+      });
+    });
+    routes.post('/management/messages/actions', async (context) =>
+      context.json({
+        data: await mail.manageMessages(
+          operationContext(context),
+          await readManagementMessageActionInput(context.req.raw),
+        ),
+      }),
+    );
     routes.get(
       '/accounts/:accountId/conversations/:conversationId/messages',
       async (context) =>
@@ -685,6 +745,11 @@ function operationContext(context: {
     actorId: context.get('auth').user.id,
     signal: context.req.raw.signal,
   };
+}
+
+function requiredDraftConflictAction(value: unknown): MailDraftConflictAction {
+  if (value === 'useRemote' || value === 'keepLocal') return value;
+  throw new TypeError('draft conflict action is invalid.');
 }
 
 async function readDraftInput(request: Request): Promise<MailComposeInput> {
@@ -872,6 +937,49 @@ async function readObject(request: Request): Promise<Record<string, unknown>> {
   }
   if (!isRecord(value)) throw new TypeError('Mail request must be an object.');
   return value;
+}
+
+async function readManagementMessageActionInput(
+  request: Request,
+): Promise<MailManagementMessageActionInput> {
+  const value = await readObject(request);
+  const action = value.action;
+  if (
+    action !== 'markRead' &&
+    action !== 'markUnread' &&
+    action !== 'star' &&
+    action !== 'unstar' &&
+    action !== 'archive' &&
+    action !== 'move' &&
+    action !== 'delete'
+  ) {
+    throw new TypeError('Mail management action is invalid.');
+  }
+  if (!Array.isArray(value.items) || value.items.length === 0) {
+    throw new TypeError('Mail management action requires at least one item.');
+  }
+  if (value.items.length > MAX_MAIL_ARRAY_ITEMS) {
+    throw new TypeError(
+      `Mail management action accepts at most ${MAX_MAIL_ARRAY_ITEMS} items.`,
+    );
+  }
+  return {
+    action,
+    items: value.items.map((item, index) => {
+      if (!isRecord(item)) {
+        throw new TypeError(`Mail management item ${index} must be an object.`);
+      }
+      return {
+        accountId: requiredString(item.accountId, `items[${index}].accountId`),
+        messageId: requiredString(item.messageId, `items[${index}].messageId`),
+      };
+    }),
+    providerFolderId: optionalString(
+      value.providerFolderId,
+      'providerFolderId',
+    ),
+    permanently: optionalBoolean(value.permanently, 'permanently'),
+  };
 }
 
 function addresses(value: unknown, field: string): readonly MailAddress[] {

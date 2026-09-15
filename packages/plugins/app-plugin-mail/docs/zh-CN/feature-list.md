@@ -59,7 +59,7 @@ NocoBase v3 的**邮件插件（Mail）**负责连接用户自己的邮箱账户
   - [x] 使用 IMAP UIDVALIDITY 与 UIDNEXT 执行可恢复的定时增量同步
   - [x] 通过 SMTP 发送纯文本、HTML、回复和附件
   - [x] 标记已读、星标、附件下载和服务端永久删除
-  - [ ] Push、label、草稿、别名和移动到文件夹
+  - [ ] Push、Provider 原生 label、远端草稿、别名和移动到文件夹
   - [ ] 外部旗标、删除和移动的完整变化对账
 - [x] 一个 NocoBase 用户连接多个邮箱账户
 - [x] 同一邮箱账户只能归属于一个 NocoBase 用户
@@ -80,6 +80,7 @@ NocoBase v3 的**邮件插件（Mail）**负责连接用户自己的邮箱账户
 - [x] 从账户行打开签名管理抽屉并管理账户级签名
 - [x] 在账户工作区打开私有邮件模板和 NocoBase 本地标签管理（含颜色）
 - [x] 已注册但未配置 `mail.providers` 的 IMAP/SMTP 类型可见，并提示先完成服务端配置
+- [x] 工作台和批量发件页使用本地发件地址选择，列出账号主地址和可发送别名
 
 ### 2. 凭据与授权安全
 
@@ -90,7 +91,7 @@ NocoBase v3 的**邮件插件（Mail）**负责连接用户自己的邮箱账户
 - [x] API 返回值隐藏 credential reference、authorization subject 和同步 cursor
 - [x] 公共 OAuth callback 只处理已经创建的授权事务
 - [x] 账户、邮件、附件、草稿、模板和身份操作均校验当前用户所有权
-- [x] 个人 Mail API 检查 `mail.workspace/access`，跨用户管理 API 检查 `mail.admin/access`
+- [x] 个人 Mail API 检查 `mail.workspace/access`，跨用户账号和操作日志 API 检查 `mail.admin/access`，邮件管理页及批量操作 API 独立检查 `mail.management/access`
 
 ### 3. 邮箱同步
 
@@ -122,26 +123,30 @@ NocoBase v3 的**邮件插件（Mail）**负责连接用户自己的邮箱账户
   - [x] Push 丢失时继续使用定时轮询兜底
 - [x] 查看同步进度和同步结果
 - [x] 保证同一账户同时只有一个有效同步任务
-- [ ] 在界面中配置每个账户的自动同步间隔
+- [x] 在账号列表中配置每个账户的自动同步间隔，并按账户上次同步时间判断是否到期
 
 ### 4. 邮件中心与浏览
 
 - [x] 独立邮件中心页面 `/mail`
 - [x] 在多个已连接账户之间切换
 - [x] 按 Provider 文件夹或 NocoBase 本地标签查看邮件
+- [x] 全部账号或单个账号没有 Provider 文件夹时仍显示收件箱、已发送、草稿箱、垃圾箱、垃圾邮件和归档默认文件夹
+- [x] 当前账号自定义文件夹显示在默认文件夹之后，文件夹筛选可以和本地标签筛选同时生效
 - [x] 智能视图
   - [x] 全部邮件
   - [x] 未读邮件
   - [x] 已加星标邮件
-- [x] 按关键词搜索当前账户邮件
+- [x] 按关键词搜索主题、摘要、发件人显示名称/地址和收件人显示名称/地址，不匹配正文
 - [x] 邮件列表分页加载
 - [x] 展示发件人、主题、摘要、时间、未读、星标和附件状态
 - [x] 查看邮件正文
 - [x] 下载收到的附件
 - [x] 使用 Provider 原生 thread / conversation 展示会话
+- [x] 同一会话中的多封邮件支持逐封折叠和展开，折叠时保留摘要
 - [x] 会话较长时向前分页加载
 - [x] 没有稳定 conversation ID 的邮件按单封邮件展示
 - [x] HTML 邮件降级为纯文本展示，避免直接渲染不可信 HTML
+- [x] Trash 邮件支持永久删除，执行前需要二次确认
 - [ ] 正文全文索引与高级搜索条件
 - [ ] 富文本 HTML 正文展示、远程图片控制和跟踪像素拦截设置
 - [x] 顶部邮件入口和全局未读数角标
@@ -160,14 +165,15 @@ v3 只使用 Gmail `threadId` 或 Microsoft Graph `conversationId` 归并会话�
 - [x] 移动邮件到 Provider 文件夹
 - [x] 软删除——优先移动到 Trash / Deleted Items
 - [x] 永久删除的服务端能力
-- [x] 同步 Provider 原生 label 和 Microsoft folder
+- [x] 发现并同步 Provider 文件夹；Provider label 只作为 Provider 文件夹来源，不作为 NocoBase 本地标签
 - [x] 邮件内部备注
 - [x] 标记和取消邮件待办
 - [ ] 在邮件中心选择任意目标文件夹移动邮件
-- [ ] 批量标记已读、星标、归档、移动或删除
+- [x] 邮件管理页支持独立权限下批量标记已读、星标、归档、移动或删除
 - [x] 新建带颜色的 NocoBase 本地邮件标签
 - [x] 编辑名称、颜色和删除 NocoBase 本地邮件标签
 - [x] 给邮件添加或移除本地标签
+- [x] 本地标签操作不调用 Provider 标签接口，Provider 文件夹变化不会覆盖本地标签
 
 ### 6. 写信与发送
 
@@ -194,7 +200,11 @@ v3 只使用 Gmail `threadId` 或 Microsoft Graph `conversationId` 归并会话�
   - [x] 粗体、斜体、下划线、有序列表和无序列表
   - [x] 撤销、重做和清除格式
   - [x] 同时生成 HTML 正文和纯文本替代内容
+  - [x] 字号、标题级别、链接和插入图片
   - [x] 过滤不安全的 HTML 标签、属性和链接
+- [x] 默认签名自动插入，切换签名时替换原签名，模板覆盖已有内容前二次确认
+- [x] To、CC、BCC 和发件人地址区域支持收缩与展开
+- [x] `/dev/mail/bulk-send` 批量发件页，按收件人独立提交、预览、结果查看和失败重试
 - [x] 模板变量插值——比如从当前记录填入联系人姓名或订单号
 - [ ] 已发送邮件撤回
 - [ ] 发送前延迟和撤销发送
@@ -203,17 +213,18 @@ v3 只使用 Gmail `threadId` 或 Microsoft Graph `conversationId` 归并会话�
 
 ### 7. 草稿
 
-- [x] 手动保存 Provider 草稿
-- [x] 打开已有草稿继续编辑
-- [x] 发送已有草稿
+- [x] 本地草稿作为唯一可编辑来源，所有支持发信的 Provider 都可以保存、恢复和发送
+- [x] Gmail 和 Microsoft 远端草稿作为可选同步镜像，镜像失败不阻断本地草稿
+- [x] 打开已有本地草稿继续编辑
+- [x] 发送已有本地草稿
 - [x] 修改草稿收件人、主题和正文
 - [x] 保留、添加或移除草稿附件
-- [x] 回复和转发内容保存为 Provider 草稿
-- [x] 编辑过程中防抖自动保存到 Provider 草稿
+- [x] 回复和转发内容保存为本地草稿，并按能力同步远端镜像
+- [x] 编辑过程中防抖自动保存到本地草稿
 - [x] 离开编辑器前提示未保存内容
 - [x] 当前标签页刷新后提示恢复未完成邮件
 - [x] 显示草稿正在保存、已保存和保存失败状态
-- [ ] 草稿版本历史和冲突处理
+- [x] 本地草稿与远端镜像冲突时保留本地修改，支持查看远端版本或放弃本地修改
 
 ### 8. 附件
 
@@ -227,6 +238,7 @@ v3 只使用 Gmail `threadId` 或 Microsoft Graph `conversationId` 归并会话�
 - [x] Microsoft Graph 小附件直接发送
 - [x] Microsoft Graph 3 MB 及以上附件使用 upload session 分片上传
 - [x] Microsoft upload session 只接受 HTTPS 地址
+- [x] 邮件正文内联图片通过 CID 匹配受保护的本地附件地址并显示
 - [ ] 内联图片编辑与 CID 管理界面
 - [ ] 文件预览
 - [ ] 从 NocoBase 文件管理器选择附件
@@ -247,7 +259,7 @@ v3 只使用 Gmail `threadId` 或 Microsoft Graph `conversationId` 归并会话�
 - [x] 写信时临时切换签名或不使用签名
 - [x] 设置默认签名
 - [ ] 按新邮件、回复等场景自动选择不同签名
-- [ ] 完整的富文本签名编辑器
+- [x] 完整的富文本签名编辑器
 
 ### 10. 邮件模板
 
@@ -264,6 +276,7 @@ v3 只使用 Gmail `threadId` 或 Microsoft Graph `conversationId` 归并会话�
 
 - [x] 当前用户账户设置页
 - [x] 管理员查看全部用户连接的邮箱账户
+- [x] 独立权限的邮件管理页以表格查看全部账号邮件并执行批量操作
 - [x] 管理员查看全部同步记录和发送记录
 - [x] 查看同步 mode、phase、状态、批次数和消息数
 - [x] 查看发送 submission 状态和公开错误分类
@@ -296,8 +309,19 @@ v3 只使用 Gmail `threadId` 或 Microsoft Graph `conversationId` 归并会话�
 - [x] Mail Core 管理权限、凭据、持久化、任务和一致性
 - [x] Provider SDK 类型不会泄漏到 Mail Core 公共接口
 - [ ] Provider capability 的结构化限制——比如消息大小、远程搜索和 ID 稳定性
-- [ ] Provider 兼容性测试套件
-- [ ] 第三方 Provider 开发指南和示例插件
+- [x] Gmail、Microsoft 和 IMAP/SMTP Provider 兼容性测试套件
+- [x] 第三方 Provider 开发指南
+- [ ] 第三方 Provider 示例插件
+
+### Provider API 调用方式
+
+Gmail 和 Microsoft 365 Provider 目前直接调用各自的官方 REST API，没有引入 [Google APIs Node.js Client](https://github.com/googleapis/google-api-nodejs-client)（`googleapis`）或 [Microsoft Graph JavaScript SDK](https://learn.microsoft.com/en-us/graph/sdks/sdk-installation)（`@microsoft/microsoft-graph-client`）。这里的“直接调用”仍然使用 Gmail API、Google OAuth、Microsoft Graph 和 Microsoft identity 的官方 endpoint，不代表使用非官方接口。
+
+选择 REST API 是因为 Provider 需要适配 `MailProviderAdapter`——Mail Core 管理权限、凭据存储、同步任务和一致性，Provider 管理 token refresh、Provider cursor、协议调用和错误转换。官方 SDK 可以减少请求构造和 API 类型定义，不过不能替代 Gmail History、Graph Delta、附件分片、Push subscription 续期和邮件标准化等 NocoBase 业务逻辑。
+
+直接调用也让 Provider 能统一设置请求超时、响应大小限制、错误转换和测试 mock，并避免在每个 Provider 中增加额外的运行时依赖。代价是 Provider 需要自己维护 endpoint、API 类型和协议变化。
+
+如果后续某个 Provider 使用的 API 范围显著扩大，或者手写请求的维护成本超过 SDK 依赖成本，可以在该 Provider 内部引入官方 SDK。SDK 类型和客户端对象仍然需要映射到 `MailProviderAdapter`，不能进入 Mail Core 公共接口。
 
 ## Provider 能力对比
 
@@ -308,9 +332,9 @@ v3 只使用 Gmail `threadId` 或 Microsoft Graph `conversationId` 归并会话�
 | 首次同步   | Gmail message 分页          | Graph folder message 分页                         | IMAP 文件夹分页                         |
 | 增量同步   | Gmail History               | Graph per-folder delta                            | UIDVALIDITY / UIDNEXT，主要发现新增邮件 |
 | Push       | Gmail watch + Pub/Sub       | Graph subscription + webhook                      | 不支持                                  |
-| 邮件组织   | label                       | folder                                            | folder，仅支持基础文件夹                |
+| 邮件组织   | Provider label 归一为文件夹 | folder                                            | folder，仅支持基础文件夹                |
 | 原生会话   | `threadId`                  | `conversationId`                                  | 不提供，邮件按独立消息处理              |
-| 草稿       | Gmail Draft API             | Graph Message Draft API                           | 不支持                                  |
+| 草稿       | 本地草稿 + Gmail Draft 镜像 | 本地草稿 + Graph Draft 镜像                       | 本地草稿，Provider 不提供远端草稿       |
 | 发件身份   | Gmail send-as               | Graph mailbox identities                          | 连接邮箱主身份                          |
 | 大附件     | Gmail MIME，受 25 MB 总限制 | 3 MB 以下直接添加，3 MB 及以上使用 upload session | 由 SMTP 服务商限制                      |
 | 移动和删除 | 支持移动、软删除和永久删除  | 支持移动、软删除和永久删除                        | 仅支持永久删除                          |
@@ -319,23 +343,23 @@ v3 只使用 Gmail `threadId` 或 Microsoft Graph `conversationId` 归并会话�
 
 NocoBase v2 邮件管理插件已经形成了完整的产品入口和可配置区块。v3 当前更侧重邮件核心、Provider、同步可靠性和独立邮件中心。下面只列官方文档可以确认的 v2 能力。
 
-| v2 能力                     | v3 当前状态  | 说明                                                                  |
-| --------------------------- | ------------ | --------------------------------------------------------------------- |
-| Gmail 和 Outlook OAuth 接入 | 已实现       | v3 拆分为 Gmail 与 Microsoft Provider 插件                            |
-| 多账户邮件中心              | 已实现       | v3 默认展示全部账户邮件，也支持切换账户、文件夹、搜索和原生会话       |
-| 手动和 5 分钟自动同步       | 已实现并增强 | v3 默认同步全部可同步账户，另外支持 Push、可恢复分批同步和增量 cursor |
-| 发送、查看、回复和转发      | 已实现       | v3 回复和转发使用 Provider 原生关系                                   |
-| 邮件签名                    | 已实现       | v3 支持每个账户维护多个共享签名、设置默认值，并在写信时选择或关闭签名 |
-| 邮件别名                    | 已实现       | v3 从 Provider 发现发件身份，发送时默认使用账户主发件地址             |
-| 邮件模板                    | 已实现       | v3 当前范围包括私有模板的创建、编辑、删除和写信应用                   |
-| 邮件备注                    | 已实现       | v3 可在邮件详情中维护仅存于 NocoBase 的内部备注                       |
-| 邮件待办                    | 已实现       | v3 可把邮件标为待办，并在列表与详情中展示                             |
-| 邮件标签管理                | 部分实现     | v3 支持在 NocoBase 中新建、分配和移除本地标签，暂不支持重命名或删除   |
-| 表格批量发送                | 不规划       | v3 保留写信入口中的逐收件人独立发送，不接入表格选中记录或全部记录     |
-| 自动保存草稿                | 已实现       | 编辑后防抖保存 Provider 草稿，并提供未保存保护与刷新恢复提示          |
-| 邮件消息、详情和发送区块    | 不规划       | v3 使用固定邮件中心，不提供 FlowEngine 邮件区块                       |
-| 按业务数据范围过滤邮件区块  | 不规划       | 该能力依赖邮件区块，不计入 v3 范围                                    |
-| AI 员工参与总结、分析和写信 | 不规划       | 不计入 v3 邮件插件范围                                                |
+| v2 能力                     | v3 当前状态  | 说明                                                                              |
+| --------------------------- | ------------ | --------------------------------------------------------------------------------- |
+| Gmail 和 Outlook OAuth 接入 | 已实现       | v3 拆分为 Gmail 与 Microsoft Provider 插件                                        |
+| 多账户邮件中心              | 已实现       | v3 默认展示全部账户邮件，也支持切换账户、文件夹、搜索和原生会话                   |
+| 手动和可配置自动同步        | 已实现并增强 | v3 默认同步全部可同步账户，支持按账户设置间隔、Push、可恢复分批同步和增量 cursor  |
+| 发送、查看、回复和转发      | 已实现       | v3 回复和转发使用 Provider 原生关系                                               |
+| 邮件签名                    | 已实现       | v3 支持每个账户维护多个共享签名、富文本编辑、设置默认值，并在写信时选择或关闭签名 |
+| 邮件别名                    | 已实现       | v3 从 Provider 发现发件身份，发送时默认使用账户主发件地址                         |
+| 邮件模板                    | 已实现       | v3 当前范围包括私有模板的创建、编辑、删除和写信应用                               |
+| 邮件备注                    | 已实现       | v3 可在邮件详情中维护仅存于 NocoBase 的内部备注                                   |
+| 邮件待办                    | 已实现       | v3 可把邮件标为待办，并在列表与详情中展示                                         |
+| 邮件标签管理                | 已实现       | v3 标签完全由 NocoBase 本地管理，不调用 Provider 标签接口                         |
+| 表格批量发送                | 不规划       | v3 保留写信入口中的逐收件人独立发送，不接入表格选中记录或全部记录                 |
+| 自动保存草稿                | 已实现       | 编辑后防抖保存本地草稿，可按 Provider 能力同步远端镜像，并提供冲突提示            |
+| 邮件消息、详情和发送区块    | 不规划       | v3 使用固定邮件中心，不提供 FlowEngine 邮件区块                                   |
+| 按业务数据范围过滤邮件区块  | 不规划       | 该能力依赖邮件区块，不计入 v3 范围                                                |
+| AI 员工参与总结、分析和写信 | 不规划       | 不计入 v3 邮件插件范围                                                            |
 
 ## 后续功能优先级
 

@@ -102,10 +102,12 @@ describe('mail account management', () => {
     expect(signatureDrawer).toHaveClass('fixed', 'inset-y-0', 'right-0');
     const name =
       await within(signatureDrawer).findByLabelText('Signature name');
-    const signature =
-      await within(signatureDrawer).findByLabelText('Signature text');
+    const signature = await within(signatureDrawer).findByRole('textbox', {
+      name: 'Signature content',
+    });
     fireEvent.change(name, { target: { value: 'Work' } });
-    fireEvent.change(signature, { target: { value: 'New signature' } });
+    signature.innerHTML = '<p>New signature</p>';
+    fireEvent.input(signature);
     fireEvent.click(
       within(signatureDrawer).getByRole('button', { name: 'Add signature' }),
     );
@@ -115,6 +117,7 @@ describe('mail account management', () => {
         accountId: 'account-1',
         name: 'Work',
         text: 'New signature',
+        html: '<p>New signature</p>',
         isDefault: true,
       }),
     );
@@ -166,6 +169,7 @@ describe('mail account management', () => {
         id: 'signature-1',
         name: 'Work updated',
         text: 'Best regards',
+        html: '<p>Best regards</p>',
         isDefault: true,
       }),
     );

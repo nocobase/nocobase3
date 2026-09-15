@@ -5,6 +5,9 @@ import {
   MAX_MAIL_SYNC_BATCH_SIZE,
   DEFAULT_MAIL_OAUTH_CALLBACK_PATH,
   DEFAULT_MAIL_CONFIG,
+  DEFAULT_MAIL_AUTOMATIC_SYNC_INTERVAL_MINUTES,
+  resolveMailAutomaticSyncIntervalFromMs,
+  resolveMailAutomaticSyncIntervalMinutes,
   resolveMailOAuthCallbackPath,
   resolveMailOAuthCallbackUrl,
   resolveMailOAuthOrigin,
@@ -12,6 +15,25 @@ import {
 } from '../server/config.js';
 
 describe('mail sync configuration', () => {
+  it('uses a five-minute automatic sync default and accepts positive minute values', () => {
+    expect(resolveMailAutomaticSyncIntervalMinutes()).toBe(
+      DEFAULT_MAIL_AUTOMATIC_SYNC_INTERVAL_MINUTES,
+    );
+    expect(resolveMailAutomaticSyncIntervalMinutes(30)).toBe(30);
+    expect(resolveMailAutomaticSyncIntervalFromMs(90_001)).toBe(2);
+  });
+
+  it('rejects non-positive or unsafe automatic sync intervals', () => {
+    for (const value of [0, -1, 1.5, Number.POSITIVE_INFINITY]) {
+      expect(() => resolveMailAutomaticSyncIntervalMinutes(value)).toThrow(
+        'Mail automatic sync interval',
+      );
+    }
+    expect(() => resolveMailAutomaticSyncIntervalFromMs(59_999)).toThrow(
+      'automaticSyncIntervalMs',
+    );
+  });
+
   it('uses the bounded default and accepts the configured upper bound', () => {
     expect(resolveMailSyncBatchSize()).toBe(DEFAULT_MAIL_SYNC_BATCH_SIZE);
     expect(resolveMailSyncBatchSize(MAX_MAIL_SYNC_BATCH_SIZE)).toBe(

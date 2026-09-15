@@ -1,6 +1,8 @@
 import {
   Archive,
   CheckSquare2,
+  ChevronDown,
+  ChevronRight,
   Download,
   Forward,
   Mail,
@@ -16,7 +18,7 @@ import {
 import type { ReactElement } from 'react';
 import { useState } from 'react';
 
-import { sanitizeMailHtml } from '../lib/mail-template.js';
+import { resolveMailInlineImages } from '../lib/mail-inline-images.js';
 import type { MailLabel, MailMessage } from '../mail-client.js';
 import { Button } from './ui/button.js';
 import { MailLabelTag } from './mail-label-tag.js';
@@ -42,6 +44,8 @@ export interface MailConversationViewLabels {
   readonly saveNote: string;
   readonly todo: string;
   readonly close?: string;
+  readonly collapseMessage?: string;
+  readonly expandMessage?: string;
 }
 
 export interface MailConversationViewProps {
@@ -83,6 +87,8 @@ export interface MailConversationViewProps {
     readonly markUnread: string;
     readonly star: string;
     readonly unstar: string;
+    readonly collapseMessage?: string;
+    readonly expandMessage?: string;
   };
 }
 
@@ -97,6 +103,15 @@ export function MailConversationView({
   actionLabels,
   availableLabels = [],
 }: MailConversationViewProps): ReactElement {
+  const [collapseState, setCollapseState] = useState<{
+    readonly subject?: string;
+    readonly messageIds: ReadonlySet<string>;
+  }>(() => ({ subject, messageIds: new Set() }));
+  const collapsedMessageIds =
+    collapseState.subject === subject
+      ? collapseState.messageIds
+      : new Set<string>();
+
   if (messages.length === 0) {
     return (
       <section className='grid h-full min-h-0 place-items-center overflow-y-auto p-8 text-sm text-muted-foreground'>
@@ -149,6 +164,32 @@ export function MailConversationView({
                 <time className='shrink-0 text-xs text-muted-foreground'>
                   {formatFullDate(message.receivedAt ?? message.sentAt)}
                 </time>
+                <Button
+                  aria-expanded={!collapsedMessageIds.has(message.id)}
+                  aria-label={
+                    collapsedMessageIds.has(message.id)
+                      ? (actionLabels?.expandMessage ?? 'Expand message')
+                      : (actionLabels?.collapseMessage ?? 'Collapse message')
+                  }
+                  className='size-7 shrink-0 p-0 [&_svg]:size-4'
+                  onClick={() =>
+                    setCollapseState((current) => {
+                      const next = new Set(
+                        current.subject === subject ? current.messageIds : [],
+                      );
+                      if (next.has(message.id)) next.delete(message.id);
+                      else next.add(message.id);
+                      return { subject, messageIds: next };
+                    })
+                  }
+                  variant='ghost'
+                >
+                  {collapsedMessageIds.has(message.id) ? (
+                    <ChevronRight aria-hidden='true' />
+                  ) : (
+                    <ChevronDown aria-hidden='true' />
+                  )}
+                </Button>
                 {actions && actionLabels ? (
                   <div className='flex shrink-0 items-center gap-0.5'>
                     {message.draft && actions.editDraft ? (
@@ -233,15 +274,26 @@ export function MailConversationView({
                   </div>
                 ) : null}
               </header>
-              {messageLabels.length > 0 ? (
+              {collapsedMessageIds.has(message.id) ? (
+                <p className='mt-3 truncate text-sm text-muted-foreground'>
+                  {message.preview ??
+                    message.text ??
+                    (message.html ? plainMessageBody(message) : '')}
+                </p>
+              ) : null}
+              {!collapsedMessageIds.has(message.id) &&
+              messageLabels.length > 0 ? (
                 <div className='mt-3 flex flex-wrap gap-1.5'>
                   {messageLabels.map((label) => (
                     <MailLabelTag key={label.id} label={label} size='md' />
                   ))}
                 </div>
               ) : null}
-              <MessageBody message={message} />
-              {message.attachments.length > 0 ? (
+              {!collapsedMessageIds.has(message.id) ? (
+                <MessageBody message={message} />
+              ) : null}
+              {!collapsedMessageIds.has(message.id) &&
+              message.attachments.length > 0 ? (
                 <div className='mt-4 border-t pt-3 text-xs text-muted-foreground'>
                   <div className='mb-2 flex items-center gap-2'>
                     <Paperclip aria-hidden='true' className='size-3.5' />
@@ -279,7 +331,7 @@ export function MailConversationView({
                   </div>
                 </div>
               ) : null}
-              {actions ? (
+              {!collapsedMessageIds.has(message.id) && actions ? (
                 <MessageMetadata
                   actions={actions}
                   availableLabels={availableLabels}
@@ -444,7 +496,9 @@ function MessageBody({
         className='mt-4 max-w-full overflow-x-auto text-sm leading-6 text-foreground [&_a]:text-primary [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:pl-3 [&_br]:leading-6 [&_img]:max-w-full [&_li]:ml-5 [&_ol]:list-decimal [&_p]:my-2 [&_table]:max-w-full [&_td]:p-1 [&_th]:p-1 [&_ul]:list-disc'
         // The body is sanitized by sanitizeMailHtml before it reaches the DOM.
         // eslint-disable-next-line @eslint-react/dom-no-dangerously-set-innerhtml
-        dangerouslySetInnerHTML={{ __html: sanitizeMailHtml(message.html) }}
+        dangerouslySetInnerHTML={{
+          __html: resolveMailInlineImages(message, message.html),
+        }}
       />
     );
   }

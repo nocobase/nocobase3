@@ -72,8 +72,9 @@ export function MailboxSidebar({
     ...folders.filter((folder) => folder.type === 'inbox'),
     ...folders.filter((folder) => folder.type === 'sent'),
     ...folders.filter(
-      (folder) => folder.type !== 'inbox' && folder.type !== 'sent',
+      (folder) => !['inbox', 'sent', 'custom'].includes(folder.type),
     ),
+    ...folders.filter((folder) => folder.type === 'custom'),
   ];
 
   return (
@@ -127,7 +128,7 @@ export function MailboxSidebar({
         />
       </nav>
 
-      {accountId ? (
+      {accounts.length > 0 ? (
         <>
           <p className='mt-6 px-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase'>
             {labels.folders}
@@ -137,15 +138,18 @@ export function MailboxSidebar({
               const Icon = folderIcons[folder.type];
               return (
                 <SidebarButton
-                  active={!labelId && folderId === folder.providerFolderId}
+                  active={folderId === folder.providerFolderId}
                   count={folder.unreadCount}
                   icon={Icon}
                   key={folder.id}
                   label={folder.name}
                   onClick={() => {
                     onSmartViewChange('all');
-                    onFolderChange(folder.providerFolderId);
-                    onLabelChange(undefined);
+                    onFolderChange(
+                      folderId === folder.providerFolderId
+                        ? undefined
+                        : folder.providerFolderId,
+                    );
                   }}
                 />
               );
@@ -167,8 +171,7 @@ export function MailboxSidebar({
                 label={label.name}
                 onClick={() => {
                   onSmartViewChange('all');
-                  onFolderChange(undefined);
-                  onLabelChange(label.id);
+                  onLabelChange(labelId === label.id ? undefined : label.id);
                 }}
               />
             ))}

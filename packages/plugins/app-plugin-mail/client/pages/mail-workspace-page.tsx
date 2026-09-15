@@ -13,19 +13,24 @@ import {
 } from '../components/index.js';
 import { Button } from '../components/ui/button.js';
 import { Input } from '../components/ui/input.js';
+import { NativeSelect } from '../components/ui/native-select.js';
 import {
   plainTextToMailHtml,
   renderMailTemplate,
   sanitizeMailHtml,
   type MailTemplateVariables,
 } from '../lib/mail-template.js';
+import { mergeMailFolders } from '../lib/mail-folders.js';
+import { replaceMailSignatureContent } from '../lib/mail-signature.js';
 import {
   mailErrorMessage,
   type MailAccountView,
   type MailBulkComposeInput,
   type MailClient,
   type MailComposeInput,
+  type MailDraftConflict,
   type MailFolder,
+  type MailIdentity,
   type MailLabel,
   type MailMessage,
   type MailMessageSummary,
@@ -51,6 +56,7 @@ interface ComposerState {
   readonly text: string;
   readonly html: string;
   readonly scheduledAt: string;
+  readonly draftConflict?: MailDraftConflict;
 }
 
 const EMPTY_COMPOSER: ComposerState = {
@@ -124,7 +130,13 @@ export default function MailWorkspacePage({
   const [composeAccountId, setComposeAccountId] = useState('');
   const [composer, setComposer] = useState<ComposerState>();
   const [composerAccountId, setComposerAccountId] = useState('');
+  const [composerIdentities, setComposerIdentities] = useState<
+    readonly MailIdentity[]
+  >([]);
   const [identityId, setIdentityId] = useState('');
+  const [ccVisible, setCcVisible] = useState(false);
+  const [bccVisible, setBccVisible] = useState(false);
+  const [scheduleEnabled, setScheduleEnabled] = useState(false);
   const [signatures, setSignatures] = useState<readonly MailSignature[]>([]);
   const [signatureId, setSignatureId] = useState('');
   const [sending, setSending] = useState(false);
@@ -184,6 +196,9 @@ export default function MailWorkspacePage({
     composerAccount,
     providers,
   );
+  const sendableComposerIdentities = composerIdentities.filter(
+    (identity) => identity.canSend,
+  );
   const selectedMessageAccount = selected
     ? accounts.find((account) => account.id === selected.accountId)
     : undefined;
@@ -209,8 +224,7 @@ export default function MailWorkspacePage({
     composerAccount?.status === 'active' && composerProviderCapabilities?.send,
   );
   const composerCanDraft = Boolean(
-    composerAccount?.status === 'active' &&
-    composerProviderCapabilities?.drafts,
+    composerAccount?.status === 'active' && composerProviderCapabilities?.send,
   );
   const selectedMessageCanMove = Boolean(
     selectedMessageAccount?.status === 'active' &&
@@ -221,10 +235,13 @@ export default function MailWorkspacePage({
   );
   const selectedMessageCanDraft = Boolean(
     selectedMessageAccount?.status === 'active' &&
-    selectedMessageProviderCapabilities?.drafts,
+    selectedMessageProviderCapabilities?.send,
   );
   const selectedMessageCanUseLabels =
     selectedMessageAccount?.status === 'active';
+  const selectedMessageInTrash = Boolean(
+    selected && isMessageInTrash(selected, foldersByAccountId),
+  );
 
   const loadAccounts = useCallback(
     (clearError = true): void => {
@@ -399,21 +416,43 @@ export default function MailWorkspacePage({
       const next = new Map<string, readonly MailFolder[]>();
       for (const result of results) {
         if (result.status === 'fulfilled') {
-          next.set(
-            result.value.accountId,
-            result.value.folders.filter((folder) => folder.type !== 'custom'),
-          );
+          next.set(result.value.accountId, result.value.folders);
         } else {
           requestError(result.reason);
         }
       }
       setFoldersByAccountId(next);
-      setFolders(next.get(accountId)?.slice() ?? []);
+      setFolders(
+        mergeMailFolders(
+          accountId || '__all__',
+          accountId ? (next.get(accountId) ?? []) : [],
+          {
+            inbox: t('workspace.defaultFolders.inbox', {
+              defaultValue: 'Inbox',
+            }),
+            sent: t('workspace.defaultFolders.sent', {
+              defaultValue: 'Sent',
+            }),
+            drafts: t('workspace.defaultFolders.drafts', {
+              defaultValue: 'Drafts',
+            }),
+            trash: t('workspace.defaultFolders.trash', {
+              defaultValue: 'Trash',
+            }),
+            junk: t('workspace.defaultFolders.junk', {
+              defaultValue: 'Spam',
+            }),
+            archive: t('workspace.defaultFolders.archive', {
+              defaultValue: 'Archive',
+            }),
+          },
+        ),
+      );
     });
     return () => {
       active = false;
     };
-  }, [accountId, accounts, mail, reloadVersion, requestError]);
+  }, [accountId, accounts, mail, reloadVersion, requestError, t]);
 
   useEffect(() => {
     if (accounts.length === 0) return;
@@ -641,6 +680,10 @@ export default function MailWorkspacePage({
     setRecoveryOffer(recovery);
     setDraftSaveStatus('idle');
     setComposer(next);
+    setComposerIdentities([]);
+    setCcVisible(Boolean(next.cc.trim()));
+    setBccVisible(Boolean(next.bcc.trim()));
+    setScheduleEnabled(Boolean(next.scheduledAt));
     setSignatures([]);
     setSignatureId(recovery?.signatureId ?? '');
     setComposeAttachments([]);
@@ -650,11 +693,19 @@ export default function MailWorkspacePage({
     void mail.listTemplates().then(setTemplates, requestError);
     void mail.listSignatures(targetAccountId).then((items) => {
       setSignatures(items);
-      if (!recovery?.signatureId) {
-        setSignatureId(items.find((item) => item.isDefault)?.id ?? '');
+      if (recovery?.signatureId) return;
+      const defaultSignatureId = items.find((item) => item.isDefault)?.id ?? '';
+      setSignatureId(defaultSignatureId);
+      if (next.mode !== 'edit' && !next.text.trim() && !next.html.trim()) {
+        setComposer((current) =>
+          current
+            ? replaceComposerSignature(current, items, defaultSignatureId)
+            : current,
+        );
       }
     }, requestError);
     void mail.listIdentities(targetAccountId).then((items) => {
+      setComposerIdentities(items);
       const nextIdentityId =
         items.find(
           (identity) =>
@@ -702,6 +753,10 @@ export default function MailWorkspacePage({
     clearComposerRecovery(composerAccountId);
     setComposer(undefined);
     setComposerAccountId('');
+    setComposerIdentities([]);
+    setCcVisible(false);
+    setBccVisible(false);
+    setScheduleEnabled(false);
     setRecoveryOffer(undefined);
     setComposeAttachments([]);
     setRetainedAttachments([]);
@@ -741,6 +796,14 @@ export default function MailWorkspacePage({
       setError(
         t('workspace.messageRequired', {
           defaultValue: 'Add a message body.',
+        }),
+      );
+      return;
+    }
+    if (scheduleEnabled && !composer.scheduledAt) {
+      setError(
+        t('workspace.scheduledAtRequired', {
+          defaultValue: 'Choose a send time.',
         }),
       );
       return;
@@ -821,6 +884,25 @@ export default function MailWorkspacePage({
       });
   };
 
+  const deleteWorkspaceMessage = (message: MailMessage): void => {
+    const permanently = isMessageInTrash(message, foldersByAccountId);
+    if (
+      permanently &&
+      !window.confirm(
+        t('workspace.permanentlyDeleteConfirm', {
+          defaultValue:
+            'Permanently delete this message? This action cannot be undone.',
+        }),
+      )
+    ) {
+      return;
+    }
+    mutateMessage(
+      mail.deleteMessage(message.accountId, message.id, permanently),
+      true,
+    );
+  };
+
   const currentComposerFingerprint = composer
     ? composerFingerprint(
         composer,
@@ -842,7 +924,9 @@ export default function MailWorkspacePage({
       retainedAttachments.length),
   );
   const composerHasRequiredContent = Boolean(
-    composer?.subject.trim() && composer?.text.trim(),
+    composer?.subject.trim() &&
+    composer?.text.trim() &&
+    (!scheduleEnabled || composer.scheduledAt),
   );
   const composerHasUnsavedChanges = Boolean(
     composer &&
@@ -931,6 +1015,7 @@ export default function MailWorkspacePage({
           const savedComposer = {
             ...snapshot,
             draftMessageId: draft.id,
+            draftConflict: draft.draftConflict,
             text: mergeProviderDraftBody(
               snapshot.text,
               snapshot.text,
@@ -979,6 +1064,7 @@ export default function MailWorkspacePage({
               ? {
                   ...current,
                   draftMessageId: draft.id,
+                  draftConflict: draft.draftConflict,
                   text: mergeProviderDraftBody(
                     current.text,
                     snapshot.text,
@@ -1111,7 +1197,7 @@ export default function MailWorkspacePage({
             accounts={accounts}
             customLabels={customLabels}
             folderId={folderId}
-            folders={isAllAccounts ? [] : folders}
+            folders={folders}
             labelId={labelId}
             labels={{
               account: t('dev.account', { defaultValue: 'Account' }),
@@ -1131,6 +1217,7 @@ export default function MailWorkspacePage({
               accountIdRef.current = value;
               setAccountId(value);
               if (value) rememberComposeAccount(value);
+              setFolders([]);
               setFolderId(undefined);
               setLabelId(undefined);
               setSmartView('all');
@@ -1140,14 +1227,12 @@ export default function MailWorkspacePage({
               messageRequestIdRef.current += 1;
               conversationRequestIdRef.current += 1;
               setFolderId(value);
-              setLabelId(undefined);
             }}
             onLabelChange={(value) => {
               if (value === labelId) return;
               messageRequestIdRef.current += 1;
               conversationRequestIdRef.current += 1;
               setLabelId(value);
-              setFolderId(undefined);
             }}
             onSmartViewChange={(value) => {
               if (value === smartView) return;
@@ -1208,11 +1293,7 @@ export default function MailWorkspacePage({
                             );
                         }
                       : undefined,
-                    delete: (message) =>
-                      mutateMessage(
-                        mail.deleteMessage(message.accountId, message.id),
-                        true,
-                      ),
+                    delete: (message) => deleteWorkspaceMessage(message),
                     downloadAttachment: (message, attachment) => {
                       void downloadAttachment(mail, message, attachment).catch(
                         (cause) =>
@@ -1265,6 +1346,7 @@ export default function MailWorkspacePage({
                               html:
                                 message.html ??
                                 plainTextToMailHtml(message.text ?? ''),
+                              draftConflict: message.draftConflict,
                             },
                             message.attachments,
                             message.accountId,
@@ -1318,7 +1400,11 @@ export default function MailWorkspacePage({
             }
             actionLabels={{
               archive: t('workspace.archive', { defaultValue: 'Archive' }),
-              delete: t('workspace.delete', { defaultValue: 'Delete' }),
+              delete: selectedMessageInTrash
+                ? t('workspace.permanentlyDelete', {
+                    defaultValue: 'Permanently delete',
+                  })
+                : t('workspace.delete', { defaultValue: 'Delete' }),
               download: t('workspace.download', { defaultValue: 'Download' }),
               reply: t('workspace.reply', { defaultValue: 'Reply' }),
               forward: t('workspace.forward', { defaultValue: 'Forward' }),
@@ -1331,6 +1417,12 @@ export default function MailWorkspacePage({
               }),
               star: t('workspace.star', { defaultValue: 'Star' }),
               unstar: t('workspace.unstar', { defaultValue: 'Remove star' }),
+              collapseMessage: t('workspace.collapseMessage', {
+                defaultValue: 'Collapse message',
+              }),
+              expandMessage: t('workspace.expandMessage', {
+                defaultValue: 'Expand message',
+              }),
             }}
             labels={{
               attachmentCount: (count) =>
@@ -1426,6 +1518,11 @@ export default function MailWorkspacePage({
                       setComposer(recoveryOffer.composer);
                       setIdentityId(recoveryOffer.identityId);
                       setSignatureId(recoveryOffer.signatureId ?? '');
+                      setCcVisible(Boolean(recoveryOffer.composer.cc.trim()));
+                      setBccVisible(Boolean(recoveryOffer.composer.bcc.trim()));
+                      setScheduleEnabled(
+                        Boolean(recoveryOffer.composer.scheduledAt),
+                      );
                       setComposeAttachments(recoveryOffer.composeAttachments);
                       setRetainedAttachments(recoveryOffer.retainedAttachments);
                       setRecoveryOffer(undefined);
@@ -1452,43 +1549,152 @@ export default function MailWorkspacePage({
                 </div>
               </div>
             ) : null}
-            {(['to', 'cc', 'bcc'] as const).map((field) => (
-              <Input
-                aria-label={t(`workspace.${field}`, {
-                  defaultValue: field.toUpperCase(),
-                })}
-                key={field}
-                onChange={(event) =>
-                  setComposer((current) =>
-                    current
-                      ? { ...current, [field]: event.target.value }
-                      : current,
-                  )
-                }
-                placeholder={t(`workspace.${field}`, {
-                  defaultValue: field.toUpperCase(),
-                })}
-                value={composer[field]}
+            {composer.draftConflict ? (
+              <DraftConflictNotice
+                conflict={composer.draftConflict}
+                onUseRemote={() => {
+                  const draftMessageId = composer.draftMessageId;
+                  if (!draftMessageId || sending) return;
+                  setSending(true);
+                  setError(undefined);
+                  void mail
+                    .resolveDraftConflict({
+                      accountId: composerAccountId,
+                      action: 'useRemote',
+                      messageId: draftMessageId,
+                    })
+                    .then((resolved) => {
+                      const nextComposer: ComposerState = {
+                        ...composer,
+                        bcc: formatAddressList(resolved.bcc),
+                        cc: formatAddressList(resolved.cc),
+                        draftConflict: undefined,
+                        html:
+                          resolved.html ??
+                          plainTextToMailHtml(resolved.text ?? ''),
+                        subject: resolved.subject,
+                        text: resolved.text ?? '',
+                        to: formatAddressList(resolved.to),
+                      };
+                      draftMessageIdRef.current = resolved.id;
+                      setCcVisible(Boolean(nextComposer.cc.trim()));
+                      setBccVisible(Boolean(nextComposer.bcc.trim()));
+                      setScheduleEnabled(Boolean(nextComposer.scheduledAt));
+                      setComposer(nextComposer);
+                      setComposeAttachments([]);
+                      setRetainedAttachments(resolved.attachments);
+                      setDraftSaveStatus('saved');
+                      setLastSavedFingerprint(
+                        composerFingerprint(
+                          nextComposer,
+                          identityId,
+                          signatureId,
+                          [],
+                          resolved.attachments,
+                        ),
+                      );
+                    })
+                    .catch(requestError)
+                    .finally(() => setSending(false));
+                }}
               />
-            ))}
-            <label className='flex items-center gap-2 text-sm text-muted-foreground'>
-              <input
-                checked={individualDelivery}
-                disabled={
-                  composer.mode !== 'new' ||
-                  autoSaving ||
-                  Boolean(composer.draftMessageId || retainedAttachments.length)
-                }
-                onChange={(event) =>
-                  setIndividualDelivery(event.target.checked)
-                }
-                type='checkbox'
-              />
-              {t('workspace.sendIndividually', {
-                defaultValue:
-                  'Send one private message per recipient (up to 100)',
-              })}
-            </label>
+            ) : null}
+            <div className='flex flex-wrap items-end gap-2'>
+              <label className='min-w-0 flex-1 text-sm font-medium'>
+                {t('workspace.from', { defaultValue: 'From address' })}
+                <NativeSelect
+                  className='mt-1'
+                  disabled={sendableComposerIdentities.length === 0}
+                  onChange={(event) => setIdentityId(event.target.value)}
+                  value={identityId}
+                >
+                  {sendableComposerIdentities.length === 0 ? (
+                    <option value=''>
+                      {t('workspace.noSenders', {
+                        defaultValue: 'No sendable addresses',
+                      })}
+                    </option>
+                  ) : null}
+                  {sendableComposerIdentities.map((identity) => (
+                    <option key={identity.id} value={identity.id}>
+                      {formatIdentity(identity)}
+                    </option>
+                  ))}
+                </NativeSelect>
+              </label>
+            </div>
+            <div className='space-y-2'>
+              <div className='flex items-center gap-2'>
+                <Input
+                  aria-label={t('workspace.to', { defaultValue: 'TO' })}
+                  className='min-w-0 flex-1'
+                  id='mail-compose-to'
+                  onChange={(event) =>
+                    setComposer((current) =>
+                      current
+                        ? { ...current, to: event.target.value }
+                        : current,
+                    )
+                  }
+                  placeholder={t('workspace.to', { defaultValue: 'TO' })}
+                  value={composer.to}
+                />
+                <div className='flex shrink-0 items-center gap-1'>
+                  <Button
+                    aria-controls='mail-compose-cc'
+                    aria-expanded={ccVisible}
+                    aria-pressed={ccVisible}
+                    className='h-9 px-1.5 text-sm font-normal text-muted-foreground'
+                    onClick={() => setCcVisible((visible) => !visible)}
+                    type='button'
+                    variant='ghost'
+                  >
+                    {t('workspace.showCc', { defaultValue: 'Cc' })}
+                  </Button>
+                  <Button
+                    aria-controls='mail-compose-bcc'
+                    aria-expanded={bccVisible}
+                    aria-pressed={bccVisible}
+                    className='h-9 px-1.5 text-sm font-normal text-muted-foreground'
+                    onClick={() => setBccVisible((visible) => !visible)}
+                    type='button'
+                    variant='ghost'
+                  >
+                    {t('workspace.showBcc', { defaultValue: 'Bcc' })}
+                  </Button>
+                </div>
+              </div>
+              {ccVisible ? (
+                <Input
+                  aria-label={t('workspace.cc', { defaultValue: 'CC' })}
+                  id='mail-compose-cc'
+                  onChange={(event) =>
+                    setComposer((current) =>
+                      current
+                        ? { ...current, cc: event.target.value }
+                        : current,
+                    )
+                  }
+                  placeholder={t('workspace.cc', { defaultValue: 'CC' })}
+                  value={composer.cc}
+                />
+              ) : null}
+              {bccVisible ? (
+                <Input
+                  aria-label={t('workspace.bcc', { defaultValue: 'BCC' })}
+                  id='mail-compose-bcc'
+                  onChange={(event) =>
+                    setComposer((current) =>
+                      current
+                        ? { ...current, bcc: event.target.value }
+                        : current,
+                    )
+                  }
+                  placeholder={t('workspace.bcc', { defaultValue: 'BCC' })}
+                  value={composer.bcc}
+                />
+              ) : null}
+            </div>
             <Input
               aria-label={t('workspace.subject', { defaultValue: 'Subject' })}
               onChange={(event) =>
@@ -1528,7 +1734,18 @@ export default function MailWorkspacePage({
                       label: signature.name,
                     })),
                   ],
-                  onSelect: setSignatureId,
+                  onSelect: (nextSignatureId) => {
+                    setComposer((current) =>
+                      current
+                        ? replaceComposerSignature(
+                            current,
+                            signatures,
+                            nextSignatureId,
+                          )
+                        : current,
+                    );
+                    setSignatureId(nextSignatureId);
+                  },
                   selectedId: signatureId,
                 },
                 template: {
@@ -1544,6 +1761,22 @@ export default function MailWorkspacePage({
                       (item) => item.id === templateId,
                     );
                     if (!template) return;
+                    const hasExistingContent = Boolean(
+                      composer?.subject.trim() ||
+                      composer?.text.trim() ||
+                      composer?.html.trim(),
+                    );
+                    if (
+                      hasExistingContent &&
+                      !window.confirm(
+                        t('workspace.templateReplaceConfirm', {
+                          defaultValue:
+                            'This replaces the existing subject and message body. Continue?',
+                        }),
+                      )
+                    ) {
+                      return;
+                    }
                     const rendered = renderMailTemplate(
                       template,
                       templateVariables,
@@ -1582,6 +1815,48 @@ export default function MailWorkspacePage({
                 redo: t('workspace.editor.redo', { defaultValue: 'Redo' }),
                 clearFormatting: t('workspace.editor.clearFormatting', {
                   defaultValue: 'Clear formatting',
+                }),
+                fontSize: t('workspace.editor.fontSize', {
+                  defaultValue: 'Font size',
+                }),
+                heading: t('workspace.editor.heading', {
+                  defaultValue: 'Heading level',
+                }),
+                link: t('workspace.editor.link', {
+                  defaultValue: 'Insert link',
+                }),
+                image: t('workspace.editor.image', {
+                  defaultValue: 'Insert image',
+                }),
+                normal: t('workspace.editor.normal', {
+                  defaultValue: 'Normal',
+                }),
+                heading1: t('workspace.editor.heading1', {
+                  defaultValue: 'Heading 1',
+                }),
+                heading2: t('workspace.editor.heading2', {
+                  defaultValue: 'Heading 2',
+                }),
+                heading3: t('workspace.editor.heading3', {
+                  defaultValue: 'Heading 3',
+                }),
+                heading4: t('workspace.editor.heading4', {
+                  defaultValue: 'Heading 4',
+                }),
+                heading5: t('workspace.editor.heading5', {
+                  defaultValue: 'Heading 5',
+                }),
+                heading6: t('workspace.editor.heading6', {
+                  defaultValue: 'Heading 6',
+                }),
+                fontSizeSmall: t('workspace.editor.fontSizeSmall', {
+                  defaultValue: 'Small',
+                }),
+                fontSizeNormal: t('workspace.editor.fontSizeNormal', {
+                  defaultValue: 'Normal',
+                }),
+                fontSizeLarge: t('workspace.editor.fontSizeLarge', {
+                  defaultValue: 'Large',
                 }),
               }}
               onChange={(value) =>
@@ -1687,25 +1962,71 @@ export default function MailWorkspacePage({
                 </ul>
               ) : null}
             </div>
-            <label className='block space-y-1 text-xs text-muted-foreground'>
-              <span>
-                {t('workspace.scheduledAt', {
-                  defaultValue: 'Send later (optional)',
+            <div className='space-y-2'>
+              <label className='flex items-center gap-2 text-sm text-muted-foreground'>
+                <input
+                  checked={scheduleEnabled}
+                  disabled={sending || autoSaving}
+                  onChange={(event) => {
+                    const enabled = event.target.checked;
+                    setScheduleEnabled(enabled);
+                    setDraftSaveStatus('idle');
+                    if (!enabled) {
+                      setComposer((current) =>
+                        current ? { ...current, scheduledAt: '' } : current,
+                      );
+                    }
+                  }}
+                  type='checkbox'
+                />
+                {t('workspace.scheduleSendToggle', {
+                  defaultValue: 'Schedule send',
                 })}
-              </span>
-              <Input
-                min={localDateTimeMinimum()}
-                onChange={(event) => {
-                  setDraftSaveStatus('idle');
-                  setComposer((current) =>
-                    current
-                      ? { ...current, scheduledAt: event.target.value }
-                      : current,
-                  );
-                }}
-                type='datetime-local'
-                value={composer.scheduledAt}
+              </label>
+              {scheduleEnabled ? (
+                <label
+                  className='block space-y-1 text-xs text-muted-foreground'
+                  htmlFor='mail-compose-scheduled-at'
+                >
+                  <span>
+                    {t('workspace.scheduledAt', {
+                      defaultValue: 'Send later (optional)',
+                    })}
+                  </span>
+                  <Input
+                    id='mail-compose-scheduled-at'
+                    min={localDateTimeMinimum()}
+                    onChange={(event) => {
+                      setDraftSaveStatus('idle');
+                      setComposer((current) =>
+                        current
+                          ? { ...current, scheduledAt: event.target.value }
+                          : current,
+                      );
+                    }}
+                    type='datetime-local'
+                    value={composer.scheduledAt}
+                  />
+                </label>
+              ) : null}
+            </div>
+            <label className='flex items-center gap-2 text-sm text-muted-foreground'>
+              <input
+                checked={individualDelivery}
+                disabled={
+                  composer.mode !== 'new' ||
+                  autoSaving ||
+                  Boolean(composer.draftMessageId || retainedAttachments.length)
+                }
+                onChange={(event) =>
+                  setIndividualDelivery(event.target.checked)
+                }
+                type='checkbox'
               />
+              {t('workspace.sendIndividually', {
+                defaultValue:
+                  'Send one private message per recipient (up to 100)',
+              })}
             </label>
           </div>
           <footer className='flex items-center gap-2 border-t px-4 py-3'>
@@ -1777,6 +2098,77 @@ function parseAddressList(value: string): readonly { address: string }[] {
     .map((address) => address.trim())
     .filter(Boolean)
     .map((address) => ({ address }));
+}
+
+function DraftConflictNotice({
+  conflict,
+  onUseRemote,
+}: {
+  readonly conflict: MailDraftConflict;
+  readonly onUseRemote: () => void;
+}): ReactElement {
+  const { t } = useTranslation();
+  return (
+    <div
+      className='rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm'
+      role='alert'
+    >
+      <p className='font-medium'>
+        {t('workspace.draftConflict.title', {
+          defaultValue: 'The remote draft changed while you were editing.',
+        })}
+      </p>
+      <p className='mt-1 text-xs text-muted-foreground'>
+        {t('workspace.draftConflict.remoteSummary', {
+          defaultValue: 'Remote version: {{subject}}',
+          subject: conflict.remote.subject || '(no subject)',
+        })}
+      </p>
+      <details className='mt-2 text-xs'>
+        <summary className='cursor-pointer font-medium'>
+          {t('workspace.draftConflict.viewRemote', {
+            defaultValue: 'View remote version',
+          })}
+        </summary>
+        <div className='mt-2 space-y-1 rounded border bg-background/60 p-2'>
+          <p>{conflict.remote.text || conflict.remote.html || '—'}</p>
+          {conflict.remote.attachments.length > 0 ? (
+            <p className='text-muted-foreground'>
+              {t('workspace.draftConflict.attachments', {
+                count: conflict.remote.attachments.length,
+                defaultValue: '{{count}} remote attachments',
+              })}
+            </p>
+          ) : null}
+        </div>
+      </details>
+      <Button
+        className='mt-2'
+        onClick={onUseRemote}
+        type='button'
+        variant='outline'
+      >
+        {t('workspace.draftConflict.useRemote', {
+          defaultValue: 'Discard local changes and use remote',
+        })}
+      </Button>
+    </div>
+  );
+}
+
+function replaceComposerSignature(
+  composer: ComposerState,
+  signatures: readonly MailSignature[],
+  signatureId: string,
+): ComposerState {
+  return {
+    ...composer,
+    ...replaceMailSignatureContent(
+      { text: composer.text, html: composer.html },
+      signatures,
+      signatureId,
+    ),
+  };
 }
 
 function buildComposerInput(
@@ -2066,6 +2458,22 @@ function findProviderCapabilities(
       provider.type === account.provider.type &&
       provider.name === account.provider.name,
   )?.capabilities;
+}
+
+function isMessageInTrash(
+  message: Pick<MailMessage, 'accountId' | 'folderIds'>,
+  foldersByAccountId: ReadonlyMap<string, readonly MailFolder[]>,
+): boolean {
+  const trash = foldersByAccountId
+    .get(message.accountId)
+    ?.find((folder) => folder.type === 'trash');
+  return Boolean(trash && message.folderIds.includes(trash.providerFolderId));
+}
+
+function formatIdentity(identity: MailIdentity): string {
+  return identity.displayName
+    ? `${identity.displayName} <${identity.address}>`
+    : identity.address;
 }
 
 function formatAddressList(

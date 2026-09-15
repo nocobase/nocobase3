@@ -10,6 +10,9 @@ import type {
   MailListMessagesInput,
   MailListConversationMessagesInput,
   MailManagedAccountView,
+  MailManagementMessageActionInput,
+  MailManagementMessageActionItemResult,
+  MailManagementMessageActionResult,
   MailFolder,
   MailLabel,
   MailLabelColor,
@@ -28,6 +31,10 @@ import type {
   MailSubmissionLogView,
   MailSubmissionView,
   MailCredentialVault,
+  MailIdentity,
+  MailDraftConflict,
+  MailDraftRemoteVersion,
+  MailResolveDraftConflictInput,
   MailProviderConfig,
   MailProviderContext,
   MailProviderRegistry,
@@ -36,11 +43,22 @@ import type {
   MailOutboundAttachmentView,
   MailSaveLabelInput,
   MailUploadAttachmentInput,
+  NormalizedMailAttachment,
+  NormalizedMailMessage,
 } from './types.js';
-import { DEFAULT_MAIL_LABEL_COLOR, isMailLabelColor } from './types.js';
+import {
+  DEFAULT_MAIL_LABEL_COLOR,
+  isMailLabelColor,
+  MAIL_LOCAL_DRAFT_FOLDER_ID,
+  MAIL_PROVIDER_ERROR_CATEGORIES,
+} from './types.js';
 import { SendMailOperation } from './operations/send-mail.js';
 import { toMailAccountView } from './store.js';
-import { resolveMailSyncBatchSize } from './config.js';
+import {
+  DEFAULT_MAIL_AUTOMATIC_SYNC_INTERVAL_MINUTES,
+  resolveMailAutomaticSyncIntervalMinutes,
+  resolveMailSyncBatchSize,
+} from './config.js';
 import {
   notifyMailMessageChange,
   type MailMessageChangeNotifier,
@@ -59,6 +77,7 @@ export interface DefaultMailServiceDependencies {
   readonly adapters: MailProviderAdapterResolver;
   readonly outbox: MailOutboxPublisher;
   readonly syncBatchSize?: number;
+  readonly defaultAutomaticSyncIntervalMinutes?: number;
   readonly registry?: MailProviderRegistry;
   readonly providerContext?: MailProviderContext;
   readonly credentials?: MailCredentialVault;
@@ -73,11 +92,17 @@ export interface DefaultMailServiceDependencies {
 export class DefaultMailService implements MailService {
   private readonly sendMail: SendMailOperation;
   private readonly syncBatchSize: number;
+  private readonly defaultAutomaticSyncIntervalMinutes: number;
 
   public constructor(
     private readonly dependencies: DefaultMailServiceDependencies,
   ) {
     this.syncBatchSize = resolveMailSyncBatchSize(dependencies.syncBatchSize);
+    this.defaultAutomaticSyncIntervalMinutes =
+      resolveMailAutomaticSyncIntervalMinutes(
+        dependencies.defaultAutomaticSyncIntervalMinutes ??
+          DEFAULT_MAIL_AUTOMATIC_SYNC_INTERVAL_MINUTES,
+      );
     this.sendMail = new SendMailOperation({
       ...dependencies,
       outbox: dependencies.outbox,
@@ -289,10 +314,21 @@ export class DefaultMailService implements MailService {
         throw new Error('This Mail account must be reauthorized.');
       }
     }
-    if (input.status !== undefined) {
+    const automaticSyncIntervalMinutes =
+      input.automaticSyncIntervalMinutes === undefined
+        ? (updated.automaticSyncIntervalMinutes ??
+          this.defaultAutomaticSyncIntervalMinutes)
+        : resolveMailAutomaticSyncIntervalMinutes(
+            input.automaticSyncIntervalMinutes,
+          );
+    if (
+      input.status !== undefined ||
+      input.automaticSyncIntervalMinutes !== undefined
+    ) {
       updated = await this.dependencies.store.saveAccount({
         ...updated,
-        ...(input.status ? { status: input.status } : {}),
+        status: input.status ?? updated.status,
+        automaticSyncIntervalMinutes,
       });
     }
     return toMailAccountView(updated);
@@ -385,6 +421,44 @@ export class DefaultMailService implements MailService {
           context.actorId,
       })),
       submissions: submissions.map(toSubmissionLogView),
+    };
+  }
+
+  public listManagedFolders(
+    _context: MailOperationContext,
+    accountId: string,
+  ): Promise<readonly MailFolder[]> {
+    return this.dependencies.store.listFolders(accountId);
+  }
+
+  public listManagedMessages(
+    _context: MailOperationContext,
+    input: MailListMessagesInput,
+  ): Promise<MailPage<MailMessageSummary>> {
+    return this.dependencies.store.listAllMessages(input);
+  }
+
+  public async manageMessages(
+    context: MailOperationContext,
+    input: MailManagementMessageActionInput,
+  ): Promise<MailManagementMessageActionResult> {
+    const items: MailManagementMessageActionItemResult[] = [];
+    for (const target of input.items) {
+      try {
+        await this.executeManagedMessageAction(context, target, input);
+        items.push({ ...target, status: 'succeeded' });
+      } catch (cause) {
+        items.push({
+          ...target,
+          status: 'failed',
+          error: toManagementActionError(cause),
+        });
+      }
+    }
+    return {
+      items,
+      succeeded: items.filter((item) => item.status === 'succeeded').length,
+      failed: items.filter((item) => item.status === 'failed').length,
     };
   }
 
@@ -777,33 +851,74 @@ export class DefaultMailService implements MailService {
     if (!identity || identity.accountId !== account.id || !identity.canSend) {
       throw new Error('Mail sending identity is not available.');
     }
-    const adapter = await this.dependencies.adapters.resolve(
-      account,
-      context.signal,
+    const existingDraft = input.draftMessageId
+      ? await this.dependencies.store.getMessage(
+          context.actorId,
+          account.id,
+          input.draftMessageId,
+        )
+      : undefined;
+    if (input.draftMessageId && (!existingDraft || !existingDraft.draft)) {
+      throw new Error('Mail draft was not found.');
+    }
+    let localDraft = await this.dependencies.store.saveMessage(
+      account.id,
+      await this.createLocalDraftMessage(
+        context,
+        identity,
+        input,
+        existingDraft,
+      ),
     );
+    let adapter: MailProviderAdapter | undefined;
     try {
-      if (!adapter.capabilities.drafts || !adapter.saveDraft) {
-        throw new Error('The selected Mail Provider cannot save drafts.');
-      }
-      const existingDraft = input.draftMessageId
-        ? await this.dependencies.store.getMessage(
+      adapter = await this.dependencies.adapters.resolve(
+        account,
+        context.signal,
+      );
+    } catch {
+      notifyMailMessageChange(
+        this.dependencies.messageChangeNotifier,
+        context.actorId,
+      );
+      return localDraft;
+    }
+    try {
+      if (!adapter.capabilities.drafts || !adapter.saveDraft) return localDraft;
+      const remoteDraftId =
+        existingDraft?.providerDraftMessageId ??
+        (existingDraft && !isLocalDraftMessage(existingDraft)
+          ? existingDraft.providerMessageId
+          : undefined);
+      if (remoteDraftId && adapter.getMessage) {
+        const remote = await adapter.getMessage(remoteDraftId, context.signal);
+        if (remote.ok && !sameDraftContent(existingDraft, remote.value)) {
+          localDraft = await this.dependencies.store.saveMessage(account.id, {
+            ...normalizedDraftFromMessage(localDraft),
+            draftConflict: toDraftConflict(remote.value),
+          });
+          notifyMailMessageChange(
+            this.dependencies.messageChangeNotifier,
             context.actorId,
-            account.id,
-            input.draftMessageId,
-          )
-        : undefined;
-      if (input.draftMessageId && (!existingDraft || !existingDraft.draft)) {
-        throw new Error('Mail draft was not found.');
+          );
+          return localDraft;
+        }
       }
       const providerMessage = await this.sendMail.prepareProviderMessage(
         context,
         input,
       );
+      const hasRemoteDraft = Boolean(
+        existingDraft?.providerDraftId ||
+        existingDraft?.providerDraftMessageId ||
+        (existingDraft && !isLocalDraftMessage(existingDraft)),
+      );
       const draft = assertProviderResult(
-        existingDraft
+        hasRemoteDraft && existingDraft
           ? await (adapter.updateDraft
               ? adapter.updateDraft(
                   existingDraft.providerDraftId ??
+                    existingDraft.providerDraftMessageId ??
                     existingDraft.providerMessageId,
                   {
                     trackingId: randomUUID(),
@@ -829,7 +944,9 @@ export class DefaultMailService implements MailService {
             }),
       );
       const saved = await this.dependencies.store.saveMessage(account.id, {
-        ...draft,
+        ...normalizedDraftFromMessage(localDraft),
+        providerDraftMessageId: draft.providerMessageId,
+        providerDraftId: draft.providerDraftId,
         draft: true,
       });
       notifyMailMessageChange(
@@ -837,9 +954,149 @@ export class DefaultMailService implements MailService {
         context.actorId,
       );
       return saved;
+    } catch {
+      notifyMailMessageChange(
+        this.dependencies.messageChangeNotifier,
+        context.actorId,
+      );
+      return localDraft;
     } finally {
-      await closeAdapter(adapter);
+      if (adapter) await closeAdapter(adapter);
     }
+  }
+
+  public async resolveDraftConflict(
+    context: MailOperationContext,
+    input: MailResolveDraftConflictInput,
+  ): Promise<MailMessage> {
+    const { account, message } = await this.requireOwnedMessage(
+      context,
+      input.accountId,
+      input.messageId,
+    );
+    if (!message.draft || !message.draftConflict) {
+      throw new Error('Mail draft conflict was not found.');
+    }
+    const remote = message.draftConflict.remote;
+    const normalized: NormalizedMailMessage =
+      input.action === 'useRemote'
+        ? {
+            providerMessageId: message.providerMessageId,
+            providerDraftMessageId: message.providerDraftMessageId,
+            providerDraftId: message.providerDraftId,
+            providerConversationId:
+              remote.providerConversationId ?? message.conversationId,
+            providerFolderIds: [MAIL_LOCAL_DRAFT_FOLDER_ID],
+            from: remote.from,
+            to: remote.to,
+            cc: remote.cc,
+            bcc: remote.bcc,
+            replyTo: message.replyTo,
+            inReplyTo: message.inReplyTo,
+            references: message.references,
+            subject: remote.subject,
+            preview: (remote.text ?? '').slice(0, 240),
+            text: remote.text,
+            html: remote.html,
+            read: true,
+            starred: message.starred,
+            draft: true,
+            attachments: remote.attachments,
+          }
+        : normalizedDraftFromMessage(message);
+    const resolved = await this.dependencies.store.saveMessage(
+      account.id,
+      normalized,
+    );
+    notifyMailMessageChange(
+      this.dependencies.messageChangeNotifier,
+      context.actorId,
+    );
+    return resolved;
+  }
+
+  private async createLocalDraftMessage(
+    context: MailOperationContext,
+    identity: MailIdentity,
+    input: import('./types.js').MailComposeInput,
+    existingDraft?: MailMessage,
+  ): Promise<NormalizedMailMessage> {
+    const attachments = await this.loadLocalDraftAttachments(
+      context,
+      input,
+      existingDraft,
+    );
+    return {
+      providerMessageId:
+        existingDraft?.providerMessageId ?? `local-draft:${randomUUID()}`,
+      providerDraftMessageId: existingDraft?.providerDraftMessageId,
+      providerDraftId: existingDraft?.providerDraftId,
+      providerConversationId: existingDraft?.conversationId,
+      providerFolderIds: [MAIL_LOCAL_DRAFT_FOLDER_ID],
+      from: {
+        address: identity.address,
+        ...(identity.displayName ? { name: identity.displayName } : {}),
+      },
+      to: input.to,
+      cc: input.cc ?? [],
+      bcc: input.bcc ?? [],
+      replyTo: [],
+      references: existingDraft?.references ?? [],
+      inReplyTo: existingDraft?.inReplyTo,
+      subject: input.subject,
+      preview: input.text.slice(0, 240),
+      text: input.text,
+      html: input.html,
+      read: true,
+      starred: existingDraft?.starred ?? false,
+      draft: true,
+      attachments,
+      draftConflict: existingDraft?.draftConflict,
+    };
+  }
+
+  private async loadLocalDraftAttachments(
+    context: MailOperationContext,
+    input: import('./types.js').MailComposeInput,
+    existingDraft?: MailMessage,
+  ): Promise<readonly NormalizedMailAttachment[]> {
+    const retained =
+      input.retainedAttachmentIds === undefined
+        ? (existingDraft?.attachments ?? [])
+        : (existingDraft?.attachments ?? []).filter((attachment) =>
+            input.retainedAttachmentIds?.includes(attachment.id),
+          );
+    const attachments: NormalizedMailAttachment[] = retained.map(
+      (attachment) => ({
+        providerAttachmentId: attachment.providerAttachmentId,
+        fileName: attachment.fileName,
+        contentType: attachment.contentType,
+        size: attachment.size,
+        contentId: attachment.contentId,
+        inline: attachment.inline,
+      }),
+    );
+    for (const attachmentId of input.attachmentIds ?? []) {
+      const metadata = await this.dependencies.store.getOutboundAttachment(
+        context.actorId,
+        attachmentId,
+      );
+      if (!metadata) throw new Error('Mail outbound attachment was not found.');
+      if (
+        attachments.some(
+          (attachment) => attachment.providerAttachmentId === attachmentId,
+        )
+      )
+        continue;
+      attachments.push({
+        providerAttachmentId: attachmentId,
+        fileName: metadata.fileName,
+        contentType: metadata.contentType,
+        size: metadata.size,
+        inline: false,
+      });
+    }
+    return attachments;
   }
 
   public async uploadAttachment(
@@ -1040,6 +1297,39 @@ export class DefaultMailService implements MailService {
       input.accountId,
       input.messageId,
     );
+    if (isLocalDraftMessage(message)) {
+      let adapter: MailProviderAdapter | undefined;
+      try {
+        if (message.providerDraftMessageId) {
+          adapter = await this.dependencies.adapters.resolve(
+            account,
+            context.signal,
+          );
+          if (adapter.deleteMessage) {
+            await adapter.deleteMessage(
+              message.providerDraftMessageId,
+              true,
+              context.signal,
+            );
+          }
+        }
+      } catch {
+        // Remote draft cleanup is best effort; local deletion remains authoritative.
+      } finally {
+        if (adapter) await closeAdapter(adapter);
+      }
+      const deleted = await this.dependencies.store.deleteMessage(
+        account.id,
+        message.id,
+      );
+      if (deleted) {
+        notifyMailMessageChange(
+          this.dependencies.messageChangeNotifier,
+          context.actorId,
+        );
+      }
+      return;
+    }
     const adapter = await this.dependencies.adapters.resolve(
       account,
       context.signal,
@@ -1169,6 +1459,167 @@ export class DefaultMailService implements MailService {
     return { account, message };
   }
 
+  private async executeManagedMessageAction(
+    context: MailOperationContext,
+    target: MailManagementMessageActionInput['items'][number],
+    input: MailManagementMessageActionInput,
+  ): Promise<void> {
+    const account = await this.dependencies.store.getAccount(target.accountId);
+    if (!account) throw new Error('Mail account was not found.');
+    if (account.status !== 'active') {
+      throw new Error('Mail account is not active.');
+    }
+    const message = await this.dependencies.store.getMessageForAccount(
+      account.id,
+      target.messageId,
+    );
+    if (!message) throw new Error('Mail message was not found.');
+    const adapter = await this.dependencies.adapters.resolve(
+      account,
+      context.signal,
+    );
+    try {
+      switch (input.action) {
+        case 'markRead':
+        case 'markUnread': {
+          if (!adapter.setRead) {
+            throw new Error(
+              'The selected Mail Provider cannot change read state.',
+            );
+          }
+          assertManagedProviderResult(
+            await adapter.setRead(
+              message.providerMessageId,
+              input.action === 'markRead',
+              context.signal,
+            ),
+          );
+          const updated = await this.dependencies.store.updateMessageState(
+            account.id,
+            message.id,
+            { read: input.action === 'markRead' },
+          );
+          if (!updated)
+            throw new Error('Mail message was not found after update.');
+          break;
+        }
+        case 'star':
+        case 'unstar': {
+          if (!adapter.setStarred) {
+            throw new Error(
+              'The selected Mail Provider cannot change starred state.',
+            );
+          }
+          assertManagedProviderResult(
+            await adapter.setStarred(
+              message.providerMessageId,
+              input.action === 'star',
+              context.signal,
+            ),
+          );
+          const updated = await this.dependencies.store.updateMessageState(
+            account.id,
+            message.id,
+            { starred: input.action === 'star' },
+          );
+          if (!updated)
+            throw new Error('Mail message was not found after update.');
+          break;
+        }
+        case 'archive':
+        case 'move': {
+          const destination =
+            input.action === 'archive'
+              ? (await this.dependencies.store.listFolders(account.id)).find(
+                  (folder) => folder.type === 'archive',
+                )
+              : input.providerFolderId
+                ? (await this.dependencies.store.listFolders(account.id)).find(
+                    (folder) =>
+                      folder.providerFolderId === input.providerFolderId,
+                  )
+                : undefined;
+          if (!destination) {
+            throw new Error('Mail destination folder was not found.');
+          }
+          if (!adapter.capabilities.moveMessage || !adapter.moveMessage) {
+            throw new Error('The selected Mail Provider cannot move messages.');
+          }
+          const moved = assertManagedProviderResult(
+            await adapter.moveMessage(
+              message.providerMessageId,
+              destination.providerFolderId,
+              context.signal,
+            ),
+          );
+          const updated = await this.dependencies.store.moveMessage(
+            account.id,
+            message.id,
+            moved.providerMessageId,
+            destination.providerFolderId,
+          );
+          if (!updated)
+            throw new Error('Mail message was not found after move.');
+          break;
+        }
+        case 'delete': {
+          if (
+            !input.permanently &&
+            adapter.capabilities.moveMessage &&
+            adapter.moveMessage
+          ) {
+            const trash = (
+              await this.dependencies.store.listFolders(account.id)
+            ).find((folder) => folder.type === 'trash');
+            if (trash) {
+              const moved = assertManagedProviderResult(
+                await adapter.moveMessage(
+                  message.providerMessageId,
+                  trash.providerFolderId,
+                  context.signal,
+                ),
+              );
+              const updated = await this.dependencies.store.moveMessage(
+                account.id,
+                message.id,
+                moved.providerMessageId,
+                trash.providerFolderId,
+              );
+              if (!updated)
+                throw new Error('Mail message was not found after delete.');
+              break;
+            }
+          }
+          if (!adapter.deleteMessage) {
+            throw new Error(
+              'The selected Mail Provider cannot delete messages.',
+            );
+          }
+          assertManagedProviderResult(
+            await adapter.deleteMessage(
+              message.providerMessageId,
+              input.permanently ?? false,
+              context.signal,
+            ),
+          );
+          const deleted = await this.dependencies.store.deleteMessage(
+            account.id,
+            message.id,
+          );
+          if (!deleted)
+            throw new Error('Mail message was not found after delete.');
+          break;
+        }
+      }
+      notifyMailMessageChange(
+        this.dependencies.messageChangeNotifier,
+        account.userId,
+      );
+    } finally {
+      await closeAdapter(adapter);
+    }
+  }
+
   private async requireOwnedAccount(
     context: MailOperationContext,
     accountId: string,
@@ -1234,6 +1685,9 @@ export class DefaultMailService implements MailService {
         initialSyncReceivedAfter: existing
           ? existing.initialSyncReceivedAfter
           : (initialSyncReceivedAfter ?? undefined),
+        automaticSyncIntervalMinutes:
+          existing?.automaticSyncIntervalMinutes ??
+          this.defaultAutomaticSyncIntervalMinutes,
       };
       const previousIdentities = existing
         ? await this.dependencies.store.listIdentities(existing.id)
@@ -1332,6 +1786,44 @@ function assertProviderResult<T>(
   return result.value;
 }
 
+function assertManagedProviderResult<T>(
+  result: import('./types.js').MailProviderResult<T>,
+): T {
+  if (!result.ok) {
+    throw Object.assign(new Error(result.error.message), result.error);
+  }
+  return result.value;
+}
+
+function toManagementActionError(
+  cause: unknown,
+): import('./types.js').MailPublicError {
+  if (isMailProviderError(cause)) return toPublicError(cause);
+  return {
+    code: 'MAIL_MANAGEMENT_ACTION_FAILED',
+    category: 'unknown',
+    retryable: false,
+  };
+}
+
+function isMailProviderError(
+  value: unknown,
+): value is import('./types.js').MailProviderError {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.code === 'string' &&
+    typeof value.category === 'string' &&
+    (MAIL_PROVIDER_ERROR_CATEGORIES as readonly string[]).includes(
+      value.category,
+    ) &&
+    typeof value.retryable === 'boolean'
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 function finalizeStream(
   stream: ReadableStream<Uint8Array>,
   finalize: () => Promise<void>,
@@ -1388,6 +1880,91 @@ function normalizeMailLabelColor(
     throw new TypeError('Mail label color is invalid.');
   }
   return value;
+}
+
+function isLocalDraftMessage(
+  message: Pick<MailMessage, 'providerMessageId'>,
+): boolean {
+  return message.providerMessageId.startsWith('local-draft:');
+}
+
+function sameDraftContent(
+  local: MailMessage | undefined,
+  remote: NormalizedMailMessage,
+): boolean {
+  if (!local) return true;
+  return (
+    JSON.stringify(draftContent(local)) === JSON.stringify(draftContent(remote))
+  );
+}
+
+function draftContent(
+  message: Pick<
+    MailMessage,
+    'from' | 'to' | 'cc' | 'bcc' | 'subject' | 'text' | 'html'
+  >,
+): unknown {
+  return {
+    from: message.from,
+    to: message.to,
+    cc: message.cc,
+    bcc: message.bcc,
+    subject: message.subject,
+    text: message.text ?? '',
+    html: message.html ?? '',
+  };
+}
+
+function toDraftConflict(message: NormalizedMailMessage): MailDraftConflict {
+  const remote: MailDraftRemoteVersion = {
+    providerMessageId: message.providerMessageId,
+    providerDraftId: message.providerDraftId,
+    providerConversationId: message.providerConversationId,
+    from: message.from,
+    to: message.to,
+    cc: message.cc,
+    bcc: message.bcc,
+    subject: message.subject,
+    text: message.text,
+    html: message.html,
+    attachments: message.attachments,
+  };
+  return { detectedAt: new Date().toISOString(), remote };
+}
+
+function normalizedDraftFromMessage(
+  message: MailMessage,
+): NormalizedMailMessage {
+  return {
+    providerMessageId: message.providerMessageId,
+    providerDraftMessageId: message.providerDraftMessageId,
+    providerDraftId: message.providerDraftId,
+    providerConversationId: message.conversationId,
+    providerFolderIds: [MAIL_LOCAL_DRAFT_FOLDER_ID],
+    from: message.from,
+    to: message.to,
+    cc: message.cc,
+    bcc: message.bcc,
+    replyTo: message.replyTo,
+    inReplyTo: message.inReplyTo,
+    references: message.references,
+    subject: message.subject,
+    preview: (message.text ?? '').slice(0, 240),
+    text: message.text,
+    html: message.html,
+    read: message.read,
+    starred: message.starred,
+    draft: true,
+    attachments: message.attachments.map((attachment) => {
+      const {
+        id: _id,
+        messageId: _messageId,
+        fileReference: _fileReference,
+        ...publicAttachment
+      } = attachment;
+      return publicAttachment;
+    }),
+  };
 }
 
 function hashState(state: string): string {

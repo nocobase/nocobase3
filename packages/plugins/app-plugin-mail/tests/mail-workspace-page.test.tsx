@@ -13,6 +13,10 @@ const mail = vi.hoisted(() => ({
   getSyncRun: vi.fn(),
   getMessage: vi.fn(),
   listAccounts: vi.fn(),
+  listManagementAccounts: vi.fn(),
+  listManagedFolders: vi.fn(),
+  listManagedMessages: vi.fn(),
+  manageMessages: vi.fn(),
   listProviders: vi.fn(),
   listConversationMessages: vi.fn(),
   listFolders: vi.fn(),
@@ -54,6 +58,17 @@ describe('MailWorkspacePage', () => {
         status: 'active',
       },
     ]);
+    mail.listManagementAccounts.mockResolvedValue([
+      {
+        id: 'account-1',
+        userId: 'user-1',
+        provider: { type: 'gmail', name: 'google' },
+        address: 'user@example.com',
+        scopes: [],
+        status: 'active',
+        canSync: false,
+      },
+    ]);
     mail.listProviders.mockResolvedValue([
       {
         type: 'gmail',
@@ -74,6 +89,8 @@ describe('MailWorkspacePage', () => {
       },
     ]);
     mail.listFolders.mockResolvedValue([]);
+    mail.deleteMessage.mockResolvedValue(undefined);
+    mail.listManagedFolders.mockResolvedValue([]);
     mail.listLabels.mockResolvedValue([]);
     mail.listIdentities.mockResolvedValue([
       {
@@ -86,6 +103,12 @@ describe('MailWorkspacePage', () => {
     ]);
     mail.listSignatures.mockResolvedValue([]);
     mail.listMessages.mockResolvedValue({ items: [] });
+    mail.listManagedMessages.mockResolvedValue({ items: [] });
+    mail.manageMessages.mockResolvedValue({
+      items: [],
+      succeeded: 0,
+      failed: 0,
+    });
     mail.listTemplates.mockResolvedValue([]);
     mail.sendMessage.mockResolvedValue({
       id: 'submission-1',
@@ -119,6 +142,7 @@ describe('MailWorkspacePage', () => {
     render(<MailWorkspacePage />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Compose' }));
+    await waitFor(() => expect(mail.listIdentities).toHaveBeenCalled());
     expect(
       screen.queryByRole('combobox', { name: 'From' }),
     ).not.toBeInTheDocument();
@@ -155,6 +179,63 @@ describe('MailWorkspacePage', () => {
     );
   });
 
+  it('keeps Cc and Bcc fields hidden until their text buttons are clicked', async () => {
+    render(<MailWorkspacePage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Compose' }));
+
+    expect(document.getElementById('mail-compose-cc')).not.toBeInTheDocument();
+    expect(document.getElementById('mail-compose-bcc')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cc' }));
+    expect(document.getElementById('mail-compose-cc')).toBeInTheDocument();
+    expect(document.getElementById('mail-compose-bcc')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Bcc' }));
+    expect(document.getElementById('mail-compose-bcc')).toBeInTheDocument();
+  });
+
+  it('shows the scheduled time only after enabling scheduled send', async () => {
+    render(<MailWorkspacePage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Compose' }));
+    await waitFor(() =>
+      expect(mail.listIdentities).toHaveBeenCalledWith('account-1'),
+    );
+    fireEvent.change(screen.getByLabelText('TO'), {
+      target: { value: 'recipient@example.com' },
+    });
+    fireEvent.change(screen.getByLabelText('Subject'), {
+      target: { value: 'Scheduled message' },
+    });
+    const editor = screen.getByLabelText('Message body');
+    editor.innerHTML = '<p>Message content</p>';
+    fireEvent.input(editor);
+
+    expect(
+      document.getElementById('mail-compose-scheduled-at'),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Schedule send' }));
+    const send = screen.getByRole('button', { name: 'Send' });
+    expect(send).toBeDisabled();
+
+    const scheduledAt = '2099-01-01T10:30';
+    fireEvent.change(screen.getByLabelText('Send later (optional)'), {
+      target: { value: scheduledAt },
+    });
+    expect(screen.getByRole('button', { name: 'Schedule send' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Schedule send' }));
+
+    await waitFor(() =>
+      expect(mail.sendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          scheduledAt: new Date(scheduledAt).toISOString(),
+        }),
+      ),
+    );
+  });
+
   it('opens all accounts first', async () => {
     mail.listAccounts.mockResolvedValue([
       {
@@ -183,6 +264,12 @@ describe('MailWorkspacePage', () => {
         expect.objectContaining({ accountId: undefined }),
       ),
     );
+    const folders = screen.getAllByRole('navigation', { name: 'Folders' })[1];
+    expect(
+      within(folders)
+        .getAllByRole('button')
+        .map((button) => button.textContent),
+    ).toEqual(['Inbox', 'Sent', 'Drafts', 'Trash', 'Spam', 'Archive']);
   });
 
   it('keeps connected accounts visible when optional labels loading fails', async () => {
@@ -219,6 +306,99 @@ describe('MailWorkspacePage', () => {
         name: 'second@example.com',
       }),
     ).toBeInTheDocument();
+  });
+
+  it('shows the standard folders and custom folders for a selected account', async () => {
+    mail.listFolders.mockResolvedValue([
+      {
+        id: 'folder-custom',
+        accountId: 'account-1',
+        providerFolderId: 'Projects',
+        type: 'custom',
+        name: 'Projects',
+        kind: 'folder',
+      },
+    ]);
+
+    render(<MailWorkspacePage />);
+    fireEvent.change(await screen.findByLabelText('Account'), {
+      target: { value: 'account-1' },
+    });
+
+    await waitFor(() => {
+      const folders = screen.getAllByRole('navigation', { name: 'Folders' })[1];
+      expect(
+        within(folders)
+          .getAllByRole('button')
+          .map((button) => button.textContent),
+      ).toEqual([
+        'Inbox',
+        'Sent',
+        'Drafts',
+        'Trash',
+        'Spam',
+        'Archive',
+        'Projects',
+      ]);
+    });
+  });
+
+  it('permanently deletes a message from Trash only after confirmation', async () => {
+    const message = {
+      id: 'message-trash',
+      accountId: 'account-1',
+      providerMessageId: 'provider-trash',
+      folderIds: ['TRASH'],
+      labelIds: [],
+      from: { address: 'sender@example.com' },
+      to: [{ address: 'user@example.com' }],
+      cc: [],
+      bcc: [],
+      subject: 'Trash message',
+      preview: 'Remove permanently',
+      read: true,
+      starred: false,
+      draft: false,
+      hasAttachments: false,
+      attachments: [],
+      todo: false,
+    };
+    mail.listFolders.mockResolvedValue([
+      {
+        id: 'folder-trash',
+        accountId: 'account-1',
+        providerFolderId: 'TRASH',
+        type: 'trash',
+        name: 'Trash',
+        kind: 'folder',
+      },
+    ]);
+    mail.listMessages.mockResolvedValue({ items: [message] });
+    mail.getMessage.mockResolvedValue(message);
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    try {
+      render(<MailWorkspacePage />);
+      fireEvent.change(await screen.findByLabelText('Account'), {
+        target: { value: 'account-1' },
+      });
+      fireEvent.click(await screen.findByText('Trash message'));
+      await screen.findByRole('heading', { name: 'Trash message' });
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Permanently delete' }),
+      );
+
+      expect(confirm).toHaveBeenCalledWith(
+        'Permanently delete this message? This action cannot be undone.',
+      );
+      expect(mail.deleteMessage).toHaveBeenCalledWith(
+        'account-1',
+        'message-trash',
+        true,
+      );
+    } finally {
+      confirm.mockRestore();
+    }
   });
 
   it('groups messages from the same conversation into one mailbox row', async () => {
@@ -341,6 +521,48 @@ describe('MailWorkspacePage', () => {
     );
   });
 
+  it('inserts the default signature and replaces it when another signature is selected', async () => {
+    mail.listSignatures.mockResolvedValue([
+      {
+        id: 'signature-default',
+        accountId: 'account-1',
+        name: 'Default',
+        text: 'Regards, Sales',
+        html: '<p>Regards, Sales</p>',
+        isDefault: true,
+        createdAt: '2026-09-08T00:00:00.000Z',
+        updatedAt: '2026-09-08T00:00:00.000Z',
+      },
+      {
+        id: 'signature-support',
+        accountId: 'account-1',
+        name: 'Support',
+        text: 'Support team',
+        html: '<p>Support team</p>',
+        isDefault: false,
+        createdAt: '2026-09-08T00:00:00.000Z',
+        updatedAt: '2026-09-08T00:00:00.000Z',
+      },
+    ]);
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    try {
+      render(<MailWorkspacePage />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Compose' }));
+      const editor = await screen.findByLabelText('Message body');
+      await waitFor(() => expect(editor).toHaveTextContent('Regards, Sales'));
+      fireEvent.click(screen.getByRole('button', { name: 'Signature' }));
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'Support' }));
+      expect(editor).toHaveTextContent('Support team');
+      expect(editor).not.toHaveTextContent('Regards, Sales');
+      fireEvent.click(screen.getByRole('button', { name: 'Signature' }));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'No signature' }));
+      expect(editor).not.toHaveTextContent('Support team');
+    } finally {
+      confirm.mockRestore();
+    }
+  });
+
   it('does not allow sending without a subject and message body', async () => {
     render(<MailWorkspacePage />);
 
@@ -461,7 +683,9 @@ describe('MailWorkspacePage', () => {
       within(screen.getByRole('dialog')).getByRole('button', { name: 'Close' }),
     );
     fireEvent.click(screen.getByRole('button', { name: 'Compose' }));
-    expect(screen.queryByRole('button', { name: 'Save draft' })).toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'Save draft' }),
+    ).toBeInTheDocument();
   });
 
   it('auto-saves rich text and updates the same Provider draft', async () => {
@@ -846,7 +1070,7 @@ describe('MailWorkspacePage', () => {
   });
 
   it('lists synchronized messages across every account in the management table', async () => {
-    mail.listMessages.mockResolvedValue({
+    mail.listManagedMessages.mockResolvedValue({
       items: [
         {
           id: 'message-1',
@@ -873,10 +1097,98 @@ describe('MailWorkspacePage', () => {
     expect(
       await screen.findByText('Management table message'),
     ).toBeInTheDocument();
-    expect(mail.listMessages).toHaveBeenCalledWith({
+    expect(mail.listManagedMessages).toHaveBeenCalledWith({
       accountId: undefined,
       query: undefined,
       limit: 100,
     });
+  });
+
+  it('runs a management action for selected rows and keeps failed rows selected', async () => {
+    const messages = [
+      {
+        id: 'message-1',
+        accountId: 'account-1',
+        providerMessageId: 'provider-message-1',
+        folderIds: ['INBOX'],
+        labelIds: [],
+        from: { address: 'sender@example.com' },
+        to: [{ address: 'user@example.com' }],
+        cc: [],
+        bcc: [],
+        subject: 'First management message',
+        read: false,
+        starred: false,
+        draft: false,
+        hasAttachments: false,
+      },
+      {
+        id: 'message-2',
+        accountId: 'account-1',
+        providerMessageId: 'provider-message-2',
+        folderIds: ['INBOX'],
+        labelIds: [],
+        from: { address: 'sender@example.com' },
+        to: [{ address: 'user@example.com' }],
+        cc: [],
+        bcc: [],
+        subject: 'Second management message',
+        read: false,
+        starred: false,
+        draft: false,
+        hasAttachments: false,
+      },
+    ] as const;
+    mail.listManagedMessages.mockResolvedValue({ items: messages });
+    mail.manageMessages.mockResolvedValue({
+      items: [
+        {
+          accountId: 'account-1',
+          messageId: 'message-1',
+          status: 'succeeded',
+        },
+        {
+          accountId: 'account-1',
+          messageId: 'message-2',
+          status: 'failed',
+          error: {
+            code: 'MAIL_MANAGEMENT_ACTION_FAILED',
+            category: 'unknown',
+            retryable: false,
+          },
+        },
+      ],
+      succeeded: 1,
+      failed: 1,
+    });
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    render(<MailManagementPage />);
+
+    expect(
+      await screen.findByText('First management message'),
+    ).toBeInTheDocument();
+    const checkboxes = screen.getAllByRole('checkbox');
+    fireEvent.click(checkboxes[1]);
+    fireEvent.click(checkboxes[2]);
+    fireEvent.click(screen.getByRole('button', { name: 'Mark read' }));
+
+    await waitFor(() =>
+      expect(mail.manageMessages).toHaveBeenCalledWith({
+        action: 'markRead',
+        items: [
+          { accountId: 'account-1', messageId: 'message-1' },
+          { accountId: 'account-1', messageId: 'message-2' },
+        ],
+      }),
+    );
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(
+      await screen.findByText(
+        '1 succeeded, 1 failed. Failed messages remain selected for retry.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getAllByRole('checkbox')[2]).toBeChecked();
+    confirm.mockRestore();
   });
 });

@@ -399,7 +399,10 @@ export class SendMailOperation {
       providerConversationId: input.inReplyToMessageId
         ? related?.conversationId
         : draft?.conversationId,
-      draftProviderMessageId: draft?.providerMessageId,
+      draftProviderMessageId:
+        draft && !draft.providerMessageId.startsWith('local-draft:')
+          ? draft.providerMessageId
+          : draft?.providerDraftMessageId,
       draftProviderDraftId: draft?.providerDraftId,
       replyToProviderMessageId: input.inReplyToMessageId
         ? related?.providerMessageId

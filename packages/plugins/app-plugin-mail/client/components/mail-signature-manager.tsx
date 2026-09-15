@@ -8,11 +8,12 @@ import { mailErrorMessage } from '../mail-client.js';
 import { getMailClient } from '../runtime.js';
 import { MAIL_PLUGIN_NS } from '../namespace.js';
 import { cn } from '../lib/utils.js';
+import { plainTextToMailHtml } from '../lib/mail-template.js';
 import { Button } from './ui/button.js';
 import { Card } from './ui/card.js';
 import { Input } from './ui/input.js';
+import { MailRichTextEditor } from './mail-rich-text-editor.js';
 import { NativeSelect } from './ui/native-select.js';
-import { Textarea } from './ui/textarea.js';
 
 const mail = getMailClient();
 
@@ -25,12 +26,14 @@ interface SignatureDraft {
   readonly id?: string;
   readonly name: string;
   readonly text: string;
+  readonly html: string;
   readonly isDefault: boolean;
 }
 
 const EMPTY_SIGNATURE: SignatureDraft = {
   name: '',
   text: '',
+  html: '',
   isDefault: false,
 };
 
@@ -130,6 +133,7 @@ export function MailSignatureManager({
       id: signature.id,
       name: signature.name,
       text: signature.text,
+      html: signature.html ?? plainTextToMailHtml(signature.text),
       isDefault: signature.isDefault,
     });
   };
@@ -169,6 +173,7 @@ export function MailSignatureManager({
       accountId: selectedAccount.id,
       name: draft.name.trim(),
       text: draft.text,
+      html: draft.html,
       isDefault,
       ...(selectedSignature ? { id: selectedSignature.id } : {}),
     };
@@ -195,6 +200,7 @@ export function MailSignatureManager({
         id: signature.id,
         name: signature.name,
         text: signature.text,
+        html: signature.html,
         isDefault: true,
       })
       .then((saved) => {
@@ -205,6 +211,7 @@ export function MailSignatureManager({
                 id: saved.id,
                 name: saved.name,
                 text: saved.text,
+                html: saved.html ?? plainTextToMailHtml(saved.text),
                 isDefault: true,
               }
             : current,
@@ -494,27 +501,91 @@ export function MailSignatureManager({
         </div>
 
         <div className='space-y-2'>
-          <label className='text-sm font-medium' htmlFor='mail-signature-text'>
+          <label
+            className='text-sm font-medium'
+            htmlFor='mail-signature-editor'
+          >
             {t('settings.identities.signatureFor', {
-              defaultValue: 'Signature text',
+              defaultValue: 'Signature content',
             })}
           </label>
-          <Textarea
-            aria-label={t('settings.identities.signatureFor', {
-              defaultValue: 'Signature text',
+          <MailRichTextEditor
+            ariaLabel={t('settings.identities.signatureFor', {
+              defaultValue: 'Signature content',
             })}
             disabled={busy || !selectedAccount}
-            id='mail-signature-text'
-            onChange={(event) =>
+            labels={{
+              toolbar: t('actions.editor.toolbar', {
+                defaultValue: 'Formatting',
+              }),
+              bold: t('actions.editor.bold', { defaultValue: 'Bold' }),
+              italic: t('actions.editor.italic', {
+                defaultValue: 'Italic',
+              }),
+              underline: t('actions.editor.underline', {
+                defaultValue: 'Underline',
+              }),
+              bulletList: t('actions.editor.bulletList', {
+                defaultValue: 'Bulleted list',
+              }),
+              numberedList: t('actions.editor.numberedList', {
+                defaultValue: 'Numbered list',
+              }),
+              undo: t('actions.editor.undo', { defaultValue: 'Undo' }),
+              redo: t('actions.editor.redo', { defaultValue: 'Redo' }),
+              clearFormatting: t('actions.editor.clearFormatting', {
+                defaultValue: 'Clear formatting',
+              }),
+              fontSize: t('actions.editor.fontSize', {
+                defaultValue: 'Font size',
+              }),
+              heading: t('actions.editor.heading', {
+                defaultValue: 'Heading level',
+              }),
+              link: t('actions.editor.link', { defaultValue: 'Insert link' }),
+              image: t('actions.editor.image', {
+                defaultValue: 'Insert image',
+              }),
+              normal: t('actions.editor.normal', { defaultValue: 'Normal' }),
+              heading1: t('actions.editor.heading1', {
+                defaultValue: 'Heading 1',
+              }),
+              heading2: t('actions.editor.heading2', {
+                defaultValue: 'Heading 2',
+              }),
+              heading3: t('actions.editor.heading3', {
+                defaultValue: 'Heading 3',
+              }),
+              heading4: t('actions.editor.heading4', {
+                defaultValue: 'Heading 4',
+              }),
+              heading5: t('actions.editor.heading5', {
+                defaultValue: 'Heading 5',
+              }),
+              heading6: t('actions.editor.heading6', {
+                defaultValue: 'Heading 6',
+              }),
+              fontSizeSmall: t('actions.editor.fontSizeSmall', {
+                defaultValue: 'Small',
+              }),
+              fontSizeNormal: t('actions.editor.fontSizeNormal', {
+                defaultValue: 'Normal',
+              }),
+              fontSizeLarge: t('actions.editor.fontSizeLarge', {
+                defaultValue: 'Large',
+              }),
+            }}
+            onChange={(value) =>
               setDraft((current) => ({
                 ...current,
-                text: event.target.value,
+                html: value.html,
+                text: value.text,
               }))
             }
             placeholder={t('settings.identities.signaturePlaceholder', {
               defaultValue: 'Signature appended to outgoing messages',
             })}
-            value={draft.text}
+            value={draft.html}
           />
         </div>
 

@@ -21,6 +21,14 @@ describe('MailClient', () => {
     expect(request).toHaveBeenLastCalledWith({
       path: 'mail/settings/accounts',
     });
+    await client.listManagementAccounts();
+    expect(request).toHaveBeenLastCalledWith({
+      path: 'mail/management/accounts',
+    });
+    await client.listManagedFolders('account/1');
+    expect(request).toHaveBeenLastCalledWith({
+      path: 'mail/management/accounts/account%2F1/folders',
+    });
     await client.listManagedOperationLogs();
     expect(request).toHaveBeenLastCalledWith({
       path: 'mail/settings/operation-logs',
@@ -72,6 +80,31 @@ describe('MailClient', () => {
     });
     expect(request).toHaveBeenLastCalledWith({
       path: 'mail/messages?accountId=account%2F1&query=from%3Aalice&folderId=inbox&labelId=label%2F1&conversationId=thread%2F1&unread=true&limit=20',
+    });
+
+    await client.listManagedMessages({
+      accountId: 'account/1',
+      query: 'alice@example.com',
+      folderId: 'folder/1',
+      limit: 20,
+    });
+    expect(request).toHaveBeenLastCalledWith({
+      path: 'mail/management/messages?accountId=account%2F1&query=alice%40example.com&folderId=folder%2F1&limit=20',
+    });
+
+    await client.manageMessages({
+      action: 'move',
+      items: [{ accountId: 'account/1', messageId: 'message/1' }],
+      providerFolderId: 'archive',
+    });
+    expect(request).toHaveBeenLastCalledWith({
+      path: 'mail/management/messages/actions',
+      method: 'POST',
+      json: {
+        action: 'move',
+        items: [{ accountId: 'account/1', messageId: 'message/1' }],
+        providerFolderId: 'archive',
+      },
     });
 
     await client.startSync({

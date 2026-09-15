@@ -12,12 +12,19 @@ import {
   mailErrorMessage,
   type MailAccountView,
   type MailAddress,
+  type MailFolder,
+  type MailManagementMessageAction,
   type MailMessageSummary,
 } from '../mail-client.js';
 import { getMailClient } from '../runtime.js';
 
 const mail = getMailClient();
 const PAGE_SIZE = 100;
+
+interface ManagedFolderOption extends Pick<MailFolder, 'name' | 'type'> {
+  readonly accountId: string;
+  readonly providerFolderId: string;
+}
 
 export default function MailManagementPage(): ReactElement {
   const { t } = useTranslation();
@@ -26,6 +33,9 @@ export default function MailManagementPage(): ReactElement {
   const [folderNames, setFolderNames] = useState<ReadonlyMap<string, string>>(
     () => new Map(),
   );
+  const [folderOptions, setFolderOptions] = useState<
+    readonly ManagedFolderOption[]
+  >([]);
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [messages, setMessages] = useState<readonly MailMessageSummary[]>([]);
@@ -33,8 +43,15 @@ export default function MailManagementPage(): ReactElement {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string>();
+  const [actionError, setActionError] = useState<string>();
+  const [selectedKeys, setSelectedKeys] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const [selectedFolderId, setSelectedFolderId] = useState('');
+  const [actionBusy, setActionBusy] = useState<MailManagementMessageAction>();
   const [reloadVersion, setReloadVersion] = useState(0);
   const requestIdRef = useRef(0);
+  const selectAllRef = useRef<HTMLInputElement>(null);
 
   const reportError = useCallback(
     (cause: unknown): void => {
@@ -50,13 +67,13 @@ export default function MailManagementPage(): ReactElement {
 
   const loadAccounts = useCallback((): void => {
     void mail
-      .listAccounts()
+      .listManagementAccounts()
       .then(async (nextAccounts) => {
         setAccounts(nextAccounts);
         const folderGroups = await Promise.all(
           nextAccounts.map(async (account) => ({
             accountId: account.id,
-            folders: await mail.listFolders(account.id),
+            folders: await mail.listManagedFolders(account.id),
           })),
         );
         setFolderNames(
@@ -70,6 +87,16 @@ export default function MailManagementPage(): ReactElement {
                   ] as const,
               ),
             ),
+          ),
+        );
+        setFolderOptions(
+          folderGroups.flatMap(({ accountId: ownerId, folders }) =>
+            folders.map((folder) => ({
+              accountId: ownerId,
+              providerFolderId: folder.providerFolderId,
+              name: folder.name,
+              type: folder.type,
+            })),
           ),
         );
       })
@@ -93,7 +120,7 @@ export default function MailManagementPage(): ReactElement {
         if (requestIdRef.current !== requestId) return undefined;
         setLoading(true);
         setError(undefined);
-        return mail.listMessages({
+        return mail.listManagedMessages({
           accountId: accountId || undefined,
           query: debouncedQuery.trim() || undefined,
           limit: PAGE_SIZE,
@@ -117,12 +144,140 @@ export default function MailManagementPage(): ReactElement {
     [accounts],
   );
 
+  const selectedMessages = useMemo(
+    () => messages.filter((message) => selectedKeys.has(messageKey(message))),
+    [messages, selectedKeys],
+  );
+  const allSelected =
+    messages.length > 0 && selectedMessages.length === messages.length;
+  const someSelected = selectedMessages.length > 0 && !allSelected;
+  const folderOptionsById = useMemo(() => {
+    const options = new Map<string, ManagedFolderOption>();
+    for (const folder of folderOptions) {
+      if (!options.has(folder.providerFolderId)) {
+        options.set(folder.providerFolderId, folder);
+      }
+    }
+    return [...options.values()];
+  }, [folderOptions]);
+  const canPermanentlyDelete =
+    selectedMessages.length > 0 &&
+    selectedMessages.every((message) =>
+      message.folderIds.some(
+        (folderId) =>
+          folderOptions.find(
+            (folder) =>
+              folder.accountId === message.accountId &&
+              folder.providerFolderId === folderId,
+          )?.type === 'trash',
+      ),
+    );
+
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = someSelected;
+    }
+  }, [someSelected]);
+
+  const toggleMessage = (message: MailMessageSummary): void => {
+    const key = messageKey(message);
+    setSelectedKeys((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const toggleAllMessages = (): void => {
+    setSelectedKeys(
+      allSelected ? new Set() : new Set(messages.map(messageKey)),
+    );
+  };
+
+  const runAction = (
+    action: MailManagementMessageAction,
+    options: {
+      readonly permanently?: boolean;
+      readonly folderId?: string;
+    } = {},
+  ): void => {
+    if (selectedMessages.length === 0 || actionBusy) return;
+    if (action === 'move' && !options.folderId) {
+      setActionError(
+        t('dev.management.selectFolder', {
+          defaultValue: 'Select a destination folder first.',
+        }),
+      );
+      return;
+    }
+    const actionLabel = managementActionLabel(action);
+    if (
+      !window.confirm(
+        t('dev.management.confirmAction', {
+          defaultValue: `Apply “${actionLabel}” to ${selectedMessages.length} selected messages?`,
+          action: actionLabel,
+          count: selectedMessages.length,
+        }),
+      )
+    ) {
+      return;
+    }
+    if (
+      action === 'delete' &&
+      options.permanently &&
+      !window.confirm(
+        t('dev.management.confirmPermanentDelete', {
+          defaultValue:
+            'This permanently deletes the selected messages from Trash and cannot be undone. Continue?',
+        }),
+      )
+    ) {
+      return;
+    }
+    setActionBusy(action);
+    setActionError(undefined);
+    void mail
+      .manageMessages({
+        action,
+        items: selectedMessages.map((message) => ({
+          accountId: message.accountId,
+          messageId: message.id,
+        })),
+        ...(options.folderId ? { providerFolderId: options.folderId } : {}),
+        ...(action === 'delete'
+          ? { permanently: options.permanently ?? false }
+          : {}),
+      })
+      .then((result) => {
+        setSelectedKeys(
+          new Set(
+            result.items
+              .filter((item) => item.status === 'failed')
+              .map((item) => `${item.accountId}:${item.messageId}`),
+          ),
+        );
+        if (result.failed > 0) {
+          setActionError(
+            t('dev.management.partialFailure', {
+              defaultValue: `${result.succeeded} succeeded, ${result.failed} failed. Failed messages remain selected for retry.`,
+              succeeded: result.succeeded,
+              failed: result.failed,
+            }),
+          );
+        }
+        setReloadVersion((version) => version + 1);
+      })
+      .catch(reportError)
+      .finally(() => setActionBusy(undefined));
+  };
+
   const loadMore = (): void => {
     if (!nextCursor || loadingMore) return;
     const requestId = requestIdRef.current;
     setLoadingMore(true);
     void mail
-      .listMessages({
+      .listManagedMessages({
         accountId: accountId || undefined,
         query: debouncedQuery.trim() || undefined,
         cursor: nextCursor,
@@ -155,7 +310,11 @@ export default function MailManagementPage(): ReactElement {
       actions={
         <Button
           disabled={loading}
-          onClick={() => setReloadVersion((version) => version + 1)}
+          onClick={() => {
+            setSelectedKeys(new Set());
+            setActionError(undefined);
+            setReloadVersion((version) => version + 1);
+          }}
           variant='outline'
         >
           <RefreshCw
@@ -173,7 +332,11 @@ export default function MailManagementPage(): ReactElement {
               defaultValue: 'Account',
             })}
             className='sm:w-72'
-            onChange={(event) => setAccountId(event.target.value)}
+            onChange={(event) => {
+              setSelectedKeys(new Set());
+              setActionError(undefined);
+              setAccountId(event.target.value);
+            }}
             value={accountId}
           >
             <option value=''>
@@ -197,7 +360,11 @@ export default function MailManagementPage(): ReactElement {
                 defaultValue: 'Search subject or preview',
               })}
               className='pl-9'
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => {
+                setSelectedKeys(new Set());
+                setActionError(undefined);
+                setQuery(event.target.value);
+              }}
               placeholder={t('dev.management.search', {
                 defaultValue: 'Search subject or preview',
               })}
@@ -206,9 +373,129 @@ export default function MailManagementPage(): ReactElement {
           </label>
         </section>
 
-        {error ? (
+        {messages.length > 0 ? (
+          <section className='flex flex-col gap-3 rounded-2xl border bg-background p-3 shadow-sm lg:flex-row lg:items-center'>
+            <label className='flex items-center gap-2 text-sm text-muted-foreground'>
+              <input
+                aria-label={t('dev.management.selectAll', {
+                  defaultValue: 'Select all messages on this page',
+                })}
+                checked={allSelected}
+                disabled={Boolean(actionBusy)}
+                onChange={toggleAllMessages}
+                ref={selectAllRef}
+                type='checkbox'
+              />
+              {t('dev.management.selectedCount', {
+                defaultValue: `${selectedMessages.length} selected`,
+                count: selectedMessages.length,
+              })}
+            </label>
+            <div className='flex flex-1 flex-wrap items-center gap-2'>
+              <Button
+                disabled={selectedMessages.length === 0 || Boolean(actionBusy)}
+                onClick={() => runAction('markRead')}
+                variant='outline'
+              >
+                {t('dev.management.actions.markRead', {
+                  defaultValue: 'Mark read',
+                })}
+              </Button>
+              <Button
+                disabled={selectedMessages.length === 0 || Boolean(actionBusy)}
+                onClick={() => runAction('markUnread')}
+                variant='outline'
+              >
+                {t('dev.management.actions.markUnread', {
+                  defaultValue: 'Mark unread',
+                })}
+              </Button>
+              <Button
+                disabled={selectedMessages.length === 0 || Boolean(actionBusy)}
+                onClick={() => runAction('star')}
+                variant='outline'
+              >
+                {t('dev.management.actions.star', { defaultValue: 'Star' })}
+              </Button>
+              <Button
+                disabled={selectedMessages.length === 0 || Boolean(actionBusy)}
+                onClick={() => runAction('unstar')}
+                variant='outline'
+              >
+                {t('dev.management.actions.unstar', {
+                  defaultValue: 'Remove star',
+                })}
+              </Button>
+              <Button
+                disabled={selectedMessages.length === 0 || Boolean(actionBusy)}
+                onClick={() => runAction('archive')}
+                variant='outline'
+              >
+                {t('dev.management.actions.archive', {
+                  defaultValue: 'Archive',
+                })}
+              </Button>
+              <Button
+                disabled={selectedMessages.length === 0 || Boolean(actionBusy)}
+                onClick={() => runAction('delete')}
+                variant='destructive'
+              >
+                {t('dev.management.actions.delete', { defaultValue: 'Delete' })}
+              </Button>
+              {canPermanentlyDelete ? (
+                <Button
+                  disabled={Boolean(actionBusy)}
+                  onClick={() => runAction('delete', { permanently: true })}
+                  variant='destructive'
+                >
+                  {t('dev.management.actions.permanentDelete', {
+                    defaultValue: 'Permanently delete',
+                  })}
+                </Button>
+              ) : null}
+              <NativeSelect
+                aria-label={t('dev.management.moveFolder', {
+                  defaultValue: 'Destination folder',
+                })}
+                className='min-w-48'
+                disabled={selectedMessages.length === 0 || Boolean(actionBusy)}
+                onChange={(event) => setSelectedFolderId(event.target.value)}
+                value={selectedFolderId}
+              >
+                <option value=''>
+                  {t('dev.management.moveFolder', {
+                    defaultValue: 'Move to folder…',
+                  })}
+                </option>
+                {folderOptionsById.map((folder) => (
+                  <option
+                    key={folder.providerFolderId}
+                    value={folder.providerFolderId}
+                  >
+                    {folder.name}
+                  </option>
+                ))}
+              </NativeSelect>
+              <Button
+                disabled={
+                  selectedMessages.length === 0 ||
+                  !selectedFolderId ||
+                  Boolean(actionBusy)
+                }
+                onClick={() =>
+                  runAction('move', { folderId: selectedFolderId })
+                }
+                variant='outline'
+              >
+                {t('dev.management.actions.move', { defaultValue: 'Move' })}
+              </Button>
+            </div>
+          </section>
+        ) : null}
+
+        {error || actionError ? (
           <div className='rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive'>
-            {error}
+            {error ?? actionError}
           </div>
         ) : null}
 
@@ -228,6 +515,11 @@ export default function MailManagementPage(): ReactElement {
               <table className='w-full min-w-[1450px] text-sm'>
                 <thead className='border-b bg-muted/50 text-left text-xs text-muted-foreground'>
                   <tr>
+                    <Header
+                      label={t('dev.management.selection', {
+                        defaultValue: 'Select',
+                      })}
+                    />
                     <Header label={t('dev.management.account')} />
                     <Header label={t('dev.management.sender')} />
                     <Header label={t('dev.management.recipients')} />
@@ -243,8 +535,19 @@ export default function MailManagementPage(): ReactElement {
                   {messages.map((message) => (
                     <tr
                       className='align-top hover:bg-muted/30'
-                      key={message.id}
+                      key={messageKey(message)}
                     >
+                      <td className='px-4 py-3'>
+                        <input
+                          aria-label={t('dev.management.selectMessage', {
+                            defaultValue: 'Select message',
+                          })}
+                          checked={selectedKeys.has(messageKey(message))}
+                          disabled={Boolean(actionBusy)}
+                          onChange={() => toggleMessage(message)}
+                          type='checkbox'
+                        />
+                      </td>
                       <Cell>
                         {accountNames.get(message.accountId) ??
                           message.accountId}
@@ -362,4 +665,27 @@ function formatTimestamp(value: string | undefined): string {
   if (!value) return '—';
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+}
+
+function messageKey(message: MailMessageSummary): string {
+  return `${message.accountId}:${message.id}`;
+}
+
+function managementActionLabel(action: MailManagementMessageAction): string {
+  switch (action) {
+    case 'markRead':
+      return 'Mark read';
+    case 'markUnread':
+      return 'Mark unread';
+    case 'star':
+      return 'Star';
+    case 'unstar':
+      return 'Remove star';
+    case 'archive':
+      return 'Archive';
+    case 'move':
+      return 'Move';
+    case 'delete':
+      return 'Delete';
+  }
 }

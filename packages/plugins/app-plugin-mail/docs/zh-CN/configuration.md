@@ -45,7 +45,7 @@ Mail Core 的配置直接写在 `mail` 下。环境变量只覆盖下表中明�
 | 配置项                         | 类型      | 默认值                 | 环境变量                          | 说明                                                                            |
 | ------------------------------ | --------- | ---------------------- | --------------------------------- | ------------------------------------------------------------------------------- |
 | `mail.oauthCallbackUrl`        | `string`  | `/mail/oauth/callback` | `MAIL_OAUTH_CALLBACK_URL`         | OAuth callback 的应用内路径，或完整的 `http(s)` URL。                           |
-| `mail.automaticSyncIntervalMs` | `integer` | `300000`（5 分钟）     | `MAIL_AUTOMATIC_SYNC_INTERVAL_MS` | 自动同步间隔，最小值为 `60000`（1 分钟）。                                      |
+| `mail.automaticSyncIntervalMs` | `integer` | `300000`（5 分钟）     | `MAIL_AUTOMATIC_SYNC_INTERVAL_MS` | 新关联账号的自动同步间隔默认值，最小值为 `60000`（1 分钟）；账号页可单独调整。  |
 | `mail.syncBatchSize`           | `integer` | `100`                  | `MAIL_SYNC_BATCH_SIZE`            | 每次 Provider 同步请求的邮件数量，范围为 `1–200`。                              |
 | `mail.pushWebhookUrl`          | `string`  | 无                     | `MAIL_PUSH_WEBHOOK_URL`           | Push callback 的公共地址，应该以 `/mail/webhooks` 结尾。                        |
 | `mail.pushWebhookSecret`       | `string`  | 无                     | `MAIL_PUSH_WEBHOOK_SECRET`        | Push callback 使用的共享密钥，长度为 `32–128`，只能使用字母、数字、`_` 和 `-`。 |
@@ -71,7 +71,7 @@ mail:
 
 首次同步时，起始日期和最大消息数同时生效。起始日期用于筛选历史邮件，`maxMessages` 用于限制历史同步阶段导入的数量；如果达到数量上限，或者 Provider 没有更多符合日期条件的邮件，历史同步就会结束。未传 `maxMessages` 时默认值为 10,000，API 可设置为 1–100,000。Provider 返回的单页可能略超请求数量，因此最终导入数量可能略高于配置值；历史同步结束后，系统还会从基线游标执行追赶同步，补齐期间发生的变更。
 
-`mail.automaticSyncIntervalMs` 只控制自动同步的触发间隔，不限制单次同步的执行时长。
+`mail.automaticSyncIntervalMs` 作为新关联账号的默认自动同步间隔，不限制单次同步的执行时长。已存在账号可以在 `/dev/mail/accounts` 的账号列表中单独修改分钟数；运行时每分钟检查到期账号，因此不同账号可以使用不同间隔。
 
 ### OAuth callback 地址
 
@@ -130,6 +130,15 @@ mail:
 https://mail.example.com/main/mail/webhooks/gmail/google/<secret>
 ```
 
+同一个 `pushWebhookUrl` 和 `pushWebhookSecret` 可以供多个 Provider 实例共用，系统会根据 Provider 类型和实例名生成不同的 callback 地址。
+
+配置方式取决于 Provider：
+
+- Gmail：需要在 Google Cloud Pub/Sub 中手动配置 Push subscription，把 endpoint 设置为生成后的完整 Gmail callback 地址；同时填写 `pushTopicName`，并确保 topic 允许 Gmail Push 服务账号发布消息
+- Microsoft 365：不需要在 Microsoft Graph 或 Microsoft Entra 中手动配置 webhook 地址。Mail Core 会在账户连接后自动创建、验证和续期 Graph subscription；应用公共地址需要支持公网 HTTPS 访问
+
+Push callback 地址和 OAuth callback 地址是两套配置。Google Cloud Console 和 Microsoft Entra 仍然需要登记 OAuth callback 地址，配置方式见上面的 [OAuth callback 地址](#oauth-callback-地址) 章节。
+
 只配置其中一项不会启用 Push。Push 通知可能延迟或丢失，自动同步仍然会作为兜底机制运行。
 
 ## Provider 配置
@@ -185,7 +194,7 @@ mail:
 | `pushTopicName`         | 否   | 无                                             | Google Cloud Pub/Sub topic 的完整名称。配置后才会为 Gmail 账户创建 watch。 |
 | `pushLabelIds`          | 否   | 无                                             | 限制 Gmail watch 监听的 label ID。省略时按 Gmail 默认范围监听。            |
 
-Gmail Push 还需要配置 Mail Core 的 `pushWebhookUrl` 和 `pushWebhookSecret`，并确保 Pub/Sub topic 允许 Gmail Push 服务账号发布消息。
+Gmail Push 还需要配置 Mail Core 的 `pushWebhookUrl` 和 `pushWebhookSecret`，并在 Google Cloud Pub/Sub 中手动把 Push subscription 的 endpoint 设置为生成后的完整 Gmail callback 地址。Pub/Sub topic 还必须允许 Gmail Push 服务账号发布消息。
 
 ### Microsoft 365
 
@@ -223,7 +232,7 @@ mail:
 | `authorityBaseUrl` | 否   | `https://login.microsoftonline.com`                                                        | Microsoft identity authority 的基础地址。                             |
 | `graphBaseUrl`     | 否   | `https://graph.microsoft.com/v1.0`                                                         | Microsoft Graph API 的基础地址。                                      |
 
-Microsoft Graph Push 还需要配置 Mail Core 的 `pushWebhookUrl` 和 `pushWebhookSecret`。Graph subscription 由 Mail Core 创建和续期。
+Microsoft Graph Push 还需要配置 Mail Core 的 `pushWebhookUrl` 和 `pushWebhookSecret`，不需要在 Microsoft Graph 或 Microsoft Entra 中手动配置 webhook 地址。Graph subscription 由 Mail Core 在账户连接后创建、验证和续期。
 
 ### IMAP / SMTP
 

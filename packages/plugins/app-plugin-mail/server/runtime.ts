@@ -13,7 +13,12 @@ import SendScheduledMailJob, {
 } from './jobs/send-scheduled-mail.js';
 import { SendMailOperation } from './operations/send-mail.js';
 import { SyncMailboxOperation } from './operations/sync-mailbox.js';
-import { resolveMailSyncBatchSize } from './config.js';
+import {
+  DEFAULT_MAIL_AUTOMATIC_SYNC_INTERVAL_MINUTES,
+  DEFAULT_MAIL_AUTOMATIC_SYNC_INTERVAL_MS,
+  resolveMailAutomaticSyncIntervalMinutes,
+  resolveMailSyncBatchSize,
+} from './config.js';
 import type { MailMessageChangeNotifier } from './realtime.js';
 import type { MailOutboxPublisher } from './service.js';
 import type {
@@ -124,7 +129,14 @@ export class MailRuntime implements MailOutboxPublisher {
     this.relayTimer.unref();
     this.automaticSyncTimer = setInterval(
       () => this.scheduleAutomaticSync(),
-      this.options.automaticSyncIntervalMs ?? 300_000,
+      Math.max(
+        60_000,
+        Math.min(
+          this.options.automaticSyncIntervalMs ??
+            DEFAULT_MAIL_AUTOMATIC_SYNC_INTERVAL_MS,
+          60_000,
+        ),
+      ),
     );
     this.automaticSyncTimer.unref();
     this.kick();
@@ -159,6 +171,14 @@ export class MailRuntime implements MailOutboxPublisher {
           { accountId: account.id, error },
           'Mail push subscription maintenance failed.',
         );
+      }
+      const lastSyncedAt = await this.options.store.getLastSyncedAt?.(
+        account.id,
+      );
+      if (
+        !isAutomaticSyncDue(lastSyncedAt, account.automaticSyncIntervalMinutes)
+      ) {
+        continue;
       }
       try {
         if (await this.createSyncRun(account.id)) created += 1;
@@ -519,4 +539,18 @@ export class MailRuntime implements MailOutboxPublisher {
 
 export function createMailRuntime(options: MailRuntimeOptions): MailRuntime {
   return new MailRuntime(options);
+}
+
+export function isAutomaticSyncDue(
+  lastSyncedAt: string | undefined,
+  intervalMinutes?: number,
+  now: number = Date.now(),
+): boolean {
+  if (!lastSyncedAt) return true;
+  const last = Date.parse(lastSyncedAt);
+  if (!Number.isFinite(last)) return true;
+  const interval = resolveMailAutomaticSyncIntervalMinutes(
+    intervalMinutes ?? DEFAULT_MAIL_AUTOMATIC_SYNC_INTERVAL_MINUTES,
+  );
+  return now - last >= interval * 60_000;
 }

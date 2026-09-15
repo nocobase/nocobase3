@@ -31,7 +31,7 @@ const routes: readonly AppClientRouteContribution[] = [
         },
         {
           name: 'operation-logs',
-          path: '/send-logs',
+          path: '/operation-logs',
           navigation: { title: 'nav.operationLogs', icon: History },
           access: { resource: 'mail.admin', action: 'access' },
           componentLoader: () => import('./pages/mail-operation-logs-page.js'),
@@ -68,7 +68,7 @@ const routes: readonly AppClientRouteContribution[] = [
           name: 'management',
           path: '/management',
           navigation: { title: 'nav.devManagement', icon: Table2 },
-          access: { resource: 'mail.workspace', action: 'access' },
+          access: { resource: 'mail.management', action: 'access' },
           componentLoader: () => import('./pages/mail-management-page.js'),
         },
         {
@@ -80,6 +80,13 @@ const routes: readonly AppClientRouteContribution[] = [
             import('./pages/mail-dev-page.js').then(({ MailSendDevPage }) => ({
               default: MailSendDevPage,
             })),
+        },
+        {
+          name: 'bulk-send',
+          path: '/bulk-send',
+          navigation: { title: 'nav.devBulkSend', icon: Send },
+          access: { resource: 'mail.workspace', action: 'access' },
+          componentLoader: () => import('./pages/mail-bulk-send-page.js'),
         },
         {
           name: 'sync-logs',

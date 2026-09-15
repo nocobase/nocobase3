@@ -8,6 +8,7 @@ import {
   MailConversationView,
   MailMessageList,
   MailProviderCard,
+  MailRichTextEditor,
   MailSyncPolicyFields,
 } from '../client/components/index.js';
 import type {
@@ -29,6 +30,72 @@ const capabilities: MailProviderView['capabilities'] = {
 };
 
 describe('Mail client components', () => {
+  it('supports rich text size, heading, link, and image controls', () => {
+    const execCommand = vi.fn(() => true);
+    const originalExecCommand = document.execCommand;
+    const prompt = vi
+      .spyOn(window, 'prompt')
+      .mockReturnValueOnce('https://example.com')
+      .mockReturnValueOnce('https://example.com/image.png');
+    Object.defineProperty(document, 'execCommand', {
+      configurable: true,
+      value: execCommand,
+    });
+
+    try {
+      render(
+        <MailRichTextEditor
+          ariaLabel='Message body'
+          labels={{
+            toolbar: 'Formatting toolbar',
+            bold: 'Bold',
+            italic: 'Italic',
+            underline: 'Underline',
+            bulletList: 'Bulleted list',
+            numberedList: 'Numbered list',
+            undo: 'Undo',
+            redo: 'Redo',
+            clearFormatting: 'Clear formatting',
+            fontSize: 'Font size',
+            heading: 'Heading level',
+            link: 'Insert link',
+            image: 'Insert image',
+          }}
+          onChange={vi.fn()}
+          value='<p>Message</p>'
+        />,
+      );
+
+      fireEvent.change(screen.getByLabelText('Font size'), {
+        target: { value: '5' },
+      });
+      fireEvent.change(screen.getByLabelText('Heading level'), {
+        target: { value: 'h2' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Insert link' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Insert image' }));
+
+      expect(execCommand).toHaveBeenCalledWith('fontSize', false, '5');
+      expect(execCommand).toHaveBeenCalledWith('formatBlock', false, 'h2');
+      expect(execCommand).toHaveBeenCalledWith(
+        'createLink',
+        false,
+        'https://example.com',
+      );
+      expect(execCommand).toHaveBeenCalledWith(
+        'insertImage',
+        false,
+        'https://example.com/image.png',
+      );
+    } finally {
+      prompt.mockRestore();
+      Object.defineProperty(document, 'execCommand', {
+        configurable: true,
+        value: originalExecCommand,
+      });
+    }
+  });
+
   it('fills the available message list height and enables vertical scrolling', () => {
     const message: MailMessageSummary = {
       id: 'message-1',
@@ -448,6 +515,7 @@ describe('Mail client components', () => {
 
   it('switches mailbox sidebar views and provider folders', () => {
     const onFolderChange = vi.fn();
+    const onLabelChange = vi.fn();
     const onSmartViewChange = vi.fn();
     render(
       <MailboxSidebar
@@ -491,7 +559,15 @@ describe('Mail client components', () => {
             kind: 'label',
           },
         ]}
-        customLabels={[]}
+        customLabels={[
+          {
+            id: 'label-1',
+            name: 'Customers',
+            color: 'blue',
+            createdAt: '2026-09-08T00:00:00.000Z',
+            updatedAt: '2026-09-08T00:00:00.000Z',
+          },
+        ]}
         labelId={undefined}
         labels={{
           account: 'Account',
@@ -504,7 +580,7 @@ describe('Mail client components', () => {
         }}
         onAccountChange={vi.fn()}
         onFolderChange={onFolderChange}
-        onLabelChange={vi.fn()}
+        onLabelChange={onLabelChange}
         onSmartViewChange={onSmartViewChange}
         smartView='all'
       />,
@@ -525,6 +601,56 @@ describe('Mail client components', () => {
     fireEvent.click(screen.getByRole('button', { name: /Inbox/ }));
     expect(onSmartViewChange).toHaveBeenCalledWith('all');
     expect(onFolderChange).toHaveBeenCalledWith('INBOX');
+    fireEvent.click(screen.getByRole('button', { name: 'Customers' }));
+    expect(onFolderChange).toHaveBeenCalledTimes(1);
+    expect(onLabelChange).toHaveBeenCalledWith('label-1');
+  });
+
+  it('collapses each message independently while keeping a summary visible', () => {
+    render(
+      <MailConversationView
+        actionLabels={{
+          archive: 'Archive',
+          collapseMessage: 'Collapse message',
+          delete: 'Delete',
+          download: 'Download',
+          expandMessage: 'Expand message',
+          forward: 'Forward',
+          markRead: 'Mark read',
+          markUnread: 'Mark unread',
+          reply: 'Reply',
+          star: 'Star',
+          unstar: 'Unstar',
+        }}
+        labels={{
+          attachmentCount: (count) => `${count} attachments`,
+          conversation: (count) => `${count} messages`,
+          loadMore: 'Load more',
+          noSubject: '(no subject)',
+          selectMessage: 'Select a message',
+          unknownSender: 'Unknown sender',
+        }}
+        messages={[
+          conversationMessage('message-1', 'Alice', 'First message'),
+          conversationMessage('message-2', 'Bob', 'Second message'),
+        ]}
+        onLoadMore={vi.fn()}
+        subject='Project update'
+      />,
+    );
+
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Collapse message' })[0],
+    );
+    expect(
+      screen.getAllByRole('button', { name: 'Expand message' }),
+    ).toHaveLength(1);
+    expect(screen.getAllByText('First message')).toHaveLength(1);
+    expect(screen.getByText('Second message')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Expand message' }));
+    expect(
+      screen.getAllByRole('button', { name: 'Collapse message' }),
+    ).toHaveLength(2);
   });
 
   it('renders every synchronized message in a provider conversation', () => {

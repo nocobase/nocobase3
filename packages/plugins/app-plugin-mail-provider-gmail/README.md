@@ -16,11 +16,7 @@ web client ID, and its client secret. Register the callback URL
 default. Override it with Mail Core's `mail.oauthCallbackUrl` or
 `MAIL_OAUTH_CALLBACK_URL` and register that exact URL instead.
 
-Push delivery additionally requires a fully qualified `pushTopicName` in the
-Provider entry and Mail Core's `MAIL_PUSH_WEBHOOK_URL` and
-`MAIL_PUSH_WEBHOOK_SECRET`. Configure the topic's push subscription endpoint to
-the generated Gmail webhook URL. The topic must already allow the Gmail push
-service account to publish. Optional `pushLabelIds` limit watched labels.
+Push delivery additionally requires a fully qualified `pushTopicName` in the Provider entry and Mail Core's `MAIL_PUSH_WEBHOOK_URL` and `MAIL_PUSH_WEBHOOK_SECRET`. Manually configure the topic's push subscription endpoint to the generated Gmail webhook URL. The topic must already allow the Gmail push service account to publish. Optional `pushLabelIds` limit watched labels.
 
 ## Verification
 

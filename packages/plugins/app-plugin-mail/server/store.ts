@@ -40,8 +40,14 @@ import type {
   MailProviderPushSubscription,
   MailTemplate,
   MailLabelColor,
+  MailDraftConflict,
 } from './types.js';
-import { DEFAULT_MAIL_LABEL_COLOR, isMailLabelColor } from './types.js';
+import {
+  DEFAULT_MAIL_LABEL_COLOR,
+  isMailLabelColor,
+  MAIL_LOCAL_DRAFT_FOLDER_ID,
+} from './types.js';
+import { DEFAULT_MAIL_AUTOMATIC_SYNC_INTERVAL_MINUTES } from './config.js';
 
 interface AuthorizationStateRow extends Row {
   stateHash: string;
@@ -101,6 +107,7 @@ interface AccountRow extends Row {
   scopes: readonly string[] | string;
   status: MailAccount['status'];
   initialSyncReceivedAfter?: string | null;
+  automaticSyncIntervalMinutes?: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -162,6 +169,7 @@ interface MessageRow extends Row {
   accountId: string;
   providerMessageId: string;
   providerDraftId?: string | null;
+  providerDraftMessageId?: string | null;
   internetMessageId?: string | null;
   providerConversationId?: string | null;
   sender?: MailAddress | string | null;
@@ -188,6 +196,7 @@ interface MessageRow extends Row {
   attachments: readonly NormalizedMailAttachment[] | string;
   note?: string | null;
   todo?: boolean | number;
+  draftConflict?: MailDraftConflict | string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -197,6 +206,14 @@ interface MessageFolderRow extends Row {
   messageId: string;
   providerFolderId: string;
 }
+
+const SYNTHETIC_FOLDER_TYPES: Readonly<Record<string, MailFolder['type']>> = {
+  __nocobase_default_inbox__: 'inbox',
+  __nocobase_default_sent__: 'sent',
+  __nocobase_default_trash__: 'trash',
+  __nocobase_default_junk__: 'junk',
+  __nocobase_default_archive__: 'archive',
+};
 
 interface MessageLabelRow extends Row {
   messageId: string;
@@ -1141,6 +1158,19 @@ export class DatabaseMailStore implements MailStore {
     const requested = input.accountIds
       ? owned.filter((account) => input.accountIds?.includes(account.id))
       : owned;
+    return this.listMessagesForAccounts(requested, input);
+  }
+
+  public async listAllMessages(
+    input: MailListMessagesInput,
+  ): Promise<MailPage<MailMessageSummary>> {
+    return this.listMessagesForAccounts(await this.listAllAccounts(), input);
+  }
+
+  private async listMessagesForAccounts(
+    requested: readonly MailAccount[],
+    input: MailListMessagesInput,
+  ): Promise<MailPage<MailMessageSummary>> {
     if (requested.length === 0) return { items: [] };
     const limit = Math.min(Math.max(input.limit ?? 50, 1), 200);
     const cursor = parseMessageCursor(input.cursor);
@@ -1152,6 +1182,7 @@ export class DatabaseMailStore implements MailStore {
         'mailMessages.accountId',
         'mailMessages.providerMessageId',
         'mailMessages.providerDraftId',
+        'mailMessages.providerDraftMessageId',
         'mailMessages.internetMessageId',
         'mailMessages.providerConversationId',
         'mailMessages.sender',
@@ -1173,7 +1204,32 @@ export class DatabaseMailStore implements MailStore {
         'in',
         requested.map((account) => account.id),
       );
-    if (input.folderIds?.length) {
+    const requestedFolderId =
+      input.folderIds?.length === 1 ? input.folderIds[0] : undefined;
+    const syntheticFolderType = requestedFolderId
+      ? SYNTHETIC_FOLDER_TYPES[requestedFolderId]
+      : undefined;
+    if (requestedFolderId === MAIL_LOCAL_DRAFT_FOLDER_ID) {
+      query = query.where('mailMessages.draft', '=', true);
+    } else if (syntheticFolderType) {
+      query = query
+        .innerJoin(
+          'mailMessageFolders',
+          'mailMessages.id',
+          'mailMessageFolders.messageId',
+        )
+        .innerJoin('mailFolders', (join) =>
+          join
+            .onRef('mailFolders.accountId', '=', 'mailMessages.accountId')
+            .onRef(
+              'mailFolders.providerFolderId',
+              '=',
+              'mailMessageFolders.providerFolderId',
+            )
+            .on('mailFolders.type', '=', syntheticFolderType),
+        )
+        .distinct();
+    } else if (input.folderIds?.length) {
       query = query
         .innerJoin(
           'mailMessageFolders',
@@ -1208,6 +1264,8 @@ export class DatabaseMailStore implements MailStore {
         builder.eb.or([
           builder.eb('mailMessages.subject', 'like', `%${input.query}%`),
           builder.eb('mailMessages.preview', 'like', `%${input.query}%`),
+          builder.eb('mailMessages.sender', 'like', `%${input.query}%`),
+          builder.eb('mailMessages.recipients', 'like', `%${input.query}%`),
         ]),
       );
     if (cursor) {
@@ -1262,6 +1320,13 @@ export class DatabaseMailStore implements MailStore {
   ): Promise<MailMessage | undefined> {
     const account = await this.getAccount(accountId);
     if (!account || account.userId !== userId) return undefined;
+    return this.getMessageForAccount(accountId, messageId);
+  }
+
+  public async getMessageForAccount(
+    accountId: string,
+    messageId: string,
+  ): Promise<MailMessage | undefined> {
     const row = await this.database
       .query()
       .selectFrom<MessageRow>('mailMessages')
@@ -1506,6 +1571,16 @@ export class DatabaseMailStore implements MailStore {
     return row
       ? parseJson<MailSyncCursor>(row.cursor, 'sync cursor')
       : undefined;
+  }
+
+  public async getLastSyncedAt(accountId: string): Promise<string | undefined> {
+    const row = await this.database
+      .query()
+      .selectFrom<SyncStateRow>('mailSyncStates')
+      .select('lastSyncedAt')
+      .where('accountId', '=', accountId)
+      .executeTakeFirst<Pick<SyncStateRow, 'lastSyncedAt'>>();
+    return row?.lastSyncedAt;
   }
 
   public async clearSyncCursor(accountId: string): Promise<void> {
@@ -1782,6 +1857,11 @@ export class DatabaseMailStore implements MailStore {
         let staleFolders = connection.query
           .deleteFrom('mailFolders')
           .where('accountId', '=', input.run.accountId);
+        staleFolders = staleFolders.where(
+          'providerFolderId',
+          '!=',
+          MAIL_LOCAL_DRAFT_FOLDER_ID,
+        );
         if (input.completeProviderFolderIds.length > 0) {
           staleFolders = staleFolders.where(
             'providerFolderId',
@@ -2560,7 +2640,8 @@ async function removeStaleMessageFolders(
 ): Promise<void> {
   let deleteQuery = query
     .deleteFrom<MessageFolderRow>('mailMessageFolders')
-    .where('accountId', '=', accountId);
+    .where('accountId', '=', accountId)
+    .where('providerFolderId', '!=', MAIL_LOCAL_DRAFT_FOLDER_ID);
   if (completeProviderFolderIds.length > 0) {
     deleteQuery = deleteQuery.where(
       'providerFolderId',
@@ -2732,6 +2813,9 @@ function toAccountRow(
     scopes: JSON.stringify(account.scopes),
     status: account.status,
     initialSyncReceivedAfter: account.initialSyncReceivedAfter ?? null,
+    automaticSyncIntervalMinutes:
+      account.automaticSyncIntervalMinutes ??
+      DEFAULT_MAIL_AUTOMATIC_SYNC_INTERVAL_MINUTES,
     createdAt: createdAt ?? updatedAt,
     updatedAt,
   };
@@ -2749,6 +2833,9 @@ function fromAccountRow(row: AccountRow): MailAccount {
     scopes: parseJson<readonly string[]>(row.scopes, 'account scopes'),
     status: row.status,
     initialSyncReceivedAfter: row.initialSyncReceivedAfter ?? undefined,
+    automaticSyncIntervalMinutes:
+      row.automaticSyncIntervalMinutes ??
+      DEFAULT_MAIL_AUTOMATIC_SYNC_INTERVAL_MINUTES,
   };
 }
 
@@ -2762,6 +2849,7 @@ export function toMailAccountView(account: MailAccount): MailAccountView {
     scopes: account.scopes,
     status: account.status,
     initialSyncReceivedAfter: account.initialSyncReceivedAfter,
+    automaticSyncIntervalMinutes: account.automaticSyncIntervalMinutes,
   };
 }
 
@@ -2850,6 +2938,7 @@ function toMessageRow(
     accountId,
     providerMessageId: message.providerMessageId,
     providerDraftId: message.providerDraftId,
+    providerDraftMessageId: message.providerDraftMessageId,
     internetMessageId: message.internetMessageId,
     providerConversationId: message.providerConversationId,
     sender: jsonOrNull(message.from),
@@ -2874,6 +2963,7 @@ function toMessageRow(
     attachments: JSON.stringify(message.attachments),
     note: local?.note ?? null,
     todo: local?.todo ?? false,
+    draftConflict: jsonOrNull(message.draftConflict),
     createdAt,
     updatedAt,
   };
@@ -3019,6 +3109,7 @@ function toMailMessageSummary(
     accountId: row.accountId,
     providerMessageId: row.providerMessageId,
     providerDraftId: row.providerDraftId ?? undefined,
+    providerDraftMessageId: row.providerDraftMessageId ?? undefined,
     internetMessageId: row.internetMessageId ?? undefined,
     conversationId: row.providerConversationId ?? undefined,
     folderIds,
@@ -3040,6 +3131,9 @@ function toMailMessageSummary(
     hasAttachments: attachments.length > 0,
     note: row.note ?? undefined,
     todo: Boolean(row.todo),
+    draftConflict: row.draftConflict
+      ? parseJson<MailDraftConflict>(row.draftConflict, 'draft conflict')
+      : undefined,
   };
 }
 
@@ -3066,6 +3160,7 @@ function toMailMessage(
     accountId: row.accountId,
     providerMessageId: row.providerMessageId,
     providerDraftId: row.providerDraftId ?? undefined,
+    providerDraftMessageId: row.providerDraftMessageId ?? undefined,
     internetMessageId: row.internetMessageId ?? undefined,
     conversationId: row.providerConversationId ?? undefined,
     folderIds,
@@ -3087,6 +3182,9 @@ function toMailMessage(
     hasAttachments: attachments.length > 0,
     note: row.note ?? undefined,
     todo: Boolean(row.todo),
+    draftConflict: row.draftConflict
+      ? parseJson<MailDraftConflict>(row.draftConflict, 'draft conflict')
+      : undefined,
     replyTo: parseJson<MailMessage['replyTo']>(row.replyTo, 'message reply-to'),
     inReplyTo: row.inReplyTo ?? undefined,
     references: parseJson<readonly string[]>(

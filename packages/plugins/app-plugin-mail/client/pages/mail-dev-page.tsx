@@ -12,6 +12,7 @@ import {
 import {
   mailErrorMessage,
   type MailAccountView,
+  type MailIdentity,
   type MailSubmissionView,
   type MailSignature,
   type MailTemplate,
@@ -23,6 +24,7 @@ import { Input } from '../components/ui/input.js';
 import { NativeSelect } from '../components/ui/native-select.js';
 import MailWorkspacePage from './mail-workspace-page.js';
 import { renderMailTemplate } from '../lib/mail-template.js';
+import { replaceMailSignatureContent } from '../lib/mail-signature.js';
 
 const mail = getMailClient();
 interface ComposeValue {
@@ -69,6 +71,7 @@ function MailDevPage(): ReactElement {
   const { t } = useTranslation();
   const [accounts, setAccounts] = useState<readonly MailAccountView[]>([]);
   const [accountId, setAccountId] = useState('');
+  const [identities, setIdentities] = useState<readonly MailIdentity[]>([]);
   const [identityId, setIdentityId] = useState('');
   const [compose, setCompose] = useState<ComposeValue>({
     to: '',
@@ -126,6 +129,7 @@ function MailDevPage(): ReactElement {
   useEffect(() => {
     if (!accountId) {
       void Promise.resolve().then(() => {
+        setIdentities([]);
         setSignatures([]);
         setSignatureId('');
       });
@@ -134,7 +138,20 @@ function MailDevPage(): ReactElement {
     void mail.listSignatures(accountId).then(
       (items) => {
         setSignatures(items);
-        setSignatureId(items.find((item) => item.isDefault)?.id ?? '');
+        const nextSignatureId = items.find((item) => item.isDefault)?.id ?? '';
+        setSignatureId(nextSignatureId);
+        setCompose((current) =>
+          current.text.trim() || current.html.trim()
+            ? current
+            : {
+                ...current,
+                ...replaceMailSignatureContent(
+                  { text: current.text, html: current.html },
+                  items,
+                  nextSignatureId,
+                ),
+              },
+        );
       },
       (cause: unknown) =>
         setError(
@@ -154,6 +171,7 @@ function MailDevPage(): ReactElement {
     void mail.listIdentities(accountId).then(
       (nextIdentities) => {
         if (!active) return;
+        setIdentities(nextIdentities);
         setIdentityId(
           nextIdentities.find(
             (identity) => identity.isPrimary && identity.canSend,
@@ -286,6 +304,34 @@ function MailDevPage(): ReactElement {
                 </p>
               ) : null}
               <label className='block text-sm font-medium'>
+                {t('dev.send.from', { defaultValue: 'From address' })}
+                <NativeSelect
+                  className='mt-1'
+                  disabled={
+                    identities.filter((identity) => identity.canSend).length ===
+                    0
+                  }
+                  onChange={(event) => setIdentityId(event.target.value)}
+                  value={identityId}
+                >
+                  {identities.filter((identity) => identity.canSend).length ===
+                  0 ? (
+                    <option value=''>
+                      {t('dev.send.noSenders', {
+                        defaultValue: 'No sendable addresses',
+                      })}
+                    </option>
+                  ) : null}
+                  {identities
+                    .filter((identity) => identity.canSend)
+                    .map((identity) => (
+                      <option key={identity.id} value={identity.id}>
+                        {formatIdentity(identity)}
+                      </option>
+                    ))}
+                </NativeSelect>
+              </label>
+              <label className='block text-sm font-medium'>
                 {t('dev.send.to', { defaultValue: 'To' })}
                 <Input
                   className='mt-1'
@@ -330,7 +376,7 @@ function MailDevPage(): ReactElement {
                     }),
                     options: [
                       {
-                        id: '',
+                        id: '__none__',
                         label: t('workspace.noSignature', {
                           defaultValue: 'No signature',
                         }),
@@ -340,7 +386,17 @@ function MailDevPage(): ReactElement {
                         label: signature.name,
                       })),
                     ],
-                    onSelect: setSignatureId,
+                    onSelect: (nextSignatureId) => {
+                      setSignatureId(nextSignatureId);
+                      setCompose((current) => ({
+                        ...current,
+                        ...replaceMailSignatureContent(
+                          { text: current.text, html: current.html },
+                          signatures,
+                          nextSignatureId,
+                        ),
+                      }));
+                    },
                     selectedId: signatureId,
                   },
                   template: {
@@ -356,6 +412,19 @@ function MailDevPage(): ReactElement {
                         (item) => item.id === templateId,
                       );
                       if (!template) return;
+                      if (
+                        (compose.subject.trim() ||
+                          compose.text.trim() ||
+                          compose.html.trim()) &&
+                        !window.confirm(
+                          t('dev.send.templateConfirm', {
+                            defaultValue:
+                              'This replaces the existing subject and message body. Continue?',
+                          }),
+                        )
+                      ) {
+                        return;
+                      }
                       const rendered = renderMailTemplate(template);
                       setCompose((current) => ({
                         ...current,
@@ -376,6 +445,20 @@ function MailDevPage(): ReactElement {
                   undo: 'Undo',
                   redo: 'Redo',
                   clearFormatting: 'Clear formatting',
+                  fontSize: 'Font size',
+                  heading: 'Heading level',
+                  link: 'Insert link',
+                  image: 'Insert image',
+                  normal: 'Normal',
+                  heading1: 'Heading 1',
+                  heading2: 'Heading 2',
+                  heading3: 'Heading 3',
+                  heading4: 'Heading 4',
+                  heading5: 'Heading 5',
+                  heading6: 'Heading 6',
+                  fontSizeSmall: 'Small',
+                  fontSizeNormal: 'Normal',
+                  fontSizeLarge: 'Large',
                 }}
                 onChange={(value) =>
                   setCompose((current) => ({ ...current, ...value }))
@@ -439,4 +522,10 @@ function statusTone(status: string): 'success' | 'danger' | 'info' {
 
 function createIdempotencyKey(): string {
   return `mail-dev-${globalThis.crypto.randomUUID()}`;
+}
+
+function formatIdentity(identity: MailIdentity): string {
+  return identity.displayName
+    ? `${identity.displayName} <${identity.address}>`
+    : identity.address;
 }
