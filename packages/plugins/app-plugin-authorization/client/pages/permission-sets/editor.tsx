@@ -1,6 +1,7 @@
 import { useState, type FormEvent, type ReactElement } from 'react';
 
 import type { AuthorizationOptions } from '../../authorization-client.js';
+import { ConfirmDialog } from '../../components/confirm-dialog.js';
 import { ActionsEditor, Field } from '../../components/editors.js';
 import {
   ClearFilterButton,
@@ -42,6 +43,8 @@ export function PermissionSetEditor({
   const [resourceSearch, setResourceSearch] = useState('');
   const [resourceType, setResourceType] = useState('all');
   const [expanded, setExpanded] = useState<number>();
+  // The grant a confirmed removal would drop, by its position in the draft.
+  const [pendingRemoval, setPendingRemoval] = useState<number>();
   const query = resourceSearch.trim().toLowerCase();
   const visibleIndexes = draft.grants
     .map((grant, index) => ({ grant, index }))
@@ -200,14 +203,7 @@ export function PermissionSetEditor({
                       size='sm'
                       type='button'
                       variant='ghost'
-                      onClick={() =>
-                        onChange({
-                          ...draft,
-                          grants: draft.grants.filter(
-                            (_item, current) => current !== index,
-                          ),
-                        })
-                      }
+                      onClick={() => setPendingRemoval(index)}
                     >
                       Remove
                     </Button>
@@ -268,6 +264,25 @@ export function PermissionSetEditor({
           </Button>
         </div>
       </form>
+      <ConfirmDialog
+        confirmLabel='Remove permission'
+        open={pendingRemoval !== undefined}
+        title='Remove this permission?'
+        onCancel={() => setPendingRemoval(undefined)}
+        onConfirm={() => {
+          const index = pendingRemoval;
+          setPendingRemoval(undefined);
+          if (index === undefined) return;
+          onChange({
+            ...draft,
+            grants: draft.grants.filter((_item, current) => current !== index),
+          });
+        }}
+      >
+        {removalLabel(options, draft, pendingRemoval)} and every action
+        configured on it are removed from this permission set. This cannot be
+        undone once the set is saved.
+      </ConfirmDialog>
       {pickerOpen ? (
         <PermissionResourcePicker
           options={options}
@@ -284,4 +299,14 @@ export function PermissionSetEditor({
       ) : null}
     </SidePanel>
   );
+}
+
+/** The resource a pending removal names, for the confirmation body. */
+function removalLabel(
+  options: AuthorizationOptions,
+  draft: Draft,
+  index?: number,
+): string {
+  const grant = index === undefined ? undefined : draft.grants[index];
+  return grant ? resourceLabel(options, grant.resource) : 'This resource';
 }

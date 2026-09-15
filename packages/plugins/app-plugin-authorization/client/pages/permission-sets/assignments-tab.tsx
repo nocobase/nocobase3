@@ -4,6 +4,7 @@ import type {
   AuthorizationSubject,
   PermissionSetAssignment,
 } from '../../authorization-client.js';
+import { ConfirmDialog } from '../../components/confirm-dialog.js';
 import {
   ClearFilterButton,
   FilterBar,
@@ -58,6 +59,11 @@ export function Assignments({
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<readonly string[]>([]);
   const [addOpen, setAddOpen] = useState(false);
+  // The assignments a confirmed revoke would remove, with what to call them.
+  const [pendingRevoke, setPendingRevoke] = useState<{
+    readonly ids: readonly string[];
+    readonly label: string;
+  }>();
   const query = search.trim().toLowerCase();
   const visible = assignments.filter((item) => {
     const label = subjectLabel(item.subject, directory).toLowerCase();
@@ -115,7 +121,12 @@ export function Assignments({
           <Button
             variant='outline'
             disabled={busy || !canRevoke}
-            onClick={() => void onRevoke(selected).then(() => setSelected([]))}
+            onClick={() =>
+              setPendingRevoke({
+                ids: selected,
+                label: `${selected.length} ${selected.length === 1 ? 'assignment' : 'assignments'}`,
+              })
+            }
           >
             Revoke selected ({selected.length})
           </Button>
@@ -191,7 +202,12 @@ export function Assignments({
                     size='sm'
                     variant='ghost'
                     disabled={!canRevoke}
-                    onClick={() => void onRevoke([item.id])}
+                    onClick={() =>
+                      setPendingRevoke({
+                        ids: [item.id],
+                        label: subjectLabel(item.subject, directory),
+                      })
+                    }
                   >
                     Revoke
                   </Button>
@@ -214,6 +230,27 @@ export function Assignments({
           onPage={setPage}
         />
       </ManagementTable>
+      <ConfirmDialog
+        busy={busy}
+        confirmLabel='Revoke'
+        open={pendingRevoke !== undefined}
+        title={
+          (pendingRevoke?.ids.length ?? 0) > 1
+            ? 'Revoke these assignments?'
+            : 'Revoke this assignment?'
+        }
+        onCancel={() => setPendingRevoke(undefined)}
+        onConfirm={() => {
+          const ids = pendingRevoke?.ids ?? [];
+          setPendingRevoke(undefined);
+          void onRevoke(ids).then(() =>
+            setSelected((items) => items.filter((id) => !ids.includes(id))),
+          );
+        }}
+      >
+        {pendingRevoke?.label} will no longer hold this permission set. This
+        cannot be undone; the assignment has to be added again.
+      </ConfirmDialog>
       {addOpen ? (
         <AssignmentPicker
           directory={directory}

@@ -19,6 +19,7 @@ import type {
   AuthorizationOptions,
   DefaultAccessRule,
 } from '../authorization-client.js';
+import { ConfirmDialog } from '../components/confirm-dialog.js';
 import { ActionScopesEditor, ResourceEditor } from '../components/editors.js';
 import { ErrorBox, errorMessage as message } from '../components/feedback.js';
 import {
@@ -49,6 +50,7 @@ export function DefaultAccessPanel({
   const [editorStep, setEditorStep] = useState<'resource' | 'access'>(
     'resource',
   );
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [records, setRecords] = useState<
     readonly import('../authorization-client.js').AuthorizationRecordOption[]
   >([]);
@@ -177,6 +179,21 @@ export function DefaultAccessPanel({
           onPage={setPage}
         />
       </ManagementTable>
+      <ConfirmDialog
+        confirmLabel='Delete rule'
+        open={confirmDelete}
+        title='Delete this default access rule?'
+        onCancel={() => setConfirmDelete(false)}
+        onConfirm={() => {
+          setConfirmDelete(false);
+          void remove();
+        }}
+      >
+        The baseline access on “
+        {original ? resourceLabel(options, original) : ''}” is removed, and
+        everyone falls back to what their permission sets grant. This cannot be
+        undone.
+      </ConfirmDialog>
       {draft ? (
         <SidePanel
           title={original ? 'Edit default access' : 'Set default access'}
@@ -194,7 +211,10 @@ export function DefaultAccessPanel({
             footer={
               <>
                 {original ? (
-                  <Button variant='outline' onClick={() => void remove()}>
+                  <Button
+                    variant='outline'
+                    onClick={() => setConfirmDelete(true)}
+                  >
                     Delete rule
                   </Button>
                 ) : null}

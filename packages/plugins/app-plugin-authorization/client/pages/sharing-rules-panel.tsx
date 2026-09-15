@@ -21,6 +21,7 @@ import type {
   SharingRule,
 } from '../authorization-client.js';
 import type { UserDirectory } from '../components/user-directory.js';
+import { ConfirmDialog } from '../components/confirm-dialog.js';
 import { SearchField } from '../components/filters.js';
 import {
   ActionsEditor,
@@ -60,6 +61,7 @@ export function SharingRulesPanel({
   const [editorTab, setEditorTab] = useState<'rule' | 'access' | 'assignments'>(
     'rule',
   );
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const load = useCallback(async (): Promise<void> => {
     try {
       setRules(await authz.listSharingRules());
@@ -197,6 +199,20 @@ export function SharingRulesPanel({
           onPage={setPage}
         />
       </ManagementTable>
+      <ConfirmDialog
+        confirmLabel='Delete rule'
+        open={confirmDelete}
+        title='Delete this sharing rule?'
+        onCancel={() => setConfirmDelete(false)}
+        onConfirm={() => {
+          setConfirmDelete(false);
+          void remove();
+        }}
+      >
+        “{draft?.title || humanize(originalKey ?? '')}” is deleted, and the
+        people it shared records with lose the access it opened. This cannot be
+        undone.
+      </ConfirmDialog>
       {draft ? (
         <SidePanel
           title={originalKey ? 'Edit sharing rule' : 'New sharing rule'}
@@ -214,7 +230,10 @@ export function SharingRulesPanel({
             footer={
               <>
                 {originalKey ? (
-                  <Button variant='outline' onClick={() => void remove()}>
+                  <Button
+                    variant='outline'
+                    onClick={() => setConfirmDelete(true)}
+                  >
                     Delete rule
                   </Button>
                 ) : null}

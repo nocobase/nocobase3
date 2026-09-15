@@ -154,7 +154,7 @@ describe('table pager', () => {
 });
 
 describe('permissions tab', () => {
-  it('opens on one table naming the resource, its type beneath it and one mark per action', () => {
+  it('opens on one table naming the resource, its type beneath it and each granted action', () => {
     render(<PermissionsSummary draft={draft} options={options} />);
     // The type is a second line under the name rather than a column of its own.
     expect(
@@ -167,27 +167,26 @@ describe('permissions tab', () => {
     expect(orders.getByText('Orders')).toBeInTheDocument();
     expect(orders.getByText('Collections')).toBeInTheDocument();
 
-    // One mark per action the kind declares, in the same order for every row of it.
+    // The granted actions alone, each mark beside the name of its action.
     expect(
       orders.getAllByRole('img').map((mark) => mark.getAttribute('aria-label')),
-    ).toEqual([
-      'Create: Not granted',
-      'Read: Every record',
-      'Update: Scoped records',
-      'Delete: Not granted',
-    ]);
+    ).toEqual(['Every record', 'Scoped records']);
+    expect(orders.getByText('Read')).toBeInTheDocument();
+    expect(orders.getByText('Update')).toBeInTheDocument();
+
+    const articles = within(rows[1] as HTMLElement);
     expect(
-      within(rows[1] as HTMLElement)
+      articles
         .getAllByRole('img')
         .map((mark) => mark.getAttribute('aria-label')),
-    ).toEqual([
-      'Create: Not granted',
-      'Read: Every record',
-      'Update: Not granted',
-      'Delete: Not granted',
-    ]);
+    ).toEqual(['Every record']);
+    expect(articles.getByText('Read')).toBeInTheDocument();
+    expect(articles.queryByText('Update')).toBeNull();
     expect(
       within(rows[2] as HTMLElement).getByText('Pages'),
+    ).toBeInTheDocument();
+    expect(
+      within(rows[2] as HTMLElement).getByText('View'),
     ).toBeInTheDocument();
   });
 

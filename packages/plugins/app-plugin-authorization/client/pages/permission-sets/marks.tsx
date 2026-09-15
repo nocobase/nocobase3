@@ -1,11 +1,7 @@
 import { Check, Contrast, Minus, Shield } from 'lucide-react';
 import type { ReactElement } from 'react';
 
-import {
-  markDescriptions,
-  markLabels,
-  type GrantMark,
-} from './access-report.js';
+import { markDescriptions, markLabels, type GrantMark } from './labels.js';
 
 const markStyles: Readonly<Record<GrantMark, string>> = {
   all: 'bg-primary/10 text-primary',

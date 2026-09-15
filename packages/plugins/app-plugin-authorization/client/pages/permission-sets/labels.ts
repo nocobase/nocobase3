@@ -15,6 +15,42 @@ import type {
   RecordAccessDraft,
 } from './types.js';
 
+/** The resource type whose grants carry record access and field selections. */
+export const COLLECTION_TYPE: string = 'database.collection';
+
+/**
+ * What one action on one resource reaches: every record, some of them, or
+ * nothing. A set conferring unrestricted access has no grants to read, so it
+ * carries its own mark rather than reading as "not granted".
+ */
+export type GrantMark = 'all' | 'scoped' | 'none' | 'bypass';
+
+export const markLabels: Readonly<Record<GrantMark, string>> = {
+  all: 'Every record',
+  scoped: 'Scoped records',
+  none: 'Not granted',
+  bypass: 'Unrestricted',
+};
+
+/** What the mark means, for a tooltip and for the legend. */
+export const markDescriptions: Readonly<Record<GrantMark, string>> = {
+  all: 'Every record',
+  scoped: 'Scoped records',
+  none: 'Not granted',
+  bypass: 'Unrestricted: grants are not consulted',
+};
+
+export function actionMark(grant: GrantDraft, action: string): GrantMark {
+  if (!grant.actions.includes(action)) return 'none';
+  if (grant.resource.type !== COLLECTION_TYPE) return 'all';
+  // A create selects no records, so it is never scoped.
+  if (action === 'create') return 'all';
+  const value = grant.database[action] ?? defaultDatabaseActionDraft();
+  return recordAccessKey(value.recordAccess) === 'allRecords'
+    ? 'all'
+    : 'scoped';
+}
+
 /** How each filter operator is named, in the editor and wherever a stored condition is read back. */
 export const filterOperatorLabels: Readonly<
   Record<FilterConditionDraft['operator'], string>

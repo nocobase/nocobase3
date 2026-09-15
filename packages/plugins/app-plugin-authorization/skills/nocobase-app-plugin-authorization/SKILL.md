@@ -266,23 +266,9 @@ When a permission does not behave as expected, inspect in this order:
    the module. The returned reasons identify the authorization decision and
    its contributing constraints.
 
-Three settings screens answer the first steps without a query, all reached from
-the permission sets filter bar. **Resource access** answers step 4 for one
-resource: search for the resource, and the rows are the sets that grant
-anything on it with that resource kind's own actions as columns. **Compare two
-sets** answers how one set differs from another: two selectors, a row per
-resource and action grouped by resource type, and only the rows where the two
-differ until the toggle asks for every row. Both mark whether an action starts
-from every record, from a scoped set, is not granted, or belongs to a set
-conferring unrestricted access, for which grants are not consulted at all.
-**User access**, from the same bar,
-answers step 4 and step 5 for one person: the sets they hold and whether each
-was assigned directly or is held because they are signed in, the grants that
-follow with the records and fields each action starts from and the set that
-granted it, and the default access, sharing and restriction rules that may
-adjust what those grants reach. Those rules resolve per request, so that list
-is what may apply, not a computed result; `authz.explain()` remains the way to
-settle one concrete request.
+`authz.explain()` remains the way to settle one concrete request. The settings
+pages edit one layer each and report nothing across layers, because the four
+authorization plugins are separable packages.
 
 Do not treat a successful permission snapshot as proof that a database query
 is safe: a snapshot contains grants, while database authorization may still

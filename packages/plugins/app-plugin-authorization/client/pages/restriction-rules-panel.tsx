@@ -20,6 +20,7 @@ import type {
   RestrictionRule,
 } from '../authorization-client.js';
 import type { UserDirectory } from '../components/user-directory.js';
+import { ConfirmDialog } from '../components/confirm-dialog.js';
 import {
   ActionScopesEditor,
   Field,
@@ -61,6 +62,7 @@ export function RestrictionRulesPanel({
   const [editorTab, setEditorTab] = useState<'rule' | 'access' | 'assignments'>(
     'rule',
   );
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [records, setRecords] = useState<
     readonly import('../authorization-client.js').AuthorizationRecordOption[]
   >([]);
@@ -208,6 +210,20 @@ export function RestrictionRulesPanel({
           onPage={setPage}
         />
       </ManagementTable>
+      <ConfirmDialog
+        confirmLabel='Delete rule'
+        open={confirmDelete}
+        title='Delete this restriction rule?'
+        onCancel={() => setConfirmDelete(false)}
+        onConfirm={() => {
+          setConfirmDelete(false);
+          void remove();
+        }}
+      >
+        “{draft?.title || humanize(originalKey ?? '')}” is deleted, and the
+        people it narrowed reach whatever their permission sets and sharing
+        rules allow. This cannot be undone.
+      </ConfirmDialog>
       {draft ? (
         <SidePanel
           title={originalKey ? 'Edit restriction rule' : 'New restriction rule'}
@@ -225,7 +241,10 @@ export function RestrictionRulesPanel({
             footer={
               <>
                 {originalKey ? (
-                  <Button variant='outline' onClick={() => void remove()}>
+                  <Button
+                    variant='outline'
+                    onClick={() => setConfirmDelete(true)}
+                  >
                     Delete rule
                   </Button>
                 ) : null}

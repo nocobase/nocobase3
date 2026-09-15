@@ -1,10 +1,11 @@
-import type { ReactElement } from 'react';
+import { useState, type ReactElement } from 'react';
 
 import type {
   AuthorizationOptions,
   AuthorizationSubject,
   PermissionSetAssignment,
 } from '../../authorization-client.js';
+import { ConfirmDialog } from '../../components/confirm-dialog.js';
 import { ErrorBox, NoticeBox } from '../../components/feedback.js';
 import { DetailHeader, DetailTabs } from '../../components/management-ui.js';
 import {
@@ -56,14 +57,16 @@ export function PermissionSetDetail({
   onAssign: (subjects: readonly AuthorizationSubject[]) => Promise<void>;
   onRevoke: (ids: readonly string[]) => Promise<void>;
 }): ReactElement {
+  const [confirmDelete, setConfirmDelete] = useState(false);
   // An unrestricted set has no permissions to configure, so its detail view is the assignments alone.
   const detailSection = capabilities.unrestricted ? 'assignments' : section;
+  const title = draft.title || humanize(draft.key) || 'New permission set';
   return (
     <div className='space-y-5'>
       {error ? <ErrorBox value={error} /> : null}
       <DetailHeader
         onBack={onBack}
-        title={draft.title || humanize(draft.key) || 'New permission set'}
+        title={title}
         subtitle={detailSummary(draft, assignments, capabilities.unrestricted)}
         badge={
           <SetBadge tone={detailBadgeTone(capabilities)}>
@@ -82,7 +85,7 @@ export function PermissionSetDetail({
                 className='text-destructive hover:text-destructive'
                 variant='ghost'
                 disabled={busy}
-                onClick={onDelete}
+                onClick={() => setConfirmDelete(true)}
               >
                 Delete
               </Button>
@@ -118,6 +121,20 @@ export function PermissionSetDetail({
       {!capabilities.unrestricted && detailSection === 'permissions' ? (
         <PermissionsSummary options={options} draft={draft} />
       ) : null}
+      <ConfirmDialog
+        busy={busy}
+        confirmLabel='Delete permission set'
+        open={confirmDelete}
+        title='Delete this permission set?'
+        onCancel={() => setConfirmDelete(false)}
+        onConfirm={() => {
+          setConfirmDelete(false);
+          onDelete();
+        }}
+      >
+        “{title}” will be deleted, and everyone it is assigned to loses the
+        access it grants. This cannot be undone.
+      </ConfirmDialog>
       {detailSection === 'assignments' ? (
         <Assignments
           directory={directory}

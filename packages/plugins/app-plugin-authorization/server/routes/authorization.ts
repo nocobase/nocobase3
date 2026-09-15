@@ -46,16 +46,6 @@ export function createAuthorizationRoutes(
       data: await permissionSetOptions(authorization, connection),
     });
   });
-  // Every assignment in one answer. A screen that reports who holds which set
-  // would otherwise issue one request per set. Gated by the same
-  // `permission-sets` read check the library's own assignment routes use.
-  routes.get('/permission-sets/assignments', async (context) => {
-    await admin(context, 'permission-sets', 'read');
-    return context.json({
-      data: await authorization.permissionSets.listAssignments(),
-    });
-  });
-
   for (const settings of [
     'default-access',
     'sharing-rules',

@@ -25,13 +25,14 @@ import {
   TableHeader,
   TableRow,
 } from '../../components/ui/table.js';
-import { COLLECTION_TYPE, actionMark } from './access-report.js';
 import {
   customFilterConditions,
   defaultDatabaseActionDraft,
   recordAccessKey,
 } from './drafts.js';
 import {
+  COLLECTION_TYPE,
+  actionMark,
   filterOperatorLabels,
   humanize,
   recordAccessLabel,
@@ -96,18 +97,6 @@ export function PermissionsSummary({
   const isCollection = activeType === COLLECTION_TYPE;
   // The combined table carries a records column too, for the collection rows in it.
   const columns = combined ? 3 : actions.length + (isCollection ? 2 : 1);
-  // Every row of one kind carries the same marks in the same positions, so the columns are per kind.
-  const kindActions = useMemo(
-    () =>
-      new Map(
-        types.map((item) => [
-          item.value,
-          actionColumns(options, draft, item.value),
-        ]),
-      ),
-    [options, draft, types],
-  );
-
   return (
     <div className='space-y-4'>
       <div>
@@ -206,10 +195,7 @@ export function PermissionsSummary({
                 </TableCell>
                 {combined ? (
                   <TableCell className='px-5 py-4'>
-                    <GrantedActions
-                      actions={kindActions.get(grant.resource.type) ?? []}
-                      grant={grant}
-                    />
+                    <GrantedActions grant={grant} />
                   </TableCell>
                 ) : (
                   actions.map((action) => (
@@ -260,27 +246,24 @@ export function PermissionsSummary({
 }
 
 /**
- * One mark per action of the resource's kind, always in the same order and the
- * same positions, so every row of that kind occupies the same width. The action
- * is named in the label and the tooltip rather than on screen.
+ * The actions the grant confers, each with the mark saying what it reaches and
+ * its name beside it. A label never splits across lines; the column wraps
+ * between labels instead.
  */
-function GrantedActions({
-  actions,
-  grant,
-}: {
-  actions: readonly string[];
-  grant: GrantDraft;
-}): ReactElement {
+function GrantedActions({ grant }: { grant: GrantDraft }): ReactElement {
+  const actions = sortActions(grant.actions);
   if (actions.length === 0)
     return <span className='text-sm text-muted-foreground'>{NONE}</span>;
   return (
-    <div className='flex items-center gap-1.5'>
+    <div className='flex flex-wrap items-center gap-x-3 gap-y-1.5'>
       {actions.map((action) => (
-        <ScopeMark
+        <span
+          className='flex items-center gap-1.5 text-sm whitespace-nowrap'
           key={action}
-          context={humanize(action)}
-          value={actionMark(grant, action)}
-        />
+        >
+          <ScopeMark value={actionMark(grant, action)} />
+          {humanize(action)}
+        </span>
       ))}
     </div>
   );
