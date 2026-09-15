@@ -1,4 +1,5 @@
 import { createMiddleware } from 'langchain';
+import type { AgentMiddleware } from 'langchain';
 import type { AgentProviders, PreparedAgentContext } from '../types.js';
 import { conversationMiddleware } from './conversation.js';
 import { skillToolBindingMiddleware } from './skill-tools.js';
@@ -13,7 +14,7 @@ const namedNoopMiddleware = (name: string) => createMiddleware({ name });
 export function buildStandardAgentMiddleware(
   providers: AgentProviders,
   prepared: PreparedAgentContext,
-) {
+): AgentMiddleware[] {
   const { features } = providers;
   return [
     features.contextEnrichment
