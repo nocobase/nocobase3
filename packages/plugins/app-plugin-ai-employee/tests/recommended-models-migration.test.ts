@@ -113,10 +113,9 @@ describe('recommended LLM models migration', () => {
       type: 'json',
       nullable: false,
     });
-    expect(JSON.parse(String(field?.defaultValue))).toEqual({
-      mode: 'provider',
-      models: [],
-    });
+    // The physical default is the literal text; the resolved Field carries the
+    // document it encodes.
+    expect(field?.defaultValue).toEqual({ mode: 'provider', models: [] });
     await expect(metadataStore.get('llmServices')).resolves.toBeUndefined();
   });
 });
