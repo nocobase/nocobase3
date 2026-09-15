@@ -358,6 +358,11 @@ export class CollectionBuilder {
     operations: CollectionOperation[],
     options: BuilderExecOptions = {},
   ): Promise<BuilderResult> {
+    if ('syncMetadata' in options) {
+      throw new Error(
+        'CollectionBuilder no longer supports syncMetadata. Metadata synchronization is required for correct data input and output. Remove this option.',
+      );
+    }
     const effectiveOperations = applyExecOptions(operations, options);
     assertNoPhysicalMappingOperations(effectiveOperations);
     const compilerContext =
@@ -399,21 +404,15 @@ export class CollectionBuilder {
         schemaOperations,
         compilerContext,
       );
-      const metadataOperations =
-        options.syncMetadata !== false ? executedOperations : undefined;
-      if (metadataOperations) {
-        assertMetadataFieldChanges(metadataOperations, compilerContext);
-        await this.assertDocumentMetadataWritable(metadataOperations);
-      }
+      assertMetadataFieldChanges(executedOperations, compilerContext);
+      await this.assertDocumentMetadataWritable(executedOperations);
       await this.schemaAdapter.execute(schemaOperations);
       this.updatePlannedCollections(executedOperations);
       this.invalidatePhysicalSchema(effectiveOperations);
-      if (metadataOperations) {
-        await this.applyDocumentMetadataChanges(
-          metadataOperations,
-          compilerContext,
-        );
-      }
+      await this.applyDocumentMetadataChanges(
+        executedOperations,
+        compilerContext,
+      );
     }
 
     return {
