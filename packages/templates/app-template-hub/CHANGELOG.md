@@ -1,5 +1,27 @@
 # @nocobase/app-template-hub
 
+## 1.0.0-beta.15
+
+### Minor Changes
+
+- 154e09e: Register `@nocobase/app-plugin-api-keys` so an application generated from either template can issue API keys out of the box.
+
+  Both halves are wired: the server plugin for the `apikey` table and the Settings page in the client plugin list, plus `apiKey()` in `server/config/auth.ts` and `apiKeyClient()` in `client/config/auth.ts`. Registering only one half is the failure worth knowing about — the plugin list alone creates the table and mounts no endpoints, and the auth config alone mounts endpoints against a table that does not exist.
+
+  The page declares `page:api-keys/access`. Keys are self-service and every endpoint acts only on the caller's own, so an application normally grants it to all authenticated users.
+
+### Patch Changes
+
+- c01baf6: Resolve application namespace aliases in React translations, synchronize the document language at startup and on changes, and inject the configured default language into served HTML. Allow client-only language selections with an English server fallback and an informational toast, and standardize documented locale checks on `pnpm nocobase app i18n:check`.
+- Updated dependencies [154e09e]
+- Updated dependencies [154e09e]
+- Updated dependencies [154e09e]
+- Updated dependencies [c01baf6]
+  - @nocobase/app-plugin-api-keys@0.1.0-beta.0
+  - @nocobase/app-plugin-authentication@0.1.0-beta.12
+  - @nocobase/app-server@1.0.0-beta.13
+  - @nocobase/app-plugin-i18n@0.1.0-beta.6
+
 ## 1.0.0-beta.14
 
 ### Minor Changes

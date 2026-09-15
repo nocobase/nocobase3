@@ -2,6 +2,7 @@ import type { Context, MiddlewareHandler, Next } from 'hono';
 
 import {
   APP_NS,
+  BASE_LOCALE,
   parseAcceptLanguage,
   type I18nRuntime,
   type Locale,
@@ -54,6 +55,9 @@ export async function resolveRequestLocale(
     context,
     options.sessionKey ?? LOCALE_SESSION_KEY,
   );
+  // The locale endpoint explicitly selects English for a client-only language, even when the application's own
+  // server locale list omits it. Base English resources are always loaded alongside the configured default.
+  if (stored === BASE_LOCALE) return BASE_LOCALE;
   if (stored) return runtime.resolveLocale(stored);
 
   const accepted = parseAcceptLanguage(
