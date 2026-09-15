@@ -72,7 +72,7 @@ Credentials belong here rather than in `server/config/database.ts` because `conf
 
 ## The dialects
 
-| Dialect     | Package                  | Native driver    | Default port | Names the database with            | Other defaults                                          |
+| Dialect     | Package                  | Driver           | Default port | Names the database with            | Other defaults                                          |
 | ----------- | ------------------------ | ---------------- | ------------ | ---------------------------------- | ------------------------------------------------------- |
 | `sqlite`    | `@nocobase/db-sqlite`    | `better-sqlite3` | —            | `database` (file under `storage/`) |                                                         |
 | `postgres`  | `@nocobase/db-postgres`  | `pg`             | 5432         | `database`                         | `postgres`, `schema: [public]`, `ssl: false`            |
@@ -85,20 +85,15 @@ Credentials belong here rather than in `server/config/database.ts` because `conf
 
 MariaDB runs on the `mysql` dialect. MySQL and OceanBase also accept `socketPath` instead of `host` and `port`.
 
-## Native drivers need build permission
+## Native drivers
 
-pnpm 11 does not run a dependency's install script unless the package appears under `allowBuilds` in `pnpm-workspace.yaml`, and a package left undecided stops the install outright with `ERR_PNPM_IGNORED_BUILDS`.
+Two of the drivers install a platform binary: `better-sqlite3` and `oracledb`. The other four are plain JavaScript — `pg`, `mysql2`, `tedious` and `dmdb`, which between them cover PostgreSQL, MySQL, SQL Server, KingbaseES, OceanBase and Dameng. Dameng in particular looks like it should be native and is not.
 
-The generated file already decides `better-sqlite3`, `oracledb` and `esbuild`. **`dmdb` is not in it**, so switching to Dameng means adding it:
+pnpm 11 runs a dependency's install script only when the package appears under `allowBuilds` in `pnpm-workspace.yaml`, and a package left undecided stops the install outright with `ERR_PNPM_IGNORED_BUILDS`. The generated file already decides both of the drivers that have one, so **switching dialects needs no change there**. A package with an install script that the application adds for its own reasons still does.
 
-```yaml
-allowBuilds:
-  dmdb: true
-```
+`ignore-scripts=true` in an npm configuration is the exception worth knowing: it suppresses install scripts globally and outranks `allowBuilds`, so the addon is not compiled and `pnpm install` reports success anyway. `pnpm rebuild better-sqlite3` is the remedy — re-running `pnpm install` does nothing, because the package is already in the store.
 
-`pg`, `mysql2` and `tedious` are pure JavaScript and need no entry, which covers PostgreSQL, MySQL, SQL Server, KingbaseES and OceanBase.
-
-A native addon is also compiled for one platform and Node version at a time, so a build made on a Mac installs binaries a Linux server cannot load. `pnpm build --target linux-x64` and the rest of the deployment story are in the README; a forgotten `--target` produces a `dist/` that fails only on the server. An application on PostgreSQL, MySQL or SQL Server has no native module and none of this applies.
+A native addon is compiled for one platform and Node version at a time, so a build made on a Mac installs binaries a Linux server cannot load. `pnpm build --target linux-x64` and the rest of the deployment story are in the README; a forgotten `--target` produces a `dist/` that fails only on the server. On any dialect but SQLite and Oracle the application has no native module at all, and none of this applies.
 
 ## Dialects outside the built-in connection types
 
