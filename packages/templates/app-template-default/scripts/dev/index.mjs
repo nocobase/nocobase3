@@ -1,12 +1,12 @@
 import spawn from 'cross-spawn';
-import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadStandaloneAppEnv } from '@nocobase/app-server/node';
 
 import { readCliHooks, runHookStage } from '../utils/cli-hooks.mjs';
 import { resolvePluginWatchIncludes } from './plugin-watches.mjs';
-import { resolveConfigWatch } from './config-watch.mjs';
+import { resolveConfigWatch, watchConfigFiles } from './config-watch.mjs';
+import { resolveWatchEnvironment } from './watch-environment.mjs';
 import { findAvailablePort } from './ports.mjs';
 import { waitForHttpReady } from './readiness.mjs';
 import { parseProxyTarget } from './proxy.mjs';
@@ -133,6 +133,7 @@ process.once('SIGINT', () => shutdown(0));
 process.once('SIGTERM', () => shutdown(0));
 
 const env = loadEnv();
+const watchEnv = await resolveWatchEnvironment(env);
 const proxyTarget = parseProxyTarget(env.PROXY_TARGET_URL);
 const viteDevHost = env.APP_VITE_DEV_HOST || '0.0.0.0';
 // In proxy mode Vite is the public app server, so it owns APP_SERVER_PORT.
@@ -145,7 +146,7 @@ const vitePort = await findAvailablePort({
   preferredPort: configuredVitePort,
 });
 const initialEnv = {
-  ...env,
+  ...watchEnv,
   APP_SERVER_HOST: env.APP_SERVER_HOST || '0.0.0.0',
   APP_VITE_DEV_HOST: viteDevHost,
   APP_VITE_DEV_PORT: String(vitePort),
@@ -258,7 +259,7 @@ if (!proxyTarget) {
   const configuredConfigPath = serverEnv.APP_CONFIG_FILE;
   const configWatch = resolveConfigWatch(rootDir, configuredConfigPath);
 
-  envWatcher = fs.watch(configWatch.directory, (_eventType, filename) => {
+  envWatcher = watchConfigFiles(configWatch, (_eventType, filename) => {
     const changedFile = filename?.toString();
     if (!changedFile || !configWatch.filenames.has(changedFile)) return;
 

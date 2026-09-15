@@ -7,7 +7,7 @@ import type { Repository, RepositoryRecord } from '../repository/types.js';
 import { createSeeder, type Seeder } from '../seed/seeder.js';
 import type { DatabaseSeederOptions } from '../seed/types.js';
 import type {
-  BaseConnectionConfig,
+  AnyConnectionConfig,
   CollectionMetadataStoreConfig,
   DatabaseConfig,
   ExtensibleDatabaseConfig,
@@ -80,15 +80,11 @@ export class CollectionMetadataStoreRequiredError extends Error {
   }
 }
 
-export function createDatabaseManager(config: DatabaseConfig): DatabaseManager;
 export function createDatabaseManager<
-  TConnection extends BaseConnectionConfig & { dialect: string },
->(config: ExtensibleDatabaseConfig<TConnection>): DatabaseManager;
-export function createDatabaseManager(
-  config: DatabaseConfig | ExtensibleDatabaseConfig<any>,
-): DatabaseManager {
+  TConnection extends AnyConnectionConfig = ConnectionConfig,
+>(config: ExtensibleDatabaseConfig<TConnection>): DatabaseManager {
   return new DefaultDatabaseManager(
-    config as DatabaseConfig,
+    config,
     new DefaultConnectionFactory({
       knex: new KnexConnectionAdapter(),
     }),

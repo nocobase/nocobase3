@@ -1437,6 +1437,18 @@ importers:
       '@nocobase/db-dameng':
         specifier: workspace:*
         version: link:../db-dameng
+      '@nocobase/db-mssql':
+        specifier: workspace:*
+        version: link:../db-mssql
+      '@nocobase/db-mysql':
+        specifier: workspace:*
+        version: link:../db-mysql
+      '@nocobase/db-oracle':
+        specifier: workspace:*
+        version: link:../db-oracle
+      '@nocobase/db-postgres':
+        specifier: workspace:*
+        version: link:../db-postgres
       '@nocobase/db-sqlite':
         specifier: workspace:*
         version: link:../db-sqlite
@@ -2919,6 +2931,12 @@ importers:
         specifier: ^19.0.0
         version: 19.2.8(react@19.2.8)
     devDependencies:
+      '@nocobase/db-mysql':
+        specifier: workspace:*
+        version: link:../../libs/db-mysql
+      '@nocobase/db-oracle':
+        specifier: workspace:*
+        version: link:../../libs/db-oracle
       '@nocobase/db-sqlite':
         specifier: workspace:*
         version: link:../../libs/db-sqlite
@@ -3326,6 +3344,12 @@ importers:
       '@boringnode/queue':
         specifier: 'catalog:'
         version: 0.7.1(@opentelemetry/api@1.9.0)(ioredis@5.11.1)(knex@3.3.0(better-sqlite3@13.0.3)(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0))(kysely@0.29.5)
+      '@nocobase/db-mysql':
+        specifier: workspace:*
+        version: link:../../libs/db-mysql
+      '@nocobase/db-postgres':
+        specifier: workspace:*
+        version: link:../../libs/db-postgres
       '@nocobase/db-sqlite':
         specifier: workspace:*
         version: link:../../libs/db-sqlite

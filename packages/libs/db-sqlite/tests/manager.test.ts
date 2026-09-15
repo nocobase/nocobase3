@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import sqlite from '../src/index.js';
+import sqlite, { type SqliteConnectionConfig } from '../src/index.js';
 import {
   createDatabaseManager,
   defineDatabase,
@@ -20,7 +20,7 @@ import {
 
 const testDrivers = { sqlite };
 
-function createTestDatabase(config: DatabaseConfig) {
+function createTestDatabase(config: DatabaseConfig<SqliteConnectionConfig>) {
   return createDatabaseManager({
     ...config,
     drivers: { ...testDrivers, ...config.drivers },
