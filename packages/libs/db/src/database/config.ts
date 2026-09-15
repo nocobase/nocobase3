@@ -152,7 +152,7 @@ export interface DatabaseDriverFactory<
   TOptions extends object = object,
   TConfig extends AnyConnectionConfig = AnyConnectionConfig,
 > {
-  (options?: TOptions): BaseConnectionConfig & {
+  (options?: TOptions): AnyConnectionConfig & {
     dialect: TDialect;
     databaseDriver: DatabaseDriverDefinition<TDialect, TConfig>;
   };
@@ -272,7 +272,7 @@ interface SocketConnectionConfig {
 }
 
 export function defineDatabase<
-  T extends DatabaseConfig | ExtensibleDatabaseConfig<any>,
+  T extends ExtensibleDatabaseConfig<AnyConnectionConfig>,
 >(config: T): T {
   return config;
 }
