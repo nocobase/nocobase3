@@ -1,5 +1,5 @@
 ---
-title: 'AI employees'
+title: 'Register a Tool'
 description: 'This page is being written.'
 ---
 

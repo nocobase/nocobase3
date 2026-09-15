@@ -1,27 +1,13 @@
 [
+  { "type": "file", "name": "index", "label": "Overview" },
+  { "type": "file", "name": "quick-start", "label": "Quick start" },
+  { "type": "dir", "name": "development", "label": "Define AI employees" },
+  { "type": "dir", "name": "components", "label": "Use AI components" },
+  { "type": "dir", "name": "configuration", "label": "Configuration" },
+  { "type": "dir", "name": "management", "label": "Manage AI services" },
   {
     "type": "file",
-    "name": "index",
-    "label": "概览"
-  },
-  {
-    "type": "dir",
-    "name": "quick-start",
-    "label": "开始使用"
-  },
-  {
-    "type": "dir",
-    "name": "llm",
-    "label": "模型服务"
-  },
-  {
-    "type": "dir",
-    "name": "agent-development",
-    "label": "Agent 开发"
-  },
-  {
-    "type": "dir",
-    "name": "management",
-    "label": "员工管理"
+    "name": "server-extension",
+    "label": "Extend server-side AI services"
   }
 ]

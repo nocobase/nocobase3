@@ -1,5 +1,5 @@
 ---
-title: 'AI employees'
+title: 'Global chat entry'
 description: 'This page is being written.'
 ---
 
