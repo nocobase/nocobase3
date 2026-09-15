@@ -1,10 +1,30 @@
 [
   { "type": "file", "name": "index", "label": "Overview" },
   { "type": "file", "name": "quick-start", "label": "Quick start" },
-  { "type": "dir", "name": "development", "label": "Define AI employees" },
-  { "type": "dir", "name": "components", "label": "Use AI components" },
-  { "type": "dir", "name": "configuration", "label": "Configuration" },
-  { "type": "dir", "name": "management", "label": "Manage AI services" },
+  {
+    "type": "dir",
+    "collapsed": true,
+    "name": "development",
+    "label": "Define AI employees"
+  },
+  {
+    "type": "dir",
+    "collapsed": true,
+    "name": "components",
+    "label": "Use AI components"
+  },
+  {
+    "type": "dir",
+    "collapsed": true,
+    "name": "configuration",
+    "label": "Configuration"
+  },
+  {
+    "type": "dir",
+    "collapsed": true,
+    "name": "management",
+    "label": "Manage AI services"
+  },
   {
     "type": "file",
     "name": "server-extension",

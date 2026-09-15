@@ -11,6 +11,7 @@
   },
   {
     "type": "dir",
+    "collapsed": true,
     "name": "development",
     "label": "Develop with an Agent"
   }
