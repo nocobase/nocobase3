@@ -10,7 +10,7 @@
 import type { ArtifactResolver } from '../artifact-resolver.ts';
 import type { AppRuntimeRegistry } from '../app-registry.ts';
 import type { AppVolumeManager } from '../deployment/volume-manager.ts';
-import { fullErrorMessage } from '../errors.ts';
+import { rootErrorMessage } from '../errors.ts';
 import path from 'node:path';
 import { rm } from 'node:fs/promises';
 import type {
@@ -165,7 +165,7 @@ export class ManagedReconciler {
           this.statuses.set(status.id, {
             ...status,
             observedState: 'failed',
-            error: fullErrorMessage(error),
+            error: rootErrorMessage(error),
           });
           throw error;
         }
@@ -484,7 +484,7 @@ export class ManagedReconciler {
         revision,
         cacheHit: null,
         app: this.registry.snapshot(spec.appId) ?? null,
-        error: fullErrorMessage(error),
+        error: rootErrorMessage(error),
       });
     }
   }

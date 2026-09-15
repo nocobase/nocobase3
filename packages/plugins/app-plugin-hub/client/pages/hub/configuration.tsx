@@ -194,25 +194,6 @@ export function Configuration({
               'Review the current and new configuration before publishing. This reloads configuration without restarting the application.',
           })}
           onClose={() => setReviewOpen(false)}
-          footerClassName='justify-between'
-          footer={
-            <>
-              <Button variant='outline' onClick={() => setReviewOpen(false)}>
-                {t('configuration.back', { defaultValue: 'Back' })}
-              </Button>
-              <Button
-                disabled={busy || !changed || validationError !== null}
-                onClick={() => {
-                  setReviewOpen(false);
-                  onSave(draft);
-                }}
-              >
-                {t('configuration.saveAndPublish', {
-                  defaultValue: 'Save and publish',
-                })}
-              </Button>
-            </>
-          }
         >
           <ConfigChangesReview
             current={content}
@@ -223,6 +204,22 @@ export function Configuration({
           />
           <div className='mt-4'>
             <ConfigReloadNotice />
+          </div>
+          <div className='mt-7 flex justify-between gap-2'>
+            <Button variant='outline' onClick={() => setReviewOpen(false)}>
+              {t('configuration.back', { defaultValue: 'Back' })}
+            </Button>
+            <Button
+              disabled={busy || !changed || validationError !== null}
+              onClick={() => {
+                setReviewOpen(false);
+                onSave(draft);
+              }}
+            >
+              {t('configuration.saveAndPublish', {
+                defaultValue: 'Save and publish',
+              })}
+            </Button>
           </div>
         </AppDialog>
       ) : null}
@@ -393,91 +390,8 @@ export function DeploymentDialog({
       description={app.app.name}
       onClose={onClose}
       wide
-      footerClassName='justify-between'
-      footer={
-        <>
-          <Button
-            onClick={step === firstStep ? onClose : () => setStep(step - 1)}
-            variant='outline'
-          >
-            {step === firstStep
-              ? t('releases.cancel', { defaultValue: 'Cancel' })
-              : t('configuration.back', { defaultValue: 'Back' })}
-          </Button>
-          {step < 2 ? (
-            <Button
-              disabled={
-                !release ||
-                busy ||
-                (step === 1 &&
-                  (!configReady ||
-                    mode === 'managed' ||
-                    validationError !== null))
-              }
-              onClick={() => {
-                setTemplateError(undefined);
-                setStep(step + 1);
-              }}
-            >
-              {t('configuration.continue', { defaultValue: 'Continue' })}{' '}
-              <ChevronRight />
-            </Button>
-          ) : (
-            <Button
-              disabled={
-                busy ||
-                !release ||
-                !configReady ||
-                mode === 'managed' ||
-                validationError !== null
-              }
-              onClick={onComplete}
-            >
-              {busy
-                ? rollback
-                  ? t('deployments.rollingBack', {
-                      defaultValue: 'Rolling back…',
-                    })
-                  : t('deployments.deploying', { defaultValue: 'Deploying…' })
-                : rollback
-                  ? t('deployments.rollback', { defaultValue: 'Roll back' })
-                  : t('deployments.deploy', { defaultValue: 'Deploy' })}
-            </Button>
-          )}
-        </>
-      }
-      subheader={
-        <>
-          <DeploymentSteps current={step} rollback={rollback} />
-          {step === 1 ? (
-            <div className='mt-5 space-y-5'>
-              {rollback ? (
-                <div className='flex items-center justify-between rounded-lg border bg-muted/20 px-4 py-3 text-sm'>
-                  <span className='text-muted-foreground'>
-                    {t('deployments.release', { defaultValue: 'Release' })}
-                  </span>
-                  <span className='font-medium'>{releaseLabel(release)}</span>
-                </div>
-              ) : null}
-              {rollback ? (
-                <div className='flex items-center justify-between rounded-lg border bg-muted/20 px-4 py-3 text-sm'>
-                  <span className='text-muted-foreground'>
-                    {t('configuration.source', {
-                      defaultValue: 'Configuration source',
-                    })}
-                  </span>
-                  <span className='font-medium'>
-                    {localizedConfigModeLabel(mode, t)}
-                  </span>
-                </div>
-              ) : (
-                <ConfigModePicker value={mode} onChange={onMode} />
-              )}
-            </div>
-          ) : null}
-        </>
-      }
     >
+      <DeploymentSteps current={step} rollback={rollback} />
       <div>
         {step === 0 ? (
           <div className='max-h-[22rem] overflow-y-auto rounded-xl border'>
@@ -566,6 +480,28 @@ export function DeploymentDialog({
           </div>
         ) : step === 1 ? (
           <div className='space-y-5'>
+            {rollback ? (
+              <div className='flex items-center justify-between rounded-lg border bg-muted/20 px-4 py-3 text-sm'>
+                <span className='text-muted-foreground'>
+                  {t('deployments.release', { defaultValue: 'Release' })}
+                </span>
+                <span className='font-medium'>{releaseLabel(release)}</span>
+              </div>
+            ) : null}
+            {rollback ? (
+              <div className='flex items-center justify-between rounded-lg border bg-muted/20 px-4 py-3 text-sm'>
+                <span className='text-muted-foreground'>
+                  {t('configuration.source', {
+                    defaultValue: 'Configuration source',
+                  })}
+                </span>
+                <span className='font-medium'>
+                  {localizedConfigModeLabel(mode, t)}
+                </span>
+              </div>
+            ) : (
+              <ConfigModePicker value={mode} onChange={onMode} />
+            )}
             {mode === 'file' ? (
               <div className='space-y-3'>
                 {release?.hasConfigTemplate ? (
@@ -859,6 +795,56 @@ export function DeploymentDialog({
               </div>
             )}
           </div>
+        )}
+      </div>
+      <div className='mt-7 flex justify-between gap-2'>
+        <Button
+          onClick={step === firstStep ? onClose : () => setStep(step - 1)}
+          variant='outline'
+        >
+          {step === firstStep
+            ? t('releases.cancel', { defaultValue: 'Cancel' })
+            : t('configuration.back', { defaultValue: 'Back' })}
+        </Button>
+        {step < 2 ? (
+          <Button
+            disabled={
+              !release ||
+              busy ||
+              (step === 1 &&
+                (!configReady ||
+                  mode === 'managed' ||
+                  validationError !== null))
+            }
+            onClick={() => {
+              setTemplateError(undefined);
+              setStep(step + 1);
+            }}
+          >
+            {t('configuration.continue', { defaultValue: 'Continue' })}{' '}
+            <ChevronRight />
+          </Button>
+        ) : (
+          <Button
+            disabled={
+              busy ||
+              !release ||
+              !configReady ||
+              mode === 'managed' ||
+              validationError !== null
+            }
+            onClick={onComplete}
+          >
+            {busy
+              ? rollback
+                ? t('deployments.rollingBack', {
+                    defaultValue: 'Rolling back…',
+                  })
+                : t('deployments.deploying', { defaultValue: 'Deploying…' })
+              : rollback
+                ? t('deployments.rollback', { defaultValue: 'Roll back' })
+                : t('deployments.deploy', { defaultValue: 'Deploy' })}
+          </Button>
         )}
       </div>
     </AppDialog>

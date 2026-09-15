@@ -22,25 +22,6 @@ export class AppRegistryError extends Error {
   }
 }
 
-/**
- * The message of the error itself, wrappers included.
- *
- * Prefer this over {@link rootErrorMessage} for anything an operator reads. The errors raised while installing an
- * artifact or activating an app already fold their cause into their own message, so this returns the reason *and*
- * the context around it — which phase failed, which app, what had already succeeded. Digging out the innermost
- * cause discards exactly that context, which is why reporting a failed deployment used to name a missing package
- * without saying whether it was missing during install or at startup.
- */
-export function fullErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-/**
- * The message of the innermost cause, with every wrapper discarded.
- *
- * This is for the narrow case of matching or classifying an underlying failure. It is the wrong choice for
- * anything displayed, because the wrappers carry the context that makes the message actionable.
- */
 export function rootErrorMessage(error: unknown): string {
   let current = error;
   const visited = new Set<unknown>();
@@ -89,10 +70,7 @@ export class AppNotFoundError extends AppRegistryError {
 
 export class AppCreateFailedError extends AppRegistryError {
   constructor(id: string, cause: unknown) {
-    // The cause is folded into the message rather than left on `cause` alone. This error crosses the Hub IPC
-    // boundary, which serialises an error to its message and reconstructs it on the other side, so anything not in
-    // the message is lost before an operator ever sees it — leaving "failed to initialize" as the whole diagnosis.
-    super(`App "${id}" failed to initialize: ${describeCause(cause, id)}`, {
+    super(`App "${id}" failed to initialize`, {
       status: 500,
       code: 'APP_CREATE_FAILED',
       cause,
@@ -102,7 +80,7 @@ export class AppCreateFailedError extends AppRegistryError {
 
 export class AppReloadFailedError extends AppRegistryError {
   constructor(id: string, cause: unknown) {
-    super(`App "${id}" failed to reload: ${describeCause(cause, id)}`, {
+    super(`App "${id}" failed to reload`, {
       status: 500,
       code: 'APP_RELOAD_FAILED',
       cause,
@@ -120,29 +98,4 @@ export class AppCapacityExceededError extends AppRegistryError {
       },
     );
   }
-}
-
-/**
- * The message of whatever went wrong, for folding into an error about `id` that has to survive serialisation.
- *
- * An `AggregateError` is unfolded because its own message says only that several things failed. The replacement
- * path throws one holding both the activation failure and the restore failure, and those two messages are the
- * diagnosis; reporting the summary alone would keep the exact defect this folding exists to remove.
- *
- * Every layer of these errors names the app it is about, so folding one into another would repeat that name at
- * each colon. The subject is stated once by the outermost message and stripped from what it wraps, leaving the
- * verbs to chain: `App "crm" failed to reload: failed to initialize: ...`.
- */
-function describeCause(cause: unknown, id: string): string {
-  if (cause instanceof AggregateError && cause.errors.length > 0) {
-    const reasons = cause.errors.map((error) => describeCause(error, id));
-    return `${withoutAppPrefix(cause.message, id)} (${reasons.join('; ')})`;
-  }
-
-  return withoutAppPrefix(fullErrorMessage(cause), id);
-}
-
-function withoutAppPrefix(message: string, id: string): string {
-  const prefix = `App "${id}" `;
-  return message.startsWith(prefix) ? message.slice(prefix.length) : message;
 }
