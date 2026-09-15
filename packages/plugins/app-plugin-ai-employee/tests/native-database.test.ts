@@ -44,6 +44,49 @@ afterEach(async () => {
 });
 
 describe('native AI employee persistence', () => {
+  it('resolves logical field types after running the complete migration chain', async () => {
+    const database = await createDatabase();
+    const connection = database.connection();
+    const employee = await connection.collections.get('aiEmployees');
+    for (const name of [
+      'enabled',
+      'builtIn',
+      'deprecated',
+      'enableKnowledgeBase',
+    ]) {
+      expect(
+        employee?.fields.find((field) => field.name === name),
+      ).toMatchObject({
+        type: 'boolean',
+      });
+    }
+    expect(
+      employee?.fields.find((field) => field.name === 'sort'),
+    ).toMatchObject({
+      type: 'integer',
+    });
+    await expect(
+      connection.collectionMetadata.get('aiEmployees'),
+    ).resolves.toMatchObject({
+      document: {
+        fields: {
+          enabled: { type: 'boolean' },
+          skillSettings: { type: 'json' },
+          sort: { type: 'integer' },
+        },
+      },
+    });
+    const files = await connection.collections.get('aiFiles');
+    expect(files?.fields.some((field) => field.name === 'disk')).toBe(true);
+    expect(files?.fields.some((field) => field.name === 'storageId')).toBe(
+      false,
+    );
+    const settings = await connection.collections.get('aiSettings');
+    expect(
+      settings?.fields.some((field) => field.name === 'defaultLlmService'),
+    ).toBe(true);
+  });
+
   it('creates native tables and shares records across repository factories', async () => {
     const database = await createDatabase();
     const first = new RepositoryFactory({ connection: database.connection() });
@@ -88,6 +131,10 @@ describe('native AI employee persistence', () => {
     ).toMatchObject({
       nickname: 'Nathan',
       description: 'Developer assistant',
+      enabled: true,
+      builtIn: true,
+      deprecated: false,
+      enableKnowledgeBase: false,
     });
     expect(
       await second.aiMessages.find({
@@ -253,6 +300,30 @@ describe('native AI employee persistence', () => {
       enabledModels: ['gpt-4o', 'gpt-4.1'],
     });
   });
+
+  it.each(['0', 'false', '{"enabled":false}', '"quoted"'])(
+    'preserves JSON-looking text in tool-message content: %s',
+    async (content) => {
+      const database = await createDatabase();
+      const repositories = new RepositoryFactory({
+        connection: database.connection(),
+      });
+      const tool = await repositories.aiToolMessages.create({
+        values: { toolCallId: 'json-text', content, auto: false },
+      });
+      await expect(
+        repositories.aiToolMessages.findOne({ filter: { id: tool.id } }),
+      ).resolves.toMatchObject({ content, auto: false });
+      await expect(
+        database
+          .query()
+          .selectFrom('aiToolMessages')
+          .select('content')
+          .where('id', '=', tool.id)
+          .value('content'),
+      ).resolves.toBe(content);
+    },
+  );
 
   it('rolls back transaction-bound repository writes', async () => {
     const database = await createDatabase();

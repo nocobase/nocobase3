@@ -22,6 +22,6 @@ export function createAIMCPClientCollection(
       c.datetime('updatedAt').nullable();
       c.primary('name', { name: 'pk_ai_mcp_clients' });
     },
-    { ifNotExists: true, syncMetadata: false },
+    { ifNotExists: true },
   );
 }

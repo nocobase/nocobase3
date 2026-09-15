@@ -31,6 +31,6 @@ export function createAIEmployeeCollection(
       c.datetime('updatedAt').nullable();
       c.primary('username', { name: 'pk_ai_employees' });
     },
-    { ifNotExists: true, syncMetadata: false },
+    { ifNotExists: true },
   );
 }
