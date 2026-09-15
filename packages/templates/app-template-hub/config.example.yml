@@ -19,7 +19,7 @@ client:
 
 auth:
   # Generate a unique secret, for example with: openssl rand -hex 32
-  # secret: replace-with-a-unique-secret
+  secret: replace-with-a-unique-secret
   emailAndPassword:
     enabled: true
     autoSignIn: false
@@ -27,9 +27,9 @@ auth:
   session:
     storeSessionInDatabase: true
 
-# session:
-#   # Use the same generated value as auth.secret, or another unique secret.
-#   secret: replace-with-a-unique-secret
+session:
+  # Use the same generated value as auth.secret, or another unique secret.
+  secret: replace-with-a-unique-secret
 
 # User mailbox OAuth and Provider configuration.
 # mail:

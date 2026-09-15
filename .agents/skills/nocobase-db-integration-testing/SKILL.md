@@ -5,11 +5,7 @@ description: 'Decide which NocoBase v3 database dialect integration suites a cha
 
 # NocoBase Database Integration Testing
 
-This Skill answers one question: **given what I just changed, which integration
-suites do I run, and how.** It is a routing layer; the full option reference is
-[`internal-docs/development/database-integration-testing.md`](../../../internal-docs/development/database-integration-testing.md),
-and the dialect/shared ownership boundary is
-[`packages/libs/db-testkit/TESTING.md`](../../../packages/libs/db-testkit/TESTING.md).
+This Skill answers one question: **given what I just changed, which integration suites do I run, and how.** The dialect/shared ownership boundary is described in [`packages/libs/db-testkit/TESTING.md`](../../../packages/libs/db-testkit/TESTING.md).
 
 Apply it only in a workspace that contains `packages/libs/db/` and
 `packages/libs/db-testkit/`. A repository with `packages/core/database/` is

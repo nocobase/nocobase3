@@ -130,7 +130,7 @@ await db.transaction(async (connection) => {
 ## 6. 读取完整 Collection
 
 ```ts
-const ordersCollection = await db.connection().collections.get('orders');
+const ordersCollection = await db.collections().get('orders');
 ```
 
 `collections` 合并物理 Schema、补充 Metadata 和 Connection naming。检查物理数据库对象时改用 `connection.schemaInspector`。

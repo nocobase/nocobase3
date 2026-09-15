@@ -42,6 +42,8 @@ server/routes/            HTTP endpoints
 server/providers/         Services and their lifecycle
 database/main/migrations/      Schema changes
 database/main/seeds/           Required initial data
+database/main/collections/     Generated Collection artifacts; regenerate, never edit
+database/externalCrm/collections/ metadata.json per Collection: the external CRM's metadata source
 cli/commands/             Commands this application owns
 tests/                    Tests; never beside the source
 ```
@@ -134,6 +136,8 @@ Keep HTTP concerns in the route and domain logic in a service under `server/prov
 
 Schema changes are migrations under `database/main/migrations/`. Data the application requires to run is a seed under `database/main/seeds/`. Seeds never create structure.
 
+`database/<connection>/collections/` holds what the database currently resolves each Collection to — `collection.json`, `metadata.json` and `schema.json` per Collection plus a `_manifest.json` — written by `pnpm collections:generate` after migrating. On a managed connection every file there is derived: edit metadata through migrations or the Collection Metadata Service and regenerate, never by hand. On an `external` connection `metadata.json` is the exception — it is the metadata source, read at startup, so edit it by hand and regenerate; the other files stay derived. Never import any of these files from a migration. `pnpm collections:generate --check` fails when they are out of date.
+
 ```ts
 const migration: MigrationDefinition = defineMigration({
   name: '202609020001_create_orders',
@@ -156,7 +160,7 @@ Edit an existing migration only while the branch that introduced it is unmerged.
 
 The exported `name` must match the filename. Apply with `pnpm migrate` and verify against a real database.
 
-At runtime, resolve `databaseManagerToken` from the container and use `database.query()` to read and write the default connection. Use `database.query('analytics')` for another connection. Application tasks use `database/<connectionName>/{migrations,seeds}` and bind to that connection explicitly; plugin tasks and default runtime access stay on `database.default`. Only managed connections run migrations or seeds. See the migrations reference for execution and upgrade rules.
+At runtime, resolve `databaseManagerToken` from the container and use `database.query()` to read and write the default connection. Use `database.query('analytics')` for another connection. Application tasks use `database/<connectionName>/{migrations,seeds}` and bind to that connection explicitly; plugin tasks and default runtime access stay on `database.default`. Only managed connections run migrations or seeds. See the migrations reference for execution and upgrade rules. An `external` connection such as `externalCrm` reads a database another system owns: put its supplemental metadata in `database/<connectionName>/collections/<name>/metadata.json` (scaffold them with `pnpm collections:generate --connection <connectionName>`), never write migrations for it, and expose it read-only unless the owning system has agreed otherwise.
 
 ### User-facing text
 
@@ -169,7 +173,7 @@ t('orders.title');
 
 To reword a plugin's string, add an `overrides` block keyed by that plugin's package name in your locale file. Do not edit the plugin.
 
-The languages the application offers are its own locale files, not a configured list, and the two sides are read separately: `client/locales/` decides what the picker shows, `server/locales/` what the server will answer in. Adding a language means adding its file to both. `pnpm nocobase app i18n:check` reports one declared on a single side.
+The languages the application offers are its own locale files, not a configured list, and the two sides are read separately: `client/locales/` decides what the picker shows, while `server/locales/` decides which languages the server can answer in. Prefer adding a language to both when server-produced text needs translating, but a client-only language is valid: the interface switches normally and the server falls back to English with an informational notice. `pnpm nocobase app i18n:check` reports one declared on a single side and exits nonzero until the lists align; that check does not block the runtime switch.
 
 The account menu language control in `client/shell/language-switcher.tsx` uses a shadcn submenu with radio items. Render it inside `DropdownMenuContent` to preserve menu keyboard navigation and selection semantics.
 

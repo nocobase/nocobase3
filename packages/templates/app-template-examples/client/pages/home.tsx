@@ -8,6 +8,7 @@ import {
   FolderOpen,
   ShoppingCart,
   PanelsTopLeft,
+  Plug,
   Users,
   Workflow,
 } from 'lucide-react';
@@ -19,6 +20,7 @@ const examples = [
   { key: 'routeOverlays', path: '/route-overlays', icon: PanelsTopLeft },
   { key: 'articles', path: '/articles', icon: FileText },
   { key: 'numbers', path: '/numeric-examples', icon: Hash },
+  { key: 'externalCrm', path: '/external-crm', icon: Plug },
   { key: 'repository', path: '/repository-example/find-many', icon: Database },
   { key: 'crm', path: '/repository-example/crm', icon: Users },
   { key: 'orders', path: '/repository-example/orders', icon: ShoppingCart },

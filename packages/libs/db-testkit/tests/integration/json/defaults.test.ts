@@ -40,6 +40,19 @@ describeIntegrationDatabases('JSON field defaults', (context) => {
       expect(await repository.findOne({ filter: { id: 'a' } })).toEqual(
         expected,
       );
+
+      // The resolved definition reports the same documents the Builder was
+      // given, not the SQL literal text the catalog stores them as.
+      const resolved = await context.database
+        .connection()
+        .collections.get('jsonDefaults');
+      const defaults = Object.fromEntries(
+        (resolved?.fields ?? [])
+          .filter((field) => field.name !== 'id')
+          .map((field) => [field.name, field.defaultValue]),
+      );
+      const { id: _id, ...expectedDefaults } = expected;
+      expect(defaults).toEqual(expectedDefaults);
     },
   );
 

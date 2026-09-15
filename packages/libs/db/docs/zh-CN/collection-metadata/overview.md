@@ -56,14 +56,15 @@ export default defineCollectionMetadata({
 
 ## 选择 Store
 
-| Store                                |             可写 | 适用场景                                                   |
-| ------------------------------------ | ---------------: | ---------------------------------------------------------- |
-| `DatabaseCollectionMetadataStore`    |               是 | Managed Connection 的持久化 Metadata；未显式配置时自动使用 |
-| `ModuleCollectionMetadataStore`      |               否 | 源码管理的外部数据库 Metadata                              |
-| `InMemoryCollectionMetadataStore`    |               是 | 测试和显式临时场景                                         |
-| `TransactionCollectionMetadataStore` | 取决于底层 Store | 非数据库 Store 的事务 overlay，由 Connection 事务管理      |
+| Store                                |             可写 | 适用场景                                                                                                                                            |
+| ------------------------------------ | ---------------: | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DatabaseCollectionMetadataStore`    |               是 | Managed Connection 的持久化 Metadata；未显式配置时自动使用                                                                                          |
+| `ModuleCollectionMetadataStore`      |               否 | 代码里声明的外部数据库 Metadata                                                                                                                     |
+| `DirectoryCollectionMetadataStore`   |               否 | 仓库里 `<dir>/<name>/metadata.json` 文件中的外部数据库 Metadata，格式与 Collection 产物一致；可写成 `{ type: 'directory', directory }` 的声明式配置 |
+| `InMemoryCollectionMetadataStore`    |               是 | 测试和显式临时场景                                                                                                                                  |
+| `TransactionCollectionMetadataStore` | 取决于底层 Store | 非数据库 Store 的事务 overlay，由 Connection 事务管理                                                                                               |
 
-Writable File Store 当前尚未实现。
+目录 Store 只读；写回文件尚未实现。
 
 ## 下一步
 

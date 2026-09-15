@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
@@ -28,6 +28,37 @@ function createTestDatabase(config: DatabaseConfig) {
 }
 
 describe('DatabaseManager', () => {
+  it('mirrors connection collections through db.collections()', async () => {
+    const db = createTestDatabase({
+      default: 'main',
+      connections: {
+        main: { dialect: 'sqlite', filename: ':memory:' },
+        analytics: { dialect: 'sqlite', filename: ':memory:' },
+      },
+    });
+
+    try {
+      expect(db.collections()).toBe(db.connection().collections);
+      expect(db.collections('analytics')).toBe(
+        db.connection('analytics').collections,
+      );
+      expect(db.collections('analytics')).not.toBe(db.collections());
+
+      await db.builder('analytics').createCollection('events', (collection) => {
+        collection.increments('id');
+      });
+
+      await expect(
+        db.collections('analytics').get('events'),
+      ).resolves.toMatchObject({
+        name: 'events',
+      });
+      await expect(db.collections().get('events')).resolves.toBeUndefined();
+    } finally {
+      await db.destroy();
+    }
+  });
+
   it('requires an explicitly registered dialect package', () => {
     const db = createDatabaseManager({
       connections: {
@@ -253,9 +284,10 @@ describe('DatabaseManager', () => {
       expect(scanned).toEqual(['orders']);
 
       await db.reconnect();
-      await expect(
-        db.connection().collections.get('orders'),
-      ).resolves.toMatchObject({ name: 'orders', title: 'Orders' });
+      await expect(db.collections().get('orders')).resolves.toMatchObject({
+        name: 'orders',
+        title: 'Orders',
+      });
     } finally {
       await db.destroy();
       rmSync(directory, { recursive: true, force: true });
@@ -946,5 +978,97 @@ describe('DatabaseManager', () => {
     expect(() => oldShape.connection()).toThrow(
       'Database connection config cannot include client, connection. Use dialect and flattened connection parameters.',
     );
+  });
+});
+
+describe('declarative metadata store configuration', () => {
+  function crmDirectory(): string {
+    const directory = mkdtempSync(
+      path.join(tmpdir(), 'nocobase-declarative-store-'),
+    );
+    mkdirSync(path.join(directory, 'collections', 'orders'), {
+      recursive: true,
+    });
+    writeFileSync(
+      path.join(directory, 'collections', 'orders', 'metadata.json'),
+      `${JSON.stringify(
+        {
+          formatVersion: 1,
+          name: 'orders',
+          document: { version: 1, name: 'orders', title: 'CRM orders' },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    return directory;
+  }
+
+  it('resolves { type: "directory" } on a connection into a DirectoryCollectionMetadataStore', async () => {
+    const directory = crmDirectory();
+    const db = createTestDatabase({
+      connections: {
+        crm: {
+          dialect: 'sqlite',
+          filename: path.join(directory, 'crm.sqlite'),
+          schemaManagement: 'external',
+          metadataStore: {
+            type: 'directory',
+            directory: path.join(directory, 'collections'),
+          },
+        },
+      },
+    });
+    try {
+      const client = await db.connection('crm').client<any>();
+      await client.schema.createTable('orders', (table: any) => {
+        table.increments('id');
+      });
+      await expect(db.collections('crm').get('orders')).resolves.toMatchObject({
+        name: 'orders',
+        title: 'CRM orders',
+      });
+      expect(db.connection('crm').collectionMetadata).toBeDefined();
+    } finally {
+      await db.destroy();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('accepts the declarative form at the top level and still requires one for external connections', async () => {
+    const directory = crmDirectory();
+    try {
+      const shared = createTestDatabase({
+        metadataStore: {
+          type: 'directory',
+          directory: path.join(directory, 'collections'),
+        },
+        connections: {
+          crm: {
+            dialect: 'sqlite',
+            filename: ':memory:',
+            schemaManagement: 'external',
+          },
+        },
+      });
+      expect(() => shared.connection('crm')).not.toThrow();
+      await shared.destroy();
+
+      const missing = createTestDatabase({
+        connections: {
+          crm: {
+            dialect: 'sqlite',
+            filename: ':memory:',
+            schemaManagement: 'external',
+          },
+        },
+      });
+      expect(() => missing.connection('crm')).toThrow(
+        /requires an explicit Collection Metadata Store/,
+      );
+      await missing.destroy();
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 });

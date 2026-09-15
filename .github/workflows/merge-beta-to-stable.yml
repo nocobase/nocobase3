@@ -15,8 +15,8 @@ name: Merge Beta to Stable
 # （源码 getUnpublishedPackages）。所以合并完成后随时可以发。
 #
 # 用 GITHUB_TOKEN 而不是 PAT：仓库暂时没有分支保护，它足够推送。
-# 已知限制是它推送的 commit 不会触发其它 workflow（GitHub 防死循环的
-# 设计）—— 对本流程无影响，同步过去的内容已经在发版时 build + test 过。
+# GITHUB_TOKEN pushes do not trigger push workflows, but its PRs create CI runs awaiting approval.
+# Add [skip ci] to generated commits to skip version-sync PR checks; this workflow still runs its own checks.
 # 将来给 main / develop 加上分支保护后，需要换成能绕过保护的 PAT。
 
 on:
@@ -165,7 +165,7 @@ jobs:
         run: |
           NAME="${{ steps.branch.outputs.name }}"
           git add -A
-          git commit -m "chore: promote prerelease versions"
+          git commit -m "chore: promote prerelease versions [skip ci]"
           git push --force origin "$NAME"
 
       - name: Merge into main
@@ -205,7 +205,7 @@ jobs:
           git checkout -B "$SYNC" origin/develop
 
           set +e
-          git merge --no-ff "origin/${{ steps.branch.outputs.name }}" -m "chore: sync promoted versions back to develop"
+          git merge --no-ff "origin/${{ steps.branch.outputs.name }}" -m "chore: sync promoted versions back to develop [skip ci]"
           RC=$?
           set -e
           if [ $RC -ne 0 ]; then
@@ -216,7 +216,7 @@ jobs:
 
           pnpm changeset pre enter beta
           git add .changeset
-          git commit -m "chore: re-enter pre mode for the next line"
+          git commit -m "chore: re-enter pre mode for the next line [skip ci]"
           git push --force origin "$SYNC"
 
           PR_URL=$(gh pr create \

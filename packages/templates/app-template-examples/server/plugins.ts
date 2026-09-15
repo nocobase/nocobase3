@@ -1,6 +1,7 @@
 import authentication from '@nocobase/app-plugin-authentication/server';
 import aiEmployee from '@nocobase/app-plugin-ai-employee/server/plugin';
 import authorization from '@nocobase/app-plugin-authorization/server';
+import databaseExplorer from '@nocobase/app-plugin-database-explorer/server';
 import databaseExample from '@nocobase/app-plugin-database-example/server';
 import i18n from '@nocobase/app-plugin-i18n/server';
 import install from '@nocobase/app-plugin-install/server';
@@ -26,6 +27,7 @@ const serverPlugins: AppServerPlugins = defineServerPlugins([
   authentication,
   aiEmployee,
   authorization,
+  databaseExplorer,
   databaseExample,
   i18n,
   install,

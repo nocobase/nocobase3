@@ -451,8 +451,10 @@ async function renderManifest(
     devDependencies['tw-animate-css'] = 'catalog:';
   }
 
+  // `database` is deliberately absent: its TypeScript compiles into `dist/database`, which is what the runtime
+  // resolves. Publishing the source directory as well shadows the compiled copy, and Node refuses to strip types
+  // from a file under `node_modules`, so an installed plugin fails to run its own migrations.
   const files = ['dist', 'README.md', 'CHANGELOG.md'];
-  if (capabilities.database) files.push('database');
   if (capabilities.skills) files.push('skills');
   if (capabilities.registry)
     files.push(

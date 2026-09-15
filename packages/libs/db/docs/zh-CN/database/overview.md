@@ -38,6 +38,7 @@ Builder、Query 和 Repository 是当前公开业务入口。`SchemaAdapter`、K
 const connection = db.connection();
 const builder = db.builder();
 const query = db.query();
+const collections = db.collections();
 const projects = db.repository('projects');
 ```
 
@@ -47,8 +48,11 @@ const projects = db.repository('projects');
 db.connection();
 db.connection().builder;
 db.connection().query;
+db.connection().collections;
 db.connection().repository('projects');
 ```
+
+Manager 只镜像 Connection 上按逻辑名工作的这四个句柄。`schema`、`schemaInspector` 和 `collectionMetadata` 按物理名工作或写入补充 Metadata，只在 Connection 上提供。
 
 连续操作命名连接时，优先保留 Connection：
 

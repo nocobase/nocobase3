@@ -2,6 +2,7 @@ import {
   defineClientPlugins,
   type AppClientPlugins,
 } from '@nocobase/app-client/plugins';
+import apiKeys from '@nocobase/app-plugin-api-keys/client';
 import authentication from '@nocobase/app-plugin-authentication/client';
 import authorization from '@nocobase/app-plugin-authorization/client';
 import users from '@nocobase/app-plugin-users/client';
@@ -28,6 +29,7 @@ const clientPlugins: AppClientPlugins = defineClientPlugins([
     mount: 'app',
     path: '/users',
   }),
+  apiKeys({ path: '/api-keys' }),
   i18n(),
   install(),
   mail(),

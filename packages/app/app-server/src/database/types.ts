@@ -1,11 +1,26 @@
 import type {
+  CollectionMetadataStore,
+  CollectionMetadataStoreConfig,
   DatabaseConfig as NocoBaseDatabaseConfig,
   MigrationSource,
   SeedSource,
 } from '@nocobase/db';
 
-export interface AppDatabaseConfig extends NocoBaseDatabaseConfig {
+/**
+ * A metadata store as an application may configure it: the instance, the
+ * declarative form `@nocobase/db` understands, or — the form `config.yml` can
+ * carry — the collections directory alone. Relative directories resolve
+ * against the application root.
+ */
+export type AppMetadataStoreConfig =
+  string | CollectionMetadataStoreConfig | CollectionMetadataStore;
+
+export interface AppDatabaseConfig extends Omit<
+  NocoBaseDatabaseConfig,
+  'connections' | 'metadataStore'
+> {
   connections: Record<string, AppDatabaseConnectionConfig>;
+  metadataStore?: AppMetadataStoreConfig;
   /** @deprecated Configure tasks on connections instead. Applies to the default connection. */
   migrations?: Partial<AppDatabaseMigrationConfig>;
   /** @deprecated Configure tasks on connections instead. Applies to the default connection. */
@@ -48,8 +63,21 @@ export interface AppDatabaseSeedConfig {
   extensions?: readonly string[];
 }
 
-export type AppDatabaseConnectionConfig =
-  NocoBaseDatabaseConfig['connections'][string] & {
-    migrations?: Partial<AppDatabaseMigrationConfig>;
-    seeds?: Partial<AppDatabaseSeedConfig>;
-  };
+/** `Omit` over a union keeps only the common keys; distribute it so each dialect keeps its own. */
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
+  ? Omit<T, K>
+  : never;
+
+export type AppDatabaseConnectionConfig = DistributiveOmit<
+  NocoBaseDatabaseConfig['connections'][string],
+  'metadataStore'
+> & {
+  migrations?: Partial<AppDatabaseMigrationConfig>;
+  seeds?: Partial<AppDatabaseSeedConfig>;
+  /**
+   * Where supplemental metadata comes from. An `external` connection that
+   * sets nothing here or at the top level reads
+   * `database/<connection>/collections/*\/metadata.json`.
+   */
+  metadataStore?: AppMetadataStoreConfig;
+};

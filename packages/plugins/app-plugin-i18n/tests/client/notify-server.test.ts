@@ -38,4 +38,25 @@ describe('telling the server which language to answer in', () => {
     expect(init?.method).toBe('POST');
     expect(init?.body).toBe(JSON.stringify({ locale: 'zh-CN' }));
   });
+
+  it('returns the server fallback result to the language control', async () => {
+    const result = {
+      locale: 'en-US',
+      requestedLocale: 'ja-JP',
+      fallback: true,
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockResolvedValue(Response.json(result)),
+    );
+    const { notifyServerLocale } = await import('../../client/use-locale.js');
+    await expect(notifyServerLocale('ja-JP')).resolves.toEqual(result);
+  });
+
+  it('keeps transport failures distinguishable from a successful fallback', async () => {
+    const failure = new TypeError('Network unavailable');
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockRejectedValue(failure));
+    const { notifyServerLocale } = await import('../../client/use-locale.js');
+    await expect(notifyServerLocale('ja-JP')).rejects.toBe(failure);
+  });
 });

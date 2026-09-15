@@ -1,5 +1,35 @@
 # @nocobase/db
 
+## 1.0.0-beta.6
+
+### Minor Changes
+
+- 1d5ee9a: Add Collection artifact serialization, `Migrator.history()`, and skip NocoBase bookkeeping tables when listing Collections
+
+  `serializeCollectionArtifact()` and `serializeCollectionArtifactManifest()` turn one Collection's resolution, physical schema and stored metadata document into the three deterministic JSON files an application commits under `database/<connection>/collections/<name>/`, plus a connection-level manifest recording the dialect, the schema management mode and the last applied migration. Object keys are sorted and `undefined` members dropped; arrays whose order carries meaning — fields, index columns, relations — are left in resolution order, and only unordered sets such as warnings are sorted. `validateCollectionArtifactDirectoryName()` and `assertCollectionArtifactDirectoryNames()` apply the file-system rules a logical name has to satisfy to become a directory, including rejecting names that differ only by case.
+
+  `Migrator.history()` returns the applied migrations, oldest first, without creating the history table when none exists. It is what lets a read-only command record which migration a snapshot was taken after.
+
+  `connection.collections.list()` and `scan()` used to throw on any migrated database: the registry only treated the metadata store's own table as internal, so the first `__nocobase_migration_lock` or `__nocobase_migrations` table it met failed to map to a logical name. Every table under the `__nocobase_` prefix is now recognised as NocoBase's own bookkeeping and skipped, and a connection can declare further bookkeeping tables — a migration or seed history or lock table given a custom name — through the new `internalTables` option.
+
+- 211538b: Add `db.collections(name?)` to `DatabaseManager`
+
+  The Manager already mirrored three of the four Connection handles that work in logical names — `builder`, `query` and `repository` — but not `collections`, so reading one Collection definition from the Manager took `db.connection().collections.get('orders')` while the neighbouring handles took one call. The omission read as an accident rather than a boundary.
+
+  `db.collections(name?)` returns the very object `db.connection(name).collections` holds, so the resolution cache stays shared with every Builder, Repository and Migration on that connection. The mirroring stops at these four: `schema`, `schemaInspector` and `collectionMetadata` work in physical names or write supplemental metadata and remain Connection-only.
+
+- 1d5ee9a: Add `DirectoryCollectionMetadataStore` and a declarative `metadataStore` configuration
+
+  `DirectoryCollectionMetadataStore` reads supplemental Collection metadata from a Collection artifact directory — one `<name>/metadata.json` per Collection, in the format `serializeCollectionArtifact()` writes — so the files an application commits are the metadata source for a connection whose schema it does not own. It is read-only, like the Module store, and treats a missing directory or a `null` document as no metadata.
+
+  A connection's or the top-level `metadataStore` may now be given declaratively as `{ type: 'directory', directory }` instead of an instance; `createDatabaseManager` resolves it when the connection is first created. An instance still passes through, and an external connection without a store at either level still raises `CollectionMetadataStoreRequiredError`.
+
+### Patch Changes
+
+- 1d5ee9a: Resolve a json column's default to the document it encodes
+
+  `connection.collections.get()` reported a json Field's `defaultValue` as the text between the quotes of the SQL literal — `'{"storage":"local"}'` came back as the string `{"storage":"local"}` — while the Builder had been given the object. The inspector parses defaults at the literal level and does not know the column's type, so the resolver now decodes the text for `json` columns; the physical literal stays in `db.defaultExpression`. A default that is not valid JSON keeps `defaultValue` unset and adds a `COLLECTION_JSON_DEFAULT_INVALID` resolution warning instead of failing.
+
 ## 1.0.0-beta.5
 
 ### Major Changes

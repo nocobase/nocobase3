@@ -4,6 +4,7 @@ import authConfig from '../../server/config/auth.js';
 import ArticlesProvider from '../../server/providers/articles.ts';
 import { articlesRoutes } from '../../server/routes/articles.ts';
 import { analyticsRoutes } from '../../server/routes/analytics.ts';
+import { externalCrmRoutes } from '../../server/routes/external-crm.ts';
 import { numericExamplesRoutes } from '../../server/routes/numeric-examples.ts';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -335,6 +336,7 @@ describe('app server', () => {
           (route) =>
             route !== articlesRoutes &&
             route !== analyticsRoutes &&
+            route !== externalCrmRoutes &&
             route !== numericExamplesRoutes,
         ),
         serviceProviders: [

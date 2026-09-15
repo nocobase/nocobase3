@@ -5,6 +5,7 @@ import {
 import aiEmployee from '@nocobase/app-plugin-ai-employee/client';
 import authentication from '@nocobase/app-plugin-authentication/client';
 import authorization from '@nocobase/app-plugin-authorization/client';
+import databaseExplorer from '@nocobase/app-plugin-database-explorer/client';
 import install from '@nocobase/app-plugin-install/client';
 import mail from '@nocobase/app-plugin-mail/client';
 import notificationProvider from '@nocobase/app-plugin-notification-provider/client';
@@ -23,6 +24,7 @@ const clientPlugins: AppClientPlugins = defineClientPlugins([
   authentication(),
   aiEmployee(),
   authorization(),
+  databaseExplorer(),
   i18n(),
   install(),
   mail(),
