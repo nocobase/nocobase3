@@ -12,8 +12,8 @@ name: Release Beta
 # 之后每一轮发版都由这个 workflow 完成，转正后 CI 会自动重新进入 pre 模式。
 #
 # 用 GITHUB_TOKEN 而不是 PAT：仓库暂时没有分支保护，它足够推送。
-# 已知限制是它推送的 commit 不会触发其它 workflow（GitHub 防死循环的
-# 设计）—— 对本流程无影响，同步过去的内容已经在发版时 build + test 过。
+# GITHUB_TOKEN pushes do not trigger push workflows, but its PRs create CI runs awaiting approval.
+# Add [skip ci] to generated commits to skip version-sync PR checks; this workflow still runs its own checks.
 # 将来给 main / develop 加上分支保护后，需要换成能绕过保护的 PAT。
 
 on:
@@ -206,7 +206,7 @@ jobs:
         run: |
           NAME="${{ steps.branch.outputs.name }}"
           git add -A
-          git commit -m "chore: release ${{ steps.branch.outputs.batch }}"
+          git commit -m "chore: release ${{ steps.branch.outputs.batch }} [skip ci]"
           git tag "$NAME"
           git push origin "refs/heads/${NAME}:refs/heads/${NAME}"
           git push origin "refs/tags/${NAME}:refs/tags/${NAME}"
