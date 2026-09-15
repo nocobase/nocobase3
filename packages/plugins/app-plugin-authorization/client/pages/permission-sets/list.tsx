@@ -29,6 +29,7 @@ export function PermissionSetsList({
   onSearch,
   onOpen,
   onCreate,
+  onResourceAccess,
   onCompare,
   onUserAccess,
 }: {
@@ -41,7 +42,9 @@ export function PermissionSetsList({
   onSearch: (value: string) => void;
   onOpen: (set: PermissionSet) => void;
   onCreate: () => void;
-  /** Opens the side-by-side view of the same sets. */
+  /** Opens the view that reports which sets grant one resource. */
+  onResourceAccess: () => void;
+  /** Opens the view that diffs two of these sets. */
   onCompare: () => void;
   /** Opens the view that reports one person's access across those sets. */
   onUserAccess: () => void;
@@ -66,8 +69,11 @@ export function PermissionSetsList({
         onAction={onCreate}
         secondaryActions={
           <>
+            <Button variant='outline' onClick={onResourceAccess}>
+              Resource access
+            </Button>
             <Button variant='outline' onClick={onCompare}>
-              Compare
+              Compare two sets
             </Button>
             <Button variant='outline' onClick={onUserAccess}>
               User access

@@ -116,7 +116,7 @@ export function PermissionSetDetail({
       )}
       {capabilities.unrestricted ? <UnrestrictedAccessNotice /> : null}
       {!capabilities.unrestricted && detailSection === 'permissions' ? (
-        <PermissionsSummary options={options} draft={draft} onEdit={onEdit} />
+        <PermissionsSummary options={options} draft={draft} />
       ) : null}
       {detailSection === 'assignments' ? (
         <Assignments

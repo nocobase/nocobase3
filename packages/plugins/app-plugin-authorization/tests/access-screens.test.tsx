@@ -11,8 +11,9 @@ import type {
   SharingRule,
 } from '../client/authorization-client.js';
 
-const { CompareSets } =
-  await import('../client/pages/permission-sets/compare.js');
+const { ResourceAccess } =
+  await import('../client/pages/permission-sets/resource-access.js');
+const { SetDiff } = await import('../client/pages/permission-sets/set-diff.js');
 const { UserAccess } =
   await import('../client/pages/permission-sets/user-access.js');
 const { setsHeldBy, userGrants } =
@@ -162,79 +163,159 @@ function choosePerson(name: string): void {
   fireEvent.click(screen.getByRole('option', { name: new RegExp(name) }));
 }
 
-describe('compare sets', () => {
-  it('renders a column per set and marks every record, scoped and not granted', () => {
-    render(
-      <CompareSets options={options} sets={sets} onBack={() => undefined} />,
-    );
-    expect(
-      screen.getAllByRole('columnheader').map((cell) => cell.textContent),
-    ).toEqual([
-      'Resource',
-      expect.stringContaining('Root'),
-      expect.stringContaining('Member'),
-      expect.stringContaining('Order operators'),
-    ]);
+function chooseResource(name: string): void {
+  fireEvent.change(screen.getByLabelText('Search resources'), {
+    target: { value: name },
+  });
+  fireEvent.click(screen.getByRole('option', { name: new RegExp(name) }));
+}
 
-    // One row per resource for the chosen action, which opens on read.
-    const rows = bodyRows();
-    const ordersRead = rows.find((row) => /Orders/.test(row.textContent ?? ''));
-    expect(ordersRead).toBeDefined();
-    const read = within(ordersRead as HTMLElement);
-    expect(read.getByLabelText('Unrestricted')).toBeInTheDocument();
-    expect(read.getAllByLabelText('Not granted')).toHaveLength(1);
-    expect(read.getByLabelText('Every record')).toBeInTheDocument();
+describe('resource access', () => {
+  function renderResourceAccess(): void {
+    render(
+      <ResourceAccess
+        options={options}
+        sets={sets}
+        onBack={() => undefined}
+        onOpen={() => undefined}
+      />,
+    );
+  }
+
+  it('shows nothing until a resource is chosen', () => {
+    renderResourceAccess();
+    expect(screen.getByText('No resource chosen yet')).toBeInTheDocument();
+    expect(screen.queryByRole('columnheader')).toBeNull();
   });
 
-  it('changes the rows with the action selector', () => {
+  it('lists a row per set granting the chosen resource, with the kind\u2019s own actions as columns', () => {
+    renderResourceAccess();
+    chooseResource('Orders');
+
+    expect(
+      screen.getAllByRole('columnheader').map((cell) => cell.textContent),
+    ).toEqual(['Permission set', 'Create', 'Read', 'Update', 'Delete']);
+
+    // Member grants articles alone, so it is not a row here.
+    const rows = bodyRows();
+    expect(rows.map((row) => row.textContent)).toEqual([
+      expect.stringContaining('Root'),
+      expect.stringContaining('Order operators'),
+    ]);
+    expect(screen.queryByText('Member')).toBeNull();
+
+    const ops = within(rows[1] as HTMLElement);
+    expect(ops.getByLabelText('Every record')).toBeInTheDocument();
+    expect(ops.getByLabelText('Scoped records')).toBeInTheDocument();
+    expect(ops.getAllByLabelText('Not granted')).toHaveLength(2);
+  });
+
+  it('marks an unrestricted set as a bypass across the row', () => {
+    renderResourceAccess();
+    chooseResource('Orders');
+    const root = within(bodyRows()[0] as HTMLElement);
+    expect(root.getAllByLabelText('Unrestricted')).toHaveLength(4);
+  });
+
+  it('opens the set it names', () => {
+    const opened: string[] = [];
     render(
-      <CompareSets options={options} sets={sets} onBack={() => undefined} />,
+      <ResourceAccess
+        options={options}
+        sets={sets}
+        onBack={() => undefined}
+        onOpen={(set) => opened.push(set.key)}
+      />,
     );
-    // Read is granted on both collections; update on orders alone.
+    chooseResource('Articles');
+    fireEvent.click(screen.getByRole('button', { name: 'Member' }));
+    expect(opened).toEqual(['member']);
+  });
+
+  it('returns to the empty state when the choice is cleared', () => {
+    renderResourceAccess();
+    chooseResource('Orders');
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filter' }));
+    expect(screen.getByText('No resource chosen yet')).toBeInTheDocument();
+  });
+});
+
+describe('compare two sets', () => {
+  function renderDiff(initialKey?: string): void {
+    render(
+      <SetDiff
+        options={options}
+        sets={sets}
+        {...(initialKey === undefined ? {} : { initialKey })}
+        onBack={() => undefined}
+      />,
+    );
+  }
+
+  it('opens on the set the administrator came from and shows only differing rows', () => {
+    renderDiff('member');
+    expect(screen.getByLabelText('First set')).toHaveValue('member');
+    expect(screen.getByLabelText('Second set')).toHaveValue('root');
+
+    fireEvent.change(screen.getByLabelText('Second set'), {
+      target: { value: 'order-ops' },
+    });
+    // Member reads articles; order operators read and update orders and access the page.
+    const rows = bodyRows().filter(
+      (row) => row.querySelectorAll('td').length > 1,
+    );
+    expect(
+      rows.map((row) =>
+        [...row.querySelectorAll('td')]
+          .slice(0, 2)
+          .map((cell) => cell.textContent)
+          .join(' '),
+      ),
+    ).toEqual(['Articles Read', 'Orders Read', 'Orders Update', 'Home Access']);
+  });
+
+  it('shows every row on the toggle, including the ones the two sets share', () => {
+    renderDiff('member');
+    fireEvent.change(screen.getByLabelText('Second set'), {
+      target: { value: 'order-ops' },
+    });
+    const differing = bodyRows().length;
+    fireEvent.click(screen.getByRole('button', { name: /All rows/ }));
+    expect(bodyRows().length).toBeGreaterThanOrEqual(differing);
+    expect(screen.getByRole('button', { name: /All rows/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
+
+  it('reports an empty state when the two sets grant the same thing', () => {
+    const twin: PermissionSet = {
+      ...member,
+      key: 'member-twin',
+      title: 'Twin',
+    };
+    render(
+      <SetDiff
+        options={options}
+        sets={[member, twin]}
+        onBack={() => undefined}
+      />,
+    );
+    expect(
+      screen.getByText(/These two sets grant exactly the same thing/),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /All rows/ }));
     expect(
       bodyRows().filter((row) => /Articles/.test(row.textContent ?? '')),
     ).toHaveLength(1);
-
-    fireEvent.change(screen.getByLabelText('Compared action'), {
-      target: { value: 'update' },
-    });
-    const rows = bodyRows();
-    expect(
-      rows.filter((row) => /Articles/.test(row.textContent ?? '')),
-    ).toEqual([]);
-    const ordersUpdate = rows.find((row) =>
-      /Orders/.test(row.textContent ?? ''),
-    );
-    expect(
-      within(ordersUpdate as HTMLElement).getByLabelText('Scoped records'),
-    ).toBeInTheDocument();
   });
 
-  it('shows the unrestricted mark for the set that confers it, on every row', () => {
-    render(
-      <CompareSets options={options} sets={sets} onBack={() => undefined} />,
-    );
-    // Two read rows — orders and articles — plus the legend entry.
-    expect(screen.getAllByLabelText('Unrestricted')).toHaveLength(3);
+  it('explains the bypass rather than comparing an unrestricted set grant by grant', () => {
+    renderDiff('root');
     expect(
-      screen.getByText('Unrestricted: grants are not consulted'),
+      screen.getByText('Root confers unrestricted access.'),
     ).toBeInTheDocument();
-  });
-
-  it('narrows the rows to one resource type and offers to clear the filter', () => {
-    render(
-      <CompareSets options={options} sets={sets} onBack={() => undefined} />,
-    );
-    // Pages declare no read, so the selector falls back to the action they do declare.
-    fireEvent.click(screen.getByRole('button', { name: /Pages/ }));
-    expect(screen.getByLabelText('Compared action')).toHaveValue('access');
-    expect(
-      bodyRows().filter((row) => row.textContent?.includes('Home')),
-    ).toHaveLength(1);
-    expect(screen.queryByText(/Orders/)).toBeNull();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Clear filter' }));
-    expect(screen.queryByRole('button', { name: 'Clear filter' })).toBeNull();
+    expect(screen.getAllByLabelText('Unrestricted').length).toBeGreaterThan(0);
   });
 });
 

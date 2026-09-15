@@ -178,7 +178,7 @@ export function PermissionSetEditor({
                 <span className='flex shrink-0 items-center gap-3'>
                   {grant.resource.type === 'database.collection' ? (
                     <span className='hidden text-xs text-muted-foreground sm:inline'>
-                      {databaseAccessSummary(grant)}
+                      {databaseAccessSummary(options, grant)}
                     </span>
                   ) : null}
                   <span className='text-muted-foreground'>

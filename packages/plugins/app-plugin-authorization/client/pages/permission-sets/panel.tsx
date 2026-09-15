@@ -25,12 +25,13 @@ import {
 } from './drafts.js';
 import { PermissionSetEditor } from './editor.js';
 import { PermissionSetsList } from './list.js';
-import { CompareSets } from './compare.js';
+import { ResourceAccess } from './resource-access.js';
+import { SetDiff } from './set-diff.js';
 import { UserAccess, type AccessRuleSources } from './user-access.js';
 import type { DetailSection, Draft } from './types.js';
 
 /** Which view of the same permission sets the panel is showing. */
-type PanelView = 'list' | 'compare' | 'user-access';
+type PanelView = 'list' | 'resource-access' | 'set-diff' | 'user-access';
 
 /** What the user access view reads once, rather than a request per set. */
 interface UserAccessData {
@@ -65,6 +66,8 @@ export function PermissionSetsPanel({
   const [editorOpen, setEditorOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [view, setView] = useState<PanelView>('list');
+  // The set the administrator came from, which the diff opens its first selector on.
+  const [lastOpened, setLastOpened] = useState<string>();
   const [userAccess, setUserAccess] = useState<UserAccessData>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
@@ -101,6 +104,8 @@ export function PermissionSetsPanel({
 
   async function open(set: PermissionSet): Promise<void> {
     setDraft(fromSet(set));
+    setLastOpened(set.key);
+    setView('list');
     setEditorDraft(undefined);
     setSection(set.unrestricted === true ? 'assignments' : 'permissions');
     setError(undefined);
@@ -222,13 +227,28 @@ export function PermissionSetsPanel({
     }
   }
 
-  if (!draft && view === 'compare') {
+  if (!draft && view === 'resource-access') {
     return (
       <>
         {error ? <ErrorBox value={error} /> : null}
-        <CompareSets
+        <ResourceAccess
           options={options}
           sets={sets}
+          onBack={() => setView('list')}
+          onOpen={(set) => void open(set)}
+        />
+      </>
+    );
+  }
+
+  if (!draft && view === 'set-diff') {
+    return (
+      <>
+        {error ? <ErrorBox value={error} /> : null}
+        <SetDiff
+          options={options}
+          sets={sets}
+          {...(lastOpened === undefined ? {} : { initialKey: lastOpened })}
           onBack={() => setView('list')}
         />
       </>
@@ -261,7 +281,8 @@ export function PermissionSetsPanel({
           onSearch={setSearch}
           onOpen={(set) => void open(set)}
           onCreate={create}
-          onCompare={() => setView('compare')}
+          onResourceAccess={() => setView('resource-access')}
+          onCompare={() => setView('set-diff')}
           onUserAccess={() => void openUserAccess()}
         />
         {editorDraft ? (

@@ -17,7 +17,6 @@ import {
 } from '../../components/management-ui.js';
 import { pageSlice } from '../../components/pagination.js';
 import { compareActions } from '../../components/rule-utils.js';
-import { Button } from '../../components/ui/button.js';
 import {
   Table,
   TableBody,
@@ -52,11 +51,9 @@ const NONE = '—';
 export function PermissionsSummary({
   options,
   draft,
-  onEdit,
 }: {
   options: AuthorizationOptions;
   draft: Draft;
-  onEdit: () => void;
 }): ReactElement {
   const [search, setSearch] = useState('');
   const [type, setType] = useState<string>(ALL_TYPES);
@@ -98,7 +95,18 @@ export function PermissionsSummary({
   const combined = activeType === ALL_TYPES;
   const isCollection = activeType === COLLECTION_TYPE;
   // The combined table carries a records column too, for the collection rows in it.
-  const columns = combined ? 4 : actions.length + (isCollection ? 2 : 1);
+  const columns = combined ? 3 : actions.length + (isCollection ? 2 : 1);
+  // Every row of one kind carries the same marks in the same positions, so the columns are per kind.
+  const kindActions = useMemo(
+    () =>
+      new Map(
+        types.map((item) => [
+          item.value,
+          actionColumns(options, draft, item.value),
+        ]),
+      ),
+    [options, draft, types],
+  );
 
   return (
     <div className='space-y-4'>
@@ -142,7 +150,6 @@ export function PermissionsSummary({
             }}
           />
         ) : null}
-        <Button onClick={onEdit}>Edit permissions</Button>
       </FilterBar>
       <ManagementTable>
         <Table className='min-w-[42rem]'>
@@ -150,12 +157,9 @@ export function PermissionsSummary({
             <TableRow>
               <TableHead className='px-5 py-3 font-medium'>Resource</TableHead>
               {combined ? (
-                <>
-                  <TableHead className='px-5 py-3 font-medium'>Type</TableHead>
-                  <TableHead className='px-5 py-3 font-medium'>
-                    Granted actions
-                  </TableHead>
-                </>
+                <TableHead className='px-5 py-3 font-medium'>
+                  Granted actions
+                </TableHead>
               ) : (
                 actions.map((action) => (
                   <TableHead
@@ -180,23 +184,33 @@ export function PermissionsSummary({
                 key={grant.id}
                 onClick={() => setSelected(grant.id)}
               >
-                <TableCell className='px-5 py-4 font-medium'>
-                  {resourceLabel(options, grant.resource)}
-                  {isUnknownPage(options, grant.resource) ? (
-                    <span className='ml-2 rounded-md bg-destructive/10 px-2 py-0.5 text-[0.6875rem] font-normal text-destructive'>
-                      Unknown page
+                <TableCell className='max-w-[18rem] px-5 py-4'>
+                  <span className='flex items-center gap-2'>
+                    <span
+                      className='truncate font-medium'
+                      title={resourceLabel(options, grant.resource)}
+                    >
+                      {resourceLabel(options, grant.resource)}
+                    </span>
+                    {isUnknownPage(options, grant.resource) ? (
+                      <span className='shrink-0 rounded-md bg-destructive/10 px-2 py-0.5 text-[0.6875rem] font-normal text-destructive'>
+                        Unknown page
+                      </span>
+                    ) : null}
+                  </span>
+                  {combined ? (
+                    <span className='mt-0.5 block truncate text-xs text-muted-foreground'>
+                      {resourceTypeLabel(options, grant.resource.type)}
                     </span>
                   ) : null}
                 </TableCell>
                 {combined ? (
-                  <>
-                    <TableCell className='px-5 py-4 text-sm text-muted-foreground'>
-                      {resourceTypeLabel(options, grant.resource.type)}
-                    </TableCell>
-                    <TableCell className='px-5 py-4'>
-                      <GrantedActions grant={grant} />
-                    </TableCell>
-                  </>
+                  <TableCell className='px-5 py-4'>
+                    <GrantedActions
+                      actions={kindActions.get(grant.resource.type) ?? []}
+                      grant={grant}
+                    />
+                  </TableCell>
                 ) : (
                   actions.map((action) => (
                     <TableCell key={action} className='px-5 py-4 text-center'>
@@ -207,7 +221,7 @@ export function PermissionsSummary({
                 {combined || isCollection ? (
                   <TableCell className='px-5 py-4 text-sm text-muted-foreground'>
                     {grant.resource.type === COLLECTION_TYPE
-                      ? recordsAndFieldsSummary(grant)
+                      ? recordsAndFieldsSummary(options, grant)
                       : NONE}
                   </TableCell>
                 ) : null}
@@ -245,18 +259,28 @@ export function PermissionsSummary({
   );
 }
 
-/** The actions one grant carries, each with the mark that says what it reaches. */
-function GrantedActions({ grant }: { grant: GrantDraft }): ReactElement {
-  const actions = sortActions(grant.actions);
+/**
+ * One mark per action of the resource's kind, always in the same order and the
+ * same positions, so every row of that kind occupies the same width. The action
+ * is named in the label and the tooltip rather than on screen.
+ */
+function GrantedActions({
+  actions,
+  grant,
+}: {
+  actions: readonly string[];
+  grant: GrantDraft;
+}): ReactElement {
   if (actions.length === 0)
     return <span className='text-sm text-muted-foreground'>{NONE}</span>;
   return (
-    <div className='flex flex-wrap gap-2'>
+    <div className='flex items-center gap-1.5'>
       {actions.map((action) => (
-        <span className='flex items-center gap-1.5 text-sm' key={action}>
-          <ScopeMark value={actionMark(grant, action)} />
-          {humanize(action)}
-        </span>
+        <ScopeMark
+          key={action}
+          context={humanize(action)}
+          value={actionMark(grant, action)}
+        />
       ))}
     </div>
   );

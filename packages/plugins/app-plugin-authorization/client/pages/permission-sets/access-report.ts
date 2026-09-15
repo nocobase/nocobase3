@@ -61,45 +61,122 @@ export function actionMark(grant: GrantDraft, action: string): GrantMark {
     : 'scoped';
 }
 
-/** One line of the comparison: a resource and an action, marked for every set. */
-export interface ComparisonRow {
+/** One permission set's access to one resource, marked action by action. */
+export interface ResourceAccessRow {
   readonly key: string;
-  readonly resourceType: string;
-  /** The label of the resource type, which the table repeats as a group heading. */
-  readonly groupLabel: string;
-  readonly resource: { readonly type: string; readonly id: string };
-  readonly resourceLabel: string;
-  readonly action: string;
-  /** One mark per set, in the order the sets were given. */
+  readonly set: PermissionSet;
+  readonly title: string;
+  /** One mark per action, in the order the actions were given. */
   readonly marks: readonly GrantMark[];
 }
 
 /**
- * Every resource and action any set grants, marked per set. A set conferring
- * unrestricted access carries no grants, so its column is the bypass mark
- * throughout rather than an empty one.
+ * The actions one resource offers: the ones its kind declares, plus any a grant
+ * names that the kind no longer does. The vocabulary is uniform by
+ * construction, because every row is the same resource.
  */
-export function comparisonRows(
+export function resourceActions(
   options: AuthorizationOptions,
   sets: readonly PermissionSet[],
-): readonly ComparisonRow[] {
-  const drafts = sets.map((set) => ({ set, draft: fromSet(set) }));
-  const grants = drafts.flatMap(({ draft }) => draft.grants);
+  resource: { type: string; id: string },
+): readonly string[] {
+  const declared = (
+    options.resourceTypes.find((item) => item.value === resource.type)
+      ?.actions ?? []
+  ).map((item) => item.value);
+  const granted = sets.flatMap((set) =>
+    set.grants
+      .filter(
+        (grant) =>
+          grant.resource.type === resource.type &&
+          grant.resource.id === resource.id,
+      )
+      .flatMap((grant) => grant.actions.map((action) => action.action)),
+  );
+  return [...new Set([...declared, ...granted])]
+    .map((value) => ({ value }))
+    .sort(compareActions)
+    .map((item) => item.value);
+}
+
+/**
+ * The sets that grant anything on one resource, marked action by action. A set
+ * conferring unrestricted access is always reported, because its grants are
+ * never consulted and it reaches the resource all the same.
+ */
+export function resourceAccessRows(
+  sets: readonly PermissionSet[],
+  resource: { type: string; id: string },
+  actions: readonly string[],
+): readonly ResourceAccessRow[] {
+  return sets.flatMap((set) => {
+    const draft = fromSet(set);
+    const grant = draft.grants.find(
+      (item) =>
+        item.resource.type === resource.type &&
+        item.resource.id === resource.id,
+    );
+    if (
+      set.unrestricted !== true &&
+      (grant === undefined || grant.actions.length === 0)
+    )
+      return [];
+    return [
+      {
+        key: set.key,
+        set,
+        title: setTitle(set),
+        marks: actions.map((action) => setMark(set, draft, resource, action)),
+      },
+    ];
+  });
+}
+
+/** One line of the diff: a resource and an action, marked for each of the two sets. */
+export interface SetDiffRow {
+  readonly key: string;
+  readonly resourceType: string;
+  /** The label of the resource type, which the table repeats as a group heading. */
+  readonly groupLabel: string;
+  readonly resourceLabel: string;
+  readonly action: string;
+  readonly left: GrantMark;
+  readonly right: GrantMark;
+  /** True where the two sets do not reach the same thing, which is what the table shows by default. */
+  readonly differs: boolean;
+}
+
+/**
+ * Every resource and action either set grants, marked for both. A set
+ * conferring unrestricted access carries no grants, so it is marked as a bypass
+ * throughout rather than as granting nothing.
+ */
+export function setDiffRows(
+  options: AuthorizationOptions,
+  left: PermissionSet,
+  right: PermissionSet,
+): readonly SetDiffRow[] {
+  const sides = [left, right].map((set) => ({ set, draft: fromSet(set) }));
+  const grants = sides.flatMap((side) => side.draft.grants);
   return orderedTypes(options, grants).flatMap((type) => {
     const groupLabel = resourceTypeLabel(options, type);
     return resourceIds(grants, type).flatMap((id) => {
       const resource = { type, id };
-      return actionsFor(grants, resource).map((action) => ({
-        key: `${type}:${id}:${action}`,
-        resourceType: type,
-        groupLabel,
-        resource,
-        resourceLabel: resourceLabel(options, resource),
-        action,
-        marks: drafts.map(({ set, draft }) =>
+      return actionsFor(grants, resource).map((action) => {
+        const [first, second] = sides.map(({ set, draft }) =>
           setMark(set, draft, resource, action),
-        ),
-      }));
+        ) as [GrantMark, GrantMark];
+        return {
+          key: `${type}:${id}:${action}`,
+          resourceType: type,
+          groupLabel,
+          resourceLabel: resourceLabel(options, resource),
+          action,
+          left: first,
+          right: second,
+          differs: first !== second,
+        };
+      });
     });
   });
 }

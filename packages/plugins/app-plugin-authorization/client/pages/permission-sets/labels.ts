@@ -108,30 +108,58 @@ export function detailSummary(
   return `Key: ${draft.key} · ${permissionCountFromDraft(draft)} permissions · ${categories.size} resource ${categories.size === 1 ? 'type' : 'types'} · ${assignmentCount}`;
 }
 
-export function databaseAccessSummary(grant: GrantDraft): string {
+export function databaseAccessSummary(
+  options: AuthorizationOptions,
+  grant: GrantDraft,
+): string {
   return grant.actions
     .map((action) => {
       const value = grant.database[action] ?? defaultDatabaseActionDraft();
-      return `${humanize(action)}: ${action === 'create' ? 'new records' : humanize(recordAccessKey(value.recordAccess))}`;
+      return `${humanize(action)}: ${action === 'create' ? 'new records' : recordAccessLabel(options, value.recordAccess)}`;
     })
     .join(', ');
 }
 
-/** The one-line summary the collection rows carry beside their per-action marks. */
-export function recordsAndFieldsSummary(grant: GrantDraft): string {
-  if (grant.actions.length === 0) return '—';
+/**
+ * The records the granted actions start from, as one clause. A create selects
+ * no records, so it is left out; actions that disagree say so once rather than
+ * listing every one, because the side panel already carries the breakdown.
+ */
+export function recordsClause(
+  options: AuthorizationOptions,
+  grant: GrantDraft,
+): string {
+  const labels = grant.actions
+    .filter((action) => action !== 'create')
+    .map((action) =>
+      recordAccessLabel(
+        options,
+        (grant.database[action] ?? defaultDatabaseActionDraft()).recordAccess,
+      ),
+    );
+  if (labels.length === 0) return 'New records';
+  return new Set(labels).size > 1 ? 'Mixed records' : labels[0];
+}
+
+/** The two clauses a collection row carries: its records, then its fields. */
+export function recordsAndFieldsSummary(
+  options: AuthorizationOptions,
+  grant: GrantDraft,
+): string {
+  if (grant.actions.length === 0) return NONE;
   const values = grant.actions.map(
     (action) => grant.database[action] ?? defaultDatabaseActionDraft(),
   );
   const fields = values.every(
     (value) => value.input === '*' && value.output === '*',
   )
-    ? 'All fields'
-    : 'Selected fields';
-  return `${fields} · ${databaseAccessSummary(grant)}`;
+    ? 'all fields'
+    : 'selected fields';
+  return `${recordsClause(options, grant)}, ${fields}`;
 }
 
 export function databaseActionSummary(
+  options: AuthorizationOptions,
   action: string,
   value: DatabaseActionDraft,
 ): string {
@@ -140,7 +168,7 @@ export function databaseActionSummary(
     ...(fields === NONE ? [] : [fields]),
     ...(action === 'create'
       ? []
-      : [humanize(recordAccessKey(value.recordAccess))]),
+      : [recordAccessLabel(options, value.recordAccess)]),
   ].join(' · ');
 }
 

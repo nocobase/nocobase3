@@ -154,40 +154,65 @@ describe('table pager', () => {
 });
 
 describe('permissions tab', () => {
-  it('opens on one table carrying every resource, its type and its actions', () => {
-    render(
-      <PermissionsSummary
-        draft={draft}
-        options={options}
-        onEdit={() => undefined}
-      />,
-    );
+  it('opens on one table naming the resource, its type beneath it and one mark per action', () => {
+    render(<PermissionsSummary draft={draft} options={options} />);
+    // The type is a second line under the name rather than a column of its own.
     expect(
       screen.getAllByRole('columnheader').map((cell) => cell.textContent),
-    ).toEqual(['Resource', 'Type', 'Granted actions', 'Records and fields']);
+    ).toEqual(['Resource', 'Granted actions', 'Records and fields']);
 
     const rows = bodyRows();
     expect(rows).toHaveLength(3);
     const orders = within(rows[0] as HTMLElement);
     expect(orders.getByText('Orders')).toBeInTheDocument();
     expect(orders.getByText('Collections')).toBeInTheDocument();
-    expect(orders.getByText('Read')).toBeInTheDocument();
-    expect(orders.getByText('Update')).toBeInTheDocument();
-    expect(orders.getAllByLabelText('Every record')).toHaveLength(1);
-    expect(orders.getAllByLabelText('Scoped records')).toHaveLength(1);
+
+    // One mark per action the kind declares, in the same order for every row of it.
+    expect(
+      orders.getAllByRole('img').map((mark) => mark.getAttribute('aria-label')),
+    ).toEqual([
+      'Create: Not granted',
+      'Read: Every record',
+      'Update: Scoped records',
+      'Delete: Not granted',
+    ]);
+    expect(
+      within(rows[1] as HTMLElement)
+        .getAllByRole('img')
+        .map((mark) => mark.getAttribute('aria-label')),
+    ).toEqual([
+      'Create: Not granted',
+      'Read: Every record',
+      'Update: Not granted',
+      'Delete: Not granted',
+    ]);
     expect(
       within(rows[2] as HTMLElement).getByText('Pages'),
     ).toBeInTheDocument();
   });
 
+  it('summarises records and fields with the policy label, not the stored key', () => {
+    render(<PermissionsSummary draft={draft} options={options} />);
+    const rows = bodyRows();
+    // Two actions disagreeing on their records say so once; one action names its policy.
+    expect(
+      within(rows[0] as HTMLElement).getByText('Mixed records, all fields'),
+    ).toBeInTheDocument();
+    expect(
+      within(rows[1] as HTMLElement).getByText('All Records, all fields'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/RecordsIOwn/)).toBeNull();
+  });
+
+  it('carries no edit control in the filter bar', () => {
+    render(<PermissionsSummary draft={draft} options={options} />);
+    expect(
+      screen.queryByRole('button', { name: 'Edit permissions' }),
+    ).toBeNull();
+  });
+
   it('keeps the per-type table when a type chip is selected', () => {
-    render(
-      <PermissionsSummary
-        draft={draft}
-        options={options}
-        onEdit={() => undefined}
-      />,
-    );
+    render(<PermissionsSummary draft={draft} options={options} />);
     fireEvent.click(screen.getByRole('button', { name: /Collections/ }));
     const rows = bodyRows();
     expect(rows).toHaveLength(2);
@@ -198,13 +223,7 @@ describe('permissions tab', () => {
   });
 
   it('reports one resource action by action, with its records and its fields', () => {
-    render(
-      <PermissionsSummary
-        draft={detailDraft}
-        options={options}
-        onEdit={() => undefined}
-      />,
-    );
+    render(<PermissionsSummary draft={detailDraft} options={options} />);
     fireEvent.click(screen.getByText('Orders'));
     const panel = within(screen.getByRole('dialog'));
 
@@ -224,13 +243,7 @@ describe('permissions tab', () => {
   });
 
   it('switches tables with the resource type chips', () => {
-    render(
-      <PermissionsSummary
-        draft={draft}
-        options={options}
-        onEdit={() => undefined}
-      />,
-    );
+    render(<PermissionsSummary draft={draft} options={options} />);
     fireEvent.click(screen.getByRole('button', { name: /Pages/ }));
     const rows = bodyRows();
     expect(rows).toHaveLength(1);
@@ -243,13 +256,7 @@ describe('permissions tab', () => {
   });
 
   it('returns every filter in the bar to its default', () => {
-    render(
-      <PermissionsSummary
-        draft={draft}
-        options={options}
-        onEdit={() => undefined}
-      />,
-    );
+    render(<PermissionsSummary draft={draft} options={options} />);
     fireEvent.click(screen.getByRole('button', { name: /Pages/ }));
     fireEvent.change(screen.getByLabelText('Search resources'), {
       target: { value: 'nothing' },
@@ -266,13 +273,7 @@ describe('permissions tab', () => {
   });
 
   it('clears the search field from the field itself', () => {
-    render(
-      <PermissionsSummary
-        draft={draft}
-        options={options}
-        onEdit={() => undefined}
-      />,
-    );
+    render(<PermissionsSummary draft={draft} options={options} />);
     const field = screen.getByLabelText('Search resources');
     fireEvent.change(field, { target: { value: 'articles' } });
     expect(bodyRows()).toHaveLength(1);

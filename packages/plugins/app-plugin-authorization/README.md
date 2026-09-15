@@ -51,23 +51,33 @@ bar's filters to their defaults. Lists that grow page ten rows at a time through
 `client/components/pagination.ts` and the pager at the foot of the table frame;
 this is presentation over rows the panel already holds and asks the server for
 nothing. The permissions tab opens on every resource the set grants, one row
-each with its type, the actions it grants as marks and, for a collection, the
-records and fields those actions reach; a resource-type chip narrows it to that
-type's own table, where the actions become columns and each collection cell
-shows whether that action starts from every record, from a scoped set, or is
-not granted at all. Opening a row reports that resource's actions one by one:
-whether each is allowed, the record access policy and the parameters it holds,
-and the writable and visible fields by name.
+each: the resource on one line with its type quietly beneath it, one mark per
+action of that resource's kind so every row of a kind occupies the same width
+and the action is named in the label and the tooltip rather than on screen,
+and, for a collection, its records and its fields as two short clauses — the
+record access policy as the options endpoint labels it, or `Mixed records`
+where the actions disagree. A resource-type chip narrows it to that type's own
+table, where the actions become columns and each collection cell shows whether
+that action starts from every record, from a scoped set, or is not granted at
+all. Opening a row reports that resource's actions one by one: whether each is
+allowed, the record access policy and the parameters it holds, and the writable
+and visible fields by name.
 
-Two screens read across those layers rather than editing one of them. Compare
-sets and User access are views of the permission sets page reached from its
-filter bar, not routes, because neither needs a stored page-grant identifier.
-Compare puts the sets side by side, one column per set and one row per
-resource, for the action its filter bar selects, carrying the same marks the
+Three screens read across those layers rather than editing one of them.
+Resource access, Compare two sets and User access are views of the permission
+sets page reached from its filter bar, not routes, because none needs a stored
+page-grant identifier. Resource access answers who can act on one resource: a
+search chooses the resource, the rows are the sets granting anything on it and
+the columns are that resource kind's own actions, so the action vocabulary is
+uniform by construction rather than chosen from a selector that cannot serve
+two kinds at once. Compare two sets answers how one set differs from another:
+two selectors, the first opening on the set the administrator came from, and a
+row per resource and action grouped by resource type, showing only where the
+two differ until the toggle asks for every row. Both carry the same marks the
 permissions tab uses plus a fourth for a set that confers unrestricted access,
-whose grants are never consulted; the table scrolls sideways with its first
-column pinned, since many sets means many columns. User access reports one
-person: the sets they hold and how — assigned directly, or held because they
+whose grants are never consulted; capping the comparison at two is deliberate,
+because a column per set stops being readable long before an installation stops
+adding sets. User access reports one person: the sets they hold and how — assigned directly, or held because they
 are signed in — then the grants that follow, grouped by resource, with the
 records each action starts from, the fields, and the set that granted it. Below
 those it lists the rules that may adjust what the grants reach, labelled as
@@ -75,7 +85,7 @@ widening or narrowing, and states that rules resolve per request, so the list
 is what may apply rather than a computed result. A rule list the administrator
 cannot read is left out rather than failing the screen.
 
-Neither view asks for anything per set. `GET /api/authz/permission-sets/assignments`
+No view asks for anything per set. `GET /api/authz/permission-sets/assignments`
 answers with every assignment at once, gated by the same `permission-sets`
 `read` check the neighbouring endpoints use, so User access reads the whole
 picture in one request.

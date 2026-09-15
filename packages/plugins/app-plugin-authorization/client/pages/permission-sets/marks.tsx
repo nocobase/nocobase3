@@ -21,14 +21,26 @@ const markIcons = {
   bypass: Shield,
 } as const;
 
-export function ScopeMark({ value }: { value: GrantMark }): ReactElement {
+export function ScopeMark({
+  value,
+  context,
+}: {
+  value: GrantMark;
+  /**
+   * What the mark stands for where no column header names it, such as the
+   * action in a fixed row of marks. It reaches the label and the tooltip, so
+   * the row stays the same width whatever the action is called.
+   */
+  context?: string;
+}): ReactElement {
   const Icon = markIcons[value];
+  const prefix = context === undefined ? '' : `${context}: `;
   return (
     <span
-      aria-label={markLabels[value]}
+      aria-label={`${prefix}${markLabels[value]}`}
       className={`inline-grid size-6 place-items-center rounded-md ${markStyles[value]}`}
       role='img'
-      title={markDescriptions[value]}
+      title={`${prefix}${markDescriptions[value]}`}
     >
       <Icon className='size-3.5' />
     </span>

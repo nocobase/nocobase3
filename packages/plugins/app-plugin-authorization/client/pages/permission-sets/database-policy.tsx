@@ -109,7 +109,7 @@ function DatabaseActionPolicyEditor({
           </p>
         </div>
         <span className='text-xs text-muted-foreground'>
-          {databaseActionSummary(action, value)}
+          {databaseActionSummary(options, action, value)}
         </span>
       </div>
       {input || output ? (
