@@ -7,7 +7,7 @@ import sqlite from '@nocobase/db-sqlite';
 import type { BetterAuthPlugin } from 'better-auth';
 import { APIError, createAuthMiddleware } from 'better-auth/api';
 import { Hono } from 'hono';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { Auth, type AuthEnv } from '../../auth.js';
 
@@ -133,6 +133,41 @@ describe('Auth.getSession', () => {
       const optional = await router.request('/optional');
       expect(optional.status).toBe(200);
       expect(await optional.json()).toEqual({ auth: null });
+    });
+
+    it('honours a test double that replaces getSession', async () => {
+      const auth = authWith(rejectingCredential('FORBIDDEN'));
+      vi.spyOn(auth, 'getSession').mockImplementation(async (headers) =>
+        headers.get('x-test-user')
+          ? {
+              user: {
+                id: 'tester',
+                name: 'Tester',
+                email: 'tester@example.test',
+                emailVerified: true,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              },
+              session: {
+                id: 'test-session',
+                token: 'test-token',
+                userId: 'tester',
+                expiresAt: new Date(Date.now() + 60_000),
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              },
+            }
+          : null,
+      );
+      const router = routerFor(auth);
+
+      const signedIn = await router.request('/required', {
+        headers: { 'x-test-user': '1' },
+      });
+      expect(signedIn.status).toBe(200);
+
+      const anonymous = await router.request('/required');
+      expect(anonymous.status).toBe(401);
     });
 
     it('still surfaces a server-side failure as a failure', async () => {

@@ -32,6 +32,11 @@ export interface AuthMiddlewareOptions {
   skip?: (context: Context) => boolean;
 }
 
+export interface GetSessionOptions {
+  /** Throw Better Auth's APIError for a refused credential instead of answering null. */
+  readonly throwOnRejected?: boolean;
+}
+
 export class Auth {
   private readonly auth;
   private readonly connection: DatabaseConnection;
@@ -124,34 +129,31 @@ export class Auth {
     return this.auth.handler(request);
   }
 
-  async getSession(headers: Headers): Promise<AuthSession> {
+  /**
+   * Resolves who, if anyone, is signed in on this request.
+   *
+   * A refused credential — an expired or revoked API key — answers null, so
+   * callers that only ask "who?" need no error handling. The middleware asks
+   * for the reason with `throwOnRejected`, and forwards Better Auth's answer.
+   */
+  async getSession(
+    headers: Headers,
+    options: GetSessionOptions = {},
+  ): Promise<AuthSession> {
     try {
-      return await this.authenticate(headers);
+      const session = await this.auth.api.getSession({ headers });
+      if (!session) return null;
+      const user = await this.connection.query
+        .selectFrom('user')
+        .select(['id', 'disabledAt'])
+        .where('id', '=', session.user.id)
+        .executeTakeFirst();
+      if (!user || user.disabledAt != null) return null;
+      return session;
     } catch (reason) {
-      if (isRejectedCredential(reason)) return null;
+      if (isRejectedCredential(reason) && !options.throwOnRejected) return null;
       throw reason;
     }
-  }
-
-  /**
-   * Resolves the session, throwing Better Auth's APIError when a credential is
-   * present but refused.
-   *
-   * A bad cookie yields null. A plugin that authenticates by header — an API
-   * key — throws instead, saying why, and `required()` and `optional()`
-   * forward that answer. `getSession()` folds it into null for callers that
-   * only need to know who, if anyone, is signed in.
-   */
-  private async authenticate(headers: Headers): Promise<AuthSession> {
-    const session = await this.auth.api.getSession({ headers });
-    if (!session) return null;
-    const user = await this.connection.query
-      .selectFrom('user')
-      .select(['id', 'disabledAt'])
-      .where('id', '=', session.user.id)
-      .executeTakeFirst();
-    if (!user || user.disabledAt != null) return null;
-    return session;
   }
 
   /** @internal Used by the Authentication-owned administration service. */
@@ -171,7 +173,12 @@ export class Auth {
         return;
       }
       try {
-        context.set('auth', await this.authenticate(context.req.raw.headers));
+        context.set(
+          'auth',
+          await this.getSession(context.req.raw.headers, {
+            throwOnRejected: true,
+          }),
+        );
       } catch (reason) {
         if (isRejectedCredential(reason)) return refuse(context, reason);
         throw reason;
@@ -188,7 +195,9 @@ export class Auth {
       }
       let auth: AuthSession;
       try {
-        auth = await this.authenticate(context.req.raw.headers);
+        auth = await this.getSession(context.req.raw.headers, {
+          throwOnRejected: true,
+        });
       } catch (reason) {
         if (isRejectedCredential(reason)) return refuse(context, reason);
         throw reason;
