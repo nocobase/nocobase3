@@ -44,5 +44,4 @@ Transport 标签可能是：
 ## 相关链接
 
 - [MCP 服务配置](../configuration/mcp.md) — 修改连接、命令和 Header
-- [注册 MCP 服务](../development/mcp.md) — 用 TypeScript 定义固定服务
 - [注册 Tool](../development/tool.md) — 理解 Ask 与 Allow

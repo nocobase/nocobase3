@@ -6,7 +6,7 @@ keywords: 'MCP,Model Context Protocol,stdio,http,sse,config.yml'
 
 # MCP 服务配置
 
-`ai.mcpServers` 以对象键作为 MCP 服务的稳定名称。配置集合是权威来源，管理页不负责创建、编辑或删除连接。
+MCP 服务只能通过应用根目录的 `config.yml` 配置。`ai.mcpServers` 以对象键作为服务的稳定名称，并以整个配置集合为权威来源；管理页不负责创建、编辑或删除连接。
 
 ## Stdio 服务
 
@@ -64,6 +64,5 @@ AI 员工插件会递归展开 MCP 配置中的 `${NAME}`。变量缺失时替�
 
 ## 相关链接
 
-- [注册 MCP 服务](../development/mcp.md) — 用 TypeScript 随应用交付固定连接
 - [MCP 服务管理](../management/mcp-services.md) — 启用服务、查看 Tool 并调整权限
 - [注册 Tool](../development/tool.md) — 了解 Tool 权限

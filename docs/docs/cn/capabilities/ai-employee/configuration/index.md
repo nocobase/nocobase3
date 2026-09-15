@@ -6,7 +6,7 @@ keywords: 'NocoBase,config.yml,ai.llmServices,ai.storage,ai.skills,ai.mcpServers
 
 # AI 员工配置参考
 
-AI 员工的部署级配置位于应用根目录的 `config.yml` 的 `ai` 节点下。这里适合声明连接地址、凭据引用、存储磁盘和额外资源目录。员工角色和 Tool 代码仍放在应用源码中；用户可调整的员工和模型状态由管理页保存。
+AI 员工的部署级配置位于应用根目录的 `config.yml` 的 `ai` 节点下。这里用于声明 LLM 和 MCP 连接、凭据引用、存储磁盘和额外 Skill 目录。MCP 服务只能在 `config.yml` 中配置。员工角色和 Tool 代码仍放在应用源码中；用户可调整的员工和模型状态由管理页保存。
 
 ## 完整结构
 
@@ -45,7 +45,7 @@ AI 员工插件会递归展开 `llmServices` 和 `mcpServers` 中的 `${NAME}`�
 
 ## 配置重载
 
-LLM 和 MCP 配置订阅 `ai` 命名空间，配置重载后会重新同步，不需要重新扫描静态资源。Employee、Tool、Skill 和 `ai/mcp` TypeScript 文件不会随配置重载重新加载，修改它们后要重启服务。
+LLM 和 MCP 配置订阅 `ai` 命名空间，配置重载后会重新同步。Employee、Tool 和 Skill 等静态资源不会随配置重载重新加载，修改它们后要重启服务。
 
 为了减少首次配置时的状态差异，[快速开始](../quick-start.md) 统一使用“修改配置后重启”的操作路径。
 
