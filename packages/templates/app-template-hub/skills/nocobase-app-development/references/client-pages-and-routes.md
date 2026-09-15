@@ -114,7 +114,7 @@ A navigable page normally changes `client/routes.ts`, its page component, and `c
 
 The owning layout supplies the route tree: `AppShell` for business pages, and `SurfaceLayout` for Dev pages. The Hub has no Settings surface. `StandalonePageLayout` does not currently supply one, so breadcrumbs there render nothing.
 
-`navigation` decides whether a page appears in a menu. `breadcrumb` decides whether it appears in a breadcrumb trail, and what it is called there. The two work the same way — declaring one puts the route in; leaving it out keeps the route out — and they are independent, so a route that belongs in both states its title twice.
+`navigation` controls menu entries; `breadcrumb` independently supplies a trail title. Declare both when a route belongs in both. Breadcrumb titles are static translation keys resolved in the owning package's namespace and are allowed on parameterized paths.
 
 ```ts
 {
@@ -125,8 +125,6 @@ The owning layout supplies the route tree: `AppShell` for business pages, and `S
   componentLoader: () => import('./pages/orders/index.js'),
 }
 ```
-
-A page reached only from another page declares `breadcrumb` alone; a menu entry the user never returns to declares `navigation` alone. Unlike `navigation`, `breadcrumb` is allowed on a parameterised path — which is the only way a detail page can name itself.
 
 The page places `<Breadcrumbs />` itself, above its heading, and keeps its own container and spacing:
 
@@ -140,15 +138,12 @@ The page places `<Breadcrumbs />` itself, above its heading, and keeps its own c
 </section>
 ```
 
-Adding it to a page costs nothing when the page does not warrant a trail: the component decides for itself and renders nothing until the page sits under a parent.
+The trail follows the matched route hierarchy:
 
-What the trail shows is the sequence of destinations rather than the sequence of URL segments:
-
-- A route declaring `breadcrumb` is somewhere the user can return to, so it joins the trail.
-- A route without one is skipped — a tab, an overlay, a layer that exists only to share a layout. Declaring no `breadcrumb` on a tab route is how you keep it out.
-- Nothing renders until the page actually sits under a parent. A single level would only repeat the heading directly below it, and the sidebar already says which top-level page the user is on. A page with no children and no parent therefore needs no `breadcrumb` at all.
-
-The title names the kind of page rather than the record it is showing. `/orders/:orderId` is called "Order detail", not "Order #42": the trail states where in the structure the user is, and the page's own heading already identifies the record. Keeping it static is also what lets the whole trail be known before the page loads anything, so it never changes while the user waits.
+- Only routes declaring `breadcrumb` appear; Tab, dialog, and drawer routes leave it unset.
+- It renders only when at least two matched routes declare `breadcrumb`. Having a parent route alone is not enough.
+- Earlier page entries link to their resolved paths; groups without a component render as plain text. The last entry is the current page and is not a link.
+- Titles describe the page type, such as “Order detail”. Record-specific titles, such as “Order #42”, belong in the page heading.
 
 ## Customizing a plugin's page
 

@@ -43,13 +43,13 @@ cli/commands/             Commands this application owns
 tests/                    Tests; never beside the source
 ```
 
-One entry under `client/pages/` is one page. A page with nothing but itself is a file; a page that owns child routes, or components and data only it uses, is a folder holding `index.tsx` plus those files, and its child pages follow the same rule inside it. The folders then mirror the route paths: a page at `/orders` is `client/pages/orders/index.tsx` and its child at `/orders/archived` is `client/pages/orders/archived.tsx`, so the file tree reads as the URL tree. What several pages in one folder share goes beside them rather than in `client/components/`, which is for what the whole application shares: components in a `shared.tsx`, the way `client/pages/auth/` already does, and constants or data in a module of their own — Fast Refresh stops working on a file that exports both.
+A page with children or page-local helpers uses a folder with `index.tsx`; child folders mirror route paths. Keep page-local components and data in that folder, reserving `client/components/` for application-wide components. See [child routes](skills/nocobase-app-development/references/client-child-routes.md) for examples.
 
 A feature with a page and an API touches five places: a migration for the table, a route in `server/routes/`, a page in `client/pages/` declared in `client/routes.ts`, navigation on the page route, and strings in `client/locales/`.
 
 ### The rest is framework structure
 
-`AppShell` provides the business route tree for breadcrumbs. The Dev layout provides its own route tree through `SurfaceLayout`; `AppRouter` only selects routes and layouts. Standalone guest and optional pages do not receive a route-tree provider.
+Layouts own breadcrumb route context; `AppRouter` selects routes and layouts. See [page routes](skills/nocobase-app-development/references/client-pages-and-routes.md#putting-the-page-in-a-breadcrumb-trail) for each layout's scope.
 
 Header entries stay visible on their destination pages. The Dev tools entry is development-only; the Hub has no Settings entry.
 

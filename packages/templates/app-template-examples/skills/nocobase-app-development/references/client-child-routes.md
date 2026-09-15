@@ -54,12 +54,13 @@ const routes: readonly AppClientRouteContribution[] = [
           name: 'workspace',
           path: '/workspace',
           navigation: { title: 'navigation.workspace' },
-          componentLoader: () => import('./pages/workspace.js'),
+          componentLoader: () => import('./pages/workspace/index.js'),
           children: [
             {
               name: 'workspaceReport',
               path: 'reports/:reportId',
-              componentLoader: () => import('./pages/workspace-report.js'),
+              componentLoader: () =>
+                import('./pages/workspace/reports/report.js'),
             },
           ],
         },
@@ -72,7 +73,7 @@ export default routes;
 ```
 
 ```tsx
-// client/pages/workspace.tsx
+// client/pages/workspace/index.tsx
 import type { ReactElement } from 'react';
 import { useTranslation } from '@nocobase/i18n/client';
 import {
@@ -122,7 +123,7 @@ export default function Workspace(): ReactElement {
 ```
 
 ```tsx
-// client/pages/workspace-report.tsx
+// client/pages/workspace/reports/report.tsx
 import type { ReactElement } from 'react';
 import { useTranslation } from '@nocobase/i18n/client';
 import { useParams } from 'react-router';
@@ -163,7 +164,7 @@ The route renderer supplies outlets for pure groups. Business pages place their 
 
 ## How a child route presents itself
 
-Every child route reaches the screen through the parent's outlet, and every one of them is a layer over the page that opened it. What differs is only how that layer looks, which the child page itself chooses:
+A child route renders through its parent's outlet. It can render inline, as the Tab example above does, or use one of these wrappers to cover the parent:
 
 | Component        | Where it sits             | Modal |
 | ---------------- | ------------------------- | ----- |
@@ -171,7 +172,7 @@ Every child route reaches the screen through the parent's outlet, and every one 
 | `RouteDrawer`    | At the side of the page   | Yes   |
 | `RouteChildPage` | Covering the content area | No    |
 
-Only `RouteChildPage` is a destination, so only it declares `breadcrumb`. A dialog or a drawer floats over a page that is still on screen behind it — the user has not gone anywhere — so a `breadcrumb` there would add a level to the trail for something that is not a place to return to. Leave it out and the trail stops at the page underneath, which is where the user still is.
+Among these wrappers, `RouteChildPage` represents a page destination and its route declares `breadcrumb`; `RouteDialog` and `RouteDrawer` leave it unset. Breadcrumbs are not restricted to these wrappers: ordinary page routes can also declare them. See [breadcrumb declarations](client-pages-and-routes.md#putting-the-page-in-a-breadcrumb-trail).
 
 ```tsx
 export default function ArchivedOrdersPage() {
@@ -191,15 +192,10 @@ export default function ArchivedOrdersPage() {
 }
 ```
 
-Keep the outlet outside the layer. `RouteChildPage` scrolls its own content, so a layer nested inside one would scroll away with it once the user had scrolled the page; as siblings both anchor to the content area. It also stops the DOM gaining a level for every level of routing.
-
-The parent needs to know none of this. It renders its content and places its outlet, exactly as it would for a dialog, and the layer covers it. Because it covers rather than replaces, the page beneath keeps its DOM: a half-typed draft and a scroll position are still there when the layer closes.
-
-`RouteChildPage` is deliberately not modal. The user is still on a page of the application and has to be able to reach the sidebar, so it does not portal out of the content area or trap focus. That is also why it carries no close button and ignores Escape — what closes it is the breadcrumb above it, or the browser's back button.
-
-It does mark the siblings it covers `inert`, which is a smaller thing than it sounds: covering a page does not close it, so those siblings keep their place in the tab order and the accessibility tree, and a keyboard user would otherwise tab through controls hidden behind opaque paint — focusing one scrolls the covered page into view while the layer, anchored to the content area, does not move. The sidebar and the header sit outside the content area, so they are outside what the layer covers and stay reachable. The component does this itself; a parent page declares nothing for it.
-
-A top-level page does not use it. There is no page underneath to cover, and the content area is already its own.
+- Place a deeper route's `<Outlet />` beside `RouteChildPage`, not inside it, so the deeper layer does not scroll with its parent layer.
+- The covered page keeps its DOM, including form state and scroll position. The wrapper marks preceding siblings `inert` while covered and restores them on cleanup.
+- `RouteChildPage` is non-modal: the sidebar and header remain reachable. It has no close button or Escape handler; return through breadcrumbs or browser history.
+- Use it for child pages that cover a parent, not for top-level pages.
 
 ## Child pages shown as dialogs or drawers
 
