@@ -141,6 +141,7 @@ describe('application', () => {
     const calls: string[] = [];
     const app = new Application(createTestApplicationOptions());
     const plugin = defineServerPlugin({
+      baseDir: import.meta.dirname,
       packageName: '@nocobase/app-plugin-test',
       serviceProviders: [RuntimePluginProvider],
       routes: [
@@ -208,6 +209,7 @@ describe('application', () => {
       }
     }
     const plugin = defineServerPlugin({
+      baseDir: import.meta.dirname,
       packageName: '@nocobase/app-plugin-runtime-order-test',
       serviceProviders: [PluginProvider],
       routes: [

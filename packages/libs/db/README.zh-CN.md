@@ -105,3 +105,7 @@ pnpm --filter @nocobase/db-sqlite test:integration
 - Repository、Select AST、Filter Builder、Filter AST 和 Sort AST 是未来提案，当前不可调用。
 - QueryAdapter 是数据库层查询接口，不读取 Collection Metadata。
 - `connection.client()` 是底层 adapter 逃生口，不是常规数据库入口。
+
+## Compiled task checksums
+
+See [migration and seed checksum builds and upgrades](CHECKSUMS.md) before switching an existing database between TypeScript sources and compiled JavaScript.

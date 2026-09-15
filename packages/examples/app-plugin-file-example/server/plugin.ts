@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import {
   defineRepositoryApiRoutes,
   type RepositoryApiExposure,
@@ -114,6 +116,7 @@ const businessRepositories: readonly RepositoryApiExposure[] = [
 ];
 
 const plugin: AppServerPlugin = defineServerPlugin({
+  baseDir: path.resolve(import.meta.dirname, '..'),
   packageName: '@nocobase/app-plugin-file-example',
   database: {
     migrations: './database/migrations',

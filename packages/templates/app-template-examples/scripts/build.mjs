@@ -1,3 +1,4 @@
+import { generateDatabaseManifests } from '@nocobase/dev-config/build/database-manifests';
 import spawn from 'cross-spawn';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -291,6 +292,11 @@ run('Rewrite server path aliases', 'pnpm', [
 // `metadata.json` is copied: `collection.json` and `schema.json` are derived output nothing reads back.
 copyCollectionMetadata();
 runHookStage(buildHooks, 'afterServerBuild', run);
+await generateDatabaseManifests({
+  sourceDir: path.join(rootDir, 'database'),
+  outputDir: path.join(distDir, 'database'),
+});
+
 writeDistEnv();
 run('Generate server package', 'node', [
   './scripts/utils/build-server-dist-package.mjs',

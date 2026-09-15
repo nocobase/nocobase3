@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import {
   defineServerPlugin,
   type AppServerPlugin,
@@ -9,6 +11,7 @@ import type { AuthenticationProviderConfig } from './providers/authentication.js
 
 const authenticationPlugin: AppServerPlugin<AuthenticationProviderConfig> =
   defineServerPlugin<AuthenticationProviderConfig>({
+    baseDir: path.resolve(import.meta.dirname, '..'),
     packageName: '@nocobase/app-plugin-authentication',
     serviceProviders,
     routes,

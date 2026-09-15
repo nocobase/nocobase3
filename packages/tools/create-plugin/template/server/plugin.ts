@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import {
   defineServerPlugin,
   type AppServerPlugin,
@@ -7,6 +9,7 @@ import serviceProviders from './providers/index.js';
 import routes from './routes/index.js';
 
 const __NOCOBASE_MODULE_NAME__Plugin: AppServerPlugin = defineServerPlugin({
+  baseDir: path.resolve(import.meta.dirname, ".."),
   packageName: __NOCOBASE_PACKAGE_NAME_LITERAL__,
   serviceProviders,
   routes,

@@ -189,6 +189,7 @@ async function startApplication(
       plugins: [
         {
           definition: defineServerPlugin({
+            baseDir: import.meta.dirname,
             packageName: '@nocobase/app-plugin-test',
             locales: () => Promise.resolve(pluginLocales),
           }),
@@ -196,6 +197,7 @@ async function startApplication(
             packageName: '@nocobase/app-plugin-test',
             version: 'test',
             rootDir: '/test/plugins/test',
+            baseDir: '/test/plugins/test',
             jobLocations: [],
           },
         },

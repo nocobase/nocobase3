@@ -27,6 +27,8 @@ export interface LoadedSeed {
   readonly filePath: string;
   readonly fileName: string;
   readonly checksum: string;
+  /** Verified pre-manifest artifact hash used only to upgrade legacy history. */
+  readonly legacyChecksum?: string;
   readonly seed: SeedDefinition;
 }
 

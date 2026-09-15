@@ -201,8 +201,7 @@ describe('createPlugin', () => {
   );
 
   it.each([
-    // The compiled `dist/database` is what ships; publishing the TypeScript source beside it would shadow the
-    // compiled migrations in an installed plugin, where Node cannot strip types under `node_modules`.
+    // Compiled plugins resolve database resources from baseDir inside dist.
     ['database', ['dist', 'README.md', 'CHANGELOG.md']],
     ['server.jobs', ['dist', 'README.md', 'CHANGELOG.md']],
     ['client.react-providers', ['dist', 'README.md', 'CHANGELOG.md']],

@@ -45,11 +45,9 @@ export function hasTypeEntrypoints(manifest) {
   return visit(manifest.exports);
 }
 
-// The runtime resolves a plugin's declared `database/migrations`, `database/seeds` and `server/jobs` by path, trying
-// the package's own directory before its `dist`. A package that publishes both hands an installed application the
-// TypeScript sources: Node refuses to strip types under `node_modules`, so the plugin fails on its own migrations
-// while every development checkout keeps working. A template publishes its sources instead of a `dist`, so the rule
-// only applies once `dist` is published.
+// Compiled packages publish runtime resources in dist and resolve them from the plugin's baseDir.
+// Keep source directories out of these packages, preserving the publish contract that also protects older runtimes
+// which search package-root resources first. Templates publish source instead of dist and are exempt.
 const RUNTIME_RESOLVED_SOURCE_DIRECTORIES = ['database', 'server'];
 
 export function findShadowedSourceDirectories(manifest) {
@@ -85,7 +83,7 @@ export function validatePackageManifest(manifest, directory) {
 
   for (const directoryName of findShadowedSourceDirectories(manifest)) {
     errors.push(
-      `files must not publish the "${directoryName}" source directory beside dist; the runtime resolves it first and cannot load TypeScript under node_modules`,
+      `files must not publish the "${directoryName}" source directory beside dist; compiled runtime resources belong in dist`,
     );
   }
 
@@ -281,6 +279,7 @@ async function smokeTestDevConfig(archivePath, packageDirectory) {
       'vitest/node.js',
       'vitest/react.js',
       'vite/portal.js',
+      'database/database-manifests.js',
     ]) {
       await import(
         pathToFileURL(path.join(extractDirectory, 'package', 'dist', entry))

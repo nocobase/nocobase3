@@ -1,4 +1,8 @@
-import { createHash } from 'node:crypto';
+import {
+  readTaskManifest,
+  resolveTaskChecksum,
+  type TaskManifest,
+} from '../migration/manifest.js';
 import type { Dirent } from 'node:fs';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { basename, extname, join, resolve } from 'node:path';
@@ -38,6 +42,7 @@ export async function validateSeeds(
 
 async function loadSeedSource(source: SeedSource): Promise<LoadedSeed[]> {
   const directory = resolve(source.directory);
+  const manifest = await readTaskManifest(directory);
   const entries = await readSeedDirectory(directory);
   const extensions = new Set(source.extensions ?? DEFAULT_SEED_EXTENSIONS);
   const files = entries
@@ -53,6 +58,7 @@ async function loadSeedSource(source: SeedSource): Promise<LoadedSeed[]> {
         source.packageName,
         join(directory, fileName),
         fileName,
+        manifest,
       ),
     );
   }
@@ -117,12 +123,13 @@ async function loadSeedFile(
   packageName: string,
   filePath: string,
   fileName: string,
+  manifest: TaskManifest | undefined,
 ): Promise<LoadedSeed> {
   const [source, fileStat] = await Promise.all([
     readFile(filePath, 'utf8'),
     stat(filePath),
   ]);
-  const checksum = createHash('sha256').update(source).digest('hex');
+  const checksums = resolveTaskChecksum(filePath, source, manifest);
   const seed = await importSeed(filePath, fileStat.mtimeMs);
   validateSeedDefinition(seed, filePath, fileName);
 
@@ -131,7 +138,7 @@ async function loadSeedFile(
     name: seed.name,
     filePath,
     fileName,
-    checksum,
+    ...checksums,
     seed,
   };
 }
