@@ -187,7 +187,7 @@ export default function ArchivedOrdersPage() {
 }
 ```
 
-Keep the outlet outside the layer. A deeper layer covers this one either way, but nesting it would make the DOM gain a level for every level of routing.
+Keep the outlet outside the layer. `RouteChildPage` scrolls its own content, so a layer nested inside one would scroll away with it once the user had scrolled the page; as siblings both anchor to the content area. It also stops the DOM gaining a level for every level of routing.
 
 The parent needs to know none of this. It renders its content and places its outlet, exactly as it would for a dialog, and the layer covers it. Because it covers rather than replaces, the page beneath keeps its DOM: a half-typed draft and a scroll position are still there when the layer closes.
 
