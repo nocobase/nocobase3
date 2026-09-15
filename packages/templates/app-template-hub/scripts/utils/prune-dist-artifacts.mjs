@@ -82,10 +82,8 @@ const isPreserved = (relativePath) =>
  * - A map turns a production stack trace back into the TypeScript that produced it, which is the difference between a
  *   diagnosable report and a line number in compiled output. Nobody debugs into `openai` on a deployed server; we do
  *   debug into our own plugins, and the whole set costs about 4 MB.
- * - A markdown file may be product data rather than documentation. `@nocobase/ai-employee` loads employees, skills,
- *   and tools by scanning directories for `prompt.md`, `SKILLS.md`, and `description.md`; removing those breaks
- *   loading with an error naming a file that was present when the plugin was built. Nothing here can see that from the
- *   file alone, so the whole scope is exempt.
+ * - AI resource Markdown is packaged explicitly by its owning plugin. Keep package-owned Skill manifests when they
+ *   are part of a plugin's published files; arbitrary Markdown is not a runtime dependency.
  *
  * Declarations are removed everywhere. They describe types for a compiler, and a deployment does not compile.
  */

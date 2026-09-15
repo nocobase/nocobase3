@@ -29,6 +29,8 @@ import {
   agentServiceFactoryToken,
 } from '../../server/agent/service/agent-service-factory.js';
 import { createTestAppDeps } from './test-app-deps.js';
+import { AIResourceRegistrar } from '../../server/ai/index.js';
+import type { AIEmployeeManager, ToolsManager } from '@nocobase/ai-employee';
 
 export function createTestActor(overrides: Partial<Actor> = {}): Actor {
   return {
@@ -43,6 +45,16 @@ export function createTestConversationExecution(
   overrides: ConversationExecution = {},
 ): ConversationExecution {
   return { ...overrides };
+}
+
+export class TestAIResourceRegistrar extends AIResourceRegistrar {
+  protected override async registerAIEmployees(
+    _aiEmployeeManager: AIEmployeeManager,
+  ): Promise<void> {}
+
+  protected override async registerTools(
+    _toolsManager: ToolsManager,
+  ): Promise<void> {}
 }
 
 export function createTestAIEmployeeFixture() {
@@ -75,8 +87,8 @@ export function createTestAIEmployeeFixture() {
     aiStorageDisk: deps.aiStorageDisk,
   });
   services.configure({
-    paths: deps.paths,
-    loadResources: false,
+    llmServices: [],
+    resourceRegistrar: new TestAIResourceRegistrar(),
   });
   const managers = container.resolve(managerFactoryToken);
   const repositories = container.resolve(repositoryFactoryToken);

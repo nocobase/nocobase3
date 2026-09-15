@@ -10,9 +10,10 @@
     "label": "总览"
   },
   {
-    "type": "file",
+    "type": "dir",
+    "collapsed": true,
     "name": "auth",
-    "label": "登录注册"
+    "label": "认证"
   },
   {
     "type": "file",
@@ -21,6 +22,7 @@
   },
   {
     "type": "dir",
+    "collapsed": true,
     "name": "workflow",
     "label": "工作流"
   },
@@ -46,11 +48,13 @@
   },
   {
     "type": "dir",
+    "collapsed": true,
     "name": "ai-employee",
     "label": "AI 员工"
   },
   {
     "type": "dir",
+    "collapsed": true,
     "name": "ai-knowledge-base",
     "label": "AI 知识库"
   }

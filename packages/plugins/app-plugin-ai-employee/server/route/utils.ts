@@ -1,5 +1,6 @@
 import { DomainError } from '../types.js';
-import type { Auth } from '@nocobase/app-plugin-authentication';
+import type { Auth, AuthSession } from '@nocobase/app-plugin-authentication';
+import { APIError } from 'better-auth';
 import type { Logger } from '@nocobase/logging';
 import type { Actor } from '../types.js';
 import type { Context as HonoContext, MiddlewareHandler } from 'hono';
@@ -114,7 +115,13 @@ async function resolveAuthenticatedUser(
   auth: Auth,
   request: Request,
 ): Promise<Actor> {
-  const session = await auth.getSession(request.headers);
+  let session: AuthSession = null;
+  try {
+    session = await auth.getSession(request.headers);
+  } catch (error) {
+    // A refused credential (Better Auth APIError) is not signed in, here.
+    if (!(error instanceof APIError)) throw error;
+  }
   const user = session?.user;
   if (!user?.id) return { id: 'anonymous', roles: ['member'], isRoot: false };
   const profile = user as typeof user & Record<string, unknown>;

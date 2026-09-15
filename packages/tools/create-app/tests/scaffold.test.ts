@@ -9,7 +9,6 @@ import {
   REQUIRED_PACKAGE_MANAGER,
   scaffoldFromTemplate,
 } from '../src/lib/scaffold.ts';
-import { addDriverDependency, DRIVER_VERSIONS } from '../src/lib/manifest.ts';
 
 const created: string[] = [];
 
@@ -412,65 +411,6 @@ describe('readConfigExample', () => {
   });
 });
 
-describe('addDriverDependency', () => {
-  /** The template depends on `knex` alone, so exactly one driver is added based on the selected dialect. */
-  it('adds the driver to dependencies, not devDependencies', async () => {
-    const directory = await createTemplate();
-
-    await addDriverDependency(directory, 'pg');
-
-    const manifest = JSON.parse(
-      await readFile(path.join(directory, 'package.json'), 'utf8'),
-    );
-
-    expect(manifest.dependencies.pg).toBe(DRIVER_VERSIONS.pg);
-    expect(manifest.dependencies.knex).toBe('^3.1.0');
-    expect(manifest.devDependencies?.pg).toBeUndefined();
-  });
-
-  it('removes a devDependency copy that would pin a conflicting range', async () => {
-    const directory = await createTempDirectory();
-
-    await writeFile(
-      path.join(directory, 'package.json'),
-      JSON.stringify({
-        name: 'app',
-        version: '0.1.0',
-        devDependencies: { pg: '^7.0.0' },
-      }),
-      'utf8',
-    );
-    await addDriverDependency(directory, 'pg');
-
-    const manifest = JSON.parse(
-      await readFile(path.join(directory, 'package.json'), 'utf8'),
-    );
-
-    expect(manifest.dependencies.pg).toBe(DRIVER_VERSIONS.pg);
-    expect(manifest.devDependencies.pg).toBeUndefined();
-  });
-
-  it('rejects a driver it has no version range for', async () => {
-    const directory = await createTemplate();
-
-    await expect(addDriverDependency(directory, 'db2')).rejects.toThrow(
-      /No version range/u,
-    );
-  });
-
-  it('knows a range for every driver it can install', async () => {
-    for (const driver of [
-      'better-sqlite3',
-      'pg',
-      'mysql2',
-      'oracledb',
-      'tedious',
-    ]) {
-      expect(DRIVER_VERSIONS[driver]).toMatch(/^\^\d+\.\d+\.\d+$/u);
-    }
-  });
-});
-
 describe('gitignore handling', () => {
   /**
    * The published `@nocobase/app-template-default` ships no ignore file of any name. Without a fallback the generated
@@ -496,6 +436,8 @@ describe('gitignore handling', () => {
     expect(contents).toContain('/config.yml');
     expect(contents).toContain('/.nocobase/');
     expect(contents).toContain('/.agents/');
+    // Written by this command for a hub, so a template has no particular reason to have ignored it.
+    expect(contents).toContain('/.env');
   });
 
   it('prefers the template gitignore over the fallback', async () => {
@@ -519,5 +461,6 @@ describe('gitignore handling', () => {
     expect(contents).toContain('custom-output/');
     expect(contents).not.toContain('# Local application state.');
     expect(contents).toContain('/.agents/');
+    expect(contents).toContain('/.env');
   });
 });

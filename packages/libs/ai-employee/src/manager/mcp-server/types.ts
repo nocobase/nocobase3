@@ -11,6 +11,7 @@ export interface MCPServerManager extends MCPRegistration {
   getMCP(name: string): Promise<MCPEntity | undefined>;
   listMCP(filter?: MCPFilter): Promise<MCPEntity[]>;
   deleteMCP(name: string): Promise<void>;
+  updateMCPEnabled(name: string, enabled: boolean): Promise<void>;
   testConnection(options: MCPOptions): Promise<MCPTestResult>;
   rebuildClient(): Promise<void>;
   getClient(): MultiServerMCPClient | null;
@@ -29,6 +30,7 @@ export interface MCPRegistration {
 }
 
 export type MCPOptions = {
+  title?: string;
   transport: MCPTransport;
   command?: string;
   args?: string[];
@@ -36,6 +38,7 @@ export type MCPOptions = {
   url?: string;
   headers?: Record<string, string>;
   restart?: Record<string, any>;
+  enabled?: boolean;
 };
 
 export type MCPFilter = {

@@ -5,13 +5,21 @@ import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import sqlite from '@nocobase/db-sqlite';
-import { createDatabaseManager, databaseManagerToken } from '@nocobase/db';
+import {
+  createDatabaseManager,
+  databaseManagerToken,
+  type DatabaseManager,
+  type RepositoryPolicy,
+} from '@nocobase/db';
 import { createDriveManager } from '@nocobase/drive';
 import { driveManagerToken } from '@nocobase/app-server/drive';
 import { createPublicBasePathAdapter } from '@nocobase/app-server/runtime';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { createApiClient } from '@nocobase/api-client';
-import { ServerFileRepositoryManager } from '../server/repository.js';
+import {
+  ServerFileRepositoryManager,
+  uploadPolicy,
+} from '../server/repository.js';
 import {
   defineFileRepositoryApiRoutes,
   type FileRepositoryApiExposure,
@@ -23,6 +31,31 @@ import { ClientFileRepositoryServiceProvider } from '../client/providers/index.j
 import { clientFileRepositoryManagerToken } from '../client/token.js';
 import { apiClientToken, type ClientApplication } from '@nocobase/app-client';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
+
+/** Every action allowed; a test that restricts one declares its own Policy. */
+const openPolicy: RepositoryPolicy = {
+  read: true,
+  create: true,
+  update: true,
+  delete: true,
+};
+
+/**
+ * Stand in for the Repository an upload writes through.
+ *
+ * The manager binds a derived Policy for uploads, so a stub has to sit on the
+ * instance `withPolicy` returns rather than on the one the manager was handed.
+ */
+function stubUploadRepository(db: DatabaseManager): {
+  repository: ReturnType<DatabaseManager['repository']>;
+  writable: ReturnType<ReturnType<DatabaseManager['repository']>['withPolicy']>;
+} {
+  const repository = db.repository('attachments');
+  const writable = repository.withPolicy(uploadPolicy(openPolicy));
+  vi.spyOn(repository, 'withPolicy').mockReturnValue(writable);
+  vi.spyOn(db, 'repository').mockReturnValue(repository);
+  return { repository, writable };
+}
 
 const cleanup: (() => Promise<unknown>)[] = [];
 afterEach(async () => {
@@ -99,6 +132,7 @@ async function fixture(
   const files = manager.repository('attachments', {
     disk: overrides.disk ?? 'local',
     accessPath: overrides.accessPath ?? '/uploads/attachments',
+    policy: overrides.policy ?? openPolicy,
   });
   const container = new ServiceContainer();
   container.instance(databaseManagerToken, db);
@@ -113,6 +147,7 @@ async function fixture(
       {
         name: 'attachments',
         disk: 'local',
+        policy: openPolicy,
         actions: {
           findMany: {},
           findOne: {},
@@ -197,10 +232,16 @@ describe('server repository and Client API', () => {
     async (field) => {
       const { files, client, db } = await fixture(
         {
+          policy: {
+            read: true,
+            create: true,
+            update: { scope: true, fields: ['filename'] },
+            delete: false,
+          },
           actions: {
             findOne: {},
             findMany: {},
-            updateOne: { writePolicy: { fields: ['filename'] } },
+            updateOne: {},
           },
         },
         { databaseSize: String, databaseJsonField: field },
@@ -382,8 +423,15 @@ describe('server repository and Client API', () => {
     for await (const row of query) rows.push(row);
     expect(rows).toHaveLength(1);
   });
-  it('keeps generic writePolicy and does not expose unconfigured actions', async () => {
-    const { client, router } = await fixture();
+  it('refuses a create the Policy does not grant and does not expose unconfigured actions', async () => {
+    const { client, router } = await fixture({
+      policy: {
+        read: true,
+        create: false,
+        update: true,
+        delete: true,
+      },
+    });
     await expect(client.createOne({ values: {} })).rejects.toMatchObject({
       code: 'WRITE_FORBIDDEN',
     });
@@ -603,7 +651,12 @@ describe('upload boundary and access modes', () => {
     },
   );
   it('validates access paths and upload configuration', () => {
-    const entry = { name: 'attachments', disk: 'local', actions: {} };
+    const entry = {
+      name: 'attachments',
+      disk: 'local',
+      policy: openPolicy,
+      actions: {},
+    };
     expect(() =>
       defineFileRepositoryApiRoutes({
         repositories: [
@@ -653,22 +706,23 @@ describe('service providers and uncertain commits', () => {
         .repository('attachments', {
           disk: 'local',
           accessPath: '/uploads/attachments',
+          policy: openPolicy,
         })
         .exists({ filter: { id: result.record.id } }),
     ).toBe(true);
   });
   it('keeps an object when createOne committed before reporting an error', async () => {
     const { db, manager, root } = await fixture();
-    const repository = db.repository('attachments');
-    const create = repository.createOne.bind(repository);
-    vi.spyOn(repository, 'createOne').mockImplementation(async (input) => {
+    const { repository, writable } = stubUploadRepository(db);
+    const create = writable.createOne.bind(writable);
+    vi.spyOn(writable, 'createOne').mockImplementation(async (input) => {
       await create(input);
       throw new Error('commit acknowledgement lost');
     });
-    vi.spyOn(db, 'repository').mockReturnValue(repository);
     const files = manager.repository('attachments', {
       disk: 'local',
       accessPath: '/uploads/attachments',
+      policy: openPolicy,
     });
     await expect(files.uploadOne({ file: file() })).rejects.toThrow(
       'commit acknowledgement lost',
@@ -678,17 +732,17 @@ describe('service providers and uncertain commits', () => {
   });
   it('retains objects if the database cannot verify commit status', async () => {
     const { db, manager, root } = await fixture();
-    const repository = db.repository('attachments');
-    vi.spyOn(repository, 'createMany').mockRejectedValue(
+    const { repository, writable } = stubUploadRepository(db);
+    vi.spyOn(writable, 'createMany').mockRejectedValue(
       new Error('database disconnected'),
     );
     vi.spyOn(repository, 'exists').mockRejectedValue(
       new Error('database disconnected'),
     );
-    vi.spyOn(db, 'repository').mockReturnValue(repository);
     const files = manager.repository('attachments', {
       disk: 'local',
       accessPath: '/uploads/attachments',
+      policy: openPolicy,
     });
     await expect(
       files.uploadMany({ files: [file(), file()] }),
@@ -697,18 +751,18 @@ describe('service providers and uncertain commits', () => {
   });
   it('does not remove committed objects when URL decoration fails', async () => {
     const { db, manager, root } = await fixture();
-    const repository = db.repository('attachments');
-    const create = repository.createOne.bind(repository);
-    vi.spyOn(repository, 'createOne').mockImplementation(async (input) => {
+    const { repository, writable } = stubUploadRepository(db);
+    const create = writable.createOne.bind(writable);
+    vi.spyOn(writable, 'createOne').mockImplementation(async (input) => {
       const result = await create(input);
       return { ...result, record: { ...result.record, id: '\ud800' } };
     });
-    vi.spyOn(db, 'repository').mockReturnValue(repository);
     await expect(
       manager
         .repository('attachments', {
           disk: 'local',
           accessPath: '/uploads/attachments',
+          policy: openPolicy,
         })
         .uploadOne({ file: file() }),
     ).rejects.toThrow(URIError);

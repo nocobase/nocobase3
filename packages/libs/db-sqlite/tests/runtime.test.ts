@@ -94,6 +94,7 @@ describe('sqlite runtime strategy', () => {
       runtime.schema!.columnType!({
         column: { type: 'datetime' } as never,
         tablePrimaryKey: false,
+        altering: false,
       }),
     ).toBe('text');
     expect(

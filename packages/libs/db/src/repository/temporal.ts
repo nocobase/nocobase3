@@ -95,12 +95,37 @@ export function normalizeTemporalValue(
   return instant.toISOString();
 }
 
+/**
+ * Recognize epoch milliseconds left behind by the query builder before it knew about temporal Fields.
+ *
+ * It used to hand `Date` values straight to the driver, and knex stores a `Date` on SQLite as `getTime()`, so a
+ * `datetime` column written through `database.query()` at the time holds `1789908736452` as a REAL, or the text
+ * `"1789908736452.0"` once the column's TEXT affinity has had its way. Without this, the first read of such a row
+ * fails with `FIELD_CAPABILITY_NOT_SUPPORTED` and an application that upgraded in place cannot even sign a user in.
+ *
+ * No valid V1 temporal string is a bare number, so the shape is unambiguous. Only values with at least twelve digits
+ * qualify, which keeps a short numeric string on the ordinary validation path so it is still reported as invalid.
+ * The value is read back as the instant it was and rendered exactly as a `Date` result would be.
+ */
+function legacyEpochMilliseconds(input: unknown): number | undefined {
+  if (typeof input === 'number') {
+    return Number.isFinite(input) && Math.abs(input) >= 1e11
+      ? input
+      : undefined;
+  }
+  if (typeof input !== 'string') return undefined;
+  const match = input.match(/^(-?\d{12,16})(?:\.0+)?$/);
+  return match ? Number(match[1]) : undefined;
+}
+
 /** Normalize driver-native temporal results to the portable string contract. */
 export function normalizeTemporalResultValue(
   field: FieldDefinition,
-  input: unknown,
+  raw: unknown,
 ): string | null {
-  if (input === null) return null;
+  if (raw === null) return null;
+  const legacy = legacyEpochMilliseconds(raw);
+  const input = legacy === undefined ? raw : new Date(legacy);
   if (input instanceof Date) {
     if (!Number.isFinite(input.getTime())) {
       throw new RepositoryError(

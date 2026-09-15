@@ -10,7 +10,7 @@
 import type { ArtifactResolver } from '../artifact-resolver.ts';
 import type { AppRuntimeRegistry } from '../app-registry.ts';
 import type { AppVolumeManager } from '../deployment/volume-manager.ts';
-import { rootErrorMessage } from '../errors.ts';
+import { fullErrorMessage } from '../errors.ts';
 import path from 'node:path';
 import { rm } from 'node:fs/promises';
 import type {
@@ -98,15 +98,74 @@ export class ManagedReconciler {
       const revision = this.nextRevision();
       if (this.registry.has(deployment.appId)) {
         this.markPending(revision, running);
+        const previousDefinition = this.registry.definition(deployment.appId);
+        const previousConfigPath = previousDefinition?.configPath;
+        let candidateConfigPath: string | undefined;
+        let definitionUpdated = false;
         let app;
         try {
+          const configPath = await this.prepareConfig(
+            running,
+            previousConfigPath,
+          );
+          candidateConfigPath =
+            running.config?.content !== undefined ? configPath : undefined;
+          if (previousDefinition && previousConfigPath !== configPath) {
+            await this.registry.updateDefinition(deployment.appId, {
+              ...previousDefinition,
+              configPath,
+            });
+            definitionUpdated = true;
+          }
           app = await this.registry.ensureActive(deployment.appId);
+          if (previousConfigPath && previousConfigPath !== configPath) {
+            await this.volumes
+              .removeConfig(deployment.appId, previousConfigPath)
+              .catch((error: unknown) => {
+                console.warn(
+                  'Failed to clean up previous app configuration after start',
+                  {
+                    appId: deployment.appId,
+                    error,
+                  },
+                );
+              });
+          }
         } catch (error) {
+          if (definitionUpdated && previousDefinition) {
+            await this.registry
+              .updateDefinition(deployment.appId, previousDefinition)
+              .catch((restoreError: unknown) => {
+                console.warn(
+                  'Failed to restore previous app definition after start failure',
+                  {
+                    appId: deployment.appId,
+                    error: restoreError,
+                  },
+                );
+              });
+          }
+          if (
+            candidateConfigPath &&
+            candidateConfigPath !== previousConfigPath
+          ) {
+            await this.volumes
+              .removeConfig(deployment.appId, candidateConfigPath)
+              .catch((cleanupError: unknown) => {
+                console.warn(
+                  'Failed to clean up candidate app configuration after start failure',
+                  {
+                    appId: deployment.appId,
+                    error: cleanupError,
+                  },
+                );
+              });
+          }
           const status = this.requireStatus(deployment.appId);
           this.statuses.set(status.id, {
             ...status,
             observedState: 'failed',
-            error: rootErrorMessage(error),
+            error: fullErrorMessage(error),
           });
           throw error;
         }
@@ -126,6 +185,24 @@ export class ManagedReconciler {
       this.reconciledRevision = revision;
       return this.getStatus();
     });
+  }
+
+  private async prepareConfig(
+    spec: HostDeploymentSpec,
+    previousConfigPath?: string,
+  ): Promise<string | undefined> {
+    if (spec.config?.content !== undefined) {
+      return await this.volumes.writeConfig(
+        spec.appId,
+        spec.config.revision ?? spec.id,
+        spec.config.content,
+      );
+    }
+    return spec.config
+      ? (spec.config.path ??
+          previousConfigPath ??
+          this.volumes.configPath(spec.appId))
+      : undefined;
   }
 
   stopDeployment(appId: string): Promise<HostStatus> {
@@ -407,7 +484,7 @@ export class ManagedReconciler {
         revision,
         cacheHit: null,
         app: this.registry.snapshot(spec.appId) ?? null,
-        error: rootErrorMessage(error),
+        error: fullErrorMessage(error),
       });
     }
   }

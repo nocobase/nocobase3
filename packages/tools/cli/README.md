@@ -6,8 +6,6 @@ NocoBase 3 的命令行工具，bin 名为 `nocobase`。
 
 创建项目不走这里，走 `pnpm create @nocobase/app`。
 
-命令文档见 [internal-docs/cli](../../../internal-docs/cli/README.md)，插件如何贡献命令见 [plugin-cli.md](../../../internal-docs/cli/plugin-cli.md)。
-
 ## 内置命令
 
 | 命令                          | 说明                                                    |
@@ -17,6 +15,8 @@ NocoBase 3 的命令行工具，bin 名为 `nocobase`。
 | `nocobase plugin unregister`  | 上述的逆操作，并卸载插件包                              |
 | `nocobase plugin update`      | 升级插件包并同步其 skills                               |
 | `nocobase plugin skills sync` | 同步插件 skills，不升级                                 |
+
+`pnpm plugin:update @nocobase/app-plugin-workflow` 更新指定插件，也接受 `workflow` 简写。不传名称时更新全部已注册插件。插件名使用位置参数，与 `plugin:register`、`plugin:unregister` 一致。
 
 实现在 `src/lib/` 下的 `client-plugins.ts`、`server-plugins.ts`、`cli-plugins.ts`、`plugin-registration.ts` 和 `skills-sync.ts`。仓库根目录不再维护第二套 register、unregister 或 skills sync 脚本。
 

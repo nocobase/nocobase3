@@ -1,6 +1,7 @@
 import type {
   EnabledModelsConfig,
   LLMServiceOptions,
+  MCPOptions,
 } from '@nocobase/ai-employee';
 
 export interface AIStorageConfig {
@@ -16,8 +17,15 @@ export interface AIKnowledgeBaseVectorDatabaseConnectionConfig {
   readonly tableName: string;
 }
 
+/**
+ * `key` is the unique identifier of a vector database entry within one
+ * configuration, and is what synchronization matches an existing record by.
+ * `name` is an optional display title and falls back to `key` when omitted,
+ * so two entries may share the same name.
+ */
 export interface AIKnowledgeBaseVectorDatabaseConfig {
-  readonly name: string;
+  readonly key: string;
+  readonly name?: string;
   readonly provider?: string;
   readonly databaseSpec?: string;
   readonly connection: AIKnowledgeBaseVectorDatabaseConnectionConfig;
@@ -40,6 +48,9 @@ export interface AIEmployeeEnabledModelConfig {
   readonly value: string;
 }
 
+export interface AISkillsConfig {
+  readonly paths?: readonly string[];
+}
 export type AIEmployeeLLMServiceConfig = Omit<
   LLMServiceOptions,
   'enabledModels'
@@ -52,6 +63,8 @@ export interface AIApplicationConfig {
   readonly aiEmployee?: {
     readonly storage?: AIStorageConfig;
   };
+  readonly skills?: AISkillsConfig;
+  readonly mcpServers?: Readonly<Record<string, MCPOptions>>;
   readonly aiKnowledgeBase?: AIKnowledgeBaseConfig;
   readonly llmServices: AIEmployeeLLMServiceConfig[];
   readonly [key: string]: unknown;

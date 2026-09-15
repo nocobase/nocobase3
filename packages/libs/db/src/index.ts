@@ -22,6 +22,8 @@ export type {
   PostgresConnectionConfig,
   SchemaManagementMode,
   SqliteConnectionConfig,
+  CollectionMetadataStoreConfig,
+  DirectoryCollectionMetadataStoreConfig,
 } from './database/config.js';
 export type { DatabaseConnection } from './database/connection.js';
 export type { DatabaseManager } from './database/manager.js';
@@ -51,6 +53,33 @@ export type {
   OptimisticLockDefinition,
 } from './collection/types.js';
 export type { CollectionBuilder } from './collection/builder/builder.js';
+export type {
+  CollectionResolutionResult,
+  CollectionResolutionWarning,
+} from './collection/resolver/types.js';
+export {
+  COLLECTION_ARTIFACT_FILE_NAMES,
+  COLLECTION_ARTIFACT_FORMAT_VERSION,
+  COLLECTION_ARTIFACT_MANIFEST_FILE_NAME,
+  assertCollectionArtifactDirectoryNames,
+  CollectionArtifactNameError,
+  findCollectionArtifactNameConflicts,
+  serializeCollectionArtifact,
+  serializeCollectionArtifactManifest,
+  validateCollectionArtifactDirectoryName,
+} from './collection/artifact/index.js';
+export type {
+  CollectionArtifactCollectionFile,
+  CollectionArtifactFileKind,
+  CollectionArtifactFiles,
+  CollectionArtifactFormatVersion,
+  CollectionArtifactInput,
+  CollectionArtifactManifest,
+  CollectionArtifactManifestInput,
+  CollectionArtifactMetadataFile,
+  CollectionArtifactNameErrorCode,
+  CollectionArtifactSchemaFile,
+} from './collection/artifact/index.js';
 
 export type {
   ComparisonOperator,
@@ -73,6 +102,7 @@ export type {
   CreateMigratorOptions,
   DatabaseMigratorOptions,
   MigrationContext,
+  MigrationHistoryRecord,
   MigrationDefinition,
   MigrationRollbackResult,
   MigrationRunResult,
@@ -104,6 +134,8 @@ export { defineCollectionMetadata } from './metadata/define.js';
 export { extractLegacyCollectionMetadata } from './metadata/legacy-extraction.js';
 export { InMemoryCollectionMetadataStore } from './metadata/in-memory-document-store.js';
 export { ModuleCollectionMetadataStore } from './metadata/module-document-store.js';
+export { DirectoryCollectionMetadataStore } from './metadata/directory-document-store.js';
+export type { DirectoryCollectionMetadataStoreOptions } from './metadata/directory-document-store.js';
 export { validateCollectionMetadataDocument } from './metadata/validation.js';
 export type {
   CollectionMetadataDocument,
@@ -152,7 +184,7 @@ export type {
 export { UnsupportedCapabilityError } from './schema/capabilities.js';
 
 export { RepositoryError } from './repository/errors.js';
-export type { JsonValue } from './json.js';
+export type { JsonResultForm, JsonValue } from './json.js';
 export {
   isTemporalType,
   normalizeTemporalValue,
@@ -266,6 +298,9 @@ export type {
   RepositorySelect,
   RepositorySort,
   RepositoryUniqueFieldSetDescription,
+  PolicyRecord,
+  RepositoryOperations,
+  ScopedRepository,
   RelationSelectBuilder,
   RelationConnectInput,
   RelationCreateInput,
@@ -310,6 +345,48 @@ export type {
   RepositoryErrorCode,
   RepositoryErrorOptions,
 } from './repository/errors.js';
+
+export { buildRepositoryPolicy } from './repository/policy/build.js';
+export type {
+  CreatePolicyNodeBuilder,
+  DeletePolicyNodeBuilder,
+  ReadPolicyNodeBuilder,
+  RelationCreateShapePolicyBuilder,
+  RelationPolicyNodeBuilder,
+  RelationShapePolicyBuilder,
+  RelationUpsertPolicyBuilder,
+  RepositoryPolicyBuilder,
+  ThroughFieldsPolicyBuilder,
+  ThroughPolicyBuilder,
+  WritePolicyNodeBuilder,
+} from './repository/policy/build.js';
+export { normalizeRepositoryPolicy } from './repository/policy/normalize.js';
+export { narrowRepositoryPolicy } from './repository/policy/narrow.js';
+export { expandPolicyRefs, ref } from './repository/policy/refs.js';
+export type { ScopedDatabaseConnection } from './database/connection.js';
+export type {
+  CreateNode,
+  DeleteNode,
+  NormalizedCreateNode,
+  NormalizedDeleteNode,
+  NormalizedReadNode,
+  NormalizedRelationShapeNode,
+  NormalizedRelationWriteNode,
+  NormalizedRepositoryPolicy,
+  NormalizedThroughNode,
+  NormalizedWriteNode,
+  PartialReadNode,
+  PartialRepositoryPolicy,
+  PolicyRef,
+  PolicyScalarValue,
+  PolicyScope,
+  ReadNode,
+  RelationCreateNode,
+  RelationShapeNode,
+  RelationWriteNode,
+  RepositoryPolicy,
+  WriteNode,
+} from './repository/policy/types.js';
 
 export {
   buildWritePolicy,

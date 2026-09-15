@@ -1,19 +1,19 @@
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
 import { type AIManager } from '@nocobase/ai-employee';
 import { databaseManagerToken } from '@nocobase/db';
 import { cachingToken } from '@nocobase/app-server/caching';
 import { idGeneratorToken } from '@nocobase/app-server/id-generator';
 import { loggingToken } from '@nocobase/app-server/logging';
-import type { ConfigPaths } from '@nocobase/app-server/config';
 import {
   createServiceToken,
   type ServiceContainer,
   type ServiceToken,
 } from '@nocobase/service-provider';
 
-import type { AIEmployeeLLMServiceConfig } from '../config.js';
+import type {
+  AIEmployeeLLMServiceConfig,
+  AIApplicationConfig,
+} from '../config.js';
+import type { AIResourceRegistrar } from '../ai/index.js';
 import { type ManagerFactory, managerFactoryToken } from './manager-factory.js';
 import { repositoryFactoryToken } from './repository-factory.js';
 import { LLMServiceConfigSynchronizer } from '../manager/llm-service-config.js';
@@ -29,11 +29,7 @@ import { AIToolService } from '../service/ai-tool-service.js';
 import { AIFileService } from '../service/file-service.js';
 import { LLMService } from '../service/llm-service.js';
 import { ModelService } from '../service/model-service.js';
-import {
-  loadResources,
-  resolveAIDirectory,
-} from '../service/resource-loader.js';
-
+import { loadResources } from '../service/resource-loader.js';
 export const serviceFactoryToken: ServiceToken<ServiceFactory> =
   createServiceToken<ServiceFactory>(
     '@nocobase/app-plugin-ai-employee/internal/services',
@@ -44,9 +40,9 @@ export interface ServiceFactoryOptions {
 }
 
 export interface ServiceFactoryInitialization {
-  readonly paths: ConfigPaths;
   readonly llmServices?: readonly AIEmployeeLLMServiceConfig[];
-  readonly loadResources?: boolean;
+  readonly mcpServers?: AIApplicationConfig['mcpServers'];
+  readonly resourceRegistrar: AIResourceRegistrar;
 }
 
 /** App-container-scoped owner of all plugin services and mutable collaborators. */
@@ -166,35 +162,17 @@ export class ServiceFactory {
       this.repositories.aiEmployees,
     );
     await this.llmServiceConfigSynchronizer.enqueue(initialization.llmServices);
+    await this.mcpServerService.syncConfiguredMCPServers(
+      initialization.mcpServers,
+    );
     await this.ai.llmServiceManager.switchRepository(
       this.repositories.llmServices,
     );
-    if (initialization.loadResources === false) return;
-
-    const packageDirectory = resolveAIDirectory(
-      path.resolve(
-        path.dirname(fileURLToPath(import.meta.url)),
-        '..',
-        '..',
-        'ai',
-      ),
-    );
-    const appDirectory = resolveAIDirectory(initialization.paths.root('ai'));
     await loadResources({
       ai: this.ai,
       logger: this.logger,
-      aiDirectory: packageDirectory,
+      resourceRegistrar: initialization.resourceRegistrar,
     });
-    const summary = await loadResources({
-      ai: this.ai,
-      logger: this.logger,
-      aiDirectory: appDirectory,
-      overrideTools: true,
-    });
-    this.logger.info?.(
-      { aiDirectory: appDirectory, summary },
-      'AI employee services initialized',
-    );
   }
   private resolveAgentServiceFactory(): AgentServiceFactory {
     return this.container.resolve(agentServiceFactoryToken);

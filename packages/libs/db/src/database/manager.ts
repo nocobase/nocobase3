@@ -1,4 +1,5 @@
 import type { CollectionBuilder } from '../collection/builder/builder.js';
+import type { ConnectionCollections } from '../collection/registry/types.js';
 import { createMigrator, type Migrator } from '../migration/migrator.js';
 import type { DatabaseMigratorOptions } from '../migration/types.js';
 import type { QueryAdapter } from '../query/types.js';
@@ -7,9 +8,12 @@ import { createSeeder, type Seeder } from '../seed/seeder.js';
 import type { DatabaseSeederOptions } from '../seed/types.js';
 import type {
   BaseConnectionConfig,
+  CollectionMetadataStoreConfig,
   DatabaseConfig,
   ExtensibleDatabaseConfig,
 } from './config.js';
+import type { CollectionMetadataStore } from '../metadata/document-store.js';
+import { DirectoryCollectionMetadataStore } from '../metadata/directory-document-store.js';
 import type {
   ConnectionConfig,
   DatabaseDriverDefinition,
@@ -19,12 +23,29 @@ import type { DatabaseConnection } from './connection.js';
 import { DefaultConnectionFactory, type ConnectionFactory } from './factory.js';
 import { KnexConnectionAdapter } from './internal/knex/adapter.js';
 
+/**
+ * Application-level entry to every named connection.
+ *
+ * Besides `connection()`, the Manager mirrors the four Connection handles that
+ * work in logical Collection and Field names — `builder`, `query`,
+ * `repository` and `collections` — each taking the connection name as its last
+ * parameter and returning the very object the Connection holds. Nothing else is
+ * mirrored: `schema`, `schemaInspector` and `collectionMetadata` work in
+ * physical names or write supplemental metadata, and stay on the Connection.
+ */
 export interface DatabaseManager {
   connection(name?: string): DatabaseConnection;
   /** Collection schema and metadata builder. Uses Collection and Field logical names. */
   builder(name?: string): CollectionBuilder;
   /** Database-layer query builder. Does not read Collection metadata or collection table prefixes. */
   query(name?: string): QueryAdapter;
+  /**
+   * Resolved Collections of one connection, by logical name. Same object as
+   * `connection(name).collections`, so its cache is shared with every Builder,
+   * Repository and Migration on that connection: `invalidate()` and
+   * `refresh()` affect all of them.
+   */
+  collections(name?: string): ConnectionCollections;
   repository<
     TRecord extends object = RepositoryRecord,
     TCreate extends object = Partial<TRecord>,
@@ -100,8 +121,9 @@ export class DefaultDatabaseManager implements DatabaseManager {
       this.config.drivers,
       name,
     );
-    const metadataStore =
-      resolvedConnectionConfig.metadataStore ?? this.config.metadataStore;
+    const metadataStore = resolveMetadataStore(
+      resolvedConnectionConfig.metadataStore ?? this.config.metadataStore,
+    );
     if (
       resolvedConnectionConfig.schemaManagement === 'external' &&
       !metadataStore
@@ -123,6 +145,10 @@ export class DefaultDatabaseManager implements DatabaseManager {
 
   query(name?: string): QueryAdapter {
     return this.connection(name).query;
+  }
+
+  collections(name?: string): ConnectionCollections {
+    return this.connection(name).collections;
   }
 
   repository<
@@ -189,6 +215,32 @@ export class DefaultDatabaseManager implements DatabaseManager {
       throw new Error('No database connections configured.');
     }
     return name;
+  }
+}
+
+/**
+ * A store is either an instance or its declarative form. Telling them apart by
+ * the presence of `initialize` rather than by a `type` field keeps a custom
+ * store that happens to carry a `type` property from being mistaken for
+ * configuration.
+ */
+function resolveMetadataStore(
+  value: CollectionMetadataStore | CollectionMetadataStoreConfig | undefined,
+): CollectionMetadataStore | undefined {
+  if (value === undefined) return undefined;
+  if (typeof (value as CollectionMetadataStore).initialize === 'function') {
+    return value as CollectionMetadataStore;
+  }
+  const config = value as CollectionMetadataStoreConfig;
+  switch (config.type) {
+    case 'directory':
+      return new DirectoryCollectionMetadataStore({
+        directory: config.directory,
+      });
+    default:
+      throw new Error(
+        `Unknown Collection metadata store type "${String((config as { type?: unknown }).type)}".`,
+      );
   }
 }
 

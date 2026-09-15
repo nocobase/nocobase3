@@ -70,7 +70,7 @@ Field rules:
 | `scope`                  | yes      | Exact uppercase enum: `SPECIFIED`, `GENERAL`, or `CUSTOM`.                                                                                                                  |
 | `definition`             | yes      | Model-facing tool definition.                                                                                                                                               |
 | `definition.name`        | yes      | Must be non-empty for validation. For filesystem resources, the loader replaces it with the filename/directory key. Still provide a non-empty placeholder or intended name. |
-| `definition.description` | yes      | Model-facing usage description. A sibling `description.md` replaces it when loaded from a tool directory.                                                                   |
+| `definition.description` | yes      | Model-facing usage description. A sibling the TypeScript definition is authoritative.                                                                                       |
 | `definition.schema`      | no       | Input schema, commonly a Zod object. `null` is accepted by existing resources but a precise schema is preferred.                                                            |
 | `invoke`                 | yes      | Async callback. Argument order is `(ctx, args, runtime)`. Must return a Promise.                                                                                            |
 | `defaultPermission`      | no       | `ASK` by default; use `ALLOW` only for safe automatic calls.                                                                                                                |
@@ -81,9 +81,9 @@ Field rules:
 
 Filesystem key examples:
 
-- `ai/tools/search.ts` → registered name `search`.
-- `ai/tools/search/index.ts` → registered name `search`.
-- `ai/tools/search/description.md` → description for `search`.
+- `server/ai/tools/search.ts` → registered name `search`.
+- `server/ai/tools/search/index.ts` → registered name `search`.
+- Tool descriptions are declared in the TypeScript definition.
 
 Minimal valid definition:
 
@@ -110,7 +110,7 @@ export default defineTools<AgentContext>({
 
 ## Skill Configuration
 
-A skill is a `SKILLS.md` file parsed as Markdown with YAML frontmatter.
+A skill is a `SKILL.md` file parsed as Markdown with YAML frontmatter.
 
 ```yaml
 ---
@@ -180,7 +180,7 @@ Field rules:
 | `chatSettings.systemPromptMode` | no       | Exact values: `default`, `raw`, or `none`.                                                                                                                                                                |
 | `chatSettings.enableSkills`     | no       | Enables skill behavior when true.                                                                                                                                                                         |
 | `chatSettings.enableTools`      | no       | Enables tool behavior when true.                                                                                                                                                                          |
-| `systemPrompt`                  | no       | String, `null`, or omitted. A colocated `prompt.md` replaces this value.                                                                                                                                  |
+| `systemPrompt`                  | no       | String, `null`, or omitted. Declare the prompt directly in the TypeScript `systemPrompt` field.                                                                                                           |
 | profile fields                  | no       | `avatar`, `nickname`, `position`, `bio`, `greeting`.                                                                                                                                                      |
 | `sort`                          | no       | Number used before username in employee ordering.                                                                                                                                                         |
 

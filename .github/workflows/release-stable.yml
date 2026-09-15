@@ -16,8 +16,8 @@ name: Release Stable
 # 所以给旧版本发补丁时，唯一要做的就是别让 latest 指针倒退。
 #
 # 用 GITHUB_TOKEN 而不是 PAT：仓库暂时没有分支保护，它足够推送。
-# 已知限制是它推送的 commit 不会触发其它 workflow（GitHub 防死循环的
-# 设计）—— 对本流程无影响，同步过去的内容已经在发版时 build + test 过。
+# GITHUB_TOKEN pushes do not trigger push workflows, but its PRs create CI runs awaiting approval.
+# Add [skip ci] to generated commits to skip version-sync PR checks; this workflow still runs its own checks.
 # 将来给 main / develop 加上分支保护后，需要换成能绕过保护的 PAT。
 
 on:
@@ -264,7 +264,7 @@ jobs:
         if: "!inputs.dry_run && steps.mode.outputs.needs_version == 'true'"
         run: |
           git add -A
-          git commit -m "chore: release ${{ steps.batch.outputs.value }}"
+          git commit -m "chore: release ${{ steps.batch.outputs.value }} [skip ci]"
           git push origin "refs/heads/${{ steps.branch.outputs.name }}:refs/heads/${{ steps.branch.outputs.name }}"
 
       # 两种场景共用：聚合 tag 打在即将 publish 的这个 commit 上。
@@ -339,7 +339,7 @@ jobs:
           git checkout -B develop origin/develop
 
           set +e
-          git merge --no-ff origin/main -m "chore: sync ${{ steps.batch.outputs.value }} into develop"
+          git merge --no-ff origin/main -m "chore: sync ${{ steps.batch.outputs.value }} into develop [skip ci]"
           MERGE_RC=$?
           set -e
 
@@ -370,7 +370,7 @@ jobs:
               echo "synced=false" >> "$GITHUB_OUTPUT"
               exit 0
             fi
-            git commit -m "chore: sync ${{ steps.batch.outputs.value }} into develop"
+            git commit -m "chore: sync ${{ steps.batch.outputs.value }} into develop [skip ci]"
           fi
 
           # 合并不该带走 develop 的 pre 状态。带走了说明合进来的内容有问题，

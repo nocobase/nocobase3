@@ -1,5 +1,33 @@
 # @nocobase/create-app
 
+## 0.1.0-beta.15
+
+### Minor Changes
+
+- c258b92: Generate `config.yml` from the template's own `config.example.yml` and remove `--db-dialect`.
+
+  The database is no longer chosen at generation time. Since dialects were split into `@nocobase/db-*` packages, a connection may only use a dialect the application registers in `server/config/database.ts`, and that file cannot be overridden from `config.yml`. Adding a bare driver to `dependencies` — what `--db-dialect` did — therefore produced an application that failed to start with `Database dialect "postgres" is not registered.` for every dialect but SQLite. A generated application now starts on the SQLite connection its template declares, and another database is a change to that file plus the matching dialect package.
+
+  `config.yml` is built from the template's `config.example.yml` with `auth.secret` and `session.secret` filled in, rather than assembled here. The example documents everything an application can be configured with — notification channels, LLM services, additional connections — and a file written from scratch carried a fraction of it and went stale whenever the example grew.
+
+  A hub is generated the same way. It owns a database like any other application, so it now gets a `config.yml` too: without one it started in install mode on a secret regenerated every boot, which invalidated every session on restart. It also gets its plugin skills synchronized, and no longer gets the vestigial `app-dist/` directory, which nothing reads. `.env` remains, for the deployment facts that belong to it.
+
+  The fallback `.gitignore`, written when a template ships none, now also covers `.env`, `config.toml`, and the local SQLite files.
+
+## 0.1.0-beta.14
+
+### Patch Changes
+
+- f17f3a6: Provide editable TypeScript defaults for application modules, assembled by the runtime before services start. Module factories receive the runtime with application paths and plugin metadata; deployment files and environment variables override defaults, and configuration reload preserves code defaults.
+
+  Keep deployment settings in YAML examples and reserve explicit environment overrides for secrets and startup integration. Simplify application configuration loading, merging and reload subscriptions.
+
+  Align client configuration assembly with the server: runtime merges application TypeScript defaults beneath public configuration before services start. Client inspection reports the application configuration entry.
+
+- f17f3a6: Support TypeScript authentication options in application templates and use the native authentication client. Keep authentication plugins and callbacks in editable server and client configuration, with YAML as the default format for deployment settings.
+
+  Runtime assembly now prepares complete configuration before application creation. Module configuration factories use defineAppConfig and defaultAppConfigs, receive the runtime once, and retain their defaults when environment configuration reloads.
+
 ## 0.1.0-beta.13
 
 ### Patch Changes

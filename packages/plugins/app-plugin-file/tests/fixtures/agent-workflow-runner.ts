@@ -109,6 +109,7 @@ try {
     .repository('invoice_files', {
       disk: 'local',
       accessPath: '/uploads/invoices',
+      policy: { read: true, create: true, update: false, delete: false },
     });
   assert.equal(server.getUrl(row), '/uploads/invoices/' + row.id + '.txt');
   await assert.rejects(

@@ -1,6 +1,6 @@
 {
   "name": "@nocobase/dev-config",
-  "version": "0.1.0-beta.5",
+  "version": "0.1.0-beta.6",
   "description": "Shared TypeScript, ESLint, Prettier, Vitest, and Vite configuration for NocoBase packages.",
   "type": "module",
   "sideEffects": [
@@ -64,12 +64,13 @@
     "clean": "node ./scripts/clean-dist.ts",
     "build": "node ./scripts/build.ts",
     "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run --passWithNoTests",
     "lint": "eslint . --max-warnings=0",
     "lint:fix": "eslint . --fix --max-warnings=0",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "fix": "pnpm lint:fix && pnpm format",
-    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm build",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
     "prepack": "pnpm build",
     "pack:check": "node ./scripts/pack-check.ts"
   },

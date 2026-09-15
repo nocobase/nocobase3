@@ -1,8 +1,16 @@
+import type { RepositoryPolicy } from '@nocobase/db';
 import { expectTypeOf, it } from 'vitest';
 import type {
   RepositoryApiActions,
   RepositoryApiExposure,
 } from '../../src/router/index.js';
+
+const policy: RepositoryPolicy = {
+  read: true,
+  create: { scope: true, fields: ['title'] },
+  update: { scope: true, fields: ['title'] },
+  delete: false,
+};
 
 it('uses configuration objects and limits options to the relevant action', () => {
   const actions: RepositoryApiActions = {
@@ -14,14 +22,7 @@ it('uses configuration objects and limits options to the relevant action', () =>
     groupBy: {},
     deleteOne: {},
     createOne: {},
-    updateOne: {
-      writePolicy: (allow) =>
-        allow.relation('tasks', (task) =>
-          task.update((w) =>
-            w.fields('title').relation('assignee', (a) => a.connect()),
-          ),
-        ),
-    },
+    updateOne: {},
   };
   expectTypeOf(actions).toMatchTypeOf<RepositoryApiActions>();
   const invalid = () => {
@@ -32,29 +33,45 @@ it('uses configuration objects and limits options to the relevant action', () =>
     // @ts-expect-error empty configurations must not accept arbitrary options
     const count: RepositoryApiActions = { count: { maxLimit: 10 } };
     const find: RepositoryApiActions = {
-      // @ts-expect-error read actions cannot grant writes
-      findMany: { writePolicy: false },
+      // @ts-expect-error a Policy belongs to the exposure, not to an action
+      findMany: { policy },
     };
-    const deletion: RepositoryApiActions = {
-      // @ts-expect-error deleteOne has no nested values
-      deleteOne: { writePolicy: false },
+    const written: RepositoryApiActions = {
+      // @ts-expect-error writePolicy is no longer part of a route declaration
+      updateOne: { writePolicy: false },
     };
-    const policy: RepositoryApiActions = {
-      // @ts-expect-error wildcards via true are unsupported
-      updateOne: { writePolicy: true },
-    };
+    // @ts-expect-error every exposure declares a Policy
+    const unpoliced: RepositoryApiExposure = { name: 'projects', actions };
     const root: RepositoryApiExposure = {
       name: 'projects',
+      policy,
       actions,
       // @ts-expect-error maxLimit belongs to findMany
       maxLimit: 100,
     };
     const array: RepositoryApiExposure = {
       name: 'projects',
+      policy,
       // @ts-expect-error arrays are unsupported
       actions: ['count'],
     };
-    void [flag, disabled, count, find, deletion, policy, root, array];
+    void [flag, disabled, count, find, written, unpoliced, root, array];
   };
   void invalid;
+});
+
+it('types a Policy function against the principal the resolver returns', () => {
+  const scoped: RepositoryApiExposure<{ tenantId: string }> = {
+    name: 'projects',
+    policy: (principal) => ({
+      read: { scope: { tenantId: principal.tenantId }, fields: ['id'] },
+      create: false,
+      update: false,
+      delete: false,
+    }),
+    actions: { findMany: {} },
+  };
+  expectTypeOf(scoped.policy).toMatchTypeOf<
+    RepositoryPolicy | ((principal: { tenantId: string }) => RepositoryPolicy)
+  >();
 });

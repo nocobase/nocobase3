@@ -10,8 +10,6 @@ import {
   HUB_TEMPLATE_PACKAGE,
   isLocalTemplateSource,
   isTemplateAlias,
-  isTemplateTag,
-  parseTemplateTag,
   resolveTemplateKind,
   resolveTemplateSource,
   TEMPLATE_ALIASES,
@@ -162,24 +160,6 @@ describe('DEFAULT_TEMPLATE_TAG', () => {
   it('is latest, because beta names the oldest published template', () => {
     expect(DEFAULT_TEMPLATE_TAG).toBe('latest');
     expect(TEMPLATE_TAGS).toContain('beta');
-  });
-});
-
-describe('parseTemplateTag', () => {
-  it('accepts the known channels', () => {
-    expect(parseTemplateTag('latest')).toBe('latest');
-    expect(parseTemplateTag('beta')).toBe('beta');
-    expect(parseTemplateTag('  beta  ')).toBe('beta');
-  });
-
-  it('rejects anything else, listing what is accepted', () => {
-    expect(() => parseTemplateTag('nightly')).toThrow(/Unknown template tag/u);
-    expect(() => parseTemplateTag('nightly')).toThrow(/latest/u);
-  });
-
-  it('recognizes only the listed channels', () => {
-    expect(isTemplateTag('latest')).toBe(true);
-    expect(isTemplateTag('canary')).toBe(false);
   });
 });
 

@@ -23,12 +23,14 @@ describe('OceanBase runtime strategy', () => {
       runtime.schema!.columnType!({
         column: { type: 'datetimeTz' } as never,
         tablePrimaryKey: false,
+        altering: false,
       }),
     ).toBe('datetime(3)');
     expect(
       runtime.schema!.columnType!({
         column: { type: 'time' } as never,
         tablePrimaryKey: false,
+        altering: false,
       }),
     ).toBe('time(3)');
     expect(runtime.repository!.encodeBoolean!({} as never, true)).toBe(1);
@@ -120,4 +122,22 @@ describe('OceanBase runtime strategy', () => {
       undefined,
     ]);
   });
+});
+
+it('follows the connection when the driver returns JSON as text', () => {
+  const form = (connection: unknown): unknown =>
+    oceanbase.driver.createRuntime!({
+      dialect: 'oceanbase',
+      sourceConfig: {} as never,
+      config: { connection } as never,
+      capabilities: oceanbase.driver.capabilities as never,
+      getClient: () => undefined as never,
+      resolveClient: async () => undefined as never,
+    }).repository?.jsonResults;
+
+  // mysql2 parses a json column by default; `jsonStrings` turns that off and
+  // reaches the driver through `driverOptions`.
+  expect(form({})).toBe('parsed');
+  expect(form({ jsonStrings: false })).toBe('parsed');
+  expect(form({ jsonStrings: true })).toBe('text');
 });

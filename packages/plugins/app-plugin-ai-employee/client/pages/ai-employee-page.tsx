@@ -10,6 +10,7 @@ import {
   Undo2,
   X,
 } from 'lucide-react';
+import { useNotification } from '@refinedev/core';
 import { useCallback, useEffect, useState, type ReactElement } from 'react';
 
 import {
@@ -29,6 +30,7 @@ import {
   type KnowledgeBaseOption,
 } from '../ai-employee-service.js';
 import { AIEmployeeAvatar } from '../avatar.js';
+import { ConfirmDialog } from '../components/confirm-dialog.js';
 import { useT } from '../locales/index.js';
 
 type DetailTab =
@@ -178,36 +180,48 @@ function AddMenu({
   items: AIMetadataItem[];
   onAdd: (name: string) => void;
 }): ReactElement {
+  const [open, setOpen] = useState(false);
+  const disabled = items.length === 0;
   return (
-    <details className='group relative'>
-      <summary
-        className={`inline-flex list-none items-center gap-2 rounded-md px-3 py-2 text-sm font-medium marker:content-none ${items.length ? 'cursor-pointer bg-primary text-primary-foreground' : 'pointer-events-none bg-muted text-muted-foreground'}`}
+    <div
+      className='relative'
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <button
+        type='button'
+        disabled={disabled}
+        aria-expanded={open}
+        onFocus={() => setOpen(true)}
+        className={`inline-flex list-none items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${disabled ? 'pointer-events-none bg-muted text-muted-foreground' : 'cursor-pointer bg-primary text-primary-foreground'}`}
       >
         <Plus className='h-4 w-4' /> {label}
-      </summary>
-      <div className='absolute right-0 z-30 mt-1 max-h-72 min-w-72 overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md'>
-        {items.map((item) => (
-          <button
-            type='button'
-            key={item.name}
-            onClick={(event) => {
-              onAdd(item.name);
-              event.currentTarget.closest('details')?.removeAttribute('open');
-            }}
-            className='block w-full rounded-sm px-3 py-2 text-left hover:bg-accent hover:text-accent-foreground'
-          >
-            <span className='block text-sm font-medium'>
-              {item.title ?? item.name}
-            </span>
-            {item.description ? (
-              <span className='mt-1 block text-xs text-muted-foreground'>
-                {item.description}
+      </button>
+      {open && !disabled ? (
+        <div className='absolute right-0 z-30 mt-1 max-h-72 min-w-72 overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md'>
+          {items.map((item) => (
+            <button
+              type='button'
+              key={item.name}
+              onClick={() => {
+                onAdd(item.name);
+                setOpen(false);
+              }}
+              className='block w-full rounded-sm px-3 py-2 text-left hover:bg-accent hover:text-accent-foreground'
+            >
+              <span className='block text-sm font-medium'>
+                {item.title ?? item.name}
               </span>
-            ) : null}
-          </button>
-        ))}
-      </div>
-    </details>
+              {item.description ? (
+                <span className='mt-1 block text-xs text-muted-foreground'>
+                  {item.description}
+                </span>
+              ) : null}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -455,6 +469,7 @@ function ModelMultiSelect({
 export default function AIEmployeePage(): ReactElement {
   const api = useService(apiClientToken);
   const t = useT();
+  const { open } = useNotification();
   const [employees, setEmployees] = useState<AIEmployeeRecord[]>([]);
   const [selectedUsername, setSelectedUsername] = useState<string>();
   const [selected, setSelected] = useState<AIEmployeeRecord>();
@@ -471,7 +486,8 @@ export default function AIEmployeePage(): ReactElement {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [saveError, setSaveError] = useState('');
-  const [saved, setSaved] = useState(false);
+  const [pendingEmployeeUsername, setPendingEmployeeUsername] =
+    useState<string>();
 
   const dirty =
     !!selected &&
@@ -547,17 +563,53 @@ export default function AIEmployeePage(): ReactElement {
     return () => controller.abort();
   }, [api, selectedUsername]);
 
-  const selectEmployee = (username: string): void => {
-    if (username === selectedUsername) return;
-    if (dirty && !window.confirm(t('Discard unsaved changes?'))) return;
-    setSaved(false);
+  const applyEmployeeSelection = (username: string): void => {
+    setPendingEmployeeUsername(undefined);
     setTab('profile');
     setSelectedUsername(username);
   };
 
+  const selectEmployee = (username: string): void => {
+    if (username === selectedUsername) return;
+    if (dirty) {
+      setPendingEmployeeUsername(username);
+      return;
+    }
+    applyEmployeeSelection(username);
+  };
+
   const patchDraft = (patch: Partial<AIEmployeeEditableValues>): void => {
-    setSaved(false);
     setDraft((current) => (current ? { ...current, ...patch } : current));
+  };
+
+  const updateSkillNames = (update: (skills: string[]) => string[]): void => {
+    setDraft((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        skillSettings: {
+          ...current.skillSettings,
+          skills: update(current.skillSettings.skills),
+        },
+      };
+    });
+  };
+
+  const updateToolSettings = (
+    update: (
+      tools: AIEmployeeEditableValues['skillSettings']['tools'],
+    ) => AIEmployeeEditableValues['skillSettings']['tools'],
+  ): void => {
+    setDraft((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        skillSettings: {
+          ...current.skillSettings,
+          tools: update(current.skillSettings.tools),
+        },
+      };
+    });
   };
 
   const save = async (): Promise<void> => {
@@ -574,7 +626,6 @@ export default function AIEmployeePage(): ReactElement {
     }
     setSaving(true);
     setSaveError('');
-    setSaved(false);
     try {
       const updated = await updateAIEmployee(selected, draft, api);
       setSelected(updated);
@@ -584,9 +635,17 @@ export default function AIEmployeePage(): ReactElement {
           item.username === updated.username ? { ...item, ...updated } : item,
         ),
       );
-      setSaved(true);
+      open?.({
+        type: 'success',
+        message: t('AI employee saved'),
+        description: t('Your changes have been saved successfully.'),
+      });
     } catch (cause) {
-      setSaveError(cause instanceof Error ? cause.message : String(cause));
+      open?.({
+        type: 'error',
+        message: t('Unable to save changes.'),
+        description: cause instanceof Error ? cause.message : String(cause),
+      });
     } finally {
       setSaving(false);
     }
@@ -719,7 +778,7 @@ export default function AIEmployeePage(): ReactElement {
             {t('Loading employee details…')}
           </p>
         ) : (
-          <div className='mx-auto max-w-5xl space-y-6'>
+          <div className='flex min-h-[calc(100vh-9rem)] flex-col gap-6'>
             <header className='flex flex-col gap-4 rounded-xl border p-5 sm:flex-row sm:items-center'>
               <AIEmployeeAvatar
                 src={selected.avatar}
@@ -937,17 +996,16 @@ export default function AIEmployeePage(): ReactElement {
                     description={t(
                       'Can be added to or removed from this AI employee.',
                     )}
+                    defaultOpen={customSkills.length > 0}
                     action={
                       <AddMenu
                         label={t('Add skill')}
                         items={availableCustomSkills}
                         onAdd={(name) =>
-                          patchDraft({
-                            skillSettings: {
-                              ...draft.skillSettings,
-                              skills: [...configuredSkills, name],
-                            },
-                          })
+                          updateSkillNames((currentSkills) => [
+                            ...currentSkills,
+                            name,
+                          ])
                         }
                       />
                     }
@@ -964,14 +1022,11 @@ export default function AIEmployeePage(): ReactElement {
                           aria-label={`${t('Remove')} ${item.title ?? item.name}`}
                           className='rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground'
                           onClick={() =>
-                            patchDraft({
-                              skillSettings: {
-                                ...draft.skillSettings,
-                                skills: configuredSkills.filter(
-                                  (name) => name !== item.name,
-                                ),
-                              },
-                            })
+                            updateSkillNames((currentSkills) =>
+                              currentSkills.filter(
+                                (name) => name !== item.name,
+                              ),
+                            )
                           }
                         >
                           <Trash2 className='h-4 w-4' />
@@ -1041,20 +1096,16 @@ export default function AIEmployeePage(): ReactElement {
                     description={t(
                       'Created by workflow. You can add/remove and set default permissions.',
                     )}
+                    defaultOpen={customTools.length > 0}
                     action={
                       <AddMenu
                         label={t('Add tool')}
                         items={availableCustomTools}
                         onAdd={(name) =>
-                          patchDraft({
-                            skillSettings: {
-                              ...draft.skillSettings,
-                              tools: [
-                                ...configuredTools,
-                                { name, autoCall: false },
-                              ],
-                            },
-                          })
+                          updateToolSettings((currentTools) => [
+                            ...currentTools,
+                            { name, autoCall: false },
+                          ])
                         }
                       />
                     }
@@ -1087,20 +1138,17 @@ export default function AIEmployeePage(): ReactElement {
                                     type='button'
                                     key={permission}
                                     onClick={() =>
-                                      patchDraft({
-                                        skillSettings: {
-                                          ...draft.skillSettings,
-                                          tools: configuredTools.map((tool) =>
-                                            tool.name === item.name
-                                              ? {
-                                                  ...tool,
-                                                  autoCall:
-                                                    permission === 'ALLOW',
-                                                }
-                                              : tool,
-                                          ),
-                                        },
-                                      })
+                                      updateToolSettings((currentTools) =>
+                                        currentTools.map((tool) =>
+                                          tool.name === item.name
+                                            ? {
+                                                ...tool,
+                                                autoCall:
+                                                  permission === 'ALLOW',
+                                              }
+                                            : tool,
+                                        ),
+                                      )
                                     }
                                     className={`rounded px-3 py-1 text-sm ${active ? 'bg-background shadow-sm' : 'text-muted-foreground'}`}
                                   >
@@ -1116,14 +1164,11 @@ export default function AIEmployeePage(): ReactElement {
                               aria-label={`${t('Remove')} ${item.title ?? item.name}`}
                               className='rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground'
                               onClick={() =>
-                                patchDraft({
-                                  skillSettings: {
-                                    ...draft.skillSettings,
-                                    tools: configuredTools.filter(
-                                      (tool) => tool.name !== item.name,
-                                    ),
-                                  },
-                                })
+                                updateToolSettings((currentTools) =>
+                                  currentTools.filter(
+                                    (tool) => tool.name !== item.name,
+                                  ),
+                                )
                               }
                             >
                               <Trash2 className='h-4 w-4' />
@@ -1324,35 +1369,51 @@ export default function AIEmployeePage(): ReactElement {
                 {saveError}
               </p>
             ) : null}
-            {saved ? (
-              <p className='text-sm text-emerald-600'>{t('Changes saved.')}</p>
-            ) : null}
             {dirty ? (
-              <footer className='sticky bottom-0 flex justify-end gap-2 border-t bg-background/95 py-4 backdrop-blur'>
-                <button
-                  type='button'
-                  className='inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm'
-                  onClick={() => {
-                    setDraft(buildEditableValues(selected));
-                    setSaveError('');
-                  }}
-                >
-                  <Undo2 className='h-4 w-4' /> {t('Cancel')}
-                </button>
-                <button
-                  type='button'
-                  disabled={saving}
-                  className='inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50'
-                  onClick={() => void save()}
-                >
-                  <Save className='h-4 w-4' />{' '}
-                  {saving ? t('Saving…') : t('Save')}
-                </button>
+              <footer className='sticky bottom-0 z-40 mt-auto border-t bg-background/95 backdrop-blur'>
+                <div className='mx-auto flex max-w-5xl justify-end gap-2 px-4 py-4 sm:px-6 lg:px-8'>
+                  <button
+                    type='button'
+                    className='inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm'
+                    onClick={() => {
+                      setDraft(buildEditableValues(selected));
+                      setSaveError('');
+                    }}
+                  >
+                    <Undo2 className='h-4 w-4' /> {t('Cancel')}
+                  </button>
+                  <button
+                    type='button'
+                    disabled={saving}
+                    className='inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50'
+                    onClick={() => void save()}
+                  >
+                    <Save className='h-4 w-4' />{' '}
+                    {saving ? t('Saving…') : t('Save')}
+                  </button>
+                </div>
               </footer>
             ) : null}
           </div>
         )}
       </section>
+      <ConfirmDialog
+        open={pendingEmployeeUsername !== undefined}
+        title={t('Discard unsaved changes?')}
+        description={t(
+          'Your changes to this AI employee will be lost if you continue.',
+        )}
+        cancelLabel={t('Keep editing')}
+        confirmLabel={t('Discard changes')}
+        onOpenChange={(open) => {
+          if (!open) setPendingEmployeeUsername(undefined);
+        }}
+        onConfirm={() => {
+          if (pendingEmployeeUsername) {
+            applyEmployeeSelection(pendingEmployeeUsername);
+          }
+        }}
+      />
     </main>
   );
 }

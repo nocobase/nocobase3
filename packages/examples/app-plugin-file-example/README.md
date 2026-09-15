@@ -50,18 +50,18 @@ await profiles.updateOne({
 });
 ```
 
-关系写入由业务 Repository 的 writePolicy 授权：`fileExampleProfiles` 只允许 `avatar` 的 connect／disconnect，`fileExampleOrders` 只允许 `attachments` 的 connect／disconnect。上传成功后返回的 `record` 已带 `contentUrl`，页面直接用它预览。
+关系写入由业务 Repository 的 Policy 授权：`fileExampleProfiles` 只允许 `avatar` 的 connect／disconnect，`fileExampleOrders` 只允许 `attachments` 的 connect／disconnect。上传成功后返回的 `record` 已带 `contentUrl`，页面直接用它预览。
 
 演示数据由 `202609110001_seed_file_example_business` 写入：3 名员工、3 个订单，初始都没有文件，方便按需上传。
 
 ## 路由
 
-示例 Server 通过 `defineFileRepositoryApiRoutes()` 声明三个文件仓库，使用 `main` 数据库连接、`local` 盘、`stream` 模式：
+示例 Server 通过 `defineFileRepositoryApiRoutes()` 声明三个文件仓库，使用 `main` 数据库连接、`local` 盘、`stream` 模式。三者共用同一份 Policy：`read: true`、`delete: true`，`create` 是一个空白名单节点而不是 `false` —— 上传本身走的就是 create，节点为 `false` 会连上传一起拒绝，而空白名单只拒绝调用方自带字段的文件记录。
 
 - `POST /api/attachments:<action>`、`POST /api/profileAvatars:<action>`、`POST /api/orderAttachments:<action>`：findMany、findOne、count、exists、deleteOne、uploadOne、uploadMany。
 - `GET /uploads/attachments/<uuid>.<ext>`、`GET /uploads/profile-avatars/<uuid>.<ext>`、`GET /uploads/order-attachments/<uuid>.<ext>`：下载完整文件；无扩展名省略后缀。
 
-业务仓库通过 `defineRepositoryApiRoutes()` 声明，只暴露读接口和带 writePolicy 的 `updateOne`：
+业务仓库通过 `defineRepositoryApiRoutes()` 声明，只暴露读接口和 `updateOne`，可写字段与关系操作由各自的 Policy 限定：
 
 - `POST /api/fileExampleProfiles:<action>`、`POST /api/fileExampleOrders:<action>`。
 

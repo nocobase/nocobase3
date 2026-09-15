@@ -3,13 +3,20 @@ import { symlink, mkdir } from 'node:fs/promises';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import type { Config } from '@oclif/core';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { loadTestConfig, runCommand } from './helpers.ts';
 import {
   normalizePluginPackageNames,
   planPluginUpdate,
 } from '../src/lib/plugin-update.ts';
 
 const created: string[] = [];
+let config: Config;
+
+beforeAll(async () => {
+  config = await loadTestConfig();
+});
 
 afterEach(async () => {
   await Promise.all(
@@ -115,6 +122,63 @@ describe('planPluginUpdate', () => {
 
     expect(plan.packageManager).toBe('yarn');
     expect(plan.args[0]).toBe('up');
+  });
+});
+
+describe('plugin update command selection', () => {
+  it.each([
+    { selectors: [], expected: ['alpha', 'beta'] },
+    { selectors: ['@nocobase/app-plugin-alpha'], expected: ['alpha'] },
+    { selectors: ['alpha'], expected: ['alpha'] },
+  ])('selects $expected with $selectors', async ({ selectors, expected }) => {
+    const appRoot = await createApp(
+      ['@nocobase/app-plugin-alpha', '@nocobase/app-plugin-beta'],
+      { packageManager: 'pnpm@11.0.0' },
+    );
+    const result = await runCommand(config, 'plugin:update', [
+      ...selectors,
+      '--dir',
+      appRoot,
+      '--dry-run',
+      '--json',
+    ]);
+    const packageNames = expected.map((name) => `@nocobase/app-plugin-${name}`);
+
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      ok: true,
+      operation: 'plugin:update',
+      result: {
+        mode: 'dry-run',
+        packageNames,
+        commands: [
+          {
+            command: 'pnpm',
+            args: ['update', ...packageNames],
+            cwd: appRoot,
+          },
+        ],
+      },
+    });
+  });
+
+  it('rejects an unregistered positional name instead of updating all plugins', async () => {
+    const appRoot = await createApp(['@nocobase/app-plugin-alpha']);
+
+    await expect(
+      runCommand(config, 'plugin:update', [
+        '@nocobase/app-plugin-missing',
+        '--dir',
+        appRoot,
+        '--dry-run',
+      ]),
+    ).rejects.toThrow('Not registered in this app');
+  });
+
+  it('accepts an optional name argument and exposes no plugin flag', () => {
+    const command = config.findCommand('plugin:update', { must: true });
+
+    expect(command.args.name.required).toBe(false);
+    expect(command.flags).not.toHaveProperty('plugin');
   });
 });
 

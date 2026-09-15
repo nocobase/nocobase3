@@ -40,6 +40,8 @@ async function loadAIConfig(value: unknown): Promise<AppConfig> {
       aiEmployee: { storage: {} },
       aiKnowledgeBase: { storage: {}, vectorDatabases: [], manifests: [] },
       llmServices: [],
+      skills: { paths: [] },
+      mcpServers: {},
     },
   });
   return config;
@@ -57,7 +59,9 @@ describe('AI application config', () => {
         vectorDatabases: [],
         manifests: [],
       },
+      skills: { paths: [] },
       llmServices: [],
+      mcpServers: {},
     });
   });
 
@@ -116,7 +120,8 @@ describe('AI application config', () => {
           storage: { disk: ['local', 'archive'] },
           vectorDatabases: [
             {
-              name: 'pgvector1',
+              key: 'pgvector1',
+              name: 'Primary PGVector',
               provider: 'NocobaseDefaultPGVectorProvider',
               databaseSpec: 'PGVector',
               connection: {
@@ -130,7 +135,7 @@ describe('AI application config', () => {
               enabled: true,
             },
             {
-              name: 'normalized-by-knowledge-base',
+              key: 'normalized-by-knowledge-base',
               connection: {
                 host: 'database.internal',
                 port: 5432,
@@ -157,7 +162,8 @@ describe('AI application config', () => {
       storage: { disk: ['local', 'archive'] },
       vectorDatabases: [
         {
-          name: 'pgvector1',
+          key: 'pgvector1',
+          name: 'Primary PGVector',
           provider: 'NocobaseDefaultPGVectorProvider',
           databaseSpec: 'PGVector',
           connection: {
@@ -171,7 +177,7 @@ describe('AI application config', () => {
           enabled: true,
         },
         {
-          name: 'normalized-by-knowledge-base',
+          key: 'normalized-by-knowledge-base',
           connection: {
             host: 'database.internal',
             port: 5432,

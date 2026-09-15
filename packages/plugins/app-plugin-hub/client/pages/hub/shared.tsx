@@ -1,12 +1,18 @@
 import { AlertCircle, X } from 'lucide-react';
 import { Badge } from '../../components/ui/badge.js';
-import { Alert, AlertDescription } from '../../components/ui/alert.js';
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from '../../components/ui/alert.js';
 import { Avatar, AvatarFallback } from '../../components/ui/avatar.js';
 import { Button } from '../../components/ui/button.js';
 import {
   Dialog as UiDialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '../../components/ui/dialog.js';
@@ -18,20 +24,41 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '../../components/ui/empty.js';
+import { useTranslation } from '@nocobase/i18n/client';
 import { type ReactElement, type ReactNode } from 'react';
-import { initials, stateLabel } from './utils.js';
+import {
+  appStatusLabel,
+  initials,
+  type ReadableError,
+  stateLabel,
+  type AppManagementStatus,
+} from './utils.js';
 
 export function AppDialog({
   title,
   description,
   onClose,
+  subheader,
   children,
+  footer,
+  footerClassName,
   wide = false,
 }: {
   readonly title: string;
   readonly description: string;
   readonly onClose: () => void;
-  readonly children: ReactNode;
+  /**
+   * Controls that stay put while the body scrolls, such as a wizard's step indicator.
+   *
+   * Anything a reader needs in order to act on the body belongs here rather than in it — inside the body it
+   * scrolls out of reach exactly when the content is long enough to need it.
+   */
+  readonly subheader?: ReactNode;
+  /** The scrolling body. A confirmation that asks in its description alone may leave it out. */
+  readonly children?: ReactNode;
+  /** Actions for this dialog. Passing them here pins them below the scrolling body rather than at the end of it. */
+  readonly footer?: ReactNode;
+  readonly footerClassName?: string;
   readonly wide?: boolean;
 }): ReactElement {
   return (
@@ -44,28 +71,47 @@ export function AppDialog({
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
-        {children}
+        {subheader ? <div className='mb-5 shrink-0'>{subheader}</div> : null}
+        {children ? <DialogBody>{children}</DialogBody> : null}
+        {footer ? (
+          <DialogFooter className={footerClassName}>{footer}</DialogFooter>
+        ) : null}
       </DialogContent>
     </UiDialog>
   );
 }
 
 export function ErrorBanner({
+  error,
   message,
   onClose,
 }: {
-  readonly message: string;
+  readonly error?: ReadableError;
+  readonly message?: string;
   readonly onClose?: () => void;
 }): ReactElement {
+  const { title, description, technicalMessage } = useErrorCopy(error, message);
+  const { t } = useTranslation('@nocobase/app-plugin-hub');
   return (
     <Alert className='mb-5 border-destructive/30 bg-destructive/5 text-destructive'>
       <AlertCircle className='size-4 shrink-0' />
-      <AlertDescription className='text-destructive'>
-        {message}
+      <AlertDescription className='min-w-0 text-destructive'>
+        {title ? (
+          <AlertTitle className='text-destructive'>{title}</AlertTitle>
+        ) : null}
+        <p className={title ? 'mt-1' : undefined}>{message ?? description}</p>
+        {technicalMessage ? (
+          <TechnicalErrorDetails
+            error={error}
+            technicalMessage={technicalMessage}
+          />
+        ) : null}
       </AlertDescription>
       {onClose ? (
         <Button
-          aria-label='Dismiss error'
+          aria-label={t('common.dismissError', {
+            defaultValue: 'Dismiss error',
+          })}
           className='absolute top-1 right-1'
           onClick={onClose}
           size='icon'
@@ -75,6 +121,149 @@ export function ErrorBanner({
         </Button>
       ) : null}
     </Alert>
+  );
+}
+
+export function ErrorDialog({
+  error,
+  onClose,
+}: {
+  readonly error: ReadableError;
+  readonly onClose: () => void;
+}): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-hub');
+  const { title, description, technicalMessage } = useErrorCopy(error);
+  return (
+    <AppDialog
+      title={
+        title ??
+        t('errors.unexpectedTitle', {
+          defaultValue: 'Something went wrong',
+        })
+      }
+      description={description}
+      onClose={onClose}
+    >
+      <div className='mt-6 space-y-5'>
+        {technicalMessage ? (
+          <TechnicalErrorDetails
+            error={error}
+            technicalMessage={technicalMessage}
+          />
+        ) : null}
+        <div className='flex justify-end'>
+          <Button onClick={onClose}>
+            {t('common.close', { defaultValue: 'Close' })}
+          </Button>
+        </div>
+      </div>
+    </AppDialog>
+  );
+}
+
+function useErrorCopy(
+  error?: ReadableError,
+  message?: string,
+): {
+  readonly title: string | undefined;
+  readonly description: string;
+  readonly technicalMessage: string | undefined;
+} {
+  const { t } = useTranslation('@nocobase/app-plugin-hub');
+  const isInvalidArtifact = error?.code === 'INVALID_ARTIFACT';
+  const isArtifactVersionMismatch = error?.code === 'ARTIFACT_VERSION_MISMATCH';
+  const isRestartFailed = error?.code === 'RESTART_FAILED';
+  const isForbidden = error?.code === 'FORBIDDEN' || error?.status === 403;
+  const isNotFound = error?.code === 'NOT_FOUND' || error?.status === 404;
+  const title = isInvalidArtifact
+    ? t('errors.invalidArtifactTitle', {
+        defaultValue: 'Release artifact could not be uploaded',
+      })
+    : isArtifactVersionMismatch
+      ? t('errors.artifactVersionMismatchTitle', {
+          defaultValue: 'Release does not match this application',
+        })
+      : isRestartFailed
+        ? t('errors.restartFailedTitle', {
+            defaultValue: 'Restart failed',
+          })
+        : isForbidden
+          ? t('errors.forbiddenTitle', {
+              defaultValue: 'You do not have permission to perform this action',
+            })
+          : isNotFound
+            ? t('errors.notFoundTitle', {
+                defaultValue: 'The requested resource was not found',
+              })
+            : error
+              ? t('errors.unexpectedTitle', {
+                  defaultValue: 'Something went wrong',
+                })
+              : undefined;
+  const description = isInvalidArtifact
+    ? t('errors.invalidArtifactDescription', {
+        defaultValue:
+          'Please upload a .tar.gz file generated by pnpm build --tar. The artifact must include dist/package.json and dist/server/embedded.js.',
+      })
+    : isArtifactVersionMismatch
+      ? t('errors.artifactVersionMismatchDescription', {
+          defaultValue:
+            'Build the release from this application source, then upload the generated artifact again.',
+        })
+      : isRestartFailed
+        ? t('errors.restartFailedDescription', {
+            defaultValue:
+              'The application could not be restarted. Check its deployment status and try again.',
+          })
+        : isForbidden
+          ? t('errors.forbiddenDescription', {
+              defaultValue:
+                'Your account does not have permission to complete this action.',
+            })
+          : isNotFound
+            ? t('errors.notFoundDescription', {
+                defaultValue:
+                  'The requested application or release is no longer available.',
+              })
+            : error && !error.isTechnical
+              ? error.message
+              : t('errors.unexpectedDescription', {
+                  defaultValue:
+                    'The operation could not be completed. Try again. If the problem continues, share the technical details with an administrator.',
+                });
+  const technicalMessage =
+    error &&
+    (error.isTechnical || error.technicalMessage !== error.message) &&
+    error.technicalMessage !== (message ?? description)
+      ? error.technicalMessage
+      : undefined;
+  return { title, description, technicalMessage };
+}
+
+function TechnicalErrorDetails({
+  error,
+  technicalMessage,
+}: {
+  readonly error?: ReadableError;
+  readonly technicalMessage: string;
+}): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-hub');
+  return (
+    <details className='mt-2 text-xs text-destructive/80'>
+      <summary className='cursor-pointer select-none'>
+        {t('errors.showTechnicalDetails', {
+          defaultValue: 'Show technical details',
+        })}
+      </summary>
+      <pre className='mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-md bg-destructive/10 p-2 font-mono leading-5'>
+        {error?.code
+          ? `${t('errors.code', {
+              code: error.code,
+              defaultValue: `Error code: ${error.code}`,
+            })}\n${technicalMessage}`
+          : technicalMessage}
+      </pre>
+    </details>
   );
 }
 
@@ -170,24 +359,45 @@ export function StatusBadge({
 }: {
   readonly state: string;
 }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-hub');
+  const statusKeys: Readonly<Record<string, string>> = {
+    'host-unavailable': 'status.hostUnavailable',
+    'deployment-pending': 'status.deploymentPending',
+    'not-deployed': 'status.notDeployed',
+    ready: 'status.ready',
+    stopped: 'status.stopped',
+    unknown: 'status.unknown',
+    failed: 'status.failed',
+    running: 'status.running',
+  };
+  const statusKey = statusKeys[state];
+  const label =
+    statusKey && state in statusKeys
+      ? t(statusKey, {
+          defaultValue: appStatusLabel(state as AppManagementStatus),
+        })
+      : stateLabel(state);
   const style =
     state === 'running'
       ? 'bg-emerald-500/10 text-emerald-700'
       : state === 'failed'
         ? 'bg-destructive/10 text-destructive'
-        : state === 'pending' || state === 'queued' || state === 'deploying'
+        : state === 'pending' ||
+            state === 'queued' ||
+            state === 'deploying' ||
+            state === 'deployment-pending'
           ? 'bg-amber-500/10 text-amber-700'
           : state === 'succeeded'
             ? 'bg-emerald-500/10 text-emerald-700'
-            : state === 'stopped'
+            : state === 'stopped' || state === 'ready'
               ? 'bg-sky-500/10 text-sky-700'
               : 'bg-muted text-muted-foreground';
   return (
     <Badge className={`self-center gap-1.5 whitespace-nowrap ${style}`}>
       <span
-        className={`size-1.5 rounded-full ${state === 'running' || state === 'succeeded' ? 'bg-emerald-500' : state === 'failed' ? 'bg-destructive' : state === 'pending' || state === 'queued' || state === 'deploying' ? 'bg-amber-500' : state === 'stopped' ? 'bg-sky-500' : 'bg-neutral-400'}`}
+        className={`size-1.5 rounded-full ${state === 'running' || state === 'succeeded' ? 'bg-emerald-500' : state === 'failed' ? 'bg-destructive' : state === 'pending' || state === 'queued' || state === 'deploying' || state === 'deployment-pending' ? 'bg-amber-500' : state === 'stopped' || state === 'ready' ? 'bg-sky-500' : 'bg-neutral-400'}`}
       />
-      {stateLabel(state)}
+      {label}
     </Badge>
   );
 }

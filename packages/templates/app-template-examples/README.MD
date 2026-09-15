@@ -20,7 +20,7 @@ Before publication, from the source repository root:
 
 ```bash
 pnpm --filter @nocobase/create-app build
-node packages/tools/create-app/bin/run.js my-examples --template ./packages/templates/app-template-examples --db-dialect sqlite
+node packages/tools/create-app/bin/run.js my-examples --template ./packages/templates/app-template-examples
 ```
 
 The scaffolder creates an independent configuration and database. Never copy another application's `config.yml`, `.env`, `storage/`, or generated `dist/` into this template.
@@ -41,13 +41,48 @@ pnpm dev
 
 `pnpm dev` starts the API server and the Vite client together, picks free ports if the defaults are taken, and prints the URL to open. Use the printed URL rather than assuming a port.
 
+### Develop against another backend
+
+Set `PROXY_TARGET_URL` to the backend application's public URL, including its mount path but excluding `/api`:
+
+```bash
+# Example only: replace /main with the backend's actual public mount path.
+PROXY_TARGET_URL=http://127.0.0.1:13000/main pnpm dev
+```
+
+**`/main` is the fallback, not a required or fixed path.** Local development reads `APP_BASE_PATH` from the command-line environment, then `.env.local`, then `.env`, falling back to `/main` when unset. The remote path comes from `PROXY_TARGET_URL`; it is not inferred from the local `APP_BASE_PATH`. Read the target application's actual public URL before constructing this value. If it is mounted at the origin root, use the origin URL without a mount path.
+
+For example, these applications can use different paths:
+
+```bash
+APP_BASE_PATH=/local PROXY_TARGET_URL=http://127.0.0.1:13000/crm pnpm dev
+# /local/api/users -> http://127.0.0.1:13000/crm/api/users
+# /local/ws        -> ws://127.0.0.1:13000/crm/ws
+```
+
+This runs Vite with your local client source and proxies API and WebSocket requests to that application. It does not start a local backend, allocate its port, wait for its health endpoint, or watch server configuration/plugins. Existing `beforeDev` hooks still run to prepare client artifacts. Open the printed **Local** URL (the Vite port); **Backend** identifies the target.
+
+The target can be another local project running `pnpm dev`, or an HTTP(S) deployment. Use its printed application URL, not its Vite URL. Local `APP_BASE_PATH` and the remote mount path may differ: local `/main/api/users` can map to remote `/crm/api/users`. Trailing slashes are accepted. Credentials, query strings, and fragments are not accepted in the target URL.
+
+Requests use the remote backend's data and permissions, including writes. Only `<APP_BASE_PATH>/api` and `<APP_BASE_PATH>/ws` are proxied; application root callbacks and absolute URLs returned by the backend keep their original routing. Cookie domain/path scopes are adapted to the local application. HTTP and WebSocket requests whose Origin matches the local request's protocol and Host are forwarded with the target Origin, so browser authentication and realtime connections pass the backend's same-origin checks. Same-origin Referer URLs within the local app base are mapped to the target app base as well; requests without Origin keep it absent. Other origins and referers remain unchanged and subject to backend validation. HTTPS-only cookie requirements remain enforced, and authentication flows using explicit callback URLs still require appropriate callback configuration.
+
+The variable can also be set in `.env` or `.env.local`; the command-line environment takes precedence. Restart `pnpm dev` after changing the target. Without this variable, development still starts both the local backend and Vite. Production builds ignore it.
+
+Use `APP_SERVER_PORT` to choose the local application port in either development mode. With `PROXY_TARGET_URL` set, it selects Vite's preferred port (5173 when unset); without a proxy target, it selects the local backend's preferred port (13000 when unset), while Vite still starts from 5173. If the preferred port is occupied, development selects the next available port and prints the actual URL. The remote backend address is always taken from `PROXY_TARGET_URL`.
+
+```bash
+APP_SERVER_PORT=13399 PROXY_TARGET_URL=http://127.0.0.1:13000/main pnpm dev
+# Local: http://127.0.0.1:13399/main/ when 13399 is available.
+# Replace /main with the remote application's actual mount path.
+```
+
 ### Review your configuration
 
-`config.yml` was written when the project was created, carrying the database you chose and a generated `auth.secret`. It gets you running; adjust it for your situation:
+`config.yml` was generated from `config.example.yml` when the project was created, with `auth.secret` and `session.secret` filled in. It gets you running on SQLite; adjust it for your situation:
 
-- **Database.** Point the connection at the database you actually intend to use — dialect, host, port, and credentials.
+- **Database.** SQLite needs no server and works as it is. To use another one, register its dialect in `server/config/database.ts`, add the matching `@nocobase/db-*` package, and point the connection here at it — host, port, and credentials. Drivers are code rather than settings, so a dialect the application does not register cannot be introduced from this file.
 - **Where the application is served.** `APP_BASE_PATH` is the public mount path, `/main` by default, so the development URL looks like `http://127.0.0.1:13000/main/`. `APP_SERVER_PORT` and `APP_SERVER_HOST` change what the server binds to.
-- **Anything a feature you enable requires** — mail delivery, IM webhooks, storage. `config.example.yml` documents common deployment options, including sections your `config.yml` does not yet have.
+- **Anything a feature you enable requires** — mail delivery, IM webhooks, storage. Every section is already here, commented out where it is optional.
 
 `config.yml` is gitignored because it holds your `auth.secret`. Deploy it through your secret management rather than committing it.
 
@@ -91,9 +126,11 @@ database/
 ├── main/
 │   ├── migrations/      Schema history for the main connection
 │   └── seeds/           Initial example data
-└── analytics/
-    ├── migrations/      Independent analytics schema
-    └── seeds/           Channel, campaign and daily metric examples
+├── analytics/
+│   ├── migrations/      Independent analytics schema
+│   └── seeds/           Channel, campaign and daily metric examples
+└── externalCrm/
+    └── collections/     metadata.json per Collection: the external CRM's metadata source
 
 tests/                   Unit and integration tests
 e2e/                     Browser tests needing a real server
@@ -117,10 +154,11 @@ The three files named `runtime.ts`, `plugins.ts`, and `routes.ts` are compositio
 
 ### Database
 
-| Script         | What it does                                                                                                                                                                                    |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm migrate` | Apply pending migrations from your `database/main/migrations/` and from every registered plugin; `pnpm migrate --fresh --force` clears managed schema objects and rebuilds them from migrations |
-| `pnpm seed`    | Run seeds from `database/main/seeds/` and from registered plugins                                                                                                                               |
+| Script                      | What it does                                                                                                                                                                                        |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm migrate`              | Apply pending migrations from your `database/main/migrations/` and from every registered plugin; `pnpm migrate --fresh --force` clears managed schema objects and rebuilds them from migrations     |
+| `pnpm seed`                 | Run seeds from `database/main/seeds/` and from registered plugins                                                                                                                                   |
+| `pnpm collections:generate` | Write `collection.json`, `metadata.json` and `schema.json` for every Collection under `database/<connection>/collections/`, plus a `_manifest.json`; `--check` fails when the files are out of date |
 
 Migrations also run automatically on startup while `database.connections.main.migrations.autoRun` is `true` in `config.yml`. Run `pnpm migrate` explicitly when you want to apply a schema change without restarting.
 
@@ -191,6 +229,86 @@ Requests use `POST <app-base>/api/<repository>:<action>`, for example
 The response is wrapped in `{ "data": ... }`. Use the application's authenticated
 API client, for example `api.repository('analyticsChannels').findMany({ limit: 10 })`.
 
+### External database example
+
+Not every database an application reads is one it owns. The `externalCrm`
+connection in `server/config/database.ts` shows the shape of one that is not:
+`schemaManagement: 'external'` tells NocoBase to read the schema and never
+change it, and `naming` strips the CRM's `crm_` table prefix when mapping
+tables to logical Collection names. No migrations or seeds run against it, and
+the Builder refuses DDL on it.
+
+What the schema cannot say — titles, descriptions, and which column is a
+relation — comes from `database/externalCrm/collections/<name>/metadata.json`.
+That is the default metadata source for an external connection, so nothing has
+to be configured; `metadataStore` can point at another collections directory
+when metadata is kept elsewhere. The files are the source, not generated
+output: the workflow is `pnpm collections:generate --connection externalCrm`
+to scaffold one `metadata.json` per table with an empty document, fill in the
+documents by hand, and generate again so `collection.json` reflects them.
+Dropping a table removes its generated files but keeps its `metadata.json`,
+which the command reports as an orphan.
+
+The connection points at `storage/external-crm.sqlite` so the example runs
+without a real CRM. `server/providers/external-crm.ts` plays the part of the
+foreign system: when the connection is the SQLite stand-in and the tables are
+missing, it creates `crm_customers` and `crm_orders` with the raw client and
+inserts three customers and four orders. Point the connection at an actual
+database in `config.yml` and the provider does nothing.
+
+Open **External CRM** from the homepage or navigation (`/external-crm`). The
+page in `client/pages/external-crm.tsx` lists the CRM's orders with their
+customers, filtered by status, entirely through the read-only routes below; it
+addresses everything by logical name and never sees the `crm_` table prefix.
+
+`server/routes/external-crm.ts` exposes the two Collections read-only through
+`defineRepositoryApiRoutes`, bound to `externalCrm`:
+
+| Repository API name | Collection  |
+| ------------------- | ----------- |
+| `crmCustomers`      | `customers` |
+| `crmOrders`         | `orders`    |
+
+Each supports `findMany` (maximum 100), `findOne`, `count`, `exists`,
+`aggregate` and `groupBy` for signed-in users; write actions are not exposed.
+Logical names work as they do for managed tables — filter on `status`, sort by
+`id`, select `orderNo` and include the `customer` relation — because the
+Repository resolves them through the connection's naming and metadata. For
+example, `POST /main/api/crmOrders:findMany` with:
+
+```json
+{
+  "filter": { "status": "paid" },
+  "sort": {
+    "kind": "sort",
+    "version": 1,
+    "items": [{ "kind": "field", "path": ["id"], "direction": "asc" }]
+  },
+  "select": {
+    "kind": "select",
+    "version": 1,
+    "root": {
+      "kind": "selection",
+      "fields": ["id", "orderNo", "totalAmount"],
+      "includes": [
+        {
+          "kind": "include",
+          "relation": "customer",
+          "select": { "kind": "selection", "fields": ["id", "displayName"] }
+        }
+      ]
+    }
+  }
+}
+```
+
+`pnpm collections:generate --connection externalCrm` writes `collection.json`
+and `schema.json` next to each `metadata.json` under
+`database/externalCrm/collections/`; the manifest records
+`schemaManagement: external` and no migration head, since the CRM has no
+migration history this application knows about. Only the `metadata.json` files
+are committed here.
+
 ### Checks
 
 | Script               | What it does                                                 |
@@ -203,19 +321,30 @@ API client, for example `api.repository('analyticsChannels').findMany({ limit: 1
 | `pnpm fix`           | Fix lint problems, then format                               |
 | `pnpm check`         | Everything above plus a build; what to run before committing |
 
-`pnpm nocobase app i18n:check` reports a language declared in `client/locales/` but not `server/locales/`, or the reverse. The browser builds its language picker from one and the server decides what it answers in from the other, so a language on only one side is one the interface offers and the server then rejects.
+`pnpm nocobase app i18n:check` reports a language declared in `client/locales/` but not `server/locales/`, or the reverse, and exits nonzero until the lists align. The browser builds its language picker from the client list, so a client-only language still works in the interface; server messages fall back to English and the language control explains that fallback. Add the matching server locale when server-produced text should use the same language.
 
 ### Plugins
 
 Plugins add features to your application. Let these commands edit `package.json`, `client/plugins.ts`, and `server/plugins.ts` for you rather than editing those files by hand.
 
-| Script                          | What it does                                              |
-| ------------------------------- | --------------------------------------------------------- |
-| `pnpm plugin:register <name>`   | Install a plugin and wire it into the client and server   |
-| `pnpm plugin:unregister <name>` | Remove a plugin and its wiring                            |
-| `pnpm plugin:update`            | Upgrade registered plugins and re-sync their agent skills |
-| `pnpm plugin:inspect <name>`    | Report a plugin's registration state; read-only           |
-| `pnpm plugin:skills:sync`       | Re-copy plugin agent skills into `.agents/skills/`        |
+| Script                          | What it does                                             |
+| ------------------------------- | -------------------------------------------------------- |
+| `pnpm plugin:register <name>`   | Install a plugin and wire it into the client and server  |
+| `pnpm plugin:unregister <name>` | Remove a plugin and its wiring                           |
+| `pnpm plugin:update [name]`     | Upgrade one or all registered plugins and re-sync skills |
+| `pnpm plugin:inspect <name>`    | Report a plugin's registration state; read-only          |
+| `pnpm plugin:skills:sync`       | Re-copy plugin agent skills into `.agents/skills/`       |
+
+Use a full package name, as with `plugin:register` and `plugin:unregister`; short names such as `authentication` also work. The optional name is a positional argument, not `--plugin`.
+
+```bash
+pnpm plugin:update @nocobase/app-plugin-authentication  # Update one registered plugin
+pnpm plugin:update authentication                      # Equivalent short name
+pnpm plugin:update                                     # Update all registered plugins
+pnpm plugin:update @nocobase/app-plugin-authentication --dry-run  # Preview only
+```
+
+Without a name, the command collects registered plugins from `client/plugins.ts`, `server/plugins.ts`, and `cli/plugins.ts`. It uses the application's package manager; with pnpm, `update` follows the declared version ranges without `--latest`. An unregistered name is rejected, and an application with no registered plugins is left unchanged. After a successful package update, all registered plugins' agent skills are re-synchronized, even when only one package was selected.
 
 Ordering in `client/plugins.ts` and `server/plugins.ts` is contribution order, and a plugin is enabled by appearing in the array. Reorder entries or pass a plugin its options by hand; leave adding and removing entries to the commands.
 
@@ -319,7 +448,7 @@ Rebuild with a matching `--target` and `--node-version`. ABI 115 is Node 20, 127
 
 ## Configuration
 
-`server/config/` and `client/config/` contain editable TypeScript defaults. `config.yml` holds environment-specific overrides, written for you at generation time and yours to edit from there. It is gitignored because it carries your `auth.secret`; deploy it through your secret management rather than committing it. `config.example.yml` documents common deployment options, including sections the generated file leaves out.
+`server/config/` and `client/config/` contain editable TypeScript defaults. `config.yml` holds environment-specific overrides, written for you at generation time and yours to edit from there. It is gitignored because it carries your `auth.secret`; deploy it through your secret management rather than committing it. It is generated from `config.example.yml`, which is kept beside it as the reference for every option.
 
 Two settings decide where the application is reachable:
 

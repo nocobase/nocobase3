@@ -6,7 +6,6 @@ import { EMPTY_ARRAY } from '@/lib/constants';
 import { SurfaceLayout, type SurfaceCopy } from './surface-layout.js';
 
 const SETTINGS_COPY: SurfaceCopy = {
-  surface: 'settings',
   title: 'Settings',
   pathPrefix: '/settings',
   emptyTitle: 'No settings available',

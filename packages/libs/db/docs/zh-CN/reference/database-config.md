@@ -117,9 +117,27 @@ const db = createDatabaseManager({
 
 - Managed Connection 未显式配置时，自动使用数据库内部表持久化 Metadata。
 - External Connection 必须显式提供 Metadata Store。
+- `metadataStore` 也接受声明式的 `{ type: 'directory', directory }`，Manager 在首次创建连接时解析为 `DirectoryCollectionMetadataStore`；`directory` 应为绝对路径。
 - `onCollectionMetadataInvalidationError` 只处理 Metadata 已提交后发生的缓存失效错误；它不会回滚已持久化的文档。
 
 Store 的选择和读写边界见 [Collection Metadata](../collection-metadata/overview.md)。
+
+## 声明记账表
+
+`collections.list()` 和 `scan()` 会跳过 NocoBase 自己的记账表：migration 与 seed 的历史表和锁表、Collection Metadata 表。默认名称都带 `__nocobase_` 前缀，按前缀识别。给 Migrator 或 Seeder 配了不带前缀的 `tableName` 或 `lockTableName` 时，连接无从得知，需要在连接上用 `internalTables` 声明：
+
+```ts
+const db = createDatabaseManager({
+  connections: {
+    main: sqlite({
+      filename: 'storage/main.sqlite',
+      internalTables: ['legacy_history', 'legacy_lock'],
+    }),
+  },
+});
+```
+
+否则这些表会被当成逻辑 Collection 返回。在 NocoBase 应用里，app-server 会根据连接的 `migrations`、`seeds` 配置自动填充这一项。
 
 ## 只定义配置
 

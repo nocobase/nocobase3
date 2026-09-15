@@ -6,6 +6,9 @@ import {
   type AppApiRouteContribution,
 } from '@nocobase/app-server/router';
 import { Hono } from 'hono';
+import { BASE_LOCALE } from '@nocobase/i18n';
+
+import type { ServerLocaleResult } from '../locale-result.js';
 
 /**
  * The language endpoints: what is available, and which one this session wants.
@@ -32,22 +35,24 @@ export const i18nApiRoutes: AppApiRouteContribution<AppPluginApplication> =
           ? (body as { locale?: unknown }).locale
           : undefined;
 
-      if (typeof requested !== 'string') {
+      if (typeof requested !== 'string' || !requested.trim()) {
         return context.json({ error: 'A locale is required.' }, 400);
       }
 
-      // The value arrives from the browser, so it is checked against the configured list rather than stored as sent.
+      // Client and server locale lists are independent. A client-only language must not prevent a browser switch.
       const supported = runtime
         .getLocales()
         .find((locale) => locale === requested);
-      if (!supported) {
-        return context.json({ error: `Unsupported locale: ${requested}` }, 400);
-      }
+      const locale = supported ?? BASE_LOCALE;
 
       const session = getContextSession(context);
-      if (session) await session.set(LOCALE_SESSION_KEY, supported);
+      if (session) await session.set(LOCALE_SESSION_KEY, locale);
 
-      return context.json({ locale: supported });
+      return context.json({
+        locale,
+        requestedLocale: requested,
+        fallback: supported === undefined,
+      } satisfies ServerLocaleResult);
     });
 
     return router;

@@ -1,0 +1,6 @@
+interface:
+  display_name: 'NocoBase Database Integration Testing'
+  short_description: 'Choose and run NocoBase v3 dialect integration suites'
+  default_prompt: 'Use $nocobase-db-integration-testing to decide which database dialect integration suites this change requires and how to run them.'
+policy:
+  allow_implicit_invocation: true

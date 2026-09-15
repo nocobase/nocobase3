@@ -104,6 +104,7 @@ describe('the default locale published to the browser', () => {
     const html = await fetchSpaIndex(config);
 
     expect(html).toContain('"i18n":{"defaultLocale":"zh-CN"}');
+    expect(html).toContain('<html lang="zh-CN">');
   });
 
   it('is omitted when the application registers no i18n config', async () => {
@@ -112,6 +113,7 @@ describe('the default locale published to the browser', () => {
     const html = await fetchSpaIndex(config);
 
     expect(html).not.toContain('"i18n"');
+    expect(html).toContain('<html lang="en-US">');
   });
 });
 
@@ -140,7 +142,11 @@ async function createSpaAppConfig(
 ): Promise<AppConfig> {
   const root = mkdtempSync(path.join(tmpdir(), 'nocobase-spa-index-'));
   temporaryDirectories.push(root);
-  writeFileSync(path.join(root, 'index.html'), '<main></main>', 'utf8');
+  writeFileSync(
+    path.join(root, 'index.html'),
+    '<html lang="en-US"><main></main></html>',
+    'utf8',
+  );
 
   const config = new AppConfig();
   config.load(

@@ -1,5 +1,338 @@
 # @nocobase/app-template-examples
 
+## 0.1.0-beta.8
+
+### Patch Changes
+
+- c258b92: Declare `auth.secret` and `session.secret` as live keys in `config.example.yml` rather than commented-out placeholders, and describe how a generated application's `config.yml` and database now come about.
+
+  `@nocobase/create-app` generates `config.yml` from this file and fills the two secrets in. Leaving them commented meant the generator had to uncomment them, which made the exact comment syntax of this file part of its contract; a live key with a placeholder value is a target it can simply replace.
+
+  The other way this file is used — copying it to `config.yml` by hand — is covered separately: the placeholder is a non-empty string that would otherwise pass for a configured secret, so the runtime now refuses it by name and says how to generate a replacement.
+
+  The generator no longer asks which database to use, so "Review your configuration" in each README no longer says `config.yml` carries the database you chose. An application starts on SQLite, and another database means registering its dialect in `server/config/database.ts` and adding the matching `@nocobase/db-*` package — drivers are code rather than settings, and a dialect the application does not register cannot be introduced from `config.yml`.
+
+  The Hub's upgrade skill no longer describes `app-dist/`, which the generator stopped creating and nothing reads.
+
+- Updated dependencies [c258b92]
+  - @nocobase/app-server@1.0.0-beta.14
+  - @nocobase/app-plugin-authentication@0.1.0-beta.13
+
+## 0.1.0-beta.7
+
+### Patch Changes
+
+- c01baf6: Resolve application namespace aliases in React translations, synchronize the document language at startup and on changes, and inject the configured default language into served HTML. Allow client-only language selections with an English server fallback and an informational toast, and standardize documented locale checks on `pnpm nocobase app i18n:check`.
+- Updated dependencies [154e09e]
+- Updated dependencies [154e09e]
+- Updated dependencies [154e09e]
+- Updated dependencies [154e09e]
+- Updated dependencies [c01baf6]
+  - @nocobase/app-plugin-ai-employee@0.1.0-beta.9
+  - @nocobase/app-plugin-authentication@0.1.0-beta.12
+  - @nocobase/app-plugin-notification-in-app@0.2.0-beta.10
+  - @nocobase/app-server@1.0.0-beta.13
+  - @nocobase/app-plugin-i18n@0.1.0-beta.6
+
+## 0.1.0-beta.6
+
+### Minor Changes
+
+- 1d5ee9a: Add `pnpm collections:generate` for writing and checking Collection artifacts
+
+  `pnpm nocobase app collections generate` reads every Collection of a managed connection and writes `collection.json`, `metadata.json` and `schema.json` under `database/<connection>/collections/<name>/`, plus a `_manifest.json` per connection recording the dialect, whether the schema is managed or external, and the last applied migration. `--connection` targets one connection, `--all` every configured one including external connections, and `--check` compares the result with the files on disk and exits non-zero on any difference without writing, which is what a CI step runs.
+
+  The command is a thin entry over `generateAppCollectionsArtifact()` from `@nocobase/app-server`; the files are derived output for developers, documentation and AI tooling, and nothing reads them back at runtime. `AGENTS.md` and the README describe the directory.
+
+- 1d5ee9a: Add an external database example
+
+  The `externalCrm` connection reads a database another system owns: `schemaManagement: 'external'` keeps NocoBase from changing its schema, `naming` maps the CRM's `crm_`-prefixed tables to logical Collection names, and a `ModuleCollectionMetadataStore` fed from `database/externalCrm/metadata.ts` supplies titles and the `orders.customer` relation the schema cannot express. Two read-only repository routes, `crmCustomers` and `crmOrders`, expose it to signed-in users, and an **External CRM** page lists the orders with their customers through them.
+
+  The connection points at a local SQLite file so the example runs without a real CRM; a provider plays the foreign system and creates the tables and sample rows when they are missing, and does nothing once the connection is pointed elsewhere.
+
+### Patch Changes
+
+- a153ad8: Add a read-only Database Explorer plugin and enable it in the Default and Examples templates.
+
+  The Settings page browses the application's database connections, the collections on each one, and their fields and physical columns. The two detail panes are child routes and the selection rides in the query string, so any view can be linked to and is restored by browser Back.
+
+  Read-only means the plugin creates, alters or drops no collection and changes no row. One qualifier: reading a collection initializes the collection registry, whose metadata store creates `__nocobase_collection_metadata` on a managed connection when it is missing, so that one bookkeeping table is the only object a read can bring into existence — and only when the first NocoBase activity against a database is an Explorer read. External connections cannot reach that path. A test states this boundary against a real database rather than assuming it.
+
+  Listing connections reads configuration and opens no database, so one unreachable external connection cannot take down the page. A connection reports its dialect, schema management, logical database, schemas, naming options, and internal tables, and never its credentials, host, port, socket path, or SQLite file — enforced as an allow-list, so a field a new dialect introduces stays inside by default. Driver errors are withheld from responses and recorded in logs by classification only, never by message or cause.
+
+  The collections list follows the server's cursor to the end so its client-side search sees every collection, and says so when a connection exceeds the bound.
+
+  Every endpoint requires `page:database-explorer/access`, the grant the page and both of its panes declare, which the seeded System Administrator permission set covers.
+
+- 1d5ee9a: Keep the external CRM example's metadata in `metadata.json` files
+
+  The `externalCrm` connection no longer constructs a `ModuleCollectionMetadataStore` from TypeScript documents. Its metadata lives in `database/externalCrm/collections/{customers,orders}/metadata.json`, the default source for an external connection, so the connection is configured by `dialect`, `schemaManagement` and `naming` alone. The build copies these files into `dist/database` so a deployment resolves the same titles and relations.
+
+- 22d0d2a: Resolve client chunk URLs at run time so a built application works wherever it is mounted.
+
+  Vite bakes `base` into the bundle at build time, while an App Host mounts a deployed application under its own App ID. A build made for `/main` and deployed as `/crm` therefore asked for `/main/assets/<chunk>.js` and got a 404 for every chunk the browser had to fetch at run time, which is every lazily imported route: the application loaded, its shell rendered, and each lazy page failed with "Route … could not be loaded". Pages whose chunks `index.html` preloads kept working, so the failure looked like it belonged to a particular plugin rather than to the deployment.
+
+  Only the URLs emitted into JavaScript become runtime-relative, resolved against `import.meta.url`; every chunk sits beside the entry chunk, so this is correct at any mount path. The URLs in `index.html` stay absolute: the document is served at arbitrary SPA route depths where a relative URL would resolve against the current route, and the Host rewrites those root-relative attributes to the mount path, which it can only do while they start with `/`.
+
+  Applications generated from these templates need to rebuild to pick this up. No configuration changes, and a build deployed at the path it was built for behaves as before.
+
+- 73f7538: Resolve a Portal build's asset URLs from the runtime base path so a build keeps working when a host mounts it under a different prefix. Vite inlined the build-time `base` into its `__vitePreload` helper, and that helper awaits every stylesheet link it inserts, so a lazy chunk carrying its own CSS rejected its dynamic import and rendered the route's error state once the application was served from somewhere other than the prefix it was built for.
+
+  The templates each carried their own copy of this fix, added before it existed in the shared configuration. They now inherit it from `createPortalViteConfig` instead. A consumer that configures `experimental.renderBuiltUrl` itself still overrides the shared one, so nothing that needs its own strategy loses it — the templates simply no longer need one.
+
+- Updated dependencies [be92e2b]
+- Updated dependencies [6d43421]
+- Updated dependencies [1d5ee9a]
+- Updated dependencies [1d5ee9a]
+- Updated dependencies [a153ad8]
+- Updated dependencies [1d5ee9a]
+- Updated dependencies [211538b]
+- Updated dependencies [1d5ee9a]
+- Updated dependencies [1d5ee9a]
+- Updated dependencies [1d5ee9a]
+- Updated dependencies [6d43421]
+- Updated dependencies [6d43421]
+  - @nocobase/app-plugin-ai-employee@0.1.0-beta.7
+  - @nocobase/app-server@1.0.0-beta.12
+  - @nocobase/app-plugin-database-explorer@0.1.0-beta.0
+  - @nocobase/db@1.0.0-beta.6
+  - @nocobase/db-mysql@0.1.0-beta.1
+
+## 0.1.0-beta.5
+
+### Minor Changes
+
+- ceb356b: Add an independent analytics database with channel, campaign, and daily metric examples, deterministic initial data, and authenticated Repository API routes for CRUD and aggregation.
+- ceb356b: Add an application-owned numeric types example with a migrated table, repeatable initial data, and an authenticated page comparing Query and Repository reads and aggregates.
+- ceb356b: Add runnable quotation routing, analytics daily report, and failure diagnostic workflows, with a homepage entry, idempotent report storage, and usage examples.
+- 0f80d52: Support PROXY_TARGET_URL during development to run the local Vite client against another application's API and WebSocket service, including browser origin handling for authentication, without starting a local backend.
+- 3bb34a3: Add RouteDialog and RouteDrawer with guarded closing and a shared useRouteOverlay hook. The wrappers insert no child outlet: the page that owns a child route places one itself, so an overlay can render its next child wherever the page needs it. Include route overlay examples and application development guidance.
+
+### Patch Changes
+
+- ceb356b: Declare database dialect drivers on the application's own database config.
+
+  An application lists the dialect packages it installs under `database.drivers`,
+  next to the connections that use them, and the runtime, the CLI commands and the
+  tests all resolve a dialect from that one place. The app-server runtime stays
+  independent of every concrete database driver.
+
+  This replaces the process-wide `registerAppDatabaseDrivers` registry and the
+  `databaseDrivers` option on `Application`, both of which are removed. An
+  application that used either one moves its drivers into `database.drivers` and
+  drops the module it imported only for the registration side effect.
+
+- f17f3a6: Provide editable TypeScript defaults for application modules, assembled by the runtime before services start. Module factories receive the runtime with application paths and plugin metadata; deployment files and environment variables override defaults, and configuration reload preserves code defaults.
+
+  Keep deployment settings in YAML examples and reserve explicit environment overrides for secrets and startup integration. Simplify application configuration loading, merging and reload subscriptions.
+
+  Align client configuration assembly with the server: runtime merges application TypeScript defaults beneath public configuration before services start. Client inspection reports the application configuration entry.
+
+- f17f3a6: Move the password authentication pages to the application. The authentication plugin keeps only the protocol, session state, guards and headless actions: it no longer declares `/login`, `/register`, `/forgot-password` or `/reset-password`, drops the `client/routes` and `client/route-contracts` entries, and removes the `loginPage`/`registerPage` route override options.
+
+  Each application template now declares those four guest routes in `client/routes.ts` and loads the application-owned pages from `client/pages/auth/`, which compose the preinstalled UI from `client/extensions/nocobase-auth-ui/`. The pages use ordinary relative links; URL handling remains with the application router and basename.
+
+- f17f3a6: Support TypeScript authentication options in application templates and use the native authentication client. Keep authentication plugins and callbacks in editable server and client configuration, with YAML as the default format for deployment settings.
+
+  Runtime assembly now prepares complete configuration before application creation. Module configuration factories use defineAppConfig and defaultAppConfigs, receive the runtime once, and retain their defaults when environment configuration reloads.
+
+- ceb356b: Supply plugin migration and seed sources to database planning directly instead
+  of through the database configuration.
+
+  `AppDatabaseConfig.taskSources` is removed. It held the application's package
+  name and the migration and seed directories contributed by registered server
+  plugins — values the runtime derives from resolved plugins rather than values
+  anyone configures. Carrying them in the `database` namespace put them where a
+  `config.yml` deep-merges: `database.taskSources.migrations: []` silently
+  dropped every plugin's migrations, and the application still started.
+
+  They now travel as an `AppDatabaseTaskContributions` value alongside the
+  configuration. `planAppDatabaseTasks`, `runAppDatabaseTasks`, `runAppMigrations`
+  and `runAppSeeds` take an options object carrying it, with `paths`, `drivers`
+  and the task selection, in place of their positional parameters.
+  `createAppPluginDatabaseConfig` and `resolveAppPluginDatabaseConfig` are
+  replaced by `createAppDatabaseTaskContributions`, which maps resolved plugins to
+  that value. `contributions` is required, so a call site that has not been
+  updated fails to compile rather than quietly planning without its plugins.
+
+  An application's `server/config/database.ts` keeps only what it configures —
+  drivers and connections — and no longer calls into the plugin resolver. Its
+  `cli/database-command.ts` builds the contributions from the runtime it already
+  resolves; `cli/commands/migrate.ts` and `cli/commands/seed.ts` are unchanged.
+
+- ceb356b: Restore the application route contribution order so route overlay examples are registered before the articles page.
+- e11b855: Locate a built application's `config.yml` next to `dist/` when none exists inside it, build the client against the same `.env` files the server loads, and prefer the compiled dependency tree when resolving plugins from a production build.
+- ceb356b: Add the destructive `pnpm migrate --fresh --force` workflow for managed
+  connections. It clears dialect-owned schema objects, reruns visible migrations,
+  requires confirmation in interactive terminals, and rejects external
+  connections.
+- bf0f05b: Replace the `plugin update --plugin` flag with an optional plugin name argument, supporting full package names and short names while preserving updates of all registered plugins when no name is supplied.
+
+  Document the positional plugin update command, version-range behavior, and Skills synchronization in all three application templates' README, agent guidelines, and development Skill.
+
+- f718a90: Honor APP_SERVER_PORT as the local Vite port during remote-backend development while retaining local backend port configuration in normal development.
+- d566dde: Align the example and Hub templates with the AI resource packaging and deployment artifact pruning changes.
+- ceb356b: Remove the Dameng/DMDB driver from the examples application so its default development configuration uses SQLite without requiring a local DMDB service, and provide a development Docker Compose file for the supported server-backed database dialects. Improve Oracle schema normalization so repeated nullable column changes are skipped across all column types, map integers with enough precision for the full 32-bit range, and accept the application's ISO timestamp seed format.
+- c960d07: Replace the Repository API's per-action `writePolicy` with a Repository Policy
+  declared once per exposure.
+
+  **Breaking.** `defineRepositoryApiRoutes()` no longer accepts `writePolicy` on
+  an action, and every exposure must declare a `policy`. An action configuration
+  now says only that an endpoint exists; what it may do is the exposure's Policy,
+  which governs reading, creating, updating and deleting together. Declaring one
+  is required rather than optional because `writePolicy` defaulted to refusing
+  writes while an absent Policy restricts nothing — making it optional would have
+  turned every existing declaration from "refuse every write" into "allow
+  everything" without a word of warning.
+
+  Declare `policy` as a function of a principal, together with a
+  `principal(context)` resolver, to scope rows to the caller. The resolver belongs
+  to the application, since this router installs no authentication; one that
+  returns nothing refuses the request with 403 `PRINCIPAL_REQUIRED` rather than
+  binding a Policy built from a principal that is not there. A fixed Policy is
+  still normalized when the routes are defined, so a malformed one fails where it
+  is written; a Policy function cannot be, and its `INVALID_POLICY` now reaches
+  the host error handler as a server error instead of being reported to the caller
+  as a 400.
+
+  `@nocobase/db` gains `buildRepositoryPolicy`, a builder whose unmentioned nodes
+  are denied, so the four-node requirement costs nothing to satisfy while the
+  default stays refusal. Two related fixes travel with it: `create`, `update` and
+  `delete` nodes that are `false` now refuse a write before its payload is read,
+  so an empty body is reported as forbidden rather than as invalid input; and a
+  `create` node whose relations grant `update`, `upsert`, `disconnect`, `set` or
+  `delete` is refused during normalization, since a root create performs none of
+  them.
+
+  `@nocobase/app-plugin-file` exposures declare a Policy too, and it reaches
+  uploads: the upload path binds a Policy derived from the exposure's, inheriting
+  `create.scope` and `create.defaults` and substituting the file columns for the
+  field allowlist. A file uploaded under a scoped Policy therefore lands inside
+  the scope the same exposure reads from. The public content route under
+  `accessPath` is unchanged and deliberately outside it.
+
+  The method-level `writePolicy` option on `db.repository()` calls is unaffected
+  and remains available for narrowing a single call.
+
+- f5b066d: Keep header navigation entries visible on their destination pages while retaining the development-only Dev tools entry.
+- e11b855: Use consistent medium-weight typography for sidebar navigation items, so an item's weight no longer changes as the selection moves.
+- Updated dependencies [d566dde]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [d566dde]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [f17f3a6]
+- Updated dependencies [f17f3a6]
+- Updated dependencies [f17f3a6]
+- Updated dependencies [43d25b4]
+- Updated dependencies [027d13d]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [027d13d]
+- Updated dependencies [027d13d]
+- Updated dependencies [40e2d49]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [590861e]
+- Updated dependencies [e11b855]
+- Updated dependencies [72ed008]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [22b9672]
+- Updated dependencies [22b9672]
+- Updated dependencies [5e17578]
+- Updated dependencies [28132fd]
+- Updated dependencies [d566dde]
+- Updated dependencies [28132fd]
+- Updated dependencies [e11b855]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [e11b855]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [ceb356b]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [40e2d49]
+- Updated dependencies [e11b855]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [590861e]
+- Updated dependencies [35f9722]
+- Updated dependencies [ceb356b]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [ceb356b]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [bf0f05b]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [ceb356b]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [c960d07]
+- Updated dependencies [027d13d]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [ceb356b]
+- Updated dependencies [c960d07]
+- Updated dependencies [ceb356b]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [c8f8a93]
+- Updated dependencies [027d13d]
+- Updated dependencies [0867612]
+- Updated dependencies [027d13d]
+- Updated dependencies [72ed008]
+- Updated dependencies [027d13d]
+  - @nocobase/app-plugin-ai-employee@0.1.0-beta.6
+  - @nocobase/db-mysql@0.1.0-beta.0
+  - @nocobase/db-sqlite@0.1.0-beta.0
+  - @nocobase/db-oracle@0.1.0-beta.0
+  - @nocobase/app-server@1.0.0-beta.11
+  - @nocobase/app-plugin-notification@0.1.0-beta.8
+  - @nocobase/app-plugin-workflow@0.1.0-beta.14
+  - @nocobase/app-plugin-service-provider-example@0.1.0-beta.4
+  - @nocobase/app-plugin-authentication@0.1.0-beta.11
+  - @nocobase/config@0.1.0-beta.1
+  - @nocobase/app-plugin-install@0.1.0-beta.7
+  - @nocobase/db@1.0.0-beta.5
+  - @nocobase/db-postgres@0.1.0-beta.0
+  - @nocobase/app-plugin-file-example@0.1.0-beta.3
+  - @nocobase/app-plugin-notification-in-app@0.2.0-beta.9
+  - @nocobase/app-plugin-repository-example@0.1.0-beta.4
+  - @nocobase/app-plugin-file@0.1.0-beta.10
+  - @nocobase/nb3-cli@1.0.0-beta.7
+
 ## 0.1.0-beta.4
 
 ### Minor Changes
