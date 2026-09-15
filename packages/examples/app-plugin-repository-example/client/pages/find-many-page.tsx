@@ -1,3 +1,5 @@
+import { PageContainer } from '../components/page-container.js';
+import { PageHeader } from '../components/page-header.js';
 import { apiClientToken, useService } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
@@ -145,11 +147,8 @@ export default function FindManyPage(): ReactElement {
 
   const busy = arrayLoading || streamLoading;
   return (
-    <main className='mx-auto max-w-7xl space-y-6 p-6'>
-      <header className='space-y-2'>
-        <h1 className='text-3xl font-semibold'>{t('findManyTitle')}</h1>
-        <p className='max-w-4xl text-muted-foreground'>{t('findManyIntro')}</p>
-      </header>
+    <PageContainer>
+      <PageHeader description={t('findManyIntro')} title={t('findManyTitle')} />
       {error && (
         <p role='alert' className='text-destructive'>
           {error}
@@ -187,6 +186,6 @@ export default function FindManyPage(): ReactElement {
           }}
         />
       </div>
-    </main>
+    </PageContainer>
   );
 }

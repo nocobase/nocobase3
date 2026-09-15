@@ -1,3 +1,5 @@
+import { PageContainer } from '../components/page-container.js';
+import { PageHeader } from '../components/page-header.js';
 import {
   ApiClientError,
   apiClientToken,
@@ -130,15 +132,12 @@ function SortCard({
 export default function SortPage(): ReactElement {
   const { t } = useTranslation(NS);
   return (
-    <main className='mx-auto max-w-7xl space-y-6 p-6'>
-      <header className='space-y-2'>
-        <h1 className='text-3xl font-semibold'>{t('sortTitle')}</h1>
-        <p className='text-muted-foreground'>{t('sortIntro')}</p>
-        <p className='text-sm text-muted-foreground'>{t('sortLimits')}</p>
-      </header>
+    <PageContainer>
+      <PageHeader description={t('sortIntro')} title={t('sortTitle')} />
+      <p className='text-sm text-muted-foreground'>{t('sortLimits')}</p>
       {sortExamples.map((example) => (
         <SortCard key={example.key} example={example} />
       ))}
-    </main>
+    </PageContainer>
   );
 }

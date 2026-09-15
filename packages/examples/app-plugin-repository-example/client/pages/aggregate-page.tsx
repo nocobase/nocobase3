@@ -1,3 +1,5 @@
+import { PageContainer } from '../components/page-container.js';
+import { PageHeader } from '../components/page-header.js';
 import { GroupByExamples } from '../components/group-by-examples.js';
 import type { GroupByExample } from '../group-by.js';
 import { apiClientToken, useService } from '@nocobase/app-client';
@@ -90,11 +92,11 @@ export default function AggregatePage(): ReactElement {
   const display = (value: AggregateScalar): string =>
     value === null ? 'NULL' : String(value);
   return (
-    <main className='mx-auto max-w-7xl space-y-6 p-6'>
-      <header className='space-y-2'>
-        <h1 className='text-3xl font-semibold'>{t('aggregateTitle')}</h1>
-        <p className='text-muted-foreground'>{t('aggregateIntro')}</p>
-      </header>
+    <PageContainer>
+      <PageHeader
+        description={t('aggregateIntro')}
+        title={t('aggregateTitle')}
+      />
       <form
         className='flex flex-wrap items-end gap-4'
         onSubmit={(event) => {
@@ -343,6 +345,6 @@ export default function AggregatePage(): ReactElement {
           </section>
         </div>
       </details>
-    </main>
+    </PageContainer>
   );
 }

@@ -1,3 +1,5 @@
+import { PageContainer } from '../components/page-container.js';
+import { PageHeader } from '../components/page-header.js';
 import {
   apiClientToken,
   ApiClientError,
@@ -158,16 +160,16 @@ export default function AtomicPage(): ReactElement {
     }
   }
   return (
-    <main className='mx-auto max-w-7xl space-y-6 p-6'>
-      <header className='flex flex-wrap items-start justify-between gap-4'>
-        <div className='space-y-2'>
-          <h1 className='text-3xl font-semibold'>{t('atomicTitle')}</h1>
-          <p className='max-w-3xl text-muted-foreground'>{t('atomicIntro')}</p>
-        </div>
-        <Button variant='outline' disabled={loading || busy} onClick={reload}>
-          {t('refresh')}
-        </Button>
-      </header>
+    <PageContainer>
+      <PageHeader
+        actions={
+          <Button variant='outline' disabled={loading || busy} onClick={reload}>
+            {t('refresh')}
+          </Button>
+        }
+        description={t('atomicIntro')}
+        title={t('atomicTitle')}
+      />
       {error && (
         <p
           role='alert'
@@ -291,6 +293,6 @@ export default function AtomicPage(): ReactElement {
           </details>
         ))}
       </details>
-    </main>
+    </PageContainer>
   );
 }

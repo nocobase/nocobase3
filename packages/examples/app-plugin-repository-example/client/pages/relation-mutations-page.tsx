@@ -1,3 +1,5 @@
+import { PageContainer } from '../components/page-container.js';
+import { PageHeader } from '../components/page-header.js';
 import { apiClientToken, useService } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { useId, useState, type ReactElement } from 'react';
@@ -553,27 +555,25 @@ function OperationCard({
 export default function RelationMutationsPage(): ReactElement {
   const { t } = useTranslation(NS);
   return (
-    <main className='mx-auto max-w-7xl space-y-6 p-6'>
-      <header className='space-y-3'>
-        <h1 className='text-3xl font-semibold'>
-          {t('relationMutationsTitle')}
-        </h1>
-        <p className='max-w-4xl text-muted-foreground'>{t('labIntro')}</p>
-        <nav aria-label={t('labOperations')} className='flex flex-wrap gap-2'>
-          {relationOperations.map((operation) => (
-            <a
-              key={operation}
-              href={`#relation-${operation}`}
-              className='rounded-md border px-3 py-1 text-sm font-medium'
-            >
-              {operation}
-            </a>
-          ))}
-        </nav>
-      </header>
+    <PageContainer>
+      <PageHeader
+        description={t('labIntro')}
+        title={t('relationMutationsTitle')}
+      />
+      <nav aria-label={t('labOperations')} className='flex flex-wrap gap-2'>
+        {relationOperations.map((operation) => (
+          <a
+            key={operation}
+            href={`#relation-${operation}`}
+            className='rounded-md border px-3 py-1 text-sm font-medium'
+          >
+            {operation}
+          </a>
+        ))}
+      </nav>
       {relationOperations.map((operation) => (
         <OperationCard key={operation} operation={operation} />
       ))}
-    </main>
+    </PageContainer>
   );
 }

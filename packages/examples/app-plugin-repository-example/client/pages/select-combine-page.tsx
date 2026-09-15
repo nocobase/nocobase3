@@ -1,3 +1,5 @@
+import { PageContainer } from '../components/page-container.js';
+import { PageHeader } from '../components/page-header.js';
 import { apiClientToken, useService } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { useState, type ReactElement } from 'react';
@@ -105,19 +107,17 @@ function ExampleCard({
 export default function SelectCombinePage(): ReactElement {
   const { t } = useTranslation(NS);
   return (
-    <main className='mx-auto max-w-7xl space-y-6 p-6'>
-      <header className='space-y-2'>
-        <h1 className='text-3xl font-semibold'>{t('selectCombineTitle')}</h1>
-        <p className='max-w-4xl text-muted-foreground'>
-          {t('selectCombineIntro')}
-        </p>
-        <p className='text-sm text-muted-foreground'>{t('combineScopeHint')}</p>
-      </header>
+    <PageContainer>
+      <PageHeader
+        description={t('selectCombineIntro')}
+        title={t('selectCombineTitle')}
+      />
+      <p className='text-sm text-muted-foreground'>{t('combineScopeHint')}</p>
       <div className='grid min-w-0 items-start gap-6'>
         {combineExamples.map((definition) => (
           <ExampleCard key={definition.key} definition={definition} />
         ))}
       </div>
-    </main>
+    </PageContainer>
   );
 }

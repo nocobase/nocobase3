@@ -1,3 +1,5 @@
+import { PageContainer } from '../components/page-container.js';
+import { PageHeader } from '../components/page-header.js';
 import {
   useCallback,
   useEffect,
@@ -105,16 +107,14 @@ export default function ProfileAvatarsPage(): ReactElement {
   );
 
   return (
-    <main className='mx-auto max-w-5xl space-y-6 p-8'>
-      <header className='space-y-2'>
-        <h1 className='text-2xl font-semibold'>{t('profilesTitle')}</h1>
-        <p className='text-sm text-muted-foreground'>
-          {t('profilesDescription')}
-        </p>
-        <p className='text-sm text-muted-foreground'>
-          {t('profilesRelationHint')}
-        </p>
-      </header>
+    <PageContainer>
+      <PageHeader
+        description={t('profilesDescription')}
+        title={t('profilesTitle')}
+      />
+      <p className='text-sm text-muted-foreground'>
+        {t('profilesRelationHint')}
+      </p>
       {error && (
         <p role='alert' className='text-sm text-destructive'>
           {error}
@@ -200,6 +200,6 @@ export default function ProfileAvatarsPage(): ReactElement {
         }
         onClose={() => setPreview({ files: [], index: -1 })}
       />
-    </main>
+    </PageContainer>
   );
 }

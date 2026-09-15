@@ -85,7 +85,8 @@
     "@nocobase/i18n": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
     "lucide-react": "catalog:",
-    "react": "^19.0.0"
+    "react": "^19.0.0",
+    "tailwind-merge": "catalog:"
   },
   "engines": {
     "node": ">=24.0.0"

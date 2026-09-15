@@ -1,3 +1,5 @@
+import { PageContainer } from '../components/page-container.js';
+import { PageHeader } from '../components/page-header.js';
 import {
   OrderItemsEditor,
   OrderItemsTable,
@@ -73,18 +75,15 @@ export function RepositoryPage({
   const { t } = useTranslation(NS);
   const { recordId } = useParams();
   return (
-    <main className='mx-auto max-w-7xl space-y-6 p-6'>
-      <header className='space-y-2'>
-        <Badge variant='outline'>Repository API</Badge>
-        <h1 className='text-3xl font-semibold tracking-tight'>{t(title)}</h1>
-        <p className='text-muted-foreground'>{t('subtitle')}</p>
-      </header>
+    <PageContainer>
+      <PageHeader description={t('subtitle')} title={t(title)} />
+      <Badge variant='outline'>Repository API</Badge>
       <EntityWorkspace
         key={`${entityKey}:${recordId ?? 'list'}`}
         entity={entities[entityKey]}
         recordId={recordId}
       />
-    </main>
+    </PageContainer>
   );
 }
 function EntityWorkspace({

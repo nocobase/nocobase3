@@ -1,3 +1,5 @@
+import { PageContainer } from '../components/page-container.js';
+import { PageHeader } from '../components/page-header.js';
 import {
   useCallback,
   useEffect,
@@ -118,16 +120,12 @@ export default function OrderAttachmentsPage(): ReactElement {
   );
 
   return (
-    <main className='mx-auto max-w-5xl space-y-6 p-8'>
-      <header className='space-y-2'>
-        <h1 className='text-2xl font-semibold'>{t('ordersTitle')}</h1>
-        <p className='text-sm text-muted-foreground'>
-          {t('ordersDescription')}
-        </p>
-        <p className='text-sm text-muted-foreground'>
-          {t('ordersRelationHint')}
-        </p>
-      </header>
+    <PageContainer>
+      <PageHeader
+        description={t('ordersDescription')}
+        title={t('ordersTitle')}
+      />
+      <p className='text-sm text-muted-foreground'>{t('ordersRelationHint')}</p>
       {error && (
         <p role='alert' className='text-sm text-destructive'>
           {error}
@@ -181,6 +179,6 @@ export default function OrderAttachmentsPage(): ReactElement {
         </p>
       )}
       <p className='text-sm text-muted-foreground'>{t('ordersHint')}</p>
-    </main>
+    </PageContainer>
   );
 }
