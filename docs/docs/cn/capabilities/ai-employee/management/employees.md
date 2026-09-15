@@ -1,7 +1,7 @@
 ---
 title: 'AI 员工管理'
-description: '在设置页启用 AI 员工并维护角色、模型、Skill、Tool 和知识库。'
-keywords: 'AI Employee,Role settings,Model settings,Skills,Tools,Knowledge Base'
+description: '在设置页启用 AI 员工并维护角色、模型、Skill 和 Tool。'
+keywords: 'AI Employee,Role settings,Model settings,Skills,Tools'
 ---
 
 # AI 员工管理
@@ -41,16 +41,6 @@ Skill 按 Scope 分成三组：
 Tool 同样分成 General、Employee-specific 和 Custom。General 和 Employee-specific Tool 展示当前权限；Custom Tool 可以添加、移除，并在 `Ask` 与 `Allow` 之间切换。
 
 `Allow` 只表示运行时不再要求这一步人工确认，不代表跳过 Tool 自己的 ACL、参数校验或业务约束。对写入和外部副作用操作保持 `Ask`。
-
-## Knowledge Base
-
-启用知识库后，可以选择一个或多个当前已启用的知识库，选择按需检索或每个问题都检索，并设置提示词、Top K 和最低相似度 Score。提示词必须包含 `{knowledgeBaseData}` 占位符。
-
-用户实际检索范围仍受其角色能访问的知识库限制。员工配置中选中了知识库，不会提升使用者权限。
-
-## 保存和切换
-
-修改后页面底部出现 Save 与 Cancel。存在未保存内容时切换员工会弹出确认，不会静默丢弃修改。保存失败时保留当前草稿，先处理错误再重试。
 
 ## 相关链接
 
