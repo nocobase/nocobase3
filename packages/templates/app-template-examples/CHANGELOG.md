@@ -1,5 +1,21 @@
 # @nocobase/app-template-examples
 
+## 0.1.0-beta.7
+
+### Patch Changes
+
+- c01baf6: Resolve application namespace aliases in React translations, synchronize the document language at startup and on changes, and inject the configured default language into served HTML. Allow client-only language selections with an English server fallback and an informational toast, and standardize documented locale checks on `pnpm nocobase app i18n:check`.
+- Updated dependencies [154e09e]
+- Updated dependencies [154e09e]
+- Updated dependencies [154e09e]
+- Updated dependencies [154e09e]
+- Updated dependencies [c01baf6]
+  - @nocobase/app-plugin-ai-employee@0.1.0-beta.9
+  - @nocobase/app-plugin-authentication@0.1.0-beta.12
+  - @nocobase/app-plugin-notification-in-app@0.2.0-beta.10
+  - @nocobase/app-server@1.0.0-beta.13
+  - @nocobase/app-plugin-i18n@0.1.0-beta.6
+
 ## 0.1.0-beta.6
 
 ### Minor Changes
