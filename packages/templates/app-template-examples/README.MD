@@ -126,9 +126,11 @@ database/
 ├── main/
 │   ├── migrations/      Schema history for the main connection
 │   └── seeds/           Initial example data
-└── analytics/
-    ├── migrations/      Independent analytics schema
-    └── seeds/           Channel, campaign and daily metric examples
+├── analytics/
+│   ├── migrations/      Independent analytics schema
+│   └── seeds/           Channel, campaign and daily metric examples
+└── externalCrm/
+    └── collections/     metadata.json per Collection: the external CRM's metadata source
 
 tests/                   Unit and integration tests
 e2e/                     Browser tests needing a real server
@@ -152,10 +154,11 @@ The three files named `runtime.ts`, `plugins.ts`, and `routes.ts` are compositio
 
 ### Database
 
-| Script         | What it does                                                                                                                                                                                    |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm migrate` | Apply pending migrations from your `database/main/migrations/` and from every registered plugin; `pnpm migrate --fresh --force` clears managed schema objects and rebuilds them from migrations |
-| `pnpm seed`    | Run seeds from `database/main/seeds/` and from registered plugins                                                                                                                               |
+| Script                      | What it does                                                                                                                                                                                        |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm migrate`              | Apply pending migrations from your `database/main/migrations/` and from every registered plugin; `pnpm migrate --fresh --force` clears managed schema objects and rebuilds them from migrations     |
+| `pnpm seed`                 | Run seeds from `database/main/seeds/` and from registered plugins                                                                                                                                   |
+| `pnpm collections:generate` | Write `collection.json`, `metadata.json` and `schema.json` for every Collection under `database/<connection>/collections/`, plus a `_manifest.json`; `--check` fails when the files are out of date |
 
 Migrations also run automatically on startup while `database.connections.main.migrations.autoRun` is `true` in `config.yml`. Run `pnpm migrate` explicitly when you want to apply a schema change without restarting.
 
@@ -225,6 +228,86 @@ Requests use `POST <app-base>/api/<repository>:<action>`, for example
 
 The response is wrapped in `{ "data": ... }`. Use the application's authenticated
 API client, for example `api.repository('analyticsChannels').findMany({ limit: 10 })`.
+
+### External database example
+
+Not every database an application reads is one it owns. The `externalCrm`
+connection in `server/config/database.ts` shows the shape of one that is not:
+`schemaManagement: 'external'` tells NocoBase to read the schema and never
+change it, and `naming` strips the CRM's `crm_` table prefix when mapping
+tables to logical Collection names. No migrations or seeds run against it, and
+the Builder refuses DDL on it.
+
+What the schema cannot say — titles, descriptions, and which column is a
+relation — comes from `database/externalCrm/collections/<name>/metadata.json`.
+That is the default metadata source for an external connection, so nothing has
+to be configured; `metadataStore` can point at another collections directory
+when metadata is kept elsewhere. The files are the source, not generated
+output: the workflow is `pnpm collections:generate --connection externalCrm`
+to scaffold one `metadata.json` per table with an empty document, fill in the
+documents by hand, and generate again so `collection.json` reflects them.
+Dropping a table removes its generated files but keeps its `metadata.json`,
+which the command reports as an orphan.
+
+The connection points at `storage/external-crm.sqlite` so the example runs
+without a real CRM. `server/providers/external-crm.ts` plays the part of the
+foreign system: when the connection is the SQLite stand-in and the tables are
+missing, it creates `crm_customers` and `crm_orders` with the raw client and
+inserts three customers and four orders. Point the connection at an actual
+database in `config.yml` and the provider does nothing.
+
+Open **External CRM** from the homepage or navigation (`/external-crm`). The
+page in `client/pages/external-crm.tsx` lists the CRM's orders with their
+customers, filtered by status, entirely through the read-only routes below; it
+addresses everything by logical name and never sees the `crm_` table prefix.
+
+`server/routes/external-crm.ts` exposes the two Collections read-only through
+`defineRepositoryApiRoutes`, bound to `externalCrm`:
+
+| Repository API name | Collection  |
+| ------------------- | ----------- |
+| `crmCustomers`      | `customers` |
+| `crmOrders`         | `orders`    |
+
+Each supports `findMany` (maximum 100), `findOne`, `count`, `exists`,
+`aggregate` and `groupBy` for signed-in users; write actions are not exposed.
+Logical names work as they do for managed tables — filter on `status`, sort by
+`id`, select `orderNo` and include the `customer` relation — because the
+Repository resolves them through the connection's naming and metadata. For
+example, `POST /main/api/crmOrders:findMany` with:
+
+```json
+{
+  "filter": { "status": "paid" },
+  "sort": {
+    "kind": "sort",
+    "version": 1,
+    "items": [{ "kind": "field", "path": ["id"], "direction": "asc" }]
+  },
+  "select": {
+    "kind": "select",
+    "version": 1,
+    "root": {
+      "kind": "selection",
+      "fields": ["id", "orderNo", "totalAmount"],
+      "includes": [
+        {
+          "kind": "include",
+          "relation": "customer",
+          "select": { "kind": "selection", "fields": ["id", "displayName"] }
+        }
+      ]
+    }
+  }
+}
+```
+
+`pnpm collections:generate --connection externalCrm` writes `collection.json`
+and `schema.json` next to each `metadata.json` under
+`database/externalCrm/collections/`; the manifest records
+`schemaManagement: external` and no migration head, since the CRM has no
+migration history this application knows about. Only the `metadata.json` files
+are committed here.
 
 ### Checks
 

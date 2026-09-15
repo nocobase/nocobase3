@@ -644,6 +644,114 @@ function physicalCollection(
   };
 }
 
+describe('json Field defaults', () => {
+  it('decodes a json column default into the document the Builder was given', () => {
+    const result = resolveCollection({
+      physical: physicalCollection({
+        tableName: 'settings',
+        columns: [
+          column('id', 1),
+          column('options', 2, {
+            dataType: 'json',
+            nativeType: 'json',
+            nullable: false,
+            default: {
+              expression: `'{"storage":"local"}'`,
+              value: '{"storage":"local"}',
+            },
+          }),
+          column('tags', 3, {
+            dataType: 'json',
+            nativeType: 'jsonb',
+            default: { expression: `'[]'::jsonb`, value: '[]' },
+          }),
+          column('label', 4, {
+            default: {
+              expression: `'{"not":"json"}'`,
+              value: '{"not":"json"}',
+            },
+          }),
+        ],
+      }),
+      context: emptyContext(),
+    });
+
+    const field = (name: string) =>
+      result.collection.fields?.find((entry) => entry.name === name);
+    expect(field('options')).toMatchObject({
+      type: 'json',
+      defaultValue: { storage: 'local' },
+      db: { defaultExpression: `'{"storage":"local"}'` },
+    });
+    expect(field('tags')).toMatchObject({ defaultValue: [] });
+    // A string column keeps its text: only json columns are decoded.
+    expect(field('label')).toMatchObject({ defaultValue: '{"not":"json"}' });
+    expect(result.warnings).toEqual([]);
+  });
+
+  it('decodes the default of a text column that metadata declares as json', () => {
+    // MSSQL and Oracle have no native json type: the column is text and only
+    // the Field metadata makes it a json Field.
+    const result = resolveCollection({
+      physical: physicalCollection({
+        tableName: 'settings',
+        columns: [
+          column('id', 1),
+          column('options', 2, {
+            dataType: 'text',
+            nativeType: 'nvarchar(max)',
+            default: {
+              expression: `('{"enabled":true}')`,
+              value: '{"enabled":true}',
+            },
+          }),
+        ],
+      }),
+      metadata: {
+        version: 1,
+        name: 'settings',
+        fields: { options: { type: 'json' } },
+      },
+      context: emptyContext(),
+    });
+
+    expect(
+      result.collection.fields?.find((entry) => entry.name === 'options'),
+    ).toMatchObject({ type: 'json', defaultValue: { enabled: true } });
+    expect(result.warnings).toEqual([]);
+  });
+
+  it('keeps the physical text and warns when a json default is not valid JSON', () => {
+    const result = resolveCollection({
+      physical: physicalCollection({
+        tableName: 'settings',
+        columns: [
+          column('id', 1),
+          column('options', 2, {
+            dataType: 'json',
+            nativeType: 'json',
+            default: { expression: `'{broken'`, value: '{broken' },
+          }),
+        ],
+      }),
+      context: emptyContext(),
+    });
+
+    const options = result.collection.fields?.find(
+      (entry) => entry.name === 'options',
+    );
+    expect(options).not.toHaveProperty('defaultValue');
+    expect(options?.db).toMatchObject({ defaultExpression: `'{broken'` });
+    expect(result.warnings).toEqual([
+      expect.objectContaining({
+        code: 'COLLECTION_JSON_DEFAULT_INVALID',
+        aspect: 'columns',
+        path: ['fields', 'options', 'defaultValue'],
+      }),
+    ]);
+  });
+});
+
 function column(
   columnName: string,
   ordinalPosition: number,

@@ -22,6 +22,21 @@ export {
 } from './seeder.js';
 export { prepareAppDatabaseStorage } from './storage.js';
 export {
+  isCollectionMetadataStoreInstance,
+  resolveAppCollectionsDirectory,
+  resolveAppMetadataStore,
+  type ResolveAppMetadataStoreOptions,
+} from './collections-directory.js';
+export {
+  generateAppCollectionsArtifact,
+  type AppCollectionsArtifactConnectionResult,
+  type AppCollectionsArtifactDifference,
+  type AppCollectionsArtifactDifferenceKind,
+  type AppCollectionsArtifactManifestSummary,
+  type AppCollectionsArtifactOptions,
+  type AppCollectionsArtifactResult,
+} from './collections-artifact.js';
+export {
   runAppMigrations,
   runAppSeeds,
   runAppDatabaseTasks,
@@ -40,6 +55,7 @@ export {
 export type {
   AppDatabaseConfig,
   AppDatabaseConnectionConfig,
+  AppMetadataStoreConfig,
   AppDatabaseMigrationConfig,
   AppDatabaseSeedConfig,
   AppDatabaseTaskContributions,

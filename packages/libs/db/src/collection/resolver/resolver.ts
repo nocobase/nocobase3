@@ -87,6 +87,7 @@ export function resolveCollection(
   const collectionName = resolveCollectionName(input, naming, strategy, issues);
   const columns = resolveColumns(input, naming, issues);
   applyFieldMetadata(input.metadata?.fields, columns, issues);
+  decodeJsonDefaults(columns.fields, warnings);
 
   const constraints = resolveConstraints(input, columns, issues);
   const indexes = resolveIndexes(input, columns, issues);
@@ -395,6 +396,38 @@ function resolveColumn(
     unsigned: column.unsigned,
     db,
   });
+}
+
+/**
+ * The inspector parses a default at the SQL literal level, so a json Field's
+ * default arrives as the text between the quotes. The logical value is the
+ * document that text encodes — what the Builder was given — while the
+ * physical text stays available as `db.defaultExpression`. This runs after
+ * Field metadata is applied because on dialects without a native json type
+ * (MSSQL, Oracle) the column is text and only the metadata says it is json.
+ * The catalog holds text and nothing else, so unlike a driver result there is
+ * nothing to guess.
+ */
+function decodeJsonDefaults(
+  fields: FieldDefinition[],
+  warnings: CollectionResolutionWarning[],
+): void {
+  for (const field of fields) {
+    if (field.type !== 'json' || typeof field.defaultValue !== 'string') {
+      continue;
+    }
+    try {
+      field.defaultValue = JSON.parse(field.defaultValue) as unknown;
+    } catch {
+      delete field.defaultValue;
+      warnings.push({
+        code: 'COLLECTION_JSON_DEFAULT_INVALID',
+        aspect: 'columns',
+        path: ['fields', field.name, 'defaultValue'],
+        message: `Default of json Field "${field.name}" is not valid JSON; see db.defaultExpression for the physical text.`,
+      });
+    }
+  }
 }
 
 function applyFieldMetadata(
