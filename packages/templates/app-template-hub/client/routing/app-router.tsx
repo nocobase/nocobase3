@@ -12,7 +12,6 @@ import { EMPTY_ARRAY } from '@/lib/constants';
 import { AppShell } from '../shell/index.js';
 import { renderRouteTree } from './route-tree.js';
 import { StandalonePageLayout } from './standalone-page-layout.js';
-import { RouteTreeProvider } from './route-context.js';
 
 // The dev tools exist only while developing the application. Resolving the import inside an `import.meta.env.DEV`
 // branch lets a production build prove the module is unreachable and drop it, along with every dev page and any
@@ -30,7 +29,6 @@ export interface AppRouterProps {
 }
 
 export function AppRouter({
-  settingsRouteTree,
   devRouteTree,
   clientRoutes,
 }: AppRouterProps): ReactElement {
@@ -57,63 +55,55 @@ export function AppRouter({
     [clientRoutes],
   );
 
-  // A new array would re-render every consumer of the route tree, so this one keeps its identity.
-  const knownRoutes = useMemo(
-    () => [...clientRoutes, ...settingsRouteTree, ...devRouteTree],
-    [clientRoutes, devRouteTree, settingsRouteTree],
-  );
-
   return (
-    <RouteTreeProvider routes={knownRoutes}>
-      <Routes>
-        <Route
-          element={
-            <RequiredAuthentication>
-              <Outlet />
-            </RequiredAuthentication>
-          }
-        >
-          <Route element={<AppShell routes={routeGroups.required} />}>
-            {renderRouteTree(routeGroups.required)}
-          </Route>
-          {/* Hub is a control-plane App. Its administration pages live in the
+    <Routes>
+      <Route
+        element={
+          <RequiredAuthentication>
+            <Outlet />
+          </RequiredAuthentication>
+        }
+      >
+        <Route element={<AppShell routes={routeGroups.required} />}>
+          {renderRouteTree(routeGroups.required)}
+        </Route>
+        {/* Hub is a control-plane App. Its administration pages live in the
             primary console, so the ordinary App settings centre is disabled. */}
-          <Route path='/settings/*' element={<Navigate to='/apps' replace />} />
-          {import.meta.env.DEV && DevLayout ? (
-            <Route
-              path='/dev/*'
-              element={
-                <Suspense
-                  fallback={
-                    <Loading className='min-h-svh' label='Loading dev tools' />
-                  }
-                >
-                  <DevLayout routeTree={devRouteTree} routes={devRoutes} />
-                </Suspense>
-              }
-            />
-          ) : null}
-        </Route>
+        <Route path='/settings/*' element={<Navigate to='/apps' replace />} />
+        {import.meta.env.DEV && DevLayout ? (
+          <Route
+            path='/dev/*'
+            element={
+              <Suspense
+                fallback={
+                  <Loading className='min-h-svh' label='Loading dev tools' />
+                }
+              >
+                <DevLayout routeTree={devRouteTree} routes={devRoutes} />
+              </Suspense>
+            }
+          />
+        ) : null}
+      </Route>
 
-        <Route
-          element={
-            <GuestAuthentication>
-              <Outlet />
-            </GuestAuthentication>
-          }
-        >
-          <Route element={<StandalonePageLayout />}>
-            {renderRouteTree(routeGroups.guest)}
-          </Route>
-        </Route>
-
+      <Route
+        element={
+          <GuestAuthentication>
+            <Outlet />
+          </GuestAuthentication>
+        }
+      >
         <Route element={<StandalonePageLayout />}>
-          {renderRouteTree(routeGroups.optional)}
+          {renderRouteTree(routeGroups.guest)}
         </Route>
+      </Route>
 
-        <Route path='*' element={<Navigate to='/' replace />} />
-      </Routes>
-    </RouteTreeProvider>
+      <Route element={<StandalonePageLayout />}>
+        {renderRouteTree(routeGroups.optional)}
+      </Route>
+
+      <Route path='*' element={<Navigate to='/' replace />} />
+    </Routes>
   );
 }
 

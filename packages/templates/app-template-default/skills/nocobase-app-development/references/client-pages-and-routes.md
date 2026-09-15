@@ -112,6 +112,8 @@ A navigable page normally changes `client/routes.ts`, its page component, and `c
 
 ## Putting the page in a breadcrumb trail
 
+The owning layout supplies the route tree: `AppShell` for business pages, and `SurfaceLayout` for Settings and Dev pages. `StandalonePageLayout` does not currently supply one, so breadcrumbs there render nothing.
+
 `navigation` decides whether a page appears in a menu. `breadcrumb` decides whether it appears in a breadcrumb trail, and what it is called there. The two work the same way — declaring one puts the route in; leaving it out keeps the route out — and they are independent, so a route that belongs in both states its title twice.
 
 ```ts

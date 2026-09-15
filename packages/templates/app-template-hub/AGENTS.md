@@ -49,6 +49,8 @@ A feature with a page and an API touches five places: a migration for the table,
 
 ### The rest is framework structure
 
+`AppShell` provides the business route tree for breadcrumbs. The Dev layout provides its own route tree through `SurfaceLayout`; `AppRouter` only selects routes and layouts. Standalone guest and optional pages do not receive a route-tree provider.
+
 Header entries stay visible on their destination pages. The Dev tools entry is development-only; the Hub has no Settings entry.
 
 `client/routing/`, `client/shell/`, `client/layouts/`, `client/theme/`, the server entry points, the build scripts, and the tsconfigs are the scaffolding the template provides. It is still this application's own source — it shipped to the user and they may change it — but it is the part the template evolves, so an edit there is what a future upgrade has to reconcile.
