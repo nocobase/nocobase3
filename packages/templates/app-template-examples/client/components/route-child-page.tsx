@@ -18,21 +18,18 @@ export interface RouteChildPageProps {
  * mark the application inert, because the user is still on a page of the application and must be able to reach the
  * sidebar. What closes it is the breadcrumb above it, or the browser's back button — not an X or Escape.
  *
- * It positions itself against the nearest positioned ancestor, which is the layout's `<main>`. Nesting works
- * without a stacking order: this element is itself positioned, so a deeper layer covers it the same way.
+ * The two elements are not one element with two jobs. The outer one positions and does not scroll; the inner one
+ * scrolls and does not position. A deeper layer resolves `inset-0` against the outer one, so it covers this layer
+ * whatever this layer is scrolled to — while a single element doing both would carry that layer away with its own
+ * scrolling, out of sight.
  */
 export function RouteChildPage({
   children,
   className,
 }: RouteChildPageProps): ReactElement {
   return (
-    <div
-      className={cn(
-        'absolute inset-0 overflow-y-auto bg-background',
-        className,
-      )}
-    >
-      {children}
+    <div className='absolute inset-0 overflow-hidden bg-background'>
+      <div className={cn('h-full overflow-y-auto', className)}>{children}</div>
     </div>
   );
 }
