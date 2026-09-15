@@ -38,7 +38,7 @@ export default routes;
 
 ### 菜单分组
 
-菜单分组声明 `navigation` 和 `children`，不声明 `componentLoader`。普通页面也可以声明 `children`；是否有页面组件决定它是页面还是纯分组：
+菜单分组必须同时声明 `navigation` 和 `children`，且不声明 `componentLoader`。只有 `children` 而没有 `navigation`，不构成菜单分组。普通页面通过 `componentLoader` 加载组件，也可以声明 `children` 来组织子页面。下面是菜单分组的示例：
 
 ```ts
 // client/routes.ts（节选）
