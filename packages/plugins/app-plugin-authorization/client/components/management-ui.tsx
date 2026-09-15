@@ -152,17 +152,18 @@ export function DetailHeader({
   badge?: ReactNode;
   actions?: ReactNode;
 }): ReactElement {
+  // The page header of a list page, with the back control above it: a detail view is the page, not a card on it.
   return (
-    <header className='rounded-xl border bg-card px-6 py-5 text-card-foreground shadow-sm'>
+    <header>
       <Button
-        className='mb-4 -ml-2 text-muted-foreground'
+        className='-ml-2 text-muted-foreground'
         size='sm'
         variant='ghost'
         onClick={onBack}
       >
         ← Back to list
       </Button>
-      <div className='flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between'>
+      <div className='mt-2 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between'>
         <div>
           <div className='flex flex-wrap items-center gap-2'>
             <h2 className='text-xl font-semibold tracking-tight'>{title}</h2>

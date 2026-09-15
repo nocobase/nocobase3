@@ -266,14 +266,12 @@ When a permission does not behave as expected, inspect in this order:
    the module. The returned reasons identify the authorization decision and
    its contributing constraints.
 
-Three settings screens answer the first steps without a query. **Overview**,
-first in the Authorization group, states the four layers in the order a request
-is decided, what each does and what it cannot do, and links to the page that
-configures each. **Compare sets**, reached from the permission sets filter bar,
-puts every set side by side — one column per set, one row per resource and
-action — marking whether that action starts from every record, from a scoped
-set, is not granted, or belongs to a set conferring unrestricted access, for
-which grants are not consulted at all. **User access**, from the same bar,
+Two settings screens answer the first steps without a query. **Compare sets**,
+reached from the permission sets filter bar, puts every set side by side — one
+column per set, one row per resource for the action its filter bar selects —
+marking whether that action starts from every record, from a scoped set, is not
+granted, or belongs to a set conferring unrestricted access, for which grants
+are not consulted at all. **User access**, from the same bar,
 answers step 4 and step 5 for one person: the sets they hold and whether each
 was assigned directly or is held because they are signed in, the grants that
 follow with the records and fields each action starts from and the set that

@@ -15,6 +15,7 @@ import {
   collectionFields,
   databaseActionDescription,
   databaseActionSummary,
+  filterOperatorLabels,
   humanize,
 } from './labels.js';
 import type {
@@ -261,14 +262,13 @@ function RecordAccessEditor({
                   )
                 }
               >
-                <option value='$eq'>Equals</option>
-                <option value='$ne'>Not equal</option>
-                <option value='$in'>In</option>
-                <option value='$notIn'>Not in</option>
-                <option value='$gt'>Greater than</option>
-                <option value='$gte'>At least</option>
-                <option value='$lt'>Less than</option>
-                <option value='$lte'>At most</option>
+                {Object.entries(filterOperatorLabels).map(
+                  ([operator, label]) => (
+                    <option key={operator} value={operator}>
+                      {label}
+                    </option>
+                  ),
+                )}
               </select>
               <Input
                 aria-label='Filter value'

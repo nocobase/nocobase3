@@ -47,7 +47,6 @@ describe('@nocobase/app-plugin-authorization client', () => {
     ]);
 
     expect(resolved.settings.map((setting) => setting.path)).toEqual([
-      '/settings/authorization/overview',
       '/settings/authorization/permission-sets',
       '/settings/authorization/default-access',
       '/settings/authorization/sharing-rules',
@@ -56,8 +55,6 @@ describe('@nocobase/app-plugin-authorization client', () => {
     expect(
       resolved.settings.map((setting) => setting.access?.resource),
     ).toEqual([
-      // The overview has no resource of its own; it follows the permission sets page.
-      'authorization.settings.permission-sets',
       'authorization.settings.permission-sets',
       'authorization.settings.default-access',
       'authorization.settings.sharing-rules',

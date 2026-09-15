@@ -226,8 +226,7 @@ describe('client inspection', () => {
       packageName: '@nocobase/app-template-hub',
       source: 'application',
     });
-    expect(inspection.settings.slice(0, 5).map(({ id }) => id)).toEqual([
-      'overview',
+    expect(inspection.settings.slice(0, 4).map(({ id }) => id)).toEqual([
       'permission-sets',
       'default-access',
       'sharing-rules',

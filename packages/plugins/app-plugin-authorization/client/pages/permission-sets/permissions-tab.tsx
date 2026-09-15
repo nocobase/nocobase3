@@ -27,16 +27,27 @@ import {
   TableRow,
 } from '../../components/ui/table.js';
 import { COLLECTION_TYPE, actionMark } from './access-report.js';
-import { defaultDatabaseActionDraft } from './drafts.js';
 import {
-  databaseActionSummary,
+  customFilterConditions,
+  defaultDatabaseActionDraft,
+  recordAccessKey,
+} from './drafts.js';
+import {
+  filterOperatorLabels,
   humanize,
+  recordAccessLabel,
   recordsAndFieldsSummary,
   resourceLabel,
   resourceTypeLabel,
 } from './labels.js';
 import { ScopeLegend, ScopeMark } from './marks.js';
-import type { Draft, GrantDraft } from './types.js';
+import type { DatabaseActionDraft, Draft, GrantDraft } from './types.js';
+
+/** The chip that leaves every resource type in the table. */
+const ALL_TYPES = 'all';
+
+/** What an action's fields or records amount to when it names none. */
+const NONE = '—';
 
 export function PermissionsSummary({
   options,
@@ -48,27 +59,25 @@ export function PermissionsSummary({
   onEdit: () => void;
 }): ReactElement {
   const [search, setSearch] = useState('');
-  const [type, setType] = useState<string>();
+  const [type, setType] = useState<string>(ALL_TYPES);
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<number>();
 
   const types = useMemo(() => resourceTypes(options, draft), [options, draft]);
-  // The type holding grants is the one worth opening on, and the first type otherwise.
-  const defaultType =
-    types.find((item) => item.count > 0)?.value ?? types[0]?.value;
   const activeType =
-    type !== undefined && types.some((item) => item.value === type)
+    type === ALL_TYPES || types.some((item) => item.value === type)
       ? type
-      : defaultType;
+      : ALL_TYPES;
   const actions = useMemo(
-    () => actionColumns(options, draft, activeType),
+    () =>
+      activeType === ALL_TYPES ? [] : actionColumns(options, draft, activeType),
     [options, draft, activeType],
   );
 
   const query = search.trim().toLowerCase();
   const rows = draft.grants.filter(
     (grant) =>
-      grant.resource.type === activeType &&
+      (activeType === ALL_TYPES || grant.resource.type === activeType) &&
       (!query ||
         [grant.resource.id, resourceLabel(options, grant.resource)].some(
           (value) => value.toLowerCase().includes(query),
@@ -80,13 +89,16 @@ export function PermissionsSummary({
     setSearch(value);
     setPage(1);
   }
-  function changeType(value?: string): void {
+  function changeType(value: string): void {
     setType(value);
     setPage(1);
   }
-  const filtered = query !== '' || activeType !== defaultType;
+  const filtered = query !== '' || activeType !== ALL_TYPES;
   const selectedGrant = draft.grants.find((grant) => grant.id === selected);
+  const combined = activeType === ALL_TYPES;
   const isCollection = activeType === COLLECTION_TYPE;
+  // The combined table carries a records column too, for the collection rows in it.
+  const columns = combined ? 4 : actions.length + (isCollection ? 2 : 1);
 
   return (
     <div className='space-y-4'>
@@ -97,6 +109,13 @@ export function PermissionsSummary({
         </p>
       </div>
       <FilterBar>
+        <FilterChip
+          count={draft.grants.length}
+          pressed={combined}
+          onClick={() => changeType(ALL_TYPES)}
+        >
+          All
+        </FilterChip>
         {types.map((item) => (
           <FilterChip
             key={item.value}
@@ -119,7 +138,7 @@ export function PermissionsSummary({
           <ClearFilterButton
             onClear={() => {
               changeSearch('');
-              changeType(defaultType);
+              changeType(ALL_TYPES);
             }}
           />
         ) : null}
@@ -130,15 +149,24 @@ export function PermissionsSummary({
           <TableHeader className='bg-muted/30 uppercase'>
             <TableRow>
               <TableHead className='px-5 py-3 font-medium'>Resource</TableHead>
-              {actions.map((action) => (
-                <TableHead
-                  key={action}
-                  className='w-24 px-5 py-3 text-center font-medium'
-                >
-                  {humanize(action)}
-                </TableHead>
-              ))}
-              {isCollection ? (
+              {combined ? (
+                <>
+                  <TableHead className='px-5 py-3 font-medium'>Type</TableHead>
+                  <TableHead className='px-5 py-3 font-medium'>
+                    Granted actions
+                  </TableHead>
+                </>
+              ) : (
+                actions.map((action) => (
+                  <TableHead
+                    key={action}
+                    className='w-24 px-5 py-3 text-center font-medium'
+                  >
+                    {humanize(action)}
+                  </TableHead>
+                ))
+              )}
+              {combined || isCollection ? (
                 <TableHead className='px-5 py-3 font-medium'>
                   Records and fields
                 </TableHead>
@@ -160,20 +188,33 @@ export function PermissionsSummary({
                     </span>
                   ) : null}
                 </TableCell>
-                {actions.map((action) => (
-                  <TableCell key={action} className='px-5 py-4 text-center'>
-                    <ScopeMark value={actionMark(grant, action)} />
-                  </TableCell>
-                ))}
-                {isCollection ? (
+                {combined ? (
+                  <>
+                    <TableCell className='px-5 py-4 text-sm text-muted-foreground'>
+                      {resourceTypeLabel(options, grant.resource.type)}
+                    </TableCell>
+                    <TableCell className='px-5 py-4'>
+                      <GrantedActions grant={grant} />
+                    </TableCell>
+                  </>
+                ) : (
+                  actions.map((action) => (
+                    <TableCell key={action} className='px-5 py-4 text-center'>
+                      <ScopeMark value={actionMark(grant, action)} />
+                    </TableCell>
+                  ))
+                )}
+                {combined || isCollection ? (
                   <TableCell className='px-5 py-4 text-sm text-muted-foreground'>
-                    {recordsAndFieldsSummary(grant)}
+                    {grant.resource.type === COLLECTION_TYPE
+                      ? recordsAndFieldsSummary(grant)
+                      : NONE}
                   </TableCell>
                 ) : null}
               </TableRow>
             ))}
             {rows.length === 0 ? (
-              <EmptyTableRow colSpan={actions.length + (isCollection ? 2 : 1)}>
+              <EmptyTableRow colSpan={columns}>
                 {draft.grants.length === 0
                   ? 'No permissions yet. Edit the set to grant resources and actions.'
                   : 'No permissions match these filters.'}
@@ -188,16 +229,35 @@ export function PermissionsSummary({
           onPage={setPage}
         />
       </ManagementTable>
-      {isCollection ? <ScopeLegend values={['all', 'scoped', 'none']} /> : null}
+      {combined || isCollection ? (
+        <ScopeLegend values={['all', 'scoped', 'none']} />
+      ) : null}
       {selectedGrant ? (
         <SidePanel
           title={resourceLabel(options, selectedGrant.resource)}
           description={`${resourceTypeLabel(options, selectedGrant.resource.type)} · ${selectedGrant.resource.id}`}
           onClose={() => setSelected(undefined)}
         >
-          <PermissionDetails grant={selectedGrant} />
+          <PermissionDetails grant={selectedGrant} options={options} />
         </SidePanel>
       ) : null}
+    </div>
+  );
+}
+
+/** The actions one grant carries, each with the mark that says what it reaches. */
+function GrantedActions({ grant }: { grant: GrantDraft }): ReactElement {
+  const actions = sortActions(grant.actions);
+  if (actions.length === 0)
+    return <span className='text-sm text-muted-foreground'>{NONE}</span>;
+  return (
+    <div className='flex flex-wrap gap-2'>
+      {actions.map((action) => (
+        <span className='flex items-center gap-1.5 text-sm' key={action}>
+          <ScopeMark value={actionMark(grant, action)} />
+          {humanize(action)}
+        </span>
+      ))}
     </div>
   );
 }
@@ -220,9 +280,8 @@ function resourceTypes(
 function actionColumns(
   options: AuthorizationOptions,
   draft: Draft,
-  type?: string,
+  type: string,
 ): readonly string[] {
-  if (type === undefined) return [];
   const resourceType = options.resourceTypes.find(
     (item) => item.value === type,
   );
@@ -230,49 +289,184 @@ function actionColumns(
   const granted = draft.grants
     .filter((grant) => grant.resource.type === type)
     .flatMap((grant) => grant.actions);
-  return [...new Set([...declared, ...granted])]
+  return sortActions([...declared, ...granted]);
+}
+
+function sortActions(values: readonly string[]): readonly string[] {
+  return [...new Set(values)]
     .map((value) => ({ value }))
     .sort(compareActions)
     .map((item) => item.value);
 }
 
-function PermissionDetails({ grant }: { grant: GrantDraft }): ReactElement {
+function PermissionDetails({
+  options,
+  grant,
+}: {
+  options: AuthorizationOptions;
+  grant: GrantDraft;
+}): ReactElement {
+  const isCollection = grant.resource.type === COLLECTION_TYPE;
+  const actions = sortActions([
+    ...(
+      options.resourceTypes.find((item) => item.value === grant.resource.type)
+        ?.actions ?? []
+    ).map((item) => item.value),
+    ...grant.actions,
+  ]);
   return (
-    <div className='space-y-5'>
-      <section>
-        <h3 className='text-sm font-medium'>Allowed actions</h3>
-        <div className='mt-3 flex flex-wrap gap-2'>
-          {grant.actions.map((action) => (
-            <span
-              className='rounded-md border bg-muted/20 px-3 py-1.5 text-sm'
-              key={action}
-            >
-              {humanize(action)}
-            </span>
-          ))}
-        </div>
-      </section>
-      {grant.resource.type === COLLECTION_TYPE ? (
-        <section className='border-t pt-5'>
-          <h3 className='text-sm font-medium'>Data access</h3>
-          <div className='mt-3 divide-y rounded-lg border'>
-            {grant.actions.map((action) => (
-              <div
-                className='flex items-start justify-between gap-4 p-4'
-                key={action}
+    <div className='space-y-3'>
+      {actions.map((action) => {
+        const allowed = grant.actions.includes(action);
+        return (
+          <section className='rounded-lg border' key={action}>
+            <header className='flex items-center justify-between gap-3 border-b bg-muted/20 px-4 py-2.5'>
+              <h3 className='text-sm font-medium'>{humanize(action)}</h3>
+              <span
+                className={`text-xs ${allowed ? 'text-foreground' : 'text-muted-foreground'}`}
               >
-                <span className='font-medium'>{humanize(action)}</span>
-                <span className='text-right text-sm text-muted-foreground'>
-                  {databaseActionSummary(
-                    action,
-                    grant.database[action] ?? defaultDatabaseActionDraft(),
-                  )}
-                </span>
-              </div>
-            ))}
-          </div>
-        </section>
+                {allowed ? 'Allowed' : 'Not granted'}
+              </span>
+            </header>
+            {allowed && isCollection ? (
+              <ActionDetails
+                action={action}
+                options={options}
+                value={grant.database[action] ?? defaultDatabaseActionDraft()}
+              />
+            ) : null}
+          </section>
+        );
+      })}
+      {actions.length === 0 ? (
+        <p className='text-sm text-muted-foreground'>
+          This resource declares no actions.
+        </p>
       ) : null}
+    </div>
+  );
+}
+
+/** What one collection action was configured with: its records, then its fields. */
+function ActionDetails({
+  action,
+  options,
+  value,
+}: {
+  action: string;
+  options: AuthorizationOptions;
+  value: DatabaseActionDraft;
+}): ReactElement {
+  return (
+    <dl className='divide-y text-sm'>
+      <DetailRow label='Record access'>
+        {action === 'create' ? (
+          <span className='text-muted-foreground'>
+            A create selects no records.
+          </span>
+        ) : (
+          <RecordAccessDetails options={options} value={value} />
+        )}
+      </DetailRow>
+      {action === 'create' || action === 'update' ? (
+        <DetailRow label='Writable fields'>
+          <FieldList value={value.input} />
+        </DetailRow>
+      ) : null}
+      {action === 'create' || action === 'read' || action === 'update' ? (
+        <DetailRow label='Visible fields'>
+          <FieldList value={value.output} />
+        </DetailRow>
+      ) : null}
+    </dl>
+  );
+}
+
+function DetailRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactElement | readonly ReactElement[];
+}): ReactElement {
+  return (
+    <div className='grid gap-1 px-4 py-3 sm:grid-cols-[9rem_minmax(0,1fr)] sm:gap-4'>
+      <dt className='text-xs font-medium text-muted-foreground uppercase'>
+        {label}
+      </dt>
+      <dd className='min-w-0'>{children}</dd>
+    </div>
+  );
+}
+
+/** The policy the action holds, and the parameters it was configured with. */
+function RecordAccessDetails({
+  options,
+  value,
+}: {
+  options: AuthorizationOptions;
+  value: DatabaseActionDraft;
+}): ReactElement {
+  const conditions = customFilterConditions(value.recordAccess);
+  const params =
+    recordAccessKey(value.recordAccess) === 'customFilter'
+      ? []
+      : policyParams(value.recordAccess);
+  return (
+    <div className='space-y-2'>
+      <p>{recordAccessLabel(options, value.recordAccess)}</p>
+      {conditions.length === 0 ? null : (
+        <ul className='space-y-1'>
+          {conditions.map((condition) => (
+            <li className='font-mono text-xs' key={condition.id}>
+              {condition.field} {filterOperatorLabels[condition.operator]}{' '}
+              {condition.value || "''"}
+            </li>
+          ))}
+        </ul>
+      )}
+      {params.map((param) => (
+        <p className='font-mono text-xs' key={param.name}>
+          {param.name}: {param.text}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+/** The parameters stored beside a policy key, read as they were stored. */
+function policyParams(
+  value: GrantDraft['database'][string]['recordAccess'],
+): readonly { name: string; text: string }[] {
+  if (typeof value === 'string') return [];
+  const params = value.params;
+  if (typeof params !== 'object' || params === null || Array.isArray(params))
+    return [];
+  return Object.entries(params).map(([name, item]) => ({
+    name,
+    text: typeof item === 'string' ? item : JSON.stringify(item),
+  }));
+}
+
+/** The fields by name, because a count says nothing about which ones. */
+function FieldList({
+  value,
+}: {
+  value: '*' | readonly string[];
+}): ReactElement {
+  if (value === '*') return <span>All fields</span>;
+  if (value.length === 0)
+    return <span className='text-muted-foreground'>No fields</span>;
+  return (
+    <div className='flex flex-wrap gap-1.5'>
+      {value.map((field) => (
+        <span
+          className='rounded-md border bg-muted/20 px-2 py-0.5 font-mono text-xs'
+          key={field}
+        >
+          {field}
+        </span>
+      ))}
     </div>
   );
 }

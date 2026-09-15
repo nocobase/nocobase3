@@ -7,7 +7,27 @@ import type {
 import type { PermissionSetCapabilities } from '../../components/permission-set-access.js';
 import type { UserDirectory } from '../../components/user-directory.js';
 import { defaultDatabaseActionDraft, recordAccessKey } from './drafts.js';
-import type { DatabaseActionDraft, Draft, GrantDraft } from './types.js';
+import type {
+  DatabaseActionDraft,
+  Draft,
+  FilterConditionDraft,
+  GrantDraft,
+  RecordAccessDraft,
+} from './types.js';
+
+/** How each filter operator is named, in the editor and wherever a stored condition is read back. */
+export const filterOperatorLabels: Readonly<
+  Record<FilterConditionDraft['operator'], string>
+> = {
+  $eq: 'Equals',
+  $ne: 'Not equal',
+  $in: 'In',
+  $notIn: 'Not in',
+  $gt: 'Greater than',
+  $gte: 'At least',
+  $lt: 'Less than',
+  $lte: 'At most',
+};
 
 export function humanize(value: string): string {
   return value
@@ -56,10 +76,6 @@ export function describeSet(set: PermissionSet): string {
 
 export function isSystemSet(set: PermissionSet): boolean {
   return set.unrestricted === true || set.protection !== undefined;
-}
-
-export function permissionCount(set: PermissionSet): number {
-  return set.grants.reduce((sum, grant) => sum + grant.actions.length, 0);
 }
 
 export function permissionCountFromDraft(draft: Draft): number {
@@ -153,8 +169,17 @@ export function actionRecordsSummary(
   action: string,
   value: DatabaseActionDraft,
 ): string {
-  if (action === 'create') return NONE;
-  const key = recordAccessKey(value.recordAccess);
+  return action === 'create'
+    ? NONE
+    : recordAccessLabel(options, value.recordAccess);
+}
+
+/** The policy as the options endpoint names it. */
+export function recordAccessLabel(
+  options: AuthorizationOptions,
+  value: RecordAccessDraft,
+): string {
+  const key = recordAccessKey(value);
   return (
     options.recordAccessPolicies.find((policy) => policy.value === key)
       ?.label ?? humanize(key)

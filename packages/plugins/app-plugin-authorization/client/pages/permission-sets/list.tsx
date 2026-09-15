@@ -18,12 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from '../../components/ui/table.js';
-import {
-  describeSet,
-  humanize,
-  isSystemSet,
-  permissionCount,
-} from './labels.js';
+import { describeSet, humanize, isSystemSet } from './labels.js';
 import { SetBadge } from './set-badge.js';
 
 export function PermissionSetsList({
@@ -88,9 +83,6 @@ export function PermissionSetsList({
                 Permission set
               </TableHead>
               <TableHead className='px-5 py-3 font-medium'>Type</TableHead>
-              <TableHead className='px-5 py-3 font-medium'>
-                Permissions
-              </TableHead>
               <TableHead className='px-5 py-3 font-medium'>Key</TableHead>
               <TableHead className='w-20 px-5 py-3' />
             </TableRow>
@@ -115,9 +107,6 @@ export function PermissionSetsList({
                     {isSystemSet(set) ? 'System' : 'Custom'}
                   </SetBadge>
                 </TableCell>
-                <TableCell className='px-5 py-4 tabular-nums'>
-                  {permissionCount(set)}
-                </TableCell>
                 <TableCell className='px-5 py-4 font-mono text-xs text-muted-foreground'>
                   {set.key}
                 </TableCell>
@@ -129,7 +118,7 @@ export function PermissionSetsList({
               </TableRow>
             ))}
             {sets.length === 0 ? (
-              <EmptyTableRow colSpan={5}>
+              <EmptyTableRow colSpan={4}>
                 {total === 0
                   ? 'No permission sets yet. Create one to bundle the resources and actions people need.'
                   : 'No permission sets match your search.'}

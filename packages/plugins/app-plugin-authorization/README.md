@@ -13,8 +13,8 @@ The plugin currently provides:
 - one dispatcher under `/api/authz` that serves whatever HTTP surface the
   installed Authorization plugins registered, each of them checking its own
   `authorization.settings/<id>` permission;
-- separate settings pages for an Authorization overview, Permission Sets,
-  Default Access, Sharing Rules, Restriction Rules, and Database Authorization;
+- separate settings pages for Permission Sets, Default Access, Sharing Rules,
+  Restriction Rules, and Database Authorization;
 - selection-based editors for resources, actions, users, and record scopes;
 - migrations for Permission Sets and access rules, together with the database
   stores those migrations create the tables for: the library defines the store
@@ -50,19 +50,20 @@ field that clears itself, the resource-type chips and the control returning a
 bar's filters to their defaults. Lists that grow page ten rows at a time through
 `client/components/pagination.ts` and the pager at the foot of the table frame;
 this is presentation over rows the panel already holds and asks the server for
-nothing. The permissions tab lists one row per resource with the actions as
-columns, each collection cell showing whether that action starts from every
-record, from a scoped set, or is not granted at all.
+nothing. The permissions tab opens on every resource the set grants, one row
+each with its type, the actions it grants as marks and, for a collection, the
+records and fields those actions reach; a resource-type chip narrows it to that
+type's own table, where the actions become columns and each collection cell
+shows whether that action starts from every record, from a scoped set, or is
+not granted at all. Opening a row reports that resource's actions one by one:
+whether each is allowed, the record access policy and the parameters it holds,
+and the writable and visible fields by name.
 
-Three screens read across those layers rather than editing one of them. The
-Overview page, listed first in the Authorization group, states the four layers
-in the order a request is decided, what each one does and what it cannot do,
-and links to the page that configures it; it declares no resource of its own
-and follows the permission sets page, because a route names one resource and
-there is no "any of these" form. Compare sets and User access are views of the
-permission sets page reached from its filter bar, not routes, because neither
-needs a stored page-grant identifier. Compare puts the sets side by side, one
-column per set and one row per resource and action, carrying the same marks the
+Two screens read across those layers rather than editing one of them. Compare
+sets and User access are views of the permission sets page reached from its
+filter bar, not routes, because neither needs a stored page-grant identifier.
+Compare puts the sets side by side, one column per set and one row per
+resource, for the action its filter bar selects, carrying the same marks the
 permissions tab uses plus a fourth for a set that confers unrestricted access,
 whose grants are never consulted; the table scrolls sideways with its first
 column pinned, since many sets means many columns. User access reports one

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import type {
   AuthorizationOptions,
@@ -11,12 +11,6 @@ import type {
   SharingRule,
 } from '../client/authorization-client.js';
 
-vi.mock('@nocobase/app-client', () => ({
-  resolveAppUrl: (path: string) => `/${path}`,
-}));
-
-const { default: AuthorizationOverviewPage } =
-  await import('../client/pages/overview-page.js');
 const { CompareSets } =
   await import('../client/pages/permission-sets/compare.js');
 const { UserAccess } =
@@ -168,32 +162,6 @@ function choosePerson(name: string): void {
   fireEvent.click(screen.getByRole('option', { name: new RegExp(name) }));
 }
 
-describe('authorization overview', () => {
-  it('lists the four layers in evaluation order and links to each', () => {
-    render(<AuthorizationOverviewPage />);
-    const links = screen.getAllByRole('link');
-    expect(links.map((link) => link.getAttribute('href'))).toEqual([
-      '/settings/authorization/permission-sets',
-      '/settings/authorization/default-access',
-      '/settings/authorization/sharing-rules',
-      '/settings/authorization/restriction-rules',
-    ]);
-    expect(links.map((link) => link.textContent)).toEqual([
-      expect.stringContaining('Permission Sets'),
-      expect.stringContaining('Default Access'),
-      expect.stringContaining('Sharing Rules'),
-      expect.stringContaining('Restriction Rules'),
-    ]);
-  });
-
-  it('names what each layer does to a request', () => {
-    render(<AuthorizationOverviewPage />);
-    expect(screen.getByText('Grants')).toBeInTheDocument();
-    expect(screen.getAllByText('Widens records')).toHaveLength(2);
-    expect(screen.getByText('Narrows records')).toBeInTheDocument();
-  });
-});
-
 describe('compare sets', () => {
   it('renders a column per set and marks every record, scoped and not granted', () => {
     render(
@@ -202,25 +170,40 @@ describe('compare sets', () => {
     expect(
       screen.getAllByRole('columnheader').map((cell) => cell.textContent),
     ).toEqual([
-      'Resource and action',
+      'Resource',
       expect.stringContaining('Root'),
       expect.stringContaining('Member'),
       expect.stringContaining('Order operators'),
     ]);
 
+    // One row per resource for the chosen action, which opens on read.
     const rows = bodyRows();
-    // A group heading precedes each resource type, then one row per action.
-    const ordersRead = rows.find((row) =>
-      /Orders\s*· Read/.test(row.textContent ?? ''),
-    );
+    const ordersRead = rows.find((row) => /Orders/.test(row.textContent ?? ''));
     expect(ordersRead).toBeDefined();
     const read = within(ordersRead as HTMLElement);
     expect(read.getByLabelText('Unrestricted')).toBeInTheDocument();
     expect(read.getAllByLabelText('Not granted')).toHaveLength(1);
     expect(read.getByLabelText('Every record')).toBeInTheDocument();
+  });
 
+  it('changes the rows with the action selector', () => {
+    render(
+      <CompareSets options={options} sets={sets} onBack={() => undefined} />,
+    );
+    // Read is granted on both collections; update on orders alone.
+    expect(
+      bodyRows().filter((row) => /Articles/.test(row.textContent ?? '')),
+    ).toHaveLength(1);
+
+    fireEvent.change(screen.getByLabelText('Compared action'), {
+      target: { value: 'update' },
+    });
+    const rows = bodyRows();
+    expect(
+      rows.filter((row) => /Articles/.test(row.textContent ?? '')),
+    ).toEqual([]);
     const ordersUpdate = rows.find((row) =>
-      /Orders\s*· Update/.test(row.textContent ?? ''),
+      /Orders/.test(row.textContent ?? ''),
     );
     expect(
       within(ordersUpdate as HTMLElement).getByLabelText('Scoped records'),
@@ -231,8 +214,8 @@ describe('compare sets', () => {
     render(
       <CompareSets options={options} sets={sets} onBack={() => undefined} />,
     );
-    // Four rows — orders read, orders update, articles read, the home page — plus the legend entry.
-    expect(screen.getAllByLabelText('Unrestricted')).toHaveLength(5);
+    // Two read rows — orders and articles — plus the legend entry.
+    expect(screen.getAllByLabelText('Unrestricted')).toHaveLength(3);
     expect(
       screen.getByText('Unrestricted: grants are not consulted'),
     ).toBeInTheDocument();
@@ -242,7 +225,9 @@ describe('compare sets', () => {
     render(
       <CompareSets options={options} sets={sets} onBack={() => undefined} />,
     );
+    // Pages declare no read, so the selector falls back to the action they do declare.
     fireEvent.click(screen.getByRole('button', { name: /Pages/ }));
+    expect(screen.getByLabelText('Compared action')).toHaveValue('access');
     expect(
       bodyRows().filter((row) => row.textContent?.includes('Home')),
     ).toHaveLength(1);

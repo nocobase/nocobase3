@@ -119,8 +119,8 @@ export function DefaultAccessPanel({
       {error ? <ErrorBox value={error} /> : null}
       <ManagementToolbar
         search={search}
-        searchLabel='Search collections'
-        searchPlaceholder='Search collections'
+        searchLabel='Search rules'
+        searchPlaceholder='Search rules'
         onSearch={changeSearch}
         actionLabel='Set default access'
         onAction={() => edit()}

@@ -40,6 +40,7 @@ const options: AuthorizationOptions = {
   recordAccessPolicies: [
     { value: 'allRecords', label: 'All Records' },
     { value: 'recordsIOwn', label: 'Records I Own' },
+    { value: 'customFilter', label: 'Custom Filter' },
   ],
 };
 
@@ -69,6 +70,34 @@ const draft: Draft = {
       resource: { type: 'page', id: 'home' },
       actions: ['view'],
       database: {},
+    },
+  ],
+};
+
+/** One resource configured the way the detail panel has to read it back. */
+const detailDraft: Draft = {
+  key: 'order-ops',
+  title: 'Order operators',
+  grants: [
+    {
+      id: 1,
+      resource: { type: 'database.collection', id: 'orders' },
+      actions: ['read', 'update'],
+      database: {
+        read: {
+          input: '*',
+          output: ['id', 'status'],
+          recordAccess: 'recordsIOwn',
+        },
+        update: {
+          input: ['status'],
+          output: ['status'],
+          recordAccess: {
+            key: 'customFilter',
+            params: { filter: { $and: [{ status: { $eq: 'open' } }] } },
+          },
+        },
+      },
     },
   ],
 };
@@ -125,7 +154,7 @@ describe('table pager', () => {
 });
 
 describe('permissions tab', () => {
-  it('renders one row per resource with the record scope per action', () => {
+  it('opens on one table carrying every resource, its type and its actions', () => {
     render(
       <PermissionsSummary
         draft={draft}
@@ -133,13 +162,65 @@ describe('permissions tab', () => {
         onEdit={() => undefined}
       />,
     );
+    expect(
+      screen.getAllByRole('columnheader').map((cell) => cell.textContent),
+    ).toEqual(['Resource', 'Type', 'Granted actions', 'Records and fields']);
+
+    const rows = bodyRows();
+    expect(rows).toHaveLength(3);
+    const orders = within(rows[0] as HTMLElement);
+    expect(orders.getByText('Orders')).toBeInTheDocument();
+    expect(orders.getByText('Collections')).toBeInTheDocument();
+    expect(orders.getByText('Read')).toBeInTheDocument();
+    expect(orders.getByText('Update')).toBeInTheDocument();
+    expect(orders.getAllByLabelText('Every record')).toHaveLength(1);
+    expect(orders.getAllByLabelText('Scoped records')).toHaveLength(1);
+    expect(
+      within(rows[2] as HTMLElement).getByText('Pages'),
+    ).toBeInTheDocument();
+  });
+
+  it('keeps the per-type table when a type chip is selected', () => {
+    render(
+      <PermissionsSummary
+        draft={draft}
+        options={options}
+        onEdit={() => undefined}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Collections/ }));
     const rows = bodyRows();
     expect(rows).toHaveLength(2);
     const orders = within(rows[0] as HTMLElement);
-    expect(orders.getByText('Orders')).toBeInTheDocument();
     expect(orders.getAllByLabelText('Every record')).toHaveLength(1);
     expect(orders.getAllByLabelText('Scoped records')).toHaveLength(1);
     expect(orders.getAllByLabelText('Not granted')).toHaveLength(2);
+  });
+
+  it('reports one resource action by action, with its records and its fields', () => {
+    render(
+      <PermissionsSummary
+        draft={detailDraft}
+        options={options}
+        onEdit={() => undefined}
+      />,
+    );
+    fireEvent.click(screen.getByText('Orders'));
+    const panel = within(screen.getByRole('dialog'));
+
+    // Every action the type declares is reported, granted or not.
+    expect(panel.getAllByText('Allowed')).toHaveLength(2);
+    expect(panel.getAllByText('Not granted')).toHaveLength(2);
+
+    expect(panel.getByText('Records I Own')).toBeInTheDocument();
+    expect(panel.getByText('Custom Filter')).toBeInTheDocument();
+    expect(panel.getByText('status Equals open')).toBeInTheDocument();
+
+    // The fields are named rather than counted.
+    expect(panel.getAllByText('id')).toHaveLength(1);
+    expect(panel.getAllByText('status')).toHaveLength(3);
+    expect(panel.getByText('Writable fields')).toBeInTheDocument();
+    expect(panel.getAllByText('Visible fields')).toHaveLength(2);
   });
 
   it('switches tables with the resource type chips', () => {
@@ -180,7 +261,7 @@ describe('permissions tab', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear filter' }));
     expect(screen.getByLabelText('Search resources')).toHaveValue('');
-    expect(bodyRows()).toHaveLength(2);
+    expect(bodyRows()).toHaveLength(3);
     expect(screen.queryByRole('button', { name: 'Clear filter' })).toBeNull();
   });
 
@@ -200,6 +281,6 @@ describe('permissions tab', () => {
     );
     expect(field).toHaveValue('');
     expect(field).toHaveFocus();
-    expect(bodyRows()).toHaveLength(2);
+    expect(bodyRows()).toHaveLength(3);
   });
 });

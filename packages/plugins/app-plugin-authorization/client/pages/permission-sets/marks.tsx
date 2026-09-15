@@ -1,4 +1,4 @@
-import { Check, Contrast, Minus, Zap } from 'lucide-react';
+import { Check, Contrast, Minus, Shield } from 'lucide-react';
 import type { ReactElement } from 'react';
 
 import {
@@ -11,14 +11,14 @@ const markStyles: Readonly<Record<GrantMark, string>> = {
   all: 'bg-primary/10 text-primary',
   scoped: 'bg-muted text-foreground',
   none: 'text-muted-foreground/60',
-  bypass: 'bg-primary text-primary-foreground',
+  bypass: 'bg-primary/10 text-primary',
 };
 
 const markIcons = {
   all: Check,
   scoped: Contrast,
   none: Minus,
-  bypass: Zap,
+  bypass: Shield,
 } as const;
 
 export function ScopeMark({ value }: { value: GrantMark }): ReactElement {
