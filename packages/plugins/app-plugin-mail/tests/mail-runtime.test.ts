@@ -638,6 +638,41 @@ describe('mail MVP runtime', () => {
     );
   });
 
+  it('loads only summary fields for the mailbox list', async () => {
+    await store.commitSyncBatch({
+      accountId: 'account-1',
+      folders: [],
+      messages: [
+        {
+          ...message('provider-summary', 'Summary'),
+          text: 'A large message body that the mailbox list does not need.',
+          html: '<p>A large message body</p>',
+          attachments: [
+            {
+              providerAttachmentId: 'provider-summary-attachment',
+              fileName: 'report.pdf',
+              contentType: 'application/pdf',
+              size: 10,
+              inline: false,
+            },
+          ],
+        },
+      ],
+      deletedProviderMessageIds: [],
+      nextCursor: { value: 'summary-test' },
+    });
+
+    const result = await store.listMessages('user-1', {});
+
+    expect(result.items[0]).toMatchObject({
+      providerMessageId: 'provider-summary',
+      hasAttachments: true,
+    });
+    expect(result.items[0]).not.toHaveProperty('text');
+    expect(result.items[0]).not.toHaveProperty('html');
+    expect(result.items[0]).not.toHaveProperty('attachments');
+  });
+
   it('updates Provider and local message state, then deletes the message', async () => {
     await store.commitSyncBatch({
       accountId: 'account-1',
@@ -1108,13 +1143,12 @@ describe('mail MVP runtime', () => {
     });
   });
 
-  it('updates account lifecycle and promotes a replacement default', async () => {
+  it('updates account lifecycle and removes an account without account defaults', async () => {
     await store.saveAccount({
       ...account(),
       id: 'account-2',
       address: 'secondary@example.com',
       credentialReference: 'secret:secondary',
-      isDefault: false,
     });
     const deleteCredential = vi.fn(async () => undefined);
     const deletePushSubscription = vi.fn<
@@ -1151,13 +1185,6 @@ describe('mail MVP runtime', () => {
       { accountId: 'account-1' },
     );
     expect(accountSync.policy.receivedAfter).toBe('2026-02-01T00:00:00.000Z');
-    await expect(
-      service.updateAccount(
-        { actorId: 'user-1' },
-        { accountId: 'account-2', isDefault: true },
-      ),
-    ).resolves.toMatchObject({ id: 'account-2', isDefault: true });
-
     await store.savePushSubscription({
       accountId: 'account-2',
       provider: account().provider,
@@ -1176,7 +1203,7 @@ describe('mail MVP runtime', () => {
     );
     expect(deleteCredential).toHaveBeenCalledWith('secret:secondary');
     await expect(service.listAccounts({ actorId: 'user-1' })).resolves.toEqual([
-      expect.objectContaining({ id: 'account-1', isDefault: true }),
+      expect.objectContaining({ id: 'account-1' }),
     ]);
   });
 
@@ -1647,6 +1674,7 @@ describe('mail MVP runtime', () => {
     expect(listChanges).toHaveBeenCalledWith({
       cursor: { value: 'watermark-1' },
       limit: 1,
+      signal: expect.any(AbortSignal),
     });
     expect(await store.getSyncCursor('account-1')).toEqual({
       value: 'watermark-2',
@@ -1740,10 +1768,12 @@ describe('mail MVP runtime', () => {
     expect(listChanges).toHaveBeenNthCalledWith(1, {
       cursor: { value: 'watermark-before-import' },
       limit: 100,
+      signal: expect.any(AbortSignal),
     });
     expect(listChanges).toHaveBeenNthCalledWith(2, {
       cursor: { value: 'watermark-after-import' },
       limit: 100,
+      signal: expect.any(AbortSignal),
     });
   });
 
@@ -2237,7 +2267,6 @@ function account(): MailAccount {
     credentialReference: 'secret:test',
     scopes: [],
     status: 'active',
-    isDefault: true,
   };
 }
 

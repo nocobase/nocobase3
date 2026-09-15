@@ -153,6 +153,28 @@ describe('Mail OAuth persistence', () => {
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 
+  it('aborts a refresh that never completes and releases its local flight', async () => {
+    const vault = new DatabaseMailCredentialVault(database, 100, 5, 20);
+    const reference = await vault.put({ token: 'expired' });
+    const refresh = vi.fn(
+      (_value: { token: string }, signal?: AbortSignal) =>
+        new Promise<{ token: string }>((_resolve, reject) => {
+          signal?.addEventListener('abort', () => reject(signal.reason), {
+            once: true,
+          });
+        }),
+    );
+
+    await expect(
+      vault.getOrRefresh(
+        reference,
+        (value: { token: string }) => value.token === 'fresh',
+        refresh,
+      ),
+    ).rejects.toThrow('Mail credential refresh timed out.');
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
   it('consumes an OAuth state transaction exactly once', async () => {
     const store = createDatabaseMailStore(database);
     const transaction = {
@@ -192,7 +214,6 @@ describe('Mail OAuth persistence', () => {
       credentialReference: 'mail-credential:account-1',
       scopes: ['gmail.modify'],
       status: 'active' as const,
-      isDefault: true,
     };
     const identity = {
       id: 'duplicate-identity',
@@ -220,7 +241,6 @@ describe('Mail OAuth persistence', () => {
         authorizationSubject: 'provider-subject-1',
         scopes: [],
         status: 'active',
-        isDefault: true,
       },
       [],
     );

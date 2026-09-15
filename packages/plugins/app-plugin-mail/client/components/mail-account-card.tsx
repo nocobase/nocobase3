@@ -11,7 +11,6 @@ export interface MailAccountCardProps {
   readonly canSync?: boolean;
   readonly providerLabel: string;
   readonly syncLabel?: string;
-  readonly defaultLabel: string;
   readonly statusLabel: string;
   readonly ownerLabel?: string;
   readonly syncing?: boolean;
@@ -23,7 +22,6 @@ export function MailAccountCard({
   canSync = true,
   providerLabel,
   syncLabel,
-  defaultLabel,
   statusLabel,
   ownerLabel,
   syncing = false,
@@ -39,9 +37,6 @@ export function MailAccountCard({
               label={statusLabel}
               tone={accountStatusTone(account.status)}
             />
-            {account.isDefault ? (
-              <MailStatusBadge label={defaultLabel} tone='info' />
-            ) : null}
           </div>
           <p className='mt-1 text-sm text-muted-foreground'>
             {account.displayName ? `${account.displayName} · ` : ''}

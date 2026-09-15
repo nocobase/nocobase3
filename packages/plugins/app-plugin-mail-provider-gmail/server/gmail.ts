@@ -32,6 +32,46 @@ const DEFAULT_SCOPES = [
   'https://www.googleapis.com/auth/gmail.settings.basic',
 ] as const;
 
+const HTTP_TIMEOUT_MS = 30 * 1_000;
+const MAX_PROVIDER_JSON_BYTES = 32 * 1024 * 1024;
+const MESSAGE_FETCH_CONCURRENCY = 4;
+
+function fetchWithTimeout(
+  input: Parameters<typeof globalThis.fetch>[0],
+  init: RequestInit = {},
+): Promise<Response> {
+  const timeoutSignal = AbortSignal.timeout(HTTP_TIMEOUT_MS);
+  const signal = init.signal
+    ? AbortSignal.any([init.signal, timeoutSignal])
+    : timeoutSignal;
+  return globalThis.fetch(input, { ...init, signal });
+}
+
+async function readJson<T>(response: Response): Promise<T> {
+  if (!response.body) return (await response.json()) as T;
+  const reader =
+    response.body.getReader() as ReadableStreamDefaultReader<Uint8Array>;
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const chunk = await reader.read();
+    if (chunk.done) break;
+    total += chunk.value.byteLength;
+    if (total > MAX_PROVIDER_JSON_BYTES) {
+      await reader.cancel();
+      throw new Error('Gmail Provider response exceeded the size limit.');
+    }
+    chunks.push(chunk.value);
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return JSON.parse(new TextDecoder().decode(bytes)) as T;
+}
+
 export interface GmailMailProviderConfig extends MailProviderConfig {
   readonly type: 'gmail';
   readonly clientId: string;
@@ -585,7 +625,7 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
     if (!page.ok) return page;
     const messages = await mapConcurrent(
       (page.value.messages ?? []).flatMap((item) => (item.id ? [item.id] : [])),
-      10,
+      MESSAGE_FETCH_CONCURRENCY,
       async (id) => this.getMessage(id, input.signal),
     );
     const failed = messages.find(
@@ -806,7 +846,7 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
             ),
           };
         }
-        const response = await fetch(
+        const response = await fetchWithTimeout(
           `${apiBase(this.config)}/users/me/drafts/send`,
           {
             method: 'POST',
@@ -821,7 +861,7 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
         if (!response.ok) {
           return submissionResponse(response);
         }
-        const value = (await response.json()) as GmailMessageResource;
+        const value = await readJson<GmailMessageResource>(response);
         return { status: 'accepted', providerMessageId: value.id };
       }
       let raw: string;
@@ -836,7 +876,7 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
           ),
         };
       }
-      const response = await fetch(
+      const response = await fetchWithTimeout(
         `${apiBase(this.config)}/users/me/messages/send`,
         {
           method: 'POST',
@@ -854,7 +894,7 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
         },
       );
       if (!response.ok) return submissionResponse(response);
-      const value = (await response.json()) as GmailMessageResource;
+      const value = await readJson<GmailMessageResource>(response);
       return { status: 'accepted', providerMessageId: value.id };
     } catch (error) {
       return {
@@ -880,26 +920,29 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
       const prepared = await this.prepareForward(input);
       if (!prepared.ok) return prepared;
       input = prepared.value;
-      const response = await fetch(`${apiBase(this.config)}/users/me/drafts`, {
-        method: 'POST',
-        headers: {
-          authorization: `Bearer ${accessToken}`,
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({
-          message: {
-            raw: await buildMime(input),
-            ...(input.message.providerConversationId
-              ? { threadId: input.message.providerConversationId }
-              : {}),
+      const response = await fetchWithTimeout(
+        `${apiBase(this.config)}/users/me/drafts`,
+        {
+          method: 'POST',
+          headers: {
+            authorization: `Bearer ${accessToken}`,
+            'content-type': 'application/json',
           },
-        }),
-        signal: input.signal,
-      });
+          body: JSON.stringify({
+            message: {
+              raw: await buildMime(input),
+              ...(input.message.providerConversationId
+                ? { threadId: input.message.providerConversationId }
+                : {}),
+            },
+          }),
+          signal: input.signal,
+        },
+      );
       if (!response.ok) {
         return { ok: false, error: await responseError('GMAIL', response) };
       }
-      const value = (await response.json()) as GmailDraftResource;
+      const value = await readJson<GmailDraftResource>(response);
       const providerMessageId = required(
         value.message?.id,
         'Gmail draft message ID',
@@ -1080,7 +1123,19 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
   ): Promise<MailProviderResult<string>> {
     if (providerDraftId) return { ok: true, value: providerDraftId };
     let pageToken: string | undefined;
+    const seenPageTokens = new Set<string>();
     do {
+      if (pageToken) {
+        if (seenPageTokens.has(pageToken)) {
+          return failure(
+            'GMAIL_PAGING_STALLED',
+            'Gmail returned the same draft page token repeatedly.',
+            'provider',
+            false,
+          );
+        }
+        seenPageTokens.add(pageToken);
+      }
       const query = new URLSearchParams({ maxResults: '500' });
       if (pageToken) query.set('pageToken', pageToken);
       const page = await this.request<GmailDraftList>(
@@ -1181,13 +1236,16 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
     init: RequestInit,
   ): Promise<MailProviderResult<void>> {
     try {
-      const response = await fetch(`${apiBase(this.config)}${path}`, {
-        ...init,
-        headers: {
-          authorization: `Bearer ${await this.accessToken(init.signal ?? undefined)}`,
-          ...init.headers,
+      const response = await fetchWithTimeout(
+        `${apiBase(this.config)}${path}`,
+        {
+          ...init,
+          headers: {
+            authorization: `Bearer ${await this.accessToken(init.signal ?? undefined)}`,
+            ...init.headers,
+          },
         },
-      });
+      );
       return response.ok
         ? { ok: true, value: undefined }
         : { ok: false, error: await responseError('GMAIL', response) };
@@ -1220,7 +1278,7 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
       await this.context.credentials.getOrRefresh<GmailCredential>(
         this.account.credentialReference,
         (value) => Date.parse(value.expiresAt) > Date.now() + 60_000,
-        async (value) => {
+        async (value, refreshSignal) => {
           const refreshed = await exchangeToken(
             this.config,
             {
@@ -1229,7 +1287,7 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
               refresh_token: value.refreshToken,
               grant_type: 'refresh_token',
             },
-            signal,
+            refreshSignal ?? signal,
           );
           if (!refreshed.ok) throw new ProviderRequestError(refreshed.error);
           return {
@@ -1244,6 +1302,7 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
             tokenType: refreshed.value.token_type ?? value.tokenType,
           };
         },
+        signal,
       );
     return credential.accessToken;
   }
@@ -1255,7 +1314,7 @@ async function exchangeToken(
   signal?: AbortSignal,
 ): Promise<MailProviderResult<GmailTokenResponse>> {
   try {
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       config.tokenEndpoint ?? 'https://oauth2.googleapis.com/token',
       {
         method: 'POST',
@@ -1264,7 +1323,7 @@ async function exchangeToken(
         signal,
       },
     );
-    const value = (await response.json()) as GmailTokenResponse;
+    const value = await readJson<GmailTokenResponse>(response);
     return response.ok
       ? { ok: true, value }
       : failure(
@@ -1288,7 +1347,7 @@ async function gmailRequest<T>(
   init: RequestInit,
 ): Promise<MailProviderResult<T>> {
   try {
-    const response = await fetch(`${apiBase(config)}${path}`, {
+    const response = await fetchWithTimeout(`${apiBase(config)}${path}`, {
       ...init,
       headers: {
         ...init.headers,
@@ -1297,7 +1356,7 @@ async function gmailRequest<T>(
       },
     });
     return response.ok
-      ? { ok: true, value: (await response.json()) as T }
+      ? { ok: true, value: await readJson<T>(response) }
       : { ok: false, error: await responseError('GMAIL', response) };
   } catch (error) {
     return { ok: false, error: unknownError(error, 'GMAIL_REQUEST_FAILED') };
@@ -1470,26 +1529,23 @@ async function buildMime(input: MailProviderSendInput): Promise<string> {
             alternativeBody,
           ].join('\r\n')
         : textPart(input.message.text),
-      ...(await Promise.all(
-        input.message.attachments.map(async (attachment) => {
-          const bytes = await readAttachment(
-            attachment.open(),
-            attachment.size,
-          );
-          const fileName = encodeHeader(attachment.fileName);
-          return [
-            `Content-Type: ${cleanHeader(attachment.contentType)}; name="${fileName}"`,
-            `Content-Disposition: ${attachment.inline ? 'inline' : 'attachment'}; filename="${fileName}"`,
-            ...(attachment.contentId
-              ? [`Content-ID: <${cleanHeader(attachment.contentId)}>`]
-              : []),
-            'Content-Transfer-Encoding: base64',
-            '',
-            wrapBase64(bytes.toString('base64')),
-          ].join('\r\n');
-        }),
-      )),
     ];
+    for (const attachment of input.message.attachments) {
+      const bytes = await readAttachment(attachment.open(), attachment.size);
+      const fileName = encodeHeader(attachment.fileName);
+      parts.push(
+        [
+          `Content-Type: ${cleanHeader(attachment.contentType)}; name="${fileName}"`,
+          `Content-Disposition: ${attachment.inline ? 'inline' : 'attachment'}; filename="${fileName}"`,
+          ...(attachment.contentId
+            ? [`Content-ID: <${cleanHeader(attachment.contentId)}>`]
+            : []),
+          'Content-Transfer-Encoding: base64',
+          '',
+          wrapBase64(bytes.toString('base64')),
+        ].join('\r\n'),
+      );
+    }
     body = [
       ...parts.flatMap((part) => [`--${boundary}`, part]),
       `--${boundary}--`,
@@ -1763,10 +1819,10 @@ async function responseError(
 ): Promise<MailProviderError> {
   let message = `${prefix} request failed with status ${response.status}.`;
   try {
-    const body = (await response.json()) as {
+    const body = await readJson<{
       error?: { message?: string } | string;
       error_description?: string;
-    };
+    }>(response);
     message =
       typeof body.error === 'string'
         ? (body.error_description ?? body.error)

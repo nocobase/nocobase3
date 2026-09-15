@@ -13,7 +13,6 @@ import {
 } from '../components/index.js';
 import { Button } from '../components/ui/button.js';
 import { Input } from '../components/ui/input.js';
-import { NativeSelect } from '../components/ui/native-select.js';
 import {
   plainTextToMailHtml,
   renderMailTemplate,
@@ -30,7 +29,6 @@ import {
   type MailLabel,
   type MailMessage,
   type MailMessageSummary,
-  type MailIdentity,
   type MailProviderCapabilities,
   type MailProviderView,
   type MailSignature,
@@ -83,6 +81,8 @@ export interface MailWorkspacePageProps {
 }
 
 const COMPOSER_RECOVERY_KEY_PREFIX = 'nocobase:mail:composer-recovery:v1:';
+const LAST_COMPOSE_ACCOUNT_KEY_PREFIX =
+  'nocobase:mail:last-compose-account:v1:';
 const AUTO_SAVE_DELAY_MS = 1_000;
 
 export default function MailWorkspacePage({
@@ -94,6 +94,9 @@ export default function MailWorkspacePage({
   const [providers, setProviders] = useState<readonly MailProviderView[]>([]);
   const [accountId, setAccountId] = useState('');
   const [folders, setFolders] = useState<readonly MailFolder[]>([]);
+  const [foldersByAccountId, setFoldersByAccountId] = useState<
+    ReadonlyMap<string, readonly MailFolder[]>
+  >(() => new Map());
   const [folderId, setFolderId] = useState<string>();
   const [customLabels, setCustomLabels] = useState<readonly MailLabel[]>([]);
   const [labelId, setLabelId] = useState<string>();
@@ -107,15 +110,20 @@ export default function MailWorkspacePage({
   const [loadingAccounts, setLoadingAccounts] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [loadingConversation, setLoadingConversation] = useState(false);
-  const [syncRun, setSyncRun] = useState<MailSyncRunView>();
+  const [syncRuns, setSyncRuns] = useState<
+    Readonly<Record<string, MailSyncRunView>>
+  >({});
+  const syncRunsRef = useRef<Readonly<Record<string, MailSyncRunView>>>({});
+  const syncPollInFlightRef = useRef(false);
   const [error, setError] = useState<string>();
   const [reloadVersion, setReloadVersion] = useState(0);
   const conversationRequestIdRef = useRef(0);
   const messageRequestIdRef = useRef(0);
   const accountIdRef = useRef('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [composeAccountId, setComposeAccountId] = useState('');
   const [composer, setComposer] = useState<ComposerState>();
-  const [identities, setIdentities] = useState<readonly MailIdentity[]>([]);
+  const [composerAccountId, setComposerAccountId] = useState('');
   const [identityId, setIdentityId] = useState('');
   const [signatures, setSignatures] = useState<readonly MailSignature[]>([]);
   const [signatureId, setSignatureId] = useState('');
@@ -141,6 +149,10 @@ export default function MailWorkspacePage({
   const failedFingerprintRef = useRef<string | undefined>(undefined);
   const composerSessionRef = useRef(0);
 
+  useEffect(() => {
+    syncRunsRef.current = syncRuns;
+  }, [syncRuns]);
+
   const requestError = useCallback(
     (cause: unknown): void => {
       setError(
@@ -158,92 +170,201 @@ export default function MailWorkspacePage({
     currentAccount,
     providers,
   );
-  const accountIsActive = currentAccount?.status === 'active';
-  const canSend = Boolean(accountIsActive && currentProviderCapabilities?.send);
-  const canSync = Boolean(
-    accountIsActive && currentProviderCapabilities?.incrementalSync,
+  const composeAccount = accounts.find(
+    (account) => account.id === composeAccountId,
   );
-  const canDraft = Boolean(
-    accountIsActive && currentProviderCapabilities?.drafts,
+  const composeProviderCapabilities = findProviderCapabilities(
+    composeAccount,
+    providers,
   );
-  const canMove = Boolean(
-    accountIsActive && currentProviderCapabilities?.moveMessage,
+  const composerAccount = accounts.find(
+    (account) => account.id === composerAccountId,
   );
-  const canUseLabels = Boolean(accountIsActive);
+  const composerProviderCapabilities = findProviderCapabilities(
+    composerAccount,
+    providers,
+  );
+  const selectedMessageAccount = selected
+    ? accounts.find((account) => account.id === selected.accountId)
+    : undefined;
+  const selectedMessageProviderCapabilities = findProviderCapabilities(
+    selectedMessageAccount,
+    providers,
+  );
+  const syncableAccounts = accounts.filter((account) => {
+    const capabilities = findProviderCapabilities(account, providers);
+    return account.status === 'active' && capabilities?.incrementalSync;
+  });
+  const isAllAccounts = accountId === '';
+  const canSend = Boolean(
+    composeAccount?.status === 'active' && composeProviderCapabilities?.send,
+  );
+  const canSync = isAllAccounts
+    ? syncableAccounts.length > 0
+    : Boolean(
+        currentAccount?.status === 'active' &&
+        currentProviderCapabilities?.incrementalSync,
+      );
+  const composerCanSend = Boolean(
+    composerAccount?.status === 'active' && composerProviderCapabilities?.send,
+  );
+  const composerCanDraft = Boolean(
+    composerAccount?.status === 'active' &&
+    composerProviderCapabilities?.drafts,
+  );
+  const selectedMessageCanMove = Boolean(
+    selectedMessageAccount?.status === 'active' &&
+    selectedMessageProviderCapabilities?.moveMessage &&
+    [...(foldersByAccountId.get(selected?.accountId ?? '') ?? [])].some(
+      (folder) => folder.type === 'archive',
+    ),
+  );
+  const selectedMessageCanDraft = Boolean(
+    selectedMessageAccount?.status === 'active' &&
+    selectedMessageProviderCapabilities?.drafts,
+  );
+  const selectedMessageCanUseLabels =
+    selectedMessageAccount?.status === 'active';
 
-  const loadAccounts = useCallback((): void => {
-    setLoadingAccounts(true);
-    setError(undefined);
-    void Promise.all([
-      mail.listAccounts(),
-      mail.listProviders(),
-      mail.listLabels(),
-    ])
-      .then(([nextAccounts, nextProviders, nextLabels]) => {
-        const nextAccountId = nextAccounts.some(
-          (account) => account.id === accountIdRef.current,
-        )
-          ? accountIdRef.current
-          : (nextAccounts.find((account) => account.isDefault)?.id ??
-            nextAccounts[0]?.id ??
-            '');
-        setProviders(nextProviders);
-        setAccounts(nextAccounts);
-        setCustomLabels(nextLabels);
-        if (nextAccountId !== accountIdRef.current) {
-          messageRequestIdRef.current += 1;
-          conversationRequestIdRef.current += 1;
-          accountIdRef.current = nextAccountId;
-          setAccountId(nextAccountId);
-          setFolders([]);
-          setLabelId(undefined);
-          setMessages([]);
-          setNextCursor(undefined);
-          setSelected(undefined);
-          setConversation([]);
-          setConversationCursor(undefined);
-          setLoadingMessages(false);
-          setLoadingConversation(false);
-        }
-      })
-      .catch(requestError)
-      .finally(() => setLoadingAccounts(false));
-  }, [mail, requestError]);
+  const loadAccounts = useCallback(
+    (clearError = true): void => {
+      setLoadingAccounts(true);
+      if (clearError) setError(undefined);
+      void Promise.allSettled([
+        mail.listAccounts(),
+        mail.listProviders(),
+        mail.listLabels(),
+      ])
+        .then(([accountsResult, providersResult, labelsResult]) => {
+          if (accountsResult.status === 'rejected') {
+            requestError(accountsResult.reason);
+            return;
+          }
+          if (providersResult.status === 'rejected') {
+            requestError(providersResult.reason);
+          }
+          if (labelsResult.status === 'rejected') {
+            requestError(labelsResult.reason);
+          }
+          const nextAccounts = accountsResult.value;
+          const nextProviders =
+            providersResult.status === 'fulfilled' ? providersResult.value : [];
+          const nextLabels =
+            labelsResult.status === 'fulfilled' ? labelsResult.value : [];
+          const nextAccountId = nextAccounts.some(
+            (account) => account.id === accountIdRef.current,
+          )
+            ? accountIdRef.current
+            : '';
+          setProviders(nextProviders);
+          setAccounts(nextAccounts);
+          setCustomLabels(nextLabels);
+          setComposeAccountId((current) => {
+            if (nextAccounts.some((account) => account.id === current))
+              return current;
+            return resolveComposeAccountId(
+              nextAccounts,
+              nextProviders,
+              readLastComposeAccountId(nextAccounts[0]?.userId),
+            );
+          });
+          if (nextAccountId !== accountIdRef.current) {
+            messageRequestIdRef.current += 1;
+            conversationRequestIdRef.current += 1;
+            accountIdRef.current = nextAccountId;
+            setAccountId(nextAccountId);
+            setFolders([]);
+            setFolderId(undefined);
+            setLabelId(undefined);
+            setMessages([]);
+            setNextCursor(undefined);
+            setSelected(undefined);
+            setConversation([]);
+            setConversationCursor(undefined);
+            setLoadingMessages(false);
+            setLoadingConversation(false);
+          }
+        })
+        .catch(requestError)
+        .finally(() => setLoadingAccounts(false));
+    },
+    [mail, requestError],
+  );
 
   useEffect(() => {
-    void Promise.resolve().then(loadAccounts);
+    void Promise.resolve().then(() => loadAccounts());
   }, [loadAccounts]);
 
-  const finishSync = useCallback(
-    (run: MailSyncRunView): void => {
-      setSyncRun(run);
-      if (run.status === 'completed') {
-        loadAccounts();
-        setReloadVersion((version) => version + 1);
-        return;
-      }
-      if (run.status === 'failed' || run.status === 'cancelled') {
-        const fallback = t('errors.syncFailed', {
-          defaultValue: 'Could not synchronize the mailbox.',
-        });
-        setError(
-          run.error?.code ? `${fallback} (${run.error.code})` : fallback,
-        );
-      }
-    },
-    [loadAccounts, t],
-  );
-
   useEffect(() => {
-    if (!syncRun || !['pending', 'running'].includes(syncRun.status)) return;
     const timer = window.setInterval(() => {
-      void mail.getSyncRun(syncRun.id).then(finishSync, (cause: unknown) => {
-        setSyncRun(undefined);
-        requestError(cause);
-      });
+      if (syncPollInFlightRef.current) return;
+      const activeRuns = Object.values(syncRunsRef.current).filter(
+        isActiveSyncRun,
+      );
+      if (activeRuns.length === 0) return;
+      syncPollInFlightRef.current = true;
+      void Promise.all(
+        activeRuns.map((run) =>
+          mail.getSyncRun(run.id).catch((cause: unknown) => {
+            if (syncRunsRef.current[run.accountId]?.id === run.id) {
+              setSyncRuns((current) => {
+                if (current[run.accountId]?.id !== run.id) return current;
+                const next = { ...current };
+                delete next[run.accountId];
+                return next;
+              });
+              requestError(cause);
+            }
+            return undefined;
+          }),
+        ),
+      )
+        .then((nextRuns) => {
+          const resolvedRuns = nextRuns.filter((run): run is MailSyncRunView =>
+            Boolean(run),
+          );
+          const currentRuns = syncRunsRef.current;
+          const currentResolvedRuns = resolvedRuns.filter(
+            (run) => currentRuns[run.accountId]?.id === run.id,
+          );
+          setSyncRuns((current) => {
+            const next = { ...current };
+            let changed = false;
+            for (const run of resolvedRuns) {
+              if (current[run.accountId]?.id !== run.id) continue;
+              changed = true;
+              if (isActiveSyncRun(run)) next[run.accountId] = run;
+              else delete next[run.accountId];
+            }
+            return changed ? next : current;
+          });
+          const failedRuns = currentResolvedRuns.filter(
+            (run) => run.status === 'failed' || run.status === 'cancelled',
+          );
+          if (failedRuns.length > 0) {
+            const fallback = t('errors.syncFailed', {
+              defaultValue: 'Could not synchronize the mailbox.',
+            });
+            setError(
+              failedRuns[0].error?.code
+                ? `${fallback} (${failedRuns[0].error.code})`
+                : fallback,
+            );
+          }
+          if (
+            currentResolvedRuns.length === activeRuns.length &&
+            currentResolvedRuns.every((run) => !isActiveSyncRun(run))
+          ) {
+            loadAccounts(false);
+            setReloadVersion((version) => version + 1);
+          }
+        })
+        .finally(() => {
+          syncPollInFlightRef.current = false;
+        });
     }, 1500);
     return () => window.clearInterval(timer);
-  }, [finishSync, mail, requestError, syncRun]);
+  }, [loadAccounts, mail, requestError, t]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedQuery(query), 300);
@@ -252,7 +373,7 @@ export default function MailWorkspacePage({
 
   const messageQuery = useMemo(
     () => ({
-      accountId,
+      accountId: accountId || undefined,
       folderId,
       labelId,
       query: debouncedQuery.trim() || undefined,
@@ -264,24 +385,38 @@ export default function MailWorkspacePage({
   );
 
   useEffect(() => {
-    if (!accountId) return;
+    const requestedAccountIds = accountId
+      ? [accountId]
+      : accounts.map((account) => account.id);
     let active = true;
-    void mail.listFolders(accountId).then(
-      (nextFolders) => {
-        if (!active) return;
-        setFolders(nextFolders.filter((folder) => folder.type !== 'custom'));
-      },
-      (cause: unknown) => {
-        if (active) requestError(cause);
-      },
-    );
+    void Promise.allSettled(
+      requestedAccountIds.map(async (requestedAccountId) => ({
+        accountId: requestedAccountId,
+        folders: await mail.listFolders(requestedAccountId),
+      })),
+    ).then((results) => {
+      if (!active) return;
+      const next = new Map<string, readonly MailFolder[]>();
+      for (const result of results) {
+        if (result.status === 'fulfilled') {
+          next.set(
+            result.value.accountId,
+            result.value.folders.filter((folder) => folder.type !== 'custom'),
+          );
+        } else {
+          requestError(result.reason);
+        }
+      }
+      setFoldersByAccountId(next);
+      setFolders(next.get(accountId)?.slice() ?? []);
+    });
     return () => {
       active = false;
     };
-  }, [accountId, mail, reloadVersion, requestError]);
+  }, [accountId, accounts, mail, reloadVersion, requestError]);
 
   useEffect(() => {
-    if (!accountId) return;
+    if (accounts.length === 0) return;
     const requestId = messageRequestIdRef.current + 1;
     messageRequestIdRef.current = requestId;
     conversationRequestIdRef.current += 1;
@@ -311,7 +446,7 @@ export default function MailWorkspacePage({
           setLoadingMessages(false);
         },
       );
-  }, [accountId, mail, messageQuery, reloadVersion, requestError]);
+  }, [accountId, accounts, mail, messageQuery, reloadVersion, requestError]);
 
   const selectMessage = useCallback(
     (message: MailMessageSummary): void => {
@@ -394,16 +529,61 @@ export default function MailWorkspacePage({
       });
   };
 
+  const rememberComposeAccount = useCallback(
+    (nextAccountId: string): void => {
+      const account = accounts.find((item) => item.id === nextAccountId);
+      if (!account) return;
+      setComposeAccountId(account.id);
+      writeLastComposeAccountId(account);
+    },
+    [accounts],
+  );
+
   const startSync = (): void => {
-    if (
-      !accountId ||
-      !canSync ||
-      syncRun?.status === 'pending' ||
-      syncRun?.status === 'running'
-    )
-      return;
+    if (!canSync || Object.values(syncRuns).some(isActiveSyncRun)) return;
+    const targetAccounts = accountId
+      ? currentAccount && canSync
+        ? [currentAccount]
+        : []
+      : syncableAccounts;
+    if (targetAccounts.length === 0) return;
     setError(undefined);
-    void mail.startSync({ accountId }).then(finishSync).catch(requestError);
+    void Promise.allSettled(
+      targetAccounts.map((account) =>
+        mail.startSync({ accountId: account.id }),
+      ),
+    ).then((results) => {
+      const started = results.filter(
+        (result): result is PromiseFulfilledResult<MailSyncRunView> =>
+          result.status === 'fulfilled',
+      );
+      if (started.length > 0) {
+        setSyncRuns((current) => ({
+          ...current,
+          ...Object.fromEntries(
+            started.map(({ value }) => [value.accountId, value]),
+          ),
+        }));
+      }
+      const failed = results.filter((result) => result.status === 'rejected');
+      if (failed.length > 0) {
+        const fallback = t('errors.syncFailed', {
+          defaultValue: 'Could not synchronize the mailbox.',
+        });
+        setError(
+          failed.length === targetAccounts.length
+            ? fallback
+            : `${fallback} (${failed.length} account${failed.length === 1 ? '' : 's'} failed)`,
+        );
+      }
+      if (
+        started.length > 0 &&
+        started.every(({ value }) => !isActiveSyncRun(value))
+      ) {
+        loadAccounts(false);
+        setReloadVersion((version) => version + 1);
+      }
+    });
   };
 
   const updateVisibleMessage = (updated: MailMessage): void => {
@@ -441,10 +621,17 @@ export default function MailWorkspacePage({
   const openComposer = (
     next: ComposerState,
     existingAttachments: MailMessage['attachments'] = [],
+    preferredAccountId = composeAccountId,
   ): void => {
-    if (!accountId) return;
+    const targetAccount = accounts.find(
+      (account) => account.id === preferredAccountId,
+    );
+    if (!targetAccount) return;
+    const targetAccountId = targetAccount.id;
+    rememberComposeAccount(targetAccountId);
+    setComposerAccountId(targetAccountId);
     const recovery =
-      next.mode === 'new' ? readComposerRecovery(accountId) : undefined;
+      next.mode === 'new' ? readComposerRecovery(targetAccountId) : undefined;
     composerSessionRef.current += 1;
     draftMessageIdRef.current = next.draftMessageId;
     setLastSavedFingerprint(
@@ -461,14 +648,13 @@ export default function MailWorkspacePage({
     setIndividualDelivery(false);
     setError(undefined);
     void mail.listTemplates().then(setTemplates, requestError);
-    void mail.listSignatures(accountId).then((items) => {
+    void mail.listSignatures(targetAccountId).then((items) => {
       setSignatures(items);
       if (!recovery?.signatureId) {
         setSignatureId(items.find((item) => item.isDefault)?.id ?? '');
       }
     }, requestError);
-    void mail.listIdentities(accountId).then((items) => {
-      setIdentities(items);
+    void mail.listIdentities(targetAccountId).then((items) => {
       const nextIdentityId =
         items.find(
           (identity) =>
@@ -513,8 +699,9 @@ export default function MailWorkspacePage({
       return;
     }
     composerSessionRef.current += 1;
-    clearComposerRecovery(accountId);
+    clearComposerRecovery(composerAccountId);
     setComposer(undefined);
+    setComposerAccountId('');
     setRecoveryOffer(undefined);
     setComposeAttachments([]);
     setRetainedAttachments([]);
@@ -526,9 +713,9 @@ export default function MailWorkspacePage({
   const sendComposer = (): void => {
     if (
       !composer ||
-      !accountId ||
+      !composerAccountId ||
       !identityId ||
-      !canSend ||
+      !composerCanSend ||
       sending ||
       autoSaving
     )
@@ -561,7 +748,7 @@ export default function MailWorkspacePage({
     setSending(true);
     setError(undefined);
     const input = buildComposerInput(
-      accountId,
+      composerAccountId,
       identityId,
       signatureId,
       composer,
@@ -577,7 +764,9 @@ export default function MailWorkspacePage({
         closeComposer(true);
         setReloadVersion((version) => version + 1);
         if (individualDelivery && draftId) {
-          void mail.deleteMessage(accountId, draftId, true).catch(requestError);
+          void mail
+            .deleteMessage(composerAccountId, draftId, true)
+            .catch(requestError);
         }
       })
       .catch(requestError)
@@ -587,9 +776,9 @@ export default function MailWorkspacePage({
   const saveComposerDraft = (): void => {
     if (
       !composer ||
-      !accountId ||
+      !composerAccountId ||
       !identityId ||
-      !canDraft ||
+      !composerCanDraft ||
       sending ||
       autoSaving
     )
@@ -599,7 +788,7 @@ export default function MailWorkspacePage({
     void mail
       .saveDraft(
         buildDraftComposerInput(
-          accountId,
+          composerAccountId,
           identityId,
           signatureId,
           composer,
@@ -609,7 +798,7 @@ export default function MailWorkspacePage({
       )
       .then((draft) => {
         draftMessageIdRef.current = draft.id;
-        clearComposerRecovery(accountId);
+        clearComposerRecovery(composerAccountId);
         closeComposer(true);
         setReloadVersion((version) => version + 1);
       })
@@ -662,15 +851,15 @@ export default function MailWorkspacePage({
   );
 
   useEffect(() => {
-    if (!composer || !accountId || !currentComposerFingerprint) return;
+    if (!composer || !composerAccountId || !currentComposerFingerprint) return;
     if (recoveryOffer) return;
     if (!composerHasContent && !composer.draftMessageId) {
-      clearComposerRecovery(accountId);
+      clearComposerRecovery(composerAccountId);
       return;
     }
     writeComposerRecovery({
       version: 1,
-      accountId,
+      accountId: composerAccountId,
       identityId,
       signatureId,
       composer,
@@ -679,8 +868,8 @@ export default function MailWorkspacePage({
       savedFingerprint: lastSavedFingerprint,
     });
   }, [
-    accountId,
     composeAttachments,
+    composerAccountId,
     composer,
     composerHasContent,
     currentComposerFingerprint,
@@ -695,9 +884,9 @@ export default function MailWorkspacePage({
   useEffect(() => {
     if (
       !composer ||
-      !accountId ||
+      !composerAccountId ||
       !identityId ||
-      !canDraft ||
+      !composerCanDraft ||
       individualDelivery ||
       (!composerHasContent &&
         !composer.draftMessageId &&
@@ -724,7 +913,7 @@ export default function MailWorkspacePage({
       void mail
         .saveDraft(
           buildDraftComposerInput(
-            accountId,
+            composerAccountId,
             identityId,
             signatureId,
             {
@@ -817,13 +1006,13 @@ export default function MailWorkspacePage({
     }, AUTO_SAVE_DELAY_MS);
     return () => window.clearTimeout(timer);
   }, [
-    accountId,
     autoSaving,
     composeAttachments,
+    composerAccountId,
     composer,
     composerHasContent,
     currentComposerFingerprint,
-    canDraft,
+    composerCanDraft,
     identityId,
     individualDelivery,
     signatureId,
@@ -846,8 +1035,14 @@ export default function MailWorkspacePage({
     return () => window.removeEventListener('beforeunload', warnBeforeUnload);
   }, [composer, composerHasUnsavedChanges]);
 
-  const syncing =
-    syncRun?.status === 'pending' || syncRun?.status === 'running';
+  const syncing = Object.values(syncRuns).some(isActiveSyncRun);
+  const accountNames = useMemo(
+    () => new Map(accounts.map((account) => [account.id, account.address])),
+    [accounts],
+  );
+  const syncLabel = isAllAccounts
+    ? t('workspace.syncAll', { defaultValue: 'Sync all mailboxes' })
+    : t('workspace.incrementalRefresh', { defaultValue: 'Sync mailbox' });
 
   return (
     <section className='flex h-full min-h-[38rem] min-w-0 flex-col bg-background lg:min-h-0'>
@@ -874,11 +1069,8 @@ export default function MailWorkspacePage({
             {t('workspace.compose', { defaultValue: 'Compose' })}
           </Button>
           <Button
-            aria-label={t('workspace.incrementalRefresh', {
-              defaultValue: 'Sync mailbox',
-            })}
+            aria-label={syncLabel}
             disabled={
-              !accountId ||
               !canSync ||
               syncing ||
               loadingAccounts ||
@@ -894,9 +1086,7 @@ export default function MailWorkspacePage({
             />
             {syncing
               ? t('workspace.syncing', { defaultValue: 'Synchronizing…' })
-              : t('workspace.incrementalRefresh', {
-                  defaultValue: 'Sync mailbox',
-                })}
+              : syncLabel}
           </Button>
         </div>
       </header>
@@ -921,10 +1111,13 @@ export default function MailWorkspacePage({
             accounts={accounts}
             customLabels={customLabels}
             folderId={folderId}
-            folders={folders}
+            folders={isAllAccounts ? [] : folders}
             labelId={labelId}
             labels={{
               account: t('dev.account', { defaultValue: 'Account' }),
+              allAccounts: t('workspace.allAccounts', {
+                defaultValue: 'All accounts',
+              }),
               allMail: t('workspace.allMail', { defaultValue: 'All mail' }),
               unread: t('workspace.unreadOnly', { defaultValue: 'Unread' }),
               starred: t('workspace.starredOnly', { defaultValue: 'Starred' }),
@@ -937,6 +1130,7 @@ export default function MailWorkspacePage({
               conversationRequestIdRef.current += 1;
               accountIdRef.current = value;
               setAccountId(value);
+              if (value) rememberComposeAccount(value);
               setFolderId(undefined);
               setLabelId(undefined);
               setSmartView('all');
@@ -966,7 +1160,8 @@ export default function MailWorkspacePage({
             smartView={smartView}
           />
           <MailMessageList
-            availableLabels={canUseLabels ? customLabels : []}
+            accountNames={accountNames}
+            availableLabels={selectedMessageCanUseLabels ? customLabels : []}
             labels={{
               empty: t('workspace.empty', {
                 defaultValue: 'No messages match this mailbox view.',
@@ -989,31 +1184,30 @@ export default function MailWorkspacePage({
             nextCursor={nextCursor}
             onLoadMore={loadMoreMessages}
             onSelect={selectMessage}
+            showAccount={isAllAccounts}
             selectedMessageId={selected?.id}
           />
           <MailConversationView
-            availableLabels={canUseLabels ? customLabels : []}
+            availableLabels={selectedMessageCanUseLabels ? customLabels : []}
             actions={
-              accountIsActive
+              selectedMessageAccount?.status === 'active'
                 ? {
-                    archive:
-                      canMove &&
-                      folders.find((folder) => folder.type === 'archive')
-                        ? (message) => {
-                            const archive = folders.find(
-                              (folder) => folder.type === 'archive',
+                    archive: selectedMessageCanMove
+                      ? (message) => {
+                          const archive = foldersByAccountId
+                            .get(message.accountId)
+                            ?.find((folder) => folder.type === 'archive');
+                          if (archive)
+                            mutateMessage(
+                              mail.moveMessage({
+                                accountId: message.accountId,
+                                messageId: message.id,
+                                providerFolderId: archive.providerFolderId,
+                              }),
+                              true,
                             );
-                            if (archive)
-                              mutateMessage(
-                                mail.moveMessage({
-                                  accountId: message.accountId,
-                                  messageId: message.id,
-                                  providerFolderId: archive.providerFolderId,
-                                }),
-                                true,
-                              );
-                          }
-                        : undefined,
+                        }
+                      : undefined,
                     delete: (message) =>
                       mutateMessage(
                         mail.deleteMessage(message.accountId, message.id),
@@ -1033,21 +1227,29 @@ export default function MailWorkspacePage({
                       );
                     },
                     reply: (message) =>
-                      openComposer({
-                        ...EMPTY_COMPOSER,
-                        mode: 'reply',
-                        relatedMessageId: message.id,
-                        to: message.from?.address ?? '',
-                        subject: replySubject(message.subject),
-                      }),
+                      openComposer(
+                        {
+                          ...EMPTY_COMPOSER,
+                          mode: 'reply',
+                          relatedMessageId: message.id,
+                          to: message.from?.address ?? '',
+                          subject: replySubject(message.subject),
+                        },
+                        [],
+                        message.accountId,
+                      ),
                     forward: (message) =>
-                      openComposer({
-                        ...EMPTY_COMPOSER,
-                        mode: 'forward',
-                        relatedMessageId: message.id,
-                        subject: forwardSubject(message.subject),
-                      }),
-                    editDraft: canDraft
+                      openComposer(
+                        {
+                          ...EMPTY_COMPOSER,
+                          mode: 'forward',
+                          relatedMessageId: message.id,
+                          subject: forwardSubject(message.subject),
+                        },
+                        [],
+                        message.accountId,
+                      ),
+                    editDraft: selectedMessageCanDraft
                       ? (message) =>
                           openComposer(
                             {
@@ -1065,6 +1267,7 @@ export default function MailWorkspacePage({
                                 plainTextToMailHtml(message.text ?? ''),
                             },
                             message.attachments,
+                            message.accountId,
                           )
                       : undefined,
                     toggleRead: (message) =>
@@ -1099,7 +1302,7 @@ export default function MailWorkspacePage({
                           note: note.trim() || null,
                         }),
                       ),
-                    toggleLabel: canUseLabels
+                    toggleLabel: selectedMessageCanUseLabels
                       ? (message, labelId, assigned) =>
                           mutateMessage(
                             mail.updateMessageLabels({
@@ -1235,7 +1438,7 @@ export default function MailWorkspacePage({
                   </Button>
                   <Button
                     onClick={() => {
-                      clearComposerRecovery(accountId);
+                      clearComposerRecovery(composerAccountId);
                       setLastSavedFingerprint(currentComposerFingerprint);
                       setRecoveryOffer(undefined);
                     }}
@@ -1249,29 +1452,6 @@ export default function MailWorkspacePage({
                 </div>
               </div>
             ) : null}
-            <NativeSelect
-              aria-label={t('workspace.from', { defaultValue: 'From' })}
-              onChange={(event) => {
-                const nextIdentityId = event.target.value;
-                setIdentityId(nextIdentityId);
-              }}
-              value={identityId}
-            >
-              <option value=''>
-                {t('workspace.selectSender', {
-                  defaultValue: 'Select sender',
-                })}
-              </option>
-              {identities
-                .filter((identity) => identity.canSend)
-                .map((identity) => (
-                  <option key={identity.id} value={identity.id}>
-                    {identity.displayName
-                      ? `${identity.displayName} <${identity.address}>`
-                      : identity.address}
-                  </option>
-                ))}
-            </NativeSelect>
             {(['to', 'cc', 'bcc'] as const).map((field) => (
               <Input
                 aria-label={t(`workspace.${field}`, {
@@ -1549,7 +1729,7 @@ export default function MailWorkspacePage({
                         })
                       : null}
             </span>
-            {canDraft ? (
+            {composerCanDraft ? (
               <Button
                 disabled={!identityId || sending || autoSaving || uploading}
                 onClick={saveComposerDraft}
@@ -1567,7 +1747,7 @@ export default function MailWorkspacePage({
             </Button>
             <Button
               disabled={
-                !canSend ||
+                !composerCanSend ||
                 !identityId ||
                 !composerHasRequiredContent ||
                 sending ||
@@ -1819,6 +1999,61 @@ function toBulkComposeInput(input: MailComposeInput): MailBulkComposeInput {
     scheduledAt: input.scheduledAt,
     idempotencyKey: input.idempotencyKey,
   };
+}
+
+function isActiveSyncRun(run: MailSyncRunView): boolean {
+  return run.status === 'pending' || run.status === 'running';
+}
+
+function resolveComposeAccountId(
+  accounts: readonly MailAccountView[],
+  providers: readonly MailProviderView[],
+  preferredId?: string,
+): string {
+  const preferred = accounts.find((account) => account.id === preferredId);
+  if (preferred && isSendCapableAccount(preferred, providers)) {
+    return preferred.id;
+  }
+  return (
+    accounts.find((account) => isSendCapableAccount(account, providers))?.id ??
+    preferred?.id ??
+    accounts[0]?.id ??
+    ''
+  );
+}
+
+function isSendCapableAccount(
+  account: MailAccountView,
+  providers: readonly MailProviderView[],
+): boolean {
+  return Boolean(
+    account.status === 'active' &&
+    findProviderCapabilities(account, providers)?.send,
+  );
+}
+
+function readLastComposeAccountId(userId?: string): string | undefined {
+  if (!userId) return undefined;
+  try {
+    return (
+      window.localStorage.getItem(
+        `${LAST_COMPOSE_ACCOUNT_KEY_PREFIX}${encodeURIComponent(userId)}`,
+      ) ?? undefined
+    );
+  } catch {
+    return undefined;
+  }
+}
+
+function writeLastComposeAccountId(account: MailAccountView): void {
+  try {
+    window.localStorage.setItem(
+      `${LAST_COMPOSE_ACCOUNT_KEY_PREFIX}${encodeURIComponent(account.userId)}`,
+      account.id,
+    );
+  } catch {
+    // Browser privacy settings or storage pressure can disable this preference.
+  }
 }
 
 function findProviderCapabilities(

@@ -224,10 +224,7 @@ export default function MailAccountsDevPage(): ReactElement {
 
   const updateAccount = (
     account: MailAccountView,
-    change: {
-      readonly status?: 'active' | 'suspended';
-      readonly isDefault?: boolean;
-    },
+    change: { readonly status?: 'active' | 'suspended' },
   ): void => {
     setError(undefined);
     void mail
@@ -425,9 +422,6 @@ export default function MailAccountsDevPage(): ReactElement {
                       {t('dev.statusColumn', { defaultValue: 'Status' })}
                     </th>
                     <th className='px-4 py-3 font-medium'>
-                      {t('dev.defaultColumn', { defaultValue: 'Default' })}
-                    </th>
-                    <th className='px-4 py-3 font-medium'>
                       {t('dev.initialSyncColumn', {
                         defaultValue: 'Initial sync start date',
                       })}
@@ -444,13 +438,7 @@ export default function MailAccountsDevPage(): ReactElement {
                       <Fragment key={account.id}>
                         <ConnectedAccountRow
                           account={account}
-                          defaultLabel={t('settings.accounts.default', {
-                            defaultValue: 'Default',
-                          })}
                           onSync={startSync}
-                          onDefault={(account) =>
-                            updateAccount(account, { isDefault: true })
-                          }
                           onRemove={requestRemoveAccount}
                           onToggleStatus={(account) =>
                             updateAccount(account, {
@@ -470,10 +458,6 @@ export default function MailAccountsDevPage(): ReactElement {
                           syncLabel={t('settings.accounts.sync', {
                             defaultValue: 'Sync',
                           })}
-                          defaultActionLabel={t(
-                            'settings.accounts.makeDefault',
-                            { defaultValue: 'Make default' },
-                          )}
                           removeLabel={
                             removingAccountId === account.id
                               ? t('settings.accounts.removing', {
@@ -501,7 +485,7 @@ export default function MailAccountsDevPage(): ReactElement {
                         />
                         {run ? (
                           <tr>
-                            <td className='px-6 py-3' colSpan={6}>
+                            <td className='px-6 py-3' colSpan={5}>
                               <SyncProgress run={run} />
                             </td>
                           </tr>
@@ -817,31 +801,25 @@ export default function MailAccountsDevPage(): ReactElement {
 
 function ConnectedAccountRow({
   account,
-  defaultLabel,
   onSync,
-  onDefault,
   onRemove,
   onToggleStatus,
   providerLabel,
   statusLabel,
   syncLabel,
   syncing,
-  defaultActionLabel,
   removeLabel,
   removing,
   toggleStatusLabel,
 }: {
   readonly account: MailAccountView;
-  readonly defaultLabel: string;
   readonly onSync: (account: MailAccountView) => void;
-  readonly onDefault: (account: MailAccountView) => void;
   readonly onRemove: (account: MailAccountView) => void;
   readonly onToggleStatus: (account: MailAccountView) => void;
   readonly providerLabel: string;
   readonly statusLabel: string;
   readonly syncLabel: string;
   readonly syncing: boolean;
-  readonly defaultActionLabel: string;
   readonly removeLabel: string;
   readonly removing: boolean;
   readonly toggleStatusLabel: string;
@@ -878,13 +856,6 @@ function ConnectedAccountRow({
         />
       </td>
       <td className='px-4 py-4'>
-        {account.isDefault ? (
-          <MailStatusBadge label={defaultLabel} tone='info' />
-        ) : (
-          <span className='text-muted-foreground'>—</span>
-        )}
-      </td>
-      <td className='px-4 py-4'>
         {account.initialSyncReceivedAfter ? (
           <time dateTime={account.initialSyncReceivedAfter}>
             {account.initialSyncReceivedAfter.slice(0, 10)}
@@ -903,15 +874,6 @@ function ConnectedAccountRow({
           >
             {syncLabel}
           </Button>
-          {!account.isDefault ? (
-            <Button
-              onClick={() => onDefault(account)}
-              type='button'
-              variant='outline'
-            >
-              {defaultActionLabel}
-            </Button>
-          ) : null}
           <Button
             disabled={syncing || removing}
             onClick={() => onToggleStatus(account)}

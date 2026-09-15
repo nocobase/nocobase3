@@ -22,6 +22,8 @@ export interface SyncMailboxOperationDependencies {
   readonly messageChangeNotifier?: MailMessageChangeNotifier;
 }
 
+const SYNC_STEP_TIMEOUT_MS = 5 * 60 * 1_000;
+
 export class SyncMailboxOperation {
   public constructor(
     private readonly dependencies: SyncMailboxOperationDependencies,
@@ -53,6 +55,7 @@ export class SyncMailboxOperation {
     }
     if (run.status === 'completed' || run.status === 'cancelled') return;
 
+    const signal = AbortSignal.timeout(SYNC_STEP_TIMEOUT_MS);
     const account = await this.dependencies.store.getAccount(run.accountId);
     if (!account || account.status !== 'active') {
       await this.failSyncRun(
@@ -69,7 +72,7 @@ export class SyncMailboxOperation {
 
     let adapter: MailProviderAdapter;
     try {
-      adapter = await this.dependencies.adapters.resolve(account);
+      adapter = await this.dependencies.adapters.resolve(account, signal);
     } catch (error) {
       await this.failSyncRun(
         run,
@@ -88,7 +91,7 @@ export class SyncMailboxOperation {
       leaseMs,
     );
     try {
-      const changed = await this.executeStep(run, adapter);
+      const changed = await this.executeStep(run, adapter, signal);
       if (changed) {
         notifyMailMessageChange(
           this.dependencies.messageChangeNotifier,
@@ -177,15 +180,16 @@ export class SyncMailboxOperation {
   private async executeStep(
     run: MailSyncRun,
     adapter: MailProviderAdapter,
+    signal: AbortSignal,
   ): Promise<boolean> {
     if (run.phase === 'preparing') {
-      return this.prepare(run, adapter);
+      return this.prepare(run, adapter, signal);
     }
     if (run.phase === 'history') {
-      return this.importHistoryPage(run, adapter);
+      return this.importHistoryPage(run, adapter, signal);
     }
     if (run.phase === 'catchUp' || run.phase === 'incremental') {
-      return this.importChangePage(run, adapter);
+      return this.importChangePage(run, adapter, signal);
     }
     return false;
   }
@@ -193,6 +197,7 @@ export class SyncMailboxOperation {
   private async prepare(
     run: MailSyncRun,
     adapter: MailProviderAdapter,
+    signal: AbortSignal,
   ): Promise<boolean> {
     if (
       run.mode === 'initial' &&
@@ -207,13 +212,15 @@ export class SyncMailboxOperation {
     }
     const baseline =
       run.mode === 'initial'
-        ? (run.baselineCursor ?? unwrap(await adapter.getCurrentSyncCursor!()))
+        ? (run.baselineCursor ??
+          unwrap(await adapter.getCurrentSyncCursor!(signal)))
         : undefined;
     const folderPage = adapter.listFolders
       ? unwrap(
           await adapter.listFolders({
             cursor: run.folderCursor,
             limit: run.policy.batchSize,
+            signal,
           }),
         )
       : { folders: [], completeProviderFolderIds: [] };
@@ -257,6 +264,7 @@ export class SyncMailboxOperation {
   private async importHistoryPage(
     run: MailSyncRun,
     adapter: MailProviderAdapter,
+    signal: AbortSignal,
   ): Promise<boolean> {
     if (!adapter.listMessages) {
       throw new MailOperationError(
@@ -282,6 +290,7 @@ export class SyncMailboxOperation {
         baselineCursor: run.baselineCursor,
         cursor: run.historyCursor,
         limit: Math.min(run.policy.batchSize, remaining),
+        signal,
       }),
     );
     // Never discard records covered by the Provider's returned cursor. A
@@ -291,6 +300,14 @@ export class SyncMailboxOperation {
     const hasMore =
       page.nextCursor !== undefined &&
       run.processedMessages + imported.length < run.policy.maxMessages;
+    if (hasMore && page.nextCursor === run.historyCursor) {
+      throw new MailOperationError(
+        terminalError(
+          'MAIL_PROVIDER_CURSOR_STALLED',
+          'The mail Provider returned the same history cursor while more pages were expected.',
+        ),
+      );
+    }
     await this.dependencies.store.commitSyncStep({
       run,
       messages: imported,
@@ -322,6 +339,7 @@ export class SyncMailboxOperation {
   private async importChangePage(
     run: MailSyncRun,
     adapter: MailProviderAdapter,
+    signal: AbortSignal,
   ): Promise<boolean> {
     if (!adapter.listChanges) {
       throw new MailOperationError(
@@ -334,6 +352,7 @@ export class SyncMailboxOperation {
     let result = await adapter.listChanges({
       cursor: run.changeCursor,
       limit: run.policy.batchSize,
+      signal,
     });
     if (
       !result.ok &&
@@ -342,13 +361,24 @@ export class SyncMailboxOperation {
       isCursorInvalid(result.error) &&
       adapter.getCurrentSyncCursor
     ) {
-      const refreshedCursor = unwrap(await adapter.getCurrentSyncCursor());
+      const refreshedCursor = unwrap(
+        await adapter.getCurrentSyncCursor(signal),
+      );
       result = await adapter.listChanges({
         cursor: refreshedCursor,
         limit: run.policy.batchSize,
+        signal,
       });
     }
     const page = unwrap(result);
+    if (page.hasMore && sameSyncCursor(run.changeCursor, page.nextCursor)) {
+      throw new MailOperationError(
+        terminalError(
+          'MAIL_PROVIDER_CURSOR_STALLED',
+          'The mail Provider returned the same change cursor while more pages were expected.',
+        ),
+      );
+    }
     await this.dependencies.store.commitSyncStep({
       run,
       messages: page.messages,
@@ -400,6 +430,17 @@ function normalizeError(error: unknown): MailProviderError {
 
 function isCursorInvalid(error: MailProviderError): boolean {
   return error.code.endsWith('_SYNC_CURSOR_INVALID');
+}
+
+function sameSyncCursor(
+  left: MailSyncCursor | undefined,
+  right: MailSyncCursor,
+): boolean {
+  return Boolean(
+    left &&
+    left.version === right.version &&
+    JSON.stringify(left.value) === JSON.stringify(right.value),
+  );
 }
 
 export type SyncCursor = MailSyncCursor;

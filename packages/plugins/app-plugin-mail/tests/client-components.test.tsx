@@ -382,12 +382,10 @@ describe('Mail client components', () => {
       address: 'user@example.com',
       scopes: [],
       status: 'reauthorizationRequired',
-      isDefault: false,
     };
     render(
       <MailAccountCard
         account={account}
-        defaultLabel='Default'
         onSync={vi.fn()}
         providerLabel='Microsoft 365'
         statusLabel='Reauthorization required'
@@ -406,13 +404,11 @@ describe('Mail client components', () => {
       address: 'other@example.com',
       scopes: [],
       status: 'active',
-      isDefault: true,
     };
     render(
       <MailAccountCard
         account={account}
         canSync={false}
-        defaultLabel='Default'
         onSync={vi.fn()}
         ownerLabel='User ID: user-2'
         providerLabel='Gmail'
@@ -464,7 +460,6 @@ describe('Mail client components', () => {
             address: 'user@example.com',
             scopes: [],
             status: 'active',
-            isDefault: true,
           },
         ]}
         folders={[
@@ -500,6 +495,7 @@ describe('Mail client components', () => {
         labelId={undefined}
         labels={{
           account: 'Account',
+          allAccounts: 'All accounts',
           allMail: 'All mail',
           unread: 'Unread',
           starred: 'Starred',

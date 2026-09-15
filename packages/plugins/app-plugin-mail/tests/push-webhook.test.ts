@@ -172,7 +172,6 @@ async function createRouter(
     credentialReference: 'credential-1',
     scopes: [],
     status: 'active' as const,
-    isDefault: true,
   };
   const store = {
     findPushSubscription: async () => ({

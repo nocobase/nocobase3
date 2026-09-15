@@ -9,6 +9,7 @@ import {
 import sqlite from '@nocobase/db-sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import accountDefaultMigration from '../database/migrations/202609140006_remove_mail_account_default.js';
 import signatureScopeMigration from '../database/migrations/202609140004_move_mail_signatures_to_account_scope.js';
 
 interface SqliteClient {
@@ -113,6 +114,12 @@ describe('mail database migration', () => {
         expect.objectContaining({
           name: 'mail_messages_account_todo_sort_idx',
         }),
+        expect.objectContaining({
+          name: 'mail_messages_account_read_sort_idx',
+        }),
+        expect.objectContaining({
+          name: 'mail_messages_account_starred_sort_idx',
+        }),
       ]),
     );
     await expect(
@@ -134,9 +141,18 @@ describe('mail database migration', () => {
         expect.objectContaining({
           name: 'mail_accounts_provider_subject_unique',
         }),
+      ]),
+    );
+    await expect(
+      client.raw('PRAGMA index_list(mail_accounts)'),
+    ).resolves.not.toEqual(
+      expect.arrayContaining([
         expect.objectContaining({ name: 'mail_accounts_default_user_unique' }),
       ]),
     );
+    await expect(
+      client.schema.hasColumn('mail_accounts', 'default_for_user_id'),
+    ).resolves.toBe(false);
     await expect(
       metadataStore.get('mailMessages').then((stored) => stored?.document),
     ).resolves.toMatchObject({
@@ -168,10 +184,14 @@ describe('mail database migration', () => {
       metadataStore.get('mailAccounts').then((stored) => stored?.document),
     ).resolves.toMatchObject({
       fields: {
-        defaultForUserId: { type: 'string' },
         initialSyncReceivedAfter: { type: 'datetimeTz' },
       },
     });
+    await expect(
+      metadataStore
+        .get('mailAccounts')
+        .then((stored) => stored?.document.fields.defaultForUserId),
+    ).resolves.toBeUndefined();
     await expect(
       metadataStore
         .get('mailAccounts')
@@ -386,6 +406,76 @@ describe('mail database migration', () => {
         'initial_sync_received_after',
       ),
     ).resolves.toBe(true);
+  });
+
+  it('removes the legacy account default state and can restore the schema', async () => {
+    const connection = database.connection();
+    const migrator = database.createMigrator({
+      directory: MIGRATIONS_DIRECTORY,
+      packageName: '@nocobase/app-plugin-mail',
+    });
+    await migrator.upTo('202609140003_add_account_initial_sync_date');
+
+    const client = await connection.client<SqliteClient>();
+    await expect(
+      client.schema.hasColumn('mail_accounts', 'default_for_user_id'),
+    ).resolves.toBe(true);
+    await expect(
+      client.raw('PRAGMA index_list(mail_accounts)'),
+    ).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'mail_accounts_default_user_unique' }),
+      ]),
+    );
+    await expect(
+      metadataStore
+        .get('mailAccounts')
+        .then((stored) => stored?.document.fields.defaultForUserId),
+    ).resolves.toMatchObject({ type: 'string' });
+
+    await accountDefaultMigration.up({
+      builder: connection.builder,
+      query: connection.query,
+      connection,
+    });
+
+    await expect(
+      client.schema.hasColumn('mail_accounts', 'default_for_user_id'),
+    ).resolves.toBe(false);
+    await expect(
+      client.raw('PRAGMA index_list(mail_accounts)'),
+    ).resolves.not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'mail_accounts_default_user_unique' }),
+      ]),
+    );
+    await expect(
+      metadataStore
+        .get('mailAccounts')
+        .then((stored) => stored?.document.fields.defaultForUserId),
+    ).resolves.toBeUndefined();
+
+    await accountDefaultMigration.down({
+      builder: connection.builder,
+      query: connection.query,
+      connection,
+    });
+
+    await expect(
+      client.schema.hasColumn('mail_accounts', 'default_for_user_id'),
+    ).resolves.toBe(true);
+    await expect(
+      client.raw('PRAGMA index_list(mail_accounts)'),
+    ).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'mail_accounts_default_user_unique' }),
+      ]),
+    );
+    await expect(
+      metadataStore
+        .get('mailAccounts')
+        .then((stored) => stored?.document.fields.defaultForUserId),
+    ).resolves.toMatchObject({ type: 'string' });
   });
 
   it('moves existing signatures to account scope and rolls the fields back', async () => {

@@ -79,7 +79,6 @@ describe('mail API routes', () => {
           address: 'other@example.com',
           scopes: [],
           status: 'active',
-          isDefault: true,
           canSync: false,
         },
       ],
@@ -89,7 +88,9 @@ describe('mail API routes', () => {
     const response = await router.request('/api/mail/settings/accounts');
 
     expect(response.status).toBe(200);
-    expect(listManagedAccounts).toHaveBeenCalledWith({ actorId: 'user-1' });
+    expect(listManagedAccounts).toHaveBeenCalledWith(
+      expect.objectContaining({ actorId: 'user-1' }),
+    );
     expect(await response.json()).toMatchObject({
       data: [{ userId: 'user-2', address: 'other@example.com' }],
     });
@@ -121,6 +122,7 @@ describe('mail API routes', () => {
     expect(response.status).toBe(200);
     expect(listManagedOperationLogs).toHaveBeenCalledWith({
       actorId: 'user-1',
+      signal: expect.any(AbortSignal),
     });
     expect(await response.json()).toMatchObject({
       data: {
@@ -147,7 +149,7 @@ describe('mail API routes', () => {
 
     expect(response.status).toBe(202);
     expect(startSync).toHaveBeenCalledWith(
-      { actorId: 'user-1' },
+      expect.objectContaining({ actorId: 'user-1' }),
       {
         accountId: 'account-1',
         mode: 'initial',
@@ -165,7 +167,9 @@ describe('mail API routes', () => {
     const response = await router.request('/api/mail/sync-runs');
 
     expect(response.status).toBe(200);
-    expect(listSyncRuns).toHaveBeenCalledWith({ actorId: 'user-1' });
+    expect(listSyncRuns).toHaveBeenCalledWith(
+      expect.objectContaining({ actorId: 'user-1' }),
+    );
     expect(await response.json()).toMatchObject({
       data: [{ id: 'sync-1', accountId: 'account-1' }],
     });
@@ -198,8 +202,14 @@ describe('mail API routes', () => {
         })
       ).status,
     ).toBe(200);
-    expect(retrySyncRun).toHaveBeenCalledWith({ actorId: 'user-1' }, 'sync-1');
-    expect(cancelSyncRun).toHaveBeenCalledWith({ actorId: 'user-1' }, 'sync-1');
+    expect(retrySyncRun).toHaveBeenCalledWith(
+      expect.objectContaining({ actorId: 'user-1' }),
+      'sync-1',
+    );
+    expect(cancelSyncRun).toHaveBeenCalledWith(
+      expect.objectContaining({ actorId: 'user-1' }),
+      'sync-1',
+    );
   });
 
   it('maps unread counts, signatures, and local labels onto the Mail service', async () => {
@@ -272,11 +282,11 @@ describe('mail API routes', () => {
 
     expect(await unreadResponse.json()).toEqual({ data: 7 });
     expect(listSignatures).toHaveBeenCalledWith(
-      { actorId: 'user-1' },
+      expect.objectContaining({ actorId: 'user-1' }),
       'account-1',
     );
     expect(saveSignature).toHaveBeenCalledWith(
-      { actorId: 'user-1' },
+      expect.objectContaining({ actorId: 'user-1' }),
       {
         accountId: 'account-1',
         name: 'Sales',
@@ -286,15 +296,20 @@ describe('mail API routes', () => {
       },
     );
     expect(createLabel).toHaveBeenCalledWith(
-      { actorId: 'user-1' },
+      expect.objectContaining({ actorId: 'user-1' }),
       { name: 'Customers', color: 'green' },
     );
     expect(updateLabel).toHaveBeenCalledWith(
-      { actorId: 'user-1' },
+      expect.objectContaining({ actorId: 'user-1' }),
       { id: 'label-1', name: 'Customers renamed', color: 'violet' },
     );
-    expect(deleteLabel).toHaveBeenCalledWith({ actorId: 'user-1' }, 'label-1');
-    expect(listLabels).toHaveBeenCalledWith({ actorId: 'user-1' });
+    expect(deleteLabel).toHaveBeenCalledWith(
+      expect.objectContaining({ actorId: 'user-1' }),
+      'label-1',
+    );
+    expect(listLabels).toHaveBeenCalledWith(
+      expect.objectContaining({ actorId: 'user-1' }),
+    );
   });
 
   it('lists send logs for the authenticated user', async () => {
@@ -313,7 +328,9 @@ describe('mail API routes', () => {
     const response = await router.request('/api/mail/submissions');
 
     expect(response.status).toBe(200);
-    expect(listSubmissions).toHaveBeenCalledWith({ actorId: 'user-1' });
+    expect(listSubmissions).toHaveBeenCalledWith(
+      expect.objectContaining({ actorId: 'user-1' }),
+    );
     expect(await response.json()).toMatchObject({
       data: [{ id: 'submission-1', accountId: 'account-1' }],
     });
@@ -339,7 +356,7 @@ describe('mail API routes', () => {
 
     expect(response.status).toBe(200);
     expect(startAuthorization).toHaveBeenCalledWith(
-      { actorId: 'user-1' },
+      expect.objectContaining({ actorId: 'user-1' }),
       {
         provider: { type: 'gmail', name: 'google' },
         redirectUri: 'https://mail.example.com/test/mail/oauth/callback',
@@ -369,7 +386,7 @@ describe('mail API routes', () => {
 
     expect(response.status).toBe(200);
     expect(startAuthorization).toHaveBeenCalledWith(
-      { actorId: 'user-1' },
+      expect.objectContaining({ actorId: 'user-1' }),
       expect.objectContaining({
         redirectUri: 'https://oauth.example.com/test/mail/oauth/callback',
       }),
@@ -401,7 +418,7 @@ describe('mail API routes', () => {
 
     expect(response.status).toBe(200);
     expect(startAuthorization).toHaveBeenCalledWith(
-      { actorId: 'user-1' },
+      expect.objectContaining({ actorId: 'user-1' }),
       expect.objectContaining({
         redirectUri: 'http://localhost:13000/test/mail/oauth/callback',
       }),
@@ -417,7 +434,6 @@ describe('mail API routes', () => {
         address: input.address,
         scopes: [],
         status: 'active',
-        isDefault: true,
       }),
     );
     const router = await createRouter(true, service({ connectAccount }));
@@ -435,7 +451,7 @@ describe('mail API routes', () => {
 
     expect(response.status).toBe(200);
     expect(connectAccount).toHaveBeenCalledWith(
-      { actorId: 'user-1' },
+      expect.objectContaining({ actorId: 'user-1' }),
       {
         provider: { type: 'imap-smtp', name: 'company-mail' },
         address: 'user@example.com',
@@ -468,11 +484,11 @@ describe('mail API routes', () => {
     );
 
     expect(listFolders).toHaveBeenCalledWith(
-      { actorId: 'user-1' },
+      expect.objectContaining({ actorId: 'user-1' }),
       'account-1',
     );
     expect(listMessages).toHaveBeenCalledWith(
-      { actorId: 'user-1' },
+      expect.objectContaining({ actorId: 'user-1' }),
       {
         accountIds: ['account-1'],
         folderIds: ['inbox'],
@@ -486,7 +502,7 @@ describe('mail API routes', () => {
       },
     );
     expect(listConversationMessages).toHaveBeenCalledWith(
-      { actorId: 'user-1' },
+      expect.objectContaining({ actorId: 'user-1' }),
       'account-1',
       'thread-1',
       { cursor: '25', limit: 25 },
@@ -533,7 +549,7 @@ describe('mail API routes', () => {
 
     expect(response.status).toBe(200);
     expect(sendMessage).toHaveBeenCalledWith(
-      { actorId: 'user-1' },
+      expect.objectContaining({ actorId: 'user-1' }),
       expect.objectContaining({
         inReplyToMessageId: 'message-1',
         scheduledAt: '2099-01-01T00:00:00.000Z',
@@ -563,7 +579,7 @@ describe('mail API routes', () => {
 
     expect(response.status).toBe(200);
     expect(saveDraft).toHaveBeenCalledWith(
-      { actorId: 'user-1' },
+      expect.objectContaining({ actorId: 'user-1' }),
       expect.objectContaining({
         to: [],
         subject: '',
@@ -668,7 +684,7 @@ describe('mail API routes', () => {
     ).toBe(204);
 
     expect(updateMessage).toHaveBeenCalledWith(
-      { actorId: 'user-1' },
+      expect.objectContaining({ actorId: 'user-1' }),
       {
         accountId: 'account-1',
         messageId: 'message-1',
@@ -679,7 +695,7 @@ describe('mail API routes', () => {
       },
     );
     expect(updateMessageLabels).toHaveBeenCalledWith(
-      { actorId: 'user-1' },
+      expect.objectContaining({ actorId: 'user-1' }),
       {
         accountId: 'account-1',
         messageId: 'message-1',
@@ -688,7 +704,7 @@ describe('mail API routes', () => {
       },
     );
     expect(moveMessage).toHaveBeenCalledWith(
-      { actorId: 'user-1' },
+      expect.objectContaining({ actorId: 'user-1' }),
       {
         accountId: 'account-1',
         messageId: 'message-1',
@@ -696,7 +712,7 @@ describe('mail API routes', () => {
       },
     );
     expect(deleteMessage).toHaveBeenCalledWith(
-      { actorId: 'user-1' },
+      expect.objectContaining({ actorId: 'user-1' }),
       {
         accountId: 'account-1',
         messageId: 'message-1',
@@ -726,7 +742,7 @@ describe('mail API routes', () => {
     );
     expect(await response.text()).toBe('pdf');
     expect(getAttachment).toHaveBeenCalledWith(
-      { actorId: 'user-1' },
+      expect.objectContaining({ actorId: 'user-1' }),
       'account-1',
       'message-1',
       'attachment-1',
@@ -755,9 +771,48 @@ describe('mail API routes', () => {
 
     expect(response.status).toBe(400);
     expect(sendMessage).toHaveBeenCalledWith(
-      { actorId: 'user-1' },
+      expect.objectContaining({ actorId: 'user-1' }),
       expect.objectContaining({ attachmentIds: ['attachment-1'] }),
     );
+  });
+
+  it('rejects oversized JSON requests before parsing them', async () => {
+    const sendMessage = vi.fn<MailService['sendMessage']>(async () =>
+      messageView(),
+    );
+    const router = await createRouter(true, service({ sendMessage }));
+
+    const response = await router.request('/api/mail/messages/send', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ payload: 'x'.repeat(8 * 1024 * 1024) }),
+    });
+
+    expect(response.status).toBe(413);
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('rejects excessive recipient arrays at the HTTP boundary', async () => {
+    const sendBulk = vi.fn<MailService['sendBulk']>(async () => messageView());
+    const router = await createRouter(true, service({ sendBulk }));
+
+    const response = await router.request('/api/mail/messages/bulk', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        accountId: 'account-1',
+        identityId: 'identity-1',
+        recipients: Array.from({ length: 101 }, (_, index) => ({
+          address: `recipient-${index}@example.com`,
+        })),
+        subject: 'Hello',
+        text: 'Mail body',
+        idempotencyKey: 'bulk-too-many-recipients',
+      }),
+    });
+
+    expect(response.status).toBe(400);
+    expect(sendBulk).not.toHaveBeenCalled();
   });
 });
 
@@ -837,7 +892,6 @@ function service(overrides: Partial<MailService> = {}): MailService {
       address: 'user@example.com',
       scopes: [],
       status: 'active',
-      isDefault: true,
     }),
     completeAuthorization: async () => ({
       id: 'account-1',
@@ -846,7 +900,6 @@ function service(overrides: Partial<MailService> = {}): MailService {
       address: 'user@example.com',
       scopes: [],
       status: 'active',
-      isDefault: true,
     }),
     listAccounts: async () => [],
     updateAccount: async (_context, input) => ({
@@ -856,7 +909,6 @@ function service(overrides: Partial<MailService> = {}): MailService {
       address: 'user@example.com',
       scopes: [],
       status: input.status ?? 'active',
-      isDefault: input.isDefault ?? true,
     }),
     removeAccount: async () => {},
     listManagedAccounts: async () => [],

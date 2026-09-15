@@ -45,7 +45,6 @@ describe('mail account management', () => {
         address: 'sender@example.com',
         scopes: [],
         status: 'active',
-        isDefault: true,
       },
     ]);
     mail.listIdentities.mockResolvedValue([
@@ -267,7 +266,6 @@ describe('mail account management', () => {
         scopes: [],
         status: 'active',
         initialSyncReceivedAfter: '2026-01-15T00:00:00.000Z',
-        isDefault: true,
       },
     ]);
 

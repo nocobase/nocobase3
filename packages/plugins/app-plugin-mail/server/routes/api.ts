@@ -12,7 +12,7 @@ import {
   defineApiRoutes,
   type AppApiRouteContribution,
 } from '@nocobase/app-server/router';
-import { Hono } from 'hono';
+import { Hono, type MiddlewareHandler } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { getRequestTranslator } from '@nocobase/i18n/server';
 
@@ -39,6 +39,15 @@ type MailRoutesEnv = {
 
 const MAIL_NAMESPACE = '@nocobase/app-plugin-mail';
 const MAX_ATTACHMENT_UPLOAD_BYTES = 27 * 1024 * 1024;
+const MAX_JSON_REQUEST_BYTES = 8 * 1024 * 1024;
+const MAX_MAIL_BODY_LENGTH = 4 * 1024 * 1024;
+const MAX_MAIL_STRING_LENGTH = 4000;
+const MAX_MAIL_SUBJECT_LENGTH = 2000;
+const MAX_MAIL_IDEMPOTENCY_KEY_LENGTH = 255;
+const MAX_MAIL_ADDRESS_LENGTH = 320;
+const MAX_MAIL_NAME_LENGTH = 255;
+const MAX_MAIL_ARRAY_ITEMS = 100;
+const MAX_MAIL_ATTACHMENT_IDS = 100;
 const MAIL_WORKSPACE_RESOURCE = 'mail.workspace';
 const MAIL_ADMIN_RESOURCE = 'mail.admin';
 
@@ -106,6 +115,35 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
       );
     });
 
+    const jsonBodyLimit = bodyLimit({
+      maxSize: MAX_JSON_REQUEST_BYTES,
+      onError: (context) =>
+        context.json(
+          {
+            error: {
+              code: 'INVALID_MAIL_REQUEST',
+              message: getRequestTranslator(
+                context,
+                MAIL_NAMESPACE,
+              )('errors.invalidRequest'),
+            },
+          },
+          413,
+        ),
+    }) as MiddlewareHandler<MailRoutesEnv>;
+    routes.use('*', async (context, next) => {
+      if (
+        (context.req.method === 'POST' || context.req.method === 'PATCH') &&
+        !context.req.path.endsWith('/attachments')
+      ) {
+        return jsonBodyLimit(
+          context as Parameters<typeof jsonBodyLimit>[0],
+          next,
+        );
+      }
+      return next();
+    });
+
     routes.get('/accounts', async (context) =>
       context.json({
         data: await mail.listAccounts(operationContext(context)),
@@ -125,7 +163,6 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
         data: await mail.updateAccount(operationContext(context), {
           accountId: context.req.param('accountId'),
           status,
-          isDefault: optionalBoolean(value.isDefault, 'isDefault'),
         }),
       });
     });
@@ -163,10 +200,14 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
       const value = await readObject(context.req.raw);
       return context.json({
         data: await mail.saveTemplate(operationContext(context), {
-          name: requiredString(value.name, 'name'),
-          subject: requiredString(value.subject, 'subject'),
-          text: optionalString(value.text, 'text'),
-          html: optionalString(value.html, 'html'),
+          name: requiredString(value.name, 'name', MAX_MAIL_NAME_LENGTH),
+          subject: requiredString(
+            value.subject,
+            'subject',
+            MAX_MAIL_SUBJECT_LENGTH,
+          ),
+          text: optionalString(value.text, 'text', MAX_MAIL_BODY_LENGTH),
+          html: optionalString(value.html, 'html', MAX_MAIL_BODY_LENGTH),
         }),
       });
     });
@@ -175,10 +216,14 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
       return context.json({
         data: await mail.saveTemplate(operationContext(context), {
           id: context.req.param('templateId'),
-          name: requiredString(value.name, 'name'),
-          subject: requiredString(value.subject, 'subject'),
-          text: optionalString(value.text, 'text'),
-          html: optionalString(value.html, 'html'),
+          name: requiredString(value.name, 'name', MAX_MAIL_NAME_LENGTH),
+          subject: requiredString(
+            value.subject,
+            'subject',
+            MAX_MAIL_SUBJECT_LENGTH,
+          ),
+          text: optionalString(value.text, 'text', MAX_MAIL_BODY_LENGTH),
+          html: optionalString(value.html, 'html', MAX_MAIL_BODY_LENGTH),
         }),
       });
     });
@@ -202,14 +247,16 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
         data: await mail.startAuthorization(operationContext(context), {
           provider: {
             type: requiredString(value.type, 'type'),
-            name: requiredString(value.name, 'name'),
+            name: requiredString(value.name, 'name', MAX_MAIL_NAME_LENGTH),
           },
           redirectUri: resolveMailOAuthCallbackUrl(
             configuredMail.oauthCallbackUrl,
             origin,
             publicBasePath,
           ).toString(),
-          scopes: optionalStringArray(value.scopes, 'scopes'),
+          ...(value.scopes !== undefined
+            ? { scopes: optionalStringArray(value.scopes, 'scopes') }
+            : {}),
           ...(value.initialSyncReceivedAfter !== undefined
             ? {
                 initialSyncReceivedAfter: optionalNullableString(
@@ -223,15 +270,27 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
     });
     routes.post('/accounts/connect', async (context) => {
       const value = await readObject(context.req.raw);
-      const address = requiredString(value.address, 'address');
+      const address = requiredString(
+        value.address,
+        'address',
+        MAX_MAIL_ADDRESS_LENGTH,
+      );
       return context.json({
         data: await mail.connectAccount(operationContext(context), {
           provider: {
             type: requiredString(value.type, 'type'),
-            name: requiredString(value.name, 'name'),
+            name: requiredString(value.name, 'name', MAX_MAIL_NAME_LENGTH),
           },
           address,
-          displayName: optionalString(value.displayName, 'displayName'),
+          ...(value.displayName !== undefined
+            ? {
+                displayName: optionalString(
+                  value.displayName,
+                  'displayName',
+                  MAX_MAIL_NAME_LENGTH,
+                ),
+              }
+            : {}),
           username: optionalString(value.username, 'username') ?? address,
           password: requiredString(value.password, 'password'),
           ...(value.initialSyncReceivedAfter !== undefined
@@ -282,9 +341,13 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
       return context.json({
         data: await mail.saveSignature(operationContext(context), {
           accountId: context.req.param('accountId'),
-          name: requiredString(value.name, 'name'),
-          text: optionalString(value.text, 'text') ?? '',
-          html: optionalNullableString(value.html, 'html'),
+          name: requiredString(value.name, 'name', MAX_MAIL_NAME_LENGTH),
+          text: optionalString(value.text, 'text', MAX_MAIL_BODY_LENGTH) ?? '',
+          html: optionalNullableString(
+            value.html,
+            'html',
+            MAX_MAIL_BODY_LENGTH,
+          ),
           isDefault: optionalBoolean(value.isDefault, 'isDefault'),
         }),
       });
@@ -297,9 +360,14 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
           data: await mail.saveSignature(operationContext(context), {
             id: context.req.param('signatureId'),
             accountId: context.req.param('accountId'),
-            name: requiredString(value.name, 'name'),
-            text: optionalString(value.text, 'text') ?? '',
-            html: optionalNullableString(value.html, 'html'),
+            name: requiredString(value.name, 'name', MAX_MAIL_NAME_LENGTH),
+            text:
+              optionalString(value.text, 'text', MAX_MAIL_BODY_LENGTH) ?? '',
+            html: optionalNullableString(
+              value.html,
+              'html',
+              MAX_MAIL_BODY_LENGTH,
+            ),
             isDefault: optionalBoolean(value.isDefault, 'isDefault'),
           }),
         });
@@ -333,7 +401,7 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
       const value = await readObject(context.req.raw);
       return context.json({
         data: await mail.createLabel(operationContext(context), {
-          name: requiredString(value.name, 'name'),
+          name: requiredString(value.name, 'name', MAX_MAIL_NAME_LENGTH),
           color: optionalLabelColor(value.color, 'color'),
         }),
       });
@@ -343,7 +411,7 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
       return context.json({
         data: await mail.updateLabel(operationContext(context), {
           id: context.req.param('labelId'),
-          name: requiredString(value.name, 'name'),
+          name: requiredString(value.name, 'name', MAX_MAIL_NAME_LENGTH),
           color: optionalLabelColor(value.color, 'color'),
         }),
       });
@@ -611,8 +679,12 @@ function operationContext(context: {
   get(
     key: 'auth',
   ): NonNullable<import('@nocobase/app-plugin-authentication').AuthSession>;
-}): { actorId: string } {
-  return { actorId: context.get('auth').user.id };
+  req: { raw: Request };
+}): { actorId: string; signal: AbortSignal } {
+  return {
+    actorId: context.get('auth').user.id,
+    signal: context.req.raw.signal,
+  };
 }
 
 async function readDraftInput(request: Request): Promise<MailComposeInput> {
@@ -624,13 +696,19 @@ async function readDraftInput(request: Request): Promise<MailComposeInput> {
     to: optionalAddresses(value.to, 'to') ?? [],
     cc: optionalAddresses(value.cc, 'cc'),
     bcc: optionalAddresses(value.bcc, 'bcc'),
-    subject: optionalString(value.subject, 'subject') ?? '',
-    text: optionalString(value.text, 'text') ?? '',
-    html: optionalString(value.html, 'html'),
-    attachmentIds: optionalStringArray(value.attachmentIds, 'attachmentIds'),
+    subject:
+      optionalString(value.subject, 'subject', MAX_MAIL_SUBJECT_LENGTH) ?? '',
+    text: optionalString(value.text, 'text', MAX_MAIL_BODY_LENGTH) ?? '',
+    html: optionalString(value.html, 'html', MAX_MAIL_BODY_LENGTH),
+    attachmentIds: optionalStringArray(
+      value.attachmentIds,
+      'attachmentIds',
+      MAX_MAIL_ATTACHMENT_IDS,
+    ),
     retainedAttachmentIds: optionalStringArray(
       value.retainedAttachmentIds,
       'retainedAttachmentIds',
+      MAX_MAIL_ATTACHMENT_IDS,
     ),
     inReplyToMessageId: optionalString(
       value.inReplyToMessageId,
@@ -641,7 +719,11 @@ async function readDraftInput(request: Request): Promise<MailComposeInput> {
       'forwardOfMessageId',
     ),
     draftMessageId: optionalString(value.draftMessageId, 'draftMessageId'),
-    idempotencyKey: requiredString(value.idempotencyKey, 'idempotencyKey'),
+    idempotencyKey: requiredString(
+      value.idempotencyKey,
+      'idempotencyKey',
+      MAX_MAIL_IDEMPOTENCY_KEY_LENGTH,
+    ),
   };
 }
 
@@ -673,9 +755,17 @@ async function readComposeInput(request: Request): Promise<MailComposeInput> {
   const value = await readObject(request);
   const accountId = requiredString(value.accountId, 'accountId');
   const identityId = requiredString(value.identityId, 'identityId');
-  const subject = requiredString(value.subject, 'subject');
-  const text = requiredString(value.text, 'text');
-  const idempotencyKey = requiredString(value.idempotencyKey, 'idempotencyKey');
+  const subject = requiredString(
+    value.subject,
+    'subject',
+    MAX_MAIL_SUBJECT_LENGTH,
+  );
+  const text = requiredString(value.text, 'text', MAX_MAIL_BODY_LENGTH);
+  const idempotencyKey = requiredString(
+    value.idempotencyKey,
+    'idempotencyKey',
+    MAX_MAIL_IDEMPOTENCY_KEY_LENGTH,
+  );
   return {
     accountId,
     identityId,
@@ -685,11 +775,16 @@ async function readComposeInput(request: Request): Promise<MailComposeInput> {
     bcc: optionalAddresses(value.bcc, 'bcc'),
     subject,
     text,
-    html: optionalString(value.html, 'html'),
-    attachmentIds: optionalStringArray(value.attachmentIds, 'attachmentIds'),
+    html: optionalString(value.html, 'html', MAX_MAIL_BODY_LENGTH),
+    attachmentIds: optionalStringArray(
+      value.attachmentIds,
+      'attachmentIds',
+      MAX_MAIL_ATTACHMENT_IDS,
+    ),
     retainedAttachmentIds: optionalStringArray(
       value.retainedAttachmentIds,
       'retainedAttachmentIds',
+      MAX_MAIL_ATTACHMENT_IDS,
     ),
     inReplyToMessageId: optionalString(
       value.inReplyToMessageId,
@@ -714,16 +809,25 @@ async function readBulkComposeInput(
     identityId: requiredString(value.identityId, 'identityId'),
     signatureId: optionalNullableString(value.signatureId, 'signatureId'),
     recipients: addresses(value.recipients, 'recipients'),
-    subject: requiredString(value.subject, 'subject'),
-    text: requiredString(value.text, 'text'),
-    html: optionalString(value.html, 'html'),
-    attachmentIds: optionalStringArray(value.attachmentIds, 'attachmentIds'),
+    subject: requiredString(value.subject, 'subject', MAX_MAIL_SUBJECT_LENGTH),
+    text: requiredString(value.text, 'text', MAX_MAIL_BODY_LENGTH),
+    html: optionalString(value.html, 'html', MAX_MAIL_BODY_LENGTH),
+    attachmentIds: optionalStringArray(
+      value.attachmentIds,
+      'attachmentIds',
+      MAX_MAIL_ATTACHMENT_IDS,
+    ),
     retainedAttachmentIds: optionalStringArray(
       value.retainedAttachmentIds,
       'retainedAttachmentIds',
+      MAX_MAIL_ATTACHMENT_IDS,
     ),
     scheduledAt: optionalString(value.scheduledAt, 'scheduledAt'),
-    idempotencyKey: requiredString(value.idempotencyKey, 'idempotencyKey'),
+    idempotencyKey: requiredString(
+      value.idempotencyKey,
+      'idempotencyKey',
+      MAX_MAIL_IDEMPOTENCY_KEY_LENGTH,
+    ),
   };
 }
 
@@ -748,8 +852,14 @@ async function readSyncInput(
   return {
     accountId,
     mode,
-    receivedAfter: optionalString(value.receivedAfter, 'receivedAfter'),
-    maxMessages: optionalInteger(value.maxMessages, 'maxMessages'),
+    ...(value.receivedAfter !== undefined
+      ? {
+          receivedAfter: optionalString(value.receivedAfter, 'receivedAfter'),
+        }
+      : {}),
+    ...(value.maxMessages !== undefined
+      ? { maxMessages: optionalInteger(value.maxMessages, 'maxMessages') }
+      : {}),
   };
 }
 
@@ -770,6 +880,11 @@ function addresses(value: unknown, field: string): readonly MailAddress[] {
       `Mail field "${field}" must contain at least one address.`,
     );
   }
+  if (value.length > MAX_MAIL_ARRAY_ITEMS) {
+    throw new TypeError(
+      `Mail field "${field}" must contain at most ${MAX_MAIL_ARRAY_ITEMS} addresses.`,
+    );
+  }
   return value.map((item) => address(item, field));
 }
 
@@ -780,6 +895,11 @@ function optionalAddresses(
   if (value === undefined) return undefined;
   if (!Array.isArray(value))
     throw new TypeError(`Mail field "${field}" must be an array.`);
+  if (value.length > MAX_MAIL_ARRAY_ITEMS) {
+    throw new TypeError(
+      `Mail field "${field}" must contain at most ${MAX_MAIL_ARRAY_ITEMS} addresses.`,
+    );
+  }
   return value.map((item) => address(item, field));
 }
 
@@ -787,22 +907,44 @@ function address(value: unknown, field: string): MailAddress {
   if (!isRecord(value))
     throw new TypeError(`Mail field "${field}" contains an invalid address.`);
   return {
-    address: requiredString(value.address, `${field}.address`),
-    name: optionalString(value.name, `${field}.name`),
+    address: requiredString(
+      value.address,
+      `${field}.address`,
+      MAX_MAIL_ADDRESS_LENGTH,
+    ),
+    name: optionalString(value.name, `${field}.name`, MAX_MAIL_NAME_LENGTH),
   };
 }
 
-function requiredString(value: unknown, field: string): string {
+function requiredString(
+  value: unknown,
+  field: string,
+  maxLength = MAX_MAIL_STRING_LENGTH,
+): string {
   if (typeof value !== 'string' || value.trim().length === 0) {
     throw new TypeError(`Mail field "${field}" must be a non-empty string.`);
+  }
+  if (value.length > maxLength) {
+    throw new TypeError(
+      `Mail field "${field}" must be at most ${maxLength} characters.`,
+    );
   }
   return value;
 }
 
-function optionalString(value: unknown, field: string): string | undefined {
+function optionalString(
+  value: unknown,
+  field: string,
+  maxLength = MAX_MAIL_STRING_LENGTH,
+): string | undefined {
   if (value === undefined) return undefined;
   if (typeof value !== 'string')
     throw new TypeError(`Mail field "${field}" must be a string.`);
+  if (value.length > maxLength) {
+    throw new TypeError(
+      `Mail field "${field}" must be at most ${maxLength} characters.`,
+    );
+  }
   return value;
 }
 
@@ -820,18 +962,25 @@ function optionalLabelColor(
 function optionalNullableString(
   value: unknown,
   field: string,
+  maxLength = MAX_MAIL_STRING_LENGTH,
 ): string | null | undefined {
   if (value === null) return null;
-  return optionalString(value, field);
+  return optionalString(value, field, maxLength);
 }
 
 function optionalStringArray(
   value: unknown,
   field: string,
+  maxItems = MAX_MAIL_ARRAY_ITEMS,
 ): readonly string[] | undefined {
   if (value === undefined) return undefined;
   if (!Array.isArray(value)) {
     throw new TypeError(`Mail field "${field}" must be an array.`);
+  }
+  if (value.length > maxItems) {
+    throw new TypeError(
+      `Mail field "${field}" must contain at most ${maxItems} items.`,
+    );
   }
   return value.map((item) => requiredString(item, field));
 }

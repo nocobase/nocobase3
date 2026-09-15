@@ -44,24 +44,13 @@ and a Google Cloud Pub/Sub push subscription targeting the generated callback
 URL. Microsoft Graph subscription creation and endpoint validation are managed
 by Mail Core.
 
-`/dev/mail/accounts` manages the authenticated user's accounts, including
-default selection, suspend/resume, disconnect, manual synchronization, the
-received-after date in the account association drawer, signature and NocoBase-owned
-label management, and reusable templates. The account
-association control lists registered Providers; a Provider without a
-`mail.providers` entry is shown as unavailable until the server endpoint or
-OAuth configuration is added. `/settings/mail/accounts` and
-`GET /api/mail/settings/accounts` show every connected account to
-administrators granted `page:mail.admin/access`. The ordinary
-`GET /api/mail/accounts` endpoint remains scoped to the authenticated user and
-requires `page:mail.workspace/access`. Do not bypass Mail Core ownership checks
-for another user's account.
+`/dev/mail/accounts` manages the authenticated user's accounts, including suspend/resume, disconnect, manual synchronization, the received-after date in the account association drawer, signature and NocoBase-owned label management, and reusable templates. The account association control lists registered Providers; a Provider without a `mail.providers` entry is shown as unavailable until the server endpoint or OAuth configuration is added. `/settings/mail/accounts` and `GET /api/mail/settings/accounts` show every connected account to administrators granted `page:mail.admin/access`. The ordinary `GET /api/mail/accounts` endpoint remains scoped to the authenticated user and requires `page:mail.workspace/access`. Do not bypass Mail Core ownership checks for another user's account.
 
 `/settings/mail/send-logs` and `GET /api/mail/settings/operation-logs` provide an all-user administration view of synchronization and delivery operations. The UI filters by owner or operation text, account, status, and start time. Failed or cancelled synchronization runs can be retried, and active synchronization runs can be cancelled by their account owner. Do not automatically retry a delivery with an unknown Provider result because that may create a duplicate message. The response includes API-safe account metadata for resolving each operation to its owner; it never includes credentials, idempotency fingerprints, leases, Provider cursors, or internal Provider error messages. The development log pages remain scoped to the authenticated user.
 
 ## Read synchronized mail
 
-Open `/dev/mail/center` to filter, refresh, and inspect the authenticated user's synchronized mail. The page header exposes the cross-account unread badge. The badge treats `GET /api/mail/unread-count` as authoritative and refetches it after user-scoped realtime invalidations, WebSocket recovery, and browser focus. Opening a message loads its complete Provider conversation when a stable conversation identifier exists. The workspace can update read/starred state, maintain NocoBase-only notes and follow-up markers, move or delete messages, manage colored NocoBase-owned label membership, and securely download inbound attachments. Notes, follow-up markers, and labels are local metadata and are preserved when Provider messages are synchronized again. Development diagnostics remain available under `/dev/mail`.
+Open `/dev/mail/center` to filter, refresh, and inspect the authenticated user's synchronized mail. The workspace starts in an all-account view, identifies each message's source account, and lets the user switch to one account when provider folders are needed. The page header exposes the cross-account unread badge. The badge treats `GET /api/mail/unread-count` as authoritative and refetches it after user-scoped realtime invalidations, WebSocket recovery, and browser focus. Opening a message loads its complete Provider conversation when a stable conversation identifier exists. The workspace can update read/starred state, maintain NocoBase-only notes and follow-up markers, move or delete messages, manage colored NocoBase-owned label membership, and securely download inbound attachments. Notes, follow-up markers, and labels are local metadata and are preserved when Provider messages are synchronized again. Development diagnostics remain available under `/dev/mail`.
 
 Do not group unrelated messages by normalized subject. Gmail `threadId` and Microsoft Graph `conversationId` are normalized to `conversationId`; messages without one remain standalone. Provider-folder and NocoBase-label filtering use indexed relations rather than scanning a JSON projection stored on each message.
 
@@ -84,7 +73,7 @@ Sending supports plain text plus safe rich-text HTML, replies, forwards, Provide
 
 ## Synchronize a mailbox
 
-Start synchronization through `MailService.startSync()` or `POST /api/mail/accounts/:accountId/sync`. The runtime also schedules active accounts automatically; the default interval is five minutes and `MAIL_AUTOMATIC_SYNC_INTERVAL_MS` configures it. Initial synchronization is resumable and bounded by `receivedAfter`, `maxMessages`, and the server-configured `mail.syncBatchSize` (or `MAIL_SYNC_BATCH_SIZE`, constrained to 1–200); subsequent runs use the Provider cursor. The Outbox relay is the only component that publishes Queue work, and each Job delegates one bounded step to the sync Operation.
+Start synchronization through `MailService.startSync()` or `POST /api/mail/accounts/:accountId/sync`. The workspace's default sync action starts one run for every active account that supports incremental synchronization; selecting an account narrows it to that mailbox. The runtime also schedules active accounts automatically; the default interval is five minutes and `MAIL_AUTOMATIC_SYNC_INTERVAL_MS` configures it. Initial synchronization is resumable and bounded by `receivedAfter`, `maxMessages`, and the server-configured `mail.syncBatchSize` (or `MAIL_SYNC_BATCH_SIZE`, constrained to 1–200); subsequent runs use the Provider cursor. The Outbox relay is the only component that publishes Queue work, and each Job delegates one bounded step to the sync Operation.
 
 When push configuration is present, the same sweep creates and renews Gmail
 watches and Microsoft Graph subscriptions. A valid notification only schedules

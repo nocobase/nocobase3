@@ -67,6 +67,12 @@ mail:
       clientSecret: replace-with-google-oauth-client-secret
 ```
 
+### 首次同步的时间范围和数量
+
+首次同步时，起始日期和最大消息数同时生效。起始日期用于筛选历史邮件，`maxMessages` 用于限制历史同步阶段导入的数量；如果达到数量上限，或者 Provider 没有更多符合日期条件的邮件，历史同步就会结束。未传 `maxMessages` 时默认值为 10,000，API 可设置为 1–100,000。Provider 返回的单页可能略超请求数量，因此最终导入数量可能略高于配置值；历史同步结束后，系统还会从基线游标执行追赶同步，补齐期间发生的变更。
+
+`mail.automaticSyncIntervalMs` 只控制自动同步的触发间隔，不限制单次同步的执行时长。
+
 ### OAuth callback 地址
 
 默认值是应用内路径 `/mail/oauth/callback`。Mail Core 会把它拼接到应用的 `publicBasePath` 下，再使用 `app.publicOrigin` 生成 Provider 需要的完整地址。如果没有配置 `app.publicOrigin`，发起 OAuth 的请求地址会作为 origin。

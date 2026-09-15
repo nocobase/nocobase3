@@ -1,9 +1,14 @@
-import { RefreshCw } from 'lucide-react';
+import { Mail, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import type { ReactElement } from 'react';
 import { useTranslation } from '@nocobase/i18n/client';
 
-import { MailAccountCard, MailPageHeader } from '../components/index.js';
+import {
+  MailPageHeader,
+  MailStatusBadge,
+  type MailStatusTone,
+} from '../components/index.js';
+import { Card } from '../components/ui/card.js';
 import {
   mailErrorMessage,
   type MailManagedAccountView,
@@ -71,19 +76,6 @@ export default function MailSettingsPage(): ReactElement {
         ) : null}
 
         <section>
-          <div className='mb-3'>
-            <h2 className='font-semibold'>
-              {t('settings.accounts.title', {
-                defaultValue: 'All connected accounts',
-              })}
-            </h2>
-            <p className='text-sm text-muted-foreground'>
-              {t('settings.accounts.description', {
-                defaultValue: 'View mailboxes connected by all users.',
-              })}
-            </p>
-          </div>
-
           {loading ? (
             <LoadingState
               label={t('settings.loading', {
@@ -100,31 +92,133 @@ export default function MailSettingsPage(): ReactElement {
               })}
             />
           ) : (
-            <div className='space-y-3'>
-              {accounts.map((account) => (
-                <MailAccountCard
-                  account={account}
-                  canSync={false}
-                  defaultLabel={t('settings.accounts.default', {
-                    defaultValue: 'Default',
-                  })}
-                  key={account.id}
-                  ownerLabel={t('settings.accounts.owner', {
-                    defaultValue: 'User ID: {{userId}}',
-                    userId: account.userId,
-                  })}
-                  providerLabel={`${account.provider.type} / ${account.provider.name}`}
-                  statusLabel={t(`status.account.${account.status}`, {
-                    defaultValue: account.status,
-                  })}
-                />
-              ))}
-            </div>
+            <Card className='overflow-hidden rounded-2xl bg-background shadow-sm'>
+              <div className='flex flex-wrap items-start justify-between gap-4 border-b bg-muted/20 px-6 py-5'>
+                <div>
+                  <h2 className='font-semibold'>
+                    {t('settings.accounts.title', {
+                      defaultValue: 'All connected accounts',
+                    })}
+                  </h2>
+                  <p className='mt-1 max-w-2xl text-sm leading-6 text-muted-foreground'>
+                    {t('settings.accounts.description', {
+                      defaultValue: 'View mailboxes connected by all users.',
+                    })}
+                  </p>
+                </div>
+                <span className='inline-flex h-7 min-w-7 items-center justify-center rounded-full border bg-background px-2 text-xs font-semibold'>
+                  {accounts.length}
+                </span>
+              </div>
+
+              <div className='overflow-x-auto'>
+                <table className='min-w-[64rem] w-full text-left text-sm'>
+                  <thead className='bg-muted/20 text-xs text-muted-foreground'>
+                    <tr>
+                      <th className='px-4 py-3 font-medium'>
+                        {t('dev.accountColumn', { defaultValue: 'Account' })}
+                      </th>
+                      <th className='px-4 py-3 font-medium'>
+                        {t('dev.providerColumn', { defaultValue: 'Provider' })}
+                      </th>
+                      <th className='px-4 py-3 font-medium'>
+                        {t('dev.statusColumn', { defaultValue: 'Status' })}
+                      </th>
+                      <th className='px-4 py-3 font-medium'>
+                        {t('settings.accounts.ownerColumn', {
+                          defaultValue: 'Owner',
+                        })}
+                      </th>
+                      <th className='px-4 py-3 font-medium'>
+                        {t('dev.initialSyncColumn', {
+                          defaultValue: 'Initial sync start date',
+                        })}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className='divide-y'>
+                    {accounts.map((account) => (
+                      <ManagedAccountRow account={account} key={account.id} />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
           )}
         </section>
       </div>
     </section>
   );
+}
+
+function ManagedAccountRow({
+  account,
+}: {
+  readonly account: MailManagedAccountView;
+}): ReactElement {
+  const { t } = useTranslation();
+
+  return (
+    <tr className='transition-colors hover:bg-muted/20'>
+      <td className='px-4 py-4'>
+        <div className='flex min-w-64 items-center gap-3'>
+          <span className='grid size-10 shrink-0 place-items-center rounded-xl border bg-muted/30 text-muted-foreground'>
+            <Mail aria-hidden='true' className='size-5' />
+          </span>
+          <div className='min-w-0'>
+            <p className='truncate font-semibold'>{account.address}</p>
+            {account.displayName ? (
+              <p className='truncate text-xs text-muted-foreground'>
+                {account.displayName}
+              </p>
+            ) : null}
+          </div>
+        </div>
+      </td>
+      <td className='px-4 py-4'>
+        <div className='min-w-32'>
+          <p className='font-medium'>
+            {account.provider.type} / {account.provider.name}
+          </p>
+          <p className='mt-1 font-mono text-[11px] text-muted-foreground'>
+            {account.provider.type}
+          </p>
+        </div>
+      </td>
+      <td className='px-4 py-4'>
+        <MailStatusBadge
+          label={t(`status.account.${account.status}`, {
+            defaultValue: account.status,
+          })}
+          tone={accountStatusTone(account.status)}
+        />
+      </td>
+      <td className='whitespace-nowrap px-4 py-4 text-muted-foreground'>
+        {t('settings.accounts.owner', {
+          defaultValue: 'User ID: {{userId}}',
+          userId: account.userId,
+        })}
+      </td>
+      <td className='px-4 py-4'>
+        {account.initialSyncReceivedAfter ? (
+          <time dateTime={account.initialSyncReceivedAfter}>
+            {account.initialSyncReceivedAfter.slice(0, 10)}
+          </time>
+        ) : (
+          <span className='text-muted-foreground'>—</span>
+        )}
+      </td>
+    </tr>
+  );
+}
+
+function accountStatusTone(
+  status: MailManagedAccountView['status'],
+): MailStatusTone {
+  if (status === 'active') return 'success';
+  if (status === 'connecting') return 'info';
+  if (status === 'reauthorizationRequired') return 'warning';
+  return 'danger';
 }
 
 function EmptyState({

@@ -41,6 +41,7 @@ import MailManagementPage from '../client/pages/mail-management-page.js';
 
 describe('MailWorkspacePage', () => {
   beforeEach(() => {
+    window.localStorage.clear();
     window.sessionStorage.clear();
     for (const mock of Object.values(mail)) mock.mockReset();
     mail.listAccounts.mockResolvedValue([
@@ -51,7 +52,6 @@ describe('MailWorkspacePage', () => {
         address: 'user@example.com',
         scopes: [],
         status: 'active',
-        isDefault: true,
       },
     ]);
     mail.listProviders.mockResolvedValue([
@@ -119,6 +119,9 @@ describe('MailWorkspacePage', () => {
     render(<MailWorkspacePage />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Compose' }));
+    expect(
+      screen.queryByRole('combobox', { name: 'From' }),
+    ).not.toBeInTheDocument();
     fireEvent.change(await screen.findByLabelText('TO'), {
       target: { value: 'recipient@example.com' },
     });
@@ -152,7 +155,7 @@ describe('MailWorkspacePage', () => {
     );
   });
 
-  it('opens the configured default account first', async () => {
+  it('opens all accounts first', async () => {
     mail.listAccounts.mockResolvedValue([
       {
         id: 'account-1',
@@ -161,7 +164,6 @@ describe('MailWorkspacePage', () => {
         address: 'first@example.com',
         scopes: [],
         status: 'active',
-        isDefault: false,
       },
       {
         id: 'account-2',
@@ -170,13 +172,53 @@ describe('MailWorkspacePage', () => {
         address: 'default@example.com',
         scopes: [],
         status: 'active',
-        isDefault: true,
       },
     ]);
 
     render(<MailWorkspacePage />);
 
-    expect(await screen.findByLabelText('Account')).toHaveValue('account-2');
+    expect(await screen.findByLabelText('Account')).toHaveValue('');
+    await waitFor(() =>
+      expect(mail.listMessages).toHaveBeenCalledWith(
+        expect.objectContaining({ accountId: undefined }),
+      ),
+    );
+  });
+
+  it('keeps connected accounts visible when optional labels loading fails', async () => {
+    mail.listAccounts.mockResolvedValue([
+      {
+        id: 'account-1',
+        userId: 'user-1',
+        provider: { type: 'gmail', name: 'google' },
+        address: 'first@example.com',
+        scopes: [],
+        status: 'active',
+      },
+      {
+        id: 'account-2',
+        userId: 'user-1',
+        provider: { type: 'gmail', name: 'google' },
+        address: 'second@example.com',
+        scopes: [],
+        status: 'active',
+      },
+    ]);
+    mail.listLabels.mockRejectedValueOnce(new Error('labels unavailable'));
+
+    render(<MailWorkspacePage />);
+
+    const accountSelect = await screen.findByLabelText('Account');
+    expect(
+      within(accountSelect).getByRole('option', {
+        name: 'first@example.com',
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(accountSelect).getByRole('option', {
+        name: 'second@example.com',
+      }),
+    ).toBeInTheDocument();
   });
 
   it('groups messages from the same conversation into one mailbox row', async () => {
@@ -241,7 +283,6 @@ describe('MailWorkspacePage', () => {
         address: 'user@example.com',
         scopes: [],
         status: 'suspended',
-        isDefault: true,
       },
     ]);
 
@@ -250,7 +291,9 @@ describe('MailWorkspacePage', () => {
     expect(
       await screen.findByRole('button', { name: 'Compose' }),
     ).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Sync mailbox' })).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: 'Sync all mailboxes' }),
+    ).toBeDisabled();
   });
 
   it('keeps the selected signature when sending individual messages', async () => {
@@ -348,7 +391,6 @@ describe('MailWorkspacePage', () => {
         address: 'user@example.com',
         scopes: [],
         status: 'active',
-        isDefault: true,
       },
     ]);
     mail.listProviders.mockResolvedValue([
@@ -625,17 +667,129 @@ describe('MailWorkspacePage', () => {
     }
   });
 
-  it('lets the server choose initial or incremental mode when syncing', async () => {
+  it('syncs the current all-account scope by default', async () => {
     render(<MailWorkspacePage />);
 
     fireEvent.click(
-      await screen.findByRole('button', { name: 'Sync mailbox' }),
+      await screen.findByRole('button', { name: 'Sync all mailboxes' }),
     );
 
     await waitFor(() =>
       expect(mail.startSync).toHaveBeenCalledWith({
         accountId: 'account-1',
       }),
+    );
+  });
+
+  it('syncs every active account when the workspace is in all-account scope', async () => {
+    mail.listAccounts.mockResolvedValue([
+      {
+        id: 'account-1',
+        userId: 'user-1',
+        provider: { type: 'gmail', name: 'google' },
+        address: 'first@example.com',
+        scopes: [],
+        status: 'active',
+      },
+      {
+        id: 'account-2',
+        userId: 'user-1',
+        provider: { type: 'gmail', name: 'google' },
+        address: 'second@example.com',
+        scopes: [],
+        status: 'active',
+      },
+    ]);
+    mail.startSync.mockImplementation(async ({ accountId }) => ({
+      id: `sync-${accountId}`,
+      accountId,
+      mode: 'incremental',
+      phase: 'incremental',
+      status: 'pending',
+      policy: { maxMessages: 10_000, batchSize: 200 },
+      processedMessages: 0,
+      processedPages: 0,
+      createdAt: '2026-09-06T00:00:00.000Z',
+      updatedAt: '2026-09-06T00:00:00.000Z',
+    }));
+
+    render(<MailWorkspacePage />);
+
+    const sync = await screen.findByRole('button', {
+      name: 'Sync all mailboxes',
+    });
+    await waitFor(() => expect(sync).toBeEnabled());
+    fireEvent.click(sync);
+
+    await waitFor(() => expect(mail.startSync).toHaveBeenCalledTimes(2));
+    expect(mail.startSync).toHaveBeenNthCalledWith(1, {
+      accountId: 'account-1',
+    });
+    expect(mail.startSync).toHaveBeenNthCalledWith(2, {
+      accountId: 'account-2',
+    });
+  });
+
+  it('uses the browser-cached account when opening a new composer', async () => {
+    mail.listAccounts.mockResolvedValue([
+      {
+        id: 'account-1',
+        userId: 'user-1',
+        provider: { type: 'gmail', name: 'google' },
+        address: 'first@example.com',
+        scopes: [],
+        status: 'active',
+      },
+      {
+        id: 'account-2',
+        userId: 'user-1',
+        provider: { type: 'gmail', name: 'google' },
+        address: 'second@example.com',
+        scopes: [],
+        status: 'active',
+      },
+    ]);
+    mail.listIdentities.mockImplementation(async (accountId) => [
+      {
+        id: `identity-${accountId}`,
+        accountId,
+        address:
+          accountId === 'account-2'
+            ? 'second@example.com'
+            : 'first@example.com',
+        isPrimary: true,
+        canSend: true,
+      },
+    ]);
+    window.localStorage.setItem(
+      'nocobase:mail:last-compose-account:v1:user-1',
+      'account-2',
+    );
+
+    render(<MailWorkspacePage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Compose' }));
+    await waitFor(() =>
+      expect(mail.listIdentities).toHaveBeenCalledWith('account-2'),
+    );
+    fireEvent.change(screen.getByLabelText('TO'), {
+      target: { value: 'recipient@example.com' },
+    });
+    fireEvent.change(screen.getByLabelText('Subject'), {
+      target: { value: 'Cached account message' },
+    });
+    const editor = screen.getByLabelText('Message body');
+    editor.innerHTML = '<p>Message content</p>';
+    fireEvent.input(editor);
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await waitFor(() =>
+      expect(mail.sendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          accountId: 'account-2',
+          identityId: 'identity-account-2',
+        }),
+      ),
     );
   });
 

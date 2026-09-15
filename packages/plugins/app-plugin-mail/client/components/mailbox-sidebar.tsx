@@ -21,6 +21,7 @@ export type MailboxSmartView = 'all' | 'unread' | 'starred';
 
 export interface MailboxSidebarLabels {
   readonly account: string;
+  readonly allAccounts: string;
   readonly allMail: string;
   readonly unread: string;
   readonly starred: string;
@@ -84,6 +85,7 @@ export function MailboxSidebar({
           onChange={(event) => onAccountChange(event.target.value)}
           value={accountId}
         >
+          <option value=''>{labels.allAccounts}</option>
           {accounts.map((account) => (
             <option key={account.id} value={account.id}>
               {account.address}
@@ -125,28 +127,32 @@ export function MailboxSidebar({
         />
       </nav>
 
-      <p className='mt-6 px-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase'>
-        {labels.folders}
-      </p>
-      <nav aria-label={labels.folders} className='mt-2 space-y-1'>
-        {orderedFolders.map((folder) => {
-          const Icon = folderIcons[folder.type];
-          return (
-            <SidebarButton
-              active={!labelId && folderId === folder.providerFolderId}
-              count={folder.unreadCount}
-              icon={Icon}
-              key={folder.id}
-              label={folder.name}
-              onClick={() => {
-                onSmartViewChange('all');
-                onFolderChange(folder.providerFolderId);
-                onLabelChange(undefined);
-              }}
-            />
-          );
-        })}
-      </nav>
+      {accountId ? (
+        <>
+          <p className='mt-6 px-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase'>
+            {labels.folders}
+          </p>
+          <nav aria-label={labels.folders} className='mt-2 space-y-1'>
+            {orderedFolders.map((folder) => {
+              const Icon = folderIcons[folder.type];
+              return (
+                <SidebarButton
+                  active={!labelId && folderId === folder.providerFolderId}
+                  count={folder.unreadCount}
+                  icon={Icon}
+                  key={folder.id}
+                  label={folder.name}
+                  onClick={() => {
+                    onSmartViewChange('all');
+                    onFolderChange(folder.providerFolderId);
+                    onLabelChange(undefined);
+                  }}
+                />
+              );
+            })}
+          </nav>
+        </>
+      ) : null}
       {customLabels.length > 0 ? (
         <>
           <p className='mt-6 px-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase'>

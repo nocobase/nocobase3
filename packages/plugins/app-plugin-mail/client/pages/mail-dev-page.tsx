@@ -12,7 +12,6 @@ import {
 import {
   mailErrorMessage,
   type MailAccountView,
-  type MailIdentity,
   type MailSubmissionView,
   type MailSignature,
   type MailTemplate,
@@ -70,7 +69,6 @@ function MailDevPage(): ReactElement {
   const { t } = useTranslation();
   const [accounts, setAccounts] = useState<readonly MailAccountView[]>([]);
   const [accountId, setAccountId] = useState('');
-  const [identities, setIdentities] = useState<readonly MailIdentity[]>([]);
   const [identityId, setIdentityId] = useState('');
   const [compose, setCompose] = useState<ComposeValue>({
     to: '',
@@ -103,7 +101,6 @@ function MailDevPage(): ReactElement {
             : (nextAccounts[0]?.id ?? ''),
         );
         if (nextAccounts.length === 0) {
-          setIdentities([]);
           setIdentityId('');
         }
       })
@@ -157,10 +154,11 @@ function MailDevPage(): ReactElement {
     void mail.listIdentities(accountId).then(
       (nextIdentities) => {
         if (!active) return;
-        setIdentities(nextIdentities);
         setIdentityId(
-          nextIdentities.find((identity) => identity.isPrimary)?.id ??
-            nextIdentities[0]?.id ??
+          nextIdentities.find(
+            (identity) => identity.isPrimary && identity.canSend,
+          )?.id ??
+            nextIdentities.find((identity) => identity.canSend)?.id ??
             '',
         );
       },
@@ -258,7 +256,7 @@ function MailDevPage(): ReactElement {
               })}
             </p>
             <form className='mt-5 space-y-4' onSubmit={sendMessage}>
-              <div className='grid gap-4 md:grid-cols-2'>
+              <div className='grid gap-4'>
                 <label className='text-sm font-medium'>
                   {t('dev.account', { defaultValue: 'Account' })}
                   <NativeSelect
@@ -276,23 +274,6 @@ function MailDevPage(): ReactElement {
                     {accounts.map((account) => (
                       <option key={account.id} value={account.id}>
                         {account.address}
-                      </option>
-                    ))}
-                  </NativeSelect>
-                </label>
-                <label className='text-sm font-medium'>
-                  {t('dev.identity', { defaultValue: 'Sending identity' })}
-                  <NativeSelect
-                    className='mt-1'
-                    disabled={!accountId}
-                    onChange={(event) => setIdentityId(event.target.value)}
-                    value={identityId}
-                  >
-                    {identities.map((identity) => (
-                      <option key={identity.id} value={identity.id}>
-                        {identity.displayName
-                          ? `${identity.displayName} <${identity.address}>`
-                          : identity.address}
                       </option>
                     ))}
                   </NativeSelect>

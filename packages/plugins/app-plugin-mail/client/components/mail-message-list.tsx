@@ -15,6 +15,7 @@ export interface MailMessageListLabels {
 }
 
 export interface MailMessageListProps {
+  readonly accountNames?: ReadonlyMap<string, string>;
   readonly availableLabels?: readonly MailLabel[];
   readonly labels: MailMessageListLabels;
   readonly loading?: boolean;
@@ -23,9 +24,11 @@ export interface MailMessageListProps {
   readonly onLoadMore: () => void;
   readonly onSelect: (message: MailMessageSummary) => void;
   readonly selectedMessageId?: string;
+  readonly showAccount?: boolean;
 }
 
 export function MailMessageList({
+  accountNames,
   availableLabels = [],
   labels,
   loading = false,
@@ -34,6 +37,7 @@ export function MailMessageList({
   onLoadMore,
   onSelect,
   selectedMessageId,
+  showAccount = false,
 }: MailMessageListProps): ReactElement {
   const groupedMessages = groupMessagesByConversation(messages);
   const labelsById = new Map(availableLabels.map((label) => [label.id, label]));
@@ -52,6 +56,7 @@ export function MailMessageList({
       <div className='divide-y'>
         {groupedMessages.map(({ message, subjectCount }) => {
           const sender = message.from?.name ?? message.from?.address;
+          const accountName = accountNames?.get(message.accountId);
           const messageLabels = message.labelIds
             .map((labelId) => labelsById.get(labelId))
             .filter((label): label is MailLabel => Boolean(label));
@@ -88,6 +93,11 @@ export function MailMessageList({
                   {formatMessageDate(message.receivedAt ?? message.sentAt)}
                 </time>
               </div>
+              {showAccount && accountName ? (
+                <p className='mt-1 truncate text-xs text-muted-foreground'>
+                  {accountName}
+                </p>
+              ) : null}
               <div className='mt-1 flex items-center gap-2'>
                 <span
                   className={cn(

@@ -27,6 +27,9 @@ export interface SendMailExecutionOptions {
   readonly scheduledDelivery?: boolean;
 }
 
+const MAX_OUTBOUND_ATTACHMENT_COUNT = 100;
+const OUTBOUND_ATTACHMENT_METADATA_CONCURRENCY = 8;
+
 export class SendMailOperation {
   public constructor(
     private readonly dependencies: SendMailOperationDependencies,
@@ -328,8 +331,16 @@ export class SendMailOperation {
             return attachment;
           })
       : [];
-    const attachments = await Promise.all(
-      (input.attachmentIds ?? []).map(async (attachmentId) => {
+    const attachmentIds = input.attachmentIds ?? [];
+    if (attachmentIds.length > MAX_OUTBOUND_ATTACHMENT_COUNT) {
+      throw new TypeError(
+        `Mail messages must contain at most ${MAX_OUTBOUND_ATTACHMENT_COUNT} attachments.`,
+      );
+    }
+    const attachments = await mapConcurrent(
+      attachmentIds,
+      OUTBOUND_ATTACHMENT_METADATA_CONCURRENCY,
+      async (attachmentId) => {
         const metadata = await this.dependencies.store.getOutboundAttachment(
           context.actorId,
           attachmentId,
@@ -347,7 +358,7 @@ export class SendMailOperation {
           open: async () =>
             (await storage.open(context.actorId, attachmentId)).stream,
         };
-      }),
+      },
     );
     const attachmentSize = attachments.reduce(
       (total, attachment) => total + attachment.size,
@@ -511,4 +522,26 @@ async function closeQuietly(adapter: {
   } catch {
     // Closing a Provider client must not change a persisted submission result.
   }
+}
+
+async function mapConcurrent<T, R>(
+  values: readonly T[],
+  concurrency: number,
+  mapper: (value: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  if (values.length === 0) return [];
+  const results = new Array<R>(values.length);
+  let nextIndex = 0;
+  const workerCount = Math.min(Math.max(concurrency, 1), values.length);
+
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (true) {
+        const index = nextIndex++;
+        if (index >= values.length) return;
+        results[index] = await mapper(values[index], index);
+      }
+    }),
+  );
+  return results;
 }

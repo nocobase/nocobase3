@@ -95,13 +95,6 @@ describe('Mail client routes', () => {
               access: { resource: 'mail.workspace', action: 'access' },
               componentLoader: expect.any(Function),
             },
-            {
-              name: 'templates',
-              path: '/templates',
-              navigation: { title: 'nav.templates' },
-              access: { resource: 'mail.workspace', action: 'access' },
-              componentLoader: expect.any(Function),
-            },
           ],
         },
       ],
@@ -143,9 +136,6 @@ describe('Mail client routes', () => {
     await expect(
       dev.routes[0]?.children?.[5]?.componentLoader(),
     ).resolves.toMatchObject({ default: expect.any(Function) });
-    await expect(
-      dev.routes[0]?.children?.[6]?.componentLoader(),
-    ).resolves.toMatchObject({ default: expect.any(Function) });
 
     const resolved = resolveAppClientContributions([
       { packageName: '@nocobase/app-plugin-mail', routes },
@@ -165,7 +155,6 @@ describe('Mail client routes', () => {
       '/dev/mail/send',
       '/dev/mail/sync-logs',
       '/dev/mail/send-logs',
-      '/dev/mail/templates',
     ]);
   });
 });

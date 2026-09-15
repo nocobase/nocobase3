@@ -16,14 +16,8 @@ The first runnable vertical slice provides:
   for read-only all-user account visibility, plus
   `/settings/mail/send-logs` for all-user synchronization and delivery
   operation logs;
-- a production Mail workspace at `/mail`, plus current-user account connection
-  and development diagnostics under `/dev/mail`; `/dev/mail/accounts` defaults
-  to a connected-account table and also exposes account association (including
-  the initial sync date), signature and NocoBase-owned label management, and
-  reusable-template management;
-- account and folder filtering, refresh, message
-  search, conversation detail, account connection, synchronization controls,
-  sending, synchronization logs, and delivery submission logs;
+- a production Mail workspace at `/mail`, plus current-user account connection and development diagnostics under `/dev/mail`; `/dev/mail/accounts` defaults to a connected-account table and also exposes account association (including the initial sync date), signature and NocoBase-owned label management, and reusable-template management;
+- an all-account workspace view with account and folder filtering, refresh, message search, conversation detail, account connection, synchronization controls, sending, synchronization logs, and delivery submission logs; the composer remembers its last selected account in browser storage and the default synchronization action covers every active account;
 - database-backed OAuth credential storage with token-rotation support;
 - a synchronous `SendMailOperation` with a persisted idempotency key and an
   explicit `unknown` result for indeterminate Provider submissions;
@@ -65,8 +59,7 @@ The first runnable vertical slice provides:
   refreshes on user-scoped realtime mail invalidations and WebSocket recovery;
 - filterable operation logs with safe synchronization cancellation and retry;
 - bounded bulk delivery as separate per-recipient submissions;
-- current-user account default selection, account deactivation/reactivation, and
-  removal with local data cleanup;
+- current-user account selection, account deactivation/reactivation, and removal with local data cleanup;
 - Provider contracts, registry, adapter resolver, database storage, and an
   explicit migration.
 
@@ -113,11 +106,7 @@ returning history. One Queue
 execution advances one state-machine step, so a large mailbox never requires
 one unbounded HTTP request or one unbounded Job.
 
-The default initial policy is 10,000 messages with pages of 100. The server-side
-page size is configured through `mail.syncBatchSize` or
-`MAIL_SYNC_BATCH_SIZE` and is constrained to 1–200; API callers may choose the
-received-after date and maximum message count. Provider cursors are opaque and
-are never returned by the HTTP API as standalone Queue payloads.
+For the initial history pass, `receivedAfter` and `maxMessages` apply together: Mail Core imports messages matching the date condition until it reaches the configured count or the Provider has no more matching messages. The default `maxMessages` is 10,000; API callers can set it from 1 through 100,000. A Provider page may contain slightly more messages than requested, so the final count may slightly exceed the configured value. After the history pass, Mail Core catches up changes from the baseline watermark. The server-side page size is configured through `mail.syncBatchSize` or `MAIL_SYNC_BATCH_SIZE` and is constrained to 1–200. Provider cursors are opaque and are never returned by the HTTP API as standalone Queue payloads.
 
 ## OAuth callback URL
 

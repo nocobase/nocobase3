@@ -281,12 +281,6 @@ export class DefaultMailService implements MailService {
     }
 
     let updated = account;
-    if (input.isDefault) {
-      updated = await this.dependencies.store.setDefaultAccount(
-        context.actorId,
-        account.id,
-      );
-    }
     if (input.status) {
       if (
         input.status === 'active' &&
@@ -1227,7 +1221,6 @@ export class DefaultMailService implements MailService {
         throw new Error('Mail account is already connected to another user.');
       }
       isNewAccount = existing === undefined;
-      const accounts = await this.dependencies.store.listAccounts(userId);
       account = {
         id: existing?.id ?? randomUUID(),
         userId,
@@ -1241,7 +1234,6 @@ export class DefaultMailService implements MailService {
         initialSyncReceivedAfter: existing
           ? existing.initialSyncReceivedAfter
           : (initialSyncReceivedAfter ?? undefined),
-        isDefault: existing?.isDefault ?? accounts.length === 0,
       };
       const previousIdentities = existing
         ? await this.dependencies.store.listIdentities(existing.id)

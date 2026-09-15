@@ -186,6 +186,57 @@ describe('IMAP/SMTP mail Provider', () => {
     });
   });
 
+  it('pages initial messages with UID ranges instead of sorting the whole mailbox', async () => {
+    mocks.imap.mailboxOpen.mockResolvedValue({
+      uidValidity: 1n,
+      uidNext: 1001,
+    });
+    mocks.imap.search.mockResolvedValue(
+      Array.from({ length: 10 }, (_, index) => 1000 - index),
+    );
+    mocks.imap.fetch.mockImplementation(async function* (
+      uids: number[] | string,
+    ) {
+      const values = Array.isArray(uids)
+        ? uids
+        : (() => {
+            const [start, end] = String(uids).split(':').map(Number);
+            return Array.from(
+              { length: end - start + 1 },
+              (_, index) => end - index,
+            );
+          })();
+      for (const uid of values) yield fetchedMessage(uid);
+    });
+    const adapter = await imapSmtpMailProviderDefinition.createAdapter(
+      context(),
+      config(),
+      account(),
+    );
+
+    const first = await adapter.listMessages!({ limit: 10 });
+    if (!first.ok) throw new Error(first.error.message);
+    expect(first.value.messages).toHaveLength(10);
+    expect(mocks.imap.search).toHaveBeenNthCalledWith(
+      1,
+      { uid: '991:1000' },
+      { uid: true },
+    );
+    const cursor = first.value.nextCursor;
+    if (!cursor) throw new Error('Expected another IMAP history page.');
+
+    mocks.imap.search.mockResolvedValue(
+      Array.from({ length: 10 }, (_, index) => 990 - index),
+    );
+    const second = await adapter.listMessages!({ cursor, limit: 10 });
+    if (!second.ok) throw new Error(second.error.message);
+    expect(mocks.imap.search).toHaveBeenNthCalledWith(
+      2,
+      { uid: '981:990' },
+      { uid: true },
+    );
+  });
+
   it('returns a recoverable error for malformed sync cursors', async () => {
     const adapter = await imapSmtpMailProviderDefinition.createAdapter(
       context(),
@@ -327,7 +378,6 @@ function account(): MailAccount {
     credentialReference: 'credential-1',
     scopes: [],
     status: 'active',
-    isDefault: true,
   };
 }
 

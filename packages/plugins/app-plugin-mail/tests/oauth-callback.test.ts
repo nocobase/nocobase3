@@ -21,7 +21,6 @@ describe('Mail OAuth callback route', () => {
         address: 'user@example.com',
         scopes: [],
         status: 'active',
-        isDefault: true,
       }),
     );
     const router = await createRouter(service({ completeAuthorization }));
@@ -70,7 +69,6 @@ describe('Mail OAuth callback route', () => {
         address: 'user@example.com',
         scopes: [],
         status: 'active',
-        isDefault: true,
       }),
     );
     const router = await createRouter(

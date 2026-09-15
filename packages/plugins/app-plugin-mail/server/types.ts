@@ -96,7 +96,6 @@ export interface MailAccount {
   /** Date boundary recorded when the account was first connected. */
   readonly initialSyncReceivedAfter?: string;
   readonly syncCursor?: MailSyncCursor;
-  readonly isDefault: boolean;
 }
 
 /** API-safe account metadata. Credential references remain inside mail core. */
@@ -335,7 +334,6 @@ export interface MailStartSyncInput {
 export interface MailUpdateAccountInput {
   readonly accountId: string;
   readonly status?: 'active' | 'suspended';
-  readonly isDefault?: boolean;
 }
 
 export type MailCommandType =
@@ -1109,7 +1107,8 @@ export interface MailCredentialVault {
   getOrRefresh<T>(
     reference: string,
     isFresh: (value: T) => boolean,
-    refresh: (value: T) => Promise<T>,
+    refresh: (value: T, signal?: AbortSignal) => Promise<T>,
+    signal?: AbortSignal,
   ): Promise<T>;
   delete(reference: string): Promise<void>;
   deleteExpired?(now: string): Promise<number>;
@@ -1301,7 +1300,6 @@ export interface MailStore {
   saveAccount(account: MailAccount): Promise<MailAccount>;
   markAccountRemoving(accountId: string, userId: string): Promise<boolean>;
   markAccountReauthorizationRequired(accountId: string): Promise<boolean>;
-  setDefaultAccount(userId: string, accountId: string): Promise<MailAccount>;
   deleteAccount(accountId: string): Promise<boolean>;
   getPushSubscription(
     accountId: string,

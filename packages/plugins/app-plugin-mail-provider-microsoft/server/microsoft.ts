@@ -59,6 +59,45 @@ const MESSAGE_SELECT = [
 
 const SIMPLE_ATTACHMENT_LIMIT = 3 * 1024 * 1024;
 const UPLOAD_CHUNK_SIZE = 10 * 320 * 1024;
+const HTTP_TIMEOUT_MS = 30 * 1_000;
+const MESSAGE_NORMALIZATION_CONCURRENCY = 8;
+const MAX_PROVIDER_JSON_BYTES = 32 * 1024 * 1024;
+
+function fetchWithTimeout(
+  input: Parameters<typeof globalThis.fetch>[0],
+  init: RequestInit = {},
+): Promise<Response> {
+  const timeoutSignal = AbortSignal.timeout(HTTP_TIMEOUT_MS);
+  const signal = init.signal
+    ? AbortSignal.any([init.signal, timeoutSignal])
+    : timeoutSignal;
+  return globalThis.fetch(input, { ...init, signal });
+}
+
+async function readJson<T>(response: Response): Promise<T> {
+  if (!response.body) return (await response.json()) as T;
+  const reader =
+    response.body.getReader() as ReadableStreamDefaultReader<Uint8Array>;
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const chunk = await reader.read();
+    if (chunk.done) break;
+    total += chunk.value.byteLength;
+    if (total > MAX_PROVIDER_JSON_BYTES) {
+      await reader.cancel();
+      throw new Error('Microsoft Provider response exceeded the size limit.');
+    }
+    chunks.push(chunk.value);
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return JSON.parse(new TextDecoder().decode(bytes)) as T;
+}
 
 export interface MicrosoftMailProviderConfig extends MailProviderConfig {
   readonly type: 'microsoft';
@@ -432,7 +471,7 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
         `/subscriptions/${encodeURIComponent(providerSubscriptionId)}`,
       );
       if (!resolvedUrl.ok) return resolvedUrl;
-      const response = await fetch(resolvedUrl.value, {
+      const response = await fetchWithTimeout(resolvedUrl.value, {
         method: 'DELETE',
         headers: {
           authorization: `Bearer ${await this.accessToken(signal)}`,
@@ -882,7 +921,7 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
             ),
           };
         }
-        const sent = await fetch(
+        const sent = await fetchWithTimeout(
           `${graphBase(this.config)}/me/messages/${encodeURIComponent(input.message.draftProviderMessageId)}/send`,
           {
             method: 'POST',
@@ -926,7 +965,7 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
         }
         if (!draft.ok) return { status: 'failed', error: draft.error };
         const draftId = draft.value.providerMessageId;
-        const sent = await fetch(
+        const sent = await fetchWithTimeout(
           `${graphBase(this.config)}/me/messages/${encodeURIComponent(draftId)}/send`,
           {
             method: 'POST',
@@ -953,31 +992,34 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
           ),
         };
       }
-      const response = await fetch(`${graphBase(this.config)}/me/sendMail`, {
-        method: 'POST',
-        headers: {
-          authorization: `Bearer ${token}`,
-          'content-type': 'application/json',
-          Prefer: 'IdType="ImmutableId"',
-          'client-request-id': input.trackingId,
-        },
-        body: JSON.stringify({
-          message: {
-            subject: input.message.subject,
-            from: graphRecipient(input.identity),
-            body: {
-              contentType: input.message.html ? 'HTML' : 'Text',
-              content: input.message.html ?? input.message.text,
-            },
-            toRecipients: input.message.to.map(graphRecipient),
-            ccRecipients: input.message.cc.map(graphRecipient),
-            bccRecipients: input.message.bcc.map(graphRecipient),
-            attachments,
+      const response = await fetchWithTimeout(
+        `${graphBase(this.config)}/me/sendMail`,
+        {
+          method: 'POST',
+          headers: {
+            authorization: `Bearer ${token}`,
+            'content-type': 'application/json',
+            Prefer: 'IdType="ImmutableId"',
+            'client-request-id': input.trackingId,
           },
-          saveToSentItems: true,
-        }),
-        signal: input.signal,
-      });
+          body: JSON.stringify({
+            message: {
+              subject: input.message.subject,
+              from: graphRecipient(input.identity),
+              body: {
+                contentType: input.message.html ? 'HTML' : 'Text',
+                content: input.message.html ?? input.message.text,
+              },
+              toRecipients: input.message.to.map(graphRecipient),
+              ccRecipients: input.message.cc.map(graphRecipient),
+              bccRecipients: input.message.bcc.map(graphRecipient),
+              attachments,
+            },
+            saveToSentItems: true,
+          }),
+          signal: input.signal,
+        },
+      );
       return response.ok
         ? { status: 'accepted' }
         : submissionResponse(response);
@@ -1197,7 +1239,7 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
       };
     }
     try {
-      const response = await fetch(
+      const response = await fetchWithTimeout(
         `${graphBase(this.config)}/me/messages/${encodeURIComponent(providerMessageId)}`,
         {
           method: 'DELETE',
@@ -1254,7 +1296,7 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
     }
     if (!prepared.ok) return { status: 'failed', error: prepared.error };
     const draftId = prepared.value.providerMessageId;
-    const sent = await fetch(
+    const sent = await fetchWithTimeout(
       `${graphBase(this.config)}/me/messages/${encodeURIComponent(draftId)}/send`,
       {
         method: 'POST',
@@ -1356,7 +1398,7 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
     signal?: AbortSignal,
   ): Promise<MailProviderResult<void>> {
     try {
-      const response = await fetch(
+      const response = await fetchWithTimeout(
         `${graphBase(this.config)}/me/messages/${encodeURIComponent(providerMessageId)}/attachments/${encodeURIComponent(providerAttachmentId)}`,
         {
           method: 'DELETE',
@@ -1442,7 +1484,7 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
         start += UPLOAD_CHUNK_SIZE
       ) {
         const end = Math.min(start + UPLOAD_CHUNK_SIZE, bytes.byteLength);
-        const response = await fetch(uploadUrl, {
+        const response = await fetchWithTimeout(uploadUrl, {
           method: 'PUT',
           headers: {
             'content-length': String(end - start),
@@ -1473,32 +1515,41 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
       readonly deletedProviderMessageIds: readonly string[];
     }>
   > {
+    const results = await mapConcurrent(
+      messages,
+      MESSAGE_NORMALIZATION_CONCURRENCY,
+      async (message): Promise<PageNormalizationResult> => {
+        if (message['@removed']) {
+          if (!message.id) return {};
+          const current = await this.getMessage(message.id, signal);
+          if (current.ok) {
+            return { message: current.value };
+          } else if (current.error.code === 'MICROSOFT_HTTP_404') {
+            return { deletedProviderMessageId: message.id };
+          } else {
+            return { error: current.error };
+          }
+        }
+        const attachments =
+          message.hasAttachments && message.id
+            ? await this.attachments(message.id, signal)
+            : {
+                ok: true as const,
+                value: [] as readonly NormalizedMailAttachment[],
+              };
+        if (!attachments.ok) return { error: attachments.error };
+        const result = normalizeGraphMessage(message, attachments.value);
+        return result.ok ? { message: result.value } : { error: result.error };
+      },
+    );
     const normalized: NormalizedMailMessage[] = [];
     const deleted: string[] = [];
-    for (const message of messages) {
-      if (message['@removed']) {
-        if (!message.id) continue;
-        const current = await this.getMessage(message.id, signal);
-        if (current.ok) {
-          normalized.push(current.value);
-        } else if (current.error.code === 'MICROSOFT_HTTP_404') {
-          deleted.push(message.id);
-        } else {
-          return current;
-        }
-        continue;
+    for (const result of results) {
+      if (result.error) return { ok: false, error: result.error };
+      if (result.message) normalized.push(result.message);
+      if (result.deletedProviderMessageId) {
+        deleted.push(result.deletedProviderMessageId);
       }
-      const attachments =
-        message.hasAttachments && message.id
-          ? await this.attachments(message.id, signal)
-          : {
-              ok: true as const,
-              value: [] as readonly NormalizedMailAttachment[],
-            };
-      if (!attachments.ok) return attachments;
-      const result = normalizeGraphMessage(message, attachments.value);
-      if (!result.ok) return result;
-      normalized.push(result.value);
     }
     return {
       ok: true,
@@ -1595,7 +1646,7 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
       await this.context.credentials.getOrRefresh<MicrosoftCredential>(
         this.account.credentialReference,
         (value) => Date.parse(value.expiresAt) > Date.now() + 60_000,
-        async (value) => {
+        async (value, refreshSignal) => {
           const refreshed = await exchangeToken(
             this.config,
             {
@@ -1605,7 +1656,7 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
               grant_type: 'refresh_token',
               scope: value.scopes.join(' '),
             },
-            signal,
+            refreshSignal ?? signal,
           );
           if (!refreshed.ok) throw new ProviderRequestError(refreshed.error);
           return {
@@ -1620,6 +1671,7 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
             tokenType: refreshed.value.token_type ?? value.tokenType,
           };
         },
+        signal,
       );
     return credential.accessToken;
   }
@@ -1632,6 +1684,12 @@ interface GraphFileAttachment {
   readonly contentBytes: string;
   readonly isInline: boolean;
   readonly contentId?: string;
+}
+
+interface PageNormalizationResult {
+  readonly message?: NormalizedMailMessage;
+  readonly deletedProviderMessageId?: string;
+  readonly error?: MailProviderError;
 }
 
 function graphAttachment(
@@ -1651,16 +1709,36 @@ function graphAttachment(
 async function graphAttachments(
   input: MailProviderSendInput,
 ): Promise<readonly GraphFileAttachment[]> {
-  return Promise.all(
-    input.message.attachments.map(async (attachment) => {
-      const stream = await attachment.open();
-      const bytes = Buffer.from(await new Response(stream).arrayBuffer());
-      if (bytes.byteLength !== attachment.size) {
-        throw new Error('Mail attachment size changed before submission.');
+  const attachments: GraphFileAttachment[] = [];
+  for (const attachment of input.message.attachments) {
+    const stream = await attachment.open();
+    const bytes = Buffer.from(await new Response(stream).arrayBuffer());
+    if (bytes.byteLength !== attachment.size) {
+      throw new Error('Mail attachment size changed before submission.');
+    }
+    attachments.push(graphAttachment(attachment, bytes));
+  }
+  return attachments;
+}
+
+async function mapConcurrent<T, R>(
+  values: readonly T[],
+  concurrency: number,
+  mapper: (value: T) => Promise<R>,
+): Promise<readonly R[]> {
+  const result = new Array<R>(values.length);
+  let index = 0;
+  const workerCount = Math.min(Math.max(concurrency, 1), values.length);
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (true) {
+        const current = index++;
+        if (current >= values.length) return;
+        result[current] = await mapper(values[current]);
       }
-      return graphAttachment(attachment, bytes);
     }),
   );
+  return result;
 }
 
 function relatedBody(
@@ -1695,13 +1773,16 @@ async function exchangeToken(
   signal?: AbortSignal,
 ): Promise<MailProviderResult<MicrosoftTokenResponse>> {
   try {
-    const response = await fetch(`${authority(config)}/oauth2/v2.0/token`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams(body),
-      signal,
-    });
-    const value = (await response.json()) as MicrosoftTokenResponse;
+    const response = await fetchWithTimeout(
+      `${authority(config)}/oauth2/v2.0/token`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams(body),
+        signal,
+      },
+    );
+    const value = await readJson<MicrosoftTokenResponse>(response);
     return response.ok
       ? { ok: true, value }
       : failure(
@@ -1727,7 +1808,7 @@ async function graphRequest<T>(
   try {
     const resolvedUrl = resolveGraphUrl(config, pathOrUrl);
     if (!resolvedUrl.ok) return resolvedUrl;
-    const response = await fetch(resolvedUrl.value, {
+    const response = await fetchWithTimeout(resolvedUrl.value, {
       ...init,
       headers: {
         ...init.headers,
@@ -1737,7 +1818,7 @@ async function graphRequest<T>(
       },
     });
     return response.ok
-      ? { ok: true, value: (await response.json()) as T }
+      ? { ok: true, value: await readJson<T>(response) }
       : { ok: false, error: await responseError(response) };
   } catch (error) {
     return {
@@ -2036,9 +2117,9 @@ function required(value: string | undefined, label: string): string {
 async function responseError(response: Response): Promise<MailProviderError> {
   let message = `Microsoft Graph request failed with status ${response.status}.`;
   try {
-    const body = (await response.json()) as {
+    const body = await readJson<{
       error?: { code?: string; message?: string };
-    };
+    }>(response);
     message = body.error?.message ?? message;
   } catch {
     // Some Provider errors do not use a JSON response body.

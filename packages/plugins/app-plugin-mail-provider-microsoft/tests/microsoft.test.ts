@@ -1337,7 +1337,6 @@ function account() {
     credentialReference: 'credential-1',
     scopes: [],
     status: 'active' as const,
-    isDefault: true,
   };
 }
 
