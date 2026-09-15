@@ -3,10 +3,14 @@ import type {
   CollectionMetadataStore,
   CollectionMetadataStoreConfig,
   ConnectionConfig,
+  ConnectionsOfDrivers,
+  DatabaseDriverRegistration,
   ExtensibleDatabaseConfig,
   MigrationSource,
   SeedSource,
 } from '@nocobase/db';
+import type { AppConfigFactory } from '../config/define-app-config.js';
+import type { AppRuntimeContext } from '../runtime/definition.js';
 
 /**
  * A metadata store as an application may configure it: the instance, the
@@ -102,3 +106,51 @@ export type AppDatabaseConnectionConfig<
    */
   metadataStore?: AppMetadataStoreConfig;
 };
+
+/**
+ * Declares an application's `database` configuration, checking its connections against the drivers
+ * it registers.
+ *
+ * A connection may only use a dialect the application registered. That has always been true at
+ * runtime, where a driver is looked up by the connection's dialect and a missing one fails the start
+ * with `Database dialect "..." is not registered.`; this reports it while typing instead.
+ *
+ * ```ts
+ * const database: AppConfigFactory<AppDatabaseConfig> = defineDatabaseConfig({ sqlite })(
+ *   (runtime) => ({
+ *     default: 'main',
+ *     connections: {
+ *       main: { dialect: 'sqlite', filename: runtime.configPaths.storage('app.sqlite') },
+ *     },
+ *   }),
+ * );
+ * ```
+ *
+ * The drivers are taken in a call of their own, and the shape is not decoration. TypeScript infers
+ * from arguments rather than from a function's return type, so drivers declared inside the factory
+ * are never resolved and every connection is accepted; and even passed alongside it, the connection
+ * type stays a deferred conditional that cannot contextually type the literal, which widens each
+ * `dialect` to `string`. Binding the drivers in the first call makes the second call's parameter a
+ * concrete type — which is also what restores TypeScript's own excess-property check, so a mistyped
+ * key is reported with its own diagnostic and a spelling suggestion.
+ *
+ * The type parameter never reaches the return type, so an application keeps annotating with plain
+ * `AppConfigFactory<AppDatabaseConfig>` and `isolatedDeclarations` has nothing to write out.
+ */
+export function defineDatabaseConfig<
+  const TDrivers extends Record<string, DatabaseDriverRegistration>,
+>(
+  drivers: TDrivers,
+): (
+  factory: (runtime: AppRuntimeContext) => {
+    default?: string;
+    metadataStore?: AppMetadataStoreConfig;
+    connections: Record<
+      string,
+      AppDatabaseConnectionConfig<ConnectionsOfDrivers<TDrivers>>
+    >;
+  },
+) => AppConfigFactory<AppDatabaseConfig> {
+  return (factory) => (runtime) =>
+    ({ drivers, ...factory(runtime) }) as unknown as AppDatabaseConfig;
+}

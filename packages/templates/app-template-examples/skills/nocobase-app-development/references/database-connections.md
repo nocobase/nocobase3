@@ -6,7 +6,7 @@ An application starts on SQLite, declared in `server/config/database.ts` — her
 
 ## A dialect is registered in code, not configured
 
-`server/config/database.ts` declares the dialects the application has. This template registers four, so that its connections can demonstrate more than one:
+`server/config/database.ts` declares the dialects the application has, in the first call of `defineDatabaseConfig`. This template registers four, so that its connections can demonstrate more than one:
 
 ```ts
 import sqlite from '@nocobase/db-sqlite';
@@ -14,19 +14,45 @@ import postgres from '@nocobase/db-postgres';
 import mysql from '@nocobase/db-mysql';
 import oracle from '@nocobase/db-oracle';
 
-drivers: { sqlite, postgres, mysql, oracle },
+const database: AppConfigFactory<AppDatabaseConfig> = defineDatabaseConfig({
+  sqlite,
+  postgres,
+  mysql,
+  oracle,
+})((runtime) => ({
+  default: 'main',
+  connections: {
+    main: {
+      dialect: 'sqlite',
+      filename: runtime.configPaths.storage('database.sqlite'),
+    },
+  },
+}));
 ```
 
 Registering a dialect costs an installed package, not a connection: all three connections here run on SQLite, and the other three are available the moment one points at them.
 
-A connection may only use a dialect listed there. `config.yml` can change a connection's host, credentials and database name, but it cannot introduce a dialect — the driver is an imported module, and configuration has no way to import one. Setting `dialect: postgres` in `config.yml` without the registration fails at startup:
+A connection may only use a dialect registered there, and the connections are checked against it — naming one that is not registered is a type error:
+
+```
+Type '"postgres"' is not assignable to type '"sqlite"'.
+```
+
+Each connection is also checked against its own dialect's fields, so a mistyped key is reported where it is written rather than ignored:
+
+```
+Object literal may only specify known properties, but 'fileName' does not exist in
+type 'AppDatabaseConnectionConfig<SqliteConnectionConfig>'. Did you mean to write 'filename'?
+```
+
+`config.yml` can change a connection's host, credentials and database name, but it cannot introduce a dialect — the driver is an imported module, and configuration has no way to import one. A dialect that reaches the runtime unregistered fails the start:
 
 ```
 Database dialect "postgres" is not registered.
 Install and register the corresponding @nocobase/db-postgres package.
 ```
 
-The key in `drivers` has to be the dialect name, and it has to match the dialect the package declares. `{ pg: postgres }` is rejected, and so is `{ mysql: postgres }`.
+The key in the drivers map has to be the dialect name, and it has to match the dialect the package declares. `{ pg: postgres }` is rejected, and so is `{ mysql: postgres }`.
 
 ## Switching the default connection
 
@@ -40,13 +66,15 @@ pnpm add @nocobase/db-postgres
 
 It must land in `dependencies`, not `devDependencies`. `pnpm build` generates `dist/package.json` from `dependencies` alone, so a server import declared as a devDependency resolves in development and is missing exactly once — on the deployed server. The native driver comes with the dialect package; there is nothing else to install.
 
-**2. Register it** in `server/config/database.ts`:
+**2. Register it** in `server/config/database.ts`, in the drivers call:
 
 ```ts
 import postgres from '@nocobase/db-postgres';
 
-drivers: { postgres },
+defineDatabaseConfig({ sqlite, postgres })((runtime) => ({ ... }));
 ```
+
+Leaving a driver out is safe — the connections that use it stop typechecking, which is the point — so drivers are removed when the application genuinely stops offering that database, not to tidy up.
 
 **3. Point the connection at it,** in the same file. Change `dialect`, and remove the fields that belonged to the old one — SQLite's `filename` in particular, since `config.yml` deep-merges into these defaults rather than replacing them, and a leftover key stays for the life of the application:
 

@@ -99,6 +99,8 @@
         "ComparisonOperator",
         "ConnectTarget",
         "ConnectionConfig",
+        "ConnectionOfRegistration",
+        "ConnectionsOfDrivers",
         "CreateManyOptions",
         "CreateManyResult",
         "CreateMigratorOptions",

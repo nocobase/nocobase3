@@ -52,6 +52,7 @@ export {
   type AppDatabaseTaskPlanOptions,
   type AppDatabaseTaskSelection,
 } from './plan.js';
+export { defineDatabaseConfig } from './types.js';
 export type {
   AppDatabaseConfig,
   AppDatabaseConnectionConfig,
