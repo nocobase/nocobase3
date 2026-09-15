@@ -3,6 +3,7 @@ import {
   type AppClientPlugins,
 } from '@nocobase/app-client/plugins';
 import aiEmployee from '@nocobase/app-plugin-ai-employee/client';
+import apiKeys from '@nocobase/app-plugin-api-keys/client';
 import authentication from '@nocobase/app-plugin-authentication/client';
 import authorization from '@nocobase/app-plugin-authorization/client';
 import databaseExplorer from '@nocobase/app-plugin-database-explorer/client';
@@ -23,6 +24,7 @@ const clientPlugins: AppClientPlugins = defineClientPlugins([
   authorization(),
   databaseExplorer(),
   users({ mount: 'settings', path: '/users' }),
+  apiKeys({ path: '/api-keys' }),
   i18n(),
   install(),
   notificationProvider({ demo: false }),

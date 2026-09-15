@@ -11,6 +11,7 @@ verifyDepsBeforeRun: false
 catalog:
   '@arethetypeswrong/cli': ^0.18.5
   '@base-ui/react': ^1.6.0
+  '@better-auth/api-key': ^1.7.1
   '@boringnode/queue': ^0.7.1
   '@cacheable/memory': ^2.2.0
   '@clack/prompts': ^1.7.0

@@ -1,3 +1,4 @@
+import apiKeys from '@nocobase/app-plugin-api-keys/server';
 import authentication from '@nocobase/app-plugin-authentication/server';
 import aiEmployee from '@nocobase/app-plugin-ai-employee/server/plugin';
 import authorization from '@nocobase/app-plugin-authorization/server';
@@ -21,6 +22,7 @@ const serverPlugins: AppServerPlugins = defineServerPlugins([
   authorization,
   databaseExplorer,
   users,
+  apiKeys,
   i18n,
   install,
   notification,
