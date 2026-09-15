@@ -45,6 +45,21 @@ export function hasTypeEntrypoints(manifest) {
   return visit(manifest.exports);
 }
 
+// The runtime resolves a plugin's declared `database/migrations`, `database/seeds` and `server/jobs` by path, trying
+// the package's own directory before its `dist`. A package that publishes both hands an installed application the
+// TypeScript sources: Node refuses to strip types under `node_modules`, so the plugin fails on its own migrations
+// while every development checkout keeps working. A template publishes its sources instead of a `dist`, so the rule
+// only applies once `dist` is published.
+const RUNTIME_RESOLVED_SOURCE_DIRECTORIES = ['database', 'server'];
+
+export function findShadowedSourceDirectories(manifest) {
+  const files = Array.isArray(manifest.files) ? manifest.files : [];
+  if (!files.includes('dist')) return [];
+  return RUNTIME_RESOLVED_SOURCE_DIRECTORIES.filter((directoryName) =>
+    files.includes(directoryName),
+  );
+}
+
 export function validatePackageManifest(manifest, directory) {
   const errors = [];
 
@@ -66,6 +81,12 @@ export function validatePackageManifest(manifest, directory) {
     manifest.files.some((file) => typeof file !== 'string' || file.length === 0)
   ) {
     errors.push('files must be a non-empty array of strings');
+  }
+
+  for (const directoryName of findShadowedSourceDirectories(manifest)) {
+    errors.push(
+      `files must not publish the "${directoryName}" source directory beside dist; the runtime resolves it first and cannot load TypeScript under node_modules`,
+    );
   }
 
   // A subpath present in `exports` but absent from `publishConfig.exports` resolves in this repository, where source

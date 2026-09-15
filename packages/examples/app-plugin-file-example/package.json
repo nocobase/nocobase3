@@ -20,8 +20,7 @@
   "files": [
     "dist",
     "README.md",
-    "CHANGELOG.md",
-    "database"
+    "CHANGELOG.md"
   ],
   "publishConfig": {
     "access": "public",

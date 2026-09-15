@@ -7,6 +7,7 @@ import test from 'node:test';
 import {
   archiveNameForPackage,
   discoverPackages,
+  findShadowedSourceDirectories,
   findUnresolvedProtocols,
   hasTypeEntrypoints,
   validatePackedManifest,
@@ -64,6 +65,31 @@ test('rejects incomplete publication metadata', () => {
         '/repo/packages/libs/incomplete',
       ),
     /must not be private[\s\S]*publishConfig\.access[\s\S]*files/u,
+  );
+});
+
+test('rejects a compiled package that also publishes its runtime-resolved sources', () => {
+  assert.deepEqual(
+    findShadowedSourceDirectories({ files: ['dist', 'database', 'server'] }),
+    ['database', 'server'],
+  );
+  // A template publishes its sources for the user to read and edit, and has no `dist` for them to shadow.
+  assert.deepEqual(
+    findShadowedSourceDirectories({ files: ['server', 'database'] }),
+    [],
+  );
+  assert.throws(
+    () =>
+      validatePackageManifest(
+        {
+          files: ['dist', 'database'],
+          name: '@nocobase/app-plugin-shadowed',
+          publishConfig: { access: 'public' },
+          version: '0.0.1',
+        },
+        '/repo/packages/plugins/app-plugin-shadowed',
+      ),
+    /must not publish the "database" source directory beside dist/u,
   );
 });
 
