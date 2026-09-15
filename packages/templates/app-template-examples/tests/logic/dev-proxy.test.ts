@@ -549,7 +549,11 @@ interface DevHook {
 
 async function runDevMode(
   proxyTarget: string | undefined,
-  options: { appServerPort?: string; vitePortOffset?: number } = {},
+  options: {
+    appServerPort?: string;
+    vitePortOffset?: number;
+    watchEnvironment?: Record<string, string>;
+  } = {},
 ) {
   const helpersSource = devEntrySource.slice(
     devEntrySource.indexOf('const toUrlHost ='),
@@ -603,7 +607,11 @@ async function runDevMode(
     {
       console: { error: vi.fn(), log },
       findAvailablePort,
-      fs: { watch },
+      watchConfigFiles: watch,
+      resolveWatchEnvironment: async (env: Record<string, string>) => ({
+        ...env,
+        ...options.watchEnvironment,
+      }),
       loadEnv: () => ({
         APP_BASE_PATH: '/main',
         APP_SERVER_PORT: options.appServerPort,
@@ -648,3 +656,15 @@ async function runDevMode(
     watch,
   };
 }
+
+it('passes polling fallback settings to both development children', async () => {
+  const watchEnvironment = {
+    CHOKIDAR_USEPOLLING: 'true',
+    AGENT_ANNOTATIONS_ENABLED: 'false',
+  };
+  const run = await runDevMode(undefined, { watchEnvironment });
+  expect(run.spawnDevProcess).toHaveBeenCalledTimes(2);
+  for (const [, , , env] of run.spawnDevProcess.mock.calls) {
+    expect(env).toMatchObject(watchEnvironment);
+  }
+});
