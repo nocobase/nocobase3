@@ -6,6 +6,8 @@ Use this guide for nested pages, page Tabs, and menu groups. Routes are the sour
 
 When asked to build a page with Tabs, use child routes by default; the user does not need to request routing separately. This applies to App, Settings, and Dev pages, including plugin-owned pages. Follow an explicit user request for a different interaction.
 
+A Tab is a view of its parent page rather than a place of its own, so a Tab route declares no `breadcrumb`; the trail stops at the parent.
+
 Declare Tab content in the parent route's `children`, place `<Outlet />` in the parent's content area, and switch Tabs through router navigation. Both fixed Tabs (such as overview and activity) and parameterized Tabs use this pattern. Derive the selected Tab from the URL rather than an independent `activeTab` state. Keep each Tab directly accessible and restorable on refresh, and verify back/forward navigation. Use the existing route API and choose paths for the business requirement; no fixed path naming format is required.
 
 ## Default Tab entry
@@ -169,6 +171,8 @@ Every child route reaches the screen through the parent's outlet, and every one 
 | `RouteDrawer`    | At the side of the page   | Yes   |
 | `RouteChildPage` | Covering the content area | No    |
 
+Only `RouteChildPage` is a destination, so only it declares `breadcrumb`. A dialog or a drawer floats over a page that is still on screen behind it — the user has not gone anywhere — so a `breadcrumb` there would add a level to the trail for something that is not a place to return to. Leave it out and the trail stops at the page underneath, which is where the user still is.
+
 ```tsx
 export default function ArchivedOrdersPage() {
   return (
@@ -322,6 +326,7 @@ Returning `false` keeps the overlay open. The guard applies to the close button,
 - Does the owning page render `<Outlet />` in the intended location?
 - If the overlay has child routes, does it render its own `<Outlet />`?
 - Is `RouteDialog` or `RouteDrawer` selected for the interaction?
+- Is `breadcrumb` left undeclared, since an overlay is not a destination?
 - Is `useRouteOverlay()` used for closing, with rejection handled?
 - Is `beforeClose` present when unsaved state needs protection?
 - Do direct URLs, refresh, query strings, browser back/forward, and nested overlays behave correctly?
