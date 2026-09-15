@@ -7,7 +7,4 @@
 '@nocobase/app-plugin-repository-example': patch
 ---
 
-Declare `breadcrumb` on the routes that belong in a breadcrumb trail.
-
-Each navigation group and the pages under it now name themselves for the trail, so a page inside one of these
-plugins shows the path that leads to it.
+Add breadcrumb labels to plugin routes so nested pages show their navigation path.
