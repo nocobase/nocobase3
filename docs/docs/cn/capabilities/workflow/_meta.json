@@ -11,11 +11,13 @@
   },
   {
     "type": "dir",
+    "collapsed": true,
     "name": "development",
     "label": "应用开发中的工作流"
   },
   {
     "type": "dir",
+    "collapsed": true,
     "name": "management",
     "label": "管理工作流"
   }
