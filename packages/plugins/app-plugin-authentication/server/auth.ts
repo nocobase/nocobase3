@@ -32,11 +32,6 @@ export interface AuthMiddlewareOptions {
   skip?: (context: Context) => boolean;
 }
 
-export interface GetSessionOptions {
-  /** Throw Better Auth's APIError for a refused credential instead of answering null. */
-  readonly throwOnRejected?: boolean;
-}
-
 export class Auth {
   private readonly auth;
   private readonly connection: DatabaseConnection;
@@ -129,31 +124,16 @@ export class Auth {
     return this.auth.handler(request);
   }
 
-  /**
-   * Resolves who, if anyone, is signed in on this request.
-   *
-   * A refused credential — an expired or revoked API key — answers null, so
-   * callers that only ask "who?" need no error handling. The middleware asks
-   * for the reason with `throwOnRejected`, and forwards Better Auth's answer.
-   */
-  async getSession(
-    headers: Headers,
-    options: GetSessionOptions = {},
-  ): Promise<AuthSession> {
-    try {
-      const session = await this.auth.api.getSession({ headers });
-      if (!session) return null;
-      const user = await this.connection.query
-        .selectFrom('user')
-        .select(['id', 'disabledAt'])
-        .where('id', '=', session.user.id)
-        .executeTakeFirst();
-      if (!user || user.disabledAt != null) return null;
-      return session;
-    } catch (reason) {
-      if (isRejectedCredential(reason) && !options.throwOnRejected) return null;
-      throw reason;
-    }
+  async getSession(headers: Headers): Promise<AuthSession> {
+    const session = await this.auth.api.getSession({ headers });
+    if (!session) return null;
+    const user = await this.connection.query
+      .selectFrom('user')
+      .select(['id', 'disabledAt'])
+      .where('id', '=', session.user.id)
+      .executeTakeFirst();
+    if (!user || user.disabledAt != null) return null;
+    return session;
   }
 
   /** @internal Used by the Authentication-owned administration service. */
@@ -173,15 +153,15 @@ export class Auth {
         return;
       }
       try {
-        context.set(
-          'auth',
-          await this.getSession(context.req.raw.headers, {
-            throwOnRejected: true,
-          }),
-        );
-      } catch (reason) {
-        if (isRejectedCredential(reason)) return refuse(context, reason);
-        throw reason;
+        context.set('auth', await this.getSession(context.req.raw.headers));
+      } catch (error) {
+        if (error instanceof APIError) {
+          return context.json(
+            error.body ?? { code: error.status, message: error.message },
+            error.statusCode as ContentfulStatusCode,
+          );
+        }
+        throw error;
       }
       await next();
     };
@@ -195,12 +175,16 @@ export class Auth {
       }
       let auth: AuthSession;
       try {
-        auth = await this.getSession(context.req.raw.headers, {
-          throwOnRejected: true,
-        });
-      } catch (reason) {
-        if (isRejectedCredential(reason)) return refuse(context, reason);
-        throw reason;
+        auth = await this.getSession(context.req.raw.headers);
+        // A refused credential is Better Auth's APIError; answer with its own status and body.
+      } catch (error) {
+        if (error instanceof APIError) {
+          return context.json(
+            error.body ?? { code: error.status, message: error.message },
+            error.statusCode as ContentfulStatusCode,
+          );
+        }
+        throw error;
       }
       if (!auth) {
         return context.json(
@@ -215,19 +199,6 @@ export class Auth {
       await next();
     };
   }
-}
-
-/** A 4xx from Better Auth is the credential being refused; a 5xx is a failure. */
-function isRejectedCredential(reason: unknown): reason is APIError {
-  return reason instanceof APIError && reason.statusCode < 500;
-}
-
-/** Answers with Better Auth's own status and body, so the caller learns why. */
-function refuse(context: Context, reason: APIError): Response {
-  return context.json(
-    reason.body ?? { code: 'UNAUTHORIZED', message: reason.message },
-    reason.statusCode as ContentfulStatusCode,
-  );
 }
 
 export function createAuthentication(

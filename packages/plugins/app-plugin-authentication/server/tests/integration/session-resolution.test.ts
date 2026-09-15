@@ -69,13 +69,12 @@ describe('Auth.getSession', () => {
       plugins: [plugin],
     });
 
-  it('reads a rejected credential as no session, not as a failure', async () => {
-    // Otherwise `required()` answers 500 for an expired key instead of 401.
+  it("throws Better Auth's APIError for a rejected credential", async () => {
     const auth = authWith(rejectingCredential('FORBIDDEN'));
 
     await expect(
       auth.getSession(new Headers({ [CREDENTIAL_HEADER]: 'expired' })),
-    ).resolves.toBeNull();
+    ).rejects.toBeInstanceOf(APIError);
   });
 
   it('still surfaces a server-side failure rather than reporting a guest', async () => {
@@ -174,13 +173,11 @@ describe('Auth.getSession', () => {
       const router = routerFor(
         authWith(rejectingCredential('INTERNAL_SERVER_ERROR')),
       );
-      router.onError((error, context) =>
-        context.json({ crashed: error.message }, 500),
-      );
 
       const response = await router.request('/required', refused);
 
       expect(response.status).toBe(500);
+      expect(await response.json()).toMatchObject({ code: 'REJECTED' });
     });
   });
 });

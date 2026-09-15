@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { Auth, type AuthEnv } from '@nocobase/app-plugin-authentication/server';
 import { createDatabaseManager, createMigrator } from '@nocobase/db';
 import sqlite from '@nocobase/db-sqlite';
+import { APIError } from 'better-auth/api';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -141,7 +142,7 @@ describe('API keys', () => {
 
     await expect(
       auth.getSession(new Headers({ 'x-api-key': key })),
-    ).resolves.toBeNull();
+    ).rejects.toBeInstanceOf(APIError);
 
     // A guarded route tells the caller why, in Better Auth's own words.
     const router = new Hono<AuthEnv>();
@@ -157,12 +158,12 @@ describe('API keys', () => {
     });
   });
 
-  it('reports an unknown key as no session rather than as a failure', async () => {
+  it('reports an unknown key as Better Auth does', async () => {
     await expect(
       auth.getSession(
         new Headers({ 'x-api-key': 'not-a-key-that-was-issued' }),
       ),
-    ).resolves.toBeNull();
+    ).rejects.toBeInstanceOf(APIError);
   });
 
   it('does not cap a key at the Better Auth default of ten requests a day', async () => {
