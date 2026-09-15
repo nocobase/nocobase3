@@ -1,27 +1,25 @@
 import type { ReactElement } from 'react';
+import { PermissionsPage } from '../components/page-shell.js';
 import { RestrictionRulesPanel } from './restriction-rules-panel.js';
 import {
-  AuthorizationSettingsPage,
+  AuthorizationPageState,
   useAuthorizationPageData,
   useUserDirectory,
 } from './page-support.js';
 
 export default function RestrictionRulesPage(): ReactElement {
-  const { options, error } = useAuthorizationPageData(
-    'authz/restriction-rules/options',
-  );
+  const page = useAuthorizationPageData('authz/restriction-rules/options');
   const users = useUserDirectory();
   return (
-    <AuthorizationSettingsPage
-      eyebrow='Record access'
+    <PermissionsPage
       title='Restriction Rules'
-      description='Narrow the records available to selected users without granting access by itself.'
-      error={error}
-      loading={!options}
+      description='Restriction rules narrow access, limiting the records selected users reach without granting anything by themselves.'
     >
-      {options ? (
-        <RestrictionRulesPanel options={options} directory={users} />
-      ) : null}
-    </AuthorizationSettingsPage>
+      {page.options ? (
+        <RestrictionRulesPanel options={page.options} directory={users} />
+      ) : (
+        <AuthorizationPageState {...page} />
+      )}
+    </PermissionsPage>
   );
 }

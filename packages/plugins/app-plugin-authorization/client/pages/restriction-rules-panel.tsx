@@ -1,4 +1,13 @@
-import { Button, Input } from '../components/ui.js';
+import { Button } from '../components/ui/button.js';
+import { Input } from '../components/ui/input.js';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '../components/ui/table.js';
 import {
   useCallback,
   useEffect,
@@ -17,7 +26,11 @@ import {
   ResourceEditor,
   SubjectsEditor,
 } from '../components/editors.js';
-import { ErrorBox, errorMessage as message } from '../components/feedback.js';
+import {
+  ErrorBox,
+  errorMessage as message,
+  NoticeBox,
+} from '../components/feedback.js';
 import {
   EmptyTableRow,
   ManagementTable,
@@ -108,10 +121,10 @@ export function RestrictionRulesPanel({
   return (
     <>
       {error ? <ErrorBox value={error} /> : null}
-      <div className='rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900'>
+      <NoticeBox>
         Restriction rules only narrow existing access. They never grant
         permission on their own.
-      </div>
+      </NoticeBox>
       <ManagementTable>
         <ManagementToolbar
           search={search}
@@ -119,21 +132,27 @@ export function RestrictionRulesPanel({
           actionLabel='New restriction rule'
           onAction={() => edit()}
         />
-        <table className='w-full min-w-[56rem] text-left text-sm'>
-          <thead className='border-b bg-muted/30 text-xs text-muted-foreground uppercase'>
-            <tr>
-              <th className='px-5 py-3 font-medium'>Rule</th>
-              <th className='px-5 py-3 font-medium'>Applies to</th>
-              <th className='px-5 py-3 font-medium'>Resource</th>
-              <th className='px-5 py-3 font-medium'>Restricted actions</th>
-              <th className='px-5 py-3 font-medium'>Allowed scope</th>
-              <th className='w-20 px-5 py-3' />
-            </tr>
-          </thead>
-          <tbody className='divide-y'>
+        <Table className='min-w-[56rem]'>
+          <TableHeader className='bg-muted/30 uppercase'>
+            <TableRow>
+              <TableHead className='px-5 py-3 font-medium'>Rule</TableHead>
+              <TableHead className='px-5 py-3 font-medium'>
+                Applies to
+              </TableHead>
+              <TableHead className='px-5 py-3 font-medium'>Resource</TableHead>
+              <TableHead className='px-5 py-3 font-medium'>
+                Restricted actions
+              </TableHead>
+              <TableHead className='px-5 py-3 font-medium'>
+                Allowed scope
+              </TableHead>
+              <TableHead className='w-20 px-5 py-3' />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {visibleRules.map((rule) => (
-              <tr className='hover:bg-muted/30' key={rule.key}>
-                <td className='px-5 py-4'>
+              <TableRow key={rule.key}>
+                <TableCell className='px-5 py-4'>
                   <button
                     type='button'
                     className='font-medium text-primary hover:underline'
@@ -144,27 +163,33 @@ export function RestrictionRulesPanel({
                   <p className='text-xs text-muted-foreground'>
                     {rule.reason || rule.key}
                   </p>
-                </td>
-                <td className='px-5 py-4'>{subjectLabel(rule, directory)}</td>
-                <td className='px-5 py-4'>{resourceLabel(options, rule)}</td>
-                <td className='px-5 py-4'>
+                </TableCell>
+                <TableCell className='px-5 py-4'>
+                  {subjectLabel(rule, directory)}
+                </TableCell>
+                <TableCell className='px-5 py-4'>
+                  {resourceLabel(options, rule)}
+                </TableCell>
+                <TableCell className='px-5 py-4'>
                   {rule.actions.map((item) => humanize(item.action)).join(', ')}
-                </td>
-                <td className='px-5 py-4'>{scopeLabel(rule)}</td>
-                <td className='px-5 py-4 text-right'>
+                </TableCell>
+                <TableCell className='px-5 py-4'>{scopeLabel(rule)}</TableCell>
+                <TableCell className='px-5 py-4 text-right'>
                   <Button size='sm' variant='ghost' onClick={() => edit(rule)}>
                     Edit
                   </Button>
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ))}
             {visibleRules.length === 0 ? (
               <EmptyTableRow colSpan={6}>
-                No restriction rules match your search.
+                {rules.length === 0
+                  ? 'No restriction rules yet. Create one to narrow what selected users reach.'
+                  : 'No restriction rules match your search.'}
               </EmptyTableRow>
             ) : null}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </ManagementTable>
       {draft ? (
         <SidePanel

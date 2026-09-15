@@ -1,6 +1,7 @@
 import { useState, type ReactElement, type ReactNode } from 'react';
 
-import { Input, Label } from './ui.js';
+import { Input } from './ui/input.js';
+import { Label } from './ui/label.js';
 import type {
   AccessScope,
   AuthorizationOptions,

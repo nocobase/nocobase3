@@ -2,26 +2,26 @@ import { useClientApplication } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { useMemo, type ReactElement } from 'react';
 import type { AuthorizationOptions } from '../authorization-client.js';
+import { PermissionsPage } from '../components/page-shell.js';
 import {
   grantablePages,
   withPageResources,
 } from '../components/page-options.js';
-import { PermissionSetsPanel } from './permission-sets-panel.js';
+import { PermissionSetsPanel } from './permission-sets/index.js';
 import {
-  AuthorizationSettingsPage,
+  AuthorizationPageState,
   useAuthorizationPageData,
   useUserDirectory,
 } from './page-support.js';
 
 export default function PermissionSetsPage(): ReactElement {
-  const { options, error } = useAuthorizationPageData(
-    'authz/permission-sets/options',
-  );
+  const page = useAuthorizationPageData('authz/permission-sets/options');
   const users = useUserDirectory();
   // Page names live in client route declarations, which the server never sees. The browser holds the registry, so the
   // grantable pages are merged in here rather than hardcoded into the options endpoint.
   const application = useClientApplication();
   const { t } = useTranslation();
+  const { options } = page;
   const pageOptions = useMemo<AuthorizationOptions | undefined>(
     () =>
       options &&
@@ -41,16 +41,15 @@ export default function PermissionSetsPage(): ReactElement {
     [application, options, t],
   );
   return (
-    <AuthorizationSettingsPage
-      eyebrow='Authorization'
+    <PermissionsPage
       title='Permission Sets'
-      description='Create reusable permission bundles and assign them to users.'
-      error={error}
-      loading={!pageOptions}
+      description='Permission sets grant access: bundle the resources and actions people need, then assign the bundle to them.'
     >
       {pageOptions ? (
         <PermissionSetsPanel options={pageOptions} directory={users} />
-      ) : null}
-    </AuthorizationSettingsPage>
+      ) : (
+        <AuthorizationPageState {...page} />
+      )}
+    </PermissionsPage>
   );
 }

@@ -1,23 +1,23 @@
 import type { ReactElement } from 'react';
+import { PermissionsPage } from '../components/page-shell.js';
 import { DefaultAccessPanel } from './default-access-panel.js';
 import {
-  AuthorizationSettingsPage,
+  AuthorizationPageState,
   useAuthorizationPageData,
 } from './page-support.js';
 
 export default function DefaultAccessPage(): ReactElement {
-  const { options, error } = useAuthorizationPageData(
-    'authz/default-access/options',
-  );
+  const page = useAuthorizationPageData('authz/default-access/options');
   return (
-    <AuthorizationSettingsPage
-      eyebrow='Record access'
+    <PermissionsPage
       title='Default Access'
-      description='Set the baseline record scope before sharing and restriction rules are evaluated.'
-      error={error}
-      loading={!options}
+      description='Default access widens what everyone reaches on a collection, setting the baseline record scope before sharing and restriction rules are evaluated.'
     >
-      {options ? <DefaultAccessPanel options={options} /> : null}
-    </AuthorizationSettingsPage>
+      {page.options ? (
+        <DefaultAccessPanel options={page.options} />
+      ) : (
+        <AuthorizationPageState {...page} />
+      )}
+    </PermissionsPage>
   );
 }

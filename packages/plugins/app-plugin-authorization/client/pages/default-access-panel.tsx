@@ -1,4 +1,12 @@
-import { Button } from '../components/ui.js';
+import { Button } from '../components/ui/button.js';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '../components/ui/table.js';
 import {
   useCallback,
   useEffect,
@@ -107,47 +115,50 @@ export function DefaultAccessPanel({
           actionLabel='Set default access'
           onAction={() => edit()}
         />
-        <table className='w-full min-w-[48rem] text-left text-sm'>
-          <thead className='border-b bg-muted/30 text-xs text-muted-foreground uppercase'>
-            <tr>
-              <th className='px-5 py-3 font-medium'>Resource</th>
-              <th className='px-5 py-3 font-medium'>Default record access</th>
-              <th className='px-5 py-3 font-medium'>Allowed actions</th>
-              <th className='w-24 px-5 py-3' />
-            </tr>
-          </thead>
-          <tbody className='divide-y'>
+        <Table className='min-w-[48rem]'>
+          <TableHeader className='bg-muted/30 uppercase'>
+            <TableRow>
+              <TableHead className='px-5 py-3 font-medium'>Resource</TableHead>
+              <TableHead className='px-5 py-3 font-medium'>
+                Default record access
+              </TableHead>
+              <TableHead className='px-5 py-3 font-medium'>
+                Allowed actions
+              </TableHead>
+              <TableHead className='w-24 px-5 py-3' />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {visibleRules.map((rule) => (
-              <tr
-                className='hover:bg-muted/30'
-                key={`${rule.resource.type}:${rule.resource.id}`}
-              >
-                <td className='px-5 py-4'>
+              <TableRow key={`${rule.resource.type}:${rule.resource.id}`}>
+                <TableCell className='px-5 py-4'>
                   <p className='font-medium'>{resourceLabel(options, rule)}</p>
                   <p className='text-xs text-muted-foreground'>
                     {resourceTypeLabel(options, rule.resource.type)}
                   </p>
-                </td>
-                <td className='px-5 py-4'>
+                </TableCell>
+                <TableCell className='px-5 py-4'>
                   <ScopeBadge actions={rule.actions} options={options} />
-                </td>
-                <td className='px-5 py-4'>
+                </TableCell>
+                <TableCell className='px-5 py-4'>
                   {rule.actions.map((item) => humanize(item.action)).join(', ')}
-                </td>
-                <td className='px-5 py-4 text-right'>
+                </TableCell>
+                <TableCell className='px-5 py-4 text-right'>
                   <Button size='sm' variant='ghost' onClick={() => edit(rule)}>
                     Edit
                   </Button>
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ))}
             {visibleRules.length === 0 ? (
               <EmptyTableRow colSpan={4}>
-                No default access rules match your search.
+                {rules.length === 0
+                  ? 'No default access yet. Set it on a collection to give everyone a baseline record scope.'
+                  : 'No default access rules match your search.'}
               </EmptyTableRow>
             ) : null}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </ManagementTable>
       {draft ? (
         <SidePanel

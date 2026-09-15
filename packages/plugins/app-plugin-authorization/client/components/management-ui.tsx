@@ -1,6 +1,9 @@
 import type { ReactElement, ReactNode } from 'react';
 
-import { Button, Input } from './ui.js';
+import { Button } from './ui/button.js';
+import { Card } from './ui/card.js';
+import { Input } from './ui/input.js';
+import { TableCell, TableRow } from './ui/table.js';
 
 export function ManagementToolbar({
   search,
@@ -32,11 +35,7 @@ export function ManagementTable({
 }: {
   children: ReactNode;
 }): ReactElement {
-  return (
-    <div className='overflow-hidden rounded-xl border bg-card shadow-sm'>
-      <div className='overflow-x-auto'>{children}</div>
-    </div>
-  );
+  return <Card className='overflow-hidden'>{children}</Card>;
 }
 
 export function EmptyTableRow({
@@ -47,14 +46,14 @@ export function EmptyTableRow({
   children: ReactNode;
 }): ReactElement {
   return (
-    <tr>
-      <td
+    <TableRow className='hover:bg-transparent'>
+      <TableCell
         className='px-5 py-12 text-center text-sm text-muted-foreground'
         colSpan={colSpan}
       >
         {children}
-      </td>
-    </tr>
+      </TableCell>
+    </TableRow>
   );
 }
 
@@ -72,14 +71,15 @@ export function DetailHeader({
   actions?: ReactNode;
 }): ReactElement {
   return (
-    <header className='rounded-xl border bg-card px-6 py-5 shadow-sm'>
-      <button
-        className='mb-4 text-sm text-muted-foreground hover:text-foreground'
-        type='button'
+    <header className='rounded-xl border bg-card px-6 py-5 text-card-foreground shadow-sm'>
+      <Button
+        className='mb-4 -ml-2 text-muted-foreground'
+        size='sm'
+        variant='ghost'
         onClick={onBack}
       >
         ← Back to list
-      </button>
+      </Button>
       <div className='flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between'>
         <div>
           <div className='flex flex-wrap items-center gap-2'>

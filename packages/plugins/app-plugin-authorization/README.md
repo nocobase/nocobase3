@@ -33,6 +33,17 @@ The plugin currently provides:
 - a public Client service token and Realtime cache invalidation for individual
   user assignments and grants shared by all authenticated users.
 
+The settings pages render on the same vendored shadcn components and theme
+tokens as the rest of the application: `client/components/ui/*` with the `cn`
+helper in `client/lib/utils.ts`, one page shell in
+`client/components/page-shell.tsx` that supplies the heading, the loading card,
+the retry card and the refusal card, and the management chrome in
+`client/components/management-ui.tsx` built on those components. The Permission
+Sets panel lives in `client/pages/permission-sets/`, one file per concern —
+list, detail, permissions tab, assignments tab, editor, resource picker,
+database policy editor — with its draft model and display text in
+`drafts.ts` and `labels.ts`.
+
 Every authenticated client route is authorized as `page:<route name>/access`
 unless the route declares an explicit authorization resource. Removing the
 corresponding page grant therefore blocks direct navigation as well as hiding

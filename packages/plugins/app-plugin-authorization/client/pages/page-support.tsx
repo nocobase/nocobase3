@@ -1,7 +1,12 @@
-import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactElement } from 'react';
 import type { AuthorizationOptions } from '../authorization-client.js';
 import { getAuthorizationClient } from '../runtime.js';
-import { ErrorBox, errorMessage as message } from '../components/feedback.js';
+import { errorMessage as message } from '../components/feedback.js';
+import {
+  PageError,
+  PageForbidden,
+  PageLoading,
+} from '../components/page-shell.js';
 import {
   unavailableUserDirectory,
   userDirectory,
@@ -10,20 +15,42 @@ import {
 
 const authz = getAuthorizationClient();
 
+/** What a settings page knows before its options have arrived. */
+export interface AuthorizationPageData {
+  readonly options?: AuthorizationOptions;
+  readonly error?: string;
+  /** The options request was refused rather than failed. */
+  readonly forbidden?: boolean;
+  readonly reload: () => void;
+}
+
 // Shared by the independent Authorization settings pages.
 // eslint-disable-next-line react-refresh/only-export-components
-export function useAuthorizationPageData(optionsPath: string): {
-  options?: AuthorizationOptions;
-  error?: string;
-} {
-  const [options, setOptions] = useState<AuthorizationOptions>();
-  const [error, setError] = useState<string>();
+export function useAuthorizationPageData(
+  optionsPath: string,
+): AuthorizationPageData {
+  const [state, setState] = useState<Omit<AuthorizationPageData, 'reload'>>({});
+  const [attempt, setAttempt] = useState(0);
+  const reload = useCallback(() => {
+    setState({});
+    setAttempt((value) => value + 1);
+  }, []);
   useEffect(() => {
-    void authz
-      .loadOptions(optionsPath)
-      .then(setOptions, (cause: unknown) => setError(message(cause)));
-  }, [optionsPath]);
-  return { options, ...(error === undefined ? {} : { error }) };
+    let active = true;
+    void authz.loadOptions(optionsPath).then(
+      (options) => {
+        if (active) setState({ options });
+      },
+      (cause: unknown) => {
+        if (active)
+          setState({ error: message(cause), forbidden: status(cause) === 403 });
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [attempt, optionsPath]);
+  return { ...state, reload };
 }
 
 /**
@@ -42,46 +69,22 @@ export function useUserDirectory(): UserDirectory {
   return users;
 }
 
-export function AuthorizationSettingsPage({
-  eyebrow,
-  title,
-  description,
+/** What a page shows while its options are loading, refused, or failed. */
+export function AuthorizationPageState({
   error,
-  loading,
-  children,
-}: {
-  eyebrow: string;
-  title: string;
-  description: string;
-  error?: string;
-  loading: boolean;
-  children: ReactNode;
-}): ReactElement {
-  return (
-    <main className='min-h-[calc(100svh-4rem)] bg-muted/20'>
-      <header className='border-b bg-background px-6 py-7'>
-        <div className='mx-auto w-full max-w-7xl'>
-          <p className='text-xs font-medium tracking-wide text-muted-foreground uppercase'>
-            {eyebrow}
-          </p>
-          <h1 className='mt-1 text-2xl font-semibold tracking-tight'>
-            {title}
-          </h1>
-          <p className='mt-1 max-w-3xl text-sm text-muted-foreground'>
-            {description}
-          </p>
-        </div>
-      </header>
-      <div className='mx-auto w-full max-w-7xl space-y-5 px-6 py-6'>
-        {error ? <ErrorBox value={error} /> : null}
-        {loading ? (
-          <div className='rounded-xl border bg-card p-8 text-sm text-muted-foreground shadow-sm'>
-            Loading…
-          </div>
-        ) : (
-          children
-        )}
-      </div>
-    </main>
+  forbidden,
+  reload,
+}: AuthorizationPageData): ReactElement {
+  if (error === undefined) return <PageLoading />;
+  return forbidden === true ? (
+    <PageForbidden message={error} />
+  ) : (
+    <PageError message={error} onRetry={reload} />
   );
+}
+
+function status(error: unknown): number | undefined {
+  if (typeof error !== 'object' || error === null) return undefined;
+  const value: unknown = Reflect.get(error, 'status');
+  return typeof value === 'number' ? value : undefined;
 }
