@@ -54,14 +54,21 @@ nothing. The permissions tab opens on every resource the set grants, one row
 each: the resource on one line with its type quietly beneath it, each granted
 action with the mark saying what it reaches and its name beside it, a label
 never splitting across lines while the column wraps between them,
-and, for a collection, its records and its fields as two short clauses — the
-record access policy as the options endpoint labels it, or `Mixed records`
-where the actions disagree. A resource-type chip narrows it to that type's own
-table, where the actions become columns and each collection cell shows whether
-that action starts from every record, from a scoped set, or is not granted at
-all. Opening a row reports that resource's actions one by one: whether each is
-allowed, the record access policy and the parameters it holds, and the writable
-and visible fields by name.
+and a summary of what the grant amounts to beyond its actions. A resource-type
+chip filters the rows and never changes the columns, so the table has one shape
+whatever is in it.
+
+That matters because resource types are registered at runtime: the table names
+none of them. What a type adds — the summary cell, whether a granted action
+reaches the whole resource or a scoped part of it, and what the side panel
+reports under each action — comes from a presentation the type contributes to
+`resource-presentation.ts`. `database-presentation.ts` registers the one for
+Collections, whose summary is its records and its fields as two short clauses,
+the record access policy as the options endpoint labels it, or `Mixed records`
+where the actions disagree, and whose panel reports the policy, the parameters
+it holds and the writable and visible fields by name. A type that registers
+nothing still renders: its actions each reach the whole resource and its summary
+cell is empty.
 
 Every destructive action in these pages confirms first, through one
 `ConfirmDialog` in `client/components/confirm-dialog.tsx` over the vendored

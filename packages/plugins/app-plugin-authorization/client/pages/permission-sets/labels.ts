@@ -8,6 +8,7 @@ import type { PermissionSetCapabilities } from '../../components/permission-set-
 import type { UserDirectory } from '../../components/user-directory.js';
 import type { Translate } from '../../i18n.js';
 import { defaultDatabaseActionDraft, recordAccessKey } from './drafts.js';
+import { resourceTypePresentation } from './resource-presentation.js';
 import type {
   DatabaseActionDraft,
   Draft,
@@ -15,9 +16,6 @@ import type {
   GrantDraft,
   RecordAccessDraft,
 } from './types.js';
-
-/** The resource type whose grants carry record access and field selections. */
-export const COLLECTION_TYPE: string = 'database.collection';
 
 /**
  * What one action on one resource reaches: every record, some of them, or
@@ -35,15 +33,16 @@ export function markDescription(t: Translate, mark: GrantMark): string {
   return t(`marks.descriptions.${mark}`);
 }
 
+/**
+ * What one action on one resource reaches. A type that narrows its grants says
+ * so through its own presentation; anything else reaches the whole resource.
+ */
 export function actionMark(grant: GrantDraft, action: string): GrantMark {
   if (!grant.actions.includes(action)) return 'none';
-  if (grant.resource.type !== COLLECTION_TYPE) return 'all';
-  // A create selects no records, so it is never scoped.
-  if (action === 'create') return 'all';
-  const value = grant.database[action] ?? defaultDatabaseActionDraft();
-  return recordAccessKey(value.recordAccess) === 'allRecords'
-    ? 'all'
-    : 'scoped';
+  return (
+    resourceTypePresentation(grant.resource.type)?.mark?.(grant, action) ??
+    'all'
+  );
 }
 
 /** The operators the editor offers, in the order it offers them. */
@@ -79,6 +78,19 @@ export function resourceTypeLabel(
   return (
     options.resourceTypes.find((item) => item.value === type)?.label ??
     humanize(type)
+  );
+}
+
+/** How one action is named: as its resource type declares it, else humanised. */
+export function actionLabel(
+  options: AuthorizationOptions,
+  type: string,
+  action: string,
+): string {
+  return (
+    options.resourceTypes
+      .find((item) => item.value === type)
+      ?.actions.find((item) => item.value === action)?.label ?? humanize(action)
   );
 }
 

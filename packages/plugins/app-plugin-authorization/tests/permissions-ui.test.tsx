@@ -10,6 +10,9 @@ vi.mock('@nocobase/i18n/client', async () => {
 import type { AuthorizationOptions } from '../client/authorization-client.js';
 import { TablePager } from '../client/components/management-ui.js';
 import { pageRangeLabel, pageSlice } from '../client/components/pagination.js';
+// The database resource type contributes how its grants read; without it the
+// table still renders, which is what the invented-type test covers.
+import '../client/pages/permission-sets/database-presentation.js';
 import { PermissionsSummary } from '../client/pages/permission-sets/permissions-tab.js';
 import type { Draft } from '../client/pages/permission-sets/types.js';
 import { translate } from './locale-harness.js';
@@ -107,6 +110,36 @@ const detailDraft: Draft = {
     },
   ],
 };
+
+/** A resource type this module knows nothing about, declaring its own action. */
+const inventedOptions: AuthorizationOptions = {
+  ...options,
+  resourceTypes: [
+    {
+      value: 'scheduler.job',
+      label: 'Jobs',
+      resources: [{ value: 'nightly-export', label: 'Nightly export' }],
+      actions: [{ value: 'run', label: 'Run' }],
+    },
+  ],
+};
+
+const inventedDraft: Draft = {
+  key: 'operators',
+  title: 'Operators',
+  grants: [
+    {
+      id: 1,
+      resource: { type: 'scheduler.job', id: 'nightly-export' },
+      actions: ['run'],
+      database: {},
+    },
+  ],
+};
+
+function headers(): readonly (string | null)[] {
+  return screen.getAllByRole('columnheader').map((cell) => cell.textContent);
+}
 
 function bodyRows(): readonly HTMLElement[] {
   const [body] = screen.getAllByRole('rowgroup').slice(1);
@@ -246,21 +279,20 @@ describe('permissions tab', () => {
     ).toBeNull();
   });
 
-  it('keeps the per-type table when a type chip is selected', () => {
+  it('keeps the same columns whichever type chip is selected', () => {
     render(<PermissionsSummary draft={draft} options={options} />);
-    fireEvent.click(screen.getByRole('button', { name: /Collections/ }));
-    const rows = bodyRows();
-    expect(rows).toHaveLength(2);
-    const orders = within(rows[0] as HTMLElement);
-    expect(
-      orders.getAllByLabelText(translate('marks.labels.all')),
-    ).toHaveLength(1);
-    expect(
-      orders.getAllByLabelText(translate('marks.labels.scoped')),
-    ).toHaveLength(1);
-    expect(
-      orders.getAllByLabelText(translate('marks.labels.none')),
-    ).toHaveLength(2);
+    const combined = headers();
+
+    for (const chip of ['Collections', 'Pages']) {
+      fireEvent.click(screen.getByRole('button', { name: new RegExp(chip) }));
+      // A type chip filters the rows; it never changes what the columns are.
+      expect(headers()).toEqual(combined);
+    }
+    expect(combined).toEqual([
+      translate('common.resource'),
+      translate('permissionSets.permissions.grantedActions'),
+      translate('permissionSets.permissions.recordsAndFields'),
+    ]);
   });
 
   it('reports one resource action by action, with its records and its fields', () => {
@@ -293,17 +325,37 @@ describe('permissions tab', () => {
     ).toHaveLength(2);
   });
 
-  it('switches tables with the resource type chips', () => {
+  it('leaves only the rows of the type its chip names', () => {
     render(<PermissionsSummary draft={draft} options={options} />);
     fireEvent.click(screen.getByRole('button', { name: /Pages/ }));
     const rows = bodyRows();
     expect(rows).toHaveLength(1);
+    const home = within(rows[0] as HTMLElement);
+    expect(home.getByText('Home')).toBeInTheDocument();
+    expect(home.getByText('View')).toBeInTheDocument();
+    // A page adds nothing to summarise, so its last cell stays empty.
+    expect(home.getAllByRole('cell').at(-1)).toBeEmptyDOMElement();
+  });
+
+  it('renders a resource type it has never heard of', () => {
+    render(
+      <PermissionsSummary draft={inventedDraft} options={inventedOptions} />,
+    );
+    expect(headers()).toEqual([
+      translate('common.resource'),
+      translate('permissionSets.permissions.grantedActions'),
+      translate('permissionSets.permissions.recordsAndFields'),
+    ]);
+
+    const row = within(bodyRows()[0] as HTMLElement);
+    expect(row.getByText('Nightly export')).toBeInTheDocument();
+    expect(row.getByText('Jobs')).toBeInTheDocument();
+    // Its own actions, each reaching the whole resource, and nothing to summarise.
     expect(
-      within(rows[0] as HTMLElement).getByText('Home'),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole('columnheader', { name: 'View' }),
-    ).toBeInTheDocument();
+      row.getAllByRole('img').map((mark) => mark.getAttribute('aria-label')),
+    ).toEqual([translate('marks.labels.all')]);
+    expect(row.getByText('Run')).toBeInTheDocument();
+    expect(row.getAllByRole('cell').at(-1)).toBeEmptyDOMElement();
   });
 
   it('returns every filter in the bar to its default', () => {
