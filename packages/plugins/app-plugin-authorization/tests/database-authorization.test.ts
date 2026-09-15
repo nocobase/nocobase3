@@ -827,7 +827,7 @@ describe('policyFor', () => {
 });
 
 describe('the Collection registry', () => {
-  it('records registrations in order and refuses a duplicate', () => {
+  it('records registrations in order and needs a name', () => {
     const { collections } = databaseAuthorization().authorizationApi.db;
     collections.add('orders');
     collections.add({
@@ -846,8 +846,20 @@ describe('the Collection registry', () => {
         description: 'Billing documents',
       },
     ]);
-    expect(() => collections.add('orders')).toThrow(/already registered/);
     expect(() => collections.add('')).toThrow(/needs a name/);
+  });
+
+  // Boot runs more than once in some hosts, so the same declaration twice is
+  // not a mistake; two declarations that disagree are.
+  it('tolerates an identical repeat and refuses a conflicting one', () => {
+    const { collections } = databaseAuthorization().authorizationApi.db;
+    collections.add({ name: 'orders', title: 'Orders' });
+    collections.add({ name: 'orders', title: 'Orders' });
+
+    expect(collections.list()).toEqual([{ name: 'orders', title: 'Orders' }]);
+    expect(() =>
+      collections.add({ name: 'orders', title: 'Sales orders' }),
+    ).toThrow(/already registered/);
   });
 
   // `orders` is in db and a Permission Set grants on it; registration is what

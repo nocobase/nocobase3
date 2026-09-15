@@ -29,7 +29,15 @@ export class DatabaseCollectionRegistry {
     if (!registration.name) {
       throw new Error('A database Collection registration needs a name');
     }
-    if (this.registrations.has(registration.name)) {
+    const existing = this.registrations.get(registration.name);
+    if (existing) {
+      // Boot runs more than once in some hosts, so repeating the same
+      // declaration is not a mistake; disagreeing about it is.
+      if (
+        existing.title === registration.title &&
+        existing.description === registration.description
+      )
+        return;
       throw new Error(
         `Database Collection already registered: ${registration.name}`,
       );

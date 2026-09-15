@@ -49,8 +49,10 @@ authz.db.collections.add({ name: 'orders', title: 'Orders' });
 
 Until that line runs, every request for `orders` is denied with
 `COLLECTION_NOT_REGISTERED`, an unrestricted identity included. Exposing the
-collection through `authz.db.repositories()` registers it too, so a module that
-does only that needs no separate `add`.
+collection through `authz.db.repositories()` does not stand in for it: the
+`add` is what carries the title the permission UI shows, so a module that only
+exposes rows still writes it — from the service provider that owns the module,
+at boot, rather than from the route file.
 
 ## 2. Know what the resource is called
 

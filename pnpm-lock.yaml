@@ -670,6 +670,9 @@ importers:
       '@nocobase/i18n':
         specifier: workspace:^
         version: link:../../libs/i18n
+      '@nocobase/service-provider':
+        specifier: workspace:^
+        version: link:../../libs/service-provider
       class-variance-authority:
         specifier: 'catalog:'
         version: 0.7.1
@@ -695,9 +698,6 @@ importers:
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
-      '@nocobase/service-provider':
-        specifier: workspace:*
-        version: link:../../libs/service-provider
       '@testing-library/jest-dom':
         specifier: 'catalog:'
         version: 7.0.1(@testing-library/dom@10.4.1)(vitest@4.1.10)

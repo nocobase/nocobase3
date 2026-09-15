@@ -58,7 +58,15 @@ authz.db.collections.add({ name: 'orders', title: 'Orders' });
 Registration is the opt-in into the permission model, and it carries intent
 only: a name, plus an optional `title` and `description` for the permission
 UI. Field names, the primary key, and whether the database generates it are
-still read from `connection.collections` at authorize time.
+still read from `connection.collections` at authorize time. Registering the
+same thing twice is a no-op — boot runs more than once in some hosts — while a
+second registration that disagrees throws.
+
+Nothing registers a collection for you. `authz.db.repositories()` narrows
+Policies and registers nothing, so a collection exposed over HTTP still needs
+its own `add()`; that is what gives it the title the permission UI shows. Put
+that call in the service provider that owns the module, at boot — a route file
+builds routes and should carry no registration of its own.
 
 **An unregistered collection has no permission.** The request is denied with
 `COLLECTION_NOT_REGISTERED` before any metadata or grant lookup, for an

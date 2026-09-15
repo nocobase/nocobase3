@@ -8,6 +8,25 @@ seeded Permission Set gives each signed-in user `recordsIOwn` record access, so
 an ordinary account reads, updates and deletes only its own rows, while a
 holder of the root set bypasses grants and sees everyone's.
 
+## The registration
+
+A collection is grantable only once an application registers it, and the
+registration carries the title the permission UI shows. This plugin does that
+from a service provider, `AuthorizationExampleProvider`, rather than from a
+route file:
+
+```ts
+this.app.container.resolve(authorizationToken).db.collections.add({
+  name: COLLECTION,
+  title: 'Authorization example: tasks',
+  description: 'Tasks each signed-in user owns.',
+});
+```
+
+Boot is where a declaration like this belongs; a route file builds routes.
+`authorization.repositories()` registers nothing, so without the provider every
+request for the collection is denied with `COLLECTION_NOT_REGISTERED`.
+
 ## The two routes
 
 **The generated Repository API, authorized in place.** `authorization.repositories()`

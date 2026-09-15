@@ -18,7 +18,7 @@ import {
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 
-const COLLECTION = 'authorizationExampleTasks';
+import { COLLECTION } from '../collection.js';
 
 /**
  * The shape this example offers. What a caller gets is this narrowed by their

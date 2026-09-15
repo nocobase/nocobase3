@@ -191,20 +191,24 @@ describe('authorizing repository API routes', () => {
     });
   });
 
-  it('registers the Collections its exposures name', () => {
+  it('registers nothing: an exposure names a resource, it does not declare one', () => {
     const authorization = createAuthorization();
-    authorization.db.collections.add({ name: 'authzOrders', title: 'Orders' });
 
     authorization.db.repositories(exposures);
 
-    // Already registered by hand, so the title survives and nothing throws.
-    expect(authorization.db.collections.list()).toContainEqual({
-      name: 'authzOrders',
-      title: 'Orders',
+    expect(authorization.db.collections.list()).toEqual([]);
+  });
+
+  it('denies an exposure whose Collection was never registered', async () => {
+    await grantOrders({ recordAccess: ['allRecords'] });
+    const router = await routes({ register: false });
+
+    const response = await post(router, '/authzOrders:findMany');
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      code: 'READ_FORBIDDEN',
     });
-    expect(
-      createAuthorizationWithExposures().db.collections.list(),
-    ).toContainEqual({ name: 'authzOrders' });
   });
 
   it('refuses a policy function on an exposure that names a resource', async () => {
@@ -223,23 +227,17 @@ describe('authorizing repository API routes', () => {
   });
 });
 
-function createAuthorizationWithExposures(): ReturnType<
-  typeof createAppAuthorization
-> {
-  const authorization = createAuthorization();
-  authorization.db.repositories(exposures);
-  return authorization;
-}
-
 function createAuthorization(): ReturnType<typeof createAppAuthorization> {
   return createAppAuthorization({ connection: database.connection() });
 }
 
 /** The router an application assembles, exactly as the usage documents it. */
 async function routes(
-  options: { mount?: readonly string[] } = {},
+  options: { mount?: readonly string[]; register?: boolean } = {},
 ): Promise<Hono> {
   const authorization = createAuthorization();
+  if (options.register !== false)
+    authorization.db.collections.add({ name: 'authzOrders', title: 'Orders' });
   const authorize = authorization.db.repositories(exposures);
   const container = new ServiceContainer();
   container.instance(databaseManagerToken, database);

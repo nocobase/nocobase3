@@ -28,6 +28,9 @@ plugin's Client factory. Apply migrations and seeds before opening the page.
 
 ## What it demonstrates
 
+- A service provider registering the collection at boot, with the title the
+  permission UI shows. Registration is explicit and belongs in a provider, not
+  in a route file; nothing registers a collection on your behalf.
 - `authorization.repositories(exposures)` narrowing a static Policy shape with
   the caller's grants, mounted on each endpoint by name.
 - Writing `read` as a node with `fields` and `relations` rather than `true`,
@@ -42,7 +45,7 @@ plugin's Client factory. Apply migrations and seeds before opening the page.
 
 ## Ownership and verification
 
-The plugin owns its migration, seed, routes, page and locale strings. An
+The plugin owns its migration, seed, provider, routes, page and locale strings. An
 application reaches it through public package exports; do not import private
 source paths. For a schema change write a new migration after the existing one
 has shipped rather than editing it.

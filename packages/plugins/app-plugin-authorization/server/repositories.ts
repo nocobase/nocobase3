@@ -74,10 +74,6 @@ export function createRepositoryAuthorization(
           `Repository exposure "${exposure.name}" names a resource and declares a policy function. Authorization narrows a static Policy; write the shape out.`,
         );
       }
-      // Exposing a Collection's rows states it is part of the permission
-      // model; a hand-registered one is already there and stays as it is.
-      if (!database.collections.has(resource))
-        database.collections.add({ name: resource });
       const name = exposure.name;
       guarded.set(name, {
         resource,

@@ -110,7 +110,9 @@ permission at all — every request for it is denied with
 superuser bypasses grants rather than the model. Registration carries intent
 only: a name, and optionally a `title` and `description` the permission UI
 shows. Field names, the primary key and whether the database generates it keep
-coming from db at authorize time, so the two can never disagree.
+coming from db at authorize time, so the two can never disagree. Repeating an
+identical registration is a no-op, because boot runs more than once in some
+hosts; one that disagrees with what is already registered throws.
 
 ```ts
 authz.db.collections.add({ name: 'orders', title: 'Orders' });
@@ -118,8 +120,10 @@ authz.db.collections.add({ name: 'orders', title: 'Orders' });
 
 `authz.db.repositories()` applies the same fold to
 `defineRepositoryApiRoutes()` endpoints, narrowing each exposure's declared
-shape with the caller's grants, and registers every Collection its exposures
-name — exposing rows over HTTP is stating they are part of the model.
+shape with the caller's grants. It registers nothing: a Collection joins the
+model only through `add()` — from the provider that owns it, at boot — which is
+what lets it carry the title the permission UI shows, and an exposure naming an
+unregistered Collection is refused like any other request for it.
 See [docs/database-usage.md](./docs/database-usage.md), and
 `@nocobase/app-plugin-authorization-example` for a runnable reference that puts
 both an authorized Repository API and an owner-stamping route over one

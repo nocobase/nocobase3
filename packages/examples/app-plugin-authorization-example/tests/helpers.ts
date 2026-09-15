@@ -18,6 +18,7 @@ import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { vi } from 'vitest';
 import grantSeed from '../database/seeds/202609150002_authorization_example_grant_members.js';
+import { AuthorizationExampleProvider } from '../server/providers/authorization-example.js';
 import { apiRoutes, createRoutes } from '../server/routes/index.js';
 
 /** The Permission Set `createAppAuthorization` protects as unrestricted. */
@@ -111,6 +112,8 @@ export async function createFixture(
     container,
     router,
   };
+  // The provider registers the Collection at boot; the routes only authorize.
+  await new AuthorizationExampleProvider(app).boot();
   for (const contribution of [apiRoutes, createRoutes])
     router.route('/main/api', await contribution.createRouter(app));
 

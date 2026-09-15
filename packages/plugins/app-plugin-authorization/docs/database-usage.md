@@ -42,7 +42,8 @@ authz.db.collections.add({ name: 'orders', title: '订单' });
 Grant，不是权限模型。这样一来，数据库里的系统表与记账表不会出现在可授权列表里，
 也不会因为「db 认得这张表」而意外可授。
 
-`add()` 在启动阶段调用，不接触数据库；重复注册同一个名字会抛错。
+`add()` 在启动阶段调用，不接触数据库；同一个名字重复注册同样的内容会被忽略（有些宿主
+会执行不止一次 boot），但和已有注册不一致时会抛错。
 
 - 资源 ID 就是注册时的 Collection 名，例如 `orders`，不带数据源前缀：插件只面向一个
   连接。
@@ -208,8 +209,10 @@ await authz.restrictionRules.create({
 
 `authz.db.repositories()` 把一组 `defineRepositoryApiRoutes` 的 exposure 变成中间件：每个
 声明了 `resource` 的 exposure 都会在请求时用调用方的授权结果收窄它自己的静态 Policy，
-并在定义时把这个 Collection 注册进权限模型——把一张表的行开放成 HTTP 端点，本身就是
-在声明它属于权限模型。已经手动注册过的名字会跳过，不算冲突。
+它只负责收窄 Policy，不做注册：Collection 要显式 `add()` 才进权限模型，这样它才能带上
+权限界面要显示的标题。注册写在模块自己的 Service Provider 的 boot 里，路由文件只负责
+建路由。exposure 指向一个没注册的 Collection 时，请求一律以
+`COLLECTION_NOT_REGISTERED` 被拒。
 
 ```ts
 const authentication = app.container.resolve(authenticationToken);
