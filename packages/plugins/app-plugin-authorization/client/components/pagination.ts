@@ -1,3 +1,5 @@
+import type { Translate } from '../i18n.js';
+
 /** Rows a list shows before it pages. */
 export const PAGE_SIZE = 10;
 
@@ -28,14 +30,19 @@ export function pageSlice<T>(
 
 /** The range this page covers, as the pager states it. */
 export function pageRangeLabel(
+  t: Translate,
   total: number,
   page: number,
   size: number = PAGE_SIZE,
 ): string {
-  if (total === 0) return '0 of 0';
+  if (total === 0) return t('pagination.empty');
   const current = clampPage(page, total, size);
   const first = (current - 1) * size + 1;
-  return `${first}–${Math.min(current * size, total)} of ${total}`;
+  return t('pagination.range', {
+    first,
+    last: Math.min(current * size, total),
+    total,
+  });
 }
 
 export function pageNumbers(

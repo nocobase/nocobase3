@@ -1,6 +1,7 @@
 import { Search, X } from 'lucide-react';
 import { useRef, type ReactElement, type ReactNode } from 'react';
 
+import { useAuthorizationTranslation } from '../i18n.js';
 import { cn } from '../lib/utils.js';
 import { Button } from './ui/button.js';
 
@@ -44,6 +45,7 @@ export function SearchField({
   disabled?: boolean;
   onChange: (value: string) => void;
 }): ReactElement {
+  const t = useAuthorizationTranslation();
   const inputRef = useRef<HTMLInputElement>(null);
   return (
     <div className={cn('relative min-w-48 flex-1 sm:max-w-80', className)}>
@@ -60,7 +62,9 @@ export function SearchField({
       />
       {value ? (
         <button
-          aria-label={`Clear ${label.toLowerCase()}`}
+          aria-label={t('filters.clearSearch', {
+            label: label.toLowerCase(),
+          })}
           className='absolute top-1/2 right-1.5 grid size-6 -translate-y-1/2 place-items-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground'
           type='button'
           onClick={() => {
@@ -120,6 +124,7 @@ export function ClearFilterButton({
 }: {
   onClear: () => void;
 }): ReactElement {
+  const t = useAuthorizationTranslation();
   return (
     <Button
       className='text-muted-foreground'
@@ -127,7 +132,7 @@ export function ClearFilterButton({
       variant='ghost'
       onClick={onClear}
     >
-      Clear filter
+      {t('filters.clear')}
     </Button>
   );
 }

@@ -12,6 +12,7 @@ import {
   permissionSetErrorMessage as message,
 } from '../../components/permission-set-access.js';
 import type { UserDirectory } from '../../components/user-directory.js';
+import { useAuthorizationTranslation } from '../../i18n.js';
 import { getAuthorizationClient } from '../../runtime.js';
 import { PermissionSetDetail } from './detail.js';
 import {
@@ -34,6 +35,7 @@ export function PermissionSetsPanel({
   options: AuthorizationOptions;
   directory: UserDirectory;
 }): ReactElement {
+  const t = useAuthorizationTranslation();
   const [sets, setSets] = useState<readonly PermissionSet[]>([]);
   const [assignments, setAssignments] = useState<
     readonly PermissionSetAssignment[]
@@ -50,9 +52,9 @@ export function PermissionSetsPanel({
     try {
       setSets(await authz.listPermissionSets());
     } catch (cause) {
-      setError(message(cause));
+      setError(message(t, cause));
     }
-  }, []);
+  }, [t]);
   useEffect(() => {
     void Promise.resolve().then(load);
   }, [load]);
@@ -114,7 +116,7 @@ export function PermissionSetsPanel({
         ) ||
         hasEmptyCustomFilter(editorDraft)
       )
-        throw new TypeError('Complete every permission before saving.');
+        throw new TypeError(t('errors.completePermissions'));
       const saved = editorDraft.originalKey
         ? await authz.updatePermissionSet(editorDraft.originalKey, input)
         : await authz.createPermissionSet(input);
@@ -125,7 +127,7 @@ export function PermissionSetsPanel({
       setEditorDraft(undefined);
       setEditorOpen(false);
     } catch (cause) {
-      setError(message(cause));
+      setError(message(t, cause));
     } finally {
       setBusy(false);
     }
@@ -138,7 +140,7 @@ export function PermissionSetsPanel({
       setDraft(undefined);
       await load();
     } catch (cause) {
-      setError(message(cause));
+      setError(message(t, cause));
     } finally {
       setBusy(false);
     }
@@ -156,7 +158,7 @@ export function PermissionSetsPanel({
       );
       setAssignments(await authz.listAssignments(draft.originalKey));
     } catch (cause) {
-      setError(message(cause));
+      setError(message(t, cause));
     } finally {
       setBusy(false);
     }
@@ -168,7 +170,7 @@ export function PermissionSetsPanel({
       await Promise.all(ids.map((id) => authz.revoke(id)));
       setAssignments((items) => items.filter((item) => !ids.includes(item.id)));
     } catch (cause) {
-      setError(message(cause));
+      setError(message(t, cause));
     } finally {
       setBusy(false);
     }

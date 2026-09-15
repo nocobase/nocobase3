@@ -1,12 +1,18 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('@nocobase/i18n/client', async () => {
+  const { translate } = await import('./locale-harness.js');
+  return { useTranslation: () => ({ t: translate }) };
+});
 
 import type { AuthorizationOptions } from '../client/authorization-client.js';
 import { TablePager } from '../client/components/management-ui.js';
 import { pageRangeLabel, pageSlice } from '../client/components/pagination.js';
 import { PermissionsSummary } from '../client/pages/permission-sets/permissions-tab.js';
 import type { Draft } from '../client/pages/permission-sets/types.js';
+import { translate } from './locale-harness.js';
 
 const options: AuthorizationOptions = {
   plugins: [],
@@ -120,9 +126,15 @@ describe('pagination helpers', () => {
   });
 
   it('reports the range and the total', () => {
-    expect(pageRangeLabel(23, 1, 10)).toBe('1–10 of 23');
-    expect(pageRangeLabel(23, 3, 10)).toBe('21–23 of 23');
-    expect(pageRangeLabel(0, 1, 10)).toBe('0 of 0');
+    expect(pageRangeLabel(translate, 23, 1, 10)).toBe(
+      translate('pagination.range', { first: 1, last: 10, total: 23 }),
+    );
+    expect(pageRangeLabel(translate, 23, 3, 10)).toBe(
+      translate('pagination.range', { first: 21, last: 23, total: 23 }),
+    );
+    expect(pageRangeLabel(translate, 0, 1, 10)).toBe(
+      translate('pagination.empty'),
+    );
   });
 });
 
@@ -137,11 +149,17 @@ describe('table pager', () => {
         onPage={(page) => seen.push(page)}
       />,
     );
-    expect(screen.getByText('1–10 of 23')).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: 'Previous page' }),
+      screen.getByText(
+        translate('pagination.range', { first: 1, last: 10, total: 23 }),
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: translate('pagination.previous') }),
     ).toBeDisabled();
-    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: translate('pagination.next') }),
+    );
     expect(seen).toEqual([2]);
   });
 
@@ -159,7 +177,11 @@ describe('permissions tab', () => {
     // The type is a second line under the name rather than a column of its own.
     expect(
       screen.getAllByRole('columnheader').map((cell) => cell.textContent),
-    ).toEqual(['Resource', 'Granted actions', 'Records and fields']);
+    ).toEqual([
+      translate('common.resource'),
+      translate('permissionSets.permissions.grantedActions'),
+      translate('permissionSets.permissions.recordsAndFields'),
+    ]);
 
     const rows = bodyRows();
     expect(rows).toHaveLength(3);
@@ -170,7 +192,10 @@ describe('permissions tab', () => {
     // The granted actions alone, each mark beside the name of its action.
     expect(
       orders.getAllByRole('img').map((mark) => mark.getAttribute('aria-label')),
-    ).toEqual(['Every record', 'Scoped records']);
+    ).toEqual([
+      translate('marks.labels.all'),
+      translate('marks.labels.scoped'),
+    ]);
     expect(orders.getByText('Read')).toBeInTheDocument();
     expect(orders.getByText('Update')).toBeInTheDocument();
 
@@ -179,7 +204,7 @@ describe('permissions tab', () => {
       articles
         .getAllByRole('img')
         .map((mark) => mark.getAttribute('aria-label')),
-    ).toEqual(['Every record']);
+    ).toEqual([translate('marks.labels.all')]);
     expect(articles.getByText('Read')).toBeInTheDocument();
     expect(articles.queryByText('Update')).toBeNull();
     expect(
@@ -195,10 +220,21 @@ describe('permissions tab', () => {
     const rows = bodyRows();
     // Two actions disagreeing on their records say so once; one action names its policy.
     expect(
-      within(rows[0] as HTMLElement).getByText('Mixed records, all fields'),
+      within(rows[0] as HTMLElement).getByText(
+        translate('labels.recordsAndFields', {
+          records: translate('labels.mixedRecords'),
+          fields: translate('labels.allFieldsLower'),
+        }),
+      ),
     ).toBeInTheDocument();
     expect(
-      within(rows[1] as HTMLElement).getByText('All Records, all fields'),
+      within(rows[1] as HTMLElement).getByText(
+        translate('labels.recordsAndFields', {
+          // The policy label comes from the options endpoint, so it stays as the server named it.
+          records: 'All Records',
+          fields: translate('labels.allFieldsLower'),
+        }),
+      ),
     ).toBeInTheDocument();
     expect(screen.queryByText(/RecordsIOwn/)).toBeNull();
   });
@@ -216,9 +252,15 @@ describe('permissions tab', () => {
     const rows = bodyRows();
     expect(rows).toHaveLength(2);
     const orders = within(rows[0] as HTMLElement);
-    expect(orders.getAllByLabelText('Every record')).toHaveLength(1);
-    expect(orders.getAllByLabelText('Scoped records')).toHaveLength(1);
-    expect(orders.getAllByLabelText('Not granted')).toHaveLength(2);
+    expect(
+      orders.getAllByLabelText(translate('marks.labels.all')),
+    ).toHaveLength(1);
+    expect(
+      orders.getAllByLabelText(translate('marks.labels.scoped')),
+    ).toHaveLength(1);
+    expect(
+      orders.getAllByLabelText(translate('marks.labels.none')),
+    ).toHaveLength(2);
   });
 
   it('reports one resource action by action, with its records and its fields', () => {
@@ -227,18 +269,28 @@ describe('permissions tab', () => {
     const panel = within(screen.getByRole('dialog'));
 
     // Every action the type declares is reported, granted or not.
-    expect(panel.getAllByText('Allowed')).toHaveLength(2);
-    expect(panel.getAllByText('Not granted')).toHaveLength(2);
+    expect(
+      panel.getAllByText(translate('permissionSets.permissions.allowed')),
+    ).toHaveLength(2);
+    expect(
+      panel.getAllByText(translate('permissionSets.permissions.notGranted')),
+    ).toHaveLength(2);
 
     expect(panel.getByText('Records I Own')).toBeInTheDocument();
     expect(panel.getByText('Custom Filter')).toBeInTheDocument();
-    expect(panel.getByText('status Equals open')).toBeInTheDocument();
+    expect(
+      panel.getByText(`status ${translate('filterOperators.$eq')} open`),
+    ).toBeInTheDocument();
 
     // The fields are named rather than counted.
     expect(panel.getAllByText('id')).toHaveLength(1);
     expect(panel.getAllByText('status')).toHaveLength(3);
-    expect(panel.getByText('Writable fields')).toBeInTheDocument();
-    expect(panel.getAllByText('Visible fields')).toHaveLength(2);
+    expect(
+      panel.getByText(translate('databasePolicy.writableFields')),
+    ).toBeInTheDocument();
+    expect(
+      panel.getAllByText(translate('databasePolicy.visibleFields')),
+    ).toHaveLength(2);
   });
 
   it('switches tables with the resource type chips', () => {
@@ -262,13 +314,17 @@ describe('permissions tab', () => {
     });
     expect(bodyRows()).toHaveLength(1);
     expect(
-      screen.getByText('No permissions match these filters.'),
+      screen.getByText(translate('permissionSets.permissions.emptyFiltered')),
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Clear filter' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: translate('filters.clear') }),
+    );
     expect(screen.getByLabelText('Search resources')).toHaveValue('');
     expect(bodyRows()).toHaveLength(3);
-    expect(screen.queryByRole('button', { name: 'Clear filter' })).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: translate('filters.clear') }),
+    ).toBeNull();
   });
 
   it('clears the search field from the field itself', () => {
@@ -277,7 +333,13 @@ describe('permissions tab', () => {
     fireEvent.change(field, { target: { value: 'articles' } });
     expect(bodyRows()).toHaveLength(1);
     fireEvent.click(
-      screen.getByRole('button', { name: 'Clear search resources' }),
+      screen.getByRole('button', {
+        name: translate('filters.clearSearch', {
+          label: translate(
+            'permissionSets.permissions.searchResources',
+          ).toLowerCase(),
+        }),
+      }),
     );
     expect(field).toHaveValue('');
     expect(field).toHaveFocus();

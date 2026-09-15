@@ -30,6 +30,7 @@ import {
   SidePanel,
   TablePager,
 } from '../components/management-ui.js';
+import { useAuthorizationTranslation, type Translate } from '../i18n.js';
 import { pageSlice } from '../components/pagination.js';
 import { defaultScope, firstActions } from '../components/rule-utils.js';
 import { getAuthorizationClient } from '../runtime.js';
@@ -41,6 +42,7 @@ export function DefaultAccessPanel({
 }: {
   options: AuthorizationOptions;
 }): ReactElement {
+  const t = useAuthorizationTranslation();
   const [rules, setRules] = useState<readonly DefaultAccessRule[]>([]);
   const [draft, setDraft] = useState<DefaultAccessRule>();
   const [original, setOriginal] = useState<DefaultAccessRule>();
@@ -64,9 +66,9 @@ export function DefaultAccessPanel({
     try {
       setRules(await authz.listDefaultAccess());
     } catch (cause) {
-      setError(message(cause));
+      setError(message(t, cause));
     }
-  }, []);
+  }, [t]);
   useEffect(() => {
     void Promise.resolve().then(load);
   }, [load]);
@@ -88,7 +90,7 @@ export function DefaultAccessPanel({
     if (!draft) return;
     try {
       if (draft.actions.length === 0)
-        throw new TypeError('Select at least one action.');
+        throw new TypeError(t('errors.selectAnAction'));
       if (
         original &&
         (original.resource.type !== draft.resource.type ||
@@ -100,7 +102,7 @@ export function DefaultAccessPanel({
       setOriginal(undefined);
       await load();
     } catch (cause) {
-      setError(message(cause));
+      setError(message(t, cause));
     }
   }
   async function remove(): Promise<void> {
@@ -121,22 +123,24 @@ export function DefaultAccessPanel({
       {error ? <ErrorBox value={error} /> : null}
       <ManagementToolbar
         search={search}
-        searchLabel='Search rules'
-        searchPlaceholder='Search rules'
+        searchLabel={t('defaultAccess.search')}
+        searchPlaceholder={t('defaultAccess.search')}
         onSearch={changeSearch}
-        actionLabel='Set default access'
+        actionLabel={t('defaultAccess.create')}
         onAction={() => edit()}
       />
       <ManagementTable>
         <Table className='min-w-[48rem]'>
           <TableHeader className='bg-muted/30 uppercase'>
             <TableRow>
-              <TableHead className='px-5 py-3 font-medium'>Resource</TableHead>
               <TableHead className='px-5 py-3 font-medium'>
-                Default record access
+                {t('common.resource')}
               </TableHead>
               <TableHead className='px-5 py-3 font-medium'>
-                Allowed actions
+                {t('defaultAccess.recordAccessHeader')}
+              </TableHead>
+              <TableHead className='px-5 py-3 font-medium'>
+                {t('defaultAccess.allowedActions')}
               </TableHead>
               <TableHead className='w-24 px-5 py-3' />
             </TableRow>
@@ -158,7 +162,7 @@ export function DefaultAccessPanel({
                 </TableCell>
                 <TableCell className='px-5 py-4 text-right'>
                   <Button size='sm' variant='ghost' onClick={() => edit(rule)}>
-                    Edit
+                    {t('common.edit')}
                   </Button>
                 </TableCell>
               </TableRow>
@@ -166,44 +170,45 @@ export function DefaultAccessPanel({
             {visibleRules.length === 0 ? (
               <EmptyTableRow colSpan={4}>
                 {rules.length === 0
-                  ? 'No default access yet. Set it on a collection to give everyone a baseline record scope.'
-                  : 'No default access rules match your search.'}
+                  ? t('defaultAccess.emptyNone')
+                  : t('defaultAccess.emptySearch')}
               </EmptyTableRow>
             ) : null}
           </TableBody>
         </Table>
         <TablePager
-          label='Default access rules'
+          label={t('defaultAccess.pagerLabel')}
           page={page}
           total={visibleRules.length}
           onPage={setPage}
         />
       </ManagementTable>
       <ConfirmDialog
-        confirmLabel='Delete rule'
+        confirmLabel={t('defaultAccess.deleteRule')}
         open={confirmDelete}
-        title='Delete this default access rule?'
+        title={t('defaultAccess.confirmDeleteTitle')}
         onCancel={() => setConfirmDelete(false)}
         onConfirm={() => {
           setConfirmDelete(false);
           void remove();
         }}
       >
-        The baseline access on “
-        {original ? resourceLabel(options, original) : ''}” is removed, and
-        everyone falls back to what their permission sets grant. This cannot be
-        undone.
+        {t('defaultAccess.confirmDeleteBody', {
+          resource: original ? resourceLabel(options, original) : '',
+        })}
       </ConfirmDialog>
       {draft ? (
         <SidePanel
-          title={original ? 'Edit default access' : 'Set default access'}
-          description='Define the baseline record visibility before sharing and restrictions are applied.'
+          title={t(
+            original ? 'defaultAccess.editTitle' : 'defaultAccess.newTitle',
+          )}
+          description={t('defaultAccess.editorDescription')}
           onClose={() => setDraft(undefined)}
           wide
           scrollable={false}
         >
           <RuleEditorLayout
-            steps={defaultAccessSteps}
+            steps={defaultAccessSteps(t)}
             value={editorStep}
             onChange={(value) =>
               setEditorStep(value === 'access' ? 'access' : 'resource')
@@ -215,22 +220,26 @@ export function DefaultAccessPanel({
                     variant='outline'
                     onClick={() => setConfirmDelete(true)}
                   >
-                    Delete rule
+                    {t('defaultAccess.deleteRule')}
                   </Button>
                 ) : null}
                 <Button variant='outline' onClick={() => setDraft(undefined)}>
-                  Cancel
+                  {t('common.cancel')}
                 </Button>
-                <Button onClick={() => void save()}>Save default access</Button>
+                <Button onClick={() => void save()}>
+                  {t('defaultAccess.save')}
+                </Button>
               </>
             }
           >
             {editorStep === 'resource' ? (
               <section className='space-y-5'>
                 <div>
-                  <h3 className='text-base font-semibold'>Resource</h3>
+                  <h3 className='text-base font-semibold'>
+                    {t('defaultAccess.resourceHeading')}
+                  </h3>
                   <p className='mt-1 text-sm text-muted-foreground'>
-                    Choose the collection whose baseline access is being set.
+                    {t('defaultAccess.resourceDescription')}
                   </p>
                 </div>
                 <div className='grid gap-4 sm:grid-cols-2'>
@@ -258,9 +267,11 @@ export function DefaultAccessPanel({
             ) : (
               <section className='space-y-5'>
                 <div>
-                  <h3 className='text-base font-semibold'>Access by action</h3>
+                  <h3 className='text-base font-semibold'>
+                    {t('defaultAccess.accessHeading')}
+                  </h3>
                   <p className='mt-1 text-sm text-muted-foreground'>
-                    Set the record scope independently for each action.
+                    {t('defaultAccess.accessDescription')}
                   </p>
                 </div>
                 <ActionScopesEditor
@@ -294,9 +305,13 @@ function ScopeBadge({
   actions: readonly { action: string; scope: AccessScope }[];
   options: AuthorizationOptions;
 }): ReactElement {
+  const t = useAuthorizationTranslation();
   const label = actions
-    .map(
-      (item) => `${humanize(item.action)}: ${scopeLabel(item.scope, options)}`,
+    .map((item) =>
+      t('labels.actionScope', {
+        action: humanize(item.action),
+        scope: scopeLabel(t, item.scope, options),
+      }),
     )
     .join(' · ');
   return (
@@ -305,9 +320,14 @@ function ScopeBadge({
     </span>
   );
 }
-function scopeLabel(scope: AccessScope, options: AuthorizationOptions): string {
-  if (scope.type === 'all') return 'All records';
-  if (scope.type === 'ids') return `${scope.ids.length} selected records`;
+function scopeLabel(
+  t: Translate,
+  scope: AccessScope,
+  options: AuthorizationOptions,
+): string {
+  if (scope.type === 'all') return t('labels.allRecords');
+  if (scope.type === 'ids')
+    return t('labels.selectedRecords', { count: scope.ids.length });
   if (scope.type === 'database') {
     const key =
       typeof scope.recordAccess === 'string'
@@ -318,7 +338,7 @@ function scopeLabel(scope: AccessScope, options: AuthorizationOptions): string {
       humanize(key)
     );
   }
-  return 'Unknown scope';
+  return t('labels.unknownScope');
 }
 function fresh(options: AuthorizationOptions): DefaultAccessRule {
   const type =
@@ -338,18 +358,22 @@ function fresh(options: AuthorizationOptions): DefaultAccessRule {
   };
 }
 
-const defaultAccessSteps = [
-  {
-    value: 'resource',
-    label: 'Resource',
-    description: 'Select a collection.',
-  },
-  {
-    value: 'access',
-    label: 'Access',
-    description: 'Configure action scopes.',
-  },
-] as const;
+function defaultAccessSteps(
+  t: Translate,
+): readonly { value: string; label: string; description: string }[] {
+  return [
+    {
+      value: 'resource',
+      label: t('defaultAccess.steps.resource'),
+      description: t('defaultAccess.steps.resourceHint'),
+    },
+    {
+      value: 'access',
+      label: t('defaultAccess.steps.access'),
+      description: t('defaultAccess.steps.accessHint'),
+    },
+  ];
+}
 function resourceLabel(
   options: AuthorizationOptions,
   rule: DefaultAccessRule,

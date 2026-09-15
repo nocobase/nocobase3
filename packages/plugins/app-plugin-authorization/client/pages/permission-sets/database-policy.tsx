@@ -4,6 +4,7 @@ import type { AuthorizationOptions } from '../../authorization-client.js';
 import { Field } from '../../components/editors.js';
 import { Button } from '../../components/ui/button.js';
 import { Input } from '../../components/ui/input.js';
+import { useAuthorizationTranslation } from '../../i18n.js';
 import {
   customFilterConditions,
   defaultDatabaseActionDraft,
@@ -15,7 +16,8 @@ import {
   collectionFields,
   databaseActionDescription,
   databaseActionSummary,
-  filterOperatorLabels,
+  filterOperatorLabel,
+  filterOperators,
   humanize,
 } from './labels.js';
 import type {
@@ -34,6 +36,7 @@ export function DatabasePolicyEditor({
   grant: GrantDraft;
   onChange: (value: Readonly<Record<string, DatabaseActionDraft>>) => void;
 }): ReactElement {
+  const t = useAuthorizationTranslation();
   const fields = collectionFields(options, grant.resource.id);
   const [activeAction, setActiveAction] = useState(grant.actions[0] ?? '');
   const currentAction = grant.actions.includes(activeAction)
@@ -45,9 +48,9 @@ export function DatabasePolicyEditor({
     <section className='rounded-lg border'>
       <header className='flex flex-wrap items-center justify-between gap-3 border-b bg-muted/20 px-3 py-2.5'>
         <div>
-          <h4 className='text-sm font-medium'>Data access</h4>
+          <h4 className='text-sm font-medium'>{t('databasePolicy.title')}</h4>
           <p className='text-xs text-muted-foreground'>
-            Configure one action at a time
+            {t('databasePolicy.subtitle')}
           </p>
         </div>
         <div className='flex flex-wrap gap-1 rounded-md border bg-background p-1'>
@@ -75,7 +78,7 @@ export function DatabasePolicyEditor({
         />
       ) : (
         <p className='px-4 py-5 text-sm text-muted-foreground'>
-          Select an action before configuring data access.
+          {t('databasePolicy.selectAction')}
         </p>
       )}
     </section>
@@ -95,6 +98,7 @@ function DatabaseActionPolicyEditor({
   value: DatabaseActionDraft;
   onChange: (value: DatabaseActionDraft) => void;
 }): ReactElement {
+  const t = useAuthorizationTranslation();
   const input = action === 'create' || action === 'update';
   const output =
     action === 'create' || action === 'read' || action === 'update';
@@ -103,20 +107,22 @@ function DatabaseActionPolicyEditor({
     <div className='space-y-4 p-4'>
       <div className='flex items-center justify-between gap-3'>
         <div>
-          <h5 className='text-sm font-medium'>{humanize(action)} access</h5>
+          <h5 className='text-sm font-medium'>
+            {t('databasePolicy.actionAccess', { action: humanize(action) })}
+          </h5>
           <p className='text-xs text-muted-foreground'>
-            {databaseActionDescription(action)}
+            {databaseActionDescription(t, action)}
           </p>
         </div>
         <span className='text-xs text-muted-foreground'>
-          {databaseActionSummary(options, action, value)}
+          {databaseActionSummary(t, options, action, value)}
         </span>
       </div>
       {input || output ? (
         <div className='grid gap-3 sm:grid-cols-2'>
           {input ? (
             <FieldChecklist
-              label='Writable fields'
+              label={t('databasePolicy.writableFields')}
               fields={fields}
               value={value.input}
               onChange={(next) => onChange({ ...value, input: next })}
@@ -124,7 +130,7 @@ function DatabaseActionPolicyEditor({
           ) : null}
           {output ? (
             <FieldChecklist
-              label='Visible fields'
+              label={t('databasePolicy.visibleFields')}
               fields={fields}
               value={value.output}
               onChange={(next) => onChange({ ...value, output: next })}
@@ -158,6 +164,7 @@ function RecordAccessEditor({
   value: RecordAccessDraft;
   onChange: (value: RecordAccessDraft) => void;
 }): ReactElement {
+  const t = useAuthorizationTranslation();
   const key = recordAccessKey(value);
   const conditions = customFilterConditions(value);
   function updateConditions(next: readonly FilterConditionDraft[]): void {
@@ -168,9 +175,11 @@ function RecordAccessEditor({
   }
   return (
     <div className='space-y-3'>
-      <Field label='Record access'>
+      <Field label={t('databasePolicy.recordAccess')}>
         <select
-          aria-label={`${humanize(action)} record access`}
+          aria-label={t('databasePolicy.actionRecordAccess', {
+            action: humanize(action),
+          })}
           className='h-8 w-full rounded-lg border bg-background px-2.5 text-sm'
           value={key}
           onChange={(event) =>
@@ -195,9 +204,11 @@ function RecordAccessEditor({
         <div className='space-y-2 rounded-md border bg-muted/10 p-3'>
           <div className='flex items-center justify-between gap-3'>
             <div>
-              <p className='text-xs font-medium'>Filter conditions</p>
+              <p className='text-xs font-medium'>
+                {t('databasePolicy.filterConditions')}
+              </p>
               <p className='text-xs text-muted-foreground'>
-                All conditions must match.
+                {t('databasePolicy.filterConditionsHint')}
               </p>
             </div>
             <Button
@@ -216,7 +227,7 @@ function RecordAccessEditor({
                 ])
               }
             >
-              Add condition
+              {t('databasePolicy.addCondition')}
             </Button>
           </div>
           {conditions.map((condition, index) => (
@@ -225,7 +236,7 @@ function RecordAccessEditor({
               key={condition.id}
             >
               <select
-                aria-label='Filter field'
+                aria-label={t('databasePolicy.filterField')}
                 className='h-8 rounded-lg border bg-background px-2 text-sm'
                 value={condition.field}
                 onChange={(event) =>
@@ -245,7 +256,7 @@ function RecordAccessEditor({
                 ))}
               </select>
               <select
-                aria-label='Filter operator'
+                aria-label={t('databasePolicy.filterOperator')}
                 className='h-8 rounded-lg border bg-background px-2 text-sm'
                 value={condition.operator}
                 onChange={(event) =>
@@ -262,16 +273,14 @@ function RecordAccessEditor({
                   )
                 }
               >
-                {Object.entries(filterOperatorLabels).map(
-                  ([operator, label]) => (
-                    <option key={operator} value={operator}>
-                      {label}
-                    </option>
-                  ),
-                )}
+                {filterOperators.map((operator) => (
+                  <option key={operator} value={operator}>
+                    {filterOperatorLabel(t, operator)}
+                  </option>
+                ))}
               </select>
               <Input
-                aria-label='Filter value'
+                aria-label={t('databasePolicy.filterValue')}
                 value={condition.value}
                 onChange={(event) =>
                   updateConditions(
@@ -284,7 +293,7 @@ function RecordAccessEditor({
                 }
               />
               <Button
-                aria-label='Remove condition'
+                aria-label={t('databasePolicy.removeCondition')}
                 size='sm'
                 type='button'
                 variant='ghost'
@@ -294,13 +303,13 @@ function RecordAccessEditor({
                   )
                 }
               >
-                Remove
+                {t('common.remove')}
               </Button>
             </div>
           ))}
           {conditions.length === 0 ? (
             <p className='py-2 text-xs text-muted-foreground'>
-              Add at least one condition.
+              {t('databasePolicy.conditionRequired')}
             </p>
           ) : null}
         </div>
@@ -320,6 +329,7 @@ function FieldChecklist({
   value: '*' | readonly string[];
   onChange: (value: '*' | readonly string[]) => void;
 }): ReactElement {
+  const t = useAuthorizationTranslation();
   return (
     <Field label={label}>
       <div className='rounded-md border bg-background p-2.5'>
@@ -329,7 +339,7 @@ function FieldChecklist({
             checked={value === '*'}
             onChange={(event) => onChange(event.target.checked ? '*' : [])}
           />
-          All fields
+          {t('common.allFields')}
         </label>
         <div className='mt-2 grid max-h-32 grid-cols-2 gap-x-3 gap-y-1 overflow-y-auto'>
           {fields.map((field) => (
@@ -338,7 +348,10 @@ function FieldChecklist({
               key={field}
             >
               <input
-                aria-label={`${label}: ${field}`}
+                aria-label={t('databasePolicy.fieldCheckbox', {
+                  label,
+                  field,
+                })}
                 type='checkbox'
                 checked={value === '*' || value.includes(field)}
                 disabled={value === '*'}

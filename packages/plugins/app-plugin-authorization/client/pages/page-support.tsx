@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type ReactElement } from 'react';
 import type { AuthorizationOptions } from '../authorization-client.js';
 import { getAuthorizationClient } from '../runtime.js';
 import { errorMessage as message } from '../components/feedback.js';
+import { useAuthorizationTranslation } from '../i18n.js';
 import {
   PageError,
   PageForbidden,
@@ -29,6 +30,7 @@ export interface AuthorizationPageData {
 export function useAuthorizationPageData(
   optionsPath: string,
 ): AuthorizationPageData {
+  const t = useAuthorizationTranslation();
   const [state, setState] = useState<Omit<AuthorizationPageData, 'reload'>>({});
   const [attempt, setAttempt] = useState(0);
   const reload = useCallback(() => {
@@ -43,13 +45,16 @@ export function useAuthorizationPageData(
       },
       (cause: unknown) => {
         if (active)
-          setState({ error: message(cause), forbidden: status(cause) === 403 });
+          setState({
+            error: message(t, cause),
+            forbidden: status(cause) === 403,
+          });
       },
     );
     return () => {
       active = false;
     };
-  }, [attempt, optionsPath]);
+  }, [attempt, optionsPath, t]);
   return { ...state, reload };
 }
 
@@ -59,13 +64,16 @@ export function useAuthorizationPageData(
  */
 // eslint-disable-next-line react-refresh/only-export-components
 export function useUserDirectory(): UserDirectory {
+  const t = useAuthorizationTranslation();
   const [users, setUsers] = useState<UserDirectory>(() => userDirectory([]));
   useEffect(() => {
     void authz
       .listUsers()
-      .then(userDirectory, unavailableUserDirectory)
+      .then(userDirectory, (cause: unknown) =>
+        unavailableUserDirectory(t, cause),
+      )
       .then(setUsers);
-  }, []);
+  }, [t]);
   return users;
 }
 

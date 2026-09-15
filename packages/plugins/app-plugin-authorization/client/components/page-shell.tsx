@@ -1,6 +1,7 @@
 import { LoaderCircle } from 'lucide-react';
 import type { ReactElement, ReactNode } from 'react';
 
+import { useAuthorizationTranslation } from '../i18n.js';
 import { Button } from './ui/button.js';
 import { Card } from './ui/card.js';
 
@@ -28,11 +29,12 @@ export function PermissionsPage({
 }
 
 export function PageLoading(): ReactElement {
+  const t = useAuthorizationTranslation();
   return (
     <Card className='grid min-h-64 place-items-center'>
       <div className='flex items-center gap-2 text-sm text-muted-foreground'>
         <LoaderCircle className='size-4 animate-spin' />
-        Loading…
+        {t('common.loading')}
       </div>
     </Card>
   );
@@ -45,14 +47,15 @@ export function PageError({
   message?: string;
   onRetry: () => void;
 }): ReactElement {
+  const t = useAuthorizationTranslation();
   return (
     <Card className='grid min-h-64 place-items-center p-6 text-center'>
       <div className='space-y-3'>
         <p className='text-sm text-muted-foreground'>
-          {message ?? 'This page could not be loaded.'}
+          {message ?? t('page.loadFailed')}
         </p>
         <Button onClick={onRetry} variant='outline'>
-          Retry
+          {t('common.retry')}
         </Button>
       </div>
     </Card>

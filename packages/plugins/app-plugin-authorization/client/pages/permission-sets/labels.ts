@@ -6,6 +6,7 @@ import type {
 } from '../../authorization-client.js';
 import type { PermissionSetCapabilities } from '../../components/permission-set-access.js';
 import type { UserDirectory } from '../../components/user-directory.js';
+import type { Translate } from '../../i18n.js';
 import { defaultDatabaseActionDraft, recordAccessKey } from './drafts.js';
 import type {
   DatabaseActionDraft,
@@ -25,20 +26,14 @@ export const COLLECTION_TYPE: string = 'database.collection';
  */
 export type GrantMark = 'all' | 'scoped' | 'none' | 'bypass';
 
-export const markLabels: Readonly<Record<GrantMark, string>> = {
-  all: 'Every record',
-  scoped: 'Scoped records',
-  none: 'Not granted',
-  bypass: 'Unrestricted',
-};
+export function markLabel(t: Translate, mark: GrantMark): string {
+  return t(`marks.labels.${mark}`);
+}
 
 /** What the mark means, for a tooltip and for the legend. */
-export const markDescriptions: Readonly<Record<GrantMark, string>> = {
-  all: 'Every record',
-  scoped: 'Scoped records',
-  none: 'Not granted',
-  bypass: 'Unrestricted: grants are not consulted',
-};
+export function markDescription(t: Translate, mark: GrantMark): string {
+  return t(`marks.descriptions.${mark}`);
+}
 
 export function actionMark(grant: GrantDraft, action: string): GrantMark {
   if (!grant.actions.includes(action)) return 'none';
@@ -51,19 +46,25 @@ export function actionMark(grant: GrantDraft, action: string): GrantMark {
     : 'scoped';
 }
 
-/** How each filter operator is named, in the editor and wherever a stored condition is read back. */
-export const filterOperatorLabels: Readonly<
-  Record<FilterConditionDraft['operator'], string>
-> = {
-  $eq: 'Equals',
-  $ne: 'Not equal',
-  $in: 'In',
-  $notIn: 'Not in',
-  $gt: 'Greater than',
-  $gte: 'At least',
-  $lt: 'Less than',
-  $lte: 'At most',
-};
+/** The operators the editor offers, in the order it offers them. */
+export const filterOperators: readonly FilterConditionDraft['operator'][] = [
+  '$eq',
+  '$ne',
+  '$in',
+  '$notIn',
+  '$gt',
+  '$gte',
+  '$lt',
+  '$lte',
+];
+
+/** How one filter operator is named, in the editor and wherever a stored condition is read back. */
+export function filterOperatorLabel(
+  t: Translate,
+  operator: FilterConditionDraft['operator'],
+): string {
+  return t(`filterOperators.${operator}`);
+}
 
 export function humanize(value: string): string {
   return value
@@ -94,20 +95,32 @@ export function resourceLabel(
 }
 
 export function subjectLabel(
+  t: Translate,
   subject: AuthorizationSubject,
   directory: UserDirectory,
 ): string {
-  if (subject.type === 'authenticated') return 'All signed-in users';
+  if (subject.type === 'authenticated') return t('common.signedInUsers');
   const user = directory.users.find((item) => item.id === subject.id);
   return user
     ? `${user.name} · ${user.username ?? user.email}`
-    : `User ${subject.id}`;
+    : t('common.userFallback', { id: subject.id });
 }
 
-export function describeSet(set: PermissionSet): string {
+export function describeSet(t: Translate, set: PermissionSet): string {
   return set.unrestricted === true
-    ? 'Unrestricted access to everything in this application'
-    : `${set.grants.length} configured resource${set.grants.length === 1 ? '' : 's'}`;
+    ? t('permissionSets.describeUnrestricted')
+    : t(countKey('permissionSets.configuredResources', set.grants.length), {
+        count: set.grants.length,
+      });
+}
+
+/**
+ * The singular or plural key for a count. i18next plural suffixes are avoided
+ * so both catalogues declare exactly the same keys whatever the language's
+ * plural rules are.
+ */
+function countKey(prefix: string, count: number): string {
+  return `${prefix}.${count === 1 ? 'one' : 'other'}`;
 }
 
 export function isSystemSet(set: PermissionSet): boolean {
@@ -127,31 +140,60 @@ export function detailBadgeTone(
 }
 
 export function detailBadgeLabel(
+  t: Translate,
   capabilities: PermissionSetCapabilities,
 ): string {
-  if (capabilities.unrestricted) return 'Unrestricted access';
-  return capabilities.protectedSet ? 'Protected system set' : 'Custom';
+  if (capabilities.unrestricted)
+    return t('permissionSets.detail.badgeUnrestricted');
+  return capabilities.protectedSet
+    ? t('permissionSets.detail.badgeProtected')
+    : t('permissionSets.detail.badgeCustom');
 }
 
 export function detailSummary(
+  t: Translate,
   draft: Draft,
   assignments: readonly PermissionSetAssignment[],
   unrestricted: boolean,
 ): string {
-  const assignmentCount = `${assignments.length} ${assignments.length === 1 ? 'assignment' : 'assignments'}`;
-  if (unrestricted) return `Key: ${draft.key} · ${assignmentCount}`;
+  const assignments_ = t(
+    countKey('permissionSets.assignmentCount', assignments.length),
+    { count: assignments.length },
+  );
+  if (unrestricted)
+    return t('permissionSets.detail.summaryUnrestricted', {
+      key: draft.key,
+      assignments: assignments_,
+    });
+  const permissions = permissionCountFromDraft(draft);
   const categories = new Set(draft.grants.map((grant) => grant.resource.type));
-  return `Key: ${draft.key} · ${permissionCountFromDraft(draft)} permissions · ${categories.size} resource ${categories.size === 1 ? 'type' : 'types'} · ${assignmentCount}`;
+  return t('permissionSets.detail.summary', {
+    key: draft.key,
+    permissions: t(countKey('permissionSets.permissionCount', permissions), {
+      count: permissions,
+    }),
+    types: t(countKey('permissionSets.resourceTypeCount', categories.size), {
+      count: categories.size,
+    }),
+    assignments: assignments_,
+  });
 }
 
 export function databaseAccessSummary(
+  t: Translate,
   options: AuthorizationOptions,
   grant: GrantDraft,
 ): string {
   return grant.actions
     .map((action) => {
       const value = grant.database[action] ?? defaultDatabaseActionDraft();
-      return `${humanize(action)}: ${action === 'create' ? 'new records' : recordAccessLabel(options, value.recordAccess)}`;
+      return t('labels.actionScope', {
+        action: humanize(action),
+        scope:
+          action === 'create'
+            ? t('labels.newRecordsLower')
+            : recordAccessLabel(options, value.recordAccess),
+      });
     })
     .join(', ');
 }
@@ -162,6 +204,7 @@ export function databaseAccessSummary(
  * listing every one, because the side panel already carries the breakdown.
  */
 export function recordsClause(
+  t: Translate,
   options: AuthorizationOptions,
   grant: GrantDraft,
 ): string {
@@ -173,12 +216,13 @@ export function recordsClause(
         (grant.database[action] ?? defaultDatabaseActionDraft()).recordAccess,
       ),
     );
-  if (labels.length === 0) return 'New records';
-  return new Set(labels).size > 1 ? 'Mixed records' : labels[0];
+  if (labels.length === 0) return t('labels.newRecords');
+  return new Set(labels).size > 1 ? t('labels.mixedRecords') : labels[0];
 }
 
 /** The two clauses a collection row carries: its records, then its fields. */
 export function recordsAndFieldsSummary(
+  t: Translate,
   options: AuthorizationOptions,
   grant: GrantDraft,
 ): string {
@@ -189,17 +233,21 @@ export function recordsAndFieldsSummary(
   const fields = values.every(
     (value) => value.input === '*' && value.output === '*',
   )
-    ? 'all fields'
-    : 'selected fields';
-  return `${recordsClause(options, grant)}, ${fields}`;
+    ? t('labels.allFieldsLower')
+    : t('labels.selectedFieldsLower');
+  return t('labels.recordsAndFields', {
+    records: recordsClause(t, options, grant),
+    fields,
+  });
 }
 
 export function databaseActionSummary(
+  t: Translate,
   options: AuthorizationOptions,
   action: string,
   value: DatabaseActionDraft,
 ): string {
-  const fields = actionFieldsSummary(action, value);
+  const fields = actionFieldsSummary(t, action, value);
   return [
     ...(fields === NONE ? [] : [fields]),
     ...(action === 'create'
@@ -213,29 +261,24 @@ const NONE = '—';
 
 /** The field half of an action's summary: a delete names no fields at all. */
 export function actionFieldsSummary(
+  t: Translate,
   action: string,
   value: DatabaseActionDraft,
 ): string {
   const parts: string[] = [];
   if (action === 'create' || action === 'update')
-    parts.push(`${fieldSelectionLabel(value.input)} writable`);
+    parts.push(
+      t('labels.writableFields', {
+        fields: fieldSelectionLabel(t, value.input),
+      }),
+    );
   if (action === 'create' || action === 'read' || action === 'update')
-    parts.push(`${fieldSelectionLabel(value.output)} visible`);
+    parts.push(
+      t('labels.visibleFields', {
+        fields: fieldSelectionLabel(t, value.output),
+      }),
+    );
   return parts.length === 0 ? NONE : parts.join(' · ');
-}
-
-/**
- * The records an action starts from, named as the options endpoint names the
- * policy. A create selects no records, so it starts from none.
- */
-export function actionRecordsSummary(
-  options: AuthorizationOptions,
-  action: string,
-  value: DatabaseActionDraft,
-): string {
-  return action === 'create'
-    ? NONE
-    : recordAccessLabel(options, value.recordAccess);
 }
 
 /** The policy as the options endpoint names it. */
@@ -250,23 +293,28 @@ export function recordAccessLabel(
   );
 }
 
-export function databaseActionDescription(action: string): string {
+export function databaseActionDescription(
+  t: Translate,
+  action: string,
+): string {
   switch (action) {
     case 'create':
-      return 'Choose fields that can be submitted and returned.';
     case 'read':
-      return 'Choose visible fields and which records can be read.';
     case 'update':
-      return 'Choose editable fields and which records can be updated.';
     case 'delete':
-      return 'Choose which records can be deleted.';
+      return t(`databasePolicy.descriptions.${action}`);
     default:
-      return 'Configure fields and record access for this action.';
+      return t('databasePolicy.descriptions.other');
   }
 }
 
-export function fieldSelectionLabel(value: '*' | readonly string[]): string {
-  return value === '*' ? 'All fields' : `${value.length} fields`;
+export function fieldSelectionLabel(
+  t: Translate,
+  value: '*' | readonly string[],
+): string {
+  return value === '*'
+    ? t('common.allFields')
+    : t('labels.fieldCount', { count: value.length });
 }
 
 export function collectionFields(

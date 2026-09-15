@@ -1,7 +1,8 @@
 import { Check, Contrast, Minus, Shield } from 'lucide-react';
 import type { ReactElement } from 'react';
 
-import { markDescriptions, markLabels, type GrantMark } from './labels.js';
+import { useAuthorizationTranslation } from '../../i18n.js';
+import { markDescription, markLabel, type GrantMark } from './labels.js';
 
 const markStyles: Readonly<Record<GrantMark, string>> = {
   all: 'bg-primary/10 text-primary',
@@ -17,26 +18,15 @@ const markIcons = {
   bypass: Shield,
 } as const;
 
-export function ScopeMark({
-  value,
-  context,
-}: {
-  value: GrantMark;
-  /**
-   * What the mark stands for where no column header names it, such as the
-   * action in a fixed row of marks. It reaches the label and the tooltip, so
-   * the row stays the same width whatever the action is called.
-   */
-  context?: string;
-}): ReactElement {
+export function ScopeMark({ value }: { value: GrantMark }): ReactElement {
+  const t = useAuthorizationTranslation();
   const Icon = markIcons[value];
-  const prefix = context === undefined ? '' : `${context}: `;
   return (
     <span
-      aria-label={`${prefix}${markLabels[value]}`}
+      aria-label={markLabel(t, value)}
       className={`inline-grid size-6 place-items-center rounded-md ${markStyles[value]}`}
       role='img'
-      title={`${prefix}${markDescriptions[value]}`}
+      title={markDescription(t, value)}
     >
       <Icon className='size-3.5' />
     </span>
@@ -48,12 +38,13 @@ export function ScopeLegend({
 }: {
   values: readonly GrantMark[];
 }): ReactElement {
+  const t = useAuthorizationTranslation();
   return (
     <div className='flex flex-wrap gap-4 text-xs text-muted-foreground'>
       {values.map((value) => (
         <span key={value} className='flex items-center gap-2'>
           <ScopeMark value={value} />
-          {markDescriptions[value]}
+          {markDescription(t, value)}
         </span>
       ))}
     </div>

@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { ReactElement, ReactNode } from 'react';
 
+import { useAuthorizationTranslation } from '../i18n.js';
 import { FilterBar, FilterBarSpacer, SearchField } from './filters.js';
 import {
   PAGE_SIZE,
@@ -15,8 +16,8 @@ import { TableCell, TableRow } from './ui/table.js';
 
 export function ManagementToolbar({
   search,
-  searchLabel = 'Search',
-  searchPlaceholder = 'Search',
+  searchLabel,
+  searchPlaceholder,
   onSearch,
   actionLabel,
   onAction,
@@ -29,12 +30,13 @@ export function ManagementToolbar({
   actionLabel: string;
   onAction: () => void;
 }): ReactElement {
+  const t = useAuthorizationTranslation();
   return (
     <FilterBar>
       {/* The search field clears itself, so this bar needs no separate clear control. */}
       <SearchField
-        label={searchLabel}
-        placeholder={searchPlaceholder}
+        label={searchLabel ?? t('common.search')}
+        placeholder={searchPlaceholder ?? t('common.search')}
         value={search}
         onChange={onSearch}
       />
@@ -59,22 +61,23 @@ export function TablePager({
   label: string;
   onPage: (page: number) => void;
 }): ReactElement | null {
+  const t = useAuthorizationTranslation();
   if (total === 0) return null;
   const current = clampPage(page, total, pageSize);
   const pages = pageCount(total, pageSize);
   const numbers = pageNumbers(total, pageSize);
   return (
     <nav
-      aria-label={`${label} pagination`}
+      aria-label={t('pagination.navLabel', { label })}
       className='flex items-center gap-2 border-t px-4 py-2.5 text-xs text-muted-foreground'
     >
       <span className='tabular-nums'>
-        {pageRangeLabel(total, current, pageSize)}
+        {pageRangeLabel(t, total, current, pageSize)}
       </span>
       <span className='flex-1' />
       <div className='flex items-center gap-1'>
         <Button
-          aria-label='Previous page'
+          aria-label={t('pagination.previous')}
           disabled={current === 1}
           size='sm'
           variant='outline'
@@ -86,7 +89,7 @@ export function TablePager({
           <Button
             key={number}
             aria-current={number === current ? 'page' : undefined}
-            aria-label={`Page ${number}`}
+            aria-label={t('pagination.page', { number })}
             size='sm'
             variant={number === current ? 'default' : 'outline'}
             onClick={() => onPage(number)}
@@ -95,7 +98,7 @@ export function TablePager({
           </Button>
         ))}
         <Button
-          aria-label='Next page'
+          aria-label={t('pagination.next')}
           disabled={current === pages}
           size='sm'
           variant='outline'
@@ -148,6 +151,7 @@ export function DetailHeader({
   badge?: ReactNode;
   actions?: ReactNode;
 }): ReactElement {
+  const t = useAuthorizationTranslation();
   // The page header of a list page, with the back control above it: a detail view is the page, not a card on it.
   return (
     <header>
@@ -157,7 +161,7 @@ export function DetailHeader({
         variant='ghost'
         onClick={onBack}
       >
-        ← Back to list
+        {t('common.backToList')}
       </Button>
       <div className='mt-2 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between'>
         <div>
@@ -184,8 +188,12 @@ export function DetailTabs({
   items: readonly { value: string; label: string; count?: number }[];
   onChange: (value: string) => void;
 }): ReactElement {
+  const t = useAuthorizationTranslation();
   return (
-    <nav className='flex gap-6 border-b px-1' aria-label='Detail sections'>
+    <nav
+      className='flex gap-6 border-b px-1'
+      aria-label={t('common.detailSections')}
+    >
       {items.map((item) => (
         <button
           key={item.value}
@@ -220,6 +228,7 @@ export function SidePanel({
   wide?: boolean;
   scrollable?: boolean;
 }): ReactElement {
+  const t = useAuthorizationTranslation();
   return (
     <div
       className='fixed inset-0 z-50 flex justify-end bg-black/30'
@@ -243,7 +252,7 @@ export function SidePanel({
             ) : null}
           </div>
           <Button size='sm' variant='ghost' onClick={onClose}>
-            Close
+            {t('common.close')}
           </Button>
         </header>
         <div
@@ -269,12 +278,13 @@ export function RuleEditorLayout({
   children: ReactNode;
   footer: ReactNode;
 }): ReactElement {
+  const t = useAuthorizationTranslation();
   return (
     <div className='flex h-full min-h-0 flex-col'>
       <div className='grid min-h-0 flex-1 md:grid-cols-[14rem_minmax(0,1fr)]'>
         <nav
           className='border-b bg-muted/20 p-4 md:border-r md:border-b-0'
-          aria-label='Rule sections'
+          aria-label={t('common.ruleSections')}
         >
           <div className='grid gap-1 sm:grid-cols-3 md:grid-cols-1'>
             {steps.map((step, index) => (

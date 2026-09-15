@@ -1,5 +1,6 @@
 import { useRef, type ReactElement, type ReactNode } from 'react';
 
+import { useAuthorizationTranslation } from '../i18n.js';
 import { Button } from './ui/button.js';
 import {
   Dialog,
@@ -18,7 +19,7 @@ export function ConfirmDialog({
   open,
   title,
   confirmLabel,
-  cancelLabel = 'Cancel',
+  cancelLabel,
   busy = false,
   children,
   onConfirm,
@@ -35,6 +36,7 @@ export function ConfirmDialog({
   onConfirm: () => void;
   onCancel: () => void;
 }): ReactElement {
+  const t = useAuthorizationTranslation();
   const cancelRef = useRef<HTMLButtonElement>(null);
   return (
     <Dialog
@@ -50,7 +52,7 @@ export function ConfirmDialog({
         </DialogHeader>
         <div className='flex justify-end gap-2'>
           <Button ref={cancelRef} variant='outline' onClick={onCancel}>
-            {cancelLabel}
+            {cancelLabel ?? t('common.cancel')}
           </Button>
           <Button disabled={busy} variant='destructive' onClick={onConfirm}>
             {confirmLabel}

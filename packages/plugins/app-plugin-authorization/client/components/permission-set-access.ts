@@ -2,6 +2,7 @@ import type {
   PermissionSet,
   PermissionSetWriteOperation,
 } from '../authorization-client.js';
+import type { Translate } from '../i18n.js';
 import { errorMessage } from './feedback.js';
 
 /**
@@ -66,16 +67,19 @@ function allows(
  * server answers the protected and last-assignment cases with a code the panel
  * knows the reason for, so the raw message never has to be read as one.
  */
-export function permissionSetErrorMessage(error: unknown): string {
+export function permissionSetErrorMessage(
+  t: Translate,
+  error: unknown,
+): string {
   switch (errorCode(error)) {
     case 'LAST_ASSIGNMENT':
-      return 'This is the last assignment of a set the application must always keep someone able to use. Assign it to an enabled account before removing this one, or the application is left without an administrator.';
+      return t('errors.lastAssignment');
     case 'PROTECTED_PERMISSION_SET':
-      return 'This permission set is maintained by the application and cannot be changed here.';
+      return t('errors.protectedSet');
     case 'PERMISSION_SET_SUBJECT_NOT_ALLOWED':
-      return 'This permission set can only be assigned to the subject types the application allows. Assign it to an individual user instead of an audience.';
+      return t('errors.subjectNotAllowed');
     default:
-      return errorMessage(error);
+      return errorMessage(t, error);
   }
 }
 

@@ -1,5 +1,6 @@
 import type { ReactElement, ReactNode } from 'react';
 
+import type { Translate } from '../i18n.js';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert.js';
 
 export function ErrorBox({ value }: { value: string }): ReactElement {
@@ -27,8 +28,6 @@ export function NoticeBox({
 }
 
 // eslint-disable-next-line react-refresh/only-export-components
-export function errorMessage(error: unknown): string {
-  return error instanceof Error
-    ? error.message
-    : 'Authorization request failed.';
+export function errorMessage(t: Translate, error: unknown): string {
+  return error instanceof Error ? error.message : t('errors.requestFailed');
 }

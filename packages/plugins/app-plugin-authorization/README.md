@@ -75,6 +75,17 @@ paths are unchanged.
 The four authorization plugins are separable packages, so no screen here reads
 across them: each settings page edits its own layer and nothing else.
 
+The settings module ships English and Chinese. `client/locales/` holds
+`en-US.ts`, `zh-CN.ts` and an `index.ts` exporting one dynamic import per
+locale, registered as `locales` on the client plugin, and every screen reads
+them under the package name as its namespace through
+`useAuthorizationTranslation()` in `client/i18n.ts`. Keys are structured by
+screen, such as `permissionSets.list.title`, and a label helper that composes a
+sentence takes the translator as its first argument rather than holding English
+in a string. What stays untranslated is what the server sends as data: resource
+type and resource labels, action names, and the record access policy labels the
+options endpoints return.
+
 Every authenticated client route is authorized as `page:<route name>/access`
 unless the route declares an explicit authorization resource. Removing the
 corresponding page grant therefore blocks direct navigation as well as hiding

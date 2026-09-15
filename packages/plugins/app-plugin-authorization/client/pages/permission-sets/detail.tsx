@@ -13,6 +13,7 @@ import {
   type PermissionSetCapabilities,
 } from '../../components/permission-set-access.js';
 import { Button } from '../../components/ui/button.js';
+import { useAuthorizationTranslation } from '../../i18n.js';
 import type { UserDirectory } from '../../components/user-directory.js';
 import { Assignments } from './assignments-tab.js';
 import {
@@ -57,27 +58,34 @@ export function PermissionSetDetail({
   onAssign: (subjects: readonly AuthorizationSubject[]) => Promise<void>;
   onRevoke: (ids: readonly string[]) => Promise<void>;
 }): ReactElement {
+  const t = useAuthorizationTranslation();
   const [confirmDelete, setConfirmDelete] = useState(false);
   // An unrestricted set has no permissions to configure, so its detail view is the assignments alone.
   const detailSection = capabilities.unrestricted ? 'assignments' : section;
-  const title = draft.title || humanize(draft.key) || 'New permission set';
+  const title =
+    draft.title || humanize(draft.key) || t('permissionSets.detail.untitled');
   return (
     <div className='space-y-5'>
       {error ? <ErrorBox value={error} /> : null}
       <DetailHeader
         onBack={onBack}
         title={title}
-        subtitle={detailSummary(draft, assignments, capabilities.unrestricted)}
+        subtitle={detailSummary(
+          t,
+          draft,
+          assignments,
+          capabilities.unrestricted,
+        )}
         badge={
           <SetBadge tone={detailBadgeTone(capabilities)}>
-            {detailBadgeLabel(capabilities)}
+            {detailBadgeLabel(t, capabilities)}
           </SetBadge>
         }
         actions={
           <>
             {capabilities.canUpdate ? (
               <Button variant='outline' onClick={onEdit}>
-                Edit
+                {t('common.edit')}
               </Button>
             ) : null}
             {draft.originalKey && capabilities.canDelete ? (
@@ -87,17 +95,14 @@ export function PermissionSetDetail({
                 disabled={busy}
                 onClick={() => setConfirmDelete(true)}
               >
-                Delete
+                {t('common.delete')}
               </Button>
             ) : null}
           </>
         }
       />
       {capabilities.protectedSet && !capabilities.unrestricted ? (
-        <NoticeBox>
-          Required administration permissions and assignments are preserved so
-          administrators cannot be locked out.
-        </NoticeBox>
+        <NoticeBox>{t('permissionSets.detail.protectedNotice')}</NoticeBox>
       ) : null}
       {capabilities.unrestricted ? null : (
         <DetailTabs
@@ -106,12 +111,12 @@ export function PermissionSetDetail({
           items={[
             {
               value: 'permissions',
-              label: 'Permissions',
+              label: t('permissionSets.detail.permissionsTab'),
               count: permissionCountFromDraft(draft),
             },
             {
               value: 'assignments',
-              label: 'Assignments',
+              label: t('permissionSets.detail.assignmentsTab'),
               count: assignments.length,
             },
           ]}
@@ -123,17 +128,16 @@ export function PermissionSetDetail({
       ) : null}
       <ConfirmDialog
         busy={busy}
-        confirmLabel='Delete permission set'
+        confirmLabel={t('permissionSets.detail.confirmDelete')}
         open={confirmDelete}
-        title='Delete this permission set?'
+        title={t('permissionSets.detail.confirmDeleteTitle')}
         onCancel={() => setConfirmDelete(false)}
         onConfirm={() => {
           setConfirmDelete(false);
           onDelete();
         }}
       >
-        “{title}” will be deleted, and everyone it is assigned to loses the
-        access it grants. This cannot be undone.
+        {t('permissionSets.detail.confirmDeleteBody', { title })}
       </ConfirmDialog>
       {detailSection === 'assignments' ? (
         <Assignments
@@ -155,14 +159,10 @@ export function PermissionSetDetail({
 }
 
 function UnrestrictedAccessNotice(): ReactElement {
+  const t = useAuthorizationTranslation();
   return (
-    <NoticeBox title='This permission set grants unrestricted access.'>
-      <p>
-        Anyone holding it can read and change everything in this application,
-        regardless of any other permission set, sharing rule, or restriction
-        rule. It has no permissions to configure, so only its assignments are
-        managed here.
-      </p>
+    <NoticeBox title={t('permissionSets.detail.unrestrictedTitle')}>
+      <p>{t('permissionSets.detail.unrestrictedBody')}</p>
     </NoticeBox>
   );
 }

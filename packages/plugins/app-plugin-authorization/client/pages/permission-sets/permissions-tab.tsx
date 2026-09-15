@@ -16,6 +16,7 @@ import {
   TablePager,
 } from '../../components/management-ui.js';
 import { pageSlice } from '../../components/pagination.js';
+import { useAuthorizationTranslation } from '../../i18n.js';
 import { compareActions } from '../../components/rule-utils.js';
 import {
   Table,
@@ -33,7 +34,7 @@ import {
 import {
   COLLECTION_TYPE,
   actionMark,
-  filterOperatorLabels,
+  filterOperatorLabel,
   humanize,
   recordAccessLabel,
   recordsAndFieldsSummary,
@@ -56,6 +57,7 @@ export function PermissionsSummary({
   options: AuthorizationOptions;
   draft: Draft;
 }): ReactElement {
+  const t = useAuthorizationTranslation();
   const [search, setSearch] = useState('');
   const [type, setType] = useState<string>(ALL_TYPES);
   const [page, setPage] = useState(1);
@@ -100,9 +102,9 @@ export function PermissionsSummary({
   return (
     <div className='space-y-4'>
       <div>
-        <h3 className='font-medium'>Granted permissions</h3>
+        <h3 className='font-medium'>{t('permissionSets.permissions.title')}</h3>
         <p className='text-sm text-muted-foreground'>
-          Search and review resources without expanding every policy.
+          {t('permissionSets.permissions.description')}
         </p>
       </div>
       <FilterBar>
@@ -111,7 +113,7 @@ export function PermissionsSummary({
           pressed={combined}
           onClick={() => changeType(ALL_TYPES)}
         >
-          All
+          {t('common.all')}
         </FilterChip>
         {types.map((item) => (
           <FilterChip
@@ -126,8 +128,8 @@ export function PermissionsSummary({
         <FilterBarSpacer />
         <SearchField
           className='sm:max-w-60'
-          label='Search resources'
-          placeholder='Search resources'
+          label={t('permissionSets.permissions.searchResources')}
+          placeholder={t('permissionSets.permissions.searchResources')}
           value={search}
           onChange={changeSearch}
         />
@@ -144,10 +146,12 @@ export function PermissionsSummary({
         <Table className='min-w-[42rem]'>
           <TableHeader className='bg-muted/30 uppercase'>
             <TableRow>
-              <TableHead className='px-5 py-3 font-medium'>Resource</TableHead>
+              <TableHead className='px-5 py-3 font-medium'>
+                {t('common.resource')}
+              </TableHead>
               {combined ? (
                 <TableHead className='px-5 py-3 font-medium'>
-                  Granted actions
+                  {t('permissionSets.permissions.grantedActions')}
                 </TableHead>
               ) : (
                 actions.map((action) => (
@@ -161,7 +165,7 @@ export function PermissionsSummary({
               )}
               {combined || isCollection ? (
                 <TableHead className='px-5 py-3 font-medium'>
-                  Records and fields
+                  {t('permissionSets.permissions.recordsAndFields')}
                 </TableHead>
               ) : null}
             </TableRow>
@@ -183,7 +187,7 @@ export function PermissionsSummary({
                     </span>
                     {isUnknownPage(options, grant.resource) ? (
                       <span className='shrink-0 rounded-md bg-destructive/10 px-2 py-0.5 text-[0.6875rem] font-normal text-destructive'>
-                        Unknown page
+                        {t('permissionSets.unknownPage')}
                       </span>
                     ) : null}
                   </span>
@@ -207,7 +211,7 @@ export function PermissionsSummary({
                 {combined || isCollection ? (
                   <TableCell className='px-5 py-4 text-sm text-muted-foreground'>
                     {grant.resource.type === COLLECTION_TYPE
-                      ? recordsAndFieldsSummary(options, grant)
+                      ? recordsAndFieldsSummary(t, options, grant)
                       : NONE}
                   </TableCell>
                 ) : null}
@@ -216,14 +220,14 @@ export function PermissionsSummary({
             {rows.length === 0 ? (
               <EmptyTableRow colSpan={columns}>
                 {draft.grants.length === 0
-                  ? 'No permissions yet. Edit the set to grant resources and actions.'
-                  : 'No permissions match these filters.'}
+                  ? t('permissionSets.permissions.emptyNone')
+                  : t('permissionSets.permissions.emptyFiltered')}
               </EmptyTableRow>
             ) : null}
           </TableBody>
         </Table>
         <TablePager
-          label='Permissions'
+          label={t('permissionSets.permissions.pagerLabel')}
           page={page}
           total={rows.length}
           onPage={setPage}
@@ -313,6 +317,7 @@ function PermissionDetails({
   options: AuthorizationOptions;
   grant: GrantDraft;
 }): ReactElement {
+  const t = useAuthorizationTranslation();
   const isCollection = grant.resource.type === COLLECTION_TYPE;
   const actions = sortActions([
     ...(
@@ -332,7 +337,9 @@ function PermissionDetails({
               <span
                 className={`text-xs ${allowed ? 'text-foreground' : 'text-muted-foreground'}`}
               >
-                {allowed ? 'Allowed' : 'Not granted'}
+                {allowed
+                  ? t('permissionSets.permissions.allowed')
+                  : t('permissionSets.permissions.notGranted')}
               </span>
             </header>
             {allowed && isCollection ? (
@@ -347,7 +354,7 @@ function PermissionDetails({
       })}
       {actions.length === 0 ? (
         <p className='text-sm text-muted-foreground'>
-          This resource declares no actions.
+          {t('permissionSets.permissions.noActions')}
         </p>
       ) : null}
     </div>
@@ -364,24 +371,25 @@ function ActionDetails({
   options: AuthorizationOptions;
   value: DatabaseActionDraft;
 }): ReactElement {
+  const t = useAuthorizationTranslation();
   return (
     <dl className='divide-y text-sm'>
-      <DetailRow label='Record access'>
+      <DetailRow label={t('databasePolicy.recordAccess')}>
         {action === 'create' ? (
           <span className='text-muted-foreground'>
-            A create selects no records.
+            {t('permissionSets.permissions.createSelectsNoRecords')}
           </span>
         ) : (
           <RecordAccessDetails options={options} value={value} />
         )}
       </DetailRow>
       {action === 'create' || action === 'update' ? (
-        <DetailRow label='Writable fields'>
+        <DetailRow label={t('databasePolicy.writableFields')}>
           <FieldList value={value.input} />
         </DetailRow>
       ) : null}
       {action === 'create' || action === 'read' || action === 'update' ? (
-        <DetailRow label='Visible fields'>
+        <DetailRow label={t('databasePolicy.visibleFields')}>
           <FieldList value={value.output} />
         </DetailRow>
       ) : null}
@@ -414,6 +422,7 @@ function RecordAccessDetails({
   options: AuthorizationOptions;
   value: DatabaseActionDraft;
 }): ReactElement {
+  const t = useAuthorizationTranslation();
   const conditions = customFilterConditions(value.recordAccess);
   const params =
     recordAccessKey(value.recordAccess) === 'customFilter'
@@ -426,7 +435,7 @@ function RecordAccessDetails({
         <ul className='space-y-1'>
           {conditions.map((condition) => (
             <li className='font-mono text-xs' key={condition.id}>
-              {condition.field} {filterOperatorLabels[condition.operator]}{' '}
+              {condition.field} {filterOperatorLabel(t, condition.operator)}{' '}
               {condition.value || "''"}
             </li>
           ))}
@@ -461,9 +470,12 @@ function FieldList({
 }: {
   value: '*' | readonly string[];
 }): ReactElement {
-  if (value === '*') return <span>All fields</span>;
+  const t = useAuthorizationTranslation();
+  if (value === '*') return <span>{t('common.allFields')}</span>;
   if (value.length === 0)
-    return <span className='text-muted-foreground'>No fields</span>;
+    return (
+      <span className='text-muted-foreground'>{t('common.noFields')}</span>
+    );
   return (
     <div className='flex flex-wrap gap-1.5'>
       {value.map((field) => (

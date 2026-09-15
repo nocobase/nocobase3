@@ -1,6 +1,7 @@
 import { X } from 'lucide-react';
 import { useState, type ReactElement, type ReactNode } from 'react';
 
+import { useAuthorizationTranslation } from '../i18n.js';
 import { SearchField } from './filters.js';
 import { Input } from './ui/input.js';
 import { Label } from './ui/label.js';
@@ -48,10 +49,11 @@ export function ResourceEditor({
   id: string;
   onChange: (value: { type: string; id: string }) => void;
 }): ReactElement {
+  const t = useAuthorizationTranslation();
   const selected = options.resourceTypes.find((item) => item.value === type);
   return (
     <>
-      <Field label='Resource type'>
+      <Field label={t('editors.resourceType')}>
         <select
           className={selectClass}
           value={type}
@@ -72,7 +74,7 @@ export function ResourceEditor({
           ))}
         </select>
       </Field>
-      <Field label='Resource'>
+      <Field label={t('editors.resource')}>
         {selected && selected.resources.length > 0 ? (
           <select
             className={selectClass}
@@ -88,7 +90,7 @@ export function ResourceEditor({
         ) : (
           <Input
             required
-            placeholder='Resource ID'
+            placeholder={t('editors.resourceIdPlaceholder')}
             value={id}
             onChange={(event) => onChange({ type, id: event.target.value })}
           />
@@ -111,6 +113,7 @@ export function ActionsEditor({
   value: readonly string[];
   onChange: (value: readonly string[]) => void;
 }): ReactElement {
+  const t = useAuthorizationTranslation();
   const selectedType = options.resourceTypes.find(
     (item) => item.value === resourceType,
   );
@@ -130,17 +133,17 @@ export function ActionsEditor({
   });
   if (actions.length === 0)
     return (
-      <Field label='Actions'>
+      <Field label={t('editors.actions')}>
         <Input
           required
-          placeholder='read, create, update'
+          placeholder={t('editors.actionsPlaceholder')}
           value={value.join(', ')}
           onChange={(event) => onChange(csv(event.target.value))}
         />
       </Field>
     );
   return (
-    <Field label='Actions'>
+    <Field label={t('editors.actions')}>
       <div className='flex min-h-9 flex-wrap items-center gap-4 rounded-lg border px-3 py-2'>
         {orderedActions.map((action) => (
           <label className='flex items-center gap-2 text-sm' key={action.value}>
@@ -177,10 +180,11 @@ export function SubjectEditor({
   value: AuthorizationSubject;
   onChange: (value: AuthorizationSubject) => void;
 }): ReactElement {
+  const t = useAuthorizationTranslation();
   const users = directory.users;
   return (
     <>
-      <Field label='Who'>
+      <Field label={t('editors.who')}>
         <select
           className={selectClass}
           value={value.type}
@@ -192,12 +196,12 @@ export function SubjectEditor({
             )
           }
         >
-          <option value='authenticated'>All signed-in users</option>
-          <option value='user'>Specific user</option>
+          <option value='authenticated'>{t('common.signedInUsers')}</option>
+          <option value='user'>{t('editors.specificUser')}</option>
         </select>
       </Field>
       {value.type === 'user' ? (
-        <Field label='User'>
+        <Field label={t('editors.user')}>
           <select
             className={selectClass}
             required
@@ -206,7 +210,7 @@ export function SubjectEditor({
               onChange({ type: 'user', id: event.target.value })
             }
           >
-            <option value=''>Select a user</option>
+            <option value=''>{t('editors.selectUser')}</option>
             {users.map((user) => (
               <option key={user.id} value={user.id}>
                 {user.name} · {user.username ?? user.email}
@@ -216,7 +220,7 @@ export function SubjectEditor({
         </Field>
       ) : (
         <p className='self-end pb-2 text-xs text-muted-foreground'>
-          Applies to every user with a valid signed-in session.
+          {t('editors.audienceHint')}
         </p>
       )}
     </>
@@ -232,6 +236,7 @@ export function SubjectsEditor({
   value: readonly AuthorizationSubject[];
   onChange: (value: readonly AuthorizationSubject[]) => void;
 }): ReactElement {
+  const t = useAuthorizationTranslation();
   const users = directory.users;
   const [search, setSearch] = useState('');
   const query = search.trim().toLowerCase();
@@ -266,9 +271,9 @@ export function SubjectsEditor({
   return (
     <section className='space-y-3 rounded-lg border p-4'>
       <div>
-        <h4 className='text-sm font-medium'>Assignments</h4>
+        <h4 className='text-sm font-medium'>{t('editors.assignments')}</h4>
         <p className='text-xs text-muted-foreground'>
-          Choose an audience or multiple users.
+          {t('editors.assignmentsHint')}
         </p>
       </div>
       {directory.unavailable ? (
@@ -280,7 +285,7 @@ export function SubjectsEditor({
         <div className='flex flex-wrap gap-1.5'>
           {audience ? (
             <SubjectChip
-              label='All signed-in users'
+              label={t('common.signedInUsers')}
               onRemove={() => setAudience(false)}
             />
           ) : null}
@@ -289,7 +294,7 @@ export function SubjectsEditor({
             .map((item) => (
               <SubjectChip
                 key={item.id}
-                label={userLabel(directory, item.id)}
+                label={userLabel(t, directory, item.id)}
                 onRemove={() => setUser(item.id, false)}
               />
             ))}
@@ -303,16 +308,18 @@ export function SubjectsEditor({
           onChange={(event) => setAudience(event.target.checked)}
         />
         <span>
-          <span className='block text-sm font-medium'>All signed-in users</span>
+          <span className='block text-sm font-medium'>
+            {t('common.signedInUsers')}
+          </span>
           <span className='block text-xs text-muted-foreground'>
-            Authenticated audience
+            {t('editors.authenticatedAudience')}
           </span>
         </span>
       </label>
       <SearchField
         disabled={!canAddAssignment(directory)}
-        label='Search people'
-        placeholder='Search name, username, or email'
+        label={t('editors.searchPeople')}
+        placeholder={t('editors.searchPeoplePlaceholder')}
         value={search}
         onChange={setSearch}
       />
@@ -340,7 +347,10 @@ export function SubjectsEditor({
         ))}
       </div>
       <p className='text-xs text-muted-foreground'>
-        {value.length} assignment{value.length === 1 ? '' : 's'} selected
+        {t(
+          `editors.assignmentsSelected.${value.length === 1 ? 'one' : 'other'}`,
+          { count: value.length },
+        )}
       </p>
     </section>
   );
@@ -354,11 +364,12 @@ function SubjectChip({
   label: string;
   onRemove: () => void;
 }): ReactElement {
+  const t = useAuthorizationTranslation();
   return (
     <span className='inline-flex items-center gap-1 rounded-full bg-primary/10 py-1 pr-1 pl-2.5 text-xs font-medium text-primary'>
       {label}
       <button
-        aria-label={`Remove ${label}`}
+        aria-label={t('common.removeNamed', { label })}
         className='grid size-4 place-items-center rounded-full hover:bg-primary/20'
         type='button'
         onClick={onRemove}
@@ -401,9 +412,10 @@ export function ScopeEditor({
   value: AccessScope;
   onChange: (value: AccessScope) => void;
 }): ReactElement {
+  const t = useAuthorizationTranslation();
   return (
     <div className='grid gap-3 md:grid-cols-2'>
-      <Field label='Record scope'>
+      <Field label={t('editors.recordScope')}>
         <select
           className={selectClass}
           value={value.type}
@@ -422,9 +434,11 @@ export function ScopeEditor({
             );
           }}
         >
-          <option value='all'>All records</option>
-          {allowIds ? <option value='ids'>Specific record IDs</option> : null}
-          <option value='database'>Record Access Policy</option>
+          <option value='all'>{t('labels.allRecords')}</option>
+          {allowIds ? (
+            <option value='ids'>{t('editors.specificRecordIds')}</option>
+          ) : null}
+          <option value='database'>{t('editors.recordAccessPolicy')}</option>
         </select>
       </Field>
       {value.type === 'ids' ? (
@@ -436,7 +450,7 @@ export function ScopeEditor({
       ) : null}
       {value.type === 'database' ? (
         <>
-          <Field label='Record Access Policy'>
+          <Field label={t('editors.recordAccessPolicy')}>
             <select
               className={selectClass}
               value={recordAccessKey(value.recordAccess)}
@@ -563,6 +577,7 @@ function RecordScopeEditor({
   value: readonly string[];
   onChange: (value: readonly string[]) => void;
 }): ReactElement {
+  const t = useAuthorizationTranslation();
   const [search, setSearch] = useState('');
   const query = search.trim().toLowerCase();
   const visible = records.filter(
@@ -574,11 +589,11 @@ function RecordScopeEditor({
   );
   return (
     <div className='space-y-2 md:col-span-2'>
-      <Field label='Records'>
+      <Field label={t('editors.records')}>
         <SearchField
           className='sm:max-w-none'
-          label='Search records'
-          placeholder='Search records'
+          label={t('editors.searchRecords')}
+          placeholder={t('editors.searchRecords')}
           value={search}
           onChange={setSearch}
         />
@@ -613,7 +628,9 @@ function RecordScopeEditor({
         ))}
       </div>
       <p className='text-xs text-muted-foreground'>
-        {value.length} record{value.length === 1 ? '' : 's'} selected
+        {t(`editors.recordsSelected.${value.length === 1 ? 'one' : 'other'}`, {
+          count: value.length,
+        })}
       </p>
     </div>
   );
@@ -621,6 +638,17 @@ function RecordScopeEditor({
 
 type FilterOperator =
   '$eq' | '$ne' | '$in' | '$notIn' | '$gt' | '$gte' | '$lt' | '$lte';
+const FILTER_OPERATORS: readonly FilterOperator[] = [
+  '$eq',
+  '$ne',
+  '$in',
+  '$notIn',
+  '$gt',
+  '$gte',
+  '$lt',
+  '$lte',
+];
+
 interface FilterCondition {
   field: string;
   operator: FilterOperator;
@@ -636,6 +664,7 @@ function CustomFilterEditor({
   value: string | { key: string; params?: unknown };
   onChange: (value: { key: string; params: unknown }) => void;
 }): ReactElement {
+  const t = useAuthorizationTranslation();
   const conditions = readConditions(value);
   function update(next: readonly FilterCondition[]): void {
     onChange({
@@ -660,7 +689,9 @@ function CustomFilterEditor({
   return (
     <div className='space-y-2 md:col-span-2'>
       <div className='flex items-center justify-between'>
-        <span className='text-xs font-medium'>Filter conditions</span>
+        <span className='text-xs font-medium'>
+          {t('editors.filterConditions')}
+        </span>
         <button
           className='text-xs font-medium text-primary'
           type='button'
@@ -671,7 +702,7 @@ function CustomFilterEditor({
             ])
           }
         >
-          Add condition
+          {t('editors.addCondition')}
         </button>
       </div>
       {conditions.map((condition, index) => (
@@ -714,14 +745,11 @@ function CustomFilterEditor({
               )
             }
           >
-            <option value='$eq'>Equals</option>
-            <option value='$ne'>Not equal</option>
-            <option value='$in'>In</option>
-            <option value='$notIn'>Not in</option>
-            <option value='$gt'>Greater than</option>
-            <option value='$gte'>At least</option>
-            <option value='$lt'>Less than</option>
-            <option value='$lte'>At most</option>
+            {FILTER_OPERATORS.map((operator) => (
+              <option key={operator} value={operator}>
+                {t(`filterOperators.${operator}`)}
+              </option>
+            ))}
           </select>
           <Input
             value={condition.value}
@@ -742,7 +770,7 @@ function CustomFilterEditor({
               update(conditions.filter((_item, current) => current !== index))
             }
           >
-            Remove
+            {t('common.remove')}
           </button>
         </div>
       ))}

@@ -33,6 +33,7 @@ import {
 import type { AppClientRegisteredRoute } from '@nocobase/app-client/plugins';
 import type { AuthorizationOptions } from '../client/authorization-client.js';
 import { authorizationClientToken } from '../client/tokens.js';
+import { translate } from './locale-harness.js';
 
 describe('@nocobase/app-plugin-authorization client', () => {
   it('contributes its administration pages as one settings group', () => {
@@ -263,20 +264,20 @@ describe('@nocobase/app-plugin-authorization client', () => {
       { code: 'LAST_ASSIGNMENT' },
     );
 
-    const shown = permissionSetErrorMessage(lastAssignment);
+    const shown = permissionSetErrorMessage(translate, lastAssignment);
     expect(shown).not.toContain('LAST_ASSIGNMENT');
-    expect(shown).toContain('last assignment');
-    expect(shown).toContain('administrator');
+    expect(shown).toBe(translate('errors.lastAssignment'));
     expect(
       permissionSetErrorMessage(
+        translate,
         Object.assign(new Error('forbidden'), {
           code: 'PROTECTED_PERMISSION_SET',
         }),
       ),
-    ).toContain('maintained by the application');
-    expect(permissionSetErrorMessage(new Error('Network down'))).toBe(
-      'Network down',
-    );
+    ).toBe(translate('errors.protectedSet'));
+    expect(
+      permissionSetErrorMessage(translate, new Error('Network down')),
+    ).toBe('Network down');
   });
 
   it('names an assignment from the users API and keeps the id when it is refused', () => {
@@ -284,22 +285,30 @@ describe('@nocobase/app-plugin-authorization client', () => {
       { id: 'u1', name: 'Alice', email: 'alice@example.com' },
     ]);
     const refused = unavailableUserDirectory(
+      translate,
       Object.assign(new Error('Forbidden'), { status: 403 }),
     );
 
-    expect(userLabel(loaded, 'u1')).toBe('Alice · alice@example.com');
+    expect(userLabel(translate, loaded, 'u1')).toBe(
+      'Alice · alice@example.com',
+    );
     expect(canAddAssignment(loaded)).toBe(true);
     // The assignment list comes from Authorization, so the row stays readable.
-    expect(userLabel(refused, 'u1')).toBe('User u1');
+    expect(userLabel(translate, refused, 'u1')).toBe(
+      translate('common.userFallback', { id: 'u1' }),
+    );
     expect(canAddAssignment(refused)).toBe(false);
-    expect(refused.unavailable).toContain('permission to read users');
+    expect(refused.unavailable).toBe(translate('errors.usersForbidden'));
   });
 
   it('says a failed user request is not a permission problem', () => {
-    const offline = unavailableUserDirectory(new Error('Network down'));
+    const offline = unavailableUserDirectory(
+      translate,
+      new Error('Network down'),
+    );
 
     expect(canAddAssignment(offline)).toBe(false);
-    expect(offline.unavailable).toContain('could not be loaded');
+    expect(offline.unavailable).toBe(translate('errors.usersUnavailable'));
   });
 
   it('offers only the routes a page grant can name', () => {

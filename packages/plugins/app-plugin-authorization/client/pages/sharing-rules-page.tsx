@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react';
 import { PermissionsPage } from '../components/page-shell.js';
+import { useAuthorizationTranslation } from '../i18n.js';
 import { SharingRulesPanel } from './sharing-rules-panel.js';
 import {
   AuthorizationPageState,
@@ -8,12 +9,13 @@ import {
 } from './page-support.js';
 
 export default function SharingRulesPage(): ReactElement {
+  const t = useAuthorizationTranslation();
   const page = useAuthorizationPageData('authz/sharing-rules/options');
   const users = useUserDirectory();
   return (
     <PermissionsPage
-      title='Sharing Rules'
-      description='Sharing rules widen access, opening specific records or a reusable record scope to the people you choose.'
+      title={t('sharingRules.page.title')}
+      description={t('sharingRules.page.description')}
     >
       {page.options ? (
         <SharingRulesPanel options={page.options} directory={users} />

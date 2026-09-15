@@ -13,6 +13,7 @@ import { isUnknownPage } from '../../components/page-options.js';
 import { SidePanel } from '../../components/management-ui.js';
 import { Button } from '../../components/ui/button.js';
 import { Input } from '../../components/ui/input.js';
+import { useAuthorizationTranslation, type Translate } from '../../i18n.js';
 import { DatabasePolicyEditor } from './database-policy.js';
 import { syncDatabaseActions } from './drafts.js';
 import {
@@ -39,6 +40,7 @@ export function PermissionSetEditor({
   onSave: (event: FormEvent) => Promise<void>;
   onClose: () => void;
 }): ReactElement {
+  const t = useAuthorizationTranslation();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [resourceSearch, setResourceSearch] = useState('');
   const [resourceType, setResourceType] = useState('all');
@@ -69,14 +71,18 @@ export function PermissionSetEditor({
   }
   return (
     <SidePanel
-      title={draft.originalKey ? 'Edit permission set' : 'New permission set'}
-      description='Bundle access into a reusable assignment.'
+      title={t(
+        draft.originalKey
+          ? 'permissionSets.editor.editTitle'
+          : 'permissionSets.editor.newTitle',
+      )}
+      description={t('permissionSets.editor.description')}
       onClose={onClose}
       wide
     >
       <form className='space-y-6' onSubmit={(event) => void onSave(event)}>
         <div className='grid gap-4 sm:grid-cols-2'>
-          <Field label='Name'>
+          <Field label={t('permissionSets.editor.name')}>
             <Input
               required
               value={draft.title}
@@ -85,7 +91,7 @@ export function PermissionSetEditor({
               }
             />
           </Field>
-          <Field label='Key' hint='Stable identifier used by APIs.'>
+          <Field label={t('common.key')} hint={t('common.keyHint')}>
             <Input
               required
               disabled={Boolean(draft.originalKey)}
@@ -98,9 +104,11 @@ export function PermissionSetEditor({
         </div>
         <div className='flex items-center justify-between border-t pt-5'>
           <div>
-            <h3 className='font-medium'>Permissions</h3>
+            <h3 className='font-medium'>
+              {t('permissionSets.editor.permissions')}
+            </h3>
             <p className='text-sm text-muted-foreground'>
-              Choose resources and the actions this set grants.
+              {t('permissionSets.editor.permissionsHint')}
             </p>
           </div>
           <Button
@@ -109,24 +117,26 @@ export function PermissionSetEditor({
             variant='outline'
             onClick={() => setPickerOpen(true)}
           >
-            Add permission
+            {t('permissionSets.editor.addPermission')}
           </Button>
         </div>
         <FilterBar>
           <SearchField
             className='sm:max-w-72'
-            label='Search resources or actions'
-            placeholder='Search resources or actions'
+            label={t('permissionSets.editor.searchResources')}
+            placeholder={t('permissionSets.editor.searchResources')}
             value={resourceSearch}
             onChange={setResourceSearch}
           />
           <select
-            aria-label='Permission resource type'
+            aria-label={t('permissionSets.editor.resourceTypeLabel')}
             className='h-9 min-w-48 rounded-lg border bg-background px-3 text-sm'
             value={resourceType}
             onChange={(event) => setResourceType(event.target.value)}
           >
-            <option value='all'>All resource types</option>
+            <option value='all'>
+              {t('permissionSets.editor.allResourceTypes')}
+            </option>
             {options.resourceTypes.map((item) => (
               <option key={item.value} value={item.value}>
                 {item.label}
@@ -143,7 +153,10 @@ export function PermissionSetEditor({
           ) : null}
           <FilterBarSpacer />
           <span className='text-xs text-muted-foreground'>
-            {visibleIndexes.length} of {draft.grants.length} resources
+            {t('permissionSets.editor.visibleCount', {
+              visible: visibleIndexes.length,
+              total: draft.grants.length,
+            })}
           </span>
         </FilterBar>
         <div className='space-y-3'>
@@ -169,19 +182,20 @@ export function PermissionSetEditor({
                     </span>
                     {isUnknownPage(options, grant.resource) ? (
                       <span className='rounded-md bg-destructive/10 px-2 py-0.5 text-[0.6875rem] text-destructive'>
-                        Unknown page
+                        {t('permissionSets.unknownPage')}
                       </span>
                     ) : null}
                   </span>
                   <span className='mt-1 block truncate text-xs text-muted-foreground'>
                     {grant.resource.id} ·{' '}
-                    {grant.actions.map(humanize).join(', ') || 'No actions'}
+                    {grant.actions.map(humanize).join(', ') ||
+                      t('permissionSets.editor.noActions')}
                   </span>
                 </span>
                 <span className='flex shrink-0 items-center gap-3'>
                   {grant.resource.type === 'database.collection' ? (
                     <span className='hidden text-xs text-muted-foreground sm:inline'>
-                      {databaseAccessSummary(options, grant)}
+                      {databaseAccessSummary(t, options, grant)}
                     </span>
                   ) : null}
                   <span className='text-muted-foreground'>
@@ -193,9 +207,7 @@ export function PermissionSetEditor({
                 <div className='space-y-4 border-t p-4'>
                   {isUnknownPage(options, grant.resource) ? (
                     <p className='rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-muted-foreground'>
-                      No route declares this page any more, so this permission
-                      grants nothing. It was renamed or removed — remove the
-                      permission, or add one for the page that replaced it.
+                      {t('permissionSets.editor.unknownPageNotice')}
                     </p>
                   ) : null}
                   <div className='flex justify-end'>
@@ -205,7 +217,7 @@ export function PermissionSetEditor({
                       variant='ghost'
                       onClick={() => setPendingRemoval(index)}
                     >
-                      Remove
+                      {t('common.remove')}
                     </Button>
                   </div>
                   <ActionsEditor
@@ -237,7 +249,7 @@ export function PermissionSetEditor({
           ))}
           {visibleIndexes.length === 0 && draft.grants.length > 0 ? (
             <p className='rounded-lg border border-dashed px-4 py-8 text-center text-sm text-muted-foreground'>
-              No permissions match these filters.
+              {t('permissionSets.editor.emptyFiltered')}
             </p>
           ) : null}
           {draft.grants.length === 0 ? (
@@ -247,27 +259,29 @@ export function PermissionSetEditor({
               onClick={() => setPickerOpen(true)}
             >
               <span className='block text-sm font-medium'>
-                Add the first permission
+                {t('permissionSets.editor.addFirst')}
               </span>
               <span className='mt-1 block text-xs text-muted-foreground'>
-                Select resources by type, then configure their actions.
+                {t('permissionSets.editor.addFirstHint')}
               </span>
             </button>
           ) : null}
         </div>
         <div className='sticky bottom-0 flex justify-end gap-2 border-t bg-background py-4'>
           <Button type='button' variant='outline' onClick={onClose}>
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button disabled={busy} type='submit'>
-            {busy ? 'Saving…' : 'Save permission set'}
+            {busy
+              ? t('permissionSets.editor.saving')
+              : t('permissionSets.editor.save')}
           </Button>
         </div>
       </form>
       <ConfirmDialog
-        confirmLabel='Remove permission'
+        confirmLabel={t('permissionSets.editor.confirmRemove')}
         open={pendingRemoval !== undefined}
-        title='Remove this permission?'
+        title={t('permissionSets.editor.confirmRemoveTitle')}
         onCancel={() => setPendingRemoval(undefined)}
         onConfirm={() => {
           const index = pendingRemoval;
@@ -279,9 +293,9 @@ export function PermissionSetEditor({
           });
         }}
       >
-        {removalLabel(options, draft, pendingRemoval)} and every action
-        configured on it are removed from this permission set. This cannot be
-        undone once the set is saved.
+        {t('permissionSets.editor.confirmRemoveBody', {
+          resource: removalLabel(t, options, draft, pendingRemoval),
+        })}
       </ConfirmDialog>
       {pickerOpen ? (
         <PermissionResourcePicker
@@ -303,10 +317,13 @@ export function PermissionSetEditor({
 
 /** The resource a pending removal names, for the confirmation body. */
 function removalLabel(
+  t: Translate,
   options: AuthorizationOptions,
   draft: Draft,
   index?: number,
 ): string {
   const grant = index === undefined ? undefined : draft.grants[index];
-  return grant ? resourceLabel(options, grant.resource) : 'This resource';
+  return grant
+    ? resourceLabel(options, grant.resource)
+    : t('permissionSets.editor.thisResource');
 }

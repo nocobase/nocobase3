@@ -7,6 +7,7 @@ import {
   grantablePages,
   withPageResources,
 } from '../components/page-options.js';
+import { useAuthorizationTranslation } from '../i18n.js';
 import { PermissionSetsPanel } from './permission-sets/index.js';
 import {
   AuthorizationPageState,
@@ -15,12 +16,14 @@ import {
 } from './page-support.js';
 
 export default function PermissionSetsPage(): ReactElement {
+  const t = useAuthorizationTranslation();
   const page = useAuthorizationPageData('authz/permission-sets/options');
   const users = useUserDirectory();
   // Page names live in client route declarations, which the server never sees. The browser holds the registry, so the
   // grantable pages are merged in here rather than hardcoded into the options endpoint.
   const application = useClientApplication();
-  const { t } = useTranslation();
+  // Page names come from other packages' route declarations, so they are translated in their own namespace.
+  const { t: translatePageName } = useTranslation();
   const { options } = page;
   const pageOptions = useMemo<AuthorizationOptions | undefined>(
     () =>
@@ -32,18 +35,18 @@ export default function PermissionSetsPage(): ReactElement {
           label:
             page.title === undefined
               ? page.name
-              : t(page.title, {
+              : translatePageName(page.title, {
                   ns: page.packageName,
                   defaultValue: page.title,
                 }),
         })),
       ),
-    [application, options, t],
+    [application, options, translatePageName],
   );
   return (
     <PermissionsPage
-      title='Permission Sets'
-      description='Permission sets grant access: bundle the resources and actions people need, then assign the bundle to them.'
+      title={t('permissionSets.page.title')}
+      description={t('permissionSets.page.description')}
     >
       {pageOptions ? (
         <PermissionSetsPanel options={pageOptions} directory={users} />

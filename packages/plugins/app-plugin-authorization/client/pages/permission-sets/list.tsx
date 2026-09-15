@@ -9,6 +9,7 @@ import {
   TablePager,
 } from '../../components/management-ui.js';
 import { pageSlice } from '../../components/pagination.js';
+import { useAuthorizationTranslation } from '../../i18n.js';
 import { Button } from '../../components/ui/button.js';
 import {
   Table,
@@ -40,6 +41,7 @@ export function PermissionSetsList({
   onOpen: (set: PermissionSet) => void;
   onCreate: () => void;
 }): ReactElement {
+  const t = useAuthorizationTranslation();
   const [page, setPage] = useState(1);
   const [lastSearch, setLastSearch] = useState(search);
   // A narrower search can leave the current page past the end of the list.
@@ -53,10 +55,10 @@ export function PermissionSetsList({
       {error ? <ErrorBox value={error} /> : null}
       <ManagementToolbar
         search={search}
-        searchLabel='Search permission sets'
-        searchPlaceholder='Search permission sets'
+        searchLabel={t('permissionSets.list.search')}
+        searchPlaceholder={t('permissionSets.list.search')}
         onSearch={onSearch}
-        actionLabel='New permission set'
+        actionLabel={t('permissionSets.list.create')}
         onAction={onCreate}
       />
       <ManagementTable>
@@ -64,10 +66,14 @@ export function PermissionSetsList({
           <TableHeader className='bg-muted/30 uppercase'>
             <TableRow>
               <TableHead className='px-5 py-3 font-medium'>
-                Permission set
+                {t('permissionSets.list.nameHeader')}
               </TableHead>
-              <TableHead className='px-5 py-3 font-medium'>Type</TableHead>
-              <TableHead className='px-5 py-3 font-medium'>Key</TableHead>
+              <TableHead className='px-5 py-3 font-medium'>
+                {t('common.type')}
+              </TableHead>
+              <TableHead className='px-5 py-3 font-medium'>
+                {t('common.key')}
+              </TableHead>
               <TableHead className='w-20 px-5 py-3' />
             </TableRow>
           </TableHeader>
@@ -83,12 +89,14 @@ export function PermissionSetsList({
                     {set.title ?? humanize(set.key)}
                   </button>
                   <p className='mt-0.5 text-xs text-muted-foreground'>
-                    {describeSet(set)}
+                    {describeSet(t, set)}
                   </p>
                 </TableCell>
                 <TableCell className='px-5 py-4'>
                   <SetBadge tone={isSystemSet(set) ? 'protected' : 'neutral'}>
-                    {isSystemSet(set) ? 'System' : 'Custom'}
+                    {isSystemSet(set)
+                      ? t('permissionSets.list.system')
+                      : t('permissionSets.list.custom')}
                   </SetBadge>
                 </TableCell>
                 <TableCell className='px-5 py-4 font-mono text-xs text-muted-foreground'>
@@ -96,7 +104,7 @@ export function PermissionSetsList({
                 </TableCell>
                 <TableCell className='px-5 py-4 text-right'>
                   <Button size='sm' variant='ghost' onClick={() => onOpen(set)}>
-                    View
+                    {t('common.view')}
                   </Button>
                 </TableCell>
               </TableRow>
@@ -104,14 +112,14 @@ export function PermissionSetsList({
             {sets.length === 0 ? (
               <EmptyTableRow colSpan={4}>
                 {total === 0
-                  ? 'No permission sets yet. Create one to bundle the resources and actions people need.'
-                  : 'No permission sets match your search.'}
+                  ? t('permissionSets.list.emptyNone')
+                  : t('permissionSets.list.emptySearch')}
               </EmptyTableRow>
             ) : null}
           </TableBody>
         </Table>
         <TablePager
-          label='Permission sets'
+          label={t('permissionSets.list.pagerLabel')}
           page={page}
           total={sets.length}
           onPage={setPage}

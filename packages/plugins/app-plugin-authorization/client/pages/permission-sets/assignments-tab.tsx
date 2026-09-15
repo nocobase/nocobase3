@@ -18,6 +18,7 @@ import {
   TablePager,
 } from '../../components/management-ui.js';
 import { pageSlice } from '../../components/pagination.js';
+import { useAuthorizationTranslation } from '../../i18n.js';
 import { Button } from '../../components/ui/button.js';
 import {
   Table,
@@ -54,6 +55,7 @@ export function Assignments({
   onAssign: (subjects: readonly AuthorizationSubject[]) => Promise<void>;
   onRevoke: (ids: readonly string[]) => Promise<void>;
 }): ReactElement {
+  const t = useAuthorizationTranslation();
   const [search, setSearch] = useState('');
   const [kind, setKind] = useState('all');
   const [page, setPage] = useState(1);
@@ -66,7 +68,7 @@ export function Assignments({
   }>();
   const query = search.trim().toLowerCase();
   const visible = assignments.filter((item) => {
-    const label = subjectLabel(item.subject, directory).toLowerCase();
+    const label = subjectLabel(t, item.subject, directory).toLowerCase();
     const itemKind =
       item.subject.type === 'authenticated' ? 'audience' : 'user';
     return (
@@ -93,20 +95,24 @@ export function Assignments({
       <FilterBar>
         <SearchField
           className='sm:max-w-72'
-          label='Search assignments'
-          placeholder='Search name, username, or email'
+          label={t('permissionSets.assignments.search')}
+          placeholder={t('permissionSets.assignments.searchPlaceholder')}
           value={search}
           onChange={changeSearch}
         />
         <select
-          aria-label='Assignment type'
+          aria-label={t('permissionSets.assignments.kindLabel')}
           className='h-9 min-w-44 rounded-lg border bg-background px-3 text-sm'
           value={kind}
           onChange={(event) => changeKind(event.target.value)}
         >
-          <option value='all'>All assignments</option>
-          <option value='user'>Users</option>
-          <option value='audience'>Audiences</option>
+          <option value='all'>{t('permissionSets.assignments.kindAll')}</option>
+          <option value='user'>
+            {t('permissionSets.assignments.kindUsers')}
+          </option>
+          <option value='audience'>
+            {t('permissionSets.assignments.kindAudiences')}
+          </option>
         </select>
         {query || kind !== 'all' ? (
           <ClearFilterButton
@@ -124,18 +130,23 @@ export function Assignments({
             onClick={() =>
               setPendingRevoke({
                 ids: selected,
-                label: `${selected.length} ${selected.length === 1 ? 'assignment' : 'assignments'}`,
+                label: t(
+                  `permissionSets.assignmentCount.${selected.length === 1 ? 'one' : 'other'}`,
+                  { count: selected.length },
+                ),
               })
             }
           >
-            Revoke selected ({selected.length})
+            {t('permissionSets.assignments.revokeSelected', {
+              count: selected.length,
+            })}
           </Button>
         ) : null}
         <Button
           disabled={!canAssign || !canAddAssignment(directory)}
           onClick={() => setAddOpen(true)}
         >
-          Add assignments
+          {t('permissionSets.assignments.add')}
         </Button>
       </FilterBar>
       <ManagementTable>
@@ -149,7 +160,7 @@ export function Assignments({
             <TableRow>
               <TableHead className='w-12 px-5 py-3'>
                 <input
-                  aria-label='Select all visible assignments'
+                  aria-label={t('permissionSets.assignments.selectAllVisible')}
                   type='checkbox'
                   checked={
                     visible.length > 0 &&
@@ -172,10 +183,10 @@ export function Assignments({
                 />
               </TableHead>
               <TableHead className='px-5 py-3 font-medium'>
-                Assigned to
+                {t('permissionSets.assignments.assignedTo')}
               </TableHead>
               <TableHead className='px-5 py-3 font-medium'>
-                Subject type
+                {t('permissionSets.assignments.subjectType')}
               </TableHead>
               <TableHead className='w-24 px-5 py-3' />
             </TableRow>
@@ -185,17 +196,21 @@ export function Assignments({
               <TableRow key={item.id}>
                 <TableCell className='px-5 py-4'>
                   <input
-                    aria-label={`Select ${subjectLabel(item.subject, directory)}`}
+                    aria-label={t('common.selectNamed', {
+                      label: subjectLabel(t, item.subject, directory),
+                    })}
                     type='checkbox'
                     checked={selected.includes(item.id)}
                     onChange={(event) => toggle(item.id, event.target.checked)}
                   />
                 </TableCell>
                 <TableCell className='px-5 py-4 font-medium'>
-                  {subjectLabel(item.subject, directory)}
+                  {subjectLabel(t, item.subject, directory)}
                 </TableCell>
                 <TableCell className='px-5 py-4 text-muted-foreground'>
-                  {item.subject.type === 'authenticated' ? 'Audience' : 'User'}
+                  {item.subject.type === 'authenticated'
+                    ? t('permissionSets.assignments.audience')
+                    : t('permissionSets.assignments.user')}
                 </TableCell>
                 <TableCell className='px-5 py-4 text-right'>
                   <Button
@@ -205,11 +220,11 @@ export function Assignments({
                     onClick={() =>
                       setPendingRevoke({
                         ids: [item.id],
-                        label: subjectLabel(item.subject, directory),
+                        label: subjectLabel(t, item.subject, directory),
                       })
                     }
                   >
-                    Revoke
+                    {t('permissionSets.assignments.revoke')}
                   </Button>
                 </TableCell>
               </TableRow>
@@ -217,14 +232,14 @@ export function Assignments({
             {visible.length === 0 ? (
               <EmptyTableRow colSpan={4}>
                 {assignments.length === 0
-                  ? 'No assignments yet. Add one to give someone this permission set.'
-                  : 'No assignments match these filters.'}
+                  ? t('permissionSets.assignments.emptyNone')
+                  : t('permissionSets.assignments.emptyFiltered')}
               </EmptyTableRow>
             ) : null}
           </TableBody>
         </Table>
         <TablePager
-          label='Assignments'
+          label={t('permissionSets.assignments.pagerLabel')}
           page={page}
           total={visible.length}
           onPage={setPage}
@@ -232,13 +247,13 @@ export function Assignments({
       </ManagementTable>
       <ConfirmDialog
         busy={busy}
-        confirmLabel='Revoke'
+        confirmLabel={t('permissionSets.assignments.confirmRevoke')}
         open={pendingRevoke !== undefined}
-        title={
+        title={t(
           (pendingRevoke?.ids.length ?? 0) > 1
-            ? 'Revoke these assignments?'
-            : 'Revoke this assignment?'
-        }
+            ? 'permissionSets.assignments.confirmRevokeTitleMany'
+            : 'permissionSets.assignments.confirmRevokeTitleOne',
+        )}
         onCancel={() => setPendingRevoke(undefined)}
         onConfirm={() => {
           const ids = pendingRevoke?.ids ?? [];
@@ -248,8 +263,9 @@ export function Assignments({
           );
         }}
       >
-        {pendingRevoke?.label} will no longer hold this permission set. This
-        cannot be undone; the assignment has to be added again.
+        {t('permissionSets.assignments.confirmRevokeBody', {
+          label: pendingRevoke?.label ?? '',
+        })}
       </ConfirmDialog>
       {addOpen ? (
         <AssignmentPicker
@@ -282,6 +298,7 @@ function AssignmentPicker({
   onClose: () => void;
   onAdd: (subjects: readonly AuthorizationSubject[]) => void;
 }): ReactElement {
+  const t = useAuthorizationTranslation();
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<readonly string[]>([]);
   const [audience, setAudience] = useState(false);
@@ -313,14 +330,16 @@ function AssignmentPicker({
   }
   return (
     <SidePanel
-      title='Add assignments'
-      description='Find people and assign this permission set in one operation.'
+      title={t('permissionSets.assignments.add')}
+      description={t('permissionSets.assignments.pickerDescription')}
       onClose={onClose}
     >
       <div className='space-y-5'>
         {canAssignAudience ? (
           <section>
-            <h3 className='text-sm font-medium'>Audience</h3>
+            <h3 className='text-sm font-medium'>
+              {t('permissionSets.assignments.audience')}
+            </h3>
             <label
               className={`mt-3 flex items-start gap-3 rounded-lg border p-4 ${audienceAssigned ? 'opacity-50' : 'cursor-pointer hover:bg-muted/20'}`}
             >
@@ -333,11 +352,10 @@ function AssignmentPicker({
               />
               <span>
                 <span className='block text-sm font-medium'>
-                  All signed-in users
+                  {t('common.signedInUsers')}
                 </span>
                 <span className='mt-0.5 block text-xs text-muted-foreground'>
-                  Everyone with a valid session. This is managed separately from
-                  individual users.
+                  {t('permissionSets.assignments.audienceDescription')}
                 </span>
               </span>
             </label>
@@ -346,19 +364,23 @@ function AssignmentPicker({
         <section className='border-t pt-5'>
           <div className='flex items-end justify-between gap-3'>
             <div>
-              <h3 className='text-sm font-medium'>Users</h3>
+              <h3 className='text-sm font-medium'>
+                {t('permissionSets.assignments.usersHeading')}
+              </h3>
               <p className='mt-0.5 text-xs text-muted-foreground'>
-                Already assigned users are hidden.
+                {t('permissionSets.assignments.usersHint')}
               </p>
             </div>
             <span className='text-xs text-muted-foreground'>
-              {selected.length} selected
+              {t('permissionSets.assignments.selectedCount', {
+                count: selected.length,
+              })}
             </span>
           </div>
           <SearchField
             className='mt-3 sm:max-w-none'
-            label='Search people'
-            placeholder='Search name, username, or email'
+            label={t('editors.searchPeople')}
+            placeholder={t('editors.searchPeoplePlaceholder')}
             value={search}
             onChange={setSearch}
           />
@@ -385,9 +407,11 @@ function AssignmentPicker({
                   )
                 }
               />
-              Select all results
+              {t('permissionSets.assignments.selectAllResults')}
               <span className='ml-auto text-xs font-normal text-muted-foreground'>
-                {visible.length} users
+                {t('permissionSets.assignments.userCount', {
+                  count: visible.length,
+                })}
               </span>
             </label>
             <div className='max-h-[24rem] divide-y overflow-y-auto'>
@@ -414,7 +438,7 @@ function AssignmentPicker({
               ))}
               {visible.length === 0 ? (
                 <p className='px-4 py-10 text-center text-sm text-muted-foreground'>
-                  No available users match your search.
+                  {t('permissionSets.assignments.noAvailableUsers')}
                 </p>
               ) : null}
             </div>
@@ -422,18 +446,22 @@ function AssignmentPicker({
         </section>
         <div className='sticky bottom-0 flex items-center justify-between border-t bg-background py-4'>
           <span className='text-sm text-muted-foreground'>
-            {subjects.length} assignment{subjects.length === 1 ? '' : 's'}{' '}
-            selected
+            {t(
+              `editors.assignmentsSelected.${subjects.length === 1 ? 'one' : 'other'}`,
+              { count: subjects.length },
+            )}
           </span>
           <div className='flex gap-2'>
             <Button variant='outline' onClick={onClose}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button
               disabled={busy || subjects.length === 0}
               onClick={() => onAdd(subjects)}
             >
-              {busy ? 'Assigning…' : 'Add assignments'}
+              {busy
+                ? t('permissionSets.assignments.assigning')
+                : t('permissionSets.assignments.add')}
             </Button>
           </div>
         </div>

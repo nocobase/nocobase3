@@ -5,6 +5,7 @@ import { ActionsEditor } from '../../components/editors.js';
 import { SidePanel } from '../../components/management-ui.js';
 import { Button } from '../../components/ui/button.js';
 import { Input } from '../../components/ui/input.js';
+import { useAuthorizationTranslation } from '../../i18n.js';
 import { DatabasePolicyEditor } from './database-policy.js';
 import {
   newGrantForResource,
@@ -25,6 +26,7 @@ export function PermissionResourcePicker({
   onClose: () => void;
   onAdd: (grants: readonly GrantDraft[]) => void;
 }): ReactElement {
+  const t = useAuthorizationTranslation();
   const [type, setType] = useState(options.resourceTypes[0]?.value ?? '');
   const [search, setSearch] = useState('');
   const [pending, setPending] = useState<readonly GrantDraft[]>([]);
@@ -89,8 +91,8 @@ export function PermissionResourcePicker({
 
   return (
     <SidePanel
-      title='Add permissions'
-      description='Select resources and configure their access in one workspace.'
+      title={t('permissionSets.picker.title')}
+      description={t('permissionSets.picker.description')}
       onClose={onClose}
       wide
     >
@@ -98,10 +100,10 @@ export function PermissionResourcePicker({
         <div className='grid min-h-[34rem] grid-cols-[13rem_18rem_minmax(0,1fr)]'>
           <nav
             className='border-r bg-muted/20 py-3'
-            aria-label='Resource types'
+            aria-label={t('permissionSets.picker.resourceTypes')}
           >
             <p className='px-4 pb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase'>
-              Resource types
+              {t('permissionSets.picker.resourceTypes')}
             </p>
             {options.resourceTypes.map((item) => {
               const count = pending.filter(
@@ -140,14 +142,14 @@ export function PermissionResourcePicker({
             <div className='space-y-3 border-b p-3'>
               <div>
                 <h3 className='text-sm font-semibold'>
-                  {resourceType?.label ?? 'Resources'}
+                  {resourceType?.label ?? t('permissionSets.picker.resources')}
                 </h3>
                 <p className='text-xs text-muted-foreground'>
-                  Select a resource to configure it.
+                  {t('permissionSets.picker.selectResourceHint')}
                 </p>
               </div>
               <Input
-                placeholder='Search resources'
+                placeholder={t('permissionSets.picker.searchResources')}
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
               />
@@ -185,7 +187,7 @@ export function PermissionResourcePicker({
                         </span>
                         {disabled ? (
                           <span className='rounded-full bg-muted px-2 py-0.5 text-[0.6875rem] text-muted-foreground'>
-                            Added
+                            {t('permissionSets.picker.added')}
                           </span>
                         ) : null}
                       </span>
@@ -203,7 +205,7 @@ export function PermissionResourcePicker({
               })}
               {resources.length === 0 ? (
                 <p className='px-4 py-10 text-center text-sm text-muted-foreground'>
-                  No resources match your search.
+                  {t('permissionSets.picker.noResources')}
                 </p>
               ) : null}
             </div>
@@ -251,11 +253,10 @@ export function PermissionResourcePicker({
               <div className='flex h-full items-center justify-center text-center'>
                 <div className='max-w-xs'>
                   <p className='text-sm font-medium'>
-                    Select a resource to configure
+                    {t('permissionSets.picker.emptyTitle')}
                   </p>
                   <p className='mt-1 text-xs text-muted-foreground'>
-                    Its actions and resource-specific access settings will
-                    appear here.
+                    {t('permissionSets.picker.emptyHint')}
                   </p>
                 </div>
               </div>
@@ -264,22 +265,22 @@ export function PermissionResourcePicker({
         </div>
         <div className='flex items-center justify-between border-t bg-background px-4 py-3'>
           <p className='text-sm text-muted-foreground'>
-            {pending.length} resource{pending.length === 1 ? '' : 's'} ready to
-            add
-            {incomplete
-              ? ' · Select at least one action for each resource'
-              : ''}
+            {t(
+              `permissionSets.picker.readyCount.${pending.length === 1 ? 'one' : 'other'}`,
+              { count: pending.length },
+            )}
+            {incomplete ? t('permissionSets.picker.incomplete') : ''}
           </p>
           <div className='flex gap-2'>
             <Button type='button' variant='outline' onClick={onClose}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button
               type='button'
               disabled={pending.length === 0 || incomplete}
               onClick={() => onAdd(pending)}
             >
-              Add permissions
+              {t('permissionSets.picker.add')}
             </Button>
           </div>
         </div>

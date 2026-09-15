@@ -21,13 +21,12 @@ vi.mock('../client/runtime.js', () => ({
 vi.mock('@nocobase/app-client', () => ({
   useClientApplication: () => ({ runtime: { routes: [] } }),
 }));
-vi.mock('@nocobase/i18n/client', () => ({
-  useTranslation: () => ({
-    t: (key: string, options?: { readonly defaultValue?: string }) =>
-      options?.defaultValue ?? key,
-  }),
-}));
+vi.mock('@nocobase/i18n/client', async () => {
+  const { translate } = await import('./locale-harness.js');
+  return { useTranslation: () => ({ t: translate }) };
+});
 
+import enUS from '../client/locales/en-US.js';
 import DefaultAccessPage from '../client/pages/default-access-page.js';
 import PermissionSetsPage from '../client/pages/permission-sets-page.js';
 import RestrictionRulesPage from '../client/pages/restriction-rules-page.js';
@@ -42,10 +41,10 @@ const options: AuthorizationOptions = {
 };
 
 const pages = [
-  { name: 'Permission Sets', Page: PermissionSetsPage },
-  { name: 'Default Access', Page: DefaultAccessPage },
-  { name: 'Sharing Rules', Page: SharingRulesPage },
-  { name: 'Restriction Rules', Page: RestrictionRulesPage },
+  { name: enUS.permissionSets.page.title, Page: PermissionSetsPage },
+  { name: enUS.defaultAccess.page.title, Page: DefaultAccessPage },
+  { name: enUS.sharingRules.page.title, Page: SharingRulesPage },
+  { name: enUS.restrictionRules.page.title, Page: RestrictionRulesPage },
 ] as const;
 
 beforeEach(() => {
@@ -71,14 +70,16 @@ describe('authorization settings pages', () => {
   it('shows the shared loading state while the options are in flight', () => {
     mocks.authz.loadOptions.mockReturnValue(new Promise(() => undefined));
     render(<SharingRulesPage />);
-    expect(screen.getByText('Loading…')).toBeInTheDocument();
+    expect(screen.getByText(enUS.common.loading)).toBeInTheDocument();
   });
 
   it('shows the shared error state with a retry when loading fails', async () => {
     mocks.authz.loadOptions.mockRejectedValue(new Error('Options failed.'));
     render(<SharingRulesPage />);
     expect(await screen.findByText('Options failed.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: enUS.common.retry }),
+    ).toBeInTheDocument();
   });
 
   it('shows the refusal without a retry when the options are forbidden', async () => {
@@ -87,6 +88,8 @@ describe('authorization settings pages', () => {
     );
     render(<RestrictionRulesPage />);
     expect(await screen.findByText('Forbidden.')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: enUS.common.retry }),
+    ).toBeNull();
   });
 });

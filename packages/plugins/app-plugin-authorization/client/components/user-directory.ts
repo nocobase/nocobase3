@@ -1,4 +1,5 @@
 import type { AuthorizationUser } from '../authorization-client.js';
+import type { Translate } from '../i18n.js';
 
 /**
  * Who the settings pages can name and offer to pick. Users are read from the
@@ -21,13 +22,16 @@ export function userDirectory(
   return { users };
 }
 
-export function unavailableUserDirectory(error: unknown): UserDirectory {
+export function unavailableUserDirectory(
+  t: Translate,
+  error: unknown,
+): UserDirectory {
   return {
     users: [],
     unavailable:
       status(error) === 403
-        ? 'You do not have permission to read users. Assignments are shown by user id, and adding one is unavailable.'
-        : 'Users could not be loaded. Assignments are shown by user id, and adding one is unavailable.',
+        ? t('errors.usersForbidden')
+        : t('errors.usersUnavailable'),
   };
 }
 
@@ -36,9 +40,15 @@ export function canAddAssignment(directory: UserDirectory): boolean {
 }
 
 /** The user's name, or the subject id when the directory cannot name them. */
-export function userLabel(directory: UserDirectory, id: string): string {
+export function userLabel(
+  t: Translate,
+  directory: UserDirectory,
+  id: string,
+): string {
   const user = directory.users.find((item) => item.id === id);
-  return user ? `${user.name} · ${user.username ?? user.email}` : `User ${id}`;
+  return user
+    ? `${user.name} · ${user.username ?? user.email}`
+    : t('common.userFallback', { id });
 }
 
 function status(error: unknown): number | undefined {
