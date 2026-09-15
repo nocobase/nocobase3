@@ -36,7 +36,6 @@ import type { AppDatabaseConfig } from './types.js';
  * `database/<connection>/collections/<name>/` as three files, plus a
  * connection-level manifest. The files are derived: nothing here is read
  * back at runtime, and migrations remain the only authority on schema.
- * See `internal-docs/app-collections-artifact-design.md`.
  */
 export interface AppCollectionsArtifactOptions {
   readonly paths?: ConfigPaths;

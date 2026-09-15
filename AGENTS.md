@@ -164,8 +164,7 @@ Compose projects and host ports, so the hazard is not a collision but
 contention for one machine's CPU, memory, and Docker I/O, which pushes service
 health checks past their start period and reports a flaky startup failure
 instead of a result. CI parallelizes safely only because its matrix gives each
-dialect its own runner. Options and the full-verification order are in
-[`internal-docs/development/database-integration-testing.md`](internal-docs/development/database-integration-testing.md).
+dialect its own runner.
 
 Which suites a given change actually requires, and the command forms that
 silently run nothing, are in the
@@ -279,7 +278,7 @@ The rule applies to plugins, which are guests in an application someone else ass
 
 It does not apply to `packages/app` and `packages/libs`. They compose the runtime and are what puts the single copy in place — `app-server` depending on `@nocobase/db` is precisely how the one copy comes to exist. Nor does it apply to `packages/templates`, which are applications, and therefore the side that satisfies a peer range rather than declaring one. A new group under `packages/` needs a deliberate decision about which side of this line it sits on before it is added to `CHECKED_GROUPS`.
 
-A plugin that contributes CLI commands declares `@oclif/core` as a peer for a related but distinct reason: not module identity, but one shared version, so help rendering and flag parsing behave the same in the plugin and in the application that assembles its commands. See [internal-docs/cli/plugin-cli.md](internal-docs/cli/plugin-cli.md).
+A plugin that contributes CLI commands declares `@oclif/core` as a peer for a related but distinct reason: not module identity, but one shared version, so help rendering and flag parsing behave the same in the plugin and in the application that assembles its commands.
 
 `pnpm plugin:create` emits this shape, so a generated plugin satisfies the rule without further edits. When the list changes, update `packages/tools/create-plugin/src/lib/template.ts` and its tests in the same change — a generator that emits the old shape reintroduces the problem in every plugin created afterwards.
 
@@ -365,14 +364,11 @@ Write in English:
 
 Chinese is fine for:
 
-- Documents under `internal-docs/`
 - Feishu notification titles and bodies, which only reach an internal group
 
 The distinction is the audience, not the file type. A comment inside a workflow is read by maintainers and stays English along with the rest of the code; the Feishu message that same workflow sends never leaves the team, so it stays Chinese.
 
 The workflow files under `.github/workflows/` still carry Chinese comments written before this rule existed. Translate the ones you touch; there is no need to convert the rest in a single pass.
-
-`internal-docs/` is also excluded from Prettier in the root `.prettierignore`. It is prose written for the team to read and argue with, not an artefact, and reflowing a hand-written Chinese paragraph or realigning a table it wrote by hand buys nothing while filling a review with diff unrelated to the change. Write it however reads best.
 
 ## TypeScript Requirements for Library Development
 

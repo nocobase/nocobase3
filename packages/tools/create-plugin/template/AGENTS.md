@@ -57,8 +57,6 @@ buildHooks: {
 
 A hook command is any executable with its arguments, already split — no shell, so no quoting to get right, and no `&&` or pipes. The stage names say what exists when the hook runs: `beforeBuild` (empty `dist`), `afterClientBuild` (`dist/client`), `afterServerBuild` (`+ dist/server`), `afterBuild` (the installed deployment tree), and `beforeDev` for `pnpm dev`.
 
-Read `internal-docs/development/plugin-development/cli.md` before adding either.
-
 ## Before you finish
 
 ```bash
