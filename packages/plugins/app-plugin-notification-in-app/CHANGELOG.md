@@ -1,5 +1,18 @@
 # @nocobase/app-plugin-notification-in-app
 
+## 0.2.0-beta.10
+
+### Patch Changes
+
+- 154e09e: Treat a credential Better Auth refuses — an expired or revoked API key — as not signed in when resolving the caller, instead of failing the request.
+- Updated dependencies [154e09e]
+- Updated dependencies [154e09e]
+- Updated dependencies [c01baf6]
+  - @nocobase/app-plugin-authentication@0.1.0-beta.12
+  - @nocobase/i18n@1.0.0-beta.4
+  - @nocobase/app-client@1.0.0-beta.15
+  - @nocobase/app-server@1.0.0-beta.13
+
 ## 0.2.0-beta.9
 
 ### Patch Changes

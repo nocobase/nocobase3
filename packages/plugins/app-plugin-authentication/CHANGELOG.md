@@ -1,5 +1,33 @@
 # @nocobase/app-plugin-authentication
 
+## 0.1.0-beta.12
+
+### Minor Changes
+
+- 154e09e: Add `AuthClientPluginRegistry`, an augmentable interface that decides what `AuthClient` is typed as.
+
+  The Better Auth client is created inside this package from the application's config, so its type could never be inferred from the plugins the application actually passes. `AuthClient` was pinned to `usernameClient` instead — too narrow for any plugin an application adds, and a plugin that added one had no way to say so except a cast. A plugin package now augments the registry with its client plugin, and `AuthClient` carries it:
+
+  ```ts
+  declare module '@nocobase/app-plugin-authentication/client' {
+    interface AuthClientPluginRegistry {
+      'api-key': ReturnType<typeof apiKeyClient>;
+    }
+  }
+  ```
+
+  This is the same mechanism Better Auth uses for its own server-side plugin registry. Nothing changes for an application that adds no client plugins: the registry seeds `username`, so `AuthClient` is what it was.
+
+### Patch Changes
+
+- 154e09e: Answer a refused credential with Better Auth's own status and body instead of a 500.
+
+  `getSession()` keeps Better Auth's contract: a session, `null` when nobody is signed in, and a thrown `APIError` when a credential is present but refused — an expired or revoked API key. `Auth` had nothing translating that error at the edge, so it escaped `auth.required()` unhandled and Hono answered 500. `required()` and `optional()` now catch an `APIError` and respond with its status and body: `401 KEY_EXPIRED`, `429 USAGE_EXCEEDED`. Nothing changes for a request carrying no credential or a bad cookie. The realtime principal resolver treats a refused credential as no principal.
+
+- Updated dependencies [c01baf6]
+  - @nocobase/app-client@1.0.0-beta.15
+  - @nocobase/app-server@1.0.0-beta.13
+
 ## 0.1.0-beta.11
 
 ### Minor Changes
