@@ -271,7 +271,7 @@ export class I18nRuntime {
   public getFixedT(namespace: Namespace, locale?: Locale): Translator {
     // The chain is passed as an ordered namespace list rather than through `fallbackNS`, which i18next only reads from
     // instance options — a single instance serves every namespace here, and each one needs its own chain.
-    const chain = this.namespaceChain(namespace);
+    const chain = this.getNamespaceChain(namespace);
     // i18next types `t` against namespaces known at compile time, while every namespace here is a package name
     // resolved at runtime. This is the one place that gap is bridged, and it is narrowed to the real contract —
     // a key plus options in, a string out — rather than widened away.
@@ -283,7 +283,7 @@ export class I18nRuntime {
     return (key, options) => {
       // An explicit `ns` overrides the binding, and still falls back through the chain behind it.
       const namespaces = options?.ns
-        ? this.namespaceChain(options.ns)
+        ? this.getNamespaceChain(options.ns)
         : undefined;
       return translate(key, {
         ...options,
@@ -293,7 +293,7 @@ export class I18nRuntime {
   }
 
   /** A namespace followed by its fallbacks, with `APP_NS` resolved to the application's package name. */
-  private namespaceChain(namespace: Namespace): Namespace[] {
+  public getNamespaceChain(namespace: Namespace): readonly Namespace[] {
     return [
       this.registry.resolveNamespace(namespace),
       ...this.registry.getFallbackNamespaces(namespace),

@@ -19,6 +19,10 @@ const zhCN: AppResource = {
     confirm: '确认',
     language: '语言',
   },
+  notices: {
+    serverLocaleFallback: '服务端不支持该语言，服务端内容已回落为英文。',
+    languageChangeFailed: '未能完成语言切换，请重试。',
+  },
   account: {
     openMenu: '打开账户菜单',
     fallback: '账户',
