@@ -89,7 +89,9 @@ MariaDB runs on the `mysql` dialect. MySQL and OceanBase also accept `socketPath
 
 Two of the drivers install a platform binary: `better-sqlite3` and `oracledb`. The other four are plain JavaScript — `pg`, `mysql2`, `tedious` and `dmdb`, which between them cover PostgreSQL, MySQL, SQL Server, KingbaseES, OceanBase and Dameng. Dameng in particular looks like it should be native and is not.
 
-pnpm 11 runs a dependency's install script only when the package appears under `allowBuilds` in `pnpm-workspace.yaml`, and a package left undecided stops the install outright with `ERR_PNPM_IGNORED_BUILDS`. The generated file already decides both of the drivers that have one, so **switching dialects needs no change there**. A package with an install script that the application adds for its own reasons still does.
+pnpm 11 runs a dependency's install script only when the package appears under `allowBuilds` in `pnpm-workspace.yaml`. The generated file already decides both of the drivers that have one, so **switching dialects needs no change there** — and pre-deciding the driver the application does not use yet is the point rather than an oversight.
+
+pnpm's own default is to stop an install that skipped a build, with `ERR_PNPM_IGNORED_BUILDS`. The generated file sets `strictDepBuilds: false`, so that an unrelated transitive dependency picking up an install script cannot break every install until someone adds an entry for it. The cost of that choice is that an undecided package no longer fails loudly: the install warns, reports success, and leaves the addon uncompiled, and the first query is what fails. Deciding `oracledb` up front is what keeps switching to Oracle out of that gap. A package with an install script that the application adds for its own reasons needs the same entry, for the same reason.
 
 `ignore-scripts=true` in an npm configuration is the exception worth knowing: it suppresses install scripts globally and outranks `allowBuilds`, so the addon is not compiled and `pnpm install` reports success anyway. `pnpm rebuild better-sqlite3` is the remedy — re-running `pnpm install` does nothing, because the package is already in the store.
 
