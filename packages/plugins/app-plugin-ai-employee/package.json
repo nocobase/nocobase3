@@ -12,9 +12,6 @@
   "types": "dist/index.d.ts",
   "files": [
     "dist",
-    "client",
-    "server",
-    "database",
     "ai",
     "package.json",
     "README.md",
