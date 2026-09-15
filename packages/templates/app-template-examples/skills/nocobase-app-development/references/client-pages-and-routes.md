@@ -110,22 +110,23 @@ Groups do not render business components. Pages must place `<Outlet />` explicit
 
 A navigable page normally changes `client/routes.ts`, its page component, and `client/locales/`. Do not edit the shell or a ServiceProvider merely to add a menu.
 
-## Naming the page as a destination
+## Putting the page in a breadcrumb trail
 
-`navigation` decides whether a page appears in a menu. `title` decides what the page is called. They are separate declarations because a page reached only from another page has a name without belonging in a menu.
+`navigation` decides whether a page appears in a menu. `breadcrumb` decides whether it appears in a breadcrumb trail, and what it is called there. The two work the same way — declaring one puts the route in; leaving it out keeps the route out — and they are independent, so a route that belongs in both states its title twice.
 
 ```ts
 {
-  name: 'orderDetail',
-  path: '/orders/:orderId',
-  title: 'orders.detail.title',
-  componentLoader: () => import('./pages/order-detail.js'),
+  name: 'orders',
+  path: '/orders',
+  navigation: { title: 'navigation.orders', icon: ShoppingCart },
+  breadcrumb: { title: 'navigation.orders' },
+  componentLoader: () => import('./pages/orders/index.js'),
 }
 ```
 
-`title` falls back to `navigation.title`, so a route that already declares a menu entry does not state its name twice. Unlike `navigation`, it is allowed on a parameterised path — which is the only way a detail page can name itself.
+A page reached only from another page declares `breadcrumb` alone; a menu entry the user never returns to declares `navigation` alone. Unlike `navigation`, `breadcrumb` is allowed on a parameterised path — which is the only way a detail page can name itself.
 
-Breadcrumbs are built from these titles. The page places `<Breadcrumbs />` itself, above its heading, and keeps its own container and spacing:
+The page places `<Breadcrumbs />` itself, above its heading, and keeps its own container and spacing:
 
 ```tsx
 <section className='mx-auto w-full max-w-6xl space-y-6 p-6 md:p-8'>
@@ -141,11 +142,11 @@ Adding it to a page costs nothing when the page does not warrant a trail: the co
 
 What the trail shows is the sequence of destinations rather than the sequence of URL segments:
 
-- A route with a title is somewhere the user can return to, so it joins the trail.
-- A route without one is structure — a tab, an overlay, a layer that exists only to share a layout — and is skipped. Giving a tab route no title is how you keep it out of the breadcrumb.
-- Nothing renders until the page actually sits under a parent. A single level would only repeat the heading directly below it, and the sidebar already says which top-level page the user is on.
+- A route declaring `breadcrumb` is somewhere the user can return to, so it joins the trail.
+- A route without one is skipped — a tab, an overlay, a layer that exists only to share a layout. Declaring no `breadcrumb` on a tab route is how you keep it out.
+- Nothing renders until the page actually sits under a parent. A single level would only repeat the heading directly below it, and the sidebar already says which top-level page the user is on. A page with no children and no parent therefore needs no `breadcrumb` at all.
 
-A title names the kind of page rather than the record it is showing. `/orders/:orderId` is called "Order detail", not "Order #42": the trail states where in the structure the user is, and the page's own heading already identifies the record. Keeping it static is also what lets the whole trail be known before the page loads anything, so it never changes while the user waits.
+The title names the kind of page rather than the record it is showing. `/orders/:orderId` is called "Order detail", not "Order #42": the trail states where in the structure the user is, and the page's own heading already identifies the record. Keeping it static is also what lets the whole trail be known before the page loads anything, so it never changes while the user waits.
 
 ## Customizing a plugin's page
 

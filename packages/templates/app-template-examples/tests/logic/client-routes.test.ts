@@ -39,23 +39,23 @@ describe('app client routes', () => {
             {
               name: 'routeChildPages',
               path: 'pages',
-              title: 'routeOverlays.childPagesTitle',
+              breadcrumb: { title: 'routeOverlays.childPagesTitle' },
               children: [
                 {
                   name: 'routeChildPageQuotation',
                   path: 'quotation',
-                  title: 'routeOverlays.topicQuotation',
+                  breadcrumb: { title: 'routeOverlays.topicQuotation' },
                   children: [{ name: 'routeChildPageDialog', path: 'dialog' }],
                 },
                 {
                   name: 'routeChildPageOnboarding',
                   path: 'onboarding',
-                  title: 'routeOverlays.topicOnboarding',
+                  breadcrumb: { title: 'routeOverlays.topicOnboarding' },
                 },
                 {
                   name: 'routeChildPageRenewal',
                   path: 'renewal',
-                  title: 'routeOverlays.topicRenewal',
+                  breadcrumb: { title: 'routeOverlays.topicRenewal' },
                 },
               ],
             },

@@ -5,20 +5,21 @@
 '@nocobase/app-template-hub': minor
 ---
 
-Add a route `title` and derive breadcrumbs from it.
+Add a route `breadcrumb` declaration and build breadcrumbs from it.
 
-A client route may now declare `title`, which names it as a destination independently of whether it appears in a
-menu. It falls back to the menu title, so a route that already declares `navigation` needs no second declaration,
-and unlike `navigation` it is allowed on a parameterised path — which is the only way a page such as `/orders/:id`
-could name itself before.
+A client route may now declare `breadcrumb`, which works the way `navigation` does: declaring it puts the route in
+the trail, leaving it out keeps the route out. The two are independent — a page can appear in a menu, in a trail,
+in both, or in neither — so neither falls back to the other and a route belonging in both states its title twice.
+Unlike `navigation`, `breadcrumb` is allowed on a parameterised path, which is the only way a page such as
+`/orders/:orderId` can name itself.
 
-Breadcrumbs show the trail of destinations rather than the URL segments. A route joins the trail by having a title,
-so tabs, overlays and layers that exist only to share a layout are skipped; a level links to the resolved path
-rather than to its route pattern, and a menu group with no page behind it reads as plain text instead of a dead
-link. Nothing renders until the page actually sits under a parent, since a single level would only repeat the
-heading directly below it.
+Breadcrumbs show the trail of destinations rather than the URL segments, so tabs, overlays and layers that exist
+only to share a layout are skipped by declaring no `breadcrumb`. A level links to the resolved path rather than to
+its route pattern, and a menu group with no page behind it reads as plain text instead of a dead link. Nothing
+renders until the page actually sits under a parent, since a single level would only repeat the heading directly
+below it.
 
-A title names the kind of page rather than the record it is showing: `/orders/:orderId` is called "Order detail",
+The title names the kind of page rather than the record it is showing: `/orders/:orderId` is called "Order detail",
 not "Order #42". The trail states where in the structure the user is, and the page's own heading already identifies
 the record — so every level is known before the page loads anything, and the trail never changes while it does.
 

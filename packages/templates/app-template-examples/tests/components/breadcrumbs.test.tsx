@@ -30,15 +30,19 @@ const route = (
 });
 
 describe('Breadcrumbs', () => {
-  it('renders one level per titled destination', () => {
+  it('renders one level per route that declares a breadcrumb', () => {
     render(
       <MemoryRouter initialEntries={['/orders/archived']}>
         <RouteTreeProvider
           routes={[
             {
-              ...route('orders', '/orders', { title: 'Orders' }),
+              ...route('orders', '/orders', {
+                breadcrumb: { title: 'Orders' },
+              }),
               children: [
-                route('archived', '/orders/archived', { title: 'Archived' }),
+                route('archived', '/orders/archived', {
+                  breadcrumb: { title: 'Archived' },
+                }),
               ],
             },
           ]}
@@ -62,12 +66,14 @@ describe('Breadcrumbs', () => {
   });
 
   it('links a parameterised level to where the user is, not to its pattern', () => {
-    const orders = route('orders', '/orders', { title: 'Orders' });
+    const orders = route('orders', '/orders', {
+      breadcrumb: { title: 'Orders' },
+    });
     const detail = route('orderDetail', '/orders/edit/:id', {
-      title: 'Edit order',
+      breadcrumb: { title: 'Edit order' },
     });
     const details = route('orderDetailInfo', '/orders/edit/:id/details', {
-      title: 'Details',
+      breadcrumb: { title: 'Details' },
     });
     const tree = [
       { ...orders, children: [{ ...detail, children: [details] }] },
@@ -89,7 +95,9 @@ describe('Breadcrumbs', () => {
   });
 
   it('skips levels that are structure rather than a destination', () => {
-    const orders = route('orders', '/orders', { title: 'Orders' });
+    const orders = route('orders', '/orders', {
+      breadcrumb: { title: 'Orders' },
+    });
     // A tab and an overlay own a path segment but name no destination.
     const tab = route('ordersOpenTab', '/orders/open');
     const overlay = route('orderPreview', '/orders/open/preview');
@@ -114,12 +122,12 @@ describe('Breadcrumbs', () => {
           routes={[
             {
               ...route('automation', '/settings/automation', {
-                title: 'Automation',
+                breadcrumb: { title: 'Automation' },
                 componentLoader: undefined,
               }),
               children: [
                 route('workflows', '/settings/automation/workflows', {
-                  title: 'Workflows',
+                  breadcrumb: { title: 'Workflows' },
                 }),
               ],
             },
@@ -146,8 +154,10 @@ describe('Breadcrumbs', () => {
         <RouteTreeProvider
           routes={[
             {
-              ...route('home', '/', { title: 'Home' }),
-              children: [route('detail', '/detail', { title: 'Detail' })],
+              ...route('home', '/', { breadcrumb: { title: 'Home' } }),
+              children: [
+                route('detail', '/detail', { breadcrumb: { title: 'Detail' } }),
+              ],
             },
           ]}
         >
@@ -167,7 +177,11 @@ describe('Breadcrumbs', () => {
     render(
       <MemoryRouter initialEntries={['/articles']}>
         <RouteTreeProvider
-          routes={[route('articles', '/articles', { title: 'Articles' })]}
+          routes={[
+            route('articles', '/articles', {
+              breadcrumb: { title: 'Articles' },
+            }),
+          ]}
         >
           <Breadcrumbs />
         </RouteTreeProvider>

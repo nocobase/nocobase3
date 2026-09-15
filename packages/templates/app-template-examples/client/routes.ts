@@ -18,6 +18,7 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
     name: 'routeOverlays',
     path: '/route-overlays',
     navigation: { title: 'navigation.routeOverlays', icon: PanelsTopLeft },
+    breadcrumb: { title: 'navigation.routeOverlays' },
     componentLoader: () => import('./pages/route-overlays/index.js'),
     children: [
       {
@@ -51,13 +52,13 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
       {
         name: 'routeChildPages',
         path: 'pages',
-        title: 'routeOverlays.childPagesTitle',
+        breadcrumb: { title: 'routeOverlays.childPagesTitle' },
         componentLoader: () => import('./pages/route-overlays/pages/index.js'),
         children: [
           {
             name: 'routeChildPageQuotation',
             path: 'quotation',
-            title: 'routeOverlays.topicQuotation',
+            breadcrumb: { title: 'routeOverlays.topicQuotation' },
             componentLoader: () =>
               import('./pages/route-overlays/pages/quotation/index.js'),
             children: [
@@ -73,14 +74,14 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
           {
             name: 'routeChildPageOnboarding',
             path: 'onboarding',
-            title: 'routeOverlays.topicOnboarding',
+            breadcrumb: { title: 'routeOverlays.topicOnboarding' },
             componentLoader: () =>
               import('./pages/route-overlays/pages/onboarding.js'),
           },
           {
             name: 'routeChildPageRenewal',
             path: 'renewal',
-            title: 'routeOverlays.topicRenewal',
+            breadcrumb: { title: 'routeOverlays.topicRenewal' },
             componentLoader: () =>
               import('./pages/route-overlays/pages/renewal.js'),
           },
