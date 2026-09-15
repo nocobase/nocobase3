@@ -150,6 +150,7 @@
     "@nocobase/snowflake": "workspace:^",
     "@sinclair/typebox": "catalog:",
     "ai": "^5.0.0",
+    "better-auth": "catalog:",
     "eventsource-parser": "^3.0.0",
     "hono": "catalog:",
     "langchain": "1.2.39",

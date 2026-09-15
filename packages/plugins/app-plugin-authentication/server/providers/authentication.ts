@@ -14,6 +14,7 @@ import {
   realtimeServiceToken,
   type RealtimePrincipal,
 } from '@nocobase/app-server/realtime';
+import { APIError } from 'better-auth';
 
 import {
   createAuthentication,
@@ -77,10 +78,16 @@ export class AuthenticationProvider<
           async resolve(
             request: Request,
           ): Promise<RealtimePrincipal | undefined> {
-            const session = await container
-              .resolve(authenticationToken)
-              .getSession(request.headers);
-            return session ? { userId: session.user.id } : undefined;
+            try {
+              const session = await container
+                .resolve(authenticationToken)
+                .getSession(request.headers);
+              return session ? { userId: session.user.id } : undefined;
+            } catch (error) {
+              // A refused credential (Better Auth APIError) is not signed in, here.
+              if (error instanceof APIError) return undefined;
+              throw error;
+            }
           },
         }),
       );
