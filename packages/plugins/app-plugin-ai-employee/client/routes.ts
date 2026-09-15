@@ -29,23 +29,27 @@ const routes: readonly AppClientRouteContribution[] = [
       name: 'ai-components',
       path: '/ai-components',
       navigation: { title: 'AI Components', icon: Bot },
+      breadcrumb: { title: 'AI Components' },
       children: [
         {
           name: 'ai-chat-window',
           path: '/chat',
           navigation: { title: 'Chat window' },
+          breadcrumb: { title: 'Chat window' },
           componentLoader: createAIEmployeeDemoLoader('AIChatDemoPage'),
         },
         {
           name: 'ai-floating-chat',
           path: '/floating',
           navigation: { title: 'Floating chat' },
+          breadcrumb: { title: 'Floating chat' },
           componentLoader: createAIEmployeeDemoLoader('FloatingChatDemoPage'),
         },
         {
           name: 'ai-employee-tasks',
           path: '/tasks',
           navigation: { title: 'Employee tasks' },
+          breadcrumb: { title: 'Employee tasks' },
           componentLoader: createAIEmployeeDemoLoader(
             'AIEmployeeTasksDemoPage',
           ),
@@ -54,12 +58,14 @@ const routes: readonly AppClientRouteContribution[] = [
           name: 'ai-page-context',
           path: '/context',
           navigation: { title: 'Page context' },
+          breadcrumb: { title: 'Page context' },
           componentLoader: createAIEmployeeDemoLoader('PageContextDemoPage'),
         },
         {
           name: 'ai-tool-cards',
           path: '/tools',
           navigation: { title: 'Tool cards' },
+          breadcrumb: { title: 'Tool cards' },
           componentLoader: createAIEmployeeDemoLoader('ToolCardsDemoPage'),
         },
       ],

@@ -11,6 +11,7 @@ import { useState, type ReactElement, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router';
 
 import { Button } from '@/components/ui/button';
+import { EMPTY_ARRAY } from '@/lib/constants';
 
 import { AppBrand } from './app-brand.js';
 
@@ -130,7 +131,7 @@ export function NavigationTree({
     defaultValue: item.route.navigation!.title,
   });
   const isSelected = routeKey(item.route) === selectedKey;
-  const children = item.children ?? [];
+  const children = item.children ?? EMPTY_ARRAY;
   const Icon = item.route.navigation?.icon;
   const icon = Icon ? <Icon /> : null;
 

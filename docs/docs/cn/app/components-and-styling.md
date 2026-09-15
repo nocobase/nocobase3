@@ -6,7 +6,7 @@ keywords: 'NocoBase,组件,样式,shadcn,主题变量,深色模式,图标'
 
 # 界面和样式
 
-NocoBase 应用使用 shadcn/ui 组件和 Tailwind CSS 编写界面。基础组件放在 `client/components/ui/`，业务组件放在 `client/components/`，页面放在 `client/pages/`。
+NocoBase 应用使用 shadcn/ui 组件和 Tailwind CSS 编写界面。基础组件放在 `client/components/ui/`，应用共享组件放在 `client/components/`，页面及其专用组件放在 `client/pages/` 中对应的页面目录。
 
 普通界面样式使用主题变量。这样同一套组件可以适配浅色主题、深色主题和其他主题预设。
 
@@ -35,7 +35,7 @@ pnpm exec shadcn search @shadcn -q dialog
 
 ## 组合业务组件
 
-`client/components/ui/` 只放基础组件。把多个基础组件组合成业务组件时，放在 `client/components/`：
+`client/components/ui/` 只放基础组件。组合后的业务组件如果供多个页面复用，放在 `client/components/`；只服务于某个页面及其子页面的组件，放在该页面目录。下面以应用共享的订单摘要组件为例：
 
 ```tsx
 // client/components/order-summary.tsx
@@ -69,6 +69,34 @@ export function OrderSummary({ order }: OrderSummaryProps): ReactElement {
 ```
 
 `@/` 指向应用的 `client/` 目录。业务组件只负责自己的界面和行为，基础组件的通用交互继续由 shadcn/ui 组件提供。
+
+## 页面标题和操作区
+
+模板提供 `PageHeader`，统一排列页面标题、描述和操作区。`title` 必填，`description` 和 `actions` 可选：
+
+```tsx
+import { useTranslation } from '@nocobase/i18n/client';
+import { Link } from 'react-router';
+import { PageHeader } from '@/components/page-header';
+import { Button } from '@/components/ui/button';
+
+export function OrdersHeader() {
+  const { t } = useTranslation();
+  return (
+    <PageHeader
+      title={t('orders.title')}
+      description={t('orders.description')}
+      actions={
+        <Button nativeButton={false} render={<Link to='create' />}>
+          {t('orders.create')}
+        </Button>
+      }
+    />
+  );
+}
+```
+
+示例假设当前订单页面已声明 `create` 子路由，并添加了相应翻译。`PageHeader` 内部渲染 `h1`，外层容器、间距和面包屑由页面负责。子页面与面包屑的组合示例见[页面和菜单](./pages-and-routes)。
 
 ## 使用主题变量
 

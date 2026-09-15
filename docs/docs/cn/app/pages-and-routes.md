@@ -38,7 +38,7 @@ export default routes;
 
 ### 菜单分组
 
-把子页面放进父级的 `children`，父级就成了一个菜单分组。分组本身不需要 `componentLoader`：
+菜单分组必须同时声明 `navigation` 和 `children`，且不声明 `componentLoader`。只有 `children` 而没有 `navigation`，不构成菜单分组。普通页面通过 `componentLoader` 加载组件，也可以声明 `children` 来组织子页面。下面是菜单分组的示例：
 
 ```ts
 // client/routes.ts（节选）
@@ -107,6 +107,115 @@ export default function OrdersPage(): ReactElement {
 - import 路径使用 `.js`，即使页面文件的实际扩展名是 `.tsx`。
 - `path` 只填写应用内部路径，不要加入部署前缀。比如应用部署在 `/main` 下，路由写 `/orders`，浏览器访问地址就是 `/main/orders`。
 - 路由不配置 `navigation` 时，页面仍然可以通过 URL 访问，但不会出现在菜单中，详情页通常采用这种方式。
+
+## 页面目录和子页面
+
+只有自身内容的页面可以使用单个文件。有子页面或专用组件、数据时，改用目录，以 `index.tsx` 作为页面入口。子页面按路由路径组织，专用组件和数据也放在所属页面目录；跨页面共享的组件才放进 `client/components/`。
+
+例如，订单列表和详情页可以组织为：
+
+```text
+client/pages/orders/
+├── index.tsx       # /orders
+├── detail.tsx      # /orders/:orderId
+└── shared.tsx      # 订单页面之间共享的组件
+```
+
+在路由中声明父子关系：
+
+```ts
+// client/routes.ts（节选）
+defineAppRoutes([
+  {
+    name: 'orders',
+    path: '/orders',
+    navigation: { title: 'orders.title' },
+    breadcrumb: { title: 'orders.title' },
+    componentLoader: () => import('./pages/orders/index.js'),
+    children: [
+      {
+        name: 'order-detail',
+        path: ':orderId',
+        breadcrumb: { title: 'orders.detailTitle' },
+        componentLoader: () => import('./pages/orders/detail.js'),
+      },
+    ],
+  },
+]);
+```
+
+父页面必须手动放置 `<Outlet />`，子页面才会渲染。比如把它放在列表内容之后：
+
+```tsx
+// client/pages/orders/index.tsx
+import { useTranslation } from '@nocobase/i18n/client';
+import { Link, Outlet } from 'react-router';
+import { PageHeader } from '@/components/page-header';
+
+export default function OrdersPage() {
+  const { t } = useTranslation();
+  return (
+    <>
+      <section className='space-y-6 p-6'>
+        <PageHeader title={t('orders.title')} />
+        {/* 实际列表中的链接使用对应订单 ID。 */}
+        <Link to='42'>{t('orders.viewDetail')}</Link>
+      </section>
+      <Outlet />
+    </>
+  );
+}
+```
+
+子页面可以直接返回内容，在 `Outlet` 位置内嵌显示。页面内的 Tab 通常采用这种方式：每个 Tab 声明为子路由，用链接切换，以 URL 决定当前选中项。
+
+需要覆盖父页面时，由子页面选择展示组件：
+
+| 组件             | 展示方式             | 是否模态 |
+| ---------------- | -------------------- | -------- |
+| `RouteDialog`    | 居中对话框           | 是       |
+| `RouteDrawer`    | 侧边抽屉             | 是       |
+| `RouteChildPage` | 覆盖应用内容区的页面 | 否       |
+
+下面的详情页使用 `RouteChildPage`，打开时保留列表页的 DOM 和状态：
+
+```tsx
+// client/pages/orders/detail.tsx
+import { useTranslation } from '@nocobase/i18n/client';
+import { useParams } from 'react-router';
+import { Breadcrumbs } from '@/components/breadcrumbs';
+import { PageHeader } from '@/components/page-header';
+import { RouteChildPage } from '@/components/route-child-page';
+
+export default function OrderDetailPage() {
+  const { t } = useTranslation();
+  const { orderId } = useParams();
+  return (
+    <RouteChildPage>
+      <section className='space-y-6 p-6'>
+        <Breadcrumbs />
+        <PageHeader title={t('orders.detailTitle')} />
+        <p>{t('orders.orderNumber', { id: orderId })}</p>
+      </section>
+    </RouteChildPage>
+  );
+}
+```
+
+如果详情页还有更深的子路由，把它的 `<Outlet />` 放在 `RouteChildPage` 旁边，不要放进覆盖层内部，否则更深的覆盖层会随当前层一起滚动。
+
+`RouteChildPage` 不限制焦点在层内，侧栏和页头仍可操作。它没有关闭按钮，也不响应 Escape，用户通过面包屑或浏览器历史返回。被覆盖的前置兄弟元素会临时设为 `inert`，避免操作隐藏内容。顶层页面不需要使用它。
+
+## 面包屑
+
+`navigation` 决定菜单入口，`breadcrumb` 独立决定面包屑标题。上面的列表和详情路由都声明了 `breadcrumb`，访问 `/orders/42` 时，详情页的 `<Breadcrumbs />` 会显示“订单列表 > 订单详情”。添加示例中的翻译 key 到 `client/locales/`，让标题使用当前语言。
+
+- 匹配到的路由中，只有声明 `breadcrumb` 的条目进入面包屑；至少有两项才显示。
+- 前面的页面条目链接到对应路径；没有页面组件的分组显示纯文本，最后一项也不生成链接。
+- 动态参数路径可以声明 `breadcrumb`。标题描述页面类型，如“订单详情”；具体订单编号放在页面内容或标题中。
+- Tab、对话框和抽屉路由不声明 `breadcrumb`，面包屑停留在它们所属的页面。
+
+面包屑由页面自行放置，通常位于 `PageHeader` 上方，容器和间距也由页面控制。普通业务布局及设置、开发布局提供所需的路由树；当前独立的 guest、optional 页面没有这项上下文，`Breadcrumbs` 不会显示。
 
 ### 控制页面的登录要求
 

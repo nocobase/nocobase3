@@ -29,7 +29,7 @@ Business code goes in these places. This is where you work, and where you should
 
 ```text
 client/routes.ts          Declare a page route
-client/pages/             The page component
+client/pages/             The page component; a folder when a page has children or files of its own
 client/components/        Your components
 client/components/ui/     shadcn/ui primitives; add with the CLI, do not hand-write
 client/locales/           Every user-visible string
@@ -43,9 +43,13 @@ cli/commands/             Commands this application owns
 tests/                    Tests; never beside the source
 ```
 
+A page with children or page-local helpers uses a folder with `index.tsx`; child folders mirror route paths. Keep page-local components and data in that folder, reserving `client/components/` for application-wide components. See [child routes](skills/nocobase-app-development/references/client-child-routes.md) for examples.
+
 A feature with a page and an API touches five places: a migration for the table, a route in `server/routes/`, a page in `client/pages/` declared in `client/routes.ts`, navigation on the page route, and strings in `client/locales/`.
 
 ### The rest is framework structure
+
+Layouts own breadcrumb route context; `AppRouter` selects routes and layouts. See [page routes](skills/nocobase-app-development/references/client-pages-and-routes.md#putting-the-page-in-a-breadcrumb-trail) for each layout's scope.
 
 Header entries stay visible on their destination pages. The Dev tools entry is development-only; the Hub has no Settings entry.
 
