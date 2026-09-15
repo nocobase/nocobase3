@@ -1,4 +1,5 @@
 import { PageContainer } from '@/components/page-container';
+import { PageHeader } from '@/components/page-header';
 import { apiClientToken, useService } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { useQuery } from '@tanstack/react-query';
@@ -98,26 +99,18 @@ export default function ExternalCrmPage(): ReactElement {
   const rows = orders.data?.data ?? [];
   return (
     <PageContainer>
-      <header className='space-y-3'>
-        <div className='flex items-center gap-2 text-sm text-muted-foreground'>
-          <Plug className='size-4' />
-          {t('externalCrm.eyebrow')}
-        </div>
-        <h1 className='font-heading text-3xl font-semibold tracking-tight'>
-          {t('externalCrm.title')}
-        </h1>
-        <p className='max-w-3xl text-sm leading-relaxed text-muted-foreground'>
-          {t('externalCrm.description')}
-        </p>
-        <div className='flex flex-wrap gap-2'>
-          <Badge variant='outline'>{t('externalCrm.readOnly')}</Badge>
-          {customers.data && (
-            <Badge variant='secondary'>
-              {t('externalCrm.customers', { count: customers.data.data })}
-            </Badge>
-          )}
-        </div>
-      </header>
+      <PageHeader
+        description={t('externalCrm.description')}
+        title={t('externalCrm.title')}
+      />
+      <div className='flex flex-wrap gap-2'>
+        <Badge variant='outline'>{t('externalCrm.readOnly')}</Badge>
+        {customers.data && (
+          <Badge variant='secondary'>
+            {t('externalCrm.customers', { count: customers.data.data })}
+          </Badge>
+        )}
+      </div>
       <div className='flex flex-wrap items-center justify-between gap-4 rounded-xl border bg-card p-4'>
         <div
           className='flex flex-wrap gap-2'

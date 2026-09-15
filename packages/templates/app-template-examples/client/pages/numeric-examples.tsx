@@ -1,4 +1,5 @@
 import { PageContainer } from '@/components/page-container';
+import { PageHeader } from '@/components/page-header';
 import { apiClientToken, useService } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { useQuery } from '@tanstack/react-query';
@@ -70,19 +71,15 @@ export default function NumericExamplesPage(): ReactElement {
   });
   return (
     <PageContainer>
-      <header className='space-y-3'>
-        <h1 className='font-heading text-3xl font-semibold tracking-tight'>
-          {t('numbers.title')}
-        </h1>
-        <p className='text-sm text-muted-foreground'>
-          {t('numbers.description')}
-        </p>
-        {data && (
-          <Badge variant='outline'>
-            {t('numbers.database', { dialect: data.data.dialect })}
-          </Badge>
-        )}
-      </header>
+      <PageHeader
+        description={t('numbers.description')}
+        title={t('numbers.title')}
+      />
+      {data && (
+        <Badge variant='outline'>
+          {t('numbers.database', { dialect: data.data.dialect })}
+        </Badge>
+      )}
       <div className='flex flex-wrap items-end gap-6 rounded-xl border bg-card p-4'>
         <fieldset className='space-y-2'>
           <legend className='text-sm font-medium'>{t('numbers.source')}</legend>
