@@ -1,3 +1,4 @@
+import { PageContainer } from '@/components/page-container';
 import { apiClientToken, useService } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { useQuery } from '@tanstack/react-query';
@@ -68,7 +69,7 @@ export default function NumericExamplesPage(): ReactElement {
     retry: false,
   });
   return (
-    <section className='mx-auto w-full max-w-7xl space-y-6 p-6 md:p-8'>
+    <PageContainer>
       <header className='space-y-3'>
         <h1 className='font-heading text-3xl font-semibold tracking-tight'>
           {t('numbers.title')}
@@ -271,6 +272,6 @@ export default function NumericExamplesPage(): ReactElement {
       <p className='rounded-lg border bg-muted p-4 text-sm text-muted-foreground'>
         {t('numbers.precisionNote')}
       </p>
-    </section>
+    </PageContainer>
   );
 }

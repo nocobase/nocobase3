@@ -1,3 +1,4 @@
+import { PageContainer } from '@/components/page-container';
 import { apiClientToken, useService } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { useQuery } from '@tanstack/react-query';
@@ -96,7 +97,7 @@ export default function ExternalCrmPage(): ReactElement {
     }).format(Number(value));
   const rows = orders.data?.data ?? [];
   return (
-    <section className='mx-auto w-full max-w-6xl space-y-6 p-6 md:p-8'>
+    <PageContainer>
       <header className='space-y-3'>
         <div className='flex items-center gap-2 text-sm text-muted-foreground'>
           <Plug className='size-4' />
@@ -219,6 +220,6 @@ export default function ExternalCrmPage(): ReactElement {
         </div>
       )}
       <p className='text-sm text-muted-foreground'>{t('externalCrm.note')}</p>
-    </section>
+    </PageContainer>
   );
 }
