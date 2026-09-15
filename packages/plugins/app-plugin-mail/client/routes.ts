@@ -23,6 +23,13 @@ const routes: readonly AppClientRouteContribution[] = [
       navigation: { title: 'nav.settings', icon: Mail },
       children: [
         {
+          name: 'my-accounts',
+          path: '/my-accounts',
+          navigation: { title: 'nav.myAccounts', icon: Link2 },
+          access: { resource: 'mail.workspace', action: 'access' },
+          componentLoader: () => import('./pages/mail-accounts-page.js'),
+        },
+        {
           name: 'accounts',
           path: '/accounts',
           navigation: { title: 'nav.accounts', icon: Users },

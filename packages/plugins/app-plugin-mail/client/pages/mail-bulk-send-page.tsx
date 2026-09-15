@@ -20,11 +20,9 @@ import {
   type MailSubmissionView,
   type MailTemplate,
 } from '../mail-client.js';
-import { getMailClient } from '../runtime.js';
+import { useMailClient } from '../runtime.js';
 import { renderMailTemplate } from '../lib/mail-template.js';
 import { replaceMailSignatureContent } from '../lib/mail-signature.js';
-
-const mail = getMailClient();
 
 interface ParsedRecipients {
   readonly valid: readonly MailAddress[];
@@ -38,6 +36,7 @@ interface BulkResultRow {
 }
 
 export default function MailBulkSendPage(): ReactElement {
+  const mail = useMailClient();
   const { t } = useTranslation();
   const [accounts, setAccounts] = useState<readonly MailAccountView[]>([]);
   const [accountId, setAccountId] = useState('');
@@ -117,7 +116,7 @@ export default function MailBulkSendPage(): ReactElement {
       })
       .catch(reportError)
       .finally(() => setBusy(undefined));
-  }, [reportError]);
+  }, [mail, reportError]);
 
   useEffect(() => {
     void Promise.resolve().then(loadAccounts);
@@ -177,11 +176,11 @@ export default function MailBulkSendPage(): ReactElement {
     return () => {
       active = false;
     };
-  }, [accountId, reportError]);
+  }, [accountId, mail, reportError]);
 
   useEffect(() => {
     void mail.listTemplates().then(setTemplates).catch(reportError);
-  }, [reportError]);
+  }, [mail, reportError]);
 
   const removeRecipient = (address: string): void => {
     const next = parsedRecipients.valid.filter(

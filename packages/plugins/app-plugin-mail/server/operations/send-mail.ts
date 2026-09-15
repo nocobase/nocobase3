@@ -2,6 +2,8 @@ import { createHash, randomUUID } from 'node:crypto';
 
 import type {
   MailComposeInput,
+  MailAttachment,
+  MailMessage,
   MailOperationContext,
   MailProviderAdapterResolver,
   MailProviderMessageInput,
@@ -88,9 +90,34 @@ export class SendMailOperation {
     );
     if (input.scheduledAt && !options.scheduledDelivery) {
       const scheduledAt = parseFutureDate(input.scheduledAt);
+      const draft = input.draftMessageId
+        ? await this.dependencies.store.getMessage(
+            context.actorId,
+            input.accountId,
+            input.draftMessageId,
+          )
+        : undefined;
+      const retainedLocalIds: string[] = [];
+      for (const attachment of draft?.attachments ?? []) {
+        if (
+          input.retainedAttachmentIds !== undefined &&
+          !input.retainedAttachmentIds.includes(attachment.id)
+        )
+          continue;
+        const localId = await this.localAttachmentId(
+          context,
+          draft,
+          attachment,
+        );
+        if (localId) retainedLocalIds.push(localId);
+      }
+      const attachmentIds = uniqueStrings([
+        ...(input.attachmentIds ?? []),
+        ...retainedLocalIds,
+      ]);
       await this.dependencies.store.extendOutboundAttachments(
         context.actorId,
-        input.attachmentIds ?? [],
+        attachmentIds,
         new Date(
           new Date(scheduledAt).getTime() + 24 * 60 * 60 * 1_000,
         ).toISOString(),
@@ -107,6 +134,7 @@ export class SendMailOperation {
         context.actorId,
         {
           ...input,
+          attachmentIds,
           signatureId: null,
           text: providerMessage.text,
           html: providerMessage.html,
@@ -253,6 +281,23 @@ export class SendMailOperation {
     }
   }
 
+  private async localAttachmentId(
+    context: MailOperationContext,
+    draft: MailMessage | undefined,
+    attachment: MailAttachment,
+  ): Promise<string | undefined> {
+    if (attachment.outboundAttachmentId) return attachment.outboundAttachmentId;
+    if (
+      draft?.providerMessageId.startsWith('local-draft:') &&
+      (await this.dependencies.store.getOutboundAttachment(
+        context.actorId,
+        attachment.providerAttachmentId,
+      ))
+    )
+      return attachment.providerAttachmentId;
+    return undefined;
+  }
+
   public async prepareProviderMessage(
     context: MailOperationContext,
     input: MailComposeInput,
@@ -331,7 +376,17 @@ export class SendMailOperation {
             return attachment;
           })
       : [];
-    const attachmentIds = input.attachmentIds ?? [];
+    const localRetainedIds: string[] = [];
+    const remoteRetainedIds: string[] = [];
+    for (const attachment of retainedDraftAttachments) {
+      const localId = await this.localAttachmentId(context, draft, attachment);
+      if (localId) localRetainedIds.push(localId);
+      else remoteRetainedIds.push(attachment.providerAttachmentId);
+    }
+    const attachmentIds = uniqueStrings([
+      ...(input.attachmentIds ?? []),
+      ...localRetainedIds,
+    ]);
     if (attachmentIds.length > MAX_OUTBOUND_ATTACHMENT_COUNT) {
       throw new TypeError(
         `Mail messages must contain at most ${MAX_OUTBOUND_ATTACHMENT_COUNT} attachments.`,
@@ -385,9 +440,7 @@ export class SendMailOperation {
             signatureHtml,
           ),
       attachments,
-      retainedProviderAttachmentIds: retainedDraftAttachments.map(
-        (attachment) => attachment.providerAttachmentId,
-      ),
+      retainedProviderAttachmentIds: remoteRetainedIds,
       inReplyTo: input.inReplyToMessageId ? parentInternetMessageId : undefined,
       references:
         input.inReplyToMessageId && related

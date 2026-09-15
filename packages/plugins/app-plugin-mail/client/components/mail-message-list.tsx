@@ -8,6 +8,8 @@ import { MailLabelTag } from './mail-label-tag.js';
 
 export interface MailMessageListLabels {
   readonly empty: string;
+  readonly loading?: string;
+  readonly messages?: string;
   readonly loadMore: string;
   readonly noSubject: string;
   readonly subjectCount?: (count: number) => string;
@@ -45,9 +47,27 @@ export function MailMessageList({
   return (
     <section
       aria-busy={loading}
-      aria-label='Messages'
-      className='h-full min-h-0 overflow-y-auto border-b lg:border-r lg:border-b-0'
+      aria-label={labels.messages ?? 'Messages'}
+      className='h-full min-h-0 overflow-y-auto'
     >
+      {loading && groupedMessages.length === 0 ? (
+        <div role='status' className='space-y-4 p-4'>
+          <span className='sr-only'>
+            {labels.loading ?? 'Loading messages…'}
+          </span>
+          {[0, 1, 2, 3].map((row) => (
+            <div
+              key={row}
+              aria-hidden='true'
+              className='space-y-2 motion-safe:animate-pulse'
+            >
+              <div className='h-4 w-2/3 rounded bg-muted' />
+              <div className='h-3 w-full rounded bg-muted' />
+              <div className='h-3 w-4/5 rounded bg-muted' />
+            </div>
+          ))}
+        </div>
+      ) : null}
       {groupedMessages.length === 0 && !loading ? (
         <p className='p-8 text-center text-sm text-muted-foreground'>
           {labels.empty}

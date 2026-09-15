@@ -1,9 +1,6 @@
 # @nocobase/app-plugin-mail
 
-This package owns the v3 user-mailbox runtime. It is intentionally separate
-from notification delivery: `@nocobase/app-plugin-notification-providers`
-sends application notifications, while this package sends mail from
-user-connected accounts and synchronizes their mailboxes.
+This package owns the v3 user-mailbox runtime. It is intentionally separate from notification delivery: `@nocobase/app-plugin-notification-providers` sends application notifications, while this package sends mail from user-connected accounts and synchronizes their mailboxes.
 
 ## Current scope
 
@@ -13,12 +10,10 @@ The first runnable vertical slice provides:
   status, and reading synchronized messages;
 - authenticated OAuth start plus a public one-time-state callback;
 - a permission-protected Mail Settings group with `/settings/mail/accounts`
-  for read-only all-user account visibility, plus
-  `/settings/mail/operation-logs` for all-user synchronization and delivery
-  operation logs;
+  for read-only all-user account visibility, plus `/settings/mail/operation-logs` for all-user synchronization and delivery operation logs;
 - a separately permissioned `/dev/mail/management` table for all-user message
   search and per-message batch actions;
-- a production Mail workspace at `/mail`, plus current-user account connection and development diagnostics under `/dev/mail`; `/dev/mail/accounts` defaults to a connected-account table and also exposes account association (including the initial sync date), signature and NocoBase-owned label management, and reusable-template management;
+- a production Mail workspace at `/mail`, plus current-user account connection under `/settings/mail/my-accounts` and development diagnostics under `/dev/mail`; `/settings/mail/my-accounts` defaults to a connected-account table and also exposes account association (including the initial sync date), signature and NocoBase-owned label management, and reusable-template management;
 - an all-account workspace view with account and folder filtering, refresh, message search, conversation detail, account connection, synchronization controls, sending, synchronization logs, and delivery submission logs; the composer remembers its last selected account in browser storage and the default synchronization action covers every active account;
 - database-backed OAuth credential storage with token-rotation support;
 - a synchronous `SendMailOperation` with a persisted idempotency key and an
@@ -67,19 +62,15 @@ The first runnable vertical slice provides:
 - Provider contracts, registry, adapter resolver, database storage, and an
   explicit migration.
 
-Gmail, Microsoft, and generic IMAP/SMTP implementations live in separate
-Provider plugins. Mail Core owns OAuth and credential-connection account
-lifecycle, plus a default plain-JSON credential store, while Provider plugins
-own protocol calls and token refresh behavior. The generic IMAP/SMTP MVP uses
-periodic sync, discovers new UID ranges, and intentionally leaves push
-notifications, Provider-native labels, drafts, aliases, move-to-folder, and complete external
-flag/deletion reconciliation disabled. SMTP providers that do not automatically
-copy submitted messages to Sent will not get a local Sent copy until the
-mailbox exposes one through IMAP. Another plugin can register
-`mailCredentialVaultToken` before Mail Core to replace the default credential
-store.
+Gmail, Microsoft 365, and generic IMAP/SMTP adapters are built into this package and registered automatically. Register only `mail` in an application, then configure instances under `mail.providers`. Mail Core owns account lifecycle, synchronization, and the credential store; the adapters own protocol calls and token refresh. Third-party plugins can still register additional definitions through `mailProviderRegistryToken`.
+
+The generic IMAP/SMTP adapter uses periodic sync and discovers new UID ranges. Push notifications, provider-native labels, drafts, aliases, move-to-folder, and complete external flag/deletion reconciliation remain unsupported. SMTP services that do not automatically copy submitted messages to Sent need to expose a Sent copy through IMAP. Another plugin can register `mailCredentialVaultToken` before Mail Core to replace the default plain-JSON credential store.
 
 ## Documentation
+
+- [Gmail adapter](./docs/providers/gmail.md)
+- [Microsoft 365 adapter](./docs/providers/microsoft.md)
+- [IMAP/SMTP adapter](./docs/providers/imap-smtp.md)
 
 - [Configuration](./docs/zh-CN/configuration.md)
 - [Complete feature list and v2 comparison](./docs/zh-CN/feature-list.md)
@@ -104,28 +95,15 @@ POST /api/mail/accounts/:accountId/sync
   -> messages + checkpoint + next Outbox in one transaction
 ```
 
-An initial sync first establishes a Provider change watermark, imports bounded
-history pages, then catches up changes from that watermark. A Provider may use
-empty, resumable preparation pages to establish per-folder watermarks before
-returning history. One Queue
-execution advances one state-machine step, so a large mailbox never requires
-one unbounded HTTP request or one unbounded Job.
+An initial sync first establishes a Provider change watermark, imports bounded history pages, then catches up changes from that watermark. A Provider may use empty, resumable preparation pages to establish per-folder watermarks before returning history. One Queue execution advances one state-machine step, so a large mailbox never requires one unbounded HTTP request or one unbounded Job.
 
 For the initial history pass, `receivedAfter` and `maxMessages` apply together: Mail Core imports messages matching the date condition until it reaches the configured count or the Provider has no more matching messages. The default `maxMessages` is 10,000; API callers can set it from 1 through 100,000. A Provider page may contain slightly more messages than requested, so the final count may slightly exceed the configured value. After the history pass, Mail Core catches up changes from the baseline watermark. The server-side page size is configured through `mail.syncBatchSize` or `MAIL_SYNC_BATCH_SIZE` and is constrained to 1–200. Provider cursors are opaque and are never returned by the HTTP API as standalone Queue payloads.
 
 ## OAuth callback URL
 
-The default `mail.oauthCallbackUrl` is the app-local path
-`/mail/oauth/callback`. Mail Core prefixes it with the app's public base path
-and resolves it against `app.publicOrigin` (or the request origin when no public
-origin is configured). For example, an app mounted at `/main` produces
-`https://mail.example.com/main/mail/oauth/callback`.
+The default `mail.oauthCallbackUrl` is the app-local path `/mail/oauth/callback`. Mail Core prefixes it with the app's public base path and resolves it against `app.publicOrigin` (or the request origin when no public origin is configured). For example, an app mounted at `/main` produces `https://mail.example.com/main/mail/oauth/callback`.
 
-Override the callback with `mail.oauthCallbackUrl` or
-`MAIL_OAUTH_CALLBACK_URL`. Relative values are app-local paths and are prefixed
-with `app.publicBasePath`; absolute `http` or `https` URLs must include the
-application public base path so the mounted Root Route can receive the request.
-Register the resulting exact URL with the Provider's OAuth application.
+Override the callback with `mail.oauthCallbackUrl` or `MAIL_OAUTH_CALLBACK_URL`. Relative values are app-local paths and are prefixed with `app.publicBasePath`; absolute `http` or `https` URLs must include the application public base path so the mounted Root Route can receive the request. Register the resulting exact URL with the Provider's OAuth application.
 
 ## Push notifications
 
@@ -156,14 +134,9 @@ For safe initial sync, a Provider adapter implements:
   pagination; it returns the established checkpoint as `syncCursor`;
 - `listChanges()` for bounded catch-up and later incremental sync.
 
-Providers with folder hierarchies implement paginated `listFolders()` and
-`reconcileSyncCursor()`. A folder page is persisted before another Queue task
-is planned, so discovering a large hierarchy remains bounded and resumable.
+Providers with folder hierarchies implement paginated `listFolders()` and `reconcileSyncCursor()`. A folder page is persisted before another Queue task is planned, so discovering a large hierarchy remains bounded and resumable.
 
-For sending, it implements `sendMessage()`. A Provider that accepted a message
-but cannot return an identifier may omit `providerMessageId`. Network or
-protocol ambiguity must return `submission_unknown`; callers must not blindly
-resend it.
+For sending, it implements `sendMessage()`. A Provider that accepted a message but cannot return an identifier may omit `providerMessageId`. Network or protocol ambiguity must return `submission_unknown`; callers must not blindly resend it.
 
 ## HTTP API
 
@@ -218,26 +191,13 @@ DELETE /api/mail/accounts/:accountId/messages/:messageId
 GET  /api/mail/accounts/:accountId/conversations/:conversationId/messages
 ```
 
-The configured OAuth callback route is intentionally public because Google and
-Microsoft redirect the browser to it. It accepts only a short-lived, single-use
-state created by the authenticated start endpoint and redirects the browser to
-`/dev/mail/accounts` after completion; state and PKCE verifiers are never
-returned by account APIs.
+The configured OAuth callback route is intentionally public because Google and Microsoft redirect the browser to it. It accepts only a short-lived, single-use state created by the authenticated start endpoint and redirects the browser to `/settings/mail/my-accounts` after completion; state and PKCE verifiers are never returned by account APIs.
 
-`POST /mail/webhooks/:providerType/:providerName/:secret` is intentionally
-public because Gmail Pub/Sub and Microsoft Graph cannot use an application
-session. The route validates the configured high-entropy URL secret before
-parsing the body, limits request size, validates Microsoft `clientState`, maps
-only known active accounts, and returns no mailbox data.
+`POST /mail/webhooks/:providerType/:providerName/:secret` is intentionally public because Gmail Pub/Sub and Microsoft Graph cannot use an application session. The route validates the configured high-entropy URL secret before parsing the body, limits request size, validates Microsoft `clientState`, maps only known active accounts, and returns no mailbox data.
 
-Personal Mail APIs require `page:mail.workspace/access`; cross-user account and operation-log APIs under `/api/mail/settings/*` require `page:mail.admin/access`; the all-user message management APIs under `/api/mail/management/*` require `page:mail.management/access`. Account ownership is enforced again in `MailService`; Route authentication is not treated as ownership authorization.
-Inactive accounts cannot send or synchronize. Public responses omit credential
-references, Provider cursors, leases, and internal error messages.
+Personal Mail APIs require `page:mail.workspace/access`; cross-user account and operation-log APIs under `/api/mail/settings/*` require `page:mail.admin/access`; the all-user message management APIs under `/api/mail/management/*` require `page:mail.management/access`. Account ownership is enforced again in `MailService`; Route authentication is not treated as ownership authorization. Inactive accounts cannot send or synchronize. Public responses omit credential references, Provider cursors, leases, and internal error messages.
 
-The `/mail` workspace opens a complete conversation only when a Provider
-supplies its stable identifier (`threadId` for Gmail or `conversationId` for
-Microsoft Graph). Messages without that identifier open independently; the
-core does not infer a conversation from a matching subject.
+The `/mail` workspace opens a complete conversation only when a Provider supplies its stable identifier (`threadId` for Gmail or `conversationId` for Microsoft Graph). Messages without that identifier open independently; the core does not infer a conversation from a matching subject.
 
 ## Verification
 
@@ -247,3 +207,17 @@ pnpm --filter @nocobase/app-plugin-mail typecheck
 pnpm --filter @nocobase/app-plugin-mail test
 pnpm --filter @nocobase/app-plugin-mail build
 ```
+
+## Application-owned client and draft attachments
+
+Register the Mail Client plugin before rendering its public components. Each `ClientApplication` owns one lazy `MailClient`; React consumers use `useMailClient()` and imperative consumers resolve `mailClientToken` from that application's services. Both are exported by `@nocobase/app-plugin-mail/client`. Do not create or retain a module-global client. Public label and template managers explicitly use the Mail translation namespace when embedded in an application-owned page.
+
+The Server entry point exposes the plugin factory, `mailConfig`, `createMailProviderRegistry`, Tokens, and contract types. Default persistence, operation, and runtime implementations remain internal; resolve the supported service through its Token instead of constructing those implementations.
+
+Local draft attachments retain their upload identity separately from Provider attachment identifiers. Reopening or rescheduling a draft sends the retained local file contents. Upload cleanup preserves files referenced by live drafts and reclaims them after the final draft reference is removed and the upload expires.
+
+## Mail workspace UI
+
+`/mail` links to My mailboxes at `/settings/mail/my-accounts`, where signed-in users with `mail.workspace/access` connect and manage their own accounts, signatures, templates, and labels. The administrator overview remains at `/settings/mail/accounts` with `mail.admin/access`. The legacy `/dev/mail/accounts` preview reuses the same account page. OAuth success and failure redirects return to the production My mailboxes page.
+
+The workspace uses its available container width: three panes on wide screens, a navigation drawer on smaller screens, and list/detail switching on phones. Returning to the list preserves its filter and loaded rows. The non-modal desktop composer becomes full-screen on phones; its errors and draft state are independent of mailbox refreshes, and unsaved edits require an explicit close confirmation.

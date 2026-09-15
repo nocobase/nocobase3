@@ -60,10 +60,7 @@ describe('mail database migration', () => {
 
   it('creates the complete mail schema in one migration', async () => {
     const result = await migrateUp(database);
-    expect(result.executed).toEqual([
-      '202609030001_create_mail_tables',
-      '202609150001_add_mail_account_sync_interval',
-    ]);
+    expect(result.executed).toEqual(['202609030001_create_mail_tables']);
 
     const client = await database.connection().client<SqliteClient>();
     await expect(
@@ -88,6 +85,19 @@ describe('mail database migration', () => {
         client.schema.hasColumn('mail_accounts', 'default_for_user_id'),
       ]),
     ).resolves.toEqual([true, true, true, true, true, false]);
+
+    await expect(
+      client.raw('PRAGMA table_info(mail_accounts)'),
+    ).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'automatic_sync_interval_minutes',
+          type: 'INTEGER',
+          notnull: 1,
+          dflt_value: "'5'",
+        }),
+      ]),
+    );
 
     await expect(
       client.raw('PRAGMA index_list(mail_messages)'),

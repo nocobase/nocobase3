@@ -9,6 +9,7 @@ import sqlite from '@nocobase/db-sqlite';
 import { createQueueManager, type NocoBaseQueueManager } from '@nocobase/queue';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { SendMailOperation } from '../server/operations/send-mail.js';
 import { SyncMailboxOperation } from '../server/operations/sync-mailbox.js';
 import { createMailProviderRegistry } from '../server/registry.js';
 import {
@@ -1287,6 +1288,180 @@ describe('[SRV][DATA] mail runtime, synchronization, sending, and consistency', 
     ).resolves.toMatchObject({
       items: [expect.objectContaining({ id: draft.id })],
     });
+  });
+
+  it.each([
+    { scheduled: false, legacy: false },
+    { scheduled: true, legacy: false },
+    { scheduled: false, legacy: true },
+    { scheduled: true, legacy: true },
+  ])(
+    'sends retained local draft attachment bytes (scheduled: $scheduled, legacy: $legacy)',
+    async ({ scheduled, legacy }) => {
+      const content = new TextEncoder().encode('draft attachment');
+      const metadata = {
+        id: 'upload-1',
+        userId: 'user-1',
+        disk: 'local',
+        key: 'mail/upload-1',
+        fileName: 'note.txt',
+        contentType: 'text/plain',
+        size: content.length,
+        createdAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 86400000).toISOString(),
+      };
+      await store.createOutboundAttachment(metadata);
+      const sendMessage = vi.fn<MailProviderAdapter['sendMessage']>(
+        async () => ({
+          status: 'accepted',
+        }),
+      );
+      const attachmentStorage = {
+        create: vi.fn(),
+        cleanupExpired: vi.fn(),
+        open: vi.fn(async () => ({
+          attachment: metadata,
+          stream: new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(content);
+              controller.close();
+            },
+          }),
+        })),
+      };
+      const service = new DefaultMailService({
+        store,
+        adapters: resolver({ ...baseAdapter(), sendMessage }),
+        outboundAttachments: attachmentStorage,
+      });
+      const input = {
+        accountId: 'account-1',
+        identityId: 'identity-1',
+        to: [{ address: 'recipient@example.com' }],
+        subject: 'Attachment',
+        text: 'Body',
+        idempotencyKey: 'draft-with-attachment',
+        attachmentIds: ['upload-1'],
+      };
+      const draft = await service.saveDraft({ actorId: 'user-1' }, input);
+      expect(draft.attachments).toHaveLength(1);
+      if (legacy) {
+        await store.saveMessage('account-1', {
+          ...message(draft.providerMessageId, draft.subject),
+          draft: true,
+          attachments: draft.attachments.map(
+            ({ outboundAttachmentId: _outboundAttachmentId, ...attachment }) =>
+              attachment,
+          ),
+        });
+      }
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(Date.now() + 86400000 + 1000);
+      expect(
+        await store.getOutboundAttachment('user-1', 'upload-1'),
+      ).toBeDefined();
+      expect(
+        await store.listExpiredOutboundAttachments(
+          new Date().toISOString(),
+          100,
+        ),
+      ).toEqual([]);
+      const reopened = await store.getMessage('user-1', 'account-1', draft.id);
+      const downloaded = await service.getAttachment(
+        { actorId: 'user-1' },
+        'account-1',
+        draft.id,
+        reopened!.attachments[0].id,
+      );
+      expect(await new Response(downloaded.stream).text()).toBe(
+        'draft attachment',
+      );
+      let result = await service.sendMessage(
+        { actorId: 'user-1' },
+        {
+          ...input,
+          scheduledAt: scheduled
+            ? new Date(Date.now() + 2 * 86400000).toISOString()
+            : undefined,
+          idempotencyKey: 'send-draft-with-attachment',
+          draftMessageId: draft.id,
+          attachmentIds: [],
+          retainedAttachmentIds: reopened!.attachments.map((item) => item.id),
+        },
+      );
+      if (scheduled) {
+        expect(result.status).toBe('pending');
+        expect(sendMessage).not.toHaveBeenCalled();
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(Date.now() + 2 * 86400000 + 1000);
+        const persisted = await store.getScheduledSubmission(result.id);
+        result = await new SendMailOperation({
+          store,
+          adapters: resolver({ ...baseAdapter(), sendMessage }),
+          outboundAttachments: attachmentStorage,
+        }).execute({ actorId: 'user-1' }, persisted!.input, {
+          scheduledDelivery: true,
+        });
+      }
+      expect(result.status).toBe('accepted');
+      const sent = sendMessage.mock.calls[0][0].message;
+      expect(sent.attachments).toHaveLength(1);
+      expect(sent.retainedProviderAttachmentIds).toEqual([]);
+      expect(await new Response(await sent.attachments[0].open()).text()).toBe(
+        'draft attachment',
+      );
+    },
+  );
+
+  it('pages cleanup past retained uploads and releases them when the draft is deleted', async () => {
+    const now = new Date().toISOString();
+    const upload = {
+      id: 'upload-a',
+      userId: 'user-1',
+      disk: 'local',
+      key: 'a',
+      fileName: 'a.txt',
+      contentType: 'text/plain',
+      size: 1,
+      createdAt: now,
+      expiresAt: now,
+    };
+    await store.createOutboundAttachment(upload);
+    await store.createOutboundAttachment({
+      ...upload,
+      id: 'upload-b',
+      key: 'b',
+    });
+    const draft = await store.saveMessage('account-1', {
+      ...message('local-draft:cleanup', 'Retained upload'),
+      draft: true,
+      attachments: [
+        {
+          providerAttachmentId: upload.id,
+          outboundAttachmentId: upload.id,
+          fileName: upload.fileName,
+          contentType: upload.contentType,
+          size: upload.size,
+          inline: false,
+        },
+      ],
+    });
+    expect(
+      await store.getOutboundAttachment('user-1', upload.id),
+    ).toBeDefined();
+    expect(
+      await store.getOutboundAttachment('other-user', upload.id),
+    ).toBeUndefined();
+    expect(await store.listExpiredOutboundAttachments(now, 1)).toEqual([
+      expect.objectContaining({ id: 'upload-b' }),
+    ]);
+    await store.deleteMessage('account-1', draft.id);
+    expect(
+      await store.getOutboundAttachment('user-1', upload.id),
+    ).toBeUndefined();
+    expect(await store.listExpiredOutboundAttachments(now, 1)).toEqual([
+      expect.objectContaining({ id: 'upload-a' }),
+    ]);
   });
 
   it('does not lose the local draft when remote mirroring fails', async () => {

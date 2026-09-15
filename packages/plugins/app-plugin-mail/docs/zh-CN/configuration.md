@@ -8,14 +8,7 @@ keywords: 'NocoBase,邮件配置,邮箱,Gmail,Microsoft 365,IMAP,SMTP,OAuth,Push
 
 在 NocoBase 中，邮件插件的服务端配置放在 `config.yml` 的 `mail` 节点。大部分场景只需要配置 Provider 的必填参数；自动同步、OAuth callback 和 Push 通知按需配置即可。
 
-邮件插件由 Mail Core 和 Provider 插件组成：
-
-- `@nocobase/app-plugin-mail`——账户生命周期、OAuth callback、同步、发送和邮件中心
-- `@nocobase/app-plugin-mail-provider-gmail`——Gmail OAuth、Gmail API 和 Gmail Push
-- `@nocobase/app-plugin-mail-provider-microsoft`——Microsoft 365 OAuth、Graph API 和 Graph Push
-- `@nocobase/app-plugin-mail-provider-imap-smtp`——标准 IMAP / SMTP 账户接入
-
-使用某个 Provider 前，需要在应用中启用对应的 Server Provider 插件，并在 `mail.providers` 中添加同类型配置。
+`@nocobase/app-plugin-mail` 内置 Gmail、Microsoft 365 和 IMAP/SMTP Provider。应用只需注册 Mail 插件，并在 `mail.providers` 中添加对应类型的配置，无需安装或注册额外的内置 Provider 插件。
 
 :::warning 注意
 
@@ -85,12 +78,9 @@ https://mail.example.com/main/mail/oauth/callback
 
 `main` 来自应用的 `app.publicBasePath` 默认值 `/main`。它不是邮件插件的固定路径。
 
-本地开发时，如果模板的 `pnpm dev` 将 `APP_PUBLIC_ORIGIN` 填成了
-`127.0.0.1`，而浏览器使用同端口的 `localhost` 访问，Mail Core 会自动采用请求中的
-`localhost`，避免 Microsoft Entra 因回调地址主机名不同而拒绝请求。
+本地开发时，如果模板的 `pnpm dev` 将 `APP_PUBLIC_ORIGIN` 填成了 `127.0.0.1`，而浏览器使用同端口的 `localhost` 访问，Mail Core 会自动采用请求中的 `localhost`，避免 Microsoft Entra 因回调地址主机名不同而拒绝请求。
 
-如果浏览器通过其他端口或反向代理访问，或者希望本地 OAuth 地址完全固定，显式设置
-`APP_PUBLIC_ORIGIN`：
+如果浏览器通过其他端口或反向代理访问，或者希望本地 OAuth 地址完全固定，显式设置 `APP_PUBLIC_ORIGIN`：
 
 ```bash
 APP_PUBLIC_ORIGIN=http://localhost:13000 pnpm dev
@@ -116,34 +106,166 @@ mail:
 
 ### Push 通知
 
-Push 通知需要同时配置 Mail Core 的公共地址和共享密钥：
+Gmail 通过 Google Cloud Pub/Sub 把邮箱变更通知投递到 NocoBase；Microsoft 365 通过 Microsoft Graph 直接投递。两者都由 Mail Core 在收到通知后调度邮箱同步，通知本身不包含完整邮件内容。
+
+| 配置工作                          | Gmail                                   | Microsoft 365                         |
+| --------------------------------- | --------------------------------------- | ------------------------------------- |
+| 配置 Mail Core 公网地址和共享密钥 | 需要                                    | 需要                                  |
+| 配置 Provider OAuth 并关联邮箱    | 需要                                    | 需要                                  |
+| 在云平台手动配置通知投递          | 创建 Pub/Sub Topic 和 Push subscription | 无需手动创建 Graph subscription       |
+| Provider 额外配置                 | `pushTopicName`，可选 `pushLabelIds`    | 无                                    |
+| 邮箱监听的创建和续期              | Mail Core 自动维护 Gmail watch          | Mail Core 自动维护 Graph subscription |
+
+#### 1. 准备公共地址和密钥
+
+准备一个可以从公网访问、使用有效 HTTPS 证书的应用地址。以下示例假设域名是 `https://mail.example.com`，应用的 `publicBasePath` 是 `/main`；请同时替换域名和应用挂载路径。本地 `localhost` 或 `127.0.0.1` 无法直接接收云端 Push，需要通过公网 HTTPS 反向代理或开发隧道转发到本地应用。
+
+反向代理需要保留 webhook 路径、查询参数和 POST 请求体，并允许云端请求直接到达邮件插件。该路由使用共享密钥校验请求，不能被额外的网页登录、交互式验证码或浏览器 Cookie 校验拦截。`pushWebhookUrl` 应填写完整公共地址，包含应用挂载路径，以 `/mail/webhooks` 结尾，不加 `/api`；这个配置不会替你创建新的路由或自动补齐 `/main`。
+
+生成一个随机密钥，例如：
+
+```bash
+openssl rand -hex 32
+```
+
+该命令生成 64 个十六进制字符，符合密钥要求：长度为 32–128，只能包含字母、数字、`_` 和 `-`。把生成结果填入下面的 `pushWebhookSecret`；示例占位符不能用作实际密钥。
 
 ```yaml
 mail:
   pushWebhookUrl: https://mail.example.com/main/mail/webhooks
-  pushWebhookSecret: replace-with-a-random-secret-at-least-32-characters
+  pushWebhookSecret: replace-with-your-generated-random-secret
+  providers:
+    google:
+      type: gmail
+      clientId: replace-with-google-oauth-client-id
+      clientSecret: replace-with-google-oauth-client-secret
+      pushTopicName: projects/your-project-id/topics/mail-push
+    microsoft-365:
+      type: microsoft
+      tenant: common
+      clientId: replace-with-microsoft-entra-client-id
+      clientSecret: replace-with-microsoft-entra-client-secret
 ```
 
-运行时会在这个地址后追加 Provider 类型、Provider 实例名和共享密钥。比如 Gmail 实例名是 `google`，最终 callback 地址类似于：
+只使用一个 Provider 时，保留对应的配置即可。`google` 和 `microsoft-365` 是 Provider 实例名，需要和已关联账户使用的实例名保持一致。两者可以共用同一组 Mail Core Push 配置。
+
+Mail Core 在公共地址后追加 `/<Provider 类型>/<Provider 实例名>/<共享密钥>`，本例生成的完整 callback 地址为：
 
 ```text
+Gmail:
 https://mail.example.com/main/mail/webhooks/gmail/google/<secret>
+
+Microsoft 365:
+https://mail.example.com/main/mail/webhooks/microsoft/microsoft-365/<secret>
 ```
 
-同一个 `pushWebhookUrl` 和 `pushWebhookSecret` 可以供多个 Provider 实例共用，系统会根据 Provider 类型和实例名生成不同的 callback 地址。
+配置云平台时，把 `<secret>` 替换为与 `pushWebhookSecret` 完全相同的值，不保留尖括号。完整 URL 含有密钥，不要公开分享；代理访问日志应对该路径末段脱敏。
 
-配置方式取决于 Provider：
+也可以通过环境变量覆盖公共地址和密钥：
 
-- Gmail：需要在 Google Cloud Pub/Sub 中手动配置 Push subscription，把 endpoint 设置为生成后的完整 Gmail callback 地址；同时填写 `pushTopicName`，并确保 topic 允许 Gmail Push 服务账号发布消息
-- Microsoft 365：不需要在 Microsoft Graph 或 Microsoft Entra 中手动配置 webhook 地址。Mail Core 会在账户连接后自动创建、验证和续期 Graph subscription；应用公共地址需要支持公网 HTTPS 访问
+```bash
+MAIL_PUSH_WEBHOOK_URL=https://mail.example.com/main/mail/webhooks
+MAIL_PUSH_WEBHOOK_SECRET=replace-with-your-generated-random-secret
+```
 
-Push callback 地址和 OAuth callback 地址是两套配置。Google Cloud Console 和 Microsoft Entra 仍然需要登记 OAuth callback 地址，配置方式见上面的 [OAuth callback 地址](#oauth-callback-地址) 章节。
+两项必须同时配置才会启用 Push。Provider 的 OAuth 参数和 `pushTopicName` 仍在 `config.yml` 中配置。修改配置后重启应用。
 
-只配置其中一项不会启用 Push。Push 通知可能延迟或丢失，自动同步仍然会作为兜底机制运行。
+#### 2. 配置 Gmail Pub/Sub
+
+如果 Gmail 账户已经能够正常关联，可以复用现有 OAuth 客户端。新建时，在 Google Cloud 项目中启用 Gmail API，配置 OAuth 同意界面，并创建 **Web application** 类型的 OAuth 客户端；把最终 OAuth callback URL 登记为 **Authorized redirect URI**。测试阶段需要确保待关联账户符合应用的受众和测试用户配置。OAuth 客户端创建流程见 [Google 官方说明](https://developers.google.com/workspace/guides/create-credentials)。
+
+接着配置 Pub/Sub：
+
+1. 在 Google Cloud Console 选择 Gmail OAuth 客户端所属的项目，启用 **Cloud Pub/Sub API**。记录 Project ID，而不是项目显示名称或数字形式的 Project Number。
+2. 进入 **Pub/Sub → Topics**，创建 Topic，例如 `mail-push`。把完整名称 `projects/your-project-id/topics/mail-push` 填入 `mail.providers.google.pushTopicName`。Topic 中的项目 ID 必须与执行 Gmail watch 的 Google 项目一致，见 [Gmail watch 的 Topic 要求](https://developers.google.com/workspace/gmail/api/reference/rest/v1/users/watch)。
+3. 在该 Topic 的 **Permissions → Grant access** 中添加主体 `gmail-api-push@system.gserviceaccount.com`，授予 **Pub/Sub Publisher**（`roles/pubsub.publisher`）角色。授权对象是 Google 的 Gmail Push 服务账号，无需为它创建或下载私钥。该角色用于向 Topic 发布消息，见 [Pub/Sub 发布权限](https://docs.cloud.google.com/pubsub/docs/publisher)。
+4. 进入 **Pub/Sub → Subscriptions**，创建订阅，例如 `mail-push-nocobase`，选择刚才的 Topic，把 **Delivery type** 设置为 **Push**。如果创建 Topic 时自动生成了 Pull subscription，仍需创建或配置用于 NocoBase 的 Push subscription。
+5. 将 **Endpoint URL** 设置为完整 Gmail callback，例如 `https://mail.example.com/main/mail/webhooks/gmail/google/<secret>`。这里填写追加了 Provider 类型、实例名和实际密钥的地址，不能只填 `pushWebhookUrl`。
+6. 保持默认消息包装格式，不勾选 **Enable payload unwrapping**。当前 Provider 读取 JSON 中的 `message.data`，再解码其中的邮箱地址；开启 unwrapping 会改变请求体结构，导致回调返回 `400`。两种格式的区别见 [Pub/Sub 消息包装说明](https://docs.cloud.google.com/pubsub/docs/payload-unwrapping)。
+7. 保存订阅，重启 NocoBase，并在邮件账户页完成 Gmail 账户关联。已有正常关联的账户无需因首次启用 Push 而重新授权。
+
+当前 Mail Core 校验 URL 路径中的共享密钥，没有内置 Pub/Sub OIDC JWT 校验。直接投递到当前应用时不要求启用 **Enable authentication**；如果部署入口要求 Google 身份认证，需要在入口配置对应的服务账号权限及 JWT 验证，不能把“勾选认证”视为邮件插件已经验证了 JWT。参见 [Pub/Sub Push 认证说明](https://docs.cloud.google.com/pubsub/docs/authenticate-push-subscriptions)。
+
+如果组织的 Domain Restricted Sharing 策略阻止添加 Gmail Push 服务账号，需要由组织管理员为该主体配置适用的例外。Gmail 对 Topic 发布权限及组织策略的说明见 [Gmail Push 官方指南](https://developers.google.com/workspace/gmail/api/guides/push)。
+
+同一 Provider 实例下的多个邮箱可以共用这个 Topic 和 Push subscription，Mail Core 会分别为各个活跃账户创建 Gmail watch，并按通知中的邮箱地址定位账户。Pub/Sub subscription 负责“Topic 到 NocoBase”的投递，Gmail watch 负责“邮箱到 Topic”的发布，两者都配置成功才会收到通知。
+
+可选配置 `pushLabelIds`，例如只监听与收件箱有关的变化：
+
+```yaml
+mail:
+  providers:
+    google:
+      type: gmail
+      clientId: replace-with-google-oauth-client-id
+      clientSecret: replace-with-google-oauth-client-secret
+      pushTopicName: projects/your-project-id/topics/mail-push
+      pushLabelIds:
+        - INBOX
+```
+
+`pushLabelIds` 只限制触发 Push 的 Gmail label，不改变邮件同步本身的范围，也不是 NocoBase 本地标签。希望其他文件夹的变化也能及时触发同步时，省略它。修改 Topic 或 label 配置后需要重启应用，已有 watch 的变更会在下次 watch 维护时提交，不应仅根据一次手动同步判断新监听配置已生效。
+
+#### 3. 配置 Microsoft 365
+
+如果微软账户已经能够正常关联，确认 Mail Core 公共地址和密钥已配置即可。如果尚未配置 OAuth，在 Microsoft Entra 管理中心完成以下步骤：
+
+1. 进入 **App registrations**，创建或选择应用，按实际使用者选择支持的账户类型。单租户应用在 `tenant` 中填写对应的租户 ID；使用 `common` 时，应用注册的账户类型也需要支持相应的多租户或个人账户场景，`common` 本身不会改变应用注册的受众限制。
+2. 在 **Authentication** 中添加 **Web** 平台，并登记最终 OAuth callback URL，例如 `https://mail.example.com/main/mail/oauth/callback`。
+3. 将 **Application (client) ID** 填入 `clientId`。在 **Certificates & secrets** 中创建客户端密钥，将密钥的 **Value** 填入 `clientSecret`，不要填 Secret ID。
+4. 在 **API permissions → Microsoft Graph → Delegated permissions** 配置当前 Provider 使用的权限：`User.Read`、`Mail.ReadWrite`、`Mail.Send`，并允许 OAuth 流程请求 `openid`、`profile`、`email` 和 `offline_access`。根据租户的用户同意策略，由用户或管理员完成同意授权。
+5. 重启 NocoBase，在邮件账户页关联微软邮箱；如果原账户缺少新增权限，需要重新授权。
+
+应用注册、Web 回调与客户端凭据操作见 [Microsoft 官方注册说明](https://learn.microsoft.com/en-us/graph/auth-register-app-v2)。当前 Provider 使用用户委托授权；Graph 支持的应用权限订阅并不表示当前插件支持无人登录的应用身份接入。委托权限订阅针对登录用户自己的邮箱，共享或委托邮箱订阅有额外限制，见 [Graph 邮件订阅权限说明](https://learn.microsoft.com/en-us/graph/api/subscription-post-subscriptions?view=graph-rest-1.0)。
+
+无需在 Entra 中登记 webhook URL，也无需手动调用 Graph API 创建订阅。Mail Core 会为活跃账户创建 `me/messages` 订阅，监听 `created,updated,deleted`，设置生成的完整 callback URL，并用共享密钥作为通知的 `clientState`。
+
+创建订阅时，Graph 向 callback URL 发起带有 `validationToken` 查询参数的 POST 请求。插件会在该 URL 上返回 `200`、`Content-Type: text/plain` 和解码后的 token；反向代理必须保留查询参数，不能将响应包装成 JSON。Graph 要求在 10 秒内完成验证，详见 [Graph webhook 验证流程](https://learn.microsoft.com/en-us/graph/change-notifications-delivery-webhooks)。
+
+#### 4. 区分 OAuth callback 和 Push callback
+
+以下地址承担不同职责，不能互换：
+
+| 地址                                                                           | 填写位置                                                  | 用途                              |
+| ------------------------------------------------------------------------------ | --------------------------------------------------------- | --------------------------------- |
+| `https://mail.example.com/main/mail/oauth/callback`                            | Google OAuth 客户端和 Microsoft Entra 的 Web redirect URI | 用户关联邮箱时接收 OAuth 授权结果 |
+| `https://mail.example.com/main/mail/webhooks`                                  | `mail.pushWebhookUrl`                                     | Mail Core 生成通知地址的公共基址  |
+| `https://mail.example.com/main/mail/webhooks/gmail/google/<secret>`            | Google Pub/Sub Push subscription 的 Endpoint URL          | 接收 Gmail 通知                   |
+| `https://mail.example.com/main/mail/webhooks/microsoft/microsoft-365/<secret>` | Mail Core 自动提交给 Graph                                | 接收微软通知和验证请求            |
+
+如果自定义了 `mail.oauthCallbackUrl`，第一行使用自定义后的最终地址。OAuth callback 的路径解析规则见 [OAuth callback 地址](#oauth-callback-地址)。
+
+#### 5. 验证投递和同步
+
+1. 重启应用后，打开 `/dev/mail/accounts`，确认目标账户处于活跃状态，且手动同步能够成功。手动同步失败时，先解决 OAuth、Provider API 或队列问题。
+2. 等待运行时维护订阅。当前实现启动时执行一次维护，之后每分钟检查活跃账户；邮箱较多或 Provider 请求较慢时可能需要更长时间。
+3. 对微软，可以从外部终端用下面的 POST 请求检查 URL 验证链路。把示例中的 `<secret>` 替换为实际密钥。
+
+   ```bash
+   curl -i -X POST \
+     'https://mail.example.com/main/mail/webhooks/microsoft/microsoft-365/<secret>?validationToken=mail-webhook-check' \
+     -H 'Content-Type: text/plain' \
+     --data ''
+   ```
+
+   预期响应为 `200`、`Content-Type: text/plain`，正文为 `mail-webhook-check`。此检查只证明回调可达且验证分支正常，不代表已成功创建 Graph subscription。浏览器地址栏发出的是 GET 请求，不能用它判断 POST webhook 是否工作。
+
+4. 从另一个邮箱发送一封新邮件到已关联账户。Gmail 若配置了 `pushLabelIds: [INBOX]`，应让测试邮件进入收件箱。
+5. 检查 Gmail Pub/Sub 的订阅投递指标，以及应用或代理的 webhook POST 状态码。当前插件接受普通通知后返回 `202` 和 `{"accepted":true}`；再到 `/dev/mail/sync-logs` 检查同步结果，并在邮件中心确认邮件出现。管理员也可在 `/settings/mail/operation-logs` 查看跨用户操作日志。
+
+仅看到邮件出现不能证明 Push 成功，因为定时同步也会导入邮件；需要结合云端投递和应用 callback 请求记录判断。`202` 只表示通知已接受，不表示邮件已同步完成，也不保证通知匹配到了活跃账户。收到重复通知或已有同步任务运行时，Mail Core 会合并或延后处理，无需期待每次通知都产生一条独立同步记录。
+
+#### 6. 续期与配置变更
+
+当前 Gmail Provider 将下一次 watch 维护时间设为“一天后”和“到期前一小时”中的较早时间；Microsoft Provider 创建约两天有效的订阅，并在到期前十二小时开始续期。维护依赖应用运行时持续运行，不需要另建续期定时任务。Google 要求至少每七天重新调用一次 watch，并建议每天续期，见 [Gmail watch 续期说明](https://developers.google.com/workspace/gmail/api/guides/push)。
+
+变更公网域名、挂载路径或共享密钥后，更新 Mail Core 配置并重启应用。Gmail 还需要手动更新 Pub/Sub subscription 的 Endpoint URL；Microsoft 的旧订阅由 Mail Core 在维护时替换。轮换密钥期间旧地址会被拒绝，应协调应用配置和云端 endpoint 的更新。
+
+保留自动同步作为兜底。Push 可能延迟或丢失，不能把通知理解为每封邮件只触发一次且必定送达的事件流。
 
 ## Provider 配置
 
-`mail.providers` 是一个以实例名为 key 的对象。每个实例至少需要 `type`，并且需要安装对应的 Provider 插件：
+`mail.providers` 是一个以实例名为 key 的对象。每个实例至少需要 `type`；Gmail、Microsoft 365 和 IMAP/SMTP 类型已内置：
 
 ```yaml
 mail:
@@ -194,7 +316,7 @@ mail:
 | `pushTopicName`         | 否   | 无                                             | Google Cloud Pub/Sub topic 的完整名称。配置后才会为 Gmail 账户创建 watch。 |
 | `pushLabelIds`          | 否   | 无                                             | 限制 Gmail watch 监听的 label ID。省略时按 Gmail 默认范围监听。            |
 
-Gmail Push 还需要配置 Mail Core 的 `pushWebhookUrl` 和 `pushWebhookSecret`，并在 Google Cloud Pub/Sub 中手动把 Push subscription 的 endpoint 设置为生成后的完整 Gmail callback 地址。Pub/Sub topic 还必须允许 Gmail Push 服务账号发布消息。
+Gmail Push 还需要配置 Mail Core 的 `pushWebhookUrl` 和 `pushWebhookSecret`，并在 Google Cloud Pub/Sub 中手动把 Push subscription 的 endpoint 设置为生成后的完整 Gmail callback 地址。Pub/Sub topic 还必须允许 Gmail Push 服务账号发布消息。逐步操作见 [配置 Gmail Pub/Sub](#2-配置-gmail-pubsub)。
 
 ### Microsoft 365
 
@@ -232,7 +354,7 @@ mail:
 | `authorityBaseUrl` | 否   | `https://login.microsoftonline.com`                                                        | Microsoft identity authority 的基础地址。                             |
 | `graphBaseUrl`     | 否   | `https://graph.microsoft.com/v1.0`                                                         | Microsoft Graph API 的基础地址。                                      |
 
-Microsoft Graph Push 还需要配置 Mail Core 的 `pushWebhookUrl` 和 `pushWebhookSecret`，不需要在 Microsoft Graph 或 Microsoft Entra 中手动配置 webhook 地址。Graph subscription 由 Mail Core 在账户连接后创建、验证和续期。
+Microsoft Graph Push 还需要配置 Mail Core 的 `pushWebhookUrl` 和 `pushWebhookSecret`，不需要在 Microsoft Graph 或 Microsoft Entra 中手动配置 webhook 地址。Graph subscription 由 Mail Core 在账户连接后创建、验证和续期。逐步操作见 [配置 Microsoft 365](#3-配置-microsoft-365)。
 
 ### IMAP / SMTP
 
@@ -283,7 +405,7 @@ IMAP / SMTP MVP 不支持 Push、Provider-native label、草稿、别名和移�
 Mail Core 提供以下环境变量映射：
 
 ```bash
-MAIL_OAUTH_CALLBACK_URL=/main/mail/oauth/callback
+MAIL_OAUTH_CALLBACK_URL=/mail/oauth/callback
 MAIL_AUTOMATIC_SYNC_INTERVAL_MS=300000
 MAIL_SYNC_BATCH_SIZE=100
 MAIL_PUSH_WEBHOOK_URL=https://mail.example.com/main/mail/webhooks
@@ -302,11 +424,26 @@ Provider 的 `clientId`、`clientSecret`、endpoint 和 OAuth scopes 目前通�
 
 ### Provider 在账户关联界面中不可用
 
-检查对应的 Server Provider 插件是否已启用，再检查 `mail.providers.<name>.type` 是否和 Provider 插件一致。Gmail 和 Microsoft 365 还必须填写 `clientId` 与 `clientSecret`。
+检查 Mail Server 插件是否已启用，再检查 `mail.providers.<name>.type` 是否为 `gmail`、`microsoft` 或 `imap-smtp`。第三方类型需要额外注册对应的 Provider 插件。Gmail 和 Microsoft 365 还必须填写 `clientId` 与 `clientSecret`。
 
 ### Push 没有触发同步
 
-检查 Mail Core 的 `pushWebhookUrl` 和 `pushWebhookSecret` 是否同时配置。Gmail 还需要 `pushTopicName` 和 Pub/Sub 权限；Microsoft 365 需要应用能从公网接收 Graph callback。定时同步仍然会运行，不要关闭它。
+先确认 `pushWebhookUrl` 和 `pushWebhookSecret` 同时配置、应用已重启，账户处于活跃状态。然后按 [验证投递和同步](#5-验证投递和同步) 区分“没有建立监听”“通知投递失败”和“接受通知后同步失败”。
+
+| 现象                                      | 检查方向                                                                                                            |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Gmail watch 报 Topic 不存在或无发布权限   | 确认完整 Topic 名称、OAuth 项目 ID，以及 `gmail-api-push@system.gserviceaccount.com` 在该 Topic 上的 Publisher 权限 |
+| 无法为 Gmail 服务账号添加权限             | 检查组织的 Domain Restricted Sharing 策略，由管理员处理适用的例外                                                   |
+| Topic 有消息，但应用没有 POST 请求        | 确认订阅类型是 Push、Endpoint 是完整 callback URL，并检查 Pub/Sub 投递指标、DNS、TLS 和代理入口限制                 |
+| 应用 webhook 返回 `401`                   | 核对 URL 中的密钥与当前配置；微软还需核对通知的 `clientState`。若响应来自网关，检查网关自己的认证要求               |
+| 应用 webhook 返回 `404`                   | 核对 `/main` 等挂载路径、`/mail/webhooks` 路由、Provider 类型和实例名，确认对应插件已注册且 Provider 未禁用         |
+| Gmail callback 返回 `400`                 | 确认未启用 Payload unwrapping，请求保持 JSON 包装格式且包含有效的 `message.data`；普通测试文本不是合法 Gmail 通知   |
+| 微软提示 notification URL validation 失败 | 检查公网 HTTPS、POST 转发、`validationToken` 参数、纯文本响应及 10 秒响应时限；先运行上面的验证请求                 |
+| Graph 创建订阅报权限不足                  | 检查委托权限及用户或管理员同意状态；权限变更后重新授权，确认订阅的是登录用户自己的邮箱                              |
+| Callback 返回 `202`，但没有同步结果       | 检查是否匹配活跃账户、是否已有运行中的同步、队列 worker 和同步日志；`202` 不能单独证明邮件导入成功                  |
+| 曾经有效，数天后停止通知                  | 检查应用是否持续运行、OAuth 是否需要重新授权、客户端密钥是否过期，以及服务器订阅续期错误                            |
+
+订阅创建和续期错误写入应用服务器日志，可搜索 `Mail push subscription could not be renewed.` 或 `Mail push subscription maintenance failed.`。Webhook 接受后的任务错误可搜索 `Push-triggered Mail synchronization could not be activated.`。共享日志前应移除 token、密钥和完整 webhook URL。
 
 ### IMAP / SMTP 无法建立 TLS 连接
 
@@ -315,6 +452,6 @@ Provider 的 `clientId`、`clientSecret`、endpoint 和 OAuth scopes 目前通�
 ## 相关链接
 
 - [邮件插件功能清单](./feature-list.md) — 查看已实现能力和 Provider 差异
-- [Gmail Provider](../../../app-plugin-mail-provider-gmail/README.md) — Gmail OAuth、API 和 Pub/Sub 说明
-- [Microsoft 365 Provider](../../../app-plugin-mail-provider-microsoft/README.md) — Microsoft identity、Graph 和 Push 说明
-- [IMAP / SMTP Provider](../../../app-plugin-mail-provider-imap-smtp/README.md) — 通用邮箱 endpoint 和账户凭据说明
+- [Gmail Provider](../providers/gmail.md) — Gmail OAuth、API 和 Pub/Sub 说明
+- [Microsoft 365 Provider](../providers/microsoft.md) — Microsoft identity、Graph 和 Push 说明
+- [IMAP / SMTP Provider](../providers/imap-smtp.md) — 通用邮箱 endpoint 和账户凭据说明

@@ -1,21 +1,14 @@
+import { useService } from '@nocobase/app-client';
 import {
-  createApiClient,
-  resolveAppUrl,
-  type ApiClient,
-} from '@nocobase/app-client';
+  createServiceToken,
+  type ServiceToken,
+} from '@nocobase/service-provider';
 
-import { MailClient } from './mail-client.js';
+import type { MailClient } from './mail-client.js';
 
-let mailClient: MailClient | undefined;
+export const mailClientToken: ServiceToken<MailClient> =
+  createServiceToken<MailClient>('@nocobase/app-plugin-mail/client');
 
-export function configureMailClient(appClient: ApiClient): MailClient {
-  mailClient = new MailClient(appClient);
-  return mailClient;
-}
-
-export function getMailClient(): MailClient {
-  mailClient ??= new MailClient(
-    createApiClient({ baseURL: resolveAppUrl('/api') }),
-  );
-  return mailClient;
+export function useMailClient(): MailClient {
+  return useService(mailClientToken);
 }

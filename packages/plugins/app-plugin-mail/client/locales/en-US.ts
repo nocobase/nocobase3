@@ -2,6 +2,7 @@ import type { LocaleResource } from '@nocobase/i18n';
 
 const enUS = {
   nav: {
+    myAccounts: 'My mailboxes',
     mail: 'Mail',
     unread: '{{count}} unread messages',
     settings: 'Mail',
@@ -21,6 +22,23 @@ const enUS = {
     reloadAccounts: 'Reload accounts',
   },
   workspace: {
+    submissionUnknown:
+      'Delivery could not be confirmed. Check your provider before sending again.',
+    submissionFailed:
+      'One or more messages could not be sent. Check the delivery result before retrying.',
+    backToMail: 'Back to mail',
+    keepEditing: 'Keep editing',
+    closeDraftTitle: 'Close this message?',
+    discardChanges: 'Discard unsaved changes',
+    dismiss: 'Dismiss',
+    accepted: 'Message queued for delivery.',
+    loadedCount: '{{count}} loaded',
+    mailboxNavigation: 'Mailbox navigation',
+    backToMessages: 'Back to messages',
+    closeNavigation: 'Close mailbox navigation',
+    retry: 'Try again',
+    noAccountsTitle: 'Connect your first mailbox',
+    connectAccount: 'Connect mail account',
     title: 'Mail',
     allAccounts: 'All accounts',
     allMail: 'All mail',
@@ -244,6 +262,10 @@ const enUS = {
       displayName: 'Display name',
     },
     accounts: {
+      syncInterval: 'Automatic sync interval in minutes',
+      minutes: 'min',
+      saving: 'Saving…',
+      save: 'Save',
       title: 'All connected accounts',
       description: 'View mailboxes connected by all users.',
       ownerColumn: 'Owner',
@@ -350,6 +372,7 @@ const enUS = {
     },
   },
   dev: {
+    automaticSyncColumn: 'Automatic sync',
     eyebrow: 'Development tools',
     title: 'Mail playground',
     description:

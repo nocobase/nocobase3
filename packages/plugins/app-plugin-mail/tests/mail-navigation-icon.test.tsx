@@ -33,9 +33,10 @@ vi.mock('@nocobase/i18n/client', () => ({
   }),
 }));
 
-vi.mock('../client/runtime.js', () => ({
-  getMailClient: () => ({ getUnreadCount: mocks.getUnreadCount }),
-}));
+vi.mock('../client/runtime.js', () => {
+  const mail = { getUnreadCount: mocks.getUnreadCount };
+  return { useMailClient: () => mail };
+});
 
 vi.mock('../client/subscription.js', () => ({
   subscribeToMailInvalidations: vi.fn(

@@ -1,0 +1,17 @@
+[
+  {
+    "type": "file",
+    "name": "index",
+    "label": "概览"
+  },
+  {
+    "type": "file",
+    "name": "configuration",
+    "label": "配置邮件"
+  },
+  {
+    "type": "file",
+    "name": "usage",
+    "label": "使用邮件"
+  }
+]

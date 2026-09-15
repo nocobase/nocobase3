@@ -13,12 +13,11 @@ import {
   mailErrorMessage,
   type MailManagedAccountView,
 } from '../mail-client.js';
-import { getMailClient } from '../runtime.js';
+import { useMailClient } from '../runtime.js';
 import { Button } from '../components/ui/button.js';
 
-const mail = getMailClient();
-
 export default function MailSettingsPage(): ReactElement {
+  const mail = useMailClient();
   const { t } = useTranslation();
   const [accounts, setAccounts] = useState<readonly MailManagedAccountView[]>(
     [],
@@ -43,7 +42,7 @@ export default function MailSettingsPage(): ReactElement {
         );
       })
       .finally(() => setLoading(false));
-  }, [t]);
+  }, [mail, t]);
 
   useEffect(() => {
     void Promise.resolve().then(refresh);

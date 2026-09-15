@@ -5,7 +5,7 @@ const mail = vi.hoisted(() => ({
   listManagedAccounts: vi.fn(),
 }));
 
-vi.mock('../client/runtime.js', () => ({ getMailClient: () => mail }));
+vi.mock('../client/runtime.js', () => ({ useMailClient: () => mail }));
 
 import MailSettingsPage from '../client/pages/mail-settings-page.js';
 

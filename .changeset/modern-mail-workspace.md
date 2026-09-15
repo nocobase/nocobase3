@@ -1,8 +1,5 @@
 ---
 '@nocobase/app-plugin-mail': minor
-'@nocobase/app-plugin-mail-provider-gmail': minor
-'@nocobase/app-plugin-mail-provider-imap-smtp': minor
-'@nocobase/app-plugin-mail-provider-microsoft': minor
 '@nocobase/app-template-default': patch
 '@nocobase/app-template-examples': patch
 '@nocobase/app-template-hub': patch

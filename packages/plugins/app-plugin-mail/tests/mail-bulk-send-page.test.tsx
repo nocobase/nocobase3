@@ -11,7 +11,7 @@ const mail = vi.hoisted(() => ({
 }));
 
 vi.mock('../client/runtime.js', () => ({
-  getMailClient: () => mail,
+  useMailClient: () => mail,
 }));
 
 import MailBulkSendPage from '../client/pages/mail-bulk-send-page.js';

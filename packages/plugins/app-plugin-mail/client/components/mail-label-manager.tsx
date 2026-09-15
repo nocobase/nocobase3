@@ -8,7 +8,8 @@ import {
   type MailLabel,
   type MailLabelColor,
 } from '../mail-client.js';
-import { getMailClient } from '../runtime.js';
+import { useMailClient } from '../runtime.js';
+import { MAIL_PLUGIN_NS } from '../namespace.js';
 import { MAIL_LABEL_COLORS, mailLabelColorSwatch } from '../lib/mail-label.js';
 import { MailLabelTag } from './mail-label-tag.js';
 import { cn } from '../lib/utils.js';
@@ -24,7 +25,6 @@ import {
 import { Card } from './ui/card.js';
 import { Input } from './ui/input.js';
 
-const mail = getMailClient();
 const DEFAULT_LABEL_COLOR: MailLabelColor = 'blue';
 const DEFAULT_COLOR_NAMES: Readonly<Record<MailLabelColor, string>> = {
   slate: 'Slate',
@@ -44,7 +44,8 @@ interface LabelDraft {
 }
 
 export function MailLabelManager(): ReactElement {
-  const { t } = useTranslation();
+  const mail = useMailClient();
+  const { t } = useTranslation(MAIL_PLUGIN_NS);
   const [labels, setLabels] = useState<readonly MailLabel[]>([]);
   const [draft, setDraft] = useState<LabelDraft>(() => emptyDraft());
   const [editingId, setEditingId] = useState<string>();
@@ -72,7 +73,7 @@ export function MailLabelManager(): ReactElement {
       .then((nextLabels) => setLabels([...nextLabels].sort(compareLabels)))
       .catch(showError)
       .finally(() => setLoading(false));
-  }, [showError]);
+  }, [mail, showError]);
 
   useEffect(() => {
     void Promise.resolve().then(refresh);

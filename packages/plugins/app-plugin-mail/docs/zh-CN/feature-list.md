@@ -8,12 +8,7 @@ keywords: 'NocoBase,邮件,邮箱,Gmail,Microsoft 365,Outlook,功能清单'
 
 NocoBase v3 的**邮件插件（Mail）**负责连接用户自己的邮箱账户，在 NocoBase 中同步、查看、管理和发送邮件。它和通知插件的职责不同——通知插件负责应用通知投递，邮件插件负责完整的用户邮箱体验。
 
-这份清单覆盖以下三个包：
-
-- `@nocobase/app-plugin-mail`——账户、邮件、同步、发送、草稿、附件和管理界面
-- `@nocobase/app-plugin-mail-provider-gmail`——Gmail OAuth 与 Gmail API 适配
-- `@nocobase/app-plugin-mail-provider-microsoft`——Microsoft OAuth 与 Microsoft Graph 适配
-- `@nocobase/app-plugin-mail-provider-imap-smtp`——标准 IMAP/SMTP 凭据接入（MVP）
+这份清单覆盖 `@nocobase/app-plugin-mail`，包括邮件核心及内置的 Gmail、Microsoft 365 和 IMAP/SMTP 适配模块。应用只需注册 Mail 插件。
 
 状态说明：
 
@@ -345,7 +340,7 @@ NocoBase v2 邮件管理插件已经形成了完整的产品入口和可配置�
 
 | v2 能力                     | v3 当前状态  | 说明                                                                              |
 | --------------------------- | ------------ | --------------------------------------------------------------------------------- |
-| Gmail 和 Outlook OAuth 接入 | 已实现       | v3 拆分为 Gmail 与 Microsoft Provider 插件                                        |
+| Gmail 和 Outlook OAuth 接入 | 已实现       | v3 内置 Gmail 与 Microsoft Provider 适配模块                                      |
 | 多账户邮件中心              | 已实现       | v3 默认展示全部账户邮件，也支持切换账户、文件夹、搜索和原生会话                   |
 | 手动和可配置自动同步        | 已实现并增强 | v3 默认同步全部可同步账户，支持按账户设置间隔、Push、可恢复分批同步和增量 cursor  |
 | 发送、查看、回复和转发      | 已实现       | v3 回复和转发使用 Provider 原生关系                                               |

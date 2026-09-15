@@ -37,7 +37,7 @@ const mail = vi.hoisted(() => ({
 }));
 
 vi.mock('../client/runtime.js', () => ({
-  getMailClient: () => mail,
+  useMailClient: () => mail,
 }));
 
 import MailWorkspacePage from '../client/pages/mail-workspace-page.js';
@@ -138,6 +138,76 @@ describe('[UI][SRV] mail workspace, composer, drafts, and management', () => {
     });
   });
 
+  it('links first-time users to personal settings rather than administrator accounts', async () => {
+    mail.listAccounts.mockResolvedValue([]);
+    render(<MailWorkspacePage />);
+    const connect = await screen.findByRole('link', {
+      name: 'Connect mail account',
+    });
+    expect(connect).toHaveAttribute('href', '/settings/mail/my-accounts');
+    expect(screen.getByRole('button', { name: 'Compose' })).toBeDisabled();
+  });
+
+  it('keeps composer errors and entered text when the mailbox refreshes', async () => {
+    mail.listTemplates.mockRejectedValue(new Error('templates unavailable'));
+    render(<MailWorkspacePage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Compose' }));
+    const editor = await screen.findByRole('dialog', { name: 'New message' });
+    expect(await within(editor).findByRole('alert')).toHaveTextContent(
+      'templates unavailable',
+    );
+    fireEvent.change(within(editor).getByLabelText('TO'), {
+      target: { value: 'draft@example.com' },
+    });
+    fireEvent.change(screen.getByLabelText('Search mail'), {
+      target: { value: 'project' },
+    });
+    await waitFor(() =>
+      expect(mail.listMessages).toHaveBeenCalledWith(
+        expect.objectContaining({ query: 'project' }),
+      ),
+    );
+    expect(within(editor).getByRole('alert')).toHaveTextContent(
+      'templates unavailable',
+    );
+    expect(within(editor).getByLabelText('TO')).toHaveValue(
+      'draft@example.com',
+    );
+    expect(screen.getByRole('button', { name: 'Compose' })).toBeDisabled();
+    expect(editor).not.toHaveAttribute('aria-modal', 'true');
+  });
+
+  it('returns from a conversation without refetching or clearing the current list', async () => {
+    const message = {
+      id: 'reading-1',
+      accountId: 'account-1',
+      subject: 'Reading flow',
+      from: { address: 'sender@example.com' },
+      to: [],
+      cc: [],
+      bcc: [],
+      folderIds: [],
+      labelIds: [],
+      attachments: [],
+      read: true,
+      starred: false,
+      text: 'Message content',
+    };
+    mail.listMessages.mockResolvedValue({ items: [message] });
+    mail.getMessage.mockResolvedValue(message);
+    render(<MailWorkspacePage />);
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Reading flow/ }),
+    );
+    expect(await screen.findByText('Message content')).toBeInTheDocument();
+    const requests = mail.listMessages.mock.calls.length;
+    fireEvent.click(screen.getByRole('button', { name: 'Back to messages' }));
+    expect(
+      screen.getByRole('button', { name: /Reading flow/ }),
+    ).toBeInTheDocument();
+    expect(mail.listMessages).toHaveBeenCalledTimes(requests);
+  });
+
   it('sends mail from the production workspace composer', async () => {
     render(<MailWorkspacePage />);
 
@@ -178,6 +248,42 @@ describe('[UI][SRV] mail workspace, composer, drafts, and management', () => {
       }),
     );
   });
+
+  it.each(['unknown', 'failed'])(
+    'reports a %s submission without claiming delivery was queued',
+    async (status) => {
+      mail.sendMessage.mockResolvedValue({
+        id: 'submission-1',
+        accountId: 'account-1',
+        status,
+      });
+      render(<MailWorkspacePage />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Compose' }));
+      await waitFor(() =>
+        expect(screen.getByLabelText('From address')).toHaveValue('identity-1'),
+      );
+      fireEvent.change(screen.getByLabelText('TO'), {
+        target: { value: 'recipient@example.com' },
+      });
+      fireEvent.change(screen.getByLabelText('Subject'), {
+        target: { value: 'Delivery status' },
+      });
+      const body = screen.getByLabelText('Message body');
+      body.innerHTML = '<p>Test content</p>';
+      fireEvent.input(body);
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+      expect(
+        await screen.findByText(
+          status === 'unknown'
+            ? 'Delivery could not be confirmed. Check your provider before sending again.'
+            : 'One or more messages could not be sent. Check the delivery result before retrying.',
+        ),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByText('Message queued for delivery.'),
+      ).not.toBeInTheDocument();
+    },
+  );
 
   it('keeps Cc and Bcc fields hidden until their text buttons are clicked', async () => {
     render(<MailWorkspacePage />);
@@ -763,21 +869,30 @@ describe('[UI][SRV] mail workspace, composer, drafts, and management', () => {
     );
   });
 
-  it('protects unsaved content when the composer is closed', async () => {
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+  it('keeps unsaved content until the user explicitly discards it', async () => {
     render(<MailWorkspacePage />);
-
     fireEvent.click(await screen.findByRole('button', { name: 'Compose' }));
-    fireEvent.change(screen.getByLabelText('Subject'), {
-      target: { value: 'Keep this message' },
+    fireEvent.change(await screen.findByLabelText('TO'), {
+      target: { value: 'draft@example.com' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-
-    expect(confirm).toHaveBeenCalledWith(
-      'This message has changes that have not been saved. Close it anyway?',
+    const guard = await screen.findByRole('dialog', {
+      name: 'Close this message?',
+    });
+    fireEvent.click(
+      within(guard).getAllByRole('button', {
+        name: 'Keep editing',
+        exact: true,
+      })[0],
     );
-    expect(screen.getByLabelText('Subject')).toHaveValue('Keep this message');
-    confirm.mockRestore();
+    expect(screen.getByLabelText('TO')).toHaveValue('draft@example.com');
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Discard unsaved changes' }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByLabelText('TO')).not.toBeInTheDocument(),
+    );
   });
 
   it('binds current record values when applying a template', async () => {

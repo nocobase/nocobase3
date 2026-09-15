@@ -2,14 +2,17 @@ import { apiClientToken, ClientApplication } from '@nocobase/app-client';
 import type { ClientServiceProviderConstructor } from '@nocobase/app-client/plugins';
 import { ServiceProvider } from '@nocobase/service-provider';
 
-import { configureMailClient } from './runtime.js';
+import { mailClientToken } from './runtime.js';
+import { MailClient } from './mail-client.js';
 
 export class MailClientServiceProvider extends ServiceProvider<ClientApplication> {
   public readonly name: string = '@nocobase/app-plugin-mail/client';
 
-  public override boot(): Promise<void> {
-    configureMailClient(this.app.container.resolve(apiClientToken));
-    return Promise.resolve();
+  public override register(): void {
+    this.app.container.singleton(
+      mailClientToken,
+      () => new MailClient(this.app.container.resolve(apiClientToken)),
+    );
   }
 }
 

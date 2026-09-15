@@ -16,9 +16,8 @@ import {
   type MailManagementMessageAction,
   type MailMessageSummary,
 } from '../mail-client.js';
-import { getMailClient } from '../runtime.js';
+import { useMailClient } from '../runtime.js';
 
-const mail = getMailClient();
 const PAGE_SIZE = 100;
 
 interface ManagedFolderOption extends Pick<MailFolder, 'name' | 'type'> {
@@ -27,6 +26,7 @@ interface ManagedFolderOption extends Pick<MailFolder, 'name' | 'type'> {
 }
 
 export default function MailManagementPage(): ReactElement {
+  const mail = useMailClient();
   const { t } = useTranslation();
   const [accounts, setAccounts] = useState<readonly MailAccountView[]>([]);
   const [accountId, setAccountId] = useState('');
@@ -101,7 +101,7 @@ export default function MailManagementPage(): ReactElement {
         );
       })
       .catch(reportError);
-  }, [reportError]);
+  }, [mail, reportError]);
 
   useEffect(() => {
     void Promise.resolve().then(loadAccounts);
@@ -137,7 +137,7 @@ export default function MailManagementPage(): ReactElement {
       .finally(() => {
         if (requestIdRef.current === requestId) setLoading(false);
       });
-  }, [accountId, debouncedQuery, reloadVersion, reportError]);
+  }, [accountId, debouncedQuery, mail, reloadVersion, reportError]);
 
   const accountNames = useMemo(
     () => new Map(accounts.map((account) => [account.id, account.address])),

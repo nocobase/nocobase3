@@ -30,6 +30,11 @@
     "label": "通知"
   },
   {
+    "type": "dir",
+    "name": "mail",
+    "label": "邮件"
+  },
+  {
     "type": "file",
     "name": "file",
     "label": "文件"

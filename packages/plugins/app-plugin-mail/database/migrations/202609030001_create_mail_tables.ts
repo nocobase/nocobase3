@@ -90,6 +90,10 @@ const migration: MigrationDefinition = defineMigration({
       collection.json('scopes', { nullable: false });
       collection.string('status', { length: 50, nullable: false });
       collection.datetimeTz('initialSyncReceivedAfter');
+      collection.integer('automaticSyncIntervalMinutes', {
+        nullable: false,
+        defaultValue: 5,
+      });
       collection.datetimeTz('createdAt', { nullable: false });
       collection.datetimeTz('updatedAt', { nullable: false });
       collection.index(['userId', 'status'], {

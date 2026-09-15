@@ -34,7 +34,7 @@ describe('Mail OAuth callback route', () => {
     );
     expect(completed.status).toBe(302);
     expect(completed.headers.get('location')).toBe(
-      '/test/dev/mail/accounts?mailAuthorization=success',
+      '/test/settings/mail/my-accounts?mailAuthorization=success',
     );
     expect(completeAuthorization).toHaveBeenCalledWith({
       state: 'state-1',
@@ -56,7 +56,7 @@ describe('Mail OAuth callback route', () => {
 
     expect(response.status).toBe(302);
     expect(response.headers.get('location')).toBe(
-      '/test/dev/mail/accounts?mailAuthorization=failure',
+      '/test/settings/mail/my-accounts?mailAuthorization=failure',
     );
   });
 

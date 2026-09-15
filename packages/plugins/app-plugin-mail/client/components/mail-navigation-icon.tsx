@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import type { ReactElement } from 'react';
 import { useTranslation } from '@nocobase/i18n/client';
 
-import { getMailClient } from '../runtime.js';
+import { useMailClient } from '../runtime.js';
 import { MAIL_PLUGIN_NS } from '../namespace.js';
 import { subscribeToMailInvalidations } from '../subscription.js';
 
@@ -15,13 +15,14 @@ export const MAIL_UNREAD_COUNT_CHANGED_EVENT =
 /** Mail center icon with a current-user unread badge. */
 export function MailNavigationIcon(): ReactElement {
   const { t } = useTranslation(MAIL_PLUGIN_NS);
+  const mail = useMailClient();
   const realtime = useService(realtimeClientToken);
   const [unread, setUnread] = useState(0);
 
   useEffect(() => {
     let active = true;
     const refresh = (): void => {
-      void getMailClient()
+      void mail
         .getUnreadCount()
         .then((count) => {
           if (active) setUnread(count);
@@ -42,7 +43,7 @@ export function MailNavigationIcon(): ReactElement {
       unsubscribeRealtime();
       window.removeEventListener(MAIL_UNREAD_COUNT_CHANGED_EVENT, refresh);
     };
-  }, [realtime]);
+  }, [mail, realtime]);
 
   return (
     <span className='relative inline-flex size-4 items-center justify-center'>

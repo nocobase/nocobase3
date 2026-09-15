@@ -10,7 +10,7 @@ keywords: 'NocoBase,Mail Provider,邮件插件,第三方 Provider,IMAP,SMTP,OAut
 
 ## 设计边界
 
-第三方 Provider 应作为独立的 NocoBase Server 插件发布，并通过 `mailProviderRegistryToken` 注册一个 `MailProviderDefinition`。业务页面或其他插件不应直接实例化 Provider adapter，也不应读取 Mail Core 的账户、凭据、同步游标或 Outbox 表。
+Gmail、Microsoft 365 和 IMAP/SMTP 内置于 Mail 的 `server/adapters/`，随 Mail 自动注册。第三方 Provider 应作为独立的 NocoBase Server 插件发布，并通过 `mailProviderRegistryToken` 注册一个 `MailProviderDefinition`。业务页面或其他插件不应直接实例化 Provider adapter，也不应读取 Mail Core 的账户、凭据、同步游标或 Outbox 表。
 
 Mail Core 只接收标准化账户、文件夹、邮件、附件、游标和 Provider 错误。Provider 可以使用任意 HTTP SDK、IMAP/SMTP 客户端或厂商 SDK，但不能把服务商 SDK 的对象直接泄露到 Mail Core 的公开类型中。
 
@@ -183,15 +183,13 @@ Provider 不应把未安装的实现自动加入可用列表；只有已注册�
 - Provider 错误能映射为 `authentication`、`configuration`、`network`、`provider` 或 `content` 类别，并正确设置 `retryable`。
 - adapter 的 `close` 可以安全重复调用，不会留下 socket、timer 或 HTTP 请求。
 
-当前内置 Provider 的兼容性测试可以作为实现模板：Gmail、Microsoft 365 和 IMAP/SMTP 的 `tests/*` 都会构造真实定义和 adapter，并校验对应能力边界；测试不需要真实 OAuth、邮箱或 Push 服务。
+当前内置 Provider 的兼容性测试可以作为实现模板：Gmail、Microsoft 365 和 IMAP/SMTP 的 `tests/adapters/<type>/*` 都会构造真实定义和 adapter，并校验对应能力边界；测试不需要真实 OAuth、邮箱或 Push 服务。
 
 建议运行以下命令完成 Provider 包验证：
 
 ```bash
-pnpm --filter @nocobase/app-plugin-mail test
-pnpm --filter @nocobase/app-plugin-mail-provider-gmail check
-pnpm --filter @nocobase/app-plugin-mail-provider-microsoft check
-pnpm --filter @nocobase/app-plugin-mail-provider-imap-smtp check
+pnpm --filter @nocobase/app-plugin-mail check
+pnpm --filter <your-provider-package> check
 ```
 
 ## 发布前清单

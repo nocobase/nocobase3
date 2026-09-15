@@ -17,7 +17,7 @@ import {
   type MailSignature,
   type MailTemplate,
 } from '../mail-client.js';
-import { getMailClient } from '../runtime.js';
+import { useMailClient } from '../runtime.js';
 import { Button } from '../components/ui/button.js';
 import { Card } from '../components/ui/card.js';
 import { Input } from '../components/ui/input.js';
@@ -26,7 +26,6 @@ import MailWorkspacePage from './mail-workspace-page.js';
 import { renderMailTemplate } from '../lib/mail-template.js';
 import { replaceMailSignatureContent } from '../lib/mail-signature.js';
 
-const mail = getMailClient();
 interface ComposeValue {
   readonly to: string;
   readonly subject: string;
@@ -68,6 +67,7 @@ export function MailSendDevPage(): ReactElement {
 }
 
 function MailDevPage(): ReactElement {
+  const mail = useMailClient();
   const { t } = useTranslation();
   const [accounts, setAccounts] = useState<readonly MailAccountView[]>([]);
   const [accountId, setAccountId] = useState('');
@@ -116,7 +116,7 @@ function MailDevPage(): ReactElement {
         ),
       )
       .finally(() => setBusy(undefined));
-  }, [t]);
+  }, [mail, t]);
 
   useEffect(() => {
     void Promise.resolve().then(loadAccounts);
@@ -124,7 +124,7 @@ function MailDevPage(): ReactElement {
 
   useEffect(() => {
     void mail.listTemplates().then(setTemplates);
-  }, []);
+  }, [mail]);
 
   useEffect(() => {
     if (!accountId) {
@@ -163,7 +163,7 @@ function MailDevPage(): ReactElement {
           ),
         ),
     );
-  }, [accountId, t]);
+  }, [accountId, mail, t]);
 
   useEffect(() => {
     if (!accountId) return;
@@ -195,7 +195,7 @@ function MailDevPage(): ReactElement {
     return () => {
       active = false;
     };
-  }, [accountId, t]);
+  }, [accountId, mail, t]);
 
   const sendMessage = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault();

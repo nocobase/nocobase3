@@ -15,9 +15,7 @@ import {
   type MailSubmissionLogView,
   type MailSyncRunView,
 } from '../mail-client.js';
-import { getMailClient } from '../runtime.js';
-
-const mail = getMailClient();
+import { useMailClient } from '../runtime.js';
 
 type OperationLogTab = 'sync' | 'send';
 
@@ -28,6 +26,7 @@ const EMPTY_LOGS: MailManagedOperationLogsView = {
 };
 
 export default function MailOperationLogsPage(): ReactElement {
+  const mail = useMailClient();
   const { t } = useTranslation();
   const [logs, setLogs] = useState<MailManagedOperationLogsView>(EMPTY_LOGS);
   const [activeTab, setActiveTab] = useState<OperationLogTab>('sync');
@@ -56,7 +55,7 @@ export default function MailOperationLogsPage(): ReactElement {
         );
       })
       .finally(() => setLoading(false));
-  }, [t]);
+  }, [mail, t]);
 
   useEffect(() => {
     void Promise.resolve().then(refresh);

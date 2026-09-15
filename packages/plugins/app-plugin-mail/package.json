@@ -129,14 +129,19 @@
   },
   "dependencies": {
     "@sinclair/typebox": "catalog:",
-    "hono": "catalog:"
+    "hono": "catalog:",
+    "imapflow": "^2.0.0",
+    "mailparser": "^3.9.24",
+    "nodemailer": "^9.0.5"
   },
   "devDependencies": {
     "@nocobase/db-sqlite": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@testing-library/jest-dom": "catalog:",
     "@testing-library/react": "catalog:",
+    "@types/mailparser": "^3.4.6",
     "@types/node": "catalog:",
+    "@types/nodemailer": "^8.0.1",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "eslint": "catalog:",

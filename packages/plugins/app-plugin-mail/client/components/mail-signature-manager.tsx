@@ -5,7 +5,7 @@ import { useTranslation } from '@nocobase/i18n/client';
 
 import type { MailAccountView, MailSignature } from '../mail-client.js';
 import { mailErrorMessage } from '../mail-client.js';
-import { getMailClient } from '../runtime.js';
+import { useMailClient } from '../runtime.js';
 import { MAIL_PLUGIN_NS } from '../namespace.js';
 import { cn } from '../lib/utils.js';
 import { plainTextToMailHtml } from '../lib/mail-template.js';
@@ -14,8 +14,6 @@ import { Card } from './ui/card.js';
 import { Input } from './ui/input.js';
 import { MailRichTextEditor } from './mail-rich-text-editor.js';
 import { NativeSelect } from './ui/native-select.js';
-
-const mail = getMailClient();
 
 export interface MailSignatureManagerProps {
   readonly accounts: readonly MailAccountView[];
@@ -41,6 +39,7 @@ export function MailSignatureManager({
   accounts,
   onError,
 }: MailSignatureManagerProps): ReactElement {
+  const mail = useMailClient();
   const { t } = useTranslation(MAIL_PLUGIN_NS);
   const [signaturesByAccount, setSignaturesByAccount] = useState<
     Readonly<Record<string, readonly MailSignature[]>>
@@ -77,7 +76,7 @@ export function MailSignatureManager({
       })
       .catch(showError)
       .finally(() => setLoading(false));
-  }, [accounts, showError]);
+  }, [accounts, mail, showError]);
 
   useEffect(() => {
     void Promise.resolve().then(loadSignatures);

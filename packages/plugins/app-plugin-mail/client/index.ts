@@ -10,3 +10,4 @@ export {
   MAIL_REALTIME_TOPIC,
   type MailRealtimeEvent,
 } from '../shared/realtime.js';
+export { mailClientToken, useMailClient } from './runtime.js';

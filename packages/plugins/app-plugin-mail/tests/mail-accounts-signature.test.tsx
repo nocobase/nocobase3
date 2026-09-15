@@ -29,7 +29,7 @@ const mail = vi.hoisted(() => ({
   updateAccount: vi.fn(),
 }));
 
-vi.mock('../client/runtime.js', () => ({ getMailClient: () => mail }));
+vi.mock('../client/runtime.js', () => ({ useMailClient: () => mail }));
 
 import MailAccountsDevPage from '../client/pages/mail-accounts-dev-page.js';
 

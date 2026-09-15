@@ -1,0 +1,204 @@
+import { type QueryAdapter } from '@nocobase/db';
+import { randomUUID } from 'node:crypto';
+import {
+  MAIL_LOCAL_DRAFT_FOLDER_ID,
+  type NormalizedMailMessage,
+} from '../types.js';
+import { toMessageRow } from './mappers.js';
+import {
+  type FolderRow,
+  type MessageFolderRow,
+  type MessageLabelRow,
+  type MessageRow,
+} from './rows.js';
+import { chunks } from './serialization.js';
+
+export async function upsertMessages(
+  query: QueryAdapter,
+  accountId: string,
+  messages: readonly NormalizedMailMessage[],
+): Promise<void> {
+  const uniqueMessages = [
+    ...new Map(
+      messages.map((message) => [message.providerMessageId, message]),
+    ).values(),
+  ];
+  if (uniqueMessages.length === 0) return;
+  const now = new Date().toISOString();
+  const existingRows = await query
+    .selectFrom<MessageRow>('mailMessages')
+    .select(['id', 'providerMessageId', 'createdAt', 'note', 'todo'])
+    .where('accountId', '=', accountId)
+    .where(
+      'providerMessageId',
+      'in',
+      uniqueMessages.map((message) => message.providerMessageId),
+    )
+    .execute<
+      Pick<
+        MessageRow,
+        'id' | 'providerMessageId' | 'createdAt' | 'note' | 'todo'
+      >
+    >();
+  const existingByProviderId = new Map(
+    existingRows.map((row) => [row.providerMessageId, row]),
+  );
+  const rows: MessageRow[] = [];
+  for (const message of uniqueMessages) {
+    const existing = existingByProviderId.get(message.providerMessageId);
+    const row = toMessageRow(
+      accountId,
+      message,
+      existing?.id ?? randomUUID(),
+      existing?.createdAt ?? now,
+      now,
+      existing,
+    );
+    rows.push(row);
+    if (existing) {
+      await query
+        .updateTable<MessageRow>('mailMessages')
+        .set(row)
+        .where('id', '=', existing.id)
+        .execute();
+    }
+  }
+  const newRows = rows.filter(
+    (row) => !existingByProviderId.has(row.providerMessageId),
+  );
+  for (const batch of chunks(newRows, 25)) {
+    await query.insertInto<MessageRow>('mailMessages').values(batch).execute();
+  }
+  const messageIds = rows.map((row) => row.id);
+  await query
+    .deleteFrom<MessageFolderRow>('mailMessageFolders')
+    .where('messageId', 'in', messageIds)
+    .execute();
+  const foldersByProviderMessageId = new Map(
+    uniqueMessages.map((message) => [
+      message.providerMessageId,
+      message.providerFolderIds,
+    ]),
+  );
+  const folderRows = rows.flatMap((row) =>
+    [
+      ...new Set(foldersByProviderMessageId.get(row.providerMessageId) ?? []),
+    ].map((providerFolderId): MessageFolderRow => ({
+      accountId,
+      messageId: row.id,
+      providerFolderId,
+    })),
+  );
+  for (const batch of chunks(folderRows, 100)) {
+    await query
+      .insertInto<MessageFolderRow>('mailMessageFolders')
+      .values(batch)
+      .execute();
+  }
+}
+
+export async function removeStaleMessageFolders(
+  query: QueryAdapter,
+  accountId: string,
+  completeProviderFolderIds: readonly string[],
+): Promise<void> {
+  let deleteQuery = query
+    .deleteFrom<MessageFolderRow>('mailMessageFolders')
+    .where('accountId', '=', accountId)
+    .where('providerFolderId', '!=', MAIL_LOCAL_DRAFT_FOLDER_ID);
+  if (completeProviderFolderIds.length > 0) {
+    deleteQuery = deleteQuery.where(
+      'providerFolderId',
+      'not in',
+      completeProviderFolderIds,
+    );
+  }
+  await deleteQuery.execute();
+}
+
+export async function upsertFolders(
+  query: QueryAdapter,
+  accountId: string,
+  folders: readonly import('../types.js').NormalizedMailFolder[],
+): Promise<void> {
+  for (const folder of folders) {
+    const existing = await query
+      .selectFrom<FolderRow>('mailFolders')
+      .select('id')
+      .where('accountId', '=', accountId)
+      .where('providerFolderId', '=', folder.providerFolderId)
+      .executeTakeFirst<Pick<FolderRow, 'id'>>();
+    const row: FolderRow = {
+      id: existing?.id ?? randomUUID(),
+      accountId,
+      ...folder,
+    };
+    if (existing) {
+      await query
+        .updateTable<FolderRow>('mailFolders')
+        .set(row)
+        .where('id', '=', existing.id)
+        .execute();
+    } else {
+      await query.insertInto<FolderRow>('mailFolders').values(row).execute();
+    }
+  }
+}
+
+export async function deleteMessages(
+  query: QueryAdapter,
+  accountId: string,
+  providerMessageIds: readonly string[],
+): Promise<void> {
+  if (providerMessageIds.length === 0) return;
+  const messages = await query
+    .selectFrom<MessageRow>('mailMessages')
+    .select('id')
+    .where('accountId', '=', accountId)
+    .where('providerMessageId', 'in', providerMessageIds)
+    .execute<Pick<MessageRow, 'id'>>();
+  if (messages.length > 0) {
+    await query
+      .deleteFrom<MessageFolderRow>('mailMessageFolders')
+      .where(
+        'messageId',
+        'in',
+        messages.map((message) => message.id),
+      )
+      .execute();
+    await query
+      .deleteFrom<MessageLabelRow>('mailMessageLabels')
+      .where(
+        'messageId',
+        'in',
+        messages.map((message) => message.id),
+      )
+      .execute();
+  }
+  await query
+    .deleteFrom<MessageRow>('mailMessages')
+    .where('accountId', '=', accountId)
+    .where('providerMessageId', 'in', providerMessageIds)
+    .execute();
+}
+
+export async function removeMessagesFromFolders(
+  query: QueryAdapter,
+  accountId: string,
+  removals: readonly import('../types.js').MailProviderFolderRemoval[],
+): Promise<void> {
+  for (const removal of removals) {
+    const row = await query
+      .selectFrom<MessageRow>('mailMessages')
+      .select('id')
+      .where('accountId', '=', accountId)
+      .where('providerMessageId', '=', removal.providerMessageId)
+      .executeTakeFirst<Pick<MessageRow, 'id'>>();
+    if (!row) continue;
+    await query
+      .deleteFrom<MessageFolderRow>('mailMessageFolders')
+      .where('messageId', '=', row.id)
+      .where('providerFolderId', '=', removal.providerFolderId)
+      .execute();
+  }
+}

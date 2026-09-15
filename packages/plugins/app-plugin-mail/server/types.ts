@@ -184,6 +184,8 @@ export interface MailAddress {
 }
 
 export interface MailAttachment {
+  /** Local upload backing a draft attachment; never a Provider identifier. */
+  readonly outboundAttachmentId?: string;
   readonly id: string;
   readonly messageId: string;
   readonly providerAttachmentId: string;
@@ -995,6 +997,8 @@ export interface MailProviderPushNotifications {
 }
 
 export interface NormalizedMailAttachment {
+  /** Set by Mail Core for local draft uploads. */
+  readonly outboundAttachmentId?: string;
   readonly providerAttachmentId: string;
   readonly fileName: string;
   readonly contentType: string;

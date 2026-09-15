@@ -1,14 +1,11 @@
 export { default } from './plugin.js';
-export { MailCoreProvider } from './providers/mail-core.js';
-export * from './adapter-resolver.js';
-export * from './config.js';
-export * from './credentials.js';
-export * from './operations/index.js';
-export * from './outbound-attachments.js';
-export * from './registry.js';
-export * from './runtime.js';
-export * from './service.js';
-export * from './realtime.js';
-export * from './store.js';
+export { mailConfig } from './config.js';
+export { createMailProviderRegistry } from './registry.js';
 export * from './tokens.js';
-export * from './types.js';
+export type * from './types.js';
+export type { GmailMailProviderConfig } from './adapters/gmail/types.js';
+export type { MicrosoftMailProviderConfig } from './adapters/microsoft/types.js';
+export type {
+  ImapSmtpEndpointConfig,
+  ImapSmtpMailProviderConfig,
+} from './adapters/imap-smtp/config.js';

@@ -9,10 +9,9 @@ import { Card } from './ui/card.js';
 import { Input } from './ui/input.js';
 import { plainTextToMailHtml } from '../lib/mail-template.js';
 import { mailErrorMessage, type MailTemplate } from '../mail-client.js';
-import { getMailClient } from '../runtime.js';
+import { useMailClient } from '../runtime.js';
+import { MAIL_PLUGIN_NS } from '../namespace.js';
 import { cn } from '../lib/utils.js';
-
-const mail = getMailClient();
 
 interface TemplateDraft {
   readonly id?: string;
@@ -30,7 +29,8 @@ const EMPTY_TEMPLATE: TemplateDraft = {
 };
 
 export function MailTemplateManager(): ReactElement {
-  const { t } = useTranslation();
+  const mail = useMailClient();
+  const { t } = useTranslation(MAIL_PLUGIN_NS);
   const [templates, setTemplates] = useState<readonly MailTemplate[]>([]);
   const [draft, setDraft] = useState<TemplateDraft>(EMPTY_TEMPLATE);
   const [loading, setLoading] = useState(false);
@@ -57,7 +57,7 @@ export function MailTemplateManager(): ReactElement {
       )
       .catch(showError)
       .finally(() => setLoading(false));
-  }, [showError]);
+  }, [mail, showError]);
 
   useEffect(() => {
     void Promise.resolve().then(refresh);

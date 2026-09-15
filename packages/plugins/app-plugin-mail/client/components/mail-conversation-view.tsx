@@ -121,9 +121,12 @@ export function MailConversationView({
   }
 
   return (
-    <section aria-busy={loading} className='h-full min-h-0 overflow-y-auto'>
+    <section
+      aria-busy={loading}
+      className='@container/conversation h-full min-h-0 overflow-y-auto'
+    >
       <header className='sticky top-0 z-10 border-b bg-background/95 px-5 py-4 backdrop-blur'>
-        <h1 className='text-lg font-semibold'>{subject || labels.noSubject}</h1>
+        <h2 className='text-lg font-semibold'>{subject || labels.noSubject}</h2>
         <p className='mt-1 text-xs text-muted-foreground'>
           {labels.conversation(messages.length)}
         </p>
@@ -149,11 +152,11 @@ export function MailConversationView({
               className='rounded-xl border bg-card p-4 shadow-xs'
               key={message.id}
             >
-              <header className='flex items-start gap-3'>
+              <header className='flex flex-wrap items-start gap-3'>
                 <span className='grid size-9 shrink-0 place-items-center rounded-full bg-primary/10 text-sm font-semibold text-primary'>
                   {sender?.trim().charAt(0).toUpperCase() || '?'}
                 </span>
-                <div className='min-w-0 flex-1'>
+                <div className='min-w-24 flex-1'>
                   <p className='truncate text-sm font-medium'>
                     {sender || labels.unknownSender}
                   </p>
@@ -191,11 +194,11 @@ export function MailConversationView({
                   )}
                 </Button>
                 {actions && actionLabels ? (
-                  <div className='flex shrink-0 items-center gap-0.5'>
+                  <div className='flex w-full shrink-0 flex-wrap items-center justify-end gap-1 border-t pt-2 @2xl/conversation:w-auto @2xl/conversation:border-0 @2xl/conversation:pt-0'>
                     {message.draft && actions.editDraft ? (
                       <Button
                         aria-label={actionLabels.editDraft}
-                        className='size-7 p-0 [&_svg]:size-4'
+                        className='size-9 p-0 [&_svg]:size-4'
                         onClick={() => actions.editDraft?.(message)}
                         variant='ghost'
                       >
@@ -205,7 +208,7 @@ export function MailConversationView({
                     {!message.draft && actions.reply ? (
                       <Button
                         aria-label={actionLabels.reply}
-                        className='size-7 p-0 [&_svg]:size-4'
+                        className='size-9 p-0 [&_svg]:size-4'
                         onClick={() => actions.reply?.(message)}
                         variant='ghost'
                       >
@@ -215,7 +218,7 @@ export function MailConversationView({
                     {!message.draft && actions.forward ? (
                       <Button
                         aria-label={actionLabels.forward}
-                        className='size-7 p-0 [&_svg]:size-4'
+                        className='size-9 p-0 [&_svg]:size-4'
                         onClick={() => actions.forward?.(message)}
                         variant='ghost'
                       >
@@ -228,7 +231,7 @@ export function MailConversationView({
                           ? actionLabels.markUnread
                           : actionLabels.markRead
                       }
-                      className='size-7 p-0 [&_svg]:size-4'
+                      className='size-9 p-0 [&_svg]:size-4'
                       onClick={() => actions.toggleRead(message)}
                       variant='ghost'
                     >
@@ -244,7 +247,7 @@ export function MailConversationView({
                           ? actionLabels.unstar
                           : actionLabels.star
                       }
-                      className='size-7 p-0 [&_svg]:size-4'
+                      className='size-9 p-0 [&_svg]:size-4'
                       onClick={() => actions.toggleStarred(message)}
                       variant='ghost'
                     >
@@ -256,7 +259,7 @@ export function MailConversationView({
                     {actions.archive ? (
                       <Button
                         aria-label={actionLabels.archive}
-                        className='size-7 p-0 [&_svg]:size-4'
+                        className='size-9 p-0 [&_svg]:size-4'
                         onClick={() => actions.archive?.(message)}
                         variant='ghost'
                       >
@@ -265,7 +268,7 @@ export function MailConversationView({
                     ) : null}
                     <Button
                       aria-label={actionLabels.delete}
-                      className='size-7 p-0 [&_svg]:size-4'
+                      className='size-9 p-0 [&_svg]:size-4'
                       onClick={() => actions.delete(message)}
                       variant='ghost'
                     >

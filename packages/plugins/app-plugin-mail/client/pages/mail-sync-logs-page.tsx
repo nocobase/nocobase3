@@ -11,11 +11,10 @@ import {
   type MailAccountView,
   type MailSyncRunView,
 } from '../mail-client.js';
-import { getMailClient } from '../runtime.js';
-
-const mail = getMailClient();
+import { useMailClient } from '../runtime.js';
 
 export default function MailSyncLogsPage(): ReactElement {
+  const mail = useMailClient();
   const { t } = useTranslation();
   const [accounts, setAccounts] = useState<readonly MailAccountView[]>([]);
   const [runs, setRuns] = useState<readonly MailSyncRunView[]>([]);
@@ -41,7 +40,7 @@ export default function MailSyncLogsPage(): ReactElement {
         );
       })
       .finally(() => setLoading(false));
-  }, [t]);
+  }, [mail, t]);
 
   useEffect(() => {
     void Promise.resolve().then(refresh);

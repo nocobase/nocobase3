@@ -2,6 +2,7 @@ import type { MailResource } from './en-US.js';
 
 const zhCN: MailResource = {
   nav: {
+    myAccounts: '我的邮箱',
     mail: '邮件',
     unread: '{{count}} 封未读邮件',
     settings: '邮件',
@@ -21,6 +22,22 @@ const zhCN: MailResource = {
     reloadAccounts: '重新加载账户',
   },
   workspace: {
+    submissionUnknown:
+      '暂时无法确认发送结果，请先在邮箱服务商处核实，避免重复发送。',
+    submissionFailed: '部分或全部邮件发送失败，请核实发送结果后再重试。',
+    backToMail: '返回邮件',
+    keepEditing: '继续编辑',
+    closeDraftTitle: '关闭这封邮件？',
+    discardChanges: '放弃未保存的修改',
+    dismiss: '关闭提示',
+    accepted: '邮件已加入发送队列。',
+    loadedCount: '已加载 {{count}} 封',
+    mailboxNavigation: '邮箱导航',
+    backToMessages: '返回邮件列表',
+    closeNavigation: '关闭邮箱导航',
+    retry: '重试',
+    noAccountsTitle: '连接你的第一个邮箱',
+    connectAccount: '连接邮箱',
     title: '邮件',
     allAccounts: '全部账户',
     allMail: '全部邮件',
@@ -238,6 +255,10 @@ const zhCN: MailResource = {
       displayName: '显示名称',
     },
     accounts: {
+      syncInterval: '自动同步间隔（分钟）',
+      minutes: '分钟',
+      saving: '正在保存…',
+      save: '保存',
       title: '所有已连接账户',
       description: '查看所有用户关联的邮箱。',
       ownerColumn: '所有者',
@@ -341,6 +362,7 @@ const zhCN: MailResource = {
     },
   },
   dev: {
+    automaticSyncColumn: '自动同步',
     eyebrow: '开发工具',
     title: '邮件开发工具',
     description: '使用已连接账户验证发送与同步 API。此路由不会进入生产构建。',
