@@ -3,7 +3,10 @@ import sqlite, {
   sqliteDriver,
   type SqliteConnectionConfig,
 } from '@nocobase/db-sqlite';
-import postgres, { type PostgresConnectionConfig } from '@nocobase/db-postgres';
+import postgres, {
+  postgresDriver,
+  type PostgresConnectionConfig,
+} from '@nocobase/db-postgres';
 import type {
   BaseConnectionConfig,
   DatabaseDriverDefinition,
@@ -35,6 +38,24 @@ it('accepts driver-owned fields at application runtime entry points', async () =
     connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
   });
   await database?.destroy();
+});
+
+it('validates every driver key in explicitly annotated application configurations', () => {
+  const drivers = { sqlite, pg: postgres };
+  const invalid: AppDatabaseConfigFromDrivers<typeof drivers> = {
+    // @ts-expect-error The unused postgres factory still cannot use the pg key.
+    drivers,
+    connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
+  };
+  expectTypeOf(invalid.connections.main.dialect).toEqualTypeOf<'sqlite'>();
+
+  const descriptors = { mysql: postgresDriver };
+  const empty: AppDatabaseConfigFromDrivers<typeof descriptors> = {
+    // @ts-expect-error Empty connections do not permit invalid descriptor keys.
+    drivers: descriptors,
+    connections: {},
+  };
+  expectTypeOf(empty.connections).toEqualTypeOf<Record<string, never>>();
 });
 
 it('infers the exact connection union from factories and descriptors', () => {

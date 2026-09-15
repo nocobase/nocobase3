@@ -56,16 +56,25 @@ export type DriverConnectionConfig<TDriver> = TDriver extends {
     ? TConnection
     : never;
 
+/** Every registration uses the driver's declared dialect, including unused entries. */
+type ValidatedDriverRegistrations<
+  TDrivers extends Record<string, DatabaseDriverRegistration>,
+> = {
+  [K in keyof TDrivers]: TDrivers[K] & { readonly dialect: K };
+};
+
 /** Connection shapes accepted by the registered driver factories or descriptors. */
 export type ConnectionConfigFromDrivers<
   TDrivers extends Record<string, DatabaseDriverRegistration>,
-> = DriverConnectionConfig<TDrivers[keyof TDrivers]>;
+> = DriverConnectionConfig<
+  ValidatedDriverRegistrations<TDrivers>[keyof TDrivers]
+>;
 
 /** Declarative configuration checked against the application's registered drivers. */
 export type DatabaseConfigFromDrivers<
   TDrivers extends Record<string, DatabaseDriverRegistration>,
 > = Omit<DatabaseConfig<ConnectionConfigFromDrivers<TDrivers>>, 'drivers'> & {
-  drivers: TDrivers;
+  drivers: ValidatedDriverRegistrations<TDrivers>;
 };
 
 /**

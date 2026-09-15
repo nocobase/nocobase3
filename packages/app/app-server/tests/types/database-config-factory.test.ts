@@ -1,6 +1,6 @@
 import { expect, expectTypeOf, it, vi } from 'vitest';
 import sqlite from '@nocobase/db-sqlite';
-import postgres from '@nocobase/db-postgres';
+import postgres, { postgresDriver } from '@nocobase/db-postgres';
 import mysql from '@nocobase/db-mysql';
 import type {
   BaseConnectionConfig,
@@ -58,6 +58,56 @@ it('infers returned drivers and evaluates the configuration only when invoked', 
     filename: paths.storage('database.sqlite'),
     migrations: { autoRun: false },
   });
+});
+
+it('rejects driver aliases independently of the configured connections', () => {
+  defineAppDatabaseConfig(() => ({
+    // @ts-expect-error Unused drivers must also use their declared dialect as the key.
+    drivers: { sqlite, pg: postgres },
+    connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
+  }));
+  defineAppDatabaseConfig(() => ({
+    // @ts-expect-error Empty connections must not allow an alias key.
+    drivers: { pg: postgres },
+    connections: {},
+  }));
+  defineAppDatabaseConfig(() => ({
+    // @ts-expect-error The driver descriptor declares postgres, not mysql.
+    drivers: { mysql: postgresDriver },
+    connections: {},
+  }));
+  defineAppDatabaseConfig(() => ({
+    // @ts-expect-error Contributed drivers also require their declared dialect.
+    drivers: { other: custom },
+    connections: {},
+  }));
+  const drivers = { sqlite, pg: postgres };
+  defineAppDatabaseConfig(() => ({
+    // @ts-expect-error A separately declared registration map must be checked too.
+    drivers,
+    connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
+  }));
+});
+
+it('accepts canonical driver keys independently of local import names', () => {
+  const pg = postgres;
+  const drivers = { sqlite, postgres: pg, custom } as const;
+  const factory = defineAppDatabaseConfig(() => ({
+    drivers,
+    connections: {
+      main: { dialect: 'postgres', host: 'localhost' },
+      custom: { dialect: 'custom', endpoint: 'db.example.test' },
+    },
+  }));
+  expectTypeOf(factory).toEqualTypeOf<AppConfigFactory<AppDatabaseConfig>>();
+
+  const descriptorFactory = defineAppDatabaseConfig(() => ({
+    drivers: { postgres: postgresDriver },
+    connections: {},
+  }));
+  expectTypeOf(descriptorFactory).toEqualTypeOf<
+    AppConfigFactory<AppDatabaseConfig>
+  >();
 });
 
 it('rejects missing, unrelated, and incorrectly typed connection fields', () => {

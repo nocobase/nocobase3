@@ -4,6 +4,7 @@ import type {
   CollectionMetadataStoreConfig,
   ConnectionConfig,
   ConnectionConfigFromDrivers,
+  DatabaseConfigFromDrivers,
   DatabaseDriverRegistration,
   ExtensibleDatabaseConfig,
   MigrationSource,
@@ -48,7 +49,7 @@ export type AppDatabaseConfigFromDrivers<
 > = Omit<
   AppDatabaseConfig<ConnectionConfigFromDrivers<TDrivers>>,
   'drivers'
-> & { drivers: TDrivers };
+> & { drivers: DatabaseConfigFromDrivers<TDrivers>['drivers'] };
 
 /**
  * Runtime facts that task planning needs and configuration cannot supply: the

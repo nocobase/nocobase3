@@ -3,6 +3,7 @@ import sqlite, {
   sqliteDriver,
   type SqliteConnectionConfig,
 } from '@nocobase/db-sqlite';
+import postgres, { postgresDriver } from '@nocobase/db-postgres';
 import {
   createDatabaseManager,
   type BaseConnectionConfig,
@@ -57,4 +58,28 @@ it('infers driver-owned connection shapes without a core dialect union', async (
   };
   expectTypeOf(invalid).toEqualTypeOf<typeof config.connections>();
   expectTypeOf<ConnectionConfig['dialect']>().toEqualTypeOf<string>();
+});
+
+it('rejects aliased driver registrations even when no connection uses them', () => {
+  const drivers = { sqlite, pg: postgres };
+  const invalid: DatabaseConfigFromDrivers<typeof drivers> = {
+    // @ts-expect-error PostgreSQL must be registered under postgres, not pg.
+    drivers,
+    connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
+  };
+  expectTypeOf(invalid).toMatchTypeOf<DatabaseConfig>();
+  expectTypeOf<
+    ConnectionConfigFromDrivers<typeof drivers>
+  >().toEqualTypeOf<SqliteConnectionConfig>();
+
+  const descriptorDrivers = { mysql: postgresDriver };
+  const empty: DatabaseConfigFromDrivers<typeof descriptorDrivers> = {
+    // @ts-expect-error Descriptors also require their own dialect as the key.
+    drivers: descriptorDrivers,
+    connections: {},
+  };
+  expectTypeOf(empty).toMatchTypeOf<DatabaseConfig>();
+  expectTypeOf<
+    ConnectionConfigFromDrivers<typeof descriptorDrivers>
+  >().toEqualTypeOf<never>();
 });
