@@ -168,30 +168,6 @@ export type DatabaseDriverRegistration<
   | DatabaseDriverFactory<TDialect, object, TConfig>;
 
 /**
- * The connection shape one registration admits.
- *
- * A dialect package declares it on its driver, so this is how a configuration learns what a
- * registered driver will accept without the set of dialects being written down anywhere central.
- *
- * A factory is matched by its `driver` property rather than by `DatabaseDriverFactory`: a factory
- * narrows its own options — `(options?: SqliteOptions)` — which under contravariance does not
- * satisfy that interface's `(options?: TOptions)` call signature, so matching against it silently
- * fell through to the descriptor branch and resolved every dialect to the default.
- */
-export type ConnectionOfRegistration<TRegistration> = TRegistration extends {
-  readonly driver: DatabaseDriverDefinition<string, infer TConfig>;
-}
-  ? TConfig
-  : TRegistration extends DatabaseDriverDefinition<string, infer TConfig>
-    ? TConfig
-    : never;
-
-/** The union of connection shapes a `drivers` map admits. */
-export type ConnectionsOfDrivers<
-  TDrivers extends Record<string, DatabaseDriverRegistration>,
-> = ConnectionOfRegistration<TDrivers[keyof TDrivers]>;
-
-/**
  * Dialect identifiers are open ended. The connection config aliases below give
  * strict fields for the dialects this package declares, while a driver package
  * contributes its own dialect literal and its own connection shape — see

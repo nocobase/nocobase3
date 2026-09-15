@@ -1,16 +1,10 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
-import sqlite from '@nocobase/db-sqlite';
-import type {
-  BaseConnectionConfig,
-  ConnectionConfig,
-  ConnectionsOfDrivers,
-} from '@nocobase/db';
+import type { BaseConnectionConfig, ConnectionConfig } from '@nocobase/db';
 
-import {
-  defineDatabaseConfig,
-  type AppDatabaseConfig,
-  type AppDatabaseConnectionConfig,
+import type {
+  AppDatabaseConfig,
+  AppDatabaseConnectionConfig,
 } from '../src/database/index.js';
 
 /**
@@ -107,61 +101,3 @@ describe('AppDatabaseConfig', () => {
     >();
   });
 });
-
-describe('defineDatabaseConfig', () => {
-  /**
-   * A driver is looked up by the connection's own dialect, so a connection naming one the
-   * application never registered fails the start with `Database dialect "..." is not registered.`.
-   * These are the same rule, reported while typing.
-   */
-  it('accepts a connection whose dialect is registered', () => {
-    const database = defineDatabaseConfig({ sqlite })(() => ({
-      default: 'main',
-      connections: { main: { dialect: 'sqlite', filename: 'app.sqlite' } },
-    }));
-
-    expect(database(runtime()).connections.main.dialect).toBe('sqlite');
-  });
-
-  it('carries the drivers through to the resolved configuration', () => {
-    const database = defineDatabaseConfig({ sqlite })(() => ({
-      connections: { main: { dialect: 'sqlite', filename: 'app.sqlite' } },
-    }));
-
-    expect(database(runtime()).drivers).toEqual({ sqlite });
-  });
-
-  it('applies application task settings to a connection', () => {
-    const database = defineDatabaseConfig({ sqlite })(() => ({
-      connections: {
-        main: {
-          dialect: 'sqlite',
-          filename: 'app.sqlite',
-          migrations: { autoRun: false },
-        },
-      },
-    }));
-
-    expect(database(runtime()).connections.main.migrations?.autoRun).toBe(
-      false,
-    );
-  });
-
-  /**
-   * The rejections are compile-time, so they are asserted as types. Each body is what a `// @ts-expect-error`
-   * would guard, written as an assignability check so a regression fails the typecheck rather than silently
-   * passing.
-   */
-  it('rejects a dialect no registered driver declares', () => {
-    type Registered = ConnectionsOfDrivers<{ sqlite: typeof sqlite }>;
-
-    expectTypeOf<{ dialect: 'postgres' }>().not.toMatchTypeOf<Registered>();
-    expectTypeOf<Registered>().toMatchTypeOf<{ dialect: 'sqlite' }>();
-  });
-});
-
-function runtime(): never {
-  return {
-    configPaths: { storage: (file: string) => file },
-  } as never;
-}

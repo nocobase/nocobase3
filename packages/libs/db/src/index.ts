@@ -10,8 +10,6 @@ export type {
   AnyConnectionConfig,
   BaseConnectionConfig,
   ConnectionConfig,
-  ConnectionOfRegistration,
-  ConnectionsOfDrivers,
   DatabaseConfig,
   DatabaseDialect,
   DatabaseDriverDefinition,
