@@ -4,7 +4,11 @@ import {
   DeploymentPhaseError,
   DeploymentPhases,
 } from '../src/deployment-phases.js';
-import { AppCreateFailedError } from '../src/errors.js';
+import {
+  AppCreateFailedError,
+  fullErrorMessage,
+  rootErrorMessage,
+} from '../src/errors.js';
 
 /**
  * These assertions are about one property: what an operator reads when a deployment fails.
@@ -95,5 +99,33 @@ describe('activation errors carry their cause', () => {
     // Before this, the message was only `App "crm" failed to initialize` and the reason was lost at the IPC hop.
     expect(error.message).toContain('crm');
     expect(error.message).toContain("Cannot find package 'hono'");
+  });
+});
+
+describe('what a failed deployment reports', () => {
+  it('keeps the context instead of digging out the innermost cause', () => {
+    // What Hub stores in hub_app_deployments.error comes from the reconciler, which used to call
+    // rootErrorMessage() and discard every wrapper. The reason survived; the context around it did not, so a
+    // missing package was reported without saying whether it was missing during install or at startup.
+    const real = new Error("Cannot find package 'hono'");
+    const activation = new AppCreateFailedError('crm', real);
+
+    expect(fullErrorMessage(activation)).toBe(
+      `App "crm" failed to initialize: Cannot find package 'hono'`,
+    );
+    expect(rootErrorMessage(activation)).toBe("Cannot find package 'hono'");
+  });
+
+  it('keeps the phase context of an install failure', () => {
+    const phases = new DeploymentPhases();
+    phases.complete('artifact download', 1200);
+    const failure = phases.failure(
+      'extract',
+      new Error('unexpected end of file'),
+    );
+
+    expect(fullErrorMessage(failure)).toBe(
+      'Deployment failed during extract after artifact download 1.2s: unexpected end of file',
+    );
   });
 });

@@ -22,6 +22,25 @@ export class AppRegistryError extends Error {
   }
 }
 
+/**
+ * The message of the error itself, wrappers included.
+ *
+ * Prefer this over {@link rootErrorMessage} for anything an operator reads. The errors raised while installing an
+ * artifact or activating an app already fold their cause into their own message, so this returns the reason *and*
+ * the context around it — which phase failed, which app, what had already succeeded. Digging out the innermost
+ * cause discards exactly that context, which is why reporting a failed deployment used to name a missing package
+ * without saying whether it was missing during install or at startup.
+ */
+export function fullErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * The message of the innermost cause, with every wrapper discarded.
+ *
+ * This is for the narrow case of matching or classifying an underlying failure. It is the wrong choice for
+ * anything displayed, because the wrappers carry the context that makes the message actionable.
+ */
 export function rootErrorMessage(error: unknown): string {
   let current = error;
   const visited = new Set<unknown>();
@@ -116,5 +135,5 @@ function describeCause(cause: unknown): string {
     return `${cause.message} (${reasons.join('; ')})`;
   }
 
-  return cause instanceof Error ? cause.message : String(cause);
+  return fullErrorMessage(cause);
 }
