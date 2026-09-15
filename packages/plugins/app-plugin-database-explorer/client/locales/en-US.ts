@@ -50,6 +50,7 @@ const enUS = {
   },
   states: {
     loading: 'Loading',
+    truncated: 'This connection has more collections than the page will load.',
   },
   empty: {
     connections: 'No connections are configured.',
@@ -60,6 +61,18 @@ const enUS = {
   },
   errors: {
     unknown: 'Something went wrong.',
+    databaseUnavailable: 'This application is configured without a database.',
+    forbidden: 'You do not have access to the Database Explorer.',
+    connectionNotFound: 'This connection is not configured.',
+    connectionUnavailable:
+      'This application cannot open this connection. Its driver may not be registered.',
+    connectionUnreachable: 'This connection could not be read.',
+    schemaReadDenied: 'The database account may not read this schema.',
+    collectionNotFound: 'This collection does not exist on this connection.',
+    invalidListOptions:
+      'The listing options are not valid for this connection.',
+    invalidCursor:
+      'That page of results has expired. Search again from the start.',
   },
 };
 

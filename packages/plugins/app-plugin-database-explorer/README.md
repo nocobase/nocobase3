@@ -52,6 +52,18 @@ It never reports `password`, `username`, `host`, `port`, `socketPath`, a SQLite 
 
 That exclusion is enforced as an allow-list rather than a redaction pass, in `server/connection-summary.ts`. The dialect list is open, so a dialect package added later can introduce a field of its own — an API token, say. An allow-list keeps that field inside without anyone revisiting the file; a deny-list would publish it the day it was added.
 
-## Reading changes nothing
+## What read-only means here, exactly
 
-`tests/read-only.test.ts` pins this against a real database: it snapshots `sqlite_master` and every row, exercises each read, and asserts both are unchanged. The test exists because the guarantee is not only about the statements this plugin issues. Reading a collection initializes the collection registry, whose metadata store creates its own bookkeeping table when it is missing, and an external connection is served by a directory-backed store that only reads files. The test is what would fail if a change further down moved schema work into a read path.
+The Explorer issues no write of its own: there is no write endpoint, no migration, and no schema operation in its code. One qualifier is needed to make that honest rather than merely reassuring.
+
+Reading a collection initializes the collection registry, and on a managed connection the registry's metadata store creates `__nocobase_collection_metadata` when it is missing. So the guarantee is: **no collection is created, altered or dropped, no row of any table changes, and the only object the Explorer can bring into existence is that one bookkeeping table.** In practice a managed connection already has it, because migrations ran first; the table appears only when the very first NocoBase activity against a database is an Explorer read. An external connection cannot reach this path at all, since it is served by a directory-backed metadata store that only reads files.
+
+`tests/read-only.test.ts` states that boundary rather than asserting the comfortable version. It builds a database with raw SQL so the registry has genuinely never run, reads it, and asserts the one table added is the bookkeeping one and the foreign table is untouched. It then snapshots `sqlite_master` and the rows of every table, bookkeeping included, across each read and asserts both are unchanged.
+
+## Pagination
+
+The collections list follows the server's cursor to the end before rendering, because the page filters by name in the browser: stopping at the first page would hide collections a connection has and let a search come back empty for one of them. The walk is bounded, and a connection that exceeds the bound says so in the list rather than truncating silently.
+
+## Localization
+
+The plugin ships no server locale resources. Failures answer with a stable `code` and a fixed English message, and the client renders the wording for that code in the viewer's language. Declaring server locales that nothing consults would read as translated API errors without producing any.

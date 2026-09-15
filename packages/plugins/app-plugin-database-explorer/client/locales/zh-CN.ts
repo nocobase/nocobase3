@@ -50,6 +50,7 @@ const zhCN: DatabaseExplorerResource = {
   },
   states: {
     loading: '加载中',
+    truncated: '该连接的数据表数量超过页面可加载的上限。',
   },
   empty: {
     connections: '未配置任何连接。',
@@ -60,6 +61,15 @@ const zhCN: DatabaseExplorerResource = {
   },
   errors: {
     unknown: '发生了未知错误。',
+    databaseUnavailable: '该应用未配置数据库。',
+    forbidden: '你没有数据库浏览器的访问权限。',
+    connectionNotFound: '该连接未配置。',
+    connectionUnavailable: '应用无法打开该连接，其驱动可能未注册。',
+    connectionUnreachable: '无法读取该连接。',
+    schemaReadDenied: '该数据库账号无权读取此模式。',
+    collectionNotFound: '该连接上不存在此数据表。',
+    invalidListOptions: '该连接不接受这些列表参数。',
+    invalidCursor: '该页结果已失效，请重新搜索。',
   },
 };
 

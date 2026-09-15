@@ -2,6 +2,7 @@ import type { ApiClient } from '@nocobase/app-client';
 
 import type {
   CollectionDetail,
+  CollectionEntry,
   CollectionListResult,
   ConnectionListResult,
   ListCollectionsQuery,
@@ -44,6 +45,36 @@ export class DatabaseExplorerClient {
         ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
       },
     );
+  }
+
+  /**
+   * Reads every collection on a connection, following the cursor to the end.
+   *
+   * The page filters by name in the browser, which is only honest if it is
+   * filtering the whole set: stopping at the first page would hide collections
+   * a connection genuinely has and let a search come back empty for one of
+   * them. `maxPages` bounds the walk so a connection that keeps issuing
+   * cursors cannot hold the request open forever.
+   */
+  public async allCollections(
+    connection: string,
+    maxPages = 50,
+  ): Promise<{
+    readonly items: readonly CollectionEntry[];
+    readonly truncated: boolean;
+  }> {
+    const items: CollectionEntry[] = [];
+    let cursor: string | undefined;
+    for (let page = 0; page < maxPages; page += 1) {
+      const result = await this.collections(
+        connection,
+        cursor === undefined ? {} : { cursor },
+      );
+      items.push(...result.items);
+      cursor = result.nextCursor;
+      if (cursor === undefined) return { items, truncated: false };
+    }
+    return { items, truncated: true };
   }
 
   public collection(

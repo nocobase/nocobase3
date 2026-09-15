@@ -101,6 +101,53 @@ describe('@nocobase/app-plugin-database-explorer API routes', () => {
     expect(database.connection).not.toHaveBeenCalled();
   });
 
+  it.each(['toString', 'constructor', '__proto__'])(
+    'reports the inherited name %s as an unconfigured connection',
+    async (name) => {
+      // `name in connections` is true for every prototype member, so an `in`
+      // check would send these to the Manager and answer 502 instead of 404.
+      const database = fakeDatabase();
+      const router = await apiRoutes.createRouter(
+        application({ identity: 'authenticated', database }),
+      );
+
+      const response = await router.request(
+        `/database-explorer/connections/${name}/collections`,
+      );
+
+      expect(response.status).toBe(404);
+      expect(await response.json()).toMatchObject({
+        code: 'CONNECTION_NOT_FOUND',
+      });
+      expect(database.connection).not.toHaveBeenCalled();
+    },
+  );
+
+  it('never writes a driver error into the log either', async () => {
+    // The response withholds the cause; a log file is the easier of the two to
+    // paste into an issue, so it must withhold it too.
+    const database = fakeDatabase();
+    database.collections.list.mockRejectedValue(
+      inspectorError(
+        'SCHEMA_INSPECTION_FAILED',
+        new Error('connect ECONNREFUSED 10.0.0.4:5432 password "hunter2"'),
+      ),
+    );
+    const logger = { warn: vi.fn(), info: vi.fn() };
+    const router = await apiRoutes.createRouter(
+      application({ identity: 'authenticated', database, logger }),
+    );
+
+    await router.request(COLLECTIONS_PATH);
+
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+    const logged = JSON.stringify(logger.warn.mock.calls[0]);
+    expect(logged).not.toContain('hunter2');
+    expect(logged).not.toContain('10.0.0.4');
+    // The classification survives, which is what an operator acts on.
+    expect(logged).toContain('SCHEMA_INSPECTION_FAILED');
+  });
+
   it('reports an unconfigured connection as not found', async () => {
     const database = fakeDatabase();
     const router = await apiRoutes.createRouter(

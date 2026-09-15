@@ -14,6 +14,15 @@ export const DATABASE_EXPLORER_ACCESS = {
   action: 'access',
 } as const;
 
+/** The pane a bare page URL opens, and the one the tab strip lists first. */
+export const DEFAULT_PANE = 'fields';
+
+/**
+ * The two detail panes are child routes rather than component state, so a pane
+ * can be linked to, survives a refresh, and is restored by browser Back. The
+ * selected connection and collection ride along in the query string, which the
+ * parent preserves when it redirects a bare page URL to the default pane.
+ */
 const routes: AppClientRouteContribution = defineSettingsRoutes([
   {
     name: 'database-explorer',
@@ -21,6 +30,18 @@ const routes: AppClientRouteContribution = defineSettingsRoutes([
     access: DATABASE_EXPLORER_ACCESS,
     navigation: { title: 'nav.databaseExplorer', icon: Database },
     componentLoader: () => import('./pages/database-explorer-page.js'),
+    children: [
+      {
+        name: 'database-explorer.fields',
+        path: 'fields',
+        componentLoader: () => import('./pages/collection-fields.js'),
+      },
+      {
+        name: 'database-explorer.columns',
+        path: 'columns',
+        componentLoader: () => import('./pages/collection-columns.js'),
+      },
+    ],
   },
 ]);
 

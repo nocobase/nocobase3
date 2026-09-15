@@ -21,6 +21,7 @@ import {
   MAX_COLLECTION_PAGE_SIZE,
   type ExplorerDatabaseConfig,
 } from '../explorer.js';
+import { isSchemaInspectorError } from '../errors.js';
 import { DatabaseExplorerError } from '../types.js';
 
 /**
@@ -44,15 +45,18 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
     routes.onError((error, context) => {
       if (!(error instanceof DatabaseExplorerError)) throw error;
       if (error.status === 502) {
-        // A driver's connection error routinely quotes the host, database, and
-        // account it failed to reach, so it is logged rather than returned.
+        // Only the classification is recorded. A driver's connection error
+        // quotes the host, database, and account it failed to reach, so
+        // writing the cause here would put into the log file exactly what the
+        // response body goes to such lengths to withhold -- and a log is the
+        // easier of the two to copy into an issue.
         logger?.warn(
           {
             event: 'connection.unreadable',
             code: error.code,
-            reason: String(error.cause),
+            cause: classifyCause(error.cause),
           },
-          error.message,
+          'A connection could not be read.',
         );
       }
       return context.json(
@@ -148,6 +152,16 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
     router.route('/database-explorer', routes);
     return router;
   });
+
+/**
+ * Names the kind of failure underneath without quoting it. An inspector error
+ * carries a stable code; anything else is identified by its constructor name,
+ * which no driver puts a credential in.
+ */
+function classifyCause(cause: unknown): string {
+  if (isSchemaInspectorError(cause)) return cause.code;
+  return cause instanceof Error ? cause.name : typeof cause;
+}
 
 function optionalLimit(value: string | undefined): { limit?: number } {
   if (value === undefined) return {};

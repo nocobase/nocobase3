@@ -16,11 +16,18 @@ const config: ExplorerDatabaseConfig = {
 };
 
 /**
- * The Explorer promises to change nothing. That promise is not only about the
- * statements written here: reading a Collection initializes the Collection
- * registry, whose metadata store creates its own bookkeeping table when it is
- * absent. This pins the boundary, so a change further down that moves schema
- * work into a read path fails here rather than on someone's database.
+ * What "read-only" is actually worth here.
+ *
+ * The Explorer issues no write of its own, but reading a Collection
+ * initializes the Collection registry, and on a managed connection the
+ * registry's metadata store creates its own `__nocobase_collection_metadata`
+ * table when it is missing. So the honest guarantee is narrower than "touches
+ * nothing": no Collection is created, altered or dropped, no row of any table
+ * changes, and the single table the Explorer can bring into existence is that
+ * bookkeeping one.
+ *
+ * These tests state that boundary rather than hiding it behind a warm-up read,
+ * so a change that widens it fails here instead of on someone's database.
  */
 describe('reading never changes a database', () => {
   let database: DatabaseManager;
@@ -33,16 +40,45 @@ describe('reading never changes a database', () => {
         collection.increments('id').primary();
         collection.string('name').notNull();
       });
-    // Read once first, so any bookkeeping the registry needs already exists
-    // and the comparison below is about the Explorer, not about setup.
-    await listCollections(database, config, 'main');
+    await database
+      .connection()
+      .repository('customers')
+      .createOne({ values: { name: 'Ada' } });
   });
 
   afterEach(async () => {
     await database.destroy();
   });
 
-  it('leaves the physical schema byte-identical', async () => {
+  it('adds nothing but its own bookkeeping table on a first read', async () => {
+    // A database NocoBase has never touched: the table is created with raw
+    // SQL, so the Collection builder never runs and the metadata store is
+    // genuinely absent. This is the one moment the Explorer can change a
+    // schema, and it is not reachable once migrations have run.
+    const virgin = createDatabaseManager({ drivers: { sqlite }, ...config });
+    try {
+      await raw(
+        virgin,
+        'create table invoices (id integer primary key, total integer not null)',
+      );
+      const before = await tableNames(virgin);
+      expect(before).toEqual(['invoices']);
+
+      await listCollections(virgin, config, 'main');
+
+      const added = (await tableNames(virgin)).filter(
+        (name) => !before.includes(name),
+      );
+      expect(added).toEqual(['__nocobase_collection_metadata']);
+      // The foreign table itself is untouched.
+      expect(await raw(virgin, 'select * from invoices')).toEqual([]);
+    } finally {
+      await virgin.destroy();
+    }
+  });
+
+  it('leaves the schema byte-identical once that table exists', async () => {
+    await listCollections(database, config, 'main');
     const before = await schemaSnapshot(database);
 
     listConnections(config);
@@ -53,27 +89,50 @@ describe('reading never changes a database', () => {
     expect(await schemaSnapshot(database)).toEqual(before);
   });
 
-  it('leaves the rows of every table untouched', async () => {
-    const repository = database.connection().repository('customers');
-    await repository.createOne({ values: { name: 'Ada' } });
-    const before = await repository.findMany();
+  it('leaves the rows of every table untouched, bookkeeping included', async () => {
+    // Every table, not just the fixture's: a regression that wrote a metadata
+    // row on read would pass a check that only looked at `customers`.
+    await listCollections(database, config, 'main');
+    const before = await allRows(database);
+    expect(Object.keys(before)).toContain('__nocobase_collection_metadata');
+    expect(before.customers).toHaveLength(1);
 
     await listCollections(database, config, 'main');
     await readCollection(database, config, 'main', 'customers');
     await readPhysicalCollection(database, config, 'main', 'customers');
 
-    expect(await repository.findMany()).toEqual(before);
+    expect(await allRows(database)).toEqual(before);
   });
 });
+
+async function raw<T>(database: DatabaseManager, sql: string): Promise<T[]> {
+  const client = await database
+    .connection()
+    .client<{ raw: (sql: string) => Promise<unknown> }>();
+  return (await client.raw(sql)) as T[];
+}
+
+async function tableNames(database: DatabaseManager): Promise<string[]> {
+  const rows = await raw<{ name: string }>(
+    database,
+    "select name from sqlite_master where type = 'table' order by name",
+  );
+  return rows.map((row) => row.name);
+}
 
 async function schemaSnapshot(
   database: DatabaseManager,
 ): Promise<readonly { name: string; sql: string | null }[]> {
-  const client = await database.connection().client<{
-    raw: (sql: string) => Promise<unknown>;
-  }>();
-  const rows = (await client.raw(
-    'select name, sql from sqlite_master order by name',
-  )) as readonly { name: string; sql: string | null }[];
-  return [...rows];
+  return raw(database, 'select name, sql from sqlite_master order by name');
+}
+
+async function allRows(
+  database: DatabaseManager,
+): Promise<Record<string, unknown[]>> {
+  const snapshot: Record<string, unknown[]> = {};
+  for (const name of await tableNames(database)) {
+    if (name.startsWith('sqlite_')) continue;
+    snapshot[name] = await raw(database, `select * from "${name}"`);
+  }
+  return snapshot;
 }

@@ -5,9 +5,14 @@ import {
 
 import routes from './routes/index.js';
 
+/**
+ * No Server locales. Failures answer with a stable `code` and a fixed English
+ * message, and the Client renders the wording for that code in the viewer's
+ * language. Declaring Server locale resources that nothing consults would read
+ * as translated API errors without producing any.
+ */
 const databaseExplorerPlugin: AppServerPlugin = defineServerPlugin({
   packageName: '@nocobase/app-plugin-database-explorer',
-  locales: () => import('./locales/index.js'),
   routes,
 });
 

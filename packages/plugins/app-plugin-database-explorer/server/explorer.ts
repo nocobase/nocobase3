@@ -43,7 +43,7 @@ export function listConnections(
   const configured = config?.default;
   const fallback = names.length > 0 ? (names[0] ?? null) : null;
   const defaultConnection =
-    configured !== undefined && configured in connections
+    configured !== undefined && Object.hasOwn(connections, configured)
       ? configured
       : fallback;
   return {
@@ -154,7 +154,10 @@ function openConnection(
   config: ExplorerDatabaseConfig | undefined,
   connectionName: string,
 ): DatabaseConnection {
-  if (!(connectionName in (config?.connections ?? {}))) {
+  // `hasOwn` rather than `in`: every object inherits `toString`, so `in` would
+  // accept a request for a connection named after a prototype member and send
+  // it to the Manager instead of reporting it as unconfigured.
+  if (!Object.hasOwn(config?.connections ?? {}, connectionName)) {
     throw new DatabaseExplorerError(
       'CONNECTION_NOT_FOUND',
       404,
