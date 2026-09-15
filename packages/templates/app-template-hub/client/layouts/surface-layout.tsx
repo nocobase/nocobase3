@@ -8,7 +8,7 @@ import { Loading } from '@/components/loading';
 import { Button } from '@/components/ui/button';
 
 import { renderRouteTree } from '../routing/route-tree.js';
-import { RouteMetadataBoundary } from '../routing/route-context.js';
+import { RouteTreeProvider } from '../routing/route-context.js';
 import {
   routeKey,
   matchRouteTree,
@@ -67,7 +67,7 @@ export function SurfaceLayout({
     denied,
   );
   const visible = navigationPages(navEntries);
-  // Both the match below and the boundary's memo key off this, so it keeps its identity between renders.
+  // The match below and every consumer of the route tree key off this, so it keeps its identity.
   const allRoutes = useMemo(
     () => [...routeTree, ...routes],
     [routeTree, routes],
@@ -200,12 +200,12 @@ export function SurfaceLayout({
               </option>
             ))}
           </select>
-          <RouteMetadataBoundary routes={allRoutes}>
+          <RouteTreeProvider routes={allRoutes}>
             <Routes>
               {renderRouteTree(routeTree, copy.pathPrefix, false, true)}
               {renderRouteTree(routes, copy.pathPrefix)}
             </Routes>
-          </RouteMetadataBoundary>
+          </RouteTreeProvider>
         </main>
       </div>
     </div>

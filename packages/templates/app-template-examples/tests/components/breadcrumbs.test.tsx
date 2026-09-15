@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 
 import { Breadcrumbs } from '../../client/components/breadcrumbs.js';
-import { RouteMetadataBoundary } from '../../client/routing/route-context.js';
+import { RouteTreeProvider } from '../../client/routing/route-context.js';
 
 vi.mock('@nocobase/i18n/client', () => ({
   useTranslation: () => ({
@@ -33,7 +33,7 @@ describe('Breadcrumbs', () => {
   it('renders one level per titled destination', () => {
     render(
       <MemoryRouter initialEntries={['/orders/archived']}>
-        <RouteMetadataBoundary
+        <RouteTreeProvider
           routes={[
             {
               ...route('orders', '/orders', { title: 'Orders' }),
@@ -44,7 +44,7 @@ describe('Breadcrumbs', () => {
           ]}
         >
           <Breadcrumbs />
-        </RouteMetadataBoundary>
+        </RouteTreeProvider>
       </MemoryRouter>,
     );
 
@@ -75,9 +75,9 @@ describe('Breadcrumbs', () => {
 
     render(
       <MemoryRouter initialEntries={['/orders/edit/42/details']}>
-        <RouteMetadataBoundary routes={tree}>
+        <RouteTreeProvider routes={tree}>
           <Breadcrumbs />
-        </RouteMetadataBoundary>
+        </RouteTreeProvider>
       </MemoryRouter>,
     );
 
@@ -97,9 +97,9 @@ describe('Breadcrumbs', () => {
 
     render(
       <MemoryRouter initialEntries={['/orders/open/preview']}>
-        <RouteMetadataBoundary routes={tree}>
+        <RouteTreeProvider routes={tree}>
           <Breadcrumbs />
-        </RouteMetadataBoundary>
+        </RouteTreeProvider>
       </MemoryRouter>,
     );
 
@@ -110,7 +110,7 @@ describe('Breadcrumbs', () => {
   it('renders a group as plain text because no page sits behind it', () => {
     render(
       <MemoryRouter initialEntries={['/settings/automation/workflows']}>
-        <RouteMetadataBoundary
+        <RouteTreeProvider
           routes={[
             {
               ...route('automation', '/settings/automation', {
@@ -126,7 +126,7 @@ describe('Breadcrumbs', () => {
           ]}
         >
           <Breadcrumbs />
-        </RouteMetadataBoundary>
+        </RouteTreeProvider>
       </MemoryRouter>,
     );
 
@@ -143,7 +143,7 @@ describe('Breadcrumbs', () => {
   it('counts the root route as a level when a page sits under it', () => {
     render(
       <MemoryRouter initialEntries={['/detail']}>
-        <RouteMetadataBoundary
+        <RouteTreeProvider
           routes={[
             {
               ...route('home', '/', { title: 'Home' }),
@@ -152,7 +152,7 @@ describe('Breadcrumbs', () => {
           ]}
         >
           <Breadcrumbs />
-        </RouteMetadataBoundary>
+        </RouteTreeProvider>
       </MemoryRouter>,
     );
 
@@ -166,11 +166,11 @@ describe('Breadcrumbs', () => {
   it('stays hidden on a top-level page', () => {
     render(
       <MemoryRouter initialEntries={['/articles']}>
-        <RouteMetadataBoundary
+        <RouteTreeProvider
           routes={[route('articles', '/articles', { title: 'Articles' })]}
         >
           <Breadcrumbs />
-        </RouteMetadataBoundary>
+        </RouteTreeProvider>
       </MemoryRouter>,
     );
 

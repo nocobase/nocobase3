@@ -24,33 +24,44 @@ export interface RouteTrailEntry {
   readonly pathname: string;
 }
 
-const RouteTrailContext = createContext<readonly RouteTrailEntry[]>([]);
+const RouteTreeContext = createContext<readonly AppClientRegisteredRoute[]>([]);
 const CurrentRouteContext = createContext<AppClientRegisteredRoute | undefined>(
   undefined,
 );
 
-export function useRouteTrail(): readonly RouteTrailEntry[] {
-  return useContext(RouteTrailContext);
-}
-
-export interface RouteMetadataBoundaryProps extends PropsWithChildren {
+export interface RouteTreeProviderProps extends PropsWithChildren {
   readonly routes: readonly AppClientRegisteredRoute[];
 }
 
 /**
- * Resolves the current location against a route tree and publishes the resulting trail.
+ * Publishes the routes a page may be reached through, so anything below can work out where it is.
+ *
+ * It carries the tree rather than a trail derived from it: deriving is `useRouteTrail`'s job, which keeps the
+ * derivation and the memo that guards it in one place. `routes` still has to keep its identity between renders,
+ * since a new array re-renders every consumer; callers pass a memoised one.
+ */
+export function RouteTreeProvider({
+  children,
+  routes,
+}: RouteTreeProviderProps): ReactElement {
+  return (
+    <RouteTreeContext.Provider value={routes}>
+      {children}
+    </RouteTreeContext.Provider>
+  );
+}
+
+/**
+ * The trail of route levels leading to the current location.
  *
  * Every level is named by its route. A title states what kind of page a level is rather than which record it is
  * showing, so it is known before the page loads anything and the trail never changes while the user waits.
- *
- * `routes` has to keep its identity between renders for the trail to be reused; callers pass a memoised array.
  */
-export function RouteMetadataBoundary({
-  children,
-  routes,
-}: RouteMetadataBoundaryProps): ReactElement {
+export function useRouteTrail(): readonly RouteTrailEntry[] {
+  const routes = useContext(RouteTreeContext);
   const { pathname } = useLocation();
-  const trail = useMemo(
+
+  return useMemo(
     () =>
       matchRouteTree(routes, pathname)?.map(
         ({ route, pathname: resolvedPathname }) => ({
@@ -59,12 +70,6 @@ export function RouteMetadataBoundary({
         }),
       ) ?? [],
     [pathname, routes],
-  );
-
-  return (
-    <RouteTrailContext.Provider value={trail}>
-      {children}
-    </RouteTrailContext.Provider>
   );
 }
 

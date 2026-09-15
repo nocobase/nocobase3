@@ -11,7 +11,7 @@ import { Loading } from '@/components/loading';
 import { AppShell } from '../shell/index.js';
 import { renderRouteTree } from './route-tree.js';
 import { StandalonePageLayout } from './standalone-page-layout.js';
-import { RouteMetadataBoundary } from './route-context.js';
+import { RouteTreeProvider } from './route-context.js';
 
 // The settings centre brings its own chrome and navigation, none of which the application needs until someone opens
 // it. Loading it lazily keeps it out of the entry chunk, the same way every page it hosts stays out.
@@ -71,14 +71,14 @@ export function AppRouter({
     [clientRoutes],
   );
 
-  // The boundary memoises the trail on this array, so it has to keep its identity between renders.
+  // A new array would re-render every consumer of the route tree, so this one keeps its identity.
   const knownRoutes = useMemo(
     () => [...clientRoutes, ...settingsRouteTree, ...devRouteTree],
     [clientRoutes, devRouteTree, settingsRouteTree],
   );
 
   return (
-    <RouteMetadataBoundary routes={knownRoutes}>
+    <RouteTreeProvider routes={knownRoutes}>
       <Routes>
         <Route
           element={
@@ -139,7 +139,7 @@ export function AppRouter({
 
         <Route path='*' element={<Navigate to='/' replace />} />
       </Routes>
-    </RouteMetadataBoundary>
+    </RouteTreeProvider>
   );
 }
 

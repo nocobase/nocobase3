@@ -11,7 +11,7 @@ import { Loading } from '@/components/loading';
 import { AppShell } from '../shell/index.js';
 import { renderRouteTree } from './route-tree.js';
 import { StandalonePageLayout } from './standalone-page-layout.js';
-import { RouteMetadataBoundary } from './route-context.js';
+import { RouteTreeProvider } from './route-context.js';
 
 // The dev tools exist only while developing the application. Resolving the import inside an `import.meta.env.DEV`
 // branch lets a production build prove the module is unreachable and drop it, along with every dev page and any
@@ -56,14 +56,14 @@ export function AppRouter({
     [clientRoutes],
   );
 
-  // The boundary memoises the trail on this array, so it has to keep its identity between renders.
+  // A new array would re-render every consumer of the route tree, so this one keeps its identity.
   const knownRoutes = useMemo(
     () => [...clientRoutes, ...settingsRouteTree, ...devRouteTree],
     [clientRoutes, devRouteTree, settingsRouteTree],
   );
 
   return (
-    <RouteMetadataBoundary routes={knownRoutes}>
+    <RouteTreeProvider routes={knownRoutes}>
       <Routes>
         <Route
           element={
@@ -112,7 +112,7 @@ export function AppRouter({
 
         <Route path='*' element={<Navigate to='/' replace />} />
       </Routes>
-    </RouteMetadataBoundary>
+    </RouteTreeProvider>
   );
 }
 

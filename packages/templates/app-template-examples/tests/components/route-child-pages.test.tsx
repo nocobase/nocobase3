@@ -12,7 +12,7 @@ import RouteOverlaysPage from '../../client/pages/route-overlays/index.js';
 import applicationRoutes from '../../client/routes.js';
 import {
   CurrentRouteProvider,
-  RouteMetadataBoundary,
+  RouteTreeProvider,
   useChildPageActive,
 } from '../../client/routing/route-context.js';
 
@@ -45,9 +45,9 @@ const routeNamed = (name: string): AppClientRegisteredRoute => {
 
 const trailAt = (pathname: string) => (
   <MemoryRouter initialEntries={[pathname]}>
-    <RouteMetadataBoundary routes={registered}>
+    <RouteTreeProvider routes={registered}>
       <Breadcrumbs />
-    </RouteMetadataBoundary>
+    </RouteTreeProvider>
   </MemoryRouter>
 );
 
@@ -99,11 +99,11 @@ describe('nested example pages', () => {
     const overlays = routeNamed('routeOverlays');
     const page = (pathname: string) => (
       <MemoryRouter initialEntries={[pathname]}>
-        <RouteMetadataBoundary routes={registered}>
+        <RouteTreeProvider routes={registered}>
           <CurrentRouteProvider route={overlays}>
             <RouteOverlaysPage />
           </CurrentRouteProvider>
-        </RouteMetadataBoundary>
+        </RouteTreeProvider>
       </MemoryRouter>
     );
 
@@ -126,12 +126,12 @@ describe('nested example pages', () => {
 
     render(
       <MemoryRouter initialEntries={['/route-overlays/dialog']}>
-        <RouteMetadataBoundary routes={registered}>
+        <RouteTreeProvider routes={registered}>
           {/* The dialog is an overlay: it declares no title, so nothing has taken over from it. */}
           <CurrentRouteProvider route={routeNamed('routeDialogExample')}>
             <Probe />
           </CurrentRouteProvider>
-        </RouteMetadataBoundary>
+        </RouteTreeProvider>
       </MemoryRouter>,
     );
 
@@ -141,11 +141,11 @@ describe('nested example pages', () => {
   it('heads a child page with the same title its route declares', () => {
     render(
       <MemoryRouter initialEntries={['/route-overlays/pages/quotation']}>
-        <RouteMetadataBoundary routes={registered}>
+        <RouteTreeProvider routes={registered}>
           <CurrentRouteProvider route={routeNamed('routeChildPageQuotation')}>
             <RouteChildPageQuotationPage />
           </CurrentRouteProvider>
-        </RouteMetadataBoundary>
+        </RouteTreeProvider>
       </MemoryRouter>,
     );
 
