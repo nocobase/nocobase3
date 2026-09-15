@@ -15,6 +15,7 @@ import { Link, Outlet, useLocation } from 'react-router';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/page-header';
+import { PageContainer } from '@/components/page-container';
 
 export default function RouteOverlaysPage() {
   const { t } = useTranslation();
@@ -67,7 +68,7 @@ export default function RouteOverlaysPage() {
   ] as const;
 
   return (
-    <section className='w-full space-y-6 p-6 md:p-8'>
+    <PageContainer>
       <PageHeader
         actions={
           <>
@@ -230,6 +231,6 @@ export default function RouteOverlaysPage() {
         </aside>
       </div>
       <Outlet />
-    </section>
+    </PageContainer>
   );
 }

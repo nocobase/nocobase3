@@ -4,6 +4,7 @@ import { Link, Outlet } from 'react-router';
 import { Breadcrumbs } from '@/components/breadcrumbs';
 import { RouteChildPage } from '@/components/route-child-page';
 import { PageHeader } from '@/components/page-header';
+import { PageContainer } from '@/components/page-container';
 import { Button } from '@/components/ui/button';
 
 import { routeChildPageTopics } from './topics.js';
@@ -13,7 +14,7 @@ export default function RouteChildPagesPage() {
   return (
     <>
       <RouteChildPage>
-        <section className='w-full space-y-6 p-6 md:p-8'>
+        <PageContainer>
           <Breadcrumbs />
           <PageHeader
             description={t('routeOverlays.childPagesDescription')}
@@ -47,7 +48,7 @@ export default function RouteChildPagesPage() {
               </li>
             ))}
           </ul>
-        </section>
+        </PageContainer>
       </RouteChildPage>
       {/* The next layer is a sibling of this one, so the DOM gains no level per level of nesting. */}
       <Outlet />
