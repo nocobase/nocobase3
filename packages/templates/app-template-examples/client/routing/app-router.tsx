@@ -7,6 +7,7 @@ import { lazy, Suspense, useMemo, type ReactElement } from 'react';
 import { Navigate, Outlet, Route, Routes } from 'react-router';
 
 import { Loading } from '@/components/loading';
+import { EMPTY_ARRAY } from '@/lib/constants';
 
 import { AppShell } from '../shell/index.js';
 import { renderRouteTree } from './route-tree.js';
@@ -150,7 +151,7 @@ function filterRouteTree(
 ): AppClientRegisteredRoute[] {
   return routes.flatMap((route) => {
     if (route.componentLoader) return predicate(route) ? [route] : [];
-    const children = filterRouteTree(route.children ?? [], predicate);
+    const children = filterRouteTree(route.children ?? EMPTY_ARRAY, predicate);
     return children.length ? [{ ...route, children }] : [];
   });
 }

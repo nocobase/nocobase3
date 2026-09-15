@@ -8,6 +8,8 @@ import {
   type ReactElement,
 } from 'react';
 
+import { EMPTY_ARRAY } from '@/lib/constants';
+
 import { matchRouteTree } from './route-navigation.js';
 
 /* eslint-disable react-refresh/only-export-components -- provider and hooks are intentionally colocated */
@@ -64,7 +66,7 @@ export function useRouteTrail(): readonly RouteTrailEntry[] {
           route,
           pathname: resolvedPathname,
         }),
-      ) ?? [],
+      ) ?? EMPTY_ARRAY,
     [pathname, routes],
   );
 }

@@ -6,6 +6,7 @@ import { Link, Navigate, Routes, useLocation, useNavigate } from 'react-router';
 
 import { Loading } from '@/components/loading';
 import { Button } from '@/components/ui/button';
+import { EMPTY_ARRAY } from '@/lib/constants';
 
 import { renderRouteTree } from '../routing/route-tree.js';
 import { RouteTreeProvider } from '../routing/route-context.js';
@@ -49,7 +50,7 @@ export interface SurfaceLayoutProps {
 export function SurfaceLayout({
   copy,
   routeTree,
-  routes = [],
+  routes = EMPTY_ARRAY,
 }: SurfaceLayoutProps): ReactElement {
   const location = useLocation();
   const navigate = useNavigate();

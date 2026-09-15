@@ -41,4 +41,8 @@ layer covers exactly the content area.
 The examples application demonstrates both kinds under its route overlays page: the dialog and drawer leave the
 trail untouched, while the nested pages beside them each add a level.
 
-Also adds the `PageHeader` component for a page title, description and action slots.
+Also adds the `PageHeader` component for a page title, description and action slots, and `EMPTY_ARRAY` in
+`client/lib/constants.ts` for the absent collection. An array literal is a new value every time it is
+evaluated, so a `routes = []` default parameter or a `?? []` fallback inside a `useMemo` reads as a changed
+dependency on every render; one frozen instance keeps those comparisons meaningful, and freezing it makes a
+caller that tries to fill everyone's empty array fail where the cause is visible.
