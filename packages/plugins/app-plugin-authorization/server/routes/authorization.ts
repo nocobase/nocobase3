@@ -6,15 +6,27 @@ import type { Auth } from '@nocobase/app-plugin-authentication';
 import type { DatabaseConnection } from '@nocobase/db';
 import { Hono, type Context } from 'hono';
 import { describeCollection } from '../database/index.js';
+import {
+  resolveOptionText,
+  translateAuthorization,
+  type OptionText,
+} from '../i18n.js';
 import type { AuthorizationAdministration } from '../administration.js';
 import type { AppAuthorizationService } from '../tokens.js';
 
 /** One grantable Collection: its registration, plus the fields db reports. */
 interface DatabaseCollectionOption {
   readonly name: string;
-  readonly title?: string;
-  readonly description?: string;
+  readonly title?: OptionText;
+  readonly description?: OptionText;
   readonly fields: readonly string[];
+}
+
+/** One option as the wire carries it: a value and the text for this request's locale. */
+interface Option {
+  readonly value: string;
+  readonly label: string;
+  readonly description?: string;
 }
 
 export function createAuthorizationRoutes(
@@ -43,7 +55,7 @@ export function createAuthorizationRoutes(
   routes.get('/permission-sets/options', async (context) => {
     await admin(context, 'permission-sets', 'read');
     return context.json({
-      data: await permissionSetOptions(authorization, connection),
+      data: await permissionSetOptions(authorization, connection, context),
     });
   });
   for (const settings of [
@@ -54,7 +66,11 @@ export function createAuthorizationRoutes(
     routes.get(`/${settings}/options`, async (context) => {
       await admin(context, settings, 'read');
       return context.json({
-        data: await databaseScopeRuleOptions(authorization, connection),
+        data: await databaseScopeRuleOptions(
+          authorization,
+          connection,
+          context,
+        ),
       });
     });
     routes.get(`/${settings}/records/:collection`, async (context) => {
@@ -96,54 +112,66 @@ function mountedPath(context: Context<AuthorizationEnv>): string {
 
 const crudActions = ['read', 'create', 'update', 'delete'] as const;
 const administrationResources = [
-  settingsResource('permission-sets', crudActions),
-  settingsResource('default-access', crudActions),
-  settingsResource('sharing-rules', crudActions),
-  settingsResource('restriction-rules', crudActions),
+  'permission-sets',
+  'default-access',
+  'sharing-rules',
+  'restriction-rules',
 ] as const;
 
 async function permissionSetOptions(
   authz: AppAuthorizationService,
   connection: DatabaseConnection | undefined,
+  context: Context,
 ): Promise<object> {
   const collections = await databaseCollections(authz, connection);
+  const access = [actionOption(context, 'access')];
   return {
     plugins: ['permission-sets', 'pages', 'database'],
     resourceTypes: [
       {
         value: 'page',
-        label: 'Pages',
+        label: translateAuthorization(
+          context,
+          'options.resourceTypes.page',
+          'Pages',
+        ),
         resources: [
           // The page inventory is declared in client route files, which the server never sees. The browser merges the
           // grantable pages into these options from its own route registry; only the wildcard is meaningful without
           // knowing the inventory.
           {
             value: '*',
-            label: 'All pages',
-            description:
+            label: translateAuthorization(
+              context,
+              'options.pages.all',
+              'All pages',
+            ),
+            description: translateAuthorization(
+              context,
+              'options.pages.allDescription',
               'Allow access to every page, including pages added later.',
-            actions: [{ value: 'access', label: 'Access' }],
+            ),
+            actions: access,
           },
         ],
-        actions: [{ value: 'access', label: 'Access' }],
+        actions: access,
       },
-      administrationOptions(),
-      databaseResourceOptions(collections),
+      administrationOptions(context),
+      databaseResourceOptions(context, collections),
     ],
-    subjectTypes: subjectTypeOptions(),
-    ...databaseOptions(authz, collections),
+    subjectTypes: subjectTypeOptions(context),
+    ...databaseOptions(context, authz, collections),
   };
 }
 
 async function databaseScopeRuleOptions(
   authz: AppAuthorizationService,
   connection: DatabaseConnection | undefined,
+  context: Context,
 ): Promise<object> {
   const collections = await databaseCollections(authz, connection);
-  const collection = databaseResourceOptions(collections);
-  const withoutCreate = (
-    actions: readonly { value: string; label: string }[],
-  ): readonly { value: string; label: string }[] =>
+  const collection = databaseResourceOptions(context, collections);
+  const withoutCreate = (actions: readonly Option[]): readonly Option[] =>
     actions.filter((action) => action.value !== 'create');
   return {
     plugins: ['database'],
@@ -157,20 +185,23 @@ async function databaseScopeRuleOptions(
         actions: withoutCreate(collection.actions),
       },
     ],
-    subjectTypes: subjectTypeOptions(),
-    ...databaseOptions(authz, collections),
+    subjectTypes: subjectTypeOptions(context),
+    ...databaseOptions(context, authz, collections),
   };
 }
 
-function administrationOptions(): object {
+function administrationOptions(context: Context): object {
   return {
     value: 'authorization.settings',
-    label: 'Authorization settings',
-    resources: administrationResources,
-    actions: ['read', 'create', 'update', 'delete'].map((value) => ({
-      value,
-      label: sentenceCase(value),
-    })),
+    label: translateAuthorization(
+      context,
+      'options.resourceTypes.settings',
+      'Authorization settings',
+    ),
+    resources: administrationResources.map((resource) =>
+      settingsResource(context, resource, crudActions),
+    ),
+    actions: crudActions.map((value) => actionOption(context, value)),
   };
 }
 
@@ -198,31 +229,30 @@ async function databaseCollections(
 }
 
 function databaseResourceOptions(
+  context: Context,
   collections: readonly DatabaseCollectionOption[],
 ): {
   value: string;
   label: string;
-  resources: readonly {
-    value: string;
-    label: string;
-    description?: string;
-    actions: readonly { value: string; label: string }[];
-  }[];
-  actions: readonly { value: string; label: string }[];
+  resources: readonly (Option & { actions: readonly Option[] })[];
+  actions: readonly Option[];
 } {
-  const actions = crudActions.map((value) => ({
-    value,
-    label: sentenceCase(value),
-  }));
+  const actions = crudActions.map((value) => actionOption(context, value));
   return {
     value: 'database.collection',
-    label: 'Database collections',
+    label: translateAuthorization(
+      context,
+      'options.resourceTypes.collection',
+      'Database collections',
+    ),
     resources: collections.map((collection) => ({
       value: collection.name,
-      label: collection.title ?? collection.name,
+      label: resolveOptionText(context, collection.title, collection.name),
       ...(collection.description === undefined
         ? {}
-        : { description: collection.description }),
+        : {
+            description: resolveOptionText(context, collection.description, ''),
+          }),
       actions,
     })),
     actions,
@@ -230,24 +260,35 @@ function databaseResourceOptions(
 }
 
 function settingsResource(
+  context: Context,
   value: string,
   actions: readonly string[],
-): {
-  value: string;
-  label: string;
-  actions: readonly { value: string; label: string }[];
-} {
+): Option & { actions: readonly Option[] } {
   return {
     value,
-    label: title(value),
-    actions: actions.map((action) => ({
-      value: action,
-      label: sentenceCase(action),
-    })),
+    label: translateAuthorization(
+      context,
+      `options.settings.${value}`,
+      title(value),
+    ),
+    actions: actions.map((action) => actionOption(context, action)),
+  };
+}
+
+/** One action as this request names it; its English sentence case is the default. */
+function actionOption(context: Context, value: string): Option {
+  return {
+    value,
+    label: translateAuthorization(
+      context,
+      `options.actions.${value}`,
+      sentenceCase(value),
+    ),
   };
 }
 
 function databaseOptions(
+  context: Context,
   authz: AppAuthorizationService,
   collections: readonly DatabaseCollectionOption[],
 ): object {
@@ -255,20 +296,39 @@ function databaseOptions(
     collections: collections.map(({ name, fields }) => ({ name, fields })),
     recordAccessPolicies: authz.db.recordAccess.list().map((policy) => ({
       value: policy.key,
-      label: policy.title ?? policy.key,
-      description: policy.description,
+      label: resolveOptionText(context, policy.title, policy.key),
+      ...(policy.description === undefined
+        ? {}
+        : {
+            description: resolveOptionText(context, policy.description, ''),
+          }),
     })),
   };
 }
 
-function subjectTypeOptions(): readonly object[] {
+function subjectTypeOptions(context: Context): readonly Option[] {
   return [
     {
       value: 'authenticated',
-      label: 'All signed-in users',
-      description: 'Applies to every user with a valid signed-in session.',
+      label: translateAuthorization(
+        context,
+        'options.subjectTypes.authenticated',
+        'All signed-in users',
+      ),
+      description: translateAuthorization(
+        context,
+        'options.subjectTypes.authenticatedDescription',
+        'Applies to every user with a valid signed-in session.',
+      ),
     },
-    { value: 'user', label: 'Specific user' },
+    {
+      value: 'user',
+      label: translateAuthorization(
+        context,
+        'options.subjectTypes.user',
+        'Specific user',
+      ),
+    },
   ];
 }
 

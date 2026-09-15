@@ -1,4 +1,5 @@
 import type { Principal } from '@nocobase/authorization/core';
+import type { OptionText } from '../i18n.js';
 import type { AuthorizationCollection } from './model.js';
 import { condition, type DatabaseScope } from './scope.js';
 
@@ -11,8 +12,8 @@ export interface RecordAccessPolicyContext<P> {
 
 export interface RecordAccessPolicy<P = unknown> {
   key: string;
-  title?: string;
-  description?: string;
+  title?: OptionText;
+  description?: OptionText;
   paramsSchema?: unknown;
   resolve(
     context: RecordAccessPolicyContext<P>,
@@ -21,8 +22,8 @@ export interface RecordAccessPolicy<P = unknown> {
 
 export interface DefineRecordAccessPolicyOptions<P = unknown> {
   key: string;
-  title?: string;
-  description?: string;
+  title?: OptionText;
+  description?: OptionText;
   paramsSchema?: unknown;
   resolve: RecordAccessPolicy<P>['resolve'];
 }
@@ -36,7 +37,7 @@ export function defineRecordAccessPolicy<P = unknown>(
 export function allRecords(): RecordAccessPolicy {
   return defineRecordAccessPolicy({
     key: 'allRecords',
-    title: 'All Records',
+    title: { key: 'options.recordAccessPolicies.allRecords' },
     resolve: () => true,
   });
 }
@@ -51,7 +52,7 @@ export function recordsIOwn(): RecordAccessPolicy<
 > {
   return defineRecordAccessPolicy<RecordOwnerParams | undefined>({
     key: 'recordsIOwn',
-    title: 'Records I Own',
+    title: { key: 'options.recordAccessPolicies.recordsIOwn' },
     resolve: ({ principal, collection, params }) =>
       condition(
         ownerField(collection, params?.field ?? 'ownerId'),
@@ -66,7 +67,7 @@ export function recordsICreated(): RecordAccessPolicy<
 > {
   return defineRecordAccessPolicy<RecordOwnerParams | undefined>({
     key: 'recordsICreated',
-    title: 'Records I Created',
+    title: { key: 'options.recordAccessPolicies.recordsICreated' },
     resolve: ({ principal, collection, params }) =>
       condition(
         ownerField(collection, params?.field ?? 'createdById'),
@@ -83,8 +84,8 @@ export interface CustomFilterParams {
 export function customFilter(): RecordAccessPolicy<CustomFilterParams> {
   return defineRecordAccessPolicy({
     key: 'customFilter',
-    title: 'Custom Filter',
-    description: 'Select records with a custom filter condition.',
+    title: { key: 'options.recordAccessPolicies.customFilter' },
+    description: { key: 'options.recordAccessPolicies.customFilterHint' },
     paramsSchema: { type: 'filter-node' },
     resolve: ({ params }) => {
       if (!params || typeof params !== 'object' || !('filter' in params)) {

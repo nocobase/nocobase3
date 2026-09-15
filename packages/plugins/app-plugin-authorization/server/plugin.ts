@@ -10,6 +10,7 @@ const authorizationPlugin: AppServerPlugin = defineServerPlugin({
   packageName: '@nocobase/app-plugin-authorization',
   serviceProviders,
   routes,
+  locales: () => import('./locales/index.js'),
   database: {
     migrations: './database/migrations',
     seeds: './database/seeds',

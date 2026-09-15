@@ -82,9 +82,18 @@ them under the package name as its namespace through
 `useAuthorizationTranslation()` in `client/i18n.ts`. Keys are structured by
 screen, such as `permissionSets.list.title`, and a label helper that composes a
 sentence takes the translator as its first argument rather than holding English
-in a string. What stays untranslated is what the server sends as data: resource
-type and resource labels, action names, and the record access policy labels the
-options endpoints return.
+in a string.
+
+The vocabulary the options endpoints send is translated on the server instead,
+from `server/locales/`, registered as `locales` on the server plugin under the
+same namespace. Resource type names, resource and action labels, subject types
+and record access policy titles are resolved against the request's locale and
+sent as plain strings, so the wire format carries no keys and no client threads
+a translator to render them. The two catalogues share no key: each side owns the
+strings it is the only one able to resolve. A request carries its language in
+`Accept-Language`, which `@nocobase/app-client` sends from the application's
+current locale, and the settings pages reload their options when the language
+changes.
 
 Every authenticated client route is authorized as `page:<route name>/access`
 unless the route declares an explicit authorization resource. Removing the
@@ -162,13 +171,20 @@ permission at all — every request for it is denied with
 `COLLECTION_NOT_REGISTERED`, an unrestricted identity included, because a
 superuser bypasses grants rather than the model. Registration carries intent
 only: a name, and optionally a `title` and `description` the permission UI
-shows. Field names, the primary key and whether the database generates it keep
+shows. Each of those is a string used as written, or `{ key, ns }` naming an
+entry in a catalogue the registering package ships — the options endpoint
+resolves it per request, so a plugin with no client bundle can still be named in
+the reader's language. Field names, the primary key and whether the database generates it keep
 coming from db at authorize time, so the two can never disagree. Repeating an
 identical registration is a no-op, because boot runs more than once in some
 hosts; one that disagrees with what is already registered throws.
 
 ```ts
 authz.db.collections.add({ name: 'orders', title: 'Orders' });
+authz.db.collections.add({
+  name: 'invoices',
+  title: { key: 'collections.invoices', ns: '@example/app-plugin-billing' },
+});
 ```
 
 `authz.db.repositories()` applies the same fold to

@@ -3,6 +3,9 @@ import { describe, expect, it } from 'vitest';
 import enUS from '../client/locales/en-US.js';
 import locales from '../client/locales/index.js';
 import zhCN from '../client/locales/zh-CN.js';
+import serverEnUS from '../server/locales/en-US.js';
+import serverLocales from '../server/locales/index.js';
+import serverZhCN from '../server/locales/zh-CN.js';
 
 /** Every leaf, as a dotted path, so a missing or extra key names itself. */
 function keys(value: unknown, prefix: string = ''): readonly string[] {
@@ -34,6 +37,30 @@ describe('locales', () => {
 
   it('loads one module per locale', () => {
     expect(Object.keys(locales).toSorted()).toEqual(['en-US', 'zh-CN']);
+  });
+});
+
+// The server owns the vocabulary the options endpoint sends; the client
+// receives it as plain strings and declares none of these keys.
+describe('server locales', () => {
+  it('declares the same keys in both languages', () => {
+    expect(keys(serverZhCN).toSorted()).toEqual(keys(serverEnUS).toSorted());
+  });
+
+  it('translates rather than copying the English', () => {
+    const copied = keys(serverEnUS).filter(
+      (key) => read(serverEnUS, key) === read(serverZhCN, key),
+    );
+    expect(copied).toEqual([]);
+  });
+
+  it('shares no key with the client catalogue', () => {
+    const client = new Set(keys(enUS));
+    expect(keys(serverEnUS).filter((key) => client.has(key))).toEqual([]);
+  });
+
+  it('loads one module per locale', () => {
+    expect(Object.keys(serverLocales).toSorted()).toEqual(['en-US', 'zh-CN']);
   });
 });
 

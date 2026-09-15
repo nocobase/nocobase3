@@ -52,3 +52,5 @@ export type {
   RepositoryAuthorizationPrincipal,
 } from './repositories.js';
 export { AuthorizationProvider } from './providers/authorization.js';
+export { translateAuthorization, type OptionText } from './i18n.js';
+export { AUTHORIZATION_NAMESPACE } from '../shared.js';

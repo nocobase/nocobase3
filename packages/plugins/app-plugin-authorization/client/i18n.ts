@@ -1,8 +1,8 @@
 import { useTranslation } from '@nocobase/i18n/client';
 
-/** The namespace this plugin's catalogues are registered under: its package name. */
-export const AUTHORIZATION_NAMESPACE: string =
-  '@nocobase/app-plugin-authorization';
+import { AUTHORIZATION_NAMESPACE } from '../shared.js';
+
+export { AUTHORIZATION_NAMESPACE };
 
 /** What a label helper needs: the narrow shape of i18next's `t`. */
 export type Translate = (

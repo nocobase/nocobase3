@@ -57,7 +57,10 @@ authz.db.collections.add({ name: 'orders', title: 'Orders' });
 
 Registration is the opt-in into the permission model, and it carries intent
 only: a name, plus an optional `title` and `description` for the permission
-UI. Field names, the primary key, and whether the database generates it are
+UI. Each of those is either a string, used as written, or `{ key, ns }` naming
+an entry in a catalogue your package ships; the options endpoint resolves it
+against the request's locale and sends a plain string, so a translated title
+needs nothing on the client. Field names, the primary key, and whether the database generates it are
 still read from `connection.collections` at authorize time. Registering the
 same thing twice is a no-op — boot runs more than once in some hosts — while a
 second registration that disagrees throws.

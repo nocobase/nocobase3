@@ -1,3 +1,5 @@
+import { sameOptionText, type OptionText } from '../i18n.js';
+
 /**
  * A Collection an application declared part of the permission model.
  *
@@ -6,8 +8,8 @@
  */
 export interface DatabaseCollectionRegistration {
   readonly name: string;
-  readonly title?: string;
-  readonly description?: string;
+  readonly title?: OptionText;
+  readonly description?: OptionText;
 }
 
 /**
@@ -34,8 +36,8 @@ export class DatabaseCollectionRegistry {
       // Boot runs more than once in some hosts, so repeating the same
       // declaration is not a mistake; disagreeing about it is.
       if (
-        existing.title === registration.title &&
-        existing.description === registration.description
+        sameOptionText(existing.title, registration.title) &&
+        sameOptionText(existing.description, registration.description)
       )
         return;
       throw new Error(
