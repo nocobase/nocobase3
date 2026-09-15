@@ -1,15 +1,18 @@
 name: Verify create-app
 description: >-
-  Publishes this release to a throwaway registry, generates an application from it with create-app, and boots that
-  application. Fails the run before anything reaches the real registry.
+  Publishes packages to a throwaway registry, generates an application with create-app, and checks dev, build, and
+  production start. Fails the run before anything reaches the real registry.
 
 inputs:
   port:
     description: Port the throwaway registry listens on.
     default: '4873'
   timeout:
-    description: Seconds to wait for the generated application to become ready.
+    description: Seconds to wait for each dev and production server to become ready.
     default: '420'
+  local-packages-only:
+    description: Disable upstream resolution for workspace packages so PRs test their own artifacts at committed versions.
+    default: 'false'
 
 runs:
   using: composite
@@ -22,11 +25,17 @@ runs:
       shell: bash
       env:
         PORT: ${{ inputs.port }}
+        LOCAL_PACKAGES_ONLY: ${{ inputs.local-packages-only }}
       run: |
         set -euo pipefail
+        CONFIG="$GITHUB_WORKSPACE/.github/verdaccio/config.yaml"
+        if [ "$LOCAL_PACKAGES_ONLY" = 'true' ]; then
+          CONFIG="$RUNNER_TEMP/smoke-verdaccio.yaml"
+          node scripts/smoke-registry-config.mjs > "$CONFIG"
+        fi
         docker run -d --name release-verdaccio \
           -p "$PORT:4873" \
-          -v "$GITHUB_WORKSPACE/.github/verdaccio/config.yaml:/verdaccio/conf/config.yaml:ro" \
+          -v "$CONFIG:/verdaccio/conf/config.yaml:ro" \
           verdaccio/verdaccio:5
 
         for _ in $(seq 1 60); do
@@ -101,7 +110,7 @@ runs:
     #
     # --no-git-tag because the tags belong to the real publish. Creating them here would leave the second publish
     # trying to create tags that already exist.
-    - name: Publish this release to the throwaway registry
+    - name: Publish packages to the throwaway registry
       shell: bash
       env:
         PORT: ${{ inputs.port }}
@@ -131,7 +140,7 @@ runs:
 
         pnpm changeset publish --no-git-tag
 
-    - name: Generate an application and boot it
+    - name: Generate an application and verify dev, build, and start
       shell: bash
       env:
         PORT: ${{ inputs.port }}
@@ -152,6 +161,14 @@ runs:
           --template "@nocobase/app-template-default@$TEMPLATE_VERSION" \
           --timeout "$TIMEOUT" \
           --workdir "$RUNNER_TEMP/create-app-smoke"
+
+    - name: Upload smoke logs
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: create-app-smoke-logs
+        path: ${{ runner.temp }}/create-app-smoke/*.log
+        if-no-files-found: ignore
 
     - name: Stop the throwaway registry
       if: always()
