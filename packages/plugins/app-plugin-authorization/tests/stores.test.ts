@@ -57,7 +57,7 @@ describe('authorization plugin database stores', () => {
     await authorization.permissionSets.create({
       key: 'order-reader',
       grants: [
-        authorization.database.grant('orders', {
+        authorization.db.grant('orders', {
           read: { fields: { output: ['id', 'amount'] } },
         }),
       ],

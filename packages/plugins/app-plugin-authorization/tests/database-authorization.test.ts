@@ -20,6 +20,7 @@ import {
   defineRecordAccessPolicy,
   recordsIOwn,
   condition,
+  type DatabaseAuthorizationPlugin,
 } from '../server/database/index.js';
 import { MockPermissionSetStore } from './mock-permission-set-store.js';
 import { createOrdersDatabase, orderFields } from './orders-database.js';
@@ -108,6 +109,18 @@ afterAll(async () => {
 
 const resource = { type: 'database.collection', id: 'orders' } as const;
 
+/**
+ * The plugin with the Collections these tests grant on in the permission
+ * model. `invoices` is registered and absent from db, which is a different
+ * denial from one nobody registered.
+ */
+function databasePlugin(): DatabaseAuthorizationPlugin {
+  const plugin = databaseAuthorization();
+  plugin.authorizationApi.db.collections.add('orders');
+  plugin.authorizationApi.db.collections.add('invoices');
+  return plugin;
+}
+
 const ast = (root: object): object => ({
   kind: 'filter',
   version: 1,
@@ -148,10 +161,7 @@ function setup(
 ) {
   return createAuthorization({
     connection,
-    plugins: [
-      permissionSets({ store: readerStore(policy) }),
-      databaseAuthorization(),
-    ],
+    plugins: [permissionSets({ store: readerStore(policy) }), databasePlugin()],
   });
 }
 
@@ -167,7 +177,7 @@ describe('database resource authorization', () => {
     const authorization = createAuthorization({
       plugins: [
         permissionSets({ store: readerStore({ type: 'database' }) }),
-        databaseAuthorization(),
+        databasePlugin(),
       ],
     });
 
@@ -197,7 +207,7 @@ describe('database resource authorization', () => {
       grantProvider: 'permission-sets',
     });
     expect(
-      authorization.database.grant('orders', {
+      authorization.db.grant('orders', {
         read: { fields: { output: ['id'] }, recordAccess: ['recordsIOwn'] },
       }),
     ).toMatchObject({ resource });
@@ -207,11 +217,9 @@ describe('database resource authorization', () => {
       resolve: ({ principal }) =>
         condition('regionId', '$eq', String(principal.attributes?.regionId)),
     });
-    authorization.database.recordAccess.add(policy);
-    expect(authorization.database.recordAccess.get('regionalRecords')).toBe(
-      policy,
-    );
-    expect(authorization.database.recordAccess.list()).toEqual(
+    authorization.db.recordAccess.add(policy);
+    expect(authorization.db.recordAccess.get('regionalRecords')).toBe(policy);
+    expect(authorization.db.recordAccess.list()).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ key: 'allRecords' }),
         expect.objectContaining({ key: 'recordsIOwn' }),
@@ -219,7 +227,7 @@ describe('database resource authorization', () => {
         policy,
       ]),
     );
-    expect(() => authorization.database.recordAccess.add(policy)).toThrow(
+    expect(() => authorization.db.recordAccess.add(policy)).toThrow(
       /already registered/,
     );
     await expect(
@@ -297,7 +305,7 @@ describe('database resource authorization', () => {
             ],
           }),
         }),
-        databaseAuthorization(),
+        databasePlugin(),
       ],
     });
 
@@ -364,7 +372,7 @@ describe('database resource authorization', () => {
       fields: { output: ['id', 'regionId'] },
       recordAccess: [{ key: 'regionalRecords', params: { field: 'regionId' } }],
     });
-    authorization.database.recordAccess.add(regionalRecords);
+    authorization.db.recordAccess.add(regionalRecords);
 
     await expect(
       authorization.authorize({
@@ -437,7 +445,7 @@ describe('database resource authorization', () => {
     });
     const authorization = createAuthorization({
       connection,
-      plugins: [permissionSets({ store }), databaseAuthorization()],
+      plugins: [permissionSets({ store }), databasePlugin()],
     });
 
     await expect(
@@ -463,7 +471,7 @@ describe('database resource authorization', () => {
       fields: { output: ['id'] },
       recordAccess: ['invalidFilter'],
     });
-    authorization.database.recordAccess.add({
+    authorization.db.recordAccess.add({
       key: 'invalidFilter',
       resolve: () => condition('unknownField', '$eq', 'value'),
     });
@@ -522,7 +530,7 @@ describe('database resource authorization', () => {
         }),
         sharingRules({ store: rules }),
         restrictionRules({ store: restrictions }),
-        databaseAuthorization(),
+        databasePlugin(),
       ],
     });
 
@@ -578,7 +586,7 @@ describe('database resource authorization', () => {
           store: readerStore({ type: 'database', fields: { output: ['id'] } }),
         }),
         defaultAccess({ store: defaults }),
-        databaseAuthorization(),
+        databasePlugin(),
       ],
     });
 
@@ -617,7 +625,7 @@ describe('database resource authorization', () => {
     const roles: AuthorizationPlugin = { id: 'roles', grants: roleGrants };
     const authorization = createAuthorization({
       connection,
-      plugins: [databaseAuthorization(), roles],
+      plugins: [databasePlugin(), roles],
     });
     expect(authorization.describe().plugins).toEqual(['roles', 'database']);
 
@@ -647,7 +655,7 @@ describe('database resource authorization', () => {
     });
     const authorization = createAuthorization({
       connection,
-      plugins: [permissionSets({ store }), databaseAuthorization()],
+      plugins: [permissionSets({ store }), databasePlugin()],
     });
     authorization.permissionSets.protect({
       owner: '@nocobase/test',
@@ -750,15 +758,13 @@ describe('policyFor', () => {
     });
     const authorization = createAuthorization({
       connection,
-      plugins: [permissionSets({ store }), databaseAuthorization()],
+      plugins: [permissionSets({ store }), databasePlugin()],
     });
     const scope = authorization.for({
       principal: { type: 'user', id: 'alice' },
     });
 
-    await expect(
-      authorization.database.policyFor('orders', scope),
-    ).resolves.toEqual({
+    await expect(authorization.db.policyFor('orders', scope)).resolves.toEqual({
       read: { scope: true, fields: orderFields },
       create: { scope: true, fields: ['amount'] },
       update: {
@@ -783,7 +789,7 @@ describe('policyFor', () => {
     });
     const authorization = createAuthorization({
       connection,
-      plugins: [permissionSets({ store }), databaseAuthorization()],
+      plugins: [permissionSets({ store }), databasePlugin()],
     });
     authorization.permissionSets.protect({
       owner: '@nocobase/test',
@@ -792,7 +798,7 @@ describe('policyFor', () => {
     });
 
     await expect(
-      authorization.database.policyFor(
+      authorization.db.policyFor(
         'orders',
         authorization.for({ principal: { type: 'user', id: 'root' } }),
       ),
@@ -807,10 +813,107 @@ describe('policyFor', () => {
   it('denies every action for an identity with no grants', async () => {
     const authorization = setup();
     await expect(
-      authorization.database.policyFor(
+      authorization.db.policyFor(
         'orders',
         authorization.for({ principal: { type: 'user', id: 'bob' } }),
       ),
+    ).resolves.toEqual({
+      read: false,
+      create: false,
+      update: false,
+      delete: false,
+    });
+  });
+});
+
+describe('the Collection registry', () => {
+  it('records registrations in order and refuses a duplicate', () => {
+    const { collections } = databaseAuthorization().authorizationApi.db;
+    collections.add('orders');
+    collections.add({
+      name: 'invoices',
+      title: 'Invoices',
+      description: 'Billing documents',
+    });
+
+    expect(collections.has('orders')).toBe(true);
+    expect(collections.has('shipments')).toBe(false);
+    expect(collections.list()).toEqual([
+      { name: 'orders' },
+      {
+        name: 'invoices',
+        title: 'Invoices',
+        description: 'Billing documents',
+      },
+    ]);
+    expect(() => collections.add('orders')).toThrow(/already registered/);
+    expect(() => collections.add('')).toThrow(/needs a name/);
+  });
+
+  // `orders` is in db and a Permission Set grants on it; registration is what
+  // is missing, and that alone is enough to deny.
+  it('grants nothing on a Collection outside the permission model', async () => {
+    const authorization = createAuthorization({
+      connection,
+      plugins: [
+        permissionSets({
+          store: readerStore({
+            type: 'database',
+            fields: { output: '*' },
+            recordAccess: ['allRecords'],
+          }),
+        }),
+        databaseAuthorization(),
+      ],
+    });
+
+    await expect(authorization.authorize(request)).resolves.toMatchObject({
+      effect: 'deny',
+      reasons: [{ code: 'COLLECTION_NOT_REGISTERED' }],
+    });
+    await expect(
+      authorization.db.policyFor(
+        'orders',
+        authorization.for({ principal: { type: 'user', id: 'alice' } }),
+      ),
+    ).resolves.toEqual({
+      read: false,
+      create: false,
+      update: false,
+      delete: false,
+    });
+  });
+
+  it('denies an unrestricted identity too', async () => {
+    const store = new MockPermissionSetStore({
+      permissionSets: [{ key: 'superuser', grants: [] }],
+      assignments: [
+        {
+          id: 'root-superuser',
+          subject: { type: 'user', id: 'root' },
+          permissionSet: 'superuser',
+        },
+      ],
+    });
+    const authorization = createAuthorization({
+      connection,
+      plugins: [permissionSets({ store }), databaseAuthorization()],
+    });
+    authorization.permissionSets.protect({
+      owner: '@nocobase/test',
+      keys: ['superuser'],
+      unrestricted: true,
+    });
+    const principal = { type: 'user', id: 'root' } as const;
+
+    await expect(
+      authorization.authorize({ principal, resource, action: 'read' }),
+    ).resolves.toMatchObject({
+      effect: 'deny',
+      reasons: [{ code: 'COLLECTION_NOT_REGISTERED' }],
+    });
+    await expect(
+      authorization.db.policyFor('orders', authorization.for({ principal })),
     ).resolves.toEqual({
       read: false,
       create: false,

@@ -1,6 +1,5 @@
 import type { Application } from '@nocobase/app-server/application';
 import {
-  appAuthorizationDatabase,
   authorizationToken,
   permissionSetsToken,
 } from '@nocobase/app-plugin-authorization';
@@ -16,10 +15,11 @@ export default class ArticlesProvider extends ServiceProvider<Application> {
       !this.app.container.has(permissionSetsToken)
     )
       return;
-    const database = appAuthorizationDatabase(
-      this.app.container.resolve(authorizationToken),
-    );
-    if (!database) return;
+    const { db } = this.app.container.resolve(authorizationToken);
+    // Articles are part of the permission model; nothing else in this
+    // application's database is.
+    if (!db.collections.has('articles'))
+      db.collections.add({ name: 'articles', title: '文章 / Articles' });
     const permissionSets = this.app.container.resolve(permissionSetsToken);
     // Initialize once for existing administrators. Later permission edits and revocations remain authoritative.
     if (await permissionSets.get('articles-manager')) return;
@@ -29,7 +29,7 @@ export default class ArticlesProvider extends ServiceProvider<Application> {
       key: 'articles-manager',
       title: '文章管理 / Article management',
       grants: [
-        database.grant('articles', {
+        db.grant('articles', {
           read: { fields: { output: '*' }, recordAccess: ['allRecords'] },
           // The route composes the timestamps it stores, so a write grant has
           // to cover them as well as the fields a caller sends.

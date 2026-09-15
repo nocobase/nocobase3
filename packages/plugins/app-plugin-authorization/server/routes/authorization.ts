@@ -1,22 +1,25 @@
 import {
   AuthorizationDeniedError,
-  type Authorization,
   type AuthorizationEnv,
 } from '@nocobase/authorization/core';
 import type { Auth } from '@nocobase/app-plugin-authentication';
 import type { DatabaseConnection } from '@nocobase/db';
 import { Hono, type Context } from 'hono';
-import { appAuthorizationDatabase } from '../authorization.js';
-import {
-  describeCollection,
-  listCollectionNames,
-  type AuthorizationCollection,
-} from '../database/index.js';
+import { describeCollection } from '../database/index.js';
 import type { AuthorizationAdministration } from '../administration.js';
+import type { AppAuthorizationService } from '../tokens.js';
+
+/** One grantable Collection: its registration, plus the fields db reports. */
+interface DatabaseCollectionOption {
+  readonly name: string;
+  readonly title?: string;
+  readonly description?: string;
+  readonly fields: readonly string[];
+}
 
 export function createAuthorizationRoutes(
   auth: Auth,
-  authorization: Authorization,
+  authorization: AppAuthorizationService,
   administration: AuthorizationAdministration,
   connection?: DatabaseConnection,
 ): Hono<AuthorizationEnv> {
@@ -100,7 +103,7 @@ const administrationResources = [
 ] as const;
 
 async function permissionSetOptions(
-  authz: Authorization,
+  authz: AppAuthorizationService,
   connection: DatabaseConnection | undefined,
 ): Promise<object> {
   const collections = await databaseCollections(authz, connection);
@@ -133,7 +136,7 @@ async function permissionSetOptions(
 }
 
 async function databaseScopeRuleOptions(
-  authz: Authorization,
+  authz: AppAuthorizationService,
   connection: DatabaseConnection | undefined,
 ): Promise<object> {
   const collections = await databaseCollections(authz, connection);
@@ -172,30 +175,37 @@ function administrationOptions(): object {
 }
 
 /**
- * The Collections an application can grant on. db holds them, so an
- * application without the database plugin, or without a connection, grants
- * none of them.
+ * The Collections an application can grant on: the registered ones, and only
+ * those. The field pickers still read their fields from db, which owns them.
  */
 async function databaseCollections(
-  authz: Authorization,
+  authz: AppAuthorizationService,
   connection: DatabaseConnection | undefined,
-): Promise<readonly AuthorizationCollection[]> {
-  if (!connection || !appAuthorizationDatabase(authz)) return [];
-  const names = await listCollectionNames(connection);
+): Promise<readonly DatabaseCollectionOption[]> {
+  if (!connection) return [];
   const described = await Promise.all(
-    names.map((name) => describeCollection(connection, name)),
+    authz.db.collections.list().map(async (registration) => {
+      const collection = await describeCollection(
+        connection,
+        registration.name,
+      );
+      return collection === undefined
+        ? undefined
+        : { ...registration, fields: collection.fields };
+    }),
   );
   return described.filter((item) => item !== undefined);
 }
 
 function databaseResourceOptions(
-  collections: readonly AuthorizationCollection[],
+  collections: readonly DatabaseCollectionOption[],
 ): {
   value: string;
   label: string;
   resources: readonly {
     value: string;
     label: string;
+    description?: string;
     actions: readonly { value: string; label: string }[];
   }[];
   actions: readonly { value: string; label: string }[];
@@ -209,7 +219,10 @@ function databaseResourceOptions(
     label: 'Database collections',
     resources: collections.map((collection) => ({
       value: collection.name,
-      label: collection.name,
+      label: collection.title ?? collection.name,
+      ...(collection.description === undefined
+        ? {}
+        : { description: collection.description }),
       actions,
     })),
     actions,
@@ -235,21 +248,16 @@ function settingsResource(
 }
 
 function databaseOptions(
-  authz: Authorization,
-  collections: readonly AuthorizationCollection[],
+  authz: AppAuthorizationService,
+  collections: readonly DatabaseCollectionOption[],
 ): object {
-  // An application may leave `databaseAuthorization` out of its plugin list;
-  // the endpoint then answers with nothing to grant rather than failing.
-  const database = appAuthorizationDatabase(authz);
   return {
     collections: collections.map(({ name, fields }) => ({ name, fields })),
-    recordAccessPolicies: (database?.recordAccess.list() ?? []).map(
-      (policy) => ({
-        value: policy.key,
-        label: policy.title ?? policy.key,
-        description: policy.description,
-      }),
-    ),
+    recordAccessPolicies: authz.db.recordAccess.list().map((policy) => ({
+      value: policy.key,
+      label: policy.title ?? policy.key,
+      description: policy.description,
+    })),
   };
 }
 

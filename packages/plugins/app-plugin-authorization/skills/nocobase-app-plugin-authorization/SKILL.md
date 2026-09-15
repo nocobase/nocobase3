@@ -22,12 +22,13 @@ access-range features.
 
 - Use `authz.resources.add()` when a module owns a new resource type and needs
   to define how that resource is authorized.
-- Use `authz.repositories()` when a module exposes collections through
-  `defineRepositoryApiRoutes()`. It authorizes each endpoint in place.
+- Use `authz.db.repositories()` when a module exposes collections through
+  `defineRepositoryApiRoutes()`. It authorizes each endpoint in place and
+  registers the collections its exposures name.
 - Use `authz.guard()` for an HTTP route or action that needs one authorization
   check before the handler runs.
-- Use `authz.database.policyFor()` when the handler reads or writes a
-  registered collection: it returns a Repository Policy to bind with
+- Use `authz.db.policyFor()` when the handler reads or writes a registered
+  collection: it returns a Repository Policy to bind with
   `repository.withPolicy()`.
 - Use `context.get('authz').authorize()` when a handler needs one action's raw
   decision rather than a Policy.
@@ -38,27 +39,34 @@ Do not add a second permission system inside a module. The module should keep
 its normal service/repository API and add an authorization check immediately
 before the operation.
 
-## Collection metadata comes from db
+## Register the collections the module governs
 
-There is no collection registry to populate. Field names, the primary key, and
-whether the database generates it are read from `connection.collections`, so
-any collection db knows about can be granted on.
+Database authorization is built in — an application no longer lists it among
+its plugins — and it is reached as `authz.db`.
 
 ```ts
 const authz = createAppAuthorization({
   connection,
   config: {
-    plugins: [
-      databaseAuthorization(),
-      defaultAccess(),
-      sharingRules(),
-      restrictionRules(),
-    ],
+    plugins: [defaultAccess(), sharingRules(), restrictionRules()],
   },
 });
+
+authz.db.collections.add({ name: 'orders', title: 'Orders' });
 ```
 
-- The resource id is the collection name db knows — `orders`, with no
+Registration is the opt-in into the permission model, and it carries intent
+only: a name, plus an optional `title` and `description` for the permission
+UI. Field names, the primary key, and whether the database generates it are
+still read from `connection.collections` at authorize time.
+
+**An unregistered collection has no permission.** The request is denied with
+`COLLECTION_NOT_REGISTERED` before any metadata or grant lookup, for an
+unrestricted identity too — a superuser bypasses grants, not the model. This
+is what keeps system and bookkeeping tables out of the permission UI and out
+of every grant.
+
+- The resource id is the registered collection name — `orders`, with no
   connection prefix. The plugin reads one connection.
 - The actions are fixed: `read`, `create`, `update`, `delete`.
 - Fields are the collection's own columns. Relations are governed by a
@@ -66,8 +74,8 @@ const authz = createAppAuthorization({
 - `recordsIOwn` and `recordsICreated` take the column to compare as
   `params.field`, defaulting to `ownerId` and `createdById`.
 
-A collection db does not hold, an action outside those four, and a field the
-collection does not have are each denied.
+An unregistered collection, a collection db does not hold, an action outside
+those four, and a field the collection does not have are each denied.
 
 ## Protect a module API
 
@@ -76,7 +84,7 @@ the constraints used by that service; it does not replace the service.
 
 ```ts
 routes.get('/orders', async (context) => {
-  const policy = await authz.database.policyFor('orders', context.get('authz'));
+  const policy = await authz.db.policyFor('orders', context.get('authz'));
   if (policy.read === false) return context.json({ code: 'FORBIDDEN' }, 403);
   const orders = database.repository('orders').withPolicy(policy);
   return context.json({ data: await orders.findMany() });
@@ -123,7 +131,7 @@ written without its scope.
 ```ts
 const orders = database
   .repository('orders')
-  .withPolicy(await authz.database.policyFor('orders', scope));
+  .withPolicy(await authz.db.policyFor('orders', scope));
 
 await orders.updateOne({ filter: { id }, values: input });
 ```
@@ -135,12 +143,13 @@ than granting `input: '*'`.
 ## Protect Repository API routes
 
 When the module exposes collections with `defineRepositoryApiRoutes()`,
-`authz.repositories()` authorizes them without a handler of its own. Each
+`authz.db.repositories()` authorizes them without a handler of its own. Each
 exposure that names a `resource` declares the static Policy it offers; the
-middleware narrows that shape with the caller's grants per request.
+middleware narrows that shape with the caller's grants per request, and each
+named collection is registered at definition time.
 
 ```ts
-const authorize = authorization.repositories(repositories);
+const authorize = authorization.db.repositories(repositories);
 router.use('/orders:findMany', authentication.required(), authorize);
 router.route(
   '/',
@@ -189,7 +198,7 @@ const permissionSet = await authz.permissionSets.create({
   key: 'orders-manager',
   title: 'Orders manager',
   grants: [
-    authz.database.grant('orders', {
+    authz.db.grant('orders', {
       read: {
         fields: { output: ['id', 'number', 'amount', 'status'] },
         recordAccess: ['allRecords'],
@@ -238,8 +247,9 @@ route or service performs the authorization request before invoking it.
 
 When a permission does not behave as expected, inspect in this order:
 
-1. Confirm the resource type and id exactly match the resource, and that db
-   holds the collection a `database.collection` id names.
+1. Confirm the resource type and id exactly match the resource, that the
+   collection a `database.collection` id names is registered in
+   `authz.db.collections`, and that db holds it.
 2. Confirm the action is one the resource supports.
 3. Confirm the request principal and subjects were resolved by middleware.
 4. Check the user's Permission Set assignments.
@@ -254,7 +264,8 @@ narrow the rows and fields a Policy allows.
 
 ## Implementation checklist
 
-- Register the resource or collection in the module setup.
+- Register the resource or collection in the module setup; an unregistered
+  collection has no permission at all.
 - Keep the module's service/repository API unchanged.
 - Run authorization middleware before route guards.
 - Use `policyFor()` and `withPolicy()` for collection reads and writes.

@@ -2,9 +2,16 @@ import type {
   AuthorizationDecision,
   AuthorizationScope,
 } from '@nocobase/authorization/core';
+import type { Authorization } from '@nocobase/authorization/core';
 import type { PermissionGrant } from '@nocobase/authorization/permissions';
 import type { RepositoryPolicy } from '@nocobase/db';
+import {
+  createRepositoryAuthorization,
+  type RepositoryAuthorization,
+  type RepositoryAuthorizationExposure,
+} from '../repositories.js';
 import { UNRESTRICTED_ACCESS } from './authorizer.js';
+import { DatabaseCollectionRegistry } from './collection-registry.js';
 import type {
   DatabaseAccessScope,
   DatabaseAuthorizationConditions,
@@ -14,6 +21,8 @@ import type {
 import { RecordAccessPolicyRegistry } from './record-access-registry.js';
 
 export interface DatabaseApi {
+  /** Which Collections are part of the permission model. */
+  readonly collections: DatabaseCollectionRegistry;
   readonly recordAccess: RecordAccessPolicyRegistry;
   grant(resource: string, definition: DatabaseGrantDefinition): PermissionGrant;
   scope(recordAccess: DatabaseRecordAccess): DatabaseAccessScope;
@@ -21,17 +30,49 @@ export interface DatabaseApi {
     collection: string,
     scope: AuthorizationScope,
   ): Promise<RepositoryPolicy>;
+  repositories(
+    exposures: readonly RepositoryAuthorizationExposure[],
+  ): RepositoryAuthorization;
 }
 
 export interface DatabaseAuthorizationApi {
-  database: DatabaseApi;
+  db: DatabaseApi;
 }
 
 export class DatabaseAuthorizationService implements DatabaseApi {
+  readonly collections: DatabaseCollectionRegistry;
   readonly recordAccess: RecordAccessPolicyRegistry;
+  private host: Authorization | undefined;
 
-  constructor(recordAccess: RecordAccessPolicyRegistry) {
+  constructor(
+    collections: DatabaseCollectionRegistry,
+    recordAccess: RecordAccessPolicyRegistry,
+  ) {
+    this.collections = collections;
     this.recordAccess = recordAccess;
+  }
+
+  /**
+   * The Authorization this api was installed into. A plugin's `setup` is not
+   * handed the instance, so the host binds it once the instance exists.
+   */
+  installInto(authz: Authorization): void {
+    this.host = authz;
+  }
+
+  /**
+   * Authorizes a Repository API exposure set, registering every Collection it
+   * names: exposing rows over HTTP is stating they are part of the model.
+   */
+  repositories(
+    exposures: readonly RepositoryAuthorizationExposure[],
+  ): RepositoryAuthorization {
+    if (!this.host) {
+      throw new Error(
+        'Database authorization was not installed into an Authorization',
+      );
+    }
+    return createRepositoryAuthorization(this.host, this, exposures);
   }
 
   grant(

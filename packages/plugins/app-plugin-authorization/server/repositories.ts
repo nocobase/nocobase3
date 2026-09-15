@@ -12,7 +12,7 @@ import {
 } from '@nocobase/db';
 import type { Context } from 'hono';
 
-import { appAuthorizationDatabase } from './authorization.js';
+import type { DatabaseApi } from './database/api.js';
 
 /** Where the middleware leaves what it decided for the request's exposure. */
 const principalVariable = '@nocobase/app-plugin-authorization/repository';
@@ -45,12 +45,6 @@ export interface RepositoryAuthorization {
   readonly repositories: readonly RepositoryApiExposure<RepositoryAuthorizationPrincipal>[];
 }
 
-export interface RepositoryAuthorizationApi {
-  repositories(
-    exposures: readonly RepositoryAuthorizationExposure[],
-  ): RepositoryAuthorization;
-}
-
 /** Every action refused. db then raises READ_FORBIDDEN or WRITE_FORBIDDEN. */
 const denyAll: RepositoryPolicy = {
   read: false,
@@ -66,14 +60,9 @@ interface GuardedExposure {
 
 export function createRepositoryAuthorization(
   authz: Authorization,
+  database: DatabaseApi,
   exposures: readonly RepositoryAuthorizationExposure[],
 ): RepositoryAuthorization {
-  const database = appAuthorizationDatabase(authz);
-  if (!database) {
-    throw new Error(
-      'authorization.repositories() needs the database plugin: add databaseAuthorization() to the application’s authorization plugins.',
-    );
-  }
   const guarded = new Map<string, GuardedExposure>();
   const repositories = exposures.map(
     (exposure): RepositoryApiExposure<RepositoryAuthorizationPrincipal> => {
@@ -85,6 +74,10 @@ export function createRepositoryAuthorization(
           `Repository exposure "${exposure.name}" names a resource and declares a policy function. Authorization narrows a static Policy; write the shape out.`,
         );
       }
+      // Exposing a Collection's rows states it is part of the permission
+      // model; a hand-registered one is already there and stays as it is.
+      if (!database.collections.has(resource))
+        database.collections.add({ name: resource });
       const name = exposure.name;
       guarded.set(name, {
         resource,

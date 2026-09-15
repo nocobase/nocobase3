@@ -64,7 +64,7 @@ await authz.sharingRules.create({
       action: 'read',
       selection: {
         type: 'policy',
-        policy: authz.database.scope({
+        policy: authz.db.scope({
           key: 'regionalRecords',
           params: { region: 'north' },
         }),

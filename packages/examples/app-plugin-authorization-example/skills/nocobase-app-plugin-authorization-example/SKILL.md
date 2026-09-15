@@ -36,7 +36,7 @@ plugin's Client factory. Apply migrations and seeds before opening the page.
 - A hand-written route that binds the same Policy through
   `repository.withPolicy()` because the value it writes is the server's to
   decide, never the request body's.
-- A seed that writes Permission Set rows in the shape `authz.database.grant()`
+- A seed that writes Permission Set rows in the shape `authz.db.grant()`
   emits, idempotently, and does nothing when the authorization tables are
   absent.
 

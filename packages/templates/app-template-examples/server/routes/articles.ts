@@ -1,6 +1,5 @@
 import { authenticationToken } from '@nocobase/app-plugin-authentication';
 import {
-  appAuthorizationDatabase,
   authorizationToken,
   type AuthorizationEnv,
 } from '@nocobase/app-plugin-authorization';
@@ -83,17 +82,10 @@ export const articlesRoutes: AppApiRouteContribution<Application> =
     );
     const auth = app.container.resolve(authenticationToken);
     const authorization = app.container.resolve(authorizationToken);
-    const authzDatabase = appAuthorizationDatabase(authorization);
-    if (!authzDatabase) {
-      routes.all('*', (c) =>
-        c.json({ code: 'AUTHORIZATION_UNAVAILABLE' }, 503),
-      );
-      return router.route('/articles', routes);
-    }
     const policyFor = (c: {
       get(name: 'authz'): AuthorizationEnv['Variables']['authz'];
     }): Promise<RepositoryPolicy> =>
-      authzDatabase.policyFor('articles', c.get('authz'));
+      authorization.db.policyFor('articles', c.get('authz'));
     routes.use(
       '*',
       auth.required(),

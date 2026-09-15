@@ -66,7 +66,7 @@ await authz.defaultAccess.set({
   actions: [
     {
       action: 'read',
-      scope: authz.database.scope('publishedArticles'),
+      scope: authz.db.scope('publishedArticles'),
     },
   ],
 });

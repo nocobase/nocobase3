@@ -36,11 +36,14 @@ describe('the identity an application resolves for a request', () => {
   });
 
   // The identity step is middleware on the instance, so the plugin list holds
-  // exactly what the application declared and nothing else.
+  // the two built-in plugins and whatever the application declared.
   it('installs no identity plugin to do it', () => {
     const authorization = createAppAuthorization({ connection });
 
-    expect(authorization.describe().plugins).toEqual(['permission-sets']);
+    expect(authorization.describe().plugins).toEqual([
+      'permission-sets',
+      'database',
+    ]);
   });
 });
 

@@ -8,11 +8,10 @@ Permission Set 是一组可以重复分配的权限声明。它适合把“订�
 ```ts
 import { createAuthorization } from '@nocobase/authorization/core';
 import { permissionSets } from '@nocobase/authorization/permissions';
-import { databaseAuthorization } from '@nocobase/app-plugin-authorization/server';
 
 const authz = createAuthorization({
   connection,
-  plugins: [permissionSets({ store }), databaseAuthorization()],
+  plugins: [permissionSets({ store })],
 });
 ```
 
@@ -28,14 +27,14 @@ Store，并与创建下面这些表的 migration 一起发布：
 ## 创建 Permission Set
 
 数据库资源插件由 `@nocobase/app-plugin-authorization` 提供；安装后通过
-`authz.database.grant()` 定义数据库权限：
+`authz.db.grant()` 定义数据库权限：
 
 ```ts
 await authz.permissionSets.create({
   key: 'order-reader',
   title: '订单只读',
   grants: [
-    authz.database.grant('orders', {
+    authz.db.grant('orders', {
       read: { fields: { output: ['id', 'number', 'amount'] } },
     }),
   ],
@@ -63,7 +62,7 @@ Permission Set 的每个 Action 可以携带一个 `policy`。`type` 标识负�
 ```
 
 Permission Sets 只保存和传递 Policy，不解释插件字段。业务代码通常优先使用资源插件
-提供的 `grant()` API，例如 `authz.database.grant()`，由插件生成正确的 Policy
+提供的 `grant()` API，例如 `authz.db.grant()`，由插件生成正确的 Policy
 结构。
 
 ## 分配 Permission Set

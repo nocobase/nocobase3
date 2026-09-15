@@ -1,6 +1,5 @@
 import { authenticationToken } from '@nocobase/app-plugin-authentication';
 import {
-  appAuthorizationDatabase,
   authorizationToken,
   type AuthorizationEnv,
   type RepositoryAuthorizationExposure,
@@ -61,7 +60,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
     const router = new Hono();
     const authentication = app.container.resolve(authenticationToken);
     const authorization = app.container.resolve(authorizationToken);
-    const authorize = authorization.repositories(repositories);
+    const authorize = authorization.db.repositories(repositories);
     // Guard each path by name; a wildcard would reach contributions mounted
     // alongside this one.
     for (const { name, actions } of repositories)
@@ -91,13 +90,6 @@ export const createRoutes: AppApiRouteContribution<AppPluginApplication> =
     const routes = new Hono<AuthorizationEnv>();
     const authentication = app.container.resolve(authenticationToken);
     const authorization = app.container.resolve(authorizationToken);
-    const database = appAuthorizationDatabase(authorization);
-    if (!database) {
-      routes.all('*', (c) =>
-        c.json({ code: 'AUTHORIZATION_UNAVAILABLE' }, 503),
-      );
-      return router.route('/authorization-example', routes);
-    }
     const repository = app.container
       .resolve(databaseManagerToken)
       .repository(COLLECTION);
@@ -111,7 +103,7 @@ export const createRoutes: AppApiRouteContribution<AppPluginApplication> =
       const body: unknown = await c.req.json().catch(() => undefined);
       const title = parseTitle(body);
       if (title === undefined) return c.json({ code: 'INVALID_TITLE' }, 400);
-      const policy = await database.policyFor(COLLECTION, c.var.authz);
+      const policy = await authorization.db.policyFor(COLLECTION, c.var.authz);
       const now = new Date();
       try {
         const { record } = await repository.withPolicy(policy).createOne({

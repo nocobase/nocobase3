@@ -12,7 +12,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import permissionSetMigration from '../database/migrations/202608210001_create_permission_set_tables.js';
 import { createAppAuthorization } from '../server/authorization.js';
-import { databaseAuthorization } from '../server/database/index.js';
 import type { RepositoryAuthorizationExposure } from '../server/repositories.js';
 
 const ordersPolicy = buildRepositoryPolicy((policy) =>
@@ -192,11 +191,27 @@ describe('authorizing repository API routes', () => {
     });
   });
 
+  it('registers the Collections its exposures name', () => {
+    const authorization = createAuthorization();
+    authorization.db.collections.add({ name: 'authzOrders', title: 'Orders' });
+
+    authorization.db.repositories(exposures);
+
+    // Already registered by hand, so the title survives and nothing throws.
+    expect(authorization.db.collections.list()).toContainEqual({
+      name: 'authzOrders',
+      title: 'Orders',
+    });
+    expect(
+      createAuthorizationWithExposures().db.collections.list(),
+    ).toContainEqual({ name: 'authzOrders' });
+  });
+
   it('refuses a policy function on an exposure that names a resource', async () => {
     const authorization = createAuthorization();
 
     expect(() =>
-      authorization.repositories([
+      authorization.db.repositories([
         {
           name: 'authzOrders',
           resource: 'authzOrders',
@@ -208,11 +223,16 @@ describe('authorizing repository API routes', () => {
   });
 });
 
+function createAuthorizationWithExposures(): ReturnType<
+  typeof createAppAuthorization
+> {
+  const authorization = createAuthorization();
+  authorization.db.repositories(exposures);
+  return authorization;
+}
+
 function createAuthorization(): ReturnType<typeof createAppAuthorization> {
-  return createAppAuthorization({
-    connection: database.connection(),
-    config: { plugins: [databaseAuthorization()] },
-  });
+  return createAppAuthorization({ connection: database.connection() });
 }
 
 /** The router an application assembles, exactly as the usage documents it. */
@@ -220,7 +240,7 @@ async function routes(
   options: { mount?: readonly string[] } = {},
 ): Promise<Hono> {
   const authorization = createAuthorization();
-  const authorize = authorization.repositories(exposures);
+  const authorize = authorization.db.repositories(exposures);
   const container = new ServiceContainer();
   container.instance(databaseManagerToken, database);
   const router = new Hono();

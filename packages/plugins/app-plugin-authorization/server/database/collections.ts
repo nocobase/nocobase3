@@ -51,19 +51,3 @@ export async function describeCollection(
         schema.generated !== undefined),
   };
 }
-
-/** The Collections an application can grant on: whatever db reports. */
-export async function listCollectionNames(
-  connection: DatabaseConnection,
-): Promise<readonly string[]> {
-  const names: string[] = [];
-  let cursor: string | undefined;
-  do {
-    const page = await connection.collections.list(
-      cursor === undefined ? {} : { cursor },
-    );
-    for (const item of page.items) names.push(item.name);
-    cursor = page.nextCursor;
-  } while (cursor !== undefined);
-  return names;
-}

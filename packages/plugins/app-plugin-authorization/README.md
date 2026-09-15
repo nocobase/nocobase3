@@ -75,13 +75,7 @@ states `auth`:
 const authorization: AppConfigFactory<AuthorizationConfig> = defineAppConfig(
   (_runtime) => ({
     permissionSets: { rootSet: 'root', defaultSet: 'member' },
-    plugins: [
-      pages(),
-      databaseAuthorization(),
-      defaultAccess(),
-      sharingRules(),
-      restrictionRules(),
-    ],
+    plugins: [pages(), defaultAccess(), sharingRules(), restrictionRules()],
   }),
 );
 ```
@@ -91,25 +85,41 @@ const authorization: AppConfigFactory<AuthorizationConfig> = defineAppConfig(
 | `permissionSets` | `{ rootSet: 'root', defaultSet: 'member' }` | The keys of the two code-owned sets. The plugin installs Permission Sets itself; an application names its sets, not the plugin. |
 | `plugins`        | none                                        | The rest of the Authorization plugins this application installs. Dropping one is deleting a line.                               |
 
-The plugin ships no default list beyond Permission Sets: an application that
-configures nothing else installs nothing else, and the library's own errors
-say what is missing at first use.
+The plugin ships no default list beyond the two built-in plugins, Permission
+Sets and database authorization: an application that configures nothing else
+installs nothing else, and the library's own errors say what is missing at
+first use. Neither built-in plugin appears in an application's list, and
+neither can be dropped.
 
 ## The database resource plugin
 
-`databaseAuthorization` lives here rather than in `@nocobase/authorization`. It
-is the adapter between the library's grant model and `@nocobase/db`'s Repository
-Policy, and an adapter belongs on the side that knows both — the library stays
-storage-agnostic and hands out opaque scope references for a resource plugin to
-interpret. It produces db's filter AST directly, and
-`authz.database.policyFor(collection, scope)` folds a request's read, create,
-update and delete decisions into one `RepositoryPolicy` that
-`repository.withPolicy()` binds, so a route runs plain `findMany` and
-`createOne` instead of compiling a filter by hand. Collection metadata — field
-names, the primary key, whether the database generates it — is read from db
-rather than registered here, so anything db holds can be granted on.
-`authz.repositories()` applies the same fold to `defineRepositoryApiRoutes()`
-endpoints, narrowing each exposure's declared shape with the caller's grants.
+Database authorization is built in and reached as `authz.db`. It lives here
+rather than in `@nocobase/authorization` because it is the adapter between the
+library's grant model and `@nocobase/db`'s Repository Policy, and an adapter
+belongs on the side that knows both — the library stays storage-agnostic and
+hands out opaque scope references for a resource plugin to interpret. It
+produces db's filter AST directly, and `authz.db.policyFor(collection, scope)`
+folds a request's read, create, update and delete decisions into one
+`RepositoryPolicy` that `repository.withPolicy()` binds, so a route runs plain
+`findMany` and `createOne` instead of compiling a filter by hand.
+
+`authz.db.collections` is the permission model: an application registers the
+Collections it means to grant on, and a Collection nobody registered has no
+permission at all — every request for it is denied with
+`COLLECTION_NOT_REGISTERED`, an unrestricted identity included, because a
+superuser bypasses grants rather than the model. Registration carries intent
+only: a name, and optionally a `title` and `description` the permission UI
+shows. Field names, the primary key and whether the database generates it keep
+coming from db at authorize time, so the two can never disagree.
+
+```ts
+authz.db.collections.add({ name: 'orders', title: 'Orders' });
+```
+
+`authz.db.repositories()` applies the same fold to
+`defineRepositoryApiRoutes()` endpoints, narrowing each exposure's declared
+shape with the caller's grants, and registers every Collection its exposures
+name — exposing rows over HTTP is stating they are part of the model.
 See [docs/database-usage.md](./docs/database-usage.md), and
 `@nocobase/app-plugin-authorization-example` for a runnable reference that puts
 both an authorized Repository API and an owner-stamping route over one
@@ -119,10 +129,9 @@ The plugin always registers the identity step that turns a session into a
 principal, and keeps Realtime permission invalidation in step with grant
 changes through `authz.onGrantsChanged`, which reaches whichever Grant
 Provider is installed rather than naming Permission Sets. Everything else is
-the application's list. An application that drops `databaseAuthorization` keeps
-working: the options endpoints then answer with no collections to grant. An
-application cannot drop Permission Sets, and an application plugin that also
-provides grants is refused as a second Grant Provider.
+the application's list. An application cannot drop Permission Sets or database
+authorization, and an application plugin that also provides grants is refused
+as a second Grant Provider.
 
 Both code-owned sets are named in `permissionSets: { rootSet, defaultSet }`,
 which the library protects on its own behalf. The generic

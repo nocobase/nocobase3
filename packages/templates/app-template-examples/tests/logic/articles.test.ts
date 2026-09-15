@@ -3,14 +3,11 @@ import path from 'node:path';
 import { createDatabaseManager, databaseManagerToken } from '@nocobase/db';
 import sqlite from '@nocobase/db-sqlite';
 import {
-  appAuthorizationDatabase,
   createAppAuthorization,
-  databaseAuthorization,
   permissionSetsToken,
-  type Authorization,
+  type AppAuthorizationService,
   authorizationToken,
 } from '@nocobase/app-plugin-authorization';
-import type { PermissionSetsAuthorizationApi } from '@nocobase/authorization/permissions';
 import { authenticationToken } from '@nocobase/app-plugin-authentication';
 import type { Application } from '@nocobase/app-server/application';
 import {
@@ -30,8 +27,7 @@ const database = () =>
   });
 let db: ReturnType<typeof database>;
 let router: Hono;
-let authz: Authorization & PermissionSetsAuthorizationApi;
-let authzDatabase: NonNullable<ReturnType<typeof appAuthorizationDatabase>>;
+let authz: AppAuthorizationService;
 let app: Application;
 beforeEach(async () => {
   db = database();
@@ -64,19 +60,10 @@ beforeEach(async () => {
     .latest();
   // Articles are a database collection granted through Permission Sets, and
   // `rootSet` is what makes holding `root` bypass those grants.
-  const created = createAppAuthorization({
+  authz = createAppAuthorization({
     connection: db.connection(),
-    config: {
-      permissionSets: { rootSet: 'root' },
-      plugins: [databaseAuthorization()],
-    },
+    config: { permissionSets: { rootSet: 'root' } },
   });
-  const resolved = appAuthorizationDatabase(created);
-  if (!resolved) {
-    throw new Error('The plugin list under test installs the database plugin');
-  }
-  authz = created;
-  authzDatabase = resolved;
   const container = new ServiceContainer();
   container.instance(databaseManagerToken, db);
   container.instance(authorizationToken, authz);
@@ -134,7 +121,7 @@ async function grant(filter = 'allRecords') {
   await authz.permissionSets.create({
     key: 'editor',
     grants: [
-      authzDatabase.grant('articles', {
+      authz.db.grant('articles', {
         read: { fields: { output: '*' }, recordAccess: [filter] },
         create: { fields: { input: writableFields } },
         update: { fields: { input: writableFields }, recordAccess: [filter] },
@@ -192,7 +179,7 @@ it('applies authorized record ranges to counts, lists and updates', async () => 
   await authz.permissionSets.create({
     key: 'restricted',
     grants: [
-      authzDatabase.grant('articles', {
+      authz.db.grant('articles', {
         read: {
           fields: { output: '*' },
           recordAccess: [

@@ -92,10 +92,7 @@ Use a stable `resource`/`action` pair per operation — `read` and `create` are 
 `policyFor()` returns that. It folds this request's read, create, update and delete decisions into one Repository Policy, and `withPolicy()` binds it:
 
 ```ts
-const policy = await authz.database.policyFor(
-  'customers',
-  context.get('authz'),
-);
+const policy = await authz.db.policyFor('customers', context.get('authz'));
 if (policy.read === false) return context.json({ code: 'FORBIDDEN' }, 403);
 
 const customers = database.repository('customers').withPolicy(policy);
@@ -106,14 +103,14 @@ return context.json({ data: await customers.findMany() });
 
 A denied action is `false` on its node, so a route reads the Policy for its own status code rather than re-deriving the decision.
 
-Nothing registers the collection. Field names, the primary key, and whether the database generates it are read from db's own Collection metadata, so any collection a migration created can be granted on. `recordsIOwn` and `recordsICreated` take the column to compare as `params.field`, defaulting to `ownerId` and `createdById`.
+A collection is only grantable once the application registers it. The articles provider does this with `authz.db.collections.add({ name: 'articles', title: '文章 / Articles' })` before it seeds its Permission Set, and the authorization example registers its task collection simply by exposing it. Skip the registration and every request is denied with `COLLECTION_NOT_REGISTERED` — including one from a root holder, since unrestricted access skips grants rather than the permission model. A registration states intent only: the name, and a title or description the permission UI shows. Field names, the primary key, and whether the database generates it come from db's own Collection metadata. `recordsIOwn` and `recordsICreated` take the column to compare as `params.field`, defaulting to `ownerId` and `createdById`.
 
 ### Repository API endpoints
 
-When a route exposes a collection through `defineRepositoryApiRoutes()` rather than a handler of its own, `authorization.repositories()` authorizes it in place. Each exposure names the `resource` its rows belong to and declares the static Policy shape it offers; the middleware narrows that shape with the caller's grants:
+When a route exposes a collection through `defineRepositoryApiRoutes()` rather than a handler of its own, `authorization.db.repositories()` authorizes it in place. It also registers each collection its exposures name, so a module that exposes a collection this way needs no separate `add`. Each exposure names the `resource` its rows belong to and declares the static Policy shape it offers; the middleware narrows that shape with the caller's grants:
 
 ```ts
-const authorize = authorization.repositories(repositories);
+const authorize = authorization.db.repositories(repositories);
 for (const action of ['findMany', 'createOne'])
   router.use(`/orders:${action}`, auth.required(), authorize);
 router.route(

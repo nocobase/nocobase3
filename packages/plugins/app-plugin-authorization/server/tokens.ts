@@ -7,7 +7,7 @@ import type { PermissionSetsApi } from '@nocobase/authorization/permissions';
 
 import type { createAppAuthorization } from './authorization.js';
 
-/** What the application registers: the composed object, `repositories` included. */
+/** What the application registers: the Authorization with its built-in apis. */
 export type AppAuthorizationService = ReturnType<typeof createAppAuthorization>;
 
 export const authorizationToken: ServiceToken<AppAuthorizationService> =

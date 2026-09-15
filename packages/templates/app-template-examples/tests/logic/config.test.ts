@@ -128,7 +128,6 @@ describe('application config', () => {
     });
     expect(authorization.plugins?.map((plugin) => plugin.id)).toEqual([
       'pages',
-      'database',
       'default-access',
       'sharing-rules',
       'restriction-rules',

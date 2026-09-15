@@ -6,53 +6,64 @@ Database Authorization 是应用插件里的资源插件：它把 Authorization 
 
 一个完整的接入过程包括：
 
-1. 安装 Database Authorization 插件；
+1. 把要纳入权限模型的 Collection 注册到 `authz.db.collections`；
 2. 通过 Permission Set、Role 或其他 Grant Provider 提供动作权限；
 3. 在数据访问入口用 `policyFor()` 得到 Repository Policy；
 4. 用 `repository.withPolicy(policy)` 绑定后照常读写，或者用
-   `authz.repositories()` 保护 Repository API 路由。
+   `authz.db.repositories()` 保护 Repository API 路由。
 
-## 安装插件
+## 插件是内置的
+
+Database Authorization 是 `createAppAuthorization()` 固定安装的插件之一，应用不需要、
+也无法把它列进 `plugins`：
 
 ```ts
-import {
-  createAppAuthorization,
-  databaseAuthorization,
-} from '@nocobase/app-plugin-authorization/server';
+import { createAppAuthorization } from '@nocobase/app-plugin-authorization/server';
 
-const authz = createAppAuthorization({
-  connection,
-  config: { plugins: [databaseAuthorization()] },
-});
+const authz = createAppAuthorization({ connection });
 ```
 
-Database Authorization 需要一个 Grant Provider。应用插件默认安装 Permission Sets；
-应用也可以安装自己的 Role Grant Provider。
+它需要一个 Grant Provider。应用插件默认安装 Permission Sets；应用也可以安装自己的
+Role Grant Provider。
 
-## Collection 元数据来自 db
+## 注册即纳入权限模型
 
-插件不再维护自己的 Collection 注册表：字段清单、主键以及主键是否由数据库生成，都由
-`connection.collections` 提供。应用只需要保证 db 认识这张表，授权就能用它。
+`authz.db.collections` 记录哪些 Collection 属于权限模型，只记录这一件事：
 
-- 资源 ID 就是 db 认识的 Collection 名，例如 `orders`，不带数据源前缀：插件只面向一个
+```ts
+authz.db.collections.add({ name: 'orders', title: '订单' });
+```
+
+`title` 与 `description` 只服务于权限配置界面。字段清单、主键以及主键是否由数据库
+生成，仍然在授权时从 `connection.collections` 读取，所以两边不会对不上。
+
+**没有注册的 Collection 没有任何权限。** 授权在查元数据和 Grant 之前就以
+`COLLECTION_NOT_REGISTERED` 拒绝，unrestricted 身份同样如此——超级用户跳过的是
+Grant，不是权限模型。这样一来，数据库里的系统表与记账表不会出现在可授权列表里，
+也不会因为「db 认得这张表」而意外可授。
+
+`add()` 在启动阶段调用，不接触数据库；重复注册同一个名字会抛错。
+
+- 资源 ID 就是注册时的 Collection 名，例如 `orders`，不带数据源前缀：插件只面向一个
   连接。
 - 动作固定为 `read`、`create`、`update`、`delete`。
 - 字段是 Collection 的直接列；关系由 Repository Policy 的 `relations` 管辖，不出现在
   字段清单里。
 - 记录标识使用主键；`recordsIOwn` 与 `recordsICreated` 通过 `params.field` 指定列。
 
-db 不认识的 Collection、四个动作之外的动作、以及不属于该表的字段都会被拒绝。
+没有注册的 Collection、db 不认识的 Collection、四个动作之外的动作、以及不属于该表的
+字段都会被拒绝。
 
 ## 定义数据表权限
 
-`authz.database.grant()` 创建 Database 能够解释的 Grant：
+`authz.db.grant()` 创建 Database 能够解释的 Grant：
 
 ```ts
 await authz.permissionSets.create({
   key: 'order-reader',
   title: '订单只读',
   grants: [
-    authz.database.grant('orders', {
+    authz.db.grant('orders', {
       read: {
         fields: { output: ['id', 'number', 'amount'] },
         recordAccess: ['recordsIOwn'],
@@ -76,7 +87,7 @@ await authz.permissionSets.create({
 `policyFor()` 把本次请求的四个动作判断折叠成一个 Repository Policy：
 
 ```ts
-const policy = await authz.database.policyFor('articles', c.get('authz'));
+const policy = await authz.db.policyFor('articles', c.get('authz'));
 const repository = database.repository('articles').withPolicy(policy);
 
 const rows = await repository.findMany({ limit: 20 });
@@ -133,7 +144,7 @@ recordAccess: [{ key: 'recordsIOwn', params: { field: 'salesRepId' } }];
 ```ts
 import { condition } from '@nocobase/app-plugin-authorization/server';
 
-authz.database.recordAccess.add<{ field: string }>({
+authz.db.recordAccess.add<{ field: string }>({
   key: 'regionalRecords',
   title: '当前区域的记录',
   resolve: ({ principal, params }) =>
@@ -186,8 +197,8 @@ await authz.restrictionRules.create({
   key: 'contractor-owned-orders',
   resource: { type: 'database.collection', id: 'orders' },
   actions: [
-    { action: 'read', scope: authz.database.scope('recordsIOwn') },
-    { action: 'update', scope: authz.database.scope('recordsIOwn') },
+    { action: 'read', scope: authz.db.scope('recordsIOwn') },
+    { action: 'update', scope: authz.db.scope('recordsIOwn') },
   ],
   subjects: [{ type: 'role', id: 'contractor' }],
 });
@@ -195,13 +206,15 @@ await authz.restrictionRules.create({
 
 ## 保护 Repository API 路由
 
-`authz.repositories()` 把一组 `defineRepositoryApiRoutes` 的 exposure 变成中间件：每个
-声明了 `resource` 的 exposure 都会在请求时用调用方的授权结果收窄它自己的静态 Policy。
+`authz.db.repositories()` 把一组 `defineRepositoryApiRoutes` 的 exposure 变成中间件：每个
+声明了 `resource` 的 exposure 都会在请求时用调用方的授权结果收窄它自己的静态 Policy，
+并在定义时把这个 Collection 注册进权限模型——把一张表的行开放成 HTTP 端点，本身就是
+在声明它属于权限模型。已经手动注册过的名字会跳过，不算冲突。
 
 ```ts
 const authentication = app.container.resolve(authenticationToken);
 const authorization = app.container.resolve(authorizationToken);
-const authorize = authorization.repositories(repositories);
+const authorize = authorization.db.repositories(repositories);
 router.use('/orders:findMany', authentication.required(), authorize);
 router.route(
   '/',
@@ -230,6 +243,7 @@ router.route(
 
 | Code                                  | 含义                                         |
 | ------------------------------------- | -------------------------------------------- |
+| `COLLECTION_NOT_REGISTERED`           | 这张表没有注册进权限模型                     |
 | `UNKNOWN_DATABASE_RESOURCE_OR_ACTION` | db 里没有这张表，或动作不在四个之内          |
 | `UNKNOWN_DATABASE_FIELD`              | 请求使用了该表没有的字段                     |
 | `DATABASE_UNAVAILABLE`                | 安装插件时没有提供数据库连接                 |

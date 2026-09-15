@@ -1,4 +1,3 @@
-import { databaseAuthorization } from '../server/database/index.js';
 import {
   defaultAccess,
   restrictionRules,
@@ -25,7 +24,6 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createOrdersDatabase, orderFields } from './orders-database.js';
 
 import {
-  appAuthorizationDatabase,
   createAppAuthorization,
   type CreateAppAuthorizationOptions,
 } from '../server/authorization.js';
@@ -37,7 +35,10 @@ import type {
 import type { AuthorizationConfig } from '../server/authorization.js';
 import { pages } from '../server/pages-authorization.js';
 import { apiRoutes } from '../server/routes/index.js';
-import { authorizationToken } from '../server/tokens.js';
+import {
+  authorizationToken,
+  type AppAuthorizationService,
+} from '../server/tokens.js';
 
 /** Collection metadata comes from db, so the options endpoints need a real one. */
 let database: DatabaseManager;
@@ -52,10 +53,9 @@ afterAll(async () => {
   await database.destroy();
 });
 
-/** The plugin list all three templates ship; the plugin adds Permission Sets. */
+/** The plugin list all three templates ship; Permission Sets and database are built in. */
 const templatePlugins = (): AuthorizationPlugin[] => [
   pages(),
-  databaseAuthorization(),
   defaultAccess(),
   sharingRules(),
   restrictionRules(),
@@ -63,7 +63,7 @@ const templatePlugins = (): AuthorizationPlugin[] => [
 
 function authorizationWith(
   config: AuthorizationConfig,
-): Authorization & PermissionSetsAuthorizationApi {
+): AppAuthorizationService {
   const options: CreateAppAuthorizationOptions = { connection, config };
   return createAppAuthorization(options);
 }
@@ -104,13 +104,16 @@ describe('what an application configures about its own authorization', () => {
     expect(authorization.permissionSets.protection('member')).toBeUndefined();
   });
 
-  // The plugin ships no fallback list beyond Permission Sets: what an
-  // application does not declare, it does not have, and the first request is
-  // what says so.
-  it('installs Permission Sets alone when the application configures nothing', async () => {
+  // The plugin ships no fallback list beyond the two built-in plugins: what
+  // an application does not declare, it does not have, and the first request
+  // is what says so.
+  it('installs the built-in plugins alone when the application configures nothing', async () => {
     const authorization = createAppAuthorization({ connection });
 
-    expect(authorization.describe().plugins).toEqual(['permission-sets']);
+    expect(authorization.describe().plugins).toEqual([
+      'permission-sets',
+      'database',
+    ]);
     await expect(
       authorization.authorize({
         principal: { type: 'user', id: 'alice' },
@@ -126,12 +129,7 @@ describe('what an application configures about its own authorization', () => {
 
   it('leaves out a capability the application drops from its list', () => {
     const authorization = authorizationWith({
-      plugins: [
-        pages(),
-        databaseAuthorization(),
-        defaultAccess(),
-        restrictionRules(),
-      ],
+      plugins: [pages(), defaultAccess(), restrictionRules()],
     });
 
     const plugins = authorization.describe().plugins;
@@ -142,17 +140,24 @@ describe('what an application configures about its own authorization', () => {
   it('has a Grant Provider whatever the application lists', () => {
     expect(
       authorizationWith({ plugins: [pages()] }).describe().plugins,
-    ).toEqual(['permission-sets', 'pages']);
+    ).toEqual(['permission-sets', 'database', 'pages']);
+  });
+
+  // `db` is a member of the returned type, so no accessor stands between the
+  // application and the api.
+  it('exposes the database api with an empty registry', () => {
+    const authorization = createAppAuthorization({ connection });
+
+    expect(authorization.db.collections.list()).toEqual([]);
   });
 
   it('identifies a database resource by the collection name alone', () => {
-    const authorization = authorizationWith({
-      plugins: [databaseAuthorization()],
-    });
+    const authorization = authorizationWith({});
 
-    expect(
-      databaseOf(authorization).grant('orders', { read: {} }).resource,
-    ).toEqual({ type: 'database.collection', id: 'orders' });
+    expect(authorization.db.grant('orders', { read: {} }).resource).toEqual({
+      type: 'database.collection',
+      id: 'orders',
+    });
   });
 
   it('tells the application whose permissions an assignment changed', async () => {
@@ -178,7 +183,7 @@ describe('what an application configures about its own authorization', () => {
     expect(onAuthenticatedPermissionsChanged).toHaveBeenCalledOnce();
   });
 
-  it('answers the options endpoints without the database plugin', async () => {
+  it('answers the options endpoints with no Collection registered', async () => {
     const authorization = authorizationWith({
       plugins: [pages(), defaultAccess(), restrictionRules()],
     });
@@ -206,15 +211,15 @@ describe('what an application configures about its own authorization', () => {
     expect(responses.map(({ status }) => status)).toEqual([200, 200]);
     for (const response of responses) {
       await expect(response.json()).resolves.toMatchObject({
-        data: { collections: [], recordAccessPolicies: [] },
+        data: { collections: [] },
       });
     }
   });
 
   it('answers its own options and record endpoints ahead of the plugin routes', async () => {
-    const router = await mountedRouter(
-      authorizationWith({ plugins: templatePlugins() }),
-    );
+    const authorization = authorizationWith({ plugins: templatePlugins() });
+    authorization.db.collections.add({ name: 'orders', title: 'Orders' });
+    const router = await mountedRouter(authorization);
 
     const [options, records] = await Promise.all([
       router.request('/api/authz/sharing-rules/options'),
@@ -225,8 +230,14 @@ describe('what an application configures about its own authorization', () => {
     await expect(options.json()).resolves.toMatchObject({
       data: {
         plugins: ['database'],
-        // The Collections db holds, not a list the application registered.
+        // Only what the application registered; db supplies the fields.
         collections: [{ name: 'orders', fields: orderFields }],
+        resourceTypes: [
+          {
+            value: 'database.collection',
+            resources: [{ value: 'orders', label: 'Orders' }],
+          },
+        ],
       },
     });
     await expect(records.json()).resolves.toEqual({ data: [] });
@@ -292,21 +303,10 @@ describe('what an application configures about its own authorization', () => {
   });
 });
 
-/** The database api of an authorization that installed the database plugin. */
-function databaseOf(
-  authorization: Authorization,
-): NonNullable<ReturnType<typeof appAuthorizationDatabase>> {
-  const api = appAuthorizationDatabase(authorization);
-  if (!api) {
-    throw new Error(
-      'The configuration under test installs the database plugin',
-    );
-  }
-  return api;
-}
-
 /** The plugin routes where an application mounts them, under `/api`. */
-async function mountedRouter(authorization: Authorization): Promise<Hono> {
+async function mountedRouter(
+  authorization: AppAuthorizationService,
+): Promise<Hono> {
   const container = new ServiceContainer();
   container.instance(databaseManagerToken, database);
   container.instance(authenticationToken, {
@@ -328,8 +328,10 @@ async function mountedRouter(authorization: Authorization): Promise<Hono> {
  * The same authorization with the permission check open, so the options
  * endpoints can be read without a Permission Set store behind them.
  */
-function alwaysPermitted(authorization: Authorization): Authorization {
-  const permitted = Object.create(authorization) as Authorization;
+function alwaysPermitted(
+  authorization: AppAuthorizationService,
+): AppAuthorizationService {
+  const permitted = Object.create(authorization) as AppAuthorizationService;
   permitted.middleware = () => async (context, next) => {
     context.set('authz', authorizationScopeThatPermitsEverything());
     await next();

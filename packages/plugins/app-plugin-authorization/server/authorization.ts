@@ -4,18 +4,16 @@ import {
   type Authorization,
   type AuthorizationPlugin,
 } from '@nocobase/authorization/core';
-import type { DatabaseAuthorizationApi } from './database/index.js';
+import {
+  databaseAuthorization,
+  type DatabaseAuthorizationApi,
+  type DatabaseAuthorizationPlugin,
+} from './database/index.js';
 import {
   permissionSets,
   type PermissionSetsAuthorizationApi,
   type PermissionSetsPlugin,
 } from '@nocobase/authorization/permissions';
-import {
-  createRepositoryAuthorization,
-  type RepositoryAuthorization,
-  type RepositoryAuthorizationApi,
-  type RepositoryAuthorizationExposure,
-} from './repositories.js';
 import { DatabaseConnectionHandle } from './stores/connection.js';
 import { DatabasePermissionSetStore } from './stores/permission-sets.js';
 
@@ -28,7 +26,10 @@ export interface AppPermissionSetsConfig {
 
 export interface AuthorizationConfig {
   permissionSets?: AppPermissionSetsConfig;
-  /** Plugins the application chooses to install; Permission Sets is not among them. */
+  /**
+   * Plugins the application chooses to install. Permission Sets and database
+   * authorization are built in and are not among them.
+   */
   plugins?: readonly AuthorizationPlugin[];
 }
 
@@ -54,15 +55,18 @@ export function createAppAuthorization(
   options: CreateAppAuthorizationOptions,
 ): Authorization &
   PermissionSetsAuthorizationApi<DatabaseConnection> &
-  RepositoryAuthorizationApi {
+  DatabaseAuthorizationApi {
   const sets = options.config?.permissionSets;
+  const database = databaseAuthorization();
   const connection = new DatabaseConnectionHandle(
     'Permission Sets',
     options.connection,
   );
-  // Permission Sets leads the tuple so the api is inferred rather than asserted.
+  // The two built-in plugins lead the tuple so their apis are inferred rather
+  // than asserted: `authz.permissionSets` and `authz.db` are statically typed.
   const plugins: readonly [
     PermissionSetsPlugin<DatabaseConnection>,
+    DatabaseAuthorizationPlugin,
     ...AuthorizationPlugin[],
   ] = [
     permissionSets<DatabaseConnection>({
@@ -75,6 +79,7 @@ export function createAppAuthorization(
       },
       defaultSet: sets?.defaultSet ?? DEFAULT_DEFAULT_SET,
     }),
+    database,
     ...(options.config?.plugins ?? []),
   ];
   const authz = createAuthorization({
@@ -94,30 +99,8 @@ export function createAppAuthorization(
       await options.onAuthenticatedPermissionsChanged?.();
     }
   });
-  return Object.assign(authz, {
-    repositories: (
-      exposures: readonly RepositoryAuthorizationExposure[],
-    ): RepositoryAuthorization =>
-      createRepositoryAuthorization(authz, exposures),
-  });
-}
-
-/**
- * The database plugin's api, or `undefined` when the application chose not to
- * install `databaseAuthorization`. The member is not part of `Authorization`,
- * so reaching it is a question the application answers at runtime.
- */
-export function appAuthorizationDatabase(
-  authz: Authorization,
-): DatabaseAuthorizationApi['database'] | undefined {
-  const api: unknown = Reflect.get(authz, 'database');
-  return isDatabaseApi(api) ? api : undefined;
-}
-
-function isDatabaseApi(
-  value: unknown,
-): value is DatabaseAuthorizationApi['database'] {
-  return isRecord(value) && 'policyFor' in value && 'recordAccess' in value;
+  database.authorizationApi.db.installInto(authz);
+  return authz;
 }
 
 function readAuthSession(value: unknown): AuthSession {

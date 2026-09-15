@@ -1,6 +1,5 @@
 export { default } from './plugin.js';
 export {
-  appAuthorizationDatabase,
   createAppAuthorization,
   type CreateAppAuthorizationOptions,
 } from './authorization.js';
@@ -8,6 +7,7 @@ export type {
   AuthorizationCollection,
   DatabaseApi,
   DatabaseAuthorizationApi,
+  DatabaseCollectionRegistration,
   DatabaseAuthorizationConditions,
   DatabaseAuthorizationParams,
   DatabaseGrantDefinition,
@@ -32,7 +32,6 @@ export type {
 // reads `AuthorizationConfig` from.
 export { pages } from './pages-authorization.js';
 export type { PermissionSetsApi } from '@nocobase/authorization/permissions';
-export { databaseAuthorization } from './database/index.js';
 export {
   defaultAccess,
   restrictionRules,
@@ -49,7 +48,6 @@ export {
 } from './tokens.js';
 export type {
   RepositoryAuthorization,
-  RepositoryAuthorizationApi,
   RepositoryAuthorizationExposure,
   RepositoryAuthorizationPrincipal,
 } from './repositories.js';

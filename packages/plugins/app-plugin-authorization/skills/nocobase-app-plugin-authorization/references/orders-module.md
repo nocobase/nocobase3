@@ -38,15 +38,25 @@ export default defineMigration({
 } satisfies MigrationDefinition);
 ```
 
-That migration is the whole of the setup. Authorization reads the field list,
-the primary key, and whether the database generates it from
-`connection.collections`, so there is nothing to register.
+Authorization reads the field list, the primary key, and whether the database
+generates it from `connection.collections`. What it does not read from db is
+whether the collection may be granted on at all — that is the module's own
+statement:
+
+```ts
+authz.db.collections.add({ name: 'orders', title: 'Orders' });
+```
+
+Until that line runs, every request for `orders` is denied with
+`COLLECTION_NOT_REGISTERED`, an unrestricted identity included. Exposing the
+collection through `authz.db.repositories()` registers it too, so a module that
+does only that needs no separate `add`.
 
 ## 2. Know what the resource is called
 
-A `database.collection` resource is identified by the collection name db knows
-— `orders`, with no connection prefix — and the actions are the fixed `read`,
-`create`, `update` and `delete`.
+A `database.collection` resource is identified by the registered collection
+name — `orders`, with no connection prefix — and the actions are the fixed
+`read`, `create`, `update` and `delete`.
 
 ```ts
 const ordersResource = {
@@ -81,7 +91,7 @@ routes.use('*', authz.middleware());
 const repositoryFor = async (context: Context) =>
   database
     .repository('orders')
-    .withPolicy(await authz.database.policyFor('orders', context.get('authz')));
+    .withPolicy(await authz.db.policyFor('orders', context.get('authz')));
 ```
 
 The bound Repository applies the scope to every statement and rejects a field
@@ -125,13 +135,14 @@ for a create; list the columns when the route should write fewer.
 
 ### Or expose the Repository directly
 
-When the module has no handler of its own, `authz.repositories()` authorizes
+When the module has no handler of its own, `authz.db.repositories()` authorizes
 `defineRepositoryApiRoutes()` endpoints in place. Each exposure names the
 `resource` its rows belong to and declares the static Policy shape it offers;
-the middleware narrows that shape with the caller's grants.
+the middleware narrows that shape with the caller's grants, and registers each
+named collection at definition time.
 
 ```ts
-const authorize = authz.repositories([
+const authorize = authz.db.repositories([
   {
     name: 'orders',
     resource: 'orders',
@@ -176,7 +187,7 @@ const ordersManager = await authz.permissionSets.create({
   key: 'orders-manager',
   title: 'Orders manager',
   grants: [
-    authz.database.grant('orders', {
+    authz.db.grant('orders', {
       read: {
         fields: { output: '*' },
         recordAccess: ['allRecords'],
@@ -224,7 +235,7 @@ grant: a user with no `read` grant cannot be given one by a Sharing Rule.
 ```ts
 await authz.defaultAccess.set({
   resource: ordersResource,
-  actions: [{ action: 'read', scope: authz.database.scope('allRecords') }],
+  actions: [{ action: 'read', scope: authz.db.scope('allRecords') }],
 });
 
 await authz.sharingRules.create({
@@ -243,8 +254,8 @@ await authz.restrictionRules.create({
   key: 'contractors-own-orders',
   resource: ordersResource,
   actions: [
-    { action: 'read', scope: authz.database.scope('recordsIOwn') },
-    { action: 'update', scope: authz.database.scope('recordsIOwn') },
+    { action: 'read', scope: authz.db.scope('recordsIOwn') },
+    { action: 'update', scope: authz.db.scope('recordsIOwn') },
   ],
   subjects: [{ type: 'role', id: 'contractor' }],
 });
@@ -267,15 +278,14 @@ A dynamic scope uses a registered Record Access policy, whose `resolve` returns
 ```ts
 import { condition } from '@nocobase/app-plugin-authorization/server';
 
-authz.database.recordAccess.add<{ region: string }>({
+authz.db.recordAccess.add<{ region: string }>({
   key: 'regionalOrders',
   resolve: ({ params }) => condition('region', '$eq', params.region),
 });
 ```
 
 Nodes are built literally rather than through db's `FilterBuilder`, which needs
-a field's type to choose an operator group; the collection registry records
-names only.
+a field's type to choose an operator group; a registration records names only.
 
 ## 6. Diagnose a denied request
 
@@ -305,9 +315,7 @@ row-level safety.
 
 ```ts
 it('folds the request into a Repository Policy', async () => {
-  await expect(
-    authz.database.policyFor('orders', scope),
-  ).resolves.toMatchObject({
+  await expect(authz.db.policyFor('orders', scope)).resolves.toMatchObject({
     read: { scope: true },
     update: { fields: ['status', 'amount', 'updatedAt'] },
     delete: false,

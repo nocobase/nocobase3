@@ -27,8 +27,9 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
         authorization,
         createAuthorizationAdministration({
           ...(connection === undefined ? {} : { connection }),
+          // A record can only be picked from a Collection in the model.
           resolveCollection: async (name) =>
-            connection === undefined
+            connection === undefined || !authorization.db.collections.has(name)
               ? undefined
               : await describeCollection(connection, name),
         }),

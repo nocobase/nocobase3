@@ -7,6 +7,7 @@ import type {
   AuthorizationRequest,
   Principal,
 } from '@nocobase/authorization/core';
+import { DatabaseCollectionRegistry } from './collection-registry.js';
 import {
   databaseCollectionFieldsKnown,
   databaseFieldsAllowed,
@@ -40,19 +41,35 @@ export const UNRESTRICTED_ACCESS = 'UNRESTRICTED_ACCESS';
 const actions: readonly string[] = ['read', 'create', 'update', 'delete'];
 
 export interface DatabaseResourceAuthorizerOptions {
+  collections: DatabaseCollectionRegistry;
   recordAccess: RecordAccessPolicyRegistry;
   /** Absent when the application installed the plugin without a connection. */
   resolveCollection?: ResolveAuthorizationCollection;
 }
 
 export class DatabaseResourceAuthorizer {
+  private readonly collections: DatabaseCollectionRegistry;
   private readonly recordAccess: RecordAccessPolicyRegistry;
   private readonly resolveCollection:
     ResolveAuthorizationCollection | undefined;
 
   constructor(options: DatabaseResourceAuthorizerOptions) {
+    this.collections = options.collections;
     this.recordAccess = options.recordAccess;
     this.resolveCollection = options.resolveCollection;
+  }
+
+  /**
+   * An unregistered Collection is outside the permission model, so nothing can
+   * be granted on it and nothing bypasses that — a superuser skips grants, not
+   * the model.
+   */
+  private unregistered(name: string): AuthorizationDecision | undefined {
+    if (this.collections.has(name)) return undefined;
+    return this.deny(
+      'COLLECTION_NOT_REGISTERED',
+      `Collection ${name} is not part of the permission model`,
+    );
   }
 
   /** db owns the metadata, so an unknown Collection is whatever db does not hold. */
@@ -84,6 +101,8 @@ export class DatabaseResourceAuthorizer {
     constraintsService: AccessConstraintService,
   ): Promise<AuthorizationDecision> {
     const resourceId = request.resource.id;
+    const unregistered = this.unregistered(resourceId);
+    if (unregistered) return unregistered;
     const resolved = await this.collection(resourceId, request.action);
     if ('effect' in resolved) return resolved;
     const resource = resolved;
@@ -174,6 +193,8 @@ export class DatabaseResourceAuthorizer {
     request: AuthorizationRequest<DatabaseAuthorizationParams>,
   ): Promise<AuthorizationDecision> {
     const resourceId = request.resource.id;
+    const unregistered = this.unregistered(resourceId);
+    if (unregistered) return unregistered;
     const resolved = await this.collection(resourceId, request.action);
     if ('effect' in resolved) return resolved;
     const resource = resolved;

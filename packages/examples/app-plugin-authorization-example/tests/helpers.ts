@@ -3,7 +3,7 @@ import { Auth, authenticationToken } from '@nocobase/app-plugin-authentication';
 import {
   authorizationToken,
   createAppAuthorization,
-  databaseAuthorization,
+  type AppAuthorizationService,
 } from '@nocobase/app-plugin-authorization';
 import { createApiClient, type ApiClient } from '@nocobase/app-client';
 import { createConfigPaths } from '@nocobase/app-server/config';
@@ -32,6 +32,7 @@ export interface FixtureOptions {
 
 export interface Fixture {
   readonly database: DatabaseManager;
+  readonly authorization: AppAuthorizationService;
   readonly router: Hono;
   /** An API client signed in as `userId`. */
   client(userId: string): ApiClient;
@@ -70,13 +71,8 @@ export async function createFixture(
 
   const container = new ServiceContainer();
   container.instance(databaseManagerToken, database);
-  container.instance(
-    authorizationToken,
-    createAppAuthorization({
-      connection,
-      config: { plugins: [databaseAuthorization()] },
-    }),
-  );
+  const authorization = createAppAuthorization({ connection });
+  container.instance(authorizationToken, authorization);
   const authentication = new Auth({
     connection,
     secret: 'authorization-example-test-secret-at-least-32-characters',
@@ -120,6 +116,7 @@ export async function createFixture(
 
   return {
     database,
+    authorization,
     router,
     client: (userId) =>
       createApiClient({

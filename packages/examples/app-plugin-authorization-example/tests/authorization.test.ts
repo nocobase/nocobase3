@@ -65,6 +65,24 @@ describe('Authorization example', () => {
     ).resolves.toHaveLength(3);
   });
 
+  // The repository exposures register the one Collection this example is
+  // about; everything else in the database stays outside the permission model.
+  it('grants nothing on a Collection the example does not expose', async () => {
+    f = await createFixture({ root: 'admin' });
+    const scope = f.authorization.for({
+      principal: { type: 'user', id: 'admin' },
+    });
+
+    await expect(
+      f.authorization.db.policyFor('authorizationPermissionSets', scope),
+    ).resolves.toEqual({
+      read: false,
+      create: false,
+      update: false,
+      delete: false,
+    });
+  });
+
   describe('the create route', () => {
     it('stamps the owner from the principal', async () => {
       f = await createFixture();

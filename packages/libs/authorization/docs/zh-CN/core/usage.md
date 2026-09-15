@@ -227,7 +227,7 @@ authz.subjects.define('user', {
 ```ts
 const authz = createAuthorization({
   connection: databaseConnection,
-  plugins: [permissionSets({ store }), databaseAuthorization()],
+  plugins: [permissionSets({ store })],
 });
 ```
 

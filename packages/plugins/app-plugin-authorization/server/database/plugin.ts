@@ -5,26 +5,35 @@ import {
   type DatabaseAuthorizationApi,
 } from './api.js';
 import { DatabaseResourceAuthorizer } from './authorizer.js';
+import { DatabaseCollectionRegistry } from './collection-registry.js';
 import { collectionResolver } from './collections.js';
 import type { DatabaseAuthorizationParams } from './model.js';
 import { RecordAccessPolicyRegistry } from './record-access-registry.js';
 
-export type DatabaseAuthorizationPlugin = AuthorizationPlugin<
+/**
+ * The api is narrowed to the service so the host can bind itself to it after
+ * the Authorization exists; a plugin's `setup` is not handed the instance.
+ */
+export interface DatabaseAuthorizationPlugin extends AuthorizationPlugin<
   DatabaseAuthorizationApi,
   DatabaseConnection
->;
+> {
+  readonly authorizationApi: { db: DatabaseAuthorizationService };
+}
 
 export function databaseAuthorization(): DatabaseAuthorizationPlugin {
+  const collections = new DatabaseCollectionRegistry();
   const recordAccess = new RecordAccessPolicyRegistry();
-  const api = new DatabaseAuthorizationService(recordAccess);
+  const api = new DatabaseAuthorizationService(collections, recordAccess);
   return {
     id: 'database',
     requiresGrants: true,
-    authorizationApi: { database: api },
+    authorizationApi: { db: api },
     setup(authz): void {
       // Collection metadata comes from the connection the host passed in; an
       // application that installed the plugin without one grants nothing.
       const authorizer = new DatabaseResourceAuthorizer({
+        collections,
         recordAccess,
         ...(authz.connection
           ? { resolveCollection: collectionResolver(authz.connection) }

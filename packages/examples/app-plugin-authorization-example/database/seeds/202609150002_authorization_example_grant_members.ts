@@ -8,7 +8,7 @@ const SET = 'authorization-example-member';
 const RESOURCE = 'authorizationExampleTasks';
 
 /**
- * What `authz.database.grant()` emits, written out: a seed reaches the tables
+ * What `authz.db.grant()` emits, written out: a seed reaches the tables
  * rather than the running authorization.
  *
  * `recordsIOwn` compares `ownerId`, so a signed-in user reads, updates and

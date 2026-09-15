@@ -34,8 +34,8 @@ await authz.restrictionRules.create({
     id: 'orders',
   },
   actions: [
-    { action: 'read', scope: authz.database.scope('recordsIOwn') },
-    { action: 'update', scope: authz.database.scope('recordsIOwn') },
+    { action: 'read', scope: authz.db.scope('recordsIOwn') },
+    { action: 'update', scope: authz.db.scope('recordsIOwn') },
   ],
   subjects: [{ type: 'role', id: 'contractor' }],
 });
