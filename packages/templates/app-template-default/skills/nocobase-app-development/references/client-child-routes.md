@@ -172,18 +172,22 @@ Every child route reaches the screen through the parent's outlet, and every one 
 ```tsx
 export default function ArchivedOrdersPage() {
   return (
-    <RouteChildPage>
-      <section className='mx-auto w-full max-w-6xl space-y-6 p-6 md:p-8'>
-        <Breadcrumbs />
-        <PageHeader title={t('orders.archived.title')} />
-        {/* the page's own content */}
-      </section>
-      {/* A deeper layer covers this one, so it goes outside the content. */}
+    <>
+      <RouteChildPage>
+        <section className='mx-auto w-full max-w-6xl space-y-6 p-6 md:p-8'>
+          <Breadcrumbs />
+          <PageHeader title={t('orders.archived.title')} />
+          {/* the page's own content */}
+        </section>
+      </RouteChildPage>
+      {/* A deeper layer is a sibling of this one, not content inside it. */}
       <Outlet />
-    </RouteChildPage>
+    </>
   );
 }
 ```
+
+Keep the outlet outside the layer. A deeper layer covers this one either way, but nesting it would make the DOM gain a level for every level of routing.
 
 The parent needs to know none of this. It renders its content and places its outlet, exactly as it would for a dialog, and the layer covers it. Because it covers rather than replaces, the page beneath keeps its DOM: a half-typed draft and a scroll position are still there when the layer closes.
 

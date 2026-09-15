@@ -20,43 +20,45 @@ export function ChildPageExample({
   const { t } = useTranslation();
 
   return (
-    <RouteChildPage>
-      <section className='w-full space-y-6 p-6 md:p-8'>
-        <Breadcrumbs />
-        <PageHeader
-          actions={
-            topic.overlay ? (
-              <Button
-                nativeButton={false}
-                render={<Link to='dialog' />}
-                variant='outline'
-              >
-                <MessageSquare />
-                {t('routeOverlays.openTopicDialog')}
-              </Button>
-            ) : undefined
-          }
-          description={t(topic.summary)}
-          title={t(topic.name)}
-        />
-        <section className='rounded-xl border bg-muted/30 p-5 md:p-6'>
-          <div className='flex items-start gap-3'>
-            <div className='flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground'>
-              <Layers3 className='size-4' />
+    <>
+      <RouteChildPage>
+        <section className='w-full space-y-6 p-6 md:p-8'>
+          <Breadcrumbs />
+          <PageHeader
+            actions={
+              topic.overlay ? (
+                <Button
+                  nativeButton={false}
+                  render={<Link to='dialog' />}
+                  variant='outline'
+                >
+                  <MessageSquare />
+                  {t('routeOverlays.openTopicDialog')}
+                </Button>
+              ) : undefined
+            }
+            description={t(topic.summary)}
+            title={t(topic.name)}
+          />
+          <section className='rounded-xl border bg-muted/30 p-5 md:p-6'>
+            <div className='flex items-start gap-3'>
+              <div className='flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground'>
+                <Layers3 className='size-4' />
+              </div>
+              <p className='text-sm leading-6 text-muted-foreground'>
+                {t(
+                  topic.overlay
+                    ? 'routeOverlays.topicOverlayHint'
+                    : 'routeOverlays.topicHint',
+                )}
+              </p>
             </div>
-            <p className='text-sm leading-6 text-muted-foreground'>
-              {t(
-                topic.overlay
-                  ? 'routeOverlays.topicOverlayHint'
-                  : 'routeOverlays.topicHint',
-              )}
-            </p>
-          </div>
+          </section>
         </section>
-      </section>
-      {/* A dialog child route renders here when this page owns one. */}
+      </RouteChildPage>
+      {/* A dialog child route is a layer beside this one, not content inside it. */}
       <Outlet />
-    </RouteChildPage>
+    </>
   );
 }
 
