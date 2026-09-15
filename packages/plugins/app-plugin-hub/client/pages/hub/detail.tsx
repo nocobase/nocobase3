@@ -49,6 +49,7 @@ const TAB_LABELS: Readonly<Record<DetailTab, string>> = {
   resources: 'detail.tabs.resources',
   configuration: 'detail.tabs.configuration',
   settings: 'detail.tabs.settings',
+  'api-keys': 'detail.tabs.apiKeys',
 };
 
 export function Detail({

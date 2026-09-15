@@ -1,3 +1,4 @@
+import type { HubApiKeyService } from './api-keys.js';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import {
   chmod,
@@ -78,6 +79,7 @@ const EMBEDDED_ENTRY_PATH = 'dist/server/embedded.js';
 const DEFAULT_STARTUP_RESTORATION_WAIT_MS = 5_000;
 
 export interface DefaultHubServiceOptions {
+  readonly apiKeys?: Pick<HubApiKeyService, 'removeAppKeys'>;
   readonly database: DatabaseManager;
   readonly config: HubPluginConfig;
   readonly hostController: HubHostController;
@@ -105,7 +107,7 @@ export class HubError extends Error {
   public constructor(
     message: string,
     public readonly code: string,
-    public readonly status: 400 | 404 | 409 | 413 | 422 | 503,
+    public readonly status: 400 | 401 | 403 | 404 | 409 | 413 | 422 | 503,
   ) {
     super(message);
     this.name = 'HubError';
@@ -641,6 +643,7 @@ export class DefaultHubService implements HubService {
       const app = await this.requireApp(appId);
       const releases = await this.listReleases(appId);
       await this.hostController.removeDeployment(appId);
+      await this.options.apiKeys?.removeAppKeys(appId);
       await this.options.database.transaction(async (connection) => {
         await connection.query
           .deleteFrom('hubAppReleases')

@@ -186,7 +186,7 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
 
   useEffect(() => {
     let cancelled = false;
-    void Promise.all([loadDetail(), loadHubCapabilities(authorization)])
+    void Promise.all([loadDetail(), loadHubCapabilities(authorization, appId)])
       .then(([nextDetail, nextCapabilities]) => {
         if (cancelled) return;
         setDetail(nextDetail);

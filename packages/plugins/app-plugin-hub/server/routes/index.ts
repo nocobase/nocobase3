@@ -13,6 +13,11 @@ import { Hono, type Context } from 'hono';
 import { AuthorizationDeniedError } from '@nocobase/authorization/core';
 import type { Logger } from '@nocobase/logging';
 
+import { hubApiKeyServiceToken } from '../services/api-keys.js';
+import type {
+  HubApiKeyScope,
+  CreateHubApiKeyInput,
+} from '../../shared/api-keys.js';
 import { HubError } from '../services/hub.js';
 import {
   hubServiceToken,
@@ -44,7 +49,108 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       ? container.resolve(loggingToken).getLogger('security')
       : undefined;
 
-    routes.use('*', authentication.required(), authorization.middleware());
+    // Publishing credentials never enter the Session authentication pipeline.
+    // Resolve the exact method and route before accepting a scoped credential.
+    routes.use('*', async (context, next) => {
+      const credential = context.req.header('authorization');
+      if (!credential) {
+        if (
+          /\/api-keys(?:\/|$)/.test(context.req.path) &&
+          context.req.header('x-api-key')
+        ) {
+          return context.json(
+            {
+              error: {
+                code: 'SESSION_REQUIRED',
+                message: 'Sign in to manage publishing keys.',
+              },
+            },
+            401,
+          );
+        }
+        return next();
+      }
+      const match =
+        /\/apps\/([^/]+)\/(releases(?:\/[^/]+)?|deploy|deployments(?:\/[^/]+)?)$/.exec(
+          context.req.path,
+        );
+      const token = /^Bearer (hub_app_[A-Za-z0-9_-]+)$/i.exec(credential)?.[1];
+      if (!token)
+        return context.json(
+          {
+            error: {
+              code: 'INVALID_API_KEY',
+              message: 'Invalid publishing credential.',
+            },
+          },
+          401,
+        );
+      const endpoint = match?.[2];
+      const scope: HubApiKeyScope | undefined =
+        context.req.method === 'GET' && endpoint?.startsWith('releases')
+          ? 'read-release'
+          : context.req.method === 'GET' && endpoint?.startsWith('deployments')
+            ? 'read-operation'
+            : context.req.method === 'POST' && endpoint === 'releases'
+              ? 'upload-release'
+              : context.req.method === 'POST' && endpoint === 'deploy'
+                ? 'deploy'
+                : undefined;
+      if (!scope || !match)
+        return context.json(
+          {
+            error: {
+              code: 'API_KEY_FORBIDDEN',
+              message: 'This endpoint requires a signed-in user.',
+            },
+          },
+          403,
+        );
+      try {
+        const appId = decodeURIComponent(match[1]);
+        const key = await container
+          .resolve(hubApiKeyServiceToken)
+          .verify(token, appId, scope);
+        context.set(
+          'authz',
+          authorization.for({
+            principal: { type: 'user', id: key.createdBy },
+            subjects: [{ type: 'authenticated', id: '*' }],
+          }),
+        );
+        securityLogger?.info(
+          {
+            event: 'hub.api-key.use',
+            keyId: key.id,
+            actorId: key.createdBy,
+            appId,
+            scope,
+          },
+          'hub.api-key.use',
+        );
+        await next();
+      } catch (error) {
+        if (error instanceof HubError)
+          return context.json(
+            { error: { code: error.code, message: error.message } },
+            error.status,
+          );
+        throw error;
+      }
+    });
+    routes.use(
+      '*',
+      authentication.required({
+        skip: (context) => Boolean(context.req.header('authorization')),
+      }),
+    );
+    routes.use(
+      '*',
+      async (context: Context<AuthorizationEnv, string>, next) => {
+        if (context.req.header('authorization')) return next();
+        return authorization.middleware()(context, next);
+      },
+    );
     routes.onError((error, context) => {
       if (error instanceof AuthorizationDeniedError) {
         return context.json(
@@ -53,6 +159,66 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
         );
       }
       throw error;
+    });
+
+    routes.get('/apps/:appId/api-keys', async (context) => {
+      preventSensitiveResponseCaching(context);
+      const appId = context.req.param('appId');
+      await requireHubAction(context, appId, 'manage-api-keys');
+      return respond(context, () =>
+        container
+          .resolve(hubApiKeyServiceToken)
+          .list(appId, context.get('authz').identity.principal.id),
+      );
+    });
+    routes.post('/apps/:appId/api-keys', async (context) => {
+      preventSensitiveResponseCaching(context);
+      const appId = context.req.param('appId');
+      await requireHubAction(context, appId, 'manage-api-keys');
+      const input = await context.req.json<CreateHubApiKeyInput>();
+      return respond(context, async () => {
+        const result = await container
+          .resolve(hubApiKeyServiceToken)
+          .create(appId, context.get('authz').identity.principal.id, input);
+        logSecurityEvent(securityLogger, context, 'hub.api-key.create', appId, {
+          keyId: result.key.id,
+        });
+        return result;
+      });
+    });
+    routes.post('/apps/:appId/api-keys/:keyId/disable', async (context) => {
+      preventSensitiveResponseCaching(context);
+      const appId = context.req.param('appId');
+      const keyId = context.req.param('keyId');
+      await requireHubAction(context, appId, 'manage-api-keys');
+      return respond(context, async () => {
+        await container
+          .resolve(hubApiKeyServiceToken)
+          .disable(appId, keyId, context.get('authz').identity.principal.id);
+        logSecurityEvent(
+          securityLogger,
+          context,
+          'hub.api-key.disable',
+          appId,
+          { keyId },
+        );
+        return { success: true };
+      });
+    });
+    routes.delete('/apps/:appId/api-keys/:keyId', async (context) => {
+      preventSensitiveResponseCaching(context);
+      const appId = context.req.param('appId');
+      const keyId = context.req.param('keyId');
+      await requireHubAction(context, appId, 'manage-api-keys');
+      return respond(context, async () => {
+        await container
+          .resolve(hubApiKeyServiceToken)
+          .remove(appId, keyId, context.get('authz').identity.principal.id);
+        logSecurityEvent(securityLogger, context, 'hub.api-key.delete', appId, {
+          keyId,
+        });
+        return { success: true };
+      });
     });
 
     routes.get('/apps', async (context) => {

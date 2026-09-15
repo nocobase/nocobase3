@@ -1,6 +1,55 @@
 import type { LocaleResource } from '@nocobase/i18n';
 
 const enUS = {
+  apiKeys: {
+    invalidExpiry: 'Choose a future expiration time.',
+    title: 'API keys',
+    description:
+      'Publishing credentials for {{name}}. Each key can access only this application.',
+    create: 'Create API key',
+    name: 'Name',
+    scopes: 'Permissions',
+    status: 'Status',
+    creator: 'Created by',
+    createdAt: 'Created',
+    expiresAt: 'Expires',
+    lastUsedAt: 'Last used',
+    actions: 'Actions',
+    disable: 'Disable',
+    delete: 'Delete',
+    cancel: 'Cancel',
+    done: 'Done',
+    never: 'No expiration',
+    expiryHint:
+      'Optional. Leave empty for no expiration. Uses your local time.',
+    loading: 'Loading API keys…',
+    empty: 'No API keys yet',
+    emptyDescription:
+      'Create a publishing key for a CI pipeline or local script. Choose only the permissions it needs.',
+    noAccess:
+      'You do not have permission to manage this application’s API keys.',
+    created: 'API key created',
+    oneTime: 'Copy and store this key securely. It will not be shown again.',
+    copy: 'Copy key',
+    copied: 'Copied',
+    copyFailed: 'Copy failed. Select the key and copy it manually.',
+    loadFailed: 'Could not load API keys. Reload the page to try again.',
+    operationFailed:
+      'The action could not be completed. Check your permissions and try again.',
+    disableTitle: 'Disable {{name}}?',
+    disableDescription:
+      'Requests using this key will be rejected. This cannot be undone; create a new key to restore access.',
+    deleteTitle: 'Delete {{name}}?',
+    deleteDescription:
+      'This key will stop working and be permanently removed from the list. This cannot be undone.',
+    scope: {
+      'upload-release': 'Upload releases',
+      'read-release': 'Read releases',
+      deploy: 'Deploy',
+      'read-operation': 'Read deployment results',
+    },
+    state: { active: 'Active', disabled: 'Disabled', expired: 'Expired' },
+  },
   navigation: {
     applications: 'Applications',
     userAccess: 'Users & permissions',
@@ -78,6 +127,7 @@ const enUS = {
     onFirstVisit: 'On first visit',
     updated: 'Updated {{date}}',
     tabs: {
+      apiKeys: 'API keys',
       deployments: 'Deployments',
       releases: 'Releases',
       development: 'Development',
@@ -375,6 +425,7 @@ const enUS = {
       'user-management': 'User management',
     },
     capabilities: {
+      'manage-api-keys': 'Manage publishing API keys',
       'view-status': 'View application, release, deployment, and host status',
       'view-resources': 'View Resources and raw configuration',
       'create-release': 'Create applications and upload releases',

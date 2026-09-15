@@ -23,6 +23,25 @@ function resolvesKeys(plugin: Plugin): boolean {
 }
 
 describe('apiKey', () => {
+  it('accepts isolated configurations while retaining the default user-key behavior', () => {
+    expect(
+      resolvesKeys(
+        apiKey([
+          { configId: 'default' },
+          { configId: 'integration', enableSessionForAPIKeys: false },
+        ]),
+      ),
+    ).toBe(true);
+    expect(
+      resolvesKeys(
+        apiKey([{ configId: 'integration', enableSessionForAPIKeys: false }]),
+      ),
+    ).toBe(false);
+    expect(() =>
+      apiKey([{ configId: 'same' }, { configId: 'same' }]),
+    ).toThrow();
+  });
+
   it('turns a key into a session, which Better Auth does not do by default', () => {
     expect(resolvesKeys(apiKey())).toBe(true);
   });

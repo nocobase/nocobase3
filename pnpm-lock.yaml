@@ -2232,6 +2232,12 @@ importers:
       '@better-auth/api-key':
         specifier: 'catalog:'
         version: 1.7.4(@better-auth/core@1.7.1(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.4.0(zod@4.6.5))(jose@6.2.9)(kysely@0.29.5)(nanostores@1.5.1))(@better-auth/utils@0.4.2)(better-auth@1.7.1(@opentelemetry/api@1.9.0)(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg@8.23.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(vitest@4.1.10))(better-call@1.4.0(zod@4.6.5))
+      '@better-auth/core':
+        specifier: ^1.7.1
+        version: 1.7.1(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.4.0(zod@4.6.5))(jose@6.2.9)(kysely@0.29.5)(nanostores@1.5.1)
+      '@better-auth/utils':
+        specifier: 0.4.2
+        version: 0.4.2
       '@nocobase/app-client':
         specifier: workspace:^
         version: link:../../app/app-client
@@ -2253,6 +2259,9 @@ importers:
       better-auth:
         specifier: 'catalog:'
         version: 1.7.1(@opentelemetry/api@1.9.0)(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg@8.23.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(vitest@4.1.10)
+      better-call:
+        specifier: 1.4.0
+        version: 1.4.0(zod@4.6.5)
       class-variance-authority:
         specifier: 'catalog:'
         version: 0.7.1
@@ -2645,6 +2654,9 @@ importers:
       '@nocobase/app-host':
         specifier: workspace:^
         version: link:../../app/app-host
+      '@nocobase/app-plugin-api-keys':
+        specifier: workspace:^
+        version: link:../app-plugin-api-keys
       '@nocobase/app-plugin-authentication':
         specifier: workspace:^
         version: link:../app-plugin-authentication
@@ -2675,6 +2687,9 @@ importers:
       '@sinclair/typebox':
         specifier: 'catalog:'
         version: 0.34.52
+      better-auth:
+        specifier: 'catalog:'
+        version: 1.7.1(@opentelemetry/api@1.9.0)(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg@8.23.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(vitest@4.1.10)
       class-variance-authority:
         specifier: 'catalog:'
         version: 0.7.1
@@ -2735,7 +2750,7 @@ importers:
         version: 30.0.1(@noble/hashes@2.3.0)
       knex:
         specifier: 'catalog:'
-        version: 3.3.0(better-sqlite3@13.0.3)(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)
+        version: 3.3.0(better-sqlite3@13.0.3)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)
       prettier:
         specifier: 'catalog:'
         version: 3.9.6
@@ -3352,7 +3367,7 @@ importers:
         version: 30.0.1(@noble/hashes@2.3.0)
       knex:
         specifier: 'catalog:'
-        version: 3.3.0(better-sqlite3@13.0.3)(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)
+        version: 3.3.0(better-sqlite3@13.0.3)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)
       prettier:
         specifier: 'catalog:'
         version: 3.9.6
@@ -15966,7 +15981,7 @@ snapshots:
     optionalDependencies:
       '@opentelemetry/api': 1.9.0
       ioredis: 5.11.1
-      knex: 3.3.0(better-sqlite3@13.0.3)(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)
+      knex: 3.3.0(better-sqlite3@13.0.3)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)
       kysely: 0.29.5
 
   '@braidai/lang@1.1.2': {}
@@ -22604,7 +22619,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  knex@3.3.0(better-sqlite3@13.0.3)(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0):
+  knex@3.3.0(better-sqlite3@13.0.3)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0):
     dependencies:
       colorette: 2.0.19
       commander: 10.0.1
@@ -22622,6 +22637,7 @@ snapshots:
       tildify: 2.0.0
     optionalDependencies:
       better-sqlite3: 13.0.3
+      mysql2: 3.23.3(@types/node@24.13.3)
       pg: 8.23.0
       pg-query-stream: 4.17.0(pg@8.23.0)
     transitivePeerDependencies:

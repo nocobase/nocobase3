@@ -3,6 +3,8 @@ import {
   APIError,
   betterAuth,
   type BetterAuthOptions,
+  type BetterAuthPlugin,
+  type FilteredAPI,
   type Session,
   type User,
 } from 'better-auth';
@@ -136,12 +138,27 @@ export class Auth {
     return session;
   }
 
+  /** Returns only a registered plugin's API methods, including the normal hook pipeline. */
+  pluginApi<TPlugin extends BetterAuthPlugin>(
+    pluginId: TPlugin['id'],
+  ): FilteredAPI<NonNullable<TPlugin['endpoints']>> {
+    const plugin = this.options.plugins?.find((item) => item.id === pluginId);
+    if (!plugin?.endpoints)
+      throw new Error(`Authentication plugin "${pluginId}" is not registered.`);
+    const api: Record<string, unknown> = {};
+    for (const name of Object.keys(plugin.endpoints)) {
+      const endpoint: unknown = Reflect.get(this.auth.api, name);
+      if (typeof endpoint === 'function') api[name] = endpoint;
+    }
+    return api as FilteredAPI<NonNullable<TPlugin['endpoints']>>;
+  }
+
   /** @internal Used by the Authentication-owned administration service. */
   administrationContext(): typeof this.auth.$context {
     return this.auth.$context;
   }
 
-  /** @internal Binds Authentication operations to a caller-owned transaction. */
+  /** Binds trusted server operations to a caller-owned connection or transaction. */
   forConnection(connection: DatabaseConnection): Auth {
     return new Auth({ ...this.options, connection });
   }

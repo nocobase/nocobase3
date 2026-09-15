@@ -69,6 +69,13 @@ export function createHubRoutes(
                 import('./pages/hub/tabs/configuration-page.js'),
             },
             {
+              name: 'hub-app-api-keys',
+              path: 'api-keys',
+              access: { resource: 'hub.app', action: 'manage-api-keys' },
+              componentLoader: () =>
+                import('./pages/hub/tabs/api-keys-page.js'),
+            },
+            {
               name: 'hub-app-settings',
               path: 'settings',
               componentLoader: () =>

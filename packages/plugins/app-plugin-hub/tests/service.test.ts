@@ -398,6 +398,10 @@ describe('@nocobase/app-plugin-hub service', () => {
   });
 
   it('removes only the selected application and its persisted resources', async () => {
+    const removeAppKeys = vi.fn().mockResolvedValue(undefined);
+    service = new DefaultHubService(
+      createServiceOptions({ apiKeys: { removeAppKeys } }),
+    );
     await service.createApp({ id: 'customer', name: 'Customer' });
     const release = await service.createRelease('customer', {
       bytes: await createArtifact(rootDir, '1.2.3'),
@@ -410,6 +414,7 @@ describe('@nocobase/app-plugin-hub service', () => {
       Partial<HubError>
     >({ code: 'APP_NOT_FOUND' });
     expect(host.targetedOperations.at(-1)).toBe('remove:customer');
+    expect(removeAppKeys).toHaveBeenCalledExactlyOnceWith('customer');
   });
 
   it('records an asynchronous failure without replacing the active deployment', async () => {

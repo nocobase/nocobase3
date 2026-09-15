@@ -22,6 +22,7 @@ const HUB_APP_ACTIONS = new Set([
   'create',
   'update-settings',
   'remove',
+  'manage-api-keys',
   'read-release',
   'upload-release',
   'read-config-template',

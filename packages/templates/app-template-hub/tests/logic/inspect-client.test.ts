@@ -172,6 +172,11 @@ describe('client inspection', () => {
       },
       {
         auth: 'required',
+        id: '@nocobase/app-plugin-hub:hub-app-api-keys',
+        path: '/apps/:appId/api-keys',
+      },
+      {
+        auth: 'required',
         id: '@nocobase/app-plugin-hub:hub-app-settings',
         path: '/apps/:appId/settings',
       },

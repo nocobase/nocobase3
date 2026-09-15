@@ -100,3 +100,13 @@ pnpm --filter @nocobase/app-plugin-hub typecheck
 pnpm --filter @nocobase/app-plugin-hub test
 pnpm --filter @nocobase/app-plugin-hub build
 ```
+
+## App publishing API keys
+
+Each application's **API keys** tab lets Hub administrators create, disable and delete credentials for CI and local publishing scripts. A key is bound to one App and supports `upload-release`, `read-release`, `deploy` and `read-operation`. Expiration is optional. The full key is returned only once; Hub stores a API Keys plugin hash and a display prefix. Permissions cannot be edited after creation.
+
+Use `Authorization: Bearer <key>` with the existing Hub Release and Deployment endpoints. Publishing keys do not become user Sessions and cannot access configuration, user administration or key management. Each use additionally checks that its creator is enabled and still has the corresponding Hub permission. Revocation takes effect for subsequent requests; it does not cancel an already accepted deployment.
+
+Management requires a signed-in user with `hub.app / manage-api-keys`, granted only to `hub-administrator` by default. The new migration preserves other role grants and cascades key deletion when an App is removed. The generic user API Keys plugin remains separate. See [the publishing-key guide](skills/nocobase-hub-api-keys/SKILL.md) for endpoint and scope details.
+
+Hub reuses `@nocobase/app-plugin-api-keys` for key generation, hashing, expiry, verification, and credential management. Register `...hubApiKeyAuthentication()` in the Hub authentication configuration in place of `apiKey()`. It preserves the default user-key configuration and adds a `hub-publishing` configuration without Session authentication. Hub owns only the App binding, scopes, permanent revocation rule, and current-owner authorization.

@@ -38,6 +38,7 @@ describe('@nocobase/app-plugin-hub', () => {
       'development',
       'resources',
       'configuration',
+      'api-keys',
       'settings',
     ]);
     await expect(

@@ -2,6 +2,7 @@ import type { AuthorizationClient } from '@nocobase/app-plugin-authorization/cli
 import type { DetailTab } from './pages/hub/types.js';
 
 export const HUB_APP_ACTIONS = [
+  'manage-api-keys',
   'create',
   'update-settings',
   'remove',
@@ -42,6 +43,7 @@ export function visibleHubDetailTabs(
     ...(state.deployed && capabilities['read-config']
       ? (['configuration'] as const)
       : []),
+    ...(capabilities['manage-api-keys'] ? (['api-keys'] as const) : []),
     ...(capabilities['update-settings'] || capabilities.remove
       ? (['settings'] as const)
       : []),
