@@ -116,7 +116,7 @@ Use one managed connection per physical database/schema. Identical configured ta
 
 ## Existing applications
 
-Old top-level `database.migrations` and `database.seeds` remain accepted and apply only to the current default connection, never automatically to `main`. Legacy fields override matching per-connection fields, including existing `DB_MIGRATIONS_*` / `DB_SEEDS_*` environment settings. Connection environment variables such as `DB_DATABASE` retain their existing `main` mapping. Prefer the new connection settings for new configuration; remove old overrides when adopting them.
+Old top-level `database.migrations` and `database.seeds` remain accepted and apply only to the current default connection, never automatically to `main`. Legacy fields override matching per-connection fields. Configure new migration, seed, and connection settings under the corresponding connection in `config.yml`; remove old overrides when adopting them.
 
 Different explicit old/new directories, two explicit source arrays, or a combined directory and source array are configuration errors. Without an explicit source, the default connection falls back to `database/migrations` or `database/seeds` when present. If both old and new conventional directories exist, execution fails until you select one explicitly. Non-default connections never use the legacy directory.
 

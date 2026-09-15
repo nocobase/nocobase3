@@ -26,20 +26,17 @@ Dependency keys get reordered between releases, so most of the raw diff is noise
 
 Ranges in a published template are already resolved (`pnpm pack` expands `workspace:` and `catalog:`). Take them as published.
 
-## `config.yml` and `.env`
+## `config.yml`
 
-A hub reads both, for different things. `.env` carries build-time settings — `APP_NAME`, `APP_BASE_PATH`, the dev server host and port — consumed by `vite.config.ts` and the build scripts. `config.yml` carries runtime settings: database connections, auth, notification channels, snowflake. Neither replaces the other.
+The generator writes application settings to gitignored `config.yml`, which is absent from the template diff. Preserve its deployment-specific values and secrets during the merge; never print them.
 
-Both are gitignored, were written by the generator rather than the template, and are in no diff. Never edit either as part of the merge, and never print them.
-
-Their examples do ship with the template and merge normally, and a new key in one is the only signal the live file needs an edit:
+`config.example.yml` ships with the template and merges normally. Compare it to identify new settings:
 
 ```bash
 diff "$WORK/$BASE/config.example.yml" "$WORK/$TARGET/config.example.yml"
-diff "$WORK/$BASE/.env.example" "$WORK/$TARGET/.env.example"
 ```
 
-A new key with a working default needs nothing. One without a default is a startup failure waiting for the next restart: tell the user what to add and let them edit the file. `APP_NAME` and `APP_BASE_PATH` are deployment facts — take neither from the template.
+A new key with a working default needs nothing. When a new setting requires a deployment-specific value, explain what must be configured in `config.yml`. Preserve the application's identity and public mount path rather than copying the template's values.
 
 ## `client/plugins.ts`, `server/plugins.ts`, `cli/plugins.ts`
 
@@ -66,7 +63,7 @@ Never edit a migration that arrives this way, and never edit one already run —
 
 `.agents/skills/` is generated, gitignored, and replaced wholesale by `pnpm plugin:skills:sync`. Never merge into it.
 
-`config.yml`, `.env`, `.gitignore`, and `pnpm-workspace.yaml` were written by the generator and appear in no diff at all.
+`config.yml`, `.gitignore`, and `pnpm-workspace.yaml` were written by the generator and appear in no diff at all.
 
 ## Where the user's code lives
 
@@ -83,5 +80,5 @@ Template structure — where most of the delta lands
 
 Both sides edit these — the hardest decisions
   client/plugins.ts  server/plugins.ts  cli/plugins.ts
-  package.json  config.example.yml  .env.example  AGENTS.md  CLAUDE.md  skills/
+  package.json  config.example.yml  AGENTS.md  CLAUDE.md  skills/
 ```

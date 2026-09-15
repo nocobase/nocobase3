@@ -117,7 +117,7 @@ When the right answer is unclear, stop and ask. The user is the only one who kno
 
 ## 7. Reconcile what is not ordinary source
 
-`package.json`, `config.yml` and `.env`, and the plugin composition roots have their own rules — see [edge cases](references/edge-cases.md).
+`package.json`, `config.yml`, and the plugin composition roots have their own rules — see [edge cases](references/edge-cases.md).
 
 ## 8. Finish
 
