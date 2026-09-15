@@ -9,9 +9,5 @@
 
 Declare `breadcrumb` on the routes that belong in a breadcrumb trail.
 
-A menu title no longer implies a breadcrumb title: `navigation` puts a route in a menu and `breadcrumb` puts it in
-a trail, independently of each other. Each navigation group and the pages under it now state both, so a page inside
-one of these plugins still shows the path that leads to it.
-
-Routes with neither children nor a parent are left alone. Their trail would be a single level, which renders
-nothing, so a `breadcrumb` there would have no effect.
+Each navigation group and the pages under it now name themselves for the trail, so a page inside one of these
+plugins shows the path that leads to it.
