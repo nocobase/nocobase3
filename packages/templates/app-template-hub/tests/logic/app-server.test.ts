@@ -186,6 +186,7 @@ describe('app server', () => {
     const app = createTestApp({
       plugins: [
         defineServerPlugin<AppConfig>({
+          baseDir: import.meta.dirname,
           packageName: '@nocobase/app-plugin-test',
           serviceProviders: [TestPluginProvider],
         }),
@@ -201,6 +202,7 @@ describe('app server', () => {
     const app = createTestApp({
       plugins: [
         defineServerPlugin<AppConfig>({
+          baseDir: import.meta.dirname,
           packageName: '@nocobase/app-plugin-test',
           routes: [
             defineApiRoutes((application) => {
@@ -336,6 +338,7 @@ describe('app server', () => {
       ...resolvedRuntime,
       plugins: createResolvedTestServerPlugins([
         defineServerPlugin<AppConfig>({
+          baseDir: import.meta.dirname,
           packageName: '@nocobase/app-plugin-runtime-test',
           serviceProviders: [TestRuntimePluginProvider],
         }),
@@ -1243,6 +1246,7 @@ function createResolvedTestServerPlugins(
         packageName: definition.packageName,
         version: 'test',
         rootDir: `/test/plugins/${definition.packageName}`,
+        baseDir: definition.baseDir,
         jobLocations: [],
       },
     })),

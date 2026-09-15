@@ -100,3 +100,11 @@ Subpath exports are public API. Adding an optional preset is a minor release;
 implementation fixes that do not add diagnostics are patches; new default
 errors, semantic TypeScript changes, and removed or renamed exports are major
 changes.
+
+## Database task build manifests
+
+Run `nocobase-db-manifests [source-database-dir] [output-database-dir]` after compiling database migrations and seeds and after rewriting JavaScript imports. The defaults are `database` and `dist/database`. The command traverses connection directories and seals each `migrations` or `seeds` directory with a versioned `.manifest.json`. It does not import or execute task modules. Missing outputs, output files without a source, colliding output names, and sources newer than their outputs fail the build; compile from a stable source tree and clean removed output files before rebuilding.
+
+Build scripts can instead import `generateDatabaseManifests` from `@nocobase/dev-config/build/database-manifests` and call it with absolute `sourceDir` and `outputDir`. A task's manifest entry records `sourceChecksum` (SHA-256 of source text) and `artifactChecksum` (SHA-256 of final JavaScript, including the appended manifest marker). The marker tells the database loader that the JavaScript requires a manifest; handwritten JavaScript without a manifest keeps its content checksum. Source files are never changed. Generated manifests contain no timestamps or absolute paths and are replaced rather than merged on each build.
+
+The manifest detects inconsistent or modified artifacts, not malicious replacement of both the artifact and its manifest: it is build metadata, not a digital signature. Include it in packed and deployed output. A source map describes the original emitted lines; the marker is appended after those lines.

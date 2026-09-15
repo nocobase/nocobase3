@@ -1,3 +1,4 @@
+import { upgradeTaskChecksums } from './checksum-history.js';
 import { assertManagedSchema } from '../database/schema-management.js';
 import type { Knex } from 'knex';
 import {
@@ -97,6 +98,12 @@ class DefaultMigrator implements Migrator {
           history,
           participatingPackageNames(this.options),
         );
+        await upgradeTaskChecksums(
+          migrationConnection,
+          this.options.tableName ?? DEFAULT_MIGRATION_TABLE,
+          migrations,
+          history,
+        );
 
         const appliedNames = new Set(history.map((record) => record.name));
         const pending = selectedMigrations.filter(
@@ -165,6 +172,12 @@ class DefaultMigrator implements Migrator {
           migrations,
           history,
           participatingPackageNames(this.options),
+        );
+        await upgradeTaskChecksums(
+          migrationConnection,
+          this.options.tableName ?? DEFAULT_MIGRATION_TABLE,
+          migrations,
+          history,
         );
 
         const batch = currentBatch(history);
@@ -300,7 +313,11 @@ function validateAppliedMigrationHistory(
         `Executed migration "${record.name}" is missing from migration sources. Package: "${record.packageName}".`,
       );
     }
-    if (record.checksum !== migration.checksum) {
+    if (
+      record.checksum !== migration.checksum &&
+      (record.packageName !== migration.packageName ||
+        record.checksum !== migration.legacyChecksum)
+    ) {
       throw new Error(
         `Executed migration "${record.name}" checksum changed. Package: "${record.packageName}".`,
       );

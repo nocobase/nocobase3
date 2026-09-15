@@ -156,6 +156,12 @@ For Client or Server Route tasks, inspect only the matching files in `packages/e
 - Follow repository and package `AGENTS.md` rules, including shared dev config,
   dependency protocols, and validation requirements.
 
+## Resource and checksum contract
+
+Every Server plugin requires `baseDir`, an absolute resource base. In a declaration under `server/`, import `path` from `node:path` and set `baseDir: path.resolve(import.meta.dirname, '..')`. Database and Queue paths are relative to this base, not automatically to the package root. Compiled declarations resolve compiled resources without a source/dist fallback. Keep source and publish exports aligned, and never calculate this directory from the application's working directory.
+
+After compiling migrations and seeds and rewriting JavaScript imports, run `nocobase-db-manifests` from `@nocobase/dev-config`. Include each generated `.manifest.json` and its marked JavaScript in published output. Do not modify task source to embed checksums. Source checksum is the stable history identity; artifact checksum validates the emitted file. For legacy JS history, an exact verified pre-marker artifact hash can be upgraded under the task lock; unverified history remains an error. See [database checksum upgrades](../../../packages/libs/db/CHECKSUMS.md).
+
 ## Safe implementation loop
 
 1. Inspect workspace status, target plugin, target App, package metadata,
