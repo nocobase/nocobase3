@@ -592,39 +592,40 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
           onClose={() => {
             if (!busy) setLifecycleAction(undefined);
           }}
-        >
-          <div className='mt-6 flex justify-end gap-2'>
-            <Button
-              variant='outline'
-              disabled={busy}
-              onClick={() => setLifecycleAction(undefined)}
-            >
-              {t('detail.cancel', { defaultValue: 'Cancel' })}
-            </Button>
-            <Button
-              disabled={busy}
-              variant={lifecycleAction === 'stop' ? 'destructive' : 'default'}
-              onClick={() => {
-                const action = lifecycleAction;
-                if (!action) return;
-                setLifecycleAction(undefined);
-                void perform(async () => {
-                  await client.request({
-                    path: `hub/apps/${appId}/${action}`,
-                    method: 'POST',
+          footer={
+            <>
+              <Button
+                variant='outline'
+                disabled={busy}
+                onClick={() => setLifecycleAction(undefined)}
+              >
+                {t('detail.cancel', { defaultValue: 'Cancel' })}
+              </Button>
+              <Button
+                disabled={busy}
+                variant={lifecycleAction === 'stop' ? 'destructive' : 'default'}
+                onClick={() => {
+                  const action = lifecycleAction;
+                  if (!action) return;
+                  setLifecycleAction(undefined);
+                  void perform(async () => {
+                    await client.request({
+                      path: `hub/apps/${appId}/${action}`,
+                      method: 'POST',
+                    });
                   });
-                });
-              }}
-            >
-              {busy ? <LoaderCircle className='size-4 animate-spin' /> : null}
-              {lifecycleAction === 'start'
-                ? t('detail.start', { defaultValue: 'Start' })
-                : lifecycleAction === 'stop'
-                  ? t('detail.stop', { defaultValue: 'Stop' })
-                  : t('detail.restart', { defaultValue: 'Restart' })}
-            </Button>
-          </div>
-        </AppDialog>
+                }}
+              >
+                {busy ? <LoaderCircle className='size-4 animate-spin' /> : null}
+                {lifecycleAction === 'start'
+                  ? t('detail.start', { defaultValue: 'Start' })
+                  : lifecycleAction === 'stop'
+                    ? t('detail.stop', { defaultValue: 'Stop' })
+                    : t('detail.restart', { defaultValue: 'Restart' })}
+              </Button>
+            </>
+          }
+        />
       ) : null}
       {deployOpen &&
       capabilities[rollbackDeploymentId ? 'rollback' : 'deploy'] ? (

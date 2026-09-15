@@ -10,7 +10,10 @@ const editorTheme = EditorView.theme({
     backgroundColor: 'var(--background)',
     color: 'var(--foreground)',
     fontSize: '13px',
-    height: '360px',
+    // Capped against the viewport as well as in pixels: the editor sits inside a dialog whose footer is pinned,
+    // so on a short screen a fixed height would spend the whole body on the editor and leave its surroundings
+    // to be scrolled past. It only shrinks when 360px does not fit.
+    height: 'min(360px, 42svh)',
   },
   '.cm-content': {
     fontFamily:
@@ -106,7 +109,7 @@ export function ConfigMergeEditor({
 
   return (
     <div
-      className={`overflow-hidden rounded-b-xl [&_.cm-mergeView]:h-[360px] [&_.cm-mergeView]:overflow-auto [&_.cm-mergeViewEditor]:min-w-0 ${visiblePane === 'both' ? '[&_.cm-mergeViewEditor]:basis-1/2' : '[&_.cm-mergeViewEditor]:basis-full [&_.cm-merge-revert]:hidden'} ${visiblePane === 'new' ? '[&_.cm-mergeViewEditor:first-child]:hidden' : visiblePane === 'current' ? '[&_.cm-mergeViewEditor:last-child]:hidden' : ''}`}
+      className={`overflow-hidden rounded-b-xl [&_.cm-mergeView]:h-[min(360px,42svh)] [&_.cm-mergeView]:overflow-auto [&_.cm-mergeViewEditor]:min-w-0 ${visiblePane === 'both' ? '[&_.cm-mergeViewEditor]:basis-1/2' : '[&_.cm-mergeViewEditor]:basis-full [&_.cm-merge-revert]:hidden'} ${visiblePane === 'new' ? '[&_.cm-mergeViewEditor:first-child]:hidden' : visiblePane === 'current' ? '[&_.cm-mergeViewEditor:last-child]:hidden' : ''}`}
       ref={parentRef}
     />
   );

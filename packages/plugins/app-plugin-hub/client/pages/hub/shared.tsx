@@ -9,8 +9,10 @@ import { Avatar, AvatarFallback } from '../../components/ui/avatar.js';
 import { Button } from '../../components/ui/button.js';
 import {
   Dialog as UiDialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '../../components/ui/dialog.js';
@@ -36,13 +38,27 @@ export function AppDialog({
   title,
   description,
   onClose,
+  subheader,
   children,
+  footer,
+  footerClassName,
   wide = false,
 }: {
   readonly title: string;
   readonly description: string;
   readonly onClose: () => void;
-  readonly children: ReactNode;
+  /**
+   * Controls that stay put while the body scrolls, such as a wizard's step indicator.
+   *
+   * Anything a reader needs in order to act on the body belongs here rather than in it — inside the body it
+   * scrolls out of reach exactly when the content is long enough to need it.
+   */
+  readonly subheader?: ReactNode;
+  /** The scrolling body. A confirmation that asks in its description alone may leave it out. */
+  readonly children?: ReactNode;
+  /** Actions for this dialog. Passing them here pins them below the scrolling body rather than at the end of it. */
+  readonly footer?: ReactNode;
+  readonly footerClassName?: string;
   readonly wide?: boolean;
 }): ReactElement {
   return (
@@ -55,7 +71,11 @@ export function AppDialog({
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
-        {children}
+        {subheader ? <div className='mb-5 shrink-0'>{subheader}</div> : null}
+        {children ? <DialogBody>{children}</DialogBody> : null}
+        {footer ? (
+          <DialogFooter className={footerClassName}>{footer}</DialogFooter>
+        ) : null}
       </DialogContent>
     </UiDialog>
   );
