@@ -505,21 +505,23 @@ export function DeploymentError({
           })}
           onClose={() => setOpen(false)}
           wide
+          footer={
+            <>
+              <Button onClick={() => setOpen(false)} variant='outline'>
+                {t('deployments.close', { defaultValue: 'Close' })}
+              </Button>
+              <Button onClick={() => void copy()}>
+                {copied ? <ClipboardCheck /> : <Clipboard />}
+                {copied
+                  ? t('deployments.copied', { defaultValue: 'Copied' })
+                  : t('deployments.copyError', { defaultValue: 'Copy error' })}
+              </Button>
+            </>
+          }
         >
           <pre className='max-h-[24rem] overflow-auto whitespace-pre-wrap break-words rounded-xl bg-slate-950 p-4 font-mono text-xs leading-5 text-red-200'>
             {readableError.technicalMessage}
           </pre>
-          <div className='mt-5 flex justify-end gap-2'>
-            <Button onClick={() => setOpen(false)} variant='outline'>
-              {t('deployments.close', { defaultValue: 'Close' })}
-            </Button>
-            <Button onClick={() => void copy()}>
-              {copied ? <ClipboardCheck /> : <Clipboard />}
-              {copied
-                ? t('deployments.copied', { defaultValue: 'Copied' })
-                : t('deployments.copyError', { defaultValue: 'Copy error' })}
-            </Button>
-          </div>
         </AppDialog>
       ) : null}
     </div>
