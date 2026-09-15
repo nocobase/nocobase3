@@ -90,7 +90,7 @@ export function SurfaceLayout({
   }
 
   return (
-    <div className='flex min-h-svh bg-background'>
+    <div className='flex h-svh bg-background'>
       {mobileSidebarOpen ? (
         <button
           aria-label='Close navigation'
@@ -176,7 +176,7 @@ export function SurfaceLayout({
           </div>
           <HeaderActions surface={copy.surface} />
         </header>
-        <main className='min-w-0 flex-1'>
+        <main className='relative min-w-0 flex-1 overflow-y-auto'>
           <label className='sr-only' htmlFor='surface-page'>
             {copy.title} page
           </label>

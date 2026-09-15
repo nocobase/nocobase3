@@ -11,7 +11,6 @@ import { Loading } from '@/components/loading';
 import { Button } from '@/components/ui/button';
 
 import { describeRoutePage, type ClientPageDescriptor } from './client-page.js';
-import { CurrentRouteProvider } from './route-context.js';
 
 export interface ClientRouteProps {
   readonly route: AppClientRegisteredRoute;
@@ -22,12 +21,7 @@ export function ClientRoute({
   route,
   defaultAccess,
 }: ClientRouteProps): ReactElement {
-  return (
-    // The page is told which route rendered it, so it can ask whether a child page has taken over from it.
-    <CurrentRouteProvider route={route}>
-      <ClientPage page={describeRoutePage(route, defaultAccess)} />
-    </CurrentRouteProvider>
-  );
+  return <ClientPage page={describeRoutePage(route, defaultAccess)} />;
 }
 
 export interface ClientPageProps {

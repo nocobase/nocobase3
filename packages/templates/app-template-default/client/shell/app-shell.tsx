@@ -17,7 +17,7 @@ export function AppShell({
   const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState(false);
 
   return (
-    <div className='flex min-h-svh bg-background'>
+    <div className='flex h-svh bg-background'>
       <AppSidebar
         routes={routes}
         desktopCollapsed={desktopSidebarCollapsed}
@@ -32,7 +32,7 @@ export function AppShell({
             setDesktopSidebarCollapsed((collapsed) => !collapsed)
           }
         />
-        <main className='min-w-0 flex-1'>
+        <main className='relative min-w-0 flex-1 overflow-y-auto'>
           <Outlet />
         </main>
       </div>

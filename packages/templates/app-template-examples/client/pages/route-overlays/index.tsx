@@ -12,7 +12,6 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { Link, Outlet, useLocation } from 'react-router';
-import { useChildPageActive } from '@/routing/route-context';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/page-header';
@@ -20,8 +19,6 @@ import { PageHeader } from '@/components/page-header';
 export default function RouteOverlaysPage() {
   const { t } = useTranslation();
   const location = useLocation();
-  // An overlay leaves this page on screen beneath it; a child page takes over from it.
-  const childPageActive = useChildPageActive();
   const currentRoute = `${location.pathname}${location.search}`;
   const patterns = [
     {
@@ -68,8 +65,6 @@ export default function RouteOverlaysPage() {
       description: t('routeOverlays.stepThreeDescription'),
     },
   ] as const;
-
-  if (childPageActive) return <Outlet />;
 
   return (
     <section className='w-full space-y-6 p-6 md:p-8'>

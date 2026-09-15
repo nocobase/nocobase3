@@ -25,9 +25,16 @@ the record — so every level is known before the page loads anything, and the t
 A page places `<Breadcrumbs />` itself and keeps its own container and spacing. The trail begins at the first named
 level on the way to the page, with no root crumb of its own.
 
-`useChildPageActive` tells a page whether a child *page* has taken over from it or an overlay is merely floating
-above it, which is the same distinction the trail draws. The examples application demonstrates both under its route
-overlays page: the dialog and drawer leave the page and the trail untouched, while the nested pages beside them each
-add a level.
+`RouteChildPage` is a third way a child route can present itself, beside `RouteDialog` and `RouteDrawer`: a layer
+covering the content area rather than floating in the middle or at the side. It is deliberately not modal — the user
+is still on a page of the application and has to reach the sidebar — so the breadcrumb above it, not a close button,
+is what dismisses it. Because every child route is now a layer, a parent renders its content and places its outlet
+without knowing what kind of child follows, and the page beneath keeps its DOM while the layer is open.
+
+The layout follows from that: the application shell is a fixed frame and the content area is what scrolls, so a
+layer covers exactly the content area.
+
+The examples application demonstrates both kinds under its route overlays page: the dialog and drawer leave the
+trail untouched, while the nested pages beside them each add a level.
 
 Also adds the `PageHeader` component for a page title, description and action slots.

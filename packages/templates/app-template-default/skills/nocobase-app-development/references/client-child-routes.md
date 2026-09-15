@@ -159,30 +159,37 @@ Omit `navigation` for details, Tab content, or another page that should not appe
 
 The route renderer supplies outlets for pure groups. Business pages place their own outlet; no outlet is inserted automatically into a page, and the route overlay wrappers below insert none either. Put it where the next page belongs.
 
-## Child pages that replace the parent
+## How a child route presents itself
 
-A child route reaches the screen through the parent's outlet either way, so the parent has to know which of two things it is. An overlay floats above and the parent stays on screen beneath it. A child page takes over, and the parent should stop rendering its own content.
+Every child route reaches the screen through the parent's outlet, and every one of them is a layer over the page that opened it. What differs is only how that layer looks, which the child page itself chooses:
 
-The declaration that tells them apart is the same one breadcrumbs read: a child page declares a `title`, an overlay declares none. The parent then hands over:
+| Component        | Where it sits             | Modal |
+| ---------------- | ------------------------- | ----- |
+| `RouteDialog`    | Centred over the page     | Yes   |
+| `RouteDrawer`    | At the side of the page   | Yes   |
+| `RouteChildPage` | Covering the content area | No    |
 
 ```tsx
-export default function OrdersPage() {
-  const childPageActive = useChildPageActive();
-
-  if (childPageActive) return <Outlet />;
-
+export default function ArchivedOrdersPage() {
   return (
-    <section className='mx-auto w-full max-w-6xl space-y-6 p-6 md:p-8'>
-      <Breadcrumbs />
-      <PageHeader title={t('orders.title')} />
-      {/* the page's own content */}
+    <RouteChildPage>
+      <section className='mx-auto w-full max-w-6xl space-y-6 p-6 md:p-8'>
+        <Breadcrumbs />
+        <PageHeader title={t('orders.archived.title')} />
+        {/* the page's own content */}
+      </section>
+      {/* A deeper layer covers this one, so it goes outside the content. */}
       <Outlet />
-    </section>
+    </RouteChildPage>
   );
 }
 ```
 
-`useChildPageActive()`, from `client/routing/route-context.js`, answers whether the deepest titled level is still this page. An overlay adds no titled level, so it reads `false` and the parent keeps rendering — which is exactly what puts the page behind the dialog. It is a question only a page with a title can ask: on a route that declares none it always answers `false`, because such a route is never a level the trail can move past.
+The parent needs to know none of this. It renders its content and places its outlet, exactly as it would for a dialog, and the layer covers it. Because it covers rather than replaces, the page beneath keeps its DOM: a half-typed draft and a scroll position are still there when the layer closes.
+
+`RouteChildPage` is deliberately not modal. The user is still on a page of the application and has to be able to reach the sidebar, so it does not portal out of the content area, trap focus, or mark the rest inert. That is also why it carries no close button and ignores Escape — what closes it is the breadcrumb above it, or the browser's back button.
+
+A top-level page does not use it. There is no page underneath to cover, and the content area is already its own.
 
 ## Child pages shown as dialogs or drawers
 

@@ -25,10 +25,6 @@ export interface RouteTrailEntry {
 }
 
 const RouteTreeContext = createContext<readonly AppClientRegisteredRoute[]>([]);
-const CurrentRouteContext = createContext<AppClientRegisteredRoute | undefined>(
-  undefined,
-);
-
 export interface RouteTreeProviderProps extends PropsWithChildren {
   readonly routes: readonly AppClientRegisteredRoute[];
 }
@@ -70,43 +66,5 @@ export function useRouteTrail(): readonly RouteTrailEntry[] {
         }),
       ) ?? [],
     [pathname, routes],
-  );
-}
-
-/**
- * Whether a child *page* has taken over from the page asking.
- *
- * A page and an overlay both render through the same outlet, so a page with children needs to tell them apart: an
- * overlay floats above and leaves the page beneath it on screen, while a child page replaces it. The answer follows
- * from the same rule breadcrumbs use — the deepest titled level is the page the user considers themselves to be on.
- */
-export function useChildPageActive(): boolean {
-  const route = useContext(CurrentRouteContext);
-  const trail = useRouteTrail();
-
-  // Only a page that names a destination can be taken over from. An overlay or a tab never joins the titled levels,
-  // so without this it would read its own ancestor as a child page and hand its content away.
-  if (!route?.title) return false;
-
-  const deepest = trail
-    .filter((entry) => entry.route.title !== undefined)
-    .at(-1);
-
-  return Boolean(deepest && deepest.route.id !== route.id);
-}
-
-export interface CurrentRouteProviderProps extends PropsWithChildren {
-  readonly route: AppClientRegisteredRoute;
-}
-
-/** Tells the page which route rendered it, which is what lets it ask whether a child page has taken over. */
-export function CurrentRouteProvider({
-  children,
-  route,
-}: CurrentRouteProviderProps): ReactElement {
-  return (
-    <CurrentRouteContext.Provider value={route}>
-      {children}
-    </CurrentRouteContext.Provider>
   );
 }

@@ -1,7 +1,4 @@
-import {
-  resolveAppClientContributions,
-  type AppClientRegisteredRoute,
-} from '@nocobase/app-client/plugins';
+import { resolveAppClientContributions } from '@nocobase/app-client/plugins';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
@@ -10,11 +7,7 @@ import { Breadcrumbs } from '../../client/components/breadcrumbs.js';
 import RouteChildPageQuotationPage from '../../client/pages/route-overlays/pages/quotation/index.js';
 import RouteOverlaysPage from '../../client/pages/route-overlays/index.js';
 import applicationRoutes from '../../client/routes.js';
-import {
-  CurrentRouteProvider,
-  RouteTreeProvider,
-  useChildPageActive,
-} from '../../client/routing/route-context.js';
+import { RouteTreeProvider } from '../../client/routing/route-context.js';
 
 vi.mock('@nocobase/i18n/client', () => ({
   useTranslation: () => ({
@@ -31,17 +24,6 @@ const registered = resolveAppClientContributions([
     routes: applicationRoutes,
   },
 ]).routes;
-
-const flatten = (
-  nodes: readonly AppClientRegisteredRoute[],
-): AppClientRegisteredRoute[] =>
-  nodes.flatMap((node) => [node, ...flatten(node.children ?? [])]);
-
-const routeNamed = (name: string): AppClientRegisteredRoute => {
-  const route = flatten(registered).find((entry) => entry.name === name);
-  if (!route) throw new Error(`No route named "${name}"`);
-  return route;
-};
 
 const trailAt = (pathname: string) => (
   <MemoryRouter initialEntries={[pathname]}>
@@ -95,56 +77,26 @@ describe('nested example pages', () => {
     expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
   });
 
-  it('hands the surface to a child page but keeps it under an overlay', () => {
-    const overlays = routeNamed('routeOverlays');
-    const page = (pathname: string) => (
-      <MemoryRouter initialEntries={[pathname]}>
-        <RouteTreeProvider routes={registered}>
-          <CurrentRouteProvider route={overlays}>
-            <RouteOverlaysPage />
-          </CurrentRouteProvider>
-        </RouteTreeProvider>
-      </MemoryRouter>
-    );
-
-    const { unmount } = render(page('/route-overlays/dialog'));
-    expect(
-      screen.getByRole('heading', { name: 'routeOverlays.title', level: 1 }),
-    ).toBeVisible();
-    unmount();
-
-    render(page('/route-overlays/pages'));
-    expect(
-      screen.queryByRole('heading', { name: 'routeOverlays.title' }),
-    ).not.toBeInTheDocument();
-  });
-
-  it('reports no takeover on a page that names no destination', () => {
-    function Probe() {
-      return <span>{String(useChildPageActive())}</span>;
-    }
-
+  it('keeps the page beneath rendered when a child page is open', () => {
     render(
-      <MemoryRouter initialEntries={['/route-overlays/dialog']}>
+      <MemoryRouter initialEntries={['/route-overlays/pages']}>
         <RouteTreeProvider routes={registered}>
-          {/* The dialog is an overlay: it declares no title, so nothing has taken over from it. */}
-          <CurrentRouteProvider route={routeNamed('routeDialogExample')}>
-            <Probe />
-          </CurrentRouteProvider>
+          <RouteOverlaysPage />
         </RouteTreeProvider>
       </MemoryRouter>,
     );
 
-    expect(screen.getByText('false')).toBeInTheDocument();
+    // The child page lays itself over this one rather than replacing it, so a draft typed here would survive.
+    expect(
+      screen.getByRole('heading', { name: 'routeOverlays.title', level: 1 }),
+    ).toBeVisible();
   });
 
   it('heads a child page with the same title its route declares', () => {
     render(
       <MemoryRouter initialEntries={['/route-overlays/pages/quotation']}>
         <RouteTreeProvider routes={registered}>
-          <CurrentRouteProvider route={routeNamed('routeChildPageQuotation')}>
-            <RouteChildPageQuotationPage />
-          </CurrentRouteProvider>
+          <RouteChildPageQuotationPage />
         </RouteTreeProvider>
       </MemoryRouter>,
     );
