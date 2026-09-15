@@ -195,7 +195,9 @@ Keep the outlet outside the layer. `RouteChildPage` scrolls its own content, so 
 
 The parent needs to know none of this. It renders its content and places its outlet, exactly as it would for a dialog, and the layer covers it. Because it covers rather than replaces, the page beneath keeps its DOM: a half-typed draft and a scroll position are still there when the layer closes.
 
-`RouteChildPage` is deliberately not modal. The user is still on a page of the application and has to be able to reach the sidebar, so it does not portal out of the content area, trap focus, or mark the rest inert. That is also why it carries no close button and ignores Escape — what closes it is the breadcrumb above it, or the browser's back button.
+`RouteChildPage` is deliberately not modal. The user is still on a page of the application and has to be able to reach the sidebar, so it does not portal out of the content area or trap focus. That is also why it carries no close button and ignores Escape — what closes it is the breadcrumb above it, or the browser's back button.
+
+It does mark the siblings it covers `inert`, which is a smaller thing than it sounds: covering a page does not close it, so those siblings keep their place in the tab order and the accessibility tree, and a keyboard user would otherwise tab through controls hidden behind opaque paint — focusing one scrolls the covered page into view while the layer, anchored to the content area, does not move. The sidebar and the header sit outside the content area, so they are outside what the layer covers and stay reachable. The component does this itself; a parent page declares nothing for it.
 
 A top-level page does not use it. There is no page underneath to cover, and the content area is already its own.
 

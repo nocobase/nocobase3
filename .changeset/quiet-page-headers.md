@@ -31,6 +31,9 @@ covering the content area rather than floating in the middle or at the side. It 
 is still on a page of the application and has to reach the sidebar — so the breadcrumb above it, not a close button,
 is what dismisses it. Because every child route is now a layer, a parent renders its content and places its outlet
 without knowing what kind of child follows, and the page beneath keeps its DOM while the layer is open.
+Covering a page is not the same as closing it, so the layer marks the siblings it covers `inert`: they keep
+their DOM but leave the tab order and the accessibility tree, while the sidebar and header outside the
+content area stay reachable.
 
 The layout follows from that: the application shell is a fixed frame and the content area is what scrolls, so a
 layer covers exactly the content area.
