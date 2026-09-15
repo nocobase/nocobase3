@@ -1,5 +1,13 @@
 # @nocobase/create-plugin
 
+## 0.1.0-beta.7
+
+### Patch Changes
+
+- 009ebed: Remove unavailable documentation references from generated plugin guidance.
+- Updated dependencies [73f7538]
+  - @nocobase/dev-config@0.1.0-beta.6
+
 ## 0.1.0-beta.6
 
 ### Minor Changes

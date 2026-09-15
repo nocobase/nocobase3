@@ -1,5 +1,36 @@
 # @nocobase/app-plugin-ai-employee
 
+## 0.1.0-beta.7
+
+### Minor Changes
+
+- 6d43421: Identify `ai.aiKnowledgeBase.vectorDatabases` entries by `key` instead of `name`. This is a breaking change to the application configuration contract: `key` is now required and must be unique within one configuration, and `name` is now optional.
+
+  `key` is the stable identifier of a record — the knowledge-base plugin matches existing records by it when synchronizing declarative configuration, and its settings page lists it as the UID. `name` is only a display title, shown as the Title, and falls back to `key` when omitted, so two entries may share the same name.
+
+  A configuration written against the previous contract fails to typecheck until each entry's `name` is renamed to `key`. Keep `name` alongside it only when a separate display title is wanted.
+
+### Patch Changes
+
+- be92e2b: Use the NocoBase AI chat mark for the floating AI employee chat entry instead of the generic `lucide-react` `Bot` glyph on a solid primary square. The trigger now shows the same brand artwork the Portal template uses for this entry.
+
+  The mark ships as an inlined `NocoBaseAIChatIcon` React component under `shared/icons/` rather than an `.svg` asset import. Registry source is copied into an application and typechecked with plain `tsc`, so an asset import would require shipping a `declare module '*.svg'` declaration into every consuming application alongside it.
+
+- 6d43421: Add a `#` row-number column to the LLM service table, matching the MCP table. Both settings tables now open with the same fixed-width centered index column before the UID.
+- 6d43421: Fix the LLM service model dialog overlay leaving the page header uncovered. Its backdrop had no `z-index`, so the surface layout's `sticky z-40` header painted over it and stayed interactive while the dialog was open. It now sits at `z-50`, matching every other dialog in the plugin.
+- Updated dependencies [1d5ee9a]
+- Updated dependencies [1d5ee9a]
+- Updated dependencies [1d5ee9a]
+- Updated dependencies [211538b]
+- Updated dependencies [1d5ee9a]
+- Updated dependencies [1d5ee9a]
+  - @nocobase/app-server@1.0.0-beta.12
+  - @nocobase/db@1.0.0-beta.6
+  - @nocobase/app-plugin-authentication@0.1.0-beta.11
+  - @nocobase/app-client@1.0.0-beta.14
+  - @nocobase/i18n@1.0.0-beta.3
+  - @nocobase/service-provider@0.0.2-beta.1
+
 ## 0.1.0-beta.6
 
 ### Minor Changes

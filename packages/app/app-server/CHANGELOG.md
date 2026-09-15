@@ -1,5 +1,31 @@
 # @nocobase/app-server
 
+## 1.0.0-beta.12
+
+### Minor Changes
+
+- 1d5ee9a: Add `generateAppCollectionsArtifact()` for writing and checking Collection artifacts
+
+  Reads every Collection a managed connection resolves and writes it under `database/<connection>/collections/<name>/` as `collection.json`, `metadata.json` and `schema.json`, with a `_manifest.json` per connection recording the dialect, whether the schema is managed or external, and the last applied migration. Connection selection follows the migration and seed commands — the default connection, `connection` for one, or `all` for every one — except that external connections take part too: their schema is owned elsewhere and they record no migration head, but a snapshot of what they resolve to is exactly what a reader without database access needs from them.
+
+  Each Collection's files are staged and swapped in as a unit, directories of Collections that no longer exist are removed, and entries the generator does not own make it fail rather than delete them. `check: true` compares the generated result with the files on disk and reports each difference as missing, stale or unexpected without writing anything, which is what a CI step runs.
+
+  Nothing here is read back at runtime; the files are derived output for developers, documentation and AI tooling.
+
+- 1d5ee9a: Read an external connection's metadata from `database/<connection>/collections` by default
+
+  An `external` connection that configures no `metadataStore` — on the connection or at the top level — now reads `database/<connection>/collections/*/metadata.json` through a `DirectoryCollectionMetadataStore`, so an existing database can be connected from `config.yml` alone. `metadataStore` also accepts a directory as a plain string, resolved against the application root, for metadata kept elsewhere.
+
+  `generateAppCollectionsArtifact()` treats `metadata.json` as the source on such a connection: regenerating only normalizes its formatting, and when the database no longer has a Collection the generated files are removed while `metadata.json` is kept and reported under `orphans`. The generator resolves each connection's directory through the same `resolveAppCollectionsDirectory()` the store default uses. A connection's configured migration and seed `tableName` and `lockTableName` are passed to `@nocobase/db` as `internalTables`, so a custom-named history table is not reported as a Collection or written as an artifact.
+
+### Patch Changes
+
+- Updated dependencies [1d5ee9a]
+- Updated dependencies [211538b]
+- Updated dependencies [1d5ee9a]
+- Updated dependencies [1d5ee9a]
+  - @nocobase/db@1.0.0-beta.6
+
 ## 1.0.0-beta.11
 
 ### Minor Changes
