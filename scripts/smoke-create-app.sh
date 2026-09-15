@@ -15,14 +15,13 @@
 #     --registry http://localhost:4873 \
 #     --create-app-version 0.1.0-beta.12 \
 #     --template @nocobase/app-template-default@0.1.0-beta.12 \
-#     [--dialect sqlite] [--workdir DIR] [--timeout SECONDS]
+#     [--workdir DIR] [--timeout SECONDS]
 
 set -euo pipefail
 
 REGISTRY=''
 CREATE_APP_VERSION=''
 TEMPLATE=''
-DIALECT='sqlite'
 WORKDIR=''
 TIMEOUT=420
 APP_NAME='crm'
@@ -32,7 +31,6 @@ while [ $# -gt 0 ]; do
     --registry) REGISTRY="$2"; shift 2 ;;
     --create-app-version) CREATE_APP_VERSION="$2"; shift 2 ;;
     --template) TEMPLATE="$2"; shift 2 ;;
-    --dialect) DIALECT="$2"; shift 2 ;;
     --workdir) WORKDIR="$2"; shift 2 ;;
     --timeout) TIMEOUT="$2"; shift 2 ;;
     --app-name) APP_NAME="$2"; shift 2 ;;
@@ -85,15 +83,14 @@ echo "::group::Create the application"
 echo "registry:    $REGISTRY"
 echo "create-app:  $CREATE_APP_VERSION"
 echo "template:    $TEMPLATE"
-echo "dialect:     $DIALECT"
 echo "workdir:     $WORKDIR"
 
 cd "$WORKDIR"
 rm -rf "$APP_DIR"
 
-# --db-dialect is what keeps this non-interactive: it is the only question the app flow asks.
+# The directory argument is what keeps this non-interactive: it is the only question the command asks. The generated
+# application runs on the SQLite connection its template declares, so there is nothing else to answer here.
 pnpm create "@nocobase/app@$CREATE_APP_VERSION" "$APP_NAME" \
-  --db-dialect="$DIALECT" \
   --registry="$REGISTRY" \
   --template="$TEMPLATE"
 echo "::endgroup::"
@@ -180,4 +177,4 @@ if ! curl -fsS --max-time 30 "$APP_URL" -o /dev/null; then
 fi
 
 echo "::endgroup::"
-echo "create-app smoke test passed: $TEMPLATE booted on $DIALECT."
+echo "create-app smoke test passed: $TEMPLATE booted."

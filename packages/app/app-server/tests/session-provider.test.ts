@@ -3,7 +3,11 @@ import { describe, expect, it } from 'vitest';
 
 import { ServiceContainer } from '@nocobase/service-provider';
 
-import { AppConfig, createConfigPaths } from '../src/config/index.js';
+import {
+  AppConfig,
+  createConfigPaths,
+  PLACEHOLDER_SECRET,
+} from '../src/config/index.js';
 
 import type { AppPluginApplication } from '../src/plugins/index.js';
 
@@ -61,6 +65,28 @@ describe('SessionProvider', () => {
     expect(() =>
       resolveAppSessionConfig(configured, 'ephemeral-secret'),
     ).toThrow('session.gcLottery.hits must not exceed');
+  });
+
+  /**
+   * The placeholder is a non-empty string, so without this it is taken as a configured secret — and it is the same
+   * string in every installation that copied `config.example.yml` without editing it.
+   */
+  it('rejects the secret the example ships', () => {
+    const configured = createRuntimeConfig({ secret: PLACEHOLDER_SECRET });
+
+    expect(() =>
+      resolveAppSessionConfig(configured, 'ephemeral-secret'),
+    ).toThrow('session.secret is still set to the placeholder');
+  });
+
+  it('rejects it with surrounding whitespace too', () => {
+    const configured = createRuntimeConfig({
+      secret: `  ${PLACEHOLDER_SECRET}\n`,
+    });
+
+    expect(() =>
+      resolveAppSessionConfig(configured, 'ephemeral-secret'),
+    ).toThrow('session.secret is still set to the placeholder');
   });
 });
 
