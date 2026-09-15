@@ -7,6 +7,7 @@ const enUS = {
     defaultAccess: 'Default Access',
     sharingRules: 'Sharing Rules',
     restrictionRules: 'Restriction Rules',
+    inspector: 'Permission Inspector',
   },
   common: {
     all: 'All',
@@ -160,6 +161,36 @@ const enUS = {
       delete: 'Choose which records can be deleted.',
       other: 'Configure fields and record access for this action.',
     },
+  },
+  inspector: {
+    page: {
+      title: 'Permission Inspector',
+      description:
+        'Answer what one person may do on one resource, and why the application decided it.',
+    },
+    person: 'Person',
+    selectPerson: 'Select a person',
+    searchPeople: 'Search people',
+    searchPeoplePlaceholder: 'Search name, username, or email',
+    action: 'Action',
+    selectAction: 'Select an action',
+    inspect: 'Inspect',
+    inspecting: 'Inspecting…',
+    empty:
+      'Choose a person, a resource and an action to see what the application decides.',
+    decision: 'Decision',
+    effects: {
+      permit: 'Allowed',
+      deny: 'Denied',
+      conditional: 'Allowed with conditions',
+    },
+    reasons: 'Reasons',
+    noReasons: 'The decision carries no reasons.',
+    reasonFrom: 'From {{plugin}}',
+    reasonFromCore: 'From the authorization core',
+    conditions: 'Conditions',
+    conditionsHint:
+      'The decision holds only for what these conditions select, shown as the core returned them.',
   },
   permissionSets: {
     page: {

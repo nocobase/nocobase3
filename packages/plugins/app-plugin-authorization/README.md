@@ -70,6 +70,22 @@ it holds and the writable and visible fields by name. A type that registers
 nothing still renders: its actions each reach the whole resource and its summary
 cell is empty.
 
+The Permission Inspector answers what one person may do on one resource, and
+why. `POST /api/authz/inspect` names the subject, the resource and the action;
+the route builds the identity the request middleware builds — the principal
+plus the audience subject every signed-in user carries — and returns the core's
+`explain()` decision unchanged: the effect, the reasons with the plugin each
+came from, and the conditions when the decision is conditional. It is gated by
+`authorization.settings.permission-sets/read`, like the page it sits beside,
+because it reveals another person's access.
+
+`client/pages/inspector-page.tsx` renders that decision generically. It knows no
+plugin's reason codes and interprets no conditions: a reason shows its message,
+its code and whichever plugin named it, and conditions are shown as they were
+returned. That is what lets it explain a decision made by a plugin this package
+has never heard of. It lives in the host's own pages rather than under
+`permission-sets/`, because it belongs to no single plugin.
+
 Every destructive action in these pages confirms first, through one
 `ConfirmDialog` in `client/components/confirm-dialog.tsx` over the vendored
 `client/components/ui/dialog.tsx`: deleting a permission set, a default access

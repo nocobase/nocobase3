@@ -5,6 +5,7 @@ import {
 import {
   KeyRound,
   LockKeyhole,
+  ScanSearch,
   Share2,
   ShieldBan,
   ShieldCheck,
@@ -57,6 +58,18 @@ const settings: AppClientRouteContribution = defineSettingsRoutes([
           action: 'read',
         },
         componentLoader: () => import('./pages/restriction-rules-page.js'),
+      },
+      // The inspector explains whatever the installed plugins decided, so it
+      // belongs to none of them and lives beside them rather than under one.
+      {
+        name: 'inspector',
+        path: '/inspector',
+        navigation: { title: 'navigation.inspector', icon: ScanSearch },
+        access: {
+          resource: 'authorization.settings.permission-sets',
+          action: 'read',
+        },
+        componentLoader: () => import('./pages/inspector-page.js'),
       },
     ],
   },

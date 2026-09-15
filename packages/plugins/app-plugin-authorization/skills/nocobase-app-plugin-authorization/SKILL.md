@@ -269,9 +269,14 @@ When a permission does not behave as expected, inspect in this order:
    the module. The returned reasons identify the authorization decision and
    its contributing constraints.
 
-`authz.explain()` remains the way to settle one concrete request. The settings
-pages edit one layer each and report nothing across layers, because the four
-authorization plugins are separable packages.
+`authz.explain()` remains the way to settle one concrete request. The
+Permission Inspector under Settings → Authorization asks the same question from
+the browser: pick a person, a resource and an action, and it reports the effect,
+each reason with the plugin that gave it, and the conditions when the decision
+is conditional, exactly as the core returned them. It is gated by
+`authorization.settings.permission-sets/read`. Otherwise the settings pages edit
+one layer each and report nothing across layers, because the four authorization
+plugins are separable packages.
 
 Do not treat a successful permission snapshot as proof that a database query
 is safe: a snapshot contains grants, while database authorization may still

@@ -52,6 +52,7 @@ describe('@nocobase/app-plugin-authorization client', () => {
       '/settings/authorization/default-access',
       '/settings/authorization/sharing-rules',
       '/settings/authorization/restriction-rules',
+      '/settings/authorization/inspector',
     ]);
     expect(
       resolved.settings.map((setting) => setting.access?.resource),
@@ -60,6 +61,8 @@ describe('@nocobase/app-plugin-authorization client', () => {
       'authorization.settings.default-access',
       'authorization.settings.sharing-rules',
       'authorization.settings.restriction-rules',
+      // The inspector belongs to no one plugin; it is gated with its neighbours.
+      'authorization.settings.permission-sets',
     ]);
     // The group and every page carry an icon, so the navigation never falls back to a bare row. A lucide icon is a
     // forwardRef object rather than a plain function, so this checks for a renderable rather than for a typeof.

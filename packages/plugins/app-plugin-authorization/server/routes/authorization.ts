@@ -83,6 +83,34 @@ export function createAuthorizationRoutes(
     });
   }
 
+  // Why one person reaches one resource, built only on the core's explanation
+  // so it knows nothing about which plugins an application installed. It
+  // reveals another person's access, so it is gated like the Permission Sets it
+  // is mostly explaining.
+  routes.post('/inspect', async (context) => {
+    await admin(context, 'permission-sets', 'read');
+    const input = readInspectRequest(await body(context));
+    if (!input)
+      return context.json(
+        {
+          code: 'INVALID_BODY',
+          message: 'inspect requires a subject, a resource and an action.',
+        },
+        400,
+      );
+    // The identity the request middleware builds: the principal, plus the
+    // audience subject every signed-in user carries.
+    const decision = await authorization
+      .for({
+        principal: input.subject,
+        subjects: [{ type: 'authenticated', id: '*' }],
+      })
+      .explain({ resource: input.resource, action: input.action });
+    // Passed through as the core gave it: reasons name the plugin they came
+    // from, and conditions are not interpreted here.
+    return context.json({ data: decision });
+  });
+
   // Everything else is served by whichever Authorization plugin registered the
   // path; one this application did not install registered nothing.
   routes.all('*', async (context) => {
@@ -108,6 +136,45 @@ function mountedPath(context: Context<AuthorizationEnv>): string {
       ? ''
       : context.req.routePath.slice(0, wildcard).replace(/\/$/, '');
   return context.req.path.slice(mount.length) || '/';
+}
+
+/** What the inspector was asked: whose access, on what, doing what. */
+interface InspectRequest {
+  readonly subject: { type: string; id: string };
+  readonly resource: { type: string; id: string };
+  readonly action: string;
+}
+
+async function body(context: Context): Promise<unknown> {
+  try {
+    return await context.req.json();
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The inspect body, checked field by field. Administering settings is what lets
+ * someone ask the question, not a reason to trust the shape of what they send.
+ */
+function readInspectRequest(value: unknown): InspectRequest | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const { subject, resource, action } = value as Record<string, unknown>;
+  const [inspected, target] = [reference(subject), reference(resource)];
+  if (!inspected || !target || typeof action !== 'string' || action === '')
+    return undefined;
+  return { subject: inspected, resource: target, action };
+}
+
+function reference(value: unknown): { type: string; id: string } | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const { type, id } = value as Record<string, unknown>;
+  return typeof type === 'string' &&
+    type !== '' &&
+    typeof id === 'string' &&
+    id !== ''
+    ? { type, id }
+    : undefined;
 }
 
 const crudActions = ['read', 'create', 'update', 'delete'] as const;

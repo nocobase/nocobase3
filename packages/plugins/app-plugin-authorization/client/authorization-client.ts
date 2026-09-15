@@ -119,6 +119,30 @@ export interface RestrictionRule {
   reason?: string;
 }
 
+/** One reason a decision came out as it did, as the core gave it. */
+export interface AuthorizationReason {
+  code: string;
+  message: string;
+  /** The plugin the reason came from; absent when the core itself said it. */
+  plugin?: string;
+  details?: Readonly<Record<string, unknown>>;
+}
+
+export type AuthorizationEffect = 'permit' | 'conditional' | 'deny';
+
+/** What the core decided, with why, and what it holds for when conditional. */
+export interface AuthorizationDecision {
+  effect: AuthorizationEffect;
+  conditions?: Readonly<Record<string, unknown>> & { type: string };
+  reasons: readonly AuthorizationReason[];
+}
+
+export interface AuthorizationInspectInput {
+  subject: AuthorizationSubject;
+  resource: { type: string; id: string };
+  action: string;
+}
+
 interface PermissionsSnapshot {
   permissions: readonly {
     resource: { type: string; id: string };
@@ -192,6 +216,10 @@ export class AuthorizationClient {
         query: { pageSize: USER_PAGE_SIZE },
       })
       .then((response) => response.data.items);
+  }
+  /** What one person may do on one resource, and why the application says so. */
+  inspect(input: AuthorizationInspectInput): Promise<AuthorizationDecision> {
+    return this.send<AuthorizationDecision>('authz/inspect', 'POST', input);
   }
   listDefaultAccess(): Promise<readonly DefaultAccessRule[]> {
     return this.get<readonly DefaultAccessRule[]>('authz/default-access');

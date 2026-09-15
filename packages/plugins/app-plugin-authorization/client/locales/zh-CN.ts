@@ -7,6 +7,7 @@ const zhCN: AuthorizationResource = {
     defaultAccess: '默认访问',
     sharingRules: '共享规则',
     restrictionRules: '限制规则',
+    inspector: '权限检查器',
   },
   common: {
     all: '全部',
@@ -159,6 +160,33 @@ const zhCN: AuthorizationResource = {
       delete: '选择可以删除哪些记录。',
       other: '为该操作配置字段与记录访问。',
     },
+  },
+  inspector: {
+    page: {
+      title: '权限检查器',
+      description: '查看某个人对某个资源可以做什么，以及应用为何这样判定。',
+    },
+    person: '人员',
+    selectPerson: '选择人员',
+    searchPeople: '搜索人员',
+    searchPeoplePlaceholder: '搜索姓名、用户名或邮箱',
+    action: '操作',
+    selectAction: '选择操作',
+    inspect: '检查',
+    inspecting: '检查中…',
+    empty: '选择人员、资源和操作，即可查看应用的判定结果。',
+    decision: '判定结果',
+    effects: {
+      permit: '允许',
+      deny: '拒绝',
+      conditional: '有条件允许',
+    },
+    reasons: '判定依据',
+    noReasons: '该判定没有给出依据。',
+    reasonFrom: '来自 {{plugin}}',
+    reasonFromCore: '来自授权内核',
+    conditions: '条件',
+    conditionsHint: '该判定只对这些条件选中的数据成立，按内核返回的原样展示。',
   },
   permissionSets: {
     page: {
