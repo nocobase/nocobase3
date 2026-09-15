@@ -18,7 +18,7 @@ import { mailServiceToken } from '../server/tokens.js';
 import type { MailService, MailSyncRunView } from '../server/types.js';
 import serverLocales from '../server/locales/index.js';
 
-describe('mail API routes', () => {
+describe('[API][SEC] mail API routes and permission boundaries', () => {
   it('owns an authentication boundary', async () => {
     const router = await createRouter(false, service());
     const response = await router.request('/api/mail/accounts');

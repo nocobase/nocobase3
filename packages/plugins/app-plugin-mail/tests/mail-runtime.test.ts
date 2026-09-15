@@ -30,7 +30,7 @@ import type {
   NormalizedMailMessage,
 } from '../server/types.js';
 
-describe('mail MVP runtime', () => {
+describe('[SRV][DATA] mail runtime, synchronization, sending, and consistency', () => {
   let database: DatabaseManager;
   let store: MailStore;
   let queue: NocoBaseQueueManager | undefined;
@@ -71,6 +71,7 @@ describe('mail MVP runtime', () => {
     await database.destroy();
   });
 
+  // MAIL-SEND-009/010 and MAIL-BULK-003: idempotent and scheduled delivery.
   it('sends once for a repeated idempotency key', async () => {
     const sendMessage = vi.fn<MailProviderAdapter['sendMessage']>(async () => ({
       status: 'accepted',
@@ -244,6 +245,7 @@ describe('mail MVP runtime', () => {
     );
   });
 
+  // MAIL-SYNC-003/004/012/013/014: automatic synchronization and Push.
   it('schedules automatic mailbox sync without duplicating an active run', async () => {
     queue = createQueueManager({
       default: 'sync',
@@ -620,6 +622,7 @@ describe('mail MVP runtime', () => {
     );
   });
 
+  // MAIL-SEND-007, MAIL-CENTER-008/010, and MAIL-ACTION-001/005/007: messages.
   it('resolves a reply against the owned stored message', async () => {
     await store.commitSyncBatch({
       accountId: 'account-1',
@@ -1197,6 +1200,7 @@ describe('mail MVP runtime', () => {
     ).rejects.toThrow('not found');
   });
 
+  // MAIL-DRAFT-001A/001B and MAIL-DRAFT-SRV-001/002: local-first drafts.
   it('saves a Provider draft into the synchronized message store', async () => {
     const saveDraft = vi.fn<NonNullable<MailProviderAdapter['saveDraft']>>(
       async (input) => ({
@@ -1413,6 +1417,7 @@ describe('mail MVP runtime', () => {
     expect(resolved.draftConflict).toBeUndefined();
   });
 
+  // MAIL-ACCOUNT-013/015/016/017 and MAIL-MANAGE-001/005: account lifecycle.
   it('updates account lifecycle and removes an account without account defaults', async () => {
     await store.saveAccount({
       ...account(),
@@ -1684,6 +1689,7 @@ describe('mail MVP runtime', () => {
     });
   });
 
+  // MAIL-SEND-SRV-001/002, MAIL-API-008/009, and MAIL-DATA-004: recovery fences.
   it('resumes a pending submission after interruption before claiming', async () => {
     const sendMessage = vi.fn<MailProviderAdapter['sendMessage']>(async () => ({
       status: 'accepted',
@@ -1854,6 +1860,7 @@ describe('mail MVP runtime', () => {
     ).rejects.toThrow('not active');
   });
 
+  // MAIL-SYNC-001/005/006/007/008/009/011: resumable sync consistency.
   it('imports history in pages and catches up from the starting watermark', async () => {
     const listMessages = vi
       .fn<NonNullable<MailProviderAdapter['listMessages']>>()

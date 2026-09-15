@@ -29,7 +29,7 @@ const capabilities: MailProviderView['capabilities'] = {
   aliases: true,
 };
 
-describe('Mail client components', () => {
+describe('[UI][SEC] mail client components and capability states', () => {
   it('supports rich text size, heading, link, and image controls', () => {
     const execCommand = vi.fn(() => true);
     const originalExecCommand = document.execCommand;

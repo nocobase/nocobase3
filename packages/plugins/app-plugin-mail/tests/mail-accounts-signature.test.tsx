@@ -33,7 +33,7 @@ vi.mock('../client/runtime.js', () => ({ getMailClient: () => mail }));
 
 import MailAccountsDevPage from '../client/pages/mail-accounts-dev-page.js';
 
-describe('mail account management', () => {
+describe('[UI][DATA] accounts, signatures, templates, and local labels', () => {
   beforeEach(() => {
     for (const mock of Object.values(mail)) mock.mockReset();
     mail.listProviders.mockResolvedValue([]);

@@ -43,7 +43,7 @@ vi.mock('../client/runtime.js', () => ({
 import MailWorkspacePage from '../client/pages/mail-workspace-page.js';
 import MailManagementPage from '../client/pages/mail-management-page.js';
 
-describe('MailWorkspacePage', () => {
+describe('[UI][SRV] mail workspace, composer, drafts, and management', () => {
   beforeEach(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
