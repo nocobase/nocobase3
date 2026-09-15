@@ -201,7 +201,9 @@ describe('createPlugin', () => {
   );
 
   it.each([
-    ['database', ['dist', 'README.md', 'CHANGELOG.md', 'database']],
+    // The compiled `dist/database` is what ships; publishing the TypeScript source beside it would shadow the
+    // compiled migrations in an installed plugin, where Node cannot strip types under `node_modules`.
+    ['database', ['dist', 'README.md', 'CHANGELOG.md']],
     ['server.jobs', ['dist', 'README.md', 'CHANGELOG.md']],
     ['client.react-providers', ['dist', 'README.md', 'CHANGELOG.md']],
     ['skills', ['dist', 'README.md', 'CHANGELOG.md', 'skills']],
@@ -506,7 +508,7 @@ describe('createPlugin', () => {
       '@nocobase/service-provider': 'workspace:^',
     });
     expect(manifest.files).toEqual(
-      expect.arrayContaining(['database', 'skills', 'registry', 'public/r']),
+      expect.arrayContaining(['skills', 'registry', 'public/r']),
     );
     expect(manifest.scripts?.prepack).toBe('pnpm registry:build');
   });
