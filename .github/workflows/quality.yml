@@ -155,6 +155,42 @@ jobs:
           PACK_DIR: ${{ runner.temp }}/nocobase-pack-check
         run: pnpm pack:check
 
+  create-app-smoke:
+    name: Create-app smoke (Verdaccio)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build publishable packages
+        env:
+          NOCOBASE_SKIP_WORKSPACE_DEPENDENCY_BUILD: '1'
+        # The documentation site is not installed by create-app and does not contribute to the smoke test.
+        run: pnpm -r --filter '!@nocobase/docs' --if-present build
+
+      # No version bump or npm credentials: the isolated registry has no upstream for workspace packages, so even
+      # already-published versions are packed from this checkout. External dependencies still use the normal proxies.
+      - name: Verify create-app against this checkout
+        uses: ./.github/actions/verify-create-app
+        with:
+          local-packages-only: 'true'
+
   db-integration:
     name: DB integration (${{ matrix.database }})
     runs-on: ubuntu-latest
@@ -202,6 +238,7 @@ jobs:
     needs:
       - changed-files
       - validation
+      - create-app-smoke
       - db-integration
     runs-on: ubuntu-latest
     steps:
@@ -209,9 +246,10 @@ jobs:
         env:
           CHANGED_FILES_RESULT: ${{ needs.changed-files.result }}
           VALIDATION_RESULT: ${{ needs.validation.result }}
+          CREATE_APP_SMOKE_RESULT: ${{ needs['create-app-smoke'].result }}
           DB_INTEGRATION_RESULT: ${{ needs['db-integration'].result }}
         run: |
-          if [[ "$CHANGED_FILES_RESULT" != "success" || "$VALIDATION_RESULT" != "success" || "$DB_INTEGRATION_RESULT" != "success" ]]; then
+          if [[ "$CHANGED_FILES_RESULT" != "success" || "$VALIDATION_RESULT" != "success" || "$CREATE_APP_SMOKE_RESULT" != "success" || "$DB_INTEGRATION_RESULT" != "success" ]]; then
             echo "One or more quality jobs failed or were cancelled."
             exit 1
           fi

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# Generates an application with create-app and boots it, which is the one thing the release pipeline could not tell
-# you before: every package can build, typecheck and test in this repository and still produce an application that
+# Generates an application with create-app, checks dev, then builds and starts it in production mode.
+# Every package can build, typecheck and test in this repository and still produce an application that
 # does not start, because what a generated application installs is decided by published manifests rather than by the
 # workspace links everything resolves through here.
 #
@@ -51,6 +51,8 @@ mkdir -p "$WORKDIR"
 
 APP_DIR="$WORKDIR/$APP_NAME"
 DEV_LOG="$WORKDIR/dev.log"
+BUILD_LOG="$WORKDIR/build.log"
+START_LOG="$WORKDIR/start.log"
 
 # A freshly published version is minutes old, and pnpm refuses packages younger than the configured minimum release
 # age. Both the create-app download and the generated application's own install have to see this.
@@ -114,20 +116,24 @@ READY_MARKER='App dev server ready'
 # would do the same thing but does not exist on macOS, where this script is also run by hand.
 set -m
 pnpm dev > "$DEV_LOG" 2>&1 &
-DEV_PID=$!
+APP_PID=$!
 set +m
 
-stop_dev() {
-  if kill -0 "$DEV_PID" 2>/dev/null; then
-    kill -TERM -"$DEV_PID" 2>/dev/null || kill -TERM "$DEV_PID" 2>/dev/null || true
+stop_app() {
+  # Check the group even if pnpm has already exited: its children may still own the port.
+  if kill -0 -"$APP_PID" 2>/dev/null; then
+    kill -TERM -"$APP_PID" 2>/dev/null || true
     for _ in $(seq 1 20); do
-      kill -0 "$DEV_PID" 2>/dev/null || break
+      kill -0 -"$APP_PID" 2>/dev/null || break
       sleep 0.5
     done
-    kill -KILL -"$DEV_PID" 2>/dev/null || true
+    kill -KILL -"$APP_PID" 2>/dev/null || true
   fi
+  wait "$APP_PID" 2>/dev/null || true
 }
-trap stop_dev EXIT
+trap stop_app EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 READY=0
 EXITED=0
@@ -136,7 +142,7 @@ for _ in $(seq 1 "$TIMEOUT"); do
     READY=1
     break
   fi
-  if ! kill -0 "$DEV_PID" 2>/dev/null; then
+  if ! kill -0 "$APP_PID" 2>/dev/null; then
     EXITED=1
     break
   fi
@@ -177,4 +183,81 @@ if ! curl -fsS --max-time 30 "$APP_URL" -o /dev/null; then
 fi
 
 echo "::endgroup::"
-echo "create-app smoke test passed: $TEMPLATE booted."
+
+# Dev must be gone before building or probing production, otherwise it can answer requests on behalf of a broken start.
+stop_app
+trap - EXIT
+
+echo "::group::Build the application with pnpm build"
+if ! pnpm build 2>&1 | tee "$BUILD_LOG"; then
+  echo "::endgroup::"
+  echo "::error::pnpm build failed"
+  exit 1
+fi
+echo "::endgroup::"
+
+echo "::group::Boot the application with pnpm start"
+# Ask the OS for an available loopback port rather than assuming the development or default port is free.
+START_PORT=$(node --input-type=module -e '
+  import net from "node:net";
+  const server = net.createServer();
+  server.listen(0, "127.0.0.1", () => {
+    console.log(server.address().port);
+    server.close();
+  });
+')
+# Reuse the generated application's public path from dev; the default template mounts at /main, not at /.
+APP_PATH=$(node -e 'console.log(new URL(process.argv[1]).pathname.replace(/\/+$/, ""))' "$APP_URL")
+START_URL="http://127.0.0.1:$START_PORT$APP_PATH"
+echo "Waiting up to ${TIMEOUT}s for $START_URL/api/healthz"
+set -m
+APP_SERVER_HOST=127.0.0.1 APP_SERVER_PORT="$START_PORT" pnpm start > "$START_LOG" 2>&1 &
+APP_PID=$!
+set +m
+trap stop_app EXIT
+
+READY=0
+EXITED=0
+DEADLINE=$((SECONDS + TIMEOUT))
+NEXT_PROGRESS=$SECONDS
+while [ "$SECONDS" -lt "$DEADLINE" ]; do
+  if ! kill -0 "$APP_PID" 2>/dev/null; then
+    EXITED=1
+    break
+  fi
+  if HTTP_STATUS=$(curl -sS --max-time 2 --write-out '%{http_code}' "$START_URL/api/healthz" -o "$WORKDIR/health.json" 2>/dev/null) \
+    && [ "$HTTP_STATUS" = '200' ] \
+    && node -e 'const fs = require("node:fs"); try { process.exit(JSON.parse(fs.readFileSync(process.argv[1], "utf8")).ok === true ? 0 : 1); } catch { process.exit(1); }' "$WORKDIR/health.json"; then
+    READY=1
+    break
+  fi
+  if [ "$SECONDS" -ge "$NEXT_PROGRESS" ]; then
+    echo "Still waiting for production health: HTTP ${HTTP_STATUS:-000}; $((DEADLINE - SECONDS))s remaining"
+    tail -n 10 "$START_LOG"
+    NEXT_PROGRESS=$((SECONDS + 15))
+  fi
+  sleep 1
+done
+
+if [ "$READY" != "1" ]; then
+  echo "::endgroup::"
+  if [ "$EXITED" = "1" ]; then
+    echo "::error::pnpm start exited before the application became ready"
+  else
+    echo "::error::pnpm start did not become ready within ${TIMEOUT}s"
+  fi
+  cat "$START_LOG"
+  exit 1
+fi
+
+if ! curl -fsS --max-time 30 "$START_URL/" -o /dev/null || ! kill -0 "$APP_PID" 2>/dev/null; then
+  echo "::endgroup::"
+  echo "::error::The production application did not serve its homepage or exited after becoming ready"
+  cat "$START_LOG"
+  exit 1
+fi
+
+cat "$START_LOG"
+echo "Production application is serving at $START_URL/"
+echo "::endgroup::"
+echo "create-app smoke test passed: $TEMPLATE passed dev, build, and start."
