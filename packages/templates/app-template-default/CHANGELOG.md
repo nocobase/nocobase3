@@ -1,5 +1,57 @@
 # @nocobase/app-template-default
 
+## 1.0.0-beta.24
+
+### Minor Changes
+
+- 1d5ee9a: Add `pnpm collections:generate` for writing and checking Collection artifacts
+
+  `pnpm nocobase app collections generate` reads every Collection of a managed connection and writes `collection.json`, `metadata.json` and `schema.json` under `database/<connection>/collections/<name>/`, plus a `_manifest.json` per connection recording the dialect, whether the schema is managed or external, and the last applied migration. `--connection` targets one connection, `--all` every configured one including external connections, and `--check` compares the result with the files on disk and exits non-zero on any difference without writing, which is what a CI step runs.
+
+  The command is a thin entry over `generateAppCollectionsArtifact()` from `@nocobase/app-server`; the files are derived output for developers, documentation and AI tooling, and nothing reads them back at runtime. `AGENTS.md` and the README describe the directory.
+
+### Patch Changes
+
+- a153ad8: Add a read-only Database Explorer plugin and enable it in the Default and Examples templates.
+
+  The Settings page browses the application's database connections, the collections on each one, and their fields and physical columns. The two detail panes are child routes and the selection rides in the query string, so any view can be linked to and is restored by browser Back.
+
+  Read-only means the plugin creates, alters or drops no collection and changes no row. One qualifier: reading a collection initializes the collection registry, whose metadata store creates `__nocobase_collection_metadata` on a managed connection when it is missing, so that one bookkeeping table is the only object a read can bring into existence — and only when the first NocoBase activity against a database is an Explorer read. External connections cannot reach that path. A test states this boundary against a real database rather than assuming it.
+
+  Listing connections reads configuration and opens no database, so one unreachable external connection cannot take down the page. A connection reports its dialect, schema management, logical database, schemas, naming options, and internal tables, and never its credentials, host, port, socket path, or SQLite file — enforced as an allow-list, so a field a new dialect introduces stays inside by default. Driver errors are withheld from responses and recorded in logs by classification only, never by message or cause.
+
+  The collections list follows the server's cursor to the end so its client-side search sees every collection, and says so when a connection exceeds the bound.
+
+  Every endpoint requires `page:database-explorer/access`, the grant the page and both of its panes declare, which the seeded System Administrator permission set covers.
+
+- 22d0d2a: Resolve client chunk URLs at run time so a built application works wherever it is mounted.
+
+  Vite bakes `base` into the bundle at build time, while an App Host mounts a deployed application under its own App ID. A build made for `/main` and deployed as `/crm` therefore asked for `/main/assets/<chunk>.js` and got a 404 for every chunk the browser had to fetch at run time, which is every lazily imported route: the application loaded, its shell rendered, and each lazy page failed with "Route … could not be loaded". Pages whose chunks `index.html` preloads kept working, so the failure looked like it belonged to a particular plugin rather than to the deployment.
+
+  Only the URLs emitted into JavaScript become runtime-relative, resolved against `import.meta.url`; every chunk sits beside the entry chunk, so this is correct at any mount path. The URLs in `index.html` stay absolute: the document is served at arbitrary SPA route depths where a relative URL would resolve against the current route, and the Host rewrites those root-relative attributes to the mount path, which it can only do while they start with `/`.
+
+  Applications generated from these templates need to rebuild to pick this up. No configuration changes, and a build deployed at the path it was built for behaves as before.
+
+- 73f7538: Resolve a Portal build's asset URLs from the runtime base path so a build keeps working when a host mounts it under a different prefix. Vite inlined the build-time `base` into its `__vitePreload` helper, and that helper awaits every stylesheet link it inserts, so a lazy chunk carrying its own CSS rejected its dynamic import and rendered the route's error state once the application was served from somewhere other than the prefix it was built for.
+
+  The templates each carried their own copy of this fix, added before it existed in the shared configuration. They now inherit it from `createPortalViteConfig` instead. A consumer that configures `experimental.renderBuiltUrl` itself still overrides the shared one, so nothing that needs its own strategy loses it — the templates simply no longer need one.
+
+- Updated dependencies [be92e2b]
+- Updated dependencies [6d43421]
+- Updated dependencies [1d5ee9a]
+- Updated dependencies [1d5ee9a]
+- Updated dependencies [a153ad8]
+- Updated dependencies [1d5ee9a]
+- Updated dependencies [211538b]
+- Updated dependencies [1d5ee9a]
+- Updated dependencies [1d5ee9a]
+- Updated dependencies [6d43421]
+- Updated dependencies [6d43421]
+  - @nocobase/app-plugin-ai-employee@0.1.0-beta.7
+  - @nocobase/app-server@1.0.0-beta.12
+  - @nocobase/app-plugin-database-explorer@0.1.0-beta.0
+  - @nocobase/db@1.0.0-beta.6
+
 ## 1.0.0-beta.23
 
 ### Minor Changes
