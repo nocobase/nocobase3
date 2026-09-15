@@ -43,7 +43,10 @@ describe('Server inspection', () => {
       ),
     ).toBe(true);
     expect(inspection).not.toHaveProperty('limitations');
-    expect(inspection.plugins[0]).not.toHaveProperty('rootDir');
+    expect(inspection.plugins[0]).toMatchObject({
+      rootDir: expect.any(String),
+      baseDir: expect.any(String),
+    });
     expect(Array.isArray(inspection.locales)).toBe(true);
     expect(formatAppServerInspection(inspection)).toContain(
       'Runtime Provider, Route, locale, database, and Job behavior is not inspected.',

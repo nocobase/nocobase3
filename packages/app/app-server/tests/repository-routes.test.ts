@@ -1538,6 +1538,7 @@ describe('Repository API routes', () => {
     ];
     const contribution = defineRepositoryApiRoutes({ repositories: entries });
     defineServerPlugin({
+      baseDir: import.meta.dirname,
       packageName: '@nocobase/app-plugin-test',
       routes: [contribution],
     });

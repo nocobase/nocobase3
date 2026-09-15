@@ -123,7 +123,7 @@
   },
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
-    "build": "pnpm clean && tsc -p tsconfig.json",
+    "build": "pnpm clean && tsc -p tsconfig.json && nocobase-db-manifests",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "lint": "eslint . --max-warnings 0",
@@ -156,7 +156,7 @@
     "langchain": "1.2.39",
     "lodash": "^4.17.21",
     "remark-gfm": "^4.0.1",
-    "zod": "^3"
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@nocobase/db-sqlite": "workspace:*",

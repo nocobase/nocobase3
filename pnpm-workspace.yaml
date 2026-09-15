@@ -92,6 +92,7 @@ catalog:
   vitest: ^4.1.10
   ws: ^8.21.3
   yaml: ^2.9.0
+  zod: ^4.6.5
 
 # Which dependencies may run install scripts: true compiles a native addon, false skips a script
 # nothing here needs. tesseract.js arrives through officeparser and its postinstall only prints a

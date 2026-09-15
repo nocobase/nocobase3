@@ -68,7 +68,7 @@
   ],
   "scripts": {
     "clean": "node ./scripts/clean-dist.mjs",
-    "build": "pnpm clean && tsc -p tsconfig.json && tsc -p tsconfig.migrations.json",
+    "build": "pnpm clean && tsc -p tsconfig.json && tsc -p tsconfig.migrations.json && nocobase-db-manifests",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.migrations.json --noEmit",
     "test": "vitest run",
     "lint": "eslint . --max-warnings 0",

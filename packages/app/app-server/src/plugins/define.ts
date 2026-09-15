@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import type {
   AppServerPlugin,
   AppServerPluginDefinition,
@@ -11,8 +13,18 @@ export function defineServerPlugin<TConfig = object>(
 ): AppServerPlugin<TConfig> {
   const packageName = normalizePackageName(definition.packageName);
 
+  if (
+    typeof definition.baseDir !== 'string' ||
+    !path.isAbsolute(definition.baseDir)
+  ) {
+    throw new Error(
+      `Server plugin "${packageName}" requires an absolute baseDir. Set baseDir relative to the declaring module with import.meta.dirname.`,
+    );
+  }
+
   return Object.freeze({
     packageName,
+    baseDir: path.normalize(definition.baseDir),
     serviceProviders: Object.freeze([...(definition.serviceProviders ?? [])]),
     routes: Object.freeze([...(definition.routes ?? [])]),
     database: definition.database
