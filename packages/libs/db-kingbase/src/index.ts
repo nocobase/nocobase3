@@ -1,7 +1,6 @@
 import { createRequire } from 'node:module';
 import type {
   BaseConnectionConfig,
-  ConnectionConfig,
   DatabaseCapabilities,
   DatabaseDriverDefinition,
 } from '@nocobase/db';
@@ -31,7 +30,10 @@ export type KingbaseOptions = Omit<
   'dialect' | 'driver' | 'databaseDriver'
 >;
 
-export const kingbaseDriver: DatabaseDriverDefinition<'kingbase'> = {
+export const kingbaseDriver: DatabaseDriverDefinition<
+  'kingbase',
+  KingbaseConnectionConfig
+> = {
   dialect: 'kingbase',
   packageName: '@nocobase/db-kingbase',
   nativeDriver: 'pg',
@@ -162,14 +164,7 @@ export const kingbaseDriver: DatabaseDriverDefinition<'kingbase'> = {
     }
     return KingbaseClientWithQueryStream;
   },
-  resolveConnection: (
-    source: ConnectionConfig,
-  ): {
-    connection: unknown;
-    searchPath?: string[];
-    useNullAsDefault?: boolean;
-  } => {
-    const config = source as unknown as KingbaseConnectionConfig;
+  resolveConnection: (config) => {
     assertDriverOptions(config.driverOptions, [
       'host',
       'port',
@@ -202,7 +197,7 @@ export const kingbaseDriver: DatabaseDriverDefinition<'kingbase'> = {
     };
   },
   createSchemaInspector: (context) => {
-    const schema = (context.config as KingbaseConnectionConfig).schema;
+    const schema = context.config.schema;
     return new KingbaseSchemaInspector({
       connectionName: context.connectionName,
       searchPath:
@@ -224,8 +219,7 @@ export const kingbaseDriver: DatabaseDriverDefinition<'kingbase'> = {
     schema: ['public'],
     ...asKingbaseConnectionConfig(source),
   }),
-  resolveOwnershipTarget: (source) => {
-    const config = asKingbaseConnectionConfig(source);
+  resolveOwnershipTarget: (config) => {
     const schema =
       typeof config.schema === 'string'
         ? config.schema
@@ -240,7 +234,7 @@ export const kingbaseDriver: DatabaseDriverDefinition<'kingbase'> = {
     ];
   },
   resetManagedSchema: async (context) => {
-    const config = context.config as KingbaseConnectionConfig;
+    const config = context.config;
     const schema =
       typeof config.schema === 'string'
         ? config.schema
@@ -272,7 +266,7 @@ export const kingbaseDriver: DatabaseDriverDefinition<'kingbase'> = {
       );
     }
   },
-} satisfies DatabaseDriverDefinition<'kingbase'>;
+} satisfies DatabaseDriverDefinition<'kingbase', KingbaseConnectionConfig>;
 
 export type KingbaseConnection = KingbaseOptions & {
   dialect: 'kingbase';

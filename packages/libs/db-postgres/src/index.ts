@@ -19,7 +19,10 @@ export type PostgresOptions = Omit<
   'dialect' | 'driver' | 'databaseDriver'
 >;
 
-export const postgresDriver: DatabaseDriverDefinition<'postgres'> = {
+export const postgresDriver: DatabaseDriverDefinition<
+  'postgres',
+  PostgresConnectionConfig
+> = {
   dialect: 'postgres',
   packageName: '@nocobase/db-postgres',
   nativeDriver: 'pg',
@@ -169,7 +172,7 @@ export const postgresDriver: DatabaseDriverDefinition<'postgres'> = {
     };
   },
   createSchemaInspector: (context) => {
-    const schema = (context.config as PostgresConnectionConfig).schema;
+    const schema = context.config.schema;
     return new PostgresSchemaInspector({
       connectionName: context.connectionName,
       searchPath:
@@ -189,10 +192,10 @@ export const postgresDriver: DatabaseDriverDefinition<'postgres'> = {
     password: '',
     ssl: false,
     schema: ['public'],
-    ...(source as PostgresConnectionConfig),
+    ...source,
   }),
   resolveOwnershipTarget: (source) => {
-    const config = source as PostgresConnectionConfig;
+    const config = source;
     const schema =
       typeof config.schema === 'string'
         ? config.schema
@@ -207,7 +210,7 @@ export const postgresDriver: DatabaseDriverDefinition<'postgres'> = {
     ];
   },
   resetManagedSchema: async (context) => {
-    const config = context.config as PostgresConnectionConfig;
+    const config = context.config;
     const schema =
       typeof config.schema === 'string'
         ? config.schema
@@ -238,7 +241,7 @@ export const postgresDriver: DatabaseDriverDefinition<'postgres'> = {
       );
     }
   },
-} satisfies DatabaseDriverDefinition<'postgres'>;
+} satisfies DatabaseDriverDefinition<'postgres', PostgresConnectionConfig>;
 
 export type PostgresConnection = PostgresOptions & {
   dialect: 'postgres';

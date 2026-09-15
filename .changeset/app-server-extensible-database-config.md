@@ -16,4 +16,4 @@ const database: AppConfigFactory<
 > = defineAppConfig(() => ({ drivers: { kingbase }, ... }));
 ```
 
-Widening applies to the named shape alone: a dialect nobody named is still rejected, `sqlite` still requires `filename`, and `serviceName` on a `postgres` connection is still an error. `AppConnectionShape` is exported for annotating code generic over a connection.
+Widening applies to the named shape alone: a dialect nobody named is still rejected, `sqlite` still requires `filename`, and `serviceName` on a `postgres` connection is still an error. The constraint to write against when code is generic over a connection is `AnyConnectionConfig`, from `@nocobase/db`.

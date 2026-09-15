@@ -1,7 +1,6 @@
 import { createRequire } from 'node:module';
 import { RepositoryError } from '@nocobase/db';
 import type {
-  ConnectionConfig,
   DatabaseCapabilities,
   DatabaseDriverDefinition,
   DatabaseDriverRuntimeContext,
@@ -18,7 +17,20 @@ export type OceanbaseOptions = Omit<
   MysqlConnectionConfig,
   'dialect' | 'driver' | 'databaseDriver'
 >;
-export const oceanbaseDriver: DatabaseDriverDefinition<'oceanbase'> = {
+
+/**
+ * OceanBase speaks the MySQL protocol, so its options are MySQL's. The dialect is its own, which is
+ * what a connection is resolved by — reusing `MysqlConnectionConfig` whole would declare this
+ * driver's connections as `dialect: 'mysql'`.
+ */
+export type OceanbaseConnectionConfig = OceanbaseOptions & {
+  dialect: 'oceanbase';
+  driver?: string;
+};
+export const oceanbaseDriver: DatabaseDriverDefinition<
+  'oceanbase',
+  OceanbaseConnectionConfig
+> = {
   dialect: 'oceanbase',
   packageName: '@nocobase/db-oceanbase',
   nativeDriver: 'mysql2',
@@ -152,8 +164,7 @@ export const oceanbaseDriver: DatabaseDriverDefinition<'oceanbase'> = {
     }
     return MysqlClientWithDriver;
   },
-  resolveConnection: (source: ConnectionConfig) => {
-    const config = source as MysqlConnectionConfig;
+  resolveConnection: (config) => {
     assertSocketPathExclusive(config, ['host', 'port']);
     assertDriverOptions(config.driverOptions, [
       'host',
@@ -194,8 +205,9 @@ export const oceanbaseDriver: DatabaseDriverDefinition<'oceanbase'> = {
       connectionName: context.connectionName,
       resolveClient: context.resolveClient,
     }),
-  normalizeConnection: (source) => {
-    const config = source as MysqlConnectionConfig;
+  normalizeConnection: (config) => {
+    // The connection target is a union — host and port, or socketPath — and filling in host defaults
+    // produces an object TypeScript cannot attribute to one branch of it.
     return {
       ...(config.socketPath ? {} : { host: '127.0.0.1', port: 2881 }),
       database: 'app',
@@ -205,8 +217,7 @@ export const oceanbaseDriver: DatabaseDriverDefinition<'oceanbase'> = {
       ...config,
     };
   },
-  resolveOwnershipTarget: (source) => {
-    const config = source as MysqlConnectionConfig;
+  resolveOwnershipTarget: (config) => {
     return [
       'oceanbase',
       config.host,
@@ -217,7 +228,7 @@ export const oceanbaseDriver: DatabaseDriverDefinition<'oceanbase'> = {
     ];
   },
   resetManagedSchema: async (context) => {
-    const config = context.config as MysqlConnectionConfig;
+    const { config } = context;
     const client = await context.resolveClient();
     const database =
       config.database ??

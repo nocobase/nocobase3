@@ -1,5 +1,5 @@
 import type {
-  BaseConnectionConfig,
+  AnyConnectionConfig,
   CollectionMetadataStore,
   CollectionMetadataStoreConfig,
   ConnectionConfig,
@@ -35,10 +35,8 @@ export type AppMetadataStoreConfig =
  * }));
  * ```
  */
-export type AppConnectionShape = BaseConnectionConfig & { dialect: string };
-
 export interface AppDatabaseConfig<
-  TConnection extends AppConnectionShape = ConnectionConfig,
+  TConnection extends AnyConnectionConfig = ConnectionConfig,
 > extends Omit<
   ExtensibleDatabaseConfig<TConnection>,
   'connections' | 'metadataStore'
@@ -93,7 +91,7 @@ type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
   : never;
 
 export type AppDatabaseConnectionConfig<
-  TConnection extends AppConnectionShape = ConnectionConfig,
+  TConnection extends AnyConnectionConfig = ConnectionConfig,
 > = DistributiveOmit<TConnection, 'metadataStore'> & {
   migrations?: Partial<AppDatabaseMigrationConfig>;
   seeds?: Partial<AppDatabaseSeedConfig>;

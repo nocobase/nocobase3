@@ -15,7 +15,10 @@ export type MssqlOptions = Omit<
   MssqlConnectionConfig,
   'dialect' | 'driver' | 'databaseDriver'
 >;
-export const mssqlDriver: DatabaseDriverDefinition<'mssql'> = {
+export const mssqlDriver: DatabaseDriverDefinition<
+  'mssql',
+  MssqlConnectionConfig
+> = {
   dialect: 'mssql',
   packageName: '@nocobase/db-mssql',
   nativeDriver: 'tedious',
@@ -296,10 +299,10 @@ export const mssqlDriver: DatabaseDriverDefinition<'mssql'> = {
     password: '',
     encrypt: false,
     trustServerCertificate: false,
-    ...(source as MssqlConnectionConfig),
+    ...source,
   }),
   resolveOwnershipTarget: (source) => {
-    const config = source as MssqlConnectionConfig;
+    const config = source;
     return [
       'mssql',
       config.host,

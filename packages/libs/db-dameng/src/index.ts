@@ -1,7 +1,6 @@
 import { createRequire } from 'node:module';
 import type {
   BaseConnectionConfig,
-  ConnectionConfig,
   DatabaseCapabilities,
   DatabaseDriverDefinition,
   DatabaseDriverRuntimeContext,
@@ -71,7 +70,10 @@ async function decodeDamengLobRow(
 const ISO_INSTANT_PATTERN =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/;
 
-export const damengDriver: DatabaseDriverDefinition<'dameng'> = {
+export const damengDriver: DatabaseDriverDefinition<
+  'dameng',
+  DamengConnectionConfig
+> = {
   dialect: 'dameng',
   packageName: '@nocobase/db-dameng',
   nativeDriver: 'dmdb',
@@ -413,8 +415,7 @@ export const damengDriver: DatabaseDriverDefinition<'dameng'> = {
       },
     },
   }),
-  resolveConnection: (source: ConnectionConfig) => {
-    const config = source as unknown as DamengConnectionConfig;
+  resolveConnection: (config) => {
     assertDriverOptions(config.driverOptions, [
       'connectString',
       'connectionString',

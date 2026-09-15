@@ -7,6 +7,7 @@ export { databaseManagerToken } from './database/token.js';
 export { defineDatabase } from './database/config.js';
 export { SchemaManagementNotAllowedError } from './database/schema-management.js';
 export type {
+  AnyConnectionConfig,
   BaseConnectionConfig,
   ConnectionConfig,
   DatabaseConfig,

@@ -20,7 +20,10 @@ export type OracleOptions = Omit<
 const SPACE_DATETIME_PATTERN =
   /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d{1,3})?$/;
 
-export const oracleDriver: DatabaseDriverDefinition<'oracle'> = {
+export const oracleDriver: DatabaseDriverDefinition<
+  'oracle',
+  OracleConnectionConfig
+> = {
   dialect: 'oracle',
   packageName: '@nocobase/db-oracle',
   nativeDriver: 'oracledb',
@@ -407,7 +410,7 @@ export const oracleDriver: DatabaseDriverDefinition<'oracle'> = {
     };
   },
   normalizeConnection: (source) => {
-    const config = source as OracleConnectionConfig;
+    const config = source;
     return {
       ...config,
       host: config.host ?? '127.0.0.1',
@@ -418,7 +421,7 @@ export const oracleDriver: DatabaseDriverDefinition<'oracle'> = {
     };
   },
   resolveOwnershipTarget: (source) => {
-    const config = source as OracleConnectionConfig;
+    const config = source;
     return [
       'oracle',
       config.host,
