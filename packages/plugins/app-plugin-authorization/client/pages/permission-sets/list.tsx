@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react';
+import { useState, type ReactElement } from 'react';
 
 import type { PermissionSet } from '../../authorization-client.js';
 import { ErrorBox } from '../../components/feedback.js';
@@ -6,7 +6,9 @@ import {
   EmptyTableRow,
   ManagementTable,
   ManagementToolbar,
+  TablePager,
 } from '../../components/management-ui.js';
+import { pageSlice } from '../../components/pagination.js';
 import { Button } from '../../components/ui/button.js';
 import {
   Table,
@@ -43,16 +45,26 @@ export function PermissionSetsList({
   onOpen: (set: PermissionSet) => void;
   onCreate: () => void;
 }): ReactElement {
+  const [page, setPage] = useState(1);
+  const [lastSearch, setLastSearch] = useState(search);
+  // A narrower search can leave the current page past the end of the list.
+  if (lastSearch !== search) {
+    setLastSearch(search);
+    setPage(1);
+  }
+  const visible = pageSlice(sets, page);
   return (
     <>
       {error ? <ErrorBox value={error} /> : null}
+      <ManagementToolbar
+        search={search}
+        searchLabel='Search permission sets'
+        searchPlaceholder='Search permission sets'
+        onSearch={onSearch}
+        actionLabel='New permission set'
+        onAction={onCreate}
+      />
       <ManagementTable>
-        <ManagementToolbar
-          search={search}
-          onSearch={onSearch}
-          actionLabel='New permission set'
-          onAction={onCreate}
-        />
         <Table className='min-w-[48rem]'>
           <TableHeader className='bg-muted/30 uppercase'>
             <TableRow>
@@ -68,7 +80,7 @@ export function PermissionSetsList({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sets.map((set) => (
+            {visible.map((set) => (
               <TableRow key={set.key}>
                 <TableCell className='px-5 py-4'>
                   <button
@@ -109,6 +121,12 @@ export function PermissionSetsList({
             ) : null}
           </TableBody>
         </Table>
+        <TablePager
+          label='Permission sets'
+          page={page}
+          total={sets.length}
+          onPage={setPage}
+        />
       </ManagementTable>
     </>
   );

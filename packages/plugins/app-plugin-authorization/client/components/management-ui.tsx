@@ -1,32 +1,110 @@
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { ReactElement, ReactNode } from 'react';
 
+import { FilterBar, FilterBarSpacer, SearchField } from './filters.js';
+import {
+  PAGE_SIZE,
+  clampPage,
+  pageCount,
+  pageNumbers,
+  pageRangeLabel,
+} from './pagination.js';
 import { Button } from './ui/button.js';
 import { Card } from './ui/card.js';
-import { Input } from './ui/input.js';
 import { TableCell, TableRow } from './ui/table.js';
 
 export function ManagementToolbar({
   search,
+  searchLabel = 'Search',
+  searchPlaceholder = 'Search',
   onSearch,
   actionLabel,
   onAction,
 }: {
   search: string;
+  /** What the field searches, for anyone who cannot see the placeholder. */
+  searchLabel?: string;
+  searchPlaceholder?: string;
   onSearch: (value: string) => void;
   actionLabel: string;
   onAction: () => void;
 }): ReactElement {
   return (
-    <div className='flex flex-col gap-3 border-b bg-card px-5 py-4 sm:flex-row sm:items-center sm:justify-between'>
-      <Input
-        className='w-full sm:w-96 sm:flex-none'
-        type='search'
-        placeholder='Search'
+    <FilterBar>
+      {/* The search field clears itself, so this bar needs no separate clear control. */}
+      <SearchField
+        label={searchLabel}
+        placeholder={searchPlaceholder}
         value={search}
-        onChange={(event) => onSearch(event.target.value)}
+        onChange={onSearch}
       />
+      <FilterBarSpacer />
       <Button onClick={onAction}>{actionLabel}</Button>
-    </div>
+    </FilterBar>
+  );
+}
+
+/** Pages rows the panel already holds. It never asks the server for another page. */
+export function TablePager({
+  total,
+  page,
+  pageSize = PAGE_SIZE,
+  label,
+  onPage,
+}: {
+  total: number;
+  page: number;
+  pageSize?: number;
+  /** What is being paged, so several pagers on one screen stay distinguishable. */
+  label: string;
+  onPage: (page: number) => void;
+}): ReactElement | null {
+  if (total === 0) return null;
+  const current = clampPage(page, total, pageSize);
+  const pages = pageCount(total, pageSize);
+  const numbers = pageNumbers(total, pageSize);
+  return (
+    <nav
+      aria-label={`${label} pagination`}
+      className='flex items-center gap-2 border-t px-4 py-2.5 text-xs text-muted-foreground'
+    >
+      <span className='tabular-nums'>
+        {pageRangeLabel(total, current, pageSize)}
+      </span>
+      <span className='flex-1' />
+      <div className='flex items-center gap-1'>
+        <Button
+          aria-label='Previous page'
+          disabled={current === 1}
+          size='sm'
+          variant='outline'
+          onClick={() => onPage(current - 1)}
+        >
+          <ChevronLeft />
+        </Button>
+        {numbers.map((number) => (
+          <Button
+            key={number}
+            aria-current={number === current ? 'page' : undefined}
+            aria-label={`Page ${number}`}
+            size='sm'
+            variant={number === current ? 'default' : 'outline'}
+            onClick={() => onPage(number)}
+          >
+            {number}
+          </Button>
+        ))}
+        <Button
+          aria-label='Next page'
+          disabled={current === pages}
+          size='sm'
+          variant='outline'
+          onClick={() => onPage(current + 1)}
+        >
+          <ChevronRight />
+        </Button>
+      </div>
+    </nav>
   );
 }
 
@@ -222,7 +300,8 @@ export function RuleEditorLayout({
         </nav>
         <main className='min-h-0 overflow-y-auto p-6 md:p-8'>{children}</main>
       </div>
-      <footer className='flex shrink-0 justify-end gap-2 border-t bg-background px-6 py-4'>
+      {/* The drawer's footer sits on the sunk surface, as the prototype has it. */}
+      <footer className='flex shrink-0 justify-end gap-2 border-t bg-muted/40 px-6 py-4'>
         {footer}
       </footer>
     </div>

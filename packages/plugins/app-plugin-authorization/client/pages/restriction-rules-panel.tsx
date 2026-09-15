@@ -37,7 +37,9 @@ import {
   ManagementToolbar,
   RuleEditorLayout,
   SidePanel,
+  TablePager,
 } from '../components/management-ui.js';
+import { pageSlice } from '../components/pagination.js';
 import { defaultScope, firstActions } from '../components/rule-utils.js';
 import { getAuthorizationClient } from '../runtime.js';
 
@@ -54,6 +56,7 @@ export function RestrictionRulesPanel({
   const [draft, setDraft] = useState<RestrictionRule>();
   const [originalKey, setOriginalKey] = useState<string>();
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
   const [error, setError] = useState<string>();
   const [editorTab, setEditorTab] = useState<'rule' | 'access' | 'assignments'>(
     'rule',
@@ -87,6 +90,12 @@ export function RestrictionRulesPanel({
         )
       : rules;
   }, [rules, search]);
+  const pagedRules = pageSlice(visibleRules, page);
+  // Narrowing the search can leave the current page past the end of the list.
+  function changeSearch(value: string): void {
+    setSearch(value);
+    setPage(1);
+  }
   function edit(rule?: RestrictionRule): void {
     setOriginalKey(rule?.key);
     setDraft(rule ?? fresh(options));
@@ -125,13 +134,15 @@ export function RestrictionRulesPanel({
         Restriction rules only narrow existing access. They never grant
         permission on their own.
       </NoticeBox>
+      <ManagementToolbar
+        search={search}
+        searchLabel='Search restriction rules'
+        searchPlaceholder='Search restriction rules'
+        onSearch={changeSearch}
+        actionLabel='New restriction rule'
+        onAction={() => edit()}
+      />
       <ManagementTable>
-        <ManagementToolbar
-          search={search}
-          onSearch={setSearch}
-          actionLabel='New restriction rule'
-          onAction={() => edit()}
-        />
         <Table className='min-w-[56rem]'>
           <TableHeader className='bg-muted/30 uppercase'>
             <TableRow>
@@ -150,7 +161,7 @@ export function RestrictionRulesPanel({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {visibleRules.map((rule) => (
+            {pagedRules.map((rule) => (
               <TableRow key={rule.key}>
                 <TableCell className='px-5 py-4'>
                   <button
@@ -190,6 +201,12 @@ export function RestrictionRulesPanel({
             ) : null}
           </TableBody>
         </Table>
+        <TablePager
+          label='Restriction rules'
+          page={page}
+          total={visibleRules.length}
+          onPage={setPage}
+        />
       </ManagementTable>
       {draft ? (
         <SidePanel

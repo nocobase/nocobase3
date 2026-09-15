@@ -27,7 +27,9 @@ import {
   ManagementToolbar,
   RuleEditorLayout,
   SidePanel,
+  TablePager,
 } from '../components/management-ui.js';
+import { pageSlice } from '../components/pagination.js';
 import { defaultScope, firstActions } from '../components/rule-utils.js';
 import { getAuthorizationClient } from '../runtime.js';
 
@@ -42,6 +44,7 @@ export function DefaultAccessPanel({
   const [draft, setDraft] = useState<DefaultAccessRule>();
   const [original, setOriginal] = useState<DefaultAccessRule>();
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
   const [error, setError] = useState<string>();
   const [editorStep, setEditorStep] = useState<'resource' | 'access'>(
     'resource',
@@ -73,6 +76,12 @@ export function DefaultAccessPanel({
         )
       : rules;
   }, [options, rules, search]);
+  const pagedRules = pageSlice(visibleRules, page);
+  // Narrowing the search can leave the current page past the end of the list.
+  function changeSearch(value: string): void {
+    setSearch(value);
+    setPage(1);
+  }
   async function save(): Promise<void> {
     if (!draft) return;
     try {
@@ -108,13 +117,15 @@ export function DefaultAccessPanel({
   return (
     <>
       {error ? <ErrorBox value={error} /> : null}
+      <ManagementToolbar
+        search={search}
+        searchLabel='Search collections'
+        searchPlaceholder='Search collections'
+        onSearch={changeSearch}
+        actionLabel='Set default access'
+        onAction={() => edit()}
+      />
       <ManagementTable>
-        <ManagementToolbar
-          search={search}
-          onSearch={setSearch}
-          actionLabel='Set default access'
-          onAction={() => edit()}
-        />
         <Table className='min-w-[48rem]'>
           <TableHeader className='bg-muted/30 uppercase'>
             <TableRow>
@@ -129,7 +140,7 @@ export function DefaultAccessPanel({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {visibleRules.map((rule) => (
+            {pagedRules.map((rule) => (
               <TableRow key={`${rule.resource.type}:${rule.resource.id}`}>
                 <TableCell className='px-5 py-4'>
                   <p className='font-medium'>{resourceLabel(options, rule)}</p>
@@ -159,6 +170,12 @@ export function DefaultAccessPanel({
             ) : null}
           </TableBody>
         </Table>
+        <TablePager
+          label='Default access rules'
+          page={page}
+          total={visibleRules.length}
+          onPage={setPage}
+        />
       </ManagementTable>
       {draft ? (
         <SidePanel

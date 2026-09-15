@@ -2,6 +2,12 @@ import { useState, type FormEvent, type ReactElement } from 'react';
 
 import type { AuthorizationOptions } from '../../authorization-client.js';
 import { ActionsEditor, Field } from '../../components/editors.js';
+import {
+  ClearFilterButton,
+  FilterBar,
+  FilterBarSpacer,
+  SearchField,
+} from '../../components/filters.js';
 import { isUnknownPage } from '../../components/page-options.js';
 import { SidePanel } from '../../components/management-ui.js';
 import { Button } from '../../components/ui/button.js';
@@ -103,17 +109,17 @@ export function PermissionSetEditor({
             Add permission
           </Button>
         </div>
-        <div className='flex flex-wrap gap-2 border-b pb-4'>
-          <Input
-            className='max-w-72 flex-1'
-            type='search'
+        <FilterBar>
+          <SearchField
+            className='sm:max-w-72'
+            label='Search resources or actions'
             placeholder='Search resources or actions'
             value={resourceSearch}
-            onChange={(event) => setResourceSearch(event.target.value)}
+            onChange={setResourceSearch}
           />
           <select
             aria-label='Permission resource type'
-            className='h-8 min-w-48 rounded-lg border bg-background px-3 text-sm'
+            className='h-9 min-w-48 rounded-lg border bg-background px-3 text-sm'
             value={resourceType}
             onChange={(event) => setResourceType(event.target.value)}
           >
@@ -124,10 +130,19 @@ export function PermissionSetEditor({
               </option>
             ))}
           </select>
-          <span className='self-center text-xs text-muted-foreground'>
+          {query || resourceType !== 'all' ? (
+            <ClearFilterButton
+              onClear={() => {
+                setResourceSearch('');
+                setResourceType('all');
+              }}
+            />
+          ) : null}
+          <FilterBarSpacer />
+          <span className='text-xs text-muted-foreground'>
             {visibleIndexes.length} of {draft.grants.length} resources
           </span>
-        </div>
+        </FilterBar>
         <div className='space-y-3'>
           {visibleIndexes.map(({ grant, index }) => (
             <section

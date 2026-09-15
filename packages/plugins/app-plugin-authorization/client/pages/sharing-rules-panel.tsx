@@ -21,6 +21,7 @@ import type {
   SharingRule,
 } from '../authorization-client.js';
 import type { UserDirectory } from '../components/user-directory.js';
+import { SearchField } from '../components/filters.js';
 import {
   ActionsEditor,
   Field,
@@ -35,7 +36,9 @@ import {
   ManagementToolbar,
   RuleEditorLayout,
   SidePanel,
+  TablePager,
 } from '../components/management-ui.js';
+import { pageSlice } from '../components/pagination.js';
 import { defaultScope, firstActions } from '../components/rule-utils.js';
 import { getAuthorizationClient } from '../runtime.js';
 
@@ -52,6 +55,7 @@ export function SharingRulesPanel({
   const [draft, setDraft] = useState<SharingRule>();
   const [originalKey, setOriginalKey] = useState<string>();
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
   const [error, setError] = useState<string>();
   const [editorTab, setEditorTab] = useState<'rule' | 'access' | 'assignments'>(
     'rule',
@@ -76,6 +80,12 @@ export function SharingRulesPanel({
         )
       : rules;
   }, [rules, search]);
+  const pagedRules = pageSlice(visibleRules, page);
+  // Narrowing the search can leave the current page past the end of the list.
+  function changeSearch(value: string): void {
+    setSearch(value);
+    setPage(1);
+  }
   function edit(rule?: SharingRule): void {
     setOriginalKey(rule?.key);
     setDraft(rule ?? fresh(options));
@@ -115,13 +125,15 @@ export function SharingRulesPanel({
   return (
     <>
       {error ? <ErrorBox value={error} /> : null}
+      <ManagementToolbar
+        search={search}
+        searchLabel='Search sharing rules'
+        searchPlaceholder='Search sharing rules'
+        onSearch={changeSearch}
+        actionLabel='New sharing rule'
+        onAction={() => edit()}
+      />
       <ManagementTable>
-        <ManagementToolbar
-          search={search}
-          onSearch={setSearch}
-          actionLabel='New sharing rule'
-          onAction={() => edit()}
-        />
         <Table className='min-w-[58rem]'>
           <TableHeader className='bg-muted/30 uppercase'>
             <TableRow>
@@ -138,7 +150,7 @@ export function SharingRulesPanel({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {visibleRules.map((rule) => (
+            {pagedRules.map((rule) => (
               <TableRow key={rule.key}>
                 <TableCell className='px-5 py-4'>
                   <button
@@ -178,6 +190,12 @@ export function SharingRulesPanel({
             ) : null}
           </TableBody>
         </Table>
+        <TablePager
+          label='Sharing rules'
+          page={page}
+          total={visibleRules.length}
+          onPage={setPage}
+        />
       </ManagementTable>
       {draft ? (
         <SidePanel
@@ -483,11 +501,12 @@ function RecordPicker({
   return (
     <div className='space-y-2'>
       <Field label='Records'>
-        <Input
-          type='search'
+        <SearchField
+          className='sm:max-w-none'
+          label='Search records'
           placeholder='Search records'
           value={search}
-          onChange={(event) => onSearch(event.target.value)}
+          onChange={onSearch}
         />
       </Field>
       <div className='max-h-64 divide-y overflow-y-auto rounded-md border'>

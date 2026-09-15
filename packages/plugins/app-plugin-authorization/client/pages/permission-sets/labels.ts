@@ -101,6 +101,20 @@ export function databaseAccessSummary(grant: GrantDraft): string {
     .join(', ');
 }
 
+/** The one-line summary the collection rows carry beside their per-action marks. */
+export function recordsAndFieldsSummary(grant: GrantDraft): string {
+  if (grant.actions.length === 0) return '—';
+  const values = grant.actions.map(
+    (action) => grant.database[action] ?? defaultDatabaseActionDraft(),
+  );
+  const fields = values.every(
+    (value) => value.input === '*' && value.output === '*',
+  )
+    ? 'All fields'
+    : 'Selected fields';
+  return `${fields} · ${databaseAccessSummary(grant)}`;
+}
+
 export function databaseActionSummary(
   action: string,
   value: DatabaseActionDraft,

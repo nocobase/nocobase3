@@ -1,5 +1,7 @@
+import { X } from 'lucide-react';
 import { useState, type ReactElement, type ReactNode } from 'react';
 
+import { SearchField } from './filters.js';
 import { Input } from './ui/input.js';
 import { Label } from './ui/label.js';
 import type {
@@ -8,7 +10,11 @@ import type {
   AuthorizationRecordOption,
   AuthorizationSubject,
 } from '../authorization-client.js';
-import { canAddAssignment, type UserDirectory } from './user-directory.js';
+import {
+  canAddAssignment,
+  userLabel,
+  type UserDirectory,
+} from './user-directory.js';
 
 const selectClass =
   'h-8 w-full rounded-lg border border-input bg-background px-3 text-sm';
@@ -270,6 +276,25 @@ export function SubjectsEditor({
           {directory.unavailable}
         </p>
       ) : null}
+      {value.length > 0 ? (
+        <div className='flex flex-wrap gap-1.5'>
+          {audience ? (
+            <SubjectChip
+              label='All signed-in users'
+              onRemove={() => setAudience(false)}
+            />
+          ) : null}
+          {value
+            .filter((item) => item.type === 'user')
+            .map((item) => (
+              <SubjectChip
+                key={item.id}
+                label={userLabel(directory, item.id)}
+                onRemove={() => setUser(item.id, false)}
+              />
+            ))}
+        </div>
+      ) : null}
       <label className='flex items-start gap-3 rounded-md border p-3'>
         <input
           className='mt-1'
@@ -284,25 +309,25 @@ export function SubjectsEditor({
           </span>
         </span>
       </label>
-      <Input
-        type='search'
+      <SearchField
         disabled={!canAddAssignment(directory)}
+        label='Search people'
         placeholder='Search name, username, or email'
         value={search}
-        onChange={(event) => setSearch(event.target.value)}
+        onChange={setSearch}
       />
       <div className='max-h-56 divide-y overflow-y-auto rounded-md border'>
         {visible.map((user) => (
           <label
-            className='flex cursor-pointer items-start gap-3 px-3 py-2.5 hover:bg-muted/20'
+            className='flex cursor-pointer items-center gap-3 px-3 py-2.5 hover:bg-muted/20'
             key={user.id}
           >
             <input
-              className='mt-1'
               type='checkbox'
               checked={selectedUsers.has(user.id)}
               onChange={(event) => setUser(user.id, event.target.checked)}
             />
+            <Avatar name={user.name} />
             <span className='min-w-0'>
               <span className='block truncate text-sm font-medium'>
                 {user.name}
@@ -318,6 +343,46 @@ export function SubjectsEditor({
         {value.length} assignment{value.length === 1 ? '' : 's'} selected
       </p>
     </section>
+  );
+}
+
+/** A chosen subject, removable without hunting for its row in the list. */
+function SubjectChip({
+  label,
+  onRemove,
+}: {
+  label: string;
+  onRemove: () => void;
+}): ReactElement {
+  return (
+    <span className='inline-flex items-center gap-1 rounded-full bg-primary/10 py-1 pr-1 pl-2.5 text-xs font-medium text-primary'>
+      {label}
+      <button
+        aria-label={`Remove ${label}`}
+        className='grid size-4 place-items-center rounded-full hover:bg-primary/20'
+        type='button'
+        onClick={onRemove}
+      >
+        <X className='size-3' />
+      </button>
+    </span>
+  );
+}
+
+function Avatar({ name }: { name: string }): ReactElement {
+  const initials = name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('');
+  return (
+    <span
+      aria-hidden='true'
+      className='grid size-7 shrink-0 place-items-center rounded-full border bg-muted text-[0.625rem] font-semibold text-muted-foreground'
+    >
+      {initials}
+    </span>
   );
 }
 
@@ -510,11 +575,12 @@ function RecordScopeEditor({
   return (
     <div className='space-y-2 md:col-span-2'>
       <Field label='Records'>
-        <Input
-          type='search'
+        <SearchField
+          className='sm:max-w-none'
+          label='Search records'
           placeholder='Search records'
           value={search}
-          onChange={(event) => setSearch(event.target.value)}
+          onChange={setSearch}
         />
       </Field>
       <div className='max-h-56 divide-y overflow-y-auto rounded-md border'>

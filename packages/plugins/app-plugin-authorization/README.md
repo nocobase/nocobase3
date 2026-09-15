@@ -44,6 +44,16 @@ list, detail, permissions tab, assignments tab, editor, resource picker,
 database policy editor — with its draft model and display text in
 `drafts.ts` and `labels.ts`.
 
+Every toolbar carrying a filter is a defined bar rather than loose controls on
+the page background: `client/components/filters.tsx` supplies that bar, a search
+field that clears itself, the resource-type chips and the control returning a
+bar's filters to their defaults. Lists that grow page ten rows at a time through
+`client/components/pagination.ts` and the pager at the foot of the table frame;
+this is presentation over rows the panel already holds and asks the server for
+nothing. The permissions tab lists one row per resource with the actions as
+columns, each collection cell showing whether that action starts from every
+record, from a scoped set, or is not granted at all.
+
 Every authenticated client route is authorized as `page:<route name>/access`
 unless the route declares an explicit authorization resource. Removing the
 corresponding page grant therefore blocks direct navigation as well as hiding

@@ -5,12 +5,19 @@ import type {
   PermissionSetAssignment,
 } from '../../authorization-client.js';
 import {
+  ClearFilterButton,
+  FilterBar,
+  FilterBarSpacer,
+  SearchField,
+} from '../../components/filters.js';
+import {
   EmptyTableRow,
   ManagementTable,
   SidePanel,
+  TablePager,
 } from '../../components/management-ui.js';
+import { pageSlice } from '../../components/pagination.js';
 import { Button } from '../../components/ui/button.js';
-import { Input } from '../../components/ui/input.js';
 import {
   Table,
   TableBody,
@@ -48,6 +55,7 @@ export function Assignments({
 }): ReactElement {
   const [search, setSearch] = useState('');
   const [kind, setKind] = useState('all');
+  const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<readonly string[]>([]);
   const [addOpen, setAddOpen] = useState(false);
   const query = search.trim().toLowerCase();
@@ -59,130 +67,153 @@ export function Assignments({
       (kind === 'all' || kind === itemKind) && (!query || label.includes(query))
     );
   });
+  const paged = pageSlice(visible, page);
+  // Narrowing a filter can leave the current page past the end of the list.
+  function changeSearch(value: string): void {
+    setSearch(value);
+    setPage(1);
+  }
+  function changeKind(value: string): void {
+    setKind(value);
+    setPage(1);
+  }
   function toggle(id: string, checked: boolean): void {
     setSelected((items) =>
       checked ? [...items, id] : items.filter((item) => item !== id),
     );
   }
   return (
-    <ManagementTable>
-      <div className='flex flex-col gap-3 border-b p-4 lg:flex-row lg:items-center lg:justify-between'>
-        <div className='flex flex-wrap gap-2'>
-          <Input
-            className='max-w-72 flex-1'
-            type='search'
-            placeholder='Search name, username, or email'
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
+    <div className='space-y-4'>
+      <FilterBar>
+        <SearchField
+          className='sm:max-w-72'
+          label='Search assignments'
+          placeholder='Search name, username, or email'
+          value={search}
+          onChange={changeSearch}
+        />
+        <select
+          aria-label='Assignment type'
+          className='h-9 min-w-44 rounded-lg border bg-background px-3 text-sm'
+          value={kind}
+          onChange={(event) => changeKind(event.target.value)}
+        >
+          <option value='all'>All assignments</option>
+          <option value='user'>Users</option>
+          <option value='audience'>Audiences</option>
+        </select>
+        {query || kind !== 'all' ? (
+          <ClearFilterButton
+            onClear={() => {
+              changeSearch('');
+              setKind('all');
+            }}
           />
-          <select
-            aria-label='Assignment type'
-            className='h-8 min-w-44 rounded-lg border bg-background px-3 text-sm'
-            value={kind}
-            onChange={(event) => setKind(event.target.value)}
-          >
-            <option value='all'>All assignments</option>
-            <option value='user'>Users</option>
-            <option value='audience'>Audiences</option>
-          </select>
-        </div>
-        <div className='flex gap-2'>
-          {selected.length > 0 ? (
-            <Button
-              variant='outline'
-              disabled={busy || !canRevoke}
-              onClick={() =>
-                void onRevoke(selected).then(() => setSelected([]))
-              }
-            >
-              Revoke selected ({selected.length})
-            </Button>
-          ) : null}
+        ) : null}
+        <FilterBarSpacer />
+        {selected.length > 0 ? (
           <Button
-            disabled={!canAssign || !canAddAssignment(directory)}
-            onClick={() => setAddOpen(true)}
+            variant='outline'
+            disabled={busy || !canRevoke}
+            onClick={() => void onRevoke(selected).then(() => setSelected([]))}
           >
-            Add assignments
+            Revoke selected ({selected.length})
           </Button>
-        </div>
-      </div>
-      {directory.unavailable ? (
-        <p className='border-b bg-muted/40 px-4 py-2 text-xs text-muted-foreground'>
-          {directory.unavailable}
-        </p>
-      ) : null}
-      <Table>
-        <TableHeader className='bg-muted/30 uppercase'>
-          <TableRow>
-            <TableHead className='w-12 px-5 py-3'>
-              <input
-                aria-label='Select all visible assignments'
-                type='checkbox'
-                checked={
-                  visible.length > 0 &&
-                  visible.every((item) => selected.includes(item.id))
-                }
-                onChange={(event) =>
-                  setSelected(
-                    event.target.checked
-                      ? [
-                          ...new Set([
-                            ...selected,
-                            ...visible.map((item) => item.id),
-                          ]),
-                        ]
-                      : selected.filter(
-                          (id) => !visible.some((item) => item.id === id),
-                        ),
-                  )
-                }
-              />
-            </TableHead>
-            <TableHead className='px-5 py-3 font-medium'>Assigned to</TableHead>
-            <TableHead className='px-5 py-3 font-medium'>
-              Subject type
-            </TableHead>
-            <TableHead className='w-24 px-5 py-3' />
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {visible.map((item) => (
-            <TableRow key={item.id}>
-              <TableCell className='px-5 py-4'>
+        ) : null}
+        <Button
+          disabled={!canAssign || !canAddAssignment(directory)}
+          onClick={() => setAddOpen(true)}
+        >
+          Add assignments
+        </Button>
+      </FilterBar>
+      <ManagementTable>
+        {directory.unavailable ? (
+          <p className='border-b bg-muted/40 px-4 py-2 text-xs text-muted-foreground'>
+            {directory.unavailable}
+          </p>
+        ) : null}
+        <Table>
+          <TableHeader className='bg-muted/30 uppercase'>
+            <TableRow>
+              <TableHead className='w-12 px-5 py-3'>
                 <input
-                  aria-label={`Select ${subjectLabel(item.subject, directory)}`}
+                  aria-label='Select all visible assignments'
                   type='checkbox'
-                  checked={selected.includes(item.id)}
-                  onChange={(event) => toggle(item.id, event.target.checked)}
+                  checked={
+                    visible.length > 0 &&
+                    visible.every((item) => selected.includes(item.id))
+                  }
+                  onChange={(event) =>
+                    setSelected(
+                      event.target.checked
+                        ? [
+                            ...new Set([
+                              ...selected,
+                              ...visible.map((item) => item.id),
+                            ]),
+                          ]
+                        : selected.filter(
+                            (id) => !visible.some((item) => item.id === id),
+                          ),
+                    )
+                  }
                 />
-              </TableCell>
-              <TableCell className='px-5 py-4 font-medium'>
-                {subjectLabel(item.subject, directory)}
-              </TableCell>
-              <TableCell className='px-5 py-4 text-muted-foreground'>
-                {item.subject.type === 'authenticated' ? 'Audience' : 'User'}
-              </TableCell>
-              <TableCell className='px-5 py-4 text-right'>
-                <Button
-                  size='sm'
-                  variant='ghost'
-                  disabled={!canRevoke}
-                  onClick={() => void onRevoke([item.id])}
-                >
-                  Revoke
-                </Button>
-              </TableCell>
+              </TableHead>
+              <TableHead className='px-5 py-3 font-medium'>
+                Assigned to
+              </TableHead>
+              <TableHead className='px-5 py-3 font-medium'>
+                Subject type
+              </TableHead>
+              <TableHead className='w-24 px-5 py-3' />
             </TableRow>
-          ))}
-          {visible.length === 0 ? (
-            <EmptyTableRow colSpan={4}>
-              {assignments.length === 0
-                ? 'No assignments yet. Add one to give someone this permission set.'
-                : 'No assignments match these filters.'}
-            </EmptyTableRow>
-          ) : null}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {paged.map((item) => (
+              <TableRow key={item.id}>
+                <TableCell className='px-5 py-4'>
+                  <input
+                    aria-label={`Select ${subjectLabel(item.subject, directory)}`}
+                    type='checkbox'
+                    checked={selected.includes(item.id)}
+                    onChange={(event) => toggle(item.id, event.target.checked)}
+                  />
+                </TableCell>
+                <TableCell className='px-5 py-4 font-medium'>
+                  {subjectLabel(item.subject, directory)}
+                </TableCell>
+                <TableCell className='px-5 py-4 text-muted-foreground'>
+                  {item.subject.type === 'authenticated' ? 'Audience' : 'User'}
+                </TableCell>
+                <TableCell className='px-5 py-4 text-right'>
+                  <Button
+                    size='sm'
+                    variant='ghost'
+                    disabled={!canRevoke}
+                    onClick={() => void onRevoke([item.id])}
+                  >
+                    Revoke
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+            {visible.length === 0 ? (
+              <EmptyTableRow colSpan={4}>
+                {assignments.length === 0
+                  ? 'No assignments yet. Add one to give someone this permission set.'
+                  : 'No assignments match these filters.'}
+              </EmptyTableRow>
+            ) : null}
+          </TableBody>
+        </Table>
+        <TablePager
+          label='Assignments'
+          page={page}
+          total={visible.length}
+          onPage={setPage}
+        />
+      </ManagementTable>
       {addOpen ? (
         <AssignmentPicker
           directory={directory}
@@ -195,7 +226,7 @@ export function Assignments({
           }
         />
       ) : null}
-    </ManagementTable>
+    </div>
   );
 }
 
@@ -287,12 +318,12 @@ function AssignmentPicker({
               {selected.length} selected
             </span>
           </div>
-          <Input
-            className='mt-3'
-            type='search'
+          <SearchField
+            className='mt-3 sm:max-w-none'
+            label='Search people'
             placeholder='Search name, username, or email'
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={setSearch}
           />
           <div className='mt-3 overflow-hidden rounded-lg border'>
             <label className='flex items-center gap-3 border-b bg-muted/20 px-4 py-3 text-sm font-medium'>
