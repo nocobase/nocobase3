@@ -6,6 +6,7 @@ import {
 } from '../src/deployment-phases.js';
 import {
   AppCreateFailedError,
+  AppReloadFailedError,
   fullErrorMessage,
   rootErrorMessage,
 } from '../src/errors.js';
@@ -126,6 +127,30 @@ describe('what a failed deployment reports', () => {
 
     expect(fullErrorMessage(failure)).toBe(
       'Deployment failed during extract after artifact download 1.2s: unexpected end of file',
+    );
+  });
+});
+
+describe('naming the app once', () => {
+  it('does not repeat the app name at every layer', () => {
+    const failure = new AppReloadFailedError(
+      'crm',
+      new AppCreateFailedError('crm', new Error("Cannot find package 'hono'")),
+    );
+
+    expect(failure.message).toBe(
+      `App "crm" failed to reload: failed to initialize: Cannot find package 'hono'`,
+    );
+  });
+
+  it('keeps the name of a different app', () => {
+    const failure = new AppReloadFailedError(
+      'crm',
+      new AppCreateFailedError('billing', new Error('boom')),
+    );
+
+    expect(failure.message).toBe(
+      'App "crm" failed to reload: App "billing" failed to initialize: boom',
     );
   });
 });
