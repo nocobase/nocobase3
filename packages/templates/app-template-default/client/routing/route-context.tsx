@@ -17,9 +17,9 @@ import { matchRouteTree } from './route-navigation.js';
 /**
  * One level of the trail leading to the current page.
  *
- * `pathname` is the resolved URL rather than the registered pattern, so a level such as `/orders/:id` links to where
- * the user actually is. The route names itself: a level with no `title` is structure rather than a destination — a
- * tab, an overlay, or a layer that exists only to share a layout — and consumers skip it.
+ * `pathname` is the resolved URL rather than the registered pattern, so a level such as `/orders/:id` links to
+ * where the user actually is. The route names itself: a level with no `breadcrumb` is structure rather than a
+ * destination — a tab, an overlay, or a layer that exists only to share a layout — and consumers skip it.
  */
 export interface RouteTrailEntry {
   readonly route: AppClientRegisteredRoute;
@@ -52,8 +52,10 @@ export function RouteTreeProvider({
 /**
  * The trail of route levels leading to the current location.
  *
- * Every level is named by its route. A title states what kind of page a level is rather than which record it is
- * showing, so it is known before the page loads anything and the trail never changes while the user waits.
+ * Every level the location matches is returned, structure included; whether a level is named, and what it is
+ * called, is its route's own `breadcrumb`, which a consumer reads. A breadcrumb title states what kind of page a
+ * level is rather than which record it is showing, so it is known before the page loads anything and the trail
+ * never changes while the user waits.
  */
 export function useRouteTrail(): readonly RouteTrailEntry[] {
   const routes = useContext(RouteTreeContext);
