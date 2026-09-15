@@ -102,29 +102,35 @@ pnpm's own default is to stop an install that skipped a build, with `ERR_PNPM_IG
 
 A native addon is compiled for one platform and Node version at a time, so a build made on a Mac installs binaries a Linux server cannot load. `pnpm build --target linux-x64` and the rest of the deployment story are in the README; a forgotten `--target` produces a `dist/` that fails only on the server. On any dialect but SQLite and Oracle the application has no native module at all, and none of this applies.
 
-## Dialects outside the built-in connection types
+## Dialects a package contributes
 
-`@nocobase/db` ships strict connection types for `sqlite`, `postgres`, `mysql`, `oracle` and `mssql`. `kingbase`, `oceanbase` and `dameng` work at runtime — the registration is looked up by name — but their connection objects do not satisfy `AppDatabaseConnectionConfig`, so `pnpm typecheck` rejects them:
-
-```
-Type '"kingbase"' is not assignable to type '"mssql"'.
-```
-
-Until the type is widened, such a connection needs an assertion, and the comment saying why belongs next to it:
+`@nocobase/db` declares connection types for `sqlite`, `postgres`, `mysql`, `oracle` and `mssql`, and `AppDatabaseConfig` accepts those without being told anything. `kingbase`, `oceanbase` and `dameng` come from packages it knows nothing about, so their connection shape is named on the configuration:
 
 ```ts
-import kingbase from '@nocobase/db-kingbase';
-import type { AppDatabaseConnectionConfig } from '@nocobase/app-server/database';
+import kingbase, { type KingbaseOptions } from '@nocobase/db-kingbase';
+import type { ConnectionConfig } from '@nocobase/db';
+import type { AppDatabaseConfig } from '@nocobase/app-server/database';
 
-connections: {
-  // @nocobase/db's ConnectionConfig union does not yet include this dialect.
-  // The registration below resolves by name at runtime.
-  main: {
-    dialect: 'kingbase',
-    database: 'crm',
-  } as unknown as AppDatabaseConnectionConfig,
-},
+type KingbaseConnection = KingbaseOptions & { dialect: 'kingbase' };
+
+const database: AppConfigFactory<
+  AppDatabaseConfig<ConnectionConfig | KingbaseConnection>
+> = defineAppConfig(() => ({
+  drivers: { kingbase },
+  default: 'main',
+  connections: {
+    main: {
+      dialect: 'kingbase',
+      database: 'crm',
+      schemaManagement: 'managed',
+    },
+  },
+}));
 ```
+
+Each of the three exports the `Options` type this needs — `KingbaseOptions`, `OceanbaseOptions`, `DamengOptions` — which is its connection config without the fields the registration supplies.
+
+Naming a shape widens the configuration for that dialect alone. Every other connection stays exactly as strictly checked as before, so a `filename` left behind on a `postgres` connection is still an error, and a dialect nobody named is still rejected.
 
 ## Adding a second connection
 

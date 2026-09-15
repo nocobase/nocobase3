@@ -10,4 +10,4 @@ Nothing documented this. `database-and-data.md` states in its first line that it
 
 The new page covers why a dialect is registered in `server/config/database.ts` rather than configured in `config.yml`, the four steps to switch the default connection, a table of every dialect with its package, native driver, default port and connection fields, which drivers install a native binary and which do not, and the fact that switching does not carry data across. It is routed from `SKILL.md` and `AGENTS.md` in each template.
 
-It also records a current limitation: `kingbase`, `oceanbase` and `dameng` resolve at runtime but do not satisfy `AppDatabaseConnectionConfig`, whose union in `@nocobase/db` still lists only the original five dialects, so configuring one needs a type assertion until that union is widened.
+It also shows how to configure `kingbase`, `oceanbase` and `dameng`, whose connection shapes `@nocobase/db` does not declare, by naming them on `AppDatabaseConfig`.

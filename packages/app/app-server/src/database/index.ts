@@ -53,6 +53,7 @@ export {
   type AppDatabaseTaskSelection,
 } from './plan.js';
 export type {
+  AppConnectionShape,
   AppDatabaseConfig,
   AppDatabaseConnectionConfig,
   AppMetadataStoreConfig,

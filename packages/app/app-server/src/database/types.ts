@@ -1,7 +1,9 @@
 import type {
+  BaseConnectionConfig,
   CollectionMetadataStore,
   CollectionMetadataStoreConfig,
-  DatabaseConfig as NocoBaseDatabaseConfig,
+  ConnectionConfig,
+  ExtensibleDatabaseConfig,
   MigrationSource,
   SeedSource,
 } from '@nocobase/db';
@@ -15,11 +17,33 @@ import type {
 export type AppMetadataStoreConfig =
   string | CollectionMetadataStoreConfig | CollectionMetadataStore;
 
-export interface AppDatabaseConfig extends Omit<
-  NocoBaseDatabaseConfig,
+/**
+ * A connection shape an application may configure, which is every dialect
+ * `@nocobase/db` declares a config type for by default.
+ *
+ * Naming another one admits a dialect from a package that contributes its own,
+ * the way `createDatabaseManager` already accepts one through
+ * `ExtensibleDatabaseConfig`. Only the named shapes are accepted, so widening
+ * for one dialect leaves every other one as strict as it was:
+ *
+ * ```ts
+ * const database: AppConfigFactory<
+ *   AppDatabaseConfig<ConnectionConfig | KingbaseConnectionConfig>
+ * > = defineAppConfig(() => ({
+ *   drivers: { kingbase },
+ *   connections: { main: { dialect: 'kingbase', database: 'crm' } },
+ * }));
+ * ```
+ */
+export type AppConnectionShape = BaseConnectionConfig & { dialect: string };
+
+export interface AppDatabaseConfig<
+  TConnection extends AppConnectionShape = ConnectionConfig,
+> extends Omit<
+  ExtensibleDatabaseConfig<TConnection>,
   'connections' | 'metadataStore'
 > {
-  connections: Record<string, AppDatabaseConnectionConfig>;
+  connections: Record<string, AppDatabaseConnectionConfig<TConnection>>;
   metadataStore?: AppMetadataStoreConfig;
   /** @deprecated Configure tasks on connections instead. Applies to the default connection. */
   migrations?: Partial<AppDatabaseMigrationConfig>;
@@ -68,10 +92,9 @@ type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
   ? Omit<T, K>
   : never;
 
-export type AppDatabaseConnectionConfig = DistributiveOmit<
-  NocoBaseDatabaseConfig['connections'][string],
-  'metadataStore'
-> & {
+export type AppDatabaseConnectionConfig<
+  TConnection extends AppConnectionShape = ConnectionConfig,
+> = DistributiveOmit<TConnection, 'metadataStore'> & {
   migrations?: Partial<AppDatabaseMigrationConfig>;
   seeds?: Partial<AppDatabaseSeedConfig>;
   /**
