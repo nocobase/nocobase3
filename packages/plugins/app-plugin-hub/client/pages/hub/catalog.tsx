@@ -407,6 +407,9 @@ export function AppListRow({
   );
 }
 
+/** Ties the pinned submit button back to the form it no longer encloses. */
+const createAppFormId = 'hub-create-app-form';
+
 export function CreateDialog({
   busy,
   appId,
@@ -432,8 +435,20 @@ export function CreateDialog({
         defaultValue: 'Create a stable identity before deploying a release.',
       })}
       onClose={onClose}
+      footer={
+        <>
+          <Button onClick={onClose} variant='outline'>
+            {t('detail.cancel', { defaultValue: 'Cancel' })}
+          </Button>
+          {/* The button sits outside the form now that it is pinned, so `form` reassociates it. */}
+          <Button disabled={busy} form={createAppFormId} type='submit'>
+            {t('page.create', { defaultValue: 'Create application' })}
+          </Button>
+        </>
+      }
     >
       <form
+        id={createAppFormId}
         onSubmit={(event) => {
           event.preventDefault();
           onCreate();
@@ -473,14 +488,6 @@ export function CreateDialog({
             value={appId}
           />
         </Field>
-        <div className='mt-6 flex justify-end gap-2'>
-          <Button onClick={onClose} variant='outline'>
-            {t('detail.cancel', { defaultValue: 'Cancel' })}
-          </Button>
-          <Button disabled={busy} type='submit'>
-            {t('page.create', { defaultValue: 'Create application' })}
-          </Button>
-        </div>
       </form>
     </AppDialog>
   );

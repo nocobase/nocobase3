@@ -21,7 +21,7 @@ export function DialogContent({
       <DialogPrimitive.Popup
         data-slot='dialog-content'
         className={cn(
-          'fixed top-1/2 left-1/2 z-50 max-h-[90svh] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl border bg-background p-6 shadow-2xl outline-none',
+          'fixed top-1/2 left-1/2 z-50 flex max-h-[90svh] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border bg-background p-6 shadow-2xl outline-none',
           className,
         )}
         {...props}
@@ -51,7 +51,45 @@ export function DialogHeader({
   return (
     <div
       data-slot='dialog-header'
-      className={cn('mb-6 space-y-1', className)}
+      className={cn('mb-6 shrink-0 space-y-1', className)}
+      {...props}
+    />
+  );
+}
+
+/**
+ * The one scrolling region of a dialog.
+ *
+ * The popup itself does not scroll: a dialog tall enough to overflow used to move its own footer below the fold,
+ * so the primary action could only be reached by scrolling the whole dialog. Header and footer stay put and this
+ * is what moves, which is also why it needs `min-h-0` — a flex child refuses to shrink below its content without
+ * it, and the overflow would move back out to the popup.
+ */
+export function DialogBody({
+  className,
+  ...props
+}: ComponentProps<'div'>): ReactElement {
+  return (
+    <div
+      data-slot='dialog-body'
+      className={cn('min-h-0 flex-1 overflow-y-auto', className)}
+      {...props}
+    />
+  );
+}
+
+/** Actions pinned below the scrolling body, so they are reachable at any content height. */
+export function DialogFooter({
+  className,
+  ...props
+}: ComponentProps<'div'>): ReactElement {
+  return (
+    <div
+      data-slot='dialog-footer'
+      className={cn(
+        'mt-6 flex shrink-0 justify-end gap-2 border-t pt-5',
+        className,
+      )}
       {...props}
     />
   );
