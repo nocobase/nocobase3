@@ -38,7 +38,15 @@ Skill 按 Scope 分成三组：
 
 ## Tools
 
-Tool 同样分成 General、Employee-specific 和 Custom。General 和 Employee-specific Tool 展示当前权限；Custom Tool 可以添加、移除，并在 `Ask` 与 `Allow` 之间切换。
+Tool 按 Scope 分成三组：
+
+| 分组                    | 管理方式                                    |
+| ----------------------- | ------------------------------------------- |
+| General tools           | 所有员工共享，只读展示当前权限              |
+| Employee-specific tools | 源码绑定给这个员工，只读展示当前权限        |
+| Custom tools            | 管理员可以添加、移除并切换 `Ask` 或 `Allow` |
+
+管理页只能选择已经注册的 Tool，不能在这里创建或编辑 Tool 实现。
 
 `Allow` 只表示运行时不再要求这一步人工确认，不代表跳过 Tool 自己的 ACL、参数校验或业务约束。对写入和外部副作用操作保持 `Ask`。
 
