@@ -140,14 +140,18 @@ describe('AppRuntimeRegistry runtime replacement', () => {
       failure = error;
     }
 
+    // Hub serialises an error across its IPC channel as `message` alone, so both reasons have to be in that
+    // string. It used to read `App "customer" failed to reload` and nothing said which version failed, or why.
+    expect((failure as Error).message).toBe(
+      'App "customer" failed to reload: App "customer" failed to activate the replacement and restore the previous runtime (App "customer" failed to initialize: broken failed; App "customer" failed to initialize: 1.0.0 failed)',
+    );
     expect(failure).toMatchObject({
-      message: 'App "customer" failed to reload',
       cause: {
         message:
           'App "customer" failed to activate the replacement and restore the previous runtime',
         errors: [
-          { message: 'App "customer" failed to initialize' },
-          { message: 'App "customer" failed to initialize' },
+          { message: 'App "customer" failed to initialize: broken failed' },
+          { message: 'App "customer" failed to initialize: 1.0.0 failed' },
         ],
       },
     });

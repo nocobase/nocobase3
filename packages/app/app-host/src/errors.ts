@@ -70,7 +70,10 @@ export class AppNotFoundError extends AppRegistryError {
 
 export class AppCreateFailedError extends AppRegistryError {
   constructor(id: string, cause: unknown) {
-    super(`App "${id}" failed to initialize`, {
+    // The cause is folded into the message rather than left on `cause` alone. This error crosses the Hub IPC
+    // boundary, which serialises an error to its message and reconstructs it on the other side, so anything not in
+    // the message is lost before an operator ever sees it — leaving "failed to initialize" as the whole diagnosis.
+    super(`App "${id}" failed to initialize: ${describeCause(cause)}`, {
       status: 500,
       code: 'APP_CREATE_FAILED',
       cause,
@@ -80,7 +83,7 @@ export class AppCreateFailedError extends AppRegistryError {
 
 export class AppReloadFailedError extends AppRegistryError {
   constructor(id: string, cause: unknown) {
-    super(`App "${id}" failed to reload`, {
+    super(`App "${id}" failed to reload: ${describeCause(cause)}`, {
       status: 500,
       code: 'APP_RELOAD_FAILED',
       cause,
@@ -98,4 +101,20 @@ export class AppCapacityExceededError extends AppRegistryError {
       },
     );
   }
+}
+
+/**
+ * The message of whatever went wrong, for folding into an error that has to survive serialisation.
+ *
+ * An `AggregateError` is unfolded because its own message says only that several things failed. The replacement
+ * path throws one holding both the activation failure and the restore failure, and those two messages are the
+ * diagnosis; reporting the summary alone would keep the exact defect this folding exists to remove.
+ */
+function describeCause(cause: unknown): string {
+  if (cause instanceof AggregateError && cause.errors.length > 0) {
+    const reasons = cause.errors.map((error) => describeCause(error));
+    return `${cause.message} (${reasons.join('; ')})`;
+  }
+
+  return cause instanceof Error ? cause.message : String(cause);
 }
