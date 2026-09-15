@@ -171,6 +171,12 @@ const enUS = {
     confirm: 'Confirm',
     language: 'Language',
   },
+  notices: {
+    serverLocaleFallback:
+      'The server does not support this language, so server messages will use English.',
+    languageChangeFailed:
+      'Unable to complete the language change. Please try again.',
+  },
   externalCrm: {
     eyebrow: 'External database example',
     title: 'CRM orders',

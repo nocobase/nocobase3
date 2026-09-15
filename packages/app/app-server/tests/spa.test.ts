@@ -58,6 +58,21 @@ describe('SPA runtime globals', () => {
       result.indexOf('<script type="module"'),
     );
   });
+
+  it('uses en-US when the configured HTML language is invalid', () => {
+    const withInvalidLocale = injectSpaRuntimeHtml(
+      '<html lang="en-US"><body></body></html>',
+      {
+        clientConfig: {
+          i18n: { defaultLocale: 'en-US" onload="alert(1)' },
+        },
+      },
+    );
+
+    expect(withInvalidLocale.match(/<html[^>]*>/)?.[0]).toBe(
+      '<html lang="en-US">',
+    );
+  });
 });
 
 describe('SPA routes', () => {
@@ -95,7 +110,10 @@ describe('SPA routes', () => {
       runtimeGlobals: {
         APP_BASE_PATH: '/main/test/',
       },
-      clientConfig: { app: { title: 'NocoBase' } },
+      clientConfig: {
+        app: { title: 'NocoBase' },
+        i18n: { defaultLocale: 'zh-CN' },
+      },
     });
 
     const response = await router.request(
@@ -105,9 +123,8 @@ describe('SPA routes', () => {
 
     expect(response.status).toBe(200);
     expect(html).toContain('window.APP_BASE_PATH = "/main/test/";');
-    expect(html).toContain(
-      '{"version":1,"config":{"app":{"title":"NocoBase"}}}',
-    );
+    expect(html).toContain('"app":{"title":"NocoBase"}');
+    expect(html).toContain('<html lang="zh-CN">');
     expect(html).toContain(
       '<script type="module" src="/main/test/assets/index.js"></script>',
     );
@@ -118,7 +135,10 @@ describe('SPA routes', () => {
     registerSpaRoutes(router, {
       basePath: '/main/test',
       indexPath: '/unused/index.html',
-      clientConfig: { feature: { enabled: true } },
+      clientConfig: {
+        feature: { enabled: true },
+        i18n: { defaultLocale: 'ja-JP' },
+      },
       runtimeGlobals: { APP_BASE_PATH: '/main/test/' },
       handler: (request) =>
         new URL(request.url).pathname.endsWith('.js')
@@ -126,7 +146,7 @@ describe('SPA routes', () => {
               headers: { 'content-type': 'text/javascript' },
             })
           : new Response(
-              '<script type="module" src="/src/main.tsx"></script>',
+              '<html lang="en-US"><script type="module" src="/src/main.tsx"></script></html>',
               {
                 headers: { 'content-type': 'text/html; charset=utf-8' },
               },
@@ -140,9 +160,7 @@ describe('SPA routes', () => {
       'http://localhost/main/test/src/main.js',
     );
 
-    await expect(htmlResponse.text()).resolves.toContain(
-      '{"version":1,"config":{"feature":{"enabled":true}}}',
-    );
+    await expect(htmlResponse.text()).resolves.toContain('<html lang="ja-JP">');
     await expect(assetResponse.text()).resolves.toBe('export default true;');
   });
 
@@ -171,7 +189,7 @@ function createSpaFixture(): string {
   mkdirSync(path.join(root, 'assets'));
   writeFileSync(
     rootPath(root, 'index.html'),
-    '<script type="module" src="/main/test/assets/index.js"></script>',
+    '<html lang="en-US"><script type="module" src="/main/test/assets/index.js"></script></html>',
   );
   writeFileSync(rootPath(root, 'assets/index.js'), 'console.log("asset");');
   return root;

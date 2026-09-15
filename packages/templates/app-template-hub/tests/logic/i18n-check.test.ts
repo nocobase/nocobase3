@@ -45,8 +45,8 @@ it('passes when both sides declare the same languages', async () => {
   expect(result.serverOnly).toEqual([]);
 });
 
-// The failure this command exists for: the picker offers Spanish, and `POST /api/i18n/locale` rejects it.
-it('reports a language the browser offers and the server would reject', async () => {
+// The mismatch remains useful to report even though the browser may offer a language the server handles in English.
+it('reports a client-only language difference', async () => {
   const result = await checkAppLocales(
     fixture({
       client: ['en-US', 'es-ES', 'zh-CN'],

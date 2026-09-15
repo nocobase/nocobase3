@@ -46,12 +46,12 @@ import { useAppLocale } from '@nocobase/app-plugin-i18n/client';
 const { locale, locales, setLocale, switching } = useAppLocale();
 ```
 
-| Field       | Meaning                                                                             |
-| ----------- | ----------------------------------------------------------------------------------- |
-| `locale`    | The language currently in use                                                       |
-| `locales`   | Every available language, each with a `label` in its own language and a `direction` |
-| `setLocale` | Switches language; resolves once every namespace has loaded                         |
-| `switching` | True while resources are loading, for disabling the control                         |
+| Field       | Meaning                                                                                |
+| ----------- | -------------------------------------------------------------------------------------- |
+| `locale`    | The language currently in use                                                          |
+| `locales`   | Every available language, each with a `label` in its own language and a `direction`    |
+| `setLocale` | Switches language and returns `{ locale, requestedLocale, fallback }` from the server  |
+| `switching` | True while resources load and the server request is pending, for disabling the control |
 
 A label reads as short as stays unambiguous — "中文" rather than "中文（中国）" — and keeps the region only when two enabled languages share a language and the region is what tells them apart.
 
@@ -61,15 +61,14 @@ A label reads as short as stays unambiguous — "中文" rather than "中文（�
 
 `setLocale(next)` runs the whole chain:
 
-1. Writes `localStorage`, so a refresh cannot lose the choice
-2. Loads every registered namespace's resources for the new language, in parallel
-3. Tells the server, so it answers in the same language
-4. Changes the language, which i18next broadcasts
-5. Updates `<html lang>` and `<html dir>`
+1. Loads every registered namespace's resources for the new language, in parallel
+2. Changes the interface language, which i18next broadcasts; the application runtime updates `<html lang>` and `<html dir>`
+3. Writes `localStorage`, so a refresh cannot lose the choice
+4. Tells the server which language was selected and returns its result
 
-Step 2 waits for every namespace together, so the switch is atomic: no frame renders half-translated. **Plugins need no code to follow a switch** — one i18next instance serves every namespace, and `useTranslation` subscribes to it.
+Step 1 waits for every namespace together, so the interface switch is atomic: no frame renders half-translated. **Plugins need no code to follow a switch** — one i18next instance serves every namespace, and `useTranslation` subscribes to it.
 
-Step 3 does not block the interface. If it fails the interface has already switched while the server has not, which shows up as a server-produced string arriving in the previous language; the next startup reconciles it.
+The interface remains in the selected language when the server does not support it. The server stores `en-US` and returns `fallback: true`; the template shows an informational toast using its client locale messages. An unsupported locale is a normal result, not an HTTP error. Transport failures reject `setLocale` and populate `error` without undoing the browser's choice, so a custom control must handle the rejection and tell the user that server synchronization failed.
 
 ## Keeping the server in step
 
@@ -81,9 +80,9 @@ The browser is the source of truth for what it renders; the server keeps its own
 
 ```
 GET  /api/i18n/locales   → { defaultLocale, locales: [{ locale, label, direction }] }
-POST /api/i18n/locale    { locale } → stores it on the session
+POST /api/i18n/locale    { locale } → { locale, requestedLocale, fallback }
 ```
 
-Both sit under the application's base path, so an application served from `/main` answers at `/main/api/i18n/locale`. `POST` rejects a language the application does not offer, since the value arrives from the browser. What the server offers follows from the application's `server/locales/`, so a language present in `client/locales/` alone is rejected here — keep the two in step.
+Both sit under the application's base path, so an application served from `/main` answers at `/main/api/i18n/locale`. `POST` stores the requested language when supported and otherwise stores English (`en-US`), even if the configured default is another language. Missing or invalid locale values still return HTTP 400. What the server offers follows from the application's `server/locales/`; keeping it aligned with `client/locales/` is recommended, but a client-only language is allowed and does not prevent switching.
 
 **A known limit:** the language is stored on the session, so tabs sharing an account overwrite each other. Tab A switching to Chinese means tab B's requests also come back in Chinese while its interface is still English. Error payloads carry `ns`, `key`, and `params` alongside the translated `message`, so a frontend can render errors in its own interface language regardless of what the session says.

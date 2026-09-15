@@ -174,7 +174,7 @@ t('orders.title');
 
 To reword a plugin's string, add an `overrides` block keyed by that plugin's package name in your locale file. Do not edit the plugin.
 
-The languages the application offers are its own locale files, not a configured list, and the two sides are read separately: `client/locales/` decides what the picker shows, `server/locales/` what the server will answer in. Adding a language means adding its file to both. `pnpm nocobase app i18n:check` reports one declared on a single side.
+The languages the application offers are its own locale files, not a configured list, and the two sides are read separately: `client/locales/` decides what the picker shows, while `server/locales/` decides which languages the server can answer in. Prefer adding a language to both when server-produced text needs translating, but a client-only language is valid: the interface switches normally and the server falls back to English with an informational notice. `pnpm nocobase app i18n:check` reports one declared on a single side and exits nonzero until the lists align; that check does not block the runtime switch.
 
 The account menu language control in `client/shell/language-switcher.tsx` uses a shadcn submenu with radio items. Render it inside `DropdownMenuContent` to preserve menu keyboard navigation and selection semantics.
 

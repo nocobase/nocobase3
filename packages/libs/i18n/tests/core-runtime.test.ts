@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { APP_NS, BASE_NAMESPACE } from '../src/core/registry.js';
+import {
+  APP_NS as APP_NS_SENTINEL,
+  BASE_NAMESPACE,
+} from '../src/core/registry.js';
 import { I18nRuntime } from '../src/core/runtime.js';
 
 const APP_NS = '@acme/app';
@@ -293,9 +296,9 @@ describe('APP_NS', () => {
     await runtime.init('en-US');
 
     // A plugin cannot know the application's package name, so it asks for it through the sentinel.
-    expect(runtime.getFixedT(PLUGIN_NS)('welcome', { ns: APP_NS })).toBe(
-      'Welcome',
-    );
+    expect(
+      runtime.getFixedT(PLUGIN_NS)('welcome', { ns: APP_NS_SENTINEL }),
+    ).toBe('Welcome');
   });
 
   it('still finds the base terms when no application is registered', async () => {
@@ -305,7 +308,9 @@ describe('APP_NS', () => {
     });
     await runtime.init('en-US');
 
-    expect(runtime.getFixedT(PLUGIN_NS)('save', { ns: APP_NS })).toBe('Save');
+    expect(runtime.getFixedT(PLUGIN_NS)('save', { ns: APP_NS_SENTINEL })).toBe(
+      'Save',
+    );
   });
 });
 
