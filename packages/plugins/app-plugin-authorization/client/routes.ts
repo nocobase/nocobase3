@@ -4,6 +4,7 @@ import {
 } from '@nocobase/app-client/plugins';
 import {
   KeyRound,
+  Layers,
   LockKeyhole,
   Share2,
   ShieldBan,
@@ -18,6 +19,18 @@ const settings: AppClientRouteContribution = defineSettingsRoutes([
     path: '/authorization',
     navigation: { title: 'Authorization', icon: ShieldCheck },
     children: [
+      {
+        name: 'overview',
+        path: '/overview',
+        navigation: { title: 'Overview', icon: Layers },
+        // A route declares one resource, and there is no "any of these" form. The overview explains the four layers
+        // and links to them, so it follows the permission sets page: whoever may read that may read this.
+        access: {
+          resource: 'authorization.settings.permission-sets',
+          action: 'read',
+        },
+        componentLoader: () => import('./pages/overview-page.js'),
+      },
       {
         name: 'permission-sets',
         path: '/permission-sets',

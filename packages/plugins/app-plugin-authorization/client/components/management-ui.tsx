@@ -20,6 +20,7 @@ export function ManagementToolbar({
   onSearch,
   actionLabel,
   onAction,
+  secondaryActions,
 }: {
   search: string;
   /** What the field searches, for anyone who cannot see the placeholder. */
@@ -28,6 +29,8 @@ export function ManagementToolbar({
   onSearch: (value: string) => void;
   actionLabel: string;
   onAction: () => void;
+  /** Controls offered beside the primary action, such as another view of the same list. */
+  secondaryActions?: ReactNode;
 }): ReactElement {
   return (
     <FilterBar>
@@ -39,6 +42,7 @@ export function ManagementToolbar({
         onChange={onSearch}
       />
       <FilterBarSpacer />
+      {secondaryActions}
       <Button onClick={onAction}>{actionLabel}</Button>
     </FilterBar>
   );

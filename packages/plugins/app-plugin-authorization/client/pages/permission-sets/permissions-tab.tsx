@@ -1,4 +1,3 @@
-import { Check, Contrast, Minus } from 'lucide-react';
 import { useMemo, useState, type ReactElement } from 'react';
 
 import type { AuthorizationOptions } from '../../authorization-client.js';
@@ -27,7 +26,8 @@ import {
   TableHeader,
   TableRow,
 } from '../../components/ui/table.js';
-import { defaultDatabaseActionDraft, recordAccessKey } from './drafts.js';
+import { COLLECTION_TYPE, actionMark } from './access-report.js';
+import { defaultDatabaseActionDraft } from './drafts.js';
 import {
   databaseActionSummary,
   humanize,
@@ -35,12 +35,8 @@ import {
   resourceLabel,
   resourceTypeLabel,
 } from './labels.js';
+import { ScopeLegend, ScopeMark } from './marks.js';
 import type { Draft, GrantDraft } from './types.js';
-
-const COLLECTION_TYPE = 'database.collection';
-
-/** What one action on one resource reaches: every record, some of them, or nothing. */
-type GrantMark = 'all' | 'scoped' | 'none';
 
 export function PermissionsSummary({
   options,
@@ -192,7 +188,7 @@ export function PermissionsSummary({
           onPage={setPage}
         />
       </ManagementTable>
-      {isCollection ? <ScopeLegend /> : null}
+      {isCollection ? <ScopeLegend values={['all', 'scoped', 'none']} /> : null}
       {selectedGrant ? (
         <SidePanel
           title={resourceLabel(options, selectedGrant.resource)}
@@ -238,55 +234,6 @@ function actionColumns(
     .map((value) => ({ value }))
     .sort(compareActions)
     .map((item) => item.value);
-}
-
-function actionMark(grant: GrantDraft, action: string): GrantMark {
-  if (!grant.actions.includes(action)) return 'none';
-  if (grant.resource.type !== COLLECTION_TYPE) return 'all';
-  // A create selects no records, so it is never scoped.
-  if (action === 'create') return 'all';
-  const value = grant.database[action] ?? defaultDatabaseActionDraft();
-  return recordAccessKey(value.recordAccess) === 'allRecords'
-    ? 'all'
-    : 'scoped';
-}
-
-const markLabels: Readonly<Record<GrantMark, string>> = {
-  all: 'Every record',
-  scoped: 'Scoped records',
-  none: 'Not granted',
-};
-
-function ScopeMark({ value }: { value: GrantMark }): ReactElement {
-  const styles: Readonly<Record<GrantMark, string>> = {
-    all: 'bg-primary/10 text-primary',
-    scoped: 'bg-muted text-foreground',
-    none: 'text-muted-foreground/60',
-  };
-  const Icon = value === 'all' ? Check : value === 'scoped' ? Contrast : Minus;
-  return (
-    <span
-      aria-label={markLabels[value]}
-      className={`inline-grid size-6 place-items-center rounded-md ${styles[value]}`}
-      role='img'
-      title={markLabels[value]}
-    >
-      <Icon className='size-3.5' />
-    </span>
-  );
-}
-
-function ScopeLegend(): ReactElement {
-  return (
-    <div className='flex flex-wrap gap-4 text-xs text-muted-foreground'>
-      {(['all', 'scoped', 'none'] as const).map((value) => (
-        <span key={value} className='flex items-center gap-2'>
-          <ScopeMark value={value} />
-          {markLabels[value]}
-        </span>
-      ))}
-    </div>
-  );
 }
 
 function PermissionDetails({ grant }: { grant: GrantDraft }): ReactElement {

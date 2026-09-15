@@ -13,8 +13,8 @@ The plugin currently provides:
 - one dispatcher under `/api/authz` that serves whatever HTTP surface the
   installed Authorization plugins registered, each of them checking its own
   `authorization.settings/<id>` permission;
-- separate settings pages for Permission Sets, Default Access, Sharing Rules,
-  Restriction Rules, and Database Authorization;
+- separate settings pages for an Authorization overview, Permission Sets,
+  Default Access, Sharing Rules, Restriction Rules, and Database Authorization;
 - selection-based editors for resources, actions, users, and record scopes;
 - migrations for Permission Sets and access rules, together with the database
   stores those migrations create the tables for: the library defines the store
@@ -53,6 +53,31 @@ this is presentation over rows the panel already holds and asks the server for
 nothing. The permissions tab lists one row per resource with the actions as
 columns, each collection cell showing whether that action starts from every
 record, from a scoped set, or is not granted at all.
+
+Three screens read across those layers rather than editing one of them. The
+Overview page, listed first in the Authorization group, states the four layers
+in the order a request is decided, what each one does and what it cannot do,
+and links to the page that configures it; it declares no resource of its own
+and follows the permission sets page, because a route names one resource and
+there is no "any of these" form. Compare sets and User access are views of the
+permission sets page reached from its filter bar, not routes, because neither
+needs a stored page-grant identifier. Compare puts the sets side by side, one
+column per set and one row per resource and action, carrying the same marks the
+permissions tab uses plus a fourth for a set that confers unrestricted access,
+whose grants are never consulted; the table scrolls sideways with its first
+column pinned, since many sets means many columns. User access reports one
+person: the sets they hold and how — assigned directly, or held because they
+are signed in — then the grants that follow, grouped by resource, with the
+records each action starts from, the fields, and the set that granted it. Below
+those it lists the rules that may adjust what the grants reach, labelled as
+widening or narrowing, and states that rules resolve per request, so the list
+is what may apply rather than a computed result. A rule list the administrator
+cannot read is left out rather than failing the screen.
+
+Neither view asks for anything per set. `GET /api/authz/permission-sets/assignments`
+answers with every assignment at once, gated by the same `permission-sets`
+`read` check the neighbouring endpoints use, so User access reads the whole
+picture in one request.
 
 Every authenticated client route is authorized as `page:<route name>/access`
 unless the route declares an explicit authorization resource. Removing the

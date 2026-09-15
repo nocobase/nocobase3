@@ -34,6 +34,8 @@ export function PermissionSetsList({
   onSearch,
   onOpen,
   onCreate,
+  onCompare,
+  onUserAccess,
 }: {
   /** The sets the current search leaves visible. */
   sets: readonly PermissionSet[];
@@ -44,6 +46,10 @@ export function PermissionSetsList({
   onSearch: (value: string) => void;
   onOpen: (set: PermissionSet) => void;
   onCreate: () => void;
+  /** Opens the side-by-side view of the same sets. */
+  onCompare: () => void;
+  /** Opens the view that reports one person's access across those sets. */
+  onUserAccess: () => void;
 }): ReactElement {
   const [page, setPage] = useState(1);
   const [lastSearch, setLastSearch] = useState(search);
@@ -63,6 +69,16 @@ export function PermissionSetsList({
         onSearch={onSearch}
         actionLabel='New permission set'
         onAction={onCreate}
+        secondaryActions={
+          <>
+            <Button variant='outline' onClick={onCompare}>
+              Compare
+            </Button>
+            <Button variant='outline' onClick={onUserAccess}>
+              User access
+            </Button>
+          </>
+        }
       />
       <ManagementTable>
         <Table className='min-w-[48rem]'>

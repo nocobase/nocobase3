@@ -311,6 +311,15 @@ export class AuthorizationClient {
       .then((response) => response.data);
   }
 
+  /** Every assignment at once, for a screen that reports across sets. */
+  listAllAssignments(): Promise<readonly PermissionSetAssignment[]> {
+    return this.api
+      .request<DataResponse<readonly PermissionSetAssignment[]>>({
+        path: 'authz/permission-sets/assignments',
+      })
+      .then((response) => response.data);
+  }
+
   assign(
     permissionSet: string,
     input: PermissionAssignmentInput,

@@ -119,14 +119,46 @@ export function databaseActionSummary(
   action: string,
   value: DatabaseActionDraft,
 ): string {
+  const fields = actionFieldsSummary(action, value);
+  return [
+    ...(fields === NONE ? [] : [fields]),
+    ...(action === 'create'
+      ? []
+      : [humanize(recordAccessKey(value.recordAccess))]),
+  ].join(' · ');
+}
+
+/** What the value stands for when an action has no fields or no records to name. */
+const NONE = '—';
+
+/** The field half of an action's summary: a delete names no fields at all. */
+export function actionFieldsSummary(
+  action: string,
+  value: DatabaseActionDraft,
+): string {
   const parts: string[] = [];
   if (action === 'create' || action === 'update')
     parts.push(`${fieldSelectionLabel(value.input)} writable`);
   if (action === 'create' || action === 'read' || action === 'update')
     parts.push(`${fieldSelectionLabel(value.output)} visible`);
-  if (action !== 'create')
-    parts.push(humanize(recordAccessKey(value.recordAccess)));
-  return parts.join(' · ');
+  return parts.length === 0 ? NONE : parts.join(' · ');
+}
+
+/**
+ * The records an action starts from, named as the options endpoint names the
+ * policy. A create selects no records, so it starts from none.
+ */
+export function actionRecordsSummary(
+  options: AuthorizationOptions,
+  action: string,
+  value: DatabaseActionDraft,
+): string {
+  if (action === 'create') return NONE;
+  const key = recordAccessKey(value.recordAccess);
+  return (
+    options.recordAccessPolicies.find((policy) => policy.value === key)
+      ?.label ?? humanize(key)
+  );
 }
 
 export function databaseActionDescription(action: string): string {

@@ -16,6 +16,7 @@ import {
 
 import { createAuthorization, permissionSets } from '@nocobase/authorization';
 import {
+  AuthorizationDeniedError,
   AuthorizationRouteRegistry,
   type AuthorizationPlugin,
 } from '@nocobase/authorization/core';
@@ -203,6 +204,60 @@ describe('@nocobase/app-plugin-authorization routes', () => {
     expect(last.status).toBe(409);
     await expect(last.json()).resolves.toMatchObject({
       code: 'LAST_ASSIGNMENT',
+    });
+  });
+
+  it('answers with every assignment across sets', async () => {
+    const { container } = await protectedFixture();
+    const router = await protectedRouter(container);
+
+    const response = await router.request(
+      '/api/authz/permission-sets/assignments',
+    );
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      data: readonly { id: string; permissionSet: string }[];
+    };
+    expect(
+      body.data.map((assignment) => [assignment.permissionSet, assignment.id]),
+    ).toEqual(
+      expect.arrayContaining([
+        ['root', 'user:admin:root'],
+        ['hub-viewer', 'hub-viewer-alice'],
+      ]),
+    );
+  });
+
+  it('refuses the assignment list without the permission sets read permission', async () => {
+    const container = new ServiceContainer();
+    container.instance(authenticationToken, {
+      required: () => async (_context, next) => next(),
+    } as unknown as Auth);
+    container.instance(authorizationToken, {
+      middleware: () => async (context, next) => {
+        context.set('authz', {
+          require: () =>
+            Promise.reject(
+              new AuthorizationDeniedError({
+                effect: 'deny',
+                reasons: [{ code: 'FORBIDDEN', message: 'Denied' }],
+              }),
+            ),
+        });
+        await next();
+      },
+      routes: new AuthorizationRouteRegistry(),
+    } as unknown as Authorization);
+    const router = await protectedRouter(container);
+
+    const response = await router.request(
+      '/api/authz/permission-sets/assignments',
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      code: 'FORBIDDEN',
     });
   });
 
