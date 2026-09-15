@@ -1,10 +1,20 @@
 import type { AppClientRegisteredRoute } from '@nocobase/app-client/plugins';
 import { render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router';
+import {
+  MemoryRouter,
+  Route,
+  Routes,
+  useLocation,
+  useParams,
+} from 'react-router';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import { Breadcrumbs } from '../../client/components/breadcrumbs.js';
-import { RouteTreeProvider } from '../../client/routing/route-context.js';
+import {
+  RouteTreeProvider,
+  useRouteTrail,
+} from '../../client/routing/route-context.js';
 
 vi.mock('@nocobase/i18n/client', () => ({
   useTranslation: () => ({
@@ -92,6 +102,94 @@ describe('Breadcrumbs', () => {
       '/orders/edit/42',
     );
     expect(screen.getByText('Details')).toHaveAttribute('aria-current', 'page');
+  });
+
+  it.each(['a?b#c', 'a%b', 'a/b', 'a%2Fb', '中文'])(
+    'preserves the encoded parameter %s when navigating with a basename',
+    async (id) => {
+      const encoded = encodeURIComponent(id);
+      const detail = route('detail', '/orders/:id', {
+        breadcrumb: { title: 'Order' },
+      });
+      const tree = [
+        {
+          ...detail,
+          children: [
+            route('info', '/orders/:id/details', {
+              breadcrumb: { title: 'Details' },
+            }),
+          ],
+        },
+      ];
+      function Destination() {
+        const location = useLocation();
+        const params = useParams();
+        return (
+          <output>
+            {JSON.stringify({
+              pathname: location.pathname,
+              search: location.search,
+              hash: location.hash,
+              id: params.id,
+            })}
+          </output>
+        );
+      }
+      render(
+        <MemoryRouter
+          basename='/main'
+          initialEntries={[`/main/orders/${encoded}/details`]}
+        >
+          <RouteTreeProvider routes={tree}>
+            <Breadcrumbs />
+          </RouteTreeProvider>
+          <Routes>
+            <Route path='/orders/:id' element={<Destination />} />
+            <Route path='/orders/:id/details' element={<Destination />} />
+          </Routes>
+        </MemoryRouter>,
+      );
+      const initialParams = screen.getByRole('status').textContent!;
+      const link = screen.getByRole('link', { name: 'Order' });
+      expect(link).toHaveAttribute('href', `/main/orders/${encoded}`);
+      await userEvent.click(link);
+      expect(JSON.parse(screen.getByRole('status').textContent!)).toEqual({
+        pathname: `/orders/${encoded}`,
+        search: '',
+        hash: '',
+        id: (JSON.parse(initialParams) as { id: string }).id,
+      });
+    },
+  );
+
+  it.each([
+    ['/orders/:locale?/:id', '/orders/a%3Fb', '/orders/a%3Fb'],
+    ['/orders/:locale?/:id', '/orders/en/a%3Fb', '/orders/en/a%3Fb'],
+    ['/files/*', '/files/folder/a%23b', '/files/folder/a%23b'],
+    ['/files/*', '/files', '/files'],
+    ['/orders/:id', '/orders/a%3Fb/', '/orders/a%3Fb/'],
+  ])('preserves matched depth for %s at %s', (pattern, pathname, expected) => {
+    function Trail() {
+      return (
+        <output>
+          {JSON.stringify(useRouteTrail().map((entry) => entry.pathname))}
+        </output>
+      );
+    }
+    render(
+      <MemoryRouter initialEntries={[pathname]}>
+        <RouteTreeProvider
+          routes={[
+            { ...route('root', '/'), children: [route('child', pattern)] },
+          ]}
+        >
+          <Trail />
+        </RouteTreeProvider>
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('status')).toHaveTextContent(
+      JSON.stringify(['/', expected]),
+    );
   });
 
   it('skips levels that are structure rather than a destination', () => {

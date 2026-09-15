@@ -66,7 +66,18 @@ export function useRouteTrail(): readonly RouteTrailEntry[] {
       matchRouteTree(routes, pathname)?.map(
         ({ route, pathname: resolvedPathname }) => ({
           route,
-          pathname: resolvedPathname,
+          // matchRoutes decodes path segments (but keeps encoded slashes). Use only
+          // its matched depth, taking the actual segments from the original URL.
+          pathname:
+            pathname
+              .split('/')
+              .slice(
+                0,
+                resolvedPathname === '/'
+                  ? 1
+                  : resolvedPathname.split('/').length,
+              )
+              .join('/') || '/',
         }),
       ) ?? EMPTY_ARRAY,
     [pathname, routes],
