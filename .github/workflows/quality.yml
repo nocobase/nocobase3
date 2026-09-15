@@ -179,7 +179,10 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build publishable packages
-        run: pnpm build
+        env:
+          NOCOBASE_SKIP_WORKSPACE_DEPENDENCY_BUILD: '1'
+        # The documentation site is not installed by create-app and does not contribute to the smoke test.
+        run: pnpm -r --filter '!@nocobase/docs' --if-present build
 
       # No version bump or npm credentials: the isolated registry has no upstream for workspace packages, so even
       # already-published versions are packed from this checkout. External dependencies still use the normal proxies.
