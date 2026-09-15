@@ -20,8 +20,16 @@ describe('@nocobase/app-plugin-database-explorer Client routes', () => {
           navigation: { title: 'nav.databaseExplorer' },
           componentLoader: expect.any(Function),
           children: [
-            { name: 'database-explorer.fields', path: 'fields' },
-            { name: 'database-explorer.columns', path: 'columns' },
+            {
+              name: 'database-explorer.fields',
+              path: 'fields',
+              access: { resource: 'database-explorer', action: 'access' },
+            },
+            {
+              name: 'database-explorer.columns',
+              path: 'columns',
+              access: { resource: 'database-explorer', action: 'access' },
+            },
           ],
         },
       ],
@@ -39,6 +47,14 @@ describe('@nocobase/app-plugin-database-explorer Client routes', () => {
       await expect(child.componentLoader?.()).resolves.toMatchObject({
         default: expect.any(Function),
       });
+    }
+  });
+
+  it('guards every pane, not only the page that lists them', () => {
+    // A Settings child Route without `access` is reachable without the grant,
+    // and the application's Client inspection reports it as an issue.
+    for (const child of routes.routes[0]?.children ?? []) {
+      expect(child.access).toEqual(DATABASE_EXPLORER_ACCESS);
     }
   });
 

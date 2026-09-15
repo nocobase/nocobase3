@@ -31,14 +31,19 @@ const routes: AppClientRouteContribution = defineSettingsRoutes([
     navigation: { title: 'nav.databaseExplorer', icon: Database },
     componentLoader: () => import('./pages/database-explorer-page.js'),
     children: [
+      // Each pane repeats the grant. A Settings child Route that declares no
+      // access is reachable without one, so the page's own check would not
+      // cover the URLs the panes actually live at.
       {
         name: 'database-explorer.fields',
         path: 'fields',
+        access: DATABASE_EXPLORER_ACCESS,
         componentLoader: () => import('./pages/collection-fields.js'),
       },
       {
         name: 'database-explorer.columns',
         path: 'columns',
+        access: DATABASE_EXPLORER_ACCESS,
         componentLoader: () => import('./pages/collection-columns.js'),
       },
     ],
