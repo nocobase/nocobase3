@@ -32,8 +32,12 @@ export function AppShell({
             setDesktopSidebarCollapsed((collapsed) => !collapsed)
           }
         />
-        <main className='relative min-w-0 flex-1 overflow-y-auto'>
-          <Outlet />
+        <main className='relative min-w-0 flex-1 overflow-hidden'>
+          {/* main only positions; the page scrolls in here, so a child page layer laid over main is neither
+            moved by the page's scrolling nor stretched by its height. */}
+          <div className='h-full overflow-y-auto'>
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>

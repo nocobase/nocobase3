@@ -176,36 +176,40 @@ export function SurfaceLayout({
           </div>
           <HeaderActions surface={copy.surface} />
         </header>
-        <main className='relative min-w-0 flex-1 overflow-y-auto'>
-          <label className='sr-only' htmlFor='surface-page'>
-            {copy.title} page
-          </label>
-          <select
-            id='surface-page'
-            className='m-3 h-9 w-[calc(100%-1.5rem)] min-w-0 rounded-xl border border-border/70 bg-background px-3 text-sm md:hidden'
-            value={
-              visible.find((route) => routeKey(route) === selectedKey)?.path ??
-              ''
-            }
-            onChange={(event) => {
-              void navigate(event.target.value);
-            }}
-          >
-            {visible.map((route) => (
-              <option key={routeKey(route)} value={route.path}>
-                {t(route.navigation!.title, {
-                  ns: route.packageName,
-                  defaultValue: route.navigation!.title,
-                })}
-              </option>
-            ))}
-          </select>
-          <RouteTreeProvider routes={allRoutes}>
-            <Routes>
-              {renderRouteTree(routeTree, copy.pathPrefix, false, true)}
-              {renderRouteTree(routes, copy.pathPrefix)}
-            </Routes>
-          </RouteTreeProvider>
+        <main className='relative min-w-0 flex-1 overflow-hidden'>
+          {/* main only positions; the page scrolls in here, so a child page layer laid over main is neither
+            moved by the page's scrolling nor stretched by its height. */}
+          <div className='h-full overflow-y-auto'>
+            <label className='sr-only' htmlFor='surface-page'>
+              {copy.title} page
+            </label>
+            <select
+              id='surface-page'
+              className='m-3 h-9 w-[calc(100%-1.5rem)] min-w-0 rounded-xl border border-border/70 bg-background px-3 text-sm md:hidden'
+              value={
+                visible.find((route) => routeKey(route) === selectedKey)
+                  ?.path ?? ''
+              }
+              onChange={(event) => {
+                void navigate(event.target.value);
+              }}
+            >
+              {visible.map((route) => (
+                <option key={routeKey(route)} value={route.path}>
+                  {t(route.navigation!.title, {
+                    ns: route.packageName,
+                    defaultValue: route.navigation!.title,
+                  })}
+                </option>
+              ))}
+            </select>
+            <RouteTreeProvider routes={allRoutes}>
+              <Routes>
+                {renderRouteTree(routeTree, copy.pathPrefix, false, true)}
+                {renderRouteTree(routes, copy.pathPrefix)}
+              </Routes>
+            </RouteTreeProvider>
+          </div>
         </main>
       </div>
     </div>
