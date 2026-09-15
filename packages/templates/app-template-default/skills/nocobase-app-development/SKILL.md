@@ -71,6 +71,7 @@ Read the page for the task in front of you. Do not read all of them.
 | Add an API endpoint, a webhook, or a callback; authenticate and authorize it     | [server routes](references/server-routes.md)                     |
 | Query or write data, resolve the database, work with transactions                | [database and data access](references/database-and-data.md)      |
 | Create a table, alter a column, add an index, write required initial data        | [migrations and seeds](references/migrations.md)                 |
+| Switch the database, register a dialect, add a second connection                 | [database connections](references/database-connections.md)       |
 | Make text translatable, add a locale, reword a plugin's string                   | [internationalization](references/i18n.md)                       |
 | Add a reusable service, share it across routes, run background or scheduled work | [services and jobs](references/services-and-jobs.md)             |
 | Write tests, choose a test layer, verify before finishing                        | [testing and verification](references/testing.md)                |

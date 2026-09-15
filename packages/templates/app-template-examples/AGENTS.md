@@ -19,6 +19,7 @@ This application is based on `@nocobase/app-template-default` and provides runna
 | Add an HTTP endpoint                             | `references/server-routes.md`           |
 | Read or write data                               | `references/database-and-data.md`       |
 | Change the schema                                | `references/migrations.md`              |
+| Switch or add a database connection              | `references/database-connections.md`    |
 | Add translatable text                            | `references/i18n.md`                    |
 | Add a service, background job, or scheduled task | `references/services-and-jobs.md`       |
 | Write tests and verify                           | `references/testing.md`                 |
