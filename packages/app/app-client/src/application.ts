@@ -55,7 +55,14 @@ class CoreClientServiceProvider extends ServiceProvider<ClientApplication> {
   public override register(): void {
     this.app.container.singleton(apiClientToken, (): ApiClient => {
       const baseURL = this.app.config.get<string>('api.baseURL');
-      return createApiClient({ baseURL: baseURL ?? resolveAppUrl('/api') });
+      const i18n = this.app.runtime.i18n;
+      return createApiClient({
+        baseURL: baseURL ?? resolveAppUrl('/api'),
+        // The application keeps its language in the browser, so the server can
+        // only learn it from the request. Resolved per request rather than
+        // captured once, so a language switch needs nothing invalidated.
+        headers: () => ({ 'Accept-Language': i18n.getLocale() }),
+      });
     });
     this.app.container.singleton(realtimeClientToken, (): RealtimeClient =>
       createRealtimeClient({
