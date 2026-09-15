@@ -16,6 +16,7 @@ const http = require('node:http');
 const command = process.argv[2];
 const scenario = process.env.SMOKE_SCENARIO;
 const state = process.env.SMOKE_STATE;
+const basePath = process.env.SMOKE_BASE_PATH;
 if (command === 'config') {
   console.log(process.env.PNPM_CONFIG_REGISTRY);
 } else if (command === 'create') {
@@ -34,25 +35,28 @@ if (command === 'config') {
     if (command === 'start' && !fs.existsSync('built')) throw new Error('Start ran before build');
     if (scenario === command + '-exits') process.exit(7);
     const server = http.createServer((req, res) => {
-      if (command === 'start' && req.url === '/api/healthz') {
+      if (command === 'start' && req.url === basePath + '/api/healthz') {
         res.end(JSON.stringify({ ok: scenario !== 'unhealthy' }));
-      } else {
+      } else if (req.url === basePath + '/') {
         res.statusCode = command === 'start' && scenario === 'homepage-fails' ? 500 : 200;
         res.end('<html>Generated app</html>');
+      } else {
+        res.statusCode = 404;
+        res.end('Not found');
       }
     });
     server.listen(command === 'dev' ? 0 : Number(process.env.APP_SERVER_PORT), '127.0.0.1', () => {
       fs.writeFileSync(path.join(state, command + '.pid'), String(process.pid));
       if (command === 'dev') {
         console.log('App dev server ready');
-        console.log('Local: http://127.0.0.1:' + server.address().port);
+        console.log('Local: http://127.0.0.1:' + server.address().port + basePath + '/');
       }
     });
   }
 }
 `;
 
-async function runSmoke(t, scenario) {
+async function runSmoke(t, scenario, basePath = '/main') {
   const workdir = fs.realpathSync(
     fs.mkdtempSync(path.join(os.tmpdir(), 'smoke-script-test-')),
   );
@@ -83,6 +87,7 @@ async function runSmoke(t, scenario) {
         PATH: `${bin}${path.delimiter}${process.env.PATH}`,
         SMOKE_SCENARIO: scenario,
         SMOKE_STATE: workdir,
+        SMOKE_BASE_PATH: basePath,
       },
       stdio: ['ignore', 'pipe', 'pipe'],
       timeout: 30_000,
@@ -117,12 +122,15 @@ async function runSmoke(t, scenario) {
   };
 }
 
-test('builds and starts the generated application after stopping dev', async (t) => {
-  const result = await runSmoke(t, 'success');
-  assert.equal(result.code, 0, result.output);
-  assert.deepEqual(result.commands, ['dev', 'build', 'start']);
-  assert.match(result.output, /passed dev, build, and start/u);
-});
+for (const basePath of ['', '/main', '/nested/app']) {
+  test(`builds and starts the generated application at ${basePath || '/'}`, async (t) => {
+    const result = await runSmoke(t, 'success', basePath);
+    assert.equal(result.code, 0, result.output);
+    assert.deepEqual(result.commands, ['dev', 'build', 'start']);
+    assert.match(result.output, /passed dev, build, and start/u);
+    assert.ok(result.output.includes(`${basePath}/api/healthz`));
+  });
+}
 
 for (const [scenario, commands, error] of [
   ['dev-exits', ['dev'], 'pnpm dev exited'],

@@ -206,7 +206,10 @@ START_PORT=$(node --input-type=module -e '
     server.close();
   });
 ')
-START_URL="http://127.0.0.1:$START_PORT"
+# Reuse the generated application's public path from dev; the default template mounts at /main, not at /.
+APP_PATH=$(node -e 'console.log(new URL(process.argv[1]).pathname.replace(/\/+$/, ""))' "$APP_URL")
+START_URL="http://127.0.0.1:$START_PORT$APP_PATH"
+echo "Waiting up to ${TIMEOUT}s for $START_URL/api/healthz"
 set -m
 APP_SERVER_HOST=127.0.0.1 APP_SERVER_PORT="$START_PORT" pnpm start > "$START_LOG" 2>&1 &
 APP_PID=$!
@@ -216,15 +219,22 @@ trap stop_app EXIT
 READY=0
 EXITED=0
 DEADLINE=$((SECONDS + TIMEOUT))
+NEXT_PROGRESS=$SECONDS
 while [ "$SECONDS" -lt "$DEADLINE" ]; do
   if ! kill -0 "$APP_PID" 2>/dev/null; then
     EXITED=1
     break
   fi
-  if curl -fsS --max-time 2 "$START_URL/api/healthz" -o "$WORKDIR/health.json" 2>/dev/null \
+  if HTTP_STATUS=$(curl -sS --max-time 2 --write-out '%{http_code}' "$START_URL/api/healthz" -o "$WORKDIR/health.json" 2>/dev/null) \
+    && [ "$HTTP_STATUS" = '200' ] \
     && node -e 'const fs = require("node:fs"); try { process.exit(JSON.parse(fs.readFileSync(process.argv[1], "utf8")).ok === true ? 0 : 1); } catch { process.exit(1); }' "$WORKDIR/health.json"; then
     READY=1
     break
+  fi
+  if [ "$SECONDS" -ge "$NEXT_PROGRESS" ]; then
+    echo "Still waiting for production health: HTTP ${HTTP_STATUS:-000}; $((DEADLINE - SECONDS))s remaining"
+    tail -n 10 "$START_LOG"
+    NEXT_PROGRESS=$((SECONDS + 15))
   fi
   sleep 1
 done
@@ -247,6 +257,7 @@ if ! curl -fsS --max-time 30 "$START_URL/" -o /dev/null || ! kill -0 "$APP_PID" 
   exit 1
 fi
 
-echo "Production application is serving at $START_URL"
+cat "$START_LOG"
+echo "Production application is serving at $START_URL/"
 echo "::endgroup::"
 echo "create-app smoke test passed: $TEMPLATE passed dev, build, and start."
