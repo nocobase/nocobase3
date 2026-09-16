@@ -278,6 +278,8 @@ Without `--tar` no archive is produced, which is what you want when the build is
 
 ### Building for another platform
 
+`pnpm build --help` (or `-h`) lists build options and exits without loading build dependencies, running hooks, or modifying `dist/`. Every successful build records `nocobase.buildTarget` in `dist/package.json`, including builds with no native modules: `platform`, `arch`, `libc`, `nodeMajor`, and `nodeAbi`. Use `libc` only for Linux; its value on other platforms is a compatibility placeholder. Deployment checks should compare these fields with the host runtime and also respect `engines.node`. With `--target current` (the default), the Node version and ABI come from the running process; an explicit platform target defaults to Node 24 unless `--node-version` is supplied.
+
 `pnpm build` targets the machine it runs on, so `pnpm build && pnpm start` works. A deployment build says where it is going: `--target linux-x64`, `--target linux-arm64`, `--target linux-x64-musl`, plus `--node-version` when the server's Node major differs. Every build prints the platform it produced and records it in `dist/package.json` under `nocobase.buildTarget`.
 
 A `.node` binary must match the target platform, architecture, and C library; addons using the Node ABI must also match its version. `better-sqlite3` 13 uses N-API and bundles its platform binaries, so cross-platform builds retain the target's binary, including the separate `linuxmusl` build for Alpine. `pg`, `mysql2`, and `tedious` are plain JavaScript, so an application using only those is portable as built.
