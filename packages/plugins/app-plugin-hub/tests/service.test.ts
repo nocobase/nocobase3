@@ -171,6 +171,31 @@ describe('@nocobase/app-plugin-hub service', () => {
     });
   });
 
+  it('reads the current ready proxy target without starting the Host', () => {
+    const start = vi.spyOn(host, 'ensureStarted');
+    expect(service.getHostProxyTarget()).toBeNull();
+    host.info = { status: 'ready', targetUrl: 'http://127.0.0.1:13010' };
+    expect(service.getHostProxyTarget()?.href).toBe('http://127.0.0.1:13010/');
+    host.info = { status: 'starting', targetUrl: 'http://127.0.0.1:13011' };
+    expect(service.getHostProxyTarget()).toBeNull();
+    host.info.status = 'ready';
+    expect(service.getHostProxyTarget()?.href).toBe('http://127.0.0.1:13011/');
+    expect(start).not.toHaveBeenCalled();
+  });
+
+  it('reserves the Hub mount and exposes the configured public entry', async () => {
+    const options = createServiceOptions({ publicBasePath: '/hub' });
+    service = new DefaultHubService({
+      ...options,
+      config: { ...options.config, publicHostUrl: '/' },
+    });
+    await expect(
+      service.createApp({ id: 'hub', name: 'Conflict' }),
+    ).rejects.toMatchObject({ code: 'INVALID_APP_ID' });
+    const detail = await service.createApp({ id: 'hubble', name: 'Hubble' });
+    expect(detail.hostUrl).toBe('/');
+  });
+
   it('restarts only the requested App without creating a deployment', async () => {
     await service.createApp({ id: 'customer', name: 'Customer' });
     await expect(service.restart('customer')).rejects.toMatchObject({
@@ -1352,6 +1377,10 @@ async function waitForDeployment(
 }
 
 class FakeHostController implements HubHostController {
+  info: ReturnType<HubHostController['getInfo']> = { status: 'stopped' };
+  getInfo(): ReturnType<HubHostController['getInfo']> {
+    return this.info;
+  }
   readonly readyListeners = new Set<() => void>();
   onReady(listener: () => void): () => void {
     this.readyListeners.add(listener);

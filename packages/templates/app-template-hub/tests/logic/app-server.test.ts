@@ -87,6 +87,7 @@ import {
 } from '@nocobase/app-server/plugins';
 import authenticationServerPlugin from '@nocobase/app-plugin-authentication/server';
 import authorizationServerPlugin from '@nocobase/app-plugin-authorization/server';
+import { hubServiceToken } from '@nocobase/app-plugin-hub/server';
 
 import { createServer as createEmbeddedServer } from '../../server/embedded.ts';
 import { createStandaloneRuntimeScope } from '@nocobase/app-server/node';
@@ -652,9 +653,46 @@ describe('app server', () => {
     const bareLocalApi = await requestApp(app, 'http://localhost/api/healthz');
 
     await expect(appHealth.json()).resolves.toEqual(expectedHealth);
-    expect(rootHealth.status).toBe(404);
-    expect(bareLocalApi.status).toBe(404);
+    expect(rootHealth.status).toBe(503);
+    expect(bareLocalApi.status).toBe(503);
     await app.close();
+  });
+
+  it('forwards outside a custom Hub mount through its current Host target', async () => {
+    const app = trackCloseable(
+      await createIsolatedStandaloneServer({
+        basePath: '/console',
+        viteDevUrl: false,
+      }),
+    );
+    const upstream = createHttpServer((req, res) => res.end(`host:${req.url}`));
+    servers.push(upstream);
+    await new Promise<void>((resolve) =>
+      upstream.listen(0, '127.0.0.1', resolve),
+    );
+    const address = upstream.address() as AddressInfo;
+    const target = vi
+      .spyOn(
+        app.application.container.resolve(hubServiceToken),
+        'getHostProxyTarget',
+      )
+      .mockReturnValue(new URL(`http://127.0.0.1:${address.port}`));
+    for (const pathname of [
+      '/customer/api/data?limit=1',
+      '/hub/',
+      '/console-other',
+      '/',
+    ]) {
+      expect(
+        await (await requestApp(app, `http://localhost${pathname}`)).text(),
+      ).toBe(`host:${pathname}`);
+    }
+    const calls = target.mock.calls.length;
+    expect(
+      (await requestApp(app, 'http://localhost/console/api/healthz')).status,
+    ).toBe(200);
+    expect(target).toHaveBeenCalledTimes(calls);
+    target.mockRestore();
   });
 
   it('mounts standalone WebSocket handlers behind the public base path', async () => {

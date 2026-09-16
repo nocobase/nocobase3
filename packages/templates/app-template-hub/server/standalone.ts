@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { hubServiceToken } from '@nocobase/app-plugin-hub/server';
 
 import {
   defineStandaloneServer,
@@ -13,6 +14,18 @@ const standalone = defineStandaloneServer({
   rootDir: path.resolve(import.meta.dirname, '..'),
   appRuntime,
   createServer,
+  // Forward outside the Hub mount before application routing can return a 404.
+  proxy: ({ application }) => {
+    const basePath = application.publicBasePath;
+    const hub = application.container.resolve(hubServiceToken);
+    return {
+      match: (pathname) =>
+        Boolean(basePath) &&
+        pathname !== basePath &&
+        !pathname.startsWith(`${basePath}/`),
+      target: () => hub.getHostProxyTarget(),
+    };
+  },
 });
 
 export type StandaloneServer = CoreStandaloneServer;

@@ -6,6 +6,8 @@ You own everything in this directory. Add pages, API routes, database tables, an
 
 The primary console owns applications, Hub roles, and Users. The shared Settings entry exposes API Keys and other registered settings pages without redirecting them into the application list.
 
+The standalone listener also proxies App Host through the same public port. Requests at the Hub's exact public base path and its descendants stay in Hub; all other HTTP paths and WebSocket upgrades retain their path and query and forward to the current ready Host port. With `APP_BASE_PATH=/hub`, `/hub` and `/hub/*` serve Hub, while `/customer/*` serves the customer App. `/` also forwards to Host, whose managed mode currently returns 404 there. Host probes such as `/__live` follow the same forwarding rule. A disabled or restarting Host returns 503; an upstream connection failure returns 502. Visit App links use the same public origin through `hub.publicHostUrl: /`. Configure an outer reverse proxy to preserve public Host and protocol information.
+
 ## Getting started
 
 Start the development server:

@@ -141,6 +141,8 @@ export function shortId(value: string): string {
 
 export function applicationUrl(app: AppDetail): string | null {
   if (!app.hostUrl || !hasDeployment(app)) return null;
+  if (app.hostUrl === '/')
+    return `/${app.deployment.basePath.replace(/^\/+|\/+$/gu, '')}/`;
   try {
     return new URL(
       app.deployment.basePath.replace(/^\//u, ''),
