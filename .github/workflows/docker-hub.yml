@@ -93,6 +93,9 @@ jobs:
           file: Dockerfile.hub
           platforms: linux/amd64,linux/arm64
           push: true
+          # Alibaba Cloud rejects attestation manifests using application/vnd.oci.empty.v1+json.
+          provenance: false
+          sbom: false
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
