@@ -87,7 +87,7 @@ Keep `@nocobase/db` in the Hub's `dependencies`, alongside the driver that requi
 
 ## Where to work
 
-The Settings header entry appears only when the user has an accessible page in the settings navigation, and stays visible on that page. The Dev tools entry stays visible on its destination pages, is development-only, and must remain absent from production builds.
+The Settings header entry appears only when the user has an accessible page in the settings navigation, and stays visible on that page. The header reads the registered settings tree through `useClientApplication().runtime.settingsRouteTree`, reusing the application context. The Dev tools entry stays visible on its destination pages, is development-only, and must remain absent from production builds.
 
 Business code belongs in a small, stable set of places:
 

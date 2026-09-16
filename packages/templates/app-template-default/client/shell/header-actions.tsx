@@ -1,8 +1,8 @@
+import { useClientApplication } from '@nocobase/app-client';
 import { MonitorCog, Settings } from 'lucide-react';
-import { useContext, type ReactElement } from 'react';
+import type { ReactElement } from 'react';
 import { Link } from 'react-router';
 
-import { SettingsRouteTreeContext } from '../routing/settings-route-context.js';
 import {
   navigationPages,
   useRouteNavigation,
@@ -16,7 +16,7 @@ const ACTION_LINK_CLASS =
 
 /** Keep header entries visible on their destination pages so navigation stays consistent across surfaces. */
 export function HeaderActions(): ReactElement {
-  const routes = useContext(SettingsRouteTreeContext);
+  const routes = useClientApplication().runtime.settingsRouteTree;
   // Use the same access checks as Settings navigation so the entry never opens an empty surface.
   const { items } = useRouteNavigation(routes, true);
   const hasSettings = navigationPages(items).length > 0;
