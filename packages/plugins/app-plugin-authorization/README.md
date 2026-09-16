@@ -12,7 +12,7 @@ The plugin currently provides:
   record pickers behind the settings pages;
 - one dispatcher under `/api/authz` that serves whatever HTTP surface the
   installed Authorization plugins registered, each of them checking its own
-  `authorization.settings/<id>` permission;
+  `settings/authorization.<id>` permission;
 - separate settings pages for Permission Sets, Default Access, Sharing Rules,
   Restriction Rules, and Database Authorization;
 - selection-based editors for resources, actions, users, and record scopes;
@@ -76,7 +76,7 @@ the route builds the identity the request middleware builds — the principal
 plus the audience subject every signed-in user carries — and returns the core's
 `explain()` decision unchanged: the effect, the reasons with the plugin each
 came from, and the conditions when the decision is conditional. It is gated by
-`authorization.settings.permission-sets/read`, like the page it sits beside,
+`settings.authorization.permission-sets/read`, like the page it sits beside,
 because it reveals another person's access.
 
 `client/pages/inspector-page.tsx` renders that decision generically. It knows no
@@ -188,7 +188,7 @@ folds a request's read, create, update and delete decisions into one
 `RepositoryPolicy` that `repository.withPolicy()` binds, so a route runs plain
 `findMany` and `createOne` instead of compiling a filter by hand.
 
-`authz.db.collections` is the permission model: an application registers the
+`authz.getResource('database.collection').items` is the permission model: an application registers the
 Collections it means to grant on, and a Collection nobody registered has no
 permission at all — every request for it is denied with
 `COLLECTION_NOT_REGISTERED`, an unrestricted identity included, because a
@@ -203,8 +203,10 @@ identical registration is a no-op, because boot runs more than once in some
 hosts; one that disagrees with what is already registered throws.
 
 ```ts
-authz.db.collections.add({ name: 'orders', title: 'Orders' });
-authz.db.collections.add({
+authz
+  .getResource('database.collection')
+  .items.add({ name: 'orders', title: 'Orders' });
+authz.getResource('database.collection').items.add({
   name: 'invoices',
   title: { key: 'collections.invoices', ns: '@example/app-plugin-billing' },
 });
@@ -242,3 +244,26 @@ a role picker, for instance — rather than repeating the key.
 apply to every identity without an assignment": that comes from the
 `authenticated:*` assignment row and from the identity step that adds the
 subject.
+
+## Resource groups and items
+
+Use `authz.getResource(type)` to access a registered resource type. Settings is built in; `page` is available when the Pages plugin is installed. An unknown type throws. Each resource has a `groups` tree for display and a flat `items` registry for grantable resources. Group IDs must be unique within the resource type, including all descendants. An item's optional `group` references one of those IDs; omit it to display the item at the root. Group membership never grants access or changes an item's authorization ID.
+
+```ts
+const settings = authz.getResource('settings');
+settings.groups.add({
+  id: 'ai',
+  title: 'AI',
+  children: [{ id: 'ai.configuration', title: 'Configuration' }],
+});
+settings.items.add({
+  id: 'ai.models',
+  title: 'Models',
+  group: 'ai.configuration',
+  actions: ['read', 'update'],
+});
+```
+
+Check this item with `{ resource: { type: 'settings', id: 'ai.models' }, action: 'update' }`. Authorization's own sections use `authorization.permission-sets`, `authorization.default-access`, `authorization.sharing-rules`, and `authorization.restriction-rules` under the same `settings` type. No data migration or legacy identifier fallback is provided.
+
+Database collections use `authz.getResource('database.collection').items.add({ name: 'orders', title: 'Orders', group: 'sales' })`, retaining the database-specific registration shape and opt-in authorization boundary. Register display groups on that resource's `groups` first. Client page discovery preserves navigation-only route groups recursively and references them from flat page items; route nodes that load a page retain their existing authorization boundary. Server-declared page items and groups are also exposed in the picker.

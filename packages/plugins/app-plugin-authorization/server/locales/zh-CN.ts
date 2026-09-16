@@ -12,8 +12,9 @@ const zhCN: AuthorizationServerResource = {
     resourceTypes: {
       page: '页面',
       collection: '数据表',
-      settings: '授权设置',
+      settings: '后台设置',
     },
+    settingsModules: { authorization: '权限管理' },
     pages: {
       all: '所有页面',
       allDescription: '允许访问所有页面，包括之后新增的页面。',

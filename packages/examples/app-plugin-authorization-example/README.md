@@ -16,11 +16,14 @@ from a service provider, `AuthorizationExampleProvider`, rather than from a
 route file:
 
 ```ts
-this.app.container.resolve(authorizationToken).db.collections.add({
-  name: COLLECTION,
-  title: 'Authorization example: tasks',
-  description: 'Tasks each signed-in user owns.',
-});
+this.app.container
+  .resolve(authorizationToken)
+  .getResource('database.collection')
+  .items.add({
+    name: COLLECTION,
+    title: 'Authorization example: tasks',
+    description: 'Tasks each signed-in user owns.',
+  });
 ```
 
 Boot is where a declaration like this belongs; a route file builds routes.

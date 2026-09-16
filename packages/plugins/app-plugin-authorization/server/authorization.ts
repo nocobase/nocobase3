@@ -100,6 +100,23 @@ export function createAppAuthorization(
     }
   });
   database.authorizationApi.db.installInto(authz);
+  authz.getResource('settings').groups.add({
+    id: 'authorization',
+    title: { key: 'options.settingsModules.authorization' },
+  });
+  for (const section of [
+    'permission-sets',
+    'default-access',
+    'sharing-rules',
+    'restriction-rules',
+  ]) {
+    authz.getResource('settings').items.add({
+      id: `authorization.${section}`,
+      title: { key: `options.settings.${section}` },
+      group: 'authorization',
+      actions: ['read', 'create', 'update', 'delete'],
+    });
+  }
   return authz;
 }
 

@@ -275,7 +275,7 @@ export function permissionSets<TTransaction = unknown>(
         service.handler(input),
       );
       authz.resources.add({
-        resourceType: 'authorization.settings',
+        resourceType: 'settings',
         async authorize(request, context) {
           const grants = await context.grants.resolve({
             principal: request.principal,
@@ -288,7 +288,7 @@ export function permissionSets<TTransaction = unknown>(
                 effect: 'permit',
                 reasons: grants.map((grant) => ({
                   code: 'PERMISSION_SET_ADMINISTRATION_GRANTED',
-                  message: `${grant.source.plugin}:${grant.source.id} allows Authorization settings administration`,
+                  message: `${grant.source.plugin}:${grant.source.id} allows settings administration`,
                   plugin: 'permission-sets',
                 })),
               }
@@ -297,8 +297,7 @@ export function permissionSets<TTransaction = unknown>(
                 reasons: [
                   {
                     code: 'PERMISSION_SET_ADMINISTRATION_DENIED',
-                    message:
-                      'Authorization settings administration is not allowed',
+                    message: 'Settings administration is not allowed',
                     plugin: 'permission-sets',
                   },
                 ],

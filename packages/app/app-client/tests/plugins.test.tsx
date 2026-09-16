@@ -574,7 +574,7 @@ describe('client settings', () => {
                 path: '/permission-sets',
                 navigation: { title: 'Permission Sets' },
                 access: {
-                  resource: 'authorization.settings.permission-sets',
+                  resource: 'settings.authorization.permission-sets',
                   action: 'read',
                 },
                 componentLoader: page,

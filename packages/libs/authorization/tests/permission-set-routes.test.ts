@@ -13,8 +13,8 @@ describe('Permission Set handler', () => {
       grants: [
         {
           resource: {
-            type: 'authorization.settings',
-            id: 'permission-sets',
+            type: 'settings',
+            id: 'authorization.permission-sets',
           },
           actions: [
             { action: 'read' },
@@ -146,7 +146,7 @@ describe('Permission Set handler', () => {
       key: 'administrator',
       grants: [
         {
-          resource: { type: 'authorization.settings', id: '*' },
+          resource: { type: 'settings', id: '*' },
           actions: [
             { action: 'read' },
             { action: 'create' },
@@ -273,7 +273,7 @@ describe('Permission Set handler', () => {
       key: 'administrator',
       grants: [
         {
-          resource: { type: 'authorization.settings', id: '*' },
+          resource: { type: 'settings', id: '*' },
           actions: [{ action: 'read' }],
         },
       ],
@@ -312,7 +312,7 @@ describe('Permission Set handler', () => {
           key: 'administrator',
           grants: [
             {
-              resource: { type: 'authorization.settings', id: '*' },
+              resource: { type: 'settings', id: '*' },
               actions: [{ action: 'read' }],
             },
           ],

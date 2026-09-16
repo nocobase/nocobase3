@@ -184,7 +184,7 @@ async function authorization({
     grants: settings
       ? [
           {
-            resource: { type: 'authorization.settings', id: '*' },
+            resource: { type: 'settings', id: '*' },
             actions: [{ action: 'read' }],
           },
         ]

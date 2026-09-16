@@ -52,9 +52,14 @@ export interface SelectOption {
   description?: string;
 }
 export interface ResourceOption extends SelectOption {
+  group?: string;
   actions?: readonly SelectOption[];
 }
+export interface ResourceGroupOption extends SelectOption {
+  children?: readonly ResourceGroupOption[];
+}
 export interface ResourceTypeOption {
+  groups?: readonly ResourceGroupOption[];
   value: string;
   label: string;
   resources: readonly ResourceOption[];

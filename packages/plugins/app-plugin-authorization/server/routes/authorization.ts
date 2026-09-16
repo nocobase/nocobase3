@@ -1,3 +1,4 @@
+import type { ResourceGroup } from '@nocobase/authorization/core';
 import {
   AuthorizationDeniedError,
   type AuthorizationEnv,
@@ -16,6 +17,7 @@ import type { AppAuthorizationService } from '../tokens.js';
 
 /** One grantable Collection: its registration, plus the fields db reports. */
 interface DatabaseCollectionOption {
+  group?: string;
   readonly name: string;
   readonly title?: OptionText;
   readonly description?: OptionText;
@@ -178,13 +180,6 @@ function reference(value: unknown): { type: string; id: string } | undefined {
 }
 
 const crudActions = ['read', 'create', 'update', 'delete'] as const;
-const administrationResources = [
-  'permission-sets',
-  'default-access',
-  'sharing-rules',
-  'restriction-rules',
-] as const;
-
 async function permissionSetOptions(
   authz: AppAuthorizationService,
   connection: DatabaseConnection | undefined,
@@ -197,34 +192,36 @@ async function permissionSetOptions(
     resourceTypes: [
       {
         value: 'page',
+        groups: authz.resources.get('page')
+          ? resourceGroupOptions(
+              context,
+              authz.getResource('page').groups.list(),
+            )
+          : [],
         label: translateAuthorization(
           context,
           'options.resourceTypes.page',
           'Pages',
         ),
         resources: [
-          // The page inventory is declared in client route files, which the server never sees. The browser merges the
-          // grantable pages into these options from its own route registry; only the wildcard is meaningful without
-          // knowing the inventory.
-          {
-            value: '*',
-            label: translateAuthorization(
-              context,
-              'options.pages.all',
-              'All pages',
-            ),
-            description: translateAuthorization(
-              context,
-              'options.pages.allDescription',
-              'Allow access to every page, including pages added later.',
-            ),
-            actions: access,
-          },
+          ...(authz.resources.get('page')
+            ? authz
+                .getResource('page')
+                .items.list()
+                .map((item) => ({
+                  value: item.id,
+                  label: resolveOptionText(context, item.title, item.id),
+                  ...(item.group ? { group: item.group } : {}),
+                  actions: item.actions.map((action) =>
+                    actionOption(context, action),
+                  ),
+                }))
+            : []),
         ],
         actions: access,
       },
-      administrationOptions(context),
-      databaseResourceOptions(context, collections),
+      databaseResourceOptions(context, collections, authz),
+      administrationOptions(context, authz),
     ],
     subjectTypes: subjectTypeOptions(context),
     ...databaseOptions(context, authz, collections),
@@ -237,7 +234,7 @@ async function databaseScopeRuleOptions(
   context: Context,
 ): Promise<object> {
   const collections = await databaseCollections(authz, connection);
-  const collection = databaseResourceOptions(context, collections);
+  const collection = databaseResourceOptions(context, collections, authz);
   const withoutCreate = (actions: readonly Option[]): readonly Option[] =>
     actions.filter((action) => action.value !== 'create');
   return {
@@ -257,18 +254,42 @@ async function databaseScopeRuleOptions(
   };
 }
 
-function administrationOptions(context: Context): object {
+function resourceGroupOptions(
+  context: Context,
+  groups: readonly ResourceGroup[],
+): object[] {
+  return groups.map((group) => ({
+    value: group.id,
+    label: resolveOptionText(context, group.title, group.id),
+    ...(group.children
+      ? { children: resourceGroupOptions(context, group.children) }
+      : {}),
+  }));
+}
+
+function administrationOptions(
+  context: Context,
+  authz: AppAuthorizationService,
+): object {
+  const settings = authz.getResource('settings');
+  const resources = settings.items.list();
   return {
-    value: 'authorization.settings',
+    value: 'settings',
     label: translateAuthorization(
       context,
       'options.resourceTypes.settings',
-      'Authorization settings',
+      'Admin settings',
     ),
-    resources: administrationResources.map((resource) =>
-      settingsResource(context, resource, crudActions),
-    ),
-    actions: crudActions.map((value) => actionOption(context, value)),
+    groups: resourceGroupOptions(context, settings.groups.list()),
+    resources: resources.map((resource) => ({
+      value: resource.id,
+      ...(resource.group ? { group: resource.group } : {}),
+      label: resolveOptionText(context, resource.title, resource.id),
+      actions: resource.actions.map((action) => actionOption(context, action)),
+    })),
+    actions: [
+      ...new Set(resources.flatMap((resource) => resource.actions)),
+    ].map((action) => actionOption(context, action)),
   };
 }
 
@@ -282,15 +303,18 @@ async function databaseCollections(
 ): Promise<readonly DatabaseCollectionOption[]> {
   if (!connection) return [];
   const described = await Promise.all(
-    authz.db.collections.list().map(async (registration) => {
-      const collection = await describeCollection(
-        connection,
-        registration.name,
-      );
-      return collection === undefined
-        ? undefined
-        : { ...registration, fields: collection.fields };
-    }),
+    authz
+      .getResource('database.collection')
+      .items.list()
+      .map(async (registration) => {
+        const collection = await describeCollection(
+          connection,
+          registration.name,
+        );
+        return collection === undefined
+          ? undefined
+          : { ...registration, fields: collection.fields };
+      }),
   );
   return described.filter((item) => item !== undefined);
 }
@@ -298,7 +322,9 @@ async function databaseCollections(
 function databaseResourceOptions(
   context: Context,
   collections: readonly DatabaseCollectionOption[],
+  authz: AppAuthorizationService,
 ): {
+  groups: object[];
   value: string;
   label: string;
   resources: readonly (Option & { actions: readonly Option[] })[];
@@ -307,6 +333,10 @@ function databaseResourceOptions(
   const actions = crudActions.map((value) => actionOption(context, value));
   return {
     value: 'database.collection',
+    groups: resourceGroupOptions(
+      context,
+      authz.getResource('database.collection').groups.list(),
+    ),
     label: translateAuthorization(
       context,
       'options.resourceTypes.collection',
@@ -314,6 +344,7 @@ function databaseResourceOptions(
     ),
     resources: collections.map((collection) => ({
       value: collection.name,
+      ...(collection.group ? { group: collection.group } : {}),
       label: resolveOptionText(context, collection.title, collection.name),
       ...(collection.description === undefined
         ? {}
@@ -323,22 +354,6 @@ function databaseResourceOptions(
       actions,
     })),
     actions,
-  };
-}
-
-function settingsResource(
-  context: Context,
-  value: string,
-  actions: readonly string[],
-): Option & { actions: readonly Option[] } {
-  return {
-    value,
-    label: translateAuthorization(
-      context,
-      `options.settings.${value}`,
-      title(value),
-    ),
-    actions: actions.map((action) => actionOption(context, action)),
   };
 }
 
@@ -399,10 +414,6 @@ function subjectTypeOptions(context: Context): readonly Option[] {
   ];
 }
 
-function title(value: string): string {
-  return value.split('-').map(sentenceCase).join(' ');
-}
-
 async function admin(
   context: {
     get(name: 'authz'): {
@@ -416,7 +427,7 @@ async function admin(
   action: string,
 ): Promise<void> {
   await context.get('authz').require({
-    resource: { type: 'authorization.settings', id: resourceId },
+    resource: { type: 'settings', id: `authorization.${resourceId}` },
     action,
   });
 }

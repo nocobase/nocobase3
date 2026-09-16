@@ -94,14 +94,14 @@ describe('the HTTP surface each rule plugin serves', () => {
     expect(created.status).toBe(200);
     await expect(created.json()).resolves.toEqual({ data: rule });
     expect(require).toHaveBeenLastCalledWith({
-      resource: { type: 'authorization.settings', id: 'default-access' },
+      resource: { type: 'settings', id: 'authorization.default-access' },
       action: 'create',
     });
 
     const updated = await call('/default-access', json('PUT', rule));
     expect(updated.status).toBe(200);
     expect(require).toHaveBeenLastCalledWith({
-      resource: { type: 'authorization.settings', id: 'default-access' },
+      resource: { type: 'settings', id: 'authorization.default-access' },
       action: 'update',
     });
 

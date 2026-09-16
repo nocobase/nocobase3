@@ -34,12 +34,12 @@ export class AuthorizationServiceProvider extends ServiceProvider<ClientApplicat
       async can({ resource, action }) {
         if (!resource) return { can: false };
         if (resource === 'authorization') return { can: true };
-        if (resource.startsWith('authorization.settings.')) {
+        if (resource.startsWith('settings.')) {
           return {
             can: await authz.can(
               {
-                type: 'authorization.settings',
-                id: resource.slice('authorization.settings.'.length),
+                type: 'settings',
+                id: resource.slice('settings.'.length),
               },
               administrationAction(action),
             ),

@@ -8,15 +8,17 @@ import type { GrantDraft } from './types.js';
 const COLLECTION_TYPE = 'database.collection';
 
 /**
- * What a grant on a Collection reaches. A create selects no records, so it is
- * never scoped; everything else is scoped unless its policy takes every record.
+ * What a grant on a Collection reaches. An action is unrestricted only when every
+ * applicable record and field dimension is unrestricted.
  */
 function collectionMark(grant: GrantDraft, action: string): GrantMark {
-  if (action === 'create') return 'all';
   const value = grant.database[action] ?? defaultDatabaseActionDraft();
-  return recordAccessKey(value.recordAccess) === 'allRecords'
-    ? 'all'
-    : 'scoped';
+  const records =
+    action === 'create' || recordAccessKey(value.recordAccess) === 'allRecords';
+  const input = !['create', 'update'].includes(action) || value.input === '*';
+  const output =
+    !['create', 'read', 'update'].includes(action) || value.output === '*';
+  return records && input && output ? 'all' : 'scoped';
 }
 
 registerResourceTypePresentation(COLLECTION_TYPE, {

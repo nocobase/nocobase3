@@ -357,7 +357,7 @@ describe('official authorization plugins', () => {
           key: 'settings',
           grants: [
             {
-              resource: { type: 'authorization.settings', id: '*' },
+              resource: { type: 'settings', id: '*' },
               actions: [{ action: 'read' }],
             },
           ],
@@ -379,11 +379,11 @@ describe('official authorization plugins', () => {
     });
 
     await authz.can({
-      resource: { type: 'authorization.settings', id: 'permission-sets' },
+      resource: { type: 'settings', id: 'authorization.permission-sets' },
       action: 'read',
     });
     await authz.can({
-      resource: { type: 'authorization.settings', id: 'sharing-rules' },
+      resource: { type: 'settings', id: 'authorization.sharing-rules' },
       action: 'read',
     });
     await authz.permissions();

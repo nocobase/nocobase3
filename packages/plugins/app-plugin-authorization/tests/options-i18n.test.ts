@@ -71,16 +71,11 @@ describe('the options endpoint translates on the server', () => {
     const pageType = resourceType(data, 'page');
     expect(pageType.label).toBe('Pages');
     expect(pageType.actions).toEqual([{ value: 'access', label: 'Access' }]);
-    expect(pageType.resources[0]).toEqual({
-      value: '*',
-      label: 'All pages',
-      description: 'Allow access to every page, including pages added later.',
-      actions: [{ value: 'access', label: 'Access' }],
-    });
-    const settings = resourceType(data, 'authorization.settings');
-    expect(settings.label).toBe('Authorization settings');
+    expect(pageType.resources).toEqual([]);
+    const settings = resourceType(data, 'settings');
+    expect(settings.label).toBe('Admin settings');
     expect(settings.resources[0]).toMatchObject({
-      value: 'permission-sets',
+      value: 'authorization.permission-sets',
       label: 'Permission Sets',
     });
     expect(resourceType(data, 'database.collection').actions).toEqual([
@@ -100,6 +95,36 @@ describe('the options endpoint translates on the server', () => {
     });
   });
 
+  it('includes resources registered by another settings module', async () => {
+    const authz = authorization();
+    authz.getResource('settings').groups.add({ id: 'ai', title: 'AI' });
+    authz.getResource('settings').items.add({
+      id: 'ai.models',
+      title: 'Models',
+      group: 'ai',
+      actions: ['read', 'update'],
+    });
+    const router = await mountedRouter(authz);
+    const response = await router.request('/api/authz/permission-sets/options');
+    const { data } = (await response.json()) as OptionsBody;
+    const settings = resourceType(data, 'settings');
+    expect(settings).toMatchObject({
+      groups: [
+        { value: 'authorization', label: 'Authorization' },
+        { value: 'ai', label: 'AI' },
+      ],
+    });
+    expect(settings.resources).toContainEqual({
+      value: 'ai.models',
+      label: 'Models',
+      group: 'ai',
+      actions: [
+        { value: 'read', label: 'Read' },
+        { value: 'update', label: 'Update' },
+      ],
+    });
+  });
+
   it('answers in Chinese when the request asks for it', async () => {
     const router = await mountedRouter(authorization());
 
@@ -112,14 +137,11 @@ describe('the options endpoint translates on the server', () => {
     const pageType = resourceType(data, 'page');
     expect(pageType.label).toBe('页面');
     expect(pageType.actions).toEqual([{ value: 'access', label: '访问' }]);
-    expect(pageType.resources[0]).toMatchObject({
-      value: '*',
-      label: '所有页面',
-    });
-    const settings = resourceType(data, 'authorization.settings');
-    expect(settings.label).toBe('授权设置');
+    expect(pageType.resources).toEqual([]);
+    const settings = resourceType(data, 'settings');
+    expect(settings.label).toBe('后台设置');
     expect(settings.resources[0]).toMatchObject({
-      value: 'permission-sets',
+      value: 'authorization.permission-sets',
       label: '权限集',
     });
     expect(data.subjectTypes[0]?.label).toBe('所有已登录用户');
@@ -132,7 +154,9 @@ describe('the options endpoint translates on the server', () => {
 
   it('sends a registered string as it was written, in every language', async () => {
     const authz = authorization();
-    authz.db.collections.add({ name: 'orders', title: 'Orders' });
+    authz
+      .getResource('database.collection')
+      .items.add({ name: 'orders', title: 'Orders' });
     const router = await mountedRouter(authz);
 
     const labels = await Promise.all(
@@ -151,7 +175,7 @@ describe('the options endpoint translates on the server', () => {
 
   it('resolves a registered key through the catalogue of its namespace', async () => {
     const authz = authorization();
-    authz.db.collections.add({
+    authz.getResource('database.collection').items.add({
       name: 'orders',
       title: { key: 'options.resourceTypes.collection' },
     });

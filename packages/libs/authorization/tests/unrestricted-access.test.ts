@@ -92,7 +92,7 @@ describe('unrestricted access', () => {
     });
     const request = {
       principal: { type: 'user', id: 'root' },
-      resource: { type: 'authorization.settings', id: 'permission-sets' },
+      resource: { type: 'settings', id: 'authorization.permission-sets' },
       action: 'delete',
     } as const;
 

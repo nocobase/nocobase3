@@ -2,12 +2,11 @@ import { useClientApplication } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { useMemo, type ReactElement } from 'react';
 import type { AuthorizationOptions } from '../authorization-client.js';
-import { PermissionsPage } from '../components/page-shell.js';
 import {
   grantablePages,
+  pageGroups,
   withPageResources,
 } from '../components/page-options.js';
-import { useAuthorizationTranslation } from '../i18n.js';
 import { PermissionSetsPanel } from './permission-sets/index.js';
 import {
   AuthorizationPageState,
@@ -16,7 +15,6 @@ import {
 } from './page-support.js';
 
 export default function PermissionSetsPage(): ReactElement {
-  const t = useAuthorizationTranslation();
   const page = useAuthorizationPageData('authz/permission-sets/options');
   const users = useUserDirectory();
   // Page names live in client route declarations, which the server never sees. The browser holds the registry, so the
@@ -32,6 +30,7 @@ export default function PermissionSetsPage(): ReactElement {
         options,
         grantablePages(application.runtime.routes).map((page) => ({
           value: page.name,
+          ...(page.group ? { group: page.group } : {}),
           label:
             page.title === undefined
               ? page.name
@@ -40,19 +39,15 @@ export default function PermissionSetsPage(): ReactElement {
                   defaultValue: page.title,
                 }),
         })),
+        pageGroups(application.runtime.routes, (title, ns) =>
+          translatePageName(title, { ns, defaultValue: title }),
+        ),
       ),
     [application, options, translatePageName],
   );
-  return (
-    <PermissionsPage
-      title={t('permissionSets.page.title')}
-      description={t('permissionSets.page.description')}
-    >
-      {pageOptions ? (
-        <PermissionSetsPanel options={pageOptions} directory={users} />
-      ) : (
-        <AuthorizationPageState {...page} />
-      )}
-    </PermissionsPage>
+  return pageOptions ? (
+    <PermissionSetsPanel options={pageOptions} directory={users} />
+  ) : (
+    <AuthorizationPageState {...page} />
   );
 }

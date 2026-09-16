@@ -2,6 +2,7 @@ import type { AppClientRegisteredRoute } from '@nocobase/app-client/plugins';
 import type {
   AuthorizationOptions,
   ResourceOption,
+  ResourceGroupOption,
 } from '../authorization-client.js';
 
 /** The resource type page grants are stored under. */
@@ -15,6 +16,7 @@ export interface GrantablePage {
   readonly name: string;
   readonly packageName: string;
   readonly title?: string;
+  readonly group?: string;
 }
 
 /**
@@ -28,6 +30,7 @@ export interface GrantablePage {
 export function grantablePages(
   routes: readonly AppClientRegisteredRoute[],
   hasPageAncestor: boolean = false,
+  group?: string,
 ): readonly GrantablePage[] {
   return routes.flatMap((route) => [
     ...(route.componentLoader &&
@@ -37,6 +40,7 @@ export function grantablePages(
       ? [
           {
             name: route.name,
+            ...(group ? { group } : {}),
             packageName: route.packageName,
             ...(route.navigation?.title === undefined
               ? {}
@@ -47,6 +51,7 @@ export function grantablePages(
     ...grantablePages(
       route.children ?? [],
       hasPageAncestor || Boolean(route.componentLoader),
+      !route.componentLoader && route.navigation ? route.name : group,
     ),
   ]);
 }
@@ -59,6 +64,7 @@ export function grantablePages(
 export function withPageResources(
   options: AuthorizationOptions,
   pages: readonly ResourceOption[],
+  groups: readonly ResourceGroupOption[] = [],
 ): AuthorizationOptions {
   return {
     ...options,
@@ -69,6 +75,7 @@ export function withPageResources(
       );
       return {
         ...resourceType,
+        groups: mergeGroups(resourceType.groups ?? [], groups),
         resources: [
           ...resourceType.resources,
           ...pages.filter((page) => !declared.has(page.value)),
@@ -94,4 +101,44 @@ export function isUnknownPage(
     pages !== undefined &&
     !pages.resources.some((page) => page.value === resource.id)
   );
+}
+
+/** Navigation-only route nodes form the display tree; pages remain flat items. */
+export function pageGroups(
+  routes: readonly AppClientRegisteredRoute[],
+  translate: (title: string, namespace: string) => string,
+): readonly ResourceGroupOption[] {
+  return routes.flatMap((route) => {
+    if (route.componentLoader) return [];
+    const children = pageGroups(route.children ?? [], translate);
+    if (!route.navigation) return children;
+    if (grantablePages(route.children ?? []).length === 0) return [];
+    return [
+      {
+        value: route.name,
+        label: translate(route.navigation.title, route.packageName),
+        ...(children.length ? { children } : {}),
+      },
+    ];
+  });
+}
+
+function mergeGroups(
+  existing: readonly ResourceGroupOption[],
+  incoming: readonly ResourceGroupOption[],
+): readonly ResourceGroupOption[] {
+  const groups = new Map(existing.map((group) => [group.value, group]));
+  for (const group of incoming) {
+    const current = groups.get(group.value);
+    groups.set(
+      group.value,
+      current
+        ? {
+            ...current,
+            children: mergeGroups(current.children ?? [], group.children ?? []),
+          }
+        : group,
+    );
+  }
+  return [...groups.values()];
 }

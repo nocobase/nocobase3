@@ -10,6 +10,7 @@ export interface DatabaseCollectionRegistration {
   readonly name: string;
   readonly title?: OptionText;
   readonly description?: OptionText;
+  readonly group?: string;
 }
 
 /**
@@ -37,14 +38,15 @@ export class DatabaseCollectionRegistry {
       // declaration is not a mistake; disagreeing about it is.
       if (
         sameOptionText(existing.title, registration.title) &&
-        sameOptionText(existing.description, registration.description)
+        sameOptionText(existing.description, registration.description) &&
+        existing.group === registration.group
       )
         return;
       throw new Error(
         `Database Collection already registered: ${registration.name}`,
       );
     }
-    this.registrations.set(registration.name, registration);
+    this.registrations.set(registration.name, structuredClone(registration));
   }
 
   has(name: string): boolean {
@@ -52,6 +54,6 @@ export class DatabaseCollectionRegistry {
   }
 
   list(): readonly DatabaseCollectionRegistration[] {
-    return [...this.registrations.values()];
+    return structuredClone([...this.registrations.values()]);
   }
 }

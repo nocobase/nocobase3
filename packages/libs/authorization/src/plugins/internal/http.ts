@@ -33,7 +33,7 @@ export function requireSettings(
   action: string,
 ): Promise<void> {
   return authorization.require({
-    resource: { type: 'authorization.settings', id: settings },
+    resource: { type: 'settings', id: `authorization.${settings}` },
     action,
   });
 }

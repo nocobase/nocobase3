@@ -96,7 +96,7 @@ Default Access 返回 `effect: "expand"` 的访问约束。资源 Handler 决定
 
 插件在安装时把自己的管理路由注册到 `authz.routes`，应用只需要挂载一个分发器（见
 Core 文档的 `routes`）。处理器会先用请求级 Authorization 检查
-`authorization.settings/default-access` 的相应权限，拒绝时返回 `403 FORBIDDEN`，请求体不合法时
+`settings/authorization.default-access` 的相应权限，拒绝时返回 `403 FORBIDDEN`，请求体不合法时
 返回 `400 INVALID_AUTHORIZATION_INPUT`。
 
 可用端点：

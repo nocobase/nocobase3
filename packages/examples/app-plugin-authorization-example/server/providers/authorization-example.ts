@@ -13,11 +13,14 @@ export class AuthorizationExampleProvider extends ServiceProvider<AppPluginAppli
 
   public override boot(): Promise<void> {
     if (!this.app.container.has(authorizationToken)) return Promise.resolve();
-    this.app.container.resolve(authorizationToken).db.collections.add({
-      name: COLLECTION,
-      title: 'Authorization example: tasks',
-      description: 'Tasks each signed-in user owns.',
-    });
+    this.app.container
+      .resolve(authorizationToken)
+      .getResource('database.collection')
+      .items.add({
+        name: COLLECTION,
+        title: 'Authorization example: tasks',
+        description: 'Tasks each signed-in user owns.',
+      });
     return Promise.resolve();
   }
 }

@@ -29,7 +29,8 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
           ...(connection === undefined ? {} : { connection }),
           // A record can only be picked from a Collection in the model.
           resolveCollection: async (name) =>
-            connection === undefined || !authorization.db.collections.has(name)
+            connection === undefined ||
+            !authorization.getResource('database.collection').items.has(name)
               ? undefined
               : await describeCollection(connection, name),
         }),

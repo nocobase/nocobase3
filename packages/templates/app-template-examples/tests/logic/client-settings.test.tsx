@@ -316,7 +316,7 @@ describe('settings centre', () => {
   it('drops a group whose every page the user is denied', async () => {
     renderSettings('/settings', {
       can: async ({ resource }) => ({
-        can: !resource?.startsWith('authorization.settings.'),
+        can: !resource?.startsWith('settings.authorization.'),
       }),
     });
 
@@ -351,7 +351,7 @@ describe('settings centre', () => {
   it('hides a setting the access control provider denies, and does not land on it', async () => {
     renderSettings('/settings/authorization/permission-sets', {
       can: async ({ resource }) => ({
-        can: resource !== 'authorization.settings.permission-sets',
+        can: resource !== 'settings.authorization.permission-sets',
       }),
     });
 
@@ -365,7 +365,7 @@ describe('settings centre', () => {
   it('treats a provider that throws as a denial', async () => {
     renderSettings('/settings/authorization/permission-sets', {
       can: async ({ resource }) => {
-        if (resource === 'authorization.settings.permission-sets') {
+        if (resource === 'settings.authorization.permission-sets') {
           throw new Error('provider unavailable');
         }
         return { can: true };
@@ -465,14 +465,14 @@ const AUTHORIZATION: AppClientRegisteredSettingGroup = {
       'permission-sets',
       'Permission Sets',
       'authorization',
-      'authorization.settings.permission-sets',
+      'settings.authorization.permission-sets',
       ICON,
     ),
     createSetting(
       'default-access',
       'Default Access',
       'authorization',
-      'authorization.settings.default-access',
+      'settings.authorization.default-access',
     ),
   ],
   source: 'plugin',

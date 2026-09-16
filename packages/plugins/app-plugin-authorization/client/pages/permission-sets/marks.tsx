@@ -1,24 +1,30 @@
-import { Check, Contrast, Minus, Shield } from 'lucide-react';
+import { Circle, CircleCheck, Contrast, Shield } from 'lucide-react';
 import type { ReactElement } from 'react';
 
 import { useAuthorizationTranslation } from '../../i18n.js';
 import { markDescription, markLabel, type GrantMark } from './labels.js';
 
 const markStyles: Readonly<Record<GrantMark, string>> = {
-  all: 'bg-primary/10 text-primary',
-  scoped: 'bg-muted text-foreground',
-  none: 'text-muted-foreground/60',
+  all: 'text-primary',
+  scoped: 'text-foreground',
+  none: 'text-muted-foreground',
   bypass: 'bg-primary/10 text-primary',
 };
 
 const markIcons = {
-  all: Check,
+  all: CircleCheck,
   scoped: Contrast,
-  none: Minus,
+  none: Circle,
   bypass: Shield,
 } as const;
 
-export function ScopeMark({ value }: { value: GrantMark }): ReactElement {
+export function ScopeMark({
+  value,
+  legend = false,
+}: {
+  value: GrantMark;
+  legend?: boolean;
+}): ReactElement {
   const t = useAuthorizationTranslation();
   const Icon = markIcons[value];
   return (
@@ -28,7 +34,11 @@ export function ScopeMark({ value }: { value: GrantMark }): ReactElement {
       role='img'
       title={markDescription(t, value)}
     >
-      <Icon className='size-3.5' />
+      <Icon
+        className={
+          value === 'bypass' ? 'size-3.5' : legend ? 'size-4.5' : 'size-4'
+        }
+      />
     </span>
   );
 }
@@ -43,7 +53,7 @@ export function ScopeLegend({
     <div className='flex flex-wrap gap-4 text-xs text-muted-foreground'>
       {values.map((value) => (
         <span key={value} className='flex items-center gap-2'>
-          <ScopeMark value={value} />
+          <ScopeMark value={value} legend />
           {markDescription(t, value)}
         </span>
       ))}

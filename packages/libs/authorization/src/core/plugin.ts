@@ -10,6 +10,7 @@ export interface AuthorizationPluginSetup<TConnection = unknown> {
   readonly connection?: TConnection;
   readonly grants: AuthorizationGrantService;
   readonly resources: ResourceHandlerRegistry;
+  readonly getResource: ResourceHandlerRegistry['getResource'];
   readonly constraints: AccessConstraintRegistry;
   readonly subjects: AuthorizationSubjectRegistry;
   readonly routes: AuthorizationRouteRegistry;

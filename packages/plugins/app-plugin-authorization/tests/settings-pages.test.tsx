@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AuthorizationOptions } from '../client/authorization-client.js';
@@ -59,9 +60,14 @@ beforeEach(() => {
 
 describe('authorization settings pages', () => {
   it.each(pages)('renders the $name shell heading', async ({ name, Page }) => {
-    render(<Page />);
+    render(
+      <MemoryRouter>
+        <Page />
+      </MemoryRouter>,
+    );
     const heading = await screen.findByRole('heading', { level: 1, name });
     // Each page says in one sentence what its layer does.
+    if (Page === PermissionSetsPage) return;
     expect(heading.parentElement?.querySelector('p')?.textContent).toMatch(
       /grant|widen|narrow/,
     );

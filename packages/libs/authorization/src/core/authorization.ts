@@ -1,4 +1,8 @@
-import { ResourceHandlerRegistry } from './registry.js';
+import {
+  ResourceHandlerRegistry,
+  type AuthorizationResourceItems,
+  type RegisteredResource,
+} from './registry.js';
 import { AuthorizationSubjectRegistry } from './subjects.js';
 import { AuthorizationRouteRegistry } from './routes.js';
 import { AccessConstraintRegistry } from './constraints.js';
@@ -123,6 +127,7 @@ export class Authorization {
           return grantProvider.grants;
         },
         resources: this.resources,
+        getResource: this.resources.getResource.bind(this.resources),
         constraints: this.constraints,
         subjects: this.subjects,
         routes: this.routes,
@@ -131,6 +136,14 @@ export class Authorization {
         },
       });
     }
+  }
+
+  getResource<T extends keyof AuthorizationResourceItems>(
+    type: T,
+  ): RegisteredResource<AuthorizationResourceItems[T]>;
+  getResource(type: string): RegisteredResource;
+  getResource(type: string): RegisteredResource<unknown> {
+    return this.resources.getResource(type);
   }
 
   /**

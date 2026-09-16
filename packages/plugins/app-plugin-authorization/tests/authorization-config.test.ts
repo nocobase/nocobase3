@@ -148,7 +148,9 @@ describe('what an application configures about its own authorization', () => {
   it('exposes the database api with an empty registry', () => {
     const authorization = createAppAuthorization({ connection });
 
-    expect(authorization.db.collections.list()).toEqual([]);
+    expect(
+      authorization.getResource('database.collection').items.list(),
+    ).toEqual([]);
   });
 
   it('identifies a database resource by the collection name alone', () => {
@@ -218,7 +220,9 @@ describe('what an application configures about its own authorization', () => {
 
   it('answers its own options and record endpoints ahead of the plugin routes', async () => {
     const authorization = authorizationWith({ plugins: templatePlugins() });
-    authorization.db.collections.add({ name: 'orders', title: 'Orders' });
+    authorization
+      .getResource('database.collection')
+      .items.add({ name: 'orders', title: 'Orders' });
     const router = await mountedRouter(authorization);
 
     const [options, records] = await Promise.all([

@@ -10,5 +10,12 @@ export {
   ResourceHandlerRegistry,
   type AuthorizationRuntimeContext,
   type ResourceAuthorizationHandler,
+  ResourceGroups,
+  ResourceItems,
+  type ResourceItem,
+  type ResourceGroup,
+  type RegisteredResource,
+  type AuthorizationResourceItems,
+  type ResourceTitle,
 } from './registry.js';
 export * from './types.js';

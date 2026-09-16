@@ -52,7 +52,9 @@ const authz = createAppAuthorization({
   },
 });
 
-authz.db.collections.add({ name: 'orders', title: 'Orders' });
+authz
+  .getResource('database.collection')
+  .items.add({ name: 'orders', title: 'Orders' });
 ```
 
 Registration is the opt-in into the permission model, and it carries intent
@@ -260,7 +262,7 @@ When a permission does not behave as expected, inspect in this order:
 
 1. Confirm the resource type and id exactly match the resource, that the
    collection a `database.collection` id names is registered in
-   `authz.db.collections`, and that db holds it.
+   `authz.getResource('database.collection').items`, and that db holds it.
 2. Confirm the action is one the resource supports.
 3. Confirm the request principal and subjects were resolved by middleware.
 4. Check the user's Permission Set assignments.
@@ -274,7 +276,7 @@ Permission Inspector under Settings → Authorization asks the same question fro
 the browser: pick a person, a resource and an action, and it reports the effect,
 each reason with the plugin that gave it, and the conditions when the decision
 is conditional, exactly as the core returned them. It is gated by
-`authorization.settings.permission-sets/read`. Otherwise the settings pages edit
+`settings.authorization.permission-sets/read`. Otherwise the settings pages edit
 one layer each and report nothing across layers, because the four authorization
 plugins are separable packages.
 
@@ -293,3 +295,7 @@ narrow the rows and fields a Policy allows.
 - Add a Permission Set only when the business access is reusable or needs
   administrator configuration.
 - Test both an allowed request and a request denied by a record or field rule.
+
+## Resource registration
+
+Use `authz.getResource(type).groups.add({ id, title, children })` for display groups and `authz.getResource(type).items.add(...)` for grantable items. Groups support recursive children and have IDs unique within the resource type. Generic items use `{ id, title, group?, actions }`; database items retain `{ name, title?, description?, group? }`. Omit `group` for a root item. Groups do not grant permissions. The settings resource is built in and owns module-qualified IDs such as `authorization.permission-sets` and `ai.models`. Register each module's groups and items from its owning provider. Page resources follow the same grouping contract; the permission picker derives navigation-only groups from client routes and merges their grantable pages with server declarations. Do not use the removed `authz.db.collections` API or the old `authorization.settings` resource type.

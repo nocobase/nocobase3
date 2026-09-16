@@ -24,7 +24,7 @@ export interface DatabaseAuthorizationPlugin extends AuthorizationPlugin<
 export function databaseAuthorization(): DatabaseAuthorizationPlugin {
   const collections = new DatabaseCollectionRegistry();
   const recordAccess = new RecordAccessPolicyRegistry();
-  const api = new DatabaseAuthorizationService(collections, recordAccess);
+  const api = new DatabaseAuthorizationService(recordAccess);
   return {
     id: 'database',
     requiresGrants: true,
@@ -39,8 +39,12 @@ export function databaseAuthorization(): DatabaseAuthorizationPlugin {
           ? { resolveCollection: collectionResolver(authz.connection) }
           : {}),
       });
-      authz.resources.add<DatabaseAuthorizationParams>({
+      authz.resources.add<
+        DatabaseAuthorizationParams,
+        DatabaseCollectionRegistry
+      >({
         resourceType: 'database.collection',
+        items: collections,
         authorize: (request, context) =>
           authorizer.authorize(request, context.grants, context.constraints),
         authorizeUnrestricted: (request) =>
@@ -48,4 +52,10 @@ export function databaseAuthorization(): DatabaseAuthorizationPlugin {
       });
     },
   };
+}
+
+declare module '@nocobase/authorization/core' {
+  interface AuthorizationResourceItems {
+    'database.collection': DatabaseCollectionRegistry;
+  }
 }

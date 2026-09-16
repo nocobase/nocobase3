@@ -116,8 +116,12 @@ const resource = { type: 'database.collection', id: 'orders' } as const;
  */
 function databasePlugin(): DatabaseAuthorizationPlugin {
   const plugin = databaseAuthorization();
-  plugin.authorizationApi.db.collections.add('orders');
-  plugin.authorizationApi.db.collections.add('invoices');
+  const setup = plugin.setup?.bind(plugin);
+  plugin.setup = (authz) => {
+    setup?.(authz);
+    authz.getResource('database.collection').items.add('orders');
+    authz.getResource('database.collection').items.add('invoices');
+  };
   return plugin;
 }
 
@@ -203,7 +207,7 @@ describe('database resource authorization', () => {
     const authorization = setup();
     expect(authorization.describe()).toMatchObject({
       plugins: ['permission-sets', 'database'],
-      resourceTypes: ['authorization.settings', 'database.collection'],
+      resourceTypes: ['database.collection', 'settings'],
       grantProvider: 'permission-sets',
     });
     expect(
@@ -828,7 +832,12 @@ describe('policyFor', () => {
 
 describe('the Collection registry', () => {
   it('records registrations in order and needs a name', () => {
-    const { collections } = databaseAuthorization().authorizationApi.db;
+    const collections = createAuthorization({
+      plugins: [
+        permissionSets({ store: new MockPermissionSetStore() }),
+        databaseAuthorization(),
+      ],
+    }).getResource('database.collection').items;
     collections.add('orders');
     collections.add({
       name: 'invoices',
@@ -852,7 +861,12 @@ describe('the Collection registry', () => {
   // Boot runs more than once in some hosts, so the same declaration twice is
   // not a mistake; two declarations that disagree are.
   it('tolerates an identical repeat and refuses a conflicting one', () => {
-    const { collections } = databaseAuthorization().authorizationApi.db;
+    const collections = createAuthorization({
+      plugins: [
+        permissionSets({ store: new MockPermissionSetStore() }),
+        databaseAuthorization(),
+      ],
+    }).getResource('database.collection').items;
     collections.add({ name: 'orders', title: 'Orders' });
     collections.add({ name: 'orders', title: 'Orders' });
 

@@ -16,8 +16,9 @@ const enUS = {
     resourceTypes: {
       page: 'Pages',
       collection: 'Database collections',
-      settings: 'Authorization settings',
+      settings: 'Admin settings',
     },
+    settingsModules: { authorization: 'Authorization' },
     pages: {
       all: 'All pages',
       allDescription:

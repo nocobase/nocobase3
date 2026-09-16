@@ -6,7 +6,7 @@ Database Authorization 是应用插件里的资源插件：它把 Authorization 
 
 一个完整的接入过程包括：
 
-1. 把要纳入权限模型的 Collection 注册到 `authz.db.collections`；
+1. 把要纳入权限模型的 Collection 注册到 `authz.getResource('database.collection').items`；
 2. 通过 Permission Set、Role 或其他 Grant Provider 提供动作权限；
 3. 在数据访问入口用 `policyFor()` 得到 Repository Policy；
 4. 用 `repository.withPolicy(policy)` 绑定后照常读写，或者用
@@ -28,10 +28,12 @@ Role Grant Provider。
 
 ## 注册即纳入权限模型
 
-`authz.db.collections` 记录哪些 Collection 属于权限模型，只记录这一件事：
+`authz.getResource('database.collection').items` 记录哪些 Collection 属于权限模型，只记录这一件事：
 
 ```ts
-authz.db.collections.add({ name: 'orders', title: '订单' });
+authz
+  .getResource('database.collection')
+  .items.add({ name: 'orders', title: '订单' });
 ```
 
 `title` 与 `description` 只服务于权限配置界面。字段清单、主键以及主键是否由数据库

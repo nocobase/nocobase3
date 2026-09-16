@@ -186,7 +186,7 @@ await authz.permissionSets.create({
   key: 'permission-administrator',
   grants: [
     {
-      resource: { type: 'authorization.settings', id: 'permission-sets' },
+      resource: { type: 'settings', id: 'authorization.permission-sets' },
       actions: [
         { action: 'read' },
         { action: 'create' },

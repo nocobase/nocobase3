@@ -99,7 +99,7 @@ export function createPermissionSetHandler(
 
   routes.use('/permission-sets/*', async (context, next) => {
     await context.env.authorization.require({
-      resource: { type: 'authorization.settings', id: 'permission-sets' },
+      resource: { type: 'settings', id: 'authorization.permission-sets' },
       action: permissionSetAdministrationAction(context.req.method),
     });
     await next();

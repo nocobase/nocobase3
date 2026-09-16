@@ -114,7 +114,7 @@ describe('@nocobase/app-plugin-authorization routes', () => {
 
       expect(response.status).toBe(200);
       expect(require).toHaveBeenCalledWith({
-        resource: { type: 'authorization.settings', id: 'default-access' },
+        resource: { type: 'settings', id: 'authorization.default-access' },
         action: expected,
       });
       expect(set).toHaveBeenCalledOnce();
@@ -395,7 +395,7 @@ async function protectedFixture(): Promise<{
     key: 'root',
     grants: [
       {
-        resource: { type: 'authorization.settings', id: '*' },
+        resource: { type: 'settings', id: '*' },
         actions: ['read', 'create', 'update', 'delete'].map((action) => ({
           action,
         })),

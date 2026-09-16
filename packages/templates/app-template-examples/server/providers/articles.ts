@@ -18,7 +18,10 @@ export default class ArticlesProvider extends ServiceProvider<Application> {
     const { db } = this.app.container.resolve(authorizationToken);
     // Articles are part of the permission model; nothing else in this
     // application's database is.
-    db.collections.add({ name: 'articles', title: '文章 / Articles' });
+    this.app.container
+      .resolve(authorizationToken)
+      .getResource('database.collection')
+      .items.add({ name: 'articles', title: '文章 / Articles' });
     const permissionSets = this.app.container.resolve(permissionSetsToken);
     // Initialize once for existing administrators. Later permission edits and revocations remain authoritative.
     if (await permissionSets.get('articles-manager')) return;

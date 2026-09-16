@@ -4,7 +4,7 @@ import type { Translate } from '../i18n.js';
 /**
  * Who the settings pages can name and offer to pick. Users are read from the
  * Users API, which authorizes against the `user` resource, while these pages
- * authorize against `authorization.settings/*`: someone who administers
+ * authorize against `settings/authorization.*`: someone who administers
  * permission sets may not be allowed to read users at all.
  */
 export interface UserDirectory {

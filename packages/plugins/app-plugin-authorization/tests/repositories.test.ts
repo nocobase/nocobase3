@@ -196,7 +196,9 @@ describe('authorizing repository API routes', () => {
 
     authorization.db.repositories(exposures);
 
-    expect(authorization.db.collections.list()).toEqual([]);
+    expect(
+      authorization.getResource('database.collection').items.list(),
+    ).toEqual([]);
   });
 
   it('denies an exposure whose Collection was never registered', async () => {
@@ -237,7 +239,9 @@ async function routes(
 ): Promise<Hono> {
   const authorization = createAuthorization();
   if (options.register !== false)
-    authorization.db.collections.add({ name: 'authzOrders', title: 'Orders' });
+    authorization
+      .getResource('database.collection')
+      .items.add({ name: 'authzOrders', title: 'Orders' });
   const authorize = authorization.db.repositories(exposures);
   const container = new ServiceContainer();
   container.instance(databaseManagerToken, database);

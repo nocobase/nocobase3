@@ -44,7 +44,9 @@ whether the collection may be granted on at all — that is the module's own
 statement:
 
 ```ts
-authz.db.collections.add({ name: 'orders', title: 'Orders' });
+authz
+  .getResource('database.collection')
+  .items.add({ name: 'orders', title: 'Orders' });
 ```
 
 Until that line runs, every request for `orders` is denied with

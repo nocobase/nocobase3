@@ -11,7 +11,6 @@ import {
   type RepositoryAuthorizationExposure,
 } from '../repositories.js';
 import { UNRESTRICTED_ACCESS } from './authorizer.js';
-import { DatabaseCollectionRegistry } from './collection-registry.js';
 import type {
   DatabaseAccessScope,
   DatabaseAuthorizationConditions,
@@ -21,8 +20,6 @@ import type {
 import { RecordAccessPolicyRegistry } from './record-access-registry.js';
 
 export interface DatabaseApi {
-  /** Which Collections are part of the permission model. */
-  readonly collections: DatabaseCollectionRegistry;
   readonly recordAccess: RecordAccessPolicyRegistry;
   grant(resource: string, definition: DatabaseGrantDefinition): PermissionGrant;
   scope(recordAccess: DatabaseRecordAccess): DatabaseAccessScope;
@@ -40,15 +37,10 @@ export interface DatabaseAuthorizationApi {
 }
 
 export class DatabaseAuthorizationService implements DatabaseApi {
-  readonly collections: DatabaseCollectionRegistry;
   readonly recordAccess: RecordAccessPolicyRegistry;
   private host: Authorization | undefined;
 
-  constructor(
-    collections: DatabaseCollectionRegistry,
-    recordAccess: RecordAccessPolicyRegistry,
-  ) {
-    this.collections = collections;
+  constructor(recordAccess: RecordAccessPolicyRegistry) {
     this.recordAccess = recordAccess;
   }
 

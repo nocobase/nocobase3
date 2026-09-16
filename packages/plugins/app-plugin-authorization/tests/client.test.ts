@@ -27,6 +27,7 @@ import {
 } from '../client/components/user-directory.js';
 import {
   grantablePages,
+  pageGroups,
   isUnknownPage,
   withPageResources,
 } from '../client/components/page-options.js';
@@ -49,6 +50,10 @@ describe('@nocobase/app-plugin-authorization client', () => {
 
     expect(resolved.settings.map((setting) => setting.path)).toEqual([
       '/settings/authorization/permission-sets',
+      '/settings/authorization/permission-sets/new',
+      '/settings/authorization/permission-sets/edit/:permissionSetKey',
+      '/settings/authorization/permission-sets/edit/:permissionSetKey/assignments',
+      '/settings/authorization/permission-sets/edit/:permissionSetKey/details',
       '/settings/authorization/default-access',
       '/settings/authorization/sharing-rules',
       '/settings/authorization/restriction-rules',
@@ -57,19 +62,25 @@ describe('@nocobase/app-plugin-authorization client', () => {
     expect(
       resolved.settings.map((setting) => setting.access?.resource),
     ).toEqual([
-      'authorization.settings.permission-sets',
-      'authorization.settings.default-access',
-      'authorization.settings.sharing-rules',
-      'authorization.settings.restriction-rules',
+      'settings.authorization.permission-sets',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'settings.authorization.default-access',
+      'settings.authorization.sharing-rules',
+      'settings.authorization.restriction-rules',
       // The inspector belongs to no one plugin; it is gated with its neighbours.
-      'authorization.settings.permission-sets',
+      'settings.authorization.permission-sets',
     ]);
     // The group and every page carry an icon, so the navigation never falls back to a bare row. A lucide icon is a
     // forwardRef object rather than a plain function, so this checks for a renderable rather than for a typeof.
     expect(resolved.settingGroups[0].icon).toBeTruthy();
-    expect(resolved.settings.every((setting) => Boolean(setting.icon))).toBe(
-      true,
-    );
+    expect(
+      resolved.settings
+        .filter((setting) => setting.access)
+        .every((setting) => Boolean(setting.icon)),
+    ).toBe(true);
   });
 
   it('uses CRUD order when choosing the initial action', () => {
@@ -105,7 +116,7 @@ describe('@nocobase/app-plugin-authorization client', () => {
           plugins: [],
           resourceTypes: [
             {
-              value: 'authorization.settings',
+              value: 'settings',
               label: 'Settings',
               resources: [
                 {
@@ -124,7 +135,7 @@ describe('@nocobase/app-plugin-authorization client', () => {
           collections: [],
           recordAccessPolicies: [],
         },
-        'authorization.settings',
+        'settings',
         'audit-log',
       ),
     ).toEqual(['read']);
@@ -312,6 +323,69 @@ describe('@nocobase/app-plugin-authorization client', () => {
 
     expect(canAddAssignment(offline)).toBe(false);
     expect(offline.unavailable).toBe(translate('errors.usersUnavailable'));
+  });
+
+  it('merges route children into an existing server group', () => {
+    const original = options();
+    const source = {
+      ...original,
+      resourceTypes: original.resourceTypes.map((type) =>
+        type.value === 'page'
+          ? { ...type, groups: [{ value: 'business', label: 'Server title' }] }
+          : type,
+      ),
+    };
+    const merged = withPageResources(
+      source,
+      [],
+      [
+        {
+          value: 'business',
+          label: 'Client title',
+          children: [{ value: 'sales', label: 'Sales' }],
+        },
+      ],
+    );
+    expect(
+      merged.resourceTypes.find((type) => type.value === 'page')?.groups,
+    ).toEqual([
+      {
+        value: 'business',
+        label: 'Server title',
+        children: [{ value: 'sales', label: 'Sales' }],
+      },
+    ]);
+  });
+
+  it('preserves recursive route groups without turning them into grantable pages', () => {
+    const routes = [
+      route({
+        name: 'business',
+        componentLoader: undefined,
+        navigation: { title: 'Business' },
+        children: [
+          route({
+            name: 'sales',
+            componentLoader: undefined,
+            navigation: { title: 'Sales' },
+            children: [route({ name: 'orders' })],
+          }),
+        ],
+      }),
+      route({ name: 'home' }),
+    ];
+    expect(pageGroups(routes, (title) => title)).toEqual([
+      {
+        value: 'business',
+        label: 'Business',
+        children: [{ value: 'sales', label: 'Sales' }],
+      },
+    ]);
+    expect(grantablePages(routes)).toMatchObject([
+      { name: 'orders', group: 'sales' },
+      { name: 'home' },
+    ]);
+    expect(grantablePages(routes)[1]).not.toHaveProperty('group');
   });
 
   it('offers only the routes a page grant can name', () => {
