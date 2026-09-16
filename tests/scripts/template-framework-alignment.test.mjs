@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
+import ts from 'typescript';
 
 const root = path.resolve(import.meta.dirname, '../../packages/templates');
 const templates = ['default', 'examples', 'hub'].map((kind) => {
@@ -25,6 +26,47 @@ function filesIn(directory, prefix = '') {
         : [relative];
     })
     .sort();
+}
+
+function sharedFrameworkSource(template, file) {
+  const source = readFileSync(path.join(template.directory, file), 'utf8');
+  if (template.kind !== 'hub' || file !== 'server/standalone.ts') {
+    return source;
+  }
+
+  // Hub alone fronts App Host. Its proxy behavior is covered by the Hub tests;
+  // compare every other part of the standalone entry with Default unchanged.
+  const parsed = ts.createSourceFile(
+    file,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  const standalone = parsed.statements
+    .filter(ts.isVariableStatement)
+    .flatMap(({ declarationList }) => declarationList.declarations)
+    .find(({ name }) => ts.isIdentifier(name) && name.text === 'standalone');
+  const call = standalone?.initializer;
+  assert.ok(
+    call &&
+      ts.isCallExpression(call) &&
+      ts.isIdentifier(call.expression) &&
+      call.expression.text === 'defineStandaloneServer',
+  );
+  const [options] = call.arguments;
+  assert.ok(options && ts.isObjectLiteralExpression(options));
+  const proxy = options.properties.find(
+    (property) =>
+      ts.isPropertyAssignment(property) &&
+      ts.isIdentifier(property.name) &&
+      property.name.text === 'proxy',
+  );
+  assert.ok(proxy, 'Hub standalone must configure its App Host proxy');
+  const end = proxy.end + (source[proxy.end] === ',' ? 1 : 0);
+  return (source.slice(0, proxy.getFullStart()) + source.slice(end)).replace(
+    "import { hubServiceToken } from '@nocobase/app-plugin-hub/server';\n",
+    '',
+  );
 }
 
 // These are shared framework mechanisms, not product pages or plugin composition.
@@ -64,8 +106,8 @@ for (const template of templates) {
       'client/shell/header-actions.tsx',
     ]) {
       assert.equal(
-        readFileSync(path.join(template.directory, file), 'utf8'),
-        readFileSync(path.join(baseline.directory, file), 'utf8'),
+        sharedFrameworkSource(template, file),
+        sharedFrameworkSource(baseline, file),
         `${template.kind}: ${file}`,
       );
     }
