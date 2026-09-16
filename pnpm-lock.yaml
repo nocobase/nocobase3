@@ -2153,6 +2153,9 @@ importers:
       remark-gfm:
         specifier: ^4.0.1
         version: 4.0.1
+      tailwind-merge:
+        specifier: 'catalog:'
+        version: 3.6.0
       zod:
         specifier: 'catalog:'
         version: 4.6.5
@@ -2214,9 +2217,6 @@ importers:
       react-markdown:
         specifier: ^10.1.0
         version: 10.1.0(@types/react@19.2.18)(react@19.2.8)
-      tailwind-merge:
-        specifier: 'catalog:'
-        version: 3.6.0
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -2499,6 +2499,9 @@ importers:
       react-router:
         specifier: 'catalog:'
         version: 7.18.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      tailwind-merge:
+        specifier: 'catalog:'
+        version: 3.6.0
     devDependencies:
       '@nocobase/db-sqlite':
         specifier: workspace:*
@@ -2915,6 +2918,9 @@ importers:
       react-dom:
         specifier: ^19.0.0
         version: 19.2.8(react@19.2.8)
+      tailwind-merge:
+        specifier: 'catalog:'
+        version: 3.6.0
     devDependencies:
       '@nocobase/db-mysql':
         specifier: workspace:*
@@ -3322,6 +3328,9 @@ importers:
       react-router:
         specifier: 'catalog:'
         version: 7.18.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      tailwind-merge:
+        specifier: 'catalog:'
+        version: 3.6.0
       typescript:
         specifier: 'catalog:'
         version: 6.0.3

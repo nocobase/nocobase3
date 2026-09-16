@@ -115,7 +115,8 @@
     "lucide-react": "catalog:",
     "react": "catalog:",
     "react-router": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "tailwind-merge": "catalog:"
   },
   "peerDependenciesMeta": {
     "typescript": {

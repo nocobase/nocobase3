@@ -87,7 +87,8 @@
     "@nocobase/i18n": "workspace:^",
     "lucide-react": "catalog:",
     "react": "^19.0.0",
-    "react-router": "catalog:"
+    "react-router": "catalog:",
+    "tailwind-merge": "catalog:"
   },
   "devDependencies": {
     "@nocobase/db-sqlite": "workspace:*",

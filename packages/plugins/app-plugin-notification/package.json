@@ -114,7 +114,8 @@
     "@nocobase/service-provider": "workspace:^",
     "lucide-react": "catalog:",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "tailwind-merge": "catalog:"
   },
   "devDependencies": {
     "@nocobase/db-sqlite": "workspace:*",
