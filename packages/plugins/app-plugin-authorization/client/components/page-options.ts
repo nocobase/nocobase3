@@ -59,7 +59,7 @@ export function grantablePages(
 /**
  * Adds the pages the browser discovered to the page resource type the server reported, leaving every other resource
  * type — database collections, settings resources — exactly as it came back. A page the server already listed keeps
- * its own entry, so the wildcard and its description survive.
+ * its own entry, preserving explicit server declarations.
  */
 export function withPageResources(
   options: AuthorizationOptions,

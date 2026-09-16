@@ -14,6 +14,7 @@ import {
   type PermissionSetsAuthorizationApi,
   type PermissionSetsPlugin,
 } from '@nocobase/authorization/permissions';
+import { pages } from './pages-authorization.js';
 import { DatabaseConnectionHandle } from './stores/connection.js';
 import { DatabasePermissionSetStore } from './stores/permission-sets.js';
 
@@ -27,7 +28,7 @@ export interface AppPermissionSetsConfig {
 export interface AuthorizationConfig {
   permissionSets?: AppPermissionSetsConfig;
   /**
-   * Plugins the application chooses to install. Permission Sets and database
+   * Plugins the application chooses to install. Permission Sets, page and database
    * authorization are built in and are not among them.
    */
   plugins?: readonly AuthorizationPlugin[];
@@ -80,6 +81,7 @@ export function createAppAuthorization(
       defaultSet: sets?.defaultSet ?? DEFAULT_DEFAULT_SET,
     }),
     database,
+    pages(),
     ...(options.config?.plugins ?? []),
   ];
   const authz = createAuthorization({

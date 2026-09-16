@@ -34,7 +34,6 @@ describe('application config', () => {
       defaultSet: 'member',
     });
     expect(authorization.plugins?.map((plugin) => plugin.id)).toEqual([
-      'pages',
       'default-access',
       'sharing-rules',
       'restriction-rules',

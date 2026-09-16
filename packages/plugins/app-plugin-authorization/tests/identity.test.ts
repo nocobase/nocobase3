@@ -43,6 +43,7 @@ describe('the identity an application resolves for a request', () => {
     expect(authorization.describe().plugins).toEqual([
       'permission-sets',
       'database',
+      'pages',
     ]);
   });
 });

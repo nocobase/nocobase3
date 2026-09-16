@@ -33,7 +33,6 @@ import type {
 } from '@nocobase/authorization/core';
 
 import type { AuthorizationConfig } from '../server/authorization.js';
-import { pages } from '../server/pages-authorization.js';
 import { apiRoutes } from '../server/routes/index.js';
 import {
   authorizationToken,
@@ -53,9 +52,8 @@ afterAll(async () => {
   await database.destroy();
 });
 
-/** The plugin list all three templates ship; Permission Sets and database are built in. */
+/** The plugin list all three templates ship; Permission Sets, page and database authorization are built in. */
 const templatePlugins = (): AuthorizationPlugin[] => [
-  pages(),
   defaultAccess(),
   sharingRules(),
   restrictionRules(),
@@ -89,7 +87,7 @@ describe('what an application configures about its own authorization', () => {
   it('names the sets the application asked the library to protect', () => {
     const authorization = authorizationWith({
       permissionSets: { rootSet: 'owner', defaultSet: 'everyone' },
-      plugins: [pages()],
+      plugins: [],
     });
 
     expect(authorization.permissionSets.isUnrestricted('owner')).toBe(true);
@@ -104,32 +102,51 @@ describe('what an application configures about its own authorization', () => {
     expect(authorization.permissionSets.protection('member')).toBeUndefined();
   });
 
-  // The plugin ships no fallback list beyond the two built-in plugins: what
-  // an application does not declare, it does not have, and the first request
-  // is what says so.
   it('installs the built-in plugins alone when the application configures nothing', async () => {
     const authorization = createAppAuthorization({ connection });
 
     expect(authorization.describe().plugins).toEqual([
       'permission-sets',
       'database',
+      'pages',
     ]);
+    vi.spyOn(authorization.permissionSets, 'getEffective').mockResolvedValue(
+      [],
+    );
     await expect(
       authorization.authorize({
         principal: { type: 'user', id: 'alice' },
         subjects: [],
         resource: { type: 'page', id: 'home' },
-        action: 'view',
+        action: 'access',
       }),
     ).resolves.toMatchObject({
       effect: 'deny',
-      reasons: [expect.objectContaining({ code: 'UNKNOWN_RESOURCE_TYPE' })],
+      reasons: [expect.objectContaining({ code: 'PAGE_ACCESS_DENIED' })],
     });
+    vi.mocked(authorization.permissionSets.getEffective).mockResolvedValue([
+      {
+        key: 'reader',
+        grants: [
+          {
+            resource: { type: 'page', id: 'home' },
+            actions: [{ action: 'access' }],
+          },
+        ],
+      },
+    ]);
+    await expect(
+      authorization.authorize({
+        principal: { type: 'user', id: 'alice' },
+        resource: { type: 'page', id: 'home' },
+        action: 'access',
+      }),
+    ).resolves.toMatchObject({ effect: 'permit' });
   });
 
   it('leaves out a capability the application drops from its list', () => {
     const authorization = authorizationWith({
-      plugins: [pages(), defaultAccess(), restrictionRules()],
+      plugins: [defaultAccess(), restrictionRules()],
     });
 
     const plugins = authorization.describe().plugins;
@@ -138,9 +155,11 @@ describe('what an application configures about its own authorization', () => {
   });
 
   it('has a Grant Provider whatever the application lists', () => {
-    expect(
-      authorizationWith({ plugins: [pages()] }).describe().plugins,
-    ).toEqual(['permission-sets', 'database', 'pages']);
+    expect(authorizationWith({ plugins: [] }).describe().plugins).toEqual([
+      'permission-sets',
+      'database',
+      'pages',
+    ]);
   });
 
   // `db` is a member of the returned type, so no accessor stands between the
@@ -169,7 +188,7 @@ describe('what an application configures about its own authorization', () => {
       connection,
       onUserPermissionsChanged,
       onAuthenticatedPermissionsChanged,
-      config: { plugins: [pages()] },
+      config: { plugins: [] },
     });
 
     await authorization.permissionSets.notifyAssignmentsChanged({
@@ -187,7 +206,7 @@ describe('what an application configures about its own authorization', () => {
 
   it('answers the options endpoints with no Collection registered', async () => {
     const authorization = authorizationWith({
-      plugins: [pages(), defaultAccess(), restrictionRules()],
+      plugins: [defaultAccess(), restrictionRules()],
     });
     const container = new ServiceContainer();
     container.instance(authenticationToken, {
@@ -248,9 +267,7 @@ describe('what an application configures about its own authorization', () => {
   });
 
   it('has no route for a capability the application left out', async () => {
-    const router = await mountedRouter(
-      authorizationWith({ plugins: [pages()] }),
-    );
+    const router = await mountedRouter(authorizationWith({ plugins: [] }));
 
     const [missing, installed] = await Promise.all([
       router.request('/api/authz/sharing-rules'),
@@ -291,7 +308,7 @@ describe('what an application configures about its own authorization', () => {
   // anywhere else answered 404 on every plugin surface while the
   // application's own endpoints kept working.
   it('answers the plugin surfaces under whatever prefix the router is mounted at', async () => {
-    const authorization = authorizationWith({ plugins: [pages()] });
+    const authorization = authorizationWith({ plugins: [] });
     const router = new Hono().route(
       '/portal',
       await mountedRouter(authorization),

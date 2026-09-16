@@ -32,5 +32,3 @@ export interface FilterConditionDraft {
   operator: '$eq' | '$ne' | '$in' | '$notIn' | '$gt' | '$gte' | '$lt' | '$lte';
   value: string;
 }
-
-export type DetailSection = 'permissions' | 'assignments';

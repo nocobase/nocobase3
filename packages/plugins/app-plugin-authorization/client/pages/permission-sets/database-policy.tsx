@@ -10,7 +10,7 @@ import {
   nextDraftId,
   recordAccessKey,
 } from './drafts.js';
-import { filterOperatorLabel, filterOperators, humanize } from './labels.js';
+import { filterOperatorLabel, filterOperators, actionLabel } from './labels.js';
 import type { FilterConditionDraft, RecordAccessDraft } from './types.js';
 
 export function RecordAccessEditor({
@@ -40,7 +40,7 @@ export function RecordAccessEditor({
       <Field label={t('databasePolicy.recordAccess')}>
         <select
           aria-label={t('databasePolicy.actionRecordAccess', {
-            action: humanize(action),
+            action: actionLabel(options, 'database.collection', action),
           })}
           className='h-8 w-full rounded-lg border bg-background px-2.5 text-sm'
           value={key}

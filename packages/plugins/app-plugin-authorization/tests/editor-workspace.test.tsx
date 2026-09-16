@@ -92,7 +92,7 @@ describe('scope controls', () => {
     const popup = await screen.findByRole('dialog');
     expect(popup).toHaveTextContent('Orders · Read');
     expect(
-      screen.getByRole('button', { name: 'Custom scope…' }),
+      screen.getByRole('button', { name: 'Custom scope' }),
     ).toHaveAttribute('aria-pressed', 'true');
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
     fireEvent.click(
@@ -105,7 +105,7 @@ describe('scope controls', () => {
     expect(
       screen.queryByRole('region', { name: 'Fields users can view' }),
     ).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Custom scope…' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Custom scope' }));
     expect(
       screen.getByRole('region', { name: 'Fields users can view' }),
     ).toBeVisible();
@@ -119,7 +119,7 @@ describe('scope controls', () => {
       screen.getByRole('region', { name: 'Fields users can view' }),
     ).toBeVisible();
     expect(
-      screen.getByRole('button', { name: 'Custom scope…' }),
+      screen.getByRole('button', { name: 'Custom scope' }),
     ).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(
       screen.getByRole('button', { name: 'Not granted', exact: true }),

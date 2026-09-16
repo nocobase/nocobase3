@@ -1,6 +1,5 @@
 import { defaultDatabaseActionDraft, recordAccessKey } from './drafts.js';
-import { DatabaseActionDetails } from './database-grant-details.js';
-import { recordsAndFieldsSummary, type GrantMark } from './labels.js';
+import type { GrantMark } from './labels.js';
 import { registerResourceTypePresentation } from './resource-presentation.js';
 import type { GrantDraft } from './types.js';
 
@@ -22,7 +21,5 @@ function collectionMark(grant: GrantDraft, action: string): GrantMark {
 }
 
 registerResourceTypePresentation(COLLECTION_TYPE, {
-  summary: recordsAndFieldsSummary,
   mark: collectionMark,
-  actionDetails: DatabaseActionDetails,
 });

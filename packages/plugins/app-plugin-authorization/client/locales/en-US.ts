@@ -52,11 +52,11 @@ const enUS = {
   errors: {
     requestFailed: 'Authorization request failed.',
     lastAssignment:
-      'This is the last assignment of a set the application must always keep someone able to use. Assign it to an enabled account before removing this one, or the application is left without an administrator.',
+      'This permission set must retain an active assignee. Assign it to another enabled account before removing this assignment.',
     protectedSet:
       'This permission set is maintained by the application and cannot be changed here.',
     subjectNotAllowed:
-      'This permission set can only be assigned to the subject types the application allows. Assign it to an individual user instead of an audience.',
+      'This permission set does not support the selected subject type. Choose a type allowed by the application.',
     usersForbidden:
       'You do not have permission to read users. Assignments are shown by user id, and adding one is unavailable.',
     usersUnavailable:
@@ -67,14 +67,14 @@ const enUS = {
   },
   marks: {
     labels: {
-      all: 'Every record',
-      scoped: 'Scoped records',
+      all: 'Full access',
+      scoped: 'Limited access',
       none: 'Not granted',
       bypass: 'Unrestricted',
     },
     descriptions: {
-      all: 'Every record',
-      scoped: 'Scoped records',
+      all: 'Full access',
+      scoped: 'Limited access',
       none: 'Not granted',
       bypass: 'Unrestricted: grants are not consulted',
     },
@@ -90,15 +90,6 @@ const enUS = {
     $lte: 'At most',
   },
   labels: {
-    newRecords: 'New records',
-    newRecordsLower: 'new records',
-    mixedRecords: 'Mixed records',
-    allFieldsLower: 'all fields',
-    selectedFieldsLower: 'selected fields',
-    recordsAndFields: '{{records}}, {{fields}}',
-    fieldCount: '{{count}} fields',
-    writableFields: '{{fields}} writable',
-    visibleFields: '{{fields}} visible',
     allRecords: 'All records',
     selectedRecords: '{{count}} selected records',
     unknownScope: 'Unknown scope',
@@ -148,12 +139,10 @@ const enUS = {
 
     fullScopeHint: 'All records and fields are accessible.',
     noScopeHint: 'This action is not granted.',
-    scopePlaceholder:
-      'Click a restricted permission to view its configuration, or choose Custom scope from an action menu.',
     grantAccess: 'Click to grant access',
     revokeAccess: 'Click to remove this grant',
     clickScope: 'Click a scope icon to change access.',
-    mode: { none: 'Not granted', all: 'Full access', custom: 'Custom scope…' },
+    mode: { none: 'Not granted', all: 'Full access', custom: 'Custom scope' },
     createFields: 'Fields users can fill in',
     updateFields: 'Fields users can modify',
     readFields: 'Fields users can view',
@@ -175,10 +164,6 @@ const enUS = {
     selectedOnly: 'Only selected',
     field: 'Field',
     read: 'Read',
-    createInput: 'Create · write',
-    createOutput: 'Create · return',
-    updateInput: 'Update · write',
-    updateOutput: 'Update · return',
     allFuture: 'All fields, including future fields',
     matches: '{{count}} matching fields',
     selectMatches: 'Select matching fields',
@@ -214,13 +199,6 @@ const enUS = {
     filterValue: 'Filter value',
     removeCondition: 'Remove condition',
     conditionRequired: 'Add at least one condition.',
-    descriptions: {
-      create: 'Choose fields that can be submitted and returned.',
-      read: 'Choose visible fields and which records can be read.',
-      update: 'Choose editable fields and which records can be updated.',
-      delete: 'Choose which records can be deleted.',
-      other: 'Configure fields and record access for this action.',
-    },
   },
   inspector: {
     page: {
@@ -259,23 +237,9 @@ const enUS = {
         'Permission sets grant access: bundle the resources and actions people need, then assign the bundle to them.',
     },
     unknownPage: 'Unknown page',
-    describeUnrestricted:
-      'Unrestricted access to everything in this application',
-    configuredResources: {
-      one: '{{count}} configured resource',
-      other: '{{count}} configured resources',
-    },
     assignmentCount: {
       one: '{{count}} assignment',
       other: '{{count}} assignments',
-    },
-    permissionCount: {
-      one: '{{count}} permission',
-      other: '{{count}} permissions',
-    },
-    resourceTypeCount: {
-      one: '{{count}} resource type',
-      other: '{{count}} resource types',
     },
     list: {
       search: 'Search permission sets',
@@ -290,38 +254,13 @@ const enUS = {
     },
     detail: {
       untitled: 'New permission set',
-      summary: 'Key: {{key}} · {{permissions}} · {{types}} · {{assignments}}',
-      summaryUnrestricted: 'Key: {{key}} · {{assignments}}',
-      badgeUnrestricted: 'Unrestricted access',
-      badgeProtected: 'Protected system set',
-      badgeCustom: 'Custom',
-      protectedNotice:
-        'Required administration permissions and assignments are preserved so administrators cannot be locked out.',
-      permissionsTab: 'Permissions',
-      assignmentsTab: 'Assignments',
       unrestrictedTitle: 'This permission set grants unrestricted access.',
       unrestrictedBody:
-        'Anyone holding it can read and change everything in this application, regardless of any other permission set, sharing rule, or restriction rule. It has no permissions to configure, so only its assignments are managed here.',
+        'This set grants unrestricted access, unaffected by other permission sets, sharing rules or restriction rules. No individual permissions need configuration. Manage its assignees in User assignments.',
       confirmDeleteTitle: 'Delete this permission set?',
       confirmDeleteBody:
-        '“{{title}}” will be deleted, and everyone it is assigned to loses the access it grants. This cannot be undone.',
+        'Delete “{{title}}” and its assignments. Other permission sets and rules remain in effect.',
       confirmDelete: 'Delete permission set',
-    },
-    permissions: {
-      title: 'Granted permissions',
-      description:
-        'Search and review resources without expanding every policy.',
-      searchResources: 'Search resources',
-      grantedActions: 'Granted actions',
-      recordsAndFields: 'Records and fields',
-      emptyNone:
-        'No permissions yet. Edit the set to grant resources and actions.',
-      emptyFiltered: 'No permissions match these filters.',
-      pagerLabel: 'Permissions',
-      allowed: 'Allowed',
-      notGranted: 'Not granted',
-      noActions: 'This resource declares no actions.',
-      createSelectsNoRecords: 'A create selects no records.',
     },
     assignments: {
       search: 'Search assignments',
@@ -345,7 +284,7 @@ const enUS = {
       confirmRevokeTitleOne: 'Revoke this assignment?',
       confirmRevokeTitleMany: 'Revoke these assignments?',
       confirmRevokeBody:
-        '{{label}} will no longer hold this permission set. This cannot be undone; the assignment has to be added again.',
+        '{{label}} will no longer hold this permission set. Other assignments remain in effect, and this set can be assigned again.',
       confirmRevoke: 'Revoke',
       pickerDescription:
         'Find people and assign this permission set in one operation.',
@@ -410,14 +349,14 @@ const enUS = {
     page: {
       title: 'Default Access',
       description:
-        'Default access widens what everyone reaches on a collection, setting the baseline record scope before sharing and restriction rules are evaluated.',
+        'Default access expands the baseline record scope for users with the relevant action permission. It does not grant action or field permissions; sharing and restriction rules also apply.',
     },
     search: 'Search rules',
     create: 'Set default access',
     recordAccessHeader: 'Default record access',
     allowedActions: 'Allowed actions',
     emptyNone:
-      'No default access yet. Set it on a collection to give everyone a baseline record scope.',
+      'No default access rules yet. Set a baseline record scope for users with the relevant action permission.',
     emptySearch: 'No default access rules match your search.',
     pagerLabel: 'Default access rules',
     editTitle: 'Edit default access',
@@ -439,7 +378,7 @@ const enUS = {
     save: 'Save default access',
     confirmDeleteTitle: 'Delete this default access rule?',
     confirmDeleteBody:
-      'The baseline access on “{{resource}}” is removed, and everyone falls back to what their permission sets grant. This cannot be undone.',
+      'Delete the default access rule for “{{resource}}”. Remaining permission sets and rules determine access.',
   },
   sharingRules: {
     page: {
@@ -485,7 +424,7 @@ const enUS = {
     save: 'Save sharing rule',
     confirmDeleteTitle: 'Delete this sharing rule?',
     confirmDeleteBody:
-      '“{{title}}” is deleted, and the people it shared records with lose the access it opened. This cannot be undone.',
+      'Delete sharing rule “{{title}}”. Access provided by other permission sets and sharing rules remains available.',
   },
   restrictionRules: {
     page: {
@@ -529,7 +468,7 @@ const enUS = {
     save: 'Save restriction rule',
     confirmDeleteTitle: 'Delete this restriction rule?',
     confirmDeleteBody:
-      '“{{title}}” is deleted, and the people it narrowed reach whatever their permission sets and sharing rules allow. This cannot be undone.',
+      'Delete restriction rule “{{title}}”. Remaining permission sets and rules determine access.',
   },
 };
 

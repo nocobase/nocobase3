@@ -18,7 +18,6 @@ import { AUTHORIZATION_NAMESPACE } from '../shared.js';
 import { createAppAuthorization } from '../server/authorization.js';
 import { defineRecordAccessPolicy } from '../server/database/record-access.js';
 import serverLocales from '../server/locales/index.js';
-import { pages } from '../server/pages-authorization.js';
 import { apiRoutes } from '../server/routes/index.js';
 import {
   authorizationToken,
@@ -217,7 +216,7 @@ function resourceType(
 function authorization(): AppAuthorizationService {
   return createAppAuthorization({
     connection,
-    config: { plugins: [pages()] },
+    config: { plugins: [] },
   });
 }
 

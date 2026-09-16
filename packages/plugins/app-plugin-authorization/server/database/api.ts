@@ -53,8 +53,7 @@ export class DatabaseAuthorizationService implements DatabaseApi {
   }
 
   /**
-   * Authorizes a Repository API exposure set, registering every Collection it
-   * names: exposing rows over HTTP is stating they are part of the model.
+   * Narrows Repository API policies for explicitly registered collections.
    */
   repositories(
     exposures: readonly RepositoryAuthorizationExposure[],

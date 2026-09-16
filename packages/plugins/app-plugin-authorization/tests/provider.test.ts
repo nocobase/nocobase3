@@ -16,7 +16,7 @@ vi.mock('../server/authorization.js', async (importOriginal) => {
 
 import { AuthorizationProvider } from '../server/providers/authorization.js';
 import type { AuthorizationConfig } from '../server/authorization.js';
-import { pages } from '../server/pages-authorization.js';
+import { sharingRules } from '../server/rules.js';
 import { authorizationToken } from '../server/tokens.js';
 
 describe('authorization provider', () => {
@@ -25,7 +25,7 @@ describe('authorization provider', () => {
   });
 
   it('registers authorization with the service-container database', () => {
-    const plugins = [pages()];
+    const plugins = [sharingRules()];
     const connection = { kind: 'connection' };
     const database = {
       connection: vi.fn(() => connection),
@@ -50,8 +50,6 @@ describe('authorization provider', () => {
     expect(authorization).toBe(createAppAuthorization.mock.results[0]?.value);
   });
 
-  // The provider hands over what the application configured and invents
-  // nothing; an application that configures nothing installs nothing.
   it('passes no configuration when the application declares none', () => {
     const container = new ServiceContainer();
     const provider = new AuthorizationProvider({

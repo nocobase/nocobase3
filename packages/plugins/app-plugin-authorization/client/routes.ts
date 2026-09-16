@@ -11,8 +11,6 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 
-// The group id and the child ids compose into the paths these pages were already published at, so every URL is
-// unchanged: /settings/authorization/permission-sets and its three siblings.
 const settings: AppClientRouteContribution = defineSettingsRoutes([
   {
     name: 'authorization',

@@ -90,27 +90,6 @@ export function fromSet(set: PermissionSet): Draft {
   };
 }
 
-export function cloneDraft(draft: Draft): Draft {
-  return {
-    ...draft,
-    grants: draft.grants.map((grant) => ({
-      ...grant,
-      resource: { ...grant.resource },
-      actions: [...grant.actions],
-      database: Object.fromEntries(
-        Object.entries(grant.database).map(([action, value]) => [
-          action,
-          {
-            ...value,
-            input: value.input === '*' ? '*' : [...value.input],
-            output: value.output === '*' ? '*' : [...value.output],
-          },
-        ]),
-      ),
-    })),
-  };
-}
-
 export function defaultDatabaseActionDraft(
   options?: AuthorizationOptions,
 ): DatabaseActionDraft {
@@ -119,19 +98,6 @@ export function defaultDatabaseActionDraft(
     output: '*',
     recordAccess: options?.recordAccessPolicies[0]?.value ?? 'allRecords',
   };
-}
-
-export function syncDatabaseActions(
-  options: AuthorizationOptions,
-  current: Readonly<Record<string, DatabaseActionDraft>>,
-  actions: readonly string[],
-): Readonly<Record<string, DatabaseActionDraft>> {
-  return Object.fromEntries(
-    actions.map((action) => [
-      action,
-      current[action] ?? defaultDatabaseActionDraft(options),
-    ]),
-  );
 }
 
 export function databasePolicyForAction(

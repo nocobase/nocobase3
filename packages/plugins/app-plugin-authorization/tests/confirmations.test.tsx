@@ -7,52 +7,53 @@ vi.mock('@nocobase/i18n/client', async () => {
   return { useTranslation: () => ({ t: translate }) };
 });
 
-import type { AuthorizationOptions } from '../client/authorization-client.js';
-import { permissionSetCapabilities } from '../client/components/permission-set-access.js';
-import { userDirectory } from '../client/components/user-directory.js';
-import { PermissionSetDetail } from '../client/pages/permission-sets/detail.js';
-import type { Draft } from '../client/pages/permission-sets/types.js';
+import { MemoryRouter, Route, Routes } from 'react-router';
+import { PermissionSetsPanel } from '../client/pages/permission-sets/panel.js';
+import EditPage from '../client/pages/permission-set-edit-page.js';
 import { translate } from './locale-harness.js';
 
-const options: AuthorizationOptions = {
-  plugins: [],
-  resourceTypes: [],
-  subjectTypes: [],
-  collections: [],
-  recordAccessPolicies: [],
-};
+const api = vi.hoisted(() => ({
+  listPermissionSets: vi.fn(),
+  deletePermissionSet: vi.fn(),
+  invalidatePermissions: vi.fn(),
+}));
+vi.mock('../client/runtime.js', () => ({ getAuthorizationClient: () => api }));
 
-const draft: Draft = {
-  originalKey: 'order-ops',
-  key: 'order-ops',
-  title: 'Order operators',
-  grants: [],
-};
-
-function renderDetail(onDelete: () => void): void {
+async function renderDetail(onDelete: () => void): Promise<void> {
+  api.listPermissionSets.mockResolvedValue([
+    { key: 'order-ops', title: 'Order operators', grants: [] },
+  ]);
+  api.deletePermissionSet.mockImplementation(onDelete);
   render(
-    <PermissionSetDetail
-      assignments={[]}
-      busy={false}
-      capabilities={permissionSetCapabilities()}
-      directory={userDirectory([])}
-      draft={draft}
-      options={options}
-      section='permissions'
-      onAssign={() => Promise.resolve()}
-      onBack={() => undefined}
-      onDelete={onDelete}
-      onEdit={() => undefined}
-      onRevoke={() => Promise.resolve()}
-      onSection={() => undefined}
-    />,
+    <MemoryRouter initialEntries={['/sets/edit/order-ops']}>
+      <Routes>
+        <Route
+          path='/sets'
+          element={
+            <PermissionSetsPanel
+              options={{
+                plugins: [],
+                resourceTypes: [],
+                subjectTypes: [],
+                collections: [],
+                recordAccessPolicies: [],
+              }}
+              directory={{ users: [] }}
+            />
+          }
+        >
+          <Route path='edit/:permissionSetKey' element={<EditPage />} />
+        </Route>
+      </Routes>
+    </MemoryRouter>,
   );
+  await screen.findByRole('button', { name: 'Order operators' });
 }
 
 describe('destructive actions', () => {
-  it('asks before deleting a permission set and names it', () => {
+  it('asks before deleting a permission set and names it', async () => {
     const onDelete = vi.fn();
-    renderDetail(onDelete);
+    await renderDetail(onDelete);
 
     fireEvent.click(
       screen.getByRole('button', { name: translate('common.delete') }),
@@ -72,9 +73,9 @@ describe('destructive actions', () => {
     ).toBeInTheDocument();
   });
 
-  it('does nothing when the confirmation is cancelled', () => {
+  it('does nothing when the confirmation is cancelled', async () => {
     const onDelete = vi.fn();
-    renderDetail(onDelete);
+    await renderDetail(onDelete);
 
     fireEvent.click(
       screen.getByRole('button', { name: translate('common.delete') }),
@@ -89,9 +90,9 @@ describe('destructive actions', () => {
     ).toBeNull();
   });
 
-  it('deletes once the confirmation is accepted', () => {
+  it('deletes once the confirmation is accepted', async () => {
     const onDelete = vi.fn();
-    renderDetail(onDelete);
+    await renderDetail(onDelete);
 
     fireEvent.click(
       screen.getByRole('button', { name: translate('common.delete') }),
