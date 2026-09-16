@@ -26,6 +26,7 @@ import {
 } from '@nocobase/drive';
 import type { Knex } from 'knex';
 import type { AppHostSupervisorInfo } from '@nocobase/app-host/supervisor';
+import { normalizeBasePath } from '@nocobase/app-server/support';
 import { x as extractTar } from 'tar';
 import {
   parse as parseYaml,
@@ -315,10 +316,19 @@ export class DefaultHubService implements HubService {
         422,
       );
     }
+    // Managed App Host reserves the /__ namespace for listener-owned routes.
+    if (id.startsWith('__')) {
+      throw new HubError(
+        'App IDs beginning with "__" are reserved by App Host.',
+        'INVALID_APP_ID',
+        422,
+      );
+    }
     const basePath = `/${id}`;
+    const publicBasePath = normalizeBasePath(this.options.publicBasePath ?? '');
     if (
-      this.options.publicBasePath === basePath ||
-      this.options.publicBasePath?.startsWith(`${basePath}/`)
+      publicBasePath === basePath ||
+      publicBasePath.startsWith(`${basePath}/`)
     ) {
       throw new HubError(
         'App ID conflicts with the Hub public base path.',

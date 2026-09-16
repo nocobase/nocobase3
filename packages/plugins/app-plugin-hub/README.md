@@ -48,7 +48,7 @@ Set `HUB_HOST_ENABLED=false` only for processes that need Hub metadata without s
 
 ## Host supervision configuration
 
-`hubServiceToken` exposes `getHostProxyTarget()` for a standalone listener to read the current ready Host origin without starting it. The method returns `null` while Host is disabled, stopped, starting or failed, and reads Supervisor state again on every call so a restarted Host may use a different port. The Hub listener owns HTTP and WebSocket forwarding; plugin API routes remain application-local management endpoints. App IDs that overlap the Hub application's public base path are rejected when created.
+`hubServiceToken` exposes `getHostProxyTarget()` for a standalone listener to read the current ready Host origin without starting it. The method returns `null` while Host is disabled, stopped, starting or failed, and reads Supervisor state again on every call so a restarted Host may use a different port. The Hub listener owns HTTP and WebSocket forwarding; plugin API routes remain application-local management endpoints. App IDs that overlap the Hub application's normalized public base path are rejected when created. IDs beginning with `__` are also rejected to match the managed Host's reserved namespace, which includes `/__live`, `/__ready`, and `/__health`.
 
 `hub.publicHostUrl` controls the public entry used by the Visit App link. Set it to `/` when the Hub standalone listener proxies other paths on the same origin, as the Hub template does. An absolute origin supports an externally exposed Host; omitting it preserves direct Host links for existing plugin consumers. The internal proxy target always comes from Supervisor state, independently of this browser-facing setting.
 

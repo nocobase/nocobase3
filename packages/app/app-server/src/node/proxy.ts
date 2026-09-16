@@ -46,6 +46,14 @@ export class NodeServerProxy {
           signal: request.signal,
         });
         outgoing.once('error', reject);
+        outgoing.once('upgrade', (_incoming, socket) => {
+          // HTTP fetch cannot represent 101, and Node skips the response event.
+          socket.destroy();
+          outgoing.destroy();
+          reject(
+            new Error('Upstream returned an unexpected protocol upgrade.'),
+          );
+        });
         outgoing.once('response', (incoming) => {
           try {
             const responseHeaders = readHeaders(incoming);

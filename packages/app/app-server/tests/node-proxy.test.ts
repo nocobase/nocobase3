@@ -180,6 +180,29 @@ describe('standalone proxy', () => {
     expect(await (await fetch(`${url}/hub/status`)).text()).toBe('hub');
   });
 
+  it('rejects an unexpected HTTP upgrade and closes its upstream connection', async () => {
+    let upstreamClosed = false;
+    const target = await listen(
+      createServer((req, res) => {
+        req.socket.once('close', () => {
+          upstreamClosed = true;
+        });
+        res.writeHead(101, { connection: 'Upgrade', upgrade: 'websocket' });
+        res.end();
+      }),
+    );
+    const { url } = await startProxy(() => target);
+    const response = await fetch(`${url}/crm/`, {
+      signal: AbortSignal.timeout(1000),
+    });
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({
+      error: 'Upstream server is unavailable.',
+    });
+    await vi.waitFor(() => expect(upstreamClosed).toBe(true));
+    expect(await (await fetch(`${url}/hub/status`)).text()).toBe('hub');
+  });
+
   it('uses the same routing for WebSocket upgrades and keeps upstream handshake decisions', async () => {
     const upstream = createServer();
     let received: IncomingMessage | undefined;
