@@ -21,7 +21,8 @@
     "CHANGELOG.md",
     "registry",
     "registry.config.json",
-    "public/r"
+    "public/r",
+    "skills"
   ],
   "exports": {
     ".": {
