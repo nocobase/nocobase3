@@ -1,7 +1,7 @@
 export { default } from './plugin.js';
 
 /**
- * Better Auth's API Key plugin, wrapped only to supply defaults.
+ * Better Auth's API Key plugin with NocoBase defaults and trusted server operations.
  *
  * It carries Better Auth's name, options, and behaviour, so Better Auth's
  * documentation applies unchanged. It is exported from here rather than
@@ -9,7 +9,7 @@ export { default } from './plugin.js';
  * `apikey` table migration, and that table has to match the schema this
  * version of `@better-auth/api-key` declares.
  */
-export { apiKey } from './api-keys.js';
+export { apiKey, type ApiKeysPlugin } from './api-keys.js';
 
 export { API_KEY_ERROR_CODES, API_KEY_TABLE_NAME } from '@better-auth/api-key';
 
@@ -18,3 +18,8 @@ export type {
   ApiKeyConfigurationOptions,
   ApiKeyOptions,
 } from '@better-auth/api-key';
+export {
+  ApiKeyService,
+  type ServerApiKeySummary,
+  type CreateServerApiKeyInput,
+} from './service.js';

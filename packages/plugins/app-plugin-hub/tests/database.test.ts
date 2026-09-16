@@ -1,3 +1,7 @@
+import operatorRemovalMigration from '../database/migrations/202609160008_operator_remove_own_apps.js';
+import removeDeploymentMode from '../database/migrations/202609160006_remove_deployment_mode.js';
+import configFingerprintMigration from '../database/migrations/202609160007_release_config_fingerprint.js';
+import publishingMigration from '../database/migrations/202609160005_release_publishing.js';
 import sqlite from '@nocobase/db-sqlite';
 import {
   createDatabaseManager,
@@ -6,6 +10,7 @@ import {
 } from '@nocobase/db';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import ownershipMigration from '../database/migrations/202609160004_hub_app_ownership.js';
 import appTablesMigration from '../database/migrations/202609010001_create_hub_app_tables.js';
 import permissionSetsMigration from '../database/migrations/202609080001_create_hub_permission_sets.js';
 import administratorSeed from '../database/seeds/202609080001_assign_hub_administrator.js';
@@ -41,6 +46,104 @@ describe('@nocobase/app-plugin-hub database migration', () => {
     await database.destroy();
   });
 
+  it('adds and reverses the publishing configuration fingerprint while preserving existing rows', async () => {
+    await migrate(appTablesMigration, 'up', database);
+    await migrate(publishingMigration, 'up', database);
+    await database
+      .query()
+      .insertInto('hubReleaseChecksums')
+      .values({ appId: 'crm', checksum: 'a'.repeat(64), releaseId: 'old' })
+      .execute();
+    await migrate(configFingerprintMigration, 'up', database);
+    const client = await database.connection().client<SqliteClient>();
+    expect(
+      await client.schema.hasColumn(
+        'hub_release_checksums',
+        'config_fingerprint',
+      ),
+    ).toBe(true);
+    expect(
+      await database
+        .query()
+        .selectFrom('hubReleaseChecksums')
+        .selectAll()
+        .execute(),
+    ).toMatchObject([{ releaseId: 'old', configFingerprint: null }]);
+    await migrate(configFingerprintMigration, 'down', database);
+    expect(
+      await client.schema.hasColumn(
+        'hub_release_checksums',
+        'config_fingerprint',
+      ),
+    ).toBe(false);
+    await migrate(configFingerprintMigration, 'up', database);
+    expect(
+      await database
+        .query()
+        .selectFrom('hubReleaseChecksums')
+        .selectAll()
+        .execute(),
+    ).toHaveLength(1);
+  });
+
+  it('preserves duplicate release history while selecting a canonical checksum and reverses publishing tables', async () => {
+    await migrate(appTablesMigration, 'up', database);
+    for (const id of ['old', 'new'])
+      await database
+        .query()
+        .insertInto('hubAppReleases')
+        .values({
+          id,
+          appId: 'crm',
+          version: '1.0.0',
+          artifactKey: id,
+          checksum: 'a'.repeat(64),
+          size: 1,
+          configTemplate: null,
+          manifest: null,
+          createdAt: new Date(id === 'old' ? '2026-01-01' : '2026-02-01'),
+        })
+        .execute();
+    await migrate(publishingMigration, 'up', database);
+    expect(
+      await database.query().selectFrom('hubAppReleases').selectAll().execute(),
+    ).toHaveLength(2);
+    expect(
+      await database
+        .query()
+        .selectFrom('hubReleaseChecksums')
+        .selectAll()
+        .execute(),
+    ).toMatchObject([{ releaseId: 'old' }]);
+    await expect(
+      database
+        .query()
+        .insertInto('hubReleaseChecksums')
+        .values({ appId: 'crm', checksum: 'a'.repeat(64), releaseId: 'new' })
+        .execute(),
+    ).rejects.toThrow();
+    await migrate(removeDeploymentMode, 'up', database);
+    const schema = await database.connection().client<SqliteClient>();
+    expect(await schema.schema.hasColumn('hub_apps', 'deployment_mode')).toBe(
+      false,
+    );
+    await migrate(removeDeploymentMode, 'down', database);
+    await migrate(publishingMigration, 'down', database);
+    const client = await database.connection().client<SqliteClient>();
+    expect(await client.schema.hasColumn('hub_apps', 'deployment_mode')).toBe(
+      false,
+    );
+    expect(await client.schema.hasTable('hub_release_checksums')).toBe(false);
+    await migrate(publishingMigration, 'up', database);
+    expect(
+      await database
+        .query()
+        .selectFrom('hubReleaseChecksums')
+        .selectAll()
+        .execute(),
+    ).toHaveLength(1);
+  });
+
   it('creates the App, Release, and Deployment schema', async () => {
     await migrate(appTablesMigration, 'up', database);
     const client = await database.connection().client<SqliteClient>();
@@ -74,6 +177,42 @@ describe('@nocobase/app-plugin-hub database migration', () => {
     expect(appMetadata?.document.fields).not.toHaveProperty('config');
   });
 
+  it('adds nullable ownership without assigning legacy Apps and reverses schema and metadata', async () => {
+    await migrate(appTablesMigration, 'up', database);
+    const query = database.query();
+    await query
+      .insertInto('hubApps')
+      .values({
+        id: 'legacy',
+        name: 'Legacy',
+        enabled: false,
+        basePath: '/legacy',
+        backend: 'in-process',
+        startupMode: 'lazy',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .execute();
+    await migrate(ownershipMigration, 'up', database);
+    const client = await database.connection().client<SqliteClient>();
+    expect(await client.schema.hasColumn('hub_apps', 'created_by')).toBe(true);
+    expect(
+      (await metadataStore.get('hubApps'))?.document.fields,
+    ).toHaveProperty('createdBy');
+    expect(
+      await query.selectFrom('hubApps').select(['id', 'createdBy']).execute(),
+    ).toEqual([{ id: 'legacy', createdBy: null }]);
+    await migrate(ownershipMigration, 'down', database);
+    expect(await client.schema.hasColumn('hub_apps', 'created_by')).toBe(false);
+    expect(
+      (await metadataStore.get('hubApps'))?.document.fields,
+    ).not.toHaveProperty('createdBy');
+    await migrate(ownershipMigration, 'up', database);
+    expect(await query.selectFrom('hubApps').select('id').execute()).toEqual([
+      { id: 'legacy' },
+    ]);
+  });
+
   it('drops the schema and metadata', async () => {
     await migrate(appTablesMigration, 'up', database);
     await migrate(appTablesMigration, 'down', database);
@@ -87,6 +226,78 @@ describe('@nocobase/app-plugin-hub database migration', () => {
     for (const [collection] of COLLECTIONS) {
       await expect(metadataStore.get(collection)).resolves.toBeUndefined();
     }
+  });
+
+  it('adds Operator removal once while preserving other grants, roles, and assignments', async () => {
+    await createAuthorizationTables(database);
+    await migrate(permissionSetsMigration, 'up', database);
+    const query = database.connection().query;
+    const customGrant = {
+      resource: { type: 'custom.resource', id: 'mine' },
+      actions: [{ action: 'read', policy: { type: 'custom-policy' } }],
+    };
+    const before = await query
+      .selectFrom('authorizationPermissionSets')
+      .selectAll()
+      .orderBy('key')
+      .execute();
+    const operator = before.find((role) => role.key === 'hub-operator')!;
+    const grants = (
+      typeof operator.grants === 'string'
+        ? JSON.parse(operator.grants)
+        : operator.grants
+    ) as unknown[];
+    await query
+      .updateTable('authorizationPermissionSets')
+      .set({ grants: JSON.stringify([...grants, customGrant]) })
+      .where('key', '=', 'hub-operator')
+      .execute();
+    const assignments = await query
+      .selectFrom('authorizationPermissionSetAssignments')
+      .selectAll()
+      .execute();
+
+    await migrate(operatorRemovalMigration, 'up', database);
+    const after = await query
+      .selectFrom('authorizationPermissionSets')
+      .selectAll()
+      .orderBy('key')
+      .execute();
+    const changed = after.find((role) => role.key === 'hub-operator')!;
+    const updated = (
+      typeof changed.grants === 'string'
+        ? JSON.parse(changed.grants)
+        : changed.grants
+    ) as unknown[];
+    expect(updated).toEqual([
+      ...grants.map((grant) => {
+        const value = grant as {
+          resource: { type: string; id: string };
+          actions: { action: string }[];
+        };
+        return value.resource.type === 'hub.app' && value.resource.id === '*'
+          ? { ...value, actions: [...value.actions, { action: 'remove' }] }
+          : value;
+      }),
+      customGrant,
+    ]);
+    expect(after.filter((role) => role.key !== 'hub-operator')).toEqual(
+      before.filter((role) => role.key !== 'hub-operator'),
+    );
+    expect(
+      await query
+        .selectFrom('authorizationPermissionSetAssignments')
+        .selectAll()
+        .execute(),
+    ).toEqual(assignments);
+    await migrate(operatorRemovalMigration, 'up', database);
+    expect(
+      await query
+        .selectFrom('authorizationPermissionSets')
+        .selectAll()
+        .orderBy('key')
+        .execute(),
+    ).toEqual(after);
   });
 
   it('creates fixed Hub roles and upgrades every system administrator', async () => {

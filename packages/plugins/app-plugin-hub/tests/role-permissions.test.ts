@@ -1,3 +1,10 @@
+import {
+  apiClientToken,
+  realtimeClientToken,
+  type AppClientRefineConfig,
+} from '@nocobase/app-client';
+import { AuthorizationServiceProvider } from '../../app-plugin-authorization/client/service-provider.js';
+import { createHubRoutes } from '../client/routes.js';
 import { fileURLToPath } from 'node:url';
 
 import {
@@ -44,6 +51,13 @@ const ADMINISTRATOR_AND_OPERATOR = [
 const ALL_HUB_ROLES = HUB_ROLES;
 
 const HUB_API_CASES: readonly ApiCase[] = [
+  {
+    name: 'rename an application',
+    method: 'PUT',
+    path: '/hub/apps/customer/settings',
+    body: json({ name: 'Renamed App' }),
+    allowed: ADMINISTRATOR_AND_OPERATOR,
+  },
   {
     name: 'list applications',
     path: '/hub/apps',
@@ -161,7 +175,7 @@ const HUB_API_CASES: readonly ApiCase[] = [
     name: 'remove an application',
     method: 'DELETE',
     path: '/hub/apps/customer',
-    allowed: ['hub-administrator'],
+    allowed: ADMINISTRATOR_AND_OPERATOR,
   },
   {
     name: 'read Host status',
@@ -263,7 +277,26 @@ describe('Hub role API permissions', () => {
       '@nocobase/app-plugin-hub',
       '../database/migrations',
     );
-    registerHubResources(authorization);
+    registerHubResources(authorization, database.connection());
+    await authorization.permissionSets.assign({
+      subject: { type: 'user', id: 'operator-two' },
+      permissionSet: 'hub-operator',
+    });
+    await database
+      .query()
+      .insertInto('hubApps')
+      .values({
+        id: 'customer',
+        name: 'Customer',
+        createdBy: 'hub-operator',
+        enabled: false,
+        basePath: '/customer',
+        backend: 'in-process',
+        startupMode: 'lazy',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .execute();
 
     const resourceContainer = new ServiceContainer();
     resourceContainer.instance(authorizationToken, authorization);
@@ -281,8 +314,181 @@ describe('Hub role API permissions', () => {
     await database.destroy();
   });
 
+  it.each(HUB_ROLES)(
+    'maps Hub tab routes to the real %s permission snapshot',
+    async (role) => {
+      const snapshot = await authorization
+        .for({ principal: { type: 'user', id: role } })
+        .permissions();
+      const container = new ServiceContainer();
+      container.instance(apiClientToken, {
+        request: vi.fn().mockResolvedValue({ data: snapshot }),
+      } as never);
+      container.instance(realtimeClientToken, {
+        subscribe: () => () => {},
+        onOpen: () => () => {},
+      } as never);
+      const setAccessControlProvider =
+        vi.fn<
+          (
+            value: NonNullable<AppClientRefineConfig['accessControlProvider']>,
+          ) => void
+        >();
+      const provider = new AuthorizationServiceProvider({
+        container,
+        refine: { setAccessControlProvider },
+      } as never);
+      provider.register();
+      await provider.boot();
+      const { can } = setAccessControlProvider.mock.calls[0]![0];
+      expect(await can({ resource: 'hub.app:*', action: 'remove' })).toEqual({
+        can: role !== 'hub-viewer',
+      });
+      const routes = createHubRoutes().routes;
+      const tabs = routes[0]!.children![0]!.children!;
+      for (const tab of tabs) {
+        if (!tab.access) continue;
+        const allowed =
+          role !== 'hub-viewer' ||
+          ['deployments', 'releases'].includes(tab.path!);
+        expect(await can(tab.access), `${role}: ${tab.name}`).toEqual({
+          can: allowed,
+        });
+      }
+      expect(await can(routes[1]!.access!)).toEqual({
+        can: role === 'hub-administrator',
+      });
+      await provider.shutdown();
+    },
+  );
+
+  describe('application ownership boundary', () => {
+    async function router(userId: string) {
+      await database
+        .query()
+        .updateTable('hubApps')
+        .set({ createdBy: 'hub-operator' })
+        .where('id', '=', 'customer')
+        .execute();
+      return hubApiRoutes.createRouter(
+        createRoleApplication(userId, authorization, hub, users),
+      );
+    }
+
+    it.each(
+      HUB_API_CASES.filter((scenario) =>
+        scenario.path.startsWith('/hub/apps/customer'),
+      ),
+    )('rejects a second Operator attempting to $name', async (scenario) => {
+      const app = await router('operator-two');
+      const response = await request(app, scenario);
+      expect(response.status).toBe(403);
+    });
+
+    it('allows administrators to delete another owner’s App but denies ownerless App deletion to Operators', async () => {
+      const admin = await router('hub-administrator');
+      expect(
+        (await admin.request('/hub/apps/customer', { method: 'DELETE' }))
+          .status,
+      ).toBe(200);
+      const operator = await router('hub-operator');
+      await database
+        .query()
+        .updateTable('hubApps')
+        .set({ createdBy: null })
+        .where('id', '=', 'customer')
+        .execute();
+      expect(
+        (await operator.request('/hub/apps/customer', { method: 'DELETE' }))
+          .status,
+      ).toBe(403);
+    });
+
+    it('binds the creator to the session even when the request forges ownership', async () => {
+      const app = await router('operator-two');
+      const response = await app.request('/hub/apps', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: json({
+          id: 'new-app',
+          name: 'New App',
+          createdBy: 'hub-administrator',
+        }),
+      });
+      expect(response.status).toBe(200);
+      expect(hub.createApp).toHaveBeenLastCalledWith(
+        expect.any(Object),
+        'operator-two',
+      );
+    });
+
+    it('binds catalog scope to each user and ignores forged filters', async () => {
+      for (const userId of ['hub-operator', 'operator-two', 'hub-viewer']) {
+        const app = await router(userId);
+        expect(
+          (
+            await app.request(
+              '/hub/apps?createdBy=hub-administrator&allApps=true',
+            )
+          ).status,
+        ).toBe(200);
+        expect(hub.listAppsPage).toHaveBeenLastCalledWith({
+          createdBy: userId,
+        });
+      }
+      const admin = await router('hub-administrator');
+      expect((await admin.request('/hub/apps')).status).toBe(200);
+      expect(hub.listAppsPage).toHaveBeenLastCalledWith({});
+    });
+
+    it('keeps legacy Apps administrator-only and applies role changes immediately', async () => {
+      const app = await router('hub-operator');
+      await database
+        .query()
+        .updateTable('hubApps')
+        .set({ createdBy: null })
+        .where('id', '=', 'customer')
+        .execute();
+      expect((await app.request('/hub/apps/customer')).status).toBe(403);
+      await authorization.permissionSets.assign({
+        subject: { type: 'user', id: 'hub-operator' },
+        permissionSet: 'hub-administrator',
+      });
+      expect((await app.request('/hub/apps/customer')).status).toBe(200);
+      await authorization.permissionSets.replaceSubjectAssignments({
+        subject: { type: 'user', id: 'hub-operator' },
+        managedPermissionSets: [...HUB_ROLES],
+        permissionSets: ['hub-operator'],
+      });
+      expect((await app.request('/hub/apps/customer')).status).toBe(403);
+    });
+
+    it('removes other users Apps from Host status', async () => {
+      const other = await router('operator-two');
+      vi.mocked(hub.hostStatus).mockResolvedValueOnce({
+        deployments: [{ appId: 'customer' }],
+      } as never);
+      expect(
+        await (await other.request('/hub/host/status')).json(),
+      ).toMatchObject({ data: { deployments: [] } });
+      const own = await router('hub-operator');
+      vi.mocked(hub.hostStatus).mockResolvedValueOnce({
+        deployments: [{ appId: 'customer' }],
+      } as never);
+      expect(
+        await (await own.request('/hub/host/status')).json(),
+      ).toMatchObject({ data: { deployments: [{ appId: 'customer' }] } });
+    });
+  });
+
   describe.each(HUB_ROLES)('%s', (role) => {
     it.each(HUB_API_CASES)('$name matches the role grant', async (scenario) => {
+      await database
+        .query()
+        .updateTable('hubApps')
+        .set({ createdBy: role })
+        .where('id', '=', 'customer')
+        .execute();
       const router = await hubApiRoutes.createRouter(
         createRoleApplication(role, authorization, hub, users),
       );
@@ -314,7 +520,7 @@ describe('Hub role API permissions', () => {
 });
 
 function createRoleApplication(
-  role: HubRole,
+  role: string,
   authorization: ReturnType<typeof createAppAuthorization>,
   hub: HubService,
   users: UserManagementService,
@@ -455,7 +661,7 @@ function createHubService(): HubService {
     restart: vi.fn(() => Promise.resolve(detail)),
     stop: vi.fn(() => Promise.resolve(detail)),
     remove: vi.fn(() => Promise.resolve()),
-    hostStatus: vi.fn(() => Promise.resolve({} as never)),
+    hostStatus: vi.fn(() => Promise.resolve({ deployments: [] } as never)),
     restoreDesiredState: vi.fn(() => Promise.resolve()),
     createDeploymentSet: vi.fn(() => Promise.resolve({} as never)),
     hostUrl: vi.fn(() => null),
@@ -504,7 +710,7 @@ function request(
           body: scenario.body,
           ...(hasJsonBody
             ? { headers: { 'content-type': 'application/json' } }
-            : {}),
+            : { headers: { 'content-type': 'application/gzip' } }),
         }),
   });
 }

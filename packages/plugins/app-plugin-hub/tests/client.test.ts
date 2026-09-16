@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Boxes, ShieldCheck } from 'lucide-react';
+import { Boxes, ShieldCheck, KeyRound } from 'lucide-react';
 
 import hub from '../client/plugin.js';
 import {
@@ -16,7 +16,7 @@ import {
 describe('@nocobase/app-plugin-hub', () => {
   it('declares the authenticated Hub page and lazy-loads it', async () => {
     expect(routes.parent).toBe('app');
-    expect(routes.routes).toHaveLength(1);
+    expect(routes.routes).toHaveLength(2);
     expect(routes.routes[0]).toMatchObject({
       name: 'hub',
       path: '/hub',
@@ -96,6 +96,12 @@ describe('@nocobase/app-plugin-hub', () => {
           path: '/roles',
           access: { resource: 'users', action: 'access' },
           navigation: { title: 'navigation.roles', icon: ShieldCheck },
+        },
+        {
+          name: 'hub-api-keys',
+          path: '/api-keys',
+          access: { resource: 'hub.app:*', action: 'manage-api-keys' },
+          navigation: { title: 'navigation.apiKeys', icon: KeyRound },
         },
       ],
     });

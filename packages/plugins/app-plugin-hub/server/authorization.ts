@@ -1,3 +1,4 @@
+import { HUB_RELEASE_ACTIONS } from '../shared/permissions.js';
 import type { DatabaseConnection } from '@nocobase/db';
 import type { AppAuthorization } from '@nocobase/app-plugin-authorization';
 import {
@@ -19,14 +20,16 @@ export const HUB_ADMINISTRATOR: 'hub-administrator' =
 
 const HUB_APP_ACTIONS = new Set([
   'read',
+  'read-all',
   'create',
   'update-settings',
   'remove',
+  'manage-api-keys',
   'read-release',
-  'upload-release',
+  HUB_RELEASE_ACTIONS.upload,
   'read-config-template',
   'read-deployment',
-  'deploy',
+  HUB_RELEASE_ACTIONS.deploy,
   'rollback',
   'read-config',
   'update-config',
@@ -38,15 +41,27 @@ const HUB_APP_ACTIONS = new Set([
 
 export function registerHubResources(
   authorization: Pick<AppAuthorization, 'resources'>,
+  connection: DatabaseConnection,
 ): void {
-  registerGrantBackedResource(authorization, 'hub.app', HUB_APP_ACTIONS);
-  registerGrantBackedResource(authorization, 'hub.host', new Set(['read']));
+  registerGrantBackedResource(
+    authorization,
+    'hub.app',
+    HUB_APP_ACTIONS,
+    connection,
+  );
+  registerGrantBackedResource(
+    authorization,
+    'hub.host',
+    new Set(['read']),
+    connection,
+  );
 }
 
 function registerGrantBackedResource(
   authorization: Pick<AppAuthorization, 'resources'>,
   resourceType: 'hub.app' | 'hub.host',
   actions: ReadonlySet<string>,
+  connection: DatabaseConnection,
 ): void {
   authorization.resources.add({
     resourceType,
@@ -63,14 +78,37 @@ function registerGrantBackedResource(
           ],
         };
       }
+      // read-all is a catalog scope check, derived only from the Hub Administrator's read grant.
       const grants = await context.grants.resolve({
         principal: request.principal,
         subjects: request.subjects,
         resource: request.resource,
-        action: request.action,
+        action: request.action === 'read-all' ? 'read' : request.action,
       });
       const staticGrants = grants.filter((grant) => grant.policy === undefined);
-      return staticGrants.length
+      const administrator = staticGrants.some(
+        (grant) =>
+          grant.source.plugin === 'permission-sets' &&
+          grant.source.id === HUB_ADMINISTRATOR,
+      );
+      let ownsApp = true;
+      if (resourceType === 'hub.app' && !administrator) {
+        if (
+          request.action === 'read-all' ||
+          request.principal.type !== 'user'
+        ) {
+          ownsApp = false;
+        } else if (request.resource.id !== '*') {
+          const app = await connection.query
+            .selectFrom('hubApps')
+            .select('id')
+            .where('id', '=', request.resource.id)
+            .where('createdBy', '=', request.principal.id)
+            .executeTakeFirst();
+          ownsApp = Boolean(app);
+        }
+      }
+      return staticGrants.length && ownsApp
         ? {
             effect: 'permit',
             reasons: staticGrants.map((grant) => ({
@@ -118,14 +156,14 @@ export function createHubUserRoleScope(
           label: 'Operator',
           labelI18nKey: 'roles.names.hub-operator',
           labelI18nNs: '@nocobase/app-plugin-hub',
-          description: 'Deploy and operate applications.',
+          description: 'Create, deploy, and operate your own applications.',
         },
         {
           value: 'hub-viewer',
           label: 'Viewer',
           labelI18nKey: 'roles.names.hub-viewer',
           labelI18nNs: '@nocobase/app-plugin-hub',
-          description: 'View application and runtime status.',
+          description: 'View your own applications and runtime status.',
         },
       ]),
     async get(userId, connection) {

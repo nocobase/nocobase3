@@ -11,6 +11,8 @@ export interface HubClientOptions {
   readonly applicationsPath?: string;
   /** App-relative path for the read-only Hub role matrix. Omit to disable it. */
   readonly rolesPath?: string;
+  /** App-relative path for Hub publishing API keys. */
+  readonly apiKeysPath?: string;
 }
 
 const hub: AppClientPluginFactory<HubClientOptions> = defineClientPlugin({

@@ -1,3 +1,4 @@
+import { Toaster, toast } from 'sonner';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import type { ReactElement } from 'react';
@@ -51,9 +52,10 @@ vi.mock('@nocobase/i18n/client', () => ({
 
 import AppPage from '../client/pages/hub/app-page.js';
 import DeploymentsPage from '../client/pages/hub/tabs/deployments-page.js';
+import SettingsPage from '../client/pages/hub/tabs/settings-page.js';
 import { Detail } from '../client/pages/hub/detail.js';
 import { ApplicationsCatalog } from '../client/pages/hub-page.js';
-import { ErrorBanner } from '../client/pages/hub/shared.js';
+import { ErrorNotification } from '../client/pages/hub/shared.js';
 import { readError } from '../client/pages/hub/utils.js';
 
 const appSummary = (id: string, name = id): AppSummary => ({
@@ -156,10 +158,14 @@ const renderAppPage = (
   render(
     <MemoryRouter initialEntries={[initialEntry]}>
       <Routes>
-        <Route path='/apps/:appId' element={<AppPage />}>
-          <Route path='deployments' element={<DeploymentsTab />} />
-          <Route path='releases' element={<div>Releases tab</div>} />
-          <Route path='*' element={<div>Unknown tab</div>} />
+        <Route path='/apps'>
+          <Route index element={<div>Applications catalog</div>} />
+          <Route path=':appId' element={<AppPage />}>
+            <Route path='deployments' element={<DeploymentsTab />} />
+            <Route path='releases' element={<div>Releases tab</div>} />
+            <Route path='settings' element={<SettingsPage />} />
+            <Route path='*' element={<div>Unknown tab</div>} />
+          </Route>
         </Route>
       </Routes>
     </MemoryRouter>,
@@ -178,6 +184,7 @@ const getPaginationControl = (label: string): HTMLElement => {
 
 describe('Hub client pages', () => {
   beforeEach(() => {
+    render(<Toaster position='top-right' />);
     mocks.client.request.mockReset();
     mocks.authorization.can.mockReset().mockResolvedValue(true);
     mocks.authorization.invalidatePermissions.mockReset();
@@ -187,7 +194,168 @@ describe('Hub client pages', () => {
   });
 
   afterEach(() => {
+    toast.dismiss();
     vi.restoreAllMocks();
+  });
+
+  it('requires confirmation before deleting an owned App and returns to the catalog', async () => {
+    renderAppPage('/apps/customer/settings');
+    const requestedDeletion = () =>
+      mocks.client.request.mock.calls.some(
+        ([request]) => request.method === 'DELETE',
+      );
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Remove application' }),
+    );
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(requestedDeletion()).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(requestedDeletion()).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove application' }));
+    mocks.client.request.mockResolvedValueOnce({ data: { success: true } });
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Remove', exact: true }),
+    );
+    await screen.findByText('Applications catalog');
+    expect(mocks.client.request).toHaveBeenCalledWith({
+      path: 'hub/apps/customer',
+      method: 'DELETE',
+    });
+  });
+
+  it('hides deletion when the App removal permission is denied', async () => {
+    mocks.authorization.can.mockImplementation(
+      (_resource: unknown, action: string) =>
+        Promise.resolve(action !== 'remove'),
+    );
+    renderAppPage('/apps/customer/settings');
+    await screen.findByText('Application settings');
+    expect(
+      screen.queryByRole('button', { name: 'Remove application' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('edits the App name, rejects blank input, and refreshes the saved heading', async () => {
+    renderAppPage('/apps/customer/settings');
+    const input = await screen.findByLabelText('Application name');
+    const save = screen.getByRole('button', { name: 'Save settings' });
+    expect(input).toHaveValue('Customer');
+    expect(save).toBeDisabled();
+    fireEvent.change(input, { target: { value: '   ' } });
+    expect(save).toBeDisabled();
+    fireEvent.change(input, { target: { value: '  New name  ' } });
+    expect(save).toBeEnabled();
+    mocks.client.request.mockImplementation(
+      ({ path, method }: { path: string; method?: string }) => {
+        if (method === 'PUT')
+          return Promise.resolve({ data: { success: true } });
+        if (path === 'hub/apps/customer')
+          return Promise.resolve({
+            data: detail({ app: { ...detail().app, name: 'New name' } }),
+          });
+        return Promise.resolve({
+          data: { items: [], total: 0, page: 1, pageSize: 20 },
+        });
+      },
+    );
+    fireEvent.click(save);
+    await screen.findByRole('heading', { name: 'New name' });
+    expect(mocks.client.request).toHaveBeenCalledWith({
+      path: 'hub/apps/customer/settings',
+      method: 'PUT',
+      json: { name: 'New name', activation: 'eager' },
+    });
+    expect(screen.getByLabelText('Application name')).toHaveValue('New name');
+    expect(
+      screen.getByRole('button', { name: 'Save settings' }),
+    ).toBeDisabled();
+  });
+
+  it('keeps an unsaved name and shows a notification when saving fails', async () => {
+    renderAppPage('/apps/customer/settings');
+    fireEvent.change(await screen.findByLabelText('Application name'), {
+      target: { value: 'Draft name' },
+    });
+    mocks.client.request.mockRejectedValueOnce(
+      new Error('Could not save name'),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Save settings' }));
+    await screen.findByText('Could not save name');
+    expect(screen.getByLabelText('Application name')).toHaveValue('Draft name');
+    expect(screen.getByRole('button', { name: 'Save settings' })).toBeEnabled();
+  });
+
+  it('generates different IDs for repeated application names', async () => {
+    mocks.client.request.mockImplementation(({ method }: { method?: string }) =>
+      Promise.resolve(method === 'POST' ? { data: {} } : { data: page([]) }),
+    );
+    renderCatalog();
+    const ids: string[] = [];
+    for (let count = 0; count < 2; count += 1) {
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'New application' }),
+      );
+      fireEvent.change(screen.getByLabelText('Application name'), {
+        target: { value: 'TMS' },
+      });
+      ids.push(
+        (screen.getByLabelText(/Application ID/) as HTMLInputElement).value,
+      );
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Create application' }),
+      );
+      await waitFor(() =>
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+      );
+      expect(mocks.client.request).toHaveBeenCalledWith({
+        path: 'hub/apps',
+        method: 'POST',
+        json: { id: ids[count], name: 'TMS' },
+      });
+    }
+    expect(ids[0]).not.toBe(ids[1]);
+  });
+
+  it('generates editable IDs and reports conflicts above an open create dialog', async () => {
+    const conflict = Object.assign(new Error('ID conflict'), {
+      payload: {
+        error: {
+          code: 'APP_EXISTS',
+          message: 'Application ID is unavailable.',
+        },
+      },
+    });
+    mocks.client.request.mockImplementation(
+      ({ method }: { method?: string }) =>
+        method === 'POST'
+          ? Promise.reject(conflict)
+          : Promise.resolve({ data: page([]) }),
+    );
+    renderCatalog();
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'New application' }),
+    );
+    const name = screen.getByLabelText('Application name');
+    const id = screen.getByLabelText(/Application ID/);
+    fireEvent.change(name, { target: { value: 'TMS' } });
+    expect((id as HTMLInputElement).value).toMatch(/^tms-[a-f0-9]{8}$/);
+    fireEvent.change(id, { target: { value: 'tms' } });
+    fireEvent.change(name, { target: { value: 'My TMS' } });
+    expect(id).toHaveValue('tms');
+    fireEvent.click(screen.getByRole('button', { name: 'Create application' }));
+    expect(
+      await screen.findByText('Application ID is unavailable'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(name).toHaveValue('My TMS');
+    expect(id).toHaveValue('tms');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    const notification = screen
+      .getByText('Application ID is unavailable')
+      .closest('[data-sonner-toaster]');
+    expect(notification).toHaveAttribute('data-x-position', 'right');
+    expect(notification).toHaveAttribute('data-y-position', 'top');
   });
 
   it('debounces catalog search and sends the trimmed query to the server', async () => {
@@ -355,7 +523,7 @@ describe('Hub client pages', () => {
     expect(screen.queryByText('Unknown')).not.toBeInTheDocument();
   });
 
-  it('renders a friendly restart failure while keeping raw details collapsed', () => {
+  it('notifies a friendly restart failure while keeping raw details collapsed', async () => {
     const rawMessage = 'Restart failed: App "hdsp" failed to reload';
     const apiError = Object.assign(new Error(rawMessage), {
       payload: {
@@ -365,9 +533,9 @@ describe('Hub client pages', () => {
         },
       },
     });
-    render(<ErrorBanner error={readError(apiError)} />);
+    render(<ErrorNotification error={readError(apiError)} />);
 
-    expect(screen.getByText('Restart failed')).toBeInTheDocument();
+    expect(await screen.findByText('Restart failed')).toBeInTheDocument();
     expect(
       screen.getByText(
         'The application could not be restarted. Check its deployment status and try again.',
@@ -410,7 +578,7 @@ describe('Hub client pages', () => {
       expect(screen.getByText('Restart failed')).toBeInTheDocument(),
     );
     expect(screen.queryByText('Restart Customer?')).not.toBeInTheDocument();
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(
       screen.getByText(
@@ -466,6 +634,7 @@ describe('Hub client pages', () => {
     render(
       <MemoryRouter initialEntries={['/apps/customer/deployments']}>
         <Routes>
+          <Route path='/apps' element={<div>Applications catalog</div>} />
           <Route path='/apps/:appId' element={<AppPage />}>
             <Route path='deployments' element={<DeploymentsPage />} />
           </Route>
@@ -473,7 +642,9 @@ describe('Hub client pages', () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Deploy' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Deploy release' }),
+    );
 
     const rows = await screen.findAllByRole('button', {
       name: /v1\.0\.0-beta\.22/,

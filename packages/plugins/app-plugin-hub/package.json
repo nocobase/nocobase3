@@ -35,7 +35,8 @@
   "files": [
     "dist",
     "README.md",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "skills"
   ],
   "publishConfig": {
     "access": "public",
@@ -81,7 +82,8 @@
     "@sinclair/typebox": "catalog:",
     "hono": "catalog:",
     "tar": "^7.4.3",
-    "yaml": "^2.8.1"
+    "yaml": "^2.8.1",
+    "better-auth": "catalog:"
   },
   "peerDependencies": {
     "@base-ui/react": "catalog:",
@@ -101,9 +103,11 @@
     "clsx": "catalog:",
     "codemirror": "^6.0.2",
     "lucide-react": "catalog:",
+    "sonner": "^2.0.3",
     "react": "^19.0.0",
     "react-router": "catalog:",
-    "tailwind-merge": "catalog:"
+    "tailwind-merge": "catalog:",
+    "@nocobase/app-plugin-api-keys": "workspace:^"
   },
   "devDependencies": {
     "@nocobase/db-sqlite": "workspace:*",
