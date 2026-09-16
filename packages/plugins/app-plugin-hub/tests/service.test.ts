@@ -24,7 +24,8 @@ import {
   InMemoryCollectionMetadataStore,
   type DatabaseManager,
 } from '@nocobase/db';
-import { c as createTar } from 'tar';
+import { c as createTar, Header } from 'tar';
+import { gzipSync } from 'node:zlib';
 import { parse as parseYaml } from 'yaml';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -821,6 +822,85 @@ describe('@nocobase/app-plugin-hub service', () => {
     expect(detail.app.createdAt.valueOf()).toBeGreaterThan(before);
     expect(detail.app.updatedAt.valueOf()).toBeGreaterThan(before);
   });
+
+  it.each([
+    {
+      path: 'dist/server/embedded.js',
+      type: 'SymbolicLink' as const,
+      code: 'INVALID_ARTIFACT',
+    },
+    {
+      path: 'dist/server/embedded.js',
+      type: 'Link' as const,
+      code: 'INVALID_ARTIFACT',
+    },
+    {
+      path: 'config.example.yml',
+      type: 'File' as const,
+      size: 16 * 1024 * 1024 + 1,
+      code: 'INVALID_ARTIFACT',
+    },
+    { path: '../outside.js', type: 'File' as const, code: 'UNSAFE_ARTIFACT' },
+    { path: '/outside.js', type: 'File' as const, code: 'UNSAFE_ARTIFACT' },
+  ])(
+    'rejects malformed $type entry $path without breaking subsequent uploads',
+    async (invalid) => {
+      await service.createApp({ id: 'customer', name: 'Customer' });
+      const temporaryRoot = path.join(rootDir, 'upload-temporary');
+      await mkdir(temporaryRoot);
+      const temporaryDirectory = vi
+        .spyOn(os, 'tmpdir')
+        .mockReturnValue(temporaryRoot);
+      try {
+        const entry = (data: {
+          path: string;
+          type: 'File' | 'SymbolicLink' | 'Link';
+          size?: number;
+        }) => {
+          const size = data.size ?? 0;
+          const header = new Header({
+            ...data,
+            size,
+            mode: 0o600,
+            linkpath: data.type === 'File' ? '' : 'package.json',
+          });
+          const block = Buffer.alloc(512);
+          header.encode(block);
+          return Buffer.concat([
+            block,
+            Buffer.alloc(Math.ceil(size / 512) * 512),
+          ]);
+        };
+        const bytes = gzipSync(
+          Buffer.concat([
+            entry({ path: 'package.json', type: 'File' }),
+            entry(invalid),
+            entry({ path: 'config.example.yml', type: 'File' }),
+            Buffer.alloc(1024),
+          ]),
+        );
+        await expect(
+          service.createRelease('customer', {
+            bytes,
+            deploymentIntent: 'explicit',
+          }),
+        ).rejects.toMatchObject({ code: invalid.code, status: 422 });
+        expect(await service.listReleases('customer')).toEqual([]);
+        expect((await service.listDeployments('customer')).total).toBe(0);
+        expect(host.targetedOperations).toEqual([]);
+        expect(await readdir(temporaryRoot)).toEqual([]);
+
+        const release = await service.createRelease('customer', {
+          bytes: await createArtifact(rootDir, '1.2.3'),
+        });
+        expect(release.version).toBe('1.2.3');
+        expect(await service.listReleases('customer')).toHaveLength(1);
+        expect(await readdir(temporaryRoot)).toEqual([]);
+      } finally {
+        temporaryDirectory.mockRestore();
+      }
+    },
+  );
 
   it('accepts a Release without a config example', async () => {
     await service.createApp({ id: 'customer', name: 'Customer' });

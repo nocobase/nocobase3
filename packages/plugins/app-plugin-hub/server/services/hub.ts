@@ -1634,6 +1634,10 @@ async function inspectArtifact(archivePath: string): Promise<{
     path.join(os.tmpdir(), 'nocobase-hub-artifact-'),
   );
   try {
+    // tar invokes filter from stream callbacks, outside the extraction promise.
+    // Skip rejected entries and throw only after extraction has settled so that
+    // callers can handle the error and temporary files can be cleaned safely.
+    let validationError: HubError | undefined;
     await extractTar({
       cwd: directory,
       file: archivePath,
@@ -1641,6 +1645,7 @@ async function inspectArtifact(archivePath: string): Promise<{
       preservePaths: false,
       strict: true,
       filter: (entryPath, entry): boolean => {
+        if (validationError) return false;
         const normalized = path.posix.normalize(
           entryPath.replaceAll('\\', '/'),
         );
@@ -1649,11 +1654,12 @@ async function inspectArtifact(archivePath: string): Promise<{
           normalized === '..' ||
           normalized.startsWith('../')
         ) {
-          throw new HubError(
+          validationError = new HubError(
             `Artifact contains unsafe path "${entryPath}".`,
             'UNSAFE_ARTIFACT',
             422,
           );
+          return false;
         }
         const selected =
           ARTIFACT_MANIFEST_PATHS.includes(
@@ -1667,15 +1673,18 @@ async function inspectArtifact(archivePath: string): Promise<{
           selected &&
           (!('type' in entry ? entry.type === 'File' : entry.isFile()) ||
             entry.size > 16 * 1024 * 1024)
-        )
-          throw new HubError(
+        ) {
+          validationError = new HubError(
             'Artifact metadata and entry point must be regular files no larger than 16 MiB.',
             'INVALID_ARTIFACT',
             422,
           );
+          return false;
+        }
         return selected;
       },
     });
+    if (validationError) throw validationError;
     const manifestPath = await findArtifactManifest(directory);
     await assertRegularArtifactFile(directory, EMBEDDED_ENTRY_PATH);
     const packageMetadata = JSON.parse(
