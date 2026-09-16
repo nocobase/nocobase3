@@ -1,5 +1,32 @@
 # @nocobase/app-template-hub
 
+## 1.0.0-beta.19
+
+### Patch Changes
+
+- d927494: Align shared application tooling and dependency declarations with Default while preserving Examples demonstrations and Hub management features. Remove duplicate and unused dependencies, correct repository metadata, and remove obsolete global OpenSSL options from Examples.
+
+  Add Default's Users role scope, permission seed, and complete API Keys authentication integration to Examples. Remove unused workflow, notification, and heartbeat configuration and demonstration routes from Hub. Provide an explicit Playwright entry for the optional AI server test in Default and Examples, using the current API and a real test user's API key.
+
+  Restore the shared Settings surface in Hub so its registered API Keys page is reachable for authorized users. Show the Settings entry only when an accessible navigation page exists across all three templates, correct stale template development and upgrade guidance, and resolve test dependencies through public package exports instead of monorepo-only source paths.
+
+- f5b066d: Increase the compact theme's base corner radius from 0.25rem to 0.375rem for softer corners on controls and containers.
+- d927494: Fix development startup of generated Hub applications by selecting the App Host launcher from the loaded package format, preserving source development in the workspace and using compiled JavaScript in installed packages. Keep the optional application configuration commented out so an empty YAML section cannot override application identity defaults during production startup. Correct the AI Employee plugin Skill namespace so generated applications can synchronize their registered plugins' Skills.
+- d927494: Declare @nocobase/db as a runtime dependency alongside the SQLite driver, matching the Default and Examples templates. This lets TypeScript resolve the database configuration's inferred declaration through the public package path and prevents TS2883 when building a generated Hub application.
+- 89955c5: Upgrade better-sqlite3 to ^13.0.3 and keep its dependency declaration in @nocobase/db-sqlite only. Remove redundant test dependencies from consumers so they use the same SQLite driver as applications.
+
+  Preserve the bundled musl binary when building applications for Alpine Linux.
+
+- 92c355f: Add build command help that exits before loading build dependencies or changing deployment artifacts. Record deployment target metadata even when no native modules are present, detect musl for current-machine Linux builds, and document the platform and Node fields available for deployment checks.
+- Updated dependencies [d927494]
+- Updated dependencies [6acf3bc]
+- Updated dependencies [89955c5]
+  - @nocobase/app-plugin-hub@0.1.0-beta.7
+  - @nocobase/app-plugin-users@0.0.2-beta.3
+  - @nocobase/app-plugin-api-keys@0.1.0-beta.2
+  - @nocobase/db-sqlite@0.1.0-beta.2
+  - @nocobase/app-plugin-authentication@0.1.0-beta.15
+
 ## 1.0.0-beta.18
 
 ### Patch Changes
