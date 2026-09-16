@@ -1,3 +1,4 @@
+import { PageHeader } from '../../components/page-header.js';
 import {
   AIChatWindow,
   AIEmployeeShortcut,
@@ -55,28 +56,14 @@ export function PageContextPage() {
 function PageContextPageContent() {
   const t = useAITranslate();
   return (
-    <div className='space-y-12 pb-12'>
-      <section className='flex flex-wrap items-start justify-between gap-5 border-b pb-8'>
-        <div>
-          <div className='flex items-center gap-2'>
-            <Badge variant='secondary'>
-              {t('demo.badge.components', 'AI Components')}
-            </Badge>
-            <Badge variant='outline'>
-              {t('demo.badge.pageContext', 'Conversation context')}
-            </Badge>
-          </div>
-          <h1 className='mt-4 text-3xl font-semibold tracking-[-0.035em]'>
-            {t('demo.context.title', 'Page context and frontend tools')}
-          </h1>
-          <p className='mt-3 max-w-3xl text-sm leading-6 text-muted-foreground'>
-            {t(
-              'demo.context.description',
-              'Connect AI employees to live React page state. Start with manual context selection, configure task context, then expose fixed or custom frontend capabilities that can safely update the page.',
-            )}
-          </p>
-        </div>
-      </section>
+    <div className='space-y-6'>
+      <PageHeader
+        title={t('demo.context.title', 'Page context and frontend tools')}
+        description={t(
+          'demo.context.description',
+          'Connect AI employees to live React page state. Start with manual context selection, configure task context, then expose fixed or custom frontend capabilities that can safely update the page.',
+        )}
+      />
 
       <ContextSection
         eyebrow='Manual context'

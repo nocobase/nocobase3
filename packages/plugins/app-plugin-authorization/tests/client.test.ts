@@ -3,6 +3,7 @@ import {
   apiClientToken,
   realtimeClientToken,
   type ApiClient,
+  type AppClientRefineConfig,
   type RealtimeClient,
 } from '@nocobase/app-client';
 import { ServiceContainer } from '@nocobase/service-provider';
@@ -40,7 +41,13 @@ describe('@nocobase/app-plugin-authorization client', () => {
   it('contributes its administration pages as one settings group', () => {
     expect(AuthorizationServiceProvider).toBeTypeOf('function');
     expect(routes).toMatchObject({ parent: 'settings' });
-    expect(reactProviders).toEqual([]);
+    expect(reactProviders).toMatchObject([
+      {
+        name: 'authorization',
+        after: ['@nocobase/app-plugin-authentication:authentication'],
+        component: expect.any(Function),
+      },
+    ]);
   });
 
   it('keeps every administration page at the URL it was published at', () => {
@@ -500,3 +507,125 @@ function options(): AuthorizationOptions {
     recordAccessPolicies: [],
   };
 }
+
+describe('permission snapshot lifecycle', () => {
+  const resource = { type: 'page', id: 'users' };
+  const granted = {
+    data: { permissions: [{ resource, actions: ['access'] }] },
+  };
+  const denied = { data: { permissions: [] } };
+
+  it('refetches permissions across admin, operator, and admin sessions', async () => {
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce(granted)
+      .mockResolvedValueOnce(denied)
+      .mockResolvedValueOnce(granted);
+    const client = new AuthorizationClient({ request } as never);
+    expect(await client.can(resource, 'access')).toBe(true);
+    expect(await client.can(resource, 'access')).toBe(true);
+    expect(request).toHaveBeenCalledTimes(1);
+    client.invalidatePermissions();
+    expect(await client.can(resource, 'access')).toBe(false);
+    client.invalidatePermissions();
+    expect(await client.can(resource, 'access')).toBe(true);
+    expect(request).toHaveBeenCalledTimes(3);
+    expect(client.getPermissionsRevision()).toBe(2);
+  });
+
+  it.each(['resolve', 'reject'] as const)(
+    'ignores an obsolete request that finishes with %s',
+    async (outcome) => {
+      const old = Promise.withResolvers<typeof granted>();
+      const request = vi
+        .fn()
+        .mockReturnValueOnce(old.promise)
+        .mockResolvedValueOnce(denied);
+      const client = new AuthorizationClient({ request } as never);
+      const oldCheck = client.can(resource, 'access');
+      client.invalidatePermissions();
+      expect(await client.can(resource, 'access')).toBe(false);
+      if (outcome === 'resolve') old.resolve(granted);
+      else old.reject(new Error('Previous session expired'));
+      expect(await oldCheck).toBe(false);
+      expect(await client.can(resource, 'access')).toBe(false);
+      expect(request).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it('allows retry after the current request fails', async () => {
+    const request = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('Offline'))
+      .mockResolvedValueOnce(granted);
+    const client = new AuthorizationClient({ request } as never);
+    await expect(client.can(resource, 'access')).rejects.toThrow('Offline');
+    expect(await client.can(resource, 'access')).toBe(true);
+  });
+});
+
+describe('explicit domain route permissions', () => {
+  it('preserves domain actions and resource ids without falling back to page grants', async () => {
+    const container = new ServiceContainer();
+    const request = vi.fn().mockResolvedValue({
+      data: {
+        permissions: [
+          {
+            resource: { type: 'hub.app', id: '*' },
+            actions: ['upload-release'],
+          },
+          { resource: { type: 'report', id: 'one' }, actions: ['read'] },
+          { resource: { type: 'page', id: 'hub' }, actions: ['access'] },
+          { resource: { type: 'page', id: 'hub.app' }, actions: ['access'] },
+          {
+            resource: { type: 'settings', id: 'authorization.permission-sets' },
+            actions: ['read'],
+          },
+        ],
+      },
+    });
+    container.instance(apiClientToken, { request } as never);
+    container.instance(realtimeClientToken, {
+      subscribe: () => () => {},
+      onOpen: () => () => {},
+    } as never);
+    const setAccessControlProvider =
+      vi.fn<
+        (
+          value: NonNullable<AppClientRefineConfig['accessControlProvider']>,
+        ) => void
+      >();
+    const provider = new AuthorizationServiceProvider({
+      container,
+      refine: { setAccessControlProvider },
+    } as never);
+    provider.register();
+    await provider.boot();
+    const { can } = setAccessControlProvider.mock.calls[0]![0];
+    expect(
+      await can({ resource: 'hub.app:*', action: 'upload-release' }),
+    ).toEqual({ can: true });
+    expect(
+      await can({ resource: 'hub.app:*', action: 'manage-api-keys' }),
+    ).toEqual({ can: false });
+    expect(await can({ resource: 'report:one', action: 'read' })).toEqual({
+      can: true,
+    });
+    expect(await can({ resource: 'report:two', action: 'read' })).toEqual({
+      can: false,
+    });
+    expect(await can({ resource: 'report:', action: 'read' })).toEqual({
+      can: false,
+    });
+    expect(await can({ resource: 'hub', action: 'access' })).toEqual({
+      can: true,
+    });
+    expect(
+      await can({
+        resource: 'settings.authorization.permission-sets',
+        action: 'list',
+      }),
+    ).toEqual({ can: true });
+    await provider.shutdown();
+  });
+});

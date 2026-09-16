@@ -26,6 +26,7 @@ import {
 import repositoryExample from '@nocobase/app-plugin-repository-example/server';
 import file from '@nocobase/app-plugin-file/server';
 import fileExample from '@nocobase/app-plugin-file-example/server';
+import apiKeys from '@nocobase/app-plugin-api-keys/server';
 
 const serverPlugins: AppServerPlugins = defineServerPlugins([
   authentication,
@@ -37,6 +38,7 @@ const serverPlugins: AppServerPlugins = defineServerPlugins([
   authorizationExample,
   users,
   databaseExplorer,
+  apiKeys,
   databaseExample,
   i18n,
   install,

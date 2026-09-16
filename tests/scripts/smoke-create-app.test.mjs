@@ -24,7 +24,9 @@ if (command === 'config') {
 } else {
   if (process.cwd() !== path.join(state, 'crm')) throw new Error('Not in generated application');
   fs.appendFileSync(path.join(state, 'commands'), command + '\\n');
-  if (command === 'build') {
+  if (command === 'plugin:skills:sync') {
+    if (scenario === 'skills-fails') process.exit(8);
+  } else if (command === 'build') {
     const devPid = Number(fs.readFileSync(path.join(state, 'dev.pid'), 'utf8'));
     let alive = false;
     try { process.kill(devPid, 0); alive = true; } catch {}
@@ -151,7 +153,12 @@ for (const basePath of ['', '/main', '/nested/app']) {
   test(`builds and starts the generated application at ${basePath || '/'}`, async (t) => {
     const result = await runSmoke(t, 'success', basePath);
     assert.equal(result.code, 0, result.output);
-    assert.deepEqual(result.commands, ['dev', 'build', 'start']);
+    assert.deepEqual(result.commands, [
+      'plugin:skills:sync',
+      'dev',
+      'build',
+      'start',
+    ]);
     assert.match(result.output, /passed dev, build, and start/u);
     assert.ok(result.output.includes(`${basePath}/api/healthz`));
   });
@@ -160,7 +167,12 @@ for (const basePath of ['', '/main', '/nested/app']) {
 test('keeps waiting for production readiness when the progress log is unavailable', async (t) => {
   const result = await runSmoke(t, 'start-log-unavailable');
   assert.equal(result.code, 0, result.output);
-  assert.deepEqual(result.commands, ['dev', 'build', 'start']);
+  assert.deepEqual(result.commands, [
+    'plugin:skills:sync',
+    'dev',
+    'build',
+    'start',
+  ]);
   assert.match(result.output, /tail: cannot open .*start\.log/u);
   assert.match(result.output, /passed dev, build, and start/u);
 });
@@ -175,7 +187,13 @@ for (const [scenario, commands, error] of [
   test(`fails and cleans up when ${scenario}`, async (t) => {
     const result = await runSmoke(t, scenario);
     assert.equal(result.code, 1, result.output);
-    assert.deepEqual(result.commands, commands);
+    assert.deepEqual(result.commands, ['plugin:skills:sync', ...commands]);
     assert.ok(result.output.includes(error), result.output);
   });
 }
+
+test('stops before dev when plugin Skills cannot be synchronized', async (t) => {
+  const result = await runSmoke(t, 'skills-fails');
+  assert.equal(result.code, 8, result.output);
+  assert.deepEqual(result.commands, ['plugin:skills:sync']);
+});

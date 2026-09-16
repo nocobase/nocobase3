@@ -1,7 +1,7 @@
 {
   "name": "@nocobase/app-template-default",
   "displayName": "Default Template",
-  "version": "1.0.0-beta.28",
+  "version": "1.0.0-beta.30",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -10,7 +10,7 @@
   "packageManager": "pnpm@11.7.0",
   "nocobase": {
     "templateKind": "app",
-    "defaultTemplateVersion": "1.0.0-beta.28"
+    "defaultTemplateVersion": "1.0.0-beta.30"
   },
   "devDependencies": {
     "@ai-sdk/react": "2.0.0",
@@ -21,9 +21,7 @@
     "@nocobase/ai-employee": "workspace:^",
     "@nocobase/ai-employee-avatars": "^1.0.2",
     "@nocobase/app-client": "workspace:^",
-    "@nocobase/app-plugin-database-explorer": "workspace:^",
     "@nocobase/app-plugin-notification-provider": "workspace:^",
-    "@nocobase/app-plugin-users": "workspace:^",
     "@nocobase/app-portal-sdk": "workspace:^",
     "@nocobase/app-websocket": "workspace:^",
     "@nocobase/caching": "workspace:^",
@@ -34,6 +32,7 @@
     "@nocobase/logging": "workspace:^",
     "@nocobase/queue": "workspace:^",
     "@nocobase/session": "workspace:^",
+    "@playwright/test": "catalog:",
     "@refinedev/cli": "^2.16.48",
     "@refinedev/core": "catalog:",
     "@refinedev/react-hook-form": "^5.0.0",
@@ -126,14 +125,16 @@
     "README.MD",
     "AGENTS.md",
     "CLAUDE.md",
-    "skills"
+    "skills",
+    "playwright.config.ts"
   ],
   "publishConfig": {
     "access": "public"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/nocobase/app-template-default.git"
+    "url": "git+https://github.com/nocobase/nocobase3.git",
+    "directory": "packages/templates/app-template-default"
   },
   "scripts": {
     "dev": "tsx ./scripts/dev/index.mjs",
@@ -164,7 +165,8 @@
     "test:all": "pnpm typecheck && pnpm test && pnpm build",
     "start": "node ./scripts/start.mjs",
     "refine": "refine",
-    "pack:check": "pnpm pack --out \"$PACK_DIR/nocobase-app-template-default.tgz\" && pnpm exec publint ."
+    "pack:check": "pnpm pack --out \"$PACK_DIR/nocobase-app-template-default.tgz\" && pnpm exec publint .",
+    "test:e2e": "playwright test --pass-with-no-tests"
   },
   "browserslist": {
     "production": [
@@ -204,5 +206,6 @@
     "@nocobase/app-plugin-authz-default-access": "workspace:^",
     "@nocobase/app-plugin-authz-sharing-rules": "workspace:^",
     "@nocobase/app-plugin-authz-restriction-rules": "workspace:^"
-  }
+  },
+  "description": "NocoBase 3 application template with the standard product capabilities."
 }

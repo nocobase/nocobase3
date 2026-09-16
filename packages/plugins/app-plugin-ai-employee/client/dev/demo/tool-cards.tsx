@@ -1,9 +1,9 @@
+import { PageHeader } from '../../components/page-header.js';
 import {
   ToolCallCard,
   type ToolCallPart,
 } from '../../../registry/nocobase-ai/components/chat/tool-call-card.js';
 import { PromptOutput } from '../../../registry/nocobase-ai/shared/prompt-output.js';
-import { Badge } from '../../../registry/nocobase-ai/shared/ui/badge.js';
 import {
   Card,
   CardContent,
@@ -212,28 +212,14 @@ export function ToolCardsPage() {
   );
 
   return (
-    <div className='space-y-10 pb-12'>
-      <section className='flex flex-wrap items-start justify-between gap-5 border-b pb-8'>
-        <div>
-          <div className='flex items-center gap-2'>
-            <Badge variant='secondary'>
-              {t('demo.badge.components', 'AI Components')}
-            </Badge>
-            <Badge variant='outline'>
-              {t('demo.badge.toolRenderers', 'Tool renderers')}
-            </Badge>
-          </div>
-          <h1 className='mt-4 text-3xl font-semibold tracking-[-0.035em]'>
-            {t('demo.tools.title', 'Tool Cards')}
-          </h1>
-          <p className='mt-3 max-w-3xl text-sm leading-6 text-muted-foreground'>
-            {t(
-              'demo.tools.description',
-              'Specialized tools render their complete business interaction. Tools without a registered renderer fall back to the shared status, approval, error, and input disclosure card.',
-            )}
-          </p>
-        </div>
-      </section>
+    <div className='space-y-6'>
+      <PageHeader
+        title={t('demo.tools.title', 'Tool Cards')}
+        description={t(
+          'demo.tools.description',
+          'Specialized tools render their complete business interaction. Tools without a registered renderer fall back to the shared status, approval, error, and input disclosure card.',
+        )}
+      />
 
       <section className='space-y-5'>
         <SectionTitle

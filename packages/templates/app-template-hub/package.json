@@ -1,7 +1,7 @@
 {
   "name": "@nocobase/app-template-hub",
   "displayName": "NocoBase Hub",
-  "version": "1.0.0-beta.18",
+  "version": "1.0.0-beta.20",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -10,13 +10,12 @@
   "packageManager": "pnpm@11.7.0",
   "nocobase": {
     "templateKind": "hub",
-    "defaultTemplateVersion": "1.0.0-beta.18"
+    "defaultTemplateVersion": "1.0.0-beta.20"
   },
   "devDependencies": {
     "@ai-sdk/react": "2.0.0",
     "@base-ui/react": "catalog:",
     "@dicebear/core": "^9.4.3",
-    "@fontsource-variable/geist": "^5.3.0",
     "@gchust/agent-annotations": "0.1.8",
     "@hookform/resolvers": "^5.0.1",
     "@nocobase/ai-employee-avatars": "^1.0.2",
@@ -25,7 +24,6 @@
     "@nocobase/app-portal-sdk": "workspace:^",
     "@nocobase/app-websocket": "workspace:^",
     "@nocobase/caching": "workspace:^",
-    "@nocobase/db": "workspace:^",
     "@nocobase/dev-config": "workspace:*",
     "@nocobase/drive": "workspace:^",
     "@nocobase/i18n": "workspace:^",
@@ -34,13 +32,9 @@
     "@nocobase/session": "workspace:^",
     "@refinedev/cli": "^2.16.48",
     "@refinedev/core": "catalog:",
-    "@refinedev/devtools": "^2.0.1",
     "@refinedev/react-hook-form": "^5.0.0",
     "@refinedev/react-router": "^2.0.0",
     "@refinedev/react-table": "^6.0.0",
-    "@refinedev/rest": "^2.1.0",
-    "@refinedev/simple-rest": "^6.0.0",
-    "@shadcn/react": "^0.2.1",
     "@tailwindcss/postcss": "catalog:",
     "@tailwindcss/vite": "catalog:",
     "@tanstack/react-query": "catalog:",
@@ -73,6 +67,7 @@
     "embla-carousel-react": "^8.6.0",
     "eslint": "catalog:",
     "eventsource-parser": "3.1.0",
+    "hono": "catalog:",
     "ignore": "catalog:",
     "input-otp": "^1.4.2",
     "jsdom": "catalog:",
@@ -135,7 +130,8 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/nocobase/portal-template-default.git"
+    "url": "git+https://github.com/nocobase/nocobase3.git",
+    "directory": "packages/templates/app-template-hub"
   },
   "scripts": {
     "dev": "tsx ./scripts/dev/index.mjs",
@@ -187,10 +183,10 @@
     "@nocobase/app-plugin-hub": "workspace:^",
     "@nocobase/app-plugin-i18n": "workspace:^",
     "@nocobase/app-plugin-install": "workspace:^",
-    "@nocobase/app-plugin-workflow": "workspace:^",
-    "@nocobase/config": "workspace:^",
     "@nocobase/app-plugin-users": "workspace:^",
     "@nocobase/app-server": "workspace:^",
+    "@nocobase/config": "workspace:^",
+    "@nocobase/db": "workspace:^",
     "@nocobase/db-sqlite": "workspace:^",
     "@nocobase/nb3-cli": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
@@ -203,5 +199,6 @@
     "@nocobase/app-plugin-authz-default-access": "workspace:^",
     "@nocobase/app-plugin-authz-sharing-rules": "workspace:^",
     "@nocobase/app-plugin-authz-restriction-rules": "workspace:^"
-  }
+  },
+  "description": "NocoBase 3 Hub for managing and hosting applications."
 }

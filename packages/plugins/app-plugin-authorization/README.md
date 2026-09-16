@@ -24,6 +24,8 @@ Client and server locale catalogues provide English and Chinese messages. Server
 
 Use `authz.getResource(type)` to access a registered resource type. Settings and page authorization are built in. An unknown type throws. Each resource has a `groups` tree for display and a flat `items` registry for grantable resources. Group IDs must be unique within the resource type, including all descendants. An item's optional `group` references one of those IDs; omit it to display the item at the root. Group membership never grants access or changes an item's authorization ID.
 
+Explicit domain checks use `access: { resource: 'type:id', action: 'action' }`, for example `hub.app:*` with `upload-release`. These checks preserve the resource type, identifier, and action. Plain resource names continue to check `page:<name>/access`; `settings.<id>` retains its administration action mapping. The permission snapshot only controls client visibility; the server must still enforce record ownership and operation permissions.
+
 ```ts
 const settings = authz.getResource('settings');
 settings.groups.add({

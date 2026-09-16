@@ -13,6 +13,8 @@ The workspace start scripts use `tsx` because internal package exports resolve
 to TypeScript source during monorepo development. Published package exports
 resolve to compiled JavaScript instead.
 
+When embedding `AppHostSupervisor`, use `driver: 'auto'` to follow the loaded package: a supervisor loaded from TypeScript launches the source CLI with `tsx`, while a supervisor loaded from compiled JavaScript launches the compiled CLI with Node. This selection is independent of `NODE_ENV`, so an installed package can run in development without shipping its sources. An omitted driver still defaults to `node`; explicit `node` and `tsx` selections keep their existing behavior.
+
 By default the host listens on `127.0.0.1:3000` and discovers deployed apps
 from `./storage/app-deployments` in the current working directory.
 

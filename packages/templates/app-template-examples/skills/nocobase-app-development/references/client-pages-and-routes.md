@@ -33,12 +33,15 @@ const routes: readonly AppClientRouteContribution[] = [
 export default routes;
 ```
 
-The page module must default-export its component:
+The page module must default-export its component and wrap its content in `PageContainer` to use the shared page padding and spacing:
 
 ```tsx
 // client/pages/orders.tsx
+import type { ReactElement } from 'react';
+import { PageContainer } from '@/components/page-container';
+
 export default function OrdersPage(): ReactElement {
-  return <section className='p-6'>...</section>;
+  return <PageContainer>...</PageContainer>;
 }
 ```
 
@@ -106,7 +109,7 @@ defineSettingsRoutes([
 ]);
 ```
 
-`navigation` puts the page in the settings navigation. `access` is checked before the page loads; when it is denied the page disappears from navigation and a direct URL will not load the component.
+`navigation` puts the page in the settings navigation. The header shows the Settings entry only when at least one such page is accessible. `access` is checked before the page loads; when it is denied the page disappears from navigation and a direct URL will not load the component.
 
 A settings page without `access` is open to every signed-in user who can reach the settings area. Declare `access` explicitly on anything sensitive, and enforce the same rule on the server.
 
@@ -146,16 +149,16 @@ The owning layout supplies the route tree: `AppShell` for business pages, and `S
 }
 ```
 
-The page places `<Breadcrumbs />` itself, above its heading, and keeps its own container and spacing:
+The page places `<Breadcrumbs />` itself, above its heading, inside `PageContainer`, which supplies the shared page spacing:
 
 ```tsx
-<section className='mx-auto w-full max-w-6xl space-y-6 p-6 md:p-8'>
+<PageContainer className='mx-auto max-w-6xl'>
   <Breadcrumbs />
   <PageHeader
     title={t('orders.title')}
     actions={<Button>{t('orders.create')}</Button>}
   />
-</section>
+</PageContainer>
 ```
 
 The trail follows the matched route hierarchy:
@@ -211,3 +214,7 @@ defineSettingsRoutes([
 ```
 
 Without `parent`, the root entry keeps its existing placement under Settings. Entries inside `children` must not also declare `parent`. Groups can declare empty `children` for extension. Original children precede appended entries, which retain plugin and entry registration order. Missing targets, page targets, cycles, duplicate sibling names and conflicting paths are errors; groups are never silently merged. This extension applies to Settings only, not App or Dev routes.
+
+Account-menu sign-out checks the Better Auth result for an error before refreshing the session. Keep failures visible through the localized error toast; do not simulate sign-out by redirecting while the server session remains valid.
+
+The authorization provider clears the permission snapshot before rendering a new session. Route navigation and page guards subscribe to the authorization revision; preserve these checks when customizing the shell so account changes and permission updates take effect without a reload. Pending checks hide protected content, and failed checks deny access.

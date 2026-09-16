@@ -1,4 +1,5 @@
 import type { AppClientRegisteredRoute } from '@nocobase/app-client/plugins';
+import { useAuthorizationRevision } from '@nocobase/app-plugin-authorization/client';
 import { useCanWithoutCache } from '@refinedev/core';
 import { useEffect, useMemo, useState } from 'react';
 import { matchPath, matchRoutes, type RouteObject } from 'react-router';
@@ -69,6 +70,8 @@ export function useRouteNavigation(
   surface = false,
 ) {
   const { can } = useCanWithoutCache();
+  // Recheck mounted menus after session or realtime permission invalidation.
+  const revision = useAuthorizationRevision();
   const guards = useMemo(() => {
     const collect = (
       nodes: readonly AppClientRegisteredRoute[],
@@ -97,6 +100,7 @@ export function useRouteNavigation(
   }, [routes, surface]);
   const [result, setResult] = useState<{
     guards: typeof guards;
+    revision: number;
     denied: ReadonlySet<string>;
   }>();
   useEffect(() => {
@@ -114,14 +118,19 @@ export function useRouteNavigation(
       if (active)
         setResult({
           guards,
+          revision,
           denied: new Set(ids.filter((id) => id !== undefined)),
         });
     });
     return () => {
       active = false;
     };
-  }, [can, guards]);
-  const loading = Boolean(can && guards.length && result?.guards !== guards);
+  }, [can, guards, revision]);
+  const loading = Boolean(
+    can &&
+    guards.length &&
+    (result?.guards !== guards || result.revision !== revision),
+  );
   const denied =
     can && guards.length
       ? (result?.denied ?? new Set<string>())

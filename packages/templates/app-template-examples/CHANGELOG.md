@@ -1,5 +1,52 @@
 # @nocobase/app-template-examples
 
+## 0.1.0-beta.12
+
+### Patch Changes
+
+- 489d08a: Read settings navigation from the existing application runtime and remove the redundant settings route context from template headers.
+- 9b6c645: Add the PageContainer component from the Examples template to the Default and Hub templates.
+
+  Require PageContainer when writing page components in all three application development Skills, and align page and child-route examples with the shared container.
+
+- Updated dependencies [9131230]
+- Updated dependencies [9131230]
+  - @nocobase/app-plugin-ai-employee@0.1.0-beta.13
+  - @nocobase/app-plugin-notification-in-app@0.2.0-beta.12
+  - @nocobase/app-plugin-routes-example@0.1.0-beta.10
+
+## 0.1.0-beta.11
+
+### Patch Changes
+
+- d927494: Align shared application tooling and dependency declarations with Default while preserving Examples demonstrations and Hub management features. Remove duplicate and unused dependencies, correct repository metadata, and remove obsolete global OpenSSL options from Examples.
+
+  Add Default's Users role scope, permission seed, and complete API Keys authentication integration to Examples. Remove unused workflow, notification, and heartbeat configuration and demonstration routes from Hub. Provide an explicit Playwright entry for the optional AI server test in Default and Examples, using the current API and a real test user's API key.
+
+  Restore the shared Settings surface in Hub so its registered API Keys page is reachable for authorized users. Show the Settings entry only when an accessible navigation page exists across all three templates, correct stale template development and upgrade guidance, and resolve test dependencies through public package exports instead of monorepo-only source paths.
+
+- f5b066d: Increase the compact theme's base corner radius from 0.25rem to 0.375rem for softer corners on controls and containers.
+- 89955c5: Upgrade better-sqlite3 to ^13.0.3 and keep its dependency declaration in @nocobase/db-sqlite only. Remove redundant test dependencies from consumers so they use the same SQLite driver as applications.
+
+  Preserve the bundled musl binary when building applications for Alpine Linux.
+
+- 92c355f: Add build command help that exits before loading build dependencies or changing deployment artifacts. Record deployment target metadata even when no native modules are present, detect musl for current-machine Linux builds, and document the platform and Node fields available for deployment checks.
+- Updated dependencies [6acf3bc]
+- Updated dependencies [d927494]
+- Updated dependencies [6acf3bc]
+- Updated dependencies [89955c5]
+  - @nocobase/app-plugin-ai-employee@0.1.0-beta.12
+  - @nocobase/app-plugin-database-explorer@0.1.0-beta.2
+  - @nocobase/app-plugin-users@0.0.2-beta.3
+  - @nocobase/app-plugin-api-keys@0.1.0-beta.2
+  - @nocobase/app-plugin-workflow@0.1.0-beta.17
+  - @nocobase/app-plugin-notification@0.1.0-beta.10
+  - @nocobase/db-sqlite@0.1.0-beta.2
+  - @nocobase/app-plugin-authentication@0.1.0-beta.15
+  - @nocobase/app-plugin-file@0.1.0-beta.12
+  - @nocobase/app-plugin-file-example@0.1.0-beta.7
+  - @nocobase/app-plugin-repository-example@0.1.0-beta.8
+
 ## 0.1.0-beta.10
 
 ### Patch Changes

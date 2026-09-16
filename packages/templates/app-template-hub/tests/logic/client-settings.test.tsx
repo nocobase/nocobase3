@@ -1,0 +1,741 @@
+import type {
+  AppClientRegisteredRoute,
+  AppClientRegisteredSetting,
+  AppClientRegisteredSettingGroup,
+  AppClientSettingIcon,
+} from '@nocobase/app-client/plugins';
+import {
+  ClientApplicationContext,
+  type ClientApplication,
+} from '@nocobase/app-client';
+import {
+  AuthenticationProvider,
+  authenticationClientToken,
+} from '@nocobase/app-plugin-authentication/client';
+import {
+  AuthorizationClient,
+  authorizationClientToken,
+} from '@nocobase/app-plugin-authorization/client';
+import {
+  Refine,
+  type AccessControlProvider,
+  type AuthProvider,
+} from '@refinedev/core';
+import { fireEvent, render, screen } from '@testing-library/react';
+import type { ReactElement } from 'react';
+import { MemoryRouter, Outlet, useParams } from 'react-router';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { AppRouter } from '../../client/routing/app-router.tsx';
+import { HeaderActions } from '../../client/shell/header-actions.tsx';
+import { AppThemeProvider } from '../../client/theme/index.ts';
+
+function WorkflowDetailTestPage(): ReactElement {
+  return <h2>Workflow detail {useParams().workflowId}</h2>;
+}
+
+describe('settings centre', () => {
+  beforeEach(() => {
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      addEventListener: vi.fn(),
+      addListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+      matches: query === '(prefers-color-scheme: dark)',
+      media: query,
+      onchange: null,
+      removeEventListener: vi.fn(),
+      removeListener: vi.fn(),
+    }));
+  });
+
+  it.each(['settings', 'dev'] as const)(
+    'opens a healthy %s page after another page fails to load',
+    async (surface) => {
+      const broken: AppClientRegisteredRoute = {
+        id: 'broken',
+        name: 'broken',
+        path: `/${surface}/broken`,
+        auth: 'required',
+        packageName: 'test',
+        source: 'application',
+        navigation: { title: 'Broken page' },
+        componentLoader: async () => {
+          throw new Error('Module unavailable');
+        },
+      };
+      const healthy: AppClientRegisteredRoute = {
+        ...broken,
+        id: 'healthy',
+        name: 'healthy',
+        path: `/${surface}/healthy`,
+        navigation: { title: 'Healthy page' },
+        componentLoader: async () => ({
+          default: () => <h2>Healthy content</h2>,
+        }),
+      };
+      const tree = [broken, healthy];
+      renderApp(
+        <AppRouter
+          clientRoutes={[]}
+          settingsRouteTree={surface === 'settings' ? tree : []}
+          devRouteTree={surface === 'dev' ? tree : []}
+        />,
+        broken.path,
+        surface === 'settings' ? tree : [],
+      );
+      expect(await screen.findByText('Unable to load page')).toBeVisible();
+      fireEvent.click(screen.getByRole('link', { name: 'Healthy page' }));
+      expect(await screen.findByText('Healthy content')).toBeVisible();
+      expect(screen.queryByText('Unable to load page')).not.toBeInTheDocument();
+    },
+  );
+
+  it('shows the Settings entry from the application runtime without AppRouter', async () => {
+    renderApp(<HeaderActions />, '/', toRouteTree(SETTINGS, GROUPS));
+
+    expect(
+      await screen.findByRole('link', { name: 'Settings' }),
+    ).toHaveAttribute('href', '/settings');
+  });
+
+  it('renders the requested setting with a grouped navigation of the rest', async () => {
+    renderSettings('/settings/authorization/default-access');
+
+    expect(await screen.findByText('Default Access page')).toBeVisible();
+    expect(screen.getByRole('navigation', { name: 'Settings' })).toBeVisible();
+    expect(screen.getByText('Authorization')).toBeVisible();
+    expect(
+      screen.getByRole('link', { name: 'Workflow General' }),
+    ).toBeVisible();
+    expect(
+      screen.getAllByRole('link', { name: 'Default Access' })[0],
+    ).toHaveAttribute('aria-current', 'page');
+    expect(
+      screen.getAllByRole('link', { name: 'Permission Sets' })[0],
+    ).not.toHaveAttribute('aria-current');
+    expect(
+      screen.getAllByRole('link', { name: 'Back to app' })[0],
+    ).toHaveAttribute('href', '/');
+  });
+
+  it('keeps both header entries visible inside settings', async () => {
+    renderSettings('/settings/authorization/permission-sets');
+    await screen.findByText('Permission Sets page');
+
+    expect(
+      await screen.findByRole('button', { name: 'Appearance' }),
+    ).toBeVisible();
+    // The account menu is a real dropdown, so its contents exist only once opened; the trigger carries the name.
+    expect(
+      await screen.findByRole('button', { name: 'Open account menu' }),
+    ).toHaveAttribute('title', 'Alice');
+    expect(screen.getByRole('link', { name: 'Settings' })).toBeVisible();
+    expect(screen.getByRole('link', { name: 'Dev tools' })).toHaveAttribute(
+      'href',
+      '/dev',
+    );
+    expect(
+      screen.getAllByRole('link', { name: 'Back to app' })[0],
+    ).toHaveAttribute('href', '/');
+  });
+
+  it('hides the Settings entry in dev tools when no settings are registered', async () => {
+    const devRoute: AppClientRegisteredSetting = {
+      id: 'playground',
+      navigation: true,
+      packageName: '@nocobase/app-plugin-test',
+      pageLoader: async () => ({
+        default: (): ReactElement => <h2>Playground page</h2>,
+      }),
+      path: '/dev/playground',
+      source: 'plugin',
+      surface: 'dev',
+      title: 'Playground',
+    };
+
+    renderApp(
+      <AppRouter
+        devRouteTree={toRouteTree([devRoute], [])}
+        clientRoutes={[]}
+        settingsRouteTree={[]}
+      />,
+      '/dev/playground',
+    );
+
+    expect(await screen.findByText('Playground page')).toBeVisible();
+    expect(screen.getByRole('link', { name: 'Dev tools' })).toBeVisible();
+    expect(
+      screen.queryByRole('link', { name: 'Settings' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('renders the icon a setting declares, and copes with one that declares none', async () => {
+    renderSettings('/settings/authorization/permission-sets');
+    await screen.findByText('Permission Sets page');
+
+    const iconOf = (name: string) =>
+      screen
+        .getAllByRole('link', { name })[0]
+        .querySelector('[data-testid="setting-icon"]');
+
+    expect(iconOf('Permission Sets')).toBeInTheDocument();
+    expect(iconOf('Default Access')).not.toBeInTheDocument();
+  });
+
+  it('opens the group holding the current page and collapses it on demand', async () => {
+    renderSettings('/settings/authorization/default-access');
+    await screen.findByText('Default Access page');
+
+    const group = screen.getByText('Authorization').closest('details');
+    expect(group).toHaveAttribute('open');
+
+    fireEvent.click(screen.getByText('Authorization'));
+    expect(group).not.toHaveAttribute('open');
+  });
+
+  it('renders an ungrouped page as a flat row rather than a disclosure', async () => {
+    renderSettings('/settings/workflow');
+    await screen.findByText('Workflow General page');
+
+    const link = screen.getAllByRole('link', { name: 'Workflow General' })[0];
+    expect(link).toHaveAttribute('aria-current', 'page');
+    expect(link.closest('details')).toBeNull();
+  });
+
+  it('renders a nested detail route inside settings and keeps its parent selected', async () => {
+    renderSettings('/settings/workflow/item-1', undefined, SETTINGS, GROUPS, [
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-test:workflow-detail',
+        name: 'workflow-detail',
+        packageName: '@nocobase/app-plugin-test',
+        path: '/settings/workflow/:workflowId',
+        source: 'plugin',
+        componentLoader: async () => ({
+          default: WorkflowDetailTestPage,
+        }),
+      },
+    ]);
+
+    expect(await screen.findByText('Workflow detail item-1')).toBeVisible();
+    expect(
+      screen.getAllByRole('link', { name: 'Workflow General' })[0],
+    ).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('retains the default App permission for pages mounted inside settings', async () => {
+    const loader = vi.fn(async () => ({ default: () => <h3>App overlay</h3> }));
+    renderSettings(
+      '/settings/overlay',
+      { can: async ({ resource }) => ({ can: resource !== 'overlay' }) },
+      [],
+      [],
+      [
+        {
+          auth: 'required',
+          id: 'overlay',
+          name: 'overlay',
+          packageName: 'test',
+          source: 'plugin',
+          path: '/settings/overlay',
+          componentLoader: loader,
+        },
+      ],
+    );
+    expect(await screen.findByText('Access denied')).toBeVisible();
+    expect(loader).not.toHaveBeenCalled();
+  });
+
+  it('keeps the parent layout when a nested page denies access', async () => {
+    const loader = vi.fn(async () => ({
+      default: () => <h3>Secret child</h3>,
+    }));
+    const parent: AppClientRegisteredRoute = {
+      auth: 'required',
+      id: 'parent',
+      name: 'parent',
+      packageName: 'test',
+      source: 'plugin',
+      path: '/settings/parent',
+      navigation: { title: 'Parent' },
+      componentLoader: async () => ({
+        default: () => (
+          <>
+            <h2>Parent layout</h2>
+            <Outlet />
+          </>
+        ),
+      }),
+      children: [
+        {
+          auth: 'required',
+          id: 'child',
+          name: 'child',
+          packageName: 'test',
+          source: 'plugin',
+          path: '/settings/parent/child',
+          access: { resource: 'secret', action: 'read' },
+          componentLoader: loader,
+        },
+      ],
+    };
+    renderSettings(
+      '/settings/parent/child',
+      { can: async ({ resource }) => ({ can: resource !== 'secret' }) },
+      [],
+      [],
+      [],
+      [parent],
+    );
+    expect(await screen.findByText('Access denied')).toBeVisible();
+    expect(screen.getByText('Parent layout')).toBeVisible();
+    expect(loader).not.toHaveBeenCalled();
+  });
+
+  it('keeps developer pages inside their surface when wrapped in a pathless App group', async () => {
+    renderSettings(
+      '/settings/grouped',
+      undefined,
+      [],
+      [],
+      [
+        {
+          auth: 'required',
+          id: 'group',
+          name: 'group',
+          path: '/',
+          source: 'plugin',
+          packageName: 'test',
+          children: [
+            {
+              auth: 'required',
+              id: 'page',
+              name: 'page',
+              path: '/settings/grouped',
+              source: 'plugin',
+              packageName: 'test',
+              componentLoader: async () => ({
+                default: () => <h2>Grouped surface page</h2>,
+              }),
+            },
+          ],
+        },
+      ],
+    );
+    expect(await screen.findByText('Grouped surface page')).toBeVisible();
+    expect(screen.getByRole('navigation', { name: 'Settings' })).toBeVisible();
+  });
+
+  it('drops a group whose every page the user is denied', async () => {
+    renderSettings('/settings', {
+      can: async ({ resource }) => ({
+        can: !resource?.startsWith('authorization.settings.'),
+      }),
+    });
+
+    expect(await screen.findByText('Workflow General page')).toBeVisible();
+    expect(screen.queryByText('Authorization')).not.toBeInTheDocument();
+  });
+
+  it('shows a group icon beside its title', async () => {
+    renderSettings('/settings/authorization/default-access');
+    await screen.findByText('Default Access page');
+
+    expect(
+      screen
+        .getByText('Authorization')
+        .closest('summary')
+        ?.querySelector('[data-testid="setting-icon"]'),
+    ).toBeInTheDocument();
+  });
+
+  it('redirects /settings itself to the first setting the user can open', async () => {
+    renderSettings('/settings');
+
+    expect(await screen.findByText('Permission Sets page')).toBeVisible();
+  });
+
+  it('sends an unknown settings path to the first accessible setting', async () => {
+    renderSettings('/settings/nothing/here');
+
+    expect(await screen.findByText('Permission Sets page')).toBeVisible();
+  });
+
+  it('hides a setting the access control provider denies, and does not land on it', async () => {
+    renderSettings('/settings/authorization/permission-sets', {
+      can: async ({ resource }) => ({
+        can: resource !== 'authorization.settings.permission-sets',
+      }),
+    });
+
+    // The denied setting is neither reachable directly nor listed, so the redirect falls through to the next one.
+    expect(await screen.findByText('Default Access page')).toBeVisible();
+    expect(
+      screen.queryByRole('link', { name: 'Permission Sets' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('treats a provider that throws as a denial', async () => {
+    renderSettings('/settings/authorization/permission-sets', {
+      can: async ({ resource }) => {
+        if (resource === 'authorization.settings.permission-sets') {
+          throw new Error('provider unavailable');
+        }
+        return { can: true };
+      },
+    });
+
+    expect(await screen.findByText('Default Access page')).toBeVisible();
+    expect(
+      screen.queryByRole('link', { name: 'Permission Sets' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('explains itself when every setting is denied', async () => {
+    renderSettings(
+      '/settings',
+      { can: async () => ({ can: false }) },
+      SETTINGS.filter((setting) => setting.access !== undefined),
+    );
+
+    expect(
+      await screen.findByRole('heading', { name: 'No settings available' }),
+    ).toBeVisible();
+  });
+
+  it('leaves a setting without an access rule visible even when the provider denies everything', async () => {
+    renderSettings('/settings', { can: async () => ({ can: false }) });
+
+    // `workflow/general` declares no access rule, so reaching the settings centre is the only check it has.
+    expect(await screen.findByText('Workflow General page')).toBeVisible();
+  });
+
+  it('keeps ungoverned settings visible when no plugin registered a provider', async () => {
+    renderSettings(
+      '/settings',
+      undefined,
+      [createSetting('general', 'General')],
+      [],
+    );
+
+    expect(await screen.findByText('General page')).toBeVisible();
+  });
+
+  it('navigates from the small-screen select without reloading the page', async () => {
+    renderSettings('/settings/authorization/permission-sets');
+    await screen.findByText('Permission Sets page');
+
+    fireEvent.change(screen.getByLabelText('Settings page'), {
+      target: { value: '/settings/workflow' },
+    });
+
+    expect(await screen.findByText('Workflow General page')).toBeVisible();
+  });
+
+  it('builds nav entries in declaration order, emitting each group once', () => {
+    const first = createSetting('a', 'A', 'g1');
+    const second = createSetting('b', 'B');
+    const third = createSetting('c', 'C', 'g1');
+    const group: AppClientRegisteredSettingGroup = {
+      id: 'g1',
+      packageName: '@nocobase/app-plugin-test',
+      settings: [first, third],
+      source: 'plugin',
+      title: 'Group One',
+    };
+
+    expect(
+      buildNavEntries([first, second, third], [group]).map((entry) =>
+        entry.kind === 'group'
+          ? ['group', entry.group.settings.map((s) => s.id)]
+          : ['page', entry.setting.id],
+      ),
+    ).toEqual([
+      ['group', ['a', 'c']],
+      ['page', 'b'],
+    ]);
+  });
+
+  it('renders a page flat when it names a group nobody registered', () => {
+    const orphan = createSetting('a', 'A', 'missing');
+
+    expect(buildNavEntries([orphan], [])).toEqual([
+      { kind: 'page', setting: orphan },
+    ]);
+  });
+});
+
+const ICON: AppClientSettingIcon = ({ className }) => (
+  <svg className={className} data-testid='setting-icon' />
+);
+
+const AUTHORIZATION: AppClientRegisteredSettingGroup = {
+  icon: ICON,
+  id: 'authorization',
+  packageName: '@nocobase/app-plugin-test',
+  settings: [
+    createSetting(
+      'permission-sets',
+      'Permission Sets',
+      'authorization',
+      'authorization.settings.permission-sets',
+      ICON,
+    ),
+    createSetting(
+      'default-access',
+      'Default Access',
+      'authorization',
+      'authorization.settings.default-access',
+    ),
+  ],
+  source: 'plugin',
+  surface: 'settings',
+  title: 'Authorization',
+};
+
+// A group's pages are also in the flat list; that is what the router mounts.
+const SETTINGS: readonly AppClientRegisteredSetting[] = [
+  ...AUTHORIZATION.settings,
+  createSetting('workflow', 'Workflow General'),
+];
+
+const GROUPS: readonly AppClientRegisteredSettingGroup[] = [AUTHORIZATION];
+
+function renderSettings(
+  initialEntry: string,
+  accessControlProvider?: AccessControlProvider,
+  settings: readonly AppClientRegisteredSetting[] = SETTINGS,
+  groups: readonly AppClientRegisteredSettingGroup[] = GROUPS,
+  routes: readonly AppClientRegisteredRoute[] = [],
+  tree?: readonly AppClientRegisteredRoute[],
+): void {
+  const settingsRouteTree = tree ?? toRouteTree(settings, groups);
+  renderWithAuthentication(
+    <MemoryRouter initialEntries={[initialEntry]}>
+      <AppThemeProvider>
+        <Refine
+          accessControlProvider={accessControlProvider}
+          authProvider={createAuthProvider()}
+          dataProvider={{
+            getList: vi.fn(),
+            getMany: vi.fn(),
+            getOne: vi.fn(),
+            create: vi.fn(),
+            createMany: vi.fn(),
+            update: vi.fn(),
+            updateMany: vi.fn(),
+            deleteOne: vi.fn(),
+            deleteMany: vi.fn(),
+            getApiUrl: vi.fn(),
+            custom: vi.fn(),
+          }}
+          options={{ disableTelemetry: true }}
+        >
+          <AppRouter
+            devRouteTree={[]}
+            clientRoutes={routes}
+            settingsRouteTree={settingsRouteTree}
+          />
+        </Refine>
+      </AppThemeProvider>
+    </MemoryRouter>,
+    settingsRouteTree,
+  );
+}
+
+/** Renders a router subtree the way renderSettings does, for a surface other than the settings centre. */
+function renderApp(
+  element: ReactElement,
+  initialEntry: string,
+  settingsRouteTree: readonly AppClientRegisteredRoute[] = [],
+): void {
+  renderWithAuthentication(
+    <MemoryRouter initialEntries={[initialEntry]}>
+      <AppThemeProvider>
+        <Refine
+          authProvider={createAuthProvider()}
+          dataProvider={{
+            getList: vi.fn(),
+            getMany: vi.fn(),
+            getOne: vi.fn(),
+            create: vi.fn(),
+            createMany: vi.fn(),
+            update: vi.fn(),
+            updateMany: vi.fn(),
+            deleteOne: vi.fn(),
+            deleteMany: vi.fn(),
+            getApiUrl: vi.fn(),
+            custom: vi.fn(),
+          }}
+          options={{ disableTelemetry: true }}
+        >
+          {element}
+        </Refine>
+      </AppThemeProvider>
+    </MemoryRouter>,
+    settingsRouteTree,
+  );
+}
+
+function createAuthProvider(): AuthProvider {
+  return {
+    check: async () => ({ authenticated: true }),
+    getIdentity: async () => ({ id: 1, fullName: 'Alice' }),
+    login: vi.fn(),
+    logout: vi.fn().mockResolvedValue({ success: true }),
+    onError: async (error) => ({ error }),
+  };
+}
+
+function renderWithAuthentication(
+  element: ReactElement,
+  settingsRouteTree: readonly AppClientRegisteredRoute[],
+): void {
+  const authClient = {
+    getSession: vi.fn().mockResolvedValue({
+      data: {
+        session: null,
+        user: {
+          email: 'alice@example.com',
+          id: '1',
+          image: null,
+          name: 'Alice',
+        },
+      },
+    }),
+    signOut: vi.fn().mockResolvedValue({ data: null }),
+  };
+  const authorizationClient = new AuthorizationClient({
+    request: vi.fn(),
+  } as never);
+  const app = {
+    runtime: { settingsRouteTree },
+    services: {
+      resolve: (token: unknown) => {
+        if (token === authenticationClientToken) return authClient;
+        if (token === authorizationClientToken) return authorizationClient;
+        throw new Error(`Unexpected service token: ${String(token)}`);
+      },
+    },
+  } as unknown as ClientApplication;
+
+  render(
+    <ClientApplicationContext.Provider value={app}>
+      <AuthenticationProvider>{element}</AuthenticationProvider>
+    </ClientApplicationContext.Provider>,
+  );
+}
+
+function createSetting(
+  id: string,
+  title: string,
+  groupId?: string,
+  accessResource?: string,
+  icon?: AppClientSettingIcon,
+): AppClientRegisteredSetting {
+  return {
+    ...(accessResource === undefined
+      ? {}
+      : { access: { resource: accessResource, action: 'read' } }),
+    ...(icon === undefined ? {} : { icon }),
+    ...(groupId === undefined ? {} : { groupId }),
+    id,
+    packageName: '@nocobase/app-plugin-test',
+    pageLoader: async () => ({
+      default: (): ReactElement => <h2>{title} page</h2>,
+    }),
+    path:
+      groupId === undefined ? `/settings/${id}` : `/settings/${groupId}/${id}`,
+    source: 'plugin',
+    surface: 'settings',
+    title,
+  };
+}
+
+function toRouteTree(
+  settings: readonly AppClientRegisteredSetting[],
+  groups: readonly AppClientRegisteredSettingGroup[],
+): AppClientRegisteredRoute[] {
+  const page = (
+    setting: AppClientRegisteredSetting,
+  ): AppClientRegisteredRoute => ({
+    id: setting.id,
+    name: setting.id,
+    path: setting.path,
+    auth: 'required',
+    packageName: setting.packageName,
+    source: setting.source,
+    componentLoader: setting.pageLoader,
+    access: setting.access,
+    ...(setting.navigation !== false
+      ? { navigation: { title: setting.title, icon: setting.icon } }
+      : {}),
+  });
+  return buildNavEntries(settings, groups)
+    .map((entry): AppClientRegisteredRoute =>
+      entry.kind === 'page'
+        ? page(entry.setting)
+        : {
+            id: entry.group.id,
+            name: entry.group.id,
+            path: '/settings',
+            auth: 'required',
+            packageName: entry.group.packageName,
+            source: entry.group.source,
+            navigation: { title: entry.group.title, icon: entry.group.icon },
+            children: entry.group.settings.map(page),
+          },
+    )
+    .concat(
+      settings.filter((setting) => setting.navigation === false).map(page),
+    );
+}
+
+type SurfaceNavEntry =
+  | { kind: 'group'; group: AppClientRegisteredSettingGroup }
+  | { kind: 'page'; setting: AppClientRegisteredSetting };
+
+export function buildNavEntries(
+  visible: readonly AppClientRegisteredSetting[],
+  groups: readonly AppClientRegisteredSettingGroup[],
+): readonly SurfaceNavEntry[] {
+  const visiblePaths = new Set(
+    visible
+      .filter((setting) => setting.navigation !== false)
+      .map((setting) => setting.path),
+  );
+  const groupsById = new Map(groups.map((group) => [group.id, group]));
+  const entries: SurfaceNavEntry[] = [];
+  const seenGroups = new Set<string>();
+
+  for (const setting of visible) {
+    if (setting.navigation === false) {
+      continue;
+    }
+    if (setting.groupId === undefined) {
+      entries.push({ kind: 'page', setting });
+      continue;
+    }
+    if (seenGroups.has(setting.groupId)) {
+      continue;
+    }
+    const group = groupsById.get(setting.groupId);
+    if (!group) {
+      // A page naming a group nobody registered still has to be reachable, so it renders flat rather than vanishing.
+      entries.push({ kind: 'page', setting });
+      continue;
+    }
+    seenGroups.add(group.id);
+    entries.push({
+      kind: 'group',
+      group: {
+        ...group,
+        settings: group.settings.filter((child) =>
+          visiblePaths.has(child.path),
+        ),
+      },
+    });
+  }
+
+  return entries;
+}

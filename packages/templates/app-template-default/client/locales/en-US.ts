@@ -33,6 +33,7 @@ const enUS = {
       'Unable to complete the language change. Please try again.',
   },
   account: {
+    signOutFailed: 'Unable to sign out. Please try again.',
     openMenu: 'Open account menu',
     fallback: 'Account',
     signOut: 'Sign out',

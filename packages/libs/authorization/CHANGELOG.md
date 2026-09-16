@@ -1,5 +1,13 @@
 # @nocobase/authorization
 
+## 0.1.0-beta.6
+
+### Patch Changes
+
+- 89955c5: Upgrade better-sqlite3 to ^13.0.3 and keep its dependency declaration in @nocobase/db-sqlite only. Remove redundant test dependencies from consumers so they use the same SQLite driver as applications.
+
+  Preserve the bundled musl binary when building applications for Alpine Linux.
+
 ## 0.1.0-beta.5
 
 ### Patch Changes
