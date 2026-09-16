@@ -317,11 +317,12 @@ describe('@nocobase/app-plugin-hub API routes', () => {
     const response = await router.request('/hub/apps/customer/settings', {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ activation: 'lazy' }),
+      body: JSON.stringify({ activation: 'lazy', name: 'Renamed App' }),
     });
 
     expect(response.status).toBe(200);
     expect(updateSettings).toHaveBeenCalledWith('customer', {
+      name: 'Renamed App',
       activation: 'lazy',
     });
   });

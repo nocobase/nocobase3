@@ -853,10 +853,27 @@ export class DefaultHubService implements HubService {
     input: UpdateHubSettingsInput,
   ): Promise<HubAppDetail> {
     return await this.withLock(`publish:${appId}`, async () => {
-      assertActivation(input.activation);
+      if (input.activation !== undefined) assertActivation(input.activation);
+      if (
+        input.name !== undefined &&
+        (typeof input.name !== 'string' ||
+          !input.name.trim() ||
+          input.name.trim().length > 255)
+      ) {
+        throw new HubError(
+          'Application name must contain 1 to 255 characters.',
+          'INVALID_APP_NAME',
+          422,
+        );
+      }
       await this.awaitStartupRestoration();
       await this.requireApp(appId);
-      await this.updateApp(appId, { startupMode: input.activation });
+      await this.updateApp(appId, {
+        ...(input.activation === undefined
+          ? {}
+          : { startupMode: input.activation }),
+        ...(input.name === undefined ? {} : { name: input.name.trim() }),
+      });
       return await this.getApp(appId);
     });
   }

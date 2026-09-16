@@ -167,7 +167,8 @@ export interface RollbackHubAppInput {
 }
 
 export interface UpdateHubSettingsInput {
-  readonly activation: 'lazy' | 'eager';
+  readonly name?: string;
+  readonly activation?: 'lazy' | 'eager';
 }
 
 export interface HubDeploymentPage {

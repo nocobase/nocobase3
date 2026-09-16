@@ -30,7 +30,7 @@ the Hub-owned grants rather than the generic Permission Set editor.
 Hub owns three protected Permission Sets: `hub-administrator`, `hub-operator`, and `hub-viewer`. Every management API
 checks a `hub.app`, `hub.host`, or `user` resource action on the server rather
 than checking a role name. Administrators manage applications and users,
-Operators manage application releases and runtime operations, and Viewers have
+Operators manage application releases and runtime operations, can delete their own Apps after confirmation, and Viewers have
 read-only access without raw configuration or configuration templates. Existing
 System Administrators receive the Hub Administrator role during upgrade, but
 the two roles do not implicitly inherit from one another at runtime.
@@ -143,4 +143,4 @@ Configured uploads use `Content-Type: application/vnd.nocobase.release-upload.v1
 
 ### Application names, IDs, and error notifications
 
-Application names may be repeated across users. The creation form generates an editable ID with an eight-character random hexadecimal suffix; IDs remain globally unique because they identify shared URLs, deployment records, and storage paths. Manual ID conflicts return `APP_EXISTS` without disclosing another application's owner. Hub operation failures use the shared top-right notification host, including failures while a dialog is open; they preserve form input and keep technical details collapsed.
+Application names may be repeated across users and edited in Settings by an authorized owner or Hub Administrator. Renaming preserves the App ID, URL, releases, configuration, and runtime. The creation form generates an editable ID with an eight-character random hexadecimal suffix; IDs remain globally unique because they identify shared URLs, deployment records, and storage paths. Manual ID conflicts return `APP_EXISTS` without disclosing another application's owner. Hub operation failures use the shared top-right notification host, including failures while a dialog is open; they preserve form input and keep technical details collapsed.

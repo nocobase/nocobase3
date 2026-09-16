@@ -1,3 +1,4 @@
+import { toast } from 'sonner';
 import { apiClientToken, useService } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { useCallback, useEffect, useState, type ReactElement } from 'react';
@@ -14,6 +15,7 @@ import {
 } from 'lucide-react';
 import { Button } from '../../components/ui/button.js';
 import { Input } from '../../components/ui/input.js';
+import { RadioGroup, RadioGroupItem } from '../../components/ui/radio-group.js';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -60,6 +62,21 @@ export function ApiKeys({
     action: 'disable' | 'delete';
   }>();
   const canManage = capabilities['manage-api-keys'];
+  const copySecret = async (secret: string): Promise<boolean> => {
+    try {
+      if (!navigator.clipboard?.writeText)
+        throw new Error('Clipboard unavailable');
+      await navigator.clipboard.writeText(secret);
+      setCopied(true);
+      toast.success(t('apiKeys.copied'), { position: 'top-right' });
+      return true;
+    } catch {
+      setCopied(false);
+      setError(t('apiKeys.copyFailed'));
+      return false;
+    }
+  };
+
   const scopeOptions = HUB_API_KEY_SCOPES;
   const allowedScopes = scopeOptions.filter((scope) =>
     allApps
@@ -231,14 +248,22 @@ export function ApiKeys({
                         }
                       >
                         <Button
-                          size='icon'
+                          size={key.canCopy ? 'icon' : 'sm'}
                           variant='ghost'
-                          className='size-6 shrink-0 text-muted-foreground'
-                          disabled={busy || !key.canCopy}
+                          className={
+                            key.canCopy
+                              ? 'size-6 shrink-0 text-muted-foreground'
+                              : 'h-6 px-1 text-xs text-muted-foreground'
+                          }
+                          disabled={busy}
                           aria-label={t('apiKeys.copyNamed', {
                             name: key.name,
                           })}
                           onClick={() => {
+                            if (!key.canCopy) {
+                              setError(t('apiKeys.copyUnavailable'));
+                              return;
+                            }
                             setBusy(true);
                             setError(undefined);
                             void client
@@ -246,19 +271,24 @@ export function ApiKeys({
                                 path: `${path}/${key.id}/reveal`,
                                 method: 'POST',
                               })
-                              .then((response) => {
-                                setCreated({
-                                  key,
-                                  secret: response.data.secret,
-                                });
-                                setRevealed(true);
-                                setCopied(false);
+                              .then(async (response) => {
+                                if (!(await copySecret(response.data.secret))) {
+                                  setCreated({
+                                    key,
+                                    secret: response.data.secret,
+                                  });
+                                  setRevealed(true);
+                                }
                               })
                               .catch(() => setError(t('apiKeys.revealFailed')))
                               .finally(() => setBusy(false));
                           }}
                         >
-                          <Copy className='size-3.5' />
+                          {key.canCopy ? (
+                            <Copy className='size-3.5' />
+                          ) : (
+                            t('apiKeys.copyUnavailableLabel')
+                          )}
                         </Button>
                       </span>
                     </div>
@@ -430,8 +460,7 @@ export function ApiKeys({
         <AppDialog
           title={t('apiKeys.create')}
           description={t('apiKeys.createDescription')}
-          contentClassName='p-6 sm:max-w-2xl'
-          footerClassName='mt-4 pt-4'
+          contentClassName='sm:max-w-2xl'
           onClose={() => {
             if (!busy) setCreateOpen(false);
           }}
@@ -493,10 +522,14 @@ export function ApiKeys({
         >
           <div className='space-y-4'>
             <div className='grid gap-4 sm:grid-cols-2'>
-              <label className='block space-y-2'>
-                <span className='text-sm font-medium'>{t('apiKeys.name')}</span>
+              <label className='grid gap-2'>
+                <span className='text-sm font-medium'>
+                  {t('apiKeys.name')} <RequiredMarker />
+                </span>
                 <Input
                   autoFocus
+                  aria-label={t('apiKeys.name')}
+                  required
                   value={name}
                   maxLength={100}
                   disabled={busy}
@@ -505,11 +538,18 @@ export function ApiKeys({
                 />
               </label>
               <div className='space-y-2'>
-                <label className='block space-y-2'>
+                <label className='grid gap-2'>
                   <span className='text-sm font-medium'>
                     {t('apiKeys.expiration')}
+                    <span
+                      aria-hidden='true'
+                      className='ml-1 text-xs font-normal text-muted-foreground'
+                    >
+                      ({t('apiKeys.optional')})
+                    </span>
                   </span>
                   <select
+                    aria-label={t('apiKeys.expiration')}
                     className='h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30'
                     value={customExpiry ? 'custom' : 'never'}
                     disabled={busy}
@@ -524,9 +564,12 @@ export function ApiKeys({
                 </label>
                 {customExpiry ? (
                   <label className='block space-y-1'>
-                    <span className='sr-only'>{t('apiKeys.expiresAt')}</span>
+                    <span className='text-sm font-medium'>
+                      {t('apiKeys.expiresAt')} <RequiredMarker />
+                    </span>
                     <Input
                       type='datetime-local'
+                      required
                       aria-label={t('apiKeys.expiresAt')}
                       value={expiresAt}
                       disabled={busy}
@@ -539,45 +582,43 @@ export function ApiKeys({
                 ) : null}
               </div>
             </div>
-            <fieldset className='space-y-2'>
+            <fieldset
+              className='space-y-2'
+              aria-describedby='api-key-apps-required'
+            >
               <legend className='mb-2 text-sm font-medium'>
-                {t('apiKeys.apps')}
+                {t('apiKeys.apps')} <RequiredMarker />
               </legend>
-              <div className='grid gap-1 rounded-lg bg-muted/60 p-1 sm:grid-cols-2'>
-                <label
-                  className={`flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors has-focus-visible:ring-2 has-focus-visible:ring-ring has-disabled:cursor-not-allowed has-disabled:opacity-60 ${!allApps ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-                >
-                  <input
-                    type='radio'
-                    className='size-4 shrink-0 accent-primary'
-                    name='app-scope'
-                    checked={!allApps}
-                    disabled={busy}
-                    onChange={() => {
-                      setAllApps(false);
-                      setScopes([]);
-                    }}
-                  />
+              <p id='api-key-apps-required' className='sr-only'>
+                {t('apiKeys.appsRequired')}
+              </p>
+              <RadioGroup
+                aria-label={t('apiKeys.apps')}
+                aria-describedby='api-key-apps-required'
+                className='grid gap-x-4 gap-y-3 sm:grid-cols-2'
+                value={allApps ? 'all' : 'selected'}
+                disabled={busy}
+                onValueChange={(value) => {
+                  const nextAllApps = value === 'all';
+                  setAllApps(nextAllApps);
+                  setScopes((current) =>
+                    nextAllApps
+                      ? current.filter((scope) => capabilities[scope])
+                      : [],
+                  );
+                }}
+              >
+                <label className='flex cursor-pointer items-center gap-2 text-sm has-disabled:cursor-not-allowed has-disabled:opacity-60'>
+                  <RadioGroupItem value='selected' />
                   {t('apiKeys.selectedApps')}
                 </label>
-                <label
-                  className={`flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors has-focus-visible:ring-2 has-focus-visible:ring-ring has-disabled:cursor-not-allowed has-disabled:opacity-60 ${allApps ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-                >
-                  <input
-                    type='radio'
-                    className='size-4 shrink-0 accent-primary'
-                    name='app-scope'
+                <label className='flex cursor-pointer items-center gap-2 text-sm has-disabled:cursor-not-allowed has-disabled:opacity-60'>
+                  <RadioGroupItem
+                    value='all'
                     aria-label={t('apiKeys.allApps')}
-                    checked={allApps}
                     disabled={
                       busy || !scopeOptions.some((scope) => capabilities[scope])
                     }
-                    onChange={() => {
-                      setAllApps(true);
-                      setScopes((current) =>
-                        current.filter((scope) => capabilities[scope]),
-                      );
-                    }}
                   />
                   <span>
                     {t('apiKeys.allAppsShort')}
@@ -586,9 +627,9 @@ export function ApiKeys({
                     </span>
                   </span>
                 </label>
-              </div>
+              </RadioGroup>
               {allApps ? (
-                <p className='px-1 pt-1 text-xs leading-relaxed text-muted-foreground'>
+                <p className='pt-1 text-xs leading-relaxed text-muted-foreground'>
                   {t('apiKeys.allAppsHint')}
                 </p>
               ) : null}
@@ -675,9 +716,12 @@ export function ApiKeys({
                   </div>
                 </div>
               ) : null}
-              <fieldset className='min-w-0 space-y-2 border-t pt-3'>
-                <legend className='pr-3 text-sm font-medium'>
-                  {t('apiKeys.scopes')}
+              <fieldset
+                className='min-w-0 space-y-2'
+                aria-describedby='api-key-scopes-required'
+              >
+                <legend className='mb-2 text-sm font-medium'>
+                  {t('apiKeys.scopes')} <RequiredMarker />
                 </legend>
                 <div className='grid gap-3 sm:grid-cols-2'>
                   {scopeOptions.map((scope) => (
@@ -722,15 +766,18 @@ export function ApiKeys({
                     </label>
                   ))}
                 </div>
-                {!allApps && !appIds.length ? (
-                  <p className='text-xs text-muted-foreground'>
-                    {t('apiKeys.selectAppsFirst')}
-                  </p>
-                ) : allowedScopes.length < scopeOptions.length ? (
-                  <p className='text-xs text-muted-foreground'>
-                    {t('apiKeys.unavailablePermissions')}
-                  </p>
-                ) : null}
+                <p
+                  id='api-key-scopes-required'
+                  className='text-xs font-normal text-muted-foreground'
+                >
+                  {t(
+                    !allApps && !appIds.length
+                      ? 'apiKeys.selectAppsFirst'
+                      : allowedScopes.length < scopeOptions.length
+                        ? 'apiKeys.unavailablePermissions'
+                        : 'apiKeys.scopesRequired',
+                  )}
+                </p>
               </fieldset>
             </div>
           </div>
@@ -749,16 +796,14 @@ export function ApiKeys({
         >
           <div className='space-y-3'>
             <p className='text-sm font-medium'>{created.key.name}</p>
-            <code className='block break-all rounded-lg border bg-muted p-4 text-sm'>
+            <code className='block select-all break-all rounded-lg border bg-muted p-4 text-sm'>
               {created.secret}
             </code>
             <Button
               variant='outline'
               onClick={() => {
-                void navigator.clipboard
-                  .writeText(created.secret)
-                  .then(() => setCopied(true))
-                  .catch(() => setError(t('apiKeys.copyFailed')));
+                setError(undefined);
+                void copySecret(created.secret);
               }}
             >
               <Copy className='size-4' />
@@ -806,5 +851,13 @@ export function ApiKeys({
         ></AppDialog>
       ) : null}
     </section>
+  );
+}
+
+function RequiredMarker(): ReactElement {
+  return (
+    <span className='text-destructive' aria-hidden='true'>
+      *
+    </span>
   );
 }

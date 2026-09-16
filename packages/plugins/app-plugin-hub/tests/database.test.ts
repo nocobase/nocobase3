@@ -1,3 +1,4 @@
+import operatorRemovalMigration from '../database/migrations/202609160008_operator_remove_own_apps.js';
 import removeDeploymentMode from '../database/migrations/202609160006_remove_deployment_mode.js';
 import configFingerprintMigration from '../database/migrations/202609160007_release_config_fingerprint.js';
 import publishingMigration from '../database/migrations/202609160005_release_publishing.js';
@@ -225,6 +226,78 @@ describe('@nocobase/app-plugin-hub database migration', () => {
     for (const [collection] of COLLECTIONS) {
       await expect(metadataStore.get(collection)).resolves.toBeUndefined();
     }
+  });
+
+  it('adds Operator removal once while preserving other grants, roles, and assignments', async () => {
+    await createAuthorizationTables(database);
+    await migrate(permissionSetsMigration, 'up', database);
+    const query = database.connection().query;
+    const customGrant = {
+      resource: { type: 'custom.resource', id: 'mine' },
+      actions: [{ action: 'read', policy: { type: 'custom-policy' } }],
+    };
+    const before = await query
+      .selectFrom('authorizationPermissionSets')
+      .selectAll()
+      .orderBy('key')
+      .execute();
+    const operator = before.find((role) => role.key === 'hub-operator')!;
+    const grants = (
+      typeof operator.grants === 'string'
+        ? JSON.parse(operator.grants)
+        : operator.grants
+    ) as unknown[];
+    await query
+      .updateTable('authorizationPermissionSets')
+      .set({ grants: JSON.stringify([...grants, customGrant]) })
+      .where('key', '=', 'hub-operator')
+      .execute();
+    const assignments = await query
+      .selectFrom('authorizationPermissionSetAssignments')
+      .selectAll()
+      .execute();
+
+    await migrate(operatorRemovalMigration, 'up', database);
+    const after = await query
+      .selectFrom('authorizationPermissionSets')
+      .selectAll()
+      .orderBy('key')
+      .execute();
+    const changed = after.find((role) => role.key === 'hub-operator')!;
+    const updated = (
+      typeof changed.grants === 'string'
+        ? JSON.parse(changed.grants)
+        : changed.grants
+    ) as unknown[];
+    expect(updated).toEqual([
+      ...grants.map((grant) => {
+        const value = grant as {
+          resource: { type: string; id: string };
+          actions: { action: string }[];
+        };
+        return value.resource.type === 'hub.app' && value.resource.id === '*'
+          ? { ...value, actions: [...value.actions, { action: 'remove' }] }
+          : value;
+      }),
+      customGrant,
+    ]);
+    expect(after.filter((role) => role.key !== 'hub-operator')).toEqual(
+      before.filter((role) => role.key !== 'hub-operator'),
+    );
+    expect(
+      await query
+        .selectFrom('authorizationPermissionSetAssignments')
+        .selectAll()
+        .execute(),
+    ).toEqual(assignments);
+    await migrate(operatorRemovalMigration, 'up', database);
+    expect(
+      await query
+        .selectFrom('authorizationPermissionSets')
+        .selectAll()
+        .orderBy('key')
+        .execute(),
+    ).toEqual(after);
   });
 
   it('creates fixed Hub roles and upgrades every system administrator', async () => {

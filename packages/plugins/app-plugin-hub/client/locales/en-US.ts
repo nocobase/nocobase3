@@ -2,12 +2,17 @@ import type { LocaleResource } from '@nocobase/i18n';
 
 const enUS = {
   apiKeys: {
+    optional: 'Optional',
+    appsRequired:
+      'Select at least one application, or choose all applications.',
+    scopesRequired: 'Select at least one permission.',
     expiration: 'Expiration',
     customExpiry: 'Set expiration date',
     localTime: 'Uses your local time.',
     futureAppsNote: '(including future apps)',
     viewAndCopy: 'View and copy API Key',
     copyNamed: 'Copy API Key {{name}}',
+    copyUnavailableLabel: 'Copy unavailable',
     copyUnavailable:
       'Only active keys created by you with encrypted storage can be copied. Older keys must be replaced.',
     revealFailed:
@@ -406,8 +411,10 @@ const enUS = {
   },
   settings: {
     title: 'Application settings',
+    nameHint:
+      'Names can be changed and repeated. The application ID and URL stay the same.',
     description:
-      'Choose how this application is activated after Hub starts. This is an application setting and is not changed by deployments.',
+      'Change the application name and startup behavior. These settings are preserved across deployments.',
     startup: 'Startup',
     startupDescription:
       'Controls whether the application starts with Hub or waits for its first visit.',

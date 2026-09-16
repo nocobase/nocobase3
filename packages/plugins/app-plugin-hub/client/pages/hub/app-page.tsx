@@ -71,7 +71,10 @@ interface HubAppPageContextValue {
   readonly onRollback: (deploymentId: string) => void;
   readonly onUpload: () => void;
   readonly onSaveConfiguration: (content: string) => void;
-  readonly onSaveSettings: (activation: 'lazy' | 'eager') => void;
+  readonly onSaveSettings: (settings: {
+    name: string;
+    activation: 'lazy' | 'eager';
+  }) => void;
   readonly onRemove: () => void;
   readonly onRefresh: () => void;
 }
@@ -527,12 +530,12 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
         });
         setConfigContent(response.data.content ?? '');
       }),
-    onSaveSettings: (activation) =>
+    onSaveSettings: (settings) =>
       void perform(async () => {
         await client.request({
           path: `hub/apps/${appId}/settings`,
           method: 'PUT',
-          json: { activation },
+          json: settings,
         });
       }),
     onRemove: () => setRemoveOpen(true),

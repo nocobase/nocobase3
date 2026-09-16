@@ -6,7 +6,7 @@ import {
   waitFor,
   within,
 } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import enUS from '../client/locales/en-US.js';
 import { emptyHubCapabilities } from '../client/permissions.js';
 
@@ -65,7 +65,16 @@ const key = {
   lastUsedAt: null,
   expiresAt: null,
 };
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 beforeEach(() => {
+  vi.stubGlobal('navigator', Object.create(navigator));
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: undefined,
+  });
   toast.dismiss();
   render(<Toaster position='top-right' />);
   mocks.request.mockReset();
@@ -293,6 +302,76 @@ describe('App API Keys management', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     expect(screen.queryByText('saved-test-secret')).not.toBeInTheDocument();
   });
+  it('explains unavailable legacy keys instead of silently ignoring clicks', async () => {
+    mocks.request.mockResolvedValue({ data: [{ ...key, canCopy: false }] });
+    render(<ApiKeys apps={apps} capabilities={capabilities} />);
+    const copy = await screen.findByRole('button', { name: 'Copy API Key CI' });
+    expect(copy).toHaveTextContent('Copy unavailable');
+    fireEvent.click(copy);
+    await screen.findByText(enUS.apiKeys.copyUnavailable);
+    expect(mocks.request).toHaveBeenCalledTimes(1);
+  });
+
+  it('copies the full key directly and confirms success without exposing it in a dialog', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    mocks.request.mockImplementation(async ({ path }: { path: string }) =>
+      path.endsWith('/reveal')
+        ? { data: { secret: 'full-test-secret' } }
+        : { data: [key] },
+    );
+    render(<ApiKeys apps={apps} capabilities={capabilities} />);
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Copy API Key CI' }),
+    );
+    await screen.findByText('Copied');
+    expect(writeText).toHaveBeenCalledWith('full-test-secret');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByText('full-test-secret')).not.toBeInTheDocument();
+  });
+
+  it('offers manual copying when clipboard permission is denied', async () => {
+    const writeText = vi.fn().mockRejectedValue(new Error('Permission denied'));
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    mocks.request.mockImplementation(async ({ path }: { path: string }) =>
+      path.endsWith('/reveal')
+        ? { data: { secret: 'manual-test-secret' } }
+        : { data: [key] },
+    );
+    render(<ApiKeys apps={apps} capabilities={capabilities} />);
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Copy API Key CI' }),
+    );
+    await screen.findByText('manual-test-secret');
+    await screen.findByText(enUS.apiKeys.copyFailed);
+    expect(screen.queryByText('Copied')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(screen.queryByText('manual-test-secret')).not.toBeInTheDocument();
+  });
+
+  it('reports reveal failures without attempting to copy', async () => {
+    const writeText = vi.fn();
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    mocks.request
+      .mockResolvedValueOnce({ data: [key] })
+      .mockRejectedValueOnce(new Error('Not recoverable'));
+    render(<ApiKeys apps={apps} capabilities={capabilities} />);
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Copy API Key CI' }),
+    );
+    await screen.findByText(enUS.apiKeys.revealFailed);
+    expect(writeText).not.toHaveBeenCalled();
+  });
+
   it('does not fetch keys for users without management access', async () => {
     render(<ApiKeys apps={apps} capabilities={emptyHubCapabilities()} />);
     expect(

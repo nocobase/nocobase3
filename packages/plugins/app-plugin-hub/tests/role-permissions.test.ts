@@ -52,6 +52,13 @@ const ALL_HUB_ROLES = HUB_ROLES;
 
 const HUB_API_CASES: readonly ApiCase[] = [
   {
+    name: 'rename an application',
+    method: 'PUT',
+    path: '/hub/apps/customer/settings',
+    body: json({ name: 'Renamed App' }),
+    allowed: ADMINISTRATOR_AND_OPERATOR,
+  },
+  {
     name: 'list applications',
     path: '/hub/apps',
     allowed: ALL_HUB_ROLES,
@@ -168,7 +175,7 @@ const HUB_API_CASES: readonly ApiCase[] = [
     name: 'remove an application',
     method: 'DELETE',
     path: '/hub/apps/customer',
-    allowed: ['hub-administrator'],
+    allowed: ADMINISTRATOR_AND_OPERATOR,
   },
   {
     name: 'read Host status',
@@ -334,6 +341,9 @@ describe('Hub role API permissions', () => {
       provider.register();
       await provider.boot();
       const { can } = setAccessControlProvider.mock.calls[0]![0];
+      expect(await can({ resource: 'hub.app:*', action: 'remove' })).toEqual({
+        can: role !== 'hub-viewer',
+      });
       const routes = createHubRoutes().routes;
       const tabs = routes[0]!.children![0]!.children!;
       for (const tab of tabs) {
@@ -373,6 +383,25 @@ describe('Hub role API permissions', () => {
       const app = await router('operator-two');
       const response = await request(app, scenario);
       expect(response.status).toBe(403);
+    });
+
+    it('allows administrators to delete another owner’s App but denies ownerless App deletion to Operators', async () => {
+      const admin = await router('hub-administrator');
+      expect(
+        (await admin.request('/hub/apps/customer', { method: 'DELETE' }))
+          .status,
+      ).toBe(200);
+      const operator = await router('hub-operator');
+      await database
+        .query()
+        .updateTable('hubApps')
+        .set({ createdBy: null })
+        .where('id', '=', 'customer')
+        .execute();
+      expect(
+        (await operator.request('/hub/apps/customer', { method: 'DELETE' }))
+          .status,
+      ).toBe(403);
     });
 
     it('binds the creator to the session even when the request forges ownership', async () => {

@@ -2,12 +2,16 @@ import type { HubResource } from './en-US.js';
 
 const zhCN: HubResource = {
   apiKeys: {
+    optional: '可选',
+    appsRequired: '至少选择一个应用，或选择所有应用。',
+    scopesRequired: '至少选择一项权限。',
     expiration: '有效期',
     customExpiry: '指定到期时间',
     localTime: '使用当前设备的时区。',
     futureAppsNote: '（含未来新增）',
     viewAndCopy: '查看并复制 API Key',
     copyNamed: '复制 API Key {{name}}',
+    copyUnavailableLabel: '无法复制',
     copyUnavailable:
       '仅可复制由你创建且已加密保存的有效 Key；旧 Key 需要重新创建。',
     revealFailed: '无法获取此 Key，可能已失效、无法恢复或你已无权访问。',
@@ -375,8 +379,8 @@ const zhCN: HubResource = {
   },
   settings: {
     title: '应用设置',
-    description:
-      '选择 Hub 启动后如何激活此应用。这是应用设置，不会因部署而改变。',
+    nameHint: '名称可修改、可重复，应用 ID 和访问地址保持不变。',
+    description: '修改应用名称和启动方式。这些设置不会因部署而改变。',
     startup: '启动方式',
     startupDescription: '控制应用随 Hub 启动，还是等到首次访问时再启动。',
     startWithHub: '随 Hub 启动',

@@ -682,6 +682,49 @@ describe('@nocobase/app-plugin-hub service', () => {
     expect(await readFile(configPath, 'utf8')).toContain('# Edited by the Hub');
   });
 
+  it('renames an App without changing its identity, ownership, startup policy, or runtime', async () => {
+    await service.createApp({ id: 'customer', name: 'Customer' }, 'alice');
+    await service.createApp({ id: 'other', name: 'Shared name' }, 'bob');
+    await service.updateSettings('customer', { activation: 'lazy' });
+    const before = await service.getApp('customer');
+    const operations = [...host.targetedOperations];
+    const renamed = await service.updateSettings('customer', {
+      name: '  Shared name  ',
+      id: 'forged',
+      createdBy: 'bob',
+    } as never);
+    expect(renamed.app).toMatchObject({
+      ...before.app,
+      name: 'Shared name',
+      updatedAt: expect.anything(),
+    });
+    expect(host.targetedOperations).toEqual(operations);
+    expect(
+      (
+        await service.listAppsPage({
+          createdBy: 'alice',
+          search: 'Shared name',
+        })
+      ).items.map(({ app }) => app.id),
+    ).toEqual(['customer']);
+    expect((await service.getApp('customer')).app.name).toBe('Shared name');
+  });
+
+  it.each(['', '   ', 'a'.repeat(256), null, 42])(
+    'rejects invalid renamed application names (%j) atomically',
+    async (name) => {
+      await service.createApp({ id: 'customer', name: 'Customer' });
+      const before = await service.getApp('customer');
+      await expect(
+        service.updateSettings('customer', {
+          name,
+          activation: 'lazy',
+        } as never),
+      ).rejects.toMatchObject({ code: 'INVALID_APP_NAME', status: 422 });
+      expect((await service.getApp('customer')).app).toEqual(before.app);
+    },
+  );
+
   it('updates the recovery startup policy without a runtime operation', async () => {
     await service.createApp({ id: 'customer', name: 'Customer' });
     const release = await service.createRelease('customer', {
