@@ -1,5 +1,15 @@
 # @nocobase/app-client
 
+## 1.0.0-beta.16
+
+### Minor Changes
+
+- 1a85a86: Add route breadcrumbs, nested child pages, and reusable page headers to the client and application templates.
+
+### Patch Changes
+
+- @nocobase/i18n@1.0.0-beta.4
+
 ## 1.0.0-beta.15
 
 ### Patch Changes
