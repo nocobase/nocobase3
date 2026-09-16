@@ -1,10 +1,10 @@
+import { PageHeader } from '../../components/page-header.js';
 import {
   AIChatFloatingTrigger,
   AIChatWindow,
   ChatSurface,
   ChatSurfaceActions,
 } from '../../../registry/nocobase-ai/components/index.js';
-import { Badge } from '../../../registry/nocobase-ai/shared/ui/badge.js';
 import { Card } from '../../../registry/nocobase-ai/shared/ui/card.js';
 import {
   AIChatProvider,
@@ -63,28 +63,14 @@ function FloatingChatPageContent() {
           } as CSSProperties
         }
       >
-        <div className='space-y-12 pb-12'>
-          <section className='flex flex-wrap items-start justify-between gap-5 border-b pb-8'>
-            <div>
-              <div className='flex items-center gap-2'>
-                <Badge variant='secondary'>
-                  {t('demo.badge.components', 'AI Components')}
-                </Badge>
-                <Badge variant='outline'>
-                  {t('demo.badge.globalEntry', 'Global entry')}
-                </Badge>
-              </div>
-              <h1 className='mt-4 text-3xl font-semibold tracking-[-0.035em]'>
-                {t('demo.floating.title', 'Floating AI Chat')}
-              </h1>
-              <p className='mt-3 max-w-3xl text-sm leading-6 text-muted-foreground'>
-                {t(
-                  'demo.floating.description',
-                  'A global lower-right entry for the shared AI conversation. It opens as a push side panel and can expand into a focused dialog without remounting the chat window.',
-                )}
-              </p>
-            </div>
-          </section>
+        <div className='space-y-6'>
+          <PageHeader
+            title={t('demo.floating.title', 'Floating AI Chat')}
+            description={t(
+              'demo.floating.description',
+              'A global lower-right entry for the shared AI conversation. It opens as a push side panel and can expand into a focused dialog without remounting the chat window.',
+            )}
+          />
 
           <section className='space-y-5'>
             <div>

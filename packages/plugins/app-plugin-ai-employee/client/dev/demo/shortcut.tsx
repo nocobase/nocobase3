@@ -1,3 +1,4 @@
+import { PageHeader } from '../../components/page-header.js';
 import {
   AIChatWindow,
   AIEmployeeShortcut,
@@ -161,28 +162,14 @@ function ShortcutPageContent() {
   );
 
   return (
-    <div className='space-y-12 pb-12'>
-      <section className='flex flex-wrap items-start justify-between gap-5 border-b pb-8'>
-        <div>
-          <div className='flex items-center gap-2'>
-            <Badge variant='secondary'>
-              {t('demo.badge.components', 'AI Components')}
-            </Badge>
-            <Badge variant='outline'>
-              {t('demo.badge.employeeCapability', 'Employee capability')}
-            </Badge>
-          </div>
-          <h1 className='mt-4 text-3xl font-semibold tracking-[-0.035em]'>
-            {t('demo.shortcut.title', 'Employee tasks')}
-          </h1>
-          <p className='mt-3 max-w-3xl text-sm leading-6 text-muted-foreground'>
-            {t(
-              'demo.shortcut.description',
-              'Bind reusable tasks to AI employees. Tasks can appear directly inside a chat when the employee is selected, or be triggered from contextual buttons elsewhere in the application.',
-            )}
-          </p>
-        </div>
-      </section>
+    <div className='space-y-6'>
+      <PageHeader
+        title={t('demo.shortcut.title', 'Employee tasks')}
+        description={t(
+          'demo.shortcut.description',
+          'Bind reusable tasks to AI employees. Tasks can appear directly inside a chat when the employee is selected, or be triggered from contextual buttons elsewhere in the application.',
+        )}
+      />
 
       <section className='space-y-5'>
         <div>
