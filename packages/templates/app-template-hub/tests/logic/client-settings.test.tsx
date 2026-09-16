@@ -23,6 +23,7 @@ import { MemoryRouter, Outlet, useParams } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AppRouter } from '../../client/routing/app-router.tsx';
+import { HeaderActions } from '../../client/shell/header-actions.tsx';
 import { AppThemeProvider } from '../../client/theme/index.ts';
 
 function WorkflowDetailTestPage(): ReactElement {
@@ -76,6 +77,7 @@ describe('settings centre', () => {
           devRouteTree={surface === 'dev' ? tree : []}
         />,
         broken.path,
+        surface === 'settings' ? tree : [],
       );
       expect(await screen.findByText('Unable to load page')).toBeVisible();
       fireEvent.click(screen.getByRole('link', { name: 'Healthy page' }));
@@ -83,6 +85,14 @@ describe('settings centre', () => {
       expect(screen.queryByText('Unable to load page')).not.toBeInTheDocument();
     },
   );
+
+  it('shows the Settings entry from the application runtime without AppRouter', async () => {
+    renderApp(<HeaderActions />, '/', toRouteTree(SETTINGS, GROUPS));
+
+    expect(
+      await screen.findByRole('link', { name: 'Settings' }),
+    ).toHaveAttribute('href', '/settings');
+  });
 
   it('renders the requested setting with a grouped navigation of the rest', async () => {
     renderSettings('/settings/authorization/default-access');
@@ -495,6 +505,7 @@ function renderSettings(
   routes: readonly AppClientRegisteredRoute[] = [],
   tree?: readonly AppClientRegisteredRoute[],
 ): void {
+  const settingsRouteTree = tree ?? toRouteTree(settings, groups);
   renderWithAuthentication(
     <MemoryRouter initialEntries={[initialEntry]}>
       <AppThemeProvider>
@@ -519,16 +530,21 @@ function renderSettings(
           <AppRouter
             devRouteTree={[]}
             clientRoutes={routes}
-            settingsRouteTree={tree ?? toRouteTree(settings, groups)}
+            settingsRouteTree={settingsRouteTree}
           />
         </Refine>
       </AppThemeProvider>
     </MemoryRouter>,
+    settingsRouteTree,
   );
 }
 
 /** Renders a router subtree the way renderSettings does, for a surface other than the settings centre. */
-function renderApp(element: ReactElement, initialEntry: string): void {
+function renderApp(
+  element: ReactElement,
+  initialEntry: string,
+  settingsRouteTree: readonly AppClientRegisteredRoute[] = [],
+): void {
   renderWithAuthentication(
     <MemoryRouter initialEntries={[initialEntry]}>
       <AppThemeProvider>
@@ -553,6 +569,7 @@ function renderApp(element: ReactElement, initialEntry: string): void {
         </Refine>
       </AppThemeProvider>
     </MemoryRouter>,
+    settingsRouteTree,
   );
 }
 
@@ -566,7 +583,10 @@ function createAuthProvider(): AuthProvider {
   };
 }
 
-function renderWithAuthentication(element: ReactElement): void {
+function renderWithAuthentication(
+  element: ReactElement,
+  settingsRouteTree: readonly AppClientRegisteredRoute[],
+): void {
   const authClient = {
     getSession: vi.fn().mockResolvedValue({
       data: {
@@ -582,6 +602,7 @@ function renderWithAuthentication(element: ReactElement): void {
     signOut: vi.fn().mockResolvedValue({ data: null }),
   };
   const app = {
+    runtime: { settingsRouteTree },
     services: {
       resolve: (token: unknown) => {
         if (token === authenticationClientToken) return authClient;

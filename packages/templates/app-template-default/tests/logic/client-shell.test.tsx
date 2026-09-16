@@ -238,6 +238,7 @@ function renderApplication(
     (authProvider as TestAuthProvider).authenticated ?? true;
   const authClient = createTestAuthClient(authenticated);
   const app = {
+    runtime: { settingsRouteTree: options.settingsRouteTree ?? [] },
     services: {
       resolve: (token: unknown) => {
         if (token === authenticationClientToken) return authClient;
