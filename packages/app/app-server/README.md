@@ -1,5 +1,11 @@
 # `@nocobase/app-server`
 
+## Standalone proxy
+
+`defineStandaloneServer()` accepts an optional `proxy: ({ application }) => ({ match, target })` factory, evaluated after application startup. `match(pathname)` chooses requests before the application's public base path adapter; `target()` returns the current upstream HTTP(S) origin or `null`. Both `create()` and `start()` configure this boundary. Applications without a proxy retain their normal routing.
+
+The listener applies the same rule to HTTP and WebSocket upgrades. It preserves request paths, query strings, public Host, Origin, cookies and authorization, forwards the protocol through `X-Forwarded-Proto`, streams HTTP bodies without decompressing them, and tunnels the upstream WebSocket handshake and connection. Configure the outer reverse proxy to preserve the public Host and set trustworthy protocol headers. Returning `null` yields 503; connection failures yield 502. Reading a target does not start an upstream, and changes apply to new requests and connections. Proxy connections are disposed with the standalone scope; upgraded connections are closed before HTTP shutdown drains.
+
 ## Repository API routes
 
 `defineRepositoryApiRoutes()` exposes explicitly configured Collection Repository

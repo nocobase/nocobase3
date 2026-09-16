@@ -2,3 +2,4 @@ export * from './config.js';
 export * from './runtime.js';
 export * from './server.js';
 export * from './scope.js';
+export * from './proxy.js';

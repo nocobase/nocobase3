@@ -13,6 +13,7 @@ Add domain APIs here, in this application. Do not create a plugin package for a 
 - `runtime.ts` is the composition root, declaring config, plugins, service providers, and routes.
 - `app.ts` assembles the application and its core providers and middleware.
 - `standalone.ts` is the Node entry point; `embedded.ts` is the entry point when a host process mounts this application. Both resolve the same runtime.
+- `standalone.ts` additionally configures the public HTTP and WebSocket proxy: the Hub base path stays local and every other path forwards to the current ready App Host port. Keep this outside application routes and mount adaptation; `embedded.ts` does not own this listener.
 - `plugins.ts` lists the plugins the server loads. Let `pnpm plugin:register` and `pnpm plugin:unregister` edit it.
 - `jobs/` holds background jobs, discovered automatically.
 

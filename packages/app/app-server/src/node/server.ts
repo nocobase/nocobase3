@@ -4,6 +4,7 @@ import type { AddressInfo } from 'node:net';
 import type { Duplex } from 'node:stream';
 
 import type { AppServer } from '../runtime/index.js';
+import type { NodeServerProxy } from './proxy.js';
 import {
   acceptWebSocketUpgrade,
   createWebSocketUpgradeRequest,
@@ -18,6 +19,7 @@ export type NodeAppHttpServer = ServerType;
 
 export interface ClosableNodeAppServer extends AppServer {
   readonly signal?: AbortSignal;
+  readonly proxy?: NodeServerProxy;
   close(): Promise<void>;
 }
 
@@ -101,6 +103,7 @@ export function startNodeAppServer(
       process.exitCode = 1;
     });
     registerNodeWebSocketUpgradeHandler(app, server, { logger });
+    server.once('close', () => app.proxy?.close());
     if (options.registerProcessSignals !== false) {
       unregisterShutdownHandlers = registerNodeShutdownHandlers(
         app,
@@ -112,7 +115,7 @@ export function startNodeAppServer(
 }
 
 export function registerNodeWebSocketUpgradeHandler(
-  app: AppServer,
+  app: AppServer & { readonly proxy?: NodeServerProxy },
   server: NodeAppHttpServer,
   options: { readonly logger?: NodeAppServerLogger } = {},
 ): void {
@@ -189,6 +192,7 @@ export async function shutdownNodeAppServer(
   forceExitTimer.unref();
 
   try {
+    app.proxy?.closeWebSockets();
     await closeNodeServerWithGracePeriod(
       server,
       options.httpDrainTimeoutMs ?? DEFAULT_HTTP_DRAIN_TIMEOUT_MS,
@@ -278,10 +282,17 @@ async function dispatchNodeWebSocket(
   req: IncomingMessage,
   socket: Duplex,
   head: Buffer,
-  app: AppServer,
+  app: AppServer & { readonly proxy?: NodeServerProxy },
 ): Promise<void> {
   if (!isWebSocketUpgrade(req)) {
     rejectWebSocketUpgrade(socket, 400);
+    return;
+  }
+
+  if (
+    app.proxy?.matches(new URL(createWebSocketUpgradeRequest(req).url).pathname)
+  ) {
+    await app.proxy.upgrade(req, socket, head);
     return;
   }
 
