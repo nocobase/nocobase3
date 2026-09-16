@@ -1,5 +1,16 @@
 # @nocobase/app-template-default
 
+## 1.0.0-beta.28
+
+### Patch Changes
+
+- d3429aa: Deduplicate dependencies during template upgrades and resolve stale dependency type conflicts. Replace outdated migration documents with upgrade Skill guidance based on template differences and application state, preserving migration history and user-authored operational notes. Check application code and configuration before proposing plugin removal, and obtain user confirmation before removing unused dependencies and registrations.
+- Updated dependencies [11c276a]
+- Updated dependencies [7c0ec03]
+- Updated dependencies [7c0ec03]
+  - @nocobase/app-plugin-ai-employee@0.1.0-beta.11
+  - @nocobase/app-plugin-workflow@0.1.0-beta.16
+
 ## 1.0.0-beta.27
 
 ### Minor Changes

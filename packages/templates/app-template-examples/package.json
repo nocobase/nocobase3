@@ -1,7 +1,7 @@
 {
   "name": "@nocobase/app-template-examples",
   "displayName": "NocoBase Examples",
-  "version": "0.1.0-beta.9",
+  "version": "0.1.0-beta.10",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -10,7 +10,7 @@
   "packageManager": "pnpm@11.7.0",
   "nocobase": {
     "templateKind": "app",
-    "defaultTemplateVersion": "0.1.0-beta.9"
+    "defaultTemplateVersion": "0.1.0-beta.10"
   },
   "devDependencies": {
     "@ai-sdk/react": "2.0.0",
@@ -129,7 +129,6 @@
     "docker-compose.yml",
     "config.example.yml",
     "README.MD",
-    "MIGRATION.md",
     "AGENTS.md",
     "CLAUDE.md",
     "skills"

@@ -1,5 +1,13 @@
 # @nocobase/app-plugin-repository-example
 
+## 0.1.0-beta.7
+
+### Patch Changes
+
+- b34801e: Use plugin-owned PageContainer and PageHeader components to standardize example page spacing, headings, descriptions, and actions.
+
+  Refine example cards, tables, controls, code blocks, and status presentation, and consolidate page descriptions into the shared header.
+
 ## 0.1.0-beta.6
 
 ### Patch Changes

@@ -8,7 +8,7 @@ Do not create a plugin to add a feature. Plugins are separately published packag
 
 Default is the clean application starting point. It registers product capabilities but no `app-plugin-*-example` plugins, example pages, application sample services, or sample APIs. Keep runnable demonstrations in `app-template-examples`. Application-owned server routes start empty; the only built-in application provider exposes Authorization Permission Sets as direct roles in the Users page. The only application page is a localized homepage.
 
-`database/main/` starts empty for application-owned migrations and seeds. Do not add article history, demo seeds, or compatibility copies from Examples to this template. Existing installations retain their own executed migration sources when upgrading; see `MIGRATION.md`.
+`database/main/` starts empty for application-owned migrations and seeds. Do not add article history, demo seeds, or compatibility copies from Examples to this template. Existing installations retain their own executed migration sources when upgrading; see the [upgrade migration rules](skills/nocobase-app-upgrade/references/edge-cases.md#migrations).
 
 ## Load the development skills
 
