@@ -45,15 +45,35 @@ if (command === 'config') {
         res.end('Not found');
       }
     });
-    server.listen(command === 'dev' ? 0 : Number(process.env.APP_SERVER_PORT), '127.0.0.1', () => {
+    const listen = () => server.listen(command === 'dev' ? 0 : Number(process.env.APP_SERVER_PORT), '127.0.0.1', () => {
       fs.writeFileSync(path.join(state, command + '.pid'), String(process.pid));
       if (command === 'dev') {
         console.log('App dev server ready');
         console.log('Local: http://127.0.0.1:' + server.address().port + basePath + '/');
       }
     });
+    if (command === 'start' && scenario === 'start-log-unavailable') {
+      const pendingStart = setInterval(() => {
+        if (!fs.existsSync(path.join(state, 'start-log-read'))) return;
+        clearInterval(pendingStart);
+        listen();
+      }, 10);
+    } else {
+      listen();
+    }
   }
 }
+`;
+
+// Hold production readiness until the progress loop has encountered the same log-read failure as CI. Other tail
+// calls still use the real command, including the registry configuration checks before the application starts.
+const unavailableStartLogTail = `#!/usr/bin/env bash
+if [ "$1" = '-n' ] && [ "$3" = "$SMOKE_STATE/start.log" ]; then
+  echo "tail: cannot open '$3' for reading: No such file or directory" >&2
+  : > "$SMOKE_STATE/start-log-read"
+  exit 1
+fi
+PATH="\${PATH#*:}" exec tail "$@"
 `;
 
 async function runSmoke(t, scenario, basePath = '/main') {
@@ -65,6 +85,11 @@ async function runSmoke(t, scenario, basePath = '/main') {
   fs.mkdirSync(bin);
   for (const tool of ['pnpm', 'npm']) {
     fs.writeFileSync(path.join(bin, tool), fakePnpm, { mode: 0o755 });
+  }
+  if (scenario === 'start-log-unavailable') {
+    fs.writeFileSync(path.join(bin, 'tail'), unavailableStartLogTail, {
+      mode: 0o755,
+    });
   }
   const child = spawn(
     'bash',
@@ -131,6 +156,14 @@ for (const basePath of ['', '/main', '/nested/app']) {
     assert.ok(result.output.includes(`${basePath}/api/healthz`));
   });
 }
+
+test('keeps waiting for production readiness when the progress log is unavailable', async (t) => {
+  const result = await runSmoke(t, 'start-log-unavailable');
+  assert.equal(result.code, 0, result.output);
+  assert.deepEqual(result.commands, ['dev', 'build', 'start']);
+  assert.match(result.output, /tail: cannot open .*start\.log/u);
+  assert.match(result.output, /passed dev, build, and start/u);
+});
 
 for (const [scenario, commands, error] of [
   ['dev-exits', ['dev'], 'pnpm dev exited'],
