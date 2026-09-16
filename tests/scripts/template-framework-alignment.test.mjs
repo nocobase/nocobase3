@@ -17,12 +17,14 @@ const templates = ['default', 'examples', 'hub'].map((kind) => {
 const [baseline] = templates;
 
 function filesIn(directory, prefix = '') {
-  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-    const relative = path.join(prefix, entry.name);
-    return entry.isDirectory()
-      ? filesIn(path.join(directory, entry.name), relative)
-      : [relative];
-  });
+  return readdirSync(directory, { withFileTypes: true })
+    .flatMap((entry) => {
+      const relative = path.join(prefix, entry.name);
+      return entry.isDirectory()
+        ? filesIn(path.join(directory, entry.name), relative)
+        : [relative];
+    })
+    .sort();
 }
 
 // These are shared framework mechanisms, not product pages or plugin composition.
@@ -67,15 +69,20 @@ for (const template of templates) {
         `${template.kind}: ${file}`,
       );
     }
-    for (const [name, command] of Object.entries(baseline.manifest.scripts)) {
-      if (name === 'pack:check') continue; // Each tarball has its own package name.
-      if (name === 'test:e2e' && template.kind === 'hub') continue; // Hub has no AI plugin.
-      assert.equal(
-        template.manifest.scripts[name],
-        command,
-        `${template.kind}: ${name}`,
+    // Product-specific scripts need a documented exception; compare the shared contract in both directions.
+    const exceptions = [
+      'pack:check', // Tarball names identify each template.
+      ...(template.kind === 'hub' ? ['test:e2e'] : []), // Hub has no AI plugin.
+    ];
+    const sharedScripts = (scripts) =>
+      Object.fromEntries(
+        Object.entries(scripts).filter(([name]) => !exceptions.includes(name)),
       );
-    }
+    assert.deepEqual(
+      sharedScripts(template.manifest.scripts),
+      sharedScripts(baseline.manifest.scripts),
+      `${template.kind}: shared scripts`,
+    );
   });
 
   test(`${template.kind} declares a single dependency category and the database runtime peer`, () => {

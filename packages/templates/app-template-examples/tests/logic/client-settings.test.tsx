@@ -125,7 +125,7 @@ describe('settings centre', () => {
     ).toHaveAttribute('href', '/');
   });
 
-  it('keeps both header entries visible inside dev tools', async () => {
+  it('hides the Settings entry in dev tools when no settings are registered', async () => {
     const devRoute: AppClientRegisteredSetting = {
       id: 'playground',
       navigation: true,
@@ -150,10 +150,9 @@ describe('settings centre', () => {
 
     expect(await screen.findByText('Playground page')).toBeVisible();
     expect(screen.getByRole('link', { name: 'Dev tools' })).toBeVisible();
-    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute(
-      'href',
-      '/settings',
-    );
+    expect(
+      screen.queryByRole('link', { name: 'Settings' }),
+    ).not.toBeInTheDocument();
   });
 
   it('renders the icon a setting declares, and copes with one that declares none', async () => {

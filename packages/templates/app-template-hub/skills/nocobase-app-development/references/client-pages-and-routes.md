@@ -86,7 +86,7 @@ defineSettingsRoutes([
 ]);
 ```
 
-`navigation` puts the page in the settings navigation. `access` is checked before the page loads; when it is denied the page disappears from navigation and a direct URL will not load the component.
+`navigation` puts the page in the settings navigation. The header shows the Settings entry only when at least one such page is accessible. `access` is checked before the page loads; when it is denied the page disappears from navigation and a direct URL will not load the component.
 
 A settings page without `access` is open to every signed-in user who can reach the settings area. Declare `access` explicitly on anything sensitive, and enforce the same rule on the server.
 
@@ -112,7 +112,7 @@ A navigable page normally changes `client/routes.ts`, its page component, and `c
 
 ## Putting the page in a breadcrumb trail
 
-The owning layout supplies the route tree: `AppShell` for business pages, and `SurfaceLayout` for Dev pages. The Hub has no Settings surface. `StandalonePageLayout` does not currently supply one, so breadcrumbs there render nothing.
+The owning layout supplies the route tree: `AppShell` for business pages, and `SurfaceLayout` for Settings and Dev pages. `StandalonePageLayout` does not currently supply one, so breadcrumbs there render nothing.
 
 `navigation` controls menu entries; `breadcrumb` independently supplies a trail title. Declare both when a route belongs in both. Breadcrumb titles are static translation keys resolved in the owning package's namespace and are allowed on parameterized paths.
 

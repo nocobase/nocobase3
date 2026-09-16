@@ -118,10 +118,10 @@ test.describe('local AI application server', () => {
           if (!data) return [];
           const event = JSON.parse(data) as {
             type?: string;
-            content?: unknown;
+            body?: unknown;
           };
-          return event.type === 'content' && typeof event.content === 'string'
-            ? [event.content]
+          return event.type === 'content' && typeof event.body === 'string'
+            ? [event.body]
             : [];
         })
         .join('');

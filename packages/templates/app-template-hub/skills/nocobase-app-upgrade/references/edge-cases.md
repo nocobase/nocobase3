@@ -46,7 +46,7 @@ After resolving the conflict, rerun `pnpm plugin:skills:sync` and all Finish che
 
 ## `config.yml` and `.env`
 
-A hub reads both, for different things. `.env` carries build-time settings — `APP_NAME`, `APP_BASE_PATH`, the dev server host and port — consumed by `vite.config.ts` and the build scripts. `config.yml` carries runtime settings: database connections, auth, notification channels, snowflake. Neither replaces the other.
+A hub reads both, for different things. `.env` carries build-time settings — `APP_NAME`, `APP_BASE_PATH`, the dev server host and port — consumed by `vite.config.ts` and the build scripts. `config.yml` carries runtime settings: database connections, auth, Hub hosting, and snowflake. Neither replaces the other.
 
 Both are gitignored, were written by the generator rather than the template, and are in no diff. Never edit either as part of the merge, and never print them.
 

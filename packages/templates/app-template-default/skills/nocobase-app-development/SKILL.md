@@ -88,7 +88,7 @@ Declare database defaults with `defineAppDatabaseConfig` from `@nocobase/app-ser
 
 ## Where to work
 
-The Settings and Dev tools header entries stay visible on their destination pages. The Dev tools entry is development-only and must remain absent from production builds.
+The Settings header entry appears only when the user has an accessible page in the settings navigation, and stays visible on that page. The Dev tools entry stays visible on its destination pages, is development-only, and must remain absent from production builds.
 
 Business code belongs in a small, stable set of places:
 

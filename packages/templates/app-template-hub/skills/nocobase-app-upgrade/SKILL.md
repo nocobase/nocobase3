@@ -115,7 +115,7 @@ For each file read three versions — `$WORK/$BASE/<file>`, `$WORK/$TARGET/<file
 - **Template added a file** — copy it in; if something already exists at that path, reconcile rather than overwrite.
 - **Template removed a file** — only after step 5.
 
-Three files legitimately differ from both releases because the generator rewrote the template's package name into them: `client/runtime.ts`, `client/service-provider.ts`, `server/providers/app-example.ts`. Keep the application's name when taking a change there — copying verbatim splits the i18n namespace and fails `pnpm client:inspect`.
+Two current template files legitimately differ from both releases because the generator rewrote the template's package name into them: `client/runtime.ts` and `client/service-provider.ts`. Older generated applications may also retain `server/providers/app-example.ts`; preserve any application-owned customization there when reconciling its removal from the template. Keep the application's name when taking a change there — copying verbatim splits the i18n namespace and fails `pnpm client:inspect`.
 
 When the right answer is unclear, stop and ask. The user is the only one who knows why their code is the way it is.
 

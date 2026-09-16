@@ -16,7 +16,12 @@ import ts from 'typescript';
 
 const repoRoot = path.resolve(import.meta.dirname, '../..');
 
-/** Use published declarations so workspace source imports cannot hide a missing public dependency path. */
+/**
+ * Model declaration consumers without requiring a workspace build. This is a focused
+ * dependency-category regression, not a published-artifact check: @nocobase/db
+ * and transitive packages still resolve through workspace links. The Verdaccio Hub smoke test covers packed
+ * exports, installation, declaration emission, and startup outside the workspace.
+ */
 function installDeclarations(
   applicationRoot,
   relativePackage,
@@ -58,7 +63,7 @@ function installDeclarations(
   );
 }
 
-test('a generated Hub emits portable database declarations with its declared dependencies', (t) => {
+function checkDatabaseDeclarations(t, runtimeDependency) {
   const templateRoot = path.join(
     repoRoot,
     'packages/templates/app-template-hub',
@@ -68,8 +73,13 @@ test('a generated Hub emits portable database declarations with its declared dep
   const manifest = JSON.parse(
     readFileSync(path.join(templateRoot, 'package.json'), 'utf8'),
   );
-  // Keep the actual dependency categories: TypeScript discovers runtime dependency
-  // symlinks when naming inferred types, but does not scan devDependencies this way.
+  // TypeScript discovers runtime dependency symlinks when naming inferred types,
+  // but does not scan devDependencies this way. Keep a negative control for that defect.
+  if (!runtimeDependency) {
+    manifest.devDependencies['@nocobase/db'] =
+      manifest.dependencies['@nocobase/db'];
+    delete manifest.dependencies['@nocobase/db'];
+  }
   writeFileSync(path.join(root, 'package.json'), JSON.stringify(manifest));
   installDeclarations(root, 'app/app-server', 'dist');
   installDeclarations(root, 'libs/db-sqlite', 'dist/src');
@@ -99,6 +109,10 @@ test('a generated Hub emits portable database declarations with its declared dep
     ...ts.getPreEmitDiagnostics(program),
     ...result.diagnostics,
   ];
+  if (!runtimeDependency) {
+    assert.ok(diagnostics.some(({ code }) => code === 2883));
+    return;
+  }
   assert.deepEqual(
     diagnostics.map((diagnostic) =>
       ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'),
@@ -111,4 +125,12 @@ test('a generated Hub emits portable database declarations with its declared dep
   );
   assert.ok(declaration.includes('import("@nocobase/db").ConnectionConfig'));
   assert.ok(!declaration.includes('node_modules'));
+}
+
+test('Hub runtime dependencies let TypeScript name inferred database declarations', (t) => {
+  checkDatabaseDeclarations(t, true);
+});
+
+test('moving the database dependency back to devDependencies reproduces TS2883', (t) => {
+  checkDatabaseDeclarations(t, false);
 });
