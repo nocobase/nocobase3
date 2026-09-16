@@ -1,3 +1,4 @@
+import { PageHeader } from './page-header.js';
 import { apiClientToken, useService } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import {
@@ -135,17 +136,11 @@ export function NotificationInAppInbox(): ReactElement {
   };
 
   return (
-    <div className='mx-auto flex w-full max-w-5xl flex-col gap-5'>
-      <header className='flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between'>
-        <div>
-          <div className='mb-2 flex items-center gap-2 text-sm font-medium text-primary'>
-            <Bell className='size-4' />{' '}
-            {t('inbox.eyebrow', { defaultValue: 'Personal inbox' })}
-          </div>
-          <div className='flex flex-wrap items-center gap-2'>
-            <h1 className='text-2xl font-semibold tracking-tight'>
-              {t('inbox.title', { defaultValue: 'Message center' })}
-            </h1>
+    <div className='space-y-6'>
+      <PageHeader
+        title={
+          <span className='inline-flex flex-wrap items-center gap-2'>
+            {t('inbox.title', { defaultValue: 'Message center' })}
             {unreadCount > 0 ? (
               <Badge variant='secondary'>
                 {t('inbox.unreadCount', {
@@ -154,23 +149,22 @@ export function NotificationInAppInbox(): ReactElement {
                 })}
               </Badge>
             ) : null}
-          </div>
-          <p className='mt-1 text-sm text-muted-foreground'>
-            {t('inbox.description', {
-              defaultValue:
-                'Updates from the applications and workflows you use.',
-            })}
-          </p>
-        </div>
-        <Button
-          variant='outline'
-          onClick={() => void readAll()}
-          disabled={items.every((item) => item.readAt)}
-        >
-          <CheckCheck />{' '}
-          {t('inbox.markAllRead', { defaultValue: 'Mark all read' })}
-        </Button>
-      </header>
+          </span>
+        }
+        description={t('inbox.description', {
+          defaultValue: 'Updates from the applications and workflows you use.',
+        })}
+        actions={
+          <Button
+            variant='outline'
+            onClick={() => void readAll()}
+            disabled={items.every((item) => item.readAt)}
+          >
+            <CheckCheck />{' '}
+            {t('inbox.markAllRead', { defaultValue: 'Mark all read' })}
+          </Button>
+        }
+      />
 
       <Card className='gap-0 overflow-hidden py-0'>
         <CardHeader className='border-b bg-muted/20 py-4'>
