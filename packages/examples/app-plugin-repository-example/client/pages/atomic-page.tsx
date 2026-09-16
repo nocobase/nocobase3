@@ -173,13 +173,27 @@ export default function AtomicPage(): ReactElement {
       {error && (
         <p
           role='alert'
-          className='rounded-md border border-destructive/30 p-3 text-destructive'
+          className='rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs font-medium text-destructive'
         >
           {error}
         </p>
       )}
-      {notice && <p role='status'>{notice}</p>}
-      {loading && <p role='status'>{t('loading')}</p>}
+      {notice && (
+        <p
+          role='status'
+          className='text-xs leading-relaxed text-muted-foreground'
+        >
+          {notice}
+        </p>
+      )}
+      {loading && (
+        <p
+          role='status'
+          className='text-xs leading-relaxed text-muted-foreground'
+        >
+          {t('loading')}
+        </p>
+      )}
       <div className='grid gap-4 md:grid-cols-2'>
         {scenarios.map((scenario) => {
           const record = records.find((entry) => entry.id === scenario.id);
@@ -189,24 +203,27 @@ export default function AtomicPage(): ReactElement {
           return (
             <Card
               key={scenario.id}
+              className='min-w-0 rounded-xl shadow-2xs'
               role='region'
               aria-label={t(scenario.title)}
             >
               <CardHeader>
-                <CardTitle>{t(scenario.title)}</CardTitle>
+                <CardTitle className='text-base font-semibold'>
+                  {t(scenario.title)}
+                </CardTitle>
               </CardHeader>
               <CardContent className='space-y-4'>
-                <p className='text-sm text-muted-foreground'>
+                <p className='text-xs leading-relaxed text-muted-foreground'>
                   {t(scenario.hint)}
                 </p>
                 <output
                   aria-label={t(scenario.title)}
-                  className='block text-4xl font-semibold tabular-nums'
+                  className='block rounded-lg border bg-muted/20 p-4 font-mono text-4xl font-semibold tabular-nums'
                 >
                   {record?.value ?? '—'}
                 </output>
                 {!loading && !record && (
-                  <p className='text-sm text-muted-foreground'>
+                  <p className='text-xs leading-relaxed text-muted-foreground'>
                     {t('atomicSeedHint')}
                   </p>
                 )}
@@ -262,15 +279,17 @@ export default function AtomicPage(): ReactElement {
           );
         })}
       </div>
-      <details className='rounded-lg border p-4' open>
-        <summary className='cursor-pointer font-medium'>{t('trace')}</summary>
+      <details className='rounded-xl border bg-card p-4 shadow-2xs' open>
+        <summary className='cursor-pointer text-xs font-medium text-foreground'>
+          {t('trace')}
+        </summary>
         <p className='my-3 text-sm text-muted-foreground'>
           {t('atomicTraceHint')}
         </p>
         {traces.map((entry, index) => (
           <details
             key={`${traces.length - index}-${entry.action}`}
-            className='my-2 rounded-md bg-muted p-3'
+            className='my-2 rounded-lg border bg-muted/15 p-3'
             open={index === 0}
           >
             <summary className='cursor-pointer font-mono text-sm'>
@@ -278,14 +297,14 @@ export default function AtomicPage(): ReactElement {
             </summary>
             <div className='mt-3 grid gap-4 md:grid-cols-2'>
               <section>
-                <h3>{t('request')}</h3>
-                <pre className='max-h-72 overflow-auto text-xs'>
+                <h3 className='mb-2 text-xs font-medium'>{t('request')}</h3>
+                <pre className='max-h-72 overflow-auto rounded-lg border bg-muted/40 p-3 font-mono text-xs text-foreground'>
                   {JSON.stringify(entry.input, null, 2)}
                 </pre>
               </section>
               <section>
-                <h3>{t('response')}</h3>
-                <pre className='max-h-72 overflow-auto text-xs'>
+                <h3 className='mb-2 text-xs font-medium'>{t('response')}</h3>
+                <pre className='max-h-72 overflow-auto rounded-lg border bg-muted/40 p-3 font-mono text-xs text-foreground'>
                   {JSON.stringify(entry.output, null, 2)}
                 </pre>
               </section>

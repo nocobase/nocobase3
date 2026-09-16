@@ -77,8 +77,10 @@ export default function AttachmentsPage(): ReactElement {
 
   return (
     <PageContainer>
-      <PageHeader description={t('description')} title={t('title')} />
-      <p className='text-sm text-muted-foreground'>{t('apiHint')}</p>
+      <PageHeader
+        description={`${t('description')} ${t('apiHint')}`}
+        title={t('title')}
+      />
       <FileUploadField
         repository={repository}
         labels={labels}
@@ -99,7 +101,9 @@ export default function AttachmentsPage(): ReactElement {
           run(() => repository.deleteOne({ filter: { id: file.id } }))
         }
       />
-      <p className='text-sm text-muted-foreground'>{t('retention')}</p>
+      <div className='flex items-start gap-2.5 rounded-xl border bg-muted/20 p-3.5 text-xs text-muted-foreground leading-relaxed'>
+        <p>{t('retention')}</p>
+      </div>
     </PageContainer>
   );
 }

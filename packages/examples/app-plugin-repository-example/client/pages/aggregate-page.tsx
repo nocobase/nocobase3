@@ -98,7 +98,7 @@ export default function AggregatePage(): ReactElement {
         title={t('aggregateTitle')}
       />
       <form
-        className='flex flex-wrap items-end gap-4'
+        className='flex flex-wrap items-end gap-4 rounded-xl border bg-card p-4 shadow-2xs'
         onSubmit={(event) => {
           event.preventDefault();
           setLoading(true);
@@ -110,7 +110,7 @@ export default function AggregatePage(): ReactElement {
           });
         }}
       >
-        <label className='space-y-2 text-sm'>
+        <label className='min-w-0 space-y-2 text-xs font-medium'>
           <span>{t('status')}</span>
           <Select
             value={status}
@@ -134,7 +134,7 @@ export default function AggregatePage(): ReactElement {
             </SelectContent>
           </Select>
         </label>
-        <label className='space-y-2 text-sm'>
+        <label className='min-w-0 space-y-2 text-xs font-medium'>
           <span>{t('aggregateHaving')}</span>
           <Input
             required
@@ -147,7 +147,7 @@ export default function AggregatePage(): ReactElement {
             onChange={(event) => setMinimum(event.target.value)}
           />
         </label>
-        <label className='space-y-2 text-sm'>
+        <label className='min-w-0 space-y-2 text-xs font-medium'>
           <span>{t('groupByMinimumCount')}</span>
           <Input
             required
@@ -164,9 +164,19 @@ export default function AggregatePage(): ReactElement {
           {t('aggregateApply')}
         </Button>
       </form>
-      {loading && <p role='status'>{t('loading')}</p>}
+      {loading && (
+        <p
+          role='status'
+          className='text-xs leading-relaxed text-muted-foreground'
+        >
+          {t('loading')}
+        </p>
+      )}
       {error && (
-        <p role='alert' className='text-destructive'>
+        <p
+          role='alert'
+          className='rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs font-medium text-destructive'
+        >
           {error}
         </p>
       )}
@@ -177,14 +187,16 @@ export default function AggregatePage(): ReactElement {
             aria-label={t('aggregateMetrics')}
           >
             {metrics.map((metric) => (
-              <Card key={metric}>
+              <Card className='min-w-0 rounded-xl shadow-2xs' key={metric}>
                 <CardHeader>
-                  <CardTitle>{t(`aggregate_${metric}`)}</CardTitle>
+                  <CardTitle className='text-base font-semibold'>
+                    {t(`aggregate_${metric}`)}
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <output
                     aria-label={t(`aggregate_${metric}`)}
-                    className='text-2xl font-semibold tabular-nums'
+                    className='block overflow-x-auto font-mono text-2xl font-semibold tabular-nums'
                   >
                     {display(data.summary[metric])}
                   </output>
@@ -192,17 +204,19 @@ export default function AggregatePage(): ReactElement {
               </Card>
             ))}
           </section>
-          <p className='text-sm text-muted-foreground'>
+          <p className='text-xs leading-relaxed text-muted-foreground'>
             {t('aggregateSemantics')}
           </p>
-          <div className='grid gap-6 lg:grid-cols-2'>
-            <Card>
+          <div className='grid min-w-0 gap-4 lg:grid-cols-2'>
+            <Card className='min-w-0 rounded-xl shadow-2xs'>
               <CardHeader>
-                <CardTitle>{t('aggregateStatuses')}</CardTitle>
+                <CardTitle className='text-base font-semibold'>
+                  {t('aggregateStatuses')}
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <Table aria-label={t('aggregateStatuses')}>
-                  <TableHeader>
+                  <TableHeader className='bg-muted/30'>
                     <TableRow>
                       <TableHead>{t('status')}</TableHead>
                       <TableHead>COUNT(*)</TableHead>
@@ -224,16 +238,18 @@ export default function AggregatePage(): ReactElement {
                 </Table>
               </CardContent>
             </Card>
-            <Card>
+            <Card className='min-w-0 rounded-xl shadow-2xs'>
               <CardHeader>
-                <CardTitle>{t('aggregateCustomers')}</CardTitle>
+                <CardTitle className='text-base font-semibold'>
+                  {t('aggregateCustomers')}
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className='mb-3 text-sm text-muted-foreground'>
                   {t('aggregateCustomerHint', { count: data.customerLimit })}
                 </p>
                 <Table aria-label={t('aggregateCustomers')}>
-                  <TableHeader>
+                  <TableHeader className='bg-muted/30'>
                     <TableRow>
                       <TableHead>{t('customer')}</TableHead>
                       <TableHead>COUNT(orders)</TableHead>
@@ -263,13 +279,15 @@ export default function AggregatePage(): ReactElement {
               </CardContent>
             </Card>
           </div>
-          <Card>
+          <Card className='min-w-0 rounded-xl shadow-2xs'>
             <CardHeader>
-              <CardTitle>{t('aggregateProducts')}</CardTitle>
+              <CardTitle className='text-base font-semibold'>
+                {t('aggregateProducts')}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <Table aria-label={t('aggregateProducts')}>
-                <TableHeader>
+                <TableHeader className='bg-muted/30'>
                   <TableRow>
                     <TableHead>{t('product')}</TableHead>
                     <TableHead>{t('sku')}</TableHead>
@@ -307,15 +325,17 @@ export default function AggregatePage(): ReactElement {
         </div>
       )}
       {data && !loading && !error && <GroupByExamples examples={examples} />}
-      <details className='rounded-lg border p-4'>
-        <summary className='cursor-pointer font-medium'>{t('trace')}</summary>
+      <details className='rounded-xl border bg-card p-4 shadow-2xs'>
+        <summary className='cursor-pointer text-xs font-medium text-foreground'>
+          {t('trace')}
+        </summary>
         <p className='my-3 text-sm text-muted-foreground'>
           {t('aggregateTraceHint')}
         </p>
         <div className='grid gap-4 md:grid-cols-2'>
           <section>
-            <h3>{t('request')}</h3>
-            <pre className='overflow-auto text-xs'>
+            <h3 className='mb-2 text-xs font-medium'>{t('request')}</h3>
+            <pre className='overflow-auto rounded-lg border bg-muted/40 p-3 font-mono text-xs text-foreground'>
               {JSON.stringify(
                 {
                   query,
@@ -334,8 +354,8 @@ export default function AggregatePage(): ReactElement {
             </pre>
           </section>
           <section>
-            <h3>{t('response')}</h3>
-            <pre className='max-h-96 overflow-auto text-xs'>
+            <h3 className='mb-2 text-xs font-medium'>{t('response')}</h3>
+            <pre className='max-h-96 overflow-auto rounded-lg border bg-muted/40 p-3 font-mono text-xs text-foreground'>
               {JSON.stringify(
                 loading ? null : error ? { error } : (data ?? null),
                 null,
