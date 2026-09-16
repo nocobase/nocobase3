@@ -18,6 +18,7 @@ These common requirements are already solved — install and they work. Every pa
 - [Permissions](./authorization) — Roles, menu visibility, and which records each user may see.
 - [Workflow](./workflow) — Observable, versioned, multi-stage business processes.
 - [Notifications](./notification) — Email, in-app messages, and IM channels.
+- [Mail](./mail) — Connect personal mailboxes to synchronize, read, and send messages.
 - [Files](./file) — Uploads and attachments.
 - [Language switching](./i18n) — Switching the interface language.
 - [Themes](./theme) — Change colors and fonts, and switch between light and dark.

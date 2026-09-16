@@ -9,6 +9,7 @@ import authorization from '@nocobase/app-plugin-authorization/client';
 import databaseExplorer from '@nocobase/app-plugin-database-explorer/client';
 import users from '@nocobase/app-plugin-users/client';
 import install from '@nocobase/app-plugin-install/client';
+import mail from '@nocobase/app-plugin-mail/client';
 import notificationProvider from '@nocobase/app-plugin-notification-provider/client';
 import notificationInApp from '@nocobase/app-plugin-notification-in-app/client';
 import i18n from '@nocobase/app-plugin-i18n/client';
@@ -27,6 +28,7 @@ const clientPlugins: AppClientPlugins = defineClientPlugins([
   apiKeys({ path: '/api-keys' }),
   i18n(),
   install(),
+  mail(),
   notificationProvider({ demo: false }),
   notificationInApp(),
   workflow(),

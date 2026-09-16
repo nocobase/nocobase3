@@ -1,0 +1,18 @@
+import type { MailProviderConfig } from '../../types.js';
+
+export interface ImapSmtpEndpointConfig {
+  readonly host: string;
+  readonly port: number;
+  readonly secure: boolean;
+  readonly rejectUnauthorized?: boolean;
+}
+
+export interface ImapSmtpMailProviderConfig extends MailProviderConfig {
+  readonly type: 'imap-smtp';
+  readonly enabled?: boolean;
+  readonly imap: ImapSmtpEndpointConfig;
+  readonly smtp: ImapSmtpEndpointConfig;
+  readonly sentFolder?: string;
+  readonly trashFolder?: string;
+  readonly draftsFolder?: string;
+}

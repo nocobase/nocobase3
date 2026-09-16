@@ -1,0 +1,17 @@
+[
+  {
+    "type": "file",
+    "name": "index",
+    "label": "Overview"
+  },
+  {
+    "type": "file",
+    "name": "configuration",
+    "label": "Configure Mail"
+  },
+  {
+    "type": "file",
+    "name": "usage",
+    "label": "Use Mail"
+  }
+]

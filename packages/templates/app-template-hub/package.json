@@ -185,9 +185,20 @@
     "@nocobase/app-plugin-api-keys": "workspace:^",
     "@nocobase/app-plugin-authentication": "workspace:^",
     "@nocobase/app-plugin-authorization": "workspace:^",
+    "@nocobase/app-plugin-cli-example": "workspace:^",
+    "@nocobase/app-plugin-database-example": "workspace:^",
     "@nocobase/app-plugin-hub": "workspace:^",
     "@nocobase/app-plugin-i18n": "workspace:^",
     "@nocobase/app-plugin-install": "workspace:^",
+    "@nocobase/app-plugin-mail": "workspace:^",
+    "@nocobase/app-plugin-notification": "workspace:^",
+    "@nocobase/app-plugin-notification-in-app": "workspace:^",
+    "@nocobase/app-plugin-notification-providers": "workspace:^",
+    "@nocobase/app-plugin-queue-example": "workspace:^",
+    "@nocobase/app-plugin-realtime-example": "workspace:^",
+    "@nocobase/app-plugin-routes-example": "workspace:^",
+    "@nocobase/app-plugin-service-provider-example": "workspace:^",
+    "@nocobase/app-plugin-skills-example": "workspace:^",
     "@nocobase/app-plugin-workflow": "workspace:^",
     "@nocobase/config": "workspace:^",
     "@nocobase/app-plugin-users": "workspace:^",
@@ -198,8 +209,6 @@
     "@nocobase/snowflake": "workspace:^",
     "@oclif/core": "catalog:",
     "better-auth": "catalog:",
-    "hono": "catalog:",
-    "@nocobase/app-plugin-service-provider-example": "workspace:^",
-    "@nocobase/app-plugin-notification": "workspace:^"
+    "hono": "catalog:"
   }
 }
