@@ -1,4 +1,5 @@
 import { PageContainer } from '../components/page-container.js';
+import { PageHeader } from '../components/page-header.js';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNotification } from '@refinedev/core';
 import type { Translator } from '@nocobase/i18n';
@@ -794,9 +795,7 @@ export function WorkflowListPage(): React.ReactElement {
   if (detail) return detail;
   return (
     <PageContainer className='workflow-page'>
-      <h1 className='text-2xl font-semibold tracking-tight'>
-        {t('workflows.title')}
-      </h1>
+      <PageHeader title={t('workflows.title')} />
       <WorkflowTabs active={activeTab} onChange={setActiveTab} />
       {activeTab === 'runs' ? (
         <WorkflowRunListPage embedded />
@@ -937,14 +936,10 @@ export function WorkflowDetailPage(): React.ReactElement {
   return (
     <PageContainer className='workflow-page'>
       <Link to={WORKFLOW_SETTING_PATHS.workflows}>{t('workflows.back')}</Link>
-      <div className='workflow-title-row'>
-        <div>
-          <h1 className='text-2xl font-semibold tracking-tight'>
-            {workflow.title ?? workflow.key}
-          </h1>
-          <p>{workflow.description || t('workflows.noDescription')}</p>
-        </div>
-      </div>
+      <PageHeader
+        title={workflow.title ?? workflow.key}
+        description={workflow.description || t('workflows.noDescription')}
+      />
       <section className='workflow-canvas-card'>
         <header className='workflow-canvas-header'>
           <div className='workflow-canvas-header-leading'>
@@ -1230,9 +1225,7 @@ export function WorkflowRunListPage({
     content
   ) : (
     <PageContainer className='workflow-page'>
-      <h1 className='text-2xl font-semibold tracking-tight'>
-        {t('workflows.title')}
-      </h1>
+      <PageHeader title={t('workflows.title')} />
       <WorkflowTabs active='runs' onChange={() => undefined} />
       {content}
     </PageContainer>
@@ -1276,16 +1269,16 @@ export function WorkflowRunDetailPage(): React.ReactElement {
   return (
     <PageContainer className='workflow-page'>
       <Link to={workflowPath(run.workflowId)}>{t('workflows.back')}</Link>
-      <div className='workflow-title-row'>
-        <div>
-          <h1 className='text-2xl font-semibold tracking-tight'>
+      <PageHeader
+        title={
+          <>
             {run.workflowTitle ?? run.workflowKey}
             <span className='workflow-run-title-version'>
               {run.workflowVersion ?? t('common.unpublished')}
             </span>
-          </h1>
-        </div>
-      </div>
+          </>
+        }
+      />
       <section className='workflow-canvas-card'>
         <header className='workflow-canvas-header workflow-run-detail-header'>
           <span className='workflow-run-triggered-at'>

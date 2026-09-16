@@ -1,4 +1,5 @@
 import { PageContainer } from '../components/page-container.js';
+import { PageHeader } from '../components/page-header.js';
 import { useTranslation } from '@nocobase/i18n/client';
 import { Check, Copy, LoaderCircle, Plus, Trash2 } from 'lucide-react';
 import {
@@ -124,19 +125,15 @@ export default function ApiKeysPage(): ReactElement {
 
   return (
     <PageContainer>
-      <header className='flex flex-wrap items-end justify-between gap-4'>
-        <div>
-          <h1 className='text-2xl font-semibold tracking-tight'>
-            {t('page.title')}
-          </h1>
-          <p className='mt-1 text-sm text-muted-foreground'>
-            {t('page.description')}
-          </p>
-        </div>
-        <Button onClick={() => setCreating(true)}>
-          <Plus /> {t('page.add')}
-        </Button>
-      </header>
+      <PageHeader
+        title={t('page.title')}
+        description={t('page.description')}
+        actions={
+          <Button onClick={() => setCreating(true)}>
+            <Plus /> {t('page.add')}
+          </Button>
+        }
+      />
 
       {error ? (
         <div className='rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive'>
