@@ -9,15 +9,17 @@ import { Card } from './ui/card.js';
 export function PermissionsPage({
   title,
   description,
+  wide = false,
   children,
 }: {
   title: string;
   description: string;
+  wide?: boolean;
   children: ReactNode;
 }): ReactElement {
   return (
     <main className='min-h-[calc(100svh-4rem)] bg-muted/20 p-5 sm:p-8'>
-      <div className='mx-auto max-w-6xl space-y-5'>
+      <div className={wide ? 'space-y-5' : 'mx-auto max-w-6xl space-y-5'}>
         <header>
           <h1 className='text-2xl font-semibold tracking-tight'>{title}</h1>
           <p className='mt-1 text-sm text-muted-foreground'>{description}</p>

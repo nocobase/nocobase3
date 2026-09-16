@@ -69,10 +69,20 @@ export interface DatabaseCollectionOption {
   name: string;
   fields: readonly string[];
 }
+export interface SubjectTypeOption extends SelectOption {
+  selection?: { type: 'fixed'; id: string } | { type: 'collection' };
+}
+export interface SubjectOption {
+  id: string;
+  title: string;
+  description?: string;
+}
+export type SubjectSettings =
+  'permission-sets' | 'sharing-rules' | 'restriction-rules';
 export interface AuthorizationOptions {
   plugins: readonly string[];
   resourceTypes: readonly ResourceTypeOption[];
-  subjectTypes: readonly SelectOption[];
+  subjectTypes: readonly SubjectTypeOption[];
   collections: readonly DatabaseCollectionOption[];
   recordAccessPolicies: readonly SelectOption[];
 }
@@ -214,6 +224,31 @@ export class AuthorizationClient {
    * subject ids and nothing about accounts. It authorizes separately, so this
    * request can be refused while the settings page itself is allowed.
    */
+  listSubjects(
+    settings: SubjectSettings,
+    type: string,
+    query: { search?: string; page: number; pageSize: number },
+  ): Promise<{ items: readonly SubjectOption[]; total: number }> {
+    return this.api
+      .request<
+        DataResponse<{ items: readonly SubjectOption[]; total: number }>
+      >({
+        path: `authz/${settings}/subjects/${encodeURIComponent(type)}`,
+        query,
+      })
+      .then((response) => response.data);
+  }
+  resolveSubjects(
+    settings: SubjectSettings,
+    type: string,
+    ids: readonly string[],
+  ): Promise<readonly SubjectOption[]> {
+    return this.send<readonly SubjectOption[]>(
+      `authz/${settings}/subjects/${encodeURIComponent(type)}/resolve`,
+      'POST',
+      { ids },
+    );
+  }
   listUsers(): Promise<readonly AuthorizationUser[]> {
     return this.api
       .request<DataResponse<{ items: readonly AuthorizationUser[] }>>({

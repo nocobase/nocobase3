@@ -1,3 +1,13 @@
+import { Checkbox } from '../components/ui/checkbox.js';
+import { SelectField } from '../components/select-field.js';
+import { incompleteScope } from '../components/filter-ast.js';
+import {
+  useSubjectNames,
+  subjectKey,
+} from '../components/use-subject-names.js';
+import { RuleDrawer, RuleForm } from '../components/rule-drawer.js';
+import { useRuleDraft } from '../components/use-rule-draft.js';
+import { actionLabel } from './permission-sets/labels.js';
 import { Button } from '../components/ui/button.js';
 import { Input } from '../components/ui/input.js';
 import {
@@ -20,7 +30,6 @@ import type {
   AuthorizationOptions,
   SharingRule,
 } from '../authorization-client.js';
-import type { UserDirectory } from '../components/user-directory.js';
 import { ConfirmDialog } from '../components/confirm-dialog.js';
 import { SearchField } from '../components/filters.js';
 import {
@@ -35,8 +44,6 @@ import {
   EmptyTableRow,
   ManagementTable,
   ManagementToolbar,
-  RuleEditorLayout,
-  SidePanel,
   TablePager,
 } from '../components/management-ui.js';
 import { useAuthorizationTranslation, type Translate } from '../i18n.js';
@@ -48,21 +55,24 @@ const authz = getAuthorizationClient();
 
 export function SharingRulesPanel({
   options,
-  directory,
 }: {
   options: AuthorizationOptions;
-  directory: UserDirectory;
 }): ReactElement {
   const t = useAuthorizationTranslation();
   const [rules, setRules] = useState<readonly SharingRule[]>([]);
-  const [draft, setDraft] = useState<SharingRule>();
-  const [originalKey, setOriginalKey] = useState<string>();
+  const subjectNames = useSubjectNames(
+    'sharing-rules',
+    options.subjectTypes,
+    rules.flatMap((rule) => rule.subjects),
+  );
+  const { draft, setDraft, originalKey, edit, close, dirty } = useRuleDraft(
+    rules,
+    () => fresh(options),
+  );
+  const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [error, setError] = useState<string>();
-  const [editorTab, setEditorTab] = useState<'rule' | 'access' | 'assignments'>(
-    'rule',
-  );
   const [confirmDelete, setConfirmDelete] = useState(false);
   const load = useCallback(async (): Promise<void> => {
     try {
@@ -90,13 +100,10 @@ export function SharingRulesPanel({
     setSearch(value);
     setPage(1);
   }
-  function edit(rule?: SharingRule): void {
-    setOriginalKey(rule?.key);
-    setDraft(rule ?? fresh(options));
-    setEditorTab('rule');
-  }
   async function save(): Promise<void> {
-    if (!draft) return;
+    if (!draft || busy) return;
+    setBusy(true);
+    setError(undefined);
     try {
       if (
         !draft.key ||
@@ -104,28 +111,42 @@ export function SharingRulesPanel({
         draft.actions.length === 0 ||
         draft.actions.some(
           (item) =>
+            item.selection.type === 'policy' &&
+            incompleteScope(item.selection.policy),
+        ) ||
+        draft.actions.some(
+          (item) =>
             item.selection.type === 'records' &&
             item.selection.ids.length === 0,
         ) ||
+        draft.subjects.length === 0 ||
         draft.subjects.some((item) => !item.id)
       )
         throw new TypeError(t('errors.completeRule'));
       if (originalKey) await authz.updateSharingRule(originalKey, draft);
       else await authz.createSharingRule(draft);
-      setDraft(undefined);
-      setOriginalKey(undefined);
+      close();
       await load();
     } catch (cause) {
       setError(message(t, cause));
+    } finally {
+      setBusy(false);
     }
   }
   async function remove(): Promise<void> {
-    if (!originalKey) return;
-    await authz.deleteSharingRule(originalKey);
-    setDraft(undefined);
-    setOriginalKey(undefined);
-    await load();
+    if (!originalKey || busy) return;
+    setBusy(true);
+    try {
+      await authz.deleteSharingRule(originalKey);
+      close();
+      await load();
+    } catch (cause) {
+      setError(message(t, cause));
+    } finally {
+      setBusy(false);
+    }
   }
+
   return (
     <>
       {error ? <ErrorBox value={error} /> : null}
@@ -176,13 +197,23 @@ export function SharingRulesPanel({
                   {resourceLabel(options, rule)}
                 </TableCell>
                 <TableCell className='px-5 py-4'>
-                  {selectionLabel(t, rule)}
+                  {selectionLabel(t, rule, options)}
                 </TableCell>
                 <TableCell className='px-5 py-4'>
-                  {subjectLabel(t, rule, directory)}
+                  {rule.subjects
+                    .map(
+                      (subject) =>
+                        subjectNames[subjectKey(subject)] ??
+                        `${subject.type}: ${subject.id}`,
+                    )
+                    .join(' · ')}
                 </TableCell>
                 <TableCell className='px-5 py-4'>
-                  {rule.actions.map((item) => humanize(item.action)).join(', ')}
+                  {rule.actions
+                    .map((item) =>
+                      actionLabel(options, rule.resource.type, item.action),
+                    )
+                    .join(', ')}
                 </TableCell>
                 <TableCell className='px-5 py-4 text-right'>
                   <Button size='sm' variant='ghost' onClick={() => edit(rule)}>
@@ -222,41 +253,36 @@ export function SharingRulesPanel({
         })}
       </ConfirmDialog>
       {draft ? (
-        <SidePanel
+        <RuleDrawer
           title={t(
             originalKey ? 'sharingRules.editTitle' : 'sharingRules.newTitle',
           )}
           description={t('sharingRules.editorDescription')}
-          onClose={() => setDraft(undefined)}
-          wide
-          scrollable={false}
+          onClose={close}
+          dirty={dirty}
+          busy={busy}
         >
-          <RuleEditorLayout
-            steps={sharingSteps(t)}
-            value={editorTab}
-            onChange={(value) =>
-              setEditorTab(value as 'rule' | 'access' | 'assignments')
-            }
+          <RuleForm
             footer={
               <>
                 {originalKey ? (
                   <Button
                     variant='outline'
+                    className='mr-auto text-destructive'
+                    disabled={busy}
                     onClick={() => setConfirmDelete(true)}
                   >
                     {t('sharingRules.deleteRule')}
                   </Button>
                 ) : null}
-                <Button variant='outline' onClick={() => setDraft(undefined)}>
-                  {t('common.cancel')}
-                </Button>
-                <Button onClick={() => void save()}>
+                <Button disabled={busy} onClick={() => void save()}>
                   {t('sharingRules.save')}
                 </Button>
               </>
             }
           >
-            {editorTab === 'rule' ? (
+            {error ? <ErrorBox value={error} /> : null}
+            <>
               <section className='space-y-5'>
                 <div>
                   <h3 className='text-base font-semibold'>
@@ -307,9 +333,35 @@ export function SharingRulesPanel({
                     }
                   />
                 </div>
+                <Field label={t('sharingRules.description')}>
+                  <Input
+                    value={draft.reason ?? ''}
+                    onChange={(event) =>
+                      setDraft({ ...draft, reason: event.target.value })
+                    }
+                  />
+                </Field>
               </section>
-            ) : null}
-            {editorTab === 'access' ? (
+            </>
+            <>
+              <section className='space-y-5'>
+                <div>
+                  <h3 className='text-base font-semibold'>
+                    {t('sharingRules.assignmentsHeading')}
+                  </h3>
+                  <p className='mt-1 text-sm text-muted-foreground'>
+                    {t('sharingRules.assignmentsDescription')}
+                  </p>
+                </div>
+                <SubjectsEditor
+                  types={options.subjectTypes}
+                  settings='sharing-rules'
+                  value={draft.subjects}
+                  onChange={(subjects) => setDraft({ ...draft, subjects })}
+                />
+              </section>
+            </>
+            <>
               <section className='space-y-5'>
                 <div>
                   <h3 className='text-base font-semibold'>
@@ -327,34 +379,9 @@ export function SharingRulesPanel({
                   onChange={(actions) => setDraft({ ...draft, actions })}
                 />
               </section>
-            ) : null}
-            {editorTab === 'assignments' ? (
-              <section className='space-y-5'>
-                <div>
-                  <h3 className='text-base font-semibold'>
-                    {t('sharingRules.assignmentsHeading')}
-                  </h3>
-                  <p className='mt-1 text-sm text-muted-foreground'>
-                    {t('sharingRules.assignmentsDescription')}
-                  </p>
-                </div>
-                <SubjectsEditor
-                  directory={directory}
-                  value={draft.subjects}
-                  onChange={(subjects) => setDraft({ ...draft, subjects })}
-                />
-                <Field label={t('sharingRules.description')}>
-                  <Input
-                    value={draft.reason ?? ''}
-                    onChange={(event) =>
-                      setDraft({ ...draft, reason: event.target.value })
-                    }
-                  />
-                </Field>
-              </section>
-            ) : null}
-          </RuleEditorLayout>
-        </SidePanel>
+            </>
+          </RuleForm>
+        </RuleDrawer>
       ) : null}
     </>
   );
@@ -380,31 +407,9 @@ function fresh(options: AuthorizationOptions): SharingRule {
       action,
       selection: { type: 'records' as const, ids: [] },
     })),
-    subjects: [{ type: 'authenticated', id: '*' }],
+    subjects: [],
     reason: '',
   };
-}
-
-function sharingSteps(
-  t: Translate,
-): readonly { value: string; label: string; description: string }[] {
-  return [
-    {
-      value: 'rule',
-      label: t('sharingRules.steps.rule'),
-      description: t('sharingRules.steps.ruleHint'),
-    },
-    {
-      value: 'access',
-      label: t('sharingRules.steps.access'),
-      description: t('sharingRules.steps.accessHint'),
-    },
-    {
-      value: 'assignments',
-      label: t('sharingRules.steps.assignments'),
-      description: t('sharingRules.steps.assignmentsHint'),
-    },
-  ];
 }
 
 function SharingActionsEditor({
@@ -421,17 +426,24 @@ function SharingActionsEditor({
   onChange: (value: SharingRule['actions']) => void;
 }): ReactElement {
   const t = useAuthorizationTranslation();
-  const [active, setActive] = useState(value[0]?.action ?? '');
   const [records, setRecords] = useState<
     readonly import('../authorization-client.js').AuthorizationRecordOption[]
   >([]);
   const [recordSearch, setRecordSearch] = useState('');
   useEffect(() => {
-    void authz
-      .listSharingRecords(collection)
-      .then(setRecords, () => setRecords([]));
+    let active = true;
+    void authz.listSharingRecords(collection).then(
+      (items) => {
+        if (active) setRecords(items);
+      },
+      () => {
+        if (active) setRecords([]);
+      },
+    );
+    return () => {
+      active = false;
+    };
   }, [collection]);
-  const current = value.find((item) => item.action === active) ?? value[0];
   return (
     <div className='space-y-3'>
       <ActionsEditor
@@ -449,46 +461,40 @@ function SharingActionsEditor({
                 },
             ),
           );
-          if (!actions.includes(active)) setActive(actions[0] ?? '');
         }}
       />
-      {current ? (
-        <section className='overflow-hidden rounded-lg border'>
-          <div className='flex flex-wrap gap-1 border-b bg-muted/20 p-2'>
-            {value.map((item) => (
-              <button
-                className={`rounded px-3 py-1.5 text-xs font-medium ${current.action === item.action ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}
-                key={item.action}
-                type='button'
-                onClick={() => setActive(item.action)}
-              >
-                {humanize(item.action)}
-              </button>
-            ))}
-          </div>
+      {value.map((current) => (
+        <section
+          key={current.action}
+          className='overflow-hidden rounded-lg border'
+        >
+          <h4 className='border-b bg-muted/20 px-4 py-3 font-medium'>
+            {actionLabel(options, resourceType, current.action)}
+          </h4>
           <div className='space-y-4 p-4'>
             <Field label={t('sharingRules.recordsToShare')}>
-              <select
+              <SelectField
+                aria-label={t('sharingRules.recordsToShare')}
                 className='h-8 w-full rounded-lg border bg-background px-3 text-sm'
                 value={current.selection.type}
-                onChange={(event) =>
+                onValueChange={(selectedValue) =>
                   changeSharingAction(
                     value,
                     current.action,
                     onChange,
-                    event.target.value === 'records'
+                    selectedValue === 'records'
                       ? { type: 'records', ids: [] }
                       : { type: 'policy', policy: defaultPolicy(options) },
                   )
                 }
-              >
-                <option value='records'>
-                  {t('sharingRules.selectedRecords')}
-                </option>
-                <option value='policy'>
-                  {t('sharingRules.policyRecords')}
-                </option>
-              </select>
+                options={[
+                  {
+                    value: 'records',
+                    label: t('sharingRules.selectedRecords'),
+                  },
+                  { value: 'policy', label: t('sharingRules.policyRecords') },
+                ]}
+              />
             </Field>
             {current.selection.type === 'records' ? (
               <RecordPicker
@@ -518,7 +524,7 @@ function SharingActionsEditor({
             )}
           </div>
         </section>
-      ) : null}
+      ))}
     </div>
   );
 }
@@ -562,13 +568,12 @@ function RecordPicker({
             className='flex cursor-pointer items-start gap-3 px-3 py-2.5 hover:bg-muted/20'
             key={record.id}
           >
-            <input
+            <Checkbox
               className='mt-1'
-              type='checkbox'
               checked={value.includes(record.id)}
-              onChange={(event) =>
+              onCheckedChange={(checked) =>
                 onChange(
-                  event.target.checked
+                  checked
                     ? [...value, record.id]
                     : value.filter((id) => id !== record.id),
                 )
@@ -655,34 +660,44 @@ function resourceLabel(
     rule.resource.id
   );
 }
-function selectionLabel(t: Translate, rule: SharingRule): string {
+function selectionLabel(
+  t: Translate,
+  rule: SharingRule,
+  options: AuthorizationOptions,
+): string {
   return rule.actions
     .map((item) =>
       t('labels.actionScope', {
-        action: humanize(item.action),
+        action: actionLabel(options, rule.resource.type, item.action),
         scope:
           item.selection.type === 'records'
             ? t('labels.selectedRecords', { count: item.selection.ids.length })
-            : t('sharingRules.matchingPolicy'),
+            : policyLabel(t, item.selection.policy, options),
       }),
     )
     .join(' · ');
 }
-function subjectLabel(
-  t: Translate,
-  rule: SharingRule,
-  directory: UserDirectory,
-): string {
-  const subject = rule.subjects[0];
-  if (!subject || subject.type === 'authenticated')
-    return t('common.signedInUsers');
-  return (
-    directory.users.find((user) => user.id === subject.id)?.name ??
-    t('common.userFallback', { id: subject.id })
-  );
-}
+
 function humanize(value: string): string {
   return value
     .replace(/[._-]+/g, ' ')
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function policyLabel(
+  t: Translate,
+  scope: AccessScope,
+  options: AuthorizationOptions,
+): string {
+  if (scope.type === 'all') return t('labels.allRecords');
+  if (scope.type === 'ids')
+    return t('labels.selectedRecords', { count: scope.ids.length });
+  const key =
+    typeof scope.recordAccess === 'string'
+      ? scope.recordAccess
+      : scope.recordAccess.key;
+  return (
+    options.recordAccessPolicies.find((item) => item.value === key)?.label ??
+    key
+  );
 }

@@ -3,6 +3,7 @@ import { useRef, type ReactElement, type ReactNode } from 'react';
 
 import { useAuthorizationTranslation } from '../i18n.js';
 import { cn } from '../lib/utils.js';
+import { Input } from './ui/input.js';
 import { Button } from './ui/button.js';
 
 /** A toolbar carrying filters: a sunk bar with its controls raised inside it. */
@@ -50,7 +51,7 @@ export function SearchField({
   return (
     <div className={cn('relative min-w-48 flex-1 sm:max-w-80', className)}>
       <Search className='pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground' />
-      <input
+      <Input
         ref={inputRef}
         aria-label={label}
         className={searchInputClassName}

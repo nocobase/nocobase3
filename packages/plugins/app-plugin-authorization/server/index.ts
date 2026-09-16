@@ -54,3 +54,9 @@ export type {
 export { AuthorizationProvider } from './providers/authorization.js';
 export { translateAuthorization, type OptionText } from './i18n.js';
 export { AUTHORIZATION_NAMESPACE } from '../shared.js';
+
+export type {
+  SubjectAdministration,
+  SubjectOption,
+  SubjectSelectionContext,
+} from './subjects.js';

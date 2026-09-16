@@ -18,7 +18,6 @@ import {
   permissionSetCapabilities,
   permissionSetErrorMessage as message,
 } from '../../components/permission-set-access.js';
-import type { UserDirectory } from '../../components/user-directory.js';
 import { ConfirmDialog } from '../../components/confirm-dialog.js';
 import { Button } from '../../components/ui/button.js';
 import { Input } from '../../components/ui/input.js';
@@ -36,10 +35,8 @@ export interface PermissionWorkspaceContext {
 
 export function PermissionSetsPanel({
   options,
-  directory,
 }: {
   options: AuthorizationOptions;
-  directory: UserDirectory;
 }): ReactElement {
   const navigate = useNavigate();
   const location = useLocation();
@@ -241,13 +238,12 @@ export function PermissionSetsPanel({
       ) : (
         <Assignments
           key={permissionSetKey}
-          directory={directory}
           assignments={assignments}
-          canAssign={capabilities.canAssign}
-          canAssignAudience={canAssignSubjectType(
-            capabilities,
-            'authenticated',
+          subjectTypes={options.subjectTypes}
+          assignableTypes={options.subjectTypes.filter((type) =>
+            canAssignSubjectType(capabilities, type.value),
           )}
+          canAssign={capabilities.canAssign}
           canRevoke={capabilities.canRevoke}
           busy={busy}
           onAssign={assign}

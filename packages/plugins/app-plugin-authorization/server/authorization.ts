@@ -1,3 +1,4 @@
+import './subjects.js';
 import type { DatabaseConnection } from '@nocobase/db';
 import {
   createAuthorization,
@@ -87,6 +88,13 @@ export function createAppAuthorization(
   const authz = createAuthorization({
     connection: options.connection,
     plugins,
+  });
+  authz.subjects.define('authenticated', {
+    filterActive: async (ids) => ids.filter((id) => id === '*'),
+    administration: {
+      title: { key: 'options.subjectTypes.authenticated' },
+      selection: { type: 'fixed', id: '*' },
+    },
   });
   authz.use(async (request, next) => {
     const session = readAuthSession(request.http.var.auth);

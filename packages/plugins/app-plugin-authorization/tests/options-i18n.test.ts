@@ -1,3 +1,7 @@
+import {
+  AuthorizationDeniedError,
+  type AuthorizationScope,
+} from '@nocobase/authorization/core';
 import { createConfigPaths } from '@nocobase/app-server/config';
 import {
   authenticationToken,
@@ -12,7 +16,7 @@ import {
 import { createI18nMiddleware, I18nRuntime } from '@nocobase/i18n/server';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { AUTHORIZATION_NAMESPACE } from '../shared.js';
 import { createAppAuthorization } from '../server/authorization.js';
@@ -93,6 +97,116 @@ describe('the options endpoint translates on the server', () => {
       description: 'Select records with a custom filter condition.',
     });
   });
+
+  it('publishes registered subject selectors and dispatches paged queries and resolution', async () => {
+    const authz = authorization();
+    authz.subjects.define('department', {
+      filterActive: async (ids) => ids,
+      administration: {
+        title: 'Departments',
+        selection: {
+          type: 'collection',
+          list: async (query, context) => {
+            await context.authz.require({
+              resource: { type: 'department', id: '*' },
+              action: 'read',
+            });
+            return {
+              items: [
+                {
+                  id: 'sales',
+                  title: `${query.search}:${query.page}:${query.pageSize}`,
+                },
+              ],
+              total: 42,
+            };
+          },
+          resolve: async (ids) =>
+            ids.map((id) => ({ id, title: `Department ${id}` })),
+        },
+      },
+    });
+    const router = await mountedRouter(authz);
+    const options = await router.request('/api/authz/sharing-rules/options');
+    const body = (await options.json()) as OptionsBody;
+    expect(body.data.subjectTypes).toContainEqual({
+      value: 'department',
+      label: 'Departments',
+      selection: { type: 'collection' },
+    });
+    const listed = await router.request(
+      '/api/authz/sharing-rules/subjects/department?search=sales&page=2&pageSize=20',
+    );
+    expect(await listed.json()).toEqual({
+      data: { items: [{ id: 'sales', title: 'sales:2:20' }], total: 42 },
+    });
+    const resolved = await router.request(
+      '/api/authz/restriction-rules/subjects/department/resolve',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ids: ['sales'] }),
+      },
+    );
+    expect(await resolved.json()).toEqual({
+      data: [{ id: 'sales', title: 'Department sales' }],
+    });
+    expect(
+      (
+        await router.request(
+          '/api/authz/sharing-rules/subjects/department?pageSize=101',
+        )
+      ).status,
+    ).toBe(400);
+    expect(
+      (await router.request('/api/authz/sharing-rules/subjects/unknown'))
+        .status,
+    ).toBe(404);
+  });
+
+  it.each(['permission-sets', 'sharing-rules', 'restriction-rules'])(
+    'gates %s subject searches and resolution before callbacks run',
+    async (settings) => {
+      const authz = authorization();
+      const list = vi.fn().mockResolvedValue({ items: [], total: 0 });
+      const resolve = vi.fn().mockResolvedValue([]);
+      authz.subjects.define('department', {
+        filterActive: async (ids) => ids,
+        administration: {
+          title: 'Departments',
+          selection: { type: 'collection', list, resolve },
+        },
+      });
+      const require = vi
+        .fn()
+        .mockRejectedValue(
+          new AuthorizationDeniedError({ effect: 'deny', reasons: [] }),
+        );
+      const router = await mountedRouter(authz, require);
+      expect(
+        (await router.request(`/api/authz/${settings}/subjects/department`))
+          .status,
+      ).toBe(403);
+      expect(
+        (
+          await router.request(
+            `/api/authz/${settings}/subjects/department/resolve`,
+            {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ ids: ['sales'] }),
+            },
+          )
+        ).status,
+      ).toBe(403);
+      expect(list).not.toHaveBeenCalled();
+      expect(resolve).not.toHaveBeenCalled();
+      expect(require).toHaveBeenCalledWith({
+        resource: { type: 'settings', id: `authorization.${settings}` },
+        action: 'read',
+      });
+    },
+  );
 
   it('includes resources registered by another settings module', async () => {
     const authz = authorization();
@@ -223,6 +337,7 @@ function authorization(): AppAuthorizationService {
 /** The plugin routes under `/api`, behind the i18n middleware an application mounts. */
 async function mountedRouter(
   authorization: AppAuthorizationService,
+  require?: AuthorizationScope['require'],
 ): Promise<Hono> {
   const runtime = new I18nRuntime({
     defaultLocale: 'en-US',
@@ -235,7 +350,10 @@ async function mountedRouter(
   container.instance(authenticationToken, {
     required: () => async (_context, next) => next(),
   } as unknown as Auth);
-  container.instance(authorizationToken, alwaysPermitted(authorization));
+  container.instance(
+    authorizationToken,
+    alwaysPermitted(authorization, require),
+  );
   const routes = await apiRoutes.createRouter({
     appName: 'main',
     publicBasePath: '',
@@ -251,11 +369,12 @@ async function mountedRouter(
 
 function alwaysPermitted(
   authorization: AppAuthorizationService,
+  require?: AuthorizationScope['require'],
 ): AppAuthorizationService {
   const permitted = Object.create(authorization) as AppAuthorizationService;
   permitted.middleware = () => async (context, next) => {
     context.set('authz', {
-      require: () => Promise.resolve(),
+      require: require ?? (() => Promise.resolve()),
       can: () => Promise.resolve(true),
       authorize: () => Promise.resolve({ effect: 'permit' }),
       permissions: () => Promise.resolve({}),

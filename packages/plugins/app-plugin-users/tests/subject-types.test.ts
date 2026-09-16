@@ -11,7 +11,8 @@ import {
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import type { DatabaseConnection } from '@nocobase/db';
 import { ServiceContainer } from '@nocobase/service-provider';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import type { AuthorizationScope } from '@nocobase/app-plugin-authorization';
 
 import { UsersProvider } from '../server/providers/users.js';
 
@@ -83,6 +84,41 @@ describe('the user subject type this plugin declares', () => {
     ]);
     expect(calls).toEqual([
       { userIds: ['root', 'retired'], status: 'enabled', pageSize: 100 },
+    ]);
+  });
+
+  it('checks read permission for both searches and name resolution before querying users', async () => {
+    const container = new ServiceContainer();
+    const authorization = createAppAuthorization({ connection });
+    const calls: ListAdministratedUsersInput[] = [];
+    container.instance(authorizationToken, authorization);
+    container.instance(
+      userAdministrationServiceToken,
+      userAdministration(new Set(['one']), calls),
+    );
+    await provider(container).boot();
+    const selection =
+      authorization.subjects.get('user')?.administration?.selection;
+    if (selection?.type !== 'collection') throw new Error('Missing selector');
+    const require = vi.fn().mockRejectedValue(new Error('Forbidden'));
+    const context = { authz: { require } as unknown as AuthorizationScope };
+    await expect(
+      selection.list({ search: 'abc', page: 2, pageSize: 30 }, context),
+    ).rejects.toThrow('Forbidden');
+    await expect(selection.resolve(['one'], context)).rejects.toThrow(
+      'Forbidden',
+    );
+    expect(calls).toEqual([]);
+    expect(require).toHaveBeenCalledWith({
+      resource: { type: 'user', id: '*' },
+      action: 'read',
+    });
+    require.mockResolvedValue(undefined);
+    await selection.list({ search: 'abc', page: 2, pageSize: 30 }, context);
+    await selection.resolve(['one'], context);
+    expect(calls).toEqual([
+      { search: 'abc', page: 2, pageSize: 30, status: 'enabled' },
+      { userIds: ['one'], pageSize: 100 },
     ]);
   });
 

@@ -1,4 +1,8 @@
-import { X } from 'lucide-react';
+import { Checkbox } from './ui/checkbox.js';
+import { SelectField } from './select-field.js';
+import { CustomFilterEditor } from './filter-editor.js';
+import { emptyFilter } from './filter-ast.js';
+import { actionLabel } from '../pages/permission-sets/labels.js';
 import { useState, type ReactElement, type ReactNode } from 'react';
 
 import { useAuthorizationTranslation } from '../i18n.js';
@@ -9,13 +13,7 @@ import type {
   AccessScope,
   AuthorizationOptions,
   AuthorizationRecordOption,
-  AuthorizationSubject,
 } from '../authorization-client.js';
-import {
-  canAddAssignment,
-  userLabel,
-  type UserDirectory,
-} from './user-directory.js';
 
 const selectClass =
   'h-8 w-full rounded-lg border border-input bg-background px-3 text-sm';
@@ -54,39 +52,39 @@ export function ResourceEditor({
   return (
     <>
       <Field label={t('editors.resourceType')}>
-        <select
+        <SelectField
+          aria-label={t('editors.resourceType')}
           className={selectClass}
           value={type}
-          onChange={(event) => {
+          onValueChange={(selectedValue) => {
             const next = options.resourceTypes.find(
-              (item) => item.value === event.target.value,
+              (item) => item.value === selectedValue,
             );
             onChange({
-              type: event.target.value,
+              type: selectedValue,
               id: next?.resources[0]?.value ?? '',
             });
           }}
-        >
-          {options.resourceTypes.map((item) => (
-            <option key={item.value} value={item.value}>
-              {item.label}
-            </option>
-          ))}
-        </select>
+          options={options.resourceTypes.map((item) => ({
+            value: item.value,
+            label: item.label,
+          }))}
+        />
       </Field>
       <Field label={t('editors.resource')}>
         {selected && selected.resources.length > 0 ? (
-          <select
+          <SelectField
+            aria-label={t('editors.resource')}
             className={selectClass}
             value={id}
-            onChange={(event) => onChange({ type, id: event.target.value })}
-          >
-            {selected.resources.map((item) => (
-              <option key={item.value} value={item.value}>
-                {item.label}
-              </option>
-            ))}
-          </select>
+            onValueChange={(selectedValue) =>
+              onChange({ type, id: selectedValue })
+            }
+            options={selected.resources.map((item) => ({
+              value: item.value,
+              label: item.label,
+            }))}
+          />
         ) : (
           <Input
             required
@@ -147,12 +145,11 @@ export function ActionsEditor({
       <div className='flex min-h-9 flex-wrap items-center gap-4 rounded-lg border px-3 py-2'>
         {orderedActions.map((action) => (
           <label className='flex items-center gap-2 text-sm' key={action.value}>
-            <input
-              type='checkbox'
+            <Checkbox
               checked={value.includes(action.value)}
-              onChange={(event) => {
+              onCheckedChange={(checked) => {
                 const selected = new Set(
-                  event.target.checked
+                  checked
                     ? [...value, action.value]
                     : value.filter((item) => item !== action.value),
                 );
@@ -168,232 +165,6 @@ export function ActionsEditor({
         ))}
       </div>
     </Field>
-  );
-}
-
-export function SubjectEditor({
-  directory,
-  value,
-  onChange,
-}: {
-  directory: UserDirectory;
-  value: AuthorizationSubject;
-  onChange: (value: AuthorizationSubject) => void;
-}): ReactElement {
-  const t = useAuthorizationTranslation();
-  const users = directory.users;
-  return (
-    <>
-      <Field label={t('editors.who')}>
-        <select
-          className={selectClass}
-          value={value.type}
-          onChange={(event) =>
-            onChange(
-              event.target.value === 'authenticated'
-                ? { type: 'authenticated', id: '*' }
-                : { type: 'user', id: users[0]?.id ?? '' },
-            )
-          }
-        >
-          <option value='authenticated'>{t('common.signedInUsers')}</option>
-          <option value='user'>{t('editors.specificUser')}</option>
-        </select>
-      </Field>
-      {value.type === 'user' ? (
-        <Field label={t('editors.user')}>
-          <select
-            className={selectClass}
-            required
-            value={value.id}
-            onChange={(event) =>
-              onChange({ type: 'user', id: event.target.value })
-            }
-          >
-            <option value=''>{t('editors.selectUser')}</option>
-            {users.map((user) => (
-              <option key={user.id} value={user.id}>
-                {user.name} · {user.username ?? user.email}
-              </option>
-            ))}
-          </select>
-        </Field>
-      ) : (
-        <p className='self-end pb-2 text-xs text-muted-foreground'>
-          {t('editors.audienceHint')}
-        </p>
-      )}
-    </>
-  );
-}
-
-export function SubjectsEditor({
-  directory,
-  value,
-  onChange,
-}: {
-  directory: UserDirectory;
-  value: readonly AuthorizationSubject[];
-  onChange: (value: readonly AuthorizationSubject[]) => void;
-}): ReactElement {
-  const t = useAuthorizationTranslation();
-  const users = directory.users;
-  const [search, setSearch] = useState('');
-  const query = search.trim().toLowerCase();
-  const visible = users.filter(
-    (user) =>
-      !query ||
-      [user.name, user.username, user.email].some((item) =>
-        item?.toLowerCase().includes(query),
-      ),
-  );
-  const audience = value.some((item) => item.type === 'authenticated');
-  const selectedUsers = new Set(
-    value.filter((item) => item.type === 'user').map((item) => item.id),
-  );
-  function setAudience(checked: boolean): void {
-    onChange(
-      checked
-        ? [
-            { type: 'authenticated', id: '*' },
-            ...value.filter((item) => item.type !== 'authenticated'),
-          ]
-        : value.filter((item) => item.type !== 'authenticated'),
-    );
-  }
-  function setUser(id: string, checked: boolean): void {
-    onChange(
-      checked
-        ? [...value, { type: 'user', id }]
-        : value.filter((item) => item.type !== 'user' || item.id !== id),
-    );
-  }
-  return (
-    <section className='space-y-3 rounded-lg border p-4'>
-      <div>
-        <h4 className='text-sm font-medium'>{t('editors.assignments')}</h4>
-        <p className='text-xs text-muted-foreground'>
-          {t('editors.assignmentsHint')}
-        </p>
-      </div>
-      {directory.unavailable ? (
-        <p className='rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900'>
-          {directory.unavailable}
-        </p>
-      ) : null}
-      {value.length > 0 ? (
-        <div className='flex flex-wrap gap-1.5'>
-          {audience ? (
-            <SubjectChip
-              label={t('common.signedInUsers')}
-              onRemove={() => setAudience(false)}
-            />
-          ) : null}
-          {value
-            .filter((item) => item.type === 'user')
-            .map((item) => (
-              <SubjectChip
-                key={item.id}
-                label={userLabel(t, directory, item.id)}
-                onRemove={() => setUser(item.id, false)}
-              />
-            ))}
-        </div>
-      ) : null}
-      <label className='flex items-start gap-3 rounded-md border p-3'>
-        <input
-          className='mt-1'
-          type='checkbox'
-          checked={audience}
-          onChange={(event) => setAudience(event.target.checked)}
-        />
-        <span>
-          <span className='block text-sm font-medium'>
-            {t('common.signedInUsers')}
-          </span>
-          <span className='block text-xs text-muted-foreground'>
-            {t('editors.authenticatedAudience')}
-          </span>
-        </span>
-      </label>
-      <SearchField
-        disabled={!canAddAssignment(directory)}
-        label={t('editors.searchPeople')}
-        placeholder={t('editors.searchPeoplePlaceholder')}
-        value={search}
-        onChange={setSearch}
-      />
-      <div className='max-h-56 divide-y overflow-y-auto rounded-md border'>
-        {visible.map((user) => (
-          <label
-            className='flex cursor-pointer items-center gap-3 px-3 py-2.5 hover:bg-muted/20'
-            key={user.id}
-          >
-            <input
-              type='checkbox'
-              checked={selectedUsers.has(user.id)}
-              onChange={(event) => setUser(user.id, event.target.checked)}
-            />
-            <Avatar name={user.name} />
-            <span className='min-w-0'>
-              <span className='block truncate text-sm font-medium'>
-                {user.name}
-              </span>
-              <span className='block truncate text-xs text-muted-foreground'>
-                {[user.username, user.email].filter(Boolean).join(' · ')}
-              </span>
-            </span>
-          </label>
-        ))}
-      </div>
-      <p className='text-xs text-muted-foreground'>
-        {t(
-          `editors.assignmentsSelected.${value.length === 1 ? 'one' : 'other'}`,
-          { count: value.length },
-        )}
-      </p>
-    </section>
-  );
-}
-
-/** A chosen subject, removable without hunting for its row in the list. */
-function SubjectChip({
-  label,
-  onRemove,
-}: {
-  label: string;
-  onRemove: () => void;
-}): ReactElement {
-  const t = useAuthorizationTranslation();
-  return (
-    <span className='inline-flex items-center gap-1 rounded-full bg-primary/10 py-1 pr-1 pl-2.5 text-xs font-medium text-primary'>
-      {label}
-      <button
-        aria-label={t('common.removeNamed', { label })}
-        className='grid size-4 place-items-center rounded-full hover:bg-primary/20'
-        type='button'
-        onClick={onRemove}
-      >
-        <X className='size-3' />
-      </button>
-    </span>
-  );
-}
-
-function Avatar({ name }: { name: string }): ReactElement {
-  const initials = name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? '')
-    .join('');
-  return (
-    <span
-      aria-hidden='true'
-      className='grid size-7 shrink-0 place-items-center rounded-full border bg-muted text-[0.625rem] font-semibold text-muted-foreground'
-    >
-      {initials}
-    </span>
   );
 }
 
@@ -414,13 +185,14 @@ export function ScopeEditor({
 }): ReactElement {
   const t = useAuthorizationTranslation();
   return (
-    <div className='grid gap-3 md:grid-cols-2'>
+    <div className='grid gap-3'>
       <Field label={t('editors.recordScope')}>
-        <select
+        <SelectField
+          aria-label={t('editors.recordScope')}
           className={selectClass}
           value={value.type}
-          onChange={(event) => {
-            const type = event.target.value;
+          onValueChange={(selectedValue) => {
+            const type = selectedValue;
             onChange(
               type === 'ids'
                 ? { type: 'ids', ids: [] }
@@ -433,13 +205,14 @@ export function ScopeEditor({
                   : { type: 'all' },
             );
           }}
-        >
-          <option value='all'>{t('labels.allRecords')}</option>
-          {allowIds ? (
-            <option value='ids'>{t('editors.specificRecordIds')}</option>
-          ) : null}
-          <option value='database'>{t('editors.recordAccessPolicy')}</option>
-        </select>
+          options={[
+            { value: 'all', label: t('labels.allRecords') },
+            ...(allowIds
+              ? [{ value: 'ids', label: t('editors.specificRecordIds') }]
+              : []),
+            { value: 'database', label: t('editors.recordAccessPolicy') },
+          ]}
+        />
       </Field>
       {value.type === 'ids' ? (
         <RecordScopeEditor
@@ -451,28 +224,27 @@ export function ScopeEditor({
       {value.type === 'database' ? (
         <>
           <Field label={t('editors.recordAccessPolicy')}>
-            <select
+            <SelectField
+              aria-label={t('editors.recordAccessPolicy')}
               className={selectClass}
               value={recordAccessKey(value.recordAccess)}
-              onChange={(event) =>
+              onValueChange={(selectedValue) =>
                 onChange({
                   type: 'database',
                   recordAccess:
-                    event.target.value === 'customFilter'
+                    selectedValue === 'customFilter'
                       ? {
                           key: 'customFilter',
-                          params: { filter: { $and: [] } },
+                          params: { filter: emptyFilter() },
                         }
-                      : event.target.value,
+                      : selectedValue,
                 })
               }
-            >
-              {options.recordAccessPolicies.map((policy) => (
-                <option key={policy.value} value={policy.value}>
-                  {policy.label}
-                </option>
-              ))}
-            </select>
+              options={options.recordAccessPolicies.map((policy) => ({
+                value: policy.value,
+                label: policy.label,
+              }))}
+            />
           </Field>
           {recordAccessKey(value.recordAccess) === 'customFilter' ? (
             <CustomFilterEditor
@@ -506,17 +278,15 @@ export function ActionScopesEditor({
   value: readonly { action: string; scope: AccessScope }[];
   onChange: (value: readonly { action: string; scope: AccessScope }[]) => void;
 }): ReactElement {
-  const [active, setActive] = useState(value[0]?.action ?? '');
   const selectedActions = value.map((item) => item.action);
-  const current = value.find((item) => item.action === active) ?? value[0];
   return (
-    <div className='space-y-3'>
+    <div className='space-y-4'>
       <ActionsEditor
         options={options}
         resourceType={resourceType}
         resourceId={resourceId}
         value={selectedActions}
-        onChange={(actions) => {
+        onChange={(actions) =>
           onChange(
             actions.map(
               (action) =>
@@ -525,45 +295,32 @@ export function ActionScopesEditor({
                   scope: initialScope(options),
                 },
             ),
-          );
-          if (!actions.includes(active)) setActive(actions[0] ?? '');
-        }}
+          )
+        }
       />
-      {value.length > 0 ? (
-        <section className='overflow-hidden rounded-lg border'>
-          <div className='flex flex-wrap gap-1 border-b bg-muted/20 p-2'>
-            {value.map((item) => (
-              <button
-                className={`rounded px-3 py-1.5 text-xs font-medium ${current?.action === item.action ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}
-                key={item.action}
-                type='button'
-                onClick={() => setActive(item.action)}
-              >
-                {humanize(item.action)}
-              </button>
-            ))}
-          </div>
-          {current ? (
-            <div className='p-4'>
-              <ScopeEditor
-                options={options}
-                fields={fields}
-                records={records}
-                value={current.scope}
-                onChange={(scope) =>
-                  onChange(
-                    value.map((item) =>
-                      item.action === current.action
-                        ? { ...item, scope }
-                        : item,
-                    ),
-                  )
-                }
-              />
-            </div>
-          ) : null}
+      {value.map((current) => (
+        <section
+          key={current.action}
+          className='space-y-3 rounded-lg border p-4'
+        >
+          <h4 className='font-medium'>
+            {actionLabel(options, resourceType, current.action)}
+          </h4>
+          <ScopeEditor
+            options={options}
+            fields={fields}
+            records={records}
+            value={current.scope}
+            onChange={(scope) =>
+              onChange(
+                value.map((item) =>
+                  item.action === current.action ? { ...item, scope } : item,
+                ),
+              )
+            }
+          />
         </section>
-      ) : null}
+      ))}
     </div>
   );
 }
@@ -604,13 +361,12 @@ function RecordScopeEditor({
             className='flex cursor-pointer items-start gap-3 px-3 py-2.5 hover:bg-muted/20'
             key={record.id}
           >
-            <input
+            <Checkbox
               className='mt-1'
-              type='checkbox'
               checked={value.includes(record.id)}
-              onChange={(event) =>
+              onCheckedChange={(checked) =>
                 onChange(
-                  event.target.checked
+                  checked
                     ? [...value, record.id]
                     : value.filter((id) => id !== record.id),
                 )
@@ -636,187 +392,8 @@ function RecordScopeEditor({
   );
 }
 
-type FilterOperator =
-  '$eq' | '$ne' | '$in' | '$notIn' | '$gt' | '$gte' | '$lt' | '$lte';
-const FILTER_OPERATORS: readonly FilterOperator[] = [
-  '$eq',
-  '$ne',
-  '$in',
-  '$notIn',
-  '$gt',
-  '$gte',
-  '$lt',
-  '$lte',
-];
-
-interface FilterCondition {
-  field: string;
-  operator: FilterOperator;
-  value: string;
-}
-
-function CustomFilterEditor({
-  fields,
-  value,
-  onChange,
-}: {
-  fields: readonly string[];
-  value: string | { key: string; params?: unknown };
-  onChange: (value: { key: string; params: unknown }) => void;
-}): ReactElement {
-  const t = useAuthorizationTranslation();
-  const conditions = readConditions(value);
-  function update(next: readonly FilterCondition[]): void {
-    onChange({
-      key: 'customFilter',
-      params: {
-        filter: {
-          $and: next.map((condition) => ({
-            [condition.field]: {
-              [condition.operator]:
-                condition.operator === '$in' || condition.operator === '$notIn'
-                  ? condition.value
-                      .split(',')
-                      .map((item) => item.trim())
-                      .filter(Boolean)
-                  : condition.value,
-            },
-          })),
-        },
-      },
-    });
-  }
-  return (
-    <div className='space-y-2 md:col-span-2'>
-      <div className='flex items-center justify-between'>
-        <span className='text-xs font-medium'>
-          {t('editors.filterConditions')}
-        </span>
-        <button
-          className='text-xs font-medium text-primary'
-          type='button'
-          onClick={() =>
-            update([
-              ...conditions,
-              { field: fields[0] ?? '', operator: '$eq', value: '' },
-            ])
-          }
-        >
-          {t('editors.addCondition')}
-        </button>
-      </div>
-      {conditions.map((condition, index) => (
-        <div
-          className='grid gap-2 sm:grid-cols-[1fr_8rem_1fr_auto]'
-          key={`${condition.field}-${condition.operator}-${condition.value}`}
-        >
-          <select
-            className={selectClass}
-            value={condition.field}
-            onChange={(event) =>
-              update(
-                conditions.map((item, current) =>
-                  current === index
-                    ? { ...item, field: event.target.value }
-                    : item,
-                ),
-              )
-            }
-          >
-            {fields.map((field) => (
-              <option key={field} value={field}>
-                {field}
-              </option>
-            ))}
-          </select>
-          <select
-            className={selectClass}
-            value={condition.operator}
-            onChange={(event) =>
-              update(
-                conditions.map((item, current) =>
-                  current === index
-                    ? {
-                        ...item,
-                        operator: event.target.value as FilterOperator,
-                      }
-                    : item,
-                ),
-              )
-            }
-          >
-            {FILTER_OPERATORS.map((operator) => (
-              <option key={operator} value={operator}>
-                {t(`filterOperators.${operator}`)}
-              </option>
-            ))}
-          </select>
-          <Input
-            value={condition.value}
-            onChange={(event) =>
-              update(
-                conditions.map((item, current) =>
-                  current === index
-                    ? { ...item, value: event.target.value }
-                    : item,
-                ),
-              )
-            }
-          />
-          <button
-            className='text-xs text-destructive'
-            type='button'
-            onClick={() =>
-              update(conditions.filter((_item, current) => current !== index))
-            }
-          >
-            {t('common.remove')}
-          </button>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function recordAccessKey(value: string | { key: string }): string {
   return typeof value === 'string' ? value : value.key;
-}
-
-function readConditions(
-  value: string | { key: string; params?: unknown },
-): readonly FilterCondition[] {
-  if (typeof value === 'string') return [];
-  const params = isRecord(value.params) ? value.params : undefined;
-  const filter = isRecord(params?.filter) ? params.filter : undefined;
-  const items = Array.isArray(filter?.$and) ? filter.$and : [];
-  return items.flatMap((item) => {
-    if (!isRecord(item)) return [];
-    const field = Object.entries(item)[0];
-    if (!field || !isRecord(field[1])) return [];
-    const operation = Object.entries(field[1])[0];
-    if (!operation) return [];
-    return [
-      {
-        field: field[0],
-        operator: operation[0] as FilterOperator,
-        value: Array.isArray(operation[1])
-          ? operation[1].join(', ')
-          : primitiveText(operation[1]),
-      },
-    ];
-  });
-}
-
-function primitiveText(value: unknown): string {
-  return typeof value === 'string' ||
-    typeof value === 'number' ||
-    typeof value === 'boolean'
-    ? String(value)
-    : '';
-}
-
-function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function initialScope(options: AuthorizationOptions): AccessScope {
@@ -826,12 +403,6 @@ function initialScope(options: AuthorizationOptions): AccessScope {
     : { type: 'all' };
 }
 
-function humanize(value: string): string {
-  return value
-    .replace(/[._-]+/g, ' ')
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
 // eslint-disable-next-line react-refresh/only-export-components
 export function csv(value: string): readonly string[] {
   return value
@@ -839,3 +410,5 @@ export function csv(value: string): readonly string[] {
     .map((item) => item.trim())
     .filter(Boolean);
 }
+
+export { SubjectsEditor } from './subjects-editor.js';

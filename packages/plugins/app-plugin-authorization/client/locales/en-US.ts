@@ -79,7 +79,31 @@ const enUS = {
       bypass: 'Unrestricted: grants are not consulted',
     },
   },
+  filterEditor: {
+    logic: 'Group logic',
+    all: 'All conditions (AND)',
+    any: 'Any condition (OR)',
+    addGroup: 'Add group',
+    removeGroup: 'Remove group',
+    valueType: 'Value type',
+    text: 'Text',
+    number: 'Number',
+    boolean: 'Boolean',
+    unsupported: 'This condition is preserved but cannot be edited visually.',
+    invalid:
+      'No editable filter node found. Starting over replaces the existing filter.',
+    start: 'Set up conditions',
+  },
   filterOperators: {
+    $includes: 'Contains',
+    $notIncludes: 'Does not contain',
+    $startsWith: 'Starts with',
+    $endsWith: 'Ends with',
+    $empty: 'Is empty',
+    $notEmpty: 'Is not empty',
+    $isTruly: 'Is true',
+    $isFalsy: 'Is false',
+
     $eq: 'Equals',
     $ne: 'Not equal',
     $in: 'In',
@@ -95,18 +119,26 @@ const enUS = {
     unknownScope: 'Unknown scope',
     actionScope: '{{action}}: {{scope}}',
   },
+  subjects: {
+    matchAny: 'Applies when any selected subject matches.',
+    search: 'Search subjects',
+    empty: 'No matching subjects',
+    previous: 'Previous',
+    next: 'Next',
+    selected: 'Selected subjects · {{count}}',
+    unresolved: '{{id}} (unresolved)',
+    none: 'No subjects selected',
+  },
   editors: {
     actions: 'Actions',
     actionsPlaceholder: 'read, create, update',
     addCondition: 'Add condition',
     assignments: 'Assignments',
-    assignmentsHint: 'Choose an audience or multiple users.',
     assignmentsSelected: {
       one: '{{count}} assignment selected',
       other: '{{count}} assignments selected',
     },
     audienceHint: 'Applies to every user with a valid signed-in session.',
-    authenticatedAudience: 'Authenticated audience',
     filterConditions: 'Filter conditions',
     records: 'Records',
     recordsSelected: {
@@ -134,7 +166,7 @@ const enUS = {
 
     expandSets: 'Expand permission sets',
     collapseSets: 'Collapse permission sets',
-    userAssignments: 'User assignments',
+    userAssignments: 'Assignees',
     chooseSet: 'Choose a permission set or create one.',
 
     fullScopeHint: 'All records and fields are accessible.',
@@ -256,7 +288,7 @@ const enUS = {
       untitled: 'New permission set',
       unrestrictedTitle: 'This permission set grants unrestricted access.',
       unrestrictedBody:
-        'This set grants unrestricted access, unaffected by other permission sets, sharing rules or restriction rules. No individual permissions need configuration. Manage its assignees in User assignments.',
+        'This set grants unrestricted access, unaffected by other permission sets, sharing rules or restriction rules. No individual permissions need configuration. Manage its assignments in Assignees.',
       confirmDeleteTitle: 'Delete this permission set?',
       confirmDeleteBody:
         'Delete “{{title}}” and its assignments. Other permission sets and rules remain in effect.',
@@ -264,7 +296,7 @@ const enUS = {
     },
     assignments: {
       search: 'Search assignments',
-      searchPlaceholder: 'Search name, username, or email',
+      searchPlaceholder: 'Search subject name or ID',
       kindLabel: 'Assignment type',
       kindAll: 'All assignments',
       kindUsers: 'Users',
@@ -286,8 +318,7 @@ const enUS = {
       confirmRevokeBody:
         '{{label}} will no longer hold this permission set. Other assignments remain in effect, and this set can be assigned again.',
       confirmRevoke: 'Revoke',
-      pickerDescription:
-        'Find people and assign this permission set in one operation.',
+      pickerDescription: 'Select subjects to receive this permission set.',
       audienceDescription:
         'Everyone with a valid session. This is managed separately from individual users.',
       usersHeading: 'Users',
@@ -345,7 +376,30 @@ const enUS = {
       add: 'Add permissions',
     },
   },
+  ruleWorkspace: {
+    unset: 'Not set',
+    unsetHint: 'No additional record scope is provided for this action.',
+    clearDefaults: 'Remove default configuration',
+    setDefault: 'Set default scope',
+  },
   defaultAccess: {
+    supportedScope:
+      'Only resource types that support data scopes are shown. Configure the default record scope for each action here.',
+    groupFilter: 'Resource group',
+    allGroups: 'All groups',
+    inlineHint:
+      'Simple changes save immediately. Configure and save specific scopes in the drawer.',
+    saved: 'Saved',
+    editScope: 'Edit scope',
+    back: 'Back to default access',
+
+    configureResource: 'Configure resource',
+    configure: 'Configure',
+    chooseResource: 'Choose a resource to configure its default record scopes.',
+    configured: 'Configured',
+    noDefault: 'No default scope',
+    customScope: 'Specific scope',
+
     page: {
       title: 'Default Access',
       description:
@@ -356,19 +410,13 @@ const enUS = {
     recordAccessHeader: 'Default record access',
     allowedActions: 'Allowed actions',
     emptyNone:
-      'No default access rules yet. Set a baseline record scope for users with the relevant action permission.',
+      'No default access configured. Permission sets and other rules determine access.',
     emptySearch: 'No default access rules match your search.',
     pagerLabel: 'Default access rules',
     editTitle: 'Edit default access',
     newTitle: 'Set default access',
     editorDescription:
       'Define the baseline record visibility before sharing and restrictions are applied.',
-    steps: {
-      resource: 'Resource',
-      resourceHint: 'Select a collection.',
-      access: 'Access',
-      accessHint: 'Configure action scopes.',
-    },
     resourceHeading: 'Resource',
     resourceDescription:
       'Choose the collection whose baseline access is being set.',
@@ -376,7 +424,7 @@ const enUS = {
     accessDescription: 'Set the record scope independently for each action.',
     deleteRule: 'Delete rule',
     save: 'Save default access',
-    confirmDeleteTitle: 'Delete this default access rule?',
+    confirmDeleteTitle: 'Remove this default configuration?',
     confirmDeleteBody:
       'Delete the default access rule for “{{resource}}”. Remaining permission sets and rules determine access.',
   },
@@ -399,20 +447,12 @@ const enUS = {
     editTitle: 'Edit sharing rule',
     newTitle: 'New sharing rule',
     editorDescription: 'Open access to selected records for an audience.',
-    steps: {
-      rule: 'Rule details',
-      ruleHint: 'Name and resource.',
-      access: 'Shared access',
-      accessHint: 'Actions and records.',
-      assignments: 'Assignments',
-      assignmentsHint: 'Audience and users.',
-    },
-    ruleHeading: 'Rule details',
+    ruleHeading: 'Basic information',
     ruleDescription: 'Name the rule and choose the collection to share.',
     ruleName: 'Rule name',
-    accessHeading: 'Records to share',
+    accessHeading: 'Actions and record scope',
     accessDescription: 'Choose records independently for each action.',
-    assignmentsHeading: 'Assignments',
+    assignmentsHeading: 'Applies to',
     assignmentsDescription: 'Choose who receives the additional access.',
     description: 'Description',
     recordsToShare: 'Records to share',
@@ -447,21 +487,13 @@ const enUS = {
     editTitle: 'Edit restriction rule',
     newTitle: 'New restriction rule',
     editorDescription: 'Limit the effective record scope for an audience.',
-    steps: {
-      rule: 'Rule details',
-      ruleHint: 'Name and resource.',
-      access: 'Restrictions',
-      accessHint: 'Actions and allowed scope.',
-      assignments: 'Assignments',
-      assignmentsHint: 'Audience and users.',
-    },
-    ruleHeading: 'Rule details',
+    ruleHeading: 'Basic information',
     ruleDescription: 'Name the rule and choose the collection to restrict.',
     ruleName: 'Rule name',
-    assignmentsHeading: 'Assignments',
+    assignmentsHeading: 'Applies to',
     assignmentsDescription: 'Choose who is subject to this restriction.',
-    reason: 'Reason',
-    accessHeading: 'Allowed scope',
+    reason: 'Description',
+    accessHeading: 'Actions and record scope',
     accessDescription:
       'Set the maximum record scope independently for each action.',
     deleteRule: 'Delete rule',

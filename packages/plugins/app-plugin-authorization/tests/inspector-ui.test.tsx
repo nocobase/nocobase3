@@ -1,3 +1,4 @@
+import { selectOption } from './select-option.js';
 // @vitest-environment jsdom
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -63,15 +64,18 @@ async function ask(decision: AuthorizationDecision): Promise<void> {
   render(<InspectorPage />);
   await screen.findByText(translate('inspector.empty'));
 
-  fireEvent.change(screen.getByLabelText(translate('inspector.person')), {
-    target: { value: 'alice' },
-  });
-  fireEvent.change(screen.getByLabelText(translate('editors.resource')), {
-    target: { value: 'orders' },
-  });
-  fireEvent.change(screen.getByLabelText(translate('inspector.action')), {
-    target: { value: 'read' },
-  });
+  await selectOption(
+    screen.getByLabelText(translate('inspector.person')),
+    'Alice · alice',
+  );
+  await selectOption(
+    screen.getByLabelText(translate('editors.resource')),
+    'Orders',
+  );
+  await selectOption(
+    screen.getByLabelText(translate('inspector.action')),
+    'Read',
+  );
   fireEvent.click(
     screen.getByRole('button', { name: translate('inspector.inspect') }),
   );

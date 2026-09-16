@@ -28,7 +28,7 @@ const zhCN: AuthorizationServerResource = {
     subjectTypes: {
       authenticated: '所有已登录用户',
       authenticatedDescription: '适用于所有已登录用户。',
-      user: '指定用户',
+      user: '用户',
     },
     recordAccessPolicies: {
       allRecords: '全部记录',

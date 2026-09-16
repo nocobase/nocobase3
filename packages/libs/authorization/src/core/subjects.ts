@@ -16,7 +16,13 @@ export function resolveAuthorizationSubjects(
   });
 }
 
-export interface AuthorizationSubjectType<TTransaction = unknown> {
+// Open extension point for host-owned subject metadata.
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface AuthorizationSubjectTypeExtensions {}
+
+export interface AuthorizationSubjectType<
+  TTransaction = unknown,
+> extends AuthorizationSubjectTypeExtensions {
   /**
    * Narrows the ids of this one type to the ones that still confer anything.
    * Batched on purpose: one query answers the whole set. The caller's
@@ -48,6 +54,10 @@ export class AuthorizationSubjectRegistry {
     return (): void => {
       if (this.types.get(type) === definition) this.types.delete(type);
     };
+  }
+
+  get(type: string): AuthorizationSubjectType<unknown> | undefined {
+    return this.types.get(type);
   }
 
   list(): readonly string[] {

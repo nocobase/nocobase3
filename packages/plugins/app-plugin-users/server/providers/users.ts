@@ -68,6 +68,48 @@ export class UsersProvider extends ServiceProvider<AppPluginApplication> {
       'user',
       {
         filterActive: (ids, connection) => this.enabledUserIds(ids, connection),
+        administration: {
+          title: {
+            key: 'options.subjectTypes.user',
+            ns: '@nocobase/app-plugin-authorization',
+          },
+          selection: {
+            type: 'collection',
+            list: async (query, context) => {
+              await context.authz.require({
+                resource: { type: 'user', id: '*' },
+                action: 'read',
+              });
+              const users = this.app.container.resolve(
+                userAdministrationServiceToken,
+              );
+              const result = await users.list({ ...query, status: 'enabled' });
+              return {
+                items: result.items.map((user) => ({
+                  id: user.id,
+                  title: user.name,
+                  description: user.username ?? user.email,
+                })),
+                total: result.total,
+              };
+            },
+            resolve: async (ids, context) => {
+              await context.authz.require({
+                resource: { type: 'user', id: '*' },
+                action: 'read',
+              });
+              const users = this.app.container.resolve(
+                userAdministrationServiceToken,
+              );
+              const result = await users.list({ userIds: ids, pageSize: 100 });
+              return result.items.map((user) => ({
+                id: user.id,
+                title: user.name,
+                description: user.username ?? user.email,
+              }));
+            },
+          },
+        },
       },
     );
     authorization.resources.add({

@@ -85,6 +85,58 @@ export function createAuthorizationRoutes(
     });
   }
 
+  for (const settings of [
+    'permission-sets',
+    'sharing-rules',
+    'restriction-rules',
+  ] as const) {
+    routes.get(`/${settings}/subjects/:type`, async (context) => {
+      await admin(context, settings, 'read');
+      const selection = authorization.subjects.get(context.req.param('type'))
+        ?.administration?.selection;
+      if (!selection || selection.type !== 'collection')
+        return context.json({ code: 'UNKNOWN_SUBJECT_TYPE' }, 404);
+      const page = Number(context.req.query('page') ?? 1);
+      const pageSize = Number(context.req.query('pageSize') ?? 30);
+      if (
+        !Number.isSafeInteger(page) ||
+        page < 1 ||
+        !Number.isSafeInteger(pageSize) ||
+        pageSize < 1 ||
+        pageSize > 100
+      )
+        return context.json({ code: 'INVALID_PAGINATION' }, 400);
+      const data = await selection.list(
+        { search: context.req.query('search'), page, pageSize },
+        { authz: context.get('authz') },
+      );
+      return context.json({ data });
+    });
+    routes.post(`/${settings}/subjects/:type/resolve`, async (context) => {
+      await admin(context, settings, 'read');
+      const selection = authorization.subjects.get(context.req.param('type'))
+        ?.administration?.selection;
+      if (!selection || selection.type !== 'collection')
+        return context.json({ code: 'UNKNOWN_SUBJECT_TYPE' }, 404);
+      const input = await body(context);
+      const ids: unknown =
+        input && typeof input === 'object'
+          ? Reflect.get(input, 'ids')
+          : undefined;
+      if (
+        !Array.isArray(ids) ||
+        ids.length > 100 ||
+        !ids.every(
+          (id): id is string => typeof id === 'string' && id.length > 0,
+        )
+      )
+        return context.json({ code: 'INVALID_SUBJECT_IDS' }, 400);
+      return context.json({
+        data: await selection.resolve(ids, { authz: context.get('authz') }),
+      });
+    });
+  }
+
   // Why one person reaches one resource, built only on the core's explanation
   // so it knows nothing about which plugins an application installed. It
   // reveals another person's access, so it is gated like the Permission Sets it
@@ -223,7 +275,7 @@ async function permissionSetOptions(
       databaseResourceOptions(context, collections, authz),
       administrationOptions(context, authz),
     ],
-    subjectTypes: subjectTypeOptions(context),
+    subjectTypes: subjectTypeOptions(context, authz),
     ...databaseOptions(context, authz, collections),
   };
 }
@@ -249,7 +301,7 @@ async function databaseScopeRuleOptions(
         actions: withoutCreate(collection.actions),
       },
     ],
-    subjectTypes: subjectTypeOptions(context),
+    subjectTypes: subjectTypeOptions(context, authz),
     ...databaseOptions(context, authz, collections),
   };
 }
@@ -388,30 +440,24 @@ function databaseOptions(
   };
 }
 
-function subjectTypeOptions(context: Context): readonly Option[] {
-  return [
-    {
-      value: 'authenticated',
-      label: translateAuthorization(
-        context,
-        'options.subjectTypes.authenticated',
-        'All signed-in users',
-      ),
-      description: translateAuthorization(
-        context,
-        'options.subjectTypes.authenticatedDescription',
-        'Applies to every user with a valid signed-in session.',
-      ),
-    },
-    {
-      value: 'user',
-      label: translateAuthorization(
-        context,
-        'options.subjectTypes.user',
-        'Specific user',
-      ),
-    },
-  ];
+function subjectTypeOptions(
+  context: Context,
+  authz: AppAuthorizationService,
+): readonly object[] {
+  return authz.subjects.list().flatMap((type) => {
+    const definition = authz.subjects.get(type)?.administration;
+    if (!definition) return [];
+    return [
+      {
+        value: type,
+        label: resolveOptionText(context, definition.title, type),
+        selection:
+          definition.selection.type === 'fixed'
+            ? { type: 'fixed', id: definition.selection.id }
+            : { type: 'collection' },
+      },
+    ];
+  });
 }
 
 async function admin(

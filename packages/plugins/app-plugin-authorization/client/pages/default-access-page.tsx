@@ -12,6 +12,7 @@ export default function DefaultAccessPage(): ReactElement {
   const page = useAuthorizationPageData('authz/default-access/options');
   return (
     <PermissionsPage
+      wide
       title={t('defaultAccess.page.title')}
       description={t('defaultAccess.page.description')}
     >

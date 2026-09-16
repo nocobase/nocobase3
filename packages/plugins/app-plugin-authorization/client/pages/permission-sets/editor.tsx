@@ -1,3 +1,4 @@
+import { Checkbox } from '../../components/ui/checkbox.js';
 import {
   useEffect,
   useRef,
@@ -321,12 +322,9 @@ export function PermissionSetEditor({
                     }}
                   />
                   <label className='flex items-center gap-2 text-xs text-muted-foreground'>
-                    <input
-                      type='checkbox'
+                    <Checkbox
                       checked={configuredOnly}
-                      onChange={(event) =>
-                        setConfiguredOnly(event.target.checked)
-                      }
+                      onCheckedChange={(checked) => setConfiguredOnly(checked)}
                     />
                     {t('permissionWorkspace.configuredOnly')}
                   </label>

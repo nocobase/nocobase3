@@ -1,3 +1,4 @@
+import { SelectField } from '../components/select-field.js';
 import { useMemo, useState, type ReactElement } from 'react';
 
 import type {
@@ -130,78 +131,84 @@ function Inspector({
               value={search}
               onChange={(value) => change(() => setSearch(value))}
             />
-            <select
+            <SelectField
               aria-label={t('inspector.person')}
               className={selectClass}
               value={user}
-              onChange={(event) => change(() => setUser(event.target.value))}
-            >
-              <option value=''>{t('inspector.selectPerson')}</option>
-              {people.map((person) => (
-                <option key={person.id} value={person.id}>
-                  {person.name} · {person.username ?? person.email}
-                </option>
-              ))}
-            </select>
+              onValueChange={(selectedValue) =>
+                change(() => setUser(selectedValue))
+              }
+              options={[
+                { value: '', label: t('inspector.selectPerson') },
+                ...people.map((person) => ({
+                  value: person.id,
+                  label: (
+                    <>
+                      {person.name} · {person.username ?? person.email}
+                    </>
+                  ),
+                })),
+              ]}
+            />
           </div>
         </Field>
         <Field label={t('editors.resourceType')}>
-          <select
+          <SelectField
             aria-label={t('editors.resourceType')}
             className={selectClass}
             value={type}
-            onChange={(event) =>
+            onValueChange={(selectedValue) =>
               change(() => {
                 const next = options.resourceTypes.find(
-                  (item) => item.value === event.target.value,
+                  (item) => item.value === selectedValue,
                 );
-                setType(event.target.value);
+                setType(selectedValue);
                 setId(next?.resources[0]?.value ?? '');
                 setAction('');
               })
             }
-          >
-            {options.resourceTypes.map((item) => (
-              <option key={item.value} value={item.value}>
-                {item.label}
-              </option>
-            ))}
-          </select>
+            options={options.resourceTypes.map((item) => ({
+              value: item.value,
+              label: item.label,
+            }))}
+          />
         </Field>
         <Field label={t('editors.resource')}>
-          <select
+          <SelectField
             aria-label={t('editors.resource')}
             className={selectClass}
             value={id}
-            onChange={(event) =>
+            onValueChange={(selectedValue) =>
               change(() => {
-                setId(event.target.value);
+                setId(selectedValue);
                 setAction('');
               })
             }
-          >
-            <option value=''>{t('editors.resource')}</option>
-            {(resourceType?.resources ?? []).map((item) => (
-              <option key={item.value} value={item.value}>
-                {item.label}
-              </option>
-            ))}
-          </select>
+            options={[
+              { value: '', label: t('editors.resource') },
+              ...(resourceType?.resources ?? []).map((item) => ({
+                value: item.value,
+                label: item.label,
+              })),
+            ]}
+          />
         </Field>
         <Field label={t('inspector.action')}>
-          <select
+          <SelectField
             aria-label={t('inspector.action')}
             className={selectClass}
             value={action}
-            onChange={(event) => change(() => setAction(event.target.value))}
-          >
-            <option value=''>{t('inspector.selectAction')}</option>
-            {actions.map((item) => (
-              <option key={item.value} value={item.value}>
-                {item.label}
-              </option>
-            ))}
-          </select>
+            onValueChange={(selectedValue) =>
+              change(() => setAction(selectedValue))
+            }
+            options={[
+              { value: '', label: t('inspector.selectAction') },
+              ...actions.map((item) => ({
+                value: item.value,
+                label: item.label,
+              })),
+            ]}
+          />
         </Field>
       </div>
       <Button disabled={!complete || running} onClick={inspect}>

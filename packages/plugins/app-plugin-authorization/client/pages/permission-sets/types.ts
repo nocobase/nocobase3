@@ -25,10 +25,3 @@ export type RecordAccessDraft =
       key: string;
       params?: unknown;
     };
-
-export interface FilterConditionDraft {
-  id: number;
-  field: string;
-  operator: '$eq' | '$ne' | '$in' | '$notIn' | '$gt' | '$gte' | '$lt' | '$lte';
-  value: string;
-}

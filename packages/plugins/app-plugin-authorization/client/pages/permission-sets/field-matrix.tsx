@@ -1,3 +1,5 @@
+import { Checkbox } from '../../components/ui/checkbox.js';
+import { SelectField } from '../../components/select-field.js';
 import { useState, type ReactElement } from 'react';
 import type { AuthorizationOptions } from '../../authorization-client.js';
 import { Input } from '../../components/ui/input.js';
@@ -75,19 +77,18 @@ function Fields({
           {t('permissionWorkspace.responseHint')}
         </p>
       ) : null}
-      <select
+      <SelectField
         className='h-9 w-full rounded-md border bg-background px-2 text-sm'
         aria-label={`${t(`permissionWorkspace.${label}`)}: ${t('permissionWorkspace.fieldMode')}`}
         value={value === '*' ? 'all' : 'specific'}
-        onChange={(event) =>
-          onChange(event.target.value === 'all' ? '*' : [...fields])
+        onValueChange={(selectedValue) =>
+          onChange(selectedValue === 'all' ? '*' : [...fields])
         }
-      >
-        <option value='all'>{t('permissionWorkspace.allFuture')}</option>
-        <option value='specific'>
-          {t('permissionWorkspace.specificFields')}
-        </option>
-      </select>
+        options={[
+          { value: 'all', label: t('permissionWorkspace.allFuture') },
+          { value: 'specific', label: t('permissionWorkspace.specificFields') },
+        ]}
+      />
       {value !== '*' ? (
         <>
           <Input
@@ -125,13 +126,12 @@ function Fields({
                 key={name}
                 className='flex cursor-pointer items-center gap-2 px-3 py-2 text-sm'
               >
-                <input
+                <Checkbox
                   aria-label={`${t(`permissionWorkspace.${label}`)}: ${name}`}
-                  type='checkbox'
                   checked={value.includes(name)}
-                  onChange={(event) =>
+                  onCheckedChange={(checked) =>
                     onChange(
-                      event.target.checked
+                      checked
                         ? [...value, name]
                         : value.filter((item) => item !== name),
                     )

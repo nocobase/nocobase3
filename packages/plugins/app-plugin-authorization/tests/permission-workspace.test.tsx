@@ -26,7 +26,6 @@ import NewPage from '../client/pages/permission-set-new-page.js';
 import DetailsPage from '../client/pages/permission-set-details-page.js';
 import AssignmentsPage from '../client/pages/permission-set-assignments-page.js';
 import type { AuthorizationOptions } from '../client/authorization-client.js';
-import type { UserDirectory } from '../client/components/user-directory.js';
 const options: AuthorizationOptions = {
   plugins: [],
   subjectTypes: [],
@@ -43,7 +42,6 @@ const options: AuthorizationOptions = {
     },
   ],
 };
-const directory: UserDirectory = { users: [] };
 function Location() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -59,12 +57,7 @@ function mount(path = '/sets') {
     <MemoryRouter initialEntries={[path]}>
       <Location />
       <Routes>
-        <Route
-          path='/sets'
-          element={
-            <PermissionSetsPanel options={options} directory={directory} />
-          }
-        >
+        <Route path='/sets' element={<PermissionSetsPanel options={options} />}>
           <Route path='new' element={<NewPage />} />
           <Route path='edit/:permissionSetKey' element={<EditPage />}>
             <Route path='assignments' element={<AssignmentsPage />} />
@@ -91,7 +84,7 @@ describe('permission set workspace', () => {
     );
     fireEvent.click(
       await screen.findByRole('button', {
-        name: 'User assignments',
+        name: 'Assignees',
         exact: true,
       }),
     );
@@ -193,7 +186,7 @@ describe('permission set workspace', () => {
       screen.queryByRole('button', { name: 'Delete', exact: true }),
     ).not.toBeInTheDocument();
     fireEvent.click(
-      screen.getByRole('button', { name: 'User assignments', exact: true }),
+      screen.getByRole('button', { name: 'Assignees', exact: true }),
     );
     await waitFor(() =>
       expect(api.listAssignments).toHaveBeenCalledWith('staff'),
@@ -231,7 +224,7 @@ describe('permission set workspace', () => {
       '/sets/edit/staff/details',
     );
     fireEvent.click(
-      screen.getByRole('button', { name: 'User assignments', exact: true }),
+      screen.getByRole('button', { name: 'Assignees', exact: true }),
     );
     await waitFor(() =>
       expect(api.listAssignments).toHaveBeenCalledWith('staff'),

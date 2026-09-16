@@ -69,3 +69,7 @@ pnpm --filter @nocobase/app-plugin-users typecheck
 pnpm --filter @nocobase/app-plugin-users test
 pnpm --filter @nocobase/app-plugin-users build
 ```
+
+## Authorization subject selector
+
+When authorization is installed, the plugin registers the `user` subject type with its active-account filter and an administration selector. Searches reuse the user administration service with server-side pagination and return enabled accounts. Name resolution queries the requested IDs, including disabled accounts already referenced by a saved rule. Both callbacks require `user` resource read permission before querying; the authorization plugin separately checks settings-page access and assignment writes.

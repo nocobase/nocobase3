@@ -1,3 +1,4 @@
+import { selectOption } from './select-option.js';
 // @vitest-environment jsdom
 import { useState } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -109,11 +110,11 @@ describe('scope controls', () => {
     expect(
       screen.getByRole('region', { name: 'Fields users can view' }),
     ).toBeVisible();
-    fireEvent.change(
+    await selectOption(
       screen.getByRole('combobox', {
         name: 'Fields users can view: Field selection',
       }),
-      { target: { value: 'specific' } },
+      'Specific fields',
     );
     expect(
       screen.getByRole('region', { name: 'Fields users can view' }),

@@ -5,20 +5,18 @@ import { SharingRulesPanel } from './sharing-rules-panel.js';
 import {
   AuthorizationPageState,
   useAuthorizationPageData,
-  useUserDirectory,
 } from './page-support.js';
 
 export default function SharingRulesPage(): ReactElement {
   const t = useAuthorizationTranslation();
   const page = useAuthorizationPageData('authz/sharing-rules/options');
-  const users = useUserDirectory();
   return (
     <PermissionsPage
       title={t('sharingRules.page.title')}
       description={t('sharingRules.page.description')}
     >
       {page.options ? (
-        <SharingRulesPanel options={page.options} directory={users} />
+        <SharingRulesPanel options={page.options} />
       ) : (
         <AuthorizationPageState {...page} />
       )}

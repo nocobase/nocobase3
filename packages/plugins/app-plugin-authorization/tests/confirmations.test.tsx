@@ -38,7 +38,6 @@ async function renderDetail(onDelete: () => void): Promise<void> {
                 collections: [],
                 recordAccessPolicies: [],
               }}
-              directory={{ users: [] }}
             />
           }
         >

@@ -1,3 +1,4 @@
+import { incompleteFilter, policyFilter } from '../../components/filter-ast.js';
 import type {
   AuthorizationOptions,
   PermissionGrant,
@@ -6,7 +7,6 @@ import type {
 import type {
   DatabaseActionDraft,
   Draft,
-  FilterConditionDraft,
   GrantDraft,
   RecordAccessDraft,
 } from './types.js';
@@ -63,8 +63,7 @@ export function hasEmptyCustomFilter(draft: Draft): boolean {
   return draft.grants.some((grant) =>
     Object.values(grant.database).some((value) => {
       if (recordAccessKey(value.recordAccess) !== 'customFilter') return false;
-      const conditions = customFilterConditions(value.recordAccess);
-      return conditions.length === 0 || conditions.some((item) => !item.field);
+      return incompleteFilter(policyFilter(value.recordAccess));
     }),
   );
 }
@@ -138,60 +137,8 @@ export function recordAccessKey(value: RecordAccessDraft): string {
   return typeof value === 'string' ? value : value.key;
 }
 
-export function customFilterConditions(
-  value: RecordAccessDraft,
-): readonly FilterConditionDraft[] {
-  if (typeof value === 'string' || value.key !== 'customFilter') return [];
-  const params = readRecord(value.params);
-  const filter = readRecord(params?.filter);
-  const items = readArray(filter?.$and) ?? [];
-  return items.flatMap((item, index) => {
-    const condition = readRecord(item);
-    const entry = condition ? Object.entries(condition)[0] : undefined;
-    const expression = readRecord(entry?.[1]);
-    const operation = expression ? Object.entries(expression)[0] : undefined;
-    if (!entry || !operation) return [];
-    return [
-      {
-        id: index + 1,
-        field: entry[0],
-        operator: operation[0] as FilterConditionDraft['operator'],
-        value: Array.isArray(operation[1])
-          ? operation[1].join(', ')
-          : filterValueText(operation[1]),
-      },
-    ];
-  });
-}
-
-export function filterFromConditions(
-  conditions: readonly FilterConditionDraft[],
-): Readonly<Record<string, unknown>> {
-  return {
-    $and: conditions.map((condition) => ({
-      [condition.field]: {
-        [condition.operator]:
-          condition.operator === '$in' || condition.operator === '$notIn'
-            ? condition.value
-                .split(',')
-                .map((item) => item.trim())
-                .filter(Boolean)
-            : condition.value,
-      },
-    })),
-  };
-}
-
 export function resourceKey(type: string, id: string): string {
   return `${type}\u0000${id}`;
-}
-
-function filterValueText(value: unknown): string {
-  return typeof value === 'string' ||
-    typeof value === 'number' ||
-    typeof value === 'boolean'
-    ? String(value)
-    : '';
 }
 
 function isRecordAccessValue(value: unknown): value is RecordAccessDraft {

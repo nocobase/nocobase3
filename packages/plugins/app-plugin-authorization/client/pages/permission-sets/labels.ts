@@ -6,11 +6,7 @@ import type { UserDirectory } from '../../components/user-directory.js';
 import type { Translate } from '../../i18n.js';
 import { recordAccessKey } from './drafts.js';
 import { resourceTypePresentation } from './resource-presentation.js';
-import type {
-  FilterConditionDraft,
-  GrantDraft,
-  RecordAccessDraft,
-} from './types.js';
+import type { GrantDraft, RecordAccessDraft } from './types.js';
 
 /**
  * What one action on one resource reaches: every record, some of them, or
@@ -38,26 +34,6 @@ export function actionMark(grant: GrantDraft, action: string): GrantMark {
     resourceTypePresentation(grant.resource.type)?.mark?.(grant, action) ??
     'all'
   );
-}
-
-/** The operators the editor offers, in the order it offers them. */
-export const filterOperators: readonly FilterConditionDraft['operator'][] = [
-  '$eq',
-  '$ne',
-  '$in',
-  '$notIn',
-  '$gt',
-  '$gte',
-  '$lt',
-  '$lte',
-];
-
-/** How one filter operator is named, in the editor and wherever a stored condition is read back. */
-export function filterOperatorLabel(
-  t: Translate,
-  operator: FilterConditionDraft['operator'],
-): string {
-  return t(`filterOperators.${operator}`);
 }
 
 export function humanize(value: string): string {

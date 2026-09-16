@@ -42,3 +42,46 @@ settings.items.add({
 Check this item with `{ resource: { type: 'settings', id: 'ai.models' }, action: 'update' }`. Authorization's own sections use `authorization.permission-sets`, `authorization.default-access`, `authorization.sharing-rules`, and `authorization.restriction-rules` under the same `settings` type. No data migration or legacy identifier fallback is provided.
 
 Database collections use `authz.getResource('database.collection').items.add({ name: 'orders', title: 'Orders', group: 'sales' })`, retaining the database-specific registration shape and opt-in authorization boundary. Register display groups on that resource's `groups` first. Client page discovery preserves navigation-only route groups recursively and references them from flat page items; route nodes that load a page retain their existing authorization boundary. Server-declared page items and groups are also exposed in the picker.
+
+## Selectable authorization subjects
+
+Subject types use the existing `authz.subjects.define(type, definition)` registration. The application plugin augments the library's subject definition with optional `administration` metadata; the authorization library does not depend on user directories or HTTP services.
+
+```ts
+authz.subjects.define('department', {
+  filterActive: (ids, transaction) =>
+    departments.filterActive(ids, transaction),
+  administration: {
+    title: 'Departments',
+    selection: {
+      type: 'collection',
+      async list(query, { authz }) {
+        await authz.require({
+          resource: { type: 'department', id: '*' },
+          action: 'read',
+        });
+        return departments.listOptions(query);
+      },
+      async resolve(ids, { authz }) {
+        await authz.require({
+          resource: { type: 'department', id: '*' },
+          action: 'read',
+        });
+        return departments.resolveOptions(ids);
+      },
+    },
+  },
+});
+```
+
+`list` receives `{ search?, page, pageSize }` and returns `{ items, total }`. `resolve` returns items for a batch of IDs. Each item has `{ id, title, description? }`. Both callbacks must enforce the directory's read permissions, including record restrictions where applicable. A fixed subject uses `selection: { type: 'fixed', id: '*' }` instead. Titles accept the same translation-key structure as resource titles.
+
+Permission-set, sharing-rule, and restriction-rule options expose these descriptions. Their `subjects/:type` and `subjects/:type/resolve` endpoints check the corresponding settings resource's read permission before calling the registered selector. Queries are capped at 100 items, as are resolution batches. Write endpoints independently enforce permission to assign or edit the rule; reading candidates never grants permission to save authorization changes.
+
+The common picker supports multiple types, server-side search and pagination, and grouped selected items. Unknown or unreadable subjects retain their original type and ID. The owning plugin must also add the current principal's department or position memberships to `request.subjects`; registering a selector alone does not establish membership.
+
+## Custom filter editor
+
+The shared client `FilterEditor` takes `fields`, a native DB `FilterNode` as `value`, and `onChange(FilterNode)`. Permission sets, default access, sharing rules, and restriction rules use it through `CustomFilterEditor`. Groups use `{ kind: 'group', logic: 'and' | 'or', items }`; conditions use `{ kind: 'condition', path, operator, value? }`. The UI does not serialize a separate `$and`/`$or` shorthand. The server attaches the collection and wraps the node in `FilterAst` when creating the repository policy.
+
+The authorization boundary currently permits direct fields and scalar conditions, not relation traversal or JSON conditions. The visual editor offers a subset of those operators, retains unsupported existing nodes without rewriting them, and preserves scalar value types. Empty groups must be completed or removed before saving. Field metadata currently contains names only, so operators are not yet filtered by the database field type. Unrecognized legacy filter payloads remain untouched until the user explicitly chooses to replace them.

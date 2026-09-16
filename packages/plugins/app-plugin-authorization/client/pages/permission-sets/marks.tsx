@@ -21,18 +21,20 @@ const markIcons = {
 export function ScopeMark({
   value,
   legend = false,
+  label,
 }: {
   value: GrantMark;
   legend?: boolean;
+  label?: string;
 }): ReactElement {
   const t = useAuthorizationTranslation();
   const Icon = markIcons[value];
   return (
     <span
-      aria-label={markLabel(t, value)}
+      aria-label={label ?? markLabel(t, value)}
       className={`inline-grid size-6 place-items-center rounded-md ${markStyles[value]}`}
       role='img'
-      title={markDescription(t, value)}
+      title={label ?? markDescription(t, value)}
     >
       <Icon
         className={

@@ -34,7 +34,7 @@ const enUS = {
       authenticated: 'All signed-in users',
       authenticatedDescription:
         'Applies to every user with a valid signed-in session.',
-      user: 'Specific user',
+      user: 'Users',
     },
     recordAccessPolicies: {
       allRecords: 'All Records',

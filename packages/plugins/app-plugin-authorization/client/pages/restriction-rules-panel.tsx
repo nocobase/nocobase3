@@ -1,3 +1,11 @@
+import { incompleteScope } from '../components/filter-ast.js';
+import {
+  useSubjectNames,
+  subjectKey,
+} from '../components/use-subject-names.js';
+import { RuleDrawer, RuleForm } from '../components/rule-drawer.js';
+import { useRuleDraft } from '../components/use-rule-draft.js';
+import { actionLabel } from './permission-sets/labels.js';
 import { Button } from '../components/ui/button.js';
 import { Input } from '../components/ui/input.js';
 import {
@@ -19,7 +27,6 @@ import type {
   AuthorizationOptions,
   RestrictionRule,
 } from '../authorization-client.js';
-import type { UserDirectory } from '../components/user-directory.js';
 import { ConfirmDialog } from '../components/confirm-dialog.js';
 import {
   ActionScopesEditor,
@@ -36,8 +43,6 @@ import {
   EmptyTableRow,
   ManagementTable,
   ManagementToolbar,
-  RuleEditorLayout,
-  SidePanel,
   TablePager,
 } from '../components/management-ui.js';
 import { useAuthorizationTranslation, type Translate } from '../i18n.js';
@@ -49,30 +54,42 @@ const authz = getAuthorizationClient();
 
 export function RestrictionRulesPanel({
   options,
-  directory,
 }: {
   options: AuthorizationOptions;
-  directory: UserDirectory;
 }): ReactElement {
   const t = useAuthorizationTranslation();
   const [rules, setRules] = useState<readonly RestrictionRule[]>([]);
-  const [draft, setDraft] = useState<RestrictionRule>();
-  const [originalKey, setOriginalKey] = useState<string>();
+  const subjectNames = useSubjectNames(
+    'restriction-rules',
+    options.subjectTypes,
+    rules.flatMap((rule) => rule.subjects),
+  );
+  const { draft, setDraft, originalKey, edit, close, dirty } = useRuleDraft(
+    rules,
+    () => fresh(options),
+  );
+  const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [error, setError] = useState<string>();
-  const [editorTab, setEditorTab] = useState<'rule' | 'access' | 'assignments'>(
-    'rule',
-  );
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [records, setRecords] = useState<
     readonly import('../authorization-client.js').AuthorizationRecordOption[]
   >([]);
   useEffect(() => {
     if (!draft?.resource.id) return;
-    void authz
-      .listRestrictionRecords(draft.resource.id)
-      .then(setRecords, () => setRecords([]));
+    let active = true;
+    void authz.listRestrictionRecords(draft.resource.id).then(
+      (items) => {
+        if (active) setRecords(items);
+      },
+      () => {
+        if (active) setRecords([]);
+      },
+    );
+    return () => {
+      active = false;
+    };
   }, [draft?.resource.id]);
   const load = useCallback(async (): Promise<void> => {
     try {
@@ -100,37 +117,44 @@ export function RestrictionRulesPanel({
     setSearch(value);
     setPage(1);
   }
-  function edit(rule?: RestrictionRule): void {
-    setOriginalKey(rule?.key);
-    setDraft(rule ?? fresh(options));
-    setEditorTab('rule');
-  }
   async function save(): Promise<void> {
-    if (!draft) return;
+    if (!draft || busy) return;
+    setBusy(true);
+    setError(undefined);
     try {
       if (
         !draft.key ||
         !draft.resource.id ||
         draft.actions.length === 0 ||
+        draft.actions.some((item) => incompleteScope(item.scope)) ||
+        draft.subjects.length === 0 ||
         draft.subjects.some((item) => !item.id)
       )
         throw new TypeError(t('errors.completeRule'));
       if (originalKey) await authz.updateRestrictionRule(originalKey, draft);
       else await authz.createRestrictionRule(draft);
-      setDraft(undefined);
-      setOriginalKey(undefined);
+      close();
       await load();
     } catch (cause) {
       setError(message(t, cause));
+    } finally {
+      setBusy(false);
     }
   }
   async function remove(): Promise<void> {
-    if (!originalKey) return;
-    await authz.deleteRestrictionRule(originalKey);
-    setDraft(undefined);
-    setOriginalKey(undefined);
-    await load();
+    if (!originalKey || busy) return;
+    setBusy(true);
+    try {
+      await authz.deleteRestrictionRule(originalKey);
+      close();
+      await load();
+    } catch (cause) {
+      setError(message(t, cause));
+    } finally {
+      setBusy(false);
+    }
   }
+
   return (
     <>
       {error ? <ErrorBox value={error} /> : null}
@@ -181,16 +205,26 @@ export function RestrictionRulesPanel({
                   </p>
                 </TableCell>
                 <TableCell className='px-5 py-4'>
-                  {subjectLabel(t, rule, directory)}
+                  {rule.subjects
+                    .map(
+                      (subject) =>
+                        subjectNames[subjectKey(subject)] ??
+                        `${subject.type}: ${subject.id}`,
+                    )
+                    .join(' · ')}
                 </TableCell>
                 <TableCell className='px-5 py-4'>
                   {resourceLabel(options, rule)}
                 </TableCell>
                 <TableCell className='px-5 py-4'>
-                  {rule.actions.map((item) => humanize(item.action)).join(', ')}
+                  {rule.actions
+                    .map((item) =>
+                      actionLabel(options, rule.resource.type, item.action),
+                    )
+                    .join(', ')}
                 </TableCell>
                 <TableCell className='px-5 py-4'>
-                  {scopeLabel(t, rule)}
+                  {scopeLabel(t, rule, options)}
                 </TableCell>
                 <TableCell className='px-5 py-4 text-right'>
                   <Button size='sm' variant='ghost' onClick={() => edit(rule)}>
@@ -230,43 +264,38 @@ export function RestrictionRulesPanel({
         })}
       </ConfirmDialog>
       {draft ? (
-        <SidePanel
+        <RuleDrawer
           title={t(
             originalKey
               ? 'restrictionRules.editTitle'
               : 'restrictionRules.newTitle',
           )}
           description={t('restrictionRules.editorDescription')}
-          onClose={() => setDraft(undefined)}
-          wide
-          scrollable={false}
+          onClose={close}
+          dirty={dirty}
+          busy={busy}
         >
-          <RuleEditorLayout
-            steps={restrictionSteps(t)}
-            value={editorTab}
-            onChange={(value) =>
-              setEditorTab(value as 'rule' | 'access' | 'assignments')
-            }
+          <RuleForm
             footer={
               <>
                 {originalKey ? (
                   <Button
                     variant='outline'
+                    className='mr-auto text-destructive'
+                    disabled={busy}
                     onClick={() => setConfirmDelete(true)}
                   >
                     {t('restrictionRules.deleteRule')}
                   </Button>
                 ) : null}
-                <Button variant='outline' onClick={() => setDraft(undefined)}>
-                  {t('common.cancel')}
-                </Button>
-                <Button onClick={() => void save()}>
+                <Button disabled={busy} onClick={() => void save()}>
                   {t('restrictionRules.save')}
                 </Button>
               </>
             }
           >
-            {editorTab === 'rule' ? (
+            {error ? <ErrorBox value={error} /> : null}
+            <>
               <section className='space-y-5'>
                 <div>
                   <h3 className='text-base font-semibold'>
@@ -317,9 +346,17 @@ export function RestrictionRulesPanel({
                     }
                   />
                 </div>
+                <Field label={t('restrictionRules.reason')}>
+                  <Input
+                    value={draft.reason ?? ''}
+                    onChange={(event) =>
+                      setDraft({ ...draft, reason: event.target.value })
+                    }
+                  />
+                </Field>
               </section>
-            ) : null}
-            {editorTab === 'assignments' ? (
+            </>
+            <>
               <section className='space-y-5'>
                 <div>
                   <h3 className='text-base font-semibold'>
@@ -330,21 +367,14 @@ export function RestrictionRulesPanel({
                   </p>
                 </div>
                 <SubjectsEditor
-                  directory={directory}
+                  types={options.subjectTypes}
+                  settings='restriction-rules'
                   value={draft.subjects}
                   onChange={(subjects) => setDraft({ ...draft, subjects })}
                 />
-                <Field label={t('restrictionRules.reason')}>
-                  <Input
-                    value={draft.reason ?? ''}
-                    onChange={(event) =>
-                      setDraft({ ...draft, reason: event.target.value })
-                    }
-                  />
-                </Field>
               </section>
-            ) : null}
-            {editorTab === 'access' ? (
+            </>
+            <>
               <section className='space-y-5'>
                 <div>
                   <h3 className='text-base font-semibold'>
@@ -364,9 +394,9 @@ export function RestrictionRulesPanel({
                   onChange={(actions) => setDraft({ ...draft, actions })}
                 />
               </section>
-            ) : null}
-          </RuleEditorLayout>
-        </SidePanel>
+            </>
+          </RuleForm>
+        </RuleDrawer>
       ) : null}
     </>
   );
@@ -396,31 +426,11 @@ function fresh(options: AuthorizationOptions): RestrictionRule {
       type?.value ?? '',
       type?.resources[0]?.value,
     ).map((action) => ({ action, scope: defaultScope(options) })),
-    subjects: [{ type: 'authenticated', id: '*' }],
+    subjects: [],
     reason: '',
   };
 }
-function restrictionSteps(
-  t: Translate,
-): readonly { value: string; label: string; description: string }[] {
-  return [
-    {
-      value: 'rule',
-      label: t('restrictionRules.steps.rule'),
-      description: t('restrictionRules.steps.ruleHint'),
-    },
-    {
-      value: 'access',
-      label: t('restrictionRules.steps.access'),
-      description: t('restrictionRules.steps.accessHint'),
-    },
-    {
-      value: 'assignments',
-      label: t('restrictionRules.steps.assignments'),
-      description: t('restrictionRules.steps.assignmentsHint'),
-    },
-  ];
-}
+
 function resourceLabel(
   options: AuthorizationOptions,
   rule: RestrictionRule,
@@ -432,25 +442,17 @@ function resourceLabel(
     rule.resource.id
   );
 }
-function subjectLabel(
+
+function scopeLabel(
   t: Translate,
   rule: RestrictionRule,
-  directory: UserDirectory,
+  options: AuthorizationOptions,
 ): string {
-  const subject = rule.subjects[0];
-  if (!subject || subject.type === 'authenticated')
-    return t('common.signedInUsers');
-  return (
-    directory.users.find((user) => user.id === subject.id)?.name ??
-    t('common.userFallback', { id: subject.id })
-  );
-}
-function scopeLabel(t: Translate, rule: RestrictionRule): string {
   return rule.actions
     .map((item) =>
       t('labels.actionScope', {
-        action: humanize(item.action),
-        scope: accessScopeLabel(t, item.scope),
+        action: actionLabel(options, rule.resource.type, item.action),
+        scope: accessScopeLabel(t, item.scope, options),
       }),
     )
     .join(' · ');
@@ -458,6 +460,7 @@ function scopeLabel(t: Translate, rule: RestrictionRule): string {
 function accessScopeLabel(
   t: Translate,
   scope: import('../authorization-client.js').AccessScope,
+  options: AuthorizationOptions,
 ): string {
   if (scope.type === 'all') return t('labels.allRecords');
   if (scope.type === 'ids')
@@ -466,7 +469,10 @@ function accessScopeLabel(
     typeof scope.recordAccess === 'string'
       ? scope.recordAccess
       : scope.recordAccess.key;
-  return humanize(key);
+  return (
+    options.recordAccessPolicies.find((item) => item.value === key)?.label ??
+    key
+  );
 }
 function humanize(value: string): string {
   return value

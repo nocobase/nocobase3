@@ -1,7 +1,15 @@
+import { Checkbox } from '../../components/ui/checkbox.js';
+import { SelectField } from '../../components/select-field.js';
+import {
+  useSubjectNames,
+  subjectKey,
+} from '../../components/use-subject-names.js';
+import { SubjectsEditor } from '../../components/subjects-editor.js';
 import { useState, type ReactElement } from 'react';
 
 import type {
   AuthorizationSubject,
+  SubjectTypeOption,
   PermissionSetAssignment,
 } from '../../authorization-client.js';
 import { ConfirmDialog } from '../../components/confirm-dialog.js';
@@ -28,28 +36,23 @@ import {
   TableHeader,
   TableRow,
 } from '../../components/ui/table.js';
-import {
-  canAddAssignment,
-  type UserDirectory,
-} from '../../components/user-directory.js';
-import { subjectLabel } from './labels.js';
 
 export function Assignments({
-  directory,
   assignments,
   canAssign,
-  canAssignAudience,
+  subjectTypes = [],
+  assignableTypes,
   canRevoke,
   busy,
   onAssign,
   onRevoke,
 }: {
-  directory: UserDirectory;
   assignments: readonly PermissionSetAssignment[];
   /** A protected set may still accept new assignments; adding a superuser is the recovery path. */
   canAssign: boolean;
   /** The set's protection may name the subject types it accepts. */
-  canAssignAudience: boolean;
+  subjectTypes?: readonly SubjectTypeOption[];
+  assignableTypes?: readonly SubjectTypeOption[];
   canRevoke: boolean;
   busy: boolean;
   onAssign: (subjects: readonly AuthorizationSubject[]) => Promise<void>;
@@ -66,11 +69,17 @@ export function Assignments({
     readonly ids: readonly string[];
     readonly label: string;
   }>();
+  const names = useSubjectNames(
+    'permission-sets',
+    subjectTypes,
+    assignments.map((item) => item.subject),
+  );
+  const subjectLabel = (subject: AuthorizationSubject): string =>
+    names[subjectKey(subject)] ?? `${subject.type}: ${subject.id}`;
   const query = search.trim().toLowerCase();
   const visible = assignments.filter((item) => {
-    const label = subjectLabel(t, item.subject, directory).toLowerCase();
-    const itemKind =
-      item.subject.type === 'authenticated' ? 'audience' : 'user';
+    const label = subjectLabel(item.subject).toLowerCase();
+    const itemKind = item.subject.type;
     return (
       (kind === 'all' || kind === itemKind) && (!query || label.includes(query))
     );
@@ -100,20 +109,19 @@ export function Assignments({
           value={search}
           onChange={changeSearch}
         />
-        <select
+        <SelectField
           aria-label={t('permissionSets.assignments.kindLabel')}
           className='h-9 min-w-44 rounded-lg border bg-background px-3 text-sm'
           value={kind}
-          onChange={(event) => changeKind(event.target.value)}
-        >
-          <option value='all'>{t('permissionSets.assignments.kindAll')}</option>
-          <option value='user'>
-            {t('permissionSets.assignments.kindUsers')}
-          </option>
-          <option value='audience'>
-            {t('permissionSets.assignments.kindAudiences')}
-          </option>
-        </select>
+          onValueChange={(selectedValue) => changeKind(selectedValue)}
+          options={[
+            { value: 'all', label: t('permissionSets.assignments.kindAll') },
+            ...subjectTypes.map((type) => ({
+              value: type.value,
+              label: type.label,
+            })),
+          ]}
+        />
         {query || kind !== 'all' ? (
           <ClearFilterButton
             onClear={() => {
@@ -142,33 +150,24 @@ export function Assignments({
             })}
           </Button>
         ) : null}
-        <Button
-          disabled={!canAssign || !canAddAssignment(directory)}
-          onClick={() => setAddOpen(true)}
-        >
+        <Button disabled={!canAssign} onClick={() => setAddOpen(true)}>
           {t('permissionSets.assignments.add')}
         </Button>
       </FilterBar>
       <ManagementTable>
-        {directory.unavailable ? (
-          <p className='border-b bg-muted/40 px-4 py-2 text-xs text-muted-foreground'>
-            {directory.unavailable}
-          </p>
-        ) : null}
         <Table>
           <TableHeader className='bg-muted/30 uppercase'>
             <TableRow>
               <TableHead className='w-12 px-5 py-3'>
-                <input
+                <Checkbox
                   aria-label={t('permissionSets.assignments.selectAllVisible')}
-                  type='checkbox'
                   checked={
                     visible.length > 0 &&
                     visible.every((item) => selected.includes(item.id))
                   }
-                  onChange={(event) =>
+                  onCheckedChange={(checked) =>
                     setSelected(
-                      event.target.checked
+                      checked
                         ? [
                             ...new Set([
                               ...selected,
@@ -195,22 +194,20 @@ export function Assignments({
             {paged.map((item) => (
               <TableRow key={item.id}>
                 <TableCell className='px-5 py-4'>
-                  <input
+                  <Checkbox
                     aria-label={t('common.selectNamed', {
-                      label: subjectLabel(t, item.subject, directory),
+                      label: subjectLabel(item.subject),
                     })}
-                    type='checkbox'
                     checked={selected.includes(item.id)}
-                    onChange={(event) => toggle(item.id, event.target.checked)}
+                    onCheckedChange={(checked) => toggle(item.id, checked)}
                   />
                 </TableCell>
                 <TableCell className='px-5 py-4 font-medium'>
-                  {subjectLabel(t, item.subject, directory)}
+                  {subjectLabel(item.subject)}
                 </TableCell>
                 <TableCell className='px-5 py-4 text-muted-foreground'>
-                  {item.subject.type === 'authenticated'
-                    ? t('permissionSets.assignments.audience')
-                    : t('permissionSets.assignments.user')}
+                  {subjectTypes.find((type) => type.value === item.subject.type)
+                    ?.label ?? item.subject.type}
                 </TableCell>
                 <TableCell className='px-5 py-4 text-right'>
                   <Button
@@ -220,7 +217,7 @@ export function Assignments({
                     onClick={() =>
                       setPendingRevoke({
                         ids: [item.id],
-                        label: subjectLabel(t, item.subject, directory),
+                        label: subjectLabel(item.subject),
                       })
                     }
                   >
@@ -269,9 +266,8 @@ export function Assignments({
       </ConfirmDialog>
       {addOpen ? (
         <AssignmentPicker
-          directory={directory}
           assignments={assignments}
-          canAssignAudience={canAssignAudience}
+          types={assignableTypes ?? subjectTypes}
           busy={busy}
           onClose={() => setAddOpen(false)}
           onAdd={(subjects) =>
@@ -284,188 +280,46 @@ export function Assignments({
 }
 
 function AssignmentPicker({
-  directory,
+  types,
   assignments,
-  canAssignAudience,
   busy,
   onClose,
   onAdd,
 }: {
-  directory: UserDirectory;
+  types: readonly SubjectTypeOption[];
   assignments: readonly PermissionSetAssignment[];
-  canAssignAudience: boolean;
   busy: boolean;
   onClose: () => void;
   onAdd: (subjects: readonly AuthorizationSubject[]) => void;
 }): ReactElement {
   const t = useAuthorizationTranslation();
-  const [search, setSearch] = useState('');
-  const [selected, setSelected] = useState<readonly string[]>([]);
-  const [audience, setAudience] = useState(false);
-  const assignedUsers = new Set(
-    assignments
-      .filter((item) => item.subject.type === 'user')
-      .map((item) => item.subject.id),
-  );
-  const audienceAssigned = assignments.some(
-    (item) => item.subject.type === 'authenticated',
-  );
-  const query = search.trim().toLowerCase();
-  const visible = directory.users.filter(
-    (user) =>
-      !assignedUsers.has(user.id) &&
-      (!query ||
-        [user.name, user.username, user.email].some((value) =>
-          value?.toLowerCase().includes(query),
-        )),
-  );
-  const subjects: readonly AuthorizationSubject[] = [
-    ...(audience ? [{ type: 'authenticated', id: '*' }] : []),
-    ...selected.map((id) => ({ type: 'user', id })),
-  ];
-  function toggle(id: string, checked: boolean): void {
-    setSelected((items) =>
-      checked ? [...items, id] : items.filter((item) => item !== id),
-    );
-  }
+  const [subjects, setSubjects] = useState<readonly AuthorizationSubject[]>([]);
   return (
     <SidePanel
       title={t('permissionSets.assignments.add')}
       description={t('permissionSets.assignments.pickerDescription')}
       onClose={onClose}
     >
-      <div className='space-y-5'>
-        {canAssignAudience ? (
-          <section>
-            <h3 className='text-sm font-medium'>
-              {t('permissionSets.assignments.audience')}
-            </h3>
-            <label
-              className={`mt-3 flex items-start gap-3 rounded-lg border p-4 ${audienceAssigned ? 'opacity-50' : 'cursor-pointer hover:bg-muted/20'}`}
-            >
-              <input
-                className='mt-1'
-                type='checkbox'
-                checked={audienceAssigned || audience}
-                disabled={audienceAssigned}
-                onChange={(event) => setAudience(event.target.checked)}
-              />
-              <span>
-                <span className='block text-sm font-medium'>
-                  {t('common.signedInUsers')}
-                </span>
-                <span className='mt-0.5 block text-xs text-muted-foreground'>
-                  {t('permissionSets.assignments.audienceDescription')}
-                </span>
-              </span>
-            </label>
-          </section>
-        ) : null}
-        <section className='border-t pt-5'>
-          <div className='flex items-end justify-between gap-3'>
-            <div>
-              <h3 className='text-sm font-medium'>
-                {t('permissionSets.assignments.usersHeading')}
-              </h3>
-              <p className='mt-0.5 text-xs text-muted-foreground'>
-                {t('permissionSets.assignments.usersHint')}
-              </p>
-            </div>
-            <span className='text-xs text-muted-foreground'>
-              {t('permissionSets.assignments.selectedCount', {
-                count: selected.length,
-              })}
-            </span>
-          </div>
-          <SearchField
-            className='mt-3 sm:max-w-none'
-            label={t('editors.searchPeople')}
-            placeholder={t('editors.searchPeoplePlaceholder')}
-            value={search}
-            onChange={setSearch}
-          />
-          <div className='mt-3 overflow-hidden rounded-lg border'>
-            <label className='flex items-center gap-3 border-b bg-muted/20 px-4 py-3 text-sm font-medium'>
-              <input
-                type='checkbox'
-                checked={
-                  visible.length > 0 &&
-                  visible.every((user) => selected.includes(user.id))
-                }
-                onChange={(event) =>
-                  setSelected(
-                    event.target.checked
-                      ? [
-                          ...new Set([
-                            ...selected,
-                            ...visible.map((user) => user.id),
-                          ]),
-                        ]
-                      : selected.filter(
-                          (id) => !visible.some((user) => user.id === id),
-                        ),
-                  )
-                }
-              />
-              {t('permissionSets.assignments.selectAllResults')}
-              <span className='ml-auto text-xs font-normal text-muted-foreground'>
-                {t('permissionSets.assignments.userCount', {
-                  count: visible.length,
-                })}
-              </span>
-            </label>
-            <div className='max-h-[24rem] divide-y overflow-y-auto'>
-              {visible.map((user) => (
-                <label
-                  className='flex cursor-pointer items-start gap-3 px-4 py-3 hover:bg-muted/20'
-                  key={user.id}
-                >
-                  <input
-                    className='mt-1'
-                    type='checkbox'
-                    checked={selected.includes(user.id)}
-                    onChange={(event) => toggle(user.id, event.target.checked)}
-                  />
-                  <span className='min-w-0'>
-                    <span className='block truncate text-sm font-medium'>
-                      {user.name}
-                    </span>
-                    <span className='block truncate text-xs text-muted-foreground'>
-                      {[user.username, user.email].filter(Boolean).join(' · ')}
-                    </span>
-                  </span>
-                </label>
-              ))}
-              {visible.length === 0 ? (
-                <p className='px-4 py-10 text-center text-sm text-muted-foreground'>
-                  {t('permissionSets.assignments.noAvailableUsers')}
-                </p>
-              ) : null}
-            </div>
-          </div>
-        </section>
-        <div className='sticky bottom-0 flex items-center justify-between border-t bg-background py-4'>
-          <span className='text-sm text-muted-foreground'>
-            {t(
-              `editors.assignmentsSelected.${subjects.length === 1 ? 'one' : 'other'}`,
-              { count: subjects.length },
-            )}
-          </span>
-          <div className='flex gap-2'>
-            <Button variant='outline' onClick={onClose}>
-              {t('common.cancel')}
-            </Button>
-            <Button
-              disabled={busy || subjects.length === 0}
-              onClick={() => onAdd(subjects)}
-            >
-              {busy
-                ? t('permissionSets.assignments.assigning')
-                : t('permissionSets.assignments.add')}
-            </Button>
-          </div>
+      <fieldset disabled={busy} className='min-w-0 space-y-5'>
+        <SubjectsEditor
+          settings='permission-sets'
+          types={types}
+          excluded={assignments.map((item) => item.subject)}
+          value={subjects}
+          onChange={setSubjects}
+        />
+        <div className='sticky bottom-0 flex justify-end gap-2 border-t bg-background py-4'>
+          <Button variant='outline' onClick={onClose}>
+            {t('common.cancel')}
+          </Button>
+          <Button
+            disabled={busy || !subjects.length}
+            onClick={() => onAdd(subjects)}
+          >
+            {t('permissionSets.assignments.add')}
+          </Button>
         </div>
-      </div>
+      </fieldset>
     </SidePanel>
   );
 }
