@@ -10,6 +10,7 @@ import { resolveWatchEnvironment } from './watch-environment.mjs';
 import { findAvailablePort } from './ports.mjs';
 import { waitForHttpReady } from './readiness.mjs';
 import { parseProxyTarget } from './proxy.mjs';
+import { resolveDevTrustedOrigins } from './trusted-origins.mjs';
 
 // This entry lives in scripts/dev; all child commands run from the application root.
 const rootDir = path.resolve(
@@ -231,6 +232,10 @@ if (!proxyTarget) {
     APP_SERVER_HOST: appServerHost,
     APP_SERVER_PORT: String(appServerPort),
     APP_SERVER_START_LOG: 'false',
+    BETTER_AUTH_TRUSTED_ORIGINS: resolveDevTrustedOrigins(
+      nextEnv.BETTER_AUTH_TRUSTED_ORIGINS,
+      appServerPort,
+    ),
     APP_PUBLIC_ORIGIN:
       String(nextEnv.APP_PUBLIC_ORIGIN || '').trim() || appOrigin,
   };
