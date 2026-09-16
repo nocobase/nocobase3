@@ -1,4 +1,4 @@
-import { Check, Pencil, Plus, Tag, Trash2, X } from 'lucide-react';
+import { Check, Plus, Tag, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import type { ReactElement } from 'react';
 import { useTranslation } from '@nocobase/i18n/client';
@@ -12,6 +12,8 @@ import { useMailClient } from '../runtime.js';
 import { MAIL_PLUGIN_NS } from '../namespace.js';
 import { MAIL_LABEL_COLORS, mailLabelColorSwatch } from '../lib/mail-label.js';
 import { MailLabelTag } from './mail-label-tag.js';
+import { MailManagementFormActions } from './mail-management-form-actions.js';
+import { MailManagementListItem } from './mail-management-list-item.js';
 import { cn } from '../lib/utils.js';
 import { Button } from './ui/button.js';
 import {
@@ -196,26 +198,15 @@ export function MailLabelManager(): ReactElement {
               role='region'
             >
               {labels.map((label) => (
-                <div
-                  className='flex min-w-0 items-center gap-2 px-4 py-2.5 transition-colors hover:bg-muted/30'
+                <MailManagementListItem
+                  ariaLabel={t('labels.editAction', {
+                    name: label.name,
+                    defaultValue: `Edit ${label.name}`,
+                  })}
                   key={label.id}
-                >
-                  <div className='min-w-0 flex-1'>
-                    <MailLabelTag label={label} size='md' />
-                  </div>
-                  <div className='flex shrink-0 items-center gap-1'>
-                    <Button
-                      aria-label={t('labels.editAction', {
-                        name: label.name,
-                        defaultValue: `Edit ${label.name}`,
-                      })}
-                      className='size-8 p-0'
-                      onClick={() => edit(label)}
-                      type='button'
-                      variant='ghost'
-                    >
-                      <Pencil aria-hidden='true' className='size-3.5' />
-                    </Button>
+                  onSelect={() => edit(label)}
+                  selected={editingId === label.id}
+                  actions={
                     <Button
                       aria-label={t('labels.deleteAction', {
                         name: label.name,
@@ -228,8 +219,10 @@ export function MailLabelManager(): ReactElement {
                     >
                       <Trash2 aria-hidden='true' className='size-3.5' />
                     </Button>
-                  </div>
-                </div>
+                  }
+                >
+                  <MailLabelTag label={label} size='md' />
+                </MailManagementListItem>
               ))}
             </div>
           )}
@@ -247,20 +240,9 @@ export function MailLabelManager(): ReactElement {
                 })}
               </h2>
             </div>
-            {editingId ? (
-              <Button
-                aria-label={t('labels.cancel', { defaultValue: 'Cancel' })}
-                className='size-8 p-0'
-                onClick={resetDraft}
-                type='button'
-                variant='ghost'
-              >
-                <X aria-hidden='true' className='size-4' />
-              </Button>
-            ) : null}
           </div>
 
-          <div className='space-y-2'>
+          <div className='grid gap-2'>
             <label className='text-sm font-medium' htmlFor='mail-label-name'>
               {t('labels.name', { defaultValue: 'Label name' })}
             </label>
@@ -284,8 +266,8 @@ export function MailLabelManager(): ReactElement {
             />
           </div>
 
-          <fieldset className='space-y-2'>
-            <legend className='text-sm font-medium'>
+          <fieldset>
+            <legend className='mb-2 text-sm font-medium'>
               {t('labels.color', { defaultValue: 'Color' })}
             </legend>
             <div className='grid grid-cols-3 gap-2'>
@@ -347,30 +329,18 @@ export function MailLabelManager(): ReactElement {
             />
           </div>
 
-          <div className='flex justify-end gap-2'>
-            {editingId ? (
-              <Button
-                disabled={busy}
-                onClick={resetDraft}
-                type='button'
-                variant='outline'
-              >
-                {t('labels.cancel', { defaultValue: 'Cancel' })}
-              </Button>
-            ) : null}
-            <Button
-              disabled={busy || !draft.name.trim()}
-              onClick={save}
-              type='button'
-            >
-              <Plus aria-hidden='true' className='size-4' />
-              {busy
-                ? t('labels.saving', { defaultValue: 'Saving…' })
-                : t(editingId ? 'labels.save' : 'labels.add', {
-                    defaultValue: editingId ? 'Save label' : 'Add label',
-                  })}
-            </Button>
-          </div>
+          <MailManagementFormActions
+            editing={Boolean(editingId)}
+            busy={busy}
+            disabled={!draft.name.trim()}
+            submitLabel={t(editingId ? 'labels.save' : 'labels.add', {
+              defaultValue: editingId ? 'Save label' : 'Add label',
+            })}
+            savingLabel={t('labels.saving', { defaultValue: 'Saving…' })}
+            cancelLabel={t('labels.cancel', { defaultValue: 'Cancel' })}
+            onSubmit={save}
+            onCancel={resetDraft}
+          />
         </Card>
       </div>
 

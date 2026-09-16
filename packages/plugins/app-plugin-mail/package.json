@@ -102,7 +102,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run --coverage",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0",
     "format": "prettier . --write",
@@ -125,6 +125,7 @@
     "lucide-react": "catalog:",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-router": "catalog:",
     "tailwind-merge": "catalog:"
   },
   "dependencies": {
@@ -144,6 +145,7 @@
     "@types/nodemailer": "^8.0.1",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
     "eslint": "catalog:",
     "prettier": "catalog:",
     "react": "catalog:",

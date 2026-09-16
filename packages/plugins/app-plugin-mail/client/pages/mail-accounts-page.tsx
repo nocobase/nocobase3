@@ -1,13 +1,4 @@
-import { resolveAppUrl } from '@nocobase/app-client';
-import {
-  ArrowLeft,
-  FileText,
-  Link2,
-  Mail,
-  PenLine,
-  RefreshCw,
-  Tag,
-} from 'lucide-react';
+import { FileText, Link2, Mail, PenLine, RefreshCw, Tag } from 'lucide-react';
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
 import { useTranslation } from '@nocobase/i18n/client';
@@ -26,7 +17,6 @@ import {
 } from '../components/index.js';
 import { Button } from '../components/ui/button.js';
 import { Card } from '../components/ui/card.js';
-import { Input } from '../components/ui/input.js';
 import {
   Dialog,
   DialogContent,
@@ -237,7 +227,6 @@ export default function MailAccountsPage(): ReactElement {
     account: MailAccountView,
     change: {
       readonly status?: 'active' | 'suspended';
-      readonly automaticSyncIntervalMinutes?: number;
     },
   ): void => {
     setError(undefined);
@@ -289,15 +278,6 @@ export default function MailAccountsPage(): ReactElement {
       <MailPageHeader
         actions={
           <>
-            <Button
-              render={<a href={resolveAppUrl('/mail')} />}
-              nativeButton={false}
-              role='link'
-              variant='ghost'
-            >
-              <ArrowLeft aria-hidden='true' className='size-4' />
-              {t('workspace.backToMail', { defaultValue: 'Back to mail' })}
-            </Button>
             <Button
               onClick={() => {
                 setShowConnector(true);
@@ -452,11 +432,6 @@ export default function MailAccountsPage(): ReactElement {
                         defaultValue: 'Initial sync start date',
                       })}
                     </th>
-                    <th className='px-4 py-3 font-medium'>
-                      {t('dev.automaticSyncColumn', {
-                        defaultValue: 'Automatic sync',
-                      })}
-                    </th>
                     <th className='px-4 py-3 text-right font-medium'>
                       {t('dev.actionsColumn', { defaultValue: 'Actions' })}
                     </th>
@@ -477,11 +452,6 @@ export default function MailAccountsPage(): ReactElement {
                                 account.status === 'suspended'
                                   ? 'active'
                                   : 'suspended',
-                            })
-                          }
-                          onUpdateSyncInterval={(account, minutes) =>
-                            updateAccount(account, {
-                              automaticSyncIntervalMinutes: minutes,
                             })
                           }
                           providerLabel={
@@ -522,7 +492,7 @@ export default function MailAccountsPage(): ReactElement {
                         />
                         {run ? (
                           <tr>
-                            <td className='px-6 py-3' colSpan={6}>
+                            <td className='px-6 py-3' colSpan={5}>
                               <SyncProgress run={run} />
                             </td>
                           </tr>
@@ -632,7 +602,7 @@ export default function MailAccountsPage(): ReactElement {
                       defaultValue: 'Password',
                     }),
                     displayName: t('settings.providers.displayName', {
-                      defaultValue: 'Display name',
+                      defaultValue: 'Sender name (optional)',
                     }),
                   }}
                   onConnect={connect}
@@ -849,7 +819,6 @@ function ConnectedAccountRow({
   onSync,
   onRemove,
   onToggleStatus,
-  onUpdateSyncInterval,
   providerLabel,
   statusLabel,
   syncLabel,
@@ -863,10 +832,6 @@ function ConnectedAccountRow({
   readonly onSync: (account: MailAccountView) => void;
   readonly onRemove: (account: MailAccountView) => void;
   readonly onToggleStatus: (account: MailAccountView) => void;
-  readonly onUpdateSyncInterval: (
-    account: MailAccountView,
-    minutes: number,
-  ) => void;
   readonly providerLabel: string;
   readonly statusLabel: string;
   readonly syncLabel: string;
@@ -877,13 +842,6 @@ function ConnectedAccountRow({
   readonly toggleStatusLabel: string;
 }): ReactElement {
   const { t } = useTranslation();
-  const [intervalInput, setIntervalInput] = useState(
-    String(account.automaticSyncIntervalMinutes ?? 5),
-  );
-  const intervalMinutes = Number(intervalInput);
-  const intervalValid =
-    Number.isSafeInteger(intervalMinutes) && intervalMinutes >= 1;
-
   return (
     <tr className='grid grid-cols-2 gap-x-3 px-4 py-3 transition-colors hover:bg-muted/20 @5xl/accounts:table-row @5xl/accounts:p-0'>
       <td className='col-span-2 block py-3 @5xl/accounts:table-cell @5xl/accounts:px-4 @5xl/accounts:py-4'>
@@ -928,38 +886,6 @@ function ConnectedAccountRow({
         ) : (
           <span className='text-muted-foreground'>—</span>
         )}
-      </td>
-      <td className='col-span-2 block py-3 @5xl/accounts:table-cell @5xl/accounts:px-4 @5xl/accounts:py-4'>
-        <span className='mb-2 block text-xs text-muted-foreground @5xl/accounts:hidden'>
-          {t('dev.automaticSyncColumn', { defaultValue: 'Automatic sync' })}
-        </span>
-        <div className='flex min-w-40 items-center gap-2'>
-          <Input
-            aria-label={t('settings.accounts.syncInterval', {
-              defaultValue: 'Automatic sync interval in minutes',
-            })}
-            className='h-9 w-20'
-            disabled={updating || removing}
-            min={1}
-            onChange={(event) => setIntervalInput(event.target.value)}
-            step={1}
-            type='number'
-            value={intervalInput}
-          />
-          <span className='text-xs text-muted-foreground'>
-            {t('settings.accounts.minutes', { defaultValue: 'min' })}
-          </span>
-          <Button
-            disabled={!intervalValid || updating || removing}
-            onClick={() => onUpdateSyncInterval(account, intervalMinutes)}
-            type='button'
-            variant='outline'
-          >
-            {updating
-              ? t('settings.accounts.saving', { defaultValue: 'Saving…' })
-              : t('settings.accounts.save', { defaultValue: 'Save' })}
-          </Button>
-        </div>
       </td>
       <td className='col-span-2 block border-t py-3 @5xl/accounts:table-cell @5xl/accounts:border-0 @5xl/accounts:px-4 @5xl/accounts:py-4'>
         <div className='flex flex-wrap gap-2 @5xl/accounts:justify-end'>

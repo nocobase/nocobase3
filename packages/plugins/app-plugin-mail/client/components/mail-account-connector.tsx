@@ -76,7 +76,7 @@ export function MailAccountConnector({
   return (
     <div className='space-y-4'>
       <div className='grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end'>
-        <label className='flex flex-col gap-1.5 text-sm font-medium'>
+        <label className='grid gap-2 text-sm font-medium'>
           <span>{labels.accountType}</span>
           <NativeSelect
             onChange={(event) => {
@@ -128,7 +128,7 @@ export function MailAccountConnector({
 
       {usesCredentials && providerConfigured ? (
         <div className='grid gap-3 sm:grid-cols-2'>
-          <label className='flex flex-col gap-1.5 text-sm font-medium'>
+          <label className='grid gap-2 text-sm font-medium'>
             <span>{labels.emailAddress ?? 'Email address'}</span>
             <Input
               autoComplete='email'
@@ -136,7 +136,7 @@ export function MailAccountConnector({
               value={address}
             />
           </label>
-          <label className='flex flex-col gap-1.5 text-sm font-medium'>
+          <label className='grid gap-2 text-sm font-medium'>
             <span>{labels.username ?? 'Username'}</span>
             <Input
               autoComplete='username'
@@ -144,7 +144,7 @@ export function MailAccountConnector({
               value={username}
             />
           </label>
-          <label className='flex flex-col gap-1.5 text-sm font-medium'>
+          <label className='grid gap-2 text-sm font-medium'>
             <span>{labels.password ?? 'Password'}</span>
             <Input
               autoComplete='current-password'
@@ -153,8 +153,8 @@ export function MailAccountConnector({
               value={password}
             />
           </label>
-          <label className='flex flex-col gap-1.5 text-sm font-medium'>
-            <span>{labels.displayName ?? 'Display name'}</span>
+          <label className='grid gap-2 text-sm font-medium'>
+            <span>{labels.displayName ?? 'Sender name (optional)'}</span>
             <Input
               autoComplete='name'
               onChange={(event) => setDisplayName(event.target.value)}

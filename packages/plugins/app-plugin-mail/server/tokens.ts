@@ -10,8 +10,8 @@ import type {
   MailOutboundAttachmentStorage,
   MailService,
   MailStore,
+  MailRuntimeService,
 } from './types.js';
-import type { MailRuntime } from './runtime.js';
 
 export const mailServiceToken: ServiceToken<MailService> =
   createServiceToken<MailService>('@nocobase/app-plugin-mail/service');
@@ -34,8 +34,8 @@ export const mailProviderAdapterResolverToken: ServiceToken<MailProviderAdapterR
     '@nocobase/app-plugin-mail/provider-adapter-resolver',
   );
 
-export const mailRuntimeToken: ServiceToken<MailRuntime> =
-  createServiceToken<MailRuntime>('@nocobase/app-plugin-mail/runtime');
+export const mailRuntimeToken: ServiceToken<MailRuntimeService> =
+  createServiceToken<MailRuntimeService>('@nocobase/app-plugin-mail/runtime');
 
 export const mailOutboundAttachmentStorageToken: ServiceToken<MailOutboundAttachmentStorage> =
   createServiceToken<MailOutboundAttachmentStorage>(

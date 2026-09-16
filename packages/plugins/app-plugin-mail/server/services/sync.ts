@@ -68,10 +68,12 @@ export class MailSyncService {
 
   public async listSyncRuns(
     context: MailOperationContext,
+    offset = 0,
+    limit = 100,
   ): Promise<readonly MailSyncRunView[]> {
-    return (await this.dependencies.store.listSyncRuns(context.actorId)).map(
-      toSyncRunView,
-    );
+    return (
+      await this.dependencies.store.listSyncRuns(context.actorId, offset, limit)
+    ).map(toSyncRunView);
   }
 
   public async retrySyncRun(

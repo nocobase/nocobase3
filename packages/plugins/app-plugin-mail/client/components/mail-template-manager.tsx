@@ -1,4 +1,5 @@
-import { FileText, Plus, Trash2, X } from 'lucide-react';
+import { mailEditorLabels } from '../lib/mail-editor-labels.js';
+import { FileText, Plus, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import type { ReactElement } from 'react';
 import { useTranslation } from '@nocobase/i18n/client';
@@ -6,12 +7,21 @@ import { useTranslation } from '@nocobase/i18n/client';
 import { MailRichTextEditor } from './mail-rich-text-editor.js';
 import { Button } from './ui/button.js';
 import { Card } from './ui/card.js';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from './ui/dialog.js';
 import { Input } from './ui/input.js';
 import { plainTextToMailHtml } from '../lib/mail-template.js';
 import { mailErrorMessage, type MailTemplate } from '../mail-client.js';
 import { useMailClient } from '../runtime.js';
 import { MAIL_PLUGIN_NS } from '../namespace.js';
-import { cn } from '../lib/utils.js';
+import { MailManagementFormActions } from './mail-management-form-actions.js';
+import { MailManagementListItem } from './mail-management-list-item.js';
 
 interface TemplateDraft {
   readonly id?: string;
@@ -35,6 +45,8 @@ export function MailTemplateManager(): ReactElement {
   const [draft, setDraft] = useState<TemplateDraft>(EMPTY_TEMPLATE);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [templateToDelete, setTemplateToDelete] = useState<MailTemplate>();
+  const [deleteError, setDeleteError] = useState<string>();
   const [error, setError] = useState<string>();
 
   const showError = useCallback(
@@ -77,17 +89,26 @@ export function MailTemplateManager(): ReactElement {
       .finally(() => setBusy(false));
   };
 
-  const remove = (templateId: string): void => {
-    if (busy) return;
+  const confirmDelete = (): void => {
+    const templateId = templateToDelete?.id;
+    if (!templateId || busy) return;
     setBusy(true);
-    setError(undefined);
+    setDeleteError(undefined);
     void mail
       .deleteTemplate(templateId)
       .then(() => {
         if (draft.id === templateId) setDraft(EMPTY_TEMPLATE);
+        setTemplateToDelete(undefined);
         refresh();
       })
-      .catch(showError)
+      .catch((cause: unknown) =>
+        setDeleteError(
+          mailErrorMessage(
+            cause,
+            t('errors.requestFailed', { defaultValue: 'Mail request failed.' }),
+          ),
+        ),
+      )
       .finally(() => setBusy(false));
   };
 
@@ -106,8 +127,6 @@ export function MailTemplateManager(): ReactElement {
     setDraft(EMPTY_TEMPLATE);
     setError(undefined);
   };
-
-  const selectedTemplateId = draft.id;
 
   return (
     <div className='grid min-h-0 w-full gap-4 lg:h-full lg:grid-cols-[18rem_minmax(0,1fr)]'>
@@ -171,16 +190,28 @@ export function MailTemplateManager(): ReactElement {
             role='region'
           >
             {templates.map((template) => (
-              <button
-                aria-current={draft.id === template.id ? 'true' : undefined}
-                className={cn(
-                  'flex w-full min-w-0 items-center gap-3 border-l-2 border-transparent px-4 py-2.5 text-left transition-colors hover:bg-muted/30',
-                  draft.id === template.id &&
-                    'border-primary bg-primary/10 hover:bg-primary/15',
-                )}
+              <MailManagementListItem
                 key={template.id}
-                onClick={() => selectTemplate(template)}
-                type='button'
+                onSelect={() => selectTemplate(template)}
+                selected={draft.id === template.id}
+                actions={
+                  <Button
+                    aria-label={t('templates.deleteAction', {
+                      name: template.name,
+                      defaultValue: `Delete ${template.name}`,
+                    })}
+                    className='size-8 p-0'
+                    disabled={busy}
+                    onClick={() => {
+                      setDeleteError(undefined);
+                      setTemplateToDelete(template);
+                    }}
+                    type='button'
+                    variant='ghost'
+                  >
+                    <Trash2 aria-hidden='true' className='size-3.5' />
+                  </Button>
+                }
               >
                 <span className='grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground'>
                   <FileText aria-hidden='true' className='size-4' />
@@ -193,7 +224,7 @@ export function MailTemplateManager(): ReactElement {
                     {template.subject}
                   </span>
                 </span>
-              </button>
+              </MailManagementListItem>
             ))}
           </div>
         )}
@@ -212,20 +243,9 @@ export function MailTemplateManager(): ReactElement {
               })}
             </h2>
           </div>
-          {draft.id ? (
-            <Button
-              aria-label={t('templates.cancel', { defaultValue: 'Cancel' })}
-              className='size-8 p-0'
-              onClick={resetDraft}
-              type='button'
-              variant='ghost'
-            >
-              <X aria-hidden='true' className='size-4' />
-            </Button>
-          ) : null}
         </div>
 
-        <div className='space-y-2'>
+        <div className='grid gap-2'>
           <label className='text-sm font-medium' htmlFor='mail-template-name'>
             {t('templates.name', { defaultValue: 'Template name' })}
           </label>
@@ -245,7 +265,7 @@ export function MailTemplateManager(): ReactElement {
           />
         </div>
 
-        <div className='space-y-2'>
+        <div className='grid gap-2'>
           <label
             className='text-sm font-medium'
             htmlFor='mail-template-subject'
@@ -269,34 +289,15 @@ export function MailTemplateManager(): ReactElement {
         <p className='text-xs text-muted-foreground'>
           {t('templates.variablesHelp', {
             defaultValue:
-              'Use placeholders such as {{record.customer.name}}. Values are bound when the template is applied.',
+              'Use placeholders such as {{record.customer.name}}. The page embedding this component must provide the corresponding data; unmatched placeholders remain unchanged.',
           })}
         </p>
         <MailRichTextEditor
           ariaLabel={t('workspace.messageBodyLabel', {
             defaultValue: 'Message body',
           })}
-          labels={{
-            toolbar: t('workspace.editor.toolbar', {
-              defaultValue: 'Formatting',
-            }),
-            bold: t('workspace.editor.bold', { defaultValue: 'Bold' }),
-            italic: t('workspace.editor.italic', { defaultValue: 'Italic' }),
-            underline: t('workspace.editor.underline', {
-              defaultValue: 'Underline',
-            }),
-            bulletList: t('workspace.editor.bulletList', {
-              defaultValue: 'Bulleted list',
-            }),
-            numberedList: t('workspace.editor.numberedList', {
-              defaultValue: 'Numbered list',
-            }),
-            undo: t('workspace.editor.undo', { defaultValue: 'Undo' }),
-            redo: t('workspace.editor.redo', { defaultValue: 'Redo' }),
-            clearFormatting: t('workspace.editor.clearFormatting', {
-              defaultValue: 'Clear formatting',
-            }),
-          }}
+          disabled={busy}
+          labels={mailEditorLabels(t)}
           onChange={(value) =>
             setDraft((current) => ({
               ...current,
@@ -309,29 +310,71 @@ export function MailTemplateManager(): ReactElement {
           })}
           value={draft.html}
         />
-        <div className='flex justify-end gap-2'>
-          {selectedTemplateId ? (
+        <MailManagementFormActions
+          editing={Boolean(draft.id)}
+          busy={busy}
+          disabled={!draft.name.trim() || !draft.subject.trim()}
+          submitLabel={t(draft.id ? 'templates.save' : 'templates.add', {
+            defaultValue: draft.id ? 'Save template' : 'Add template',
+          })}
+          savingLabel={t('templates.saving', { defaultValue: 'Saving…' })}
+          cancelLabel={t('templates.cancel', { defaultValue: 'Cancel' })}
+          onSubmit={save}
+          onCancel={resetDraft}
+        />
+      </Card>
+
+      <Dialog
+        open={Boolean(templateToDelete)}
+        onOpenChange={(open) => {
+          if (!open && !busy) setTemplateToDelete(undefined);
+        }}
+      >
+        <DialogContent
+          closeLabel={t('templates.close', { defaultValue: 'Close' })}
+        >
+          <DialogHeader>
+            <DialogTitle>
+              {t('templates.deleteTitle', { defaultValue: 'Delete template?' })}
+            </DialogTitle>
+            <DialogDescription>
+              {t('templates.deleteDescription', {
+                defaultValue:
+                  'This permanently deletes the template. This action cannot be undone.',
+              })}
+            </DialogDescription>
+          </DialogHeader>
+          <p className='mt-4 text-sm font-medium break-words'>
+            {templateToDelete?.name}
+          </p>
+          {deleteError ? (
+            <p role='alert' className='mt-4 text-sm text-destructive'>
+              {deleteError}
+            </p>
+          ) : null}
+          <DialogFooter>
             <Button
               disabled={busy}
-              onClick={() => remove(selectedTemplateId)}
+              onClick={() => setTemplateToDelete(undefined)}
+              type='button'
+              variant='outline'
+            >
+              {t('templates.cancel', { defaultValue: 'Cancel' })}
+            </Button>
+            <Button
+              disabled={busy}
+              onClick={confirmDelete}
               type='button'
               variant='destructive'
             >
               <Trash2 aria-hidden='true' className='size-4' />
-              {t('templates.delete', { defaultValue: 'Delete' })}
+              {busy
+                ? t('templates.deleting', { defaultValue: 'Deleting…' })
+                : t('templates.delete', { defaultValue: 'Delete template' })}
             </Button>
-          ) : null}
-          <Button
-            disabled={busy || !draft.name.trim() || !draft.subject.trim()}
-            onClick={save}
-            type='button'
-          >
-            {busy
-              ? t('templates.saving', { defaultValue: 'Saving…' })
-              : t('templates.save', { defaultValue: 'Save template' })}
-          </Button>
-        </div>
-      </Card>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

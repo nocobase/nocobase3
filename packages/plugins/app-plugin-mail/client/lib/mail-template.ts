@@ -106,6 +106,11 @@ function sanitizeChildren(parent: Element): void {
       child.replaceWith(...child.childNodes);
       continue;
     }
+    // Retain only bounded pixel font sizes, never arbitrary pasted CSS.
+    const style = document.createElement('span').style;
+    style.cssText = child.getAttribute('style') ?? '';
+    const pixelFontSize = style.fontSize;
+    child.removeAttribute('style');
     for (const attribute of [...child.attributes]) {
       const allowed =
         child.tagName === 'A' &&
@@ -123,6 +128,16 @@ function sanitizeChildren(parent: Element): void {
         attribute.value === 'nocobase-mail-signature';
       if (!allowed && !fontSize && !imageAttribute && !signatureClass)
         child.removeAttribute(attribute.name);
+    }
+    if (/^(?:10|12|14|16|18|24|32|48)px$/u.test(pixelFontSize)) {
+      child.setAttribute('style', `font-size: ${pixelFontSize};`);
+    }
+    // Keep imported legacy 48px text distinct from the editor's temporary marker.
+    if (child.tagName === 'FONT' && child.getAttribute('size') === '7') {
+      if (!child.hasAttribute('style')) {
+        child.setAttribute('style', 'font-size: 48px;');
+      }
+      child.removeAttribute('size');
     }
     if (child.tagName === 'A') {
       const href = child.getAttribute('href');

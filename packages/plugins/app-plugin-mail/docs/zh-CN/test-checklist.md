@@ -31,7 +31,6 @@ keywords: 'NocoBase,邮件插件,测试清单,Gmail,Microsoft,IMAP,SMTP,草稿'
 
 | 页面           | 当前地址                        | 当前验证范围                               |
 | -------------- | ------------------------------- | ------------------------------------------ |
-| 用户工作台     | `/mail`                         | 列表、详情、发送和草稿                     |
 | 开发工作台     | `/dev/mail/center`              | 邮件工作台能力                             |
 | 账号管理       | `/dev/mail/accounts`            | Provider、账号、签名、标签和模板           |
 | 邮件管理       | `/dev/mail/management`          | 独立权限下查看全部账号邮件、筛选和批量操作 |
@@ -46,7 +45,7 @@ keywords: 'NocoBase,邮件插件,测试清单,Gmail,Microsoft,IMAP,SMTP,草稿'
 
 - [ ] [P0][UI] MAIL-ROUTE-001：插件启用后当前页面范围内的所有路由均能加载，懒加载页面无报错
 - [ ] [P0][SEC] MAIL-ROUTE-002：未登录在浏览器访问邮件页面时跳转登录，未登录直接调用邮件接口时返回 401
-- [ ] [P0][SEC] MAIL-ROUTE-003：没有 `mail.workspace` 权限访问 `/mail`、`/dev/mail/center`、`/dev/mail/accounts` 和 `/dev/mail/send` 时返回 403
+- [ ] [P0][SEC] MAIL-ROUTE-003：没有 `mail.workspace` 权限访问 `/dev/mail/center`、`/dev/mail/accounts` 和 `/dev/mail/send` 时返回 403
 - [ ] [P0][SEC] MAIL-ROUTE-004：没有 `mail.admin` 权限访问 `/settings/mail/accounts` 和当前管理员操作日志页，或没有 `mail.management` 权限访问 `/dev/mail/management` 时返回 403
 - [ ] [P0][SEC] MAIL-ROUTE-005：用户 A 无法查看或操作用户 B 的账号、邮件、草稿、附件、标签、模板和日志
 - [ ] [P0][UI] MAIL-UI-001：页面加载中、空数据、接口失败、重试和刷新状态显示正确
@@ -58,7 +57,7 @@ keywords: 'NocoBase,邮件插件,测试清单,Gmail,Microsoft,IMAP,SMTP,草稿'
 
 ## 三、[UI][SEC] 账号与 Provider 管理
 
-- [ ] [P0][UI] MAIL-ACCOUNT-001：账号页展示 Provider、账号数量、账号地址、账号状态、初始同步日期和自动同步间隔；间隔可保存为正整数分钟
+- [ ] [P0][UI] MAIL-ACCOUNT-001：账号页展示 Provider、账号数量、账号地址、账号状态、初始同步日期；不展示自动同步间隔配置入口
 - [ ] [P0][UI] MAIL-ACCOUNT-002：Provider 列表正确区分已配置、未配置和 disabled 状态；未配置或 disabled Provider 不可连接
 - [ ] [P0][UI] MAIL-ACCOUNT-003：已配置 OAuth Provider 显示授权入口，已配置 IMAP/SMTP Provider 显示连接表单
 - [ ] [P1][UI] MAIL-ACCOUNT-004：Provider 卡片正确显示 receive、send、folders、drafts、move、aliases 和 push 能力，不把 Provider labels 当成本地标签前置条件
@@ -160,7 +159,7 @@ keywords: 'NocoBase,邮件插件,测试清单,Gmail,Microsoft,IMAP,SMTP,草稿'
 - [ ] [P1][UI] MAIL-MANAGE-001：`/dev/mail/management` 在 `mail.management/access` 权限下以表格加载全部账号和已同步邮件，展示表头、行数据、空状态、加载状态和错误状态
 - [ ] [P1][UI] MAIL-MANAGE-002：管理页按账号筛选，并按主题、摘要、发件人和收件人搜索；防抖、清空搜索和结果刷新正确
 - [ ] [P1][UI] MAIL-MANAGE-003：管理表格展示账号、发件人、收件人、主题、摘要、读状态、星标、草稿、文件夹、附件、时间和 Provider message ID
-- [ ] [P1][UI] MAIL-MANAGE-004：管理页分页无重复和遗漏，刷新后与服务端数据一致，过期请求不会覆盖新结果；刷新清理当前页选择
+- [ ] [P1][UI] MAIL-MANAGE-004：管理页默认每页显示 20 封邮件，可选择每页 20、50 或 100 条，切换条数回到第一页并清空选择，使用上一页、下一页和当前页码导航，首页禁用上一页、末页禁用下一页；翻页替换表格并清空选择，切换账号、搜索或手动刷新回到第一页；请求失败保留当前页，过期请求不会覆盖新结果，批量操作后刷新当前页并保留失败项选择
 - [ ] [P0][SEC] MAIL-MANAGE-005：没有 `mail.management/access` 时不能打开管理页、读取管理数据或调用批量操作；有权限时可查看全部账号但不能越权调用普通用户接口
 - [ ] [P0][UI][API] MAIL-MANAGE-006：管理页支持当前页单选、多选、全选、取消全选、标记已读/未读、星标/取消星标、归档、移动和删除；批量操作确认目标并逐项展示成功、失败和部分失败
 - [ ] [P0][UI][SEC] MAIL-MANAGE-007：Trash 中永久删除前显示二次确认，取消不改变邮件；部分失败项保留可追踪状态并可重试，重复点击不产生重复操作
@@ -207,7 +206,7 @@ keywords: 'NocoBase,邮件插件,测试清单,Gmail,Microsoft,IMAP,SMTP,草稿'
 - [ ] [P0][SRV] MAIL-SYNC-009：认证终止错误将账号置为 reauthorizationRequired，不可重试错误标记为 failed 并保留安全错误码
 - [ ] [P1][SRV] MAIL-SYNC-010：取消 pending 或 running 同步后不继续处理，只有账号所有者可以重试或取消自己的同步
 - [ ] [P0][SRV] MAIL-SYNC-011：旧任务、旧 revision 和旧 lease 的队列消息不能覆盖新状态，Outbox relay、Queue job、lease heartbeat 和恢复机制正常
-- [ ] [P1][UI][SRV] MAIL-SYNC-012：账号页可保存每个账号的自动同步间隔；自动同步只在该账号距离上次同步达到间隔后执行，手动同步、自动同步和 Push webhook 同时触发时同一账号只有一个有效同步任务
+- [ ] [P1][UI][SRV] MAIL-SYNC-012：账号页不提供自动同步配置；config 中的 mail.automaticSyncIntervalMs 统一作用于新账号和已有账号，历史账号间隔不影响调度；自动同步只在该账号距离上次同步达到配置间隔后执行，手动同步、自动同步和 Push webhook 同时触发时同一账号只有一个有效同步任务
 - [ ] [P1][SRV] MAIL-SYNC-013：Gmail watch 和 Microsoft subscription 可以创建、续期、过期重建和删除；Push 不可用时按当前实现回退到自动同步
 - [ ] [P1][SRV] MAIL-SYNC-014：重复 Push 事件被去重，IMAP/SMTP 不创建 Push 订阅，账号删除或状态变化与同步并发时最终状态一致
 - [ ] [P0][SRV] MAIL-SEND-SRV-001：Queue job、Outbox 和发送租约恢复 pending、unknown 或超时任务时不产生重复邮件

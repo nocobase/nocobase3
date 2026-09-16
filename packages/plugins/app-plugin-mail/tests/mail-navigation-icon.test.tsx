@@ -1,6 +1,6 @@
 import type { RealtimeClient } from '@nocobase/app-client';
-import { render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { act, render, screen, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   getUnreadCount: vi.fn(),
@@ -47,9 +47,56 @@ vi.mock('../client/subscription.js', () => ({
   ),
 }));
 
-import { MailNavigationIcon } from '../client/components/mail-navigation-icon.js';
+import {
+  MailNavigationIcon,
+  MAIL_UNREAD_COUNT_CHANGED_EVENT,
+} from '../client/components/mail-navigation-icon.js';
 
 describe('MailNavigationIcon', () => {
+  beforeEach(() => {
+    mocks.getUnreadCount.mockReset();
+    mocks.cleanup.mockClear();
+  });
+
+  it('refreshes immediately after a read change and hides the badge at zero', async () => {
+    mocks.getUnreadCount.mockResolvedValueOnce(1).mockResolvedValueOnce(0);
+    render(<MailNavigationIcon />);
+    await screen.findByLabelText('1 unread messages');
+    act(() => {
+      window.dispatchEvent(new Event(MAIL_UNREAD_COUNT_CHANGED_EVENT));
+    });
+    await waitFor(() =>
+      expect(
+        screen.queryByLabelText('1 unread messages'),
+      ).not.toBeInTheDocument(),
+    );
+    expect(mocks.getUnreadCount).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not restore an old count when an earlier refresh finishes late', async () => {
+    let finishOld!: (count: number) => void;
+    mocks.getUnreadCount
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishOld = resolve;
+          }),
+      )
+      .mockResolvedValueOnce(2);
+    render(<MailNavigationIcon />);
+    act(() => {
+      window.dispatchEvent(new Event(MAIL_UNREAD_COUNT_CHANGED_EVENT));
+    });
+    await screen.findByLabelText('2 unread messages');
+    await act(async () => {
+      finishOld(5);
+    });
+    expect(screen.getByLabelText('2 unread messages')).toBeVisible();
+    expect(
+      screen.queryByLabelText('5 unread messages'),
+    ).not.toBeInTheDocument();
+  });
+
   it('renders the unread badge and refreshes its count from realtime invalidations', async () => {
     mocks.getUnreadCount.mockResolvedValueOnce(4).mockResolvedValueOnce(7);
 

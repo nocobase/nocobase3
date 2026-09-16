@@ -40,7 +40,10 @@ export function classifyError(error: unknown, code: string): MailProviderError {
     retryable:
       category === 'network' ||
       category === 'timeout' ||
-      (responseCode !== undefined && responseCode >= 500),
+      (category !== 'authentication' &&
+        responseCode !== undefined &&
+        responseCode >= 400 &&
+        responseCode < 500),
   };
 }
 

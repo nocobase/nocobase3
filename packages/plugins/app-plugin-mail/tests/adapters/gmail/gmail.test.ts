@@ -658,91 +658,102 @@ describe('Gmail Mail Provider', () => {
     );
   });
 
-  it('forwards the original Gmail body and attachments', async () => {
-    const credentials = memoryVault();
-    await credentials.putAt('credential-1', {
-      provider: 'gmail',
-      accessToken: 'access-1',
-      refreshToken: 'refresh-1',
-      expiresAt: '2099-01-01T00:00:00.000Z',
-      scopes: [],
-      tokenType: 'Bearer',
-    });
-    const fetchMock = vi
-      .fn<typeof fetch>()
-      .mockResolvedValueOnce(
-        Response.json({
-          id: 'source-message-1',
-          labelIds: ['INBOX'],
-          payload: {
-            headers: [
-              { name: 'From', value: 'Alice <alice@example.com>' },
-              { name: 'To', value: 'user@example.com' },
-              { name: 'Subject', value: 'Original' },
-            ],
-            parts: [
-              {
-                mimeType: 'text/plain',
-                body: {
-                  data: Buffer.from('Original body').toString('base64url'),
+  it.each([false, true])(
+    'forwards the original Gmail body and attachments',
+    async (forwardBodyIncluded) => {
+      const credentials = memoryVault();
+      await credentials.putAt('credential-1', {
+        provider: 'gmail',
+        accessToken: 'access-1',
+        refreshToken: 'refresh-1',
+        expiresAt: '2099-01-01T00:00:00.000Z',
+        scopes: [],
+        tokenType: 'Bearer',
+      });
+      const fetchMock = vi
+        .fn<typeof fetch>()
+        .mockResolvedValueOnce(
+          Response.json({
+            id: 'source-message-1',
+            labelIds: ['INBOX'],
+            payload: {
+              headers: [
+                { name: 'From', value: 'Alice <alice@example.com>' },
+                { name: 'To', value: 'user@example.com' },
+                { name: 'Subject', value: 'Original' },
+              ],
+              parts: [
+                {
+                  mimeType: 'text/plain',
+                  body: {
+                    data: Buffer.from('Original body').toString('base64url'),
+                  },
                 },
-              },
-              {
-                mimeType: 'text/plain',
-                filename: 'notes.txt',
-                body: { attachmentId: 'attachment-1', size: 5 },
-              },
-            ],
+                {
+                  mimeType: 'text/plain',
+                  filename: 'notes.txt',
+                  body: { attachmentId: 'attachment-1', size: 5 },
+                },
+              ],
+            },
+          }),
+        )
+        .mockResolvedValueOnce(
+          Response.json({
+            data: Buffer.from('notes').toString('base64url'),
+            size: 5,
+          }),
+        )
+        .mockResolvedValueOnce(Response.json({ id: 'forwarded-message-1' }));
+      vi.stubGlobal('fetch', fetchMock);
+      const adapter = new GmailMailProviderAdapter(
+        context(credentials),
+        config(),
+        account(),
+      );
+
+      await expect(
+        adapter.sendMessage({
+          trackingId: 'submission-forward',
+          identity: {
+            id: 'identity-1',
+            accountId: 'account-1',
+            address: 'user@example.com',
+            isPrimary: true,
+            canSend: true,
+          },
+          message: {
+            to: [{ address: 'recipient@example.com' }],
+            cc: [],
+            bcc: [],
+            subject: 'Fwd: Original',
+            text: forwardBodyIncluded
+              ? 'Edited forwarded content'
+              : 'Please review',
+            forwardBodyIncluded,
+            attachments: [],
+            references: [],
+            forwardOfProviderMessageId: 'source-message-1',
           },
         }),
-      )
-      .mockResolvedValueOnce(
-        Response.json({
-          data: Buffer.from('notes').toString('base64url'),
-          size: 5,
-        }),
-      )
-      .mockResolvedValueOnce(Response.json({ id: 'forwarded-message-1' }));
-    vi.stubGlobal('fetch', fetchMock);
-    const adapter = new GmailMailProviderAdapter(
-      context(credentials),
-      config(),
-      account(),
-    );
-
-    await expect(
-      adapter.sendMessage({
-        trackingId: 'submission-forward',
-        identity: {
-          id: 'identity-1',
-          accountId: 'account-1',
-          address: 'user@example.com',
-          isPrimary: true,
-          canSend: true,
-        },
-        message: {
-          to: [{ address: 'recipient@example.com' }],
-          cc: [],
-          bcc: [],
-          subject: 'Fwd: Original',
-          text: 'Please review',
-          attachments: [],
-          references: [],
-          forwardOfProviderMessageId: 'source-message-1',
-        },
-      }),
-    ).resolves.toMatchObject({
-      status: 'accepted',
-      providerMessageId: 'forwarded-message-1',
-    });
-    const body = JSON.parse(String(fetchMock.mock.calls[2][1]?.body)) as {
-      raw: string;
-    };
-    const mime = Buffer.from(body.raw, 'base64url').toString('utf8');
-    expect(mime).toContain('Original body');
-    expect(mime).toContain('notes.txt');
-    expect(mime).toContain(Buffer.from('notes').toString('base64'));
-  });
+      ).resolves.toMatchObject({
+        status: 'accepted',
+        providerMessageId: 'forwarded-message-1',
+      });
+      const body = JSON.parse(String(fetchMock.mock.calls[2][1]?.body)) as {
+        raw: string;
+      };
+      const mime = Buffer.from(body.raw, 'base64url').toString('utf8');
+      if (forwardBodyIncluded) {
+        expect(mime).toContain('Edited forwarded content');
+        expect(mime).not.toContain('Original body');
+      } else {
+        expect(mime).toContain('Original body');
+      }
+      expect(mime).toContain('notes.txt');
+      expect(mime).toContain(Buffer.from('notes').toString('base64'));
+    },
+  );
 
   it('sends a saved forward draft without appending the source again', async () => {
     const credentials = memoryVault();

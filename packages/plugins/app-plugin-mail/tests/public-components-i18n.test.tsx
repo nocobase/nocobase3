@@ -37,6 +37,22 @@ describe('public Mail components outside the plugin namespace', () => {
       const messages = (await locales[locale]()).default;
       expect(await screen.findByText(messages.labels.empty)).toBeVisible();
       expect(await screen.findByText(messages.templates.empty)).toBeVisible();
+      expect(
+        screen.getByRole('combobox', {
+          name: messages.workspace.editor.fontSize,
+        }),
+      ).toBeVisible();
+      expect(
+        screen.getByRole('combobox', {
+          name: messages.workspace.editor.heading,
+        }),
+      ).toBeVisible();
+      expect(
+        screen.getByRole('button', { name: messages.workspace.editor.link }),
+      ).toBeVisible();
+      expect(
+        screen.getByRole('button', { name: messages.workspace.editor.image }),
+      ).toBeVisible();
     },
   );
 });

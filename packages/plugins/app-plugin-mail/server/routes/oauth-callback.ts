@@ -28,6 +28,9 @@ export const mailOAuthCallbackRoutes: AppRootRouteContribution<AppPluginApplicat
           {
             error: {
               code: 'MAIL_AUTHORIZATION_STATE_REQUIRED',
+              ns: '@nocobase/app-plugin-mail',
+              key: 'errors.authorizationStateRequired',
+              params: {},
               message: t('errors.authorizationStateRequired'),
             },
           },

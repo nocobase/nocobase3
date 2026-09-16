@@ -13,7 +13,7 @@ The first runnable vertical slice provides:
   for read-only all-user account visibility, plus `/settings/mail/operation-logs` for all-user synchronization and delivery operation logs;
 - a separately permissioned `/dev/mail/management` table for all-user message
   search and per-message batch actions;
-- a production Mail workspace at `/mail`, plus development-only account connection under `/dev/mail/accounts` and development diagnostics under `/dev/mail`; `/dev/mail/accounts` defaults to a connected-account table and also exposes account association (including the initial sync date), signature and NocoBase-owned label management, and reusable-template management;
+- a development Mail center at `/dev/mail/center`, account connection under `/dev/mail/accounts`, and development diagnostics under `/dev/mail`; `/dev/mail/accounts` defaults to a connected-account table and also exposes account association (including the initial sync date), signature and NocoBase-owned label management, and reusable-template management;
 - an all-account workspace view with account and folder filtering, refresh, message search, conversation detail, account connection, synchronization controls, sending, synchronization logs, and delivery submission logs; the composer remembers its last selected account in browser storage and the default synchronization action covers every active account;
 - database-backed OAuth credential storage with token-rotation support;
 - a synchronous `SendMailOperation` with a persisted idempotency key and an
@@ -31,12 +31,13 @@ The first runnable vertical slice provides:
 - idempotent message upserts by `(accountId, providerMessageId)`;
 - indexed Provider message-folder and NocoBase message-label relations;
 - reply and forward behavior using Provider-native conversation APIs;
+- forwarded HTML preserves embedded CSS, inline styles and table layouts in an isolated preview, with a separate editable comment; saved drafts and session recovery preserve this separation; external stylesheets are not loaded;
 - local-first draft creation, editing, automatic saving, recovery, and sending for every Provider that supports sending;
 - optional Gmail and Microsoft remote draft mirrors with local conflict protection;
 - scheduled delivery persisted through the Outbox and Queue;
 - automatic mailbox synchronization every five minutes by default, configurable
   with `MAIL_AUTOMATIC_SYNC_INTERVAL_MS`;
-- per-account automatic synchronization intervals configured from the connected-account table;
+- automatic synchronization configured centrally through `mail.automaticSyncIntervalMs`;
 - authenticated Provider push webhooks that coalesce notifications into the
   existing incremental synchronization pipeline;
 - automatic Gmail watch and Microsoft Graph subscription creation and renewal;
@@ -57,14 +58,14 @@ The first runnable vertical slice provides:
 - a Mail center at `/dev/mail/center` with a cross-account unread badge that
   refreshes on user-scoped realtime mail invalidations and WebSocket recovery;
 - filterable operation logs with safe synchronization cancellation and retry;
-- bounded bulk delivery as separate per-recipient submissions;
+- bounded bulk delivery as separate per-recipient submissions, with expandable batch parents, recipient details, pagination of 20 complete batches, automatic status refresh, batch-scoped retries for failed deliveries, and cancellation before a worker claims sending;
 - current-user account selection, account deactivation/reactivation, and removal with local data cleanup;
 - Provider contracts, registry, adapter resolver, database storage, and an
   explicit migration.
 
 Gmail, Microsoft 365, and generic IMAP/SMTP adapters are built into this package and registered automatically. Register only `mail` in an application, then configure instances under `mail.providers`. Mail Core owns account lifecycle, synchronization, and the credential store; the adapters own protocol calls and token refresh. Third-party plugins can still register additional definitions through `mailProviderRegistryToken`.
 
-The generic IMAP/SMTP adapter uses periodic sync and discovers new UID ranges. Push notifications, provider-native labels, drafts, aliases, move-to-folder, and complete external flag/deletion reconciliation remain unsupported. SMTP services that do not automatically copy submitted messages to Sent need to expose a Sent copy through IMAP. Another plugin can register `mailCredentialVaultToken` before Mail Core to replace the default plain-JSON credential store.
+The generic IMAP/SMTP adapter uses periodic sync and discovers new UID ranges. Push notifications, provider-native labels, drafts, aliases, move-to-folder, and complete external flag/deletion reconciliation remain unsupported. Accepted sends trigger durable mailbox refreshes immediately and after 5 and 30 seconds. SMTP services that do not automatically save sent copies can use `sentCopyMode: client` with an existing `sentFolder` or a server-designated Sent folder; the default `server` mode leaves archiving to the provider. Another plugin can register `mailCredentialVaultToken` before Mail Core to replace the default plain-JSON credential store.
 
 ## Documentation
 
@@ -140,6 +141,8 @@ For sending, it implements `sendMessage()`. A Provider that accepted a message b
 
 ## HTTP API
 
+Translated Mail errors preserve `error.code`, `error.message`, `error.ns`, `error.key`, and `error.params`. The message uses the request locale; consumers can use the namespace, key, and parameters to translate the same error in another locale. Internal provider and database error details remain private.
+
 All MVP routes require an authenticated application session:
 
 ```text
@@ -170,6 +173,9 @@ DELETE /api/mail/labels/:labelId
 POST /api/mail/attachments
 POST /api/mail/messages/send
 POST /api/mail/messages/bulk
+GET /api/mail/submissions?bulkOnly=true&groupByBatch=true&offset=0
+POST /api/mail/submissions/:submissionId/retry
+POST /api/mail/submissions/:submissionId/cancel
 POST /api/mail/messages/drafts
 GET  /api/mail/submissions
 POST /api/mail/accounts/:accountId/sync
@@ -197,7 +203,7 @@ The configured OAuth callback route is intentionally public because Google and M
 
 Personal Mail APIs require `page:mail.workspace/access`; cross-user account and operation-log APIs under `/api/mail/settings/*` require `page:mail.admin/access`; the all-user message management APIs under `/api/mail/management/*` require `page:mail.management/access`. Account ownership is enforced again in `MailService`; Route authentication is not treated as ownership authorization. Inactive accounts cannot send or synchronize. Public responses omit credential references, Provider cursors, leases, and internal error messages.
 
-The `/mail` workspace opens a complete conversation only when a Provider supplies its stable identifier (`threadId` for Gmail or `conversationId` for Microsoft Graph). Messages without that identifier open independently; the core does not infer a conversation from a matching subject.
+The `/dev/mail/center` workspace opens a complete conversation only when a Provider supplies its stable identifier (`threadId` for Gmail or `conversationId` for Microsoft Graph). Messages without that identifier open independently; the core does not infer a conversation from a matching subject.
 
 ## Verification
 
@@ -218,6 +224,12 @@ Local draft attachments retain their upload identity separately from Provider at
 
 ## Mail workspace UI
 
-`/mail` links to My mailboxes at `/dev/mail/accounts`, where signed-in users with `mail.workspace/access` connect and manage their own accounts, signatures, templates, and labels. The administrator overview remains at `/settings/mail/accounts` with `mail.admin/access`. Account setup links are visible only in development. OAuth success and failure redirects return to the development account page.
+Received HTML is rendered in a script-disabled sandboxed frame that preserves tables, inline formatting, embedded stylesheets, and authenticated CID images. Sender styles are isolated from the application theme. Scripts, forms, embedded frames, and external stylesheets are blocked.
 
-The workspace uses its available container width: three panes on wide screens, a navigation drawer on smaller screens, and list/detail switching on phones. Returning to the list preserves its filter and loaded rows. The non-modal desktop composer becomes full-screen on phones; its errors and draft state are independent of mailbox refreshes, and unsaved edits require an explicit close confirmation.
+`/dev/mail/center` links to My mailboxes at `/dev/mail/accounts`, where signed-in users with `mail.workspace/access` connect and manage their own accounts, signatures, templates, and labels. The administrator overview remains at `/settings/mail/accounts` with `mail.admin/access`. Account setup links are visible only in development. OAuth success and failure redirects return to the development account page.
+
+The workspace uses a desktop three-pane layout with mailbox navigation, the message list, and the conversation visible together. The message list loads 50 messages per page, with Previous page and Next page controls fixed at the bottom. Changing a mailbox filter returns to the first page. Successfully opening a message marks its loaded, non-draft conversation messages as read for active accounts and immediately refreshes the header unread badge. A failed read-state update leaves the content visible and reports the error without clearing its unread state. The non-modal desktop composer becomes full-screen on phones; its errors and draft state are independent of mailbox refreshes, and unsaved edits require an explicit close confirmation.
+
+### Development sending and logs
+
+The development Compose mail page (`/dev/mail/send`) uses one Mail center composer with Send and Send separately actions in its footer. Both actions share recipients, content, attachments, signatures, templates, and scheduling; ordinary sending supports Cc/Bcc, while separate sending requires those fields to be empty and deduplicates up to 100 recipients. Draft saving and recovery are shared. Mail logs (`/dev/mail/logs`) brings sending, batch delivery, and synchronization into one page with directly accessible child views; the former standalone URLs redirect to their corresponding views.

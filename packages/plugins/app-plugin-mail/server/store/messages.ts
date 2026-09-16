@@ -68,7 +68,7 @@ export class MailMessagesStore {
     const requested = input.accountIds
       ? owned.filter((account) => input.accountIds?.includes(account.id))
       : owned;
-    return this.listMessagesForAccounts(requested, input);
+    return this.listMessagesForAccounts(requested, input, true);
   }
 
   public async listAllMessages(
@@ -83,6 +83,7 @@ export class MailMessagesStore {
   private async listMessagesForAccounts(
     requested: readonly MailAccount[],
     input: MailListMessagesInput,
+    draftsOnlyInDraftFolders = false,
   ): Promise<MailPage<MailMessageSummary>> {
     if (requested.length === 0) return { items: [] };
     const limit = Math.min(Math.max(input.limit ?? 50, 1), 200);
@@ -151,6 +152,35 @@ export class MailMessagesStore {
         )
         .where('mailMessageFolders.providerFolderId', 'in', input.folderIds)
         .distinct();
+    }
+    if (
+      draftsOnlyInDraftFolders &&
+      requestedFolderId !== MAIL_LOCAL_DRAFT_FOLDER_ID
+    ) {
+      query =
+        input.folderIds?.length && !syntheticFolderType
+          ? query.where((builder) =>
+              builder.eb.or([
+                builder.eb('mailMessages.draft', '=', false),
+                builder.exists(
+                  builder
+                    .selectFrom('mailFolders')
+                    .select('id')
+                    .whereRef(
+                      'mailFolders.accountId',
+                      '=',
+                      'mailMessages.accountId',
+                    )
+                    .whereRef(
+                      'mailFolders.providerFolderId',
+                      '=',
+                      'mailMessageFolders.providerFolderId',
+                    )
+                    .where('mailFolders.type', '=', 'drafts'),
+                ),
+              ]),
+            )
+          : query.where('mailMessages.draft', '=', false);
     }
     if (input.labelIds?.length) {
       query = query

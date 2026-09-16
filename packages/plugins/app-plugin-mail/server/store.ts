@@ -518,8 +518,12 @@ export class DatabaseMailStore implements MailStore {
     return this.sync.getSyncRun(syncRunId);
   }
 
-  public async listSyncRuns(userId: string): Promise<readonly MailSyncRun[]> {
-    return this.sync.listSyncRuns(userId);
+  public async listSyncRuns(
+    userId: string,
+    offset = 0,
+    limit = 100,
+  ): Promise<readonly MailSyncRun[]> {
+    return this.sync.listSyncRuns(userId, offset, limit);
   }
 
   public async listAllSyncRuns(): Promise<readonly MailSyncRun[]> {
@@ -587,8 +591,25 @@ export class DatabaseMailStore implements MailStore {
 
   public async listSubmissions(
     userId: string,
+    bulkOnly = false,
+    offset = 0,
+    groupByBatch = false,
+    limit = groupByBatch ? 20 : 100,
   ): Promise<readonly MailStoredSubmission[]> {
-    return this.submissions.listSubmissions(userId);
+    return this.submissions.listSubmissions(
+      userId,
+      bulkOnly,
+      offset,
+      groupByBatch,
+      limit,
+    );
+  }
+
+  public async transitionSubmission(
+    submissionId: string,
+    action: 'retry' | 'cancel',
+  ): Promise<MailStoredSubmission> {
+    return this.submissions.transitionSubmission(submissionId, action);
   }
 
   public async listAllSubmissions(): Promise<readonly MailStoredSubmission[]> {

@@ -1,5 +1,4 @@
 import {
-  defineAppRoutes,
   defineDevRoutes,
   defineSettingsRoutes,
   type AppClientRouteContribution,
@@ -7,15 +6,6 @@ import {
 import { History, Inbox, Link2, Mail, Send, Table2, Users } from 'lucide-react';
 
 const routes: readonly AppClientRouteContribution[] = [
-  defineAppRoutes([
-    {
-      name: 'mail',
-      path: '/mail',
-      auth: 'required',
-      access: { resource: 'mail.workspace', action: 'access' },
-      componentLoader: () => import('./pages/mail-workspace-page.js'),
-    },
-  ]),
   defineSettingsRoutes([
     {
       name: 'mail',
@@ -77,30 +67,88 @@ const routes: readonly AppClientRouteContribution[] = [
           navigation: { title: 'nav.devSend', icon: Send },
           access: { resource: 'mail.workspace', action: 'access' },
           componentLoader: () =>
-            import('./pages/mail-dev-page.js').then(({ MailSendDevPage }) => ({
-              default: MailSendDevPage,
-            })),
+            import('./pages/mail-dev-hub-page.js').then(
+              ({ MailSendHubPage }) => ({ default: MailSendHubPage }),
+            ),
+          children: [
+            {
+              name: 'compose',
+              path: 'compose',
+              componentLoader: () =>
+                import('./pages/mail-dev-hub-page.js').then(
+                  ({ MailComposeRedirect }) => ({
+                    default: MailComposeRedirect,
+                  }),
+                ),
+            },
+            {
+              name: 'bulk',
+              path: 'bulk',
+              componentLoader: () =>
+                import('./pages/mail-dev-hub-page.js').then(
+                  ({ MailComposeRedirect }) => ({
+                    default: MailComposeRedirect,
+                  }),
+                ),
+            },
+          ],
+        },
+        {
+          name: 'logs',
+          path: '/logs',
+          navigation: { title: 'nav.devLogs', icon: History },
+          access: { resource: 'mail.workspace', action: 'access' },
+          componentLoader: () =>
+            import('./pages/mail-dev-hub-page.js').then(
+              ({ MailLogsHubPage }) => ({ default: MailLogsHubPage }),
+            ),
+          children: [
+            {
+              name: 'send',
+              path: 'send',
+              componentLoader: () => import('./pages/mail-send-logs-page.js'),
+            },
+            {
+              name: 'bulk',
+              path: 'bulk',
+              componentLoader: () =>
+                import('./pages/mail-dev-hub-page.js').then(
+                  ({ MailBulkLogsPage }) => ({ default: MailBulkLogsPage }),
+                ),
+            },
+            {
+              name: 'sync',
+              path: 'sync',
+              componentLoader: () => import('./pages/mail-sync-logs-page.js'),
+            },
+          ],
         },
         {
           name: 'bulk-send',
           path: '/bulk-send',
-          navigation: { title: 'nav.devBulkSend', icon: Send },
           access: { resource: 'mail.workspace', action: 'access' },
-          componentLoader: () => import('./pages/mail-bulk-send-page.js'),
+          componentLoader: () =>
+            import('./pages/mail-dev-hub-page.js').then(
+              ({ MailBulkSendRedirect }) => ({ default: MailBulkSendRedirect }),
+            ),
         },
         {
           name: 'sync-logs',
           path: '/sync-logs',
-          navigation: { title: 'nav.syncLogs', icon: History },
           access: { resource: 'mail.workspace', action: 'access' },
-          componentLoader: () => import('./pages/mail-sync-logs-page.js'),
+          componentLoader: () =>
+            import('./pages/mail-dev-hub-page.js').then(
+              ({ MailSyncLogsRedirect }) => ({ default: MailSyncLogsRedirect }),
+            ),
         },
         {
           name: 'send-logs',
           path: '/send-logs',
-          navigation: { title: 'nav.sendLogs', icon: Send },
           access: { resource: 'mail.workspace', action: 'access' },
-          componentLoader: () => import('./pages/mail-send-logs-page.js'),
+          componentLoader: () =>
+            import('./pages/mail-dev-hub-page.js').then(
+              ({ MailSendLogsRedirect }) => ({ default: MailSendLogsRedirect }),
+            ),
         },
       ],
     },

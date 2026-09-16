@@ -12,7 +12,6 @@ import {
   parseAddressList,
   readComposerRecovery,
   replaceComposerSignature,
-  toBulkComposeInput,
   writeComposerRecovery,
   type ComposerRecoverySnapshot,
   type ComposerState,
@@ -21,6 +20,7 @@ import { type MailTemplateVariables } from '../lib/mail-template.js';
 import {
   mailErrorMessage,
   type MailAccountView,
+  type MailBulkComposeInput,
   type MailIdentity,
   type MailMessage,
   type MailOutboundAttachmentView,
@@ -36,6 +36,7 @@ export interface MailComposerRequest {
   readonly attachments: MailMessage['attachments'];
 }
 export interface MailComposerProps {
+  readonly allowBulkSend?: boolean;
   readonly request: MailComposerRequest;
   readonly accounts: readonly MailAccountView[];
   readonly providers: readonly MailProviderView[];
@@ -49,6 +50,7 @@ export interface MailComposerProps {
 const AUTO_SAVE_DELAY_MS = 1_000;
 export function useMailComposer({
   request,
+  allowBulkSend = false,
   accounts,
   providers,
   onClose,
@@ -91,7 +93,6 @@ export function useMailComposer({
     ComposerRecoverySnapshot | undefined
   >(initialRecovery);
   const [templates, setTemplates] = useState<readonly MailTemplate[]>([]);
-  const [individualDelivery, setIndividualDelivery] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [composeAttachments, setComposeAttachments] = useState<
     readonly MailOutboundAttachmentView[]
@@ -108,6 +109,10 @@ export function useMailComposer({
   >(() => composerFingerprint(request.value, '', '', [], request.attachments));
   const failedFingerprintRef = useRef<string | undefined>(undefined);
   const composerSessionRef = useRef(0);
+  const bulkRequestRef = useRef<
+    { fingerprint: string; key: string } | undefined
+  >(undefined);
+  const copiedAttachmentsRef = useRef(new Map<string, string>());
   const requestError = useCallback(
     (cause: unknown): void => {
       setError(
@@ -232,14 +237,16 @@ export function useMailComposer({
     onClose();
   };
 
-  const sendComposer = (): void => {
+  const sendComposer = (mode: 'normal' | 'bulk' = 'normal'): void => {
     if (
       !composer ||
       !composerAccountId ||
       !identityId ||
       !composerCanSend ||
       sending ||
-      autoSaving
+      autoSaving ||
+      uploading ||
+      (mode === 'bulk' && !allowBulkSend)
     )
       return;
     const to = parseAddressList(composer.to);
@@ -259,7 +266,11 @@ export function useMailComposer({
       );
       return;
     }
-    if (!composer.text.trim()) {
+    if (
+      !composer.text.trim() &&
+      !composer.forwardQuote?.text.trim() &&
+      !composer.forwardQuote?.html.trim()
+    ) {
       setError(
         t('workspace.messageRequired', {
           defaultValue: 'Add a message body.',
@@ -275,6 +286,45 @@ export function useMailComposer({
       );
       return;
     }
+    const seenRecipients = new Set<string>();
+    const recipients = to.filter((recipient) => {
+      const address = recipient.address.toLowerCase();
+      if (seenRecipients.has(address)) return false;
+      seenRecipients.add(address);
+      return true;
+    });
+    if (mode === 'bulk') {
+      if (composer.cc.trim() || composer.bcc.trim()) {
+        setError(
+          t('dev.sendHub.bulkNoCopies', {
+            defaultValue:
+              'Separate sending does not support Cc or Bcc. Clear them to send separately.',
+          }),
+        );
+        return;
+      }
+      if (
+        recipients.some(
+          (recipient) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(recipient.address),
+        )
+      ) {
+        setError(
+          t('dev.bulkSend.invalidRecipient', {
+            defaultValue:
+              'Remove or correct invalid recipient addresses first.',
+          }),
+        );
+        return;
+      }
+      if (recipients.length > 100) {
+        setError(
+          t('dev.bulkSend.tooManyRecipients', {
+            defaultValue: 'Bulk sending supports at most 100 recipients.',
+          }),
+        );
+        return;
+      }
+    }
     setSending(true);
     setError(undefined);
     const input = buildComposerInput(
@@ -285,25 +335,65 @@ export function useMailComposer({
       composeAttachments,
       retainedAttachments,
     );
-    const operation = individualDelivery
-      ? mail.sendBulk(toBulkComposeInput(input))
-      : mail.sendMessage(input);
+    const sendBulk = async () => {
+      // Each recipient must own its delivery; sending the shared provider draft
+      // would consume it on the first message and break the rest of the batch.
+      const attachmentIds = [...(input.attachmentIds ?? [])];
+      for (const attachment of retainedAttachments) {
+        const cachedId =
+          attachment.outboundAttachmentId ??
+          copiedAttachmentsRef.current.get(attachment.id);
+        if (cachedId) {
+          attachmentIds.push(cachedId);
+          continue;
+        }
+        const stream = await mail.downloadAttachment(
+          composerAccountId,
+          input.draftMessageId ?? attachment.messageId,
+          attachment.id,
+        );
+        const blob = await new Response(stream).blob();
+        const uploaded = await mail.uploadAttachment(
+          new File([blob], attachment.fileName, {
+            type: attachment.contentType,
+          }),
+        );
+        copiedAttachmentsRef.current.set(attachment.id, uploaded.id);
+        attachmentIds.push(uploaded.id);
+      }
+      const bulkInput: Omit<MailBulkComposeInput, 'idempotencyKey'> = {
+        accountId: input.accountId,
+        identityId: input.identityId,
+        signatureId: input.signatureId,
+        recipients,
+        subject: input.subject,
+        text: input.text,
+        html: input.html,
+        attachmentIds: [...new Set(attachmentIds)],
+        scheduledAt: input.scheduledAt,
+      };
+      const fingerprint = JSON.stringify(bulkInput);
+      if (bulkRequestRef.current?.fingerprint !== fingerprint) {
+        bulkRequestRef.current = { fingerprint, key: input.idempotencyKey };
+      }
+      return mail.sendBulk({
+        ...bulkInput,
+        idempotencyKey: bulkRequestRef.current.key,
+      });
+    };
+    const operation =
+      mode === 'bulk'
+        ? sendBulk()
+        : mail.sendMessage(input).then((result) => [result]);
     void operation
-      .then((result) => {
-        const submissions = [result].flat();
-        const outcome = submissions.some((item) => item.status === 'unknown')
+      .then((results) => {
+        const outcome = results.some((result) => result.status === 'unknown')
           ? 'unknown'
-          : submissions.some((item) => item.status === 'failed')
+          : results.some((result) => result.status === 'failed')
             ? 'failed'
             : 'accepted';
-        const draftId = draftMessageIdRef.current;
         closeComposer(true);
         onComplete(outcome);
-        if (individualDelivery && draftId) {
-          void mail
-            .deleteMessage(composerAccountId, draftId, true)
-            .catch(requestError);
-        }
       })
       .catch(requestError)
       .finally(() => setSending(false));
@@ -379,7 +469,10 @@ export function useMailComposer({
   );
   const composerHasRequiredContent = Boolean(
     composer?.subject.trim() &&
-    composer?.text.trim() &&
+    composer &&
+    (composer.text.trim() ||
+      composer.forwardQuote?.text.trim() ||
+      composer.forwardQuote?.html.trim()) &&
     (!scheduleEnabled || composer.scheduledAt),
   );
   const composerHasUnsavedChanges = Boolean(
@@ -425,7 +518,6 @@ export function useMailComposer({
       !composerAccountId ||
       !identityId ||
       !composerCanDraft ||
-      individualDelivery ||
       (!composerHasContent &&
         !composer.draftMessageId &&
         !draftMessageIdRef.current) ||
@@ -469,16 +561,20 @@ export function useMailComposer({
             ...snapshot,
             draftMessageId: draft.id,
             draftConflict: draft.draftConflict,
-            text: mergeProviderDraftBody(
-              snapshot.text,
-              snapshot.text,
-              draft.text,
-            ),
-            html: mergeProviderDraftBody(
-              snapshot.html,
-              snapshot.html,
-              draft.html,
-            ),
+            text: snapshot.forwardQuote
+              ? snapshot.text
+              : mergeProviderDraftBody(
+                  snapshot.text,
+                  snapshot.text,
+                  draft.text,
+                ),
+            html: snapshot.forwardQuote
+              ? snapshot.html
+              : mergeProviderDraftBody(
+                  snapshot.html,
+                  snapshot.html,
+                  draft.html,
+                ),
           };
           const savedAttachments = draft.attachments ?? [];
           setLastSavedFingerprint(
@@ -518,16 +614,20 @@ export function useMailComposer({
                   ...current,
                   draftMessageId: draft.id,
                   draftConflict: draft.draftConflict,
-                  text: mergeProviderDraftBody(
-                    current.text,
-                    snapshot.text,
-                    draft.text,
-                  ),
-                  html: mergeProviderDraftBody(
-                    current.html,
-                    snapshot.html,
-                    draft.html,
-                  ),
+                  text: snapshot.forwardQuote
+                    ? current.text
+                    : mergeProviderDraftBody(
+                        current.text,
+                        snapshot.text,
+                        draft.text,
+                      ),
+                  html: snapshot.forwardQuote
+                    ? current.html
+                    : mergeProviderDraftBody(
+                        current.html,
+                        snapshot.html,
+                        draft.html,
+                      ),
                 }
               : current,
           );
@@ -553,7 +653,6 @@ export function useMailComposer({
     currentComposerFingerprint,
     composerCanDraft,
     identityId,
-    individualDelivery,
     signatureId,
     lastSavedFingerprint,
     mail,
@@ -603,8 +702,6 @@ export function useMailComposer({
     recoveryOffer,
     setRecoveryOffer,
     templates,
-    individualDelivery,
-    setIndividualDelivery,
     uploading,
     composeAttachments,
     setComposeAttachments,
@@ -661,8 +758,6 @@ export interface MailComposerController {
     SetStateAction<ComposerRecoverySnapshot | undefined>
   >;
   readonly templates: readonly MailTemplate[];
-  readonly individualDelivery: boolean;
-  readonly setIndividualDelivery: Dispatch<SetStateAction<boolean>>;
   readonly uploading: boolean;
   readonly composeAttachments: readonly MailOutboundAttachmentView[];
   readonly setComposeAttachments: Dispatch<
@@ -683,7 +778,7 @@ export interface MailComposerController {
   readonly composerCanSend: boolean;
   readonly composerCanDraft: boolean;
   readonly closeComposer: (force?: boolean) => void;
-  readonly sendComposer: () => void;
+  readonly sendComposer: (mode?: 'normal' | 'bulk') => void;
   readonly saveComposerDraft: () => void;
   readonly uploadComposerAttachments: (files: FileList | null) => void;
   readonly currentComposerFingerprint: string | undefined;

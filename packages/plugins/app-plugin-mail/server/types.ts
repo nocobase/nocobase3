@@ -366,7 +366,6 @@ export interface MailStartSyncInput {
 export interface MailUpdateAccountInput {
   readonly accountId: string;
   readonly status?: 'active' | 'suspended';
-  readonly automaticSyncIntervalMinutes?: number;
 }
 
 export type MailCommandType =
@@ -487,6 +486,8 @@ export interface MailComposeInput {
   readonly retainedAttachmentIds?: readonly string[];
   readonly inReplyToMessageId?: string;
   readonly forwardOfMessageId?: string;
+  /** The supplied body includes the editable forwarded content; do not append it again. */
+  readonly forwardBodyIncluded?: boolean;
   readonly scheduledAt?: string;
   readonly draftMessageId?: string;
   readonly idempotencyKey: string;
@@ -569,7 +570,7 @@ export interface MailDraftResult {
 }
 
 export type MailSubmissionStatus =
-  'pending' | 'submitting' | 'accepted' | 'failed' | 'unknown';
+  'pending' | 'submitting' | 'accepted' | 'failed' | 'unknown' | 'cancelled';
 
 export interface MailSubmission {
   readonly id: string;
@@ -592,6 +593,12 @@ export interface MailSubmissionView {
 }
 
 export interface MailSubmissionLogView extends MailSubmissionView {
+  readonly recipients?: readonly MailAddress[];
+  readonly subject?: string;
+  readonly bulk?: boolean;
+  readonly batchId?: string;
+  readonly canRetry?: boolean;
+  readonly canCancel?: boolean;
   readonly createdAt: string;
   readonly updatedAt: string;
 }
@@ -686,6 +693,17 @@ export interface MailService {
     context: MailOperationContext,
     input: MailListMessagesInput,
   ): Promise<MailPage<MailMessageSummary>>;
+  getManagedMessage(
+    context: MailOperationContext,
+    accountId: string,
+    messageId: string,
+  ): Promise<MailMessage | undefined>;
+  getManagedAttachment(
+    context: MailOperationContext,
+    accountId: string,
+    messageId: string,
+    attachmentId: string,
+  ): Promise<MailAttachmentContent>;
   manageMessages(
     context: MailOperationContext,
     input: MailManagementMessageActionInput,
@@ -740,6 +758,8 @@ export interface MailService {
   ): Promise<MailSyncRunView | undefined>;
   listSyncRuns(
     context: MailOperationContext,
+    offset?: number,
+    limit?: number,
   ): Promise<readonly MailSyncRunView[]>;
   retrySyncRun(
     context: MailOperationContext,
@@ -749,8 +769,20 @@ export interface MailService {
     context: MailOperationContext,
     syncRunId: string,
   ): Promise<MailSyncRunView>;
+  retrySubmission(
+    context: MailOperationContext,
+    submissionId: string,
+  ): Promise<MailSubmissionLogView>;
+  cancelSubmission(
+    context: MailOperationContext,
+    submissionId: string,
+  ): Promise<MailSubmissionLogView>;
   listSubmissions(
     context: MailOperationContext,
+    bulkOnly?: boolean,
+    offset?: number,
+    groupByBatch?: boolean,
+    limit?: number,
   ): Promise<readonly MailSubmissionLogView[]>;
   listMessages(
     context: MailOperationContext,
@@ -1084,6 +1116,8 @@ export interface MailProviderMessageInput {
   readonly replyToProviderMessageId?: string;
   /** Provider message used as the forward source, resolved by Mail Core. */
   readonly forwardOfProviderMessageId?: string;
+  /** Preserve the supplied forward body while retaining source attachments. */
+  readonly forwardBodyIncluded?: boolean;
 }
 
 export type MailProviderSendResult =
@@ -1091,6 +1125,7 @@ export type MailProviderSendResult =
       readonly status: 'accepted';
       readonly providerMessageId?: string;
       readonly internetMessageId?: string;
+      readonly sentCopyError?: MailProviderError;
     }
   | {
       readonly status: 'failed';
@@ -1325,6 +1360,11 @@ export interface MailScheduledSendTaskPayload {
   readonly submissionId: string;
 }
 
+export interface MailRequestSyncPayload {
+  readonly version: 1;
+  readonly accountId: string;
+}
+
 interface MailOutboxRecordBase {
   readonly id: string;
   readonly aggregateId: string;
@@ -1348,6 +1388,10 @@ export type MailOutboxRecord = MailOutboxRecordBase &
         readonly type: 'sendScheduledMail';
         readonly payload: MailScheduledSendTaskPayload;
       }
+    | {
+        readonly type: 'requestMailboxSync';
+        readonly payload: MailRequestSyncPayload;
+      }
   );
 
 export interface MailCreateSyncRunInput {
@@ -1359,6 +1403,11 @@ export interface MailCreateSyncRunInput {
 }
 
 export interface MailStoredSubmission extends MailSubmission {
+  readonly recipients?: readonly MailAddress[];
+  readonly subject?: string;
+  readonly bulk?: boolean;
+  readonly batchId?: string;
+  readonly hasComposeInput?: boolean;
   readonly requestFingerprint: string;
   readonly createdAt: string;
   readonly updatedAt: string;
@@ -1546,7 +1595,11 @@ export interface MailStore {
   createSyncRun(input: MailCreateSyncRunInput): Promise<MailSyncRun>;
   findActiveSyncRun(accountId: string): Promise<MailSyncRun | undefined>;
   getSyncRun(syncRunId: string): Promise<MailSyncRun | undefined>;
-  listSyncRuns(userId: string): Promise<readonly MailSyncRun[]>;
+  listSyncRuns(
+    userId: string,
+    offset?: number,
+    limit?: number,
+  ): Promise<readonly MailSyncRun[]>;
   listAllSyncRuns(): Promise<readonly MailSyncRun[]>;
   cancelSyncRun(syncRunId: string): Promise<MailSyncRun | undefined>;
   claimSyncRun(
@@ -1572,7 +1625,17 @@ export interface MailStore {
     accountId: string,
     idempotencyKey: string,
   ): Promise<MailStoredSubmission | undefined>;
-  listSubmissions(userId: string): Promise<readonly MailStoredSubmission[]>;
+  listSubmissions(
+    userId: string,
+    bulkOnly?: boolean,
+    offset?: number,
+    groupByBatch?: boolean,
+    limit?: number,
+  ): Promise<readonly MailStoredSubmission[]>;
+  transitionSubmission(
+    submissionId: string,
+    action: 'retry' | 'cancel',
+  ): Promise<MailStoredSubmission>;
   listAllSubmissions(): Promise<readonly MailStoredSubmission[]>;
   createSubmission(
     submission: MailSubmission,
@@ -1629,4 +1692,16 @@ export function defineMailProviderDefinition<
   definition: MailProviderDefinition<TConfig>,
 ): MailProviderDefinition<TConfig> {
   return definition;
+}
+
+/** Background delivery and synchronization lifecycle owned by the Mail provider. */
+export interface MailRuntimeService {
+  start(): void;
+  scheduleAutomaticSync(): void;
+  createAutomaticSyncRuns(): Promise<number>;
+  schedulePushSync(accountId: string): Promise<boolean>;
+  schedulePushSyncBatch(accounts: readonly MailAccount[]): Promise<void>;
+  kick(): void;
+  publishPending(): Promise<void>;
+  close(): Promise<void>;
 }

@@ -1,8 +1,9 @@
-import { RefreshCw, Search } from 'lucide-react';
+import { ChevronLeft, ChevronRight, RefreshCw, Search } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { useTranslation } from '@nocobase/i18n/client';
 
+import { MailManagementMessageDetail } from '../components/mail-management-message-detail.js';
 import { MailDevPageShell } from '../components/index.js';
 import { Button } from '../components/ui/button.js';
 import { Card } from '../components/ui/card.js';
@@ -18,7 +19,7 @@ import {
 } from '../mail-client.js';
 import { useMailClient } from '../runtime.js';
 
-const PAGE_SIZE = 100;
+const PAGE_SIZES = [20, 50, 100] as const;
 
 interface ManagedFolderOption extends Pick<MailFolder, 'name' | 'type'> {
   readonly accountId: string;
@@ -41,9 +42,14 @@ export default function MailManagementPage(): ReactElement {
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [messages, setMessages] = useState<readonly MailMessageSummary[]>([]);
+  const [detailMessage, setDetailMessage] = useState<MailMessageSummary>();
   const [nextCursor, setNextCursor] = useState<string>();
+  const [pageIndex, setPageIndex] = useState(0);
+  const [pageSize, setPageSize] = useState<number>(20);
+  const [pageCursors, setPageCursors] = useState<
+    readonly (string | undefined)[]
+  >([undefined]);
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string>();
   const [actionError, setActionError] = useState<string>();
   const [selectedKeys, setSelectedKeys] = useState<ReadonlySet<string>>(
@@ -122,10 +128,15 @@ export default function MailManagementPage(): ReactElement {
         if (requestIdRef.current !== requestId) return undefined;
         setLoading(true);
         setError(undefined);
+        setSelectedKeys(new Set());
+        setMessages([]);
+        setPageIndex(0);
+        setPageCursors([undefined]);
+        setNextCursor(undefined);
         return mail.listManagedMessages({
           accountId: accountId || undefined,
           query: debouncedQuery.trim() || undefined,
-          limit: PAGE_SIZE,
+          limit: pageSize,
         });
       })
       .then((page) => {
@@ -139,7 +150,10 @@ export default function MailManagementPage(): ReactElement {
       .finally(() => {
         if (requestIdRef.current === requestId) setLoading(false);
       });
-  }, [accountId, debouncedQuery, mail, reloadVersion, reportError]);
+    return () => {
+      requestIdRef.current += 1;
+    };
+  }, [accountId, debouncedQuery, mail, pageSize, reloadVersion, reportError]);
 
   const accountNames = useMemo(
     () => new Map(accounts.map((account) => [account.id, account.address])),
@@ -149,6 +163,9 @@ export default function MailManagementPage(): ReactElement {
   const selectedMessages = useMemo(
     () => messages.filter((message) => selectedKeys.has(messageKey(message))),
     [messages, selectedKeys],
+  );
+  const selectedNonDraftMessages = selectedMessages.filter(
+    (message) => !message.draft,
   );
   const allSelected =
     messages.length > 0 && selectedMessages.length === messages.length;
@@ -185,7 +202,7 @@ export default function MailManagementPage(): ReactElement {
     if (selectAllRef.current) {
       selectAllRef.current.indeterminate = someSelected;
     }
-  }, [someSelected]);
+  }, [loading, someSelected]);
 
   const toggleMessage = (message: MailMessageSummary): void => {
     const key = messageKey(message);
@@ -210,7 +227,11 @@ export default function MailManagementPage(): ReactElement {
       readonly folderId?: string;
     } = {},
   ): void => {
-    if (selectedMessages.length === 0 || actionBusy) return;
+    const actionMessages =
+      action === 'markRead' || action === 'markUnread'
+        ? selectedNonDraftMessages
+        : selectedMessages;
+    if (actionMessages.length === 0 || actionBusy || loading) return;
     if (action === 'move' && !options.folderId) {
       setActionError(
         t('dev.management.selectFolder', {
@@ -223,9 +244,9 @@ export default function MailManagementPage(): ReactElement {
     if (
       !window.confirm(
         t('dev.management.confirmAction', {
-          defaultValue: `Apply “${actionLabel}” to ${selectedMessages.length} selected messages?`,
+          defaultValue: `Apply “${actionLabel}” to ${actionMessages.length} selected messages?`,
           action: actionLabel,
-          count: selectedMessages.length,
+          count: actionMessages.length,
         }),
       )
     ) {
@@ -248,7 +269,7 @@ export default function MailManagementPage(): ReactElement {
     void mail
       .manageMessages({
         action,
-        items: selectedMessages.map((message) => ({
+        items: actionMessages.map((message) => ({
           accountId: message.accountId,
           messageId: message.id,
         })),
@@ -259,11 +280,14 @@ export default function MailManagementPage(): ReactElement {
       })
       .then((result) => {
         setSelectedKeys(
-          new Set(
-            result.items
+          new Set([
+            ...selectedMessages
+              .filter((message) => !actionMessages.includes(message))
+              .map(messageKey),
+            ...result.items
               .filter((item) => item.status === 'failed')
               .map((item) => `${item.accountId}:${item.messageId}`),
-          ),
+          ]),
         );
         if (result.failed > 0) {
           setActionError(
@@ -274,33 +298,54 @@ export default function MailManagementPage(): ReactElement {
             }),
           );
         }
-        setReloadVersion((version) => version + 1);
+        changePage(pageIndex, false);
       })
       .catch(reportError)
       .finally(() => setActionBusy(undefined));
   };
 
-  const loadMore = (): void => {
-    if (!nextCursor || loadingMore) return;
-    const requestId = requestIdRef.current;
-    setLoadingMore(true);
+  const changePage = (targetIndex: number, clearSelection = true): void => {
+    if (
+      loading ||
+      targetIndex < 0 ||
+      targetIndex > pageIndex + 1 ||
+      (targetIndex > pageIndex && !nextCursor)
+    )
+      return;
+    const cursor =
+      targetIndex > pageIndex ? nextCursor : pageCursors[targetIndex];
+    const requestId = ++requestIdRef.current;
+    setLoading(true);
+    setError(undefined);
+    if (clearSelection) {
+      setSelectedKeys(new Set());
+      setActionError(undefined);
+    }
     void mail
       .listManagedMessages({
         accountId: accountId || undefined,
         query: debouncedQuery.trim() || undefined,
-        cursor: nextCursor,
-        limit: PAGE_SIZE,
+        cursor,
+        limit: pageSize,
       })
       .then((page) => {
         if (requestIdRef.current !== requestId) return;
-        setMessages((current) => [...current, ...page.items]);
+        setMessages(page.items);
         setNextCursor(page.nextCursor);
+        setPageIndex(targetIndex);
+        setPageCursors((current) => [...current.slice(0, targetIndex), cursor]);
+        setSelectedKeys(
+          (current) =>
+            new Set(
+              page.items.map(messageKey).filter((key) => current.has(key)),
+            ),
+        );
       })
       .catch((cause: unknown) => {
         if (requestIdRef.current === requestId) reportError(cause);
       })
       .finally(() => {
-        if (requestIdRef.current === requestId) setLoadingMore(false);
+        if (requestIdRef.current === requestId) setLoading(false);
       });
   };
 
@@ -317,7 +362,7 @@ export default function MailManagementPage(): ReactElement {
       title={t('dev.managementTitle', { defaultValue: 'Mail management' })}
       actions={
         <Button
-          disabled={loading}
+          disabled={loading || Boolean(actionBusy)}
           onClick={() => {
             setSelectedKeys(new Set());
             setActionError(undefined);
@@ -340,6 +385,7 @@ export default function MailManagementPage(): ReactElement {
               defaultValue: 'Account',
             })}
             className='sm:w-72'
+            disabled={Boolean(actionBusy)}
             onChange={(event) => {
               setSelectedKeys(new Set());
               setActionError(undefined);
@@ -368,6 +414,7 @@ export default function MailManagementPage(): ReactElement {
                 defaultValue: 'Search subject or preview',
               })}
               className='pl-9'
+              disabled={Boolean(actionBusy)}
               onChange={(event) => {
                 setSelectedKeys(new Set());
                 setActionError(undefined);
@@ -381,7 +428,7 @@ export default function MailManagementPage(): ReactElement {
           </label>
         </section>
 
-        {messages.length > 0 ? (
+        {!loading && messages.length > 0 ? (
           <section className='flex flex-col gap-3 rounded-2xl border bg-background p-3 shadow-sm lg:flex-row lg:items-center'>
             <label className='flex items-center gap-2 text-sm text-muted-foreground'>
               <input
@@ -401,7 +448,9 @@ export default function MailManagementPage(): ReactElement {
             </label>
             <div className='flex flex-1 flex-wrap items-center gap-2'>
               <Button
-                disabled={selectedMessages.length === 0 || Boolean(actionBusy)}
+                disabled={
+                  selectedNonDraftMessages.length === 0 || Boolean(actionBusy)
+                }
                 onClick={() => runAction('markRead')}
                 variant='outline'
               >
@@ -410,7 +459,9 @@ export default function MailManagementPage(): ReactElement {
                 })}
               </Button>
               <Button
-                disabled={selectedMessages.length === 0 || Boolean(actionBusy)}
+                disabled={
+                  selectedNonDraftMessages.length === 0 || Boolean(actionBusy)
+                }
                 onClick={() => runAction('markUnread')}
                 variant='outline'
               >
@@ -520,7 +571,19 @@ export default function MailManagementPage(): ReactElement {
             </div>
           ) : (
             <div className='overflow-x-auto'>
-              <table className='w-full min-w-[1450px] text-sm'>
+              <table className='w-full min-w-[101rem] table-fixed text-sm'>
+                <colgroup>
+                  <col className='w-20' />
+                  <col className='w-44' />
+                  <col className='w-48' />
+                  <col className='w-48' />
+                  <col className='w-72' />
+                  <col className='w-28' />
+                  <col className='w-40' />
+                  <col className='w-28' />
+                  <col className='w-44' />
+                  <col className='w-32' />
+                </colgroup>
                 <thead className='border-b bg-muted/50 text-left text-xs text-muted-foreground'>
                   <tr>
                     <Header
@@ -536,7 +599,11 @@ export default function MailManagementPage(): ReactElement {
                     <Header label={t('dev.management.folders')} />
                     <Header label={t('dev.management.attachments')} />
                     <Header label={t('dev.management.time')} />
-                    <Header label={t('dev.management.providerMessageId')} />
+                    <Header
+                      label={t('dev.management.operations', {
+                        defaultValue: 'Actions',
+                      })}
+                    />
                   </tr>
                 </thead>
                 <tbody className='divide-y'>
@@ -562,7 +629,7 @@ export default function MailManagementPage(): ReactElement {
                       </Cell>
                       <Cell>{formatAddress(message.from)}</Cell>
                       <Cell>{formatAddresses(message.to)}</Cell>
-                      <td className='max-w-80 px-4 py-3'>
+                      <td className='break-words px-4 py-3'>
                         <p className='font-medium'>
                           {message.subject || t('workspace.noSubject')}
                         </p>
@@ -573,14 +640,16 @@ export default function MailManagementPage(): ReactElement {
                         ) : null}
                       </td>
                       <td className='px-4 py-3'>
-                        <div className='flex max-w-40 flex-wrap gap-1'>
-                          <Status>
-                            {t(
-                              message.read
-                                ? 'dev.management.read'
-                                : 'dev.management.unread',
-                            )}
-                          </Status>
+                        <div className='flex flex-wrap gap-1'>
+                          {!message.draft ? (
+                            <Status>
+                              {t(
+                                message.read
+                                  ? 'dev.management.read'
+                                  : 'dev.management.unread',
+                              )}
+                            </Status>
+                          ) : null}
                           {message.starred ? (
                             <Status>{t('dev.management.starred')}</Status>
                           ) : null}
@@ -609,8 +678,16 @@ export default function MailManagementPage(): ReactElement {
                       <Cell>
                         {formatTimestamp(message.receivedAt ?? message.sentAt)}
                       </Cell>
-                      <td className='max-w-64 break-all px-4 py-3 font-mono text-xs text-muted-foreground'>
-                        {message.providerMessageId}
+                      <td className='px-4 py-3'>
+                        <Button
+                          variant='ghost'
+                          className='h-8 px-2 text-xs'
+                          onClick={() => setDetailMessage(message)}
+                        >
+                          {t('dev.management.viewDetails', {
+                            defaultValue: 'View details',
+                          })}
+                        </Button>
                       </td>
                     </tr>
                   ))}
@@ -618,41 +695,91 @@ export default function MailManagementPage(): ReactElement {
               </table>
             </div>
           )}
-          {nextCursor ? (
-            <div className='border-t p-3'>
+          <nav
+            aria-label={t('workspace.pagination', {
+              defaultValue: 'Message pages',
+            })}
+            className='flex flex-wrap items-center justify-between gap-3 border-t p-3'
+          >
+            <span
+              aria-live='polite'
+              className='text-sm tabular-nums text-muted-foreground'
+            >
+              {t('workspace.pageNumber', {
+                page: pageIndex + 1,
+                defaultValue: `Page ${pageIndex + 1}`,
+              })}
+            </span>
+            <div className='flex items-center gap-2'>
+              <NativeSelect
+                aria-label={t('dev.management.pageSize', {
+                  defaultValue: 'Messages per page',
+                })}
+                className='w-auto'
+                disabled={loading || Boolean(actionBusy)}
+                onChange={(event) => {
+                  setSelectedKeys(new Set());
+                  setActionError(undefined);
+                  setPageSize(Number(event.target.value));
+                }}
+                value={pageSize}
+              >
+                {PAGE_SIZES.map((size) => (
+                  <option key={size} value={size}>
+                    {t('dev.management.perPage', {
+                      count: size,
+                      defaultValue: `${size} per page`,
+                    })}
+                  </option>
+                ))}
+              </NativeSelect>
               <Button
-                className='w-full'
-                disabled={loadingMore}
-                onClick={loadMore}
+                disabled={loading || Boolean(actionBusy) || pageIndex === 0}
+                onClick={() => changePage(pageIndex - 1)}
                 variant='outline'
               >
-                {t('dev.management.loadMore', {
-                  defaultValue: 'Load more messages',
-                })}
+                <ChevronLeft aria-hidden='true' className='size-4' />
+                {t('workspace.previousPage', { defaultValue: 'Previous page' })}
+              </Button>
+              <Button
+                disabled={loading || Boolean(actionBusy) || !nextCursor}
+                onClick={() => changePage(pageIndex + 1)}
+                variant='outline'
+              >
+                {t('workspace.nextPage', { defaultValue: 'Next page' })}
+                <ChevronRight aria-hidden='true' className='size-4' />
               </Button>
             </div>
-          ) : null}
+          </nav>
         </Card>
       </div>
+      {detailMessage ? (
+        <MailManagementMessageDetail
+          key={messageKey(detailMessage)}
+          selected={detailMessage}
+          accountName={
+            accountNames.get(detailMessage.accountId) ?? detailMessage.accountId
+          }
+          onClose={() => setDetailMessage(undefined)}
+        />
+      ) : null}
     </MailDevPageShell>
   );
 }
 
 function Header({ label }: { readonly label: string }): ReactElement {
-  return <th className='px-4 py-3 font-medium'>{label}</th>;
+  return <th className='px-4 py-3 font-medium whitespace-nowrap'>{label}</th>;
 }
 
 function Cell({ children }: { readonly children: ReactNode }): ReactElement {
   return (
-    <td className='max-w-64 break-words px-4 py-3 text-muted-foreground'>
-      {children}
-    </td>
+    <td className='break-words px-4 py-3 text-muted-foreground'>{children}</td>
   );
 }
 
 function Status({ children }: { readonly children: ReactNode }): ReactElement {
   return (
-    <span className='rounded-full border bg-background px-2 py-0.5 text-xs'>
+    <span className='rounded-full border bg-background px-2 py-0.5 text-xs whitespace-nowrap'>
       {children}
     </span>
   );

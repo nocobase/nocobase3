@@ -7,6 +7,19 @@ import {
 } from '../client/lib/mail-template.js';
 
 describe('mail template rendering', () => {
+  it('preserves exact font sizes while removing other inline CSS', () => {
+    expect(sanitizeMailHtml('<font size="7">Legacy</font>')).toBe(
+      '<font style="font-size: 48px;">Legacy</font>',
+    );
+    expect(
+      sanitizeMailHtml(
+        '<font style="font-size:12px;color:red">Small</font><span style="font-size:14px;background-image:url(https://example.com/track)">Body</span><span style="font-size:999px">Invalid</span>',
+      ),
+    ).toBe(
+      '<font style="font-size: 12px;">Small</font><span style="font-size: 14px;">Body</span><span>Invalid</span>',
+    );
+  });
+
   it('resolves nested record values while preserving unknown placeholders', () => {
     expect(
       interpolateMailTemplate(

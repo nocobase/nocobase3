@@ -27,6 +27,15 @@ describe('Mail OAuth callback route', () => {
 
     const missing = await router.request('/mail/oauth/callback');
     expect(missing.status).toBe(400);
+    expect(await missing.json()).toEqual({
+      error: {
+        code: 'MAIL_AUTHORIZATION_STATE_REQUIRED',
+        message: 'Mail authorization state is required.',
+        ns: '@nocobase/app-plugin-mail',
+        key: 'errors.authorizationStateRequired',
+        params: {},
+      },
+    });
     expect(completeAuthorization).not.toHaveBeenCalled();
 
     const completed = await router.request(

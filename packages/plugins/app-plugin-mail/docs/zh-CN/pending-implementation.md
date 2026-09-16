@@ -78,7 +78,7 @@ keywords: 'NocoBase,邮件插件,待实现,批量发件,邮件管理,权限'
 
 ## 七、本轮已实现的增强能力
 
-- [x] [P1][UI][API][SRV] MAIL-PENDING-SYNC-001：账号页支持配置每个账号的自动同步间隔，服务端按上次同步时间判断到期，Push、手动同步和自动同步仍由活动任务约束去重
+- [x] [P1][UI][API][SRV] MAIL-PENDING-SYNC-001：通过 config 统一配置所有账号的自动同步间隔，账号页不提供配置入口，服务端按上次同步时间判断到期，Push、手动同步和自动同步仍由活动任务约束去重
 - [x] [P1][UI][SEC] MAIL-PENDING-CONTENT-001：邮件 HTML 正文中的 CID 内联图片只匹配当前邮件的 inline 附件，并通过当前用户可校验的附件接口加载
 - [x] [P1][UI][API] MAIL-PENDING-SIGNATURE-001：签名管理支持安全富文本编辑、字号、标题、链接和插入图片，并同时保存 HTML 与纯文本
 - [x] [P1][PROVIDER][DOC] MAIL-PENDING-PROVIDER-001：Gmail、Microsoft 和 IMAP/SMTP 具备 Provider 兼容性契约测试，并提供第三方 Provider 开发指南

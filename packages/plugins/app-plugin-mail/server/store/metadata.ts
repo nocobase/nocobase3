@@ -84,10 +84,9 @@ export class MailMetadataStore {
       .selectAll()
       .where('accountId', '=', accountId)
       .orderBy('name', 'asc')
+      .orderBy('id', 'asc')
       .execute<SignatureRow>();
-    return rows
-      .map(fromSignatureRow)
-      .sort((left, right) => Number(right.isDefault) - Number(left.isDefault));
+    return rows.map(fromSignatureRow);
   }
 
   public async getSignature(

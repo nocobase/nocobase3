@@ -2,6 +2,7 @@ import type { LocaleResource } from '@nocobase/i18n';
 
 const enUS = {
   nav: {
+    devLogs: 'Mail logs',
     myAccounts: 'My mailboxes',
     mail: 'Mail',
     unread: '{{count}} unread messages',
@@ -14,7 +15,7 @@ const enUS = {
     devAccounts: 'Mail accounts',
     devCenter: 'Mail center',
     devManagement: 'Mail management',
-    devSend: 'Send mail',
+    devSend: 'Compose mail',
     devBulkSend: 'Bulk send',
   },
   actions: {
@@ -22,11 +23,15 @@ const enUS = {
     reloadAccounts: 'Reload accounts',
   },
   workspace: {
+    pagination: 'Message pages',
+    previousPage: 'Previous page',
+    nextPage: 'Next page',
+    pageNumber: 'Page {{page}}',
+    pageMessageCount: '{{count}} on this page',
     submissionUnknown:
       'Delivery could not be confirmed. Check your provider before sending again.',
     submissionFailed:
       'One or more messages could not be sent. Check the delivery result before retrying.',
-    backToMail: 'Back to mail',
     keepEditing: 'Keep editing',
     closeDraftTitle: 'Close this message?',
     discardChanges: 'Discard unsaved changes',
@@ -103,6 +108,7 @@ const enUS = {
     subject: 'Subject',
     messageBody: 'Write a message…',
     messageBodyLabel: 'Message body',
+    forwardedMessage: 'Forwarded message',
     editor: {
       toolbar: 'Formatting',
       bold: 'Bold',
@@ -158,7 +164,6 @@ const enUS = {
     reply: 'Reply',
     forward: 'Forward',
     editDraft: 'Edit draft',
-    sendIndividually: 'Send one private message per recipient (up to 100)',
     applyTemplate: 'Apply template',
     uploadingAttachment: 'Uploading…',
     addAttachment: 'Add attachment',
@@ -166,8 +171,14 @@ const enUS = {
     labels: 'Labels',
     note: 'Note',
     notePlaceholder: 'Add a private note…',
+    more: 'More actions',
     saveNote: 'Save note',
     todo: 'To do',
+    markTodo: 'Mark as to do',
+    cancelTodo: 'Remove to-do mark',
+    completeTodo: 'Mark as completed',
+    editNote: 'Edit note',
+    addLabel: 'Add label',
     signature: 'Signature',
     template: 'Template',
     defaultSignature: 'Default signature',
@@ -184,12 +195,19 @@ const enUS = {
     new: 'New template',
     edit: 'Edit template',
     name: 'Template name',
-    delete: 'Delete',
+    delete: 'Delete template',
+    deleteTitle: 'Delete template?',
+    deleteDescription:
+      'This permanently deletes the template. This action cannot be undone.',
+    deleting: 'Deleting…',
+    close: 'Close',
+    deleteAction: 'Delete {{name}}',
+    add: 'Add template',
     save: 'Save template',
     cancel: 'Cancel',
     saving: 'Saving…',
     variablesHelp:
-      'Use placeholders such as {{record.customer.name}}. Values are bound when the template is applied.',
+      'Use placeholders such as {{record.customer.name}}. The page embedding this component must provide the corresponding data; unmatched placeholders remain unchanged.',
   },
   labels: {
     list: 'Labels',
@@ -259,13 +277,9 @@ const enUS = {
       emailAddress: 'Email address',
       username: 'Username',
       password: 'Password',
-      displayName: 'Display name',
+      displayName: 'Sender name (optional)',
     },
     accounts: {
-      syncInterval: 'Automatic sync interval in minutes',
-      minutes: 'min',
-      saving: 'Saving…',
-      save: 'Save',
       title: 'All connected accounts',
       description: 'View mailboxes connected by all users.',
       ownerColumn: 'Owner',
@@ -307,6 +321,11 @@ const enUS = {
       default: 'Default',
       makeDefault: 'Make default',
       delete: 'Delete signature',
+      deleteTitle: 'Delete signature?',
+      deleteDescription:
+        'This permanently deletes the signature. This action cannot be undone.',
+      deleting: 'Deleting…',
+      close: 'Close',
     },
     syncLogs: {
       eyebrow: 'Mail',
@@ -372,7 +391,30 @@ const enUS = {
     },
   },
   dev: {
-    automaticSyncColumn: 'Automatic sync',
+    sendHub: {
+      sendSeparately: 'Send separately',
+      bulkNoCopies:
+        'Separate sending does not support Cc or Bcc. Clear them to send separately.',
+      bulkHelp:
+        'Send separately creates an independent message for each recipient (up to 100); duplicate addresses are removed.',
+
+      title: 'Compose mail',
+      description:
+        'Write once, then send to all recipients together or separately.',
+      compose: 'Compose',
+      bulk: 'Bulk send',
+      bulkSubmitted: 'Batch submitted. View delivery progress in Mail logs.',
+      accountHelp:
+        'Close or save the current message before switching accounts.',
+    },
+    logsHub: {
+      title: 'Mail logs',
+      description:
+        'Review sending, batch delivery and mailbox synchronization in one place.',
+      send: 'Sending',
+      bulk: 'Bulk sending',
+      sync: 'Synchronization',
+    },
     eyebrow: 'Development tools',
     title: 'Mail playground',
     description:
@@ -413,6 +455,16 @@ const enUS = {
     syncLogsCategory: 'Runtime history',
     sendLogsCategory: 'Delivery history',
     management: {
+      pageSize: 'Messages per page',
+      perPage: '{{count}} per page',
+      close: 'Close',
+      operations: 'Actions',
+      viewDetails: 'View details',
+      details: 'Message details',
+      retryDetails: 'Retry',
+      cc: 'Cc',
+      bcc: 'Bcc',
+
       allAccounts: 'All accounts',
       search: 'Search subject, preview, sender, or recipient',
       empty: 'No synchronized messages found.',
@@ -454,6 +506,21 @@ const enUS = {
       },
     },
     bulkSend: {
+      batch: 'Batch / recipient',
+      expandBatch: 'Expand batch',
+      collapseBatch: 'Collapse batch',
+      cancelBatch: 'Cancel pending',
+      previousLogs: 'Previous page',
+      nextLogs: 'Next page',
+
+      logsTitle: 'Bulk send logs',
+      logsHelp:
+        'Each batch is a parent record. Expand it to view recipient details. Pending statuses refresh automatically. Provider acceptance does not confirm delivery to the recipient.',
+      logsLoading: 'Loading send logs…',
+      logActions: 'Actions',
+      retry: 'Retry',
+      cancelSend: 'Cancel sending',
+
       category: 'Operations',
       description:
         'Create one independent submission for each recipient and review every result.',
@@ -563,9 +630,11 @@ const enUS = {
       cancelled: 'Cancelled',
     },
     submission: {
+      cancelled: 'Cancelled',
+
       pending: 'Pending',
       submitting: 'Submitting',
-      accepted: 'Accepted',
+      accepted: 'Accepted by provider',
       failed: 'Failed',
       unknown: 'Unknown',
     },

@@ -1,5 +1,6 @@
 // shadcn base-nova source adapted for declaration-emitting ESM builds.
 import { Menu as MenuPrimitive } from '@base-ui/react/menu';
+import { Check } from 'lucide-react';
 import type { ReactElement } from 'react';
 
 import { cn } from '../../lib/utils.js';
@@ -57,5 +58,26 @@ export function DropdownMenuItem({
       )}
       {...props}
     />
+  );
+}
+
+export function DropdownMenuCheckboxItem({
+  className,
+  children,
+  ...props
+}: MenuPrimitive.CheckboxItem.Props): ReactElement {
+  return (
+    <MenuPrimitive.CheckboxItem
+      className={cn(
+        'relative flex min-w-0 cursor-default items-center gap-2 rounded-md py-1.5 pr-8 pl-2 text-sm outline-none select-none focus:bg-accent focus:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50',
+        className,
+      )}
+      {...props}
+    >
+      {children}
+      <MenuPrimitive.CheckboxItemIndicator className='pointer-events-none absolute right-2'>
+        <Check aria-hidden='true' className='size-4' />
+      </MenuPrimitive.CheckboxItemIndicator>
+    </MenuPrimitive.CheckboxItem>
   );
 }

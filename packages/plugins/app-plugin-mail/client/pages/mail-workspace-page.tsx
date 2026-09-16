@@ -1,15 +1,18 @@
 import {
+  createForwardQuote,
+  readDraftComposerBody,
+} from '../lib/mail-forward-content.js';
+import {
   EMPTY_COMPOSER,
   type ComposerState,
 } from '../lib/mail-composer-state.js';
 import {
-  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
   Inbox,
-  Menu,
   PenLine,
   RefreshCw,
   Search,
-  Settings2,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
@@ -29,10 +32,7 @@ import {
 } from '../components/index.js';
 import { Button } from '../components/ui/button.js';
 import { Input } from '../components/ui/input.js';
-import {
-  plainTextToMailHtml,
-  type MailTemplateVariables,
-} from '../lib/mail-template.js';
+import { type MailTemplateVariables } from '../lib/mail-template.js';
 import { mergeMailFolders } from '../lib/mail-folders.js';
 import {
   mailErrorMessage,
@@ -47,13 +47,6 @@ import {
   type MailSyncRunView,
 } from '../mail-client.js';
 import { useMailClient } from '../runtime.js';
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from '../components/ui/sheet.js';
-import { cn } from '../lib/utils.js';
 import { MAIL_PLUGIN_NS } from '../namespace.js';
 
 export interface MailWorkspacePageProps {
@@ -83,12 +76,15 @@ export default function MailWorkspacePage({
   const [query, setQuery] = useState('');
   const [messages, setMessages] = useState<readonly MailMessageSummary[]>([]);
   const [nextCursor, setNextCursor] = useState<string>();
+  const [pageCursors, setPageCursors] = useState<
+    readonly (string | undefined)[]
+  >([undefined]);
+  const [pageIndex, setPageIndex] = useState(0);
+  const [listVersion, setListVersion] = useState(0);
   const [selected, setSelected] = useState<MailMessageSummary>();
   const [conversation, setConversation] = useState<readonly MailMessage[]>([]);
   const [conversationCursor, setConversationCursor] = useState<string>();
   const [loadingAccounts, setLoadingAccounts] = useState(true);
-  const [navigationOpen, setNavigationOpen] = useState(false);
-  const [reading, setReading] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [loadingConversation, setLoadingConversation] = useState(false);
   const [syncRuns, setSyncRuns] = useState<
@@ -100,6 +96,7 @@ export default function MailWorkspacePage({
   const [notice, setNotice] = useState<string>();
   const [reloadVersion, setReloadVersion] = useState(0);
   const conversationRequestIdRef = useRef(0);
+  const markingReadRef = useRef(new Set<string>());
   const messageRequestIdRef = useRef(0);
   const accountIdRef = useRef('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -330,6 +327,11 @@ export default function MailWorkspacePage({
     [accountId, debouncedQuery, folderId, labelId, smartView],
   );
 
+  const loadedMessageQueryRef = useRef<typeof messageQuery | undefined>(
+    undefined,
+  );
+  const messagePageRequestRef = useRef<number | undefined>(undefined);
+
   useEffect(() => {
     const requestedAccountIds = accountId
       ? [accountId]
@@ -388,10 +390,19 @@ export default function MailWorkspacePage({
     const requestId = messageRequestIdRef.current + 1;
     messageRequestIdRef.current = requestId;
     conversationRequestIdRef.current += 1;
+    loadedMessageQueryRef.current = undefined;
     void Promise.resolve()
       .then(() => {
         if (messageRequestIdRef.current !== requestId) return undefined;
         setLoadingMessages(true);
+        setMessages([]);
+        setNextCursor(undefined);
+        setPageCursors([undefined]);
+        setPageIndex(0);
+        setListVersion((version) => version + 1);
+        setSelected(undefined);
+        setConversation([]);
+        setConversationCursor(undefined);
         setLoadingConversation(false);
         setError(undefined);
         return mail.listMessages(messageQuery);
@@ -399,6 +410,7 @@ export default function MailWorkspacePage({
       .then(
         (page) => {
           if (!page || messageRequestIdRef.current !== requestId) return;
+          loadedMessageQueryRef.current = messageQuery;
           setMessages(page.items);
           setNextCursor(page.nextCursor);
           setSelected(undefined);
@@ -416,12 +428,65 @@ export default function MailWorkspacePage({
       );
   }, [accountId, accounts, mail, messageQuery, reloadVersion, requestError]);
 
+  const markOpenedMessagesRead = useCallback(
+    (openedMessages: readonly MailMessage[], requestId: number): void => {
+      for (const message of openedMessages) {
+        const key = `${message.accountId}:${message.id}`;
+        if (
+          message.read ||
+          message.draft ||
+          markingReadRef.current.has(key) ||
+          !accounts.some(
+            (account) =>
+              account.id === message.accountId && account.status === 'active',
+          )
+        )
+          continue;
+        markingReadRef.current.add(key);
+        void mail
+          .updateMessage({
+            accountId: message.accountId,
+            messageId: message.id,
+            read: true,
+          })
+          .then((updated) => {
+            const matches = (item: MailMessageSummary): boolean =>
+              item.accountId === updated.accountId && item.id === updated.id;
+            // Patch only read state so other edits made while this request ran survive.
+            setMessages((current) =>
+              current.map((item) =>
+                matches(item) ? { ...item, read: updated.read } : item,
+              ),
+            );
+            setConversation((current) =>
+              current.map((item) =>
+                matches(item) ? { ...item, read: updated.read } : item,
+              ),
+            );
+            setSelected((current) =>
+              current && matches(current)
+                ? { ...current, read: updated.read }
+                : current,
+            );
+            window.dispatchEvent(new Event(MAIL_UNREAD_COUNT_CHANGED_EVENT));
+          })
+          .catch((cause: unknown) => {
+            if (conversationRequestIdRef.current === requestId)
+              requestError(cause);
+          })
+          .finally(() => {
+            markingReadRef.current.delete(key);
+          });
+      }
+    },
+    [accounts, mail, requestError],
+  );
+
   const selectMessage = useCallback(
     (message: MailMessageSummary): void => {
       const requestId = conversationRequestIdRef.current + 1;
       conversationRequestIdRef.current = requestId;
       setSelected(message);
-      setReading(true);
       setConversation([]);
       setConversationCursor(undefined);
       setLoadingConversation(true);
@@ -440,6 +505,7 @@ export default function MailWorkspacePage({
           if (conversationRequestIdRef.current !== requestId) return;
           setConversation(page.items);
           setConversationCursor(page.nextCursor);
+          markOpenedMessagesRead(page.items, requestId);
         })
         .catch((cause: unknown) => {
           if (conversationRequestIdRef.current === requestId)
@@ -450,24 +516,46 @@ export default function MailWorkspacePage({
             setLoadingConversation(false);
         });
     },
-    [mail, requestError],
+    [mail, markOpenedMessagesRead, requestError],
   );
 
-  const loadMoreMessages = (): void => {
-    if (!nextCursor || loadingMessages) return;
+  const changeMessagePage = (targetIndex: number): void => {
+    if (
+      loadingMessages ||
+      loadedMessageQueryRef.current !== messageQuery ||
+      messagePageRequestRef.current === messageRequestIdRef.current ||
+      targetIndex < 0 ||
+      targetIndex > pageIndex + 1 ||
+      (targetIndex > pageIndex && !nextCursor)
+    )
+      return;
+    const cursor =
+      targetIndex > pageIndex ? nextCursor : pageCursors[targetIndex];
     const requestId = messageRequestIdRef.current;
+    messagePageRequestRef.current = requestId;
     setLoadingMessages(true);
+    setError(undefined);
     void mail
-      .listMessages({ ...messageQuery, cursor: nextCursor })
+      .listMessages({ ...messageQuery, cursor })
       .then((page) => {
         if (messageRequestIdRef.current !== requestId) return;
-        setMessages((current) => [...current, ...page.items]);
+        setMessages(page.items);
         setNextCursor(page.nextCursor);
+        setPageCursors((current) => [...current.slice(0, targetIndex), cursor]);
+        setPageIndex(targetIndex);
+        setListVersion((version) => version + 1);
+        setSelected(undefined);
+        setConversation([]);
+        setConversationCursor(undefined);
+        setLoadingConversation(false);
+        conversationRequestIdRef.current += 1;
       })
       .catch((cause: unknown) => {
         if (messageRequestIdRef.current === requestId) requestError(cause);
       })
       .finally(() => {
+        if (messagePageRequestRef.current === requestId)
+          messagePageRequestRef.current = undefined;
         if (messageRequestIdRef.current === requestId)
           setLoadingMessages(false);
       });
@@ -488,6 +576,7 @@ export default function MailWorkspacePage({
         if (conversationRequestIdRef.current !== requestId) return;
         setConversation((current) => [...page.items, ...current]);
         setConversationCursor(page.nextCursor);
+        markOpenedMessagesRead(page.items, requestId);
       })
       .catch((cause: unknown) => {
         if (conversationRequestIdRef.current === requestId) requestError(cause);
@@ -649,8 +738,6 @@ export default function MailWorkspacePage({
         labels: t('workspace.labels', { defaultValue: 'Labels' }),
       }}
       onAccountChange={(value) => {
-        setNavigationOpen(false);
-        setReading(false);
         if (value === accountId) return;
         messageRequestIdRef.current += 1;
         conversationRequestIdRef.current += 1;
@@ -663,24 +750,18 @@ export default function MailWorkspacePage({
         setSmartView('all');
       }}
       onFolderChange={(value) => {
-        setNavigationOpen(false);
-        setReading(false);
         if (value === folderId) return;
         messageRequestIdRef.current += 1;
         conversationRequestIdRef.current += 1;
         setFolderId(value);
       }}
       onLabelChange={(value) => {
-        setNavigationOpen(false);
-        setReading(false);
         if (value === labelId) return;
         messageRequestIdRef.current += 1;
         conversationRequestIdRef.current += 1;
         setLabelId(value);
       }}
       onSmartViewChange={(value) => {
-        setNavigationOpen(false);
-        setReading(false);
         if (value === smartView) return;
         messageRequestIdRef.current += 1;
         conversationRequestIdRef.current += 1;
@@ -700,22 +781,12 @@ export default function MailWorkspacePage({
         ? t('workspace.starredOnly', { defaultValue: 'Starred' })
         : t('workspace.allMail', { defaultValue: 'All mail' }));
   return (
-    <section className='@container/mail flex h-full min-h-[38rem] min-w-0 flex-col bg-background'>
+    <section className='flex h-full min-h-[38rem] min-w-0 flex-col bg-background'>
       <header className='flex shrink-0 flex-wrap items-center gap-3 border-b px-4 py-3'>
-        <Button
-          aria-label={t('workspace.mailboxNavigation', {
-            defaultValue: 'Mailbox navigation',
-          })}
-          className='size-9 px-0 @5xl/mail:hidden'
-          variant='ghost'
-          onClick={() => setNavigationOpen(true)}
-        >
-          <Menu className='size-4' />
-        </Button>
         <h1 className='mr-auto text-lg font-semibold'>
           {t('workspace.title', { defaultValue: 'Mail' })}
         </h1>
-        <label className='relative order-last w-full min-w-0 @3xl/mail:order-none @3xl/mail:w-64'>
+        <label className='relative w-64 min-w-0'>
           <Search
             aria-hidden='true'
             className='absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground'
@@ -729,22 +800,6 @@ export default function MailWorkspacePage({
           />
         </label>
         <div className='flex flex-wrap items-center justify-end gap-2'>
-          {(
-            import.meta as ImportMeta & {
-              readonly env?: { readonly DEV?: boolean };
-            }
-          ).env?.DEV ? (
-            <Button
-              aria-label={t('nav.myAccounts', { defaultValue: 'My mailboxes' })}
-              render={<a href={resolveAppUrl('/dev/mail/accounts')} />}
-              nativeButton={false}
-              role='link'
-              variant='ghost'
-              className='size-9 px-0'
-            >
-              <Settings2 aria-hidden='true' className='size-4' />
-            </Button>
-          ) : null}
           <Button
             disabled={!canSend || Boolean(composerRequest)}
             onClick={() => openComposer(EMPTY_COMPOSER)}
@@ -768,7 +823,7 @@ export default function MailWorkspacePage({
               aria-hidden='true'
               className={`size-4 ${syncing ? 'animate-spin' : ''}`}
             />
-            <span className='hidden @xl/mail:inline'>
+            <span>
               {syncing
                 ? t('workspace.syncing', { defaultValue: 'Synchronizing…' })
                 : syncLabel}
@@ -855,29 +910,22 @@ export default function MailWorkspacePage({
           </div>
         </div>
       ) : (
-        <div className='grid min-h-0 flex-1 grid-cols-1 overflow-hidden @3xl/mail:grid-cols-[20rem_minmax(0,1fr)] @5xl/mail:grid-cols-[13rem_20rem_minmax(0,1fr)]'>
-          <div className='hidden min-h-0 @5xl/mail:block'>
-            {mailboxNavigation}
-          </div>
-          <div
-            className={cn(
-              'min-h-0 flex-col border-r @3xl/mail:flex',
-              reading && selected ? 'hidden' : 'flex',
-            )}
-          >
+        <div className='grid min-h-0 flex-1 grid-cols-[13rem_20rem_minmax(0,1fr)] overflow-hidden'>
+          <div className='min-h-0'>{mailboxNavigation}</div>
+          <div className='flex min-h-0 flex-col border-r'>
             <div className='flex shrink-0 items-center justify-between gap-3 border-b bg-muted/20 px-4 py-3'>
               <h2 className='truncate text-sm font-semibold'>{viewTitle}</h2>
               <span className='text-xs tabular-nums text-muted-foreground'>
-                {t('workspace.loadedCount', {
+                {t('workspace.pageMessageCount', {
                   count: messages.length,
-                  defaultValue: '{{count}} loaded',
+                  defaultValue: `${messages.length} on this page`,
                 })}
-                {nextCursor ? '+' : ''}
               </span>
             </div>
             <MailMessageList
+              key={listVersion}
               accountNames={accountNames}
-              availableLabels={selectedMessageCanUseLabels ? customLabels : []}
+              availableLabels={customLabels}
               labels={{
                 loading: t('workspace.loading', {
                   defaultValue: 'Loading messages…',
@@ -903,27 +951,47 @@ export default function MailWorkspacePage({
               }}
               loading={loadingMessages}
               messages={messages}
-              nextCursor={nextCursor}
-              onLoadMore={loadMoreMessages}
+              onLoadMore={() => changeMessagePage(pageIndex + 1)}
               onSelect={selectMessage}
               showAccount={isAllAccounts}
               selectedMessageId={selected?.id}
             />
-          </div>
-          <div
-            className={cn(
-              'min-h-0 flex-col @3xl/mail:flex',
-              reading && selected ? 'flex' : 'hidden',
-            )}
-          >
-            <div className='shrink-0 border-b px-3 py-2 @3xl/mail:hidden'>
-              <Button variant='ghost' onClick={() => setReading(false)}>
-                <ArrowLeft aria-hidden='true' className='size-4' />
-                {t('workspace.backToMessages', {
-                  defaultValue: 'Back to messages',
-                })}
+            <nav
+              aria-label={t('workspace.pagination', {
+                defaultValue: 'Message pages',
+              })}
+              className='flex shrink-0 items-center justify-between gap-2 border-t px-3 py-2'
+            >
+              <Button
+                variant='ghost'
+                className='h-7 gap-1 rounded-md border-0 px-1.5 text-xs font-normal text-muted-foreground shadow-none'
+                disabled={loadingMessages || pageIndex === 0}
+                onClick={() => changeMessagePage(pageIndex - 1)}
+              >
+                <ChevronLeft aria-hidden='true' className='size-3.5' />
+                {t('workspace.previousPage', { defaultValue: 'Previous page' })}
               </Button>
-            </div>
+              <span
+                aria-live='polite'
+                className='text-xs tabular-nums text-muted-foreground'
+              >
+                {t('workspace.pageNumber', {
+                  page: pageIndex + 1,
+                  defaultValue: `Page ${pageIndex + 1}`,
+                })}
+              </span>
+              <Button
+                variant='ghost'
+                className='h-7 gap-1 rounded-md border-0 px-1.5 text-xs font-normal text-muted-foreground shadow-none'
+                disabled={loadingMessages || !nextCursor}
+                onClick={() => changeMessagePage(pageIndex + 1)}
+              >
+                {t('workspace.nextPage', { defaultValue: 'Next page' })}
+                <ChevronRight aria-hidden='true' className='size-3.5' />
+              </Button>
+            </nav>
+          </div>
+          <div className='flex min-h-0 min-w-0 flex-col'>
             <MailConversationView
               availableLabels={selectedMessageCanUseLabels ? customLabels : []}
               actions={
@@ -987,6 +1055,8 @@ export default function MailWorkspacePage({
                             mode: 'forward',
                             relatedMessageId: message.id,
                             subject: forwardSubject(message.subject),
+                            forwardQuote: createForwardQuote(message),
+                            forwardBodyIncluded: true,
                           },
                           [],
                           message.accountId,
@@ -1003,10 +1073,7 @@ export default function MailWorkspacePage({
                                 cc: formatAddressList(message.cc),
                                 bcc: formatAddressList(message.bcc),
                                 subject: message.subject,
-                                text: message.text ?? '',
-                                html:
-                                  message.html ??
-                                  plainTextToMailHtml(message.text ?? ''),
+                                ...readDraftComposerBody(message),
                                 draftConflict: message.draftConflict,
                               },
                               message.attachments,
@@ -1119,6 +1186,7 @@ export default function MailWorkspacePage({
                   defaultValue: 'Save note',
                 }),
                 todo: t('workspace.todo', { defaultValue: 'To do' }),
+                more: t('workspace.more', { defaultValue: 'More actions' }),
               }}
               loading={loadingConversation}
               messages={conversation}
@@ -1129,24 +1197,6 @@ export default function MailWorkspacePage({
           </div>
         </div>
       )}
-      <Sheet open={navigationOpen} onOpenChange={setNavigationOpen}>
-        <SheetContent
-          side='left'
-          className='w-72 p-0'
-          closeLabel={t('workspace.closeNavigation', {
-            defaultValue: 'Close mailbox navigation',
-          })}
-        >
-          <SheetHeader className='border-b pr-12'>
-            <SheetTitle>
-              {t('workspace.mailboxNavigation', {
-                defaultValue: 'Mailbox navigation',
-              })}
-            </SheetTitle>
-          </SheetHeader>
-          {navigationOpen ? mailboxNavigation : null}
-        </SheetContent>
-      </Sheet>
       {composerRequest ? (
         <MailComposer
           request={composerRequest}

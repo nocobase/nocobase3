@@ -93,6 +93,8 @@ const COMMANDS = [
   ['removeFormat', Eraser, 'clearFormatting'],
 ] as const;
 
+const FONT_SIZES = [10, 12, 14, 16, 18, 24, 32, 48] as const;
+
 export function MailRichTextEditor({
   ariaLabel,
   disabled = false,
@@ -103,6 +105,7 @@ export function MailRichTextEditor({
   value,
 }: MailRichTextEditorProps): ReactElement {
   const editorRef = useRef<HTMLDivElement>(null);
+  const pendingFontSizeRef = useRef('14');
 
   useEffect(() => {
     const editor = editorRef.current;
@@ -114,6 +117,11 @@ export function MailRichTextEditor({
   const emitValue = (): void => {
     const editor = editorRef.current;
     if (!editor) return;
+    // A collapsed selection applies the command to characters typed afterwards.
+    for (const font of editor.querySelectorAll<HTMLElement>('font[size="7"]')) {
+      font.style.fontSize = `${pendingFontSizeRef.current}px`;
+      font.removeAttribute('size');
+    }
     const html = sanitizeMailHtml(editor.innerHTML);
     onChange({ html, text: htmlToPlainText(html) });
   };
@@ -121,6 +129,21 @@ export function MailRichTextEditor({
   const runCommand = (command: string, value?: string): void => {
     editorRef.current?.focus();
     document.execCommand?.(command, false, value);
+    emitValue();
+  };
+
+  const setFontSize = (size: string): void => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    pendingFontSizeRef.current = size;
+    editor.focus();
+    // Reserve the largest legacy size as a marker without changing existing text.
+    for (const font of editor.querySelectorAll<HTMLElement>('font[size="7"]')) {
+      if (!font.style.fontSize) font.style.fontSize = '48px';
+      font.removeAttribute('size');
+    }
+    document.execCommand?.('styleWithCSS', false, 'false');
+    document.execCommand?.('fontSize', false, '7');
     emitValue();
   };
 
@@ -138,9 +161,39 @@ export function MailRichTextEditor({
     <div className='overflow-hidden rounded-lg border bg-background focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50'>
       <div
         aria-label={labels.toolbar}
-        className='flex flex-wrap gap-1 border-b bg-muted/20 p-1'
+        className='flex flex-wrap items-center gap-1 border-b bg-muted/20 p-1'
         role='toolbar'
       >
+        <select
+          aria-label={labels.heading ?? 'Heading level'}
+          className='h-8 rounded-md border-0 bg-transparent px-1 text-xs'
+          defaultValue='p'
+          disabled={disabled}
+          onChange={(event) => runCommand('formatBlock', event.target.value)}
+          title={labels.heading ?? 'Heading level'}
+        >
+          <option value='p'>{labels.normal ?? 'Normal'}</option>
+          <option value='h1'>{labels.heading1 ?? 'Heading 1'}</option>
+          <option value='h2'>{labels.heading2 ?? 'Heading 2'}</option>
+          <option value='h3'>{labels.heading3 ?? 'Heading 3'}</option>
+          <option value='h4'>{labels.heading4 ?? 'Heading 4'}</option>
+          <option value='h5'>{labels.heading5 ?? 'Heading 5'}</option>
+          <option value='h6'>{labels.heading6 ?? 'Heading 6'}</option>
+        </select>
+        <select
+          aria-label={labels.fontSize ?? 'Font size'}
+          className='h-8 rounded-md border-0 bg-transparent px-1 text-xs'
+          defaultValue='14'
+          disabled={disabled}
+          onChange={(event) => setFontSize(event.target.value)}
+          title={labels.fontSize ?? 'Font size'}
+        >
+          {FONT_SIZES.map((size) => (
+            <option key={size} value={String(size)}>
+              {size}
+            </option>
+          ))}
+        </select>
         {COMMANDS.map(([command, Icon, label]) => (
           <Button
             aria-label={labels[label]}
@@ -156,37 +209,6 @@ export function MailRichTextEditor({
             <Icon aria-hidden='true' className='size-4' />
           </Button>
         ))}
-        <select
-          aria-label={labels.fontSize ?? 'Font size'}
-          className='h-8 rounded-md border bg-background px-1 text-xs'
-          defaultValue=''
-          disabled={disabled}
-          onChange={(event) => runCommand('fontSize', event.target.value)}
-          title={labels.fontSize ?? 'Font size'}
-        >
-          <option disabled value=''>
-            {labels.fontSize ?? 'Font size'}
-          </option>
-          <option value='2'>{labels.fontSizeSmall ?? 'Small'}</option>
-          <option value='3'>{labels.fontSizeNormal ?? 'Normal'}</option>
-          <option value='5'>{labels.fontSizeLarge ?? 'Large'}</option>
-        </select>
-        <select
-          aria-label={labels.heading ?? 'Heading level'}
-          className='h-8 rounded-md border bg-background px-1 text-xs'
-          defaultValue='p'
-          disabled={disabled}
-          onChange={(event) => runCommand('formatBlock', event.target.value)}
-          title={labels.heading ?? 'Heading level'}
-        >
-          <option value='p'>{labels.normal ?? 'Normal'}</option>
-          <option value='h1'>{labels.heading1 ?? 'Heading 1'}</option>
-          <option value='h2'>{labels.heading2 ?? 'Heading 2'}</option>
-          <option value='h3'>{labels.heading3 ?? 'Heading 3'}</option>
-          <option value='h4'>{labels.heading4 ?? 'Heading 4'}</option>
-          <option value='h5'>{labels.heading5 ?? 'Heading 5'}</option>
-          <option value='h6'>{labels.heading6 ?? 'Heading 6'}</option>
-        </select>
         <Button
           aria-label={labels.link ?? 'Insert link'}
           className='size-8 px-0'
@@ -232,7 +254,7 @@ export function MailRichTextEditor({
       <div
         aria-label={ariaLabel}
         aria-multiline='true'
-        className='min-h-48 px-3 py-2 text-sm outline-none empty:before:pointer-events-none empty:before:text-muted-foreground empty:before:content-[attr(data-placeholder)]'
+        className='min-h-48 px-3 py-2 text-[14px] outline-none empty:before:pointer-events-none empty:before:text-muted-foreground empty:before:content-[attr(data-placeholder)] [&>div]:my-2 [&_p]:my-2 [&>:first-child]:mt-0 [&>:last-child]:mb-0 [&_h1]:my-3 [&_h1]:text-3xl [&_h1]:font-bold [&_h2]:my-3 [&_h2]:text-2xl [&_h2]:font-bold [&_h3]:my-2 [&_h3]:text-xl [&_h3]:font-bold [&_h4]:my-2 [&_h4]:text-lg [&_h4]:font-bold [&_h5]:my-2 [&_h5]:text-base [&_h5]:font-bold [&_h6]:my-2 [&_h6]:text-sm [&_h6]:font-bold'
         contentEditable={!disabled}
         data-placeholder={placeholder}
         onInput={disabled ? undefined : emitValue}

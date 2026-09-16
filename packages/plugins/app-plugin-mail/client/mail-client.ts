@@ -310,10 +310,16 @@ export class MailClient {
       .then((response) => response.data);
   }
 
-  public listSyncRuns(): Promise<readonly MailSyncRunView[]> {
+  public listSyncRuns(
+    offset = 0,
+    limit?: number,
+  ): Promise<readonly MailSyncRunView[]> {
     return this.client
       .request<DataResponse<readonly MailSyncRunView[]>>({
-        path: 'mail/sync-runs',
+        path:
+          offset || limit !== undefined
+            ? `mail/sync-runs?offset=${offset}${limit !== undefined ? `&limit=${limit}` : ''}`
+            : 'mail/sync-runs',
       })
       .then((response) => response.data);
   }
@@ -332,10 +338,34 @@ export class MailClient {
     );
   }
 
-  public listSubmissions(): Promise<readonly MailSubmissionLogView[]> {
+  public retrySubmission(submissionId: string): Promise<MailSubmissionLogView> {
+    return this.post<MailSubmissionLogView>(
+      `mail/submissions/${encodeURIComponent(submissionId)}/retry`,
+      {},
+    );
+  }
+
+  public cancelSubmission(
+    submissionId: string,
+  ): Promise<MailSubmissionLogView> {
+    return this.post<MailSubmissionLogView>(
+      `mail/submissions/${encodeURIComponent(submissionId)}/cancel`,
+      {},
+    );
+  }
+
+  public listSubmissions(
+    bulkOnly = false,
+    offset = 0,
+    groupByBatch = false,
+    limit?: number,
+  ): Promise<readonly MailSubmissionLogView[]> {
     return this.client
       .request<DataResponse<readonly MailSubmissionLogView[]>>({
-        path: 'mail/submissions',
+        path:
+          bulkOnly || offset || groupByBatch || limit !== undefined
+            ? `mail/submissions?bulkOnly=${String(bulkOnly)}&offset=${offset}${groupByBatch ? '&groupByBatch=true' : ''}${limit !== undefined ? `&limit=${limit}` : ''}`
+            : 'mail/submissions',
       })
       .then((response) => response.data);
   }
@@ -377,6 +407,27 @@ export class MailClient {
       'mail/management/messages/actions',
       input,
     );
+  }
+
+  public getManagedMessage(
+    accountId: string,
+    messageId: string,
+  ): Promise<MailMessage> {
+    return this.client
+      .request<DataResponse<MailMessage>>({
+        path: `mail/management/accounts/${encodeURIComponent(accountId)}/messages/${encodeURIComponent(messageId)}`,
+      })
+      .then((response) => response.data);
+  }
+
+  public downloadManagedAttachment(
+    accountId: string,
+    messageId: string,
+    attachmentId: string,
+  ): Promise<ReadableStream<Uint8Array>> {
+    return this.client.stream({
+      path: `mail/management/accounts/${encodeURIComponent(accountId)}/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`,
+    });
   }
 
   public getMessage(

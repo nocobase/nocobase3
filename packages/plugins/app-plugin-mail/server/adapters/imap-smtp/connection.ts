@@ -11,6 +11,12 @@ import { CONNECTION_TIMEOUT_MS, SOCKET_TIMEOUT_MS } from './constants.js';
 export function validateConfig(config: ImapSmtpMailProviderConfig): void {
   validateEndpoint(config.imap, 'IMAP');
   validateEndpoint(config.smtp, 'SMTP');
+  if (
+    config.sentCopyMode !== undefined &&
+    !['server', 'client'].includes(config.sentCopyMode)
+  ) {
+    throw new Error('SMTP sentCopyMode must be server or client.');
+  }
 }
 
 function validateEndpoint(

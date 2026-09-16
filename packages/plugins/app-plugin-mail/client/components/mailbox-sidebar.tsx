@@ -78,11 +78,11 @@ export function MailboxSidebar({
   ];
 
   return (
-    <aside className='flex h-full min-h-0 flex-col overflow-y-auto border-b bg-muted/20 p-3 lg:border-r lg:border-b-0'>
-      <label className='text-xs font-medium text-muted-foreground'>
+    <aside className='flex h-full min-h-0 flex-col overflow-y-auto border-r bg-muted/20 p-3'>
+      <label className='grid gap-2 text-xs font-medium text-muted-foreground'>
         {labels.account}
         <NativeSelect
-          className='mt-1 bg-background'
+          className='bg-background'
           onChange={(event) => onAccountChange(event.target.value)}
           value={accountId}
         >
@@ -139,7 +139,9 @@ export function MailboxSidebar({
               return (
                 <SidebarButton
                   active={folderId === folder.providerFolderId}
-                  count={folder.unreadCount}
+                  count={
+                    folder.type === 'drafts' ? undefined : folder.unreadCount
+                  }
                   icon={Icon}
                   key={folder.id}
                   label={folder.name}

@@ -789,12 +789,12 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
         false,
       );
     }
-    const text = forwardedText(input.message.text, source.value);
-    const html = forwardedHtml(
-      input.message.html,
-      input.message.text,
-      source.value,
-    );
+    const text = input.message.forwardBodyIncluded
+      ? input.message.text
+      : forwardedText(input.message.text, source.value);
+    const html = input.message.forwardBodyIncluded
+      ? input.message.html
+      : forwardedHtml(input.message.html, input.message.text, source.value);
     return {
       ok: true,
       value: {

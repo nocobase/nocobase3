@@ -10,6 +10,7 @@ import {
   type MailMessage,
   type MailMessageSummary,
   type MailOutboxRecord,
+  type MailRequestSyncPayload,
   type MailProviderError,
   type MailProviderPushSubscription,
   type MailScheduledSendTaskPayload,
@@ -353,7 +354,20 @@ export function fromSyncRunRow(row: SyncRunRow): MailSyncRun {
 }
 
 export function fromSubmissionRow(row: SubmissionRow): MailStoredSubmission {
+  const input = row.composeInput
+    ? parseJson<import('../types.js').MailComposeInput>(
+        row.composeInput,
+        'submission input',
+      )
+    : undefined;
   return {
+    recipients: input?.to,
+    subject: input?.subject,
+    bulk: row.idempotencyKey.startsWith('bulk:'),
+    batchId: row.idempotencyKey.startsWith('bulk:')
+      ? `${row.accountId}:${row.idempotencyKey.slice(0, row.idempotencyKey.lastIndexOf(':'))}`
+      : undefined,
+    hasComposeInput: Boolean(input),
     id: row.id,
     accountId: row.accountId,
     status: row.status,
@@ -406,6 +420,16 @@ export function fromOutboxRow(row: OutboxRow): MailOutboxRecord {
     createdAt: toIsoString(row.createdAt),
     publishedAt: row.publishedAt ? toIsoString(row.publishedAt) : undefined,
   };
+  if (row.type === 'requestMailboxSync') {
+    return {
+      ...base,
+      type: 'requestMailboxSync',
+      payload: parseJson<MailRequestSyncPayload>(
+        row.payload as string | MailRequestSyncPayload,
+        'sync request payload',
+      ),
+    };
+  }
   return row.type === 'syncMailbox'
     ? {
         ...base,

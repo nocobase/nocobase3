@@ -1,4 +1,3 @@
-import { resolveMailAutomaticSyncIntervalMinutes } from '../config.js';
 import { notifyMailMessageChange } from '../realtime.js';
 import {
   type MailAccountView,
@@ -15,7 +14,6 @@ export class MailAccountsService {
       DefaultMailServiceDependencies,
       'store' | 'adapters' | 'messageChangeNotifier' | 'credentials'
     >,
-    private readonly defaultAutomaticSyncIntervalMinutes: number,
   ) {}
 
   public async listAccounts(
@@ -44,21 +42,10 @@ export class MailAccountsService {
         throw new Error('This Mail account must be reauthorized.');
       }
     }
-    const automaticSyncIntervalMinutes =
-      input.automaticSyncIntervalMinutes === undefined
-        ? (updated.automaticSyncIntervalMinutes ??
-          this.defaultAutomaticSyncIntervalMinutes)
-        : resolveMailAutomaticSyncIntervalMinutes(
-            input.automaticSyncIntervalMinutes,
-          );
-    if (
-      input.status !== undefined ||
-      input.automaticSyncIntervalMinutes !== undefined
-    ) {
+    if (input.status !== undefined) {
       updated = await this.dependencies.store.saveAccount({
         ...updated,
         status: input.status ?? updated.status,
-        automaticSyncIntervalMinutes,
       });
     }
     return toMailAccountView(updated);

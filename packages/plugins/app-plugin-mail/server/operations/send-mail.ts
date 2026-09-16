@@ -222,26 +222,36 @@ export class SendMailOperation {
         signal: context.signal,
       });
       if (result.status === 'accepted') {
-        if (input.draftMessageId) {
-          const deleted = await this.dependencies.store.deleteMessage(
-            account.id,
-            input.draftMessageId,
-          );
-          if (deleted) {
-            notifyMailMessageChange(
-              this.dependencies.messageChangeNotifier,
-              context.actorId,
-            );
-          }
-        }
-        return this.dependencies.store.finishSubmission(
+        const accepted = await this.dependencies.store.finishSubmission(
           {
             ...submission,
             status: 'accepted',
             providerMessageId: result.providerMessageId,
+            error: result.sentCopyError,
           },
           leaseToken,
         );
+        // Cleanup and refresh must never turn a confirmed delivery into a retry.
+        try {
+          this.dependencies.outbox?.kick();
+          if (input.draftMessageId) {
+            const deleted = await this.dependencies.store.deleteMessage(
+              account.id,
+              input.draftMessageId,
+            );
+            if (deleted)
+              notifyMailMessageChange(
+                this.dependencies.messageChangeNotifier,
+                context.actorId,
+              );
+          }
+        } catch (error) {
+          console.error(
+            'Mail was accepted but post-send cleanup failed.',
+            error,
+          );
+        }
+        return accepted;
       }
       if (
         result.error.category === 'authentication' &&
@@ -463,6 +473,7 @@ export class SendMailOperation {
       forwardOfProviderMessageId: input.forwardOfMessageId
         ? related?.providerMessageId
         : undefined,
+      forwardBodyIncluded: input.forwardBodyIncluded,
     };
   }
 }
@@ -543,6 +554,7 @@ function fingerprint(input: MailComposeInput): string {
     retainedAttachmentIds: input.retainedAttachmentIds ?? null,
     inReplyToMessageId: input.inReplyToMessageId ?? null,
     forwardOfMessageId: input.forwardOfMessageId ?? null,
+    ...(input.forwardBodyIncluded ? { forwardBodyIncluded: true } : {}),
     scheduledAt: input.scheduledAt ?? null,
     draftMessageId: input.draftMessageId ?? null,
   };

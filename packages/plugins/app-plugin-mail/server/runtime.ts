@@ -14,9 +14,7 @@ import SendScheduledMailJob, {
 import { SendMailOperation } from './operations/send-mail.js';
 import { SyncMailboxOperation } from './operations/sync-mailbox.js';
 import {
-  DEFAULT_MAIL_AUTOMATIC_SYNC_INTERVAL_MINUTES,
   DEFAULT_MAIL_AUTOMATIC_SYNC_INTERVAL_MS,
-  resolveMailAutomaticSyncIntervalMinutes,
   resolveMailSyncBatchSize,
 } from './config.js';
 import type { MailMessageChangeNotifier } from './realtime.js';
@@ -28,6 +26,7 @@ import type {
   MailSyncMailboxTaskPayload,
   MailOutboundAttachmentStorage,
   MailCredentialVault,
+  MailRuntimeService,
 } from './types.js';
 
 export interface MailRuntimeLogger {
@@ -51,7 +50,7 @@ export interface MailRuntimeOptions {
   readonly messageChangeNotifier?: MailMessageChangeNotifier;
 }
 
-export class MailRuntime implements MailOutboxPublisher {
+export class MailRuntime implements MailOutboxPublisher, MailRuntimeService {
   private readonly operation: SyncMailboxOperation;
   private readonly syncBatchSize: number;
   private readonly handler: (
@@ -75,7 +74,7 @@ export class MailRuntime implements MailOutboxPublisher {
       options.queueName,
       this.handler,
     );
-    const send = new SendMailOperation(options);
+    const send = new SendMailOperation({ ...options, outbox: this });
     this.unregisterScheduledSendHandler = registerMailScheduledSendJobHandler(
       options.queueName,
       async (payload: MailScheduledSendTaskPayload): Promise<void> => {
@@ -84,14 +83,9 @@ export class MailRuntime implements MailOutboxPublisher {
         );
         if (!scheduled || scheduled.submission.status !== 'pending') return;
         try {
-          const result = await send.execute(
-            { actorId: scheduled.actorId },
-            scheduled.input,
-            { scheduledDelivery: true },
-          );
-          if (result.status !== 'pending') {
-            await options.store.clearScheduledSubmission(payload.submissionId);
-          }
+          await send.execute({ actorId: scheduled.actorId }, scheduled.input, {
+            scheduledDelivery: true,
+          });
         } catch (error) {
           await options.store.failScheduledSubmission(payload.submissionId, {
             code: 'MAIL_SCHEDULED_SEND_FAILED',
@@ -129,14 +123,7 @@ export class MailRuntime implements MailOutboxPublisher {
     this.relayTimer.unref();
     this.automaticSyncTimer = setInterval(
       () => this.scheduleAutomaticSync(),
-      Math.max(
-        60_000,
-        Math.min(
-          this.options.automaticSyncIntervalMs ??
-            DEFAULT_MAIL_AUTOMATIC_SYNC_INTERVAL_MS,
-          60_000,
-        ),
-      ),
+      60_000,
     );
     this.automaticSyncTimer.unref();
     this.kick();
@@ -176,7 +163,7 @@ export class MailRuntime implements MailOutboxPublisher {
         account.id,
       );
       if (
-        !isAutomaticSyncDue(lastSyncedAt, account.automaticSyncIntervalMinutes)
+        !isAutomaticSyncDue(lastSyncedAt, this.options.automaticSyncIntervalMs)
       ) {
         continue;
       }
@@ -475,7 +462,9 @@ export class MailRuntime implements MailOutboxPublisher {
     );
     for (const record of claimed) {
       try {
-        if (record.type === 'syncMailbox') {
+        if (record.type === 'requestMailboxSync') {
+          await this.schedulePushSync(record.payload.accountId);
+        } else if (record.type === 'syncMailbox') {
           await this.options.queue.dispatch(SyncMailboxJob, record.payload, {
             queue: this.options.queueName,
             dedup: { id: record.deduplicationKey, ttl: '1d' },
@@ -543,14 +532,11 @@ export function createMailRuntime(options: MailRuntimeOptions): MailRuntime {
 
 export function isAutomaticSyncDue(
   lastSyncedAt: string | undefined,
-  intervalMinutes?: number,
+  intervalMs: number = DEFAULT_MAIL_AUTOMATIC_SYNC_INTERVAL_MS,
   now: number = Date.now(),
 ): boolean {
   if (!lastSyncedAt) return true;
   const last = Date.parse(lastSyncedAt);
   if (!Number.isFinite(last)) return true;
-  const interval = resolveMailAutomaticSyncIntervalMinutes(
-    intervalMinutes ?? DEFAULT_MAIL_AUTOMATIC_SYNC_INTERVAL_MINUTES,
-  );
-  return now - last >= interval * 60_000;
+  return now - last >= intervalMs;
 }

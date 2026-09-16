@@ -88,6 +88,80 @@ describe('[UI][DATA] accounts, signatures, templates, and local labels', () => {
     });
   });
 
+  it('confirms signature deletion in the drawer, preserves edits on cancel and retries failures', async () => {
+    const signature = {
+      id: 'signature-1',
+      accountId: 'account-1',
+      name: 'Work',
+      text: 'Regards',
+      isDefault: true,
+    };
+    mail.listSignatures.mockResolvedValue([signature]);
+    let rejectDelete: ((reason: Error) => void) | undefined;
+    mail.deleteSignature.mockImplementationOnce(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectDelete = reject;
+        }),
+    );
+    render(<MailAccountsDevPage />);
+    fireEvent.click(
+      (await screen.findAllByRole('button', { name: 'Signatures' }))[0],
+    );
+    const drawer = within(
+      await screen.findByRole('dialog', { name: 'Signature management' }),
+    );
+    fireEvent.click(await drawer.findByRole('button', { name: /Work/ }));
+    fireEvent.change(drawer.getByLabelText('Signature name'), {
+      target: { value: 'Unsaved name' },
+    });
+    fireEvent.click(drawer.getByRole('button', { name: 'Delete signature' }));
+    const firstDialog = within(
+      await screen.findByRole('dialog', { name: 'Delete signature?' }),
+    );
+    expect(firstDialog.getByText('Work')).toBeVisible();
+    expect(mail.deleteSignature).not.toHaveBeenCalled();
+    fireEvent.click(firstDialog.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('dialog', { name: 'Delete signature?' }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(mail.deleteSignature).not.toHaveBeenCalled();
+    expect(drawer.getByLabelText('Signature name')).toHaveValue('Unsaved name');
+    fireEvent.click(drawer.getByRole('button', { name: 'Delete signature' }));
+    const dialog = within(
+      await screen.findByRole('dialog', { name: 'Delete signature?' }),
+    );
+    fireEvent.click(dialog.getByRole('button', { name: 'Delete signature' }));
+    expect(dialog.getByRole('button', { name: 'Deleting…' })).toBeDisabled();
+    expect(dialog.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+    fireEvent.click(dialog.getByRole('button', { name: 'Deleting…' }));
+    expect(mail.deleteSignature).toHaveBeenCalledTimes(1);
+    rejectDelete?.(new Error('Delete unavailable'));
+    expect(await dialog.findByRole('alert')).toHaveTextContent(
+      'Delete unavailable',
+    );
+    expect(drawer.getByLabelText('Signature name')).toHaveValue('Unsaved name');
+    mail.deleteSignature.mockResolvedValue(undefined);
+    mail.listSignatures.mockResolvedValue([]);
+    fireEvent.click(dialog.getByRole('button', { name: 'Delete signature' }));
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('dialog', { name: 'Delete signature?' }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(mail.deleteSignature).toHaveBeenCalledTimes(2);
+    expect(mail.deleteSignature).toHaveBeenLastCalledWith(
+      'account-1',
+      'signature-1',
+    );
+    expect(drawer.getByLabelText('Signature name')).toHaveValue('');
+    expect(
+      drawer.queryByRole('button', { name: /Work/ }),
+    ).not.toBeInTheDocument();
+  });
+
   it('creates a named signature for an account', async () => {
     render(<MailAccountsDevPage />);
     const signatureButtons = await screen.findAllByRole('button', {
@@ -145,17 +219,19 @@ describe('[UI][DATA] accounts, signatures, templates, and local labels', () => {
       name: /sender@example\.com/,
     });
     expect(accountToggle).toHaveAttribute('aria-expanded', 'true');
-    fireEvent.click(accountToggle);
-    expect(accountToggle).toHaveAttribute('aria-expanded', 'false');
-    expect(
-      within(signatureDrawer).queryByRole('button', { name: 'Work' }),
-    ).not.toBeInTheDocument();
-    fireEvent.click(accountToggle);
-    expect(accountToggle).toHaveAttribute('aria-expanded', 'true');
     const signatureItem = await within(signatureDrawer).findByRole('button', {
       name: /Work/,
     });
     fireEvent.click(signatureItem);
+    expect(signatureItem).toHaveAttribute('aria-current', 'true');
+    fireEvent.click(accountToggle);
+    expect(accountToggle).toHaveAttribute('aria-expanded', 'false');
+    expect(
+      within(signatureDrawer).queryByRole('button', { name: /Work/ }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(accountToggle);
+    expect(accountToggle).toHaveAttribute('aria-expanded', 'true');
+    expect(signatureItem).toHaveAttribute('aria-current', 'true');
     fireEvent.change(within(signatureDrawer).getByLabelText('Signature name'), {
       target: { value: 'Work updated' },
     });
@@ -353,6 +429,9 @@ describe('[UI][DATA] accounts, signatures, templates, and local labels', () => {
     fireEvent.click(
       await within(labelDialog).findByRole('button', { name: 'Edit Support' }),
     );
+    expect(
+      within(labelDialog).getByRole('button', { name: 'Edit Support' }),
+    ).toHaveAttribute('aria-current', 'true');
     fireEvent.change(within(labelDialog).getByLabelText('Label name'), {
       target: { value: 'Support updated' },
     });

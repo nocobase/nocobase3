@@ -1,7 +1,9 @@
 import { CheckSquare2, Paperclip, Star, StickyNote } from 'lucide-react';
 import type { ReactElement } from 'react';
+import { useTranslation } from '@nocobase/i18n/client';
 
 import type { MailLabel, MailMessageSummary } from '../mail-client.js';
+import { MAIL_PLUGIN_NS } from '../namespace.js';
 import { cn } from '../lib/utils.js';
 import { Button } from './ui/button.js';
 import { MailLabelTag } from './mail-label-tag.js';
@@ -41,6 +43,7 @@ export function MailMessageList({
   selectedMessageId,
   showAccount = false,
 }: MailMessageListProps): ReactElement {
+  const { i18n } = useTranslation(MAIL_PLUGIN_NS);
   const groupedMessages = groupMessagesByConversation(messages);
   const labelsById = new Map(availableLabels.map((label) => [label.id, label]));
 
@@ -110,7 +113,10 @@ export function MailMessageList({
                   />
                 ) : null}
                 <time className='shrink-0 text-xs text-muted-foreground'>
-                  {formatMessageDate(message.receivedAt ?? message.sentAt)}
+                  {formatMessageDate(
+                    message.receivedAt ?? message.sentAt,
+                    i18n.language,
+                  )}
                 </time>
               </div>
               {showAccount && accountName ? (
@@ -244,11 +250,11 @@ function mergeGroupedMessage(
   };
 }
 
-function formatMessageDate(value?: string): string {
+function formatMessageDate(value?: string, locale?: string): string {
   if (!value) return '';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(locale, {
     month: 'short',
     day: 'numeric',
   }).format(date);

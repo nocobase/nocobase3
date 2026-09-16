@@ -21,10 +21,9 @@ export function MailSyncPolicyFields({
   onChange,
 }: MailSyncPolicyFieldsProps): ReactElement {
   return (
-    <label className='block max-w-sm text-sm font-medium'>
+    <label className='grid max-w-sm gap-2 text-sm font-medium'>
       {labels.receivedAfter}
       <Input
-        className='mt-1'
         disabled={disabled}
         onChange={(event) =>
           onChange({ ...value, receivedAfter: event.target.value })

@@ -1,4 +1,6 @@
 import {
+  type MailAccount,
+  type MailMessage,
   type MailAttachmentContent,
   type MailOperationContext,
   type MailOutboundAttachmentView,
@@ -42,6 +44,31 @@ export class MailAttachmentsService {
       messageId,
     );
     if (!message) throw new Error('Mail message was not found.');
+    return this.openAttachment(account, message, attachmentId, context.signal);
+  }
+
+  public async getManagedAttachment(
+    context: MailOperationContext,
+    accountId: string,
+    messageId: string,
+    attachmentId: string,
+  ): Promise<MailAttachmentContent> {
+    const account = await this.dependencies.store.getAccount(accountId);
+    if (!account) throw new Error('Mail account was not found.');
+    const message = await this.dependencies.store.getMessageForAccount(
+      accountId,
+      messageId,
+    );
+    if (!message) throw new Error('Mail message was not found.');
+    return this.openAttachment(account, message, attachmentId, context.signal);
+  }
+
+  private async openAttachment(
+    account: MailAccount,
+    message: MailMessage,
+    attachmentId: string,
+    signal?: AbortSignal,
+  ): Promise<MailAttachmentContent> {
     const attachment = message.attachments.find(
       (item) =>
         item.id === attachmentId || item.providerAttachmentId === attachmentId,
@@ -51,7 +78,7 @@ export class MailAttachmentsService {
       attachment.outboundAttachmentId ??
       (isLocalDraftMessage(message) &&
       (await this.dependencies.store.getOutboundAttachment(
-        context.actorId,
+        account.userId,
         attachment.providerAttachmentId,
       ))
         ? attachment.providerAttachmentId
@@ -60,7 +87,7 @@ export class MailAttachmentsService {
       if (!this.dependencies.outboundAttachments)
         throw new Error('Mail attachment storage is not configured.');
       const content = await this.dependencies.outboundAttachments.open(
-        context.actorId,
+        account.userId,
         localId,
       );
       return {
@@ -70,10 +97,7 @@ export class MailAttachmentsService {
         stream: content.stream,
       };
     }
-    const adapter = await this.dependencies.adapters.resolve(
-      account,
-      context.signal,
-    );
+    const adapter = await this.dependencies.adapters.resolve(account, signal);
     try {
       if (!adapter.getAttachment) {
         throw new Error(
@@ -84,7 +108,7 @@ export class MailAttachmentsService {
         await adapter.getAttachment(
           message.providerMessageId,
           attachment.providerAttachmentId,
-          context.signal,
+          signal,
         ),
       );
       return {

@@ -1,5 +1,12 @@
-import { ImapFlow, type FetchMessageObject, type ListResponse } from 'imapflow';
+import {
+  ImapFlow,
+  type FetchMessageObject,
+  type ListResponse,
+  type MailboxObject,
+} from 'imapflow';
 import { type Transporter } from 'nodemailer';
+import MailComposer from 'nodemailer/lib/mail-composer/index.js';
+import { randomUUID } from 'node:crypto';
 import { simpleParser } from 'mailparser';
 
 import type {
@@ -98,16 +105,7 @@ export class ImapSmtpAdapter implements MailProviderAdapter {
       const folders: Record<string, ImapFolderCursor> = {};
       for (const mailbox of mailboxes) {
         throwIfAborted(signal);
-        const status = await (
-          await this.imap()
-        ).status(mailbox.path, {
-          uidNext: true,
-          uidValidity: true,
-        });
-        folders[mailbox.path] = folderCursor(
-          status.uidValidity,
-          status.uidNext,
-        );
+        folders[mailbox.path] = await this.folderState(mailbox.path);
       }
       return { ok: true, value: syncCursor({ version: 1, folders }) };
     } catch (error) {
@@ -154,7 +152,7 @@ export class ImapSmtpAdapter implements MailProviderAdapter {
           upperUid = selected.at(-1) ? (selected.at(-1) as number) - 1 : 0;
         } else {
           const maxUid =
-            upperUid ?? Math.max(0, Number(mailbox.uidNext ?? 1) - 1);
+            upperUid ?? (await this.selectedFolderState(mailbox)).uidNext - 1;
           if (maxUid < 1) {
             folderIndex += 1;
             upperUid = undefined;
@@ -238,16 +236,7 @@ export class ImapSmtpAdapter implements MailProviderAdapter {
 
       for (const [mailboxIndex, mailbox] of mailboxes.entries()) {
         throwIfAborted(input.signal);
-        const currentStatus = await (
-          await this.imap()
-        ).status(mailbox.path, {
-          uidNext: true,
-          uidValidity: true,
-        });
-        const current = folderCursor(
-          currentStatus.uidValidity,
-          currentStatus.uidNext,
-        );
+        const current = await this.folderState(mailbox.path);
         const old = previous.folders[mailbox.path];
         if (old && old.uidValidity !== current.uidValidity) {
           return {
@@ -442,6 +431,7 @@ export class ImapSmtpAdapter implements MailProviderAdapter {
   public async sendMessage(
     input: MailProviderSendInput,
   ): Promise<MailProviderSendResult> {
+    let submissionStarted = false;
     try {
       throwIfAborted(input.signal);
       const attachments = [];
@@ -463,7 +453,7 @@ export class ImapSmtpAdapter implements MailProviderAdapter {
           cid: attachment.contentId,
         });
       }
-      const info = (await this.smtpTransport.sendMail({
+      const mail = {
         from: toHeader({
           address: input.identity.address,
           name: input.identity.displayName,
@@ -474,7 +464,10 @@ export class ImapSmtpAdapter implements MailProviderAdapter {
         subject: input.message.subject,
         text: input.message.text,
         html: input.message.html,
-        messageId: input.message.internetMessageId,
+        messageId:
+          input.message.internetMessageId ??
+          `<${randomUUID()}@${input.identity.address.split('@')[1]}>`,
+        date: new Date(),
         headers: {
           ...(input.message.inReplyTo
             ? { 'In-Reply-To': input.message.inReplyTo }
@@ -484,17 +477,67 @@ export class ImapSmtpAdapter implements MailProviderAdapter {
             : {}),
         },
         attachments,
-      })) as { messageId?: string };
+      };
+      let sentCopy: Buffer | undefined;
+      if (this.config.sentCopyMode === 'client') {
+        const composer = new MailComposer(mail).compile();
+        composer.keepBcc = true;
+        sentCopy = await composer.build();
+      }
+      submissionStarted = true;
+      const info = (await this.smtpTransport.sendMail(mail)) as {
+        messageId?: string;
+      };
+      const internetMessageId = info.messageId ?? mail.messageId;
+      let sentCopyError;
+      if (sentCopy) {
+        try {
+          const folders = await this.listMailboxes();
+          const folder =
+            this.config.sentFolder ??
+            folders.find((item) => folderType(item) === 'sent')?.path;
+          if (!folder)
+            throw new Error(
+              'Configure sentFolder or provide an IMAP folder marked as Sent.',
+            );
+          const client = await this.imap();
+          await client.mailboxOpen(folder, { readOnly: true });
+          const existing = await client.search(
+            { header: { 'Message-ID': internetMessageId } },
+            { uid: true },
+          );
+          if (!Array.isArray(existing) || existing.length === 0) {
+            if (
+              !(await client.append(folder, sentCopy, ['\\Seen'], mail.date))
+            ) {
+              throw new Error(
+                'The IMAP server did not confirm the sent copy was saved.',
+              );
+            }
+          }
+        } catch (error) {
+          // SMTP already accepted the message; never report this as a send failure.
+          sentCopyError = {
+            ...classifyError(error, 'IMAP_SAVE_SENT_COPY'),
+            code: 'IMAP_SENT_COPY_FAILED',
+            retryable: false,
+          };
+        }
+      }
       return {
         status: 'accepted',
-        providerMessageId: info.messageId,
-        internetMessageId: info.messageId,
+        providerMessageId: internetMessageId,
+        internetMessageId,
+        ...(sentCopyError ? { sentCopyError } : {}),
       };
     } catch (error) {
       const classified = classifyError(error, 'SMTP_SEND');
       return {
         status:
-          classified.category === 'network' && classified.retryable
+          submissionStarted &&
+          (classified.category === 'network' ||
+            classified.category === 'timeout') &&
+          classified.retryable
             ? 'submission_unknown'
             : 'failed',
         error: classified,
@@ -606,13 +649,46 @@ export class ImapSmtpAdapter implements MailProviderAdapter {
       uidNext: true,
       uidValidity: true,
     });
-    return folderCursor(status.uidValidity, status.uidNext);
+    if (status.uidNext !== undefined && status.uidValidity !== undefined) {
+      return folderCursor(status.uidValidity, status.uidNext);
+    }
+    const mailbox = await (
+      await this.imap()
+    ).mailboxOpen(path, { readOnly: true });
+    return this.selectedFolderState(mailbox);
+  }
+
+  private async selectedFolderState(
+    mailbox: MailboxObject,
+  ): Promise<ImapFolderCursor> {
+    if (mailbox.uidNext !== undefined) {
+      return folderCursor(mailbox.uidValidity, mailbox.uidNext);
+    }
+    // Some servers (including Coremail/163) omit UIDNEXT in both STATUS and
+    // SELECT. Read the last sequence number's UID without downloading mail or
+    // marking it read. Missing metadata must never masquerade as an empty inbox.
+    if (mailbox.exists === 0) return folderCursor(mailbox.uidValidity, 1);
+    if (Number.isSafeInteger(mailbox.exists) && mailbox.exists > 0) {
+      const last = await (
+        await this.imap()
+      ).fetchOne(mailbox.exists, { uid: true }, { uid: false });
+      if (last && Number.isSafeInteger(last.uid) && last.uid > 0) {
+        return folderCursor(mailbox.uidValidity, last.uid + 1);
+      }
+    }
+    throw Object.assign(
+      new Error(
+        'The IMAP server did not provide UIDNEXT and the last message UID could not be read. Retry synchronization after checking the mailbox connection.',
+      ),
+      { code: 'IMAP_INVALID_UIDNEXT' },
+    );
   }
 
   private normalizeFolder(mailbox: ListResponse): NormalizedMailFolder {
     return {
       providerFolderId: mailbox.path,
-      type: folderType(mailbox),
+      type:
+        mailbox.path === this.config.sentFolder ? 'sent' : folderType(mailbox),
       name: mailbox.name || mailbox.path,
       unreadCount: mailbox.status?.unseen,
       kind: 'folder',

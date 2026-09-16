@@ -1,3 +1,4 @@
+import { validateLogPagination } from '../log-pagination.js';
 import { type DatabaseManager } from '@nocobase/db';
 import { randomUUID } from 'node:crypto';
 import {
@@ -34,10 +35,15 @@ export class MailSubmissionsStore {
 
   public async listSubmissions(
     userId: string,
+    bulkOnly = false,
+    offset = 0,
+    groupByBatch = false,
+    limit = groupByBatch ? 20 : 100,
   ): Promise<readonly MailStoredSubmission[]> {
+    validateLogPagination(offset, limit);
     const accounts = await this.accounts.listAccounts(userId);
     if (accounts.length === 0) return [];
-    const rows = await this.database
+    let query = this.database
       .query()
       .selectFrom<SubmissionRow>('mailSubmissions')
       .selectAll()
@@ -45,9 +51,56 @@ export class MailSubmissionsStore {
         'accountId',
         'in',
         accounts.map((account) => account.id),
-      )
+      );
+    if (groupByBatch) {
+      // sendBulk persists recipient zero first, making it the stable batch anchor.
+      const anchors = await query
+        .where('idempotencyKey', 'like', 'bulk:%:0')
+        .orderBy('createdAt', 'desc')
+        .orderBy('id', 'desc')
+        .offset(offset)
+        .limit(limit)
+        .execute<SubmissionRow>();
+      if (anchors.length === 0) return [];
+      const rows = await query
+        .where((builder) =>
+          builder.or(
+            anchors.map((anchor) => {
+              const prefix = anchor.idempotencyKey.slice(0, -1);
+              return builder.and([
+                builder('accountId', '=', anchor.accountId),
+                builder(
+                  'idempotencyKey',
+                  'in',
+                  Array.from(
+                    { length: 100 },
+                    (_, index) => `${prefix}${index}`,
+                  ),
+                ),
+              ]);
+            }),
+          ),
+        )
+        .orderBy('createdAt', 'asc')
+        .orderBy('id', 'asc')
+        .execute<SubmissionRow>();
+      return anchors.flatMap((anchor) => {
+        const prefix = anchor.idempotencyKey.slice(0, -1);
+        return rows
+          .filter(
+            (row) =>
+              row.accountId === anchor.accountId &&
+              row.idempotencyKey.startsWith(prefix),
+          )
+          .map(fromSubmissionRow);
+      });
+    }
+    if (bulkOnly) query = query.where('idempotencyKey', 'like', 'bulk:%');
+    const rows = await query
       .orderBy('createdAt', 'desc')
-      .limit(100)
+      .orderBy('id', 'desc')
+      .offset(offset)
+      .limit(limit)
       .execute<SubmissionRow>();
     return rows.map(fromSubmissionRow);
   }
@@ -194,13 +247,59 @@ export class MailSubmissionsStore {
       .set({
         status: 'failed',
         error: JSON.stringify(error),
-        requestedBy: null,
-        composeInput: null,
         updatedAt: new Date().toISOString(),
       })
       .where('id', '=', submissionId)
       .where('status', '=', 'pending')
       .execute();
+  }
+
+  public async transitionSubmission(
+    submissionId: string,
+    action: 'retry' | 'cancel',
+  ): Promise<MailStoredSubmission> {
+    const now = new Date().toISOString();
+    return this.database.transaction(async (connection) => {
+      const result = await connection.query
+        .updateTable<SubmissionRow>('mailSubmissions')
+        .set({
+          status: action === 'retry' ? 'pending' : 'cancelled',
+          error: null,
+          updatedAt: now,
+        })
+        .where('id', '=', submissionId)
+        .where('status', '=', action === 'retry' ? 'failed' : 'pending')
+        .where('composeInput', 'is not', null)
+        .execute();
+      if (result.updatedCount !== 1) {
+        throw new TypeError(
+          'The mail submission cannot perform this action in its current state.',
+        );
+      }
+      if (action === 'retry') {
+        await connection.query
+          .insertInto<OutboxRow>('mailOutbox')
+          .values({
+            id: randomUUID(),
+            type: 'sendScheduledMail',
+            aggregateId: submissionId,
+            deduplicationKey: `retry-send:${submissionId}:${randomUUID()}`,
+            payload: JSON.stringify({ version: 1, submissionId }),
+            status: 'pending',
+            attempts: 0,
+            availableAt: now,
+            createdAt: now,
+          })
+          .execute();
+      }
+      const row = await connection.query
+        .selectFrom<SubmissionRow>('mailSubmissions')
+        .selectAll()
+        .where('id', '=', submissionId)
+        .executeTakeFirst<SubmissionRow>();
+      if (!row) throw new Error('Mail submission was not found.');
+      return fromSubmissionRow(row);
+    });
   }
 
   public async claimSubmission(
@@ -249,21 +348,45 @@ export class MailSubmissionsStore {
     submission: MailSubmission,
     leaseToken: string,
   ): Promise<MailSubmission> {
-    await this.database
-      .query()
-      .updateTable<SubmissionRow>('mailSubmissions')
-      .set({
-        status: submission.status,
-        providerMessageId: submission.providerMessageId ?? null,
-        error: jsonOrNull(submission.error),
-        leaseToken: null,
-        leaseExpiresAt: null,
-        updatedAt: new Date().toISOString(),
-      })
-      .where('id', '=', submission.id)
-      .where('status', '=', 'submitting')
-      .where('leaseToken', '=', leaseToken)
-      .execute();
+    await this.database.transaction(async (connection): Promise<void> => {
+      const updated = await connection.query
+        .updateTable<SubmissionRow>('mailSubmissions')
+        .set({
+          status: submission.status,
+          providerMessageId: submission.providerMessageId ?? null,
+          error: jsonOrNull(submission.error),
+          leaseToken: null,
+          leaseExpiresAt: null,
+          updatedAt: new Date().toISOString(),
+        })
+        .where('id', '=', submission.id)
+        .where('status', '=', 'submitting')
+        .where('leaseToken', '=', leaseToken)
+        .execute();
+      if (updated.updatedCount === 1 && submission.status === 'accepted') {
+        // Persist refresh requests with acceptance so a restart cannot lose them.
+        const now = Date.now();
+        await connection.query
+          .insertInto<OutboxRow>('mailOutbox')
+          .values(
+            [0, 5_000, 30_000].map((delay) => ({
+              id: randomUUID(),
+              type: 'requestMailboxSync' as const,
+              aggregateId: submission.id,
+              deduplicationKey: `sent-sync:${submission.id}:${delay}`,
+              payload: JSON.stringify({
+                version: 1,
+                accountId: submission.accountId,
+              }),
+              status: 'pending' as const,
+              attempts: 0,
+              availableAt: new Date(now + delay).toISOString(),
+              createdAt: new Date(now).toISOString(),
+            })),
+          )
+          .execute();
+      }
+    });
     const row = await this.database
       .query()
       .selectFrom<SubmissionRow>('mailSubmissions')

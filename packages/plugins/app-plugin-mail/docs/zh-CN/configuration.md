@@ -35,14 +35,14 @@ Provider 实例名会出现在邮件账户关联界面中。`enabled` 省略时�
 
 Mail Core 的配置直接写在 `mail` 下。环境变量只覆盖下表中明确列出的配置项：
 
-| 配置项                         | 类型      | 默认值                 | 环境变量                          | 说明                                                                            |
-| ------------------------------ | --------- | ---------------------- | --------------------------------- | ------------------------------------------------------------------------------- |
-| `mail.oauthCallbackUrl`        | `string`  | `/mail/oauth/callback` | `MAIL_OAUTH_CALLBACK_URL`         | OAuth callback 的应用内路径，或完整的 `http(s)` URL。                           |
-| `mail.automaticSyncIntervalMs` | `integer` | `300000`（5 分钟）     | `MAIL_AUTOMATIC_SYNC_INTERVAL_MS` | 新关联账号的自动同步间隔默认值，最小值为 `60000`（1 分钟）；账号页可单独调整。  |
-| `mail.syncBatchSize`           | `integer` | `100`                  | `MAIL_SYNC_BATCH_SIZE`            | 每次 Provider 同步请求的邮件数量，范围为 `1–200`。                              |
-| `mail.pushWebhookUrl`          | `string`  | 无                     | `MAIL_PUSH_WEBHOOK_URL`           | Push callback 的公共地址，应该以 `/mail/webhooks` 结尾。                        |
-| `mail.pushWebhookSecret`       | `string`  | 无                     | `MAIL_PUSH_WEBHOOK_SECRET`        | Push callback 使用的共享密钥，长度为 `32–128`，只能使用字母、数字、`_` 和 `-`。 |
-| `mail.providers`               | `object`  | `{}`                   | 无                                | 按实例名组织的 Provider 配置。具体字段见下文。                                  |
+| 配置项                         | 类型      | 默认值                 | 环境变量                          | 说明                                                                             |
+| ------------------------------ | --------- | ---------------------- | --------------------------------- | -------------------------------------------------------------------------------- |
+| `mail.oauthCallbackUrl`        | `string`  | `/mail/oauth/callback` | `MAIL_OAUTH_CALLBACK_URL`         | OAuth callback 的应用内路径，或完整的 `http(s)` URL。                            |
+| `mail.automaticSyncIntervalMs` | `integer` | `300000`（5 分钟）     | `MAIL_AUTOMATIC_SYNC_INTERVAL_MS` | 所有账号统一使用的自动同步间隔，最小值为 `60000`（1 分钟），仅通过 config 配置。 |
+| `mail.syncBatchSize`           | `integer` | `100`                  | `MAIL_SYNC_BATCH_SIZE`            | 每次 Provider 同步请求的邮件数量，范围为 `1–200`。                               |
+| `mail.pushWebhookUrl`          | `string`  | 无                     | `MAIL_PUSH_WEBHOOK_URL`           | Push callback 的公共地址，应该以 `/mail/webhooks` 结尾。                         |
+| `mail.pushWebhookSecret`       | `string`  | 无                     | `MAIL_PUSH_WEBHOOK_SECRET`        | Push callback 使用的共享密钥，长度为 `32–128`，只能使用字母、数字、`_` 和 `-`。  |
+| `mail.providers`               | `object`  | `{}`                   | 无                                | 按实例名组织的 Provider 配置。具体字段见下文。                                   |
 
 配置示例：
 
@@ -64,7 +64,7 @@ mail:
 
 首次同步时，起始日期和最大消息数同时生效。起始日期用于筛选历史邮件，`maxMessages` 用于限制历史同步阶段导入的数量；如果达到数量上限，或者 Provider 没有更多符合日期条件的邮件，历史同步就会结束。未传 `maxMessages` 时默认值为 10,000，API 可设置为 1–100,000。Provider 返回的单页可能略超请求数量，因此最终导入数量可能略高于配置值；历史同步结束后，系统还会从基线游标执行追赶同步，补齐期间发生的变更。
 
-`mail.automaticSyncIntervalMs` 作为新关联账号的默认自动同步间隔，不限制单次同步的执行时长。已存在账号可以在 `/dev/mail/accounts` 的账号列表中单独修改分钟数；运行时每分钟检查到期账号，因此不同账号可以使用不同间隔。
+`mail.automaticSyncIntervalMs` 统一控制所有账号的自动同步间隔，不限制单次同步的执行时长。仅支持在 config 中配置，账号页面不提供配置入口。运行时每分钟检查到期账号；修改配置并重启应用后，新账号和已有账号均使用新的间隔，历史账号保存的间隔不再参与调度。
 
 ### OAuth callback 地址
 
@@ -376,6 +376,7 @@ mail:
         port: 465
         secure: true
         # rejectUnauthorized: true
+      # sentCopyMode: client
       # sentFolder: Sent
       # trashFolder: Trash
       # draftsFolder: Drafts
@@ -392,11 +393,12 @@ Endpoint 字段对 `imap` 和 `smtp` 都适用：
 
 Provider 级别的文件夹配置：
 
-| 配置项         | 必填 | 默认值   | 说明                         |
-| -------------- | ---- | -------- | ---------------------------- |
-| `sentFolder`   | 否   | 自动识别 | IMAP Sent 文件夹路径提示。   |
-| `trashFolder`  | 否   | 自动识别 | IMAP Trash 文件夹路径提示。  |
-| `draftsFolder` | 否   | 自动识别 | IMAP Drafts 文件夹路径提示。 |
+| 配置项         | 必填 | 默认值   | 说明                                                                                                             |
+| -------------- | ---- | -------- | ---------------------------------------------------------------------------------------------------------------- |
+| `sentCopyMode` | 否   | `server` | `server` 由 SMTP 服务商保存已发送副本；不自动保存的服务商可设为 `client`，由客户端追加到现有 IMAP 已发送文件夹。 |
+| `sentFolder`   | 否   | 自动识别 | IMAP Sent 文件夹路径提示。                                                                                       |
+| `trashFolder`  | 否   | 自动识别 | IMAP Trash 文件夹路径提示。                                                                                      |
+| `draftsFolder` | 否   | 自动识别 | IMAP Drafts 文件夹路径提示。                                                                                     |
 
 IMAP / SMTP MVP 不支持 Push、Provider-native label、草稿、别名和移动到文件夹。`pushWebhookUrl` 和 `pushWebhookSecret` 对这个 Provider 不生效。
 

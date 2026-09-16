@@ -6,6 +6,7 @@ import {
   type MailManagementMessageActionInput,
   type MailManagementMessageActionItemResult,
   type MailManagementMessageActionResult,
+  type MailMessage,
   type MailMessageSummary,
   type MailOperationContext,
   type MailPage,
@@ -74,6 +75,14 @@ export class MailManagementService {
     input: MailListMessagesInput,
   ): Promise<MailPage<MailMessageSummary>> {
     return this.dependencies.store.listAllMessages(input);
+  }
+
+  public getManagedMessage(
+    _context: MailOperationContext,
+    accountId: string,
+    messageId: string,
+  ): Promise<MailMessage | undefined> {
+    return this.dependencies.store.getMessageForAccount(accountId, messageId);
   }
 
   public async manageMessages(

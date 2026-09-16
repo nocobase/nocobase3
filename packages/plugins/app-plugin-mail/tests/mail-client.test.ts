@@ -4,6 +4,25 @@ import { describe, expect, it, vi } from 'vitest';
 import { MailClient } from '../client/mail-client.js';
 
 describe('MailClient', () => {
+  it('uses management endpoints for message details and attachments', async () => {
+    const request = vi.fn(async () => ({ data: { id: 'message/1' } }));
+    const app = appClient(request);
+    const stream = vi
+      .spyOn(app, 'stream')
+      .mockResolvedValue(new ReadableStream());
+    const client = new MailClient(app);
+    await expect(
+      client.getManagedMessage('account/1', 'message/1'),
+    ).resolves.toEqual({ id: 'message/1' });
+    expect(request).toHaveBeenCalledWith({
+      path: 'mail/management/accounts/account%2F1/messages/message%2F1',
+    });
+    await client.downloadManagedAttachment('account/1', 'message/1', 'file/1');
+    expect(stream).toHaveBeenCalledWith({
+      path: 'mail/management/accounts/account%2F1/messages/message%2F1/attachments/file%2F1',
+    });
+  });
+
   it('maps account and authorization calls onto the Mail API', async () => {
     const request = vi.fn(async ({ path }: { path: string }) => {
       if (path === 'mail/accounts') return { data: [{ id: 'account-1' }] };

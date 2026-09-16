@@ -12,6 +12,16 @@ export function resolveMailInlineImages(
     return sanitizeMailHtml(html);
   }
   const document = new DOMParser().parseFromString(html, 'text/html');
+  rewriteMailInlineImages(document, message);
+  return sanitizeMailHtml(document.body.innerHTML);
+}
+
+/** Rewrites CID images without changing the document's formatting. */
+export function rewriteMailInlineImages(
+  document: Document,
+  message: Pick<MailMessage, 'accountId' | 'id' | 'attachments'>,
+  scope: 'personal' | 'management' = 'personal',
+): void {
   for (const image of document.querySelectorAll('img')) {
     const source = image.getAttribute('src');
     const contentId = source?.match(/^cid:(.+)$/iu)?.[1];
@@ -29,11 +39,10 @@ export function resolveMailInlineImages(
     image.setAttribute(
       'src',
       resolveAppUrl(
-        `/api/mail/accounts/${encodeURIComponent(message.accountId)}/messages/${encodeURIComponent(message.id)}/attachments/${encodeURIComponent(attachment.id)}`,
+        `/api/mail/${scope === 'management' ? 'management/' : ''}accounts/${encodeURIComponent(message.accountId)}/messages/${encodeURIComponent(message.id)}/attachments/${encodeURIComponent(attachment.id)}`,
       ),
     );
   }
-  return sanitizeMailHtml(document.body.innerHTML);
 }
 
 function normalizeMailContentId(value: string | undefined): string | undefined {

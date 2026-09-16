@@ -19,6 +19,26 @@ import type { MailService, MailSyncRunView } from '../server/types.js';
 import serverLocales from '../server/locales/index.js';
 
 describe('[API][SEC] mail API routes and permission boundaries', () => {
+  it('does not forward per-account automatic sync configuration', async () => {
+    const mail = service();
+    const updateAccount = vi.spyOn(mail, 'updateAccount');
+    const router = await createRouter(true, mail);
+    const response = await router.request('/api/mail/accounts/account-1', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        status: 'suspended',
+        automaticSyncIntervalMinutes: 1,
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(updateAccount).toHaveBeenCalledWith(expect.anything(), {
+      accountId: 'account-1',
+      status: 'suspended',
+    });
+  });
+
   it('owns an authentication boundary', async () => {
     const router = await createRouter(false, service());
     const response = await router.request('/api/mail/accounts');
@@ -33,6 +53,9 @@ describe('[API][SEC] mail API routes and permission boundaries', () => {
     expect(await response.json()).toEqual({
       error: {
         code: 'MAIL_ACCESS_DENIED',
+        ns: '@nocobase/app-plugin-mail',
+        key: 'errors.accessDenied',
+        params: {},
         message: 'Mail access is required.',
       },
     });
@@ -75,6 +98,62 @@ describe('[API][SEC] mail API routes and permission boundaries', () => {
       'mail.workspace',
       'mail.admin',
     ]);
+  });
+
+  it('protects managed details and attachments with independent management access', async () => {
+    const getManagedMessage = vi.fn<MailService['getManagedMessage']>(
+      async () => messageView(),
+    );
+    const getManagedAttachment = vi.fn<MailService['getManagedAttachment']>(
+      async () => ({
+        fileName: 'test.txt',
+        contentType: 'text/plain',
+        stream: streamOf('managed attachment'),
+      }),
+    );
+    const mail = service({ getManagedMessage, getManagedAttachment });
+    const path =
+      '/api/mail/management/accounts/account%2F1/messages/message%2F1';
+    for (const authenticated of [false, true]) {
+      const denied = await createRouter(
+        authenticated,
+        mail,
+        (resource) => resource === 'mail.workspace',
+      );
+      expect((await denied.request(path)).status).toBe(
+        authenticated ? 403 : 401,
+      );
+      expect(
+        (await denied.request(`${path}/attachments/file%2F1`)).status,
+      ).toBe(authenticated ? 403 : 401);
+    }
+    expect(getManagedMessage).not.toHaveBeenCalled();
+    expect(getManagedAttachment).not.toHaveBeenCalled();
+    const router = await createRouter(
+      true,
+      mail,
+      (resource) => resource === 'mail.management',
+    );
+    expect((await router.request(path)).status).toBe(200);
+    expect(getManagedMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ actorId: 'user-1' }),
+      'account/1',
+      'message/1',
+    );
+    const attachment = await router.request(`${path}/attachments/file%2F1`);
+    expect(await attachment.text()).toBe('managed attachment');
+    expect(getManagedAttachment).toHaveBeenCalledWith(
+      expect.objectContaining({ actorId: 'user-1' }),
+      'account/1',
+      'message/1',
+      'file/1',
+    );
+    getManagedMessage.mockResolvedValueOnce(undefined);
+    const missing = await router.request(path);
+    expect(missing.status).toBe(404);
+    expect(await missing.json()).toMatchObject({
+      error: { code: 'MAIL_MESSAGE_NOT_FOUND' },
+    });
   });
 
   it('maps management account, folder, and message queries to the service', async () => {
@@ -183,9 +262,36 @@ describe('[API][SEC] mail API routes and permission boundaries', () => {
     expect(await response.json()).toEqual({
       error: {
         code: 'MAIL_ACCESS_DENIED',
+        ns: '@nocobase/app-plugin-mail',
+        key: 'errors.accessDenied',
+        params: {},
         message: '需要邮件访问权限。',
       },
     });
+  });
+
+  it('lets consumers translate the same error in another locale', async () => {
+    const router = await createRouter(true, service(), false);
+    const response = await router.request('/api/mail/accounts');
+    const { error } = (await response.json()) as {
+      error: {
+        code: string;
+        ns: string;
+        key: string;
+        params: Record<string, unknown>;
+        message: string;
+      };
+    };
+    const consumer = new I18nRuntime({
+      defaultLocale: 'en-US',
+      locales: ['en-US', 'zh-CN'],
+    });
+    consumer.registerNamespace(error.ns, serverLocales);
+    await consumer.init('zh-CN');
+    expect(error.message).toBe('Mail access is required.');
+    expect(consumer.getFixedT(error.ns, 'zh-CN')(error.key, error.params)).toBe(
+      '需要邮件访问权限。',
+    );
   });
 
   it('lists all managed accounts for an authorized Settings user', async () => {
@@ -449,6 +555,9 @@ describe('[API][SEC] mail API routes and permission boundaries', () => {
     expect(response.status).toBe(200);
     expect(listSubmissions).toHaveBeenCalledWith(
       expect.objectContaining({ actorId: 'user-1' }),
+      undefined,
+      undefined,
+      undefined,
     );
     expect(await response.json()).toMatchObject({
       data: [{ id: 'submission-1', accountId: 'account-1' }],
@@ -676,6 +785,52 @@ describe('[API][SEC] mail API routes and permission boundaries', () => {
     );
   });
 
+  it.each(['send', 'draft'])(
+    'preserves an editable forward body for %s',
+    async (action) => {
+      const sendMessage = vi.fn<MailService['sendMessage']>(async () => ({
+        id: 'submission-1',
+        accountId: 'account-1',
+        status: 'pending',
+      }));
+      const saveDraft = vi.fn<MailService['saveDraft']>(async () =>
+        messageView(),
+      );
+      const router = await createRouter(
+        true,
+        service({ sendMessage, saveDraft }),
+      );
+      const response = await router.request(
+        action === 'send'
+          ? '/api/mail/messages/send'
+          : '/api/mail/messages/drafts',
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            accountId: 'account-1',
+            identityId: 'identity-1',
+            to: [{ address: 'recipient@example.com' }],
+            subject: 'Fwd: Original',
+            text: 'Edited original',
+            forwardOfMessageId: 'message-1',
+            forwardBodyIncluded: true,
+            idempotencyKey: 'forward-1',
+          }),
+        },
+      );
+      expect(response.status).toBe(200);
+      expect(action === 'send' ? sendMessage : saveDraft).toHaveBeenCalledWith(
+        expect.objectContaining({ actorId: 'user-1' }),
+        expect.objectContaining({
+          forwardOfMessageId: 'message-1',
+          forwardBodyIncluded: true,
+          text: 'Edited original',
+        }),
+      );
+    },
+  );
+
   it('allows an empty-recipient draft at the HTTP boundary', async () => {
     const saveDraft = vi.fn<MailService['saveDraft']>(async () =>
       messageView(),
@@ -722,6 +877,9 @@ describe('[API][SEC] mail API routes and permission boundaries', () => {
     expect(body).toEqual({
       error: {
         code: 'MAIL_REQUEST_FAILED',
+        ns: '@nocobase/app-plugin-mail',
+        key: 'errors.requestFailed',
+        params: {},
         message: 'The mail request could not be completed.',
       },
     });
@@ -1067,8 +1225,20 @@ function service(overrides: Partial<MailService> = {}): MailService {
       ...syncRun('account-1', 'user-1'),
       status: 'cancelled',
     }),
+    retrySubmission: async () => {
+      throw new Error('Not implemented');
+    },
+    cancelSubmission: async () => {
+      throw new Error('Not implemented');
+    },
     listSubmissions: async () => [],
     listMessages: async () => ({ items: [] }),
+    getManagedMessage: async () => undefined,
+    getManagedAttachment: async () => ({
+      fileName: 'attachment.bin',
+      contentType: 'application/octet-stream',
+      stream: streamOf(''),
+    }),
     getMessage: async () => undefined,
     getAttachment: async () => ({
       fileName: 'attachment.bin',

@@ -1,6 +1,5 @@
 import type {
   MailAccountView,
-  MailBulkComposeInput,
   MailComposeInput,
   MailDraftConflict,
   MailIdentity,
@@ -12,9 +11,15 @@ import type {
 } from '../mail-client.js';
 import { replaceMailSignatureContent } from './mail-signature.js';
 import { sanitizeMailHtml } from './mail-template.js';
+import {
+  composeMailBody,
+  type MailForwardQuote,
+} from './mail-forward-content.js';
 export interface ComposerState {
   readonly mode: 'new' | 'reply' | 'forward' | 'edit';
   readonly relatedMessageId?: string;
+  readonly forwardBodyIncluded?: boolean;
+  readonly forwardQuote?: MailForwardQuote;
   readonly draftMessageId?: string;
   readonly fromAddress?: string;
   readonly to: string;
@@ -55,7 +60,7 @@ export function parseAddressList(
   value: string,
 ): readonly { address: string }[] {
   return value
-    .split(/[;,]/u)
+    .split(/[;,\n]/u)
     .map((address) => address.trim())
     .filter(Boolean)
     .map((address) => ({ address }));
@@ -84,20 +89,28 @@ export function buildComposerInput(
   attachments: readonly MailOutboundAttachmentView[],
   retainedAttachments: MailMessage['attachments'],
 ): MailComposeInput {
+  const body = composeMailBody(composer);
   return {
     accountId,
     identityId,
-    signatureId: signatureId === '__none__' ? null : signatureId || undefined,
+    // The editor places the selected signature above the quote, inside the body.
+    signatureId:
+      composer.forwardQuote || signatureId === '__none__'
+        ? null
+        : signatureId || undefined,
     to: parseAddressList(composer.to),
     cc: parseAddressList(composer.cc),
     bcc: parseAddressList(composer.bcc),
     subject: composer.subject,
-    text: composer.text,
-    html: composer.html || undefined,
+    text: body.text,
+    html: body.html || undefined,
     inReplyToMessageId:
       composer.mode === 'reply' ? composer.relatedMessageId : undefined,
     forwardOfMessageId:
       composer.mode === 'forward' ? composer.relatedMessageId : undefined,
+    ...(composer.mode === 'forward' && composer.forwardBodyIncluded
+      ? { forwardBodyIncluded: true }
+      : {}),
     scheduledAt: composer.scheduledAt
       ? new Date(composer.scheduledAt).toISOString()
       : undefined,
@@ -154,6 +167,7 @@ export function composerFingerprint(
   return JSON.stringify({
     mode: composer.mode,
     relatedMessageId: composer.relatedMessageId,
+    forwardQuote: composer.forwardQuote,
     fromAddress: composer.fromAddress,
     to: composer.to,
     cc: composer.cc,
@@ -257,7 +271,15 @@ function isComposerRecoverySnapshot(
     return false;
   }
   const composer = value.composer;
+  const quote = composer.forwardQuote;
   return (
+    (quote === undefined ||
+      (isRecord(quote) &&
+        ['id', 'accountId', 'html', 'text'].every(
+          (field) => typeof quote[field] === 'string',
+        ) &&
+        Array.isArray(quote.attachments) &&
+        quote.attachments.every(isRecoveryAttachment))) &&
     ['new', 'reply', 'forward', 'edit'].includes(String(composer.mode)) &&
     ['relatedMessageId', 'draftMessageId', 'fromAddress'].every(
       (field) =>
@@ -283,23 +305,6 @@ function isRecoveryAttachment(value: unknown): boolean {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
-}
-
-export function toBulkComposeInput(
-  input: MailComposeInput,
-): MailBulkComposeInput {
-  return {
-    accountId: input.accountId,
-    identityId: input.identityId,
-    signatureId: input.signatureId,
-    recipients: input.to,
-    subject: input.subject,
-    text: input.text,
-    html: input.html,
-    attachmentIds: input.attachmentIds,
-    scheduledAt: input.scheduledAt,
-    idempotencyKey: input.idempotencyKey,
-  };
 }
 
 export function findProviderCapabilities(

@@ -11,9 +11,21 @@ export function folderCursor(
   uidValidity: bigint | undefined,
   uidNext: number | undefined,
 ): ImapFolderCursor {
+  if (uidNext === undefined || !Number.isSafeInteger(uidNext) || uidNext < 1) {
+    throw Object.assign(
+      new Error('The IMAP server returned an invalid UIDNEXT.'),
+      { code: 'IMAP_INVALID_UIDNEXT' },
+    );
+  }
+  if (uidValidity === undefined || uidValidity < 1n) {
+    throw Object.assign(
+      new Error('The IMAP server returned an invalid UIDVALIDITY.'),
+      { code: 'IMAP_INVALID_UIDVALIDITY' },
+    );
+  }
   return {
-    uidValidity: String(uidValidity ?? 0n),
-    uidNext: Math.max(1, uidNext ?? 1),
+    uidValidity: String(uidValidity),
+    uidNext,
   };
 }
 

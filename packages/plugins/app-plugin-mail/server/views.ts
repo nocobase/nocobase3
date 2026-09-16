@@ -44,6 +44,14 @@ export function toSubmissionLogView(
 ): MailSubmissionLogView {
   return {
     ...toSubmissionView(submission),
+    recipients: submission.recipients,
+    subject: submission.subject,
+    bulk: submission.bulk,
+    batchId: submission.batchId,
+    canRetry:
+      submission.status === 'failed' && submission.hasComposeInput === true,
+    canCancel:
+      submission.status === 'pending' && submission.hasComposeInput === true,
     createdAt: submission.createdAt,
     updatedAt: submission.updatedAt,
   };

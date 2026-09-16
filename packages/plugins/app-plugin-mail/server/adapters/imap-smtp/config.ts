@@ -12,6 +12,8 @@ export interface ImapSmtpMailProviderConfig extends MailProviderConfig {
   readonly enabled?: boolean;
   readonly imap: ImapSmtpEndpointConfig;
   readonly smtp: ImapSmtpEndpointConfig;
+  /** Use client when the SMTP server does not save sent messages itself. */
+  readonly sentCopyMode?: 'server' | 'client';
   readonly sentFolder?: string;
   readonly trashFolder?: string;
   readonly draftsFolder?: string;

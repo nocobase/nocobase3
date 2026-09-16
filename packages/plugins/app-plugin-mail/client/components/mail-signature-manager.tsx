@@ -1,4 +1,5 @@
-import { ChevronDown, Mail, PenLine, Plus, Trash2, X } from 'lucide-react';
+import { mailEditorLabels } from '../lib/mail-editor-labels.js';
+import { ChevronDown, Mail, PenLine, Plus, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import type { ReactElement } from 'react';
 import { useTranslation } from '@nocobase/i18n/client';
@@ -11,8 +12,18 @@ import { cn } from '../lib/utils.js';
 import { plainTextToMailHtml } from '../lib/mail-template.js';
 import { Button } from './ui/button.js';
 import { Card } from './ui/card.js';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from './ui/dialog.js';
 import { Input } from './ui/input.js';
 import { MailRichTextEditor } from './mail-rich-text-editor.js';
+import { MailManagementFormActions } from './mail-management-form-actions.js';
+import { MailManagementListItem } from './mail-management-list-item.js';
 import { NativeSelect } from './ui/native-select.js';
 
 export interface MailSignatureManagerProps {
@@ -48,6 +59,8 @@ export function MailSignatureManager({
   const [draft, setDraft] = useState<SignatureDraft>(EMPTY_SIGNATURE);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [signatureToDelete, setSignatureToDelete] = useState<MailSignature>();
+  const [deleteError, setDeleteError] = useState<string>();
   const [collapsedAccountIds, setCollapsedAccountIds] = useState<
     ReadonlySet<string>
   >(() => new Set());
@@ -221,16 +234,26 @@ export function MailSignatureManager({
       .finally(() => setBusy(false));
   };
 
-  const remove = (account: MailAccountView, signature: MailSignature): void => {
-    if (busy) return;
+  const confirmDelete = (): void => {
+    const signature = signatureToDelete;
+    if (!signature || busy) return;
+    setDeleteError(undefined);
     setBusy(true);
     void mail
-      .deleteSignature(account.id, signature.id)
+      .deleteSignature(signature.accountId, signature.id)
       .then(() => {
         if (draft.id === signature.id) resetDraft();
+        setSignatureToDelete(undefined);
         loadSignatures();
       })
-      .catch(showError)
+      .catch((cause: unknown) =>
+        setDeleteError(
+          mailErrorMessage(
+            cause,
+            t('errors.requestFailed', { defaultValue: 'Mail request failed.' }),
+          ),
+        ),
+      )
       .finally(() => setBusy(false));
   };
 
@@ -345,63 +368,63 @@ export function MailSignatureManager({
                       signatures.map((signature) => {
                         const selected = draft.id === signature.id;
                         return (
-                          <div
-                            className='flex min-w-0 items-center gap-1 px-2 py-1.5 transition-colors hover:bg-muted/30'
+                          <MailManagementListItem
                             key={signature.id}
-                          >
-                            <button
-                              aria-current={selected ? 'true' : undefined}
-                              className={cn(
-                                'flex min-w-0 flex-1 items-center gap-2 rounded-lg border-l-2 border-transparent px-2 py-2 text-left transition-colors hover:bg-muted/30',
-                                selected &&
-                                  'border-primary bg-primary/10 hover:bg-primary/15',
-                              )}
-                              onClick={() =>
-                                selectSignature(account, signature)
-                              }
-                              type='button'
-                            >
-                              <PenLine
-                                aria-hidden='true'
-                                className='size-3.5 shrink-0 text-muted-foreground'
-                              />
-                              <span className='min-w-0 flex-1 truncate text-sm font-medium'>
-                                {signature.name}
-                              </span>
-                              {signature.isDefault ? (
-                                <span className='shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] text-primary'>
-                                  {t('settings.identities.default', {
-                                    defaultValue: 'Default',
+                            onSelect={() => selectSignature(account, signature)}
+                            selected={selected}
+                            actions={
+                              <>
+                                {!signature.isDefault ? (
+                                  <Button
+                                    className='h-auto shrink-0 border-0 px-1 py-1 text-xs font-normal text-muted-foreground underline-offset-4 hover:bg-transparent hover:text-primary hover:underline'
+                                    disabled={busy}
+                                    onClick={() =>
+                                      makeDefault(account, signature)
+                                    }
+                                    type='button'
+                                    variant='ghost'
+                                  >
+                                    {t('settings.identities.makeDefault', {
+                                      defaultValue: 'Make default',
+                                    })}
+                                  </Button>
+                                ) : null}
+                                <Button
+                                  aria-label={t('settings.identities.delete', {
+                                    defaultValue: 'Delete signature',
                                   })}
-                                </span>
-                              ) : null}
-                            </button>
-                            {!signature.isDefault ? (
-                              <Button
-                                className='h-8 shrink-0 px-2 text-[11px]'
-                                disabled={busy}
-                                onClick={() => makeDefault(account, signature)}
-                                type='button'
-                                variant='outline'
-                              >
-                                {t('settings.identities.makeDefault', {
-                                  defaultValue: 'Make default',
+                                  className='size-8 shrink-0 p-0'
+                                  disabled={busy}
+                                  onClick={() => {
+                                    setDeleteError(undefined);
+                                    setSignatureToDelete(signature);
+                                  }}
+                                  type='button'
+                                  variant='ghost'
+                                >
+                                  <Trash2
+                                    aria-hidden='true'
+                                    className='size-3.5'
+                                  />
+                                </Button>
+                              </>
+                            }
+                          >
+                            <PenLine
+                              aria-hidden='true'
+                              className='size-3.5 shrink-0 text-muted-foreground'
+                            />
+                            <span className='min-w-0 flex-1 truncate text-sm font-medium'>
+                              {signature.name}
+                            </span>
+                            {signature.isDefault ? (
+                              <span className='shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] text-primary'>
+                                {t('settings.identities.default', {
+                                  defaultValue: 'Default',
                                 })}
-                              </Button>
+                              </span>
                             ) : null}
-                            <Button
-                              aria-label={t('settings.identities.delete', {
-                                defaultValue: 'Delete signature',
-                              })}
-                              className='size-8 shrink-0 p-0'
-                              disabled={busy}
-                              onClick={() => remove(account, signature)}
-                              type='button'
-                              variant='ghost'
-                            >
-                              <Trash2 aria-hidden='true' className='size-3.5' />
-                            </Button>
-                          </div>
+                          </MailManagementListItem>
                         );
                       })
                     )}
@@ -432,22 +455,9 @@ export function MailSignatureManager({
               )}
             </h2>
           </div>
-          {isEditing ? (
-            <Button
-              aria-label={t('settings.identities.cancel', {
-                defaultValue: 'Cancel',
-              })}
-              className='size-8 p-0'
-              onClick={resetDraft}
-              type='button'
-              variant='ghost'
-            >
-              <X aria-hidden='true' className='size-4' />
-            </Button>
-          ) : null}
         </div>
 
-        <div className='space-y-2'>
+        <div className='grid gap-2'>
           <label
             className='text-sm font-medium'
             htmlFor='mail-signature-account'
@@ -477,7 +487,7 @@ export function MailSignatureManager({
           </NativeSelect>
         </div>
 
-        <div className='space-y-2'>
+        <div className='grid gap-2'>
           <label className='text-sm font-medium' htmlFor='mail-signature-name'>
             {t('settings.identities.name', {
               defaultValue: 'Signature name',
@@ -499,7 +509,7 @@ export function MailSignatureManager({
           />
         </div>
 
-        <div className='space-y-2'>
+        <div className='grid gap-2'>
           <label
             className='text-sm font-medium'
             htmlFor='mail-signature-editor'
@@ -513,67 +523,7 @@ export function MailSignatureManager({
               defaultValue: 'Signature content',
             })}
             disabled={busy || !selectedAccount}
-            labels={{
-              toolbar: t('actions.editor.toolbar', {
-                defaultValue: 'Formatting',
-              }),
-              bold: t('actions.editor.bold', { defaultValue: 'Bold' }),
-              italic: t('actions.editor.italic', {
-                defaultValue: 'Italic',
-              }),
-              underline: t('actions.editor.underline', {
-                defaultValue: 'Underline',
-              }),
-              bulletList: t('actions.editor.bulletList', {
-                defaultValue: 'Bulleted list',
-              }),
-              numberedList: t('actions.editor.numberedList', {
-                defaultValue: 'Numbered list',
-              }),
-              undo: t('actions.editor.undo', { defaultValue: 'Undo' }),
-              redo: t('actions.editor.redo', { defaultValue: 'Redo' }),
-              clearFormatting: t('actions.editor.clearFormatting', {
-                defaultValue: 'Clear formatting',
-              }),
-              fontSize: t('actions.editor.fontSize', {
-                defaultValue: 'Font size',
-              }),
-              heading: t('actions.editor.heading', {
-                defaultValue: 'Heading level',
-              }),
-              link: t('actions.editor.link', { defaultValue: 'Insert link' }),
-              image: t('actions.editor.image', {
-                defaultValue: 'Insert image',
-              }),
-              normal: t('actions.editor.normal', { defaultValue: 'Normal' }),
-              heading1: t('actions.editor.heading1', {
-                defaultValue: 'Heading 1',
-              }),
-              heading2: t('actions.editor.heading2', {
-                defaultValue: 'Heading 2',
-              }),
-              heading3: t('actions.editor.heading3', {
-                defaultValue: 'Heading 3',
-              }),
-              heading4: t('actions.editor.heading4', {
-                defaultValue: 'Heading 4',
-              }),
-              heading5: t('actions.editor.heading5', {
-                defaultValue: 'Heading 5',
-              }),
-              heading6: t('actions.editor.heading6', {
-                defaultValue: 'Heading 6',
-              }),
-              fontSizeSmall: t('actions.editor.fontSizeSmall', {
-                defaultValue: 'Small',
-              }),
-              fontSizeNormal: t('actions.editor.fontSizeNormal', {
-                defaultValue: 'Normal',
-              }),
-              fontSizeLarge: t('actions.editor.fontSizeLarge', {
-                defaultValue: 'Large',
-              }),
-            }}
+            labels={mailEditorLabels(t)}
             onChange={(value) =>
               setDraft((current) => ({
                 ...current,
@@ -588,40 +538,84 @@ export function MailSignatureManager({
           />
         </div>
 
-        <div className='flex justify-end gap-2'>
-          {isEditing && selectedAccount && selectedSignature ? (
+        <MailManagementFormActions
+          editing={isEditing}
+          busy={busy}
+          disabled={!selectedAccount || !draft.name.trim()}
+          submitLabel={t(
+            isEditing ? 'settings.identities.save' : 'settings.identities.add',
+            {
+              defaultValue: isEditing ? 'Save signature' : 'Add signature',
+            },
+          )}
+          savingLabel={t('settings.identities.saving', {
+            defaultValue: 'Saving…',
+          })}
+          cancelLabel={t('settings.identities.cancel', {
+            defaultValue: 'Cancel',
+          })}
+          onSubmit={save}
+          onCancel={resetDraft}
+        />
+      </Card>
+
+      <Dialog
+        open={Boolean(signatureToDelete)}
+        onOpenChange={(open) => {
+          if (!open && !busy) setSignatureToDelete(undefined);
+        }}
+      >
+        <DialogContent
+          closeLabel={t('settings.identities.close', { defaultValue: 'Close' })}
+        >
+          <DialogHeader>
+            <DialogTitle>
+              {t('settings.identities.deleteTitle', {
+                defaultValue: 'Delete signature?',
+              })}
+            </DialogTitle>
+            <DialogDescription>
+              {t('settings.identities.deleteDescription', {
+                defaultValue:
+                  'This permanently deletes the signature. This action cannot be undone.',
+              })}
+            </DialogDescription>
+          </DialogHeader>
+          <p className='mt-4 text-sm font-medium break-words'>
+            {signatureToDelete?.name}
+          </p>
+          {deleteError ? (
+            <p role='alert' className='mt-4 text-sm text-destructive'>
+              {deleteError}
+            </p>
+          ) : null}
+          <DialogFooter>
             <Button
               disabled={busy}
-              onClick={() => remove(selectedAccount, selectedSignature)}
+              onClick={() => setSignatureToDelete(undefined)}
+              type='button'
+              variant='outline'
+            >
+              {t('settings.identities.cancel', { defaultValue: 'Cancel' })}
+            </Button>
+            <Button
+              disabled={busy}
+              onClick={confirmDelete}
               type='button'
               variant='destructive'
             >
               <Trash2 aria-hidden='true' className='size-4' />
-              {t('settings.identities.delete', {
-                defaultValue: 'Delete signature',
-              })}
+              {busy
+                ? t('settings.identities.deleting', {
+                    defaultValue: 'Deleting…',
+                  })
+                : t('settings.identities.delete', {
+                    defaultValue: 'Delete signature',
+                  })}
             </Button>
-          ) : null}
-          <Button
-            disabled={busy || !selectedAccount || !draft.name.trim()}
-            onClick={save}
-            type='button'
-          >
-            {busy
-              ? t('settings.identities.saving', { defaultValue: 'Saving…' })
-              : t(
-                  isEditing
-                    ? 'settings.identities.save'
-                    : 'settings.identities.add',
-                  {
-                    defaultValue: isEditing
-                      ? 'Save signature'
-                      : 'Add signature',
-                  },
-                )}
-          </Button>
-        </div>
-      </Card>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

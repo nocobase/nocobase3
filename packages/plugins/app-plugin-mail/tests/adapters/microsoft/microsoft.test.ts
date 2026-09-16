@@ -893,80 +893,90 @@ describe('Microsoft Mail Provider', () => {
     );
   });
 
-  it('preserves provider-generated content when forwarding a message', async () => {
-    const credentials = memoryVault();
-    await credentials.putAt('credential-1', {
-      provider: 'microsoft',
-      accessToken: 'access-1',
-      refreshToken: 'refresh-1',
-      expiresAt: '2099-01-01T00:00:00.000Z',
-      scopes: [],
-      tokenType: 'Bearer',
-    });
-    const fetchMock = vi
-      .fn<typeof fetch>()
-      .mockResolvedValueOnce(
-        Response.json({
-          id: 'forward-draft-1',
-          body: { contentType: 'HTML', content: '<p>Original body</p>' },
-        }),
-      )
-      .mockResolvedValueOnce(Response.json({ id: 'forward-draft-1' }))
-      .mockResolvedValueOnce(
-        Response.json({
-          value: [
-            {
-              id: 'original-attachment-1',
-              name: 'original.pdf',
-              contentType: 'application/pdf',
-              size: 42,
-              isInline: false,
-            },
-          ],
-        }),
-      )
-      .mockResolvedValueOnce(new Response(null, { status: 202 }));
-    vi.stubGlobal('fetch', fetchMock);
-    const adapter = new MicrosoftMailProviderAdapter(
-      context(credentials),
-      config(),
-      account(),
-    );
+  it.each([false, true])(
+    'preserves provider-generated content when forwarding a message',
+    async (forwardBodyIncluded) => {
+      const credentials = memoryVault();
+      await credentials.putAt('credential-1', {
+        provider: 'microsoft',
+        accessToken: 'access-1',
+        refreshToken: 'refresh-1',
+        expiresAt: '2099-01-01T00:00:00.000Z',
+        scopes: [],
+        tokenType: 'Bearer',
+      });
+      const fetchMock = vi
+        .fn<typeof fetch>()
+        .mockResolvedValueOnce(
+          Response.json({
+            id: 'forward-draft-1',
+            body: { contentType: 'HTML', content: '<p>Original body</p>' },
+          }),
+        )
+        .mockResolvedValueOnce(Response.json({ id: 'forward-draft-1' }))
+        .mockResolvedValueOnce(
+          Response.json({
+            value: [
+              {
+                id: 'original-attachment-1',
+                name: 'original.pdf',
+                contentType: 'application/pdf',
+                size: 42,
+                isInline: false,
+              },
+            ],
+          }),
+        )
+        .mockResolvedValueOnce(new Response(null, { status: 202 }));
+      vi.stubGlobal('fetch', fetchMock);
+      const adapter = new MicrosoftMailProviderAdapter(
+        context(credentials),
+        config(),
+        account(),
+      );
 
-    await expect(
-      adapter.sendMessage({
-        trackingId: 'submission-forward',
-        identity: {
-          id: 'identity-1',
-          accountId: 'account-1',
-          address: 'user@example.com',
-          isPrimary: true,
-          canSend: true,
-        },
-        message: {
-          to: [{ address: 'recipient@example.com' }],
-          cc: [],
-          bcc: [],
-          subject: 'Fwd: Original',
-          text: 'Please review',
-          attachments: [],
-          references: [],
-          forwardOfProviderMessageId: 'source-message-1',
-        },
-      }),
-    ).resolves.toMatchObject({ status: 'accepted' });
-    const patchBody = JSON.parse(String(fetchMock.mock.calls[1][1]?.body)) as {
-      body: { content: string };
-    };
-    expect(patchBody.body.content).toContain('Please review');
-    expect(patchBody.body.content).toContain('Original body');
-    expect(String(fetchMock.mock.calls[2][0])).toContain(
-      '/me/messages/forward-draft-1/attachments?',
-    );
-    expect(String(fetchMock.mock.calls[3][0])).toContain(
-      '/me/messages/forward-draft-1/send',
-    );
-  });
+      await expect(
+        adapter.sendMessage({
+          trackingId: 'submission-forward',
+          identity: {
+            id: 'identity-1',
+            accountId: 'account-1',
+            address: 'user@example.com',
+            isPrimary: true,
+            canSend: true,
+          },
+          message: {
+            to: [{ address: 'recipient@example.com' }],
+            cc: [],
+            bcc: [],
+            subject: 'Fwd: Original',
+            text: 'Please review',
+            forwardBodyIncluded,
+            attachments: [],
+            references: [],
+            forwardOfProviderMessageId: 'source-message-1',
+          },
+        }),
+      ).resolves.toMatchObject({ status: 'accepted' });
+      const patchBody = JSON.parse(
+        String(fetchMock.mock.calls[1][1]?.body),
+      ) as {
+        body: { content: string };
+      };
+      expect(patchBody.body.content).toContain('Please review');
+      if (forwardBodyIncluded) {
+        expect(patchBody.body.content).toBe('Please review');
+      } else {
+        expect(patchBody.body.content).toContain('Original body');
+      }
+      expect(String(fetchMock.mock.calls[2][0])).toContain(
+        '/me/messages/forward-draft-1/attachments?',
+      );
+      expect(String(fetchMock.mock.calls[3][0])).toContain(
+        '/me/messages/forward-draft-1/send',
+      );
+    },
+  );
 
   it('uses a Graph upload session for attachments of 3 MB or larger', async () => {
     const credentials = memoryVault();

@@ -5,7 +5,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createMailProviderRegistry } from '../server/registry.js';
 import { mailPushWebhookRoutes } from '../server/routes/push-webhook.js';
-import type { MailRuntime } from '../server/runtime.js';
 import {
   mailProviderRegistryToken,
   mailRuntimeToken,
@@ -190,8 +189,15 @@ async function createRouter(
   container.instance(mailProviderRegistryToken, registry);
   container.instance(mailStoreToken, store);
   container.instance(mailRuntimeToken, {
+    start: () => undefined,
+    scheduleAutomaticSync: () => undefined,
+    createAutomaticSyncRuns: async () => 0,
+    schedulePushSync: async () => false,
     schedulePushSyncBatch,
-  } as unknown as MailRuntime);
+    kick: () => undefined,
+    publishPending: async () => undefined,
+    close: async () => undefined,
+  });
   const config = new AppConfig();
   config.get = <TValue>(): TValue =>
     ({

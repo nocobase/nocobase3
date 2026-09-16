@@ -14,6 +14,7 @@ import {
 import type {
   MailAccountView,
   MailMessageSummary,
+  MailMessage,
   MailProviderView,
 } from '../client/mail-client.js';
 
@@ -66,8 +67,16 @@ describe('[UI][SEC] mail client components and capability states', () => {
         />,
       );
 
+      expect(
+        within(screen.getByLabelText('Font size'))
+          .getAllByRole('option')
+          .filter((option) => !option.hasAttribute('disabled'))
+          .map((option) => option.textContent),
+      ).toEqual(['10', '12', '14', '16', '18', '24', '32', '48']);
+      expect(screen.getByLabelText('Font size')).toHaveValue('14');
+
       fireEvent.change(screen.getByLabelText('Font size'), {
-        target: { value: '5' },
+        target: { value: '12' },
       });
       fireEvent.change(screen.getByLabelText('Heading level'), {
         target: { value: 'h2' },
@@ -75,7 +84,7 @@ describe('[UI][SEC] mail client components and capability states', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Insert link' }));
       fireEvent.click(screen.getByRole('button', { name: 'Insert image' }));
 
-      expect(execCommand).toHaveBeenCalledWith('fontSize', false, '5');
+      expect(execCommand).toHaveBeenCalledWith('fontSize', false, '7');
       expect(execCommand).toHaveBeenCalledWith('formatBlock', false, 'h2');
       expect(execCommand).toHaveBeenCalledWith(
         'createLink',
@@ -214,11 +223,7 @@ describe('[UI][SEC] mail client components and capability states', () => {
     const connect = screen.getByRole('button', { name: 'Connect account' });
     expect(connect).toBeDisabled();
     const accountType = screen.getByLabelText('Mail account type');
-    expect(accountType.closest('label')).toHaveClass(
-      'flex',
-      'flex-col',
-      'gap-1.5',
-    );
+    expect(accountType.closest('label')).toHaveClass('grid', 'gap-2');
     fireEvent.change(accountType, {
       target: { value: 'microsoft:work' },
     });
@@ -555,8 +560,17 @@ describe('[UI][SEC] mail client components and capability states', () => {
             providerFolderId: 'INBOX',
             type: 'inbox',
             name: 'Inbox',
-            unreadCount: 0,
+            unreadCount: 3,
             kind: 'label',
+          },
+          {
+            id: 'folder-drafts',
+            accountId: 'account-1',
+            providerFolderId: 'DRAFTS',
+            type: 'drafts',
+            name: 'Drafts',
+            unreadCount: 7,
+            kind: 'folder',
           },
         ]}
         customLabels={[
@@ -597,7 +611,7 @@ describe('[UI][SEC] mail client components and capability states', () => {
       within(folderNavigation)
         .getAllByRole('button')
         .map((button) => button.textContent),
-    ).toEqual(['Inbox', 'Sent', 'Archive']);
+    ).toEqual(['Inbox3', 'Sent', 'Archive', 'Drafts']);
     fireEvent.click(screen.getByRole('button', { name: /Inbox/ }));
     expect(onSmartViewChange).toHaveBeenCalledWith('all');
     expect(onFolderChange).toHaveBeenCalledWith('INBOX');
@@ -606,9 +620,16 @@ describe('[UI][SEC] mail client components and capability states', () => {
     expect(onLabelChange).toHaveBeenCalledWith('label-1');
   });
 
-  it('collapses each message independently while keeping a summary visible', () => {
+  it('toggles messages from their headers while keeping message actions independent', () => {
+    const reply = vi.fn();
     render(
       <MailConversationView
+        actions={{
+          delete: vi.fn(),
+          reply,
+          toggleRead: vi.fn(),
+          toggleStarred: vi.fn(),
+        }}
         actionLabels={{
           archive: 'Archive',
           collapseMessage: 'Collapse message',
@@ -631,26 +652,114 @@ describe('[UI][SEC] mail client components and capability states', () => {
           unknownSender: 'Unknown sender',
         }}
         messages={[
-          conversationMessage('message-1', 'Alice', 'First message'),
-          conversationMessage('message-2', 'Bob', 'Second message'),
+          {
+            ...conversationMessage('message-1', 'Alice', 'First message'),
+            read: false,
+          },
+          {
+            ...conversationMessage('message-2', 'Bob', 'Second message'),
+            read: false,
+          },
         ]}
         onLoadMore={vi.fn()}
         subject='Project update'
       />,
     );
 
-    fireEvent.click(
-      screen.getAllByRole('button', { name: 'Collapse message' })[0],
+    const headerTrigger = screen.getAllByRole('button', {
+      name: 'Collapse message',
+    })[0];
+    const header = headerTrigger.closest('header')!;
+    expect(headerTrigger).toHaveAttribute('aria-expanded', 'true');
+    expect(headerTrigger).toBeEmptyDOMElement();
+    expect(header.querySelector('.lucide-chevron-down')).toBeInTheDocument();
+
+    fireEvent.click(within(header).getByRole('button', { name: 'Reply' }));
+    expect(reply).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'message-1' }),
     );
+    expect(headerTrigger).toHaveAttribute('aria-expanded', 'true');
+
+    fireEvent.click(headerTrigger);
+    expect(headerTrigger).toHaveAttribute('aria-expanded', 'false');
+    expect(header.querySelector('.lucide-chevron-right')).toBeInTheDocument();
     expect(
       screen.getAllByRole('button', { name: 'Expand message' }),
     ).toHaveLength(1);
     expect(screen.getAllByText('First message')).toHaveLength(1);
     expect(screen.getByText('Second message')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Expand message' }));
+    expect(headerTrigger).toHaveAttribute('aria-expanded', 'true');
     expect(
       screen.getAllByRole('button', { name: 'Collapse message' }),
     ).toHaveLength(2);
+  });
+
+  it('initializes expansion from read state and preserves it through read updates and pagination', () => {
+    const unread = {
+      ...conversationMessage('unread', 'Alice', 'Unread body'),
+      preview: 'Unread preview',
+      read: false,
+    };
+    const read = {
+      ...conversationMessage('read', 'Bob', 'Read body'),
+      preview: 'Read preview',
+    };
+    const view = (messages: readonly MailMessage[]) => (
+      <MailConversationView
+        labels={{
+          attachmentCount: (count) => `${count} attachments`,
+          conversation: (count) => `${count} messages`,
+          loadMore: 'Load more',
+          noSubject: '(no subject)',
+          selectMessage: 'Select a message',
+          unknownSender: 'Unknown sender',
+          labels: 'Labels',
+          note: 'Note',
+          notePlaceholder: 'Add a note',
+          saveNote: 'Save note',
+          todo: 'To do',
+        }}
+        messages={messages}
+        onLoadMore={vi.fn()}
+        subject='Project update'
+      />
+    );
+    const { rerender } = render(view([]));
+    rerender(view([unread, read]));
+    expect(screen.getByText('Unread body')).toBeInTheDocument();
+    expect(screen.queryByText('Read body')).not.toBeInTheDocument();
+    expect(screen.getByText('Read preview')).toBeInTheDocument();
+
+    const markedRead = { ...unread, read: true };
+    rerender(view([markedRead, read]));
+    expect(screen.getByText('Unread body')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Expand message' }));
+    expect(screen.getByText('Read body')).toBeInTheDocument();
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Collapse message' })[0],
+    );
+
+    const older = {
+      ...conversationMessage('older', 'Carol', 'Older body'),
+      preview: 'Older preview',
+    };
+    rerender(view([older, markedRead, read]));
+    expect(screen.queryByText('Older body')).not.toBeInTheDocument();
+    expect(screen.getByText('Older preview')).toBeInTheDocument();
+    expect(screen.queryByText('Unread body')).not.toBeInTheDocument();
+    expect(screen.getByText('Read body')).toBeInTheDocument();
+
+    rerender(view([]));
+    rerender(view([markedRead, read]));
+    expect(
+      screen.getAllByRole('button', { name: 'Expand message' }),
+    ).toHaveLength(2);
+    rerender(view([read]));
+    expect(screen.getByText('Read body')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Expand message' }),
+    ).not.toBeInTheDocument();
   });
 
   it('renders every synchronized message in a provider conversation', () => {
@@ -682,8 +791,9 @@ describe('[UI][SEC] mail client components and capability states', () => {
     expect(screen.getByText('Second message')).toBeInTheDocument();
   });
 
-  it('keeps message metadata behind compact action buttons', () => {
+  it('keeps message metadata in the more menu and opens dialogs after it closes', async () => {
     const saveNote = vi.fn();
+    const toggleTodo = vi.fn();
     const toggleLabel = vi.fn();
     const message = {
       ...conversationMessage('message-1', 'Alice', 'Message body'),
@@ -698,7 +808,7 @@ describe('[UI][SEC] mail client components and capability states', () => {
           toggleLabel,
           toggleRead: vi.fn(),
           toggleStarred: vi.fn(),
-          toggleTodo: vi.fn(),
+          toggleTodo,
         }}
         availableLabels={[
           {
@@ -731,7 +841,16 @@ describe('[UI][SEC] mail client components and capability states', () => {
     expect(
       screen.queryByRole('textbox', { name: 'Note' }),
     ).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Note' }));
+    expect(screen.queryByRole('button', { name: 'Note' })).toBeNull();
+    const more = screen.getByRole('button', { name: 'More actions' });
+    expect(more).toHaveAttribute('title', 'More actions');
+    fireEvent.click(more);
+    const todo = await screen.findByRole('menuitemcheckbox', { name: 'To do' });
+    expect(todo).toHaveAttribute('aria-checked', 'false');
+    fireEvent.click(todo);
+    expect(toggleTodo).toHaveBeenCalledWith(message);
+    fireEvent.click(more);
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Note' }));
     const noteDialog = screen.getByRole('dialog');
     fireEvent.change(
       within(noteDialog).getByRole('textbox', { name: 'Note' }),
@@ -744,7 +863,8 @@ describe('[UI][SEC] mail client components and capability states', () => {
     );
     expect(saveNote).toHaveBeenCalledWith(message, 'Updated note');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Labels' }));
+    fireEvent.click(more);
+    fireEvent.click(await screen.findByRole('menuitem', { name: /^Labels/ }));
     const labelsDialog = screen.getByRole('dialog');
     expect(
       within(labelsDialog).getByRole('checkbox', { name: 'Customers' }),
@@ -776,8 +896,17 @@ describe('[UI][SEC] mail client components and capability states', () => {
       />,
     );
 
-    const team = screen.getByText('team');
-    expect(team.tagName).toBe('STRONG');
+    const frame = document.querySelector('iframe');
+    expect(frame).toHaveAttribute(
+      'sandbox',
+      'allow-same-origin allow-popups allow-popups-to-escape-sandbox',
+    );
+    const body = new DOMParser().parseFromString(
+      frame?.getAttribute('srcdoc') ?? '',
+      'text/html',
+    );
+    expect(body.querySelector('strong')?.textContent).toBe('team');
+    expect(body.querySelector('script')).toBeNull();
     expect(screen.queryByText(/bad\(\)/)).not.toBeInTheDocument();
     expect(document.querySelector('script')).not.toBeInTheDocument();
   });

@@ -190,26 +190,6 @@ describe('client inspection', () => {
         id: '@nocobase/app-plugin-install:install',
         path: '/install',
       },
-      {
-        auth: 'required',
-        id: '@nocobase/app-plugin-mail:mail',
-        path: '/mail',
-      },
-      {
-        auth: 'required',
-        id: '@nocobase/app-plugin-routes-example:index',
-        path: '/routes-example',
-      },
-      {
-        auth: 'required',
-        id: '@nocobase/app-plugin-workflow:workflow-detail',
-        path: '/settings/automation/workflows/:workflowId',
-      },
-      {
-        auth: 'required',
-        id: '@nocobase/app-plugin-workflow:workflow-run-detail',
-        path: '/settings/automation/workflow-runs/:runId',
-      },
     ]);
     expect(
       inspection.reactProviders.map(({ id, order }) => ({ id, order })),
@@ -222,10 +202,6 @@ describe('client inspection', () => {
       {
         id: '@nocobase/app-plugin-notification-provider:notification-host',
         order: 3,
-      },
-      {
-        id: '@nocobase/app-plugin-routes-example:routes-example',
-        order: 4,
       },
     ]);
     expect(
@@ -240,8 +216,6 @@ describe('client inspection', () => {
       { packageName: '@nocobase/app-plugin-i18n', order: 4 },
       { packageName: '@nocobase/app-plugin-mail', order: 5 },
       { packageName: '@nocobase/app-plugin-notification-provider', order: 6 },
-      { packageName: '@nocobase/app-plugin-workflow', order: 7 },
-      { packageName: '@nocobase/app-plugin-notification', order: 8 },
     ]);
     expect(inspection.configs[0]).toMatchObject({
       kind: 'factory',
@@ -256,7 +230,7 @@ describe('client inspection', () => {
           source: 'application',
         },
         expect.objectContaining({
-          packageName: '@nocobase/app-plugin-workflow',
+          packageName: '@nocobase/app-plugin-mail',
           source: 'plugin',
         }),
       ]),

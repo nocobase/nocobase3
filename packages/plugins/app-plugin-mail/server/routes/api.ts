@@ -1,3 +1,4 @@
+import { validateLogPagination } from '../log-pagination.js';
 import {
   authenticationToken,
   type AuthEnv,
@@ -84,6 +85,9 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
             {
               error: {
                 code: 'MAIL_ACCESS_DENIED',
+                ns: '@nocobase/app-plugin-mail',
+                key: 'errors.accessDenied',
+                params: {},
                 message: t('errors.accessDenied'),
               },
             },
@@ -100,6 +104,9 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
           {
             error: {
               code: 'MAIL_IDEMPOTENCY_CONFLICT',
+              ns: '@nocobase/app-plugin-mail',
+              key: 'errors.idempotencyConflict',
+              params: {},
               message: t('errors.idempotencyConflict'),
             },
           },
@@ -111,6 +118,9 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
         {
           error: {
             code: invalid ? 'INVALID_MAIL_REQUEST' : 'MAIL_REQUEST_FAILED',
+            ns: MAIL_NAMESPACE,
+            key: invalid ? 'errors.invalidRequest' : 'errors.requestFailed',
+            params: {},
             message: t(
               invalid ? 'errors.invalidRequest' : 'errors.requestFailed',
             ),
@@ -127,6 +137,9 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
           {
             error: {
               code: 'INVALID_MAIL_REQUEST',
+              ns: '@nocobase/app-plugin-mail',
+              key: 'errors.invalidRequest',
+              params: {},
               message: getRequestTranslator(
                 context,
                 MAIL_NAMESPACE,
@@ -168,10 +181,6 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
         data: await mail.updateAccount(operationContext(context), {
           accountId: context.req.param('accountId'),
           status,
-          automaticSyncIntervalMinutes: optionalInteger(
-            value.automaticSyncIntervalMinutes,
-            'automaticSyncIntervalMinutes',
-          ),
         }),
       });
     });
@@ -454,6 +463,9 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
             {
               error: {
                 code: 'INVALID_MAIL_REQUEST',
+                ns: '@nocobase/app-plugin-mail',
+                key: 'errors.invalidRequest',
+                params: {},
                 message: getRequestTranslator(
                   context,
                   MAIL_NAMESPACE,
@@ -522,16 +534,44 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
         202,
       );
     });
-    routes.get('/sync-runs', async (context) =>
+    routes.get('/sync-runs', async (context) => {
+      const offset = optionalInteger(context.req.query('offset'), 'offset');
+      const limit = optionalInteger(context.req.query('limit'), 'limit');
+      validateLogPagination(offset ?? 0, limit ?? 100);
+      return context.json({
+        data: await mail.listSyncRuns(operationContext(context), offset, limit),
+      });
+    });
+    routes.post('/submissions/:submissionId/retry', async (context) =>
       context.json({
-        data: await mail.listSyncRuns(operationContext(context)),
+        data: await mail.retrySubmission(
+          operationContext(context),
+          context.req.param('submissionId'),
+        ),
       }),
     );
-    routes.get('/submissions', async (context) =>
+    routes.post('/submissions/:submissionId/cancel', async (context) =>
       context.json({
-        data: await mail.listSubmissions(operationContext(context)),
+        data: await mail.cancelSubmission(
+          operationContext(context),
+          context.req.param('submissionId'),
+        ),
       }),
     );
+    routes.get('/submissions', async (context) => {
+      const offset = optionalInteger(context.req.query('offset'), 'offset');
+      const limit = optionalInteger(context.req.query('limit'), 'limit');
+      validateLogPagination(offset ?? 0, limit ?? 100);
+      return context.json({
+        data: await mail.listSubmissions(
+          operationContext(context),
+          context.req.query('bulkOnly') === 'true' ? true : undefined,
+          offset,
+          context.req.query('groupByBatch') === 'true' ? true : undefined,
+          limit,
+        ),
+      });
+    });
     routes.get('/sync-runs/:syncRunId', async (context) => {
       const t = getRequestTranslator(context, MAIL_NAMESPACE);
       const run = await mail.getSyncRun(
@@ -544,6 +584,9 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
             {
               error: {
                 code: 'MAIL_SYNC_RUN_NOT_FOUND',
+                ns: '@nocobase/app-plugin-mail',
+                key: 'errors.syncRunNotFound',
+                params: {},
                 message: t('errors.syncRunNotFound'),
               },
             },
@@ -628,6 +671,51 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
           ),
         }),
     );
+    routes.get(
+      '/management/accounts/:accountId/messages/:messageId',
+      async (context) => {
+        const t = getRequestTranslator(context, MAIL_NAMESPACE);
+        const message = await mail.getManagedMessage(
+          operationContext(context),
+          context.req.param('accountId'),
+          context.req.param('messageId'),
+        );
+        return message
+          ? context.json({ data: message })
+          : context.json(
+              {
+                error: {
+                  code: 'MAIL_MESSAGE_NOT_FOUND',
+                  ns: '@nocobase/app-plugin-mail',
+                  key: 'errors.messageNotFound',
+                  params: {},
+                  message: t('errors.messageNotFound'),
+                },
+              },
+              404,
+            );
+      },
+    );
+    routes.get(
+      '/management/accounts/:accountId/messages/:messageId/attachments/:attachmentId',
+      async (context) => {
+        const content = await mail.getManagedAttachment(
+          operationContext(context),
+          context.req.param('accountId'),
+          context.req.param('messageId'),
+          context.req.param('attachmentId'),
+        );
+        const headers = new Headers({
+          'content-type': safeContentType(content.contentType),
+          'content-disposition': attachmentDisposition(content.fileName),
+          'x-content-type-options': 'nosniff',
+        });
+        if (content.size !== undefined) {
+          headers.set('content-length', String(content.size));
+        }
+        return new Response(content.stream, { headers });
+      },
+    );
     routes.get('/accounts/:accountId/messages/:messageId', async (context) => {
       const t = getRequestTranslator(context, MAIL_NAMESPACE);
       const message = await mail.getMessage(
@@ -641,6 +729,9 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
             {
               error: {
                 code: 'MAIL_MESSAGE_NOT_FOUND',
+                ns: '@nocobase/app-plugin-mail',
+                key: 'errors.messageNotFound',
+                params: {},
                 message: t('errors.messageNotFound'),
               },
             },
@@ -783,6 +874,10 @@ async function readDraftInput(request: Request): Promise<MailComposeInput> {
       value.forwardOfMessageId,
       'forwardOfMessageId',
     ),
+    forwardBodyIncluded: optionalBoolean(
+      value.forwardBodyIncluded,
+      'forwardBodyIncluded',
+    ),
     draftMessageId: optionalString(value.draftMessageId, 'draftMessageId'),
     idempotencyKey: requiredString(
       value.idempotencyKey,
@@ -858,6 +953,10 @@ async function readComposeInput(request: Request): Promise<MailComposeInput> {
     forwardOfMessageId: optionalString(
       value.forwardOfMessageId,
       'forwardOfMessageId',
+    ),
+    forwardBodyIncluded: optionalBoolean(
+      value.forwardBodyIncluded,
+      'forwardBodyIncluded',
     ),
     scheduledAt: optionalString(value.scheduledAt, 'scheduledAt'),
     draftMessageId: optionalString(value.draftMessageId, 'draftMessageId'),

@@ -4,21 +4,9 @@ import { describe, expect, it } from 'vitest';
 import routes from '../client/routes.js';
 
 describe('Mail client routes', () => {
-  it('contributes lazy application, Settings, and development routes', async () => {
-    expect(routes).toHaveLength(3);
-    const [app, settings, dev] = routes;
-    expect(app).toMatchObject({
-      parent: 'app',
-      routes: [
-        {
-          name: 'mail',
-          path: '/mail',
-          auth: 'required',
-          access: { resource: 'mail.workspace', action: 'access' },
-          componentLoader: expect.any(Function),
-        },
-      ],
-    });
+  it('contributes lazy Settings and development routes without an application page', async () => {
+    expect(routes).toHaveLength(2);
+    const [settings, dev] = routes;
     expect(settings).toMatchObject({
       parent: 'settings',
       routes: [
@@ -82,43 +70,30 @@ describe('Mail client routes', () => {
               componentLoader: expect.any(Function),
             },
             {
-              name: 'bulk-send',
-              path: '/bulk-send',
-              navigation: { title: 'nav.devBulkSend' },
+              name: 'logs',
+              path: '/logs',
+              navigation: { title: 'nav.devLogs' },
               access: { resource: 'mail.workspace', action: 'access' },
-              componentLoader: expect.any(Function),
+              children: [
+                { name: 'send', path: 'send' },
+                { name: 'bulk', path: 'bulk' },
+                { name: 'sync', path: 'sync' },
+              ],
             },
-            {
-              name: 'sync-logs',
-              path: '/sync-logs',
-              navigation: { title: 'nav.syncLogs' },
-              access: { resource: 'mail.workspace', action: 'access' },
-              componentLoader: expect.any(Function),
-            },
-            {
-              name: 'send-logs',
-              path: '/send-logs',
-              navigation: { title: 'nav.sendLogs' },
-              access: { resource: 'mail.workspace', action: 'access' },
-              componentLoader: expect.any(Function),
-            },
+            { name: 'bulk-send', path: '/bulk-send' },
+            { name: 'sync-logs', path: '/sync-logs' },
+            { name: 'send-logs', path: '/send-logs' },
           ],
         },
       ],
     });
 
-    if (app?.parent !== 'app') {
-      throw new Error('Missing Mail application route contribution.');
-    }
     if (settings?.parent !== 'settings') {
       throw new Error('Missing Mail Settings route contribution.');
     }
     if (dev?.parent !== 'dev') {
       throw new Error('Missing Mail client route contribution.');
     }
-    await expect(app.routes[0]?.componentLoader()).resolves.toMatchObject({
-      default: expect.any(Function),
-    });
     await expect(
       settings.routes[0]?.children?.[0]?.componentLoader(),
     ).resolves.toMatchObject({ default: expect.any(Function) });
@@ -147,10 +122,20 @@ describe('Mail client routes', () => {
       dev.routes[0]?.children?.[6]?.componentLoader(),
     ).resolves.toMatchObject({ default: expect.any(Function) });
 
+    expect(
+      dev.routes[0]?.children
+        ?.filter((route) => route.navigation)
+        .map((route) => route.path),
+    ).toEqual(['/accounts', '/center', '/management', '/send', '/logs']);
+    expect(dev.routes[0]?.children?.[3]?.children).toMatchObject([
+      { name: 'compose', path: 'compose' },
+      { name: 'bulk', path: 'bulk' },
+    ]);
+
     const resolved = resolveAppClientContributions([
       { packageName: '@nocobase/app-plugin-mail', routes },
     ]);
-    expect(resolved.routes.map((route) => route.path)).toEqual(['/mail']);
+    expect(resolved.routes).toEqual([]);
     expect(resolved.settingGroups).toMatchObject([
       { id: 'mail', title: 'nav.settings' },
     ]);
@@ -163,6 +148,12 @@ describe('Mail client routes', () => {
       '/dev/mail/center',
       '/dev/mail/management',
       '/dev/mail/send',
+      '/dev/mail/send/compose',
+      '/dev/mail/send/bulk',
+      '/dev/mail/logs',
+      '/dev/mail/logs/send',
+      '/dev/mail/logs/bulk',
+      '/dev/mail/logs/sync',
       '/dev/mail/bulk-send',
       '/dev/mail/sync-logs',
       '/dev/mail/send-logs',

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
 import { useTranslation } from '@nocobase/i18n/client';
 
-import { MailDevPageShell, MailStatusBadge } from '../components/index.js';
+import { MailStatusBadge } from '../components/index.js';
 import { Button } from '../components/ui/button.js';
 import { Card } from '../components/ui/card.js';
 import {
@@ -52,26 +52,16 @@ export default function MailSyncLogsPage(): ReactElement {
   );
 
   return (
-    <MailDevPageShell
-      actions={
+    <section className='space-y-4'>
+      <div className='flex justify-end'>
         <Button disabled={loading} onClick={refresh} variant='outline'>
           <RefreshCw
-            aria-hidden='true'
+            aria-hidden
             className={`size-4 ${loading ? 'animate-spin' : ''}`}
           />
           {t('actions.refresh', { defaultValue: 'Refresh' })}
         </Button>
-      }
-      badge={t('nav.dev', { defaultValue: 'Mail components' })}
-      category={t('dev.syncLogsCategory', {
-        defaultValue: 'Runtime history',
-      })}
-      description={t('settings.syncLogs.description', {
-        defaultValue:
-          'Review recent initial and incremental mailbox synchronization runs.',
-      })}
-      title={t('settings.syncLogs.title', { defaultValue: 'Sync logs' })}
-    >
+      </div>
       <div className='space-y-5 pb-12'>
         {error ? (
           <div className='rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive'>
@@ -201,7 +191,7 @@ export default function MailSyncLogsPage(): ReactElement {
           )}
         </Card>
       </div>
-    </MailDevPageShell>
+    </section>
   );
 }
 

@@ -76,10 +76,7 @@ export class DefaultMailService implements MailService {
       this.sync,
       defaultAutomaticSyncIntervalMinutes,
     );
-    this.accounts = new MailAccountsService(
-      dependencies,
-      defaultAutomaticSyncIntervalMinutes,
-    );
+    this.accounts = new MailAccountsService(dependencies);
     this.preferences = new MailPreferencesService(dependencies);
     this.messages = new MailMessagesService(dependencies);
     this.drafts = new MailDraftsService(dependencies, sendMail);
@@ -156,6 +153,28 @@ export class DefaultMailService implements MailService {
     input: MailListMessagesInput,
   ): Promise<MailPage<MailMessageSummary>> {
     return this.management.listManagedMessages(_context, input);
+  }
+
+  public getManagedMessage(
+    context: MailOperationContext,
+    accountId: string,
+    messageId: string,
+  ): Promise<MailMessage | undefined> {
+    return this.management.getManagedMessage(context, accountId, messageId);
+  }
+
+  public getManagedAttachment(
+    context: MailOperationContext,
+    accountId: string,
+    messageId: string,
+    attachmentId: string,
+  ): Promise<MailAttachmentContent> {
+    return this.attachments.getManagedAttachment(
+      context,
+      accountId,
+      messageId,
+      attachmentId,
+    );
   }
 
   public async manageMessages(
@@ -262,8 +281,10 @@ export class DefaultMailService implements MailService {
 
   public async listSyncRuns(
     context: MailOperationContext,
+    offset = 0,
+    limit = 100,
   ): Promise<readonly MailSyncRunView[]> {
-    return this.sync.listSyncRuns(context);
+    return this.sync.listSyncRuns(context, offset, limit);
   }
 
   public async retrySyncRun(
@@ -280,10 +301,42 @@ export class DefaultMailService implements MailService {
     return this.sync.cancelSyncRun(context, syncRunId);
   }
 
+  public async retrySubmission(
+    context: MailOperationContext,
+    submissionId: string,
+  ): Promise<MailSubmissionLogView> {
+    return this.submissions.transitionSubmission(
+      context,
+      submissionId,
+      'retry',
+    );
+  }
+
+  public async cancelSubmission(
+    context: MailOperationContext,
+    submissionId: string,
+  ): Promise<MailSubmissionLogView> {
+    return this.submissions.transitionSubmission(
+      context,
+      submissionId,
+      'cancel',
+    );
+  }
+
   public async listSubmissions(
     context: MailOperationContext,
+    bulkOnly = false,
+    offset = 0,
+    groupByBatch = false,
+    limit = groupByBatch ? 20 : 100,
   ): Promise<readonly MailSubmissionLogView[]> {
-    return this.submissions.listSubmissions(context);
+    return this.submissions.listSubmissions(
+      context,
+      bulkOnly,
+      offset,
+      groupByBatch,
+      limit,
+    );
   }
 
   public listMessages(

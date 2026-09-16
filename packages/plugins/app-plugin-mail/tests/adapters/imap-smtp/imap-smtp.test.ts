@@ -1,10 +1,12 @@
 // @vitest-environment node
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { simpleParser } from 'mailparser';
 
 const mocks = vi.hoisted(() => {
   const imap = {
     connect: vi.fn(),
+    append: vi.fn(),
     list: vi.fn(),
     status: vi.fn(),
     mailboxOpen: vi.fn(),
@@ -50,6 +52,8 @@ import type {
 describe('IMAP/SMTP mail Provider', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.imap.search.mockReset();
+    mocks.imap.append.mockReset();
     mocks.imap.connect.mockResolvedValue(undefined);
     mocks.imap.logout.mockResolvedValue(undefined);
     mocks.imap.close.mockImplementation(() => undefined);
@@ -63,6 +67,12 @@ describe('IMAP/SMTP mail Provider', () => {
       },
     ]);
     mocks.imap.status.mockResolvedValue({ uidNext: 4, uidValidity: 1n });
+    mocks.imap.mailboxOpen.mockResolvedValue({
+      exists: 3,
+      uidNext: 4,
+      uidValidity: 1n,
+    });
+    mocks.imap.fetchOne.mockResolvedValue(false);
     mocks.imap.fetch.mockImplementation(async function* () {});
   });
 
@@ -289,6 +299,141 @@ describe('IMAP/SMTP mail Provider', () => {
     );
   });
 
+  it('reports missing UIDNEXT instead of completing initial sync with no mail', async () => {
+    mocks.imap.mailboxOpen.mockResolvedValue({ exists: 3, uidValidity: 1n });
+    const adapter = await imapSmtpMailProviderDefinition.createAdapter(
+      context(),
+      config(),
+      account(),
+    );
+    await expect(adapter.listMessages!({ limit: 10 })).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'IMAP_INVALID_UIDNEXT', retryable: false },
+    });
+  });
+
+  it('imports history when the server omits UIDNEXT', async () => {
+    mocks.imap.mailboxOpen.mockResolvedValue({ exists: 1, uidValidity: 1n });
+    mocks.imap.fetchOne.mockResolvedValue({ uid: 7 });
+    mocks.imap.search.mockResolvedValue([7]);
+    mocks.imap.fetch.mockImplementation(async function* () {
+      yield fetchedMessage(7);
+    });
+    const adapter = await imapSmtpMailProviderDefinition.createAdapter(
+      context(),
+      config(),
+      account(),
+    );
+    const result = await adapter.listMessages!({ limit: 10 });
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        messages: [
+          expect.objectContaining({
+            providerMessageId: encodeMessageLocator({
+              folder: 'INBOX',
+              uidValidity: '1',
+              uid: 7,
+            }),
+          }),
+        ],
+      },
+    });
+    expect(mocks.imap.fetchOne).toHaveBeenCalledWith(
+      1,
+      { uid: true },
+      { uid: false },
+    );
+  });
+
+  it('derives a baseline and recovers a previously empty incremental cursor without UIDNEXT', async () => {
+    mocks.imap.status.mockResolvedValue({ uidValidity: 1n });
+    mocks.imap.mailboxOpen.mockResolvedValue({ exists: 1, uidValidity: 1n });
+    mocks.imap.fetchOne.mockResolvedValue({ uid: 7 });
+    mocks.imap.fetch.mockImplementation(async function* () {
+      yield fetchedMessage(7);
+    });
+    const adapter = await imapSmtpMailProviderDefinition.createAdapter(
+      context(),
+      config(),
+      account(),
+    );
+    const baseline = await adapter.getCurrentSyncCursor!();
+    if (!baseline.ok) throw new Error(baseline.error.message);
+    expect(JSON.parse(String(baseline.value.value))).toMatchObject({
+      folders: { INBOX: { uidNext: 8, uidValidity: '1' } },
+    });
+    const result = await adapter.listChanges!({
+      limit: 10,
+      cursor: {
+        version: 'imap-v1',
+        value: JSON.stringify({
+          version: 1,
+          folders: { INBOX: { uidNext: 1, uidValidity: '1' } },
+        }),
+      },
+    });
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        messages: [
+          expect.objectContaining({
+            providerMessageId: encodeMessageLocator({
+              folder: 'INBOX',
+              uidValidity: '1',
+              uid: 7,
+            }),
+          }),
+        ],
+        hasMore: false,
+      },
+    });
+    expect(mocks.imap.fetch).toHaveBeenCalledWith('1:7', expect.any(Object), {
+      uid: true,
+    });
+  });
+
+  it('does not fetch a last message from a genuinely empty mailbox without UIDNEXT', async () => {
+    mocks.imap.status.mockResolvedValue({ uidValidity: 1n });
+    mocks.imap.mailboxOpen.mockResolvedValue({ exists: 0, uidValidity: 1n });
+    const adapter = await imapSmtpMailProviderDefinition.createAdapter(
+      context(),
+      config(),
+      account(),
+    );
+    const baseline = await adapter.getCurrentSyncCursor!();
+    if (!baseline.ok) throw new Error(baseline.error.message);
+    expect(JSON.parse(String(baseline.value.value))).toMatchObject({
+      folders: { INBOX: { uidNext: 1 } },
+    });
+    expect(await adapter.listMessages!({ limit: 10 })).toMatchObject({
+      ok: true,
+      value: { messages: [] },
+    });
+    expect(mocks.imap.fetchOne).not.toHaveBeenCalled();
+  });
+
+  it.each(['baseline', 'incremental'] as const)(
+    'reports missing UIDNEXT during %s sync instead of saving an empty cursor',
+    async (phase) => {
+      mocks.imap.status.mockResolvedValue({ messages: 3, uidValidity: 1n });
+      mocks.imap.mailboxOpen.mockResolvedValue({ exists: 3, uidValidity: 1n });
+      const adapter = await imapSmtpMailProviderDefinition.createAdapter(
+        context(),
+        config(),
+        account(),
+      );
+      const result =
+        phase === 'baseline'
+          ? await adapter.getCurrentSyncCursor!()
+          : await adapter.listChanges!({ limit: 10 });
+      expect(result).toMatchObject({
+        ok: false,
+        error: { code: 'IMAP_INVALID_UIDNEXT', retryable: false },
+      });
+    },
+  );
+
   it('skips sparse UID ranges when a mailbox has holes', async () => {
     mocks.imap.status.mockResolvedValue({ uidNext: 5, uidValidity: 1n });
     mocks.imap.fetch.mockImplementation(async function* () {
@@ -418,6 +563,335 @@ describe('IMAP/SMTP mail Provider', () => {
     });
   });
 
+  it.each([
+    ['IMAP', 'EAUTH', 'authentication'],
+    ['SMTP', 'ETIMEDOUT', 'timeout'],
+    ['SMTP', 'CERT_HAS_EXPIRED', 'provider'],
+  ] as const)(
+    'does not store credentials after %s verification fails with %s',
+    async (endpoint, code, category) => {
+      const providerContext = context();
+      const failure = Object.assign(new Error('Connection rejected'), { code });
+      (endpoint === 'IMAP'
+        ? mocks.imap.connect
+        : mocks.verify
+      ).mockRejectedValueOnce(failure);
+      mocks.imap.logout.mockRejectedValueOnce(
+        new Error('Already disconnected'),
+      );
+      const result = await imapSmtpMailProviderDefinition.connection!.connect(
+        providerContext,
+        config(),
+        { address: 'user@example.com', username: 'user', password: 'secret' },
+      );
+      expect(result).toMatchObject({ ok: false, error: { code, category } });
+      expect(providerContext.credentials.put).not.toHaveBeenCalled();
+      expect(mocks.imap.close).toHaveBeenCalledTimes(1);
+      expect(mocks.close).toHaveBeenCalledTimes(1);
+      if (endpoint === 'IMAP') expect(mocks.verify).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ['EAUTH', 'authentication', false],
+    ['ETIMEDOUT', 'timeout', true],
+    ['ECONNRESET', 'network', true],
+    ['EPIPE', 'network', true],
+    ['CERT_HAS_EXPIRED', 'provider', false],
+  ] as const)(
+    'classifies IMAP %s failures without returning partial data',
+    async (code, category, retryable) => {
+      const adapter = await imapSmtpMailProviderDefinition.createAdapter(
+        context(),
+        config(),
+        account(),
+      );
+      mocks.imap.list.mockRejectedValueOnce(
+        Object.assign(new Error('Provider failure'), { code }),
+      );
+      expect(await adapter.listFolders!({ limit: 100 })).toEqual({
+        ok: false,
+        error: { code, category, retryable, message: 'Provider failure' },
+      });
+      await adapter.close?.();
+    },
+  );
+
+  it('rejects an expired UIDVALIDITY before fetching from a different mailbox generation', async () => {
+    mocks.imap.status.mockResolvedValueOnce({ uidNext: 10, uidValidity: 2n });
+    const adapter = await imapSmtpMailProviderDefinition.createAdapter(
+      context(),
+      config(),
+      account(),
+    );
+    expect(
+      await adapter.listChanges!({
+        limit: 10,
+        cursor: {
+          version: 'imap-v1',
+          value: JSON.stringify({
+            version: 1,
+            folders: { INBOX: { uidNext: 5, uidValidity: '1' } },
+          }),
+        },
+      }),
+    ).toMatchObject({
+      ok: false,
+      error: { code: 'IMAP_SYNC_CURSOR_INVALID', retryable: false },
+    });
+    expect(mocks.imap.fetch).not.toHaveBeenCalled();
+    await adapter.close?.();
+  });
+
+  it('honors cancellation before connecting to IMAP', async () => {
+    const adapter = await imapSmtpMailProviderDefinition.createAdapter(
+      context(),
+      config(),
+      account(),
+    );
+    const controller = new AbortController();
+    controller.abort(new Error('Cancelled by caller'));
+    expect(
+      await adapter.listFolders!({ limit: 100, signal: controller.signal }),
+    ).toMatchObject({ ok: false, error: { message: 'Cancelled by caller' } });
+    expect(mocks.imap.connect).not.toHaveBeenCalled();
+    await adapter.close?.();
+  });
+
+  it('normalizes special-use folders and preserves custom folders', async () => {
+    mocks.imap.list.mockResolvedValueOnce(
+      ['Inbox', 'Sent', 'Drafts', 'Trash', 'Junk', 'Archive', 'Projects'].map(
+        (name) => ({
+          path: name,
+          name,
+          specialUse: name === 'Projects' ? undefined : `\\${name}`,
+          status: { unseen: 2 },
+        }),
+      ),
+    );
+    const adapter = await imapSmtpMailProviderDefinition.createAdapter(
+      context(),
+      config(),
+      account(),
+    );
+    const result = await adapter.listFolders!({ limit: 100 });
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        folders: [
+          'inbox',
+          'sent',
+          'drafts',
+          'trash',
+          'junk',
+          'archive',
+          'custom',
+        ].map((type) => ({ type, kind: 'folder', unreadCount: 2 })),
+      },
+    });
+    await adapter.close?.();
+  });
+
+  it('updates read and starred flags and reports mutation failures', async () => {
+    const adapter = await imapSmtpMailProviderDefinition.createAdapter(
+      context(),
+      config(),
+      account(),
+    );
+    const id = encodeMessageLocator({
+      folder: 'INBOX',
+      uidValidity: '1',
+      uid: 7,
+    });
+    await expect(adapter.setRead!(id, true)).resolves.toMatchObject({
+      ok: true,
+    });
+    await expect(adapter.setStarred!(id, false)).resolves.toMatchObject({
+      ok: true,
+    });
+    expect(mocks.imap.messageFlagsAdd).toHaveBeenCalledWith(7, ['\\Seen'], {
+      uid: true,
+    });
+    expect(mocks.imap.messageFlagsRemove).toHaveBeenCalledWith(
+      7,
+      ['\\Flagged'],
+      { uid: true },
+    );
+    mocks.imap.messageFlagsAdd.mockRejectedValueOnce(
+      Object.assign(new Error('Lost connection'), { code: 'ECONNRESET' }),
+    );
+    await expect(adapter.setRead!(id, true)).resolves.toMatchObject({
+      ok: false,
+      error: { category: 'network', retryable: true },
+    });
+    await adapter.close?.();
+  });
+
+  it.each([
+    ['EAUTH', undefined, 'failed', 'authentication', false],
+    ['EAUTH', 535, 'failed', 'authentication', false],
+    ['EENVELOPE', 550, 'failed', 'recipient', false],
+    ['EENVELOPE', 450, 'failed', 'recipient', true],
+    ['ETIMEDOUT', undefined, 'submission_unknown', 'timeout', true],
+    ['ECONNRESET', undefined, 'submission_unknown', 'network', true],
+  ] as const)(
+    'preserves SMTP delivery certainty for %s / %s',
+    async (code, responseCode, status, category, retryable) => {
+      const adapter = await imapSmtpMailProviderDefinition.createAdapter(
+        context(),
+        config(),
+        account(),
+      );
+      mocks.sendMail.mockRejectedValueOnce(
+        Object.assign(new Error('Submission failed'), { code, responseCode }),
+      );
+      expect(
+        await adapter.sendMessage!({
+          trackingId: 'test',
+          identity: {
+            id: 'identity',
+            accountId: 'account-1',
+            address: 'user@example.com',
+            isPrimary: true,
+            canSend: true,
+          },
+          message: {
+            to: [{ address: 'recipient@example.com' }],
+            cc: [],
+            bcc: [],
+            subject: 'Test',
+            text: 'Body',
+            references: [],
+            attachments: [],
+          },
+        }),
+      ).toMatchObject({ status, error: { code, category, retryable } });
+      await adapter.close?.();
+    },
+  );
+
+  it.each(['ETIMEDOUT', 'ECONNRESET'])(
+    'does not mark attachment preparation %s as a submitted message',
+    async (code) => {
+      const adapter = await imapSmtpMailProviderDefinition.createAdapter(
+        context(),
+        config(),
+        account(),
+      );
+      expect(
+        await adapter.sendMessage!({
+          trackingId: 'test',
+          identity: {
+            id: 'identity',
+            accountId: 'account-1',
+            address: 'user@example.com',
+            isPrimary: true,
+            canSend: true,
+          },
+          message: {
+            to: [{ address: 'recipient@example.com' }],
+            cc: [],
+            bcc: [],
+            subject: 'Test',
+            text: 'Body',
+            references: [],
+            attachments: [
+              {
+                fileName: 'report.txt',
+                inline: false,
+                contentType: 'text/plain',
+                size: 5,
+                open: async () => {
+                  throw Object.assign(new Error('Attachment unavailable'), {
+                    code,
+                  });
+                },
+              },
+            ],
+          },
+        }),
+      ).toMatchObject({ status: 'failed', error: { code } });
+      expect(mocks.sendMail).not.toHaveBeenCalled();
+      await adapter.close?.();
+    },
+  );
+
+  it.each(['server', 'client'] as const)(
+    'saves sent copies according to %s mode',
+    async (sentCopyMode) => {
+      mocks.sendMail.mockImplementationOnce(
+        async (mail: { messageId: string }) => ({ messageId: mail.messageId }),
+      );
+      mocks.imap.search.mockResolvedValueOnce([]);
+      mocks.imap.append.mockResolvedValueOnce({ uid: 10, uidValidity: 1n });
+      const adapter = await imapSmtpMailProviderDefinition.createAdapter(
+        context(),
+        { ...config(), sentCopyMode, sentFolder: 'Sent Items' },
+        account(),
+      );
+      const result = await adapter.sendMessage!(sentInput());
+      expect(result).toMatchObject({ status: 'accepted' });
+      if (sentCopyMode === 'server') {
+        expect(mocks.imap.append).not.toHaveBeenCalled();
+        expect(mocks.imap.connect).not.toHaveBeenCalled();
+        return;
+      }
+      expect(mocks.imap.append).toHaveBeenCalledWith(
+        'Sent Items',
+        expect.any(Buffer),
+        ['\\Seen'],
+        expect.any(Date),
+      );
+      const raw = mocks.imap.append.mock.calls[0][1] as Buffer;
+      const parsed = await simpleParser(raw);
+      expect(parsed.messageId).toBe(
+        (mocks.sendMail.mock.calls[0][0] as { messageId: string }).messageId,
+      );
+      expect(parsed.subject).toBe('Archive test');
+      expect(parsed.text?.trim()).toBe('Body');
+      expect(parsed.html).toContain('<p>Body</p>');
+      expect(parsed.bcc).toMatchObject({
+        value: [{ address: 'hidden@example.com' }],
+      });
+      expect(parsed.attachments[0].content.toString()).toBe('attachment');
+    },
+  );
+
+  it('does not append a sent copy already saved by the server', async () => {
+    mocks.sendMail.mockResolvedValueOnce({
+      messageId: '<existing@example.com>',
+    });
+    mocks.imap.search.mockResolvedValueOnce([10]);
+    mocks.imap.list.mockResolvedValueOnce([
+      { path: 'Sent', specialUse: '\\Sent', name: 'Sent' },
+    ]);
+    const adapter = await imapSmtpMailProviderDefinition.createAdapter(
+      context(),
+      { ...config(), sentCopyMode: 'client' },
+      account(),
+    );
+    expect(await adapter.sendMessage!(sentInput())).toMatchObject({
+      status: 'accepted',
+    });
+    expect(mocks.imap.append).not.toHaveBeenCalled();
+  });
+
+  it('keeps delivery accepted when IMAP cannot archive the sent copy', async () => {
+    mocks.sendMail.mockResolvedValueOnce({ messageId: '<sent@example.com>' });
+    mocks.imap.search.mockResolvedValueOnce([]);
+    mocks.imap.append.mockRejectedValueOnce(new Error('IMAP unavailable'));
+    const adapter = await imapSmtpMailProviderDefinition.createAdapter(
+      context(),
+      { ...config(), sentCopyMode: 'client', sentFolder: 'Sent' },
+      account(),
+    );
+    expect(await adapter.sendMessage!(sentInput())).toMatchObject({
+      status: 'accepted',
+      sentCopyError: { code: 'IMAP_SENT_COPY_FAILED', retryable: false },
+    });
+    expect(mocks.sendMail).toHaveBeenCalledTimes(1);
+  });
+
   it('maps Mail send input to SMTP headers and returns the provider message id', async () => {
     mocks.sendMail.mockResolvedValueOnce({ messageId: '<sent@example.com>' });
     const adapter = await imapSmtpMailProviderDefinition.createAdapter(
@@ -482,10 +956,8 @@ function context(): MailProviderContext {
     publicBasePath: '/test',
     credentials: {
       put: vi.fn(async () => 'credential-1'),
-      get: vi.fn(async () => ({
-        username: 'user@example.com',
-        password: 'secret',
-      })),
+      get: async <T>() =>
+        ({ username: 'user@example.com', password: 'secret' }) as T,
       replace: vi.fn(),
       getOrRefresh: vi.fn(),
       delete: vi.fn(),
@@ -550,4 +1022,35 @@ function expectMailProviderCompatibility(
   expect(adapter.saveDraft).toBeUndefined();
   expect(adapter.updateDraft).toBeUndefined();
   expect(adapter.moveMessage).toBeUndefined();
+}
+
+function sentInput(): MailProviderSendInput {
+  return {
+    trackingId: 'sent-test',
+    identity: {
+      id: 'identity-1',
+      accountId: 'account-1',
+      address: 'user@example.com',
+      isPrimary: true,
+      canSend: true,
+    },
+    message: {
+      to: [{ address: 'recipient@example.com' }],
+      cc: [],
+      bcc: [{ address: 'hidden@example.com' }],
+      subject: 'Archive test',
+      text: 'Body',
+      html: '<p>Body</p>',
+      references: [],
+      attachments: [
+        {
+          fileName: 'file.txt',
+          contentType: 'text/plain',
+          size: 10,
+          inline: false,
+          open: async () => new Response('attachment').body!,
+        },
+      ],
+    },
+  };
 }

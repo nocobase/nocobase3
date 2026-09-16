@@ -1,3 +1,4 @@
+import { validateLogPagination } from '../log-pagination.js';
 import { type DatabaseManager } from '@nocobase/db';
 import { randomUUID } from 'node:crypto';
 import {
@@ -156,7 +157,12 @@ export class MailSyncStore {
     return row ? fromSyncRunRow(row) : undefined;
   }
 
-  public async listSyncRuns(userId: string): Promise<readonly MailSyncRun[]> {
+  public async listSyncRuns(
+    userId: string,
+    offset = 0,
+    limit = 100,
+  ): Promise<readonly MailSyncRun[]> {
+    validateLogPagination(offset, limit);
     const accounts = await this.accounts.listAccounts(userId);
     if (accounts.length === 0) return [];
     const rows = await this.database
@@ -169,7 +175,9 @@ export class MailSyncStore {
         accounts.map((account) => account.id),
       )
       .orderBy('createdAt', 'desc')
-      .limit(100)
+      .orderBy('id', 'desc')
+      .offset(offset)
+      .limit(limit)
       .execute<SyncRunRow>();
     return rows.map(fromSyncRunRow);
   }
@@ -318,13 +326,15 @@ export class MailSyncStore {
           .execute();
       }
       const status = pendingPush ? 'running' : input.status;
-      const phase = pendingPush ? 'incremental' : input.phase;
+      // Refresh folder metadata too: a send may have created the Sent folder.
+      const phase = pendingPush ? 'preparing' : input.phase;
       const createNextTask = pendingPush || input.createNextTask;
       const result = await connection.query
         .updateTable<SyncRunRow>('mailSyncRuns')
         .set({
           phase,
           status,
+          mode: pendingPush ? 'incremental' : input.run.mode,
           revision: input.run.revision + 1,
           activeKey: status === 'completed' ? null : input.run.accountId,
           processedMessages:

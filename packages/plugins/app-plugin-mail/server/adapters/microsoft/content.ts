@@ -38,6 +38,12 @@ export function relatedBody(
 ): { readonly contentType: 'HTML' | 'Text'; readonly content: string } {
   const contentType = input.message.html ? 'HTML' : 'Text';
   const comment = input.message.html ?? input.message.text;
+  if (
+    input.message.forwardOfProviderMessageId &&
+    input.message.forwardBodyIncluded
+  ) {
+    return { contentType, content: comment };
+  }
   const original = draft.body?.content ?? '';
   if (!original) return { contentType, content: comment };
   if (contentType === 'HTML') {

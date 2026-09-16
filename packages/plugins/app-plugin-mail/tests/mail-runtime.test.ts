@@ -67,6 +67,7 @@ describe('[SRV][DATA] mail runtime, synchronization, sending, and consistency', 
 
   afterEach(async () => {
     vi.useRealTimers();
+    vi.restoreAllMocks();
     await runtime?.close();
     await queue?.close();
     await database.destroy();
@@ -272,14 +273,75 @@ describe('[SRV][DATA] mail runtime, synchronization, sending, and consistency', 
     });
   });
 
-  it('only schedules an automatic sync after the account interval elapses', () => {
+  it('only schedules an automatic sync after the configured interval elapses', () => {
     const now = Date.parse('2026-09-15T00:00:00.000Z');
-    expect(isAutomaticSyncDue('2026-09-15T00:00:00.000Z', 30, now)).toBe(false);
-    expect(isAutomaticSyncDue('2026-09-14T23:30:00.000Z', 30, now)).toBe(true);
-    expect(isAutomaticSyncDue(undefined, 30, now)).toBe(true);
+    expect(
+      isAutomaticSyncDue('2026-09-15T00:00:00.000Z', 30 * 60_000, now),
+    ).toBe(false);
+    expect(
+      isAutomaticSyncDue('2026-09-14T23:30:00.000Z', 30 * 60_000, now),
+    ).toBe(true);
+    expect(isAutomaticSyncDue(undefined, 30 * 60_000, now)).toBe(true);
   });
 
-  it('updates and validates an account automatic sync interval', async () => {
+  it.each([
+    {
+      intervalMs: 30 * 60_000,
+      legacyMinutes: 1,
+      elapsedMs: 10 * 60_000,
+      expected: 0,
+    },
+    {
+      intervalMs: 60_000,
+      legacyMinutes: 45,
+      elapsedMs: 2 * 60_000,
+      expected: 1,
+    },
+    {
+      intervalMs: undefined,
+      legacyMinutes: 1,
+      elapsedMs: 2 * 60_000,
+      expected: 0,
+    },
+    {
+      intervalMs: undefined,
+      legacyMinutes: 45,
+      elapsedMs: 6 * 60_000,
+      expected: 1,
+    },
+    { intervalMs: 90_001, legacyMinutes: 45, elapsedMs: 90_000, expected: 0 },
+    { intervalMs: 90_001, legacyMinutes: 45, elapsedMs: 90_001, expected: 1 },
+  ])(
+    'uses config interval $intervalMs instead of the stored account interval $legacyMinutes',
+    async ({ intervalMs, legacyMinutes, elapsedMs, expected }) => {
+      const now = Date.parse('2026-09-15T00:00:00.000Z');
+      vi.spyOn(Date, 'now').mockReturnValue(now);
+      await store.saveAccount({
+        ...account(),
+        automaticSyncIntervalMinutes: legacyMinutes,
+      });
+      vi.spyOn(store, 'getLastSyncedAt').mockResolvedValue(
+        new Date(now - elapsedMs).toISOString(),
+      );
+      queue = createQueueManager({
+        default: 'sync',
+        connections: { sync: { driver: 'sync' } },
+        jobs: { autoLoad: false, locations: [] },
+      });
+      runtime = createMailRuntime({
+        store,
+        adapters: resolver(baseAdapter()),
+        queue,
+        queueName: 'mail:config-sync-test',
+        automaticSyncIntervalMs: intervalMs,
+      });
+
+      await expect(runtime.createAutomaticSyncRuns()).resolves.toBe(expected);
+    },
+  );
+
+  it('updates account status without changing its legacy sync interval', async () => {
+    await store.saveAccount({ ...account(), automaticSyncIntervalMinutes: 45 });
     const service = new DefaultMailService({
       store,
       adapters: resolver(baseAdapter()),
@@ -289,15 +351,12 @@ describe('[SRV][DATA] mail runtime, synchronization, sending, and consistency', 
     await expect(
       service.updateAccount(
         { actorId: 'user-1' },
-        { accountId: 'account-1', automaticSyncIntervalMinutes: 45 },
+        { accountId: 'account-1', status: 'suspended' },
       ),
-    ).resolves.toMatchObject({ automaticSyncIntervalMinutes: 45 });
-    await expect(
-      service.updateAccount(
-        { actorId: 'user-1' },
-        { accountId: 'account-1', automaticSyncIntervalMinutes: 0 },
-      ),
-    ).rejects.toThrow('Mail automatic sync interval');
+    ).resolves.toMatchObject({ status: 'suspended' });
+    await expect(store.getAccount('account-1')).resolves.toMatchObject({
+      automaticSyncIntervalMinutes: 45,
+    });
   });
 
   it('schedules the initial sync after completing Microsoft OAuth', async () => {
@@ -601,7 +660,7 @@ describe('[SRV][DATA] mail runtime, synchronization, sending, and consistency', 
 
     expect(committed).toMatchObject({
       status: 'running',
-      phase: 'incremental',
+      phase: 'preparing',
       revision: 1,
     });
     const next = await store.claimOutbox(
@@ -616,7 +675,7 @@ describe('[SRV][DATA] mail runtime, synchronization, sending, and consistency', 
           aggregateId: active.id,
           payload: expect.objectContaining({
             expectedRevision: 1,
-            expectedPhase: 'incremental',
+            expectedPhase: 'preparing',
           }),
         }),
       ]),
@@ -673,6 +732,52 @@ describe('[SRV][DATA] mail runtime, synchronization, sending, and consistency', 
         }),
       }),
     );
+  });
+
+  it('passes the editable forward body to the provider and fingerprints its mode', async () => {
+    await store.commitSyncBatch({
+      accountId: 'account-1',
+      folders: [],
+      messages: [message('provider-parent', 'Original')],
+      deletedProviderMessageIds: [],
+      nextCursor: { value: 'forward-test' },
+    });
+    const stored = await store.listMessages('user-1', {});
+    const sendMessage = vi.fn<MailProviderAdapter['sendMessage']>(async () => ({
+      status: 'accepted',
+      providerMessageId: 'provider-forward',
+    }));
+    const service = new DefaultMailService({
+      store,
+      adapters: resolver({ ...baseAdapter(), sendMessage }),
+      outbox: { kick: vi.fn() },
+    });
+    const input = {
+      accountId: 'account-1',
+      identityId: 'identity-1',
+      to: [{ address: 'recipient@example.com' }],
+      subject: 'Fwd: Original',
+      text: 'Edited original',
+      forwardOfMessageId: stored.items[0].id,
+      forwardBodyIncluded: true,
+      idempotencyKey: 'forward-1',
+    };
+    await service.sendMessage({ actorId: 'user-1' }, input);
+    expect(sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.objectContaining({
+          text: 'Edited original',
+          forwardOfProviderMessageId: 'provider-parent',
+          forwardBodyIncluded: true,
+        }),
+      }),
+    );
+    await expect(
+      service.sendMessage(
+        { actorId: 'user-1' },
+        { ...input, forwardBodyIncluded: false },
+      ),
+    ).rejects.toThrow();
   });
 
   it('loads only summary fields for the mailbox list', async () => {
@@ -772,6 +877,48 @@ describe('[SRV][DATA] mail runtime, synchronization, sending, and consistency', 
     await expect(store.listMessages('user-1', {})).resolves.toMatchObject({
       items: [],
     });
+  });
+
+  it('reads managed details across owners while preserving personal ownership and account scoping', async () => {
+    await store.commitSyncBatch({
+      accountId: 'account-1',
+      folders: [],
+      messages: [message('managed-detail', 'Managed detail')],
+      deletedProviderMessageIds: [],
+      nextCursor: { value: 'details' },
+    });
+    const stored = await store.listMessages('user-1', {});
+    const id = stored.items[0].id;
+    const service = new DefaultMailService({
+      store,
+      adapters: resolver(baseAdapter()),
+      outbox: { kick: vi.fn() },
+    });
+    await expect(
+      service.getManagedMessage({ actorId: 'other-user' }, 'account-1', id),
+    ).resolves.toMatchObject({ subject: 'Managed detail' });
+    await expect(
+      service.getMessage({ actorId: 'other-user' }, 'account-1', id),
+    ).resolves.toBeUndefined();
+    await expect(
+      service.getManagedMessage({ actorId: 'other-user' }, 'wrong-account', id),
+    ).resolves.toBeUndefined();
+    await expect(
+      service.getManagedAttachment(
+        { actorId: 'other-user' },
+        'wrong-account',
+        id,
+        'missing',
+      ),
+    ).rejects.toThrow('Mail account was not found.');
+    await expect(
+      service.getManagedAttachment(
+        { actorId: 'other-user' },
+        'account-1',
+        id,
+        'missing',
+      ),
+    ).rejects.toThrow('Mail attachment was not found.');
   });
 
   it('executes management actions per message and preserves partial failures', async () => {
@@ -1126,80 +1273,96 @@ describe('[SRV][DATA] mail runtime, synchronization, sending, and consistency', 
     });
   });
 
-  it('downloads only an attachment belonging to the owned message', async () => {
-    await store.commitSyncBatch({
-      accountId: 'account-1',
-      folders: [],
-      messages: [
-        {
-          ...message('provider-with-attachment', 'Attachment'),
-          attachments: [
-            {
-              providerAttachmentId: 'provider-attachment-1',
-              fileName: 'report.pdf',
-              contentType: 'application/pdf',
-              size: 3,
-              inline: false,
-            },
-          ],
-        },
-      ],
-      deletedProviderMessageIds: [],
-      nextCursor: { value: 'attachment-test' },
-    });
-    const stored = await store.listMessages('user-1', {});
-    const messageDetails = await store.getMessage(
-      'user-1',
-      'account-1',
-      stored.items[0].id,
-    );
-    const getAttachment = vi.fn<
-      NonNullable<MailProviderAdapter['getAttachment']>
-    >(async () => ({
-      ok: true,
-      value: {
-        fileName: 'provider-name',
-        contentType: 'application/octet-stream',
-        size: 3,
-        stream: streamOf('pdf'),
-      },
-    }));
-    const close = vi.fn(async () => undefined);
-    const service = new DefaultMailService({
-      store,
-      adapters: resolver({ ...baseAdapter(), getAttachment, close }),
-      outbox: { kick: vi.fn() },
-    });
-
-    const content = await service.getAttachment(
-      { actorId: 'user-1' },
-      'account-1',
-      stored.items[0].id,
-      messageDetails?.attachments[0].id ?? '',
-    );
-
-    expect(content).toMatchObject({
-      fileName: 'report.pdf',
-      contentType: 'application/pdf',
-      size: 3,
-    });
-    expect(close).not.toHaveBeenCalled();
-    expect(await new Response(content.stream).text()).toBe('pdf');
-    expect(close).toHaveBeenCalledTimes(1);
-    expect(getAttachment).toHaveBeenCalledWith(
-      'provider-with-attachment',
-      'provider-attachment-1',
-      undefined,
-    );
-    await expect(
-      service.getAttachment(
-        { actorId: 'user-1' },
+  it.each(['personal', 'management'] as const)(
+    'downloads only an attachment belonging to the %s message',
+    async (scope) => {
+      await store.commitSyncBatch({
+        accountId: 'account-1',
+        folders: [],
+        messages: [
+          {
+            ...message('provider-with-attachment', 'Attachment'),
+            attachments: [
+              {
+                providerAttachmentId: 'provider-attachment-1',
+                fileName: 'report.pdf',
+                contentType: 'application/pdf',
+                size: 3,
+                inline: false,
+              },
+            ],
+          },
+        ],
+        deletedProviderMessageIds: [],
+        nextCursor: { value: 'attachment-test' },
+      });
+      const stored = await store.listMessages('user-1', {});
+      const messageDetails = await store.getMessage(
+        'user-1',
         'account-1',
         stored.items[0].id,
-        'other-attachment',
-      ),
-    ).rejects.toThrow('not found');
-  });
+      );
+      const getAttachment = vi.fn<
+        NonNullable<MailProviderAdapter['getAttachment']>
+      >(async () => ({
+        ok: true,
+        value: {
+          fileName: 'provider-name',
+          contentType: 'application/octet-stream',
+          size: 3,
+          stream: streamOf('pdf'),
+        },
+      }));
+      const close = vi.fn(async () => undefined);
+      const service = new DefaultMailService({
+        store,
+        adapters: resolver({ ...baseAdapter(), getAttachment, close }),
+        outbox: { kick: vi.fn() },
+      });
+
+      const getContent =
+        scope === 'management'
+          ? service.getManagedAttachment.bind(service)
+          : service.getAttachment.bind(service);
+      const actorId = scope === 'management' ? 'admin-user' : 'user-1';
+      await expect(
+        service.getAttachment(
+          { actorId: 'admin-user' },
+          'account-1',
+          stored.items[0].id,
+          messageDetails?.attachments[0].id ?? '',
+        ),
+      ).rejects.toThrow('Mail account was not found.');
+      const content = await getContent(
+        { actorId },
+        'account-1',
+        stored.items[0].id,
+        messageDetails?.attachments[0].id ?? '',
+      );
+
+      expect(content).toMatchObject({
+        fileName: 'report.pdf',
+        contentType: 'application/pdf',
+        size: 3,
+      });
+      expect(close).not.toHaveBeenCalled();
+      expect(await new Response(content.stream).text()).toBe('pdf');
+      expect(close).toHaveBeenCalledTimes(1);
+      expect(getAttachment).toHaveBeenCalledWith(
+        'provider-with-attachment',
+        'provider-attachment-1',
+        undefined,
+      );
+      await expect(
+        getContent(
+          { actorId },
+          'account-1',
+          stored.items[0].id,
+          'other-attachment',
+        ),
+      ).rejects.toThrow('not found');
+    },
+  );
 
   // MAIL-DRAFT-001A/001B and MAIL-DRAFT-SRV-001/002: local-first drafts.
   it('saves a Provider draft into the synchronized message store', async () => {
@@ -1252,7 +1415,12 @@ describe('[SRV][DATA] mail runtime, synchronization, sending, and consistency', 
       subject: 'Draft subject',
       draft: true,
     });
-    await expect(store.listMessages('user-1', {})).resolves.toMatchObject({
+    await expect(store.listMessages('user-1', {})).resolves.toEqual({
+      items: [],
+    });
+    await expect(
+      store.listMessages('user-1', { folderIds: [MAIL_LOCAL_DRAFT_FOLDER_ID] }),
+    ).resolves.toMatchObject({
       items: [
         expect.objectContaining({
           providerDraftMessageId: 'provider-draft-1',
@@ -1260,6 +1428,187 @@ describe('[SRV][DATA] mail runtime, synchronization, sending, and consistency', 
         }),
       ],
     });
+  });
+
+  it.each([undefined, ['account-1']])(
+    'excludes local and synchronized drafts before paginating personal all mail (accounts: %j)',
+    async (accountIds) => {
+      await store.commitSyncBatch({
+        accountId: 'account-1',
+        folders: [
+          {
+            providerFolderId: 'drafts',
+            type: 'drafts',
+            name: 'Drafts',
+            kind: 'folder',
+          },
+        ],
+        messages: [],
+        deletedProviderMessageIds: [],
+        nextCursor: { value: 'cursor-1' },
+      });
+      for (const [id, day, draft, folder] of [
+        ['received', '01', false, 'inbox'],
+        ['sent', '02', false, 'sent'],
+        ['remote-draft', '03', true, 'drafts'],
+        ['local-draft:local', '04', true, MAIL_LOCAL_DRAFT_FOLDER_ID],
+      ] as const) {
+        await store.saveMessage('account-1', {
+          ...message(id, id),
+          providerFolderIds: [folder],
+          conversationId: 'conversation-with-draft',
+          receivedAt: `2026-09-03T00:00:${day}.000Z`,
+          draft,
+        });
+      }
+
+      const first = await store.listMessages('user-1', {
+        accountIds,
+        limit: 1,
+      });
+      expect(first.items.map((item) => item.providerMessageId)).toEqual([
+        'sent',
+      ]);
+      expect(first.nextCursor).toBeDefined();
+      const second = await store.listMessages('user-1', {
+        accountIds,
+        limit: 1,
+        cursor: first.nextCursor,
+      });
+      expect(second.items.map((item) => item.providerMessageId)).toEqual([
+        'received',
+      ]);
+      expect(second.nextCursor).toBeUndefined();
+      const drafts = await store.listMessages('user-1', {
+        folderIds: [MAIL_LOCAL_DRAFT_FOLDER_ID],
+      });
+      expect(drafts.items.map((item) => item.providerMessageId)).toEqual([
+        'local-draft:local',
+        'remote-draft',
+      ]);
+      const providerDrafts = await store.listMessages('user-1', {
+        folderIds: ['drafts'],
+      });
+      expect(
+        providerDrafts.items.map((item) => item.providerMessageId),
+      ).toEqual(['remote-draft']);
+      expect((await store.listAllMessages({})).items).toHaveLength(4);
+    },
+  );
+
+  it.each(
+    [
+      ['inbox'],
+      ['sent'],
+      ['trash'],
+      ['junk'],
+      ['archive'],
+      ['custom'],
+      ['inbox', 'sent'],
+      ['__nocobase_default_inbox__'],
+      ['__nocobase_default_sent__'],
+      ['__nocobase_default_trash__'],
+      ['__nocobase_default_junk__'],
+      ['__nocobase_default_archive__'],
+    ].map((folderIds) => ({ folderIds })),
+  )(
+    'excludes drafts from non-draft folders before pagination ($folderIds)',
+    async ({ folderIds }) => {
+      const types = [
+        'inbox',
+        'sent',
+        'trash',
+        'junk',
+        'archive',
+        'custom',
+      ] as const;
+      await store.commitSyncBatch({
+        accountId: 'account-1',
+        folders: types.map((type) => ({
+          providerFolderId: type,
+          type,
+          name: type,
+          kind: 'folder',
+        })),
+        messages: [
+          { ...message('received', 'Received'), providerFolderIds: types },
+          {
+            ...message('remote-draft', 'Draft'),
+            providerFolderIds: types,
+            draft: true,
+            receivedAt: '2026-09-04T00:00:00.000Z',
+          },
+          {
+            ...message('local-draft:local', 'Local draft'),
+            providerFolderIds: types,
+            draft: true,
+            receivedAt: '2026-09-05T00:00:00.000Z',
+          },
+        ],
+        deletedProviderMessageIds: [],
+        nextCursor: { value: 'cursor-1' },
+      });
+
+      const page = await store.listMessages('user-1', { folderIds, limit: 1 });
+      expect(page.items.map((item) => item.providerMessageId)).toEqual([
+        'received',
+      ]);
+      expect(page.nextCursor).toBeUndefined();
+    },
+  );
+
+  it('allows drafts only through a matching draft folder in the same account', async () => {
+    await store.saveAccount({
+      ...account(),
+      id: 'account-2',
+      address: 'second@example.com',
+    });
+    for (const accountId of ['account-1', 'account-2']) {
+      await store.commitSyncBatch({
+        accountId,
+        folders: [
+          {
+            providerFolderId: 'shared-folder',
+            type: accountId === 'account-1' ? 'drafts' : 'custom',
+            name: 'Shared',
+            kind: 'folder',
+          },
+          {
+            providerFolderId: 'inbox',
+            type: 'inbox',
+            name: 'Inbox',
+            kind: 'folder',
+          },
+        ],
+        messages: [
+          {
+            ...message('draft-in-both', 'Draft'),
+            draft: true,
+            providerFolderIds: ['shared-folder', 'inbox'],
+          },
+          { ...message('draft-in-inbox', 'Draft'), draft: true },
+          message('received', 'Received'),
+        ],
+        deletedProviderMessageIds: [],
+        nextCursor: { value: 'cursor-1' },
+      });
+    }
+
+    const page = await store.listMessages('user-1', {
+      folderIds: ['shared-folder', 'inbox'],
+    });
+    expect(page.items.filter((item) => item.draft)).toMatchObject([
+      { accountId: 'account-1', providerMessageId: 'draft-in-both' },
+    ]);
+    expect(page.items.filter((item) => !item.draft)).toHaveLength(2);
+    expect(
+      (
+        await store.listMessages('user-1', {
+          folderIds: [MAIL_LOCAL_DRAFT_FOLDER_ID],
+        })
+      ).items,
+    ).toHaveLength(4);
+    expect((await store.listAllMessages({})).items).toHaveLength(6);
   });
 
   it('keeps a local draft when the Provider has no draft capability', async () => {
