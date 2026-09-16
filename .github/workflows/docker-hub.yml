@@ -14,14 +14,10 @@ on:
         required: true
         default: latest
       image_tag:
-        description: 'Image tag to publish to the selected registries'
+        description: 'Image tag to publish to both GHCR and Alibaba Cloud'
         type: string
         required: true
         default: latest
-      publish_aliyun:
-        description: 'Also publish to registry.cn-beijing.aliyuncs.com/nocobase/hub'
-        type: boolean
-        default: true
 
 permissions:
   contents: read
@@ -44,7 +40,6 @@ jobs:
           persist-credentials: false
 
       - name: Check Alibaba Cloud credentials
-        if: inputs.publish_aliyun
         env:
           ALI_DOCKER_REGISTRY: ${{ secrets.ALI_DOCKER_REGISTRY }}
           ALI_DOCKER_USERNAME: ${{ secrets.ALI_DOCKER_USERNAME }}
@@ -71,7 +66,7 @@ jobs:
         with:
           images: |
             ghcr.io/nocobase/hub
-            name=registry.cn-beijing.aliyuncs.com/nocobase/hub,enable=${{ inputs.publish_aliyun }}
+            registry.cn-beijing.aliyuncs.com/nocobase/hub
           flavor: latest=false
           tags: |
             type=raw,value=${{ inputs.image_tag }}
@@ -85,7 +80,6 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Log in to Alibaba Cloud Container Registry
-        if: inputs.publish_aliyun
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         with:
           registry: ${{ secrets.ALI_DOCKER_REGISTRY }}
