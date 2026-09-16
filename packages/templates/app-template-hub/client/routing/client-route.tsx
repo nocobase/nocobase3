@@ -2,6 +2,7 @@ import type {
   AppClientRegisteredRoute,
   AppClientRouteComponentModule,
 } from '@nocobase/app-client/plugins';
+import { useAuthorizationRevision } from '@nocobase/app-plugin-authorization/client';
 import { NamespaceScope } from '@nocobase/i18n/client';
 import { useCan } from '@refinedev/core';
 import { type ReactElement, useEffect, useState } from 'react';
@@ -30,11 +31,15 @@ export interface ClientPageProps {
 
 export function ClientPage({ page }: ClientPageProps): ReactElement {
   const { access, checkAccess, componentLoader } = page;
+  const authorizationRevision = useAuthorizationRevision();
   const { data: accessResult, isLoading: accessLoading } = useCan({
     resource: access.resource,
     action: access.action,
+    // Keep cached page decisions tied to the current permission snapshot.
+    params: { authorizationRevision },
     queryOptions: {
       enabled: checkAccess,
+      placeholderData: undefined,
       staleTime: 0,
       refetchOnMount: 'always',
     },
@@ -70,7 +75,7 @@ export function ClientPage({ page }: ClientPageProps): ReactElement {
   }
 
   if (checkAccess && accessLoading) return <ClientPageLoading />;
-  if (checkAccess && accessResult?.can === false)
+  if (checkAccess && accessResult?.can !== true)
     return <ClientPageDenied page={page} />;
 
   if (!componentModule) {

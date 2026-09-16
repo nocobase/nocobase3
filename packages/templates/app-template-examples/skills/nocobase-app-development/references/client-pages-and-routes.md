@@ -175,3 +175,7 @@ Do not declare product routes in any of them. They render routes; `client/routes
 - A signed-out visit to a `required` page redirects to sign-in.
 - A settings page with `access` disappears from navigation when denied, and its direct URL does not load the component.
 - The page's chunk loads on navigation rather than in the initial bundle.
+
+Account-menu sign-out checks the Better Auth result for an error before refreshing the session. Keep failures visible through the localized error toast; do not simulate sign-out by redirecting while the server session remains valid.
+
+The authorization provider clears the permission snapshot before rendering a new session. Route navigation and page guards subscribe to the authorization revision; preserve these checks when customizing the shell so account changes and permission updates take effect without a reload. Pending checks hide protected content, and failed checks deny access.

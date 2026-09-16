@@ -245,3 +245,9 @@ return field and record conditions.
 - Add a Permission Set only when the business access is reusable or needs
   administrator configuration.
 - Test both an allowed request and a request denied by a record or field rule.
+
+## Session-aware client permissions
+
+The authorization React provider runs inside the authentication provider and clears the permission snapshot before rendering a new session. Keep both providers registered. The client discards obsolete permission responses after invalidation; custom menus and route guards should subscribe with `useAuthorizationRevision()` and rerun checks when its value changes. Cached Refine checks must include the revision in their query parameters and disable previous-result placeholders so protected content stays hidden while new permissions load. Frontend checks do not replace server authorization.
+
+Explicit route domain checks use `access: { resource: 'type:id', action: 'action' }` (for example `hub.app:*` and `upload-release`). Do not use a bare domain type as the resource: a plain name is interpreted as a page id. These snapshot checks do not enforce record ownership; keep the server's authorization boundary.

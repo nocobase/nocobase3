@@ -122,6 +122,7 @@ interface DataResponse<T> {
 
 export class AuthorizationClient {
   private snapshot?: Promise<PermissionsSnapshot>;
+  private permissionsRevision = 0;
   private readonly invalidationListeners = new Set<() => void>();
 
   constructor(private readonly api: ApiClient) {}
@@ -141,16 +142,28 @@ export class AuthorizationClient {
   }
 
   permissions(): Promise<PermissionsSnapshot> {
-    this.snapshot ??= this.api
-      .request<DataResponse<PermissionsSnapshot>>({
-        path: 'authz/permissions',
-      })
-      .then((response) => response.data)
-      .catch((error: unknown) => {
-        this.snapshot = undefined;
-        throw error;
-      });
+    if (!this.snapshot) {
+      const request: Promise<PermissionsSnapshot> = this.api
+        .request<DataResponse<PermissionsSnapshot>>({
+          path: 'authz/permissions',
+        })
+        .then(
+          (response) =>
+            this.snapshot === request ? response.data : this.permissions(),
+          (error: unknown) => {
+            // A request from an earlier session must not evict its successor.
+            if (this.snapshot !== request) return this.permissions();
+            this.snapshot = undefined;
+            throw error;
+          },
+        );
+      this.snapshot = request;
+    }
     return this.snapshot;
+  }
+
+  getPermissionsRevision(): number {
+    return this.permissionsRevision;
   }
 
   listPermissionSets(): Promise<readonly PermissionSet[]> {
@@ -307,6 +320,7 @@ export class AuthorizationClient {
 
   invalidatePermissions(): void {
     this.snapshot = undefined;
+    this.permissionsRevision += 1;
     for (const listener of this.invalidationListeners) listener();
   }
 

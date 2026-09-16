@@ -14,6 +14,10 @@ import {
   authenticationClientToken,
 } from '@nocobase/app-plugin-authentication/client';
 import {
+  AuthorizationClient,
+  authorizationClientToken,
+} from '@nocobase/app-plugin-authorization/client';
+import {
   Refine,
   type AccessControlProvider,
   type AuthProvider,
@@ -474,11 +478,15 @@ function renderApplication(
   const authenticated =
     (authProvider as TestAuthProvider).authenticated ?? true;
   const authClient = options.authClient ?? createTestAuthClient(authenticated);
+  const authorizationClient = new AuthorizationClient({
+    request: vi.fn(),
+  } as never);
   const app = {
     runtime: { settingsRouteTree: options.settingsRouteTree ?? [] },
     services: {
       resolve: (token: unknown) => {
         if (token === authenticationClientToken) return authClient;
+        if (token === authorizationClientToken) return authorizationClient;
         throw new Error(`Unexpected service token: ${String(token)}`);
       },
     },
