@@ -4,3 +4,4 @@
 export { default } from './plugin.js';
 export * from './authorization-client.js';
 export * from './tokens.js';
+export { useAuthorizationRevision } from './use-authorization-revision.js';

@@ -251,6 +251,7 @@ const zhCN: AppResource = {
     note: '不开放写入：这份数据归 CRM 所有，路由只注册查询动作，Policy 也只授予读取。',
   },
   account: {
+    signOutFailed: '退出登录失败，请重试。',
     openMenu: '打开账户菜单',
     fallback: '账户',
     signOut: '退出登录',
