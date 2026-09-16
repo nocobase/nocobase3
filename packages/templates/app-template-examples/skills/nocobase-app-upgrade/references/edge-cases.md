@@ -22,7 +22,7 @@ diff <(node -p "JSON.stringify(require('$WORK/$BASE/package.json'), null, 2)") \
 | `files`, `engines`, `packageManager`, `browserslist`, `prettier` | The template's.                                                                                                                      |
 | `pnpm`, `overrides`, `resolutions`                               | The user's, unless the template changed the same entry.                                                                              |
 
-Dependency keys get reordered between releases, so most of the raw diff is noise — compare key by key. A dependency the template dropped may be one the user now imports directly; search before deleting, same as a removed export. For plugins, also complete the [usage review](#review-a-removed-plugins-usage): no direct import does not prove the capability is unused. Keep any retained plugin in the appropriate dependency section together with its required registrations.
+Dependency keys get reordered between releases, so most of the raw diff is noise — compare key by key. A dependency the template dropped may be one the user now imports directly; search before deleting, same as a removed export. For plugins, complete the [code and configuration review](#review-a-removed-plugins-usage) and obtain confirmation before removing an apparently unused capability. Keep any retained plugin in the appropriate dependency section together with its required registrations.
 
 Ranges in a published template are already resolved (`pnpm pack` expands `workspace:` and `catalog:`). Take them as published.
 
@@ -71,15 +71,15 @@ An older application may also carry a `nocobase.plugins` array in `package.json`
 
 ### Review a removed plugin's usage
 
-Registration origin and application usage are separate questions. A plugin supplied by BASE may power the application even when its registration is unchanged and no application-owned file imports its package.
+Registration origin and application usage are separate questions. Review the application's code and configuration even when the plugin's registration is unchanged from BASE.
 
-1. Identify the removed plugin's capabilities from BASE and its public documentation. Search beyond the composition roots for its package name, exported services, API paths, route names, and collection names in application-owned code, pages, navigation, commands, workflows, and tests.
-2. Inspect relevant application configuration and business data through available read-only tools for configured workflows, knowledge bases, repositories, or other active uses. Plugin-owned tables alone do not prove active use, and an empty source search does not prove non-use. If runtime state is unavailable or usage remains uncertain, keep the plugin pending clarification and ask the user rather than assuming it is unused.
-3. Present the evidence and proposed outcome in the upgrade plan and obtain agreement before removal. Remove only a template-provided plugin confirmed unused; preserve a user-added plugin unless the user explicitly chooses to remove it. For a used plugin, retain its manifest dependency and required Client, Server, and CLI registrations as application-owned choices, and check compatibility with TARGET. If retention is incompatible or a replacement is needed, agree on the capability and data migration before removing the old plugin; a similar package name does not establish equivalence.
+1. Identify the removed plugin's capabilities from BASE and its public documentation. Search beyond the composition roots for its package name, exported services, API paths, route names, and collection names in application-owned code and configuration.
+2. If neither code nor configuration shows usage, treat the plugin as apparently unused and ask the user to confirm its removal in the upgrade plan. This review does not require inspecting running workflows or business data. Remove the dependency and registrations together only after confirmation; otherwise keep them.
+3. If references are found or the user says the capability is needed, retain its manifest dependency and required Client, Server, and CLI registrations, and check compatibility with TARGET. Preserve user-added plugins unless the user explicitly chooses to remove them. If retention is incompatible or a replacement is needed, agree on the capability and data migration before removing the old plugin; a similar package name does not establish equivalence.
 
 Before combining a retained plugin with a replacement added by TARGET, check that their dependencies and registrations can coexist. If they conflict, leave that combination unmerged until a migration is agreed.
 
-Apply the agreed outcome to the manifest and composition roots together. Verify the affected pages, APIs, workflows, and data access after upgrading; passing type checks alone does not establish that a configured capability survived.
+Apply the agreed outcome to the manifest and composition roots together, then verify the affected application behavior after upgrading.
 
 ## Migrations
 

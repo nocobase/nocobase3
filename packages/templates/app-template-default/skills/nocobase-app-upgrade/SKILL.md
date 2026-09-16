@@ -93,7 +93,7 @@ Show the user this listing, the version range, any manual actions identified fro
 
 Do this before editing, so its findings are in the plan. The template's files are consistent with each other after a change; the user's are not, and no diff points at them.
 
-Check plugins dropped from the manifest or any composition root even when the application never changed those files. A template-provided plugin can be in use without a custom import or registration; apply the [plugin usage review](references/edge-cases.md#review-a-removed-plugins-usage) before deciding to remove its dependency or registration.
+Check plugins dropped from the manifest or any composition root even when the application never changed those files. Review application code and configuration using the [plugin usage review](references/edge-cases.md#review-a-removed-plugins-usage); when no usage is found, propose removal and obtain the user's confirmation before removing its dependency or registration.
 
 ```bash
 # For each `Only in BASE` file, and each export that vanished from a surviving file:
