@@ -8,6 +8,8 @@ Do not create a plugin to add a feature. Plugins are separately published packag
 
 This application is based on `@nocobase/app-template-default` and provides runnable learning examples. Its homepage catalogs the registered demonstrations; article management is application-owned. Reusable plugin examples stay in `packages/examples/` in the source workspace. Keep framework changes aligned with Default and Hub; keep demonstration content and branding local. Use a separate configuration and database, never copy Default's runtime state.
 
+Examples retains Default’s Users and API Keys integration alongside its demonstrations. Users lists direct Authorization Permission Sets as application roles; authenticated default access remains separate. API Keys is configured in both authentication factories and mounted under Settings. Keep these product integrations aligned with Default.
+
 ## Load the development skills
 
 `skills/nocobase-app-development/` holds the detailed guidance behind this file. Read its `SKILL.md` first — it routes to the reference that matches your task instead of making you read everything:
@@ -234,6 +236,7 @@ To customize a page a plugin owns, pass an option on its registration, add a sou
 | Email, IM, or in-app messages; notifying someone that something happened                          | `@nocobase/app-plugin-notification`   |
 | Roles, permissions, "user A may only see their own records", field-level or row-level access      | `@nocobase/app-plugin-authorization`  |
 | Sign-in, registration, sessions, password reset                                                   | `@nocobase/app-plugin-authentication` |
+| User administration and application-owned role assignment                                         | `@nocobase/app-plugin-users`          |
 | File upload and metadata through Repository                                                       | `@nocobase/app-plugin-file`           |
 | Translated text and language switching                                                            | `@nocobase/app-plugin-i18n`           |
 
@@ -244,6 +247,8 @@ Building a permission system, a notification sender, or a job scheduler by hand 
 `.agents/skills/` itself is generated output: gitignored, and every synchronized directory is replaced wholesale on the next sync, so never edit a file there. This application's own `skills/` directory is the opposite — committed source you should keep current.
 
 ## Adding a dependency
+
+Keep `@nocobase/db` in `dependencies` alongside the database driver. It supplies the driver's runtime peer and lets TypeScript resolve the inferred database configuration declaration through the public package name. Moving it to `devDependencies` can cause TS2883 in an installed application even while the source workspace builds successfully.
 
 Put a package your **server** code imports in `dependencies`. Put everything your **client** code imports — along with build tooling, tests, and type-only imports — in `devDependencies`.
 

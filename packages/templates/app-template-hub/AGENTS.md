@@ -232,13 +232,15 @@ To customize a page a plugin owns, pass an option on its registration, add a sou
 
 Run `pnpm plugin:skills:sync` if `.agents/skills/` is missing or looks out of date, then read the Skill for the plugin you need. It documents that plugin's public entries, the ownership boundary, and how to verify the result — which is faster and more correct than inferring an API from its source.
 
-Building a capability by hand when a registered plugin already provides it is the most expensive mistake available here. Prefer the plugin; write your own only when you have read its Skill and confirmed it genuinely does not fit. Workflow and end-user notification plugins are intentionally not registered in the Hub template.
+Building a capability by hand when a registered plugin already provides it is the most expensive mistake available here. Prefer the plugin; write your own only when you have read its Skill and confirmed it genuinely does not fit. Workflow and end-user notification plugins are intentionally not registered in the Hub template. Their configuration factories and dependencies are absent too. The shared Settings surface stays enabled for API Keys and other registered settings pages; applications, Hub roles, and Users remain in the primary console. Application-owned routes and providers start empty; Hub management routes and role scopes come from the Hub plugin. Keep learning demonstrations in the Examples template.
 
 `.agents/skills/` itself is generated output: gitignored, and every synchronized directory is replaced wholesale on the next sync, so never edit a file there. This application's own `skills/` directory is the opposite — committed source you should keep current.
 
 ## Adding a dependency
 
 Put a package your **server** code imports in `dependencies`. Put everything your **client** code imports — along with build tooling, tests, and type-only imports — in `devDependencies`.
+
+Keep `@nocobase/db` in `dependencies` alongside the database driver. It supplies the driver's runtime peer and lets TypeScript resolve the inferred database configuration declaration through the public package name. Moving it to `devDependencies` can cause TS2883 in an installed Hub even while the source workspace builds successfully.
 
 That split looks backwards until you see how the two halves are deployed. `pnpm build` bundles the client: Vite resolves every client import and inlines it into `dist/client`, so nothing has to resolve it again later. The server is not bundled. `dist/server` keeps its bare imports, and `pnpm build` generates `dist/package.json` from your `dependencies` and installs a `node_modules` next to it — that tree is what the deployed server resolves against, and `devDependencies` are not in it.
 

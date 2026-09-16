@@ -56,9 +56,7 @@ describe('application shell', () => {
       await screen.findByRole('button', { name: 'Open account menu' }),
     ).toHaveAttribute('title', 'Alice');
     expect(screen.getByRole('button', { name: 'Appearance' })).toBeVisible();
-    expect(
-      screen.queryByRole('link', { name: 'Settings' }),
-    ).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Settings' })).toBeVisible();
     expect(screen.getByText('AI builds freely.')).toBeVisible();
     expect(screen.getByText('NocoBase Hub v0.0.0')).toBeVisible();
     expect(screen.getByText('Hub console')).toBeVisible();
@@ -175,14 +173,17 @@ describe('application shell', () => {
     expect(screen.getByRole('button', { name: 'Appearance' })).toBeVisible();
   });
 
-  it('redirects ordinary App settings paths into the Hub console', async () => {
-    renderApplication('/settings/users', createAuthProvider(true), [
-      createRoute('apps', '/apps', 'required', ApplicationsPage),
+  it('opens API Keys through the shared settings surface', async () => {
+    renderApplication('/settings/api-keys', createAuthProvider(true), [
+      createRoute('api-keys', '/settings/api-keys', 'required', () => (
+        <h2>API Keys page</h2>
+      )),
     ]);
 
     expect(
-      await screen.findByRole('heading', { name: 'Applications page' }),
+      await screen.findByRole('heading', { name: 'API Keys page' }),
     ).toBeVisible();
+    expect(screen.getByRole('link', { name: 'Settings' })).toBeVisible();
   });
 
   it('redirects the authorized Hub root through the Hub access rule', async () => {

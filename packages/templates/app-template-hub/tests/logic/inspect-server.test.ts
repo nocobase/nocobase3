@@ -13,6 +13,11 @@ describe('Server inspection', () => {
 
     expect(inspection.app.packageName).toBe('@nocobase/app-template-hub');
     expect(inspection.issues).toEqual([]);
+    expect(
+      inspection.routes.filter(
+        ({ packageName }) => packageName === inspection.app.packageName,
+      ),
+    ).toEqual([]);
     expect(inspection.consistent).toBe(true);
     expect(inspection.suggestions).toEqual([]);
     expect(inspection.plugins[0]).toMatchObject({
