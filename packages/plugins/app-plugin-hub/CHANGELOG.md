@@ -1,5 +1,20 @@
 # @nocobase/app-plugin-hub
 
+## 0.1.0-beta.7
+
+### Patch Changes
+
+- d927494: Fix development startup of generated Hub applications by selecting the App Host launcher from the loaded package format, preserving source development in the workspace and using compiled JavaScript in installed packages. Keep the optional application configuration commented out so an empty YAML section cannot override application identity defaults during production startup. Correct the AI Employee plugin Skill namespace so generated applications can synchronize their registered plugins' Skills.
+- Updated dependencies [d927494]
+- Updated dependencies [6acf3bc]
+- Updated dependencies [89955c5]
+  - @nocobase/app-host@0.1.0-beta.7
+  - @nocobase/app-plugin-users@0.0.2-beta.3
+  - @nocobase/authorization@0.1.0-beta.6
+  - @nocobase/app-plugin-authentication@0.1.0-beta.15
+  - @nocobase/app-server@1.0.0-beta.15
+  - @nocobase/db@1.0.0-beta.7
+
 ## 0.1.0-beta.6
 
 ### Patch Changes
