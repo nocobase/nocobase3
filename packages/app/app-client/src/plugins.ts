@@ -108,6 +108,8 @@ export interface AppClientRouteBreadcrumb {
 }
 
 export interface AppClientSettingsRoutePageDefinition {
+  /** Existing settings group to append to; only valid on contribution roots. */
+  readonly parent?: string;
   readonly name: string;
   /** Path relative to the built-in Settings Route. */
   readonly path: string;
@@ -127,6 +129,8 @@ export interface AppClientSettingsRoutePageDefinition {
  * them. Children may be pages or further navigation groups.
  */
 export interface AppClientSettingsRouteGroupDefinition {
+  /** Existing settings group to append to; only valid on contribution roots. */
+  readonly parent?: string;
   readonly name: string;
   /** Path segment relative to the built-in Settings Route. */
   readonly path?: string;
@@ -598,6 +602,7 @@ export function resolveAppClientContributions(
   const devRouteGroups: AppClientRegisteredDevRouteGroup[] = [];
   const reactProviders: AppClientRegisteredReactProvider[] = [];
   const reactProviderIds = new Set<string>();
+  const settingsContributions: SettingsRouteInput[] = [];
 
   for (const contribution of contributions) {
     const packageName = normalizePackageName(contribution.packageName);
@@ -606,6 +611,14 @@ export function resolveAppClientContributions(
     const routeContributions = normalizeRouteContributions(contribution.routes);
     for (const routeContribution of routeContributions) {
       const surface = routeContribution.parent;
+      if (surface === 'settings') {
+        settingsContributions.push({
+          definitions: routeContribution.routes,
+          packageName,
+          source,
+        });
+        continue;
+      }
       const tree = resolveRouteTree(
         routeContribution.routes,
         packageName,
@@ -619,53 +632,8 @@ export function resolveAppClientContributions(
       if (surface === 'app') {
         routes.push(...tree);
       } else {
-        const targetTree = surface === 'dev' ? devRouteTree : settingsRouteTree;
+        const targetTree = devRouteTree;
         targetTree.push(...tree);
-        const pages = surface === 'dev' ? devRoutes : settings;
-        const groups = surface === 'dev' ? devRouteGroups : settingGroups;
-        const project = (
-          nodes: readonly AppClientRegisteredRoute[],
-          groupId?: string,
-        ): AppClientRegisteredSetting[] =>
-          nodes.flatMap((node) => {
-            if (!node.componentLoader) {
-              const children = project(node.children ?? [], node.id);
-              groups.push(
-                Object.freeze({
-                  id: node.id,
-                  title: node.navigation!.title,
-                  ...(node.navigation?.icon
-                    ? { icon: node.navigation.icon }
-                    : {}),
-                  surface,
-                  packageName,
-                  source,
-                  settings: Object.freeze(children),
-                }),
-              );
-              return children;
-            }
-            const setting: AppClientRegisteredSetting = Object.freeze({
-              id: node.id,
-              path: node.path,
-              title: node.navigation?.title ?? node.name,
-              navigation: !!node.navigation,
-              surface,
-              packageName,
-              source,
-              pageLoader: node.componentLoader,
-              // A settings page is never declared with `access: false`; the route-level opt-out belongs to the
-              // application surface, where a page is authorized by default. Test for both so a missing rule and an
-              // opt-out are told apart rather than collapsed by falsiness.
-              ...(node.access !== undefined && node.access !== false
-                ? { access: node.access }
-                : {}),
-              ...(node.navigation?.icon ? { icon: node.navigation.icon } : {}),
-              ...(groupId ? { groupId } : {}),
-            });
-            return [setting, ...project(node.children ?? [], groupId)];
-          });
-        pages.push(...project(tree));
       }
     }
 
@@ -686,6 +654,72 @@ export function resolveAppClientContributions(
     }
   }
 
+  const assembled = assembleSettingsRoutes(settingsContributions);
+  settingsRouteTree.push(
+    ...resolveRouteTree(
+      assembled.roots,
+      '',
+      'plugin',
+      'settings',
+      '/settings',
+      undefined,
+      routeIds,
+      claimedPaths,
+      assembled.owners,
+    ),
+  );
+  const projectNavigation = (
+    surface: AppClientNavigationSurface,
+    groups: AppClientRegisteredSettingGroup[],
+    nodes: readonly AppClientRegisteredRoute[],
+    groupId?: string,
+  ): AppClientRegisteredSetting[] =>
+    nodes.flatMap((node) => {
+      if (!node.componentLoader) {
+        const children = projectNavigation(
+          surface,
+          groups,
+          node.children ?? [],
+          node.id,
+        );
+        groups.push(
+          Object.freeze({
+            id: node.id,
+            title: node.navigation!.title,
+            surface,
+            ...(node.navigation?.icon ? { icon: node.navigation.icon } : {}),
+            packageName: node.packageName,
+            source: node.source,
+            settings: Object.freeze(children),
+          }),
+        );
+        return children;
+      }
+      const setting: AppClientRegisteredSetting = Object.freeze({
+        id: node.id,
+        path: node.path,
+        title: node.navigation?.title ?? node.name,
+        navigation: !!node.navigation,
+        surface,
+        packageName: node.packageName,
+        source: node.source,
+        pageLoader: node.componentLoader,
+        ...(node.access !== undefined && node.access !== false
+          ? { access: node.access }
+          : {}),
+        ...(node.navigation?.icon ? { icon: node.navigation.icon } : {}),
+        ...(groupId ? { groupId } : {}),
+      });
+      return [
+        setting,
+        ...projectNavigation(surface, groups, node.children ?? [], groupId),
+      ];
+    });
+  settings.push(
+    ...projectNavigation('settings', settingGroups, settingsRouteTree),
+  );
+  devRoutes.push(...projectNavigation('dev', devRouteGroups, devRouteTree));
+
   return Object.freeze({
     routes: Object.freeze(routes),
     settingsRouteTree: Object.freeze(settingsRouteTree),
@@ -696,6 +730,100 @@ export function resolveAppClientContributions(
     devRouteGroups: Object.freeze(devRouteGroups),
     reactProviders: sortReactProviders(reactProviders),
   });
+}
+
+interface SettingsRouteInput {
+  definitions: readonly AppClientSettingsRouteDefinition[];
+  packageName: string;
+  source: AppClientContributionSource;
+}
+
+function assembleSettingsRoutes(inputs: readonly SettingsRouteInput[]): {
+  roots: AppClientSettingsRouteDefinition[];
+  owners: WeakMap<
+    object,
+    { packageName: string; source: AppClientContributionSource }
+  >;
+} {
+  const roots: AppClientSettingsRouteDefinition[] = [];
+  const groups = new Map<string, AppClientSettingsRouteDefinition>();
+  const owners = new WeakMap<
+    object,
+    { packageName: string; source: AppClientContributionSource }
+  >();
+  const pending: { node: AppClientSettingsRouteDefinition; parent: string }[] =
+    [];
+  const all: AppClientSettingsRouteDefinition[] = [];
+  for (const input of inputs) {
+    const copy = (
+      definition: AppClientSettingsRouteDefinition,
+      nested: boolean,
+    ): AppClientSettingsRouteDefinition => {
+      if (nested && definition.parent !== undefined)
+        throw new Error(
+          `Settings route "${definition.name}" cannot declare parent inside children.`,
+        );
+      const node = {
+        ...definition,
+        ...(definition.children
+          ? { children: definition.children.map((child) => copy(child, true)) }
+          : {}),
+      };
+      owners.set(node, input);
+      all.push(node);
+      if (!node.componentLoader) {
+        const name = normalizeSettingId(
+          node.name,
+          input.packageName,
+          'setting',
+        );
+        if (groups.has(name))
+          throw new Error(
+            `Client setting group "${name}" from plugin "${input.packageName}" is already registered by "${owners.get(groups.get(name)!)!.packageName}".`,
+          );
+        groups.set(name, node);
+      }
+      return node;
+    };
+    for (const definition of input.definitions) {
+      const node = copy(definition, false);
+      if (definition.parent === undefined) roots.push(node);
+      else
+        pending.push({
+          node,
+          parent: normalizeSettingId(
+            definition.parent,
+            input.packageName,
+            'setting parent',
+          ),
+        });
+    }
+  }
+  for (const { node, parent } of pending) {
+    const target = groups.get(parent);
+    if (!target)
+      throw new Error(
+        `Settings route "${node.name}" from "${owners.get(node)!.packageName}" references missing group "${parent}" (the target must be a group, not a page).`,
+      );
+    if (!target.children)
+      throw new Error(`Settings group "${parent}" must declare children.`);
+    (target.children as AppClientSettingsRouteDefinition[]).push(node);
+  }
+  const visiting = new Set<object>();
+  const visited = new Set<object>();
+  const visit = (node: AppClientSettingsRouteDefinition): void => {
+    if (visiting.has(node))
+      throw new Error(
+        `Circular settings parent relationship at "${node.name}".`,
+      );
+    if (visited.has(node)) return;
+    visiting.add(node);
+    for (const child of node.children ?? []) visit(child);
+    visiting.delete(node);
+    visited.add(node);
+  };
+  for (const node of all) visit(node);
+  return { roots, owners };
 }
 
 function normalizeRouteContributions(
@@ -861,203 +989,217 @@ function resolveRouteTree(
   parentAuth: AppClientRouteAuth | undefined,
   ids: Map<string, string>,
   claimed: Map<string, ClaimedPath>,
+  owners?: WeakMap<
+    object,
+    { packageName: string; source: AppClientContributionSource }
+  >,
 ): readonly AppClientRegisteredRoute[] {
   const siblingNames = new Set<string>();
   return Object.freeze(
     definitions.map((route) => {
-      const name =
-        surface === 'app'
-          ? normalizeContributionName(route.name, packageName, 'route')
-          : normalizeSettingId(
-              route.name,
-              packageName,
-              describeSurface(surface),
-            );
-      const id = surface === 'app' ? `${packageName}:${name}` : name;
-      if (
-        surface !== 'app' &&
-        parentAuth !== undefined &&
-        siblingNames.has(name)
-      ) {
-        throw new Error(
-          `Client ${describeSurface(surface)} group defines duplicate child id "${id}".`,
-        );
-      }
-      siblingNames.add(name);
-      const isPage = typeof route.componentLoader === 'function';
-      if ('componentLoader' in route && !isPage)
-        throw new Error(
-          `Client route "${id}" must define a componentLoader function.`,
-        );
-      const kind = surface === 'app' ? 'route' : describeSurface(surface);
-      if (!isPage && !route.children)
-        throw new Error(
-          `Client ${kind} "${id}" must define a componentLoader function.`,
-        );
-      if (!isPage && (!route.navigation || !route.children?.length))
-        throw new Error(
-          `Client ${kind} group "${id}" must define at least one child and navigation.`,
-        );
-      const rawPath = route.path;
-      if (isPage && rawPath === undefined)
-        throw new Error(`Client route "${id}" must define a path.`);
-      const relative =
-        rawPath === undefined
-          ? ''
-          : normalizeRoutePath(
-              parentPath ? '/' + rawPath.replace(/^\/+/, '') : rawPath,
-              packageName,
-              name,
-            );
-      const path =
-        `${parentPath.replace(/\/$/, '')}${relative === '/' && parentPath ? '' : relative}` ||
-        '/';
-      const declaredAuth = 'auth' in route ? route.auth : undefined;
-      if (parentAuth && declaredAuth && parentAuth !== declaredAuth)
-        throw new Error(
-          `Client route "${id}" cannot change inherited auth "${parentAuth}".`,
-        );
-      const auth = normalizeRouteAuth(
-        parentAuth ?? declaredAuth,
-        packageName,
-        name,
-      );
-      if (
-        surface === 'app' &&
-        isPage &&
-        path === '/' &&
-        source !== 'application'
-      )
-        throw new Error(
-          `Client route "${name}" from plugin "${packageName}" cannot use reserved application root path "/".`,
-        );
-      if (
-        surface === 'app' &&
-        RESERVED_APPLICATION_ROUTE_PATHS.has(path.toLowerCase()) &&
-        auth !== 'guest'
-      )
-        throw new Error(
-          `Client route "${name}" cannot use reserved path "${path}" unless auth is "guest".`,
-        );
-      const navigation = route.navigation
-        ? Object.freeze({
-            ...route.navigation,
-            title: normalizeSettingTitle(
-              route.navigation.title,
-              id,
-              packageName,
-              'route',
-            ),
-          })
-        : undefined;
-      if (
-        navigation &&
-        isPage &&
-        path
-          .split('/')
-          .some((segment) => segment.startsWith(':') || segment.includes('*'))
-      )
-        throw new Error(
-          `Client route "${id}" navigation requires a static path.`,
-        );
-      // A menu entry needs a static path; a breadcrumb does not, since it names the kind of page rather than the
-      // record. Nothing falls back to anything: a route in both a menu and a trail declares both.
-      const breadcrumb = route.breadcrumb
-        ? Object.freeze({
-            ...route.breadcrumb,
-            title: normalizeSettingTitle(
-              route.breadcrumb.title,
-              id,
-              packageName,
-              kind,
-            ),
-          })
-        : undefined;
-      if (isPage) {
-        const signature = createRoutePathSignature(path);
-        const previous = claimed.get(signature);
-        if (
-          previous &&
-          surface !== 'app' &&
-          previous.kind === kind &&
-          previous.path === path
-        )
-          throw new Error(
-            `Client ${kind} "${path}" from plugin "${packageName}" is already registered by "${previous.packageName}".`,
-          );
-        if (previous)
-          throw new Error(
-            `Client route path "${path}" from plugin "${packageName}" conflicts with ${previous.kind} "${previous.id}" at "${previous.path}"; already registered.`,
-          );
-        claimed.set(signature, {
-          id,
-          path,
-          packageName,
-          kind:
-            surface === 'app'
-              ? 'route'
-              : surface === 'dev'
-                ? 'dev route'
-                : 'setting',
-        });
-      }
-      // App names identify override targets across the package. Settings/Dev group
-      // names are surface-wide; page names retain their historical sibling scope.
-      if (surface === 'app' || !isPage) {
-        const identity = `${surface}:${id}`;
-        const duplicate = ids.get(identity);
-        if (duplicate) {
-          if (surface !== 'app') {
-            throw new Error(
-              `Client ${kind} group "${id}" from plugin "${packageName}" is already registered by "${duplicate}".`,
-            );
-          }
-          throw new Error(
-            `Plugin "${packageName}" defined duplicate client route name "${name}".`,
-          );
-        }
-        ids.set(identity, packageName);
-      }
-      return Object.freeze({
-        id,
-        name,
-        path,
-        auth,
-        packageName,
-        source,
-        ...(breadcrumb ? { breadcrumb } : {}),
-        ...(navigation ? { navigation } : {}),
-        // `access: false` is a declaration, not an absence: testing for truthiness here would drop it and put the
-        // page back on the default check it opted out of.
-        ...('access' in route && route.access !== undefined
-          ? { access: route.access }
-          : {}),
-        ...(isPage
-          ? {
-              componentLoader: wrapRouteComponentLoader(
-                route.componentLoader,
-                id,
-                surface === 'app' ? 'route' : describeSurface(surface),
-              ),
-            }
-          : {}),
-        ...(route.children
-          ? {
-              children: resolveRouteTree(
-                route.children,
-                packageName,
-                source,
-                surface,
-                path,
-                auth,
-                ids,
-                claimed,
-              ),
-            }
-          : {}),
-      });
+      const owner = owners?.get(route);
+      const routePackage = owner?.packageName ?? packageName;
+      const routeSource = owner?.source ?? source;
+      return resolveNode(route, routePackage, routeSource);
     }),
   );
+
+  function resolveNode(
+    route: AppClientRouteDefinition | AppClientSettingsRouteDefinition,
+    packageName: string,
+    source: AppClientContributionSource,
+  ): AppClientRegisteredRoute {
+    const name =
+      surface === 'app'
+        ? normalizeContributionName(route.name, packageName, 'route')
+        : normalizeSettingId(route.name, packageName, describeSurface(surface));
+    const id = surface === 'app' ? `${packageName}:${name}` : name;
+    if (
+      surface !== 'app' &&
+      parentAuth !== undefined &&
+      siblingNames.has(name)
+    ) {
+      throw new Error(
+        `Client ${describeSurface(surface)} group defines duplicate child id "${id}".`,
+      );
+    }
+    siblingNames.add(name);
+    const isPage = typeof route.componentLoader === 'function';
+    if ('componentLoader' in route && !isPage)
+      throw new Error(
+        `Client route "${id}" must define a componentLoader function.`,
+      );
+    if (surface === 'dev' && 'parent' in route && route.parent !== undefined)
+      throw new Error(
+        'Explicit parent is supported only on settings route contributions.',
+      );
+    const kind = surface === 'app' ? 'route' : describeSurface(surface);
+    if (!isPage && !route.children)
+      throw new Error(
+        `Client ${kind} "${id}" must define a componentLoader function.`,
+      );
+    if (
+      !isPage &&
+      (!route.navigation || (surface !== 'settings' && !route.children?.length))
+    )
+      throw new Error(
+        `Client ${kind} group "${id}" must define at least one child and navigation.`,
+      );
+    const rawPath = route.path;
+    if (isPage && rawPath === undefined)
+      throw new Error(`Client route "${id}" must define a path.`);
+    const relative =
+      rawPath === undefined
+        ? ''
+        : normalizeRoutePath(
+            parentPath ? '/' + rawPath.replace(/^\/+/, '') : rawPath,
+            packageName,
+            name,
+          );
+    const path =
+      `${parentPath.replace(/\/$/, '')}${relative === '/' && parentPath ? '' : relative}` ||
+      '/';
+    const declaredAuth = 'auth' in route ? route.auth : undefined;
+    if (parentAuth && declaredAuth && parentAuth !== declaredAuth)
+      throw new Error(
+        `Client route "${id}" cannot change inherited auth "${parentAuth}".`,
+      );
+    const auth = normalizeRouteAuth(
+      parentAuth ?? declaredAuth,
+      packageName,
+      name,
+    );
+    if (surface === 'app' && isPage && path === '/' && source !== 'application')
+      throw new Error(
+        `Client route "${name}" from plugin "${packageName}" cannot use reserved application root path "/".`,
+      );
+    if (
+      surface === 'app' &&
+      RESERVED_APPLICATION_ROUTE_PATHS.has(path.toLowerCase()) &&
+      auth !== 'guest'
+    )
+      throw new Error(
+        `Client route "${name}" cannot use reserved path "${path}" unless auth is "guest".`,
+      );
+    const navigation = route.navigation
+      ? Object.freeze({
+          ...route.navigation,
+          title: normalizeSettingTitle(
+            route.navigation.title,
+            id,
+            packageName,
+            'route',
+          ),
+        })
+      : undefined;
+    if (
+      navigation &&
+      isPage &&
+      path
+        .split('/')
+        .some((segment) => segment.startsWith(':') || segment.includes('*'))
+    )
+      throw new Error(
+        `Client route "${id}" navigation requires a static path.`,
+      );
+    // A menu entry needs a static path; a breadcrumb does not, since it names the kind of page rather than the
+    // record. Nothing falls back to anything: a route in both a menu and a trail declares both.
+    const breadcrumb = route.breadcrumb
+      ? Object.freeze({
+          ...route.breadcrumb,
+          title: normalizeSettingTitle(
+            route.breadcrumb.title,
+            id,
+            packageName,
+            kind,
+          ),
+        })
+      : undefined;
+    if (isPage) {
+      const signature = createRoutePathSignature(path);
+      const previous = claimed.get(signature);
+      if (
+        previous &&
+        surface !== 'app' &&
+        previous.kind === kind &&
+        previous.path === path
+      )
+        throw new Error(
+          `Client ${kind} "${path}" from plugin "${packageName}" is already registered by "${previous.packageName}".`,
+        );
+      if (previous)
+        throw new Error(
+          `Client route path "${path}" from plugin "${packageName}" conflicts with ${previous.kind} "${previous.id}" at "${previous.path}"; already registered.`,
+        );
+      claimed.set(signature, {
+        id,
+        path,
+        packageName,
+        kind:
+          surface === 'app'
+            ? 'route'
+            : surface === 'dev'
+              ? 'dev route'
+              : 'setting',
+      });
+    }
+    // App names identify override targets across the package. Settings/Dev group
+    // names are surface-wide; page names retain their historical sibling scope.
+    if (surface === 'app' || !isPage) {
+      const identity = `${surface}:${id}`;
+      const duplicate = ids.get(identity);
+      if (duplicate) {
+        if (surface !== 'app') {
+          throw new Error(
+            `Client ${kind} group "${id}" from plugin "${packageName}" is already registered by "${duplicate}".`,
+          );
+        }
+        throw new Error(
+          `Plugin "${packageName}" defined duplicate client route name "${name}".`,
+        );
+      }
+      ids.set(identity, packageName);
+    }
+    return Object.freeze({
+      id,
+      name,
+      path,
+      auth,
+      packageName,
+      source,
+      ...(breadcrumb ? { breadcrumb } : {}),
+      ...(navigation ? { navigation } : {}),
+      // `access: false` is a declaration, not an absence: testing for truthiness here would drop it and put the
+      // page back on the default check it opted out of.
+      ...('access' in route && route.access !== undefined
+        ? { access: route.access }
+        : {}),
+      ...(isPage
+        ? {
+            componentLoader: wrapRouteComponentLoader(
+              route.componentLoader,
+              id,
+              surface === 'app' ? 'route' : describeSurface(surface),
+            ),
+          }
+        : {}),
+      ...(route.children
+        ? {
+            children: resolveRouteTree(
+              route.children,
+              packageName,
+              source,
+              surface,
+              path,
+              auth,
+              ids,
+              claimed,
+              owners,
+            ),
+          }
+        : {}),
+    });
+  }
 }
 
 function normalizeRouteAuth(

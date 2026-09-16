@@ -1,3 +1,9 @@
+import { defaultAccess } from '@nocobase/app-plugin-authz-default-access/server';
+import { sharingRules } from '@nocobase/app-plugin-authz-sharing-rules/server';
+import { restrictionRules } from '@nocobase/app-plugin-authz-restriction-rules/server';
+import defaultAccessRoutes from '../../app-plugin-authz-default-access/server/routes.js';
+import sharingRulesRoutes from '../../app-plugin-authz-sharing-rules/server/routes.js';
+import restrictionRulesRoutes from '../../app-plugin-authz-restriction-rules/server/routes.js';
 import {
   AuthorizationDeniedError,
   type AuthorizationScope,
@@ -329,8 +335,8 @@ function resourceType(
 
 function authorization(): AppAuthorizationService {
   return createAppAuthorization({
+    config: { plugins: [defaultAccess(), sharingRules(), restrictionRules()] },
     connection,
-    config: { plugins: [] },
   });
 }
 
@@ -354,14 +360,25 @@ async function mountedRouter(
     authorizationToken,
     alwaysPermitted(authorization, require),
   );
-  const routes = await apiRoutes.createRouter({
-    appName: 'main',
-    publicBasePath: '',
-    config: { app: { name: 'main', publicBasePath: '' } },
-    paths: createConfigPaths({ rootDir: '/missing' }),
-    router: new Hono(),
-    container,
-  });
+  const routes = new Hono();
+  for (const contribution of [
+    apiRoutes,
+    ...defaultAccessRoutes,
+    ...sharingRulesRoutes,
+    ...restrictionRulesRoutes,
+  ]) {
+    routes.route(
+      '/',
+      await contribution.createRouter({
+        appName: 'main',
+        publicBasePath: '',
+        config: { app: { name: 'main', publicBasePath: '' } },
+        paths: createConfigPaths({ rootDir: '/missing' }),
+        router: new Hono(),
+        container,
+      }),
+    );
+  }
   const router = new Hono();
   router.use('*', createI18nMiddleware(runtime));
   return router.route('/api', routes);

@@ -90,9 +90,13 @@ describe('unrestricted access', () => {
     const authorization = createAuthorization({
       plugins: [permissionSets({ store: superuserStore() })],
     });
+    authorization.resources.add({
+      resourceType: 'test-resource',
+      authorize: async () => ({ effect: 'deny', reasons: [] }),
+    });
     const request = {
       principal: { type: 'user', id: 'root' },
-      resource: { type: 'settings', id: 'authorization.permission-sets' },
+      resource: { type: 'test-resource', id: 'first' },
       action: 'delete',
     } as const;
 

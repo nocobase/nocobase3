@@ -1,8 +1,9 @@
-import {
-  defaultAccess,
-  restrictionRules,
-  sharingRules,
-} from '../server/rules.js';
+import defaultAccessRoutes from '../../app-plugin-authz-default-access/server/routes.js';
+import sharingRulesRoutes from '../../app-plugin-authz-sharing-rules/server/routes.js';
+import restrictionRulesRoutes from '../../app-plugin-authz-restriction-rules/server/routes.js';
+import { defaultAccess } from '@nocobase/app-plugin-authz-default-access/server';
+import { restrictionRules } from '@nocobase/app-plugin-authz-restriction-rules/server';
+import { sharingRules } from '@nocobase/app-plugin-authz-sharing-rules/server';
 import {
   PERMISSION_SETS_PROTECTION_OWNER,
   type PermissionSetsApi,
@@ -223,13 +224,10 @@ describe('what an application configures about its own authorization', () => {
     });
 
     const responses = await Promise.all(
-      [
-        '/authz/permission-sets/options',
-        '/authz/restriction-rules/options',
-      ].map((path) => router.request(path)),
+      ['/authz/permission-sets/options'].map((path) => router.request(path)),
     );
 
-    expect(responses.map(({ status }) => status)).toEqual([200, 200]);
+    expect(responses.map(({ status }) => status)).toEqual([200]);
     for (const response of responses) {
       await expect(response.json()).resolves.toMatchObject({
         data: { collections: [] },
@@ -334,14 +332,25 @@ async function mountedRouter(
     required: () => async (_context, next) => next(),
   } as unknown as Auth);
   container.instance(authorizationToken, alwaysPermitted(authorization));
-  const routes = await apiRoutes.createRouter({
-    appName: 'main',
-    publicBasePath: '',
-    config: { app: { name: 'main', publicBasePath: '' } },
-    paths: createConfigPaths({ rootDir: '/missing' }),
-    router: new Hono(),
-    container,
-  });
+  const routes = new Hono();
+  for (const contribution of [
+    apiRoutes,
+    ...defaultAccessRoutes,
+    ...sharingRulesRoutes,
+    ...restrictionRulesRoutes,
+  ]) {
+    routes.route(
+      '/',
+      await contribution.createRouter({
+        appName: 'main',
+        publicBasePath: '',
+        config: { app: { name: 'main', publicBasePath: '' } },
+        paths: createConfigPaths({ rootDir: '/missing' }),
+        router: new Hono(),
+        container,
+      }),
+    );
+  }
   return new Hono().route('/api', routes);
 }
 

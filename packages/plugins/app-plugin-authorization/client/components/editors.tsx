@@ -2,7 +2,7 @@ import { Checkbox } from './ui/checkbox.js';
 import { SelectField } from './select-field.js';
 import { CustomFilterEditor } from './filter-editor.js';
 import { emptyFilter } from './filter-ast.js';
-import { actionLabel } from '../pages/permission-sets/labels.js';
+import { actionLabel } from './action-labels.js';
 import { useState, type ReactElement, type ReactNode } from 'react';
 
 import { useAuthorizationTranslation } from '../i18n.js';

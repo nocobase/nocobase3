@@ -34,7 +34,15 @@
       "types": "./client/react-providers.ts",
       "import": "./client/react-providers.ts"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./client/management": {
+      "types": "./client/management.ts",
+      "import": "./client/management.ts"
+    },
+    "./server/management": {
+      "types": "./server/management/index.ts",
+      "import": "./server/management/index.ts"
+    }
   },
   "files": [
     "dist",
@@ -68,7 +76,15 @@
         "types": "./dist/client/react-providers.d.ts",
         "import": "./dist/client/react-providers.js"
       },
-      "./package.json": "./package.json"
+      "./package.json": "./package.json",
+      "./client/management": {
+        "types": "./dist/client/management.d.ts",
+        "import": "./dist/client/management.js"
+      },
+      "./server/management": {
+        "types": "./dist/server/management/index.d.ts",
+        "import": "./dist/server/management/index.js"
+      }
     }
   },
   "scripts": {
@@ -118,6 +134,10 @@
     "prettier": "catalog:",
     "react-dom": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "@nocobase/app-plugin-authz-default-access": "workspace:*",
+    "@nocobase/app-plugin-authz-sharing-rules": "workspace:*",
+    "@nocobase/app-plugin-authz-restriction-rules": "workspace:*",
+    "@nocobase/repository-input": "workspace:*"
   }
 }

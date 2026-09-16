@@ -811,7 +811,7 @@ describe('client settings', () => {
     ).toThrow('defines duplicate child id "child"');
   });
 
-  it('rejects an empty group', () => {
+  it('accepts an empty group for contributions', () => {
     expect(() =>
       resolveAppClientContributions([
         {
@@ -826,7 +826,7 @@ describe('client settings', () => {
           ]),
         },
       ]),
-    ).toThrow('must define at least one child');
+    ).not.toThrow();
   });
 
   it('rejects a route that collides with a registered setting, and the reverse', () => {
@@ -849,7 +849,7 @@ describe('client settings', () => {
     };
 
     expect(() => resolveAppClientContributions([settings, route])).toThrow(
-      'conflicts with setting "general" at "/settings/general"',
+      'conflicts with route "@nocobase/app-plugin-second:general" at "/settings/general"',
     );
     expect(() => resolveAppClientContributions([route, settings])).toThrow(
       'conflicts with route "@nocobase/app-plugin-second:general" at "/settings/general"',

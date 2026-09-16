@@ -28,6 +28,11 @@ Do not add a second permission system inside a module. The module should keep it
 Database authorization is built in — an application no longer lists it among its plugins — and it is reached as `authz.db`.
 
 ```ts
+import { createAppAuthorization } from '@nocobase/app-plugin-authorization/server';
+import { defaultAccess } from '@nocobase/app-plugin-authz-default-access/server';
+import { sharingRules } from '@nocobase/app-plugin-authz-sharing-rules/server';
+import { restrictionRules } from '@nocobase/app-plugin-authz-restriction-rules/server';
+
 const authz = createAppAuthorization({
   connection,
   config: {
@@ -206,3 +211,9 @@ Use `authz.getResource(type).groups.add({ id, title, children })` for display gr
 Use `authz.subjects.define()` for users, departments, positions, or other authorization subjects. Keep `filterActive` responsible for object validity. Add optional `administration: { title, selection }` to expose the type in permission-set, sharing-rule, and restriction-rule pickers. A collection selector implements `list({ search, page, pageSize }, { authz })` returning `{ items, total }` and `resolve(ids, { authz })` returning items; each item is `{ id, title, description? }`. Both callbacks must check directory read permission and reuse the owning module's service. A fixed subject uses `selection: { type: 'fixed', id }`. See the package README for a complete registration example.
 
 The selector controls discovery and name resolution, not assignment permission. Keep write checks at the assignment or rule endpoint, and add runtime memberships to `request.subjects` separately. Do not hard-code user-only pickers or silently discard stored subjects whose plugin or directory is unavailable.
+
+## Optional rule plugins
+
+Default access, sharing rules and restriction rules are separate application plugins. Import their factories from `@nocobase/app-plugin-authz-default-access/server`, `@nocobase/app-plugin-authz-sharing-rules/server` and `@nocobase/app-plugin-authz-restriction-rules/server` respectively in `server/config/authorization.ts`. Register each installed plugin's default client factory in `client/plugins.ts` and default server definition in `server/plugins.ts`. Removing a feature requires removing both runtime registrations and its authorization config factory. The authorization library subpaths contain pure rule engines and Store contracts, not management HTTP handlers.
+
+Their settings routes use entry-level `parent: 'authorization'` to join this plugin's group while retaining their own translation namespace. The rule plugins own their database migrations; reinstall when adopting this source-level split rather than editing historical migration checksums.

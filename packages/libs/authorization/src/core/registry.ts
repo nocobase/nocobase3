@@ -66,7 +66,6 @@ export class ResourceItems {
 
 /** Plugins augment this map to supply their resource-specific item registry. */
 export interface AuthorizationResourceItems {
-  settings: ResourceItems;
   page: ResourceItems;
 }
 

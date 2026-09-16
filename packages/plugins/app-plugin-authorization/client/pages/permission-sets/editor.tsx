@@ -23,7 +23,7 @@ import {
 } from './drafts.js';
 import { actionMark, collectionFields } from './labels.js';
 import './database-presentation.js';
-import { ScopeMark, ScopeLegend } from './marks.js';
+import { ScopeMark, ScopeLegend } from '../../components/scope-marks.js';
 import { RecordAccessEditor } from './database-policy.js';
 import { FieldMatrix } from './field-matrix.js';
 import { ResourceTypeList } from './resource-tree.js';

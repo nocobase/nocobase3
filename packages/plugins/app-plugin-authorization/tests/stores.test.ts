@@ -1,18 +1,16 @@
+import { createAuthorization } from './authorization-fixture.js';
 import sqlite from '@nocobase/db-sqlite';
 import { createDatabaseManager } from '@nocobase/db';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import permissionSetMigration from '../database/migrations/202608210001_create_permission_set_tables.js';
-import defaultAccessMigration from '../database/migrations/202608210002_create_default_access_rules.js';
-import sharingRulesMigration from '../database/migrations/202608210003_create_sharing_rules.js';
-import restrictionRulesMigration from '../database/migrations/202608210004_create_restriction_rules.js';
-import { createAuthorization } from '@nocobase/authorization/core';
+import defaultAccessMigration from '../../app-plugin-authz-default-access/database/migrations/202608210002_create_default_access_rules.js';
+import sharingRulesMigration from '../../app-plugin-authz-sharing-rules/database/migrations/202608210003_create_sharing_rules.js';
+import restrictionRulesMigration from '../../app-plugin-authz-restriction-rules/database/migrations/202608210004_create_restriction_rules.js';
 import { permissionSets } from '@nocobase/authorization/permissions';
 import { databaseAuthorization } from '../server/database/index.js';
-import {
-  defaultAccess,
-  restrictionRules,
-  sharingRules,
-} from '../server/rules.js';
+import { defaultAccess } from '@nocobase/app-plugin-authz-default-access/server';
+import { restrictionRules } from '@nocobase/app-plugin-authz-restriction-rules/server';
+import { sharingRules } from '@nocobase/app-plugin-authz-sharing-rules/server';
 import { DatabasePermissionSetStore } from '../server/stores/permission-sets.js';
 
 describe('authorization plugin database stores', () => {
@@ -107,7 +105,14 @@ describe('authorization plugin database stores', () => {
   it('persists generic default, sharing, and restriction rules independently', async () => {
     const authorization = createAuthorization({
       connection: database.connection(),
-      plugins: [defaultAccess(), sharingRules(), restrictionRules()],
+      plugins: [
+        permissionSets({
+          store: new DatabasePermissionSetStore(() => database.connection()),
+        }),
+        defaultAccess(),
+        sharingRules(),
+        restrictionRules(),
+      ],
     });
     const resource = { type: 'database.collection', id: 'orders' };
 

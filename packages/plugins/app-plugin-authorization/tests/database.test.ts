@@ -16,9 +16,6 @@ describe('@nocobase/app-plugin-authorization database', () => {
       validateMigrations(migrationsDirectory),
     ).resolves.toMatchObject([
       { name: '202608210001_create_permission_set_tables' },
-      { name: '202608210002_create_default_access_rules' },
-      { name: '202608210003_create_sharing_rules' },
-      { name: '202608210004_create_restriction_rules' },
     ]);
     await expect(validateSeeds(seedsDirectory)).resolves.toMatchObject([
       {

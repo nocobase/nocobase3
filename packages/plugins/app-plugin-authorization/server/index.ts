@@ -32,14 +32,6 @@ export type {
 // reads `AuthorizationConfig` from.
 export { pages } from './pages-authorization.js';
 export type { PermissionSetsApi } from '@nocobase/authorization/permissions';
-export {
-  defaultAccess,
-  restrictionRules,
-  sharingRules,
-  type DefaultAccessOptions,
-  type RestrictionRulesOptions,
-  type SharingRulesOptions,
-} from './rules.js';
 export type { AuthorizationPlugin } from '@nocobase/authorization/core';
 export {
   authorizationToken,

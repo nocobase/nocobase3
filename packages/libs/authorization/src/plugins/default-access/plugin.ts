@@ -7,10 +7,6 @@ import type {
 import type { DefaultAccessRule } from './model.js';
 import type { DefaultAccessStore } from './store.js';
 import { requireStore } from '../internal/store.js';
-import {
-  createDefaultAccessHandler,
-  DEFAULT_ACCESS_ROUTE_PATH,
-} from './routes.js';
 
 export interface DefaultAccessApi<TTransaction = unknown> {
   set(rule: DefaultAccessRule): Promise<DefaultAccessRule>;
@@ -50,10 +46,6 @@ export function defaultAccess<TTransaction = unknown>(
     authorizationApi: { defaultAccess: service },
     setup(authz): void {
       authz.constraints.add(service);
-      authz.routes.add(
-        DEFAULT_ACCESS_ROUTE_PATH,
-        createDefaultAccessHandler(service),
-      );
     },
   };
 }

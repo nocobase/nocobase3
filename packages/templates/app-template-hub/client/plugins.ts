@@ -1,3 +1,6 @@
+import defaultAccess from '@nocobase/app-plugin-authz-default-access/client';
+import sharingRules from '@nocobase/app-plugin-authz-sharing-rules/client';
+import restrictionRules from '@nocobase/app-plugin-authz-restriction-rules/client';
 import {
   defineClientPlugins,
   type AppClientPlugins,
@@ -16,6 +19,9 @@ import hub from '@nocobase/app-plugin-hub/client';
 const clientPlugins: AppClientPlugins = defineClientPlugins([
   authentication(),
   authorization(),
+  defaultAccess(),
+  sharingRules(),
+  restrictionRules(),
   hub({
     applicationsPath: '/apps',
     rolesPath: '/roles',

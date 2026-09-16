@@ -2,14 +2,7 @@ import {
   defineSettingsRoutes,
   type AppClientRouteContribution,
 } from '@nocobase/app-client/plugins';
-import {
-  KeyRound,
-  LockKeyhole,
-  ScanSearch,
-  Share2,
-  ShieldBan,
-  ShieldCheck,
-} from 'lucide-react';
+import { KeyRound, ScanSearch, ShieldCheck } from 'lucide-react';
 
 const settings: AppClientRouteContribution = defineSettingsRoutes([
   {
@@ -71,39 +64,6 @@ const settings: AppClientRouteContribution = defineSettingsRoutes([
             ],
           },
         ],
-      },
-      {
-        name: 'default-access',
-        path: '/default-access',
-        navigation: { title: 'navigation.defaultAccess', icon: LockKeyhole },
-        breadcrumb: { title: 'navigation.defaultAccess' },
-        access: {
-          resource: 'settings.authorization.default-access',
-          action: 'read',
-        },
-        componentLoader: () => import('./pages/default-access-page.js'),
-      },
-      {
-        name: 'sharing-rules',
-        path: '/sharing-rules',
-        navigation: { title: 'navigation.sharingRules', icon: Share2 },
-        breadcrumb: { title: 'navigation.sharingRules' },
-        access: {
-          resource: 'settings.authorization.sharing-rules',
-          action: 'read',
-        },
-        componentLoader: () => import('./pages/sharing-rules-page.js'),
-      },
-      {
-        name: 'restriction-rules',
-        path: '/restriction-rules',
-        navigation: { title: 'navigation.restrictionRules', icon: ShieldBan },
-        breadcrumb: { title: 'navigation.restrictionRules' },
-        access: {
-          resource: 'settings.authorization.restriction-rules',
-          action: 'read',
-        },
-        componentLoader: () => import('./pages/restriction-rules-page.js'),
       },
       // The inspector explains whatever the installed plugins decided, so it
       // belongs to none of them and lives beside them rather than under one.

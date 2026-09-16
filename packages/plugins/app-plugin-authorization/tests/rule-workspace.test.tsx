@@ -1,3 +1,12 @@
+vi.mock('../../app-plugin-authz-restriction-rules/client/api.js', () => ({
+  authz: authz,
+}));
+vi.mock('../../app-plugin-authz-sharing-rules/client/api.js', () => ({
+  authz: authz,
+}));
+vi.mock('../../app-plugin-authz-default-access/client/api.js', () => ({
+  authz: authz,
+}));
 import { selectOption } from './select-option.js';
 // @vitest-environment jsdom
 import {
@@ -26,10 +35,10 @@ vi.mock('@nocobase/i18n/client', async () => {
   const { translate } = await import('./locale-harness.js');
   return { useTranslation: () => ({ t: translate }) };
 });
-import { DefaultAccessPanel } from '../client/pages/default-access-panel.js';
-import { RestrictionRulesPanel } from '../client/pages/restriction-rules-panel.js';
-import { SharingRulesPanel } from '../client/pages/sharing-rules-panel.js';
-import en from '../client/locales/en-US.js';
+import { DefaultAccessPanel } from '../../app-plugin-authz-default-access/client/pages/default-access-panel.js';
+import { RestrictionRulesPanel } from '../../app-plugin-authz-restriction-rules/client/pages/restriction-rules-panel.js';
+import { SharingRulesPanel } from '../../app-plugin-authz-sharing-rules/client/pages/sharing-rules-panel.js';
+import en from './rule-locales.js';
 const resource = { type: 'database.collection', id: 'orders' };
 const options: AuthorizationOptions = {
   plugins: [],

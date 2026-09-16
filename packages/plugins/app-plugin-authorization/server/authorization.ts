@@ -1,3 +1,8 @@
+import { settingsResource } from './management/settings-resource.js';
+import {
+  createPermissionSetHandler,
+  PERMISSION_SETS_ROUTE_PATH,
+} from './management/permission-sets.js';
 import './subjects.js';
 import type { DatabaseConnection } from '@nocobase/db';
 import {
@@ -64,6 +69,16 @@ export function createAppAuthorization(
     'Permission Sets',
     options.connection,
   );
+  const permissionSetPlugin = permissionSets<DatabaseConnection>({
+    store: new DatabasePermissionSetStore(connection.resolve),
+    rootSet: {
+      key: sets?.rootSet ?? DEFAULT_ROOT_SET,
+      // The identity middleware below makes `user` this host's principal
+      // type: a superuser is an account, never an audience or a group.
+      assignableTo: ['user'],
+    },
+    defaultSet: sets?.defaultSet ?? DEFAULT_DEFAULT_SET,
+  });
   // The two built-in plugins lead the tuple so their apis are inferred rather
   // than asserted: `authz.permissionSets` and `authz.db` are statically typed.
   const plugins: readonly [
@@ -71,16 +86,29 @@ export function createAppAuthorization(
     DatabaseAuthorizationPlugin,
     ...AuthorizationPlugin[],
   ] = [
-    permissionSets<DatabaseConnection>({
-      store: new DatabasePermissionSetStore(connection.resolve),
-      rootSet: {
-        key: sets?.rootSet ?? DEFAULT_ROOT_SET,
-        // The identity middleware below makes `user` this host's principal
-        // type: a superuser is an account, never an audience or a group.
-        assignableTo: ['user'],
+    {
+      ...permissionSetPlugin,
+      setup(authz) {
+        permissionSetPlugin.setup?.(authz);
+        authz.resources.add(settingsResource);
+        authz.getResource('settings').groups.add({
+          id: 'authorization',
+          title: { key: 'options.settingsModules.authorization' },
+        });
+        authz.getResource('settings').items.add({
+          id: 'authorization.permission-sets',
+          title: { key: 'options.settings.permission-sets' },
+          group: 'authorization',
+          actions: ['read', 'create', 'update', 'delete'],
+        });
+        authz.routes.add(
+          PERMISSION_SETS_ROUTE_PATH,
+          createPermissionSetHandler(
+            permissionSetPlugin.authorizationApi!.permissionSets,
+          ),
+        );
       },
-      defaultSet: sets?.defaultSet ?? DEFAULT_DEFAULT_SET,
-    }),
+    },
     database,
     pages(),
     ...(options.config?.plugins ?? []),
@@ -110,23 +138,6 @@ export function createAppAuthorization(
     }
   });
   database.authorizationApi.db.installInto(authz);
-  authz.getResource('settings').groups.add({
-    id: 'authorization',
-    title: { key: 'options.settingsModules.authorization' },
-  });
-  for (const section of [
-    'permission-sets',
-    'default-access',
-    'sharing-rules',
-    'restriction-rules',
-  ]) {
-    authz.getResource('settings').items.add({
-      id: `authorization.${section}`,
-      title: { key: `options.settings.${section}` },
-      group: 'authorization',
-      actions: ['read', 'create', 'update', 'delete'],
-    });
-  }
   return authz;
 }
 

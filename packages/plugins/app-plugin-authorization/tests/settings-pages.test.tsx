@@ -1,3 +1,12 @@
+vi.mock('../../app-plugin-authz-restriction-rules/client/api.js', () => ({
+  authz: mocks.authz,
+}));
+vi.mock('../../app-plugin-authz-sharing-rules/client/api.js', () => ({
+  authz: mocks.authz,
+}));
+vi.mock('../../app-plugin-authz-default-access/client/api.js', () => ({
+  authz: mocks.authz,
+}));
 // @vitest-environment jsdom
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
@@ -27,11 +36,11 @@ vi.mock('@nocobase/i18n/client', async () => {
   return { useTranslation: () => ({ t: translate }) };
 });
 
-import enUS from '../client/locales/en-US.js';
-import DefaultAccessPage from '../client/pages/default-access-page.js';
+import enUS from './rule-locales.js';
+import DefaultAccessPage from '../../app-plugin-authz-default-access/client/pages/default-access-page.js';
 import PermissionSetsPage from '../client/pages/permission-sets-page.js';
-import RestrictionRulesPage from '../client/pages/restriction-rules-page.js';
-import SharingRulesPage from '../client/pages/sharing-rules-page.js';
+import RestrictionRulesPage from '../../app-plugin-authz-restriction-rules/client/pages/restriction-rules-page.js';
+import SharingRulesPage from '../../app-plugin-authz-sharing-rules/client/pages/sharing-rules-page.js';
 
 const options: AuthorizationOptions = {
   plugins: [],

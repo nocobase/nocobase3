@@ -1,6 +1,8 @@
+import { fileURLToPath } from 'node:url';
 import sqlite from '@nocobase/db-sqlite';
 import {
   createDatabaseManager,
+  createMigrator,
   InMemoryCollectionMetadataStore,
   type DatabaseManager,
   type MigrationDefinition,
@@ -8,9 +10,9 @@ import {
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import permissionSets from '../database/migrations/202608210001_create_permission_set_tables.js';
-import defaultAccess from '../database/migrations/202608210002_create_default_access_rules.js';
-import sharingRules from '../database/migrations/202608210003_create_sharing_rules.js';
-import restrictionRules from '../database/migrations/202608210004_create_restriction_rules.js';
+import defaultAccess from '../../app-plugin-authz-default-access/database/migrations/202608210002_create_default_access_rules.js';
+import sharingRules from '../../app-plugin-authz-sharing-rules/database/migrations/202608210003_create_sharing_rules.js';
+import restrictionRules from '../../app-plugin-authz-restriction-rules/database/migrations/202608210004_create_restriction_rules.js';
 
 interface SqliteClient {
   readonly schema: {
@@ -55,6 +57,38 @@ describe('authorization table migrations', () => {
 
   afterEach(async () => {
     await database.destroy();
+  });
+
+  it('loads each plugin migration once on a fresh installation', async () => {
+    const packages = [
+      ['@nocobase/app-plugin-authorization', '../database/migrations'],
+      [
+        '@nocobase/app-plugin-authz-default-access',
+        '../../app-plugin-authz-default-access/database/migrations',
+      ],
+      [
+        '@nocobase/app-plugin-authz-sharing-rules',
+        '../../app-plugin-authz-sharing-rules/database/migrations',
+      ],
+      [
+        '@nocobase/app-plugin-authz-restriction-rules',
+        '../../app-plugin-authz-restriction-rules/database/migrations',
+      ],
+    ] as const;
+    const migrator = createMigrator({
+      database,
+      sources: packages.map(([packageName, directory]) => ({
+        packageName,
+        directory: fileURLToPath(new URL(directory, import.meta.url)),
+      })),
+    });
+    expect((await migrator.latest()).executed).toEqual(
+      MIGRATIONS.map((migration) => migration.name),
+    );
+    expect((await migrator.latest()).executed).toEqual([]);
+    const client = await database.connection().client<SqliteClient>();
+    for (const table of TABLES)
+      expect(await client.schema.hasTable(table)).toBe(true);
   });
 
   it('creates every store table on up and removes them on down', async () => {

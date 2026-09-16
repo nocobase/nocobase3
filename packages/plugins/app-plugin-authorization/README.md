@@ -4,7 +4,7 @@ Application integration for `@nocobase/authorization`: authenticated user identi
 
 ## Runtime boundaries
 
-The library owns authorization decisions, permission sets, access-rule services, store contracts and HTTP handlers. This plugin owns database adapters, application identity middleware and UI. Permission sets, page and database authorization are built in; the application explicitly installs default access, sharing rules and restriction rules as needed.
+The library owns authorization decisions, permission sets, access-rule services, store contracts. This plugin owns permission-set management HTTP handlers, database adapters, application identity middleware and shared administration UI. Permission sets, page and database authorization are built in; the application explicitly installs `@nocobase/app-plugin-authz-default-access`, `@nocobase/app-plugin-authz-sharing-rules` and `@nocobase/app-plugin-authz-restriction-rules` as needed. Each owns its database migration, store, management routes, settings resource, page and feature translations.
 
 `authorization.permissionSets.rootSet` and `authorization.permissionSets.defaultSet` configure the built-in set names, defaulting to `root` and `member`. The root set grants unrestricted access and may be assigned only to users. The member set applies through its `authenticated:*` assignment. Protection metadata determines which management operations each set allows.
 
@@ -95,3 +95,5 @@ All inspection endpoints require the Permission Sets settings read permission. F
 Results distinguish full, limited, denied, and failed checks. Database details display the effective record filter, writable and returned fields, and structured grant/constraint sources. Source identifiers are shown as reported by the authorization provider; they are not presented as translated permission-set titles. The first version returns each page’s explanations with the batch, so opening a result drawer does not re-evaluate or mix results from separate requests.
 
 The resource-type sidebar uses `POST /authz/inspect/configured` to summarize the subject’s effective permission-set configurations, including policy-bearing grants and unrestricted access. The shield denotes configured permissions, not a count of accessible resources, and is independent of resource pagination or search.
+
+Shared administration components and data types are exported from `./client/management`; server option queries and request helpers are exported from `./server/management`. Feature plugins depend on these exports; this plugin does not import them at runtime.

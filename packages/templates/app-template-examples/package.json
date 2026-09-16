@@ -220,7 +220,10 @@
     "@nocobase/snowflake": "workspace:^",
     "@oclif/core": "catalog:",
     "better-auth": "catalog:",
-    "hono": "catalog:"
+    "hono": "catalog:",
+    "@nocobase/app-plugin-authz-default-access": "workspace:^",
+    "@nocobase/app-plugin-authz-sharing-rules": "workspace:^",
+    "@nocobase/app-plugin-authz-restriction-rules": "workspace:^"
   },
   "description": "Runnable NocoBase 3 examples for application development.",
   "license": "Apache-2.0"

@@ -26,7 +26,7 @@ import {
   AuthorizationPageState,
   useAuthorizationPageData,
 } from './page-support.js';
-import { ScopeMark } from './permission-sets/marks.js';
+import { ScopeMark } from '../components/scope-marks.js';
 import { resourceRows } from './permission-sets/resource-groups.js';
 import { inspectionStatus } from './inspector-status.js';
 import { Decision } from './inspector-decision.js';

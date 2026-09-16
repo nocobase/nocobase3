@@ -1,4 +1,4 @@
-import { ScopeMark } from './marks.js';
+import { ScopeMark } from '../../components/scope-marks.js';
 import type { ReactElement } from 'react';
 import type {
   ResourceOption,

@@ -207,7 +207,7 @@ describe('database resource authorization', () => {
     const authorization = setup();
     expect(authorization.describe()).toMatchObject({
       plugins: ['permission-sets', 'database'],
-      resourceTypes: ['database.collection', 'settings'],
+      resourceTypes: ['database.collection'],
       grantProvider: 'permission-sets',
     });
     expect(

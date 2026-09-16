@@ -21,9 +21,6 @@ const zhCN: AuthorizationServerResource = {
     },
     settings: {
       'permission-sets': '权限集',
-      'default-access': '默认访问',
-      'sharing-rules': '共享规则',
-      'restriction-rules': '限制规则',
     },
     subjectTypes: {
       authenticated: '所有已登录用户',

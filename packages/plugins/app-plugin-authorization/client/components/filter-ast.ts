@@ -1,4 +1,4 @@
-import type { FilterGroupNode, FilterNode } from '@nocobase/db';
+import type { FilterGroupNode, FilterNode } from '@nocobase/repository-input';
 
 export function emptyFilter(): FilterGroupNode {
   return { kind: 'group', logic: 'and', items: [] };

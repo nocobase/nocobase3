@@ -1,9 +1,10 @@
+import { createAuthorization } from './authorization-fixture.js';
 import { createConfigPaths } from '@nocobase/app-server/config';
 import {
   authenticationToken,
   type Auth,
 } from '@nocobase/app-plugin-authentication';
-import { createAuthorization, permissionSets } from '@nocobase/authorization';
+import { permissionSets } from '@nocobase/authorization';
 import type {
   AuthorizationDecision,
   AuthorizationPlugin,

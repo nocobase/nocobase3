@@ -4,7 +4,7 @@ import type {
   FilterGroupNode,
   FilterConditionNode,
   FilterOperator,
-} from '@nocobase/db';
+} from '@nocobase/repository-input';
 import type { ReactElement } from 'react';
 import { useAuthorizationTranslation } from '../i18n.js';
 import { Button } from './ui/button.js';

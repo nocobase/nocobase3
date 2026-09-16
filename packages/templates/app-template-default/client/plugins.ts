@@ -1,3 +1,6 @@
+import defaultAccess from '@nocobase/app-plugin-authz-default-access/client';
+import sharingRules from '@nocobase/app-plugin-authz-sharing-rules/client';
+import restrictionRules from '@nocobase/app-plugin-authz-restriction-rules/client';
 import {
   defineClientPlugins,
   type AppClientPlugins,
@@ -22,6 +25,9 @@ const clientPlugins: AppClientPlugins = defineClientPlugins([
   authentication(),
   aiEmployee(),
   authorization(),
+  defaultAccess(),
+  sharingRules(),
+  restrictionRules(),
   databaseExplorer(),
   users({ mount: 'settings', path: '/users' }),
   apiKeys({ path: '/api-keys' }),

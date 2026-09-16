@@ -357,7 +357,7 @@ describe('official authorization plugins', () => {
           key: 'settings',
           grants: [
             {
-              resource: { type: 'settings', id: '*' },
+              resource: { type: 'test-resource', id: '*' },
               actions: [{ action: 'read' }],
             },
           ],
@@ -374,16 +374,23 @@ describe('official authorization plugins', () => {
     const authorization = createAuthorization({
       plugins: [permissionSets({ store })],
     });
+    authorization.resources.add({
+      resourceType: 'test-resource',
+      async authorize(request, context) {
+        await context.grants.resolve(request);
+        return { effect: 'permit', reasons: [] };
+      },
+    });
     const authz = authorization.for({
       principal: { type: 'user', id: 'alice' },
     });
 
     await authz.can({
-      resource: { type: 'settings', id: 'authorization.permission-sets' },
+      resource: { type: 'test-resource', id: 'first' },
       action: 'read',
     });
     await authz.can({
-      resource: { type: 'settings', id: 'authorization.sharing-rules' },
+      resource: { type: 'test-resource', id: 'second' },
       action: 'read',
     });
     await authz.permissions();
@@ -638,4 +645,12 @@ it('loads built-in rule lists once per inspection scope and reloads them in the 
     .for(identity)
     .explain({ resource: { type: 'batch', id: '0' }, action: 'read' });
   reads.forEach((read) => expect(read).toHaveBeenCalledTimes(2));
+});
+
+it('does not install application settings or management routes', () => {
+  const authorization = createAuthorization({
+    plugins: [permissionSets({ store: new MockPermissionSetStore() })],
+  });
+  expect(authorization.routes.list()).toEqual([]);
+  expect(authorization.resources.get('settings')).toBeUndefined();
 });

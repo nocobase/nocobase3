@@ -199,6 +199,9 @@
     "better-auth": "catalog:",
     "hono": "catalog:",
     "@nocobase/app-plugin-service-provider-example": "workspace:^",
-    "@nocobase/app-plugin-notification": "workspace:^"
+    "@nocobase/app-plugin-notification": "workspace:^",
+    "@nocobase/app-plugin-authz-default-access": "workspace:^",
+    "@nocobase/app-plugin-authz-sharing-rules": "workspace:^",
+    "@nocobase/app-plugin-authz-restriction-rules": "workspace:^"
   }
 }

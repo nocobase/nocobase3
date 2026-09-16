@@ -1,3 +1,5 @@
+import { createAuthorization } from './authorization-fixture.js';
+import { createPermissionSetHandler } from '../server/management/permission-sets.js';
 import sqlite from '@nocobase/db-sqlite';
 import { fileURLToPath } from 'node:url';
 import { Hono } from 'hono';
@@ -14,7 +16,7 @@ import {
   type Auth,
 } from '@nocobase/app-plugin-authentication';
 
-import { createAuthorization, permissionSets } from '@nocobase/authorization';
+import { permissionSets } from '@nocobase/authorization';
 import {
   AuthorizationRouteRegistry,
   type AuthorizationPlugin,
@@ -22,7 +24,7 @@ import {
 import {
   createDefaultAccessHandler,
   DEFAULT_ACCESS_ROUTE_PATH,
-} from '@nocobase/authorization/default-access';
+} from '../../app-plugin-authz-default-access/server/handler.js';
 
 import {
   authorizationToken,
@@ -360,6 +362,15 @@ describe('the subject types the root Permission Set accepts', () => {
 
 /** The plugin routes mounted under /api, where the Permission Set handler expects them. */
 async function protectedRouter(container: ServiceContainer): Promise<Hono> {
+  const authorization = container.resolve(authorizationToken);
+  if (
+    !authorization.routes.list().includes('/permission-sets') &&
+    authorization.permissionSets
+  )
+    authorization.routes.add(
+      '/permission-sets',
+      createPermissionSetHandler(authorization.permissionSets),
+    );
   const routes = await apiRoutes.createRouter({
     appName: 'main',
     publicBasePath: '',

@@ -16,7 +16,7 @@ vi.mock('../server/authorization.js', async (importOriginal) => {
 
 import { AuthorizationProvider } from '../server/providers/authorization.js';
 import type { AuthorizationConfig } from '../server/authorization.js';
-import { sharingRules } from '../server/rules.js';
+import { sharingRules } from '@nocobase/app-plugin-authz-sharing-rules/server';
 import { authorizationToken } from '../server/tokens.js';
 
 describe('authorization provider', () => {

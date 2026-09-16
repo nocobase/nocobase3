@@ -77,8 +77,7 @@ export interface SubjectOption {
   title: string;
   description?: string;
 }
-export type SubjectSettings =
-  'permission-sets' | 'sharing-rules' | 'restriction-rules';
+export type SubjectSettings = string;
 export interface AuthorizationOptions {
   plugins: readonly string[];
   resourceTypes: readonly ResourceTypeOption[];
@@ -104,34 +103,10 @@ export type AccessScope =
       type: 'database';
       recordAccess: string | { key: string; params?: unknown };
     };
-export interface DefaultAccessRule {
-  resource: { type: string; id: string };
-  actions: readonly { action: string; scope: AccessScope }[];
-}
+
 export interface AuthorizationSubject {
   type: string;
   id: string;
-}
-export interface SharingRule {
-  key: string;
-  title?: string;
-  resource: { type: string; id: string };
-  actions: readonly {
-    action: string;
-    selection:
-      | { type: 'records'; ids: readonly string[] }
-      | { type: 'policy'; policy: AccessScope };
-  }[];
-  subjects: readonly AuthorizationSubject[];
-  reason?: string;
-}
-export interface RestrictionRule {
-  key: string;
-  title?: string;
-  resource: { type: string; id: string };
-  actions: readonly { action: string; scope: AccessScope }[];
-  subjects: readonly AuthorizationSubject[];
-  reason?: string;
 }
 
 /** One reason a decision came out as it did, as the core gave it. */
@@ -278,84 +253,6 @@ export class AuthorizationClient {
   ): Promise<readonly AuthorizationInspection[]> {
     return this.send('authz/inspect/batch', 'POST', { subject, checks });
   }
-  listDefaultAccess(): Promise<readonly DefaultAccessRule[]> {
-    return this.get<readonly DefaultAccessRule[]>('authz/default-access');
-  }
-  setDefaultAccess(rule: DefaultAccessRule): Promise<DefaultAccessRule> {
-    return this.send<DefaultAccessRule>('authz/default-access', 'PUT', rule);
-  }
-  async deleteDefaultAccess(resource: {
-    type: string;
-    id: string;
-  }): Promise<void> {
-    await this.api.request({
-      path: `authz/default-access/${encodeURIComponent(resource.type)}/${encodeURIComponent(resource.id)}`,
-      method: 'DELETE',
-    });
-  }
-  listSharingRules(): Promise<readonly SharingRule[]> {
-    return this.get<readonly SharingRule[]>('authz/sharing-rules');
-  }
-  listSharingRecords(
-    collection: string,
-  ): Promise<readonly AuthorizationRecordOption[]> {
-    return this.get<readonly AuthorizationRecordOption[]>(
-      `authz/sharing-rules/records/${encodeURIComponent(collection)}`,
-    );
-  }
-  listDefaultAccessRecords(
-    collection: string,
-  ): Promise<readonly AuthorizationRecordOption[]> {
-    return this.get<readonly AuthorizationRecordOption[]>(
-      `authz/default-access/records/${encodeURIComponent(collection)}`,
-    );
-  }
-  createSharingRule(rule: SharingRule): Promise<SharingRule> {
-    return this.send<SharingRule>('authz/sharing-rules', 'POST', rule);
-  }
-  updateSharingRule(key: string, rule: SharingRule): Promise<SharingRule> {
-    return this.send<SharingRule>(
-      `authz/sharing-rules/${encodeURIComponent(key)}`,
-      'PUT',
-      rule,
-    );
-  }
-  async deleteSharingRule(key: string): Promise<void> {
-    await this.api.request({
-      path: `authz/sharing-rules/${encodeURIComponent(key)}`,
-      method: 'DELETE',
-    });
-  }
-  listRestrictionRules(): Promise<readonly RestrictionRule[]> {
-    return this.get<readonly RestrictionRule[]>('authz/restriction-rules');
-  }
-  listRestrictionRecords(
-    collection: string,
-  ): Promise<readonly AuthorizationRecordOption[]> {
-    return this.get<readonly AuthorizationRecordOption[]>(
-      `authz/restriction-rules/records/${encodeURIComponent(collection)}`,
-    );
-  }
-  createRestrictionRule(rule: RestrictionRule): Promise<RestrictionRule> {
-    return this.send<RestrictionRule>('authz/restriction-rules', 'POST', rule);
-  }
-  updateRestrictionRule(
-    key: string,
-    rule: RestrictionRule,
-  ): Promise<RestrictionRule> {
-    return this.send<RestrictionRule>(
-      `authz/restriction-rules/${encodeURIComponent(key)}`,
-      'PUT',
-      rule,
-    );
-  }
-  async deleteRestrictionRule(key: string): Promise<void> {
-    await this.api.request({
-      path: `authz/restriction-rules/${encodeURIComponent(key)}`,
-      method: 'DELETE',
-    });
-  }
-
   createPermissionSet(input: PermissionSetInput): Promise<PermissionSet> {
     return this.api
       .request<DataResponse<PermissionSet>>({

@@ -26,9 +26,6 @@ const enUS = {
     },
     settings: {
       'permission-sets': 'Permission Sets',
-      'default-access': 'Default Access',
-      'sharing-rules': 'Sharing Rules',
-      'restriction-rules': 'Restriction Rules',
     },
     subjectTypes: {
       authenticated: 'All signed-in users',

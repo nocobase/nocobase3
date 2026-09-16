@@ -2,10 +2,6 @@ import type { AuthorizationPlugin } from '../../core/index.js';
 import { RestrictionRuleService, type RestrictionRulesApi } from './service.js';
 import type { RestrictionRuleStore } from './store.js';
 import { requireStore } from '../internal/store.js';
-import {
-  createRestrictionRulesHandler,
-  RESTRICTION_RULES_ROUTE_PATH,
-} from './routes.js';
 
 export interface RestrictionRulesAuthorizationApi<TTransaction = unknown> {
   restrictionRules: RestrictionRulesApi<TTransaction>;
@@ -27,10 +23,6 @@ export function restrictionRules<TTransaction = unknown>(
     authorizationApi: { restrictionRules: service },
     setup(authz): void {
       authz.constraints.add(service);
-      authz.routes.add(
-        RESTRICTION_RULES_ROUTE_PATH,
-        createRestrictionRulesHandler(service),
-      );
     },
   };
 }

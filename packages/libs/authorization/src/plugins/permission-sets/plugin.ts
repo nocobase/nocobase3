@@ -1,5 +1,4 @@
 import type {
-  AuthorizationScope,
   AuthorizationSubjectRegistry,
   AuthorizationGrant,
   AuthorizationGrantService,
@@ -18,10 +17,6 @@ import type {
   PermissionSetAssignment,
   PermissionSetSubject,
 } from './model.js';
-import {
-  createPermissionSetHandler,
-  PERMISSION_SETS_ROUTE_PATH,
-} from './routes.js';
 import type { PermissionSetStore } from './store.js';
 import { requireStore } from '../internal/store.js';
 
@@ -87,7 +82,6 @@ export interface PermissionSetsApi<TTransaction = unknown> {
     principal: Principal;
     subjects?: readonly AuthorizationSubject[];
   }): Promise<readonly PermissionSet[]>;
-  handler(input: PermissionSetHandlerInput): Promise<Response>;
 }
 
 export type PermissionSetWriteOperation =
@@ -177,13 +171,6 @@ export class PermissionSetLastAssignmentError extends Error {
   }
 }
 
-export interface PermissionSetHandlerInput {
-  request: Request;
-  /** The request path relative to where the application mounted the routes. */
-  path: string;
-  authorization: Pick<AuthorizationScope, 'require'>;
-}
-
 export interface PermissionSetRootSet {
   key: string;
   /** `false` lets the set stay empty between break-glass uses. */
@@ -271,39 +258,6 @@ export function permissionSets<TTransaction = unknown>(
     authorizationApi: { permissionSets: service },
     setup(authz): void {
       service.useSubjects(authz.subjects);
-      authz.routes.add(PERMISSION_SETS_ROUTE_PATH, (input) =>
-        service.handler(input),
-      );
-      authz.resources.add({
-        resourceType: 'settings',
-        async authorize(request, context) {
-          const grants = await context.grants.resolve({
-            principal: request.principal,
-            subjects: request.subjects,
-            resource: request.resource,
-            action: request.action,
-          });
-          return grants.length > 0
-            ? {
-                effect: 'permit',
-                reasons: grants.map((grant) => ({
-                  code: 'PERMISSION_SET_ADMINISTRATION_GRANTED',
-                  message: `${grant.source.plugin}:${grant.source.id} allows settings administration`,
-                  plugin: 'permission-sets',
-                })),
-              }
-            : {
-                effect: 'deny',
-                reasons: [
-                  {
-                    code: 'PERMISSION_SET_ADMINISTRATION_DENIED',
-                    message: 'Settings administration is not allowed',
-                    plugin: 'permission-sets',
-                  },
-                ],
-              };
-        },
-      });
     },
   };
 }
@@ -326,7 +280,6 @@ class PermissionSetService<TTransaction = unknown>
   implements AuthorizationGrantService, PermissionSetsApi<TTransaction>
 {
   private readonly protections: Map<string, PermissionSetProtectionInfo>;
-  readonly handler: (input: PermissionSetHandlerInput) => Promise<Response>;
 
   constructor(
     private readonly store: PermissionSetStore<TTransaction>,
@@ -337,7 +290,6 @@ class PermissionSetService<TTransaction = unknown>
     private readonly transaction?: TTransaction,
   ) {
     this.protections = shared.protections;
-    this.handler = createPermissionSetHandler(this);
   }
 
   /** The registry that answers which subjects can still act. */

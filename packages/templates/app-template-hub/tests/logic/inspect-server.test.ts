@@ -22,6 +22,9 @@ describe('Server inspection', () => {
     expect(inspection.plugins.map(({ packageName }) => packageName)).toEqual([
       '@nocobase/app-plugin-authentication',
       '@nocobase/app-plugin-authorization',
+      '@nocobase/app-plugin-authz-default-access',
+      '@nocobase/app-plugin-authz-sharing-rules',
+      '@nocobase/app-plugin-authz-restriction-rules',
       '@nocobase/app-plugin-users',
       '@nocobase/app-plugin-api-keys',
       '@nocobase/app-plugin-i18n',

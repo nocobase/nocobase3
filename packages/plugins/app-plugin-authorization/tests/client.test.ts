@@ -54,22 +54,16 @@ describe('@nocobase/app-plugin-authorization client', () => {
       '/settings/authorization/permission-sets/edit/:permissionSetKey',
       '/settings/authorization/permission-sets/edit/:permissionSetKey/assignments',
       '/settings/authorization/permission-sets/edit/:permissionSetKey/details',
-      '/settings/authorization/default-access',
-      '/settings/authorization/sharing-rules',
-      '/settings/authorization/restriction-rules',
       '/settings/authorization/inspector',
     ]);
     expect(
       resolved.settings.map((setting) => setting.access?.resource),
     ).toEqual([
       'settings.authorization.permission-sets',
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      'settings.authorization.default-access',
-      'settings.authorization.sharing-rules',
-      'settings.authorization.restriction-rules',
+      'settings.authorization.permission-sets',
+      'settings.authorization.permission-sets',
+      'settings.authorization.permission-sets',
+      'settings.authorization.permission-sets',
       // The inspector belongs to no one plugin; it is gated with its neighbours.
       'settings.authorization.permission-sets',
     ]);
@@ -78,7 +72,7 @@ describe('@nocobase/app-plugin-authorization client', () => {
     expect(resolved.settingGroups[0].icon).toBeTruthy();
     expect(
       resolved.settings
-        .filter((setting) => setting.access)
+        .filter((setting) => setting.navigation)
         .every((setting) => Boolean(setting.icon)),
     ).toBe(true);
   });

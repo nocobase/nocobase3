@@ -200,6 +200,9 @@
     "@nocobase/service-provider": "workspace:^",
     "@nocobase/snowflake": "workspace:^",
     "@oclif/core": "catalog:",
-    "better-auth": "catalog:"
+    "better-auth": "catalog:",
+    "@nocobase/app-plugin-authz-default-access": "workspace:^",
+    "@nocobase/app-plugin-authz-sharing-rules": "workspace:^",
+    "@nocobase/app-plugin-authz-restriction-rules": "workspace:^"
   }
 }

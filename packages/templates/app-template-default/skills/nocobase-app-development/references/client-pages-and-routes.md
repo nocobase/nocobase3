@@ -192,3 +192,22 @@ Do not declare product routes in any of them. They render routes; `client/routes
 - A signed-out visit to a `required` page redirects to sign-in.
 - A settings page with `access` disappears from navigation when denied, and its direct URL does not load the component.
 - The page's chunk loads on navigation rather than in the initial bundle.
+
+## Contributing to another plugin's settings group
+
+A root entry passed to `defineSettingsRoutes()` may declare `parent: 'authorization'` to append to an existing settings group by its unique name. The target can be nested and can be declared by a later plugin. The contributed route's path is relative to the target group's path; its package and locale namespace remain those of the contributing plugin. Both pages and groups can be contributed this way.
+
+```ts
+defineSettingsRoutes([
+  {
+    parent: 'authorization',
+    name: 'audit-logs',
+    path: '/audit-logs',
+    navigation: { title: 'navigation.auditLogs' },
+    access: { resource: 'settings.audit-logs', action: 'read' },
+    componentLoader: () => import('./pages/audit-logs.js'),
+  },
+]);
+```
+
+Without `parent`, the root entry keeps its existing placement under Settings. Entries inside `children` must not also declare `parent`. Groups can declare empty `children` for extension. Original children precede appended entries, which retain plugin and entry registration order. Missing targets, page targets, cycles, duplicate sibling names and conflicting paths are errors; groups are never silently merged. This extension applies to Settings only, not App or Dev routes.

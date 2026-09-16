@@ -1,3 +1,6 @@
+import defaultAccess from '@nocobase/app-plugin-authz-default-access/server';
+import sharingRules from '@nocobase/app-plugin-authz-sharing-rules/server';
+import restrictionRules from '@nocobase/app-plugin-authz-restriction-rules/server';
 import apiKeys from '@nocobase/app-plugin-api-keys/server';
 import authentication from '@nocobase/app-plugin-authentication/server';
 import aiEmployee from '@nocobase/app-plugin-ai-employee/server/plugin';
@@ -20,6 +23,9 @@ const serverPlugins: AppServerPlugins = defineServerPlugins([
   authentication,
   aiEmployee,
   authorization,
+  defaultAccess,
+  sharingRules,
+  restrictionRules,
   databaseExplorer,
   users,
   apiKeys,
