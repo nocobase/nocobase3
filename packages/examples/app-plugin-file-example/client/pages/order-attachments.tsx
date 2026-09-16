@@ -1,3 +1,5 @@
+import { PageContainer } from '../components/page-container.js';
+import { PageHeader } from '../components/page-header.js';
 import {
   useCallback,
   useEffect,
@@ -27,9 +29,9 @@ interface OrderRow {
 }
 
 const statusClasses: Readonly<Record<OrderStatus, string>> = {
-  draft: 'bg-muted text-muted-foreground',
-  submitted: 'bg-primary/10 text-primary',
-  archived: 'bg-secondary text-secondary-foreground',
+  draft: 'bg-muted text-muted-foreground border border-border/60',
+  submitted: 'bg-primary/10 text-primary border border-primary/20',
+  archived: 'bg-secondary text-secondary-foreground border border-border/60',
 };
 
 function messageOf(cause: unknown): string {
@@ -118,69 +120,75 @@ export default function OrderAttachmentsPage(): ReactElement {
   );
 
   return (
-    <main className='mx-auto max-w-5xl space-y-6 p-8'>
-      <header className='space-y-2'>
-        <h1 className='text-2xl font-semibold'>{t('ordersTitle')}</h1>
-        <p className='text-sm text-muted-foreground'>
-          {t('ordersDescription')}
-        </p>
-        <p className='text-sm text-muted-foreground'>
-          {t('ordersRelationHint')}
-        </p>
-      </header>
+    <PageContainer>
+      <PageHeader
+        description={`${t('ordersDescription')} ${t('ordersRelationHint')}`}
+        title={t('ordersTitle')}
+      />
       {error && (
         <p role='alert' className='text-sm text-destructive'>
           {error}
         </p>
       )}
-      {rows.map(({ order, attachments: files }) => (
-        <section key={order.id} className='space-y-3 rounded-lg border p-4'>
-          <header className='flex flex-wrap items-center gap-3'>
-            <h2 className='font-medium'>{order.number}</h2>
-            <span
-              className={`rounded-full px-2 py-0.5 text-xs ${statusClasses[order.status]}`}
-            >
-              {t(`status.${order.status}`)}
-            </span>
-            <span className='text-sm text-muted-foreground'>
-              {order.customerName}
-            </span>
-            <span className='ml-auto text-sm'>
-              {amount.format(order.amountCents / 100)}
-            </span>
-          </header>
-          <FileList
-            files={files}
-            labels={{ ...labels, remove: t('unlink') }}
-            disabled={busyId === order.id}
-            emptyState={t('ordersNoFiles')}
-            onRemove={(file) =>
-              mutate(order.id, {
-                attachments: { disconnect: [{ id: file.id }] },
-              })
-            }
-          />
-          <FileUploadField
-            repository={attachments}
-            labels={labels}
-            multiple
-            disabled={busyId === order.id}
-            onChange={(records) =>
-              mutate(order.id, {
-                attachments: {
-                  connect: records.map((record) => ({ id: record.id })),
-                },
-              })
-            }
-          />
-        </section>
-      ))}
+      <div className='space-y-4'>
+        {rows.map(({ order, attachments: files }) => (
+          <section
+            key={order.id}
+            className='space-y-4 rounded-xl border bg-card p-5 shadow-2xs'
+          >
+            <header className='flex flex-wrap items-center gap-3 border-b pb-3.5'>
+              <h2 className='font-mono font-semibold text-base text-foreground'>
+                {order.number}
+              </h2>
+              <span
+                className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${statusClasses[order.status]}`}
+              >
+                {t(`status.${order.status}`)}
+              </span>
+              <span className='text-sm text-muted-foreground'>
+                {order.customerName}
+              </span>
+              <span className='ml-auto font-mono text-sm font-semibold tabular-nums text-foreground'>
+                {amount.format(order.amountCents / 100)}
+              </span>
+            </header>
+            <FileList
+              files={files}
+              labels={{ ...labels, remove: t('unlink') }}
+              disabled={busyId === order.id}
+              emptyState={t('ordersNoFiles')}
+              onRemove={(file) =>
+                mutate(order.id, {
+                  attachments: { disconnect: [{ id: file.id }] },
+                })
+              }
+            />
+            <FileUploadField
+              repository={attachments}
+              labels={labels}
+              multiple
+              disabled={busyId === order.id}
+              onChange={(records) =>
+                mutate(order.id, {
+                  attachments: {
+                    connect: records.map((record) => ({ id: record.id })),
+                  },
+                })
+              }
+            />
+          </section>
+        ))}
+      </div>
       {!rows.length && (
-        <p role='status' className='text-sm text-muted-foreground'>
-          {t('ordersEmpty')}
-        </p>
+        <div className='flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed py-12 text-center bg-card/40'>
+          <p role='status' className='text-xs text-muted-foreground'>
+            {t('ordersEmpty')}
+          </p>
+        </div>
       )}
-      <p className='text-sm text-muted-foreground'>{t('ordersHint')}</p>
-    </main>
+      <div className='flex items-start gap-2.5 rounded-xl border bg-muted/20 p-3.5 text-xs text-muted-foreground leading-relaxed'>
+        <p>{t('ordersHint')}</p>
+      </div>
+    </PageContainer>
   );
 }

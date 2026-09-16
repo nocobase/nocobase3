@@ -1,3 +1,5 @@
+import { PageContainer } from '../components/page-container.js';
+import { PageHeader } from '../components/page-header.js';
 import {
   OrderItemsEditor,
   OrderItemsTable,
@@ -73,18 +75,25 @@ export function RepositoryPage({
   const { t } = useTranslation(NS);
   const { recordId } = useParams();
   return (
-    <main className='mx-auto max-w-7xl space-y-6 p-6'>
-      <header className='space-y-2'>
-        <Badge variant='outline'>Repository API</Badge>
-        <h1 className='text-3xl font-semibold tracking-tight'>{t(title)}</h1>
-        <p className='text-muted-foreground'>{t('subtitle')}</p>
-      </header>
+    <PageContainer>
+      <PageHeader
+        description={`${t('subtitle')} ${t('choicesHint')} ${t('moneyHint')}`}
+        title={t(title)}
+        actions={
+          <Badge
+            variant='outline'
+            className='gap-1.5 px-3 py-1 font-mono text-xs font-medium shadow-2xs'
+          >
+            Repository API
+          </Badge>
+        }
+      />
       <EntityWorkspace
         key={`${entityKey}:${recordId ?? 'list'}`}
         entity={entities[entityKey]}
         recordId={recordId}
       />
-    </main>
+    </PageContainer>
   );
 }
 function EntityWorkspace({
@@ -263,9 +272,6 @@ function EntityWorkspace({
   }
   return (
     <div className='space-y-5'>
-      <p className='text-sm text-muted-foreground'>
-        {t('choicesHint')} {t('moneyHint')}
-      </p>
       {error && !editing && (
         <p
           role='alert'
@@ -335,34 +341,43 @@ function EntityWorkspace({
                   {t('apply')}
                 </Button>
               </form>
-              <div className='overflow-x-auto' aria-busy={loading}>
+              <div
+                className='overflow-hidden rounded-lg border'
+                aria-busy={loading}
+              >
                 <table className='w-full text-left text-sm'>
                   <thead>
-                    <tr className='border-b'>
+                    <tr className='border-b bg-muted/40'>
                       {entity.fields.map((field) => (
                         <th
                           key={field.key}
-                          className='whitespace-nowrap p-3 font-medium'
+                          className='whitespace-nowrap px-4 py-3 text-xs font-semibold text-foreground uppercase tracking-wider'
                         >
                           {t(field.key)}
                         </th>
                       ))}
-                      <th className='p-3'>
+                      <th className='px-4 py-3 text-right'>
                         <span className='sr-only'>{t('edit')}</span>
                       </th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className='divide-y divide-border/60'>
                     {rows.map((row) => (
-                      <tr key={row.id} className='border-b last:border-0'>
+                      <tr
+                        key={row.id}
+                        className='transition-colors hover:bg-muted/30'
+                      >
                         {entity.fields.map((field) => (
                           <td
                             key={field.key}
-                            className='max-w-56 truncate p-3'
+                            className='max-w-56 truncate px-4 py-3 text-sm'
                             title={displayValue(row[field.key] ?? '')}
                           >
                             {field.options ? (
-                              <Badge variant='secondary'>
+                              <Badge
+                                variant='secondary'
+                                className='text-xs font-normal'
+                              >
                                 {t(displayValue(row[field.key]))}
                               </Badge>
                             ) : (
@@ -383,11 +398,12 @@ function EntityWorkspace({
                             )}
                           </td>
                         ))}
-                        <td className='p-3'>
-                          <div className='flex gap-1'>
+                        <td className='px-4 py-3 text-right'>
+                          <div className='flex items-center justify-end gap-1'>
                             <Button
                               variant='ghost'
                               size='sm'
+                              className='h-7 px-2.5 text-xs'
                               disabled={busy || loading}
                               onClick={() =>
                                 void perform(() => open(row.id, false))
@@ -398,6 +414,7 @@ function EntityWorkspace({
                             <Button
                               variant='ghost'
                               size='sm'
+                              className='h-7 px-2.5 text-xs'
                               disabled={busy || loading}
                               onClick={() =>
                                 void perform(() => open(row.id, true))
@@ -408,6 +425,7 @@ function EntityWorkspace({
                             <Button
                               variant='ghost'
                               size='sm'
+                              className='h-7 px-2.5 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive'
                               disabled={busy || loading}
                               onClick={() => {
                                 setDeleting(row);

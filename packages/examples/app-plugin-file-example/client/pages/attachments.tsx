@@ -1,3 +1,5 @@
+import { PageContainer } from '../components/page-container.js';
+import { PageHeader } from '../components/page-header.js';
 import {
   useCallback,
   useEffect,
@@ -74,12 +76,11 @@ export default function AttachmentsPage(): ReactElement {
   );
 
   return (
-    <main className='mx-auto max-w-5xl space-y-6 p-8'>
-      <header className='space-y-2'>
-        <h1 className='text-2xl font-semibold'>{t('title')}</h1>
-        <p className='text-sm text-muted-foreground'>{t('description')}</p>
-        <p className='text-sm text-muted-foreground'>{t('apiHint')}</p>
-      </header>
+    <PageContainer>
+      <PageHeader
+        description={`${t('description')} ${t('apiHint')}`}
+        title={t('title')}
+      />
       <FileUploadField
         repository={repository}
         labels={labels}
@@ -100,7 +101,9 @@ export default function AttachmentsPage(): ReactElement {
           run(() => repository.deleteOne({ filter: { id: file.id } }))
         }
       />
-      <p className='text-sm text-muted-foreground'>{t('retention')}</p>
-    </main>
+      <div className='flex items-start gap-2.5 rounded-xl border bg-muted/20 p-3.5 text-xs text-muted-foreground leading-relaxed'>
+        <p>{t('retention')}</p>
+      </div>
+    </PageContainer>
   );
 }

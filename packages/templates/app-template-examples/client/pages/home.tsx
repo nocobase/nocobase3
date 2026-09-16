@@ -1,3 +1,4 @@
+import { PageContainer } from '@/components/page-container';
 import { useTranslation } from '@nocobase/i18n/client';
 import {
   ArrowUpRight,
@@ -32,7 +33,7 @@ const examples = [
 export default function ExamplesHomePage(): ReactElement {
   const { t } = useTranslation();
   return (
-    <section className='mx-auto w-full max-w-6xl space-y-8 p-6 md:p-8'>
+    <PageContainer>
       <header className='space-y-4 rounded-xl border bg-card p-6 md:p-8'>
         <p className='text-sm font-medium text-muted-foreground'>
           {t('examples.eyebrow')}
@@ -72,6 +73,6 @@ export default function ExamplesHomePage(): ReactElement {
       <p className='text-sm text-muted-foreground'>
         {t('examples.accessNote')}
       </p>
-    </section>
+    </PageContainer>
   );
 }

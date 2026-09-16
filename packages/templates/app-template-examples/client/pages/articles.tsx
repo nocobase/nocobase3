@@ -1,3 +1,5 @@
+import { PageContainer } from '@/components/page-container';
+import { PageHeader } from '@/components/page-header';
 import { apiClientToken, useService } from '@nocobase/app-client';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from '@nocobase/i18n/client';
@@ -141,25 +143,17 @@ export default function ArticlesPage(): ReactElement {
     t(`articles.${value}`);
   const pages = Math.max(1, Math.ceil(result.total / 12));
   return (
-    <section className='mx-auto w-full max-w-6xl space-y-6 p-6 md:p-8'>
-      <header className='flex flex-wrap items-start justify-between gap-4'>
-        <div className='space-y-2'>
-          <div className='flex items-center gap-2 text-sm text-muted-foreground'>
-            <FileText className='size-4' />
-            {t('articles.workspace')}
-          </div>
-          <h1 className='text-3xl font-semibold tracking-tight'>
-            {t('articles.title')}
-          </h1>
-          <p className='text-sm text-muted-foreground'>
-            {t('articles.description')}
-          </p>
-        </div>
-        <Button onClick={() => openEditor()}>
-          <Plus className='size-4' />
-          {t('articles.new')}
-        </Button>
-      </header>
+    <PageContainer>
+      <PageHeader
+        actions={
+          <Button onClick={() => openEditor()}>
+            <Plus className='size-4' />
+            {t('articles.new')}
+          </Button>
+        }
+        description={t('articles.description')}
+        title={t('articles.title')}
+      />
       <div className='flex flex-col justify-between gap-4 rounded-xl border bg-card p-4 sm:flex-row sm:items-center'>
         <div
           className='flex flex-wrap gap-2'
@@ -423,6 +417,6 @@ export default function ArticlesPage(): ReactElement {
           </form>
         </DialogContent>
       </Dialog>
-    </section>
+    </PageContainer>
   );
 }

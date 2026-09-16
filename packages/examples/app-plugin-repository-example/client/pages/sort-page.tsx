@@ -1,3 +1,5 @@
+import { PageContainer } from '../components/page-container.js';
+import { PageHeader } from '../components/page-header.js';
 import {
   ApiClientError,
   apiClientToken,
@@ -56,22 +58,28 @@ function SortCard({
     }
   }
   return (
-    <Card role='region' aria-label={title} className='min-w-0'>
+    <Card
+      role='region'
+      aria-label={title}
+      className='min-w-0 shadow-2xs rounded-xl'
+    >
       <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        <CardDescription>
+        <CardTitle className='text-base font-semibold'>{title}</CardTitle>
+        <CardDescription className='text-xs leading-relaxed'>
           {t(`sort_${example.key}_description`)}
         </CardDescription>
       </CardHeader>
       <CardContent className='space-y-4'>
-        <pre className='overflow-auto rounded-md bg-muted p-3 text-xs'>
-          <code>{example.builder}</code>
-        </pre>
-        <details className='rounded-lg border p-3'>
-          <summary className='cursor-pointer font-medium'>
+        <div className='overflow-hidden rounded-lg border bg-muted/40'>
+          <pre className='overflow-auto p-3 text-xs font-mono font-medium text-foreground'>
+            <code>{example.builder}</code>
+          </pre>
+        </div>
+        <details className='rounded-lg border bg-muted/15 p-3 text-xs'>
+          <summary className='cursor-pointer font-medium text-foreground'>
             {t('sortRequest')}
           </summary>
-          <pre className='mt-3 max-h-96 overflow-auto text-xs'>
+          <pre className='mt-3 max-h-96 overflow-auto font-mono text-xs text-muted-foreground'>
             {JSON.stringify(
               {
                 repository: example.repository,
@@ -83,15 +91,28 @@ function SortCard({
             )}
           </pre>
         </details>
-        <Button disabled={running} onClick={() => void run()}>
-          {running ? t('loading') : t('combineRun')}
-        </Button>
-        {running && <p role='status'>{t('loading')}</p>}
+        <div>
+          <Button
+            size='sm'
+            className='gap-1.5 font-medium'
+            disabled={running}
+            onClick={() => void run()}
+          >
+            {running ? t('loading') : t('combineRun')}
+          </Button>
+        </div>
+        {running && (
+          <p role='status' className='text-xs text-muted-foreground'>
+            {t('loading')}
+          </p>
+        )}
         {failure && (
           <p
             role={failure.expected ? 'status' : 'alert'}
             className={
-              failure.expected ? 'text-muted-foreground' : 'text-destructive'
+              failure.expected
+                ? 'rounded-lg border border-border/80 bg-muted/30 p-3 text-xs text-muted-foreground leading-relaxed'
+                : 'rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive font-medium leading-relaxed'
             }
           >
             {failure.expected && `${t('sortExpectedError')} — `}
@@ -100,11 +121,11 @@ function SortCard({
         )}
         {rows && (
           <div
-            className='space-y-3'
+            className='space-y-3 pt-1'
             role='region'
             aria-label={t('combineResult')}
           >
-            <p className='text-sm text-muted-foreground'>
+            <p className='text-xs text-muted-foreground font-medium'>
               {t(rows.length ? 'sortResultHint' : 'combineEmpty')}
             </p>
             {rows.length > 0 && (
@@ -113,11 +134,11 @@ function SortCard({
                 label={`${title} — ${t('combineTable')}`}
               />
             )}
-            <details className='rounded-lg border p-3'>
-              <summary className='cursor-pointer font-medium'>
+            <details className='rounded-lg border bg-muted/15 p-3 text-xs'>
+              <summary className='cursor-pointer font-medium text-foreground'>
                 {t('combineJson')}
               </summary>
-              <pre className='mt-3 max-h-96 overflow-auto text-xs'>
+              <pre className='mt-3 max-h-96 overflow-auto font-mono text-xs text-muted-foreground'>
                 {JSON.stringify(rows, null, 2)}
               </pre>
             </details>
@@ -130,15 +151,16 @@ function SortCard({
 export default function SortPage(): ReactElement {
   const { t } = useTranslation(NS);
   return (
-    <main className='mx-auto max-w-7xl space-y-6 p-6'>
-      <header className='space-y-2'>
-        <h1 className='text-3xl font-semibold'>{t('sortTitle')}</h1>
-        <p className='text-muted-foreground'>{t('sortIntro')}</p>
-        <p className='text-sm text-muted-foreground'>{t('sortLimits')}</p>
-      </header>
-      {sortExamples.map((example) => (
-        <SortCard key={example.key} example={example} />
-      ))}
-    </main>
+    <PageContainer>
+      <PageHeader description={t('sortIntro')} title={t('sortTitle')} />
+      <div className='flex items-start gap-2.5 rounded-xl border bg-muted/20 p-3.5 text-xs text-muted-foreground leading-relaxed'>
+        <p>{t('sortLimits')}</p>
+      </div>
+      <div className='space-y-4'>
+        {sortExamples.map((example) => (
+          <SortCard key={example.key} example={example} />
+        ))}
+      </div>
+    </PageContainer>
   );
 }

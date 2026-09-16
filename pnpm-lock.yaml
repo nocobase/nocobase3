@@ -714,6 +714,9 @@ importers:
       lucide-react:
         specifier: 'catalog:'
         version: 0.487.0(react@19.2.8)
+      tailwind-merge:
+        specifier: 'catalog:'
+        version: 3.6.0
     devDependencies:
       '@nocobase/app-client':
         specifier: workspace:*
