@@ -7,6 +7,7 @@ playwright-report/
 .DS_Store
 .env.local
 .env.*.local
+/hub-config.yml
 .agent-annotations/
 
 !packages/app/app-host/fixtures/app-dist/**/dist/
