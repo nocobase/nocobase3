@@ -1,3 +1,4 @@
+import type { ConnectionConfigFromDrivers } from '@nocobase/db';
 import {
   existsSync,
   mkdirSync,
@@ -22,11 +23,14 @@ import {
   createAppDatabaseManager,
   generateAppCollectionsArtifact,
   runAppDatabaseTasks,
-  type AppDatabaseConfig,
+  type AppDatabaseConfig as GenericAppDatabaseConfig,
   type AppDatabaseTaskContributions,
 } from '../src/database/index.js';
 
 const drivers = { sqlite };
+type AppDatabaseConfig = GenericAppDatabaseConfig<
+  ConnectionConfigFromDrivers<typeof drivers>
+>;
 const contributions: AppDatabaseTaskContributions = {
   appPackageName: 'test-app',
   migrations: [],

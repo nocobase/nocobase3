@@ -210,7 +210,7 @@ START_PORT=$(node --input-type=module -e '
 APP_PATH=$(node -e 'console.log(new URL(process.argv[1]).pathname.replace(/\/+$/, ""))' "$APP_URL")
 START_URL="http://127.0.0.1:$START_PORT$APP_PATH"
 echo "Waiting up to ${TIMEOUT}s for $START_URL/api/healthz"
-# Create the log before background redirection can race with the first progress report.
+# Create the log before forking so the progress loop cannot race the child's output redirection.
 : > "$START_LOG"
 set -m
 APP_SERVER_HOST=127.0.0.1 APP_SERVER_PORT="$START_PORT" pnpm start > "$START_LOG" 2>&1 &
@@ -235,7 +235,8 @@ while [ "$SECONDS" -lt "$DEADLINE" ]; do
   fi
   if [ "$SECONDS" -ge "$NEXT_PROGRESS" ]; then
     echo "Still waiting for production health: HTTP ${HTTP_STATUS:-000}; $((DEADLINE - SECONDS))s remaining"
-    tail -n 10 "$START_LOG"
+    # Progress diagnostics must not abort the readiness check when the log is temporarily unavailable.
+    tail -n 10 "$START_LOG" || true
     NEXT_PROGRESS=$((SECONDS + 15))
   fi
   sleep 1

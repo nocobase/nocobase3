@@ -18,6 +18,6 @@ export function createLCCheckpointWriteCollection(
         name: 'pk_lc_checkpoint_writes',
       });
     },
-    { ifNotExists: true, syncMetadata: false },
+    { ifNotExists: true },
   );
 }

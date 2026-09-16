@@ -1,3 +1,5 @@
+import { PageContainer } from '../components/page-container.js';
+import { PageHeader } from '../components/page-header.js';
 import { apiClientToken, useService } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
@@ -39,30 +41,46 @@ interface ExamplePanelProps {
 function ExamplePanel(props: ExamplePanelProps): ReactElement {
   const { t } = useTranslation(NS);
   return (
-    <Card role='region' aria-label={props.title}>
+    <Card
+      className='min-w-0 rounded-xl shadow-2xs'
+      role='region'
+      aria-label={props.title}
+    >
       <CardHeader>
-        <CardTitle>{props.title}</CardTitle>
+        <CardTitle className='text-base font-semibold'>{props.title}</CardTitle>
       </CardHeader>
       <CardContent className='space-y-4'>
-        <p className='text-sm text-muted-foreground'>{props.description}</p>
+        <p className='text-xs leading-relaxed text-muted-foreground'>
+          {props.description}
+        </p>
         <p className='text-sm'>
           <span className='font-medium'>{t('findManyProtocol')}:</span>{' '}
           <code>{props.protocol}</code>
         </p>
-        <pre className='overflow-x-auto rounded-md bg-muted p-3 text-xs'>
+        <pre className='overflow-x-auto rounded-lg border bg-muted/40 p-3 font-mono text-xs text-foreground'>
           <code>{props.code}</code>
         </pre>
-        <div className='flex items-center gap-3'>
+        <div className='flex flex-wrap items-center gap-3'>
           <Button disabled={props.disabled} onClick={props.onRun}>
             {props.button}
           </Button>
-          <output aria-label={`${props.title} — ${t('findManyReceived')}`}>
+          <output
+            className='rounded-full border bg-muted/20 px-2.5 py-1 text-xs font-medium tabular-nums text-muted-foreground'
+            aria-label={`${props.title} — ${t('findManyReceived')}`}
+          >
             {t('findManyReceivedCount', { count: props.records.length })}
           </output>
         </div>
-        {props.loading && <p role='status'>{t('loading')}</p>}
+        {props.loading && (
+          <p
+            role='status'
+            className='text-xs leading-relaxed text-muted-foreground'
+          >
+            {t('loading')}
+          </p>
+        )}
         <Table aria-label={`${props.title} — ${t('findManyResults')}`}>
-          <TableHeader>
+          <TableHeader className='bg-muted/30'>
             <TableRow>
               <TableHead>#</TableHead>
               <TableHead>{t('findManyRecordTitle')}</TableHead>
@@ -145,17 +163,17 @@ export default function FindManyPage(): ReactElement {
 
   const busy = arrayLoading || streamLoading;
   return (
-    <main className='mx-auto max-w-7xl space-y-6 p-6'>
-      <header className='space-y-2'>
-        <h1 className='text-3xl font-semibold'>{t('findManyTitle')}</h1>
-        <p className='max-w-4xl text-muted-foreground'>{t('findManyIntro')}</p>
-      </header>
+    <PageContainer>
+      <PageHeader description={t('findManyIntro')} title={t('findManyTitle')} />
       {error && (
-        <p role='alert' className='text-destructive'>
+        <p
+          role='alert'
+          className='rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs font-medium text-destructive'
+        >
           {error}
         </p>
       )}
-      <div className='grid items-start gap-6 xl:grid-cols-2'>
+      <div className='grid min-w-0 items-start gap-4 xl:grid-cols-2'>
         <ExamplePanel
           title={t('findManyArrayTitle')}
           description={t('findManyArrayDescription')}
@@ -187,6 +205,6 @@ export default function FindManyPage(): ReactElement {
           }}
         />
       </div>
-    </main>
+    </PageContainer>
   );
 }

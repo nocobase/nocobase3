@@ -1,5 +1,44 @@
 # @nocobase/app-server
 
+## 1.0.0-beta.15
+
+### Major Changes
+
+- a60decd: Require an explicit absolute baseDir for Server plugins and resolve migrations, seeds, jobs, and package metadata from the loaded plugin copy. Generate and validate database task manifests during builds so TypeScript and JavaScript share source checksums, with verified legacy JavaScript history conversion and synchronized plugin scaffolding and application templates.
+
+### Minor Changes
+
+- 63db898: Let `AppDatabaseConfig` accept a connection shape from a dialect package it does not know about.
+
+  `@nocobase/db` split its dialects into packages and added `ExtensibleDatabaseConfig<TConnection>` for exactly this, with an overload on `createDatabaseManager` and a compile-time contract test. `AppDatabaseConfig` was left extending the closed `DatabaseConfig`, so an application could register `@nocobase/db-kingbase`, `@nocobase/db-oceanbase` or `@nocobase/db-dameng` and watch it work at runtime while `pnpm typecheck` rejected the configuration: `Type '"kingbase"' is not assignable to type '"mssql"'`.
+
+  `AppDatabaseConfig` and `AppDatabaseConnectionConfig` now take the same type parameter, defaulting to the dialects `@nocobase/db` declares. Every existing configuration is unchanged — the bare form still means what it meant — and an application on a contributed dialect names its shape instead of reaching for an assertion:
+
+  ```ts
+  type KingbaseConnection = KingbaseOptions & { dialect: 'kingbase' };
+
+  const database: AppConfigFactory<
+    AppDatabaseConfig<ConnectionConfig | KingbaseConnection>
+  > = defineAppConfig(() => ({ drivers: { kingbase }, ... }));
+  ```
+
+  Widening applies to the named shape alone: a dialect nobody named is still rejected, `sqlite` still requires `filename`, and `serviceName` on a `postgres` connection is still an error. The constraint to write against when code is generic over a connection is `AnyConnectionConfig`, from `@nocobase/db`.
+
+- 63db898: Move concrete database connection types into their owning dialect packages and keep the core connection contract independent of installed dialects. Import `SqliteConnectionConfig`, `PostgresConnectionConfig`, `MysqlConnectionConfig`, `OracleConnectionConfig`, and `MssqlConnectionConfig` from the corresponding `@nocobase/db-<dialect>` package instead of `@nocobase/db`.
+
+  `ConnectionConfig` and the default `DatabaseConfig` and `AppDatabaseConfig` now describe the common runtime contract. For strict configuration checking, supply a concrete connection type or use `DatabaseConfigFromDrivers` and `AppDatabaseConfigFromDrivers`. The core also exports `DriverConnectionConfig` and `ConnectionConfigFromDrivers` for reusable driver inference. Preserve mutually exclusive host and socket targets in MySQL and OceanBase configuration and factory options.
+
+### Patch Changes
+
+- 63db898: Add `defineAppDatabaseConfig` to infer connection types from the drivers returned by a runtime configuration callback. Application templates now directly export this helper without explicit factory annotations, driver type maps, or `satisfies` clauses. Keep declaration emission but use full TypeScript inference for application server builds; library packages retain isolated declaration checking.
+- 63db898: Require each driver registration key to match the driver's declared dialect in inferred database configurations. Reject aliases and mismatched keys even when no connection uses that driver or the connections map is empty, while preserving connection inference for correctly registered factories and descriptors.
+- Updated dependencies [63db898]
+- Updated dependencies [63db898]
+- Updated dependencies [a60decd]
+- Updated dependencies [1c70f60]
+- Updated dependencies [63db898]
+  - @nocobase/db@1.0.0-beta.7
+
 ## 1.0.0-beta.14
 
 ### Patch Changes

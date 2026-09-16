@@ -146,16 +146,17 @@ describeIntegrationDatabases('JSON field defaults', (context) => {
 
       // Redefining a JSON column is where a type whose definition carries a
       // constraint can ask the engine for that constraint a second time.
-      await context.builder.alterField(
-        'jsonAlteredDefault',
-        'payload',
-        {
-          type: 'json',
-          nullable: false,
-          defaultValue: { mode: 'provider', models: [] },
-        },
-        { syncMetadata: false },
-      );
+      await context.builder.alterField('jsonAlteredDefault', 'payload', {
+        type: 'json',
+        nullable: false,
+        defaultValue: { mode: 'provider', models: [] },
+      });
+
+      await expect(
+        context.metadataStore.get('jsonAlteredDefault'),
+      ).resolves.toMatchObject({
+        document: { fields: { payload: { type: 'json' } } },
+      });
 
       const repository = context.database.repository('jsonAlteredDefault');
       await repository.createOne({ values: { id: 'a' } });

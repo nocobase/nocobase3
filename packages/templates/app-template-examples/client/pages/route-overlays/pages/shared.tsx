@@ -3,6 +3,7 @@ import { Layers3, MessageSquare } from 'lucide-react';
 import { Link, Outlet } from 'react-router';
 import { Breadcrumbs } from '@/components/breadcrumbs';
 import { PageHeader } from '@/components/page-header';
+import { PageContainer } from '@/components/page-container';
 import { RouteChildPage } from '@/components/route-child-page';
 import { Button } from '@/components/ui/button';
 
@@ -22,7 +23,7 @@ export function ChildPageExample({
   return (
     <>
       <RouteChildPage>
-        <section className='w-full space-y-6 p-6 md:p-8'>
+        <PageContainer>
           <Breadcrumbs />
           <PageHeader
             actions={
@@ -54,7 +55,7 @@ export function ChildPageExample({
               </p>
             </div>
           </section>
-        </section>
+        </PageContainer>
       </RouteChildPage>
       {/* A dialog child route is a layer beside this one, not content inside it. */}
       <Outlet />

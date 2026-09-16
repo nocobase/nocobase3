@@ -1,3 +1,4 @@
+import { FolderOpen } from 'lucide-react';
 import {
   defineAppRoutes,
   type AppClientRouteContribution,
@@ -6,7 +7,7 @@ const routes: readonly AppClientRouteContribution[] = [
   defineAppRoutes([
     {
       name: 'file-repository',
-      navigation: { title: 'navGroup' },
+      navigation: { title: 'navGroup', icon: FolderOpen },
       breadcrumb: { title: 'navGroup' },
       children: [
         {

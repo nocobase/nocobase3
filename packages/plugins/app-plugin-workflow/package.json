@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-workflow",
   "displayName": "Workflow App Plugin",
   "description": "Adds workflow runtime, persistence, and HTTP APIs to a NocoBase app.",
-  "version": "0.1.0-beta.14",
+  "version": "0.1.0-beta.15",
   "type": "module",
   "sideEffects": [
     "**/*.css"
@@ -137,6 +137,8 @@
     "react-dom": "catalog:",
     "tsx": "catalog:",
     "vitest": "catalog:",
-    "yaml": "catalog:"
+    "yaml": "catalog:",
+    "@nocobase/db-postgres": "workspace:*",
+    "@nocobase/db-mysql": "workspace:*"
   }
 }

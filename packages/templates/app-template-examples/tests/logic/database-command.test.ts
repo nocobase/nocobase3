@@ -8,7 +8,7 @@ import {
   type AppConfigAccessor,
 } from '@nocobase/app-server/config';
 import type { AppDatabaseConfig } from '@nocobase/app-server/database';
-import sqlite from '@nocobase/db-sqlite';
+import sqlite, { type SqliteConnectionConfig } from '@nocobase/db-sqlite';
 
 const roots: string[] = [];
 afterEach(() => {
@@ -23,7 +23,7 @@ function fixture() {
   const root = mkdtempSync(path.join(parent, 'cli-database-'));
   roots.push(root);
   const paths = createConfigPaths({ rootDir: root });
-  const database: AppDatabaseConfig = {
+  const database: AppDatabaseConfig<SqliteConnectionConfig> = {
     drivers: { sqlite },
     default: 'main',
     connections: {

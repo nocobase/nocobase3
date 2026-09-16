@@ -1,5 +1,40 @@
 # @nocobase/app-plugin-hub
 
+## 0.1.0-beta.6
+
+### Patch Changes
+
+- 1decf5f: Keep a dialog's actions and its step indicator in view while its content scrolls
+
+  `DialogContent` made the whole popup one scroll container, so a dialog tall enough to overflow moved its own footer below the fold. Deploying an application was the worst case: the configuration step stacks a source picker, a notice, and two editors, and the primary action could only be reached by scrolling past all of it.
+
+  The popup is now a column that does not scroll. A header, an optional subheader, and a footer stay put, and a single body between them is what moves. `AppDialog` gained `footer` and `subheader` for this, and the deploy wizard puts its step indicator and configuration-source picker in the subheader — controls a reader needs in order to act on the body scroll out of reach exactly when the content is long enough to need them.
+
+  The configuration editor's height is capped against the viewport as well as in pixels, so on a short screen it shrinks rather than spending the whole body on itself.
+
+  One behavioural note: the create-application dialog's submit button now sits outside the `<form>` it belongs to, and is reassociated with it by `form` id, so both clicking it and pressing Enter in a field still submit.
+
+- a60decd: Require an explicit absolute baseDir for Server plugins and resolve migrations, seeds, jobs, and package metadata from the loaded plugin copy. Generate and validate database task manifests during builds so TypeScript and JavaScript share source checksums, with verified legacy JavaScript history conversion and synchronized plugin scaffolding and application templates.
+- Updated dependencies [1decf5f]
+- Updated dependencies [63db898]
+- Updated dependencies [63db898]
+- Updated dependencies [63db898]
+- Updated dependencies [63db898]
+- Updated dependencies [a60decd]
+- Updated dependencies [1a85a86]
+- Updated dependencies [1a85a86]
+- Updated dependencies [1c70f60]
+- Updated dependencies [63db898]
+  - @nocobase/app-host@0.1.0-beta.6
+  - @nocobase/app-server@1.0.0-beta.15
+  - @nocobase/db@1.0.0-beta.7
+  - @nocobase/app-plugin-authentication@0.1.0-beta.14
+  - @nocobase/app-plugin-authorization@0.2.0-beta.10
+  - @nocobase/app-plugin-users@0.0.2-beta.2
+  - @nocobase/app-client@1.0.0-beta.16
+  - @nocobase/i18n@1.0.0-beta.4
+  - @nocobase/service-provider@0.0.2-beta.1
+
 ## 0.1.0-beta.5
 
 ### Patch Changes

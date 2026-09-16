@@ -40,7 +40,7 @@ describe('kingbase factory', () => {
 
   it('uses Kingbase server_version for Knex version detection', async () => {
     const clientClass = kingbase.driver.createKnexClient?.(
-      {},
+      { dialect: 'kingbase' },
       kingbase.driver.resolveKnexClient?.(),
     );
     expect(typeof clientClass).toBe('function');

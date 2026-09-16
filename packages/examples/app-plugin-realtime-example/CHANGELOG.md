@@ -1,5 +1,18 @@
 # @nocobase/app-plugin-realtime-example
 
+## 0.1.0-beta.6
+
+### Patch Changes
+
+- a60decd: Require an explicit absolute baseDir for Server plugins and resolve migrations, seeds, jobs, and package metadata from the loaded plugin copy. Generate and validate database task manifests during builds so TypeScript and JavaScript share source checksums, with verified legacy JavaScript history conversion and synchronized plugin scaffolding and application templates.
+- Updated dependencies [63db898]
+- Updated dependencies [63db898]
+- Updated dependencies [63db898]
+- Updated dependencies [a60decd]
+- Updated dependencies [63db898]
+  - @nocobase/app-server@1.0.0-beta.15
+  - @nocobase/service-provider@0.0.2-beta.1
+
 ## 0.1.0-beta.5
 
 ### Patch Changes

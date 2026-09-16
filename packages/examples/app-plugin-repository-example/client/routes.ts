@@ -1,3 +1,4 @@
+import { Database, ShoppingCart, Users } from 'lucide-react';
 import {
   defineAppRoutes,
   type AppClientRouteContribution,
@@ -6,7 +7,7 @@ const routes: readonly AppClientRouteContribution[] = [
   defineAppRoutes([
     {
       name: 'api-examples',
-      navigation: { title: 'apiExamples' },
+      navigation: { title: 'apiExamples', icon: Database },
       breadcrumb: { title: 'apiExamples' },
       children: [
         {
@@ -61,7 +62,7 @@ const routes: readonly AppClientRouteContribution[] = [
     },
     {
       name: 'crm-group',
-      navigation: { title: 'crm' },
+      navigation: { title: 'crm', icon: Users },
       breadcrumb: { title: 'crm' },
       children: [
         {
@@ -84,7 +85,7 @@ const routes: readonly AppClientRouteContribution[] = [
     },
     {
       name: 'orders-group',
-      navigation: { title: 'ordersTitle' },
+      navigation: { title: 'ordersTitle', icon: ShoppingCart },
       breadcrumb: { title: 'ordersTitle' },
       children: [
         {

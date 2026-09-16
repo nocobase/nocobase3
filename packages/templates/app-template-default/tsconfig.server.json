@@ -1,6 +1,8 @@
 {
   "extends": "@nocobase/dev-config/tsconfig/server-library.json",
   "compilerOptions": {
+    // Application configuration factories infer exports during the full TypeScript build.
+    "isolatedDeclarations": false,
     "rootDir": ".",
     "outDir": "dist",
     "paths": {

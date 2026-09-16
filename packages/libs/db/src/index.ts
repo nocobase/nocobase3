@@ -7,21 +7,20 @@ export { databaseManagerToken } from './database/token.js';
 export { defineDatabase } from './database/config.js';
 export { SchemaManagementNotAllowedError } from './database/schema-management.js';
 export type {
+  AnyConnectionConfig,
   BaseConnectionConfig,
   ConnectionConfig,
   DatabaseConfig,
+  DatabaseConfigFromDrivers,
+  ConnectionConfigFromDrivers,
+  DriverConnectionConfig,
   DatabaseDialect,
   DatabaseDriverDefinition,
   DatabaseDriverFactory,
   DatabaseDriverRegistration,
   DatabaseDriver,
   ExtensibleDatabaseConfig,
-  MssqlConnectionConfig,
-  MysqlConnectionConfig,
-  OracleConnectionConfig,
-  PostgresConnectionConfig,
   SchemaManagementMode,
-  SqliteConnectionConfig,
   CollectionMetadataStoreConfig,
   DirectoryCollectionMetadataStoreConfig,
 } from './database/config.js';

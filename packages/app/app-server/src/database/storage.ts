@@ -6,8 +6,10 @@ import type { AppDatabaseConfig } from './types.js';
 import { resolveAppDatabaseDriver, resolveConnections } from './manager.js';
 import { defaultConnectionName } from './plan.js';
 
-export async function prepareAppDatabaseStorage(
-  config: AppDatabaseConfig,
+export async function prepareAppDatabaseStorage<
+  TConfig extends AppDatabaseConfig,
+>(
+  config: TConfig,
   paths?: ConfigPaths,
   names?: readonly string[],
   drivers?: Record<string, DatabaseDriverRegistration>,
