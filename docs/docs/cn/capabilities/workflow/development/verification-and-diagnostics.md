@@ -8,6 +8,8 @@ keywords: 'NocoBase,工作流检查,workflow check,Artifact,诊断'
 
 工作流从源码到运行需要经过定义检查、应用编译、Artifact 构建、运行时加载和版本启用。每个阶段验证的边界不同，不能相互替代。
 
+Commands below run from the initialized application root. `workflow check` is the subcommand name; the complete invocation is `pnpm nocobase workflow check <package>`. For custom node types, use the checker/build entry in [Service API](./service-api.md#custom-instructions), which supplies the extension contracts. Configure the application in `config.yml`.
+
 ## 检查工作流定义
 
 在应用根目录运行：
