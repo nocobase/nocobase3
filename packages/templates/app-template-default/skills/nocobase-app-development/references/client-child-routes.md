@@ -2,6 +2,8 @@
 
 Use this guide for nested pages, page Tabs, and menu groups. Routes are the source of navigation for App, Settings, and Dev. Business page code decides how child content is presented.
 
+Wrap the parent page content in `PageContainer` to apply the shared page padding and spacing. Inline Tab content renders within that container and does not add a second one. A covering child page uses its own `PageContainer` inside `RouteChildPage`.
+
 ## Default for page Tabs
 
 When asked to build a page with Tabs, use child routes by default; the user does not need to request routing separately. This applies to App, Settings, and Dev pages, including plugin-owned pages. Follow an explicit user request for a different interaction.
@@ -84,6 +86,7 @@ import {
   useLocation,
   useResolvedPath,
 } from 'react-router';
+import { PageContainer } from '@/components/page-container';
 
 export default function Workspace(): ReactElement {
   const { t } = useTranslation();
@@ -106,7 +109,7 @@ export default function Workspace(): ReactElement {
   }
 
   return (
-    <section className='space-y-4 p-6'>
+    <PageContainer>
       <h1>{t('workspace.title')}</h1>
       <nav aria-label={t('workspace.reports')} className='flex gap-4'>
         <NavLink to={{ pathname: 'reports/42', search: location.search }}>
@@ -117,7 +120,7 @@ export default function Workspace(): ReactElement {
         </NavLink>
       </nav>
       <Outlet />
-    </section>
+    </PageContainer>
   );
 }
 ```
@@ -175,15 +178,17 @@ A child route renders through its parent's outlet. It can render inline, as the 
 Among these wrappers, `RouteChildPage` represents a page destination and its route declares `breadcrumb`; `RouteDialog` and `RouteDrawer` leave it unset. Breadcrumbs are not restricted to these wrappers: ordinary page routes can also declare them. See [breadcrumb declarations](client-pages-and-routes.md#putting-the-page-in-a-breadcrumb-trail).
 
 ```tsx
+import { PageContainer } from '@/components/page-container';
+
 export default function ArchivedOrdersPage() {
   return (
     <>
       <RouteChildPage>
-        <section className='mx-auto w-full max-w-6xl space-y-6 p-6 md:p-8'>
+        <PageContainer className='mx-auto max-w-6xl'>
           <Breadcrumbs />
           <PageHeader title={t('orders.archived.title')} />
           {/* the page's own content */}
-        </section>
+        </PageContainer>
       </RouteChildPage>
       {/* A deeper layer is a sibling of this one, not content inside it. */}
       <Outlet />
@@ -236,13 +241,14 @@ The page that declares `children` must render `<Outlet />` where the child belon
 
 ```tsx
 import { Outlet } from 'react-router';
+import { PageContainer } from '@/components/page-container';
 
 export default function OrdersPage() {
   return (
-    <main>
+    <PageContainer>
       <OrderList />
       <Outlet />
-    </main>
+    </PageContainer>
   );
 }
 ```
