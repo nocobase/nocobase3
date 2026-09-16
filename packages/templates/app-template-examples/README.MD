@@ -29,7 +29,7 @@ Article migration and seed sources create six articles on a fresh managed defaul
 
 ## Maintain this template
 
-Keep framework files aligned with Default and Hub: startup/build scripts, runtime composition mechanisms, shell, theme, CLI infrastructure and development guidance. Keep the examples homepage, article module, example plugin choices and sample data here. Existing Default installations retain their historical data; see Default’s `MIGRATION.md` when upgrading to its clean composition.
+Keep framework files aligned with Default and Hub: startup/build scripts, runtime composition mechanisms, shell, theme, CLI infrastructure and development guidance. Keep the examples homepage, article module, example plugin choices and sample data here. Existing Default installations retain their historical data; follow the [upgrade migration rules](skills/nocobase-app-upgrade/references/edge-cases.md#migrations) when removing example registrations.
 
 ## Getting started
 

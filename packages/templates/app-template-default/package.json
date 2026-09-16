@@ -124,7 +124,6 @@
     "ecosystem.config.js",
     "config.example.yml",
     "README.MD",
-    "MIGRATION.md",
     "AGENTS.md",
     "CLAUDE.md",
     "skills"

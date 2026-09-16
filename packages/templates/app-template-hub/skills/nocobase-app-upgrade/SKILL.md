@@ -45,6 +45,8 @@ node -p "JSON.stringify(require('./package.json').nocobase, null, 2)"
 
 `templatePackage` names the template; `defaultTemplateVersion` is BASE. If `templatePackage` is missing the application predates the field: a hub declares `templateKind: "hub"`, which identifies it outright — `@nocobase/app-template-hub` is the source. The published version lines usually settle it (`npm view <pkg> versions --registry=https://npm.nocobase.ai`), and Examples is recognizable by its `app-plugin-*-example` registrations. If `defaultTemplateVersion` itself is missing or was bumped without a merge, the baseline is unknown — work it out with the user from Git history rather than guessing, since too old a baseline replays changes already present and too new a one skips changes never applied.
 
+If `nocobase.templatePackage` is missing, use the confirmed package name for `TEMPLATE` instead of the manifest lookup below, then record it in the manifest during the agreed source merge.
+
 ## 3. Fetch both releases
 
 ```bash
@@ -71,7 +73,7 @@ Do not read the `beta` dist-tag as "newest". While every release is a prerelease
 diff -rq "$WORK/$BASE" "$WORK/$TARGET"
 ```
 
-`Files ... differ` is modified, `Only in TARGET` added, `Only in BASE` removed. Read the substantive ones with `diff -u`, and read the target's `MIGRATION.md` — it carries steps no diff can show.
+`Files ... differ` is modified, `Only in TARGET` added, `Only in BASE` removed. Read the substantive ones with `diff -u`. Use the actual BASE → TARGET changes and the project's current state to decide what applies. Consult the target's relevant development Skill references for the current contracts, and check [edge cases](references/edge-cases.md) for generated configuration and migration history that the template diff cannot describe.
 
 Then ask the project which of those files it has also touched:
 
@@ -85,7 +87,7 @@ diff -rq "$WORK/$BASE" "$WORK/$TARGET" \
     done
 ```
 
-Show the user this listing, the version range, whatever `MIGRATION.md` requires by hand, the removals from step 5, and the rollback. Get agreement before editing.
+Show the user this listing, the version range, any manual actions identified from the changed contracts and project state, the removals from step 5, and the rollback. Get agreement before editing.
 
 ## 5. Check what the diff cannot show
 
@@ -132,8 +134,8 @@ pnpm typecheck && pnpm test && pnpm lint && pnpm build
 
 `typecheck` is doing real work here — it catches the broken import a removal left behind. Then run the hub and check what the delta touched: sign-in, the user's pages, navigation, locale switching, any new migration. Passing commands are not evidence the hub still behaves.
 
-Report the range merged, how each contested file was decided, the manual steps `MIGRATION.md` required, and how to roll back.
+Report the range merged, how each contested file was decided, any manual actions and their validation, and how to roll back.
 
 ## Crossing several releases
 
-Go to the newest directly — stepping one release at a time means deciding the same file repeatedly. But read `MIGRATION.md` for the whole range: every section between the two versions applies, and manual steps appear in no diff.
+Compare BASE directly with TARGET and merge the resulting changes once. Check the user's code against changed or removed contracts and preserve existing configuration, data, and migration history. If a compatibility step cannot be determined from the endpoints, inspect the relevant intermediate release or ask for the missing project context; do not assume every historical instruction applies.
