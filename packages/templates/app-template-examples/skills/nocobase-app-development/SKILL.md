@@ -19,6 +19,8 @@ Do not use it to upgrade the template this application was generated from. That 
 
 For pages with Tabs, nested pages, or navigation groups, read [child routes](references/client-child-routes.md). Page-level Tabs use child routes by default, even when the user does not mention routing. Declare their content under the parent route and derive the selected Tab from the URL. Opening the parent URL redirects to the default accessible Tab with replace and preserves query parameters; explicit Tab URLs retain their selection. Follow an explicit user request for a different interaction.
 
+Examples retains Default’s Users and API Keys integration alongside its demonstrations. Users lists direct Authorization Permission Sets as application roles; authenticated default access remains separate. API Keys is configured in both authentication factories and mounted under Settings. Keep these product integrations aligned with Default.
+
 ## Before you start
 
 Read the application's `AGENTS.md` first for the rules that apply everywhere. This Skill's references are the detail behind it.
@@ -41,14 +43,15 @@ Build the feature in the application. Do not run a plugin generator, create a `p
 
 This application ships with plugins that already implement whole categories of requirement, each publishing its own Skill under `.agents/skills/` (run `pnpm plugin:skills:sync` if that directory is missing or stale):
 
-| The requirement sounds like                              | Read the Skill for                    |
-| -------------------------------------------------------- | ------------------------------------- |
-| Approvals, multi-step processes, "when X happens then Y" | `@nocobase/app-plugin-workflow`       |
-| Email, IM, or in-app messages                            | `@nocobase/app-plugin-notification`   |
-| Roles, permissions, per-user or per-record access        | `@nocobase/app-plugin-authorization`  |
-| Sign-in, registration, sessions                          | `@nocobase/app-plugin-authentication` |
-| File upload and metadata through Repository              | `@nocobase/app-plugin-file`           |
-| Translated text and language switching                   | `@nocobase/app-plugin-i18n`           |
+| The requirement sounds like                               | Read the Skill for                    |
+| --------------------------------------------------------- | ------------------------------------- |
+| Approvals, multi-step processes, "when X happens then Y"  | `@nocobase/app-plugin-workflow`       |
+| Email, IM, or in-app messages                             | `@nocobase/app-plugin-notification`   |
+| Roles, permissions, per-user or per-record access         | `@nocobase/app-plugin-authorization`  |
+| Sign-in, registration, sessions                           | `@nocobase/app-plugin-authentication` |
+| User administration and application-owned role assignment | `@nocobase/app-plugin-users`          |
+| File upload and metadata through Repository               | `@nocobase/app-plugin-file`           |
+| Translated text and language switching                    | `@nocobase/app-plugin-i18n`           |
 
 Read the relevant Skill before writing the feature. Implementing a permission system, a notification sender, or a scheduler by hand when a registered plugin provides one is the most expensive mistake available here.
 
@@ -79,11 +82,13 @@ For creating, editing or removing theme presets, read [themes](references/themes
 
 ## Database configuration factories
 
+Keep `@nocobase/db` in `dependencies` alongside the database driver. It supplies the driver's runtime peer and lets TypeScript resolve the inferred database configuration declaration through the public package name. Moving it to `devDependencies` can cause TS2883 in an installed application even while the source workspace builds successfully.
+
 Declare database defaults with `defineAppDatabaseConfig` from `@nocobase/app-server/database`. When switching or adding connections, read [database connections](references/database-connections.md) for complete examples, YAML overrides, schema ownership and verification.
 
 ## Where to work
 
-The Settings and Dev tools header entries stay visible on their destination pages. The Dev tools entry is development-only and must remain absent from production builds.
+The Settings header entry appears only when the user has an accessible page in the settings navigation, and stays visible on that page. The Dev tools entry stays visible on its destination pages, is development-only, and must remain absent from production builds.
 
 Business code belongs in a small, stable set of places:
 

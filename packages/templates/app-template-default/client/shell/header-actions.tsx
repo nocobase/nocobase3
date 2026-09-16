@@ -1,6 +1,12 @@
 import { MonitorCog, Settings } from 'lucide-react';
-import type { ReactElement } from 'react';
+import { useContext, type ReactElement } from 'react';
 import { Link } from 'react-router';
+
+import { SettingsRouteTreeContext } from '../routing/settings-route-context.js';
+import {
+  navigationPages,
+  useRouteNavigation,
+} from '../routing/route-navigation.js';
 
 import { ThemeSettings } from '../theme/index.js';
 import { UserMenu } from './user-menu.js';
@@ -10,6 +16,11 @@ const ACTION_LINK_CLASS =
 
 /** Keep header entries visible on their destination pages so navigation stays consistent across surfaces. */
 export function HeaderActions(): ReactElement {
+  const routes = useContext(SettingsRouteTreeContext);
+  // Use the same access checks as Settings navigation so the entry never opens an empty surface.
+  const { items } = useRouteNavigation(routes, true);
+  const hasSettings = navigationPages(items).length > 0;
+
   return (
     <div className='flex shrink-0 items-center gap-2'>
       {/* The dev entry sits left of settings and exists only while developing: a production build evaluates this to
@@ -24,14 +35,16 @@ export function HeaderActions(): ReactElement {
           <MonitorCog className='size-5' />
         </Link>
       ) : null}
-      <Link
-        aria-label='Settings'
-        className={ACTION_LINK_CLASS}
-        title='Settings'
-        to='/settings'
-      >
-        <Settings className='size-5' />
-      </Link>
+      {hasSettings ? (
+        <Link
+          aria-label='Settings'
+          className={ACTION_LINK_CLASS}
+          title='Settings'
+          to='/settings'
+        >
+          <Settings className='size-5' />
+        </Link>
+      ) : null}
       <ThemeSettings />
       <UserMenu />
     </div>

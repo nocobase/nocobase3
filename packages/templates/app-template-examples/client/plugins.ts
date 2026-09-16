@@ -16,6 +16,8 @@ import notification from '@nocobase/app-plugin-notification/client';
 import repositoryExample from '@nocobase/app-plugin-repository-example/client';
 import file from '@nocobase/app-plugin-file/client';
 import fileExample from '@nocobase/app-plugin-file-example/client';
+import users from '@nocobase/app-plugin-users/client';
+import apiKeys from '@nocobase/app-plugin-api-keys/client';
 
 // Array order is contribution order. A plugin is enabled by appearing in this
 // list; removing its entry and its import disables it.
@@ -24,6 +26,8 @@ const clientPlugins: AppClientPlugins = defineClientPlugins([
   aiEmployee(),
   authorization(),
   databaseExplorer(),
+  users({ mount: 'settings', path: '/users' }),
+  apiKeys({ path: '/api-keys' }),
   i18n(),
   install(),
   notificationProvider(),

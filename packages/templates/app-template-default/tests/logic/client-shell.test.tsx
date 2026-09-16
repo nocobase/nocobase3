@@ -7,8 +7,12 @@ import {
   AuthenticationProvider,
   authenticationClientToken,
 } from '@nocobase/app-plugin-authentication/client';
-import { Refine, type AuthProvider } from '@refinedev/core';
-import { fireEvent, render, screen } from '@testing-library/react';
+import {
+  Refine,
+  type AuthProvider,
+  type AccessControlProvider,
+} from '@refinedev/core';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ComponentType, ReactElement } from 'react';
 import { Outlet, MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -57,13 +61,56 @@ describe('application shell', () => {
       await screen.findByRole('button', { name: 'Open account menu' }),
     ).toHaveAttribute('title', 'Alice');
     expect(screen.getByRole('button', { name: 'Appearance' })).toBeVisible();
-    expect(screen.getByRole('link', { name: 'Settings' })).toBeVisible();
+    expect(
+      screen.queryByRole('link', { name: 'Settings' }),
+    ).not.toBeInTheDocument();
     expect(screen.getByText('AI builds freely.')).toBeVisible();
     expect(screen.getByText('Default Template v0.0.0')).toBeVisible();
     expect(
       await screen.findByRole('heading', { name: 'App client is ready' }),
     ).toBeVisible();
   });
+
+  it.each([true, false])(
+    'shows the Settings entry only when a page is accessible (%s)',
+    async (allowed) => {
+      const can = vi.fn(async ({ resource }: { resource?: string }) => ({
+        can: resource !== 'preferences' || allowed,
+      }));
+      renderApplication('/', createAuthProvider(true), [], {
+        accessControlProvider: { can },
+        settingsRouteTree: [
+          createRoute(
+            'preferences',
+            '/settings/preferences',
+            'required',
+            () => <h2>Preferences</h2>,
+            'plugin',
+            'Preferences',
+            true,
+          ),
+        ],
+      });
+      await screen.findByRole('heading', { name: 'App client is ready' });
+      await waitFor(() =>
+        expect(can).toHaveBeenCalledWith(
+          expect.objectContaining({
+            resource: 'preferences',
+            action: 'access',
+          }),
+        ),
+      );
+      if (allowed) {
+        expect(
+          await screen.findByRole('link', { name: 'Settings' }),
+        ).toBeVisible();
+      } else {
+        expect(
+          screen.queryByRole('link', { name: 'Settings' }),
+        ).not.toBeInTheDocument();
+      }
+    },
+  );
 
   it('renders nested pages through manual outlets and selects the nearest menu ancestor', async () => {
     const child = createRoute('detail', '/orders/42', 'required', () => (
@@ -178,6 +225,10 @@ function renderApplication(
   initialEntry: string,
   authProvider: AuthProvider,
   routes: readonly AppClientRegisteredRoute[] = [],
+  options: {
+    readonly accessControlProvider?: AccessControlProvider;
+    readonly settingsRouteTree?: readonly AppClientRegisteredRoute[];
+  } = {},
 ): void {
   const clientRoutes = [
     createRoute('home', '/', 'required', HomePage, 'application'),
@@ -200,6 +251,7 @@ function renderApplication(
         <MemoryRouter initialEntries={[initialEntry]}>
           <AppThemeProvider>
             <Refine
+              accessControlProvider={options.accessControlProvider}
               authProvider={authProvider}
               dataProvider={{
                 getList: vi.fn(),
@@ -219,7 +271,7 @@ function renderApplication(
               <AppRouter
                 devRouteTree={[]}
                 clientRoutes={clientRoutes}
-                settingsRouteTree={[]}
+                settingsRouteTree={options.settingsRouteTree ?? []}
               />
             </Refine>
           </AppThemeProvider>
@@ -276,6 +328,8 @@ function createRoute(
   auth: AppClientRegisteredRoute['auth'],
   Component: ComponentType,
   source: AppClientRegisteredRoute['source'] = 'plugin',
+  navigationTitle?: string,
+  protectedRoute: boolean = false,
 ): AppClientRegisteredRoute {
   const packageName =
     source === 'application'
@@ -290,6 +344,8 @@ function createRoute(
     packageName,
     path,
     source,
+    ...(navigationTitle ? { navigation: { title: navigationTitle } } : {}),
+    ...(protectedRoute ? { access: { resource: name, action: 'access' } } : {}),
   };
 }
 

@@ -48,7 +48,11 @@ This application ships with plugins that already implement whole categories of r
 | User administration and application-owned role assignment | `@nocobase/app-plugin-users`          |
 | Translated text and language switching                    | `@nocobase/app-plugin-i18n`           |
 
-Read the relevant Skill before writing the feature. Implementing a capability by hand when a registered plugin provides one is the most expensive mistake available here. Workflow and end-user notification plugins are intentionally not registered in the Hub template.
+Read the relevant Skill before writing the feature. Implementing a capability by hand when a registered plugin provides one is the most expensive mistake available here. Workflow and end-user notification plugins are intentionally not registered in the Hub template. Their configuration factories and dependencies are absent too. The shared Settings surface stays enabled for API Keys and other registered settings pages; applications, Hub roles, and Users remain in the primary console.
+
+The built-in Hub roles do not grant `page:api-keys/access`; system administrators retain access through their page wildcard. Grant that page explicitly when another role needs self-service keys. The header hides Settings when no navigation page is accessible.
+
+Application-owned routes and providers start empty; Hub management routes and role scopes come from the Hub plugin. Keep learning demonstrations in the Examples template.
 
 Bulk plugin Skills synchronization reads the explicit `client/plugins.ts`, `server/plugins.ts`, and `cli/plugins.ts` registrations. A package used only through imported components can have its Skills synchronized explicitly with the CLI plugin option.
 
@@ -79,9 +83,11 @@ For creating, editing or removing theme presets, read [themes](references/themes
 
 Declare database defaults with `defineAppDatabaseConfig` from `@nocobase/app-server/database`. When switching or adding connections, read [database connections](references/database-connections.md) for complete examples, YAML overrides, schema ownership and verification.
 
+Keep `@nocobase/db` in the Hub's `dependencies`, alongside the driver that requires it as a runtime peer. TypeScript also uses this declaration to resolve the inferred configuration's public type path in an installed application; putting it only in `devDependencies` can cause TS2883 during `pnpm build`.
+
 ## Where to work
 
-Header entries stay visible on their destination pages. The Dev tools entry is development-only; the Hub has no Settings entry.
+The Settings header entry appears only when the user has an accessible page in the settings navigation, and stays visible on that page. The Dev tools entry stays visible on its destination pages, is development-only, and must remain absent from production builds.
 
 Business code belongs in a small, stable set of places:
 

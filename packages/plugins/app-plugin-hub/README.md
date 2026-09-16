@@ -75,7 +75,7 @@ Environment overrides use `HUB_HOST_*`, for example `HUB_HOST_PORT`,
 `HUB_HOST_START_TIMEOUT_MS`, `HUB_HOST_AUTO_RESTART`, `HUB_HOST_ENTRY`,
 `HUB_HOST_TSX_CLI`, and `HUB_HOST_TSCONFIG`. Directory overrides are
 `HUB_HOST_DEPLOYMENTS_DIR`, `HUB_HOST_VOLUMES_DIR`, and `HUB_HOST_CONFIG_PATH`.
-The default driver is `node` in production and `tsx` otherwise.
+The Hub template uses `node` in production and `auto` otherwise. `auto` follows the loaded App Host package: workspace TypeScript exports use `tsx`, while published JavaScript exports use `node`. Development mode therefore works with an installed package that ships only `dist`, without requiring its TypeScript sources. Set `driver` to `node` or `tsx` to explicitly choose a launcher.
 
 This does not change standalone Host configuration: a directly launched Host
 still reads its own top-level `host` configuration and `APP_HOST_*` environment

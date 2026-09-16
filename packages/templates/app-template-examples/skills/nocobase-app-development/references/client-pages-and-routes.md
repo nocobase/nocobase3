@@ -86,7 +86,7 @@ defineSettingsRoutes([
 ]);
 ```
 
-`navigation` puts the page in the settings navigation. `access` is checked before the page loads; when it is denied the page disappears from navigation and a direct URL will not load the component.
+`navigation` puts the page in the settings navigation. The header shows the Settings entry only when at least one such page is accessible. `access` is checked before the page loads; when it is denied the page disappears from navigation and a direct URL will not load the component.
 
 A settings page without `access` is open to every signed-in user who can reach the settings area. Declare `access` explicitly on anything sensitive, and enforce the same rule on the server.
 

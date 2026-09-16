@@ -4,6 +4,8 @@ A full-stack NocoBase 3 application. The server runs on `@nocobase/app-server` a
 
 You own everything in this directory. Add pages, API routes, database tables, and business logic directly here — this is your application's source code, not a framework you extend from the outside.
 
+The primary console owns applications, Hub roles, and Users. The shared Settings entry exposes API Keys and other registered settings pages without redirecting them into the application list.
+
 ## Getting started
 
 Start the development server:
@@ -65,6 +67,8 @@ To run against a production build instead:
 pnpm build
 pnpm start
 ```
+
+The managed App Host uses `auto` in development: workspace source packages run through `tsx`, and installed packages run their compiled JavaScript through Node. Production explicitly uses `node`. Override `hub.host.driver` only when you need a specific launcher; published packages do not contain the source entrypoint required by `tsx`.
 
 ## Project structure
 
@@ -301,16 +305,6 @@ Configuration is resolved from the file, environment variables, and defaults in 
 ## Testing
 
 Tests live in `tests/`, never beside the source they cover. Put logic and integration tests under `tests/logic/` and component tests under `tests/components/`. Tests needing a real server, real authentication, or a real database belong in `e2e/`.
-
-### Notification testing
-
-After signing in with the `notification:test` `send` permission, use the
-notification logs settings page to send a real message through the durable
-Notification Manager. The form is generated from safe Channel test metadata;
-Email tests require an address and IM tests use the configured logical target.
-The button remains visible so configuration problems are discoverable. The
-server enforces the `notification:test` `send` permission only when the message
-is submitted.
 
 ## Working with an AI agent
 

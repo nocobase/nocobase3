@@ -11,7 +11,14 @@ import { EMPTY_ARRAY } from '@/lib/constants';
 
 import { AppShell } from '../shell/index.js';
 import { renderRouteTree } from './route-tree.js';
+import { SettingsRouteTreeContext } from './settings-route-context.js';
 import { StandalonePageLayout } from './standalone-page-layout.js';
+
+// The settings centre brings its own chrome and navigation, none of which the application needs until someone opens
+// it. Loading it lazily keeps it out of the entry chunk, the same way every page it hosts stays out.
+const SettingsLayout = lazy(async () => ({
+  default: (await import('../layouts/settings-layout.js')).SettingsLayout,
+}));
 
 // The dev tools exist only while developing the application. Resolving the import inside an `import.meta.env.DEV`
 // branch lets a production build prove the module is unreachable and drop it, along with every dev page and any
@@ -29,9 +36,19 @@ export interface AppRouterProps {
 }
 
 export function AppRouter({
+  settingsRouteTree,
   devRouteTree,
   clientRoutes,
 }: AppRouterProps): ReactElement {
+  const settingsRoutes = useMemo(
+    () =>
+      filterRouteTree(
+        clientRoutes,
+        (route) =>
+          route.auth === 'required' && route.path.startsWith('/settings/'),
+      ),
+    [clientRoutes],
+  );
   const devRoutes = useMemo(
     () =>
       filterRouteTree(
@@ -56,54 +73,68 @@ export function AppRouter({
   );
 
   return (
-    <Routes>
-      <Route
-        element={
-          <RequiredAuthentication>
-            <Outlet />
-          </RequiredAuthentication>
-        }
-      >
-        <Route element={<AppShell routes={routeGroups.required} />}>
-          {renderRouteTree(routeGroups.required)}
-        </Route>
-        {/* Hub is a control-plane App. Its administration pages live in the
-            primary console, so the ordinary App settings centre is disabled. */}
-        <Route path='/settings/*' element={<Navigate to='/apps' replace />} />
-        {import.meta.env.DEV && DevLayout ? (
+    <SettingsRouteTreeContext.Provider value={settingsRouteTree}>
+      <Routes>
+        <Route
+          element={
+            <RequiredAuthentication>
+              <Outlet />
+            </RequiredAuthentication>
+          }
+        >
+          <Route element={<AppShell routes={routeGroups.required} />}>
+            {renderRouteTree(routeGroups.required)}
+          </Route>
           <Route
-            path='/dev/*'
+            path='/settings/*'
             element={
               <Suspense
                 fallback={
-                  <Loading className='min-h-svh' label='Loading dev tools' />
+                  <Loading className='min-h-svh' label='Loading settings' />
                 }
               >
-                <DevLayout routeTree={devRouteTree} routes={devRoutes} />
+                <SettingsLayout
+                  routeTree={settingsRouteTree}
+                  routes={settingsRoutes}
+                />
               </Suspense>
             }
           />
-        ) : null}
-      </Route>
-
-      <Route
-        element={
-          <GuestAuthentication>
-            <Outlet />
-          </GuestAuthentication>
-        }
-      >
-        <Route element={<StandalonePageLayout />}>
-          {renderRouteTree(routeGroups.guest)}
+          {import.meta.env.DEV && DevLayout ? (
+            <Route
+              path='/dev/*'
+              element={
+                <Suspense
+                  fallback={
+                    <Loading className='min-h-svh' label='Loading dev tools' />
+                  }
+                >
+                  <DevLayout routeTree={devRouteTree} routes={devRoutes} />
+                </Suspense>
+              }
+            />
+          ) : null}
         </Route>
-      </Route>
 
-      <Route element={<StandalonePageLayout />}>
-        {renderRouteTree(routeGroups.optional)}
-      </Route>
+        <Route
+          element={
+            <GuestAuthentication>
+              <Outlet />
+            </GuestAuthentication>
+          }
+        >
+          <Route element={<StandalonePageLayout />}>
+            {renderRouteTree(routeGroups.guest)}
+          </Route>
+        </Route>
 
-      <Route path='*' element={<Navigate to='/' replace />} />
-    </Routes>
+        <Route element={<StandalonePageLayout />}>
+          {renderRouteTree(routeGroups.optional)}
+        </Route>
+
+        <Route path='*' element={<Navigate to='/' replace />} />
+      </Routes>
+    </SettingsRouteTreeContext.Provider>
   );
 }
 

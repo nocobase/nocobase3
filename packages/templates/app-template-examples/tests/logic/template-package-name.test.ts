@@ -15,7 +15,7 @@ const templateName = JSON.parse(
 ).name as string;
 
 /**
- * Sources `create-app` rewrites the template's package name in, mirroring `PACKAGE_NAME_SOURCES` in
+ * Sources present in this template that `create-app` rewrites, from `PACKAGE_NAME_SOURCES` in
  * `packages/tools/create-app/src/lib/scaffold.ts`.
  */
 const REWRITTEN_SOURCES = [
