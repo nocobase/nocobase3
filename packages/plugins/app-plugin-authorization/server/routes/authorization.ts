@@ -137,6 +137,91 @@ export function createAuthorizationRoutes(
     });
   }
 
+  routes.post('/inspect/configured', async (context) => {
+    await admin(context, 'permission-sets', 'read');
+    const input = await body(context);
+    const subject = reference(
+      input && typeof input === 'object'
+        ? Reflect.get(input, 'subject')
+        : undefined,
+    );
+    if (!subject) return context.json({ code: 'INVALID_SUBJECT' }, 400);
+    const sets = await authorization.permissionSets.getEffective({
+      principal: subject,
+      subjects:
+        subject.type === 'user' ? [{ type: 'authenticated', id: '*' }] : [],
+    });
+    return context.json({
+      data: {
+        unrestricted: sets.some(
+          (set) =>
+            authorization.permissionSets.protection(set.key)?.unrestricted ===
+            true,
+        ),
+        types: [
+          ...new Set(
+            sets.flatMap((set) =>
+              set.grants
+                .filter((grant) => grant.actions.length > 0)
+                .map((grant) => grant.resource.type),
+            ),
+          ),
+        ],
+      },
+    });
+  });
+
+  routes.post('/inspect/batch', async (context) => {
+    await admin(context, 'permission-sets', 'read');
+    const input = await body(context);
+    const subject = reference(
+      input && typeof input === 'object'
+        ? Reflect.get(input, 'subject')
+        : undefined,
+    );
+    const checks: unknown =
+      input && typeof input === 'object'
+        ? Reflect.get(input, 'checks')
+        : undefined;
+    if (
+      !subject ||
+      !Array.isArray(checks) ||
+      checks.length === 0 ||
+      checks.length > 100
+    ) {
+      return context.json({ code: 'INVALID_INSPECTION_BATCH' }, 400);
+    }
+    const requests = checks.map((check: unknown) =>
+      check && typeof check === 'object'
+        ? readInspectRequest({ ...check, subject })
+        : undefined,
+    );
+    if (requests.some((request) => !request))
+      return context.json({ code: 'INVALID_INSPECTION_BATCH' }, 400);
+    const scope = authorization.for({
+      principal: subject,
+      subjects:
+        subject.type === 'user' ? [{ type: 'authenticated', id: '*' }] : [],
+    });
+    const results = [];
+    // Bound concurrent rule queries and share one request-scoped grant cache.
+    for (let offset = 0; offset < requests.length; offset += 4) {
+      results.push(
+        ...(await Promise.all(
+          requests.slice(offset, offset + 4).map(async (request) => {
+            const { resource, action } = request!;
+            return {
+              resource,
+              action,
+              decision: await scope.explain({ resource, action }),
+            };
+          }),
+        )),
+      );
+    }
+    return context.json({ data: results });
+  });
+
   // Why one person reaches one resource, built only on the core's explanation
   // so it knows nothing about which plugins an application installed. It
   // reveals another person's access, so it is gated like the Permission Sets it
@@ -157,7 +242,10 @@ export function createAuthorizationRoutes(
     const decision = await authorization
       .for({
         principal: input.subject,
-        subjects: [{ type: 'authenticated', id: '*' }],
+        subjects:
+          input.subject.type === 'user'
+            ? [{ type: 'authenticated', id: '*' }]
+            : [],
       })
       .explain({ resource: input.resource, action: input.action });
     // Passed through as the core gave it: reasons name the plugin they came

@@ -1,49 +1,49 @@
-import { SelectField } from '../components/select-field.js';
-import { useMemo, useState, type ReactElement } from 'react';
-
+import { SubjectPicker } from '../components/subject-picker.js';
+import { useResourceOptions } from '../components/use-resource-options.js';
+import { useEffect, useMemo, useState, type ReactElement } from 'react';
+import { useSearchParams } from 'react-router';
+import {
+  ChevronDown,
+  ChevronRight,
+  CircleAlert,
+  CircleHelp,
+  RefreshCw,
+  Shield,
+} from 'lucide-react';
 import type {
-  AuthorizationDecision,
+  AuthorizationInspection,
   AuthorizationOptions,
-  AuthorizationReason,
+  AuthorizationSubject,
 } from '../authorization-client.js';
-import { Field } from '../components/editors.js';
-import { errorMessage } from '../components/feedback.js';
-import { SearchField } from '../components/filters.js';
-import { PermissionsPage } from '../components/page-shell.js';
-import { Badge } from '../components/ui/badge.js';
-import { Button } from '../components/ui/button.js';
-import { useAuthorizationTranslation, type Translate } from '../i18n.js';
 import { getAuthorizationClient } from '../runtime.js';
-import type { UserDirectory } from '../components/user-directory.js';
+import { useAuthorizationTranslation } from '../i18n.js';
+import { PermissionsPage } from '../components/page-shell.js';
+import { SearchField } from '../components/filters.js';
+import { Button } from '../components/ui/button.js';
+import { ErrorBox, errorMessage } from '../components/feedback.js';
+import { RuleDrawer } from '../components/rule-drawer.js';
 import {
   AuthorizationPageState,
   useAuthorizationPageData,
-  useUserDirectory,
 } from './page-support.js';
+import { ScopeMark } from './permission-sets/marks.js';
+import { resourceRows } from './permission-sets/resource-groups.js';
+import { inspectionStatus } from './inspector-status.js';
+import { Decision } from './inspector-decision.js';
 
 const authz = getAuthorizationClient();
-
-const selectClass =
-  'h-8 w-full rounded-lg border border-input bg-background px-3 text-sm';
-
-/**
- * What one person may do on one resource, and why.
- *
- * Built on the core's explanation alone, so it knows nothing about which
- * plugins an application installed: a reason names the plugin it came from and
- * is rendered as it arrives, and conditions are shown rather than interpreted.
- */
+const pageSize = 20;
 export default function InspectorPage(): ReactElement {
   const t = useAuthorizationTranslation();
   const page = useAuthorizationPageData('authz/permission-sets/options');
-  const directory = useUserDirectory();
+  const options = useResourceOptions(page.options);
   return (
     <PermissionsPage
       title={t('inspector.page.title')}
       description={t('inspector.page.description')}
     >
-      {page.options ? (
-        <Inspector directory={directory} options={page.options} />
+      {options ? (
+        <Inspector options={options} />
       ) : (
         <AuthorizationPageState {...page} />
       )}
@@ -52,258 +52,412 @@ export default function InspectorPage(): ReactElement {
 }
 
 function Inspector({
-  directory,
   options,
 }: {
-  directory: UserDirectory;
   options: AuthorizationOptions;
 }): ReactElement {
   const t = useAuthorizationTranslation();
-  const [search, setSearch] = useState('');
-  const [user, setUser] = useState('');
-  const [type, setType] = useState(options.resourceTypes[0]?.value ?? '');
-  const [id, setId] = useState(
-    options.resourceTypes[0]?.resources[0]?.value ?? '',
+  const [params, setParams] = useSearchParams();
+  const subjectType =
+    params.get('subjectType') ?? (params.has('user') ? 'user' : undefined);
+  const subjectId = params.get('subjectId') ?? params.get('user') ?? '';
+  const subject = useMemo<AuthorizationSubject | undefined>(
+    () =>
+      subjectType && subjectId
+        ? { type: subjectType, id: subjectId }
+        : undefined,
+    [subjectType, subjectId],
   );
-  const [action, setAction] = useState('');
-  const [decision, setDecision] = useState<AuthorizationDecision>();
+  const type =
+    options.resourceTypes.find((item) => item.value === params.get('type')) ??
+    options.resourceTypes.find((item) => item.resources.length > 0) ??
+    options.resourceTypes[0];
+  const search = params.get('search') ?? '';
+  const requestedPage = Number(params.get('page'));
+  const requestedPageNumber =
+    Number.isSafeInteger(requestedPage) && requestedPage > 0
+      ? requestedPage
+      : 1;
+  const [results, setResults] = useState<readonly AuthorizationInspection[]>();
   const [error, setError] = useState<string>();
-  const [running, setRunning] = useState(false);
-
-  const resourceType = options.resourceTypes.find(
-    (item) => item.value === type,
+  const [revision, setRevision] = useState(0);
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const [configured, setConfigured] = useState<{
+    key: string;
+    unrestricted: boolean;
+    types: readonly string[];
+  }>();
+  const configurationKey = JSON.stringify([subject, revision]);
+  useEffect(() => {
+    if (!subject) return;
+    let active = true;
+    void authz.inspectConfigured(subject).then(
+      (result) => {
+        if (active) setConfigured({ ...result, key: configurationKey });
+      },
+      (cause: unknown) => {
+        if (active) setError(errorMessage(t, cause));
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [subject, configurationKey, t]);
+  const [detail, setDetail] = useState<AuthorizationInspection>();
+  const [detailKey, setDetailKey] = useState('');
+  const filtered = useMemo(
+    () =>
+      (type?.resources ?? []).filter((item) =>
+        `${item.label} ${item.value}`
+          .toLowerCase()
+          .includes(search.toLowerCase()),
+      ),
+    [type, search],
+  );
+  const page = Math.min(
+    requestedPageNumber,
+    Math.max(1, Math.ceil(filtered.length / pageSize)),
+  );
+  const visible = useMemo(
+    () => filtered.slice((page - 1) * pageSize, page * pageSize),
+    [filtered, page],
   );
   const actions = useMemo(
+    () => [
+      ...new Map(
+        [
+          ...(type?.actions ?? []),
+          ...visible.flatMap((item) => item.actions ?? []),
+        ].map((item) => [item.value, item]),
+      ).values(),
+    ],
+    [type, visible],
+  );
+  const checks = useMemo(
     () =>
-      resourceType?.resources.find((item) => item.value === id)?.actions ??
-      resourceType?.actions ??
-      [],
-    [resourceType, id],
-  );
-  const query = search.trim().toLowerCase();
-  const people = directory.users.filter(
-    (person) =>
-      !query ||
-      [person.name, person.username ?? '', person.email].some((value) =>
-        value.toLowerCase().includes(query),
+      visible.flatMap((item) =>
+        (item.actions ?? type?.actions ?? []).map((action) => ({
+          resource: { type: type.value, id: item.value },
+          action: action.value,
+        })),
       ),
+    [visible, type],
   );
-  const complete = user !== '' && type !== '' && id !== '' && action !== '';
-
-  function inspect(): void {
-    setRunning(true);
-    setError(undefined);
-    void authz
-      .inspect({
-        subject: { type: 'user', id: user },
-        resource: { type, id },
-        action,
-      })
-      .then(
-        (result) => {
-          setDecision(result);
-        },
-        (cause: unknown) => {
-          setDecision(undefined);
-          setError(errorMessage(t, cause));
-        },
-      )
-      .finally(() => setRunning(false));
-  }
-
-  // Changing the question clears the answer, so no decision is ever read as
-  // the answer to something it was not asked.
-  function change(apply: () => void): void {
-    apply();
-    setDecision(undefined);
+  const queryKey = JSON.stringify([subject, checks, revision]);
+  const [loadedKey, setLoadedKey] = useState('');
+  function change(key: string, value: string) {
+    setParams((previous) => {
+      const next = new URLSearchParams(previous);
+      if (value) next.set(key, value);
+      else next.delete(key);
+      if (key !== 'page') next.delete('page');
+      if (key === 'type') next.delete('search');
+      return next;
+    });
+    setDetail(undefined);
     setError(undefined);
   }
-
+  useEffect(() => {
+    let active = true;
+    if (!subject) return;
+    void (async () => {
+      const next: AuthorizationInspection[] = [];
+      for (let offset = 0; offset < checks.length; offset += 100) {
+        if (!active) return;
+        next.push(
+          ...(await authz.inspectBatch(
+            subject,
+            checks.slice(offset, offset + 100),
+          )),
+        );
+      }
+      if (active) {
+        setError(undefined);
+        setResults(next);
+        setLoadedKey(queryKey);
+      }
+    })().catch((cause: unknown) => {
+      if (active) setError(errorMessage(t, cause));
+    });
+    return () => {
+      active = false;
+    };
+  }, [subject, checks, queryKey, t]);
+  const loading = !!subject && loadedKey !== queryKey && !error;
+  const selectedResource =
+    detail && type?.resources.find((item) => item.value === detail.resource.id);
   return (
-    <div className='space-y-6'>
-      <div className='grid gap-4 sm:grid-cols-2'>
-        <Field label={t('inspector.person')} hint={directory.unavailable}>
-          <div className='space-y-2'>
+    <div className='space-y-4'>
+      <div className='flex flex-wrap items-center gap-3 rounded-lg border bg-card p-3'>
+        <SubjectPicker
+          types={options.subjectTypes}
+          selectedType={subjectType}
+          value={subject}
+          onChange={(next, type) => {
+            setParams((previous) => {
+              const updated = new URLSearchParams(previous);
+              updated.delete('user');
+              updated.delete('page');
+              updated.set('subjectType', type);
+              if (next) updated.set('subjectId', next.id);
+              else updated.delete('subjectId');
+              return updated;
+            });
+            setDetail(undefined);
+            setError(undefined);
+          }}
+        />
+        <Button
+          variant='outline'
+          className='ml-auto'
+          disabled={!subject || loading}
+          onClick={() => {
+            setError(undefined);
+            setRevision((value) => value + 1);
+          }}
+        >
+          <RefreshCw className='size-4' />
+          {t('inspector.refresh')}
+        </Button>
+      </div>
+      {!subject ? (
+        <p className='p-8 text-center text-muted-foreground'>
+          {t('inspector.empty')}
+        </p>
+      ) : (
+        <div className='flex min-h-[60vh] gap-3'>
+          <nav
+            aria-label={t('editors.resourceType')}
+            className='w-40 shrink-0 space-y-1 rounded-lg border bg-card p-2'
+          >
+            <h2 className='px-3 py-2 text-xs font-medium text-muted-foreground'>
+              {t('editors.resourceType')}
+            </h2>
+            {options.resourceTypes.map((item) => (
+              <Button
+                key={item.value}
+                className='w-full justify-start'
+                variant={item === type ? 'outline' : 'ghost'}
+                aria-label={item.label}
+                aria-current={item === type ? 'page' : undefined}
+                onClick={() => {
+                  change('type', item.value);
+                  setCollapsed(new Set());
+                }}
+              >
+                <span className='flex-1 text-left'>{item.label}</span>
+                {configured?.key === configurationKey &&
+                (configured.unrestricted ||
+                  configured.types.includes(item.value)) ? (
+                  <span
+                    role='img'
+                    title={t('permissionWorkspace.configured')}
+                    aria-label={t('permissionWorkspace.configured')}
+                    className='shrink-0 text-muted-foreground'
+                  >
+                    <Shield className='size-3.5' aria-hidden='true' />
+                  </span>
+                ) : null}
+              </Button>
+            ))}
+          </nav>
+          <div className='min-w-0 flex-1 space-y-3'>
             <SearchField
-              className='sm:max-w-none'
-              label={t('inspector.searchPeople')}
-              placeholder={t('inspector.searchPeoplePlaceholder')}
+              label={t('permissionSets.picker.searchResources')}
+              placeholder={t('permissionSets.picker.searchResources')}
               value={search}
-              onChange={(value) => change(() => setSearch(value))}
+              onChange={(value) => change('search', value)}
             />
-            <SelectField
-              aria-label={t('inspector.person')}
-              className={selectClass}
-              value={user}
-              onValueChange={(selectedValue) =>
-                change(() => setUser(selectedValue))
+            {error ? <ErrorBox value={error} /> : null}
+            <div
+              aria-busy={loading}
+              className='max-h-[60vh] overflow-auto rounded-lg border bg-card'
+            >
+              <table className='w-full table-fixed text-sm'>
+                <thead className='sticky top-0 z-10 bg-background'>
+                  <tr>
+                    <th className='p-3 text-left'>{t('common.resource')}</th>
+                    {actions.map((action) => (
+                      <th key={action.value} className='w-24 p-3 text-center'>
+                        {action.label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {resourceRows(type?.groups ?? [], visible, collapsed).map(
+                    (row) =>
+                      row.kind === 'group' ? (
+                        <tr
+                          key={`group:${row.group.value}`}
+                          className='border-t bg-muted/30'
+                        >
+                          <td colSpan={actions.length + 1}>
+                            <button
+                              className='flex w-full items-center gap-2 py-2 text-left font-medium'
+                              style={{ paddingLeft: 12 + row.depth * 16 }}
+                              onClick={() =>
+                                setCollapsed((previous) => {
+                                  const next = new Set(previous);
+                                  if (next.has(row.group.value))
+                                    next.delete(row.group.value);
+                                  else next.add(row.group.value);
+                                  return next;
+                                })
+                              }
+                              aria-expanded={!collapsed.has(row.group.value)}
+                            >
+                              {collapsed.has(row.group.value) ? (
+                                <ChevronRight className='size-4' />
+                              ) : (
+                                <ChevronDown className='size-4' />
+                              )}
+                              {row.group.label}
+                            </button>
+                          </td>
+                        </tr>
+                      ) : (
+                        <tr key={row.item.value} className='border-t'>
+                          <td
+                            className='py-3 pr-3'
+                            style={{ paddingLeft: 12 + row.depth * 16 }}
+                          >
+                            {row.item.label}
+                          </td>
+                          {actions.map((action) => {
+                            const result =
+                              loadedKey === queryKey
+                                ? results?.find(
+                                    (item) =>
+                                      item.resource.id === row.item.value &&
+                                      item.action === action.value,
+                                  )
+                                : undefined;
+                            const supported = (
+                              row.item.actions ??
+                              type?.actions ??
+                              []
+                            ).some((item) => item.value === action.value);
+                            const status =
+                              result &&
+                              inspectionStatus(
+                                result.decision,
+                                options.collections.find(
+                                  (item) => item.name === row.item.value,
+                                )?.fields,
+                              );
+                            return (
+                              <td key={action.value} className='text-center'>
+                                {!supported ? (
+                                  '—'
+                                ) : !result ? (
+                                  <span className='text-muted-foreground'>
+                                    {loading ? '…' : '—'}
+                                  </span>
+                                ) : (
+                                  <Button
+                                    variant='ghost'
+                                    size='icon'
+                                    aria-label={`${row.item.label}: ${action.label}`}
+                                    onClick={() => {
+                                      setDetailKey(queryKey);
+                                      setDetail(result);
+                                    }}
+                                  >
+                                    {status === 'context' ? (
+                                      <CircleHelp
+                                        className='size-4 text-muted-foreground'
+                                        aria-label={t(
+                                          'inspector.status.context',
+                                        )}
+                                      />
+                                    ) : status === 'error' ? (
+                                      <CircleAlert
+                                        className='size-4 text-destructive'
+                                        aria-label={t('inspector.failed')}
+                                      />
+                                    ) : (
+                                      <ScopeMark
+                                        value={status!}
+                                        label={t(`inspector.status.${status}`)}
+                                      />
+                                    )}
+                                  </Button>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ),
+                  )}
+                </tbody>
+              </table>
+              {!visible.length ? (
+                <p className='p-8 text-center text-muted-foreground'>
+                  {t(
+                    type?.resources.length
+                      ? 'inspector.noResources'
+                      : 'inspector.noRegisteredResources',
+                  )}
+                </p>
+              ) : null}
+            </div>
+            <div className='flex items-center justify-between gap-3'>
+              <div className='flex flex-wrap gap-3 text-xs text-muted-foreground'>
+                {(['all', 'scoped', 'none'] as const).map((status) => (
+                  <span key={status} className='flex items-center gap-1'>
+                    <ScopeMark
+                      legend
+                      value={status}
+                      label={t(`inspector.status.${status}`)}
+                    />
+                    {t(`inspector.status.${status}`)}
+                  </span>
+                ))}
+              </div>
+              <div className='flex items-center gap-2 text-sm'>
+                <span>
+                  {page} / {Math.max(1, Math.ceil(filtered.length / pageSize))}
+                </span>
+                <Button
+                  variant='outline'
+                  disabled={page <= 1}
+                  onClick={() => change('page', String(page - 1))}
+                >
+                  {t('subjects.previous')}
+                </Button>
+                <Button
+                  variant='outline'
+                  disabled={page * pageSize >= filtered.length}
+                  onClick={() => change('page', String(page + 1))}
+                >
+                  {t('subjects.next')}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {detail && detailKey === queryKey && loadedKey === queryKey ? (
+        <RuleDrawer
+          title={`${selectedResource?.label ?? detail.resource.id} · ${actions.find((item) => item.value === detail.action)?.label ?? detail.action}`}
+          description={`${options.subjectTypes.find((item) => item.value === subject?.type)?.label ?? subject?.type} · ${subject?.id}`}
+          onClose={() => setDetail(undefined)}
+        >
+          <div className='overflow-y-auto p-6'>
+            <Decision
+              value={detail.decision}
+              fields={
+                options.collections.find(
+                  (item) => item.name === detail.resource.id,
+                )?.fields ?? []
               }
-              options={[
-                { value: '', label: t('inspector.selectPerson') },
-                ...people.map((person) => ({
-                  value: person.id,
-                  label: (
-                    <>
-                      {person.name} · {person.username ?? person.email}
-                    </>
-                  ),
-                })),
-              ]}
             />
           </div>
-        </Field>
-        <Field label={t('editors.resourceType')}>
-          <SelectField
-            aria-label={t('editors.resourceType')}
-            className={selectClass}
-            value={type}
-            onValueChange={(selectedValue) =>
-              change(() => {
-                const next = options.resourceTypes.find(
-                  (item) => item.value === selectedValue,
-                );
-                setType(selectedValue);
-                setId(next?.resources[0]?.value ?? '');
-                setAction('');
-              })
-            }
-            options={options.resourceTypes.map((item) => ({
-              value: item.value,
-              label: item.label,
-            }))}
-          />
-        </Field>
-        <Field label={t('editors.resource')}>
-          <SelectField
-            aria-label={t('editors.resource')}
-            className={selectClass}
-            value={id}
-            onValueChange={(selectedValue) =>
-              change(() => {
-                setId(selectedValue);
-                setAction('');
-              })
-            }
-            options={[
-              { value: '', label: t('editors.resource') },
-              ...(resourceType?.resources ?? []).map((item) => ({
-                value: item.value,
-                label: item.label,
-              })),
-            ]}
-          />
-        </Field>
-        <Field label={t('inspector.action')}>
-          <SelectField
-            aria-label={t('inspector.action')}
-            className={selectClass}
-            value={action}
-            onValueChange={(selectedValue) =>
-              change(() => setAction(selectedValue))
-            }
-            options={[
-              { value: '', label: t('inspector.selectAction') },
-              ...actions.map((item) => ({
-                value: item.value,
-                label: item.label,
-              })),
-            ]}
-          />
-        </Field>
-      </div>
-      <Button disabled={!complete || running} onClick={inspect}>
-        {running ? t('inspector.inspecting') : t('inspector.inspect')}
-      </Button>
-      {error ? (
-        <p className='text-sm text-destructive' role='alert'>
-          {error}
-        </p>
-      ) : null}
-      {decision ? (
-        <Decision value={decision} />
-      ) : error ? null : (
-        <p className='text-sm text-muted-foreground'>{t('inspector.empty')}</p>
-      )}
-    </div>
-  );
-}
-
-const effectStyles: Readonly<Record<string, string>> = {
-  permit: 'bg-primary/10 text-primary',
-  conditional: 'bg-muted text-foreground',
-  deny: 'bg-destructive/10 text-destructive',
-};
-
-function Decision({ value }: { value: AuthorizationDecision }): ReactElement {
-  const t = useAuthorizationTranslation();
-  return (
-    <div className='space-y-5'>
-      <section className='space-y-2'>
-        <h3 className='text-xs font-medium text-muted-foreground uppercase'>
-          {t('inspector.decision')}
-        </h3>
-        <Badge className={effectStyles[value.effect] ?? 'bg-muted'}>
-          {effectLabel(t, value.effect)}
-        </Badge>
-      </section>
-      <section className='space-y-2'>
-        <h3 className='text-xs font-medium text-muted-foreground uppercase'>
-          {t('inspector.reasons')}
-        </h3>
-        {value.reasons.length === 0 ? (
-          <p className='text-sm text-muted-foreground'>
-            {t('inspector.noReasons')}
-          </p>
-        ) : (
-          <ul className='space-y-2'>
-            {value.reasons.map((reason, index) => (
-              <li
-                className='rounded-lg border px-4 py-3'
-                // The core returns an ordered list carrying no identity of its
-                // own, and the list is replaced whole rather than reordered.
-                // eslint-disable-next-line @eslint-react/no-array-index-key
-                key={`${reason.code}-${index}`}
-              >
-                <Reason value={reason} />
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-      {value.conditions ? (
-        <section className='space-y-2'>
-          <h3 className='text-xs font-medium text-muted-foreground uppercase'>
-            {t('inspector.conditions')}
-          </h3>
-          <p className='text-sm text-muted-foreground'>
-            {t('inspector.conditionsHint')}
-          </p>
-          <pre className='overflow-x-auto rounded-lg border bg-muted/20 px-4 py-3 font-mono text-xs'>
-            {JSON.stringify(value.conditions, null, 2)}
-          </pre>
-        </section>
+        </RuleDrawer>
       ) : null}
     </div>
   );
-}
-
-/** One reason as it arrived: its message, where it came from, and its code. */
-function Reason({ value }: { value: AuthorizationReason }): ReactElement {
-  const t = useAuthorizationTranslation();
-  return (
-    <>
-      <p className='text-sm'>{value.message}</p>
-      <p className='mt-1 text-xs text-muted-foreground'>
-        {value.plugin === undefined
-          ? t('inspector.reasonFromCore')
-          : t('inspector.reasonFrom', { plugin: value.plugin })}
-        {' · '}
-        <span className='font-mono'>{value.code}</span>
-      </p>
-    </>
-  );
-}
-
-function effectLabel(t: Translate, effect: string): string {
-  return t(`inspector.effects.${effect}`, { defaultValue: effect });
 }

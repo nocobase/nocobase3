@@ -47,6 +47,17 @@ export interface RecordOwnerParams {
   field?: string;
 }
 
+export class UserContextRequiredError extends Error {
+  constructor() {
+    super('This record scope requires a user principal.');
+  }
+}
+
+function userId(principal: Principal): string {
+  if (principal.type !== 'user') throw new UserContextRequiredError();
+  return principal.id;
+}
+
 export function recordsIOwn(): RecordAccessPolicy<
   RecordOwnerParams | undefined
 > {
@@ -57,7 +68,7 @@ export function recordsIOwn(): RecordAccessPolicy<
       condition(
         ownerField(collection, params?.field ?? 'ownerId'),
         '$eq',
-        principal.id,
+        userId(principal),
       ),
   });
 }
@@ -72,7 +83,7 @@ export function recordsICreated(): RecordAccessPolicy<
       condition(
         ownerField(collection, params?.field ?? 'createdById'),
         '$eq',
-        principal.id,
+        userId(principal),
       ),
   });
 }

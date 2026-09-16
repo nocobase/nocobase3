@@ -1,3 +1,4 @@
+import { UserContextRequiredError } from './record-access.js';
 import type {
   AccessConstraint,
   AccessConstraintService,
@@ -137,8 +138,18 @@ export class DatabaseResourceAuthorizer {
       code: 'GRANT_MATCHED',
       message: `${grant.source.plugin}:${grant.source.id} allows ${resourceId}.${request.action}`,
       plugin: 'database',
+      details: { source: grant.source },
     }));
     try {
+      const constraints =
+        request.action === 'create'
+          ? []
+          : await constraintsService.resolve({
+              principal: request.principal,
+              subjects: request.subjects,
+              resource: { type: 'database.collection', id: resourceId },
+              action: request.action,
+            });
       const scope =
         request.action === 'create'
           ? true
@@ -147,18 +158,26 @@ export class DatabaseResourceAuthorizer {
               resource,
               request.action,
               configs,
-              await constraintsService.resolve({
-                principal: request.principal,
-                subjects: request.subjects,
-                resource: { type: 'database.collection', id: resourceId },
-                action: request.action,
-              }),
+              constraints,
             );
+      const explanation = [
+        ...reasons,
+        ...constraints.map((constraint) => ({
+          code:
+            constraint.effect === 'expand'
+              ? 'SCOPE_EXPANDED'
+              : 'SCOPE_RESTRICTED',
+          message: `${constraint.source.plugin}:${constraint.source.id}`,
+          plugin: 'database',
+          details: { source: constraint.source, scope: constraint.value },
+        })),
+      ];
       if (scope === false) {
-        return this.deny(
+        const denied = this.deny(
           'NO_RECORD_ACCESS',
           'No Record Access allows this action',
         );
+        return { ...denied, reasons: [...denied.reasons, ...explanation] };
       }
       const conditions: DatabaseAuthorizationConditions = {
         type: 'database',
@@ -166,13 +185,29 @@ export class DatabaseResourceAuthorizer {
         action: request.action,
         scope: scope === true ? true : scopeAst(resourceId, scope),
         fields: resolveActionFields(request.action, fields, resource),
+        fieldAccess: fields,
+        allFields:
+          request.action === 'delete' ||
+          ((request.action === 'read' ||
+            fields.input === '*' ||
+            resolveActionFields(
+              request.action,
+              { input: '*', output: '*' },
+              resource,
+            ).every((field) => fields.input.includes(field))) &&
+            (fields.output === '*' ||
+              resource.fields.every((field) => fields.output.includes(field)))),
       };
       return {
         effect: 'conditional',
         conditions,
-        reasons,
+        reasons: explanation,
       };
     } catch (error) {
+      if (error instanceof UserContextRequiredError) {
+        const decision = this.deny('USER_CONTEXT_REQUIRED', error.message);
+        return { ...decision, reasons: [...decision.reasons, ...reasons] };
+      }
       return this.deny(
         'DATABASE_AUTHORIZATION_FAILED',
         error instanceof Error
@@ -210,6 +245,8 @@ export class DatabaseResourceAuthorizer {
       action: request.action,
       scope: true,
       fields: resource.fields,
+      fieldAccess: { input: '*', output: '*' },
+      allFields: true,
     };
     return {
       effect: 'conditional',

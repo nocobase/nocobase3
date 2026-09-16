@@ -90,10 +90,25 @@ class DefaultAccessService<TTransaction = unknown>
     return this.store.delete(resourceType, resourceId);
   }
 
+  scope(): AccessConstraintResolver {
+    let rules: Promise<readonly DefaultAccessRule[]> | undefined;
+    return {
+      id: this.id,
+      resolve: async (input) =>
+        this.resolveRules(input, await (rules ??= this.store.list())),
+    };
+  }
+
   async resolve(
     input: ResolveAccessConstraintsInput,
   ): Promise<readonly AccessConstraint[]> {
-    const rules = await this.store.list();
+    return this.resolveRules(input, await this.store.list());
+  }
+
+  private resolveRules(
+    input: ResolveAccessConstraintsInput,
+    rules: readonly DefaultAccessRule[],
+  ): readonly AccessConstraint[] {
     return rules
       .flatMap((rule) => {
         const configured = rule.actions.find(

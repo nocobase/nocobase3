@@ -158,6 +158,12 @@ export interface AuthorizationInspectInput {
   action: string;
 }
 
+export interface AuthorizationInspection {
+  resource: { type: string; id: string };
+  action: string;
+  decision: AuthorizationDecision;
+}
+
 interface PermissionsSnapshot {
   permissions: readonly {
     resource: { type: string; id: string };
@@ -260,6 +266,17 @@ export class AuthorizationClient {
   /** What one person may do on one resource, and why the application says so. */
   inspect(input: AuthorizationInspectInput): Promise<AuthorizationDecision> {
     return this.send<AuthorizationDecision>('authz/inspect', 'POST', input);
+  }
+  inspectConfigured(
+    subject: AuthorizationSubject,
+  ): Promise<{ unrestricted: boolean; types: readonly string[] }> {
+    return this.send('authz/inspect/configured', 'POST', { subject });
+  }
+  inspectBatch(
+    subject: AuthorizationSubject,
+    checks: readonly Omit<AuthorizationInspectInput, 'subject'>[],
+  ): Promise<readonly AuthorizationInspection[]> {
+    return this.send('authz/inspect/batch', 'POST', { subject, checks });
   }
   listDefaultAccess(): Promise<readonly DefaultAccessRule[]> {
     return this.get<readonly DefaultAccessRule[]>('authz/default-access');

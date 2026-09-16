@@ -16,7 +16,7 @@ Permission sets use a collapsible sidebar and routed tabs for permissions, user 
 
 Default access and sharing rules expand record scopes for users who already have the relevant action permission. Restriction rules limit those scopes. These rules do not grant action or field permissions.
 
-The permission inspector displays a user's decision, reasons and conditions through `POST /api/authz/inspect`. It requires `settings/authorization.permission-sets/read`. Management endpoints under `/api/authz` enforce their corresponding settings permissions.
+The permission inspector displays an authorization subject's decisions, reasons and conditions through `POST /api/authz/inspect` and `POST /api/authz/inspect/batch`. It requires `settings/authorization.permission-sets/read`. Management endpoints under `/api/authz` enforce their corresponding settings permissions.
 
 Client and server locale catalogues provide English and Chinese messages. Server options resolve resource titles and action labels for the request locale. Integration instructions and examples live in [the authorization Skill](skills/nocobase-app-plugin-authorization/SKILL.md).
 
@@ -85,3 +85,13 @@ The common picker supports multiple types, server-side search and pagination, an
 The shared client `FilterEditor` takes `fields`, a native DB `FilterNode` as `value`, and `onChange(FilterNode)`. Permission sets, default access, sharing rules, and restriction rules use it through `CustomFilterEditor`. Groups use `{ kind: 'group', logic: 'and' | 'or', items }`; conditions use `{ kind: 'condition', path, operator, value? }`. The UI does not serialize a separate `$and`/`$or` shorthand. The server attaches the collection and wraps the node in `FilterAst` when creating the repository policy.
 
 The authorization boundary currently permits direct fields and scalar conditions, not relation traversal or JSON conditions. The visual editor offers a subset of those operators, retains unsupported existing nodes without rewriting them, and preserves scalar value types. Empty groups must be completed or removed before saving. Field metadata currently contains names only, so operators are not yet filtered by the database field type. Unrecognized legacy filter payloads remain untouched until the user explicitly chooses to replace them.
+
+## Subject permission inspector
+
+The inspector selects an authorization subject through its registered fixed or collection selector and displays registered resources by type and group, with 20 resources per page. It batches up to 100 resource/action checks per request to `POST /authz/inspect/batch`, limits concurrent evaluations to four, and shares the scoped grant provider and built-in rule-list caches across the batch. Each new request reads fresh configuration; it does not scan business records or calculate accessible-record counts.
+
+All inspection endpoints require the Permission Sets settings read permission. For user subjects, the inspector includes the authenticated audience used by the application. Other subject types are inspected directly without adding that audience: a department or position result describes grants assigned to that subject, not the effective permissions of every member. Integrations that add user identity memberships must extend identity resolution before those memberships can be represented. Built-in owner/creator record scopes require a user principal; inspections of other subjects display a context-required result instead of comparing a department identifier against a user field.
+
+Results distinguish full, limited, denied, and failed checks. Database details display the effective record filter, writable and returned fields, and structured grant/constraint sources. Source identifiers are shown as reported by the authorization provider; they are not presented as translated permission-set titles. The first version returns each page’s explanations with the batch, so opening a result drawer does not re-evaluate or mix results from separate requests.
+
+The resource-type sidebar uses `POST /authz/inspect/configured` to summarize the subject’s effective permission-set configurations, including policy-bearing grants and unrestricted access. The shield denotes configured permissions, not a count of accessible resources, and is independent of resource pagination or search.

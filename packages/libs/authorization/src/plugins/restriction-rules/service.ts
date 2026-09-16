@@ -50,11 +50,26 @@ export class RestrictionRuleService<TTransaction = unknown>
     return this.store.list();
   }
 
+  scope(): AccessConstraintResolver {
+    let rules: Promise<readonly RestrictionRule[]> | undefined;
+    return {
+      id: this.id,
+      resolve: async (input) =>
+        this.resolveRules(input, await (rules ??= this.store.list())),
+    };
+  }
+
   async resolve(
     input: ResolveAccessConstraintsInput,
   ): Promise<readonly AccessConstraint[]> {
+    return this.resolveRules(input, await this.store.list());
+  }
+
+  private resolveRules(
+    input: ResolveAccessConstraintsInput,
+    rules: readonly RestrictionRule[],
+  ): readonly AccessConstraint[] {
     const subjects = resolveAuthorizationSubjects(input);
-    const rules = await this.store.list();
     return rules
       .flatMap((rule) => {
         const configured = rule.actions.find(

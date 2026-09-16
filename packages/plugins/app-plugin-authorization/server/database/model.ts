@@ -80,4 +80,7 @@ export interface DatabaseAuthorizationConditions extends AuthorizationConditions
   action: string;
   scope: true | FilterAst;
   fields: readonly string[];
+  /** Inspection metadata; repository enforcement uses scope and fields above. */
+  fieldAccess?: DatabasePermissionFields;
+  allFields?: boolean;
 }

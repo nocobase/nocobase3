@@ -274,7 +274,12 @@ describe('database resource authorization', () => {
     await expect(
       authorization.authorize({ ...request, params: {} }),
     ).resolves.toMatchObject({
-      conditions: { scope: true, fields: orderFields },
+      conditions: {
+        scope: true,
+        fields: orderFields,
+        allFields: true,
+        fieldAccess: { input: [], output: '*' },
+      },
     });
   });
 
@@ -575,7 +580,13 @@ describe('database resource authorization', () => {
       }),
     ).resolves.toMatchObject({
       effect: 'deny',
-      reasons: [{ code: 'NO_RECORD_ACCESS' }],
+      reasons: expect.arrayContaining([
+        {
+          code: 'NO_RECORD_ACCESS',
+          message: 'No Record Access allows this action',
+          plugin: 'database',
+        },
+      ]),
     });
   });
 
@@ -702,6 +713,8 @@ describe('database resource authorization', () => {
         action: 'read',
         scope: true,
         fields: orderFields,
+        fieldAccess: { input: '*', output: '*' },
+        allFields: true,
       },
       reasons: [
         {

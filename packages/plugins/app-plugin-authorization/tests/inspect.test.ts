@@ -60,6 +60,122 @@ const decisions: AuthorizationPlugin = {
 };
 
 describe('the permission inspector endpoint', () => {
+  it('checks a bounded batch and requires the same settings permission', async () => {
+    const payload = {
+      subject: { type: 'user', id: 'alice' },
+      checks: ['permitted', 'conditional', 'denied'].map((id) => ({
+        resource: { type: 'test.resource', id },
+        action: 'read',
+      })),
+    };
+    const send = (router: Hono, value: unknown) =>
+      router.request('/api/authz/inspect/batch', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(value),
+      });
+    const forbidden = await mountedRouter(
+      await authorization({ settings: false }),
+    );
+    expect((await send(forbidden, payload)).status).toBe(403);
+    const router = await mountedRouter(await authorization({ settings: true }));
+    const response = await send(router, payload);
+    expect(response.status).toBe(200);
+    const result = (await response.json()) as {
+      data: { decision: AuthorizationDecision }[];
+    };
+    expect(result.data.map((item) => item.decision.effect)).toEqual([
+      'permit',
+      'conditional',
+      'deny',
+    ]);
+    for (const invalid of [
+      null,
+      {},
+      { ...payload, checks: [] },
+      {
+        ...payload,
+        checks: Array.from({ length: 101 }, () => payload.checks[0]),
+      },
+      { ...payload, checks: [null] },
+    ]) {
+      expect((await send(router, invalid)).status).toBe(400);
+    }
+  });
+
+  it('inspects non-user subjects without adding authenticated-user grants', async () => {
+    const authz = await authorization({ settings: true });
+    const seen: unknown[] = [];
+    authz.resources.add({
+      resourceType: 'subject-check',
+      authorize(request) {
+        seen.push({ principal: request.principal, subjects: request.subjects });
+        return Promise.resolve({ effect: 'permit', reasons: [] });
+      },
+    });
+    const router = await mountedRouter(authz);
+    for (const subject of [
+      { type: 'department', id: 'sales' },
+      { type: 'authenticated', id: '*' },
+      { type: 'user', id: 'alice' },
+    ]) {
+      const response = await router.request('/api/authz/inspect/batch', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          subject,
+          checks: [
+            { resource: { type: 'subject-check', id: 'test' }, action: 'read' },
+          ],
+        }),
+      });
+      expect(response.status).toBe(200);
+    }
+    expect(seen).toEqual([
+      { principal: { type: 'department', id: 'sales' }, subjects: [] },
+      { principal: { type: 'authenticated', id: '*' }, subjects: [] },
+      {
+        principal: { type: 'user', id: 'alice' },
+        subjects: [{ type: 'authenticated', id: '*' }],
+      },
+    ]);
+  });
+
+  it('summarizes configured types including policy grants and enforces settings access', async () => {
+    const send = (router: Hono) =>
+      router.request('/api/authz/inspect/configured', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ subject: { type: 'department', id: 'sales' } }),
+      });
+    expect(
+      (
+        await send(
+          await mountedRouter(await authorization({ settings: false })),
+        )
+      ).status,
+    ).toBe(403);
+    const authz = await authorization({ settings: true });
+    await authz.permissionSets.create({
+      key: 'sales',
+      grants: [
+        {
+          resource: { type: 'database.collection', id: '*' },
+          actions: [{ action: 'read', policy: { type: 'database' } }],
+        },
+      ],
+    });
+    await authz.permissionSets.assign({
+      permissionSet: 'sales',
+      subject: { type: 'department', id: 'sales' },
+    });
+    const response = await send(await mountedRouter(authz));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      data: { unrestricted: false, types: ['database.collection'] },
+    });
+  });
+
   it('refuses without the settings permission', async () => {
     const router = await mountedRouter(
       await authorization({ settings: false }),

@@ -273,15 +273,19 @@ export function PermissionSetsPanel({
     />
   );
   return (
-    <div className='flex h-[calc(100dvh-6rem)] min-h-80 gap-3 overflow-hidden p-3'>
+    <div className='flex h-[calc(100dvh-15rem)] min-h-96 gap-3 overflow-hidden'>
       <aside
         className={`flex shrink-0 flex-col overflow-hidden rounded-xl border bg-card text-card-foreground ${collapsed ? 'w-14' : 'w-56'}`}
       >
-        <div className='flex shrink-0 items-center justify-between gap-1 border-b p-2'>
+        <div className='flex shrink-0 items-center justify-end gap-1 border-b p-2'>
           {!collapsed ? (
-            <h1 className='truncate text-sm font-semibold'>
-              {t('permissionSets.page.title')}
-            </h1>
+            <Input
+              className='min-w-0 flex-1'
+              aria-label={t('permissionSets.list.search')}
+              placeholder={t('permissionSets.list.search')}
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
           ) : null}
           <div
             className={`flex shrink-0 items-center gap-1 ${collapsed ? 'flex-col' : ''}`}
@@ -316,50 +320,40 @@ export function PermissionSetsPanel({
           </div>
         </div>
         {!collapsed ? (
-          <>
-            <div className='space-y-2 p-2'>
-              <Input
-                aria-label={t('permissionSets.list.search')}
-                placeholder={t('permissionSets.list.search')}
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-              />
-            </div>
-            <nav
-              className='min-h-0 flex-1 space-y-1 overflow-y-auto p-2'
-              aria-label={t('permissionSets.page.title')}
-            >
-              {sets
-                .filter((item) =>
-                  `${item.title} ${item.key}`
-                    .toLowerCase()
-                    .includes(search.toLowerCase()),
-                )
-                .map((item) => (
-                  <button
-                    key={item.key}
-                    type='button'
-                    aria-label={item.title ?? item.key}
-                    disabled={busy}
-                    aria-current={
-                      item.key === permissionSetKey ? 'page' : undefined
-                    }
-                    className='block w-full rounded-md px-3 py-2 text-left text-sm hover:bg-muted aria-[current=page]:bg-primary/10 aria-[current=page]:font-medium aria-[current=page]:text-primary'
-                    onClick={() => go(setPath(item.key, section))}
-                  >
-                    <span className='block truncate'>
-                      {item.title ?? item.key}
-                    </span>
-                    <span className='block truncate text-xs text-muted-foreground'>
-                      {item.key}
-                    </span>
-                  </button>
-                ))}
-            </nav>
-          </>
+          <nav
+            className='min-h-0 flex-1 space-y-1 overflow-y-auto p-2'
+            aria-label={t('permissionSets.page.title')}
+          >
+            {sets
+              .filter((item) =>
+                `${item.title} ${item.key}`
+                  .toLowerCase()
+                  .includes(search.toLowerCase()),
+              )
+              .map((item) => (
+                <button
+                  key={item.key}
+                  type='button'
+                  aria-label={item.title ?? item.key}
+                  disabled={busy}
+                  aria-current={
+                    item.key === permissionSetKey ? 'page' : undefined
+                  }
+                  className='block w-full rounded-md px-3 py-2 text-left text-sm hover:bg-muted aria-[current=page]:bg-primary/10 aria-[current=page]:font-medium aria-[current=page]:text-primary'
+                  onClick={() => go(setPath(item.key, section))}
+                >
+                  <span className='block truncate'>
+                    {item.title ?? item.key}
+                  </span>
+                  <span className='block truncate text-xs text-muted-foreground'>
+                    {item.key}
+                  </span>
+                </button>
+              ))}
+          </nav>
         ) : null}
       </aside>
-      <main className='flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card text-card-foreground'>
+      <section className='flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card text-card-foreground'>
         <header className='flex shrink-0 items-center justify-between gap-3 border-b px-4 py-3'>
           <h2 className='truncate text-lg font-semibold'>
             {draft?.title ||
@@ -415,7 +409,7 @@ export function PermissionSetsPanel({
         ) : (
           <Outlet context={{ content } satisfies PermissionWorkspaceContext} />
         )}
-      </main>
+      </section>
       <ConfirmDialog
         open={pending !== undefined}
         title={t('permissionWorkspace.discardTitle')}

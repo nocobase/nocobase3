@@ -233,10 +233,52 @@ const enUS = {
     conditionRequired: 'Add at least one condition.',
   },
   inspector: {
+    subjectType: 'Subject type',
+    subject: 'Subject',
+    selectSubject: 'Select a subject',
+    searchSubjects: 'Search subjects',
+    noRegisteredResources: 'No resources are registered for this type yet.',
+    status: {
+      context: 'User context required',
+      all: 'Full access',
+      scoped: 'Limited access',
+      none: 'No access',
+      error: 'Inspection failed',
+    },
+    sources: {
+      'permission-sets': 'Permission set',
+      'default-access': 'Default access',
+      'sharing-rules': 'Sharing rule',
+      'restriction-rules': 'Restriction rule',
+    },
+    reasonCodes: {
+      USER_CONTEXT_REQUIRED:
+        'This scope depends on a specific user and cannot be resolved from this subject alone.',
+      GRANT_MATCHED: 'Permission set grants this action',
+      SCOPE_EXPANDED: 'Expands accessible records',
+      SCOPE_RESTRICTED: 'Restricts accessible records',
+      NO_OBJECT_PERMISSION: 'No permission set grants this action',
+      NO_RECORD_ACCESS: 'No accessible record scope',
+      UNRESTRICTED_ACCESS: 'Unrestricted access',
+    },
+    inputFields: 'Writable fields',
+    outputFields: 'Returned fields',
+    allFields: 'All fields',
+
+    refresh: 'Refresh',
+    failed: 'Inspection failed',
+    noResources: 'No matching resources',
+    recordScope: 'Effective record scope',
+    fields: 'Allowed fields',
+    fieldSearch: 'Search fields',
+    technicalDetails: 'Technical details',
+    allConditions: 'Match all conditions',
+    anyCondition: 'Match any condition',
+
     page: {
       title: 'Permission Inspector',
       description:
-        'Answer what one person may do on one resource, and why the application decided it.',
+        'View access granted to an authorization subject and inspect the reasons.',
     },
     person: 'Person',
     selectPerson: 'Select a person',
@@ -246,8 +288,7 @@ const enUS = {
     selectAction: 'Select an action',
     inspect: 'Inspect',
     inspecting: 'Inspecting…',
-    empty:
-      'Choose a person, a resource and an action to see what the application decides.',
+    empty: 'Select an authorization subject to view its resource permissions.',
     decision: 'Decision',
     effects: {
       permit: 'Allowed',

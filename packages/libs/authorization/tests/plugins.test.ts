@@ -593,3 +593,49 @@ describe('official authorization plugins', () => {
     expect(resolvedPolicyType).toBe('file');
   });
 });
+
+it('loads built-in rule lists once per inspection scope and reloads them in the next scope', async () => {
+  const defaults = new MockDefaultAccessStore([]);
+  const sharing = new MockSharingRuleStore([]);
+  const restrictions = new MockRestrictionRuleStore([]);
+  const reads = [
+    vi.spyOn(defaults, 'list'),
+    vi.spyOn(sharing, 'list'),
+    vi.spyOn(restrictions, 'list'),
+  ];
+  const authz = createAuthorization({
+    plugins: [
+      permissionSets({ store: readerStore() }),
+      defaultAccess({ store: defaults }),
+      sharingRules({ store: sharing }),
+      restrictionRules({ store: restrictions }),
+      {
+        id: 'batch-test',
+        setup(authorization) {
+          authorization.resources.add({
+            resourceType: 'batch',
+            async authorize(request, context) {
+              await context.constraints.resolve(request);
+              return { effect: 'permit', reasons: [] };
+            },
+          });
+        },
+      },
+    ],
+  });
+  const identity = { principal: { type: 'user', id: 'alice' } };
+  const scope = authz.for(identity);
+  await Promise.all(
+    Array.from({ length: 20 }, (_, i) =>
+      scope.explain({
+        resource: { type: 'batch', id: String(i) },
+        action: 'read',
+      }),
+    ),
+  );
+  reads.forEach((read) => expect(read).toHaveBeenCalledTimes(1));
+  await authz
+    .for(identity)
+    .explain({ resource: { type: 'batch', id: '0' }, action: 'read' });
+  reads.forEach((read) => expect(read).toHaveBeenCalledTimes(2));
+});
