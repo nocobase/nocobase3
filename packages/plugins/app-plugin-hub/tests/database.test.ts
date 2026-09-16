@@ -1,3 +1,4 @@
+import ownershipMigration from '../database/migrations/202609160004_hub_app_ownership.js';
 import sqlite from '@nocobase/db-sqlite';
 import {
   createDatabaseManager,
@@ -72,6 +73,42 @@ describe('@nocobase/app-plugin-hub database migration', () => {
     const appMetadata = await metadataStore.get('hubApps');
     expect(appMetadata?.document.fields).toBeDefined();
     expect(appMetadata?.document.fields).not.toHaveProperty('config');
+  });
+
+  it('adds nullable ownership without assigning legacy Apps and reverses schema and metadata', async () => {
+    await migrate(appTablesMigration, 'up', database);
+    const query = database.query();
+    await query
+      .insertInto('hubApps')
+      .values({
+        id: 'legacy',
+        name: 'Legacy',
+        enabled: false,
+        basePath: '/legacy',
+        backend: 'in-process',
+        startupMode: 'lazy',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .execute();
+    await migrate(ownershipMigration, 'up', database);
+    const client = await database.connection().client<SqliteClient>();
+    expect(await client.schema.hasColumn('hub_apps', 'created_by')).toBe(true);
+    expect(
+      (await metadataStore.get('hubApps'))?.document.fields,
+    ).toHaveProperty('createdBy');
+    expect(
+      await query.selectFrom('hubApps').select(['id', 'createdBy']).execute(),
+    ).toEqual([{ id: 'legacy', createdBy: null }]);
+    await migrate(ownershipMigration, 'down', database);
+    expect(await client.schema.hasColumn('hub_apps', 'created_by')).toBe(false);
+    expect(
+      (await metadataStore.get('hubApps'))?.document.fields,
+    ).not.toHaveProperty('createdBy');
+    await migrate(ownershipMigration, 'up', database);
+    expect(await query.selectFrom('hubApps').select('id').execute()).toEqual([
+      { id: 'legacy' },
+    ]);
   });
 
   it('drops the schema and metadata', async () => {

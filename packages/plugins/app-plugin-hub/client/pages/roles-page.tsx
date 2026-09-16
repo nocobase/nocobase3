@@ -26,6 +26,8 @@ import {
   type HubRoleDefinition,
 } from '../roles.js';
 
+import { ErrorNotification } from './hub/shared.js';
+
 interface HubRolesResponse {
   readonly data: readonly HubRoleDefinition[];
 }
@@ -79,9 +81,7 @@ export default function RolesPage(): ReactElement {
         ) : error ? (
           <Card className='grid min-h-64 place-items-center p-6 text-center'>
             <div className='space-y-3'>
-              <p className='text-sm text-muted-foreground'>
-                {t('roles.loadFailed')}
-              </p>
+              <ErrorNotification message={t('roles.loadFailed')} />
               <Button onClick={() => void load()} variant='outline'>
                 {t('roles.retry')}
               </Button>

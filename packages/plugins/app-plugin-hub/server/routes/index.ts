@@ -223,11 +223,17 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
 
     routes.get('/apps', async (context) => {
       await requireHubAction(context, '*', 'read');
+      const authz = context.get('authz');
+      const allApps = await authz.can({
+        resource: { type: 'hub.app', id: '*' },
+        action: 'read-all',
+      });
       const search = context.req.query('search');
       const page = context.req.query('page');
       const pageSize = context.req.query('pageSize');
       return respond(context, async () => {
         const result = await hub.listAppsPage({
+          ...(allApps ? {} : { createdBy: authz.identity.principal.id }),
           ...(search === undefined ? {} : { search }),
           ...(page === undefined ? {} : { page: Number(page) }),
           ...(pageSize === undefined ? {} : { pageSize: Number(pageSize) }),
@@ -272,7 +278,10 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       await requireHubAction(context, '*', 'create');
       const input = await context.req.json<CreateHubAppInput>();
       return await respond(context, async () => {
-        const app = await hub.createApp(input);
+        const app = await hub.createApp(
+          input,
+          context.get('authz').identity.principal.id,
+        );
         logSecurityEvent(securityLogger, context, 'hub.app.create', app.app.id);
         return { id: app.app.id };
       });
@@ -484,7 +493,24 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
         resource: { type: 'hub.host', id: 'global' },
         action: 'read',
       });
-      return respond(context, () => hub.hostStatus());
+      return respond(context, async () => {
+        const status = await hub.hostStatus();
+        const authz = context.get('authz');
+        const visible = await Promise.all(
+          status.deployments.map(async (deployment) =>
+            (await authz.can({
+              resource: { type: 'hub.app', id: deployment.appId },
+              action: 'read',
+            }))
+              ? deployment
+              : null,
+          ),
+        );
+        return {
+          ...status,
+          deployments: visible.filter((deployment) => deployment !== null),
+        };
+      });
     });
 
     router.route('/hub', routes);

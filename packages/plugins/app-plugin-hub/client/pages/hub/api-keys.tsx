@@ -5,7 +5,7 @@ import { Copy, KeyRound, LoaderCircle, Plus } from 'lucide-react';
 import { Button } from '../../components/ui/button.js';
 import { Input } from '../../components/ui/input.js';
 import { Badge } from '../../components/ui/badge.js';
-import { AppDialog, ErrorBanner } from './shared.js';
+import { AppDialog, ErrorNotification } from './shared.js';
 import { formatDateTime } from './utils.js';
 import type { HubCapabilities } from '../../permissions.js';
 import {
@@ -85,7 +85,7 @@ export function ApiKeys({
   };
   const date = (value: string | null): string =>
     value ? formatDateTime(value, i18n.language) : '—';
-  if (!canManage) return <ErrorBanner message={t('apiKeys.noAccess')} />;
+  if (!canManage) return <ErrorNotification message={t('apiKeys.noAccess')} />;
 
   return (
     <section className='space-y-5'>
@@ -112,7 +112,10 @@ export function ApiKeys({
         </Button>
       </div>
       {error ? (
-        <ErrorBanner message={error} onClose={() => setError(undefined)} />
+        <ErrorNotification
+          message={error}
+          onClose={() => setError(undefined)}
+        />
       ) : null}
       {loading ? (
         <div
@@ -283,7 +286,6 @@ export function ApiKeys({
           }
         >
           <div className='space-y-5'>
-            {error ? <ErrorBanner message={error} /> : null}
             <label className='block space-y-2'>
               <span className='text-sm font-medium'>{t('apiKeys.name')}</span>
               <Input
@@ -363,7 +365,6 @@ export function ApiKeys({
               <Copy className='size-4' />
               {t(copied ? 'apiKeys.copied' : 'apiKeys.copy')}
             </Button>
-            {error ? <ErrorBanner message={error} /> : null}
           </div>
         </AppDialog>
       ) : null}
@@ -403,9 +404,7 @@ export function ApiKeys({
               </Button>
             </>
           }
-        >
-          {error ? <ErrorBanner message={error} /> : null}
-        </AppDialog>
+        ></AppDialog>
       ) : null}
     </section>
   );

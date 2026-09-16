@@ -459,6 +459,7 @@ function createApplication(
     middleware: () => async (context, next) => {
       context.set('authz', {
         identity: { principal: { type: 'user', id: role } },
+        can: async () => role === 'administrator',
         require: async () => {
           if (role !== 'administrator') {
             throw new AuthorizationDeniedError({

@@ -196,6 +196,9 @@ export class DefaultHubService implements HubService {
     if (matchingIds) {
       countQuery = countQuery.where('id', 'in', matchingIds);
     }
+    if (options.createdBy !== undefined) {
+      countQuery = countQuery.where('createdBy', '=', options.createdBy);
+    }
     const count = await countQuery.executeTakeFirstOrThrow();
     const total = Number(count.total);
     const page = Math.min(
@@ -218,6 +221,9 @@ export class DefaultHubService implements HubService {
       .offset((page - 1) * pageSize);
     if (matchingIds) {
       appsQuery = appsQuery.where('hubApps.id', 'in', matchingIds);
+    }
+    if (options.createdBy !== undefined) {
+      appsQuery = appsQuery.where('hubApps.createdBy', '=', options.createdBy);
     }
     const apps = await appsQuery.execute<Row>();
     return {
@@ -304,7 +310,10 @@ export class DefaultHubService implements HubService {
     return await this.detail(await this.requireApp(appId));
   }
 
-  public async createApp(input: CreateHubAppInput): Promise<HubAppDetail> {
+  public async createApp(
+    input: CreateHubAppInput,
+    createdBy?: string,
+  ): Promise<HubAppDetail> {
     const id = input.id.trim();
     const name = input.name.trim();
     if (!APP_ID_PATTERN.test(id)) {
@@ -318,7 +327,11 @@ export class DefaultHubService implements HubService {
       throw new HubError('App name is required.', 'INVALID_APP_NAME', 422);
     }
     if (await this.findApp(id)) {
-      throw new HubError(`App "${id}" already exists.`, 'APP_EXISTS', 409);
+      throw new HubError(
+        'Application ID is unavailable. Choose a different ID; application names may be repeated.',
+        'APP_EXISTS',
+        409,
+      );
     }
     const now = new Date();
     const app: HubAppRecord = {
@@ -333,7 +346,22 @@ export class DefaultHubService implements HubService {
       createdAt: now,
       updatedAt: now,
     };
-    await this.query().insertInto('hubApps').values(encodeApp(app)).execute();
+    try {
+      await this.query()
+        .insertInto('hubApps')
+        .values({ ...encodeApp(app), createdBy: createdBy ?? null })
+        .execute();
+    } catch (reason) {
+      // A concurrent creator can claim the same ID after the initial check.
+      if (await this.findApp(id)) {
+        throw new HubError(
+          'Application ID is unavailable. Choose a different ID; application names may be repeated.',
+          'APP_EXISTS',
+          409,
+        );
+      }
+      throw reason;
+    }
     return await this.detail(app);
   }
 

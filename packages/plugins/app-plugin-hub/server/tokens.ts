@@ -167,6 +167,7 @@ export interface HubDeploymentPage {
 }
 
 export interface ListHubAppsOptions {
+  readonly createdBy?: string;
   readonly search?: string;
   readonly page?: number;
   readonly pageSize?: number;
@@ -183,7 +184,10 @@ export interface HubService {
   listApps(): Promise<readonly HubAppSummary[]>;
   listAppsPage(options?: ListHubAppsOptions): Promise<HubAppPage>;
   getApp(appId: string): Promise<HubAppDetail>;
-  createApp(input: CreateHubAppInput): Promise<HubAppDetail>;
+  createApp(
+    input: CreateHubAppInput,
+    createdBy?: string,
+  ): Promise<HubAppDetail>;
   listReleases(appId: string): Promise<readonly HubReleaseRecord[]>;
   getRelease(appId: string, releaseId: string): Promise<HubReleaseRecord>;
   createRelease(

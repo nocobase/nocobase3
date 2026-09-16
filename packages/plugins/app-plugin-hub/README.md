@@ -34,6 +34,8 @@ Operators manage application releases and runtime operations, and Viewers have
 read-only access without raw configuration or configuration templates. Existing
 System Administrators receive the Hub Administrator role during upgrade, but
 the two roles do not implicitly inherit from one another at runtime.
+Application ownership is enforced on the server in addition to action grants. Hub Administrators can access all Apps. Operators and Viewers can access only Apps whose `createdBy` matches their authenticated user ID, subject to their existing action permissions; Viewers still cannot create or modify Apps. The server records the creator when an App is created and ignores client-supplied ownership. Catalog search, totals, pagination, detail APIs, publishing credentials, and Host deployment status use the same boundary. Existing Apps without reliable ownership remain visible only to Hub Administrators until their ownership is explicitly established; upgrading does not guess or reassign creators. This controls Hub management access, while each hosted App retains its own business-data authentication and authorization.
+
 The Hub template redirects its root and legacy `/hub` route to `/apps` and uses
 Applications, User management, and Roles & permissions as its primary
 navigation. These entries are declared on their owning routes and do not use
@@ -110,3 +112,7 @@ Use `Authorization: Bearer <key>` with the existing Hub Release and Deployment e
 Management requires a signed-in user with `hub.app / manage-api-keys`, granted only to `hub-administrator` by default. The new migration preserves other role grants and cascades key deletion when an App is removed. The generic user API Keys plugin remains separate. See [the publishing-key guide](skills/nocobase-hub-api-keys/SKILL.md) for endpoint and scope details.
 
 Hub reuses `@nocobase/app-plugin-api-keys` for key generation, hashing, expiry, verification, and credential management. Register `...hubApiKeyAuthentication()` in the Hub authentication configuration in place of `apiKey()`. It preserves the default user-key configuration and adds a `hub-publishing` configuration without Session authentication. Hub owns only the App binding, scopes, permanent revocation rule, and current-owner authorization.
+
+### Application names, IDs, and error notifications
+
+Application names may be repeated across users. The creation form generates an editable ID with an eight-character random hexadecimal suffix; IDs remain globally unique because they identify shared URLs, deployment records, and storage paths. Manual ID conflicts return `APP_EXISTS` without disclosing another application's owner. Hub operation failures use the shared top-right notification host, including failures while a dialog is open; they preserve form input and keep technical details collapsed.

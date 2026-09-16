@@ -25,7 +25,7 @@ import {
 import { useTranslation } from '@nocobase/i18n/client';
 
 import { Button } from '../../components/ui/button.js';
-import { ErrorBanner, ErrorDialog, AppDialog } from './shared.js';
+import { ErrorNotification, AppDialog } from './shared.js';
 import { Detail, RemoveApplicationDialog } from './detail.js';
 import { DeploymentDialog } from './configuration.js';
 import { UploadReleaseDialog } from './releases.js';
@@ -384,7 +384,10 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
     if (error) {
       return (
         <div className='space-y-4 py-8'>
-          <ErrorBanner error={error} onClose={() => setError(undefined)} />
+          <ErrorNotification
+            error={error}
+            onClose={() => setError(undefined)}
+          />
           <Button
             variant='outline'
             onClick={() => void navigate(applicationsPath.pathname)}
@@ -408,7 +411,7 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
   if (!availableTabs.length) {
     return (
       <div className='space-y-4 py-8'>
-        <ErrorBanner
+        <ErrorNotification
           message={t('detail.noTabs', {
             defaultValue:
               'You do not have access to any tabs for this application.',
@@ -429,7 +432,7 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
   if (explicitTabInvalid) {
     return (
       <div className='space-y-4 py-8'>
-        <ErrorBanner
+        <ErrorNotification
           message={t('detail.unavailable', {
             defaultValue: 'This application page is not available.',
           })}
@@ -706,7 +709,7 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
         />
       ) : null}
       {error ? (
-        <ErrorDialog error={error} onClose={() => setError(undefined)} />
+        <ErrorNotification error={error} onClose={() => setError(undefined)} />
       ) : null}
     </>
   );

@@ -54,6 +54,9 @@ const zhCN: HubResource = {
     close: '关闭',
   },
   errors: {
+    appIdConflictTitle: '应用 ID 不可用',
+    appIdConflictDescription:
+      '应用名称可以重复，但应用 ID 必须在整个 Hub 中唯一。请换一个应用 ID。',
     unexpectedTitle: '操作未完成',
     unexpectedDescription:
       '当前操作未能完成，请重试。如果问题持续存在，请将技术详情提供给管理员。',
@@ -101,7 +104,7 @@ const zhCN: HubResource = {
     applicationName: '应用名称',
     applicationNamePlaceholder: '客户门户',
     applicationId: '应用 ID',
-    applicationIdHint: '用于 URL 和存储，创建后不可修改。',
+    applicationIdHint: '自动生成，可编辑；全局唯一，创建后不可修改。',
     applicationIdPlaceholder: 'customer-portal',
     create: '创建应用',
   },
@@ -386,8 +389,8 @@ const zhCN: HubResource = {
     },
     descriptions: {
       'hub-administrator': '完整管理应用、运维操作和用户权限',
-      'hub-operator': '创建、配置、发布和运维应用',
-      'hub-viewer': '仅查看应用和运行状态',
+      'hub-operator': '创建、配置、发布和运维自己创建的应用',
+      'hub-viewer': '仅查看自己创建的应用和运行状态',
     },
     groups: {
       visibility: '应用与状态',

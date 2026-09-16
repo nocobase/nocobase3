@@ -268,6 +268,7 @@ const enUS = {
     note: 'Writes are not exposed: the CRM owns this data, so the routes register only query actions and the Policy grants reads alone.',
   },
   account: {
+    signOutFailed: 'Unable to sign out. Please try again.',
     openMenu: 'Open account menu',
     fallback: 'Account',
     signOut: 'Sign out',

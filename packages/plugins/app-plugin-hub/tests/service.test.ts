@@ -1,3 +1,4 @@
+import ownershipMigration from '../database/migrations/202609160004_hub_app_ownership.js';
 import sqlite from '@nocobase/db-sqlite';
 import {
   mkdtemp,
@@ -52,6 +53,11 @@ describe('@nocobase/app-plugin-hub service', () => {
       query: connection.query,
       connection,
     });
+    await ownershipMigration.up({
+      builder: connection.builder,
+      query: connection.query,
+      connection,
+    });
     host = new FakeHostController();
     service = new DefaultHubService(createServiceOptions());
     await service.prepare();
@@ -85,6 +91,65 @@ describe('@nocobase/app-plugin-hub service', () => {
     await service.shutdown();
     await database.destroy();
     await rm(rootDir, { recursive: true, force: true });
+  });
+
+  it('allows the same name across owners while keeping IDs globally unique', async () => {
+    await service.createApp({ id: 'tms-alice', name: 'TMS' }, 'alice');
+    await service.createApp({ id: 'tms-bob', name: 'TMS' }, 'bob');
+    await expect(
+      service.createApp({ id: 'tms-alice', name: 'Another name' }, 'bob'),
+    ).rejects.toMatchObject({ code: 'APP_EXISTS', status: 409 });
+    expect(
+      (await service.listAppsPage({ createdBy: 'bob' })).items.map(
+        ({ app }) => app.id,
+      ),
+    ).toEqual(['tms-bob']);
+  });
+
+  it('reports concurrent duplicate IDs as a conflict without losing the winner', async () => {
+    const results = await Promise.allSettled([
+      service.createApp({ id: 'tms', name: 'TMS' }, 'alice'),
+      service.createApp({ id: 'tms', name: 'TMS' }, 'bob'),
+    ]);
+    expect(
+      results.filter((result) => result.status === 'fulfilled'),
+    ).toHaveLength(1);
+    expect(
+      results.find((result) => result.status === 'rejected'),
+    ).toMatchObject({
+      reason: { code: 'APP_EXISTS', status: 409 },
+    });
+    expect((await service.listAppsPage()).total).toBe(1);
+  });
+
+  it('scopes catalog totals, search, and pages to the authenticated creator', async () => {
+    await service.createApp({ id: 'alice-a', name: 'Shared name' }, 'alice');
+    await service.createApp({ id: 'alice-b', name: 'Shared name' }, 'alice');
+    await service.createApp({ id: 'bob', name: 'Shared name' }, 'bob');
+    await service.createApp({ id: 'legacy', name: 'Legacy' });
+    const own = await service.listAppsPage({
+      createdBy: 'alice',
+      search: 'Shared',
+      pageSize: 1,
+      page: 2,
+    });
+    expect(own).toMatchObject({ total: 2, page: 2, pageSize: 1 });
+    expect(own.items[0]?.app.id).toMatch(/^alice-/);
+    expect(
+      await service.listAppsPage({ createdBy: 'alice', search: 'bob' }),
+    ).toMatchObject({ items: [], total: 0 });
+    expect(await service.listAppsPage({ createdBy: 'new-user' })).toMatchObject(
+      { items: [], total: 0 },
+    );
+    expect((await service.listAppsPage()).total).toBe(4);
+    expect(
+      await database
+        .query()
+        .selectFrom('hubApps')
+        .select('createdBy')
+        .where('id', '=', 'alice-a')
+        .executeTakeFirst(),
+    ).toEqual({ createdBy: 'alice' });
   });
 
   it('paginates deployments with stable ordering and app isolation', async () => {

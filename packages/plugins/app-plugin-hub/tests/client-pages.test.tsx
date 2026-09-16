@@ -1,3 +1,4 @@
+import { Toaster, toast } from 'sonner';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import type { ReactElement } from 'react';
@@ -53,7 +54,7 @@ import AppPage from '../client/pages/hub/app-page.js';
 import DeploymentsPage from '../client/pages/hub/tabs/deployments-page.js';
 import { Detail } from '../client/pages/hub/detail.js';
 import { ApplicationsCatalog } from '../client/pages/hub-page.js';
-import { ErrorBanner } from '../client/pages/hub/shared.js';
+import { ErrorNotification } from '../client/pages/hub/shared.js';
 import { readError } from '../client/pages/hub/utils.js';
 
 const appSummary = (id: string, name = id): AppSummary => ({
@@ -178,6 +179,7 @@ const getPaginationControl = (label: string): HTMLElement => {
 
 describe('Hub client pages', () => {
   beforeEach(() => {
+    render(<Toaster position='top-right' />);
     mocks.client.request.mockReset();
     mocks.authorization.can.mockReset().mockResolvedValue(true);
     mocks.authorization.invalidatePermissions.mockReset();
@@ -187,7 +189,80 @@ describe('Hub client pages', () => {
   });
 
   afterEach(() => {
+    toast.dismiss();
     vi.restoreAllMocks();
+  });
+
+  it('generates different IDs for repeated application names', async () => {
+    mocks.client.request.mockImplementation(({ method }: { method?: string }) =>
+      Promise.resolve(method === 'POST' ? { data: {} } : { data: page([]) }),
+    );
+    renderCatalog();
+    const ids: string[] = [];
+    for (let count = 0; count < 2; count += 1) {
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'New application' }),
+      );
+      fireEvent.change(screen.getByLabelText('Application name'), {
+        target: { value: 'TMS' },
+      });
+      ids.push(
+        (screen.getByLabelText(/Application ID/) as HTMLInputElement).value,
+      );
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Create application' }),
+      );
+      await waitFor(() =>
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+      );
+      expect(mocks.client.request).toHaveBeenCalledWith({
+        path: 'hub/apps',
+        method: 'POST',
+        json: { id: ids[count], name: 'TMS' },
+      });
+    }
+    expect(ids[0]).not.toBe(ids[1]);
+  });
+
+  it('generates editable IDs and reports conflicts above an open create dialog', async () => {
+    const conflict = Object.assign(new Error('ID conflict'), {
+      payload: {
+        error: {
+          code: 'APP_EXISTS',
+          message: 'Application ID is unavailable.',
+        },
+      },
+    });
+    mocks.client.request.mockImplementation(
+      ({ method }: { method?: string }) =>
+        method === 'POST'
+          ? Promise.reject(conflict)
+          : Promise.resolve({ data: page([]) }),
+    );
+    renderCatalog();
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'New application' }),
+    );
+    const name = screen.getByLabelText('Application name');
+    const id = screen.getByLabelText(/Application ID/);
+    fireEvent.change(name, { target: { value: 'TMS' } });
+    expect((id as HTMLInputElement).value).toMatch(/^tms-[a-f0-9]{8}$/);
+    fireEvent.change(id, { target: { value: 'tms' } });
+    fireEvent.change(name, { target: { value: 'My TMS' } });
+    expect(id).toHaveValue('tms');
+    fireEvent.click(screen.getByRole('button', { name: 'Create application' }));
+    expect(
+      await screen.findByText('Application ID is unavailable'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(name).toHaveValue('My TMS');
+    expect(id).toHaveValue('tms');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    const notification = screen
+      .getByText('Application ID is unavailable')
+      .closest('[data-sonner-toaster]');
+    expect(notification).toHaveAttribute('data-x-position', 'right');
+    expect(notification).toHaveAttribute('data-y-position', 'top');
   });
 
   it('debounces catalog search and sends the trimmed query to the server', async () => {
@@ -355,7 +430,7 @@ describe('Hub client pages', () => {
     expect(screen.queryByText('Unknown')).not.toBeInTheDocument();
   });
 
-  it('renders a friendly restart failure while keeping raw details collapsed', () => {
+  it('notifies a friendly restart failure while keeping raw details collapsed', async () => {
     const rawMessage = 'Restart failed: App "hdsp" failed to reload';
     const apiError = Object.assign(new Error(rawMessage), {
       payload: {
@@ -365,9 +440,9 @@ describe('Hub client pages', () => {
         },
       },
     });
-    render(<ErrorBanner error={readError(apiError)} />);
+    render(<ErrorNotification error={readError(apiError)} />);
 
-    expect(screen.getByText('Restart failed')).toBeInTheDocument();
+    expect(await screen.findByText('Restart failed')).toBeInTheDocument();
     expect(
       screen.getByText(
         'The application could not be restarted. Check its deployment status and try again.',
@@ -410,7 +485,7 @@ describe('Hub client pages', () => {
       expect(screen.getByText('Restart failed')).toBeInTheDocument(),
     );
     expect(screen.queryByText('Restart Customer?')).not.toBeInTheDocument();
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(
       screen.getByText(

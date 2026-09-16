@@ -103,6 +103,7 @@
     "clsx": "catalog:",
     "codemirror": "^6.0.2",
     "lucide-react": "catalog:",
+    "sonner": "^2.0.3",
     "react": "^19.0.0",
     "react-router": "catalog:",
     "tailwind-merge": "catalog:",

@@ -50,6 +50,39 @@ describe('Hub user role scope', () => {
     await database.destroy();
   });
 
+  it('leaves ownership and existing Apps unchanged when migrations run again', async () => {
+    await database
+      .query()
+      .insertInto('hubApps')
+      .values({
+        id: 'owned',
+        name: 'Owned',
+        createdBy: 'user-1',
+        enabled: false,
+        basePath: '/owned',
+        backend: 'in-process',
+        startupMode: 'lazy',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .execute();
+    const directory = '../database/migrations';
+    const migrator = createMigrator({
+      database,
+      packageName: '@nocobase/app-plugin-hub',
+      directory: fileURLToPath(new URL(directory, import.meta.url)),
+    });
+    expect((await migrator.latest()).executed).toEqual([]);
+    expect((await migrator.latest()).executed).toEqual([]);
+    expect(
+      await database
+        .query()
+        .selectFrom('hubApps')
+        .select(['id', 'createdBy'])
+        .execute(),
+    ).toEqual([{ id: 'owned', createdBy: 'user-1' }]);
+  });
+
   it('keeps exactly one Hub role without touching other Permission Sets', async () => {
     await createUser(database, 'user-1');
     await authorization.permissionSets.create({

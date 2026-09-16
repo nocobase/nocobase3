@@ -36,42 +36,42 @@ export function createHubRoutes(
             {
               name: 'hub-app-deployments',
               path: 'deployments',
-              access: { resource: 'hub.app', action: 'read-deployment' },
+              access: { resource: 'hub.app:*', action: 'read-deployment' },
               componentLoader: () =>
                 import('./pages/hub/tabs/deployments-page.js'),
             },
             {
               name: 'hub-app-releases',
               path: 'releases',
-              access: { resource: 'hub.app', action: 'read-release' },
+              access: { resource: 'hub.app:*', action: 'read-release' },
               componentLoader: () =>
                 import('./pages/hub/tabs/releases-page.js'),
             },
             {
               name: 'hub-app-development',
               path: 'development',
-              access: { resource: 'hub.app', action: 'upload-release' },
+              access: { resource: 'hub.app:*', action: 'upload-release' },
               componentLoader: () =>
                 import('./pages/hub/tabs/development-page.js'),
             },
             {
               name: 'hub-app-resources',
               path: 'resources',
-              access: { resource: 'hub.app', action: 'read-config' },
+              access: { resource: 'hub.app:*', action: 'read-config' },
               componentLoader: () =>
                 import('./pages/hub/tabs/resources-page.js'),
             },
             {
               name: 'hub-app-configuration',
               path: 'configuration',
-              access: { resource: 'hub.app', action: 'read-config' },
+              access: { resource: 'hub.app:*', action: 'read-config' },
               componentLoader: () =>
                 import('./pages/hub/tabs/configuration-page.js'),
             },
             {
               name: 'hub-app-api-keys',
               path: 'api-keys',
-              access: { resource: 'hub.app', action: 'manage-api-keys' },
+              access: { resource: 'hub.app:*', action: 'manage-api-keys' },
               componentLoader: () =>
                 import('./pages/hub/tabs/api-keys-page.js'),
             },

@@ -1,3 +1,4 @@
+import { Toaster, toast } from 'sonner';
 import {
   fireEvent,
   render,
@@ -49,6 +50,8 @@ const key = {
   expiresAt: null,
 };
 beforeEach(() => {
+  toast.dismiss();
+  render(<Toaster position='top-right' />);
   mocks.request.mockReset();
 });
 
@@ -137,14 +140,14 @@ describe('App API Keys management', () => {
     );
     await waitFor(() =>
       expect(
-        within(screen.getByRole('dialog')).getByText(
+        screen.getByText(
           'The action could not be completed. Check your permissions and try again.',
         ),
       ).toBeInTheDocument(),
     );
     expect(screen.getByText('CI')).toBeInTheDocument();
   });
-  it('does not fetch keys for users without management access', () => {
+  it('does not fetch keys for users without management access', async () => {
     render(
       <ApiKeys
         appId='crm'
@@ -153,7 +156,7 @@ describe('App API Keys management', () => {
       />,
     );
     expect(
-      screen.getByText(
+      await screen.findByText(
         'You do not have permission to manage this application’s API keys.',
       ),
     ).toBeInTheDocument();

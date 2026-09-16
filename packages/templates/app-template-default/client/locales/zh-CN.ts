@@ -30,6 +30,7 @@ const zhCN: AppResource = {
     languageChangeFailed: '未能完成语言切换，请重试。',
   },
   account: {
+    signOutFailed: '退出登录失败，请重试。',
     openMenu: '打开账户菜单',
     fallback: '账户',
     signOut: '退出登录',

@@ -64,7 +64,7 @@ beforeEach(async () => {
   );
   await migrate('@nocobase/app-plugin-hub', '../database/migrations');
   authz = createAppAuthorization({ connection: db.connection() });
-  registerHubResources(authz);
+  registerHubResources(authz, db.connection());
   const now = new Date();
   for (const id of ['admin', 'operator', 'viewer']) {
     await db
@@ -273,6 +273,15 @@ describe('Hub publishing key lifecycle and permissions', () => {
     await expect(
       service.create('crm', 'viewer', { name: 'CI', scopes: ['deploy'] }),
     ).rejects.toThrow();
+    await expect(
+      service.create('crm', 'viewer', { name: 'CI', scopes: ['read-release'] }),
+    ).rejects.toThrow();
+    await db
+      .connection()
+      .query.updateTable('hubApps')
+      .set({ createdBy: 'viewer' })
+      .where('id', '=', 'crm')
+      .execute();
     await expect(
       service.create('crm', 'viewer', { name: 'CI', scopes: ['read-release'] }),
     ).resolves.toHaveProperty('secret');

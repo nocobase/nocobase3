@@ -221,14 +221,6 @@ export function Catalog({
                     'Create an application and upload its first release.',
                 })
           }
-          action={
-            query.trim() || !canCreate ? undefined : (
-              <Button className='mt-5' onClick={onCreate}>
-                <Plus className='size-4' />{' '}
-                {t('page.newApplication', { defaultValue: 'New application' })}
-              </Button>
-            )
-          }
         />
       )}
       {pagination.total > pagination.pageSize ? (
@@ -474,7 +466,7 @@ export function CreateDialog({
           label={t('page.applicationId', { defaultValue: 'Application ID' })}
           hint={t('page.applicationIdHint', {
             defaultValue:
-              'Used in URLs and storage. It cannot be changed later.',
+              'Auto-generated and editable; globally unique and fixed after creation.',
           })}
         >
           <Input

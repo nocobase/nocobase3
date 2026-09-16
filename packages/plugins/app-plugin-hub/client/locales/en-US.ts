@@ -60,6 +60,9 @@ const enUS = {
     close: 'Close',
   },
   errors: {
+    appIdConflictTitle: 'Application ID is unavailable',
+    appIdConflictDescription:
+      'Application names can be repeated, but IDs must be unique across the Hub. Choose a different application ID.',
     unexpectedTitle: 'Something went wrong',
     unexpectedDescription:
       'The operation could not be completed. Try again. If the problem continues, share the technical details with an administrator.',
@@ -112,7 +115,8 @@ const enUS = {
     applicationName: 'Application name',
     applicationNamePlaceholder: 'Customer portal',
     applicationId: 'Application ID',
-    applicationIdHint: 'Used in URLs and storage. It cannot be changed later.',
+    applicationIdHint:
+      'Auto-generated and editable; globally unique and fixed after creation.',
     applicationIdPlaceholder: 'customer-portal',
     create: 'Create application',
   },
@@ -416,8 +420,9 @@ const enUS = {
     },
     descriptions: {
       'hub-administrator': 'Full access to applications and user management',
-      'hub-operator': 'Create, configure, deploy, and operate applications',
-      'hub-viewer': 'View application and runtime status only',
+      'hub-operator':
+        'Create, configure, deploy, and operate your own applications',
+      'hub-viewer': 'View your own applications and runtime status only',
     },
     groups: {
       visibility: 'Applications and status',

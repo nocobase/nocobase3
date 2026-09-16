@@ -204,9 +204,10 @@ describe('client inspection', () => {
         id: '@nocobase/app-plugin-authentication:authentication',
         order: 2,
       },
+      { id: '@nocobase/app-plugin-authorization:authorization', order: 3 },
       {
         id: '@nocobase/app-plugin-notification-provider:notification-host',
-        order: 3,
+        order: 4,
       },
     ]);
     expect(
