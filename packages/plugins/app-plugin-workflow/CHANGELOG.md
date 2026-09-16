@@ -1,5 +1,12 @@
 # @nocobase/app-plugin-workflow
 
+## 0.1.0-beta.16
+
+### Patch Changes
+
+- 7c0ec03: Document custom workflow Instruction APIs with a complete checker, artifact build, and asynchronous runtime registration example. Clarify command entry points and use config.yml in workflow skill configuration guidance.
+- 7c0ec03: Recommend filling in workflow node descriptions to explain their operations and business purpose in the workflow authoring skill.
+
 ## 0.1.0-beta.15
 
 ### Patch Changes

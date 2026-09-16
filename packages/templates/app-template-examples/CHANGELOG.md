@@ -1,5 +1,23 @@
 # @nocobase/app-template-examples
 
+## 0.1.0-beta.10
+
+### Patch Changes
+
+- b34801e: Add a reusable PageContainer and use its default layout across example pages. Reuse PageHeader for articles, numeric examples, and external CRM, removing redundant header labels.
+
+  Refine numeric and external CRM example layouts with consistent controls, tables, and status presentation.
+
+- d3429aa: Deduplicate dependencies during template upgrades and resolve stale dependency type conflicts. Replace outdated migration documents with upgrade Skill guidance based on template differences and application state, preserving migration history and user-authored operational notes. Check application code and configuration before proposing plugin removal, and obtain user confirmation before removing unused dependencies and registrations.
+- Updated dependencies [11c276a]
+- Updated dependencies [b34801e]
+- Updated dependencies [7c0ec03]
+- Updated dependencies [7c0ec03]
+  - @nocobase/app-plugin-ai-employee@0.1.0-beta.11
+  - @nocobase/app-plugin-repository-example@0.1.0-beta.7
+  - @nocobase/app-plugin-file-example@0.1.0-beta.6
+  - @nocobase/app-plugin-workflow@0.1.0-beta.16
+
 ## 0.1.0-beta.9
 
 ### Minor Changes
