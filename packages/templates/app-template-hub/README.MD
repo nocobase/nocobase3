@@ -68,6 +68,8 @@ pnpm build
 pnpm start
 ```
 
+The managed App Host uses `auto` in development: workspace source packages run through `tsx`, and installed packages run their compiled JavaScript through Node. Production explicitly uses `node`. Override `hub.host.driver` only when you need a specific launcher; published packages do not contain the source entrypoint required by `tsx`.
+
 ## Project structure
 
 ```text

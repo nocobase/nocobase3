@@ -4,7 +4,7 @@ export interface HubPluginConfig {
   readonly artifact: AppDriveDiskConfig;
   readonly host: {
     readonly enabled: boolean;
-    readonly driver: 'node' | 'tsx';
+    readonly driver: 'auto' | 'node' | 'tsx';
     readonly appDeploymentsDir: string;
     readonly appVolumesDir: string;
     readonly configPath: string;

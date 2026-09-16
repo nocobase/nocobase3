@@ -2,7 +2,7 @@ interface:
   display_name: 'NocoBase App AI Employee'
   short_description: 'Build CLI-created App AI features'
   default_prompt: >
-    Use $nocobase-plugin-ai-employee when developing a NocoBase App created by
+    Use $nocobase-app-plugin-ai-employee when developing a NocoBase App created by
     pnpm create @nocobase/app. Treat the current directory as the App root and
     make changes only in App-owned ai/, client/extensions/nocobase-ai, client/,
     server/, tests, or App plugins. Consume the public @nocobase/ai-employee

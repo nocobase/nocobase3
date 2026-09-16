@@ -1,5 +1,5 @@
 ---
-name: nocobase-plugin-ai-employee
+name: nocobase-app-plugin-ai-employee
 description: Use when code agents develop a CLI-created NocoBase App and need to consume @nocobase/ai-employee for application employees, skills, tools, MCP resources, AI frontend experiences, settings pages, or server integrations.
 argument-hint: '[area: resources|frontend|api|settings|runtime] [task: inspect|implement|extend|verify]'
 allowed-tools: Bash, Read, Write, Grep, Glob

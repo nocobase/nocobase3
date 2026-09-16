@@ -9,11 +9,21 @@
 
 import { createHash } from 'node:crypto';
 import { EventEmitter } from 'node:events';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import {
+  cp,
+  mkdir,
+  mkdtemp,
+  readFile,
+  realpath,
+  rm,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import { c as createTar } from 'tar';
 import type { ArtifactReference } from '../dist/index.js';
@@ -22,6 +32,7 @@ import {
   sanitizeAppHostChildNodeOptions,
 } from '../dist/supervisor.js';
 import { AppHostSupervisor } from '../dist/supervisor.js';
+import { AppHostSupervisor as SourceAppHostSupervisor } from '../src/supervisor.ts';
 
 describe('AppHostSupervisor', () => {
   it('uses explicit options instead of ambient supervisor configuration', async () => {
@@ -144,18 +155,19 @@ describe('AppHostSupervisor', () => {
     stop.mockRestore();
   });
 
-  it('manages a spawned host through authenticated IPC', async () => {
+  it('auto-selects the source launcher and manages a host through authenticated IPC', async () => {
     const volumesDir = await mkdtemp(path.join(os.tmpdir(), 'app-host-data-'));
     const fixture = await createManagedFixture(volumesDir);
-    const supervisor = AppHostSupervisor.initialize({
+    const supervisor = SourceAppHostSupervisor.initialize({
       mode: 'managed',
-      driver: 'tsx',
+      driver: 'auto',
       appDeploymentsDir: fixture.appDeploymentsDir,
       appVolumesDir: fixture.appVolumesDir,
       configPath: fixture.configPath,
       startTimeoutMs: 10_000,
     });
     try {
+      expect(supervisor.getInfo().driver).toBe('tsx');
       await supervisor.ensureStarted();
 
       const deployment = {
@@ -210,6 +222,64 @@ describe('AppHostSupervisor', () => {
     } finally {
       await supervisor.shutdown();
       await rm(volumesDir, { recursive: true, force: true });
+    }
+  });
+
+  it('auto-starts a compiled package without source files in development', async () => {
+    const rootDir = await mkdtemp(
+      path.join(os.tmpdir(), 'app-host-installed-'),
+    );
+    const packageDir = path.join(rootDir, 'package');
+    await cp(
+      fileURLToPath(new URL('../dist', import.meta.url)),
+      path.join(packageDir, 'dist'),
+      { recursive: true },
+    );
+    await writeFile(
+      path.join(packageDir, 'package.json'),
+      JSON.stringify({ type: 'module' }),
+    );
+    await symlink(
+      fileURLToPath(new URL('../node_modules', import.meta.url)),
+      path.join(packageDir, 'node_modules'),
+      'dir',
+    );
+    const { AppHostSupervisor: InstalledSupervisor } = (await import(
+      pathToFileURL(path.join(packageDir, 'dist/supervisor.js')).href
+    )) as typeof import('../dist/supervisor.js');
+    const fixture = await createManagedFixture(rootDir);
+    vi.stubEnv('NODE_ENV', 'development');
+    // Only app-host is copied as a compiled package here. Its dependencies
+    // still resolve workspace TypeScript exports, which need this loader.
+    // app-host itself has no source CLI to fall back to.
+    vi.stubEnv(
+      'NODE_OPTIONS',
+      `${process.env.NODE_OPTIONS ?? ''} --import ${pathToFileURL(createRequire(import.meta.url).resolve('tsx')).href}`.trim(),
+    );
+    const supervisor = InstalledSupervisor.initialize({
+      mode: 'managed',
+      driver: 'auto',
+      appDeploymentsDir: fixture.appDeploymentsDir,
+      appVolumesDir: fixture.appVolumesDir,
+      configPath: fixture.configPath,
+      startTimeoutMs: 10_000,
+    });
+    try {
+      expect(supervisor.getInfo().driver).toBe('node');
+      await supervisor.ensureStarted();
+      expect(supervisor.getInfo()).toMatchObject({
+        status: 'ready',
+        entrypoint: await realpath(path.join(packageDir, 'dist/cli.js')),
+      });
+      const { status } = await supervisor.applyDeploymentSet({
+        revision: 1,
+        deployments: [],
+      });
+      expect(status.ready).toBe(true);
+    } finally {
+      await supervisor.shutdown();
+      vi.unstubAllEnvs();
+      await rm(rootDir, { recursive: true, force: true });
     }
   });
 
