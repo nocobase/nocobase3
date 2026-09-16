@@ -44,6 +44,8 @@ jobs:
     outputs:
       tag: ${{ steps.branch.outputs.name }}
       merged: ${{ steps.merge.outputs.merged }}
+      create_app_version: ${{ steps.hub_versions.outputs.create_app_version }}
+      hub_template_version: ${{ steps.hub_versions.outputs.hub_template_version }}
     steps:
       - name: Check out develop
         uses: actions/checkout@v4
@@ -270,6 +272,16 @@ jobs:
         if: '!inputs.dry_run'
         run: git push origin --tags
 
+      # Pin the image build to this release instead of resolving moving npm dist-tags later.
+      - name: Capture Hub image package versions
+        if: '!inputs.dry_run'
+        id: hub_versions
+        run: |
+          {
+            echo "create_app_version=$(node -p "require('./packages/tools/create-app/package.json').version")"
+            echo "hub_template_version=$(node -p "require('./packages/templates/app-template-hub/package.json').version")"
+          } >> "$GITHUB_OUTPUT"
+
       # 用 --merge 而不是 --squash：保留 tag 与 develop 历史的血缘，
       # git describe 才能用。不加 --admin：冲突时要让 PR 停下等人处理，
       # 强合会把 develop 上刚改的东西冲掉。
@@ -383,3 +395,24 @@ jobs:
       tag: ${{ needs.release.outputs.tag }}
     permissions:
       contents: write
+
+  hub-image:
+    name: Publish Hub Docker image
+    needs: [release, github-release]
+    if: >-
+      !cancelled() && !inputs.dry_run
+      && needs.release.result == 'success'
+      && needs.github-release.result == 'success'
+      && needs.release.outputs.merged == 'true'
+    uses: ./.github/workflows/docker-hub.yml
+    with:
+      create_app_version: ${{ needs.release.outputs.create_app_version }}
+      hub_template_version: ${{ needs.release.outputs.hub_template_version }}
+      image_tag: latest
+    secrets:
+      ALI_DOCKER_REGISTRY: ${{ secrets.ALI_DOCKER_REGISTRY }}
+      ALI_DOCKER_USERNAME: ${{ secrets.ALI_DOCKER_USERNAME }}
+      ALI_DOCKER_PASSWORD: ${{ secrets.ALI_DOCKER_PASSWORD }}
+    permissions:
+      contents: read
+      packages: write

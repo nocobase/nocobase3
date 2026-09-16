@@ -1,5 +1,11 @@
 # @nocobase/app-plugin-notification-in-app
 
+## 0.2.0-beta.12
+
+### Patch Changes
+
+- 9131230: Use plugin-owned PageContainer and PageHeader components to unify AI component demo and in-app inbox page layouts.
+
 ## 0.2.0-beta.11
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @nocobase/app-plugin-ai-employee
 
+## 0.1.0-beta.13
+
+### Patch Changes
+
+- 9131230: Use plugin-owned PageContainer and PageHeader components to unify AI component demo and in-app inbox page layouts.
+
 ## 0.1.0-beta.12
 
 ### Patch Changes

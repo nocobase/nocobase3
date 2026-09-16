@@ -1,6 +1,27 @@
 name: Hub Docker image
 
 on:
+  workflow_call:
+    inputs:
+      create_app_version:
+        description: 'Version or tag of @nocobase/create-app'
+        type: string
+        default: latest
+      hub_template_version:
+        description: 'Version or tag of @nocobase/app-template-hub'
+        type: string
+        default: latest
+      image_tag:
+        description: 'Image tag to publish to both GHCR and Alibaba Cloud'
+        type: string
+        default: latest
+    secrets:
+      ALI_DOCKER_REGISTRY:
+        required: true
+      ALI_DOCKER_USERNAME:
+        required: true
+      ALI_DOCKER_PASSWORD:
+        required: true
   workflow_dispatch:
     inputs:
       create_app_version:
@@ -101,7 +122,7 @@ jobs:
           build-args: |
             CREATE_APP_VERSION=${{ inputs.create_app_version }}
             HUB_TEMPLATE_VERSION=${{ inputs.hub_template_version }}
-          # A manual run must resolve moving registry tags again, including latest.
+          # Every run must resolve moving registry tags again, including latest.
           no-cache-filters: build
           cache-from: type=gha,scope=hub-multiarch
           cache-to: type=gha,mode=max,scope=hub-multiarch
