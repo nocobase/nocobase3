@@ -104,7 +104,20 @@ export default createPortalViteConfig(({ command }) => {
           ? createDevProxy(appBase, env.PROXY_TARGET_URL)
           : undefined,
       watch: {
-        ignored: ['**/.agent-annotations/**', '**/storage/**'],
+        ignored: [
+          '**/.agent-annotations/**',
+          '**/storage/**',
+          // Vite only excludes dist/client automatically. The server build and
+          // vendored packages also live in dist and can exhaust file watchers.
+          // Scope this to the app so linked dependencies still receive HMR.
+          (filePath: string) => {
+            const relativePath = path.relative(__dirname, filePath);
+            return (
+              relativePath === 'dist' ||
+              relativePath.startsWith(`dist${path.sep}`)
+            );
+          },
+        ],
       },
       ...(command === 'serve'
         ? {

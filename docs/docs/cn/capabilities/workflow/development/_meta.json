@@ -21,6 +21,7 @@
   },
   {
     "type": "dir",
+    "collapsed": true,
     "name": "nodes",
     "label": "节点"
   },

@@ -1,7 +1,7 @@
 {
   "name": "@nocobase/app-template-examples",
   "displayName": "NocoBase Examples",
-  "version": "0.1.0-beta.5",
+  "version": "0.1.0-beta.10",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -10,7 +10,7 @@
   "packageManager": "pnpm@11.7.0",
   "nocobase": {
     "templateKind": "app",
-    "defaultTemplateVersion": "0.1.0-beta.5"
+    "defaultTemplateVersion": "0.1.0-beta.10"
   },
   "devDependencies": {
     "@ai-sdk/react": "2.0.0",
@@ -22,6 +22,7 @@
     "@nocobase/ai-employee": "workspace:^",
     "@nocobase/ai-employee-avatars": "^1.0.2",
     "@nocobase/app-client": "workspace:^",
+    "@nocobase/app-plugin-database-explorer": "workspace:^",
     "@nocobase/app-plugin-notification-provider": "workspace:^",
     "@nocobase/app-plugin-users": "workspace:^",
     "@nocobase/app-portal-sdk": "workspace:^",
@@ -106,7 +107,7 @@
     "typescript": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:",
-    "zod": "^3.25.76"
+    "zod": "catalog:"
   },
   "files": [
     ".prettierignore",
@@ -129,7 +130,6 @@
     "docker-compose.yml",
     "config.example.yml",
     "README.MD",
-    "MIGRATION.md",
     "AGENTS.md",
     "CLAUDE.md",
     "skills"
@@ -192,6 +192,7 @@
     "@nocobase/app-plugin-authorization-example": "workspace:^",
     "@nocobase/app-plugin-cli-example": "workspace:^",
     "@nocobase/app-plugin-database-example": "workspace:^",
+    "@nocobase/app-plugin-database-explorer": "workspace:^",
     "@nocobase/app-plugin-file": "workspace:^",
     "@nocobase/app-plugin-file-example": "workspace:^",
     "@nocobase/app-plugin-i18n": "workspace:^",

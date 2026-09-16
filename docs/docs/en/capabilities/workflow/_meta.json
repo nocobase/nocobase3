@@ -11,11 +11,13 @@
   },
   {
     "type": "dir",
+    "collapsed": true,
     "name": "development",
     "label": "Develop with an agent"
   },
   {
     "type": "dir",
+    "collapsed": true,
     "name": "management",
     "label": "Manage workflows"
   }

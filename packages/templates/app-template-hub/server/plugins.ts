@@ -1,3 +1,4 @@
+import apiKeys from '@nocobase/app-plugin-api-keys/server';
 import authentication from '@nocobase/app-plugin-authentication/server';
 import authorization from '@nocobase/app-plugin-authorization/server';
 import users from '@nocobase/app-plugin-users/server';
@@ -13,6 +14,7 @@ const serverPlugins: AppServerPlugins = defineServerPlugins([
   authentication,
   authorization,
   users,
+  apiKeys,
   i18n,
   install,
   hub,

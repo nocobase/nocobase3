@@ -105,8 +105,7 @@ Each dialect package exposes its own `test:integration` command, and that is the
 only entry point; `@nocobase/db` carries no integration script. Run the complete
 matrix by invoking each dialect in turn. Suites must run one at a time: they
 isolate their Compose projects and host ports, but share one Docker daemon, and
-concurrent runs fail health checks during startup. See
-[`internal-docs/development/database-integration-testing.md`](../../../../../internal-docs/development/database-integration-testing.md).
+concurrent runs fail health checks during startup.
 
 Set `KEEP_TEST_DB=1` to retain a failed run for debugging. The runner prints
 the Compose project name; remove that project manually after investigation.

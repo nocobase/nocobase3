@@ -22,8 +22,8 @@ export interface KnexConnectionConfig extends BaseConnectionConfig {
  */
 export type KnexClientName = string;
 
-export function resolveKnexConnectionConfig(
-  config: ConnectionConfig,
+export function resolveKnexConnectionConfig<TConfig extends ConnectionConfig>(
+  config: TConfig,
   dialectDriver?: DatabaseDriverDefinition,
 ): KnexConnectionConfig {
   assertNoUnsupportedConnectionConfigFields(config);

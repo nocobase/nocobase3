@@ -19,6 +19,12 @@ const enUS = {
     confirm: 'Confirm',
     language: 'Language',
   },
+  notices: {
+    serverLocaleFallback:
+      'The server does not support this language, so server messages will use English.',
+    languageChangeFailed:
+      'Unable to complete the language change. Please try again.',
+  },
   account: {
     openMenu: 'Open account menu',
     fallback: 'Account',
@@ -31,6 +37,7 @@ const enUS = {
     expand: 'Expand navigation',
     collapse: 'Collapse navigation',
     label: 'Application navigation',
+    breadcrumb: 'Breadcrumb',
     console: 'Hub console',
   },
 };

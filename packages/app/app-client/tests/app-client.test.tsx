@@ -184,6 +184,48 @@ describe('app client', () => {
     expect(close).toHaveBeenCalledOnce();
   });
 
+  it('synchronizes the document locale before rendering and until shutdown', async () => {
+    const element = document.documentElement;
+    const previousLanguage = element.lang;
+    const previousDirection = element.dir;
+    vi.stubGlobal('localStorage', { getItem: () => null });
+    const runtime = await resolveAppRuntime(
+      defineAppRuntime({
+        packageName: '@example/app',
+        createAppConfig: createAppClientConfig,
+        plugins: defineClientPlugins([]),
+        locales: {
+          'en-US': async () => ({ title: 'Application' }),
+          'ar-SA': async () => ({ title: 'التطبيق' }),
+        },
+      }),
+      { rawConfig: { i18n: { defaultLocale: 'ar-SA' } } },
+    );
+    const app = new ClientApplication({
+      runtime,
+      createRenderConfig: () => ({ routes: null }),
+    });
+
+    try {
+      await app.start();
+      expect(element.lang).toBe('ar-SA');
+      expect(element.dir).toBe('rtl');
+
+      await runtime.i18n.changeLanguage('en-US');
+      expect(element.lang).toBe('en-US');
+      expect(element.dir).toBe('ltr');
+
+      await app.shutdown();
+      element.lang = 'after-shutdown';
+      await runtime.i18n.changeLanguage('ar-SA');
+      expect(element.lang).toBe('after-shutdown');
+    } finally {
+      await app.shutdown();
+      element.lang = previousLanguage;
+      element.dir = previousDirection;
+    }
+  });
+
   it('requires startup before rendering and shuts providers down in reverse order', async () => {
     const calls: string[] = [];
     const createProvider = (name: string) =>

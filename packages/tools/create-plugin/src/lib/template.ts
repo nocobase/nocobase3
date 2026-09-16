@@ -369,7 +369,9 @@ async function renderManifest(
   publishExports['./package.json'] = './package.json';
 
   const scripts: Record<string, string> = {
-    build: 'tsc -p tsconfig.json',
+    build: capabilities.database
+      ? 'tsc -p tsconfig.json && nocobase-db-manifests'
+      : 'tsc -p tsconfig.json',
     typecheck: 'tsc -p tsconfig.json --noEmit',
     test: 'vitest run --passWithNoTests',
     lint: 'eslint . --max-warnings 0',
@@ -451,8 +453,8 @@ async function renderManifest(
     devDependencies['tw-animate-css'] = 'catalog:';
   }
 
+  // Compiled plugins resolve resources from baseDir inside dist; only that runtime tree is published.
   const files = ['dist', 'README.md', 'CHANGELOG.md'];
-  if (capabilities.database) files.push('database');
   if (capabilities.skills) files.push('skills');
   if (capabilities.registry)
     files.push(
@@ -604,7 +606,7 @@ function renderServerPlugin(
   ]
     .filter(Boolean)
     .join('\n');
-  return `import { defineServerPlugin, type AppServerPlugin } from '@nocobase/app-server/plugins';\n${imports ? `\n${imports}\n` : ''}\nconst ${context.moduleName}Plugin: AppServerPlugin = defineServerPlugin({\n  packageName: ${literal(context.packageName)},\n${entries}\n});\n\nexport default ${context.moduleName}Plugin;\n`;
+  return `import path from 'node:path';\n\nimport { defineServerPlugin, type AppServerPlugin } from '@nocobase/app-server/plugins';\n${imports ? `\n${imports}\n` : ''}\nconst ${context.moduleName}Plugin: AppServerPlugin = defineServerPlugin({\n  baseDir: path.resolve(import.meta.dirname, '..'),\n  packageName: ${literal(context.packageName)},\n${entries}\n});\n\nexport default ${context.moduleName}Plugin;\n`;
 }
 
 function renderPluginTest(

@@ -1,10 +1,8 @@
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import type {
-  ConnectionConfig,
   DatabaseCapabilities,
   DatabaseDriverDefinition,
-  SqliteConnectionConfig,
 } from '@nocobase/db';
 import { rawRows } from '@nocobase/db';
 import { installDecimalAggregates } from './numeric.js';
@@ -12,13 +10,19 @@ import { preciseIntegerClient } from './precise-integers.js';
 import { SqliteSchemaInspector } from './inspectors/sqlite.js';
 import { compileSqliteJsonCondition } from './json.js';
 
+import type { SqliteConnectionConfig } from './config.js';
+export type { SqliteConnectionConfig } from './config.js';
+
 const require = createRequire(import.meta.url);
 const BetterSqlite3: unknown = require('better-sqlite3') as unknown;
 export type SqliteOptions = Omit<
   SqliteConnectionConfig,
   'dialect' | 'driver' | 'databaseDriver'
 >;
-export const sqliteDriver: DatabaseDriverDefinition<'sqlite'> = {
+export const sqliteDriver: DatabaseDriverDefinition<
+  'sqlite',
+  SqliteConnectionConfig
+> = {
   dialect: 'sqlite',
   packageName: '@nocobase/db-sqlite',
   nativeDriver: 'better-sqlite3',
@@ -120,8 +124,7 @@ export const sqliteDriver: DatabaseDriverDefinition<'sqlite'> = {
     },
   }),
   createKnexClient: () => preciseIntegerClient(BetterSqlite3),
-  resolveConnection: (source: ConnectionConfig) => {
-    const config = source as SqliteConnectionConfig;
+  resolveConnection: (config) => {
     assertDriverOptions(config.driverOptions, [
       'filename',
       'pool',
@@ -143,9 +146,8 @@ export const sqliteDriver: DatabaseDriverDefinition<'sqlite'> = {
       resolveClient: context.resolveClient,
     }),
   normalizeConnection: (source, context) => {
-    const config = source as SqliteConnectionConfig & {
-      database?: string;
-    };
+    // `database` is the spelling config.yml uses for the file, which the declarative type does not carry.
+    const config = source as SqliteConnectionConfig & { database?: string };
     const filename = config.database ?? config.filename;
     return {
       ...config,
@@ -155,13 +157,11 @@ export const sqliteDriver: DatabaseDriverDefinition<'sqlite'> = {
           : filename,
     };
   },
-  resolveOwnershipTarget: (source) => {
-    const config = source as SqliteConnectionConfig;
+  resolveOwnershipTarget: (config) => {
     if (!config.filename || config.filename === ':memory:') return undefined;
     return ['sqlite', path.resolve(config.filename)];
   },
-  prepareStorage: async (source, context) => {
-    const config = source as SqliteConnectionConfig;
+  prepareStorage: async (config, context) => {
     if (!config.filename || config.filename === ':memory:') return;
     await context.ensureDirectory(path.dirname(config.filename));
   },

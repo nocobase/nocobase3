@@ -23,16 +23,18 @@ export function GroupByExamples({
     <section className='space-y-4' aria-label={t('groupByExamples')}>
       <h2 className='text-xl font-semibold'>{t('groupByExamples')}</h2>
       {examples.map((example) => (
-        <Card key={example.key}>
+        <Card className='min-w-0 rounded-xl shadow-2xs' key={example.key}>
           <CardHeader>
-            <CardTitle>{t(`groupBy_${example.key}`)}</CardTitle>
-            <p className='text-sm text-muted-foreground'>
+            <CardTitle className='text-base font-semibold'>
+              {t(`groupBy_${example.key}`)}
+            </CardTitle>
+            <p className='text-xs leading-relaxed text-muted-foreground'>
               {t(`groupBy_${example.key}Hint`)}
             </p>
           </CardHeader>
           <CardContent className='space-y-4'>
             <Table aria-label={t(`groupBy_${example.key}`)}>
-              <TableHeader>
+              <TableHeader className='bg-muted/30'>
                 <TableRow>
                   <TableHead>
                     {t(example.target === 'customers' ? 'customer' : 'product')}
@@ -91,14 +93,14 @@ export function GroupByExamples({
                 )}
               </TableBody>
             </Table>
-            <details className='rounded-md border p-3'>
-              <summary className='cursor-pointer text-sm font-medium'>
+            <details className='rounded-lg border bg-muted/15 p-3 text-xs'>
+              <summary className='cursor-pointer text-xs font-medium text-foreground'>
                 {t('trace')}
               </summary>
               <div className='mt-3 grid gap-4 lg:grid-cols-2'>
                 <section>
-                  <h3 className='mb-2 text-sm font-medium'>{t('request')}</h3>
-                  <pre className='max-h-80 overflow-auto text-xs'>
+                  <h3 className='mb-2 text-xs font-medium'>{t('request')}</h3>
+                  <pre className='max-h-80 overflow-auto rounded-lg border bg-muted/40 p-3 font-mono text-xs text-foreground'>
                     {JSON.stringify(
                       {
                         repository: example.call.repository,
@@ -111,8 +113,8 @@ export function GroupByExamples({
                   </pre>
                 </section>
                 <section>
-                  <h3 className='mb-2 text-sm font-medium'>{t('response')}</h3>
-                  <pre className='max-h-80 overflow-auto text-xs'>
+                  <h3 className='mb-2 text-xs font-medium'>{t('response')}</h3>
+                  <pre className='max-h-80 overflow-auto rounded-lg border bg-muted/40 p-3 font-mono text-xs text-foreground'>
                     {JSON.stringify(example.call.result, null, 2)}
                   </pre>
                 </section>

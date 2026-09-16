@@ -97,106 +97,188 @@ workflow.registerInstruction(CustomInstruction);
 
 重复 type 会被拒绝。运行时注册并不足够：应用的源码检查和 Artifact 构建也必须使用同一个合同，否则定义可能在一个阶段通过、另一个阶段失败。
 
-优先让应用 Agent 使用 Workflow Skill 检查是否已有插件提供所需能力。只有可复用的流程控制语义才适合成为 Instruction；普通业务动作继续使用 Run + Service。
+优先让应用 Agent 使用 Workflow Skill 检查是否已有插件提供所需能力。需要复用独立的配置和结果合同，或扩展流程控制语义时，才考虑 Instruction；普通业务动作继续使用 Run + Service。
 
-### 可运行示例：发邮件节点
+## Custom Instructions
 
-下面的最小扩展把“发送邮件”做成可复用节点。扩展插件公开同一个
-`SendEmailInstruction`，并在 Provider 的 `boot()` 中注册；`boot()` 可以异步等待
-邮件 Service 就绪，但注册本身必须在工作流被检查、构建和运行前完成。
+## When to extend
+
+Prefer an existing installed Instruction. Use `RunInstruction` plus a typed service for application-specific calculations, CRUD, sending a notification, or calling an API. Extend the node type when several workflows need a reusable, named operation with its own validated configuration and result contract, or when they need process-control semantics that Run cannot express. A single email call does not by itself require a new Instruction. Keep application-owned extensions in the application; create a separately published plugin only when that is the requested distribution boundary.
+
+Durable waiting, approval, loops, and subflows require dedicated lifecycle support. The synchronous completion example below does not implement those capabilities; adding a `resume()` method alone does not provide an external resume API. Confirm the installed runtime's supported lifecycle before promising them.
+
+## Public API
+
+| Public entry                           | Exports and purpose                                                                                                                                                     |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@nocobase/app-plugin-workflow`        | `createNodeExpression`, `defineWorkflow`, core Instruction classes, `WorkflowNodeSourceInput`, `NodeExpression`, `ConfigIssue`, `NodeResultSchema`, `WorkflowSourceAst` |
+| `@nocobase/app-plugin-workflow/server` | `WorkflowInstruction`, `WorkflowInstructionClass`, `WorkflowInstructionContext`, `WorkflowInstructionResult`, `workflowServiceToken`                                    |
+| `@nocobase/app-plugin-workflow/build`  | `checkWorkflowPackage`, `buildApplicationWorkflows`                                                                                                                     |
+
+An Instruction class supplies a stable unique `type`, `branches` (`null` for a sequential node), `create(source)`, and synchronous `validateConfig(unknown)` returning `{ path, message }[]`. Declare `result` when downstream nodes can reference its output. The instance implements async `run()` and, for supported branching lifecycles, `resume()`. `this.config` is the node configuration; custom types must explicitly implement any desired template evaluation rather than assuming Run's argument binding applies automatically. `this.signal` is the cancellation signal; `this.processor.services` provides application service resolution. A completed node returns `{ status: 1, result }` (`1` is RESOLVED); do not import internal status constants through unpublished paths.
+
+Keep module evaluation deterministic and free of service initialization: the checker evaluates DSL in a disposable process. Put asynchronous runtime initialization in Provider `boot()`, not `register()` (which is synchronous). Register the custom class once, after Workflow is available and before accepting workflow invocations. Duplicate types are rejected.
+
+## Runnable application example
+
+This small `example-label` node returns a literal label without external services. It demonstrates the extension API, not a reason to replace ordinary Run modules. Use an initialized application with Workflow installed and registered, its existing TypeScript tooling, and `tsx` available as a development dependency. All paths below are relative to that application's root. Edit application settings in `config.yml`; use `config.example.yml` as the configuration reference.
+
+Create `server/workflow-instructions/label.ts`:
 
 ```ts
-// server/instructions/send-email.ts
+import {
+  createNodeExpression,
+  type ConfigIssue,
+  type NodeExpression,
+  type NodeResultSchema,
+  type WorkflowNodeSourceInput,
+} from '@nocobase/app-plugin-workflow';
 import {
   WorkflowInstruction,
-  createNodeExpression,
-  type WorkflowNodeSourceInput,
   type WorkflowInstructionResult,
-} from '@nocobase/app-plugin-workflow';
-import { mailServiceToken, type MailService } from '../mail/service.js';
+} from '@nocobase/app-plugin-workflow/server';
 
-type Config = { to: string; subject: string; body: string };
-export class SendEmailInstruction extends WorkflowInstruction<Config> {
-  static readonly type = 'send-email';
-  static readonly branches = null;
-  static create(source: WorkflowNodeSourceInput<Config>) {
-    return createNodeExpression(SendEmailInstruction, source);
+type LabelConfig = { label: string };
+
+export class LabelInstruction extends WorkflowInstruction {
+  static readonly type: 'example-label' = 'example-label';
+  static readonly branches: null = null;
+  static readonly result: NodeResultSchema = { type: 'string' };
+
+  static create(source: WorkflowNodeSourceInput<LabelConfig>): NodeExpression {
+    return createNodeExpression(LabelInstruction, source);
   }
-  static validateConfig(config: unknown) {
-    const c = config as Partial<Config>;
-    return typeof c?.to === 'string' &&
-      typeof c?.subject === 'string' &&
-      typeof c?.body === 'string'
+
+  static validateConfig(config: unknown): ConfigIssue[] {
+    if (
+      config === null ||
+      typeof config !== 'object' ||
+      Array.isArray(config)
+    ) {
+      return [{ path: 'config', message: 'Expected an object.' }];
+    }
+    const record = config as Record<string, unknown>;
+    if (Object.keys(record).some((key) => key !== 'label')) {
+      return [{ path: 'config', message: 'Only label is supported.' }];
+    }
+    return typeof record.label === 'string' && record.label.length > 0
       ? []
-      : [{ path: 'config', message: 'to, subject and body are required' }];
+      : [
+          {
+            path: 'config.label',
+            message: 'Expected a non-empty literal string.',
+          },
+        ];
   }
+
   async run(): Promise<WorkflowInstructionResult> {
     this.signal.throwIfAborted();
-    const mail =
-      this.processor.services?.resolve<MailService>(mailServiceToken);
-    if (!mail) throw new Error('Mail service is not configured');
-    await mail.send(this.config); // MailService must provide an idempotency key.
-    return { status: 1, result: { sent: true } }; // 1 = RESOLVED
+    const issues = LabelInstruction.validateConfig(this.config);
+    if (issues.length) throw new Error(issues[0].message);
+    return { status: 1, result: this.config.label };
   }
 }
 ```
 
-在扩展插件 Provider 中注册运行时合同：
+Create `server/providers/workflow-instructions.ts`:
 
 ```ts
-export class MailWorkflowProvider extends ServiceProvider<App> {
-  async boot() {
+import type { Application } from '@nocobase/app-server/application';
+import { workflowServiceToken } from '@nocobase/app-plugin-workflow/server';
+import { ServiceProvider } from '@nocobase/service-provider';
+
+export default class WorkflowInstructionsProvider extends ServiceProvider<Application> {
+  readonly name: string = 'workflow-instructions';
+
+  async boot(): Promise<void> {
+    const { LabelInstruction } =
+      await import('../workflow-instructions/label.js');
     const workflow = this.app.container.resolve(workflowServiceToken);
-    await this.app.container.resolve(mailServiceToken).ready();
-    workflow.registerInstruction(SendEmailInstruction);
+    workflow.registerInstruction(LabelInstruction);
   }
 }
 ```
 
-工作流定义直接使用公开导入：
+In `server/providers/index.ts`, import `WorkflowInstructionsProvider` from `./workflow-instructions.js` and append it to the existing `serviceProviders` array. Preserve all existing providers. The application's `server/runtime.ts` already consumes that array. If publishing this as a plugin instead, expose the Instruction through an explicit package export and contribute the Provider through the plugin's Server contribution; consumers must import that public entry, never a guessed internal file path.
+
+Create `server/workflows/label-example/workflow.ts`:
 
 ```ts
 import {
   defineWorkflow,
   type WorkflowSourceAst,
 } from '@nocobase/app-plugin-workflow';
-import { SendEmailInstruction } from 'your-mail-plugin/server/instructions/send-email';
+import { LabelInstruction } from '../../workflow-instructions/label.js';
+
 const workflow: WorkflowSourceAst = defineWorkflow({
-  title: 'Send welcome email',
-  inputSchema: { type: 'object' },
+  title: 'Label example',
+  inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   nodes: [
-    SendEmailInstruction.create({
-      key: 'welcome',
-      config: {
-        to: '{{$input.email}}',
-        subject: 'Welcome',
-        body: 'Hello!',
-      },
+    LabelInstruction.create({
+      key: 'label',
+      title: 'Record a label',
+      description: 'Returns a fixed label to demonstrate a custom node result.',
+      config: { label: 'Example completed' },
     }),
   ],
 });
 export default workflow;
 ```
 
-构建侧必须传入同一个 Instruction map，不能只注册运行时：
+Create `scripts/check-build-custom-workflows.mjs`:
 
-```ts
+```js
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
-  buildApplicationWorkflows,
+  ConditionInstruction,
+  RunInstruction,
+  TerminateInstruction,
+} from '@nocobase/app-plugin-workflow';
+import {
   checkWorkflowPackage,
+  buildApplicationWorkflows,
 } from '@nocobase/app-plugin-workflow/build';
-const instructions = new Map([['send-email', SendEmailInstruction]]);
-await checkWorkflowPackage(packageRoot, { contracts: { nodes: instructions } });
-await buildApplicationWorkflows({
+import { LabelInstruction } from '../server/workflow-instructions/label.ts';
+
+const appRoot = fileURLToPath(new URL('../', import.meta.url));
+const sourceRoot = path.join(appRoot, 'server/workflows');
+const instructions = new Map(
+  [
+    ConditionInstruction,
+    RunInstruction,
+    TerminateInstruction,
+    LabelInstruction,
+  ].map((instruction) => [instruction.type, instruction]),
+);
+const checked = await checkWorkflowPackage(
+  path.join(sourceRoot, 'label-example'),
+  {
+    contracts: { nodes: instructions },
+  },
+);
+console.log(JSON.stringify(checked.ir, null, 2));
+const summary = await buildApplicationWorkflows({
   sourceRoot,
-  distRoot,
-  resourceRoot,
+  distRoot: path.join(appRoot, '.workflow-artifacts'),
+  resourceRoot: sourceRoot,
   instructions,
 });
+console.log(summary);
 ```
 
-`check`、Artifact 输出和运行时注册必须使用同一个 `type`、`validateConfig`、
-`create` 和执行合同；Artifact 只写入隔离的 `dist/server/workflows`，不会替代启用。
+Run from the application root:
+
+```bash
+pnpm exec tsx scripts/check-build-custom-workflows.mjs
+pnpm typecheck
+```
+
+The script checks the example and builds every workflow under `sourceRoot` with the same map. A supplied map replaces the defaults, so include the core classes and all installed extensions in use. The default `pnpm nocobase workflow check <package>` command knows only core types; use this custom entry for extended workflows. A default-command rejection of an unknown extension does not establish that the extension is invalid.
+
+The example has no runtime resources, so it reads resources from the source tree. For workflows with Run modules or assets, first compile/copy them to `dist/server/workflows` and change `resourceRoot` to that directory, preserving each workflow's package-relative paths. `buildApplicationWorkflows()` clears `distRoot`: keep it separate from the source tree, compiled resource tree, and other build outputs. Add `.workflow-artifacts/` to the application's ignore file. For production, adapt the application's existing workflow build stage to pass this same map, then install the resulting artifacts in the configured artifact directory after their resources have been read. Do not run the unmodified core-only build stage over custom workflows or let a later build step overwrite the extended artifacts.
+
+Start the application with `pnpm dev` after adding the Provider. Development loads source workflows using runtime-registered contracts. Inspect `label-example` in Workflow management, enable it and invoke it with `{}` when authorized; its node should resolve with `Example completed`. Building an Artifact does not register the runtime class, enable the workflow, or trigger a run. Verify the actual run in addition to source checking before considering a production extension complete.
 
 ## 接入示例
 

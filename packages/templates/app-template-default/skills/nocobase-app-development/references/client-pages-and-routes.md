@@ -130,6 +130,41 @@ Groups do not render business components. Pages must place `<Outlet />` explicit
 
 A navigable page normally changes `client/routes.ts`, its page component, and `client/locales/`. Do not edit the shell or a ServiceProvider merely to add a menu.
 
+## Putting the page in a breadcrumb trail
+
+The owning layout supplies the route tree: `AppShell` for business pages, and `SurfaceLayout` for Settings and Dev pages. `StandalonePageLayout` does not currently supply one, so breadcrumbs there render nothing.
+
+`navigation` controls menu entries; `breadcrumb` independently supplies a trail title. Declare both when a route belongs in both. Breadcrumb titles are static translation keys resolved in the owning package's namespace and are allowed on parameterized paths.
+
+```ts
+{
+  name: 'orders',
+  path: '/orders',
+  navigation: { title: 'navigation.orders', icon: ShoppingCart },
+  breadcrumb: { title: 'navigation.orders' },
+  componentLoader: () => import('./pages/orders/index.js'),
+}
+```
+
+The page places `<Breadcrumbs />` itself, above its heading, and keeps its own container and spacing:
+
+```tsx
+<section className='mx-auto w-full max-w-6xl space-y-6 p-6 md:p-8'>
+  <Breadcrumbs />
+  <PageHeader
+    title={t('orders.title')}
+    actions={<Button>{t('orders.create')}</Button>}
+  />
+</section>
+```
+
+The trail follows the matched route hierarchy:
+
+- Only routes declaring `breadcrumb` appear; Tab, dialog, and drawer routes leave it unset.
+- It renders only when at least two matched routes declare `breadcrumb`. Having a parent route alone is not enough.
+- Earlier page entries link to their resolved paths; groups without a component render as plain text. The last entry is the current page and is not a link.
+- Titles describe the page type, such as “Order detail”. Record-specific titles, such as “Order #42”, belong in the page heading.
+
 ## Customizing a plugin's page
 
 Do not declare a duplicate route for a page a plugin owns. Registering a second `/install` is a conflict, not a customization. Three mechanisms exist, in order of preference:

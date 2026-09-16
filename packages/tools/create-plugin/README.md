@@ -65,3 +65,9 @@ JSON mode emits one document for both success and failure. Successful results
 set `ok` to `true`; failures keep a non-zero exit code and return `ok: false`
 with a stable `error.code`, the human-readable `error.message`, and actionable
 `error.suggestions`.
+
+## Server resources and compiled database tasks
+
+Generated Server declarations include the required absolute `baseDir`, calculated relative to `import.meta.dirname`. All filesystem contributions resolve against it. Keep source and published Server exports aligned so development loads source contributions and installed or built plugins load compiled contributions.
+
+Plugins with the `database` capability run `nocobase-db-manifests` after TypeScript compilation. This command comes from `@nocobase/dev-config` and seals each migrations or seeds directory with `.manifest.json`. Run it after any JavaScript rewriting, keep generated manifests in the published `dist`, and clean stale output when removing or renaming task files.

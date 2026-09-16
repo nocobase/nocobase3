@@ -32,11 +32,11 @@ import {
 } from '@nocobase/app-plugin-workflow';
 ```
 
-Only use Instruction classes exported by an installed plugin and registered in the target application's build-time and runtime instruction registries. The workflow plugin currently exports `ConditionInstruction`, `RunInstruction`, and `TerminateInstruction`.
+Use Instruction classes exported by an installed plugin or defined in the application, and register the same classes in the target application's build-time and runtime instruction registries. The workflow plugin currently exports `ConditionInstruction`, `RunInstruction`, and `TerminateInstruction`.
 
 ## Complete current example
 
-若应用需要可复用的流程控制能力（例如发邮件节点），请先阅读文档中的“可运行示例：发邮件节点”。示例覆盖公开导入、异步 Provider 注册、checker/build 的同一 Instruction 合同、隔离 Artifact 输出和运行时注册；不要只在 `boot()` 中注册后就直接编写 DSL。
+For reusable custom node contracts or missing process-control semantics, read [Custom Instructions](custom-instructions.md) before authoring the DSL. It includes a complete example with public imports, asynchronous Provider registration, checker contracts, and isolated Artifact output.
 
 Create all of these files; the DSL alone is not a complete package:
 
@@ -289,7 +289,7 @@ Use an exact template such as `{{$parameters.approvalLimit}}` or JSON Logic `{ v
 - Keep node keys stable across revisions. Titles/descriptions may change; keys connect history, diagnostics, and result references.
 - Only call `.branch()` on a branching node, and only use branch names declared by that instruction contract.
 
-Every node source has `key`, optional `title`/`description`, required `config`, and optional `result`. Node-level timeout is not currently enforced by the runtime; configure a workflow-level timeout instead. Config is an instruction-owned namespace; never flatten config fields onto the node.
+Every node source has `key`, optional `title`, recommended `description`, required `config`, and optional `result`. Usually fill in `description` to explain the node's operation and business purpose, including relevant inputs, outputs, or side effects when helpful. The schema permits omitting it, but authoring guidance recommends providing these details so readers can understand the node beyond its short title. Node-level timeout is not currently enforced by the runtime; configure a workflow-level timeout instead. Config is an instruction-owned namespace; never flatten config fields onto the node.
 
 ## Condition nodes
 
@@ -435,7 +435,7 @@ Rebuild twice from unchanged sources when determinism is in doubt and compare th
 
 - No legacy YAML, `trigger`, `start`, node map, numeric branch, or edge-list syntax.
 - `workflow.ts` binds `defineWorkflow()` to a const annotated with the exported `WorkflowSourceAst` type and default-exports that binding; it never default-exports a bare call expression, which fails the application's `isolatedDeclarations` typecheck (`TS9037`).
-- Import only Instruction classes exported by installed plugins and registered by the application.
+- Import Instruction classes through installed plugins' public exports or application-owned modules, and register them with the application.
 - No invented nodes/operators/config fields.
 - All objects and evaluated helpers produce JSON-only values.
 - Input root is `object`; extra fields are deliberately allowed or rejected.

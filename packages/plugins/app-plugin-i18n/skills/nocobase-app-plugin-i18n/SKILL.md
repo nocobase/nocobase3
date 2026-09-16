@@ -110,7 +110,7 @@ Without `i18nNs`, the label is treated as literal text and rendered as-is.
    };
    ```
 
-3. Add the locale to the application's own `client/locales/index.ts` and `server/locales/index.ts`. Those files are the list of languages the application offers; a plugin declaring a language the application does not is unreachable, because a plugin supplies translations rather than languages.
+3. Add the locale to the application's own `client/locales/index.ts` and, when translating server content, `server/locales/index.ts`. Keeping both lists aligned is recommended. A client-only language can still be selected: the server uses English and the application shows an informational toast. Those files decide each side's offered languages; a plugin supplies translations rather than adding languages to the picker.
 
 Do this in every package that ships locales, or the new language shows a mix: packages that have it translated, and packages falling back to English.
 

@@ -1,4 +1,7 @@
-import { createRefineI18nProvider } from '@nocobase/i18n/client';
+import {
+  applyDocumentLocale,
+  createRefineI18nProvider,
+} from '@nocobase/i18n/client';
 import { createApiClient, type ApiClient } from '@nocobase/api-client';
 import {
   createRealtimeClient,
@@ -51,6 +54,8 @@ type ClientApplicationState =
 
 class CoreClientServiceProvider extends ServiceProvider<ClientApplication> {
   public readonly name: string = '@nocobase/app-client/core';
+  private readonly synchronizeDocumentLocale = (): void =>
+    applyDocumentLocale(this.app.runtime.i18n);
 
   public override register(): void {
     this.app.container.singleton(apiClientToken, (): ApiClient => {
@@ -76,7 +81,20 @@ class CoreClientServiceProvider extends ServiceProvider<ClientApplication> {
     );
   }
 
+  public override start(): Promise<void> {
+    this.synchronizeDocumentLocale();
+    this.app.runtime.i18n.i18n.on(
+      'languageChanged',
+      this.synchronizeDocumentLocale,
+    );
+    return Promise.resolve();
+  }
+
   public override shutdown(): Promise<void> {
+    this.app.runtime.i18n.i18n.off(
+      'languageChanged',
+      this.synchronizeDocumentLocale,
+    );
     this.app.container.resolveIfCreated(realtimeClientToken)?.close();
     return Promise.resolve();
   }

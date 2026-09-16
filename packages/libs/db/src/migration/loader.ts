@@ -1,4 +1,8 @@
-import { createHash } from 'node:crypto';
+import {
+  readTaskManifest,
+  resolveTaskChecksum,
+  type TaskManifest,
+} from './manifest.js';
 import type { Dirent } from 'node:fs';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { basename, extname, join, resolve } from 'node:path';
@@ -45,6 +49,7 @@ async function loadMigrationSource(
   source: MigrationSource,
 ): Promise<LoadedMigration[]> {
   const directory = resolve(source.directory);
+  const manifest = await readTaskManifest(directory);
   const entries = await readMigrationDirectory(directory);
   const extensions = new Set(source.extensions ?? DEFAULT_MIGRATION_EXTENSIONS);
   const files = entries
@@ -60,6 +65,7 @@ async function loadMigrationSource(
         source.packageName,
         join(directory, fileName),
         fileName,
+        manifest,
       ),
     );
   }
@@ -128,12 +134,13 @@ async function loadMigrationFile(
   packageName: string,
   filePath: string,
   fileName: string,
+  manifest: TaskManifest | undefined,
 ): Promise<LoadedMigration> {
   const [source, fileStat] = await Promise.all([
     readFile(filePath, 'utf8'),
     stat(filePath),
   ]);
-  const checksum = createMigrationChecksum(source);
+  const checksums = resolveTaskChecksum(filePath, source, manifest);
   const migration = await importMigration(filePath, fileStat.mtimeMs);
   validateMigrationDefinition(migration, filePath, fileName);
 
@@ -142,7 +149,7 @@ async function loadMigrationFile(
     name: migration.name,
     filePath,
     fileName,
-    checksum,
+    ...checksums,
     migration,
   };
 }
@@ -234,10 +241,6 @@ function isMigrationFile(fileName: string, extensions: Set<string>): boolean {
 
 function migrationNameFromFileName(fileName: string): string {
   return basename(fileName, extname(fileName));
-}
-
-function createMigrationChecksum(source: string): string {
-  return createHash('sha256').update(source).digest('hex');
 }
 
 function isNonEmptyString(value: unknown): value is string {

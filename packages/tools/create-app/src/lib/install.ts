@@ -1,6 +1,5 @@
 import { access } from 'node:fs/promises';
 import path from 'node:path';
-import { driverNeedsBuild } from './database.ts';
 import { CommandFailedError, runCommand } from './run-command.ts';
 
 const INSTALL_TIMEOUT_MS = 10 * 60 * 1000;
@@ -9,21 +8,10 @@ const REBUILD_TIMEOUT_MS = 5 * 60 * 1000;
 
 export interface InstallOptions {
   directory: string;
-  /**
-   * The one database driver an app's dialect needs, recorded for the caller's benefit. Omitted for a hub, which has no
-   * database. The install itself does not read it: the driver reaches the tree through `dependencies`, not the
-   * command line.
-   */
-  driver?: string;
   registry?: string;
 }
 
-/**
- * Installs the generated project's dependencies, including the one database driver its dialect needs.
- *
- * The driver is added to `dependencies` before the install rather than installed separately, so a single resolution
- * pass produces one lockfile. Installing it afterwards would work but would resolve the tree twice.
- */
+/** Installs the generated project's dependencies. */
 export async function installDependencies(
   options: InstallOptions,
 ): Promise<void> {
@@ -59,7 +47,18 @@ export interface DriverVerification {
 }
 
 /**
- * Confirms a native driver actually loads.
+ * The native package every template's default database connection needs.
+ *
+ * It arrives transitively rather than being installed by name: each template depends on `@nocobase/db-sqlite`, which
+ * depends on `better-sqlite3`. That makes it the one native addon a generated project is guaranteed to need, and the
+ * only one worth checking. The other entries in `ALLOWED_BUILDS` do not qualify — `oracledb` is not installed unless
+ * the application adds that dialect itself, and `esbuild` resolves its binary from a platform package rather than
+ * compiling one, so neither fails the way this does.
+ */
+export const DEFAULT_NATIVE_DRIVER = 'better-sqlite3';
+
+/**
+ * Confirms the native driver actually loads.
  *
  * `better-sqlite3` ships no usable JavaScript fallback: if its install script did not run, the package directory
  * exists and `pnpm install` reports success, but the first query fails at runtime with "Could not locate the bindings
@@ -69,19 +68,15 @@ export interface DriverVerification {
  */
 export async function verifyDriver(
   directory: string,
-  driver: string,
+  driver: string = DEFAULT_NATIVE_DRIVER,
 ): Promise<DriverVerification> {
-  if (!driverNeedsBuild(driver)) {
-    return { ok: true };
-  }
-
   try {
     await access(path.join(directory, 'node_modules', driver));
   } catch {
-    return {
-      ok: false,
-      reason: `${driver} was not installed.`,
-    };
+    // Nothing to verify. The driver is not named in any manifest this command writes — it reaches the tree through
+    // the template's own dialect package — so a template that does not use SQLite legitimately has no copy of it,
+    // and an install that genuinely failed already reported so.
+    return { ok: true };
   }
 
   if (await driverLoads(directory, driver)) {

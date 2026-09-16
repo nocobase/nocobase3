@@ -1,5 +1,97 @@
 # @nocobase/app-plugin-ai-employee
 
+## 0.1.0-beta.11
+
+### Patch Changes
+
+- 11c276a: 将 AI Employee Plugin Skill 移至插件标准的 `skills/` 源目录，确保发布包可以包含并同步该 Skill。
+
+  Move the AI Employee Plugin Skill into the plugin-standard `skills/` source directory so it can be included in the published package and synchronized correctly.
+
+## 0.1.0-beta.10
+
+### Patch Changes
+
+- 1c70f60: Persist AI employee collection field metadata so Oracle returns booleans and integers with their logical types. Let the database query layer encode and decode JSON once, and use a round-trippable name for the default LLM service field. This changes initialization definitions and requires recreating development databases initialized with the previous definitions.
+- a60decd: Require an explicit absolute baseDir for Server plugins and resolve migrations, seeds, jobs, and package metadata from the loaded plugin copy. Generate and validate database task manifests during builds so TypeScript and JavaScript share source checksums, with verified legacy JavaScript history conversion and synchronized plugin scaffolding and application templates.
+- 1a85a86: Add breadcrumb labels to plugin routes so nested pages show their navigation path.
+- e067113: Depend on one zod major, so a deployment can resolve better-auth
+
+  An application that installed both the AI employee plugin and the API keys plugin failed to start with `z.ipv4 is not a function`, thrown while loading `@better-auth/core`. Nothing in better-auth was wrong: the AI employee packages asked for `zod: ^3` while better-auth asks for `^4`, and a deployment installs `dist/` with `nodeLinker: hoisted`, where one version of a package takes the root slot and the rest are nested underneath whoever depends on them. zod 3 won the root, which forced better-auth's whole subtree to be nested, and a `@better-auth/core` that ended up next to the root zod bound to the wrong major.
+
+  The same collision has a second failure mode that is harder to read. `@better-auth/api-key` declares `@better-auth/core`, `better-call`, `jose`, `kysely` and `nanostores` as peer dependencies, and a deployment sets `autoInstallPeers: false` so it installs none of them. It works anyway when better-auth's dependencies hoist to the root, because the peers are then sitting where the resolver looks; it stops working the moment the zod conflict pushes them down into `node_modules/better-auth/node_modules`, and the application fails with `Cannot find package '@better-auth/core'`.
+
+  So the fix is not to declare better-auth's internals somewhere. `@nocobase/ai-employee` never imported zod at all and no longer declares it, `@nocobase/app-plugin-ai-employee` moves to zod 4, and all three templates and the plugin now take it from the `zod` catalog entry, so one version is what an application gets. Its schemas use `z.object`, `z.string`, `z.number`, `z.array`, `z.record`, `z.coerce`, `z.any` and `z.unknown`, all of which carry over unchanged; `buildStandardAgentMiddleware` gained an explicit `AgentMiddleware[]` return type, which the new resolution made necessary.
+
+  A deployment tree now holds a single `zod` and a single `@better-auth/core`, hoisted to the root where `@better-auth/api-key` resolves them.
+
+- Updated dependencies [63db898]
+- Updated dependencies [63db898]
+- Updated dependencies [63db898]
+- Updated dependencies [63db898]
+- Updated dependencies [a60decd]
+- Updated dependencies [1a85a86]
+- Updated dependencies [1c70f60]
+- Updated dependencies [63db898]
+- Updated dependencies [e067113]
+  - @nocobase/app-server@1.0.0-beta.15
+  - @nocobase/db@1.0.0-beta.7
+  - @nocobase/app-plugin-authentication@0.1.0-beta.14
+  - @nocobase/app-client@1.0.0-beta.16
+  - @nocobase/ai-employee@0.2.0-beta.5
+  - @nocobase/i18n@1.0.0-beta.4
+  - @nocobase/service-provider@0.0.2-beta.1
+
+## 0.1.0-beta.9
+
+### Patch Changes
+
+- 154e09e: Treat a credential Better Auth refuses — an expired or revoked API key — as not signed in when resolving the caller, instead of failing the request.
+- Updated dependencies [154e09e]
+- Updated dependencies [154e09e]
+- Updated dependencies [c01baf6]
+  - @nocobase/app-plugin-authentication@0.1.0-beta.12
+  - @nocobase/i18n@1.0.0-beta.4
+  - @nocobase/app-client@1.0.0-beta.15
+  - @nocobase/app-server@1.0.0-beta.13
+
+## 0.1.0-beta.8
+
+### Patch Changes
+
+- a2dbe54: Publish only the compiled `dist/database`, no longer the TypeScript sources beside it. The runtime resolves a plugin's declared `database/migrations` and `database/seeds` against the package directory first and its `dist` second, so an installed plugin that shipped both served the sources, and Node refuses to strip types from a file under `node_modules`: `@nocobase/app-plugin-ai-employee` failed every application start with `Stripping types is currently unsupported for files under node_modules` while every development checkout, which resolves the same sources outside `node_modules`, kept working.
+
+## 0.1.0-beta.7
+
+### Minor Changes
+
+- 6d43421: Identify `ai.aiKnowledgeBase.vectorDatabases` entries by `key` instead of `name`. This is a breaking change to the application configuration contract: `key` is now required and must be unique within one configuration, and `name` is now optional.
+
+  `key` is the stable identifier of a record — the knowledge-base plugin matches existing records by it when synchronizing declarative configuration, and its settings page lists it as the UID. `name` is only a display title, shown as the Title, and falls back to `key` when omitted, so two entries may share the same name.
+
+  A configuration written against the previous contract fails to typecheck until each entry's `name` is renamed to `key`. Keep `name` alongside it only when a separate display title is wanted.
+
+### Patch Changes
+
+- be92e2b: Use the NocoBase AI chat mark for the floating AI employee chat entry instead of the generic `lucide-react` `Bot` glyph on a solid primary square. The trigger now shows the same brand artwork the Portal template uses for this entry.
+
+  The mark ships as an inlined `NocoBaseAIChatIcon` React component under `shared/icons/` rather than an `.svg` asset import. Registry source is copied into an application and typechecked with plain `tsc`, so an asset import would require shipping a `declare module '*.svg'` declaration into every consuming application alongside it.
+
+- 6d43421: Add a `#` row-number column to the LLM service table, matching the MCP table. Both settings tables now open with the same fixed-width centered index column before the UID.
+- 6d43421: Fix the LLM service model dialog overlay leaving the page header uncovered. Its backdrop had no `z-index`, so the surface layout's `sticky z-40` header painted over it and stayed interactive while the dialog was open. It now sits at `z-50`, matching every other dialog in the plugin.
+- Updated dependencies [1d5ee9a]
+- Updated dependencies [1d5ee9a]
+- Updated dependencies [1d5ee9a]
+- Updated dependencies [211538b]
+- Updated dependencies [1d5ee9a]
+- Updated dependencies [1d5ee9a]
+  - @nocobase/app-server@1.0.0-beta.12
+  - @nocobase/db@1.0.0-beta.6
+  - @nocobase/app-plugin-authentication@0.1.0-beta.11
+  - @nocobase/app-client@1.0.0-beta.14
+  - @nocobase/i18n@1.0.0-beta.3
+  - @nocobase/service-provider@0.0.2-beta.1
+
 ## 0.1.0-beta.6
 
 ### Minor Changes

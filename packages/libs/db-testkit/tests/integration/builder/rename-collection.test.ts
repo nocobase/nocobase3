@@ -3,14 +3,11 @@ import { describeIntegrationDatabases } from '../helpers.js';
 
 describeIntegrationDatabases('collection rename', (context) => {
   it('renames the backing table and preserves data', async () => {
-    await context.builder.createCollection(
-      'users',
-      (collection) => {
-        collection.increments('id');
-        collection.string('email');
-      },
-      { syncMetadata: false },
-    );
+    // An externally created table has no supplemental Metadata document.
+    await context.db.schema.createTable(context.table('users'), (table) => {
+      table.increments('id');
+      table.string('email');
+    });
     await context
       .db(context.table('users'))
       .insert({ email: 'ada@example.com' });

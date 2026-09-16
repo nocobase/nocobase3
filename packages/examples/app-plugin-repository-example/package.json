@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-repository-example",
   "displayName": "Repository Example App Plugin",
   "description": "CRM and order management demonstrating relational Repository HTTP APIs.",
-  "version": "0.1.0-beta.4",
+  "version": "0.1.0-beta.7",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -36,7 +36,6 @@
     "dist",
     "README.md",
     "CHANGELOG.md",
-    "database",
     "skills"
   ],
   "publishConfig": {
@@ -66,7 +65,7 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && nocobase-db-manifests",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run --passWithNoTests",
     "lint": "eslint . --max-warnings 0",
@@ -103,7 +102,6 @@
     "@testing-library/user-event": "catalog:",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
-    "better-sqlite3": "catalog:",
     "eslint": "catalog:",
     "jsdom": "catalog:",
     "prettier": "catalog:",

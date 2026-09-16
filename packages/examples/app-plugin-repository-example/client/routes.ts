@@ -1,3 +1,4 @@
+import { Database, ShoppingCart, Users } from 'lucide-react';
 import {
   defineAppRoutes,
   type AppClientRouteContribution,
@@ -6,13 +7,15 @@ const routes: readonly AppClientRouteContribution[] = [
   defineAppRoutes([
     {
       name: 'api-examples',
-      navigation: { title: 'apiExamples' },
+      navigation: { title: 'apiExamples', icon: Database },
+      breadcrumb: { title: 'apiExamples' },
       children: [
         {
           name: 'sort',
           path: '/repository-example/sort',
           auth: 'required',
           navigation: { title: 'sortTitle' },
+          breadcrumb: { title: 'sortTitle' },
           componentLoader: () => import('./pages/sort-page.js'),
         },
         {
@@ -20,6 +23,7 @@ const routes: readonly AppClientRouteContribution[] = [
           path: '/repository-example/select-combine',
           auth: 'required',
           navigation: { title: 'selectCombineTitle' },
+          breadcrumb: { title: 'selectCombineTitle' },
           componentLoader: () => import('./pages/select-combine-page.js'),
         },
         {
@@ -27,6 +31,7 @@ const routes: readonly AppClientRouteContribution[] = [
           path: '/repository-example/relation-mutations',
           auth: 'required',
           navigation: { title: 'relationMutationsTitle' },
+          breadcrumb: { title: 'relationMutationsTitle' },
           componentLoader: () => import('./pages/relation-mutations-page.js'),
         },
         {
@@ -34,6 +39,7 @@ const routes: readonly AppClientRouteContribution[] = [
           path: '/repository-example/find-many',
           auth: 'required',
           navigation: { title: 'findManyTitle' },
+          breadcrumb: { title: 'findManyTitle' },
           componentLoader: () => import('./pages/find-many-page.js'),
         },
         {
@@ -41,6 +47,7 @@ const routes: readonly AppClientRouteContribution[] = [
           path: '/repository-example/aggregate',
           auth: 'required',
           navigation: { title: 'aggregateTitle' },
+          breadcrumb: { title: 'aggregateTitle' },
           componentLoader: () => import('./pages/aggregate-page.js'),
         },
         {
@@ -48,19 +55,22 @@ const routes: readonly AppClientRouteContribution[] = [
           path: '/repository-example/atomic',
           auth: 'required',
           navigation: { title: 'atomicTitle' },
+          breadcrumb: { title: 'atomicTitle' },
           componentLoader: () => import('./pages/atomic-page.js'),
         },
       ],
     },
     {
       name: 'crm-group',
-      navigation: { title: 'crm' },
+      navigation: { title: 'crm', icon: Users },
+      breadcrumb: { title: 'crm' },
       children: [
         {
           name: 'crm',
           path: '/repository-example/crm',
           auth: 'required',
           navigation: { title: 'customers' },
+          breadcrumb: { title: 'customers' },
           componentLoader: () => import('./pages/crm-page.js'),
         },
         {
@@ -68,19 +78,22 @@ const routes: readonly AppClientRouteContribution[] = [
           path: '/repository-example/crm/contacts',
           auth: 'required',
           navigation: { title: 'contacts' },
+          breadcrumb: { title: 'contacts' },
           componentLoader: () => import('./pages/contacts-page.js'),
         },
       ],
     },
     {
       name: 'orders-group',
-      navigation: { title: 'ordersTitle' },
+      navigation: { title: 'ordersTitle', icon: ShoppingCart },
+      breadcrumb: { title: 'ordersTitle' },
       children: [
         {
           name: 'orders',
           path: '/repository-example/orders',
           auth: 'required',
           navigation: { title: 'orders' },
+          breadcrumb: { title: 'orders' },
           componentLoader: () => import('./pages/orders-page.js'),
         },
         {
@@ -88,6 +101,7 @@ const routes: readonly AppClientRouteContribution[] = [
           path: '/repository-example/orders/items',
           auth: 'required',
           navigation: { title: 'items' },
+          breadcrumb: { title: 'items' },
           componentLoader: () => import('./pages/items-page.js'),
         },
         {
@@ -95,6 +109,7 @@ const routes: readonly AppClientRouteContribution[] = [
           path: '/repository-example/orders/products',
           auth: 'required',
           navigation: { title: 'products' },
+          breadcrumb: { title: 'products' },
           componentLoader: () => import('./pages/products-page.js'),
         },
       ],

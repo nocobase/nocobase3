@@ -42,6 +42,8 @@ export type AppServerPluginLocalesLoader = () => Promise<LocalesModule>;
 
 export interface AppServerPluginDefinition<TConfig = object> {
   readonly packageName: string;
+  /** Absolute base directory for plugin-local contribution paths. */
+  readonly baseDir: string;
   readonly serviceProviders?: readonly AppPluginProviderConstructor<TConfig>[];
   readonly routes?: readonly AppRouteContribution<AppPluginApplication>[];
   readonly database?: AppServerPluginDatabaseContribution;
@@ -51,6 +53,8 @@ export interface AppServerPluginDefinition<TConfig = object> {
 
 export interface AppServerPlugin<TConfig = object> {
   readonly packageName: string;
+  /** Absolute base directory for plugin-local contribution paths. */
+  readonly baseDir: string;
   readonly serviceProviders: readonly AppPluginProviderConstructor<TConfig>[];
   readonly routes: readonly AppRouteContribution<AppPluginApplication>[];
   readonly database?: AppServerPluginDatabaseContribution;
@@ -65,6 +69,8 @@ export interface AppServerPlugins {
 
 export interface ResolvedAppPlugin {
   readonly packageName: string;
+  /** Absolute base directory for plugin-local contribution paths. */
+  readonly baseDir: string;
   readonly version: string;
   readonly rootDir: string;
   readonly migrationsDirectory?: string;

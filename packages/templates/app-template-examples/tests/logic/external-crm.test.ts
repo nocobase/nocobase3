@@ -6,7 +6,7 @@ import {
   databaseManagerToken,
   SchemaManagementNotAllowedError,
 } from '@nocobase/db';
-import sqlite from '@nocobase/db-sqlite';
+import sqlite, { type SqliteConnectionConfig } from '@nocobase/db-sqlite';
 import { Auth, authenticationToken } from '@nocobase/app-plugin-authentication';
 import type { Application } from '@nocobase/app-server/application';
 import { createConfigPaths } from '@nocobase/app-server/config';
@@ -34,7 +34,7 @@ beforeEach(async () => {
   directory = mkdtempSync(
     path.join(tmpdir(), 'nocobase-examples-external-crm-'),
   );
-  const config: AppDatabaseConfig = {
+  const config: AppDatabaseConfig<SqliteConnectionConfig> = {
     default: 'main',
     drivers: { sqlite },
     connections: {

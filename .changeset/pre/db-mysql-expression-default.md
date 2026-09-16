@@ -1,11 +1,7 @@
 ---
-'@nocobase/db': patch
+'@nocobase/db-mysql': patch
 ---
 
-Stop reporting a MySQL expression default as a generated column
+Read the value of an expression default from `information_schema`
 
-MySQL describes a column whose default has to be written as an expression with `EXTRA = 'DEFAULT_GENERATED'`, and the schema inspector matched on the word `GENERATED`. That is the wrong signal: `DEFAULT_GENERATED` describes a default, while a generated column reports `VIRTUAL GENERATED` or `STORED GENERATED` and is the only kind that carries a `GENERATION_EXPRESSION`. The inspector now derives it from that expression.
-
-Two things were wrong while it did not. The column's default was dropped from the introspected schema, and the Repository refused to write the column at all — `createOne` and `updateOne` rejected it as `FIELD_NOT_WRITABLE`, "managed by the database or Repository".
-
-Every defaulted `json` column on MySQL was affected, because MySQL accepts no literal default on `json` and the builder therefore emits `DEFAULT (json_object())` for one. A Collection declaring `collection.json('options').notNull().defaultTo({})` could not have its `options` written on MySQL, while the same Collection worked on every other database.
+MySQL reports an expression default — which every defaulted `json` column has, since MySQL accepts no literal default on `json` — as the expression it evaluates, `_utf8mb4\'{"enabled":true}\'`, rather than as a value. The shared literal parser did not recognise the character-set introducer or the backslash-escaped quotes, so the inspector returned the default's expression without a value and a resolved json Field carried no `defaultValue`. The introducer is now stripped and the escapes undone before parsing, so the default reads as the `'...'` literal it stands for.

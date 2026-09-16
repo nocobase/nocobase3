@@ -1,8 +1,9 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import type { Knex } from 'knex';
 import { describe, expect, it, vi } from 'vitest';
-import sqlite from '../src/index.js';
+import sqlite, { type SqliteConnectionConfig } from '../src/index.js';
 import {
   createDatabaseManager,
   defineDatabase,
@@ -20,7 +21,7 @@ import {
 
 const testDrivers = { sqlite };
 
-function createTestDatabase(config: DatabaseConfig) {
+function createTestDatabase(config: DatabaseConfig<SqliteConnectionConfig>) {
   return createDatabaseManager({
     ...config,
     drivers: { ...testDrivers, ...config.drivers },
@@ -831,17 +832,13 @@ describe('DatabaseManager', () => {
 
     try {
       const connection = db.connection();
-      await connection.builder.createCollection(
-        'orders',
-        (collection) => {
-          collection.increments('id');
-        },
-        { syncMetadata: false },
-      );
+      const client = await connection.client<Knex>();
+      await client.schema.createTable('orders', (table) => {
+        table.increments('id');
+      });
       await expect(metadataStore.get('orders')).resolves.toBeUndefined();
 
       await connection.builder.renameCollection('orders', 'archivedOrders');
-      const client = await connection.client<any>();
       expect(await client.schema.hasTable('orders')).toBe(false);
       expect(await client.schema.hasTable('archived_orders')).toBe(true);
       await expect(
@@ -850,6 +847,50 @@ describe('DatabaseManager', () => {
       await expect(
         metadataStore.get('archivedOrders'),
       ).resolves.toBeUndefined();
+    } finally {
+      await db.destroy();
+    }
+  });
+
+  it('synchronizes logical field types so existing and new records use JSON input and output', async () => {
+    const metadataStore = new InMemoryCollectionMetadataStore();
+    const db = createTestDatabase({
+      metadataStore,
+      connections: {
+        sqlite: { dialect: 'sqlite', filename: ':memory:' },
+      },
+    });
+
+    try {
+      const connection = db.connection();
+      await connection.builder.createCollection('settings', (collection) => {
+        collection.string('id').primary();
+        collection.text('payload');
+      });
+      const repository = db.repository('settings');
+      await repository.createOne({
+        values: { id: 'existing', payload: '{"enabled":true}' },
+      });
+      await expect(
+        repository.findOne({ filter: { id: 'existing' } }),
+      ).resolves.toEqual({ id: 'existing', payload: '{"enabled":true}' });
+
+      // SQLite stores both declarations as TEXT; Metadata selects the JSON codec.
+      await connection.builder.alterField('settings', 'payload', {
+        type: 'json',
+      });
+      await expect(metadataStore.get('settings')).resolves.toMatchObject({
+        document: { fields: { payload: { type: 'json' } } },
+      });
+      await expect(
+        repository.findOne({ filter: { id: 'existing' } }),
+      ).resolves.toEqual({ id: 'existing', payload: { enabled: true } });
+
+      const values = { id: 'new', payload: { models: ['a'], enabled: false } };
+      expect((await repository.createOne({ values })).record).toEqual(values);
+      await expect(
+        repository.findOne({ filter: { id: 'new' } }),
+      ).resolves.toEqual(values);
     } finally {
       await db.destroy();
     }

@@ -57,8 +57,6 @@ buildHooks: {
 
 A hook command is any executable with its arguments, already split — no shell, so no quoting to get right, and no `&&` or pipes. The stage names say what exists when the hook runs: `beforeBuild` (empty `dist`), `afterClientBuild` (`dist/client`), `afterServerBuild` (`+ dist/server`), `afterBuild` (the installed deployment tree), and `beforeDev` for `pnpm dev`.
 
-Read `internal-docs/development/plugin-development/cli.md` before adding either.
-
 ## Before you finish
 
 ```bash
@@ -71,3 +69,9 @@ pnpm --filter <this-package> build
 Every server route owns and tests its own authentication and authorization boundary; mounting under `/api` authenticates nothing. Keep declarations, exports, dependencies, tests, README, and Plugin Skills aligned when capabilities change.
 
 The repository root `AGENTS.md` covers the rest — package publishing, test layout, migrations, and the reasoning behind the rules summarized here.
+
+## Server resource base and database builds
+
+Every Server plugin declaration requires an absolute `baseDir`. In `server/plugin.ts`, calculate it with `path.resolve(import.meta.dirname, '..')` using `node:path`. Migrations, Seeds, and Jobs resolve only relative to this directory; the same declaration under `dist/server` resolves compiled resources. Keep source and published exports aligned.
+
+After compiling database tasks and finishing JavaScript rewriting, run `nocobase-db-manifests` from `@nocobase/dev-config`. Publish the generated `.manifest.json` alongside the marked JavaScript in each migrations and seeds directory. Do not edit historical migration sources or bypass checksums to accommodate compilation differences.

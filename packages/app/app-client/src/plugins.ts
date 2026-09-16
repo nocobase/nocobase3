@@ -44,6 +44,7 @@ export interface AppClientRoutePageDefinition {
   readonly path: string;
   readonly auth?: AppClientRouteAuth;
   readonly access?: AppClientRouteAccess;
+  readonly breadcrumb?: AppClientRouteBreadcrumb;
   readonly navigation?: AppClientSettingsRouteNavigation;
   readonly componentLoader: AppClientRouteComponentLoader;
   readonly children?: readonly AppClientRouteDefinition[];
@@ -53,6 +54,7 @@ export interface AppClientRouteGroupDefinition {
   readonly name: string;
   readonly path?: string;
   readonly auth?: AppClientRouteAuth;
+  readonly breadcrumb?: AppClientRouteBreadcrumb;
   readonly navigation: AppClientSettingsRouteNavigation;
   readonly children: readonly AppClientRouteDefinition[];
   readonly componentLoader?: never;
@@ -66,6 +68,7 @@ export interface AppClientRegisteredRoute {
   readonly path: string;
   readonly auth: AppClientRouteAuth;
   readonly access?: AppClientRouteAccess;
+  readonly breadcrumb?: AppClientRouteBreadcrumb;
   readonly navigation?: AppClientSettingsRouteNavigation;
   readonly componentLoader?: AppClientRouteComponentLoader;
   readonly children?: readonly AppClientRegisteredRoute[];
@@ -90,10 +93,25 @@ export interface AppClientSettingsRouteNavigation {
   readonly icon?: AppClientSettingIcon;
 }
 
+/**
+ * How a route names itself in a breadcrumb trail.
+ *
+ * It works the way `navigation` does: declaring it puts the route in the trail, leaving it out keeps the route out.
+ * The two are independent — a page can appear in a menu, in a trail, in both, or in neither — so neither falls back
+ * to the other and a route that belongs in both states its title twice.
+ *
+ * Unlike `navigation` it is allowed on a parameterised path, since a trail names the kind of page rather than the
+ * record it shows: `/orders/:orderId` is "Order detail", not "Order #42".
+ */
+export interface AppClientRouteBreadcrumb {
+  readonly title: string;
+}
+
 export interface AppClientSettingsRoutePageDefinition {
   readonly name: string;
   /** Path relative to the built-in Settings Route. */
   readonly path: string;
+  readonly breadcrumb?: AppClientRouteBreadcrumb;
   readonly navigation?: AppClientSettingsRouteNavigation;
   /** Authorization checked before the page is loaded. */
   readonly access?: {
@@ -112,6 +130,7 @@ export interface AppClientSettingsRouteGroupDefinition {
   readonly name: string;
   /** Path segment relative to the built-in Settings Route. */
   readonly path?: string;
+  readonly breadcrumb?: AppClientRouteBreadcrumb;
   readonly navigation: AppClientSettingsRouteNavigation;
   readonly componentLoader?: never;
   readonly children: readonly AppClientSettingsRouteDefinition[];
@@ -941,6 +960,19 @@ function resolveRouteTree(
         throw new Error(
           `Client route "${id}" navigation requires a static path.`,
         );
+      // A menu entry needs a static path; a breadcrumb does not, since it names the kind of page rather than the
+      // record. Nothing falls back to anything: a route in both a menu and a trail declares both.
+      const breadcrumb = route.breadcrumb
+        ? Object.freeze({
+            ...route.breadcrumb,
+            title: normalizeSettingTitle(
+              route.breadcrumb.title,
+              id,
+              packageName,
+              kind,
+            ),
+          })
+        : undefined;
       if (isPage) {
         const signature = createRoutePathSignature(path);
         const previous = claimed.get(signature);
@@ -993,6 +1025,7 @@ function resolveRouteTree(
         auth,
         packageName,
         source,
+        ...(breadcrumb ? { breadcrumb } : {}),
         ...(navigation ? { navigation } : {}),
         // `access: false` is a declaration, not an absence: testing for truthiness here would drop it and put the
         // page back on the default check it opted out of.

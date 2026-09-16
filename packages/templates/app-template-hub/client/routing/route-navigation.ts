@@ -3,6 +3,8 @@ import { useCanWithoutCache } from '@refinedev/core';
 import { useEffect, useMemo, useState } from 'react';
 import { matchPath, matchRoutes, type RouteObject } from 'react-router';
 
+import { EMPTY_ARRAY } from '@/lib/constants';
+
 export interface RouteNavigationItem {
   readonly route: AppClientRegisteredRoute;
   readonly children: readonly RouteNavigationItem[];
@@ -14,7 +16,10 @@ export function buildRouteNavigation(
 ): RouteNavigationItem[] {
   return routes.flatMap((route) => {
     if (denied.has(routeKey(route))) return [];
-    const children = buildRouteNavigation(route.children ?? [], denied);
+    const children = buildRouteNavigation(
+      route.children ?? EMPTY_ARRAY,
+      denied,
+    );
     return route.navigation && (route.componentLoader || children.length)
       ? [{ route, children }]
       : children;
@@ -84,7 +89,7 @@ export function useRouteNavigation(
             ]
           : []),
         ...collect(
-          route.children ?? [],
+          route.children ?? EMPTY_ARRAY,
           hasPageAncestor || Boolean(route.componentLoader),
         ),
       ]);
@@ -136,7 +141,7 @@ export function matchRouteTree(
     nodes.map((route) => ({
       path: route.path,
       handle: route,
-      children: toMatch(route.children ?? []),
+      children: toMatch(route.children ?? EMPTY_ARRAY),
     }));
   return matchRoutes(toMatch(routes), pathname)?.map((match) => ({
     ...match,

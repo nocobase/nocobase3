@@ -9,6 +9,7 @@ not resolve services or query the database. The application resolves
 
 ```ts
 import { defineRepositoryApiRoutes } from '@nocobase/app-server/router';
+import path from 'node:path';
 import { defineServerPlugin } from '@nocobase/app-server/plugins';
 
 const repositoryRoutes = defineRepositoryApiRoutes({
@@ -46,6 +47,7 @@ const repositoryRoutes = defineRepositoryApiRoutes({
 });
 
 export default defineServerPlugin({
+  baseDir: path.resolve(import.meta.dirname, '..'),
   packageName: '@nocobase/app-plugin-orders',
   routes: [repositoryRoutes],
 });
@@ -267,3 +269,9 @@ are `{ data: aggregateObject }` or `{ data: groupObjects }`. BigInt scalar resul
 become decimal strings without precision loss. See the
 [`@nocobase/api-client` examples](../../libs/api-client/README.md#aggregate-and-grouped-queries)
 for the JSON Aggregate, Filter and Sort AST contracts.
+
+## Plugin resource directories
+
+Every Server plugin declares an absolute `baseDir`. In `server/plugin.ts`, use `baseDir: path.resolve(import.meta.dirname, '..')`; the same declaration in `dist/server/plugin.js` points to `dist`. Migrations, Seeds, and Queue Jobs resolve only against that directory. The runtime does not try a second source or build directory and does not infer the choice from `NODE_ENV` or the application command. Source and publish exports must load the matching plugin declaration.
+
+`rootDir` remains the package root: the resolver walks upward from `baseDir` to a `package.json` whose name matches `packageName`. Inspection includes both directories and the resolved contribution paths, so an installed copy cannot silently borrow another copy's metadata. Missing `baseDir` is an API error; update all Server plugin declarations when upgrading.

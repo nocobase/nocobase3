@@ -1,5 +1,15 @@
 [
   { "type": "file", "name": "index", "label": "概览" },
-  { "type": "dir", "name": "quick-start", "label": "入门指南" },
-  { "type": "dir", "name": "management", "label": "管理与运维" }
+  {
+    "type": "dir",
+    "collapsed": true,
+    "name": "quick-start",
+    "label": "入门指南"
+  },
+  {
+    "type": "dir",
+    "collapsed": true,
+    "name": "management",
+    "label": "管理与运维"
+  }
 ]

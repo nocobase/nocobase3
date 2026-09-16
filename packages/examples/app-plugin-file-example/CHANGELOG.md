@@ -1,5 +1,40 @@
 # @nocobase/app-plugin-file-example
 
+## 0.1.0-beta.6
+
+### Patch Changes
+
+- b34801e: Use plugin-owned PageContainer and PageHeader components to standardize example page spacing, headings, descriptions, and actions.
+
+  Refine example cards, tables, controls, code blocks, and status presentation, and consolidate page descriptions into the shared header.
+
+## 0.1.0-beta.5
+
+### Patch Changes
+
+- a60decd: Require an explicit absolute baseDir for Server plugins and resolve migrations, seeds, jobs, and package metadata from the loaded plugin copy. Generate and validate database task manifests during builds so TypeScript and JavaScript share source checksums, with verified legacy JavaScript history conversion and synchronized plugin scaffolding and application templates.
+- 1a85a86: Add breadcrumb labels to plugin routes so nested pages show their navigation path.
+- Updated dependencies [63db898]
+- Updated dependencies [63db898]
+- Updated dependencies [63db898]
+- Updated dependencies [63db898]
+- Updated dependencies [a60decd]
+- Updated dependencies [1a85a86]
+- Updated dependencies [1c70f60]
+- Updated dependencies [63db898]
+  - @nocobase/app-server@1.0.0-beta.15
+  - @nocobase/db@1.0.0-beta.7
+  - @nocobase/app-plugin-file@0.1.0-beta.11
+  - @nocobase/app-client@1.0.0-beta.16
+  - @nocobase/i18n@1.0.0-beta.4
+  - @nocobase/service-provider@0.0.2-beta.1
+
+## 0.1.0-beta.4
+
+### Patch Changes
+
+- a2dbe54: Publish only the compiled `dist/database`, no longer the TypeScript sources beside it. The runtime resolves a plugin's declared `database/migrations` and `database/seeds` against the package directory first and its `dist` second, so an installed plugin that shipped both served the sources, and Node refuses to strip types from a file under `node_modules`: `@nocobase/app-plugin-ai-employee` failed every application start with `Stripping types is currently unsupported for files under node_modules` while every development checkout, which resolves the same sources outside `node_modules`, kept working.
+
 ## 0.1.0-beta.3
 
 ### Minor Changes

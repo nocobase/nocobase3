@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import {
   defineServerPlugin,
   type AppServerPlugin,
@@ -7,6 +9,7 @@ import serviceProviders from './providers/index.js';
 import routes from './routes/index.js';
 
 const inAppNotificationPlugin: AppServerPlugin = defineServerPlugin({
+  baseDir: path.resolve(import.meta.dirname, '..'),
   packageName: '@nocobase/app-plugin-notification-in-app',
   locales: () => import('./locales/index.js'),
   serviceProviders,

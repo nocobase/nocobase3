@@ -34,12 +34,12 @@ Prefer ordinary code alone when the behavior is atomic, request-bound, algorithm
 
 Architecture suitability is not enough; the target application must have Instruction contracts for the required control flow. The workflow plugin currently provides `condition`, `run`, and `terminate`. Other instructions are available only when an installed plugin exports them and the application supplies the same contracts to the source checker, Artifact builder, and runtime registry.
 
-Do not simulate missing process semantics inside a long-running `run` script. Human approval, externally resumable waiting, loops, notification instructions, and subflows require their corresponding registered Instructions. A `run` script can call a service or external system, but it cannot manufacture a durable pause/resume point or a new control-flow construct.
+Do not simulate missing process semantics inside a long-running `run` script. Human approval, externally resumable waiting, loops, and subflows require their corresponding registered Instructions. Sending a notification can remain an ordinary Run service call; a dedicated notification Instruction is useful when workflows need a shared configuration and result contract. A `run` script can call a service or external system, but it cannot manufacture a durable pause/resume point or a new control-flow construct.
 
 If the required Instruction does not exist:
 
 - Keep ordinary business work in a typed service or `run` script.
-- Add and register an Instruction only when the missing behavior is reusable process-control semantics.
+- Add and register an Instruction when the missing behavior is reusable process-control semantics or a reusable operation that needs its own configuration and result contract. Follow [Custom Instructions](custom-instructions.md); ordinary one-off business actions stay in Run modules.
 - Redesign or defer the workflow when the required lifecycle cannot be represented safely.
 
 ## Produce a decomposition before authoring

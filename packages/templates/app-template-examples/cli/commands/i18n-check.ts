@@ -81,7 +81,7 @@ export default class AppI18nCheck extends Command {
   static override summary =
     'Report languages declared on only one side of the application.';
   static override description =
-    'The browser builds its language picker from client/locales, while the server decides what it will answer in from server/locales. A language present in only one is one the interface offers and the server refuses, so the two lists have to agree.';
+    'The browser builds its language picker from client/locales, while the server decides what it can answer in from server/locales. A client-only language still works in the interface while server messages fall back to English; this command reports mismatches so server translations can stay aligned when needed.';
 
   static override examples: Command.Example[] = [
     '<%= config.bin %> <%= command.id %>',
@@ -123,7 +123,7 @@ export default class AppI18nCheck extends Command {
 
     if (sides.length < 2) {
       this.log(
-        'Only one side declares locales; nothing to compare. Add the other to serve that language from both halves.',
+        'Only one side declares locales; nothing to compare. Add the other when both halves need translated text.',
       );
       return;
     }
@@ -136,7 +136,7 @@ export default class AppI18nCheck extends Command {
     this.log('');
     for (const locale of clientOnly) {
       this.log(
-        `  ${locale}: declared in client/locales only — the picker offers it, the server rejects it.`,
+        `  ${locale}: declared in client/locales only — the picker offers it, and server messages fall back to ${SOURCE_LOCALE}.`,
       );
     }
     for (const locale of serverOnly) {
@@ -145,7 +145,7 @@ export default class AppI18nCheck extends Command {
       );
     }
     this.log(
-      `\nAdd the missing file, copying ${SOURCE_LOCALE}.ts from the other side as a starting point.`,
+      `\nAdd the matching file when both halves need this language; copy ${SOURCE_LOCALE}.ts from the other side as a starting point.`,
     );
     this.exit(1);
   }

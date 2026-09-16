@@ -45,6 +45,19 @@ export function hasTypeEntrypoints(manifest) {
   return visit(manifest.exports);
 }
 
+// Compiled packages publish runtime resources in dist and resolve them from the plugin's baseDir.
+// Keep source directories out of these packages, preserving the publish contract that also protects older runtimes
+// which search package-root resources first. Templates publish source instead of dist and are exempt.
+const RUNTIME_RESOLVED_SOURCE_DIRECTORIES = ['database', 'server'];
+
+export function findShadowedSourceDirectories(manifest) {
+  const files = Array.isArray(manifest.files) ? manifest.files : [];
+  if (!files.includes('dist')) return [];
+  return RUNTIME_RESOLVED_SOURCE_DIRECTORIES.filter((directoryName) =>
+    files.includes(directoryName),
+  );
+}
+
 export function validatePackageManifest(manifest, directory) {
   const errors = [];
 
@@ -66,6 +79,12 @@ export function validatePackageManifest(manifest, directory) {
     manifest.files.some((file) => typeof file !== 'string' || file.length === 0)
   ) {
     errors.push('files must be a non-empty array of strings');
+  }
+
+  for (const directoryName of findShadowedSourceDirectories(manifest)) {
+    errors.push(
+      `files must not publish the "${directoryName}" source directory beside dist; compiled runtime resources belong in dist`,
+    );
   }
 
   // A subpath present in `exports` but absent from `publishConfig.exports` resolves in this repository, where source
@@ -260,6 +279,7 @@ async function smokeTestDevConfig(archivePath, packageDirectory) {
       'vitest/node.js',
       'vitest/react.js',
       'vite/portal.js',
+      'database/database-manifests.js',
     ]) {
       await import(
         pathToFileURL(path.join(extractDirectory, 'package', 'dist', entry))

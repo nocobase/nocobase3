@@ -26,6 +26,6 @@ keywords: 'NocoBase,工作流节点,Run,Condition,Terminate'
 
 ## 扩展节点能力
 
-只有当一种缺失能力是可复用的流程控制语义时，才考虑实现自定义 Instruction。自定义能力必须同时交给源码检查器、Artifact 构建过程和运行时注册表。让应用 Agent 先使用 Workflow Skill 检查现有插件，参见[使用 Workflow Skill](../using-skill.md)和[Service API](../service-api.md)。
+当缺失能力是可复用的流程控制语义，或多个流程需要具有独立配置和结果合同的可复用操作时，才考虑实现自定义 Instruction。普通业务动作优先使用 Run + Service。自定义能力必须同时交给源码检查器、Artifact 构建过程和运行时注册表。让应用 Agent 先使用 Workflow Skill 检查现有插件，参见[使用 Workflow Skill](../using-skill.md)和[Service API](../service-api.md)。
 
 需要直接套用的完整实现可参考 [Service API 的发邮件节点示例](../service-api.md#可运行示例发邮件节点)，其中包含公开导入、异步 Provider、checker/build 合同、隔离 Artifact 输出和运行时注册。

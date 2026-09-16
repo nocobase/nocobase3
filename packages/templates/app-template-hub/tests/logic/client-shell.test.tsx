@@ -243,7 +243,7 @@ describe('application shell', () => {
     expect(
       await screen.findByRole('link', { name: 'User management' }),
     ).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByText('Users page')).toBeVisible();
+    expect(await screen.findByText('Users page')).toBeVisible();
   });
 
   it('never discloses a protected navigation entry when access is denied', async () => {

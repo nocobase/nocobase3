@@ -1,3 +1,4 @@
+import { upgradeTaskChecksums } from '../migration/checksum-history.js';
 import { createSeedContext } from './internal/context.js';
 import {
   DEFAULT_SEED_TABLE,
@@ -51,6 +52,12 @@ class DefaultSeeder implements Seeder {
           this.options.tableName,
         );
         validateAppliedSeedHistory(seeds, history);
+        await upgradeTaskChecksums(
+          seedConnection,
+          this.options.tableName ?? DEFAULT_SEED_TABLE,
+          seeds,
+          history,
+        );
 
         const appliedNames = new Set(history.map((record) => record.name));
         const pending = seeds.filter((seed) => !appliedNames.has(seed.name));
@@ -113,7 +120,11 @@ function validateAppliedSeedHistory(
     if (!record) {
       continue;
     }
-    if (record.checksum !== seed.checksum) {
+    if (
+      record.checksum !== seed.checksum &&
+      (record.packageName !== seed.packageName ||
+        record.checksum !== seed.legacyChecksum)
+    ) {
       throw new Error(
         `Executed seed "${record.name}" checksum changed. Package: "${record.packageName}".`,
       );

@@ -1,5 +1,190 @@
 # @nocobase/app-template-examples
 
+## 0.1.0-beta.10
+
+### Patch Changes
+
+- b34801e: Add a reusable PageContainer and use its default layout across example pages. Reuse PageHeader for articles, numeric examples, and external CRM, removing redundant header labels.
+
+  Refine numeric and external CRM example layouts with consistent controls, tables, and status presentation.
+
+- d3429aa: Deduplicate dependencies during template upgrades and resolve stale dependency type conflicts. Replace outdated migration documents with upgrade Skill guidance based on template differences and application state, preserving migration history and user-authored operational notes. Check application code and configuration before proposing plugin removal, and obtain user confirmation before removing unused dependencies and registrations.
+- Updated dependencies [11c276a]
+- Updated dependencies [b34801e]
+- Updated dependencies [7c0ec03]
+- Updated dependencies [7c0ec03]
+  - @nocobase/app-plugin-ai-employee@0.1.0-beta.11
+  - @nocobase/app-plugin-repository-example@0.1.0-beta.7
+  - @nocobase/app-plugin-file-example@0.1.0-beta.6
+  - @nocobase/app-plugin-workflow@0.1.0-beta.16
+
+## 0.1.0-beta.9
+
+### Minor Changes
+
+- 1a85a86: Add route breadcrumbs, nested child pages, and reusable page headers to the client and application templates.
+
+### Patch Changes
+
+- 63db898: Reorganize application database guidance around complete configuration factory examples. Clarify YAML overrides and SQLite paths, managed and external connections, default database selection, and verification that distinguishes reads from migrations. Keep driver installation and type inference details in troubleshooting guidance.
+- 63db898: Exclude the application's complete build output from Vite file watching to prevent EMFILE errors after a build, while preserving hot updates for linked workspace dependencies.
+
+  Check native file watching before development startup, fall back to polling with agent annotations disabled when native watchers are unavailable, and poll application configuration files so watcher resource errors no longer crash the development process.
+
+- 63db898: Add `defineAppDatabaseConfig` to infer connection types from the drivers returned by a runtime configuration callback. Application templates now directly export this helper without explicit factory annotations, driver type maps, or `satisfies` clauses. Keep declaration emission but use full TypeScript inference for application server builds; library packages retain isolated declaration checking.
+- a60decd: Require an explicit absolute baseDir for Server plugins and resolve migrations, seeds, jobs, and package metadata from the loaded plugin copy. Generate and validate database task manifests during builds so TypeScript and JavaScript share source checksums, with verified legacy JavaScript history conversion and synchronized plugin scaffolding and application templates.
+- 63db898: Add a `database connections` reference to the application development Skill, covering how to switch the database and add a connection.
+
+  Nothing documented this. `database-and-data.md` states in its first line that it is about reading and writing rows at runtime, and `migrations.md` covers per-connection migrations without saying how a connection comes to exist — so of the eight dialects the runtime supports, only SQLite was reachable from the documentation.
+
+  The new page covers why a dialect is registered in `server/config/database.ts` rather than configured in `config.yml`, the four steps to switch the default connection, a table of every dialect with its package, native driver, default port and connection fields, which drivers install a native binary and which do not, and the fact that switching does not carry data across. It is routed from `SKILL.md` and `AGENTS.md` in each template.
+
+  It also shows how to configure `kingbase`, `oceanbase` and `dameng`, whose connection shapes `@nocobase/db` does not declare, by naming them on `AppDatabaseConfig`.
+
+- e067113: Depend on one zod major, so a deployment can resolve better-auth
+
+  An application that installed both the AI employee plugin and the API keys plugin failed to start with `z.ipv4 is not a function`, thrown while loading `@better-auth/core`. Nothing in better-auth was wrong: the AI employee packages asked for `zod: ^3` while better-auth asks for `^4`, and a deployment installs `dist/` with `nodeLinker: hoisted`, where one version of a package takes the root slot and the rest are nested underneath whoever depends on them. zod 3 won the root, which forced better-auth's whole subtree to be nested, and a `@better-auth/core` that ended up next to the root zod bound to the wrong major.
+
+  The same collision has a second failure mode that is harder to read. `@better-auth/api-key` declares `@better-auth/core`, `better-call`, `jose`, `kysely` and `nanostores` as peer dependencies, and a deployment sets `autoInstallPeers: false` so it installs none of them. It works anyway when better-auth's dependencies hoist to the root, because the peers are then sitting where the resolver looks; it stops working the moment the zod conflict pushes them down into `node_modules/better-auth/node_modules`, and the application fails with `Cannot find package '@better-auth/core'`.
+
+  So the fix is not to declare better-auth's internals somewhere. `@nocobase/ai-employee` never imported zod at all and no longer declares it, `@nocobase/app-plugin-ai-employee` moves to zod 4, and all three templates and the plugin now take it from the `zod` catalog entry, so one version is what an application gets. Its schemas use `z.object`, `z.string`, `z.number`, `z.array`, `z.record`, `z.coerce`, `z.any` and `z.unknown`, all of which carry over unchanged; `buildStandardAgentMiddleware` gained an explicit `AgentMiddleware[]` return type, which the new resolution made necessary.
+
+  A deployment tree now holds a single `zod` and a single `@better-auth/core`, hoisted to the root where `@better-auth/api-key` resolves them.
+
+- Updated dependencies [1c70f60]
+- Updated dependencies [63db898]
+- Updated dependencies [63db898]
+- Updated dependencies [63db898]
+- Updated dependencies [63db898]
+- Updated dependencies [a60decd]
+- Updated dependencies [1a85a86]
+- Updated dependencies [1c70f60]
+- Updated dependencies [63db898]
+- Updated dependencies [e067113]
+  - @nocobase/app-plugin-ai-employee@0.1.0-beta.10
+  - @nocobase/app-server@1.0.0-beta.15
+  - @nocobase/db@1.0.0-beta.7
+  - @nocobase/db-sqlite@0.1.0-beta.1
+  - @nocobase/db-postgres@0.1.0-beta.1
+  - @nocobase/db-mysql@0.1.0-beta.2
+  - @nocobase/db-oracle@0.1.0-beta.1
+  - @nocobase/app-plugin-notification@0.1.0-beta.9
+  - @nocobase/app-plugin-workflow@0.1.0-beta.15
+  - @nocobase/app-plugin-authentication@0.1.0-beta.14
+  - @nocobase/app-plugin-authorization@0.2.0-beta.10
+  - @nocobase/app-plugin-database-example@0.1.0-beta.6
+  - @nocobase/app-plugin-database-explorer@0.1.0-beta.1
+  - @nocobase/app-plugin-file@0.1.0-beta.11
+  - @nocobase/app-plugin-file-example@0.1.0-beta.5
+  - @nocobase/app-plugin-i18n@0.1.0-beta.7
+  - @nocobase/app-plugin-install@0.1.0-beta.8
+  - @nocobase/app-plugin-notification-in-app@0.2.0-beta.11
+  - @nocobase/app-plugin-notification-providers@0.2.0-beta.6
+  - @nocobase/app-plugin-queue-example@0.1.0-beta.6
+  - @nocobase/app-plugin-realtime-example@0.1.0-beta.6
+  - @nocobase/app-plugin-repository-example@0.1.0-beta.6
+  - @nocobase/app-plugin-routes-example@0.1.0-beta.9
+  - @nocobase/app-plugin-service-provider-example@0.1.0-beta.5
+  - @nocobase/app-plugin-skills-example@0.1.0-beta.3
+
+## 0.1.0-beta.8
+
+### Patch Changes
+
+- c258b92: Declare `auth.secret` and `session.secret` as live keys in `config.example.yml` rather than commented-out placeholders, and describe how a generated application's `config.yml` and database now come about.
+
+  `@nocobase/create-app` generates `config.yml` from this file and fills the two secrets in. Leaving them commented meant the generator had to uncomment them, which made the exact comment syntax of this file part of its contract; a live key with a placeholder value is a target it can simply replace.
+
+  The other way this file is used — copying it to `config.yml` by hand — is covered separately: the placeholder is a non-empty string that would otherwise pass for a configured secret, so the runtime now refuses it by name and says how to generate a replacement.
+
+  The generator no longer asks which database to use, so "Review your configuration" in each README no longer says `config.yml` carries the database you chose. An application starts on SQLite, and another database means registering its dialect in `server/config/database.ts` and adding the matching `@nocobase/db-*` package — drivers are code rather than settings, and a dialect the application does not register cannot be introduced from `config.yml`.
+
+  The Hub's upgrade skill no longer describes `app-dist/`, which the generator stopped creating and nothing reads.
+
+- Updated dependencies [c258b92]
+  - @nocobase/app-server@1.0.0-beta.14
+  - @nocobase/app-plugin-authentication@0.1.0-beta.13
+
+## 0.1.0-beta.7
+
+### Patch Changes
+
+- c01baf6: Resolve application namespace aliases in React translations, synchronize the document language at startup and on changes, and inject the configured default language into served HTML. Allow client-only language selections with an English server fallback and an informational toast, and standardize documented locale checks on `pnpm nocobase app i18n:check`.
+- Updated dependencies [154e09e]
+- Updated dependencies [154e09e]
+- Updated dependencies [154e09e]
+- Updated dependencies [154e09e]
+- Updated dependencies [c01baf6]
+  - @nocobase/app-plugin-ai-employee@0.1.0-beta.9
+  - @nocobase/app-plugin-authentication@0.1.0-beta.12
+  - @nocobase/app-plugin-notification-in-app@0.2.0-beta.10
+  - @nocobase/app-server@1.0.0-beta.13
+  - @nocobase/app-plugin-i18n@0.1.0-beta.6
+
+## 0.1.0-beta.6
+
+### Minor Changes
+
+- 1d5ee9a: Add `pnpm collections:generate` for writing and checking Collection artifacts
+
+  `pnpm nocobase app collections generate` reads every Collection of a managed connection and writes `collection.json`, `metadata.json` and `schema.json` under `database/<connection>/collections/<name>/`, plus a `_manifest.json` per connection recording the dialect, whether the schema is managed or external, and the last applied migration. `--connection` targets one connection, `--all` every configured one including external connections, and `--check` compares the result with the files on disk and exits non-zero on any difference without writing, which is what a CI step runs.
+
+  The command is a thin entry over `generateAppCollectionsArtifact()` from `@nocobase/app-server`; the files are derived output for developers, documentation and AI tooling, and nothing reads them back at runtime. `AGENTS.md` and the README describe the directory.
+
+- 1d5ee9a: Add an external database example
+
+  The `externalCrm` connection reads a database another system owns: `schemaManagement: 'external'` keeps NocoBase from changing its schema, `naming` maps the CRM's `crm_`-prefixed tables to logical Collection names, and a `ModuleCollectionMetadataStore` fed from `database/externalCrm/metadata.ts` supplies titles and the `orders.customer` relation the schema cannot express. Two read-only repository routes, `crmCustomers` and `crmOrders`, expose it to signed-in users, and an **External CRM** page lists the orders with their customers through them.
+
+  The connection points at a local SQLite file so the example runs without a real CRM; a provider plays the foreign system and creates the tables and sample rows when they are missing, and does nothing once the connection is pointed elsewhere.
+
+### Patch Changes
+
+- a153ad8: Add a read-only Database Explorer plugin and enable it in the Default and Examples templates.
+
+  The Settings page browses the application's database connections, the collections on each one, and their fields and physical columns. The two detail panes are child routes and the selection rides in the query string, so any view can be linked to and is restored by browser Back.
+
+  Read-only means the plugin creates, alters or drops no collection and changes no row. One qualifier: reading a collection initializes the collection registry, whose metadata store creates `__nocobase_collection_metadata` on a managed connection when it is missing, so that one bookkeeping table is the only object a read can bring into existence — and only when the first NocoBase activity against a database is an Explorer read. External connections cannot reach that path. A test states this boundary against a real database rather than assuming it.
+
+  Listing connections reads configuration and opens no database, so one unreachable external connection cannot take down the page. A connection reports its dialect, schema management, logical database, schemas, naming options, and internal tables, and never its credentials, host, port, socket path, or SQLite file — enforced as an allow-list, so a field a new dialect introduces stays inside by default. Driver errors are withheld from responses and recorded in logs by classification only, never by message or cause.
+
+  The collections list follows the server's cursor to the end so its client-side search sees every collection, and says so when a connection exceeds the bound.
+
+  Every endpoint requires `page:database-explorer/access`, the grant the page and both of its panes declare, which the seeded System Administrator permission set covers.
+
+- 1d5ee9a: Keep the external CRM example's metadata in `metadata.json` files
+
+  The `externalCrm` connection no longer constructs a `ModuleCollectionMetadataStore` from TypeScript documents. Its metadata lives in `database/externalCrm/collections/{customers,orders}/metadata.json`, the default source for an external connection, so the connection is configured by `dialect`, `schemaManagement` and `naming` alone. The build copies these files into `dist/database` so a deployment resolves the same titles and relations.
+
+- 22d0d2a: Resolve client chunk URLs at run time so a built application works wherever it is mounted.
+
+  Vite bakes `base` into the bundle at build time, while an App Host mounts a deployed application under its own App ID. A build made for `/main` and deployed as `/crm` therefore asked for `/main/assets/<chunk>.js` and got a 404 for every chunk the browser had to fetch at run time, which is every lazily imported route: the application loaded, its shell rendered, and each lazy page failed with "Route … could not be loaded". Pages whose chunks `index.html` preloads kept working, so the failure looked like it belonged to a particular plugin rather than to the deployment.
+
+  Only the URLs emitted into JavaScript become runtime-relative, resolved against `import.meta.url`; every chunk sits beside the entry chunk, so this is correct at any mount path. The URLs in `index.html` stay absolute: the document is served at arbitrary SPA route depths where a relative URL would resolve against the current route, and the Host rewrites those root-relative attributes to the mount path, which it can only do while they start with `/`.
+
+  Applications generated from these templates need to rebuild to pick this up. No configuration changes, and a build deployed at the path it was built for behaves as before.
+
+- 73f7538: Resolve a Portal build's asset URLs from the runtime base path so a build keeps working when a host mounts it under a different prefix. Vite inlined the build-time `base` into its `__vitePreload` helper, and that helper awaits every stylesheet link it inserts, so a lazy chunk carrying its own CSS rejected its dynamic import and rendered the route's error state once the application was served from somewhere other than the prefix it was built for.
+
+  The templates each carried their own copy of this fix, added before it existed in the shared configuration. They now inherit it from `createPortalViteConfig` instead. A consumer that configures `experimental.renderBuiltUrl` itself still overrides the shared one, so nothing that needs its own strategy loses it — the templates simply no longer need one.
+
+- Updated dependencies [be92e2b]
+- Updated dependencies [6d43421]
+- Updated dependencies [1d5ee9a]
+- Updated dependencies [1d5ee9a]
+- Updated dependencies [a153ad8]
+- Updated dependencies [1d5ee9a]
+- Updated dependencies [211538b]
+- Updated dependencies [1d5ee9a]
+- Updated dependencies [1d5ee9a]
+- Updated dependencies [1d5ee9a]
+- Updated dependencies [6d43421]
+- Updated dependencies [6d43421]
+  - @nocobase/app-plugin-ai-employee@0.1.0-beta.7
+  - @nocobase/app-server@1.0.0-beta.12
+  - @nocobase/app-plugin-database-explorer@0.1.0-beta.0
+  - @nocobase/db@1.0.0-beta.6
+  - @nocobase/db-mysql@0.1.0-beta.1
+
 ## 0.1.0-beta.5
 
 ### Minor Changes

@@ -57,8 +57,7 @@ CPU、内存和磁盘 I/O，把 service health check 拖过 start period，得�
 
 ## 全矩阵测试
 
-CI 的 `db-integration` matrix 每个方言一个 runner，在每个 PR 上跑完八个，本地
-通常不需要重跑一遍。确实需要时，八个方言依次串行执行，不要并发，约束见[集成测试调度](../../../../../../internal-docs/development/database-integration-testing.md)。
+CI 的 `db-integration` matrix 每个方言一个 runner，在每个 PR 上跑完八个，本地通常不需要重跑一遍。确实需要时，八个方言依次串行执行，不要并发。
 
 ## 指定数据库
 

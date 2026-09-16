@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-notification",
   "displayName": "Notification App Plugin",
   "description": "Provides the application notification runtime, storage, delivery, and logs.",
-  "version": "0.1.0-beta.8",
+  "version": "0.1.0-beta.9",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -85,7 +85,7 @@
   ],
   "scripts": {
     "clean": "node ./scripts/clean-dist.mjs",
-    "build": "node ./scripts/clean-dist.mjs && tsc -p tsconfig.json",
+    "build": "node ./scripts/clean-dist.mjs && tsc -p tsconfig.json && nocobase-db-manifests",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "registry:build": "node ../../../scripts/registry.mjs build --package .",
@@ -114,7 +114,8 @@
     "@nocobase/service-provider": "workspace:^",
     "lucide-react": "catalog:",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "tailwind-merge": "catalog:"
   },
   "devDependencies": {
     "@nocobase/db-sqlite": "workspace:*",
@@ -127,6 +128,8 @@
     "eslint": "catalog:",
     "prettier": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "@nocobase/db-mysql": "workspace:*",
+    "@nocobase/db-oracle": "workspace:*"
   }
 }

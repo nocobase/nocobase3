@@ -4,8 +4,8 @@ import path from 'node:path';
 import { CommandFailedError, runCommand } from './run-command.ts';
 
 /**
- * v3 packages are published to the self-hosted registry rather than the public npm, and `@beta` is the only channel
- * carrying v3 releases so far. Switch to a stable range once the first stable version ships.
+ * v3 packages are published to the self-hosted registry rather than the public npm. Drop this default once they are
+ * published to the public registry as well.
  *
  * Note this is the registry the *template* is downloaded from. It is unrelated to the registry that served this
  * package itself, which `pnpm create` resolves before any of this code runs.
@@ -61,22 +61,6 @@ export const TEMPLATE_TAGS: readonly string[] = ['latest', 'beta'];
  * template. `latest` is the newest published version today, and the right default once stable versions exist.
  */
 export const DEFAULT_TEMPLATE_TAG = 'latest';
-
-export function isTemplateTag(value: string): boolean {
-  return TEMPLATE_TAGS.includes(value.trim());
-}
-
-export function parseTemplateTag(value: string): string {
-  const tag = value.trim();
-
-  if (!isTemplateTag(tag)) {
-    throw new Error(
-      `Unknown template tag "${value}". Expected one of: ${TEMPLATE_TAGS.join(', ')}.`,
-    );
-  }
-
-  return tag;
-}
 
 export interface ResolveTemplateSourceOptions {
   /** Channel a named template resolves to. Ignored for a package specifier or a local path. */

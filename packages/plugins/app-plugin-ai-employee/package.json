@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-ai-employee",
   "displayName": "AI Employee App Plugin",
   "description": "Database-backed AI employee runtime, routes, resources, and built-in employees for NocoBase Apps.",
-  "version": "0.1.0-beta.6",
+  "version": "0.1.0-beta.11",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -12,16 +12,14 @@
   "types": "dist/index.d.ts",
   "files": [
     "dist",
-    "client",
-    "server",
-    "database",
     "ai",
     "package.json",
     "README.md",
     "CHANGELOG.md",
     "registry",
     "registry.config.json",
-    "public/r"
+    "public/r",
+    "skills"
   ],
   "exports": {
     ".": {
@@ -126,7 +124,7 @@
   },
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
-    "build": "pnpm clean && tsc -p tsconfig.json",
+    "build": "pnpm clean && tsc -p tsconfig.json && nocobase-db-manifests",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "lint": "eslint . --max-warnings 0",
@@ -153,12 +151,13 @@
     "@nocobase/snowflake": "workspace:^",
     "@sinclair/typebox": "catalog:",
     "ai": "^5.0.0",
+    "better-auth": "catalog:",
     "eventsource-parser": "^3.0.0",
     "hono": "catalog:",
     "langchain": "1.2.39",
     "lodash": "^4.17.21",
     "remark-gfm": "^4.0.1",
-    "zod": "^3"
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@nocobase/db-sqlite": "workspace:*",
@@ -171,7 +170,6 @@
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
-    "better-sqlite3": "catalog:",
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",
     "echarts": "^5.5.0",
@@ -181,7 +179,6 @@
     "next-themes": "^0.4.6",
     "prettier": "catalog:",
     "react-markdown": "^10.1.0",
-    "tailwind-merge": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:"
@@ -200,6 +197,7 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-hook-form": "^7.57.0",
-    "react-router": "^7.0.0"
+    "react-router": "^7.0.0",
+    "tailwind-merge": "catalog:"
   }
 }

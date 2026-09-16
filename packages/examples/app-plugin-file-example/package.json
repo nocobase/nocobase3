@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-file-example",
   "displayName": "File Example App Plugin",
   "description": "Attachments collection, API routes, and an upload page demonstrating File Repository.",
-  "version": "0.1.0-beta.3",
+  "version": "0.1.0-beta.6",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "sideEffects": false,
@@ -20,8 +20,7 @@
   "files": [
     "dist",
     "README.md",
-    "CHANGELOG.md",
-    "database"
+    "CHANGELOG.md"
   ],
   "publishConfig": {
     "access": "public",
@@ -38,7 +37,7 @@
     }
   },
   "scripts": {
-    "build": "node ./scripts/clean-dist.mjs && tsc -p tsconfig.json",
+    "build": "node ./scripts/clean-dist.mjs && tsc -p tsconfig.json && nocobase-db-manifests",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run --passWithNoTests",
     "lint": "eslint . --max-warnings 0",
@@ -64,7 +63,6 @@
     "@nocobase/service-provider": "workspace:*",
     "react": "catalog:",
     "@types/react": "catalog:",
-    "better-sqlite3": "catalog:",
     "jsdom": "catalog:",
     "@testing-library/react": "catalog:",
     "@testing-library/user-event": "catalog:",
@@ -86,7 +84,8 @@
     "@nocobase/i18n": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
     "lucide-react": "catalog:",
-    "react": "^19.0.0"
+    "react": "^19.0.0",
+    "tailwind-merge": "catalog:"
   },
   "engines": {
     "node": ">=24.0.0"

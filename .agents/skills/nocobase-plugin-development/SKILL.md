@@ -5,9 +5,7 @@ description: 'Develop and maintain NocoBase v3 application plugins in a source w
 
 # NocoBase Plugin Development
 
-Use this Skill only for the v3 plugin architecture in the current source
-workspace. It is a routing and safety layer; the detailed, versioned guidance
-lives under `internal-docs/development/plugin-development/`.
+Use this Skill only for the v3 plugin architecture in the current source workspace. It provides routing and safety rules for plugin development.
 
 ## Verify the workspace
 
@@ -26,35 +24,7 @@ plugins there as `app-plugin-*`. If the project instead has `packages/core/`,
 the legacy `Plugin` class, do not apply this Skill. That is a different plugin
 protocol.
 
-Always read the repository `AGENTS.md` first, then read
-`internal-docs/development/plugin-development/README.md`. Read only the relevant topic page
-for the current task:
-
-| Task                                    | Read                                                 |
-| --------------------------------------- | ---------------------------------------------------- |
-| Create and register a plugin            | `quick-start.md`, `plugin-registration-workspace.md` |
-| Implement a complete business plugin    | `development-workflow.md`                            |
-| Choose an App or cross-plugin entry     | `public-contracts.md`                                |
-| Choose a Client module                  | `client.md`                                          |
-| Build public or internal Client UI      | `client-components.md`                               |
-| Share React Context                     | `client-react-providers.md`                          |
-| Add a Client Service or initialization  | `client-service-providers.md`                        |
-| Choose a Server module                  | `server.md`                                          |
-| Choose a Service/Token/Provider         | `server-services-and-providers.md`                   |
-| Implement Provider lifecycle            | `service-provider.md`                                |
-| Apply Token/Container patterns          | `service-token-examples.md`                          |
-| Add asynchronous work                   | `server-jobs.md`                                     |
-| Choose a database operation             | `database.md`                                        |
-| Change schema                           | `database-migrations.md`                             |
-| Add required initial records            | `database-seeds.md`                                  |
-| Add Client or Server translations       | `i18n.md`                                            |
-| Choose an App-owned Registry item       | `registry.md`                                        |
-| Author a Registry item                  | `registry-authoring.md`                              |
-| Build, publish, or install Registry     | `registry-delivery.md`                               |
-| Upgrade or remove a Registry item       | `registry-upgrades.md`                               |
-| Contribute CLI commands and build hooks | `cli.md`                                             |
-| Write Plugin Skills for an App Agent    | `skills.md`                                          |
-| Test, build, and verify                 | `testing.md`                                         |
+Always read the repository `AGENTS.md` first, then inspect the relevant source, tests, and examples for the current task.
 
 When building a plugin page with Tabs, use child routes by default, even if the
 user does not mention routing. Declare Tab content under the plugin's parent
@@ -70,23 +40,9 @@ in the existing `nocobase-app-development` Skill:
 - [Pages, routes, and menus](../../../packages/templates/app-template-default/skills/nocobase-app-development/references/client-pages-and-routes.md)
 - [Child routes, Tabs, navigation groups, and Outlet](../../../packages/templates/app-template-default/skills/nocobase-app-development/references/client-child-routes.md)
 
-These links use Default as the shared routing reference. When integrating with
-Examples or Hub, use the same reference files under that target template's
-`skills/nocobase-app-development/` directory. Reuse the React Router, navigation,
-and verification guidance; plugin source ownership and registration remain
-governed by this Skill. In particular, declare plugin routes in the plugin's
-`client/routes.ts`, not the application's route file. Read
-`internal-docs/development/plugin-development/client-routes-examples.md` and
-`internal-docs/development/plugin-development/client-child-routes.md` for the
-plugin-specific declarations and examples. App menus are declared on routes;
-Refine resources serve CRUD.
+These links use Default as the shared routing reference. When integrating with Examples or Hub, use the same reference files under that target template's `skills/nocobase-app-development/` directory. Reuse the React Router, navigation, and verification guidance; plugin source ownership and registration remain governed by this Skill. In particular, declare plugin routes in the plugin's `client/routes.ts`, not the application's route file. App menus are declared on routes; Refine resources serve CRUD.
 
-For server HTTP Route tasks (`defineRootRoutes()` or `defineApiRoutes()`), read
-`internal-docs/development/plugin-development/routes.md` and
-`internal-docs/development/plugin-development/server-routes-examples.md`.
-Read `client.md` or `server.md` only when choosing an adjacent module.
-Inspect only the matching files in `packages/examples/app-plugin-routes-example` when a
-runnable reference is needed.
+For Client or Server Route tasks, inspect only the matching files in `packages/examples/app-plugin-routes-example` when a runnable reference is needed.
 
 ## Stable v3 protocol
 
@@ -199,6 +155,12 @@ runnable reference is needed.
   Registry item is not a runtime contribution and does not enable the plugin.
 - Follow repository and package `AGENTS.md` rules, including shared dev config,
   dependency protocols, and validation requirements.
+
+## Resource and checksum contract
+
+Every Server plugin requires `baseDir`, an absolute resource base. In a declaration under `server/`, import `path` from `node:path` and set `baseDir: path.resolve(import.meta.dirname, '..')`. Database and Queue paths are relative to this base, not automatically to the package root. Compiled declarations resolve compiled resources without a source/dist fallback. Keep source and publish exports aligned, and never calculate this directory from the application's working directory.
+
+After compiling migrations and seeds and rewriting JavaScript imports, run `nocobase-db-manifests` from `@nocobase/dev-config`. Include each generated `.manifest.json` and its marked JavaScript in published output. Do not modify task source to embed checksums. Source checksum is the stable history identity; artifact checksum validates the emitted file. For legacy JS history, an exact verified pre-marker artifact hash can be upgraded under the task lock; unverified history remains an error. See [database checksum upgrades](../../../packages/libs/db/CHECKSUMS.md).
 
 ## Safe implementation loop
 

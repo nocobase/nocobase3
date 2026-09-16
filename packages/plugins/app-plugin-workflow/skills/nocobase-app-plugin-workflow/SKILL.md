@@ -18,14 +18,13 @@ Use NocoBase 3's source-managed Workflow implementation where business behavior 
 
 The application owns workflow source packages, business services, trigger timing, authentication and authorization, business idempotency, and compensation policy. The plugin owns the DSL and core Instructions, Artifact and execution lifecycle, persisted history, management API, and diagnostic views. Use public package exports and APIs; do not bypass them through plugin internals or materialized tables.
 
-For an initialized application, configuration is read from the application-root
-`config.yml`; use that file in setup instructions and examples. Environment
-variables may be used as secret placeholders referenced by this file.
+For an initialized application, edit application-root `config.yml`; consult `config.example.yml` for supported settings.
 
 # Choose the Task Path
 
 - Before designing a new business feature, creating a workflow, or moving existing behavior into Workflow, read [Workflow Architecture Decisions](references/workflow-concepts.md) and decide whether the behavior belongs in Workflow, ordinary typed code, or a combination of both. Apply this decision even when the user did not explicitly ask about Workflow, but do not expand the requested implementation scope without a concrete architectural reason.
 - For creating, editing, reviewing, or validating a workflow package, read the relevant sections of [DSL Authoring](references/dsl-authoring.md). Read the complete example only when authoring a package or when several DSL contracts interact.
+- For extending node types, read [Custom Instructions](references/custom-instructions.md) for the decision criteria, public API, complete application example, async Provider registration, and shared checker/build contracts.
 - For business invocation, enablement, administrator parameters, or an authorized manual run, read [Invocation and Service API](references/invocation-and-service-api.md).
 - For inspecting definitions or diagnosing a run, read [Execution Diagnostics](references/execution-diagnostics.md).
 
@@ -34,7 +33,7 @@ Use only the path relevant to the request. Ask a question only when the target, 
 # Contract Discovery
 
 - Resolve the target application's configured workflow source root instead of assuming a path. The default is `server/workflows`.
-- Before using an Instruction, confirm that an installed plugin exports it and that the target application supplies the same contract to the source checker, Artifact builder, and runtime registry. The workflow plugin itself currently exports `ConditionInstruction`, `RunInstruction`, and `TerminateInstruction`.
+- Before using an Instruction, confirm that an installed plugin publicly exports it or the application defines it, and that the target application supplies the same contract to the source checker, Artifact builder, and runtime registry. The workflow plugin itself currently exports `ConditionInstruction`, `RunInstruction`, and `TerminateInstruction`.
 - Inspect installed public exports and declarations when working outside this monorepo. Do not import plugin-internal paths from application code.
 - The workflow package directory name is its stable business trigger key. A persisted definition id identifies one materialized revision for management operations; never substitute one identifier for the other.
 
