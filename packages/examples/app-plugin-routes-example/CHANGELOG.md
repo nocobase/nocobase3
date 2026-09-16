@@ -1,5 +1,11 @@
 # @nocobase/app-plugin-routes-example
 
+## 0.1.0-beta.10
+
+### Patch Changes
+
+- 9131230: Use plugin-owned PageContainer and PageHeader components for consistent settings route example spacing and headings.
+
 ## 0.1.0-beta.9
 
 ### Patch Changes

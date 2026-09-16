@@ -1,5 +1,14 @@
 # @nocobase/app-template-hub
 
+## 1.0.0-beta.20
+
+### Patch Changes
+
+- 489d08a: Read settings navigation from the existing application runtime and remove the redundant settings route context from template headers.
+- 9b6c645: Add the PageContainer component from the Examples template to the Default and Hub templates.
+
+  Require PageContainer when writing page components in all three application development Skills, and align page and child-route examples with the shared container.
+
 ## 1.0.0-beta.19
 
 ### Patch Changes
