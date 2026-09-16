@@ -151,6 +151,8 @@ Use `APP_SERVER_PORT` for the local entry port in both development modes. With `
 
 ## Finishing
 
+When building for another platform, pass `--target` and verify the native binaries retained in `dist/node_modules`. `better-sqlite3` 13 bundles N-API binaries for multiple platforms; Alpine targets need the `linuxmusl` binary, while other Linux targets use the `linux` binary.
+
 ```bash
 pnpm typecheck
 pnpm test

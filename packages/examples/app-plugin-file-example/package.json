@@ -63,7 +63,6 @@
     "@nocobase/service-provider": "workspace:*",
     "react": "catalog:",
     "@types/react": "catalog:",
-    "better-sqlite3": "catalog:",
     "jsdom": "catalog:",
     "@testing-library/react": "catalog:",
     "@testing-library/user-event": "catalog:",

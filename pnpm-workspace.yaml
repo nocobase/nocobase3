@@ -47,7 +47,7 @@ catalog:
   '@vitest/eslint-plugin': ^1.6.27
   ajv: ^8.20.0
   better-auth: ^1.7.1
-  better-sqlite3: ^12.11.1
+  better-sqlite3: ^13.0.3
   bloom-filters: ^3.0.4
   class-variance-authority: ^0.7.1
   clsx: ^2.1.1

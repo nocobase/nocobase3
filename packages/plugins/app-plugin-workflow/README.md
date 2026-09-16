@@ -116,10 +116,7 @@ workflow.registerInstruction(CustomInstruction);
 
 ## Development dependencies
 
-The Workflow integration tests intentionally pin `better-sqlite3` 13 and the
-matching Knex range instead of using the workspace catalog. The queue test
-adapter currently exercises that newer native-driver combination; move these
-entries back to `catalog:` once the workspace database fixture is upgraded.
+The Workflow tests use `@nocobase/db-sqlite`, which owns the `better-sqlite3` runtime dependency and uses the version in the workspace catalog. The plugin does not declare the native driver separately, so its tests exercise the same driver as applications.
 
 ## Agent Skill
 
