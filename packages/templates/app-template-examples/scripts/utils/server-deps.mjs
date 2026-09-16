@@ -179,8 +179,7 @@ const readFlag = (argv, name) => {
  * `--target` because it varies independently — the same Linux host may run any of several Node versions.
  *
  * `--target current` opts out, producing binaries for the building machine. That is right for local work and
- * wrong for a deployment, which is why it is not the default: a build that silently targets the developer's
- * laptop fails only once it reaches a server.
+ * wrong for deployment to a different machine. It is the default so local builds remain runnable.
  */
 export function parseTarget(argv = []) {
   const requested = readFlag(argv, '--target') ?? 'current';
@@ -196,16 +195,27 @@ export function parseTarget(argv = []) {
   }
 
   if (requested === 'current') {
+    const libc =
+      process.platform === 'linux' &&
+      !process.report.getReport().header.glibcVersionRuntime
+        ? 'musl'
+        : 'glibc';
+    const label = `${process.platform}-${process.arch}`;
     return {
       isCurrentMachine: true,
       platform: process.platform,
       arch: process.arch,
-      libc: 'glibc',
+      libc,
       abi: Number(process.versions.modules),
       nodeMajor: Number(process.versions.node.split('.')[0]),
       nodeVersion: process.versions.node,
-      label: `${process.platform}-${process.arch}`,
-      napiSuffix: `${process.platform}-${process.arch}`,
+      label: libc === 'musl' ? `${label}-musl` : label,
+      napiSuffix:
+        process.platform === 'linux'
+          ? `${label}-${libc === 'musl' ? 'musl' : 'gnu'}`
+          : process.platform === 'win32'
+            ? `${label}-msvc`
+            : label,
     };
   }
 

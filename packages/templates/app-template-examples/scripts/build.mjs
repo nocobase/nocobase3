@@ -1,10 +1,48 @@
-import { generateDatabaseManifests } from '@nocobase/dev-config/build/database-manifests';
-import spawn from 'cross-spawn';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { readCliHooks, runHookStage } from './utils/cli-hooks.mjs';
+// Help must work before dependencies are loaded, hooks run, or an existing dist is cleared.
+if (
+  process.argv
+    .slice(2)
+    .some((argument) => argument === '--help' || argument === '-h')
+) {
+  console.log(`Usage: pnpm build [options]
+
+Build the client, server, CLI, and production dependencies into dist/.
+
+Options:
+  -h, --help               Show this help and exit without building.
+  --target <target>        Deployment platform (default: current).
+                          Common targets: linux-x64, linux-arm64,
+                          linux-x64-musl, linux-arm64-musl,
+                          darwin-x64, darwin-arm64, win32-x64, win32-arm64.
+                          Linux without a suffix uses glibc; Alpine uses musl.
+  --node-version <major>   Target Node major for an explicit platform target.
+                          Known ABI mappings: 20, 22, 24, 26 (default: 24).
+                          current uses the running Node version and ABI.
+                          The application requires Node >=24.
+  --tar                   Also create storage/dist.tar.gz containing dist/
+                          and config.example.yml after a successful build.
+
+Examples:
+  pnpm build
+  pnpm build --target linux-x64 --node-version 24
+  pnpm build --target=linux-arm64-musl --node-version=24 --tar
+
+Deployment metadata:
+  dist/package.json -> nocobase.buildTarget
+  Fields: platform, arch, libc (Linux only), nodeMajor, nodeAbi.
+  Use these with engines.node to check the deployment runtime.
+`);
+  process.exit(0);
+}
+
+const { generateDatabaseManifests } =
+  await import('@nocobase/dev-config/build/database-manifests');
+const { default: spawn } = await import('cross-spawn');
+const { readCliHooks, runHookStage } = await import('./utils/cli-hooks.mjs');
 
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
