@@ -26,6 +26,22 @@ Dependency keys get reordered between releases, so most of the raw diff is noise
 
 Ranges in a published template are already resolved (`pnpm pack` expands `workspace:` and `catalog:`). Take them as published.
 
+### Dependency resolution conflicts
+
+An existing lockfile may keep an older dependency resolution that still satisfies its declared range. After a template upgrade, the application's direct `@nocobase/db` and the copy used by an authorization dependency can therefore differ, making `DatabaseConnection` types incompatible. The Finish step runs `pnpm dedupe` to consolidate compatible versions; it cannot reconcile incompatible declared ranges.
+
+If the same-package type conflict remains, inspect the paths reported by TypeScript and use `pnpm why <package>` to find which dependency retains the older copy. For the authorization example:
+
+```bash
+pnpm why @nocobase/db
+pnpm why @nocobase/authorization
+pnpm why @nocobase/app-plugin-authorization
+```
+
+When a compatible newer version of the retaining dependency is available within its declared range, run `pnpm update <identified-package>`, then `pnpm dedupe`, and inspect the dependency paths again. Update only the package identified by the conflict; do not run an unscoped update or use `--latest`. If the declared ranges or application overrides prevent a shared version, report the conflicting constraints and reconcile them with the target template and the user's custom dependencies instead of forcing a version or deleting the lockfile.
+
+After resolving the conflict, rerun `pnpm plugin:skills:sync` and all Finish checks. Confirm the affected paths use a compatible shared package resolution; unrelated packages may legitimately retain multiple versions. A remaining type error without duplicate package resolutions needs investigation as a source or API compatibility issue.
+
 ## `config.yml` and `.env`
 
 A hub reads both, for different things. `.env` carries build-time settings — `APP_NAME`, `APP_BASE_PATH`, the dev server host and port — consumed by `vite.config.ts` and the build scripts. `config.yml` carries runtime settings: database connections, auth, notification channels, snowflake. Neither replaces the other.
@@ -50,7 +66,7 @@ Composition roots: the template registers what it ships, `pnpm plugin:register` 
 - Options changed — take the new ones, unless the user deliberately set otherwise.
 - Anything the user added — keep it.
 
-Then `pnpm install && pnpm plugin:skills:sync`, in that order: the sync reads these files and resolves each plugin out of `node_modules`.
+Follow the [Finish step](../SKILL.md#8-finish) to install and deduplicate dependencies before synchronizing Skills: the sync reads these files and resolves each plugin out of the final `node_modules`.
 
 An older application may also carry a `nocobase.plugins` array in `package.json`. It is obsolete — remove it if the target's `MIGRATION.md` says so.
 

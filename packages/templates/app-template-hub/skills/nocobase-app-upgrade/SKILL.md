@@ -124,9 +124,11 @@ When the right answer is unclear, stop and ask. The user is the only one who kno
 Set `defaultTemplateVersion` to the target, now that the source is actually merged.
 
 ```bash
-pnpm install && pnpm plugin:skills:sync
+pnpm install && pnpm dedupe && pnpm plugin:skills:sync
 pnpm typecheck && pnpm test && pnpm lint && pnpm build
 ```
+
+`pnpm install` can retain older transitive dependencies in `pnpm-lock.yaml` even after the template raises a direct dependency. Run `pnpm dedupe` to refresh compatible resolutions before synchronizing Skills from the final `node_modules`. Review and include the resulting lockfile changes in the upgrade. If type checking still reports incompatible types from two versions of the same package, follow [dependency resolution conflicts](references/edge-cases.md#dependency-resolution-conflicts) before changing application code.
 
 `typecheck` is doing real work here — it catches the broken import a removal left behind. Then run the hub and check what the delta touched: sign-in, the user's pages, navigation, locale switching, any new migration. Passing commands are not evidence the hub still behaves.
 
