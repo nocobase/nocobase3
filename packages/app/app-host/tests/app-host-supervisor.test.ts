@@ -9,11 +9,19 @@
 
 import { createHash } from 'node:crypto';
 import { EventEmitter } from 'node:events';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import {
+  cp,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import { c as createTar } from 'tar';
 import type { ArtifactReference } from '../dist/index.js';
@@ -24,6 +32,15 @@ import {
 import { AppHostSupervisor } from '../dist/supervisor.js';
 
 describe('AppHostSupervisor', () => {
+  it('keeps the tsx driver when workspace source is available', async () => {
+    const supervisor = AppHostSupervisor.initialize({ driver: 'tsx' });
+    try {
+      expect(supervisor.getInfo().driver).toBe('tsx');
+    } finally {
+      await supervisor.shutdown();
+    }
+  });
+
   it('uses explicit options instead of ambient supervisor configuration', async () => {
     vi.stubEnv('APP_HOST_ENABLED', 'false');
     vi.stubEnv('APP_HOST_MODE', 'invalid');
@@ -156,6 +173,7 @@ describe('AppHostSupervisor', () => {
       startTimeoutMs: 10_000,
     });
     try {
+      expect(supervisor.getInfo().driver).toBe('tsx');
       await supervisor.ensureStarted();
 
       const deployment = {
@@ -212,6 +230,73 @@ describe('AppHostSupervisor', () => {
       await rm(volumesDir, { recursive: true, force: true });
     }
   });
+
+  it.each([false, true])(
+    'uses Node for a published package without source (start: %s)',
+    async (start) => {
+      const root = await mkdtemp(path.join(os.tmpdir(), 'published-app-host-'));
+      const packageRoot = fileURLToPath(new URL('..', import.meta.url));
+      try {
+        await cp(path.join(packageRoot, 'dist'), path.join(root, 'dist'), {
+          recursive: true,
+        });
+        await writeFile(path.join(root, 'package.json'), '{"type":"module"}');
+        await symlink(
+          path.join(packageRoot, 'node_modules'),
+          path.join(root, 'node_modules'),
+          'dir',
+        );
+        const { AppHostSupervisor: PublishedSupervisor } = await import(
+          pathToFileURL(path.join(root, 'dist/supervisor.js')).href
+        );
+        const fixture = await createManagedFixture(root);
+        const options = {
+          mode: 'managed' as const,
+          driver: 'tsx' as const,
+          appDeploymentsDir: fixture.appDeploymentsDir,
+          appVolumesDir: fixture.appVolumesDir,
+          configPath: fixture.configPath,
+          tsxCli: path.join(root, 'missing-tsx.mjs'),
+          startTimeoutMs: 10_000,
+        };
+        const supervisor: AppHostSupervisor =
+          PublishedSupervisor.initialize(options);
+        try {
+          expect(supervisor.getInfo().driver).toBe('node');
+          if (start) {
+            await supervisor.ensureStarted();
+            expect(supervisor.getInfo()).toMatchObject({
+              status: 'ready',
+              entrypoint: path.join(root, 'dist/cli.js'),
+            });
+            const status = await (
+              await supervisor.getManagementClient()
+            ).getStatus();
+            expect(status.ready).toBe(true);
+          }
+        } finally {
+          await supervisor.shutdown();
+        }
+
+        // An explicit source entrypoint must not silently launch another program.
+        const explicit: AppHostSupervisor = PublishedSupervisor.initialize({
+          ...options,
+          entrypoint: path.join(root, 'missing-entry.ts'),
+          port: 13099,
+        });
+        try {
+          expect(explicit.getInfo().driver).toBe('tsx');
+          await expect(explicit.ensureStarted()).rejects.toThrow(
+            'The app-host source entrypoint does not exist.',
+          );
+        } finally {
+          await explicit.shutdown();
+        }
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    },
+  );
 
   it('notifies the controller after a crash so it can restore its deployment set', async () => {
     const volumesDir = await mkdtemp(path.join(os.tmpdir(), 'app-host-data-'));

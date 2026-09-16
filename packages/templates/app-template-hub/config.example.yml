@@ -1,5 +1,12 @@
 # Copy this file to config.yml before starting the application.
 
+# Hub development uses the App Host source when available and falls back to its
+# compiled Node entrypoint in published packages. No driver override is required.
+# For older App Host versions reporting "source entrypoint does not exist", use:
+# hub:
+#   host:
+#     driver: node
+
 app:
   # Public origin used for callbacks and redirects in production.
   # publicOrigin: https://apps.example.com

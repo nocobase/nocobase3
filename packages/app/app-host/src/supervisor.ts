@@ -519,6 +519,16 @@ export class AppHostSupervisor {
     }
 
     const driver = options.driver ?? 'node';
+    // Hub development requests tsx, but published packages only ship dist.
+    // Preserve source execution and explicit entrypoints when they are requested.
+    if (
+      driver === 'tsx' &&
+      !options.entrypoint &&
+      !resolveTsxAppHostEntrypoint() &&
+      resolveNodeAppHostEntrypoint()
+    ) {
+      return 'node';
+    }
     return driver === 'tsx' ? 'tsx' : 'node';
   }
 

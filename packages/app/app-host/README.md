@@ -13,6 +13,8 @@ The workspace start scripts use `tsx` because internal package exports resolve
 to TypeScript source during monorepo development. Published package exports
 resolve to compiled JavaScript instead.
 
+When Hub requests the supervisor's `tsx` driver, the supervisor uses the source entrypoint when available. In a published package without source, it uses the compiled Node entrypoint instead, so a generated Hub can run `pnpm dev` without overriding `hub.host.driver`. An explicit `entrypoint` disables this fallback; errors in custom entrypoints or a missing `tsx` runtime for source execution remain startup errors.
+
 By default the host listens on `127.0.0.1:3000` and discovers deployed apps
 from `./storage/app-deployments` in the current working directory.
 

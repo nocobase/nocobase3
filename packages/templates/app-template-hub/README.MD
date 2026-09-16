@@ -51,6 +51,8 @@ APP_SERVER_PORT=13399 PROXY_TARGET_URL=http://127.0.0.1:13000/main pnpm dev
 
 ### Review your configuration
 
+`pnpm dev` starts the Hub and its managed App Host. The supervisor uses TypeScript source in the workspace and automatically uses the compiled Node entrypoint when the installed App Host package has no source. If an older installed version reports `The app-host source entrypoint does not exist.`, set `hub.host.driver: node` in `config.yml` and restart; the same workaround is documented in `config.example.yml`.
+
 `config.yml` was generated from `config.example.yml` when the project was created, with `auth.secret` and `session.secret` filled in. It gets you running on SQLite; adjust it for your situation:
 
 - **Database.** SQLite needs no server and works as it is. To use another one, register its dialect in `server/config/database.ts`, add the matching `@nocobase/db-*` package, and point the connection here at it — host, port, and credentials. Drivers are code rather than settings, so a dialect the application does not register cannot be introduced from this file.
