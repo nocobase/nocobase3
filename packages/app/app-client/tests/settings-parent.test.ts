@@ -22,6 +22,41 @@ const contribution = (routes: readonly AppClientSettingsRouteDefinition[]) => ({
 });
 
 describe('settings parent contributions', () => {
+  it('orders contributed siblings while retaining registration order for ties', () => {
+    const result = resolveAppClientContributions([
+      owner,
+      contribution([
+        {
+          parent: 'authorization',
+          name: 'inspector',
+          path: '/inspector',
+          navigation: { title: 'Inspector', order: 100 },
+          componentLoader: page,
+        },
+        {
+          parent: 'authorization',
+          name: 'sharing',
+          path: '/sharing',
+          componentLoader: page,
+        },
+        {
+          parent: 'authorization',
+          name: 'restrictions',
+          path: '/restrictions',
+          componentLoader: page,
+        },
+      ]),
+    ]);
+    expect(
+      result.settingsRouteTree[0]?.children?.map((node) => node.name),
+    ).toEqual(['sets', 'sharing', 'restrictions', 'inspector']);
+    expect(result.settings.map((node) => node.id)).toEqual([
+      'sets',
+      'sharing',
+      'restrictions',
+      'inspector',
+    ]);
+  });
   it('appends before or after the owner registration without changing ownership or inputs', () => {
     const child = contribution([
       {

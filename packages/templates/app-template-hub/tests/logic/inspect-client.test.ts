@@ -232,10 +232,10 @@ describe('client inspection', () => {
       'edit',
       'assignments',
       'details',
-      'inspector',
       'default-access',
       'sharing-rules',
       'restriction-rules',
+      'inspector',
     ]);
 
     const output = formatAppClientInspection(inspection);

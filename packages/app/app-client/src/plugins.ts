@@ -89,6 +89,8 @@ export type AppClientSettingIcon = ComponentType<{
  * Navigation metadata for a child Route of the built-in Settings Route.
  */
 export interface AppClientSettingsRouteNavigation {
+  /** Lower values appear first among siblings; defaults to 0, with ties in registration order. */
+  readonly order?: number;
   readonly title: string;
   readonly icon?: AppClientSettingIcon;
 }
@@ -823,6 +825,16 @@ function assembleSettingsRoutes(inputs: readonly SettingsRouteInput[]): {
     visited.add(node);
   };
   for (const node of all) visit(node);
+  const sort = (nodes: AppClientSettingsRouteDefinition[]): void => {
+    nodes.sort(
+      (a, b) => (a.navigation?.order ?? 0) - (b.navigation?.order ?? 0),
+    );
+    for (const node of nodes) {
+      if (node.children)
+        sort(node.children as AppClientSettingsRouteDefinition[]);
+    }
+  };
+  sort(roots);
   return { roots, owners };
 }
 

@@ -70,7 +70,11 @@ const settings: AppClientRouteContribution = defineSettingsRoutes([
       {
         name: 'inspector',
         path: '/inspector',
-        navigation: { title: 'navigation.inspector', icon: ScanSearch },
+        navigation: {
+          title: 'navigation.inspector',
+          icon: ScanSearch,
+          order: 100,
+        },
         access: {
           resource: 'settings.authorization.permission-sets',
           action: 'read',

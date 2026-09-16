@@ -10,8 +10,8 @@ import {
 } from '@nocobase/app-plugin-authorization/client/management';
 import { useRuleDraft } from '@nocobase/app-plugin-authorization/client/management';
 import { actionLabel } from '@nocobase/app-plugin-authorization/client/management';
-import { Button } from '@nocobase/app-plugin-authorization/client/management';
-import { Input } from '@nocobase/app-plugin-authorization/client/management';
+import { Button } from '../components/ui/button.js';
+import { Input } from '../components/ui/input.js';
 import {
   Table,
   TableBody,
@@ -19,7 +19,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@nocobase/app-plugin-authorization/client/management';
+} from '../components/ui/table.js';
 import {
   useCallback,
   useEffect,
@@ -44,8 +44,8 @@ import {
   EmptyTableRow,
   ManagementTable,
   ManagementToolbar,
-  TablePager,
 } from '@nocobase/app-plugin-authorization/client/management';
+import { TablePager } from '@nocobase/app-plugin-authorization/client/management';
 import { useAuthorizationTranslation, type Translate } from '../i18n.js';
 import { pageSlice } from '@nocobase/app-plugin-authorization/client/management';
 import {

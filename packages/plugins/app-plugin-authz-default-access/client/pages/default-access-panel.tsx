@@ -3,8 +3,8 @@ import {
   Tooltip,
   TooltipTrigger,
   TooltipContent,
-} from '@nocobase/app-plugin-authorization/client/management';
-import { Checkbox } from '@nocobase/app-plugin-authorization/client/management';
+} from '../components/ui/tooltip.js';
+import { Checkbox } from '../components/ui/checkbox.js';
 import { SelectField } from '@nocobase/app-plugin-authorization/client/management';
 import { incompleteScope } from '@nocobase/app-plugin-authorization/client/management';
 import { Menu } from '@base-ui/react/menu';
@@ -27,7 +27,7 @@ import type {
 } from '@nocobase/app-plugin-authorization/client/management';
 import { authz } from '../api.js';
 import { useAuthorizationTranslation, type Translate } from '../i18n.js';
-import { Button } from '@nocobase/app-plugin-authorization/client/management';
+import { Button } from '../components/ui/button.js';
 import {
   Table,
   TableHeader,
@@ -35,7 +35,7 @@ import {
   TableRow,
   TableBody,
   TableCell,
-} from '@nocobase/app-plugin-authorization/client/management';
+} from '../components/ui/table.js';
 import {
   FilterBar,
   SearchField,
@@ -53,8 +53,8 @@ import { useRuleDraft } from '@nocobase/app-plugin-authorization/client/manageme
 import {
   ManagementTable,
   EmptyTableRow,
-  TablePager,
 } from '@nocobase/app-plugin-authorization/client/management';
+import { TablePager } from '@nocobase/app-plugin-authorization/client/management';
 import { pageSlice } from '@nocobase/app-plugin-authorization/client/management';
 import { ConfirmDialog } from '@nocobase/app-plugin-authorization/client/management';
 
