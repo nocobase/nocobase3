@@ -22,13 +22,15 @@ export default class AppUpload extends Command {
     }),
     hub: Flags.string({
       description:
-        'Hub application URL, including its base path. Defaults to HUB_URL.',
+        'Hub application URL, including its base path. Defaults to HUB_URL in the environment or App root .env.',
     }),
     'app-id': Flags.string({
-      description: 'Target App ID. Defaults to HUB_APP_ID.',
+      description:
+        'Target App ID. Defaults to HUB_APP_ID in the environment or App root .env.',
     }),
     'api-key': Flags.string({
-      description: 'Publishing API key. Prefer HUB_API_KEY in CI.',
+      description:
+        'Publishing API key. Defaults to HUB_API_KEY in the environment or App root .env.',
     }),
     file: Flags.string({
       description: 'Artifact path.',

@@ -27,6 +27,74 @@ const response = (data: object) =>
   });
 
 describe('Hub publishing client', () => {
+  it.each(['upload', 'deploy'] as const)(
+    '%s reads the App root .env with per-value flag and environment precedence',
+    async (operation) => {
+      await writeFile(
+        path.join(root, '.env'),
+        '# Publishing defaults\nHUB_URL="https://file.example/main"\nHUB_APP_ID=from-file # comment\nHUB_API_KEY=\'file-secret#literal\'\nNODE_OPTIONS=--invalid-option\n',
+      );
+      const processEnvBefore = { ...process.env };
+      const fetcher = vi
+        .fn()
+        .mockImplementation(() =>
+          Promise.resolve(response({ releaseId: 'r1', operationId: 'op-1' })),
+        );
+      vi.stubGlobal('fetch', fetcher);
+      const options = { 'release-id': 'r1' };
+      const endpoint = operation === 'upload' ? 'releases' : 'deploy';
+      const check = (host: string, appId: string, secret: string) => {
+        const call = fetcher.mock.lastCall;
+        expect(String(call?.[0])).toBe(
+          `https://${host}/main/api/hub/apps/${appId}/${endpoint}`,
+        );
+        expect(call?.[1].headers.authorization).toBe(`Bearer ${secret}`);
+      };
+      const result = await publishToHub(operation, options, root, {});
+      check('file.example', 'from-file', 'file-secret#literal');
+      expect(JSON.stringify(result)).not.toContain('file-secret');
+
+      // Each missing value falls back separately rather than selecting one source wholesale.
+      const partialEnv = { HUB_API_KEY: 'ci-secret' };
+      await publishToHub(
+        operation,
+        { ...options, 'app-id': 'flag-app' },
+        root,
+        partialEnv,
+      );
+      check('file.example', 'flag-app', 'ci-secret');
+      expect(partialEnv).toEqual({ HUB_API_KEY: 'ci-secret' });
+
+      await publishToHub(operation, options, root, env);
+      check('hub.example', 'crm', env.HUB_API_KEY);
+      await publishToHub(
+        operation,
+        {
+          ...options,
+          hub: 'https://flag.example/main',
+          'app-id': 'flag-app',
+          'api-key': 'flag-secret',
+        },
+        root,
+        env,
+      );
+      check('flag.example', 'flag-app', 'flag-secret');
+      expect(process.env).toEqual(processEnvBefore);
+    },
+  );
+
+  it('reports unreadable .env as a local error before sending a request', async () => {
+    await mkdir(path.join(root, '.env'));
+    const fetcher = vi.fn();
+    vi.stubGlobal('fetch', fetcher);
+    await expect(publishToHub('upload', {}, root, env)).rejects.toMatchObject({
+      code: 'INVALID_ENV_FILE',
+      exitCode: 2,
+      message: 'Cannot read the App root .env file.',
+    });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
   it('streams the file, preserves the Hub base path, and uses a checksum retry identity', async () => {
     const fetcher = vi.fn(async (url: URL, init: RequestInit) => {
       expect(String(url)).toBe(

@@ -20,13 +20,16 @@ export default class AppDeploy extends Command {
         'Runtime YAML configuration file. Omit to reuse the current Hub configuration.',
     }),
     hub: Flags.string({
-      description: 'Hub application URL. Defaults to HUB_URL.',
+      description:
+        'Hub application URL. Defaults to HUB_URL in the environment or App root .env.',
     }),
     'app-id': Flags.string({
-      description: 'Target App ID. Defaults to HUB_APP_ID.',
+      description:
+        'Target App ID. Defaults to HUB_APP_ID in the environment or App root .env.',
     }),
     'api-key': Flags.string({
-      description: 'Publishing API key. Prefer HUB_API_KEY in CI.',
+      description:
+        'Publishing API key. Defaults to HUB_API_KEY in the environment or App root .env.',
     }),
     'release-id': Flags.string({
       required: true,

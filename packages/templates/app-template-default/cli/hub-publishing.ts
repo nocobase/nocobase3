@@ -4,6 +4,7 @@ import { stat, readFile } from 'node:fs/promises';
 import { Readable } from 'node:stream';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
+import { parseEnv } from 'node:util';
 
 export interface PublishingOptions {
   hub?: string;
@@ -34,13 +35,25 @@ export async function publishToHub(
   root: string,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<Record<string, unknown>> {
-  const hub = options.hub ?? env.HUB_URL;
-  const apiKey = options['api-key'] ?? env.HUB_API_KEY;
-  const appId = options['app-id'] ?? env.HUB_APP_ID;
+  // Parse locally so application configuration never mutates the CLI process environment.
+  let fileEnv: NodeJS.ProcessEnv = {};
+  try {
+    fileEnv = parseEnv(await readFile(path.join(root, '.env'), 'utf8'));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
+      throw new PublishingError(
+        'INVALID_ENV_FILE',
+        'Cannot read the App root .env file.',
+        2,
+      );
+  }
+  const hub = options.hub ?? env.HUB_URL ?? fileEnv.HUB_URL;
+  const apiKey = options['api-key'] ?? env.HUB_API_KEY ?? fileEnv.HUB_API_KEY;
+  const appId = options['app-id'] ?? env.HUB_APP_ID ?? fileEnv.HUB_APP_ID;
   if (!hub || !apiKey || !appId)
     throw new PublishingError(
       'MISSING_CONFIGURATION',
-      'Provide --hub, --app-id and --api-key, or HUB_URL, HUB_APP_ID and HUB_API_KEY.',
+      'Provide --hub, --app-id and --api-key, or set HUB_URL, HUB_APP_ID and HUB_API_KEY in the environment or App root .env file.',
       2,
     );
   if (!/^[A-Za-z0-9_-]+$/.test(appId) || /[\r\n]/.test(apiKey))
