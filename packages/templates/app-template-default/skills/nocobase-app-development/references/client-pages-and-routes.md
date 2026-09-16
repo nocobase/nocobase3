@@ -33,12 +33,15 @@ const routes: readonly AppClientRouteContribution[] = [
 export default routes;
 ```
 
-The page module must default-export its component:
+The page module must default-export its component and wrap its content in `PageContainer` to use the shared page padding and spacing:
 
 ```tsx
 // client/pages/orders.tsx
+import type { ReactElement } from 'react';
+import { PageContainer } from '@/components/page-container';
+
 export default function OrdersPage(): ReactElement {
-  return <section className='p-6'>...</section>;
+  return <PageContainer>...</PageContainer>;
 }
 ```
 
@@ -126,16 +129,16 @@ The owning layout supplies the route tree: `AppShell` for business pages, and `S
 }
 ```
 
-The page places `<Breadcrumbs />` itself, above its heading, and keeps its own container and spacing:
+The page places `<Breadcrumbs />` itself, above its heading, inside `PageContainer`, which supplies the shared page spacing:
 
 ```tsx
-<section className='mx-auto w-full max-w-6xl space-y-6 p-6 md:p-8'>
+<PageContainer className='mx-auto max-w-6xl'>
   <Breadcrumbs />
   <PageHeader
     title={t('orders.title')}
     actions={<Button>{t('orders.create')}</Button>}
   />
-</section>
+</PageContainer>
 ```
 
 The trail follows the matched route hierarchy:

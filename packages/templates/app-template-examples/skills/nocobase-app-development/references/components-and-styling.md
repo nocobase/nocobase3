@@ -2,6 +2,22 @@
 
 The UI is shadcn/ui primitives, composed into application components, styled with Tailwind semantic tokens.
 
+## Page container
+
+When creating a page or writing a page component, wrap its content in `PageContainer` imported from `@/components/page-container`. This is the shared page container: it renders a `section` and owns full width, vertical spacing, and responsive padding (`w-full space-y-6 p-6 md:p-8`). Use it instead of hand-writing an outer `div`, `main`, or `section` with page padding. Keep these defaults so pages use the same spacing; change shared page spacing in the component rather than overriding it separately on each page.
+
+```tsx
+import { PageContainer } from '@/components/page-container';
+
+export default function OrdersPage() {
+  return <PageContainer>{/* Page content */}</PageContainer>;
+}
+```
+
+Place the page heading, breadcrumbs, actions, and content inside this container. Keep loading, empty, and error content within it too. `PageContainer` accepts native `section` props and merges `className`; add a width constraint such as `mx-auto max-w-6xl` only when the page needs it, preserving the shared padding and spacing.
+
+For nested routes, the parent page owns the container around inline Tab content; an inline child is content within that page and must not add another padded page container. A covering child page puts its own `PageContainer` inside `RouteChildPage`. Dialog and drawer content uses the corresponding overlay container. See [child routes](client-child-routes.md).
+
 ## Use shadcn/ui
 
 Check `client/components/ui/` first. If the primitive you need is not there, add it from the shadcn registry:
