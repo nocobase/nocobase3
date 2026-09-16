@@ -11,3 +11,5 @@ Use plugin-owned PageContainer components to unify settings page width, spacing,
 Use plugin-owned PageHeader components for consistent titles, descriptions, and page actions while preserving permission checks and workflow detail navigation.
 
 Preserve spacing below workflow tabs and wrap workflow list filters and actions on narrow screens.
+
+Restore spacing between workflow detail back links and headings, and keep execution duration cells aligned when table rows grow.

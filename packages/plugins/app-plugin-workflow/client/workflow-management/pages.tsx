@@ -935,7 +935,9 @@ export function WorkflowDetailPage(): React.ReactElement {
   };
   return (
     <PageContainer className='workflow-page'>
-      <Link to={WORKFLOW_SETTING_PATHS.workflows}>{t('workflows.back')}</Link>
+      <div>
+        <Link to={WORKFLOW_SETTING_PATHS.workflows}>{t('workflows.back')}</Link>
+      </div>
       <PageHeader
         title={workflow.title ?? workflow.key}
         description={workflow.description || t('workflows.noDescription')}
@@ -1199,8 +1201,8 @@ export function WorkflowRunListPage({
                   i18n.resolvedLanguage,
                 )}
               </TableCell>
-              <TableCell className='execution-item-meta'>
-                {duration(run)}
+              <TableCell>
+                <div className='execution-item-meta'>{duration(run)}</div>
               </TableCell>
             </TableRow>
           ))}
@@ -1268,7 +1270,9 @@ export function WorkflowRunDetailPage(): React.ReactElement {
   const description = selectedNode?.description ?? null;
   return (
     <PageContainer className='workflow-page'>
-      <Link to={workflowPath(run.workflowId)}>{t('workflows.back')}</Link>
+      <div>
+        <Link to={workflowPath(run.workflowId)}>{t('workflows.back')}</Link>
+      </div>
       <PageHeader
         title={
           <>
