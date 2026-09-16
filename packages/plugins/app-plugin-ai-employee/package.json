@@ -170,7 +170,6 @@
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
-    "better-sqlite3": "catalog:",
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",
     "echarts": "^5.5.0",
