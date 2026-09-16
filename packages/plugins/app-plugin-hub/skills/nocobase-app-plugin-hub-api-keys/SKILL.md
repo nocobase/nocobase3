@@ -1,5 +1,5 @@
 ---
-name: nocobase-hub-api-keys
+name: nocobase-app-plugin-hub-api-keys
 description: Manage Hub publishing API keys in NocoBase 3 Hub and call its Release and Deployment APIs.
 ---
 
