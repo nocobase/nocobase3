@@ -1,3 +1,4 @@
+import { PageContainer } from '../components/page-container.js';
 import { apiClientToken, useService } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { Database, Search } from 'lucide-react';
@@ -138,7 +139,7 @@ export default function DatabaseExplorerPage(): ReactElement {
   };
 
   return (
-    <div className='flex flex-col gap-4 p-6'>
+    <PageContainer>
       <header>
         <h1 className='font-heading text-2xl font-semibold'>
           {t('page.title')}
@@ -275,7 +276,7 @@ export default function DatabaseExplorerPage(): ReactElement {
           )}
         </Panel>
       </div>
-    </div>
+    </PageContainer>
   );
 }
 

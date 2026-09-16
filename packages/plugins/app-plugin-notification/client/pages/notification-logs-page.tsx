@@ -1,3 +1,4 @@
+import { PageContainer } from '../components/page-container.js';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
 import { useTranslation } from '@nocobase/i18n/client';
@@ -96,9 +97,9 @@ export default function NotificationLogsPage(): ReactElement {
   );
 
   return (
-    <main className='min-h-[calc(100svh-4rem)] bg-muted/20'>
-      <header className='border-b bg-background px-6 py-7'>
-        <div className='mx-auto flex w-full max-w-7xl flex-col gap-4 sm:flex-row sm:items-end sm:justify-between'>
+    <PageContainer>
+      <header className='border-b bg-background pb-6'>
+        <div className='flex w-full flex-col gap-4 sm:flex-row sm:items-end sm:justify-between'>
           <div>
             <p className='text-xs font-medium tracking-wide text-muted-foreground uppercase'>
               {t('logs.eyebrow', { defaultValue: 'Notifications' })}
@@ -137,7 +138,7 @@ export default function NotificationLogsPage(): ReactElement {
         </div>
       </header>
 
-      <div className='mx-auto w-full max-w-7xl space-y-5 px-6 py-6'>
+      <div className='space-y-5'>
         <div className='grid max-w-md grid-cols-2 gap-3'>
           <Metric
             label={t('logs.deliveriesShown', {
@@ -198,7 +199,7 @@ export default function NotificationLogsPage(): ReactElement {
           onSent={refresh}
         />
       ) : null}
-    </main>
+    </PageContainer>
   );
 }
 

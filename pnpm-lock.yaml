@@ -2514,6 +2514,9 @@ importers:
       react-router:
         specifier: 'catalog:'
         version: 7.18.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      tailwind-merge:
+        specifier: 'catalog:'
+        version: 3.6.0
     devDependencies:
       '@nocobase/db-sqlite':
         specifier: workspace:*
@@ -2933,6 +2936,9 @@ importers:
       react-dom:
         specifier: ^19.0.0
         version: 19.2.8(react@19.2.8)
+      tailwind-merge:
+        specifier: 'catalog:'
+        version: 3.6.0
     devDependencies:
       '@nocobase/db-mysql':
         specifier: workspace:*
@@ -3340,6 +3346,9 @@ importers:
       react-router:
         specifier: 'catalog:'
         version: 7.18.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      tailwind-merge:
+        specifier: 'catalog:'
+        version: 3.6.0
       typescript:
         specifier: 'catalog:'
         version: 6.0.3

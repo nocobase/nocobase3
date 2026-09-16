@@ -1,3 +1,4 @@
+import { PageContainer } from '../components/page-container.js';
 import { useTranslation } from '@nocobase/i18n/client';
 import { Check, Copy, LoaderCircle, Plus, Trash2 } from 'lucide-react';
 import {
@@ -122,109 +123,107 @@ export default function ApiKeysPage(): ReactElement {
     value ? new Date(value).toLocaleString(i18n.language) : t('page.never');
 
   return (
-    <main className='min-h-[calc(100svh-4rem)] bg-muted/20 p-5 sm:p-8'>
-      <div className='mx-auto max-w-5xl space-y-5'>
-        <header className='flex flex-wrap items-end justify-between gap-4'>
-          <div>
-            <h1 className='text-2xl font-semibold tracking-tight'>
-              {t('page.title')}
-            </h1>
-            <p className='mt-1 text-sm text-muted-foreground'>
-              {t('page.description')}
-            </p>
-          </div>
-          <Button onClick={() => setCreating(true)}>
-            <Plus /> {t('page.add')}
-          </Button>
-        </header>
-
-        {error ? (
-          <div className='rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive'>
-            {error}
-          </div>
-        ) : null}
-
-        <div className='overflow-hidden rounded-xl border bg-background'>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t('page.columns.name')}</TableHead>
-                <TableHead>{t('page.columns.key')}</TableHead>
-                <TableHead>{t('page.columns.status')}</TableHead>
-                <TableHead>{t('page.columns.lastUsed')}</TableHead>
-                <TableHead>{t('page.columns.expires')}</TableHead>
-                <TableHead className='w-14'>
-                  <span className='sr-only'>{t('page.columns.actions')}</span>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={6}
-                    className='h-32 text-center text-muted-foreground'
-                  >
-                    <LoaderCircle className='mx-auto size-5 animate-spin' />
-                  </TableCell>
-                </TableRow>
-              ) : keys.length === 0 ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={6}
-                    className='h-32 text-center text-muted-foreground'
-                  >
-                    {t('page.empty')}
-                  </TableCell>
-                </TableRow>
-              ) : (
-                keys.map((key) => (
-                  <TableRow key={key.id}>
-                    <TableCell className='font-medium'>
-                      {key.name ?? t('page.unnamed')}
-                    </TableCell>
-                    <TableCell className='font-mono text-xs text-muted-foreground'>
-                      {formatKeyHint(key)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          key.enabled && !isExpired(key.expiresAt)
-                            ? 'default'
-                            : 'secondary'
-                        }
-                      >
-                        {!key.enabled
-                          ? t('page.disabled')
-                          : isExpired(key.expiresAt)
-                            ? t('page.expired')
-                            : t('page.active')}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className='text-sm text-muted-foreground'>
-                      {key.lastRequest
-                        ? formatDate(key.lastRequest)
-                        : t('page.unused')}
-                    </TableCell>
-                    <TableCell className='text-sm text-muted-foreground'>
-                      {formatDate(key.expiresAt)}
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        variant='ghost'
-                        size='icon-sm'
-                        aria-label={t('page.actions.revoke')}
-                        onClick={() => setRevoking(key)}
-                      >
-                        <Trash2 />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+    <PageContainer>
+      <header className='flex flex-wrap items-end justify-between gap-4'>
+        <div>
+          <h1 className='text-2xl font-semibold tracking-tight'>
+            {t('page.title')}
+          </h1>
+          <p className='mt-1 text-sm text-muted-foreground'>
+            {t('page.description')}
+          </p>
         </div>
+        <Button onClick={() => setCreating(true)}>
+          <Plus /> {t('page.add')}
+        </Button>
+      </header>
+
+      {error ? (
+        <div className='rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive'>
+          {error}
+        </div>
+      ) : null}
+
+      <div className='overflow-hidden rounded-xl border bg-background'>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>{t('page.columns.name')}</TableHead>
+              <TableHead>{t('page.columns.key')}</TableHead>
+              <TableHead>{t('page.columns.status')}</TableHead>
+              <TableHead>{t('page.columns.lastUsed')}</TableHead>
+              <TableHead>{t('page.columns.expires')}</TableHead>
+              <TableHead className='w-14'>
+                <span className='sr-only'>{t('page.columns.actions')}</span>
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              <TableRow>
+                <TableCell
+                  colSpan={6}
+                  className='h-32 text-center text-muted-foreground'
+                >
+                  <LoaderCircle className='mx-auto size-5 animate-spin' />
+                </TableCell>
+              </TableRow>
+            ) : keys.length === 0 ? (
+              <TableRow>
+                <TableCell
+                  colSpan={6}
+                  className='h-32 text-center text-muted-foreground'
+                >
+                  {t('page.empty')}
+                </TableCell>
+              </TableRow>
+            ) : (
+              keys.map((key) => (
+                <TableRow key={key.id}>
+                  <TableCell className='font-medium'>
+                    {key.name ?? t('page.unnamed')}
+                  </TableCell>
+                  <TableCell className='font-mono text-xs text-muted-foreground'>
+                    {formatKeyHint(key)}
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant={
+                        key.enabled && !isExpired(key.expiresAt)
+                          ? 'default'
+                          : 'secondary'
+                      }
+                    >
+                      {!key.enabled
+                        ? t('page.disabled')
+                        : isExpired(key.expiresAt)
+                          ? t('page.expired')
+                          : t('page.active')}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className='text-sm text-muted-foreground'>
+                    {key.lastRequest
+                      ? formatDate(key.lastRequest)
+                      : t('page.unused')}
+                  </TableCell>
+                  <TableCell className='text-sm text-muted-foreground'>
+                    {formatDate(key.expiresAt)}
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      variant='ghost'
+                      size='icon-sm'
+                      aria-label={t('page.actions.revoke')}
+                      onClick={() => setRevoking(key)}
+                    >
+                      <Trash2 />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
       </div>
 
       <CreateKeyDialog
@@ -240,7 +239,7 @@ export default function ApiKeysPage(): ReactElement {
         onCancel={() => setRevoking(undefined)}
         onConfirm={revoke}
       />
-    </main>
+    </PageContainer>
   );
 }
 

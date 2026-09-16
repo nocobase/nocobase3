@@ -1,3 +1,4 @@
+import { PageContainer } from '../components/page-container.js';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNotification } from '@refinedev/core';
 import type { Translator } from '@nocobase/i18n';
@@ -792,7 +793,7 @@ export function WorkflowListPage(): React.ReactElement {
   useEffect(() => load(1), [load]);
   if (detail) return detail;
   return (
-    <main className='workflow-page'>
+    <PageContainer className='workflow-page'>
       <h1 className='text-2xl font-semibold tracking-tight'>
         {t('workflows.title')}
       </h1>
@@ -869,7 +870,7 @@ export function WorkflowListPage(): React.ReactElement {
           ) : null}
         </section>
       )}
-    </main>
+    </PageContainer>
   );
 }
 
@@ -900,9 +901,12 @@ export function WorkflowDetailPage(): React.ReactElement {
     [workflow],
   );
   if (!workflow || !source)
-    return <main>{loaded.error ?? t('workflows.loading')}</main>;
+    return (
+      <PageContainer>{loaded.error ?? t('workflows.loading')}</PageContainer>
+    );
   const identifier = workflow.id ?? workflow.hash;
-  if (!identifier) return <main>{t('workflows.missingIdentifier')}</main>;
+  if (!identifier)
+    return <PageContainer>{t('workflows.missingIdentifier')}</PageContainer>;
   const enabled = workflow.enabled;
   const pendingArtifact = workflow.pendingArtifact;
   const hasInput =
@@ -931,7 +935,7 @@ export function WorkflowDetailPage(): React.ReactElement {
     });
   };
   return (
-    <main className='workflow-page'>
+    <PageContainer className='workflow-page'>
       <Link to={WORKFLOW_SETTING_PATHS.workflows}>{t('workflows.back')}</Link>
       <div className='workflow-title-row'>
         <div>
@@ -1105,7 +1109,7 @@ export function WorkflowDetailPage(): React.ReactElement {
           onClose={() => setRuns(null)}
         />
       ) : null}
-    </main>
+    </PageContainer>
   );
 }
 
@@ -1225,13 +1229,13 @@ export function WorkflowRunListPage({
   return embedded ? (
     content
   ) : (
-    <main className='workflow-page'>
+    <PageContainer className='workflow-page'>
       <h1 className='text-2xl font-semibold tracking-tight'>
         {t('workflows.title')}
       </h1>
       <WorkflowTabs active='runs' onChange={() => undefined} />
       {content}
-    </main>
+    </PageContainer>
   );
 }
 
@@ -1257,7 +1261,11 @@ export function WorkflowRunDetailPage(): React.ReactElement {
     [workflow.value],
   );
   if (!run || !workflow.value || !source)
-    return <main>{state.error ?? workflow.error ?? t('runs.loading')}</main>;
+    return (
+      <PageContainer>
+        {state.error ?? workflow.error ?? t('runs.loading')}
+      </PageContainer>
+    );
   const nodes = run.nodeRuns ?? [];
   const graph = projectWorkflowGraph(source);
   const selectedNode = workflow.value.nodes.find(
@@ -1266,7 +1274,7 @@ export function WorkflowRunDetailPage(): React.ReactElement {
   const title = selectedNode?.title ?? nodeRun?.nodeKey;
   const description = selectedNode?.description ?? null;
   return (
-    <main className='workflow-page'>
+    <PageContainer className='workflow-page'>
       <Link to={workflowPath(run.workflowId)}>{t('workflows.back')}</Link>
       <div className='workflow-title-row'>
         <div>
@@ -1316,6 +1324,6 @@ export function WorkflowRunDetailPage(): React.ReactElement {
           onClose={() => setInputOpen(false)}
         />
       ) : null}
-    </main>
+    </PageContainer>
   );
 }

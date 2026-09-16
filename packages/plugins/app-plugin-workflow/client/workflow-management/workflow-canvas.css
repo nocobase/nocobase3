@@ -324,13 +324,6 @@
 .workflow-canvas .react-flow__attribution {
   display: none;
 }
-.workflow-page {
-  display: grid;
-  gap: 20px;
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 24px;
-}
 .workflow-page h1 {
   margin: 0;
 }

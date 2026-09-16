@@ -1,3 +1,4 @@
+import { PageContainer } from '../components/page-container.js';
 import {
   ApiClientError,
   apiClientToken,
@@ -206,267 +207,263 @@ export default function UsersPage(): ReactElement {
   };
 
   return (
-    <main className='min-h-[calc(100svh-4rem)] bg-muted/20 p-5 sm:p-8'>
-      <div className='mx-auto max-w-6xl space-y-5'>
-        <header className='flex flex-wrap items-end justify-between gap-4'>
-          <div>
-            <h1 className='text-2xl font-semibold tracking-tight'>
-              {t('page.title')}
-            </h1>
-            <p className='mt-1 text-sm text-muted-foreground'>
-              {t('page.description')}
-            </p>
-          </div>
-          {globalCapabilities.create && globalCapabilities['assign-role'] ? (
-            <Button onClick={() => setEditor('create')}>
-              <Plus /> {t('page.add')}
-            </Button>
-          ) : null}
-        </header>
-
-        {error ? (
-          <div className='rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive'>
-            {error}
-          </div>
+    <PageContainer>
+      <header className='flex flex-wrap items-end justify-between gap-4'>
+        <div>
+          <h1 className='text-2xl font-semibold tracking-tight'>
+            {t('page.title')}
+          </h1>
+          <p className='mt-1 text-sm text-muted-foreground'>
+            {t('page.description')}
+          </p>
+        </div>
+        {globalCapabilities.create && globalCapabilities['assign-role'] ? (
+          <Button onClick={() => setEditor('create')}>
+            <Plus /> {t('page.add')}
+          </Button>
         ) : null}
+      </header>
 
-        <div className='flex flex-wrap gap-3'>
-          <label className='flex h-9 min-w-64 flex-1 items-center gap-2 rounded-lg border bg-background px-3'>
-            <Search className='size-4 text-muted-foreground' />
-            <Input
-              className='h-auto border-0 p-0 focus-visible:ring-0'
-              placeholder={t('page.search')}
-              value={search}
-              onChange={(event) => {
-                setSearch(event.target.value);
-                setPage(1);
-              }}
-            />
-          </label>
+      {error ? (
+        <div className='rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive'>
+          {error}
+        </div>
+      ) : null}
+
+      <div className='flex flex-wrap gap-3'>
+        <label className='flex h-9 min-w-64 flex-1 items-center gap-2 rounded-lg border bg-background px-3'>
+          <Search className='size-4 text-muted-foreground' />
+          <Input
+            className='h-auto border-0 p-0 focus-visible:ring-0'
+            placeholder={t('page.search')}
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setPage(1);
+            }}
+          />
+        </label>
+        <Select
+          items={statusOptions}
+          value={status}
+          onValueChange={(value) => {
+            setStatus(value as typeof status);
+            setPage(1);
+          }}
+        >
+          <SelectTrigger className='w-36'>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value='all'>{t('page.allStatuses')}</SelectItem>
+            <SelectItem value='enabled'>{t('page.enabled')}</SelectItem>
+            <SelectItem value='disabled'>{t('page.disabled')}</SelectItem>
+          </SelectContent>
+        </Select>
+        {roleChoices.length ? (
           <Select
-            items={statusOptions}
-            value={status}
+            items={roleFilterOptions}
+            value={role}
             onValueChange={(value) => {
-              setStatus(value as typeof status);
+              setRole(String(value));
               setPage(1);
             }}
           >
-            <SelectTrigger className='w-36'>
+            <SelectTrigger className='w-48'>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value='all'>{t('page.allStatuses')}</SelectItem>
-              <SelectItem value='enabled'>{t('page.enabled')}</SelectItem>
-              <SelectItem value='disabled'>{t('page.disabled')}</SelectItem>
+              <SelectItem value='all'>{t('page.allRoles')}</SelectItem>
+              {roleChoices.map(({ scope, option }) => (
+                <SelectItem
+                  key={`${scope.key}:${option.value}`}
+                  value={`${scope.key}:${option.value}`}
+                >
+                  {option.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
-          {roleChoices.length ? (
-            <Select
-              items={roleFilterOptions}
-              value={role}
-              onValueChange={(value) => {
-                setRole(String(value));
-                setPage(1);
-              }}
-            >
-              <SelectTrigger className='w-48'>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value='all'>{t('page.allRoles')}</SelectItem>
-                {roleChoices.map(({ scope, option }) => (
-                  <SelectItem
-                    key={`${scope.key}:${option.value}`}
-                    value={`${scope.key}:${option.value}`}
-                  >
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : null}
-        </div>
-
-        {localizedOptions.roleScopes.some(
-          (scope) => scope.hasAuthenticatedDefaultAccess,
-        ) ? (
-          <p className='text-sm text-muted-foreground'>
-            {t('page.authenticatedDefaultAccess')}
-          </p>
         ) : null}
+      </div>
 
-        <div className='overflow-hidden rounded-xl border bg-background'>
-          <Table>
-            <TableHeader>
+      {localizedOptions.roleScopes.some(
+        (scope) => scope.hasAuthenticatedDefaultAccess,
+      ) ? (
+        <p className='text-sm text-muted-foreground'>
+          {t('page.authenticatedDefaultAccess')}
+        </p>
+      ) : null}
+
+      <div className='overflow-hidden rounded-xl border bg-background'>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>{t('page.columns.user')}</TableHead>
+              <TableHead>{t('page.columns.status')}</TableHead>
+              {localizedOptions.roleScopes.map((scope) => (
+                <TableHead key={scope.key}>{scope.label}</TableHead>
+              ))}
+              <TableHead className='w-14'>
+                <span className='sr-only'>{t('page.columns.actions')}</span>
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? (
               <TableRow>
-                <TableHead>{t('page.columns.user')}</TableHead>
-                <TableHead>{t('page.columns.status')}</TableHead>
-                {localizedOptions.roleScopes.map((scope) => (
-                  <TableHead key={scope.key}>{scope.label}</TableHead>
-                ))}
-                <TableHead className='w-14'>
-                  <span className='sr-only'>{t('page.columns.actions')}</span>
-                </TableHead>
+                <TableCell
+                  colSpan={3 + localizedOptions.roleScopes.length}
+                  className='h-32 text-center text-muted-foreground'
+                >
+                  <LoaderCircle className='mx-auto size-5 animate-spin' />
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={3 + localizedOptions.roleScopes.length}
-                    className='h-32 text-center text-muted-foreground'
-                  >
-                    <LoaderCircle className='mx-auto size-5 animate-spin' />
-                  </TableCell>
-                </TableRow>
-              ) : result.items.length ? (
-                result.items.map((user) => {
-                  const capabilities =
-                    userCapabilities[user.id] ?? emptyUserCapabilities();
-                  const canChangeState = user.disabledAt
-                    ? capabilities.enable
-                    : capabilities.disable;
-                  const hasActions =
-                    capabilities.update ||
-                    capabilities['reset-password'] ||
-                    capabilities['revoke-sessions'] ||
-                    canChangeState;
-                  return (
-                    <TableRow key={user.id}>
-                      <TableCell>
-                        <div className='font-medium'>{user.name}</div>
-                        <div className='text-xs text-muted-foreground'>
-                          {user.username ? `@${user.username} · ` : ''}
-                          {user.email}
-                        </div>
+            ) : result.items.length ? (
+              result.items.map((user) => {
+                const capabilities =
+                  userCapabilities[user.id] ?? emptyUserCapabilities();
+                const canChangeState = user.disabledAt
+                  ? capabilities.enable
+                  : capabilities.disable;
+                const hasActions =
+                  capabilities.update ||
+                  capabilities['reset-password'] ||
+                  capabilities['revoke-sessions'] ||
+                  canChangeState;
+                return (
+                  <TableRow key={user.id}>
+                    <TableCell>
+                      <div className='font-medium'>{user.name}</div>
+                      <div className='text-xs text-muted-foreground'>
+                        {user.username ? `@${user.username} · ` : ''}
+                        {user.email}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={user.disabledAt ? 'secondary' : 'default'}
+                      >
+                        {user.disabledAt
+                          ? t('page.disabled')
+                          : t('page.enabled')}
+                      </Badge>
+                    </TableCell>
+                    {localizedOptions.roleScopes.map((scope) => (
+                      <TableCell key={scope.key}>
+                        {capabilities['assign-role'] &&
+                        scope.options.some((option) =>
+                          roleOptionCanToggle(
+                            option,
+                            roleValues(user.roleScopes[scope.key] ?? ''),
+                          ),
+                        ) ? (
+                          <RoleEditor
+                            disabled={busy}
+                            scope={scope}
+                            value={user.roleScopes[scope.key] ?? ''}
+                            onChange={(value) =>
+                              void perform(() =>
+                                users.replaceRoleScope(
+                                  user.id,
+                                  scope.key,
+                                  value,
+                                ),
+                              )
+                            }
+                          />
+                        ) : (
+                          <RoleValue
+                            scope={scope}
+                            value={user.roleScopes[scope.key] ?? ''}
+                          />
+                        )}
                       </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={user.disabledAt ? 'secondary' : 'default'}
-                        >
-                          {user.disabledAt
-                            ? t('page.disabled')
-                            : t('page.enabled')}
-                        </Badge>
-                      </TableCell>
-                      {localizedOptions.roleScopes.map((scope) => (
-                        <TableCell key={scope.key}>
-                          {capabilities['assign-role'] &&
-                          scope.options.some((option) =>
-                            roleOptionCanToggle(
-                              option,
-                              roleValues(user.roleScopes[scope.key] ?? ''),
-                            ),
-                          ) ? (
-                            <RoleEditor
-                              disabled={busy}
-                              scope={scope}
-                              value={user.roleScopes[scope.key] ?? ''}
-                              onChange={(value) =>
-                                void perform(() =>
-                                  users.replaceRoleScope(
-                                    user.id,
-                                    scope.key,
-                                    value,
-                                  ),
-                                )
-                              }
-                            />
-                          ) : (
-                            <RoleValue
-                              scope={scope}
-                              value={user.roleScopes[scope.key] ?? ''}
-                            />
-                          )}
-                        </TableCell>
-                      ))}
-                      <TableCell>
-                        {hasActions ? (
-                          <DropdownMenu>
-                            <DropdownMenuTrigger
-                              render={<Button variant='ghost' size='icon-sm' />}
-                            >
-                              <MoreHorizontal />
-                              <span className='sr-only'>
-                                {t('page.actions.menu')}
-                              </span>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align='end'>
-                              {capabilities.update ? (
-                                <DropdownMenuItem
-                                  onClick={() => setEditor(user)}
-                                >
-                                  {t('page.actions.edit')}
-                                </DropdownMenuItem>
-                              ) : null}
-                              {capabilities['reset-password'] ? (
-                                <DropdownMenuItem
-                                  onClick={() => setPasswordUser(user)}
-                                >
-                                  {t('page.actions.resetPassword')}
-                                </DropdownMenuItem>
-                              ) : null}
-                              {capabilities['revoke-sessions'] ? (
-                                <DropdownMenuItem
-                                  onClick={() =>
-                                    void perform(() =>
-                                      users.revokeSessions(user.id),
-                                    )
-                                  }
-                                >
-                                  {t('page.actions.revokeSessions')}
-                                </DropdownMenuItem>
-                              ) : null}
-                              {canChangeState ? (
-                                <DropdownMenuItem
-                                  onClick={() => setStateUser(user)}
-                                >
-                                  {user.disabledAt
-                                    ? t('page.actions.enable')
-                                    : t('page.actions.disable')}
-                                </DropdownMenuItem>
-                              ) : null}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        ) : null}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              ) : (
-                <TableRow>
-                  <TableCell
-                    colSpan={3 + localizedOptions.roleScopes.length}
-                    className='h-32 text-center text-muted-foreground'
-                  >
-                    {t('page.noUsers')}
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                    ))}
+                    <TableCell>
+                      {hasActions ? (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger
+                            render={<Button variant='ghost' size='icon-sm' />}
+                          >
+                            <MoreHorizontal />
+                            <span className='sr-only'>
+                              {t('page.actions.menu')}
+                            </span>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align='end'>
+                            {capabilities.update ? (
+                              <DropdownMenuItem onClick={() => setEditor(user)}>
+                                {t('page.actions.edit')}
+                              </DropdownMenuItem>
+                            ) : null}
+                            {capabilities['reset-password'] ? (
+                              <DropdownMenuItem
+                                onClick={() => setPasswordUser(user)}
+                              >
+                                {t('page.actions.resetPassword')}
+                              </DropdownMenuItem>
+                            ) : null}
+                            {capabilities['revoke-sessions'] ? (
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  void perform(() =>
+                                    users.revokeSessions(user.id),
+                                  )
+                                }
+                              >
+                                {t('page.actions.revokeSessions')}
+                              </DropdownMenuItem>
+                            ) : null}
+                            {canChangeState ? (
+                              <DropdownMenuItem
+                                onClick={() => setStateUser(user)}
+                              >
+                                {user.disabledAt
+                                  ? t('page.actions.enable')
+                                  : t('page.actions.disable')}
+                              </DropdownMenuItem>
+                            ) : null}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      ) : null}
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            ) : (
+              <TableRow>
+                <TableCell
+                  colSpan={3 + localizedOptions.roleScopes.length}
+                  className='h-32 text-center text-muted-foreground'
+                >
+                  {t('page.noUsers')}
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
 
-        <div className='flex items-center justify-between text-sm text-muted-foreground'>
-          <span>{t('page.total', { count: result.total })}</span>
-          <div className='flex gap-2'>
-            <Button
-              variant='outline'
-              size='sm'
-              disabled={page <= 1 || loading}
-              onClick={() => setPage((value) => value - 1)}
-            >
-              {t('page.previous')}
-            </Button>
-            <Button
-              variant='outline'
-              size='sm'
-              disabled={page * result.pageSize >= result.total || loading}
-              onClick={() => setPage((value) => value + 1)}
-            >
-              {t('page.next')}
-            </Button>
-          </div>
+      <div className='flex items-center justify-between text-sm text-muted-foreground'>
+        <span>{t('page.total', { count: result.total })}</span>
+        <div className='flex gap-2'>
+          <Button
+            variant='outline'
+            size='sm'
+            disabled={page <= 1 || loading}
+            onClick={() => setPage((value) => value - 1)}
+          >
+            {t('page.previous')}
+          </Button>
+          <Button
+            variant='outline'
+            size='sm'
+            disabled={page * result.pageSize >= result.total || loading}
+            onClick={() => setPage((value) => value + 1)}
+          >
+            {t('page.next')}
+          </Button>
         </div>
       </div>
 
@@ -520,7 +517,7 @@ export default function UsersPage(): ReactElement {
           }
         />
       ) : null}
-    </main>
+    </PageContainer>
   );
 }
 
