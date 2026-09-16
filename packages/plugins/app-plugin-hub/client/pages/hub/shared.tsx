@@ -2,6 +2,7 @@ import { toast } from 'sonner';
 import { Badge } from '../../components/ui/badge.js';
 import { Avatar, AvatarFallback } from '../../components/ui/avatar.js';
 import { Button } from '../../components/ui/button.js';
+import { cn } from '../../lib/utils.js';
 import {
   Dialog as UiDialog,
   DialogBody,
@@ -58,20 +59,36 @@ export function AppDialog({
   readonly contentClassName?: string;
   readonly wide?: boolean;
 }): ReactElement {
+  const compact = !wide && !children && !subheader;
+
   return (
     <UiDialog open onOpenChange={(open) => (!open ? onClose() : undefined)}>
       <DialogContent
-        className={`${wide ? 'max-w-none p-8' : 'max-w-xl p-8'} ${contentClassName ?? ''}`}
+        className={cn(
+          wide ? 'max-w-none p-8' : compact ? 'max-w-md p-6' : 'max-w-xl p-8',
+          contentClassName,
+        )}
         style={wide ? { width: 'min(72rem, calc(100vw - 2rem))' } : undefined}
       >
-        <DialogHeader className='pr-6'>
-          <DialogTitle>{title}</DialogTitle>
+        <DialogHeader className={cn('pr-6', compact && 'mb-0 space-y-2')}>
+          <DialogTitle
+            className={cn(
+              'font-semibold break-words',
+              compact ? 'text-lg' : 'text-xl',
+            )}
+          >
+            {title}
+          </DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         {subheader ? <div className='mb-5 shrink-0'>{subheader}</div> : null}
         {children ? <DialogBody>{children}</DialogBody> : null}
         {footer ? (
-          <DialogFooter className={footerClassName}>{footer}</DialogFooter>
+          <DialogFooter
+            className={cn(compact && 'border-t-0 pt-0', footerClassName)}
+          >
+            {footer}
+          </DialogFooter>
         ) : null}
       </DialogContent>
     </UiDialog>
