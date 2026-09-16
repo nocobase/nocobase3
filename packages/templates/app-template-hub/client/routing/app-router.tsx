@@ -11,7 +11,6 @@ import { EMPTY_ARRAY } from '@/lib/constants';
 
 import { AppShell } from '../shell/index.js';
 import { renderRouteTree } from './route-tree.js';
-import { SettingsRouteTreeContext } from './settings-route-context.js';
 import { StandalonePageLayout } from './standalone-page-layout.js';
 
 // The settings centre brings its own chrome and navigation, none of which the application needs until someone opens
@@ -73,68 +72,66 @@ export function AppRouter({
   );
 
   return (
-    <SettingsRouteTreeContext.Provider value={settingsRouteTree}>
-      <Routes>
+    <Routes>
+      <Route
+        element={
+          <RequiredAuthentication>
+            <Outlet />
+          </RequiredAuthentication>
+        }
+      >
+        <Route element={<AppShell routes={routeGroups.required} />}>
+          {renderRouteTree(routeGroups.required)}
+        </Route>
         <Route
+          path='/settings/*'
           element={
-            <RequiredAuthentication>
-              <Outlet />
-            </RequiredAuthentication>
+            <Suspense
+              fallback={
+                <Loading className='min-h-svh' label='Loading settings' />
+              }
+            >
+              <SettingsLayout
+                routeTree={settingsRouteTree}
+                routes={settingsRoutes}
+              />
+            </Suspense>
           }
-        >
-          <Route element={<AppShell routes={routeGroups.required} />}>
-            {renderRouteTree(routeGroups.required)}
-          </Route>
+        />
+        {import.meta.env.DEV && DevLayout ? (
           <Route
-            path='/settings/*'
+            path='/dev/*'
             element={
               <Suspense
                 fallback={
-                  <Loading className='min-h-svh' label='Loading settings' />
+                  <Loading className='min-h-svh' label='Loading dev tools' />
                 }
               >
-                <SettingsLayout
-                  routeTree={settingsRouteTree}
-                  routes={settingsRoutes}
-                />
+                <DevLayout routeTree={devRouteTree} routes={devRoutes} />
               </Suspense>
             }
           />
-          {import.meta.env.DEV && DevLayout ? (
-            <Route
-              path='/dev/*'
-              element={
-                <Suspense
-                  fallback={
-                    <Loading className='min-h-svh' label='Loading dev tools' />
-                  }
-                >
-                  <DevLayout routeTree={devRouteTree} routes={devRoutes} />
-                </Suspense>
-              }
-            />
-          ) : null}
-        </Route>
+        ) : null}
+      </Route>
 
-        <Route
-          element={
-            <GuestAuthentication>
-              <Outlet />
-            </GuestAuthentication>
-          }
-        >
-          <Route element={<StandalonePageLayout />}>
-            {renderRouteTree(routeGroups.guest)}
-          </Route>
-        </Route>
-
+      <Route
+        element={
+          <GuestAuthentication>
+            <Outlet />
+          </GuestAuthentication>
+        }
+      >
         <Route element={<StandalonePageLayout />}>
-          {renderRouteTree(routeGroups.optional)}
+          {renderRouteTree(routeGroups.guest)}
         </Route>
+      </Route>
 
-        <Route path='*' element={<Navigate to='/' replace />} />
-      </Routes>
-    </SettingsRouteTreeContext.Provider>
+      <Route element={<StandalonePageLayout />}>
+        {renderRouteTree(routeGroups.optional)}
+      </Route>
+
+      <Route path='*' element={<Navigate to='/' replace />} />
+    </Routes>
   );
 }
 

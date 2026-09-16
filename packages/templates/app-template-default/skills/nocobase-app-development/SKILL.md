@@ -88,7 +88,7 @@ Declare database defaults with `defineAppDatabaseConfig` from `@nocobase/app-ser
 
 ## Where to work
 
-The Settings header entry appears only when the user has an accessible page in the settings navigation, and stays visible on that page. The Dev tools entry stays visible on its destination pages, is development-only, and must remain absent from production builds.
+The Settings header entry appears only when the user has an accessible page in the settings navigation, and stays visible on that page. The header reads the registered settings tree through `useClientApplication().runtime.settingsRouteTree`, reusing the application context. The Dev tools entry stays visible on its destination pages, is development-only, and must remain absent from production builds.
 
 Business code belongs in a small, stable set of places:
 
@@ -129,6 +129,7 @@ These cause real damage and appear in every reference:
 - **Every server route owns its own authentication and authorization.** Mounting under `/api` authenticates nothing.
 - **A migration is immutable history and self-contained.** Never import an evolving definition into one. Never edit one whose branch is merged.
 - **Every user-visible string goes through a translation key.**
+- **Wrap page content in `PageContainer`.** When creating a page or writing a page component, use `PageContainer` from `@/components/page-container` as its outer content container so page padding and spacing stay consistent. See [components and styling](references/components-and-styling.md#page-container).
 - **Visual consistency is application-wide.** Restyling only your part is a defect. Change the design tokens if a change is needed.
 - **Route paths never include the deployment base path.** The runtime restores it.
 - **Route navigation creates sidebar entries.** Declare `navigation` in `client/routes.ts`; Refine resources are for CRUD, not menus.
