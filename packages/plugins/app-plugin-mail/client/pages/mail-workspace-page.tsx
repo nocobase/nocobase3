@@ -729,16 +729,22 @@ export default function MailWorkspacePage({
           />
         </label>
         <div className='flex flex-wrap items-center justify-end gap-2'>
-          <Button
-            aria-label={t('nav.myAccounts', { defaultValue: 'My mailboxes' })}
-            render={<a href={resolveAppUrl('/settings/mail/my-accounts')} />}
-            nativeButton={false}
-            role='link'
-            variant='ghost'
-            className='size-9 px-0'
-          >
-            <Settings2 aria-hidden='true' className='size-4' />
-          </Button>
+          {(
+            import.meta as ImportMeta & {
+              readonly env?: { readonly DEV?: boolean };
+            }
+          ).env?.DEV ? (
+            <Button
+              aria-label={t('nav.myAccounts', { defaultValue: 'My mailboxes' })}
+              render={<a href={resolveAppUrl('/dev/mail/accounts')} />}
+              nativeButton={false}
+              role='link'
+              variant='ghost'
+              className='size-9 px-0'
+            >
+              <Settings2 aria-hidden='true' className='size-4' />
+            </Button>
+          ) : null}
           <Button
             disabled={!canSend || Boolean(composerRequest)}
             onClick={() => openComposer(EMPTY_COMPOSER)}
@@ -830,16 +836,22 @@ export default function MailWorkspacePage({
                 })}
               </p>
             </div>
-            <Button
-              render={<a href={resolveAppUrl('/settings/mail/my-accounts')} />}
-              nativeButton={false}
-              role='link'
-            >
-              <PenLine aria-hidden='true' className='size-4' />
-              {t('workspace.connectAccount', {
-                defaultValue: 'Connect mail account',
-              })}
-            </Button>
+            {(
+              import.meta as ImportMeta & {
+                readonly env?: { readonly DEV?: boolean };
+              }
+            ).env?.DEV ? (
+              <Button
+                render={<a href={resolveAppUrl('/dev/mail/accounts')} />}
+                nativeButton={false}
+                role='link'
+              >
+                <PenLine aria-hidden='true' className='size-4' />
+                {t('workspace.connectAccount', {
+                  defaultValue: 'Connect mail account',
+                })}
+              </Button>
+            ) : null}
           </div>
         </div>
       ) : (
@@ -934,6 +946,12 @@ export default function MailWorkspacePage({
                           }
                         : undefined,
                       delete: (message) => deleteWorkspaceMessage(message),
+                      canDelete: (message) =>
+                        Boolean(
+                          selectedMessageProviderCapabilities?.moveMessage ||
+                          isMessageInTrash(message, foldersByAccountId) ||
+                          message.providerMessageId.startsWith('local-draft:'),
+                        ),
                       downloadAttachment: (message, attachment) => {
                         void downloadAttachment(
                           mail,

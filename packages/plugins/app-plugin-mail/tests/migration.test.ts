@@ -58,7 +58,7 @@ describe('mail database migration', () => {
     await database.destroy();
   });
 
-  it('creates the complete mail schema in one migration', async () => {
+  it('creates the complete mail schema', async () => {
     const result = await migrateUp(database);
     expect(result.executed).toEqual(['202609030001_create_mail_tables']);
 
@@ -82,9 +82,10 @@ describe('mail database migration', () => {
         ),
         client.schema.hasColumn('mail_messages', 'provider_draft_message_id'),
         client.schema.hasColumn('mail_messages', 'draft_conflict'),
+        client.schema.hasColumn('mail_messages', 'remote_draft_fingerprint'),
         client.schema.hasColumn('mail_accounts', 'default_for_user_id'),
       ]),
-    ).resolves.toEqual([true, true, true, true, true, false]);
+    ).resolves.toEqual([true, true, true, true, true, true, false]);
 
     await expect(
       client.raw('PRAGMA table_info(mail_accounts)'),
@@ -223,6 +224,7 @@ describe('mail database migration', () => {
         note: { type: 'text' },
         todo: { type: 'boolean' },
         providerDraftMessageId: { type: 'string' },
+        remoteDraftFingerprint: { type: 'string' },
         draftConflict: { type: 'json' },
       },
     });

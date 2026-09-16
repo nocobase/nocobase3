@@ -254,6 +254,7 @@ const migration: MigrationDefinition = defineMigration({
       collection.boolean('todo', { nullable: false, defaultValue: false });
       collection.json('attachments', { nullable: false });
       collection.json('draftConflict');
+      collection.string('remoteDraftFingerprint', { length: 64 }).nullable();
       collection.datetimeTz('createdAt', { nullable: false });
       collection.datetimeTz('updatedAt', { nullable: false });
       collection.unique(['accountId', 'providerMessageId'], {

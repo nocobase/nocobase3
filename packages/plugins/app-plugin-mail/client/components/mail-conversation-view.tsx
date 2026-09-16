@@ -59,6 +59,7 @@ export interface MailConversationViewProps {
   readonly actions?: {
     readonly archive?: (message: MailMessage) => void;
     readonly delete: (message: MailMessage) => void;
+    readonly canDelete?: (message: MailMessage) => boolean;
     readonly downloadAttachment?: (
       message: MailMessage,
       attachment: MailMessage['attachments'][number],
@@ -268,6 +269,9 @@ export function MailConversationView({
                     ) : null}
                     <Button
                       aria-label={actionLabels.delete}
+                      disabled={
+                        actions.canDelete ? !actions.canDelete(message) : false
+                      }
                       className='size-9 p-0 [&_svg]:size-4'
                       onClick={() => actions.delete(message)}
                       variant='ghost'

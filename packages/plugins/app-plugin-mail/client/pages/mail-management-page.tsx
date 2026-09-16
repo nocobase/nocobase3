@@ -10,7 +10,7 @@ import { Input } from '../components/ui/input.js';
 import { NativeSelect } from '../components/ui/native-select.js';
 import {
   mailErrorMessage,
-  type MailAccountView,
+  type MailManagedAccountView,
   type MailAddress,
   type MailFolder,
   type MailManagementMessageAction,
@@ -28,7 +28,9 @@ interface ManagedFolderOption extends Pick<MailFolder, 'name' | 'type'> {
 export default function MailManagementPage(): ReactElement {
   const mail = useMailClient();
   const { t } = useTranslation();
-  const [accounts, setAccounts] = useState<readonly MailAccountView[]>([]);
+  const [accounts, setAccounts] = useState<readonly MailManagedAccountView[]>(
+    [],
+  );
   const [accountId, setAccountId] = useState('');
   const [folderNames, setFolderNames] = useState<ReadonlyMap<string, string>>(
     () => new Map(),
@@ -160,6 +162,12 @@ export default function MailManagementPage(): ReactElement {
     }
     return [...options.values()];
   }, [folderOptions]);
+  const canSoftDelete =
+    selectedMessages.length > 0 &&
+    selectedMessages.every((message) => {
+      const account = accounts.find((item) => item.id === message.accountId);
+      return account?.canMoveMessages === true;
+    });
   const canPermanentlyDelete =
     selectedMessages.length > 0 &&
     selectedMessages.every((message) =>
@@ -436,7 +444,7 @@ export default function MailManagementPage(): ReactElement {
                 })}
               </Button>
               <Button
-                disabled={selectedMessages.length === 0 || Boolean(actionBusy)}
+                disabled={!canSoftDelete || Boolean(actionBusy)}
                 onClick={() => runAction('delete')}
                 variant='destructive'
               >

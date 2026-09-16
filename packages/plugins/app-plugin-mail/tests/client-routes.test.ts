@@ -28,13 +28,6 @@ describe('Mail client routes', () => {
           navigation: { title: 'nav.settings' },
           children: [
             {
-              name: 'my-accounts',
-              path: '/my-accounts',
-              navigation: { title: 'nav.myAccounts' },
-              access: { resource: 'mail.workspace', action: 'access' },
-              componentLoader: expect.any(Function),
-            },
-            {
               name: 'accounts',
               path: '/accounts',
               navigation: { title: 'nav.accounts' },
@@ -162,7 +155,6 @@ describe('Mail client routes', () => {
       { id: 'mail', title: 'nav.settings' },
     ]);
     expect(resolved.settings.map((route) => route.path)).toEqual([
-      '/settings/mail/my-accounts',
       '/settings/mail/accounts',
       '/settings/mail/operation-logs',
     ]);

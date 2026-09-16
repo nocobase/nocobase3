@@ -402,9 +402,23 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
   ): Promise<MailProviderResult<MailProviderChangePage>> {
     const recoveryAfter =
       cursor.recoveryAfter ?? recoveryStart(cursor.capturedAt);
+    // Preserve a baseline captured before the first recovery page. Legacy
+    // recovery cursors have no baseline, so restart their bounded scan safely.
+    const baseline = cursor.recoveryHistoryId
+      ? {
+          ok: true as const,
+          value: gmailCursor(
+            cursor.recoveryHistoryId,
+            undefined,
+            cursor.capturedAt,
+          ),
+        }
+      : await this.getCurrentSyncCursor(input.signal);
+    if (!baseline.ok) return baseline;
+    const baselineCursor = parseGmailCursor(baseline.value)!;
     const page = await this.listMessages({
       receivedAfter: recoveryAfter,
-      cursor: cursor.recoveryPageToken,
+      cursor: cursor.recoveryHistoryId ? cursor.recoveryPageToken : undefined,
       limit: input.limit,
       signal: input.signal,
     });
@@ -416,8 +430,8 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
           messages: page.value.messages,
           deletedProviderMessageIds: [],
           nextCursor: gmailRecoveryCursor(
-            cursor.historyId,
-            cursor.capturedAt,
+            baselineCursor.historyId,
+            baselineCursor.capturedAt,
             recoveryAfter,
             page.value.nextCursor,
           ),
@@ -425,15 +439,13 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
         },
       };
     }
-    const nextCursor = await this.getCurrentSyncCursor(input.signal);
-    if (!nextCursor.ok) return nextCursor;
     return {
       ok: true,
       value: {
         messages: page.value.messages,
         deletedProviderMessageIds: [],
-        nextCursor: nextCursor.value,
-        hasMore: false,
+        nextCursor: baseline.value,
+        hasMore: true,
       },
     };
   }

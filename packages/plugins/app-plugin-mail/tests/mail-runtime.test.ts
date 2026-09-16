@@ -1504,6 +1504,98 @@ describe('[SRV][DATA] mail runtime, synchronization, sending, and consistency', 
     expect(saveDraft).toHaveBeenCalledTimes(1);
   });
 
+  it.each(['html', 'signature'] as const)(
+    'updates a %s draft against its persisted remote baseline',
+    async (kind) => {
+      let remote: NormalizedMailMessage;
+      const write = vi.fn<NonNullable<MailProviderAdapter['saveDraft']>>(
+        async (input) => {
+          remote = {
+            ...message('remote-draft-1', input.message.subject),
+            from: { address: input.identity.address },
+            to: input.message.to,
+            cc: input.message.cc,
+            bcc: input.message.bcc,
+            text: kind === 'html' ? undefined : input.message.text,
+            html: input.message.html,
+            draft: true,
+            providerDraftId: 'remote-draft-1',
+          };
+          return { ok: true, value: remote };
+        },
+      );
+      const updateDraft = vi.fn<
+        NonNullable<MailProviderAdapter['updateDraft']>
+      >(async (_id, input) => write(input));
+      const adapters = resolver({
+        ...baseAdapter(),
+        capabilities: { ...baseAdapter().capabilities, drafts: true },
+        saveDraft: write,
+        updateDraft,
+        getMessage: async () => ({ ok: true, value: remote }),
+      });
+      const service = new DefaultMailService({
+        store,
+        adapters,
+        outbox: { kick: vi.fn() },
+      });
+      if (kind === 'signature')
+        await service.saveSignature(
+          { actorId: 'user-1' },
+          {
+            accountId: 'account-1',
+            name: 'Default',
+            text: 'Signature',
+            isDefault: true,
+          },
+        );
+      const input = {
+        accountId: 'account-1',
+        identityId: 'identity-1',
+        to: [],
+        subject: 'Local',
+        text: 'Body',
+        html: kind === 'html' ? '<p>Body</p>' : undefined,
+        idempotencyKey: 'draft',
+      };
+      const initial = await service.saveDraft({ actorId: 'user-1' }, input);
+      // Recreate both the service and store to prove the baseline survives a restart.
+      const resumed = new DefaultMailService({
+        store: createDatabaseMailStore(database),
+        adapters,
+        outbox: { kick: vi.fn() },
+      });
+      const edited = await resumed.saveDraft(
+        { actorId: 'user-1' },
+        {
+          ...input,
+          text: 'Edited',
+          html: kind === 'html' ? '<p>Edited</p>' : undefined,
+          draftMessageId: initial.id,
+        },
+      );
+      expect(edited.draftConflict).toBeUndefined();
+      expect(updateDraft).toHaveBeenCalledOnce();
+      remote = { ...remote!, subject: 'External edit' };
+      const conflicted = await resumed.saveDraft(
+        { actorId: 'user-1' },
+        { ...input, draftMessageId: initial.id },
+      );
+      expect(conflicted.draftConflict?.remote.subject).toBe('External edit');
+      expect(updateDraft).toHaveBeenCalledOnce();
+      await resumed.resolveDraftConflict(
+        { actorId: 'user-1' },
+        { accountId: 'account-1', messageId: initial.id, action: 'keepLocal' },
+      );
+      const resolved = await resumed.saveDraft(
+        { actorId: 'user-1' },
+        { ...input, draftMessageId: initial.id },
+      );
+      expect(resolved.draftConflict).toBeUndefined();
+      expect(updateDraft).toHaveBeenCalledTimes(2);
+    },
+  );
+
   it('retains local changes and exposes a remote version when a draft conflicts', async () => {
     const saveDraft = vi.fn<NonNullable<MailProviderAdapter['saveDraft']>>(
       async (input) => ({

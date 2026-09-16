@@ -13,7 +13,7 @@ The first runnable vertical slice provides:
   for read-only all-user account visibility, plus `/settings/mail/operation-logs` for all-user synchronization and delivery operation logs;
 - a separately permissioned `/dev/mail/management` table for all-user message
   search and per-message batch actions;
-- a production Mail workspace at `/mail`, plus current-user account connection under `/settings/mail/my-accounts` and development diagnostics under `/dev/mail`; `/settings/mail/my-accounts` defaults to a connected-account table and also exposes account association (including the initial sync date), signature and NocoBase-owned label management, and reusable-template management;
+- a production Mail workspace at `/mail`, plus development-only account connection under `/dev/mail/accounts` and development diagnostics under `/dev/mail`; `/dev/mail/accounts` defaults to a connected-account table and also exposes account association (including the initial sync date), signature and NocoBase-owned label management, and reusable-template management;
 - an all-account workspace view with account and folder filtering, refresh, message search, conversation detail, account connection, synchronization controls, sending, synchronization logs, and delivery submission logs; the composer remembers its last selected account in browser storage and the default synchronization action covers every active account;
 - database-backed OAuth credential storage with token-rotation support;
 - a synchronous `SendMailOperation` with a persisted idempotency key and an
@@ -191,7 +191,7 @@ DELETE /api/mail/accounts/:accountId/messages/:messageId
 GET  /api/mail/accounts/:accountId/conversations/:conversationId/messages
 ```
 
-The configured OAuth callback route is intentionally public because Google and Microsoft redirect the browser to it. It accepts only a short-lived, single-use state created by the authenticated start endpoint and redirects the browser to `/settings/mail/my-accounts` after completion; state and PKCE verifiers are never returned by account APIs.
+The configured OAuth callback route is intentionally public because Google and Microsoft redirect the browser to it. It accepts only a short-lived, single-use state created by the authenticated start endpoint and redirects the browser to `/dev/mail/accounts` after completion; state and PKCE verifiers are never returned by account APIs.
 
 `POST /mail/webhooks/:providerType/:providerName/:secret` is intentionally public because Gmail Pub/Sub and Microsoft Graph cannot use an application session. The route validates the configured high-entropy URL secret before parsing the body, limits request size, validates Microsoft `clientState`, maps only known active accounts, and returns no mailbox data.
 
@@ -218,6 +218,6 @@ Local draft attachments retain their upload identity separately from Provider at
 
 ## Mail workspace UI
 
-`/mail` links to My mailboxes at `/settings/mail/my-accounts`, where signed-in users with `mail.workspace/access` connect and manage their own accounts, signatures, templates, and labels. The administrator overview remains at `/settings/mail/accounts` with `mail.admin/access`. The legacy `/dev/mail/accounts` preview reuses the same account page. OAuth success and failure redirects return to the production My mailboxes page.
+`/mail` links to My mailboxes at `/dev/mail/accounts`, where signed-in users with `mail.workspace/access` connect and manage their own accounts, signatures, templates, and labels. The administrator overview remains at `/settings/mail/accounts` with `mail.admin/access`. Account setup links are visible only in development. OAuth success and failure redirects return to the development account page.
 
 The workspace uses its available container width: three panes on wide screens, a navigation drawer on smaller screens, and list/detail switching on phones. Returning to the list preserves its filter and loaded rows. The non-modal desktop composer becomes full-screen on phones; its errors and draft state are independent of mailbox refreshes, and unsaved edits require an explicit close confirmation.

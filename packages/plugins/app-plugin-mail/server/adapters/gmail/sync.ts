@@ -28,6 +28,7 @@ export function gmailRecoveryCursor(
       historyId,
       ...(capturedAt ? { capturedAt } : {}),
       recoveryAfter,
+      recoveryHistoryId: historyId,
       recoveryPageToken,
     },
     version: 'gmail-v1',
@@ -47,6 +48,10 @@ export function parseGmailCursor(
           typeof value.pageToken === 'string' ? value.pageToken : undefined,
         capturedAt:
           typeof value.capturedAt === 'string' ? value.capturedAt : undefined,
+        recoveryHistoryId:
+          typeof value.recoveryHistoryId === 'string'
+            ? value.recoveryHistoryId
+            : undefined,
         recoveryAfter:
           typeof value.recoveryAfter === 'string'
             ? value.recoveryAfter

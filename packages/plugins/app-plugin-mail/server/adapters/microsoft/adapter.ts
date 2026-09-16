@@ -556,7 +556,16 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
       { signal },
     );
     if (!result.ok) return result;
-    return normalizeGraphMessage(result.value, []);
+    const attachments =
+      result.value.hasAttachments ||
+      /cid:/iu.test(result.value.body?.content ?? '')
+        ? await this.attachments(providerMessageId, signal)
+        : {
+            ok: true as const,
+            value: [] as readonly NormalizedMailAttachment[],
+          };
+    if (!attachments.ok) return attachments;
+    return normalizeGraphMessage(result.value, attachments.value);
   }
 
   public async getAttachment(
@@ -1225,7 +1234,9 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
           }
         }
         const attachments =
-          message.hasAttachments && message.id
+          (message.hasAttachments ||
+            /cid:/iu.test(message.body?.content ?? '')) &&
+          message.id
             ? await this.attachments(message.id, signal)
             : {
                 ok: true as const,

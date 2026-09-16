@@ -193,6 +193,7 @@ export function toMessageRow(
     note: local?.note ?? null,
     todo: local?.todo ?? false,
     draftConflict: jsonOrNull(message.draftConflict),
+    remoteDraftFingerprint: message.remoteDraftFingerprint ?? null,
     createdAt,
     updatedAt,
   };
@@ -265,6 +266,7 @@ export function toMailMessage(
   }));
   return {
     id: row.id,
+    remoteDraftFingerprint: row.remoteDraftFingerprint ?? undefined,
     accountId: row.accountId,
     providerMessageId: row.providerMessageId,
     providerDraftId: row.providerDraftId ?? undefined,

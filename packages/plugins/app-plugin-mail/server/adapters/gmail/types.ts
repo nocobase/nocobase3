@@ -122,5 +122,6 @@ export interface GmailCursorValue {
   readonly pageToken?: string;
   readonly capturedAt?: string;
   readonly recoveryAfter?: string;
+  readonly recoveryHistoryId?: string;
   readonly recoveryPageToken?: string;
 }

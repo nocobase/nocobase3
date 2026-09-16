@@ -26,7 +26,7 @@ export class MailManagementService {
   public constructor(
     private readonly dependencies: Pick<
       DefaultMailServiceDependencies,
-      'store' | 'adapters' | 'messageChangeNotifier'
+      'store' | 'adapters' | 'messageChangeNotifier' | 'registry'
     >,
   ) {}
 
@@ -36,6 +36,9 @@ export class MailManagementService {
     return (await this.dependencies.store.listAllAccounts()).map((account) => ({
       ...toMailAccountView(account),
       canSync: account.userId === context.actorId,
+      canMoveMessages:
+        this.dependencies.registry?.definition(account.provider.type)
+          ?.capabilities.moveMessage ?? false,
     }));
   }
 

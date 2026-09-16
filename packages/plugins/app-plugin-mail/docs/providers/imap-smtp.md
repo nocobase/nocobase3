@@ -34,6 +34,8 @@ Users enter the mailbox address, username, and password in the Mail account scre
 - SMTP send with text, HTML, reply headers, and attachments;
 - read/unread, starred, hard-delete, and attachment download operations.
 
+Ordinary deletion is rejected without changing the mailbox because this adapter cannot move messages to Trash. Use the mailbox provider’s client for soft deletion. Only an explicit permanent-delete request expunges messages.
+
 Push notifications, provider labels, drafts, aliases, and move-to-folder are intentionally disabled in this MVP. Message identifiers are mailbox/UID locators, so a server-side move or UIDVALIDITY reset should be followed by a fresh sync. Incremental polling currently discovers new UID ranges; it does not reconcile every external flag, deletion, or move. SMTP delivery also does not append a copy to the provider's Sent folder when the SMTP service does not do that automatically.
 
 ## Verification

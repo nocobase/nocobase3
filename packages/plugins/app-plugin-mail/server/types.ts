@@ -110,6 +110,7 @@ export type MailAccountView = Omit<
 >;
 
 export interface MailManagedAccountView extends MailAccountView {
+  readonly canMoveMessages?: boolean;
   readonly canSync: boolean;
 }
 
@@ -230,6 +231,8 @@ export interface MailMessageSummary {
 }
 
 export interface MailMessage extends MailMessageSummary {
+  /** Fingerprint of the last synchronized Provider draft content. */
+  readonly remoteDraftFingerprint?: string;
   readonly replyTo: readonly MailAddress[];
   readonly inReplyTo?: string;
   readonly references: readonly string[];
@@ -1009,6 +1012,7 @@ export interface NormalizedMailAttachment {
 
 /** Provider-normalized message before mail core assigns local identifiers. */
 export interface NormalizedMailMessage {
+  readonly remoteDraftFingerprint?: string;
   readonly providerMessageId: string;
   readonly providerDraftId?: string;
   readonly providerDraftMessageId?: string;

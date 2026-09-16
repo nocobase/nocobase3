@@ -161,6 +161,7 @@ export interface MessageRow extends Row {
   note?: string | null;
   todo?: boolean | number;
   draftConflict?: MailDraftConflict | string | null;
+  remoteDraftFingerprint?: string | null;
   createdAt: string;
   updatedAt: string;
 }

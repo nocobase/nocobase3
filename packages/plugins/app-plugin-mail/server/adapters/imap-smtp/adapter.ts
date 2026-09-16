@@ -520,9 +520,17 @@ export class ImapSmtpAdapter implements MailProviderAdapter {
 
   public async deleteMessage(
     providerMessageId: string,
-    _permanently: boolean,
+    permanently: boolean,
     signal?: AbortSignal,
   ): Promise<MailProviderResult<void>> {
+    if (!permanently) {
+      return failure(
+        'IMAP_SOFT_DELETE_UNSUPPORTED',
+        'This IMAP Provider cannot move messages to Trash. Delete them in your mail client instead.',
+        'configuration',
+        false,
+      );
+    }
     try {
       throwIfAborted(signal);
       const locator = requireMessageLocator(providerMessageId);

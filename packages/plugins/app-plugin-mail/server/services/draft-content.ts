@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   type MailDraftConflict,
   type MailDraftRemoteVersion,
@@ -18,8 +19,20 @@ export function sameDraftContent(
 ): boolean {
   if (!local) return true;
   return (
-    JSON.stringify(draftContent(local)) === JSON.stringify(draftContent(remote))
+    (local.remoteDraftFingerprint ?? draftFingerprint(local)) ===
+    draftFingerprint(remote)
   );
+}
+
+export function draftFingerprint(
+  message: Pick<
+    MailDraftRemoteVersion,
+    'from' | 'to' | 'cc' | 'bcc' | 'subject' | 'text' | 'html'
+  >,
+): string {
+  return createHash('sha256')
+    .update(JSON.stringify(draftContent(message)))
+    .digest('hex');
 }
 
 function draftContent(
@@ -29,14 +42,21 @@ function draftContent(
   >,
 ): unknown {
   return {
-    from: message.from,
-    to: message.to,
-    cc: message.cc,
-    bcc: message.bcc,
+    from: message.from ? canonicalAddress(message.from) : null,
+    to: message.to.map(canonicalAddress),
+    cc: message.cc.map(canonicalAddress),
+    bcc: message.bcc.map(canonicalAddress),
     subject: message.subject,
     text: message.text ?? '',
     html: message.html ?? '',
   };
+}
+
+function canonicalAddress(address: {
+  readonly address: string;
+  readonly name?: string;
+}): { readonly address: string; readonly name: string | null } {
+  return { address: address.address, name: address.name ?? null };
 }
 
 export function toDraftConflict(
@@ -62,6 +82,7 @@ export function normalizedDraftFromMessage(
   message: MailMessage,
 ): NormalizedMailMessage {
   return {
+    remoteDraftFingerprint: message.remoteDraftFingerprint,
     providerMessageId: message.providerMessageId,
     providerDraftMessageId: message.providerDraftMessageId,
     providerDraftId: message.providerDraftId,

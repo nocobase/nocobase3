@@ -26,6 +26,82 @@ describe('Microsoft Mail Provider', () => {
     expectMailProviderCompatibility(microsoftMailProviderDefinition, adapter);
   });
 
+  it.each(['detail', 'sync'] as const)(
+    'loads inline-only attachments during %s reads',
+    async (mode) => {
+      const credentials = memoryVault();
+      await credentials.putAt('credential-1', {
+        provider: 'microsoft',
+        accessToken: 'access-1',
+        refreshToken: 'refresh-1',
+        expiresAt: '2099-01-01T00:00:00.000Z',
+        scopes: [],
+        tokenType: 'Bearer',
+      });
+      const message = {
+        id: 'inline-message',
+        subject: 'Image',
+        hasAttachments: false,
+        body: { contentType: 'html', content: '<p><img src="cid:logo"></p>' },
+      };
+      const checkpoint =
+        'https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages/delta?$deltatoken=old';
+      const fetchMock = vi
+        .fn<typeof fetch>()
+        .mockResolvedValueOnce(
+          Response.json(
+            mode === 'detail'
+              ? message
+              : { value: [message], '@odata.deltaLink': checkpoint },
+          ),
+        )
+        .mockResolvedValueOnce(
+          Response.json({
+            value: [
+              {
+                '@odata.type': '#microsoft.graph.fileAttachment',
+                id: 'image-1',
+                name: 'logo.png',
+                contentId: 'logo',
+                isInline: true,
+                contentType: 'image/png',
+                size: 4,
+              },
+            ],
+          }),
+        );
+      vi.stubGlobal('fetch', fetchMock);
+      const adapter = new MicrosoftMailProviderAdapter(
+        context(credentials),
+        config(),
+        account(),
+      );
+      const result =
+        mode === 'detail'
+          ? await adapter.getMessage('inline-message')
+          : await adapter.listChanges({
+              cursor: {
+                version: 'microsoft-graph-v1',
+                value: {
+                  checkpoints: JSON.stringify({ inbox: checkpoint }),
+                  folders: JSON.stringify(['inbox']),
+                  folderIndex: '0',
+                },
+              },
+              limit: 100,
+            });
+      if (!result.ok) throw new Error(result.error.message);
+      const normalized =
+        'messages' in result.value ? result.value.messages[0] : result.value;
+      expect(normalized.attachments).toMatchObject([
+        { providerAttachmentId: 'image-1', contentId: 'logo', inline: true },
+      ]);
+      expect(String(fetchMock.mock.calls[1][0])).toContain(
+        '/messages/inline-message/attachments?',
+      );
+    },
+  );
+
   it('uses PKCE, requests offline access, and rotates credentials into the vault', async () => {
     const credentials = memoryVault();
     const fetchMock = vi

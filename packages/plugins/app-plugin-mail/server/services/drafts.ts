@@ -14,6 +14,7 @@ import {
 import { requireOwnedMessage } from './access.js';
 import { type DefaultMailServiceDependencies } from './dependencies.js';
 import {
+  draftFingerprint,
   isLocalDraftMessage,
   normalizedDraftFromMessage,
   sameDraftContent,
@@ -145,6 +146,7 @@ export class MailDraftsService {
       );
       const saved = await this.dependencies.store.saveMessage(account.id, {
         ...normalizedDraftFromMessage(localDraft),
+        remoteDraftFingerprint: draftFingerprint(draft),
         providerDraftMessageId: draft.providerMessageId,
         providerDraftId: draft.providerDraftId,
         draft: true,
@@ -205,10 +207,10 @@ export class MailDraftsService {
             attachments: remote.attachments,
           }
         : normalizedDraftFromMessage(message);
-    const resolved = await this.dependencies.store.saveMessage(
-      account.id,
-      normalized,
-    );
+    const resolved = await this.dependencies.store.saveMessage(account.id, {
+      ...normalized,
+      remoteDraftFingerprint: draftFingerprint(remote),
+    });
     notifyMailMessageChange(
       this.dependencies.messageChangeNotifier,
       context.actorId,
@@ -230,6 +232,7 @@ export class MailDraftsService {
     return {
       providerMessageId:
         existingDraft?.providerMessageId ?? `local-draft:${randomUUID()}`,
+      remoteDraftFingerprint: existingDraft?.remoteDraftFingerprint,
       providerDraftMessageId: existingDraft?.providerDraftMessageId,
       providerDraftId: existingDraft?.providerDraftId,
       providerConversationId: existingDraft?.conversationId,

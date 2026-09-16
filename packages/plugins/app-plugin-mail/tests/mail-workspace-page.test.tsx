@@ -67,6 +67,7 @@ describe('[UI][SRV] mail workspace, composer, drafts, and management', () => {
         scopes: [],
         status: 'active',
         canSync: false,
+        canMoveMessages: true,
       },
     ]);
     mail.listProviders.mockResolvedValue([
@@ -138,13 +139,13 @@ describe('[UI][SRV] mail workspace, composer, drafts, and management', () => {
     });
   });
 
-  it('links first-time users to personal settings rather than administrator accounts', async () => {
+  it('links first-time users to mailbox setup in Dev tools', async () => {
     mail.listAccounts.mockResolvedValue([]);
     render(<MailWorkspacePage />);
     const connect = await screen.findByRole('link', {
       name: 'Connect mail account',
     });
-    expect(connect).toHaveAttribute('href', '/settings/mail/my-accounts');
+    expect(connect).toHaveAttribute('href', '/dev/mail/accounts');
     expect(screen.getByRole('button', { name: 'Compose' })).toBeDisabled();
   });
 
@@ -447,6 +448,44 @@ describe('[UI][SRV] mail workspace, composer, drafts, and management', () => {
         'Projects',
       ]);
     });
+  });
+
+  it('disables ordinary deletion when the Provider cannot move messages', async () => {
+    const providers = await mail.listProviders();
+    mail.listProviders.mockResolvedValue(
+      providers.map((provider: { capabilities: object }) => ({
+        ...provider,
+        capabilities: { ...provider.capabilities, moveMessage: false },
+      })),
+    );
+    const message = {
+      id: 'imap-1',
+      accountId: 'account-1',
+      providerMessageId: 'imap:message',
+      folderIds: ['INBOX'],
+      from: { address: 'sender@example.com' },
+      to: [],
+      cc: [],
+      bcc: [],
+      subject: 'IMAP message',
+      read: true,
+      starred: false,
+      draft: false,
+      hasAttachments: false,
+      attachments: [],
+      todo: false,
+      labelIds: [],
+      replyTo: [],
+      references: [],
+    };
+    mail.listMessages.mockResolvedValue({ items: [message] });
+    mail.getMessage.mockResolvedValue(message);
+    render(<MailWorkspacePage />);
+    fireEvent.click(await screen.findByText('IMAP message'));
+    expect(
+      await screen.findByRole('button', { name: 'Delete' }),
+    ).toBeDisabled();
+    expect(mail.deleteMessage).not.toHaveBeenCalled();
   });
 
   it('permanently deletes a message from Trash only after confirmation', async () => {

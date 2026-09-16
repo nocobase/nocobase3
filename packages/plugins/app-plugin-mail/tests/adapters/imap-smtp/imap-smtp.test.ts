@@ -36,6 +36,7 @@ vi.mock('nodemailer', () => ({
   },
 }));
 
+import { encodeMessageLocator } from '../../../server/adapters/imap-smtp/locators.js';
 import { imapSmtpMailProviderDefinition } from '../../../server/adapters/imap-smtp/index.js';
 import type { ImapSmtpMailProviderConfig } from '../../../server/adapters/imap-smtp/config.js';
 import type {
@@ -63,6 +64,30 @@ describe('IMAP/SMTP mail Provider', () => {
     ]);
     mocks.imap.status.mockResolvedValue({ uidNext: 4, uidValidity: 1n });
     mocks.imap.fetch.mockImplementation(async function* () {});
+  });
+
+  it('rejects ordinary deletion without opening or expunging the mailbox', async () => {
+    const adapter = await imapSmtpMailProviderDefinition.createAdapter(
+      context(),
+      config(),
+      account(),
+    );
+    const id = encodeMessageLocator({
+      folder: 'INBOX',
+      uidValidity: '1',
+      uid: 7,
+    });
+    await expect(adapter.deleteMessage!(id, false)).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'IMAP_SOFT_DELETE_UNSUPPORTED', retryable: false },
+    });
+    expect(mocks.imap.mailboxOpen).not.toHaveBeenCalled();
+    expect(mocks.imap.messageDelete).not.toHaveBeenCalled();
+    await expect(adapter.deleteMessage!(id, true)).resolves.toEqual({
+      ok: true,
+      value: undefined,
+    });
+    expect(mocks.imap.messageDelete).toHaveBeenCalledWith(7, { uid: true });
   });
 
   it('advertises the MVP capability boundary', () => {
