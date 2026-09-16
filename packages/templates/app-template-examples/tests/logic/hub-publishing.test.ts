@@ -89,6 +89,18 @@ describe('Hub publishing client', () => {
       publishToHub('deploy', { 'release-id': 'r2', wait: true }, root, env),
     ).rejects.toMatchObject({ exitCode: 1, code: 'DEPLOYMENT_FAILED' });
   });
+  it.each(['failed', 'cancelled'])(
+    'rejects a known %s deployment retry without waiting',
+    async (status) => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => response({ operationId: 'previous-op', status })),
+      );
+      await expect(
+        publishToHub('deploy', { 'release-id': 'r1' }, root, env),
+      ).rejects.toMatchObject({ exitCode: 1, code: 'DEPLOYMENT_FAILED' });
+    },
+  );
   it('makes deployment retries identical and supports explicit fresh deployment identities', async () => {
     const fetcher = vi
       .fn()

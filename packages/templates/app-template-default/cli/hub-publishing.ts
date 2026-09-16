@@ -283,6 +283,12 @@ export async function publishToHub(
         'Hub did not return a deployment ID.',
         3,
       );
+    if (data.status === 'failed' || data.status === 'cancelled')
+      throw new PublishingError(
+        'DEPLOYMENT_FAILED',
+        `Deployment ${data.operationId} ${data.status}. Use a new idempotency key to retry deployment.`,
+        1,
+      );
     result = {
       releaseId: options['release-id'],
       operationId: data.operationId,

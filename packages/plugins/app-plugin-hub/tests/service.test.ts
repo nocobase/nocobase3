@@ -349,6 +349,14 @@ describe('@nocobase/app-plugin-hub service', () => {
         config: { mode: 'file', content: 'feature: changed\n' },
       }),
     ).rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' });
+    await expect(
+      service.createRelease('customer', { ...input, config: undefined }),
+    ).rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' });
+    // Upload-only deduplication does not request a deployment configuration.
+    expect(await service.createRelease('customer', { bytes })).toMatchObject({
+      id: first.id,
+      reused: true,
+    });
     const second = await service.createRelease('customer', {
       bytes: await createArtifact(rootDir, '2.0.0', {
         configTemplate: 'feature: new-template\n',

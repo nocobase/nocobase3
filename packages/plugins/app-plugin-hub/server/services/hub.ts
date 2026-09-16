@@ -576,10 +576,7 @@ export class DefaultHubService implements HubService {
         'NO_DEPLOYMENT',
         409,
       );
-    if (
-      configFingerprint !== null &&
-      canonical.configFingerprint !== configFingerprint
-    )
+    if (requiresDeployment && canonical.configFingerprint !== configFingerprint)
       throw new HubError(
         'This artifact was already uploaded with different configuration. Use app deploy with the Release ID to change configuration.',
         'IDEMPOTENCY_CONFLICT',
