@@ -1,4 +1,5 @@
 export default {
+  resourceTitle: 'Default Access',
   navigation: { title: 'Default Access' },
   defaultAccess: {
     supportedScope:

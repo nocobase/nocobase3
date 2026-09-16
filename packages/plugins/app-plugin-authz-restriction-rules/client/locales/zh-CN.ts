@@ -1,4 +1,5 @@
 export default {
+  resourceTitle: '限制规则',
   navigation: { title: '限制规则' },
   restrictionRules: {
     page: {

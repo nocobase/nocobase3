@@ -18,7 +18,9 @@ export function useSubjectNames(
 ): Readonly<Record<string, string>> {
   const identity = JSON.stringify([
     settings,
-    types,
+    types
+      .filter((type) => type.selection?.type === 'collection')
+      .map(({ value, selection }) => ({ value, selection })),
     [
       ...new Map(
         subjects.map((subject) => [subjectKey(subject), subject]),
@@ -33,7 +35,7 @@ export function useSubjectNames(
     let active = true;
     const [settings, types, subjects] = JSON.parse(identity) as [
       SubjectSettings,
-      SubjectTypeOption[],
+      Pick<SubjectTypeOption, 'value' | 'selection'>[],
       AuthorizationSubject[],
     ];
     const names: Record<string, string> = {};
@@ -41,11 +43,6 @@ export function useSubjectNames(
       await Promise.all(
         types.map(async (type) => {
           const selection = type.selection;
-          if (selection?.type === 'fixed') {
-            names[subjectKey({ type: type.value, id: selection.id })] =
-              type.label;
-            return;
-          }
           if (selection?.type !== 'collection') return;
           const ids = subjects
             .filter((subject) => subject.type === type.value)
@@ -73,5 +70,19 @@ export function useSubjectNames(
       active = false;
     };
   }, [identity]);
-  return state?.identity === identity ? state.names : {};
+  return {
+    ...(state?.identity === identity ? state.names : {}),
+    ...Object.fromEntries(
+      types.flatMap((type) =>
+        type.selection?.type === 'fixed'
+          ? [
+              [
+                subjectKey({ type: type.value, id: type.selection.id }),
+                type.label,
+              ],
+            ]
+          : [],
+      ),
+    ),
+  };
 }

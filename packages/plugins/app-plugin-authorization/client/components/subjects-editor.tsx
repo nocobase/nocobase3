@@ -43,7 +43,7 @@ export function SubjectsEditor({
     items: readonly SubjectOption[];
     total: number;
   }>();
-  const [error, setError] = useState<{ identity: string; message: string }>();
+  const [error, setError] = useState<{ identity: string; cause: unknown }>();
   const identity = JSON.stringify([settings, type, search, page]);
   const [names, setNames] = useState<Record<string, SubjectOption>>({});
   const resolvedNames = useSubjectNames(settings, types, value);
@@ -66,7 +66,7 @@ export function SubjectsEditor({
             }));
           },
           (cause: unknown) => {
-            if (active) setError({ identity, message: errorMessage(t, cause) });
+            if (active) setError({ identity, cause });
           },
         );
     }, 200);
@@ -74,7 +74,7 @@ export function SubjectsEditor({
       active = false;
       clearTimeout(timer);
     };
-  }, [settings, type, search, page, identity, t]);
+  }, [settings, type, search, page, identity]);
   const selected = new Set(value.map(key));
   const assigned = new Set(excluded.map(key));
   function toggle(subject: AuthorizationSubject, checked: boolean): void {
@@ -85,7 +85,8 @@ export function SubjectsEditor({
     );
   }
   const current = result?.identity === identity ? result : undefined;
-  const currentError = error?.identity === identity ? error.message : undefined;
+  const currentError =
+    error?.identity === identity ? errorMessage(t, error.cause) : undefined;
   const groups = [...new Set(value.map((item) => item.type))];
   return (
     <div className='space-y-3'>

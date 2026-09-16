@@ -46,30 +46,33 @@ export interface PermissionAssignmentInput {
   subject: { type: string; id: string };
 }
 
-export interface SelectOption {
+export type LocalizedText =
+  string | { key: string; ns: string; defaultValue?: string };
+
+export interface SelectOption<Text = string> {
   value: string;
-  label: string;
-  description?: string;
+  label: Text;
+  description?: Text;
 }
-export interface ResourceOption extends SelectOption {
+export interface ResourceOption<Text = string> extends SelectOption<Text> {
   group?: string;
-  actions?: readonly SelectOption[];
+  actions?: readonly SelectOption<Text>[];
 }
-export interface ResourceGroupOption extends SelectOption {
-  children?: readonly ResourceGroupOption[];
+export interface ResourceGroupOption<Text = string> extends SelectOption<Text> {
+  children?: readonly ResourceGroupOption<Text>[];
 }
-export interface ResourceTypeOption {
-  groups?: readonly ResourceGroupOption[];
+export interface ResourceTypeOption<Text = string> {
+  groups?: readonly ResourceGroupOption<Text>[];
   value: string;
-  label: string;
-  resources: readonly ResourceOption[];
-  actions: readonly SelectOption[];
+  label: Text;
+  resources: readonly ResourceOption<Text>[];
+  actions: readonly SelectOption<Text>[];
 }
 export interface DatabaseCollectionOption {
   name: string;
   fields: readonly string[];
 }
-export interface SubjectTypeOption extends SelectOption {
+export interface SubjectTypeOption<Text = string> extends SelectOption<Text> {
   selection?: { type: 'fixed'; id: string } | { type: 'collection' };
 }
 export interface SubjectOption {
@@ -78,12 +81,12 @@ export interface SubjectOption {
   description?: string;
 }
 export type SubjectSettings = string;
-export interface AuthorizationOptions {
+export interface AuthorizationOptions<Text = string> {
   plugins: readonly string[];
-  resourceTypes: readonly ResourceTypeOption[];
-  subjectTypes: readonly SubjectTypeOption[];
+  resourceTypes: readonly ResourceTypeOption<Text>[];
+  subjectTypes: readonly SubjectTypeOption<Text>[];
   collections: readonly DatabaseCollectionOption[];
-  recordAccessPolicies: readonly SelectOption[];
+  recordAccessPolicies: readonly SelectOption<Text>[];
 }
 export interface AuthorizationUser {
   id: string;
@@ -210,8 +213,8 @@ export class AuthorizationClient {
       .then((response) => response.data);
   }
 
-  loadOptions(path: string): Promise<AuthorizationOptions> {
-    return this.get<AuthorizationOptions>(path);
+  loadOptions(path: string): Promise<AuthorizationOptions<LocalizedText>> {
+    return this.get<AuthorizationOptions<LocalizedText>>(path);
   }
   /**
    * Users come from the Users API rather than from Authorization, which knows

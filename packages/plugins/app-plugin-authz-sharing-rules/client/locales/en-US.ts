@@ -1,4 +1,5 @@
 export default {
+  resourceTitle: 'Sharing Rules',
   navigation: { title: 'Sharing Rules' },
   sharingRules: {
     page: {

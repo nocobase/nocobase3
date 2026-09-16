@@ -1,4 +1,5 @@
 export default {
+  resourceTitle: 'Restriction Rules',
   navigation: { title: 'Restriction Rules' },
   restrictionRules: {
     page: {

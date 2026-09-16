@@ -40,8 +40,7 @@ describe('locales', () => {
   });
 });
 
-// The server owns the vocabulary the options endpoint sends; the client
-// receives it as plain strings and declares none of these keys.
+// Both runtimes share option vocabulary without copying translation strings.
 describe('server locales', () => {
   it('declares the same keys in both languages', () => {
     expect(keys(serverZhCN).toSorted()).toEqual(keys(serverEnUS).toSorted());
@@ -54,9 +53,9 @@ describe('server locales', () => {
     expect(copied).toEqual([]);
   });
 
-  it('shares no key with the client catalogue', () => {
-    const client = new Set(keys(enUS));
-    expect(keys(serverEnUS).filter((key) => client.has(key))).toEqual([]);
+  it('makes option vocabulary available on the client', () => {
+    expect(enUS.options).toBe(serverEnUS.options);
+    expect(zhCN.options).toBe(serverZhCN.options);
   });
 
   it('loads one module per locale', () => {

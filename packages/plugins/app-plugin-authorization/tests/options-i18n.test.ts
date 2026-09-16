@@ -1,3 +1,10 @@
+import { localizeOptions } from '../client/components/localized-options.js';
+import type {
+  AuthorizationOptions,
+  LocalizedText,
+} from '../client/authorization-client.js';
+import en from '../locales/en-US.js';
+import zh from '../locales/zh-CN.js';
 import { defaultAccess } from '@nocobase/app-plugin-authz-default-access/server';
 import { sharingRules } from '@nocobase/app-plugin-authz-sharing-rules/server';
 import { restrictionRules } from '@nocobase/app-plugin-authz-restriction-rules/server';
@@ -69,14 +76,30 @@ interface OptionsBody {
   };
 }
 
-describe('the options endpoint translates on the server', () => {
+describe('locale-independent option descriptors', () => {
+  it('returns identical descriptors for English and Chinese requests', async () => {
+    const router = await mountedRouter(authorization());
+    const en = await (
+      await router.request('/api/authz/permission-sets/options')
+    ).json();
+    const zh = await (
+      await router.request('/api/authz/permission-sets/options', {
+        headers: { 'accept-language': 'zh-CN' },
+      })
+    ).json();
+    expect(zh).toEqual(en);
+    expect(en.data.subjectTypes[0].label).toMatchObject({
+      key: 'options.subjectTypes.authenticated',
+      ns: AUTHORIZATION_NAMESPACE,
+    });
+  });
   it('answers in English by default', async () => {
     const router = await mountedRouter(authorization());
 
     const response = await router.request('/api/authz/permission-sets/options');
 
     expect(response.status).toBe(200);
-    const { data } = (await response.json()) as OptionsBody;
+    const { data } = await readOptions(response);
     const pageType = resourceType(data, 'page');
     expect(pageType.label).toBe('Pages');
     expect(pageType.actions).toEqual([{ value: 'access', label: 'Access' }]);
@@ -134,7 +157,7 @@ describe('the options endpoint translates on the server', () => {
     });
     const router = await mountedRouter(authz);
     const options = await router.request('/api/authz/sharing-rules/options');
-    const body = (await options.json()) as OptionsBody;
+    const body = await readOptions(options);
     expect(body.data.subjectTypes).toContainEqual({
       value: 'department',
       label: 'Departments',
@@ -225,7 +248,7 @@ describe('the options endpoint translates on the server', () => {
     });
     const router = await mountedRouter(authz);
     const response = await router.request('/api/authz/permission-sets/options');
-    const { data } = (await response.json()) as OptionsBody;
+    const { data } = await readOptions(response);
     const settings = resourceType(data, 'settings');
     expect(settings).toMatchObject({
       groups: [
@@ -252,7 +275,7 @@ describe('the options endpoint translates on the server', () => {
       { headers: { 'accept-language': 'zh-CN' } },
     );
 
-    const { data } = (await response.json()) as OptionsBody;
+    const { data } = await readOptions(response, 'zh-CN');
     const pageType = resourceType(data, 'page');
     expect(pageType.label).toBe('页面');
     expect(pageType.actions).toEqual([{ value: 'access', label: '访问' }]);
@@ -284,7 +307,7 @@ describe('the options endpoint translates on the server', () => {
           '/api/authz/permission-sets/options',
           locale ? { headers: { 'accept-language': locale } } : undefined,
         );
-        const { data } = (await response.json()) as OptionsBody;
+        const { data } = await readOptions(response);
         return resourceType(data, 'database.collection').resources[0]?.label;
       }),
     );
@@ -313,7 +336,7 @@ describe('the options endpoint translates on the server', () => {
       { headers: { 'accept-language': 'zh-CN' } },
     );
 
-    const { data } = (await response.json()) as OptionsBody;
+    const { data } = await readOptions(response, 'zh-CN');
     expect(resourceType(data, 'database.collection').resources[0]?.label).toBe(
       '数据表',
     );
@@ -399,4 +422,29 @@ function alwaysPermitted(
     await next();
   };
   return permitted;
+}
+
+async function readOptions(
+  response: Response,
+  locale = 'en-US',
+): Promise<OptionsBody> {
+  const { data } = (await response.json()) as {
+    data: AuthorizationOptions<LocalizedText>;
+  };
+  return {
+    data: localizeOptions(data, (key, options) => {
+      const value = key
+        .split('.')
+        .reduce<unknown>(
+          (node, part) =>
+            node && typeof node === 'object'
+              ? Reflect.get(node, part)
+              : undefined,
+          locale === 'zh-CN' ? zh : en,
+        );
+      return typeof value === 'string'
+        ? value
+        : String(options?.defaultValue ?? key);
+    }),
+  };
 }

@@ -65,7 +65,8 @@ export function PermissionSetsPanel({
   const [search, setSearch] = useState('');
   const [collapsed, setCollapsed] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string>();
+  const [errorCause, setErrorCause] = useState<unknown>();
+  const error = errorCause === undefined ? undefined : message(t, errorCause);
   const [pending, setPending] = useState<string>();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const current = sets.find((item) => item.key === permissionSetKey);
@@ -78,9 +79,9 @@ export function PermissionSetsPanel({
       setSets(await authz.listPermissionSets());
       setLoaded(true);
     } catch (cause) {
-      setError(message(t, cause));
+      setErrorCause(cause);
     }
-  }, [t]);
+  }, []);
   useEffect(() => {
     void Promise.resolve().then(load);
   }, [load]);
@@ -98,7 +99,7 @@ export function PermissionSetsPanel({
     setDraft(next);
     setBaseline(next ? JSON.stringify(next) : '');
     setRevision((value) => value + 1);
-    setError(undefined);
+    setErrorCause(undefined);
   }
   useEffect(() => {
     if (!permissionSetKey || !assignmentsTab) return;
@@ -114,7 +115,7 @@ export function PermissionSetsPanel({
         if (!cancelled) setAssignments(items);
       })
       .catch((cause: unknown) => {
-        if (!cancelled) setError(message(t, cause));
+        if (!cancelled) setErrorCause(cause);
       })
       .finally(() => {
         if (!cancelled) setAssignmentsLoading(false);
@@ -122,7 +123,7 @@ export function PermissionSetsPanel({
     return () => {
       cancelled = true;
     };
-  }, [permissionSetKey, assignmentsTab, t]);
+  }, [permissionSetKey, assignmentsTab]);
   useEffect(() => {
     if (!dirty) return;
     const warn = (event: BeforeUnloadEvent): void => event.preventDefault();
@@ -143,7 +144,7 @@ export function PermissionSetsPanel({
   async function save(): Promise<void> {
     if (!draft || (!isNew && !capabilities.canUpdate)) return;
     setBusy(true);
-    setError(undefined);
+    setErrorCause(undefined);
     try {
       const inputDraft =
         current && !isNew
@@ -176,7 +177,7 @@ export function PermissionSetsPanel({
       setRevision((value) => value + 1);
       if (isNew) void navigate(setPath(saved.key), { replace: true });
     } catch (cause) {
-      setError(message(t, cause));
+      setErrorCause(cause);
     } finally {
       setBusy(false);
     }
@@ -192,7 +193,7 @@ export function PermissionSetsPanel({
       setBaseline('');
       void navigate(base, { replace: true });
     } catch (cause) {
-      setError(message(t, cause));
+      setErrorCause(cause);
     } finally {
       setBusy(false);
     }
@@ -202,14 +203,14 @@ export function PermissionSetsPanel({
   ): Promise<void> {
     if (!current || !capabilities.canAssign) return;
     setBusy(true);
-    setError(undefined);
+    setErrorCause(undefined);
     try {
       await Promise.all(
         subjects.map((subject) => authz.assign(current.key, { subject })),
       );
       setAssignments(await authz.listAssignments(current.key));
     } catch (cause) {
-      setError(message(t, cause));
+      setErrorCause(cause);
     } finally {
       setBusy(false);
     }
@@ -217,12 +218,12 @@ export function PermissionSetsPanel({
   async function revoke(ids: readonly string[]): Promise<void> {
     if (!capabilities.canRevoke) return;
     setBusy(true);
-    setError(undefined);
+    setErrorCause(undefined);
     try {
       await Promise.all(ids.map((id) => authz.revoke(id)));
       setAssignments((items) => items.filter((item) => !ids.includes(item.id)));
     } catch (cause) {
-      setError(message(t, cause));
+      setErrorCause(cause);
     } finally {
       setBusy(false);
     }

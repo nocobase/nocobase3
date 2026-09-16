@@ -18,7 +18,7 @@ Default access and sharing rules expand record scopes for users who already have
 
 The permission inspector displays an authorization subject's decisions, reasons and conditions through `POST /api/authz/inspect` and `POST /api/authz/inspect/batch`. It requires `settings/authorization.permission-sets/read`. Management endpoints under `/api/authz` enforce their corresponding settings permissions.
 
-Client and server locale catalogues provide English and Chinese messages. Server options resolve resource titles and action labels for the request locale. Integration instructions and examples live in [the authorization Skill](skills/nocobase-app-plugin-authorization/SKILL.md).
+Client and server locale catalogues provide English and Chinese messages. Options preserve translation descriptors for resource titles and action labels. Client rendering resolves them in the current language without refetching permission data. Integration instructions and examples live in [the authorization Skill](skills/nocobase-app-plugin-authorization/SKILL.md).
 
 ## Resource groups and items
 

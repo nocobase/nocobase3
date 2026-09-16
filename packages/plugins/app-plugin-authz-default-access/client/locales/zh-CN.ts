@@ -1,4 +1,5 @@
 export default {
+  resourceTitle: '默认访问',
   navigation: { title: '默认访问' },
   defaultAccess: {
     supportedScope:

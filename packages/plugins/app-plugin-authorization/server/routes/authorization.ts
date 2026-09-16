@@ -33,7 +33,7 @@ export function createAuthorizationRoutes(
   routes.get('/permission-sets/options', async (context) => {
     await admin(context, 'permission-sets', 'read');
     return context.json({
-      data: await permissionSetOptions(authorization, connection, context),
+      data: await permissionSetOptions(authorization, connection),
     });
   });
   routes.route('/', createSubjectRoutes(authorization, 'permission-sets'));

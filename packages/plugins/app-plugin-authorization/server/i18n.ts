@@ -7,22 +7,15 @@ import type { Context } from 'hono';
 
 import { AUTHORIZATION_NAMESPACE } from '../shared.js';
 
-/**
- * Text an application registered with a Collection or a Record Access Policy:
- * written out, or a key in a catalogue it ships.
- *
- * It never reaches the wire. The options endpoint resolves it against the
- * request's locale first, so every client still receives a plain string.
- */
 export type OptionText =
-  string | { readonly key: string; readonly ns?: string };
+  | string
+  | {
+      readonly key: string;
+      readonly ns?: string;
+      readonly defaultValue?: string;
+    };
 
-/**
- * The translator for this request, bound to this plugin's namespace, or nothing
- * when the host mounted no i18n middleware. The options endpoint answers either
- * way: without one, every string is the English default written at the call
- * site, which is what it sent before it translated anything.
- */
+/** Optional translator for server-generated messages, bound to this plugin. */
 function requestTranslator(context: Context): Translator | undefined {
   return context.get(TRANSLATOR_CONTEXT_KEY) === undefined
     ? undefined
@@ -38,26 +31,21 @@ export function translateAuthorization(
   return requestTranslator(context)?.(key, { defaultValue }) ?? defaultValue;
 }
 
-/**
- * A registration's text as the request's locale renders it. A string is used as
- * written; a key resolves against its own namespace, and falls back to its last
- * segment humanised so a missing catalogue still reads as a label rather than
- * as a dotted path.
- */
-export function resolveOptionText(
-  context: Context,
+export function optionLabel(key: string, defaultValue: string): OptionText {
+  return { key, ns: AUTHORIZATION_NAMESPACE, defaultValue };
+}
+
+export function optionText(
   value: OptionText | undefined,
   fallback: string,
-): string {
+): OptionText {
   if (value === undefined) return fallback;
   if (typeof value === 'string') return value;
-  const humanized = humanizeKey(value.key);
-  return (
-    requestTranslator(context)?.(value.key, {
-      ...(value.ns === undefined ? {} : { ns: value.ns }),
-      defaultValue: humanized,
-    }) ?? humanized
-  );
+  return {
+    ...value,
+    ns: value.ns ?? AUTHORIZATION_NAMESPACE,
+    defaultValue: value.defaultValue ?? humanizeKey(value.key),
+  };
 }
 
 /** Two registrations agree when their text is the same string, or the same key. */
@@ -68,7 +56,11 @@ export function sameOptionText(
   if (left === undefined || right === undefined) return left === right;
   if (typeof left === 'string' || typeof right === 'string')
     return left === right;
-  return left.key === right.key && left.ns === right.ns;
+  return (
+    left.key === right.key &&
+    left.ns === right.ns &&
+    left.defaultValue === right.defaultValue
+  );
 }
 
 function humanizeKey(key: string): string {

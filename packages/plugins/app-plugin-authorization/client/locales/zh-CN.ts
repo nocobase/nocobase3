@@ -1,6 +1,8 @@
+import optionMessages from '../../locales/zh-CN.js';
 import type { AuthorizationResource } from './en-US.js';
 
 const zhCN: AuthorizationResource = {
+  options: optionMessages.options,
   navigation: {
     authorization: '权限管理',
     permissionSets: '权限集',

@@ -93,7 +93,9 @@ export function DefaultAccessPanel({
     );
   }
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string>();
+  const [errorCause, setErrorCause] = useState<unknown>();
+  const error =
+    errorCause === undefined ? undefined : errorMessage(t, errorCause);
   const [confirmClear, setConfirmClear] = useState(false);
   const [records, setRecords] = useState<readonly AuthorizationRecordOption[]>(
     [],
@@ -103,9 +105,9 @@ export function DefaultAccessPanel({
       setRules(await authz.listDefaultAccess());
       setLoaded(true);
     } catch (cause) {
-      setError(errorMessage(t, cause));
+      setErrorCause(cause);
     }
-  }, [t]);
+  }, []);
   useEffect(() => {
     void Promise.resolve().then(load);
   }, [load]);
@@ -184,7 +186,7 @@ export function DefaultAccessPanel({
   async function save(clear = false) {
     if (!draft || busy) return;
     setBusy(true);
-    setError(undefined);
+    setErrorCause(undefined);
     try {
       if (!clear && draft.actions.some((item) => incompleteScope(item.scope)))
         throw new Error(t('databasePolicy.conditionRequired'));
@@ -198,7 +200,7 @@ export function DefaultAccessPanel({
       close();
       await load();
     } catch (cause) {
-      setError(errorMessage(t, cause));
+      setErrorCause(cause);
     } finally {
       setBusy(false);
     }
@@ -226,7 +228,7 @@ export function DefaultAccessPanel({
     }
     setBusy(true);
     setSaved(false);
-    setError(undefined);
+    setErrorCause(undefined);
     const next = row.actions.filter((item) => item.action !== action);
     if (mode === 'all') next.push({ action, scope: { type: 'all' } });
     try {
@@ -236,7 +238,7 @@ export function DefaultAccessPanel({
       await load();
       setSaved(true);
     } catch (cause) {
-      setError(errorMessage(t, cause));
+      setErrorCause(cause);
     } finally {
       setBusy(false);
     }

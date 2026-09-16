@@ -1,6 +1,7 @@
+import optionMessages from '../../locales/en-US.js';
 import type { LocaleResource } from '@nocobase/i18n';
 
-const enUS = {
+const messages = {
   navigation: {
     authorization: 'Authorization',
     permissionSets: 'Permission Sets',
@@ -420,6 +421,11 @@ const enUS = {
     clearDefaults: 'Remove default configuration',
     setDefault: 'Set default scope',
   },
+};
+
+const enUS: typeof messages & typeof optionMessages = {
+  ...messages,
+  ...optionMessages,
 };
 
 /**

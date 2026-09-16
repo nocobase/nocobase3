@@ -65,7 +65,7 @@ class CoreClientServiceProvider extends ServiceProvider<ClientApplication> {
         baseURL: baseURL ?? resolveAppUrl('/api'),
         // The application keeps its language in the browser, so the server can
         // only learn it from the request. Resolved per request rather than
-        // captured once, so a language switch needs nothing invalidated.
+        // captured once, so subsequent requests use the current language.
         headers: () => ({ 'Accept-Language': i18n.getLocale() }),
       });
     });

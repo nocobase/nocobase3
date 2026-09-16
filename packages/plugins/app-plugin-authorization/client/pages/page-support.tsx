@@ -1,5 +1,16 @@
-import { useCallback, useEffect, useState, type ReactElement } from 'react';
-import type { AuthorizationOptions } from '../authorization-client.js';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactElement,
+} from 'react';
+import { useTranslation } from '@nocobase/i18n/client';
+import { localizeOptions } from '../components/localized-options.js';
+import type {
+  AuthorizationOptions,
+  LocalizedText,
+} from '../authorization-client.js';
 import { getAuthorizationClient } from '../runtime.js';
 import { errorMessage as message } from '../components/feedback.js';
 import { useAuthorizationTranslation } from '../i18n.js';
@@ -31,7 +42,16 @@ export function useAuthorizationPageData(
   optionsPath: string,
 ): AuthorizationPageData {
   const t = useAuthorizationTranslation();
-  const [state, setState] = useState<Omit<AuthorizationPageData, 'reload'>>({});
+  const [state, setState] = useState<{
+    options?: AuthorizationOptions<LocalizedText>;
+    error?: unknown;
+    forbidden?: boolean;
+  }>({});
+  const { t: translateOption } = useTranslation();
+  const options = useMemo(
+    () => state.options && localizeOptions(state.options, translateOption),
+    [state.options, translateOption],
+  );
   const [attempt, setAttempt] = useState(0);
   const reload = useCallback(() => {
     setState({});
@@ -46,7 +66,7 @@ export function useAuthorizationPageData(
       (cause: unknown) => {
         if (active)
           setState({
-            error: message(t, cause),
+            error: cause,
             forbidden: status(cause) === 403,
           });
       },
@@ -54,8 +74,13 @@ export function useAuthorizationPageData(
     return () => {
       active = false;
     };
-  }, [attempt, optionsPath, t]);
-  return { ...state, reload };
+  }, [attempt, optionsPath]);
+  return {
+    ...state,
+    options,
+    error: state.error === undefined ? undefined : message(t, state.error),
+    reload,
+  };
 }
 
 /**
@@ -65,16 +90,26 @@ export function useAuthorizationPageData(
 // eslint-disable-next-line react-refresh/only-export-components
 export function useUserDirectory(): UserDirectory {
   const t = useAuthorizationTranslation();
-  const [users, setUsers] = useState<UserDirectory>(() => userDirectory([]));
+  const [state, setState] = useState<{ users: UserDirectory; error?: unknown }>(
+    () => ({ users: userDirectory([]) }),
+  );
   useEffect(() => {
-    void authz
-      .listUsers()
-      .then(userDirectory, (cause: unknown) =>
-        unavailableUserDirectory(t, cause),
-      )
-      .then(setUsers);
-  }, [t]);
-  return users;
+    let active = true;
+    void authz.listUsers().then(
+      (users) => {
+        if (active) setState({ users: userDirectory(users) });
+      },
+      (error) => {
+        if (active) setState({ users: userDirectory([]), error });
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, []);
+  return state.error === undefined
+    ? state.users
+    : unavailableUserDirectory(t, state.error);
 }
 
 /** What a page shows while its options are loading, refused, or failed. */

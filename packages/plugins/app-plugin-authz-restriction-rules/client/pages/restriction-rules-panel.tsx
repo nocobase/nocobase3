@@ -73,7 +73,8 @@ export function RestrictionRulesPanel({
   const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
-  const [error, setError] = useState<string>();
+  const [errorCause, setErrorCause] = useState<unknown>();
+  const error = errorCause === undefined ? undefined : message(t, errorCause);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [records, setRecords] = useState<
     readonly import('@nocobase/app-plugin-authorization/client/management').AuthorizationRecordOption[]
@@ -97,9 +98,9 @@ export function RestrictionRulesPanel({
     try {
       setRules(await authz.listRestrictionRules());
     } catch (cause) {
-      setError(message(t, cause));
+      setErrorCause(cause);
     }
-  }, [t]);
+  }, []);
   useEffect(() => {
     void Promise.resolve().then(load);
   }, [load]);
@@ -122,7 +123,7 @@ export function RestrictionRulesPanel({
   async function save(): Promise<void> {
     if (!draft || busy) return;
     setBusy(true);
-    setError(undefined);
+    setErrorCause(undefined);
     try {
       if (
         !draft.key ||
@@ -138,7 +139,7 @@ export function RestrictionRulesPanel({
       close();
       await load();
     } catch (cause) {
-      setError(message(t, cause));
+      setErrorCause(cause);
     } finally {
       setBusy(false);
     }
@@ -151,7 +152,7 @@ export function RestrictionRulesPanel({
       close();
       await load();
     } catch (cause) {
-      setError(message(t, cause));
+      setErrorCause(cause);
     } finally {
       setBusy(false);
     }

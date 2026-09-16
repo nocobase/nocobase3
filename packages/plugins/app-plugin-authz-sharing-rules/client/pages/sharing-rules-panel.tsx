@@ -79,15 +79,16 @@ export function SharingRulesPanel({
   const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
-  const [error, setError] = useState<string>();
+  const [errorCause, setErrorCause] = useState<unknown>();
+  const error = errorCause === undefined ? undefined : message(t, errorCause);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const load = useCallback(async (): Promise<void> => {
     try {
       setRules(await authz.listSharingRules());
     } catch (cause) {
-      setError(message(t, cause));
+      setErrorCause(cause);
     }
-  }, [t]);
+  }, []);
   useEffect(() => {
     void Promise.resolve().then(load);
   }, [load]);
@@ -110,7 +111,7 @@ export function SharingRulesPanel({
   async function save(): Promise<void> {
     if (!draft || busy) return;
     setBusy(true);
-    setError(undefined);
+    setErrorCause(undefined);
     try {
       if (
         !draft.key ||
@@ -135,7 +136,7 @@ export function SharingRulesPanel({
       close();
       await load();
     } catch (cause) {
-      setError(message(t, cause));
+      setErrorCause(cause);
     } finally {
       setBusy(false);
     }
@@ -148,7 +149,7 @@ export function SharingRulesPanel({
       close();
       await load();
     } catch (cause) {
-      setError(message(t, cause));
+      setErrorCause(cause);
     } finally {
       setBusy(false);
     }

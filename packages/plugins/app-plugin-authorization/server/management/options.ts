@@ -66,7 +66,7 @@ export function createRuleOptionsRoutes(
   routes.get(`/${settings}/options`, async (context) => {
     await admin(context, settings, 'read');
     return context.json({
-      data: await databaseScopeRuleOptions(authorization, connection, context),
+      data: await databaseScopeRuleOptions(authorization, connection),
     });
   });
   routes.get(`/${settings}/records/:collection`, async (context) => {

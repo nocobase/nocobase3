@@ -79,7 +79,9 @@ function Inspector({
       ? requestedPage
       : 1;
   const [results, setResults] = useState<readonly AuthorizationInspection[]>();
-  const [error, setError] = useState<string>();
+  const [errorCause, setErrorCause] = useState<unknown>();
+  const error =
+    errorCause === undefined ? undefined : errorMessage(t, errorCause);
   const [revision, setRevision] = useState(0);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -98,13 +100,13 @@ function Inspector({
         if (active) setConfigured({ ...result, key: configurationKey });
       },
       (cause: unknown) => {
-        if (active) setError(errorMessage(t, cause));
+        if (active) setErrorCause(cause);
       },
     );
     return () => {
       active = false;
     };
-  }, [subject, configurationKey, t]);
+  }, [subject, configurationKey]);
   const [detail, setDetail] = useState<AuthorizationInspection>();
   const [detailKey, setDetailKey] = useState('');
   const filtered = useMemo(
@@ -157,34 +159,38 @@ function Inspector({
       return next;
     });
     setDetail(undefined);
-    setError(undefined);
+    setErrorCause(undefined);
   }
   useEffect(() => {
     let active = true;
-    if (!subject) return;
+    const [requestSubject, requestChecks] = JSON.parse(queryKey) as [
+      typeof subject,
+      typeof checks,
+    ];
+    if (!requestSubject) return;
     void (async () => {
       const next: AuthorizationInspection[] = [];
-      for (let offset = 0; offset < checks.length; offset += 100) {
+      for (let offset = 0; offset < requestChecks.length; offset += 100) {
         if (!active) return;
         next.push(
           ...(await authz.inspectBatch(
-            subject,
-            checks.slice(offset, offset + 100),
+            requestSubject,
+            requestChecks.slice(offset, offset + 100),
           )),
         );
       }
       if (active) {
-        setError(undefined);
+        setErrorCause(undefined);
         setResults(next);
         setLoadedKey(queryKey);
       }
     })().catch((cause: unknown) => {
-      if (active) setError(errorMessage(t, cause));
+      if (active) setErrorCause(cause);
     });
     return () => {
       active = false;
     };
-  }, [subject, checks, queryKey, t]);
+  }, [queryKey]);
   const loading = !!subject && loadedKey !== queryKey && !error;
   const selectedResource =
     detail && type?.resources.find((item) => item.value === detail.resource.id);
@@ -206,7 +212,7 @@ function Inspector({
               return updated;
             });
             setDetail(undefined);
-            setError(undefined);
+            setErrorCause(undefined);
           }}
         />
         <Button
@@ -214,7 +220,7 @@ function Inspector({
           className='ml-auto'
           disabled={!subject || loading}
           onClick={() => {
-            setError(undefined);
+            setErrorCause(undefined);
             setRevision((value) => value + 1);
           }}
         >

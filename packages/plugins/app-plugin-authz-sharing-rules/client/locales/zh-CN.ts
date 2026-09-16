@@ -1,4 +1,5 @@
 export default {
+  resourceTitle: '共享规则',
   navigation: { title: '共享规则' },
   sharingRules: {
     page: {
