@@ -210,6 +210,8 @@ START_PORT=$(node --input-type=module -e '
 APP_PATH=$(node -e 'console.log(new URL(process.argv[1]).pathname.replace(/\/+$/, ""))' "$APP_URL")
 START_URL="http://127.0.0.1:$START_PORT$APP_PATH"
 echo "Waiting up to ${TIMEOUT}s for $START_URL/api/healthz"
+# Create the log before background redirection can race with the first progress report.
+: > "$START_LOG"
 set -m
 APP_SERVER_HOST=127.0.0.1 APP_SERVER_PORT="$START_PORT" pnpm start > "$START_LOG" 2>&1 &
 APP_PID=$!
