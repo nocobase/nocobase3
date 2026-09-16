@@ -98,9 +98,13 @@ async function expectMenu(admin: boolean) {
     ),
   );
   if (admin)
-    expect(await screen.findByText('users content')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByText('users content')).toBeInTheDocument(),
+    );
   else {
-    expect(await screen.findByText('Access denied')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByText('Access denied')).toBeInTheDocument(),
+    );
     expect(screen.queryByText('users content')).not.toBeInTheDocument();
   }
 }
@@ -166,7 +170,9 @@ describe('account permission changes without a browser reload', () => {
         screen.getByRole('navigation', { name: 'Pages' }).textContent,
       ).toBe(''),
     );
-    expect(await screen.findByText('Access denied')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByText('Access denied')).toBeInTheDocument(),
+    );
     expect(screen.queryByText('users content')).not.toBeInTheDocument();
     view.request.mockResolvedValue(permissions(true));
     act(() => view.client.invalidatePermissions());
