@@ -2,9 +2,13 @@
 
 Use this guide for nested pages, page Tabs, and menu groups. Routes are the source of navigation for App, Settings, and Dev. Business page code decides how child content is presented.
 
+Wrap the parent page content in `PageContainer` to apply the shared page padding and spacing. Inline Tab content renders within that container and does not add a second one. A covering child page uses its own `PageContainer` inside `RouteChildPage`.
+
 ## Default for page Tabs
 
 When asked to build a page with Tabs, use child routes by default; the user does not need to request routing separately. This applies to App, Settings, and Dev pages, including plugin-owned pages. Follow an explicit user request for a different interaction.
+
+A Tab is a view of its parent page rather than a place of its own, so a Tab route declares no `breadcrumb`; the trail stops at the parent.
 
 Declare Tab content in the parent route's `children`, place `<Outlet />` in the parent's content area, and switch Tabs through router navigation. Both fixed Tabs (such as overview and activity) and parameterized Tabs use this pattern. Derive the selected Tab from the URL rather than an independent `activeTab` state. Keep each Tab directly accessible and restorable on refresh, and verify back/forward navigation. Use the existing route API and choose paths for the business requirement; no fixed path naming format is required.
 
@@ -23,8 +27,11 @@ Implement the parent-only redirect in the parent page with existing React Router
 | `client/routes.ts`             | Declare pages, navigation and recursive children |
 | Parent page in `client/pages/` | Add navigation and manually place `Outlet`       |
 | Child page in `client/pages/`  | Default-export its content component             |
+| The parent's folder            | Hold the children, mirroring the route paths     |
 | `client/locales/`              | Translate navigation and page copy               |
 | `tests/`                       | Verify actual navigation and access              |
+
+A page that gains children becomes a folder: the page itself moves to `index.tsx` and each child sits beside it under the name of its path segment, so `/orders/archived` is `client/pages/orders/archived.tsx`. A child with children of its own becomes a folder in turn. Anything only these pages use goes in the same folder rather than in `client/components/`, which is for what the whole application shares: a shared component in `shared.tsx`, and constants or fixtures in a module of their own, since Fast Refresh stops working on a file that exports both a component and a constant.
 
 Do not change the shell, route renderer, or ServiceProvider to add a menu. Keep CRUD resources if business code uses them; resources no longer add sidebar entries.
 
@@ -49,12 +56,13 @@ const routes: readonly AppClientRouteContribution[] = [
           name: 'workspace',
           path: '/workspace',
           navigation: { title: 'navigation.workspace' },
-          componentLoader: () => import('./pages/workspace.js'),
+          componentLoader: () => import('./pages/workspace/index.js'),
           children: [
             {
               name: 'workspaceReport',
               path: 'reports/:reportId',
-              componentLoader: () => import('./pages/workspace-report.js'),
+              componentLoader: () =>
+                import('./pages/workspace/reports/report.js'),
             },
           ],
         },
@@ -67,7 +75,7 @@ export default routes;
 ```
 
 ```tsx
-// client/pages/workspace.tsx
+// client/pages/workspace/index.tsx
 import type { ReactElement } from 'react';
 import { useTranslation } from '@nocobase/i18n/client';
 import {
@@ -78,6 +86,7 @@ import {
   useLocation,
   useResolvedPath,
 } from 'react-router';
+import { PageContainer } from '@/components/page-container';
 
 export default function Workspace(): ReactElement {
   const { t } = useTranslation();
@@ -100,7 +109,7 @@ export default function Workspace(): ReactElement {
   }
 
   return (
-    <section className='space-y-4 p-6'>
+    <PageContainer>
       <h1>{t('workspace.title')}</h1>
       <nav aria-label={t('workspace.reports')} className='flex gap-4'>
         <NavLink to={{ pathname: 'reports/42', search: location.search }}>
@@ -111,13 +120,13 @@ export default function Workspace(): ReactElement {
         </NavLink>
       </nav>
       <Outlet />
-    </section>
+    </PageContainer>
   );
 }
 ```
 
 ```tsx
-// client/pages/workspace-report.tsx
+// client/pages/workspace/reports/report.tsx
 import type { ReactElement } from 'react';
 import { useTranslation } from '@nocobase/i18n/client';
 import { useParams } from 'react-router';
@@ -155,6 +164,43 @@ A group has `navigation` and `children`, with no component loader. Its `path` is
 Omit `navigation` for details, Tab content, or another page that should not appear in the sidebar. A descendant can have navigation even when an ancestor omits it. Dynamic and wildcard paths are not concrete menu targets, so leave their navigation unset. Paths, route IDs, and component exports must resolve correctly; URL spelling is not otherwise prescribed by this guide.
 
 The route renderer supplies outlets for pure groups. Business pages place their own outlet; no outlet is inserted automatically into a page, and the route overlay wrappers below insert none either. Put it where the next page belongs.
+
+## How a child route presents itself
+
+A child route renders through its parent's outlet. It can render inline, as the Tab example above does, or use one of these wrappers to cover the parent:
+
+| Component        | Where it sits             | Modal |
+| ---------------- | ------------------------- | ----- |
+| `RouteDialog`    | Centred over the page     | Yes   |
+| `RouteDrawer`    | At the side of the page   | Yes   |
+| `RouteChildPage` | Covering the content area | No    |
+
+Among these wrappers, `RouteChildPage` represents a page destination and its route declares `breadcrumb`; `RouteDialog` and `RouteDrawer` leave it unset. Breadcrumbs are not restricted to these wrappers: ordinary page routes can also declare them. See [breadcrumb declarations](client-pages-and-routes.md#putting-the-page-in-a-breadcrumb-trail).
+
+```tsx
+import { PageContainer } from '@/components/page-container';
+
+export default function ArchivedOrdersPage() {
+  return (
+    <>
+      <RouteChildPage>
+        <PageContainer className='mx-auto max-w-6xl'>
+          <Breadcrumbs />
+          <PageHeader title={t('orders.archived.title')} />
+          {/* the page's own content */}
+        </PageContainer>
+      </RouteChildPage>
+      {/* A deeper layer is a sibling of this one, not content inside it. */}
+      <Outlet />
+    </>
+  );
+}
+```
+
+- Place a deeper route's `<Outlet />` beside `RouteChildPage`, not inside it, so the deeper layer does not scroll with its parent layer.
+- The covered page keeps its DOM, including form state and scroll position. The wrapper marks preceding siblings `inert` while covered and restores them on cleanup.
+- `RouteChildPage` is non-modal: the sidebar and header remain reachable. It has no close button or Escape handler; return through breadcrumbs or browser history.
+- Use it for child pages that cover a parent, not for top-level pages.
 
 ## Child pages shown as dialogs or drawers
 
@@ -195,13 +241,14 @@ The page that declares `children` must render `<Outlet />` where the child belon
 
 ```tsx
 import { Outlet } from 'react-router';
+import { PageContainer } from '@/components/page-container';
 
 export default function OrdersPage() {
   return (
-    <main>
+    <PageContainer>
       <OrderList />
       <Outlet />
-    </main>
+    </PageContainer>
   );
 }
 ```
@@ -283,6 +330,7 @@ Returning `false` keeps the overlay open. The guard applies to the close button,
 - Does the owning page render `<Outlet />` in the intended location?
 - If the overlay has child routes, does it render its own `<Outlet />`?
 - Is `RouteDialog` or `RouteDrawer` selected for the interaction?
+- Is `breadcrumb` left undeclared, since an overlay is not a destination?
 - Is `useRouteOverlay()` used for closing, with rejection handled?
 - Is `beforeClose` present when unsaved state needs protection?
 - Do direct URLs, refresh, query strings, browser back/forward, and nested overlays behave correctly?

@@ -7,6 +7,65 @@ const enUS = {
       'Open a dialog or drawer, then open another layer. Close the child to return to your draft. Each layer has its own URL.',
     openDialog: 'Open dialog',
     openDrawer: 'Open drawer',
+    dialogCardTitle: 'Dialog route',
+    dialogCardDescription:
+      'Keep the user focused on one task with a centered, URL-addressable layer.',
+    dialogPattern: 'Centered overlay',
+    dialogFeatureFocus: 'Focused task flow',
+    dialogFeatureNested: 'Can open a child drawer',
+    dialogFeatureConfirm: 'Supports close confirmation',
+    drawerCardTitle: 'Drawer route',
+    drawerCardDescription:
+      'Keep the underlying page visible while a side panel handles a secondary task.',
+    drawerPattern: 'Side panel',
+    drawerFeatureContext: 'Keeps page context visible',
+    drawerFeatureNested: 'Can open a child dialog',
+    drawerFeatureHistory: 'Works with browser history',
+    guideTitle: 'Try the nested flow',
+    guideDescription:
+      'Move between layers to see how each route is reflected in the address bar and browser history.',
+    stepOneTitle: 'Open a layer',
+    stepOneDescription: 'Start with a dialog or drawer from the cards above.',
+    stepTwoTitle: 'Open the next layer',
+    stepTwoDescription: 'Use the action inside the overlay to continue deeper.',
+    stepThreeTitle: 'Return to your draft',
+    stepThreeDescription:
+      'Close the child layer and the parent keeps its local state.',
+    deepLinks: 'Jump directly:',
+    openDialogDrawer: 'Dialog → Drawer',
+    openDrawerDialog: 'Drawer → Dialog',
+    currentRoute: 'Current route',
+    stateDescription:
+      'Every layer is a real route. Use browser back and forward to move through the same flow.',
+    preview: 'Preview',
+    newExample: 'New example',
+    childPagesCardTitle: 'Nested pages',
+    childPagesCardDescription:
+      'Open a page instead of an overlay and watch the breadcrumb gain a level for each one.',
+    openChildPages: 'Open nested pages',
+    childPagesTitle: 'Nested pages',
+    childPagesDescription:
+      'Each of these is its own page rather than a layer, so opening one replaces this content and adds a breadcrumb level.',
+    openTopic: 'Open page',
+    openTopicDialog: 'Open dialog',
+    topicQuotation: 'Quotation routing',
+    topicQuotationSummary:
+      'Route a quotation to the reviewer who owns the account.',
+    topicOnboarding: 'Onboarding checklist',
+    topicOnboardingSummary:
+      'Track the steps a new teammate works through in their first week.',
+    topicRenewal: 'Renewal reminder',
+    topicRenewalSummary:
+      'Notify the owner before a subscription reaches its renewal date.',
+    topicHint:
+      'The breadcrumb above gained a level when this page opened, because this page is somewhere you can return to.',
+    topicOverlayHint:
+      'Open the dialog above and the breadcrumb stays put: the address bar changes, but an overlay is not another destination.',
+    topicDialogTitle: 'A layer above the page',
+    topicDialogDescription:
+      'This dialog is a child route of the page behind it, and names no destination.',
+    topicDialogHint:
+      'The address bar changed, but the breadcrumb did not: the page behind this layer is still where you are.',
     dialogTitle: 'Dialog example',
     drawerTitle: 'Drawer example',
     hint: 'Type a draft and open a child layer to try keeping your work in place.',
@@ -68,6 +127,11 @@ const enUS = {
       title: 'Numeric types',
       description:
         'Compare INTEGER, BIGINT, DECIMAL, FLOAT and DOUBLE values, return types and aggregates.',
+    },
+    externalCrm: {
+      title: 'External database',
+      description:
+        'Read orders and customers from a database another system owns, through an external connection and its metadata files.',
     },
     eyebrow: 'NocoBase Examples',
     title: 'Explore working examples',
@@ -166,7 +230,45 @@ const enUS = {
     confirm: 'Confirm',
     language: 'Language',
   },
+  notices: {
+    serverLocaleFallback:
+      'The server does not support this language, so server messages will use English.',
+    languageChangeFailed:
+      'Unable to complete the language change. Please try again.',
+  },
+  externalCrm: {
+    eyebrow: 'External database example',
+    title: 'CRM orders',
+    description:
+      'These rows live in a database this application does not own. The externalCrm connection reads its schema, never changes it, and layers titles and the customer relation on top from database/externalCrm/collections/*/metadata.json. The page addresses everything by logical name; the crm_ table prefix never appears here.',
+    readOnly: 'Read-only',
+    customers: '{{count}} customers',
+    filter: 'Filter by status',
+    status: {
+      all: 'All orders',
+      paid: 'Paid',
+      shipped: 'Shipped',
+      draft: 'Draft',
+    },
+    refresh: 'Refresh',
+    loading: 'Loading orders…',
+    loadError:
+      'Unable to load orders. Check that you are signed in and that the external CRM database is reachable.',
+    retry: 'Retry',
+    empty: 'No matching orders',
+    emptyHint:
+      'The SQLite stand-in is filled with sample orders on startup; a real CRM shows whatever it holds.',
+    columns: {
+      orderNo: 'Order number',
+      customer: 'Customer',
+      status: 'Status',
+      totalAmount: 'Total amount',
+      placedAt: 'Placed at',
+    },
+    note: 'Writes are not exposed: the CRM owns this data, so the routes register only query actions and the Policy grants reads alone.',
+  },
   account: {
+    signOutFailed: 'Unable to sign out. Please try again.',
     openMenu: 'Open account menu',
     fallback: 'Account',
     signOut: 'Sign out',
@@ -174,6 +276,7 @@ const enUS = {
   },
   navigation: {
     numbers: 'Numeric types',
+    externalCrm: 'External CRM',
     routeOverlays: 'Route dialogs and drawers',
     articles: 'Articles',
     home: 'Home',
@@ -182,6 +285,7 @@ const enUS = {
     expand: 'Expand navigation',
     collapse: 'Collapse navigation',
     label: 'Application navigation',
+    breadcrumb: 'Breadcrumb',
   },
 };
 

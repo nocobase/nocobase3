@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-workflow",
   "displayName": "Workflow App Plugin",
   "description": "Adds workflow runtime, persistence, and HTTP APIs to a NocoBase app.",
-  "version": "0.1.0-beta.14",
+  "version": "0.1.0-beta.17",
   "type": "module",
   "sideEffects": [
     "**/*.css"
@@ -76,7 +76,7 @@
   ],
   "scripts": {
     "clean": "node ./scripts/clean-dist.mjs",
-    "build": "pnpm clean && tsc -p tsconfig.json && node ./scripts/copy-client-assets.mjs && tsc -p tsconfig.migrations.json",
+    "build": "pnpm clean && tsc -p tsconfig.json && node ./scripts/copy-client-assets.mjs && tsc -p tsconfig.migrations.json && nocobase-db-manifests",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.migrations.json --noEmit && tsc -p tsconfig.skill-evals.json --noEmit && tsc -p tsconfig.workflow-fixtures.json --noEmit",
     "test": "vitest run --passWithNoTests",
     "test:integration": "pnpm test:integration:sqlite",
@@ -116,7 +116,8 @@
     "lucide-react": "catalog:",
     "react": "catalog:",
     "react-router": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "tailwind-merge": "catalog:"
   },
   "peerDependenciesMeta": {
     "@nocobase/app-plugin-scheduler": {
@@ -133,7 +134,6 @@
     "@testing-library/react": "catalog:",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
-    "better-sqlite3": "^13.0.3",
     "eslint": "catalog:",
     "jsdom": "catalog:",
     "knex": "catalog:",
@@ -141,6 +141,8 @@
     "react-dom": "catalog:",
     "tsx": "catalog:",
     "vitest": "catalog:",
-    "yaml": "catalog:"
+    "yaml": "catalog:",
+    "@nocobase/db-postgres": "workspace:*",
+    "@nocobase/db-mysql": "workspace:*"
   }
 }

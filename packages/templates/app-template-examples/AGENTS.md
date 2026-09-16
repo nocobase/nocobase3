@@ -8,6 +8,8 @@ Do not create a plugin to add a feature. Plugins are separately published packag
 
 This application is based on `@nocobase/app-template-default` and provides runnable learning examples. Its homepage catalogs the registered demonstrations; article management is application-owned. Reusable plugin examples stay in `packages/examples/` in the source workspace. Keep framework changes aligned with Default and Hub; keep demonstration content and branding local. Use a separate configuration and database, never copy Default's runtime state.
 
+Examples retains Default’s Users and API Keys integration alongside its demonstrations. Users lists direct Authorization Permission Sets as application roles; authenticated default access remains separate. API Keys is configured in both authentication factories and mounted under Settings. Keep these product integrations aligned with Default.
+
 ## Load the development skills
 
 `skills/nocobase-app-development/` holds the detailed guidance behind this file. Read its `SKILL.md` first — it routes to the reference that matches your task instead of making you read everything:
@@ -19,6 +21,7 @@ This application is based on `@nocobase/app-template-default` and provides runna
 | Add an HTTP endpoint                             | `references/server-routes.md`           |
 | Read or write data                               | `references/database-and-data.md`       |
 | Change the schema                                | `references/migrations.md`              |
+| Switch or add a database connection              | `references/database-connections.md`    |
 | Add translatable text                            | `references/i18n.md`                    |
 | Add a service, background job, or scheduled task | `references/services-and-jobs.md`       |
 | Write tests and verify                           | `references/testing.md`                 |
@@ -33,7 +36,7 @@ Business code goes in these places. This is where you work, and where you should
 
 ```text
 client/routes.ts          Declare a page route
-client/pages/             The page component
+client/pages/             The page component; a folder when a page has children or files of its own
 client/components/        Your components
 client/components/ui/     shadcn/ui primitives; add with the CLI, do not hand-write
 client/locales/           Every user-visible string
@@ -42,15 +45,21 @@ server/routes/            HTTP endpoints
 server/providers/         Services and their lifecycle
 database/main/migrations/      Schema changes
 database/main/seeds/           Required initial data
+database/main/collections/     Generated Collection artifacts; regenerate, never edit
+database/externalCrm/collections/ metadata.json per Collection: the external CRM's metadata source
 cli/commands/             Commands this application owns
 tests/                    Tests; never beside the source
 ```
+
+A page with children or page-local helpers uses a folder with `index.tsx`; child folders mirror route paths. Keep page-local components and data in that folder, reserving `client/components/` for application-wide components. See [child routes](skills/nocobase-app-development/references/client-child-routes.md) for examples.
 
 A feature with a page and an API touches five places: a migration for the table, a route in `server/routes/`, a page in `client/pages/` declared in `client/routes.ts`, navigation on the page route, and strings in `client/locales/`.
 
 ### The rest is framework structure
 
-The Settings and Dev tools header entries stay visible on their destination pages. The Dev tools entry is development-only and must remain absent from production builds.
+Layouts own breadcrumb route context; `AppRouter` selects routes and layouts. See [page routes](skills/nocobase-app-development/references/client-pages-and-routes.md#putting-the-page-in-a-breadcrumb-trail) for each layout's scope.
+
+The Settings header entry appears only when the user has an accessible page in the settings navigation, and stays visible on that page. The header reads the registered settings tree through `useClientApplication().runtime.settingsRouteTree`, reusing the application context. The Dev tools entry stays visible on its destination pages, is development-only, and must remain absent from production builds.
 
 `client/routing/`, `client/shell/`, `client/layouts/`, `client/theme/`, the server entry points, the build scripts, and the tsconfigs are the scaffolding the template provides. It is still this application's own source — it shipped to the user and they may change it — but it is the part the template evolves, so an edit there is what a future upgrade has to reconcile.
 
@@ -134,6 +143,8 @@ Keep HTTP concerns in the route and domain logic in a service under `server/prov
 
 Schema changes are migrations under `database/main/migrations/`. Data the application requires to run is a seed under `database/main/seeds/`. Seeds never create structure.
 
+`database/<connection>/collections/` holds what the database currently resolves each Collection to — `collection.json`, `metadata.json` and `schema.json` per Collection plus a `_manifest.json` — written by `pnpm collections:generate` after migrating. On a managed connection every file there is derived: edit metadata through migrations or the Collection Metadata Service and regenerate, never by hand. On an `external` connection `metadata.json` is the exception — it is the metadata source, read at startup, so edit it by hand and regenerate; the other files stay derived. Never import any of these files from a migration. `pnpm collections:generate --check` fails when they are out of date.
+
 ```ts
 const migration: MigrationDefinition = defineMigration({
   name: '202609020001_create_orders',
@@ -156,7 +167,7 @@ Edit an existing migration only while the branch that introduced it is unmerged.
 
 The exported `name` must match the filename. Apply with `pnpm migrate` and verify against a real database.
 
-At runtime, resolve `databaseManagerToken` from the container and use `database.query()` to read and write the default connection. Use `database.query('analytics')` for another connection. Application tasks use `database/<connectionName>/{migrations,seeds}` and bind to that connection explicitly; plugin tasks and default runtime access stay on `database.default`. Only managed connections run migrations or seeds. See the migrations reference for execution and upgrade rules.
+At runtime, resolve `databaseManagerToken` from the container and use `database.query()` to read and write the default connection. Use `database.query('analytics')` for another connection. Application tasks use `database/<connectionName>/{migrations,seeds}` and bind to that connection explicitly; plugin tasks and default runtime access stay on `database.default`. Only managed connections run migrations or seeds. See the migrations reference for execution and upgrade rules. An `external` connection such as `externalCrm` reads a database another system owns: put its supplemental metadata in `database/<connectionName>/collections/<name>/metadata.json` (scaffold them with `pnpm collections:generate --connection <connectionName>`), never write migrations for it, and expose it read-only unless the owning system has agreed otherwise.
 
 ### User-facing text
 
@@ -169,9 +180,15 @@ t('orders.title');
 
 To reword a plugin's string, add an `overrides` block keyed by that plugin's package name in your locale file. Do not edit the plugin.
 
-The languages the application offers are its own locale files, not a configured list, and the two sides are read separately: `client/locales/` decides what the picker shows, `server/locales/` what the server will answer in. Adding a language means adding its file to both. `pnpm nocobase app i18n:check` reports one declared on a single side.
+The languages the application offers are its own locale files, not a configured list, and the two sides are read separately: `client/locales/` decides what the picker shows, while `server/locales/` decides which languages the server can answer in. Prefer adding a language to both when server-produced text needs translating, but a client-only language is valid: the interface switches normally and the server falls back to English with an informational notice. `pnpm nocobase app i18n:check` reports one declared on a single side and exits nonzero until the lists align; that check does not block the runtime switch.
 
 The account menu language control in `client/shell/language-switcher.tsx` uses a shadcn submenu with radio items. Render it inside `DropdownMenuContent` to preserve menu keyboard navigation and selection semantics.
+
+## Development file watching
+
+`pnpm dev` checks native file watching before starting its children. If watcher resources are exhausted or native events are unavailable, it uses polling for client and server hot updates and disables agent annotations for that run, with a warning. An explicit `CHOKIDAR_USEPOLLING=true` selects the same mode. Configuration files use stat polling so atomic saves and newly created files restart the server without native directory watchers.
+
+Vite must exclude the application's entire `dist/` tree from development file watching. Its default exclusion covers only `dist/client`; watching the compiled server and vendored packages can cause `EMFILE` after a build. Keep the exclusion scoped to this application so linked workspace dependencies, including their `dist/` files, still receive hot updates.
 
 ## Developing against another backend
 
@@ -219,6 +236,7 @@ To customize a page a plugin owns, pass an option on its registration, add a sou
 | Email, IM, or in-app messages; notifying someone that something happened                          | `@nocobase/app-plugin-notification`   |
 | Roles, permissions, "user A may only see their own records", field-level or row-level access      | `@nocobase/app-plugin-authorization`  |
 | Sign-in, registration, sessions, password reset                                                   | `@nocobase/app-plugin-authentication` |
+| User administration and application-owned role assignment                                         | `@nocobase/app-plugin-users`          |
 | File upload and metadata through Repository                                                       | `@nocobase/app-plugin-file`           |
 | Translated text and language switching                                                            | `@nocobase/app-plugin-i18n`           |
 
@@ -229,6 +247,8 @@ Building a permission system, a notification sender, or a job scheduler by hand 
 `.agents/skills/` itself is generated output: gitignored, and every synchronized directory is replaced wholesale on the next sync, so never edit a file there. This application's own `skills/` directory is the opposite — committed source you should keep current.
 
 ## Adding a dependency
+
+Keep `@nocobase/db` in `dependencies` alongside the database driver. It supplies the driver's runtime peer and lets TypeScript resolve the inferred database configuration declaration through the public package name. Moving it to `devDependencies` can cause TS2883 in an installed application even while the source workspace builds successfully.
 
 Put a package your **server** code imports in `dependencies`. Put everything your **client** code imports — along with build tooling, tests, and type-only imports — in `devDependencies`.
 
@@ -270,9 +290,11 @@ Without `--tar` no archive is produced, which is what you want when the build is
 
 ### Building for another platform
 
+`pnpm build --help` (or `-h`) lists build options and exits without loading build dependencies, running hooks, or modifying `dist/`. Every successful build records `nocobase.buildTarget` in `dist/package.json`, including builds with no native modules: `platform`, `arch`, `libc`, `nodeMajor`, and `nodeAbi`. Use `libc` only for Linux; its value on other platforms is a compatibility placeholder. Deployment checks should compare these fields with the host runtime and also respect `engines.node`. With `--target current` (the default), the Node version and ABI come from the running process; an explicit platform target defaults to Node 24 unless `--node-version` is supplied.
+
 `pnpm build` targets the machine it runs on, so `pnpm build && pnpm start` works. A deployment build says where it is going: `--target linux-x64`, `--target linux-arm64`, `--target linux-x64-musl`, plus `--node-version` when the server's Node major differs. Every build prints the platform it produced and records it in `dist/package.json` under `nocobase.buildTarget`.
 
-A `.node` binary is compiled for one platform, architecture, C library, and Node ABI at once. `pg`, `mysql2`, and `tedious` are plain JavaScript, so an application using only those is portable as built.
+A `.node` binary must match the target platform, architecture, and C library; addons using the Node ABI must also match its version. `better-sqlite3` 13 uses N-API and bundles its platform binaries, so cross-platform builds retain the target's binary, including the separate `linuxmusl` build for Alpine. `pg`, `mysql2`, and `tedious` are plain JavaScript, so an application using only those is portable as built.
 
 ### When a build or a deployment fails
 
@@ -318,3 +340,13 @@ never seed workflow definitions or execution history. The other two examples hav
 no business writes. Use the existing Automation settings pages for enablement,
 manual runs, and diagnostics; the homepage links to those pages. Sample inputs
 and expected outcomes are documented in `README.MD`.
+
+## Compiled migration and seed manifests
+
+The application build generates `.manifest.json` in each compiled migrations and seeds directory after server compilation, path rewriting, and `afterServerBuild` hooks. Keep the manifest generator in the build when customizing it. Plugins generate their own manifests when built; an application must not regenerate manifests for installed dependencies.
+
+TypeScript and compiled JavaScript use the same source checksum for migration history, while the loader separately verifies emitted JavaScript. Marked JavaScript requires its manifest. For a database with old raw JavaScript checksums, first run the compiled representation with matching original output; verified legacy hashes are converted under the task lock. Unreproducible old output remains an error. Never edit historical migrations or replace checksums by hand to resolve an upgrade failure.
+
+The account menu checks Better Auth sign-out results before refreshing the session and shows a localized error toast for API or network failures. Preserve this behavior when upgrading the shell; navigation alone does not revoke a session.
+
+The authorization provider clears the permission snapshot before rendering a new session. Route navigation and page guards subscribe to the authorization revision; preserve these checks when customizing the shell so account changes and permission updates take effect without a reload. Pending checks hide protected content, and failed checks deny access.

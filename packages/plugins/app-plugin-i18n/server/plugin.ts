@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import {
   defineServerPlugin,
   type AppServerPlugin,
@@ -6,6 +8,7 @@ import {
 import routes from './routes.js';
 
 const i18nPlugin: AppServerPlugin = defineServerPlugin({
+  baseDir: path.resolve(import.meta.dirname, '..'),
   packageName: '@nocobase/app-plugin-i18n',
   routes,
 });

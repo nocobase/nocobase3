@@ -48,6 +48,10 @@ Set `HUB_HOST_ENABLED=false` only for processes that need Hub metadata without s
 
 ## Host supervision configuration
 
+`hubServiceToken` exposes `getHostProxyTarget()` for a standalone listener to read the current ready Host origin without starting it. The method returns `null` while Host is disabled, stopped, starting or failed, and reads Supervisor state again on every call so a restarted Host may use a different port. The Hub listener owns HTTP and WebSocket forwarding; plugin API routes remain application-local management endpoints. App IDs that overlap the Hub application's normalized public base path are rejected when created. IDs beginning with `__` are also rejected to match the managed Host's reserved namespace, which includes `/__live`, `/__ready`, and `/__health`.
+
+`hub.publicHostUrl` controls the public entry used by the Visit App link. Set it to `/` when the Hub standalone listener proxies other paths on the same origin, as the Hub template does. An absolute origin supports an externally exposed Host; omitting it preserves direct Host links for existing plugin consumers. The internal proxy target always comes from Supervisor state, independently of this browser-facing setting.
+
 Hub configures its child-process supervisor through `hub.host` in the Hub's
 configuration file. The supervisor receives resolved options and does not read
 `APP_HOST_*` settings from the parent environment.
@@ -75,7 +79,7 @@ Environment overrides use `HUB_HOST_*`, for example `HUB_HOST_PORT`,
 `HUB_HOST_START_TIMEOUT_MS`, `HUB_HOST_AUTO_RESTART`, `HUB_HOST_ENTRY`,
 `HUB_HOST_TSX_CLI`, and `HUB_HOST_TSCONFIG`. Directory overrides are
 `HUB_HOST_DEPLOYMENTS_DIR`, `HUB_HOST_VOLUMES_DIR`, and `HUB_HOST_CONFIG_PATH`.
-The default driver is `node` in production and `tsx` otherwise.
+The Hub template uses `node` in production and `auto` otherwise. `auto` follows the loaded App Host package: workspace TypeScript exports use `tsx`, while published JavaScript exports use `node`. Development mode therefore works with an installed package that ships only `dist`, without requiring its TypeScript sources. Set `driver` to `node` or `tsx` to explicitly choose a launcher.
 
 This does not change standalone Host configuration: a directly launched Host
 still reads its own top-level `host` configuration and `APP_HOST_*` environment

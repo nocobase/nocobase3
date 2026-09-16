@@ -8,6 +8,7 @@ import {
 } from '@nocobase/session';
 import { ServiceProvider } from '@nocobase/service-provider';
 
+import { assertSecretIsNotPlaceholder } from '../config/placeholder-secret.js';
 import type { AppPluginApplication } from '../plugins/index.js';
 import {
   defineHttpMiddleware,
@@ -42,6 +43,9 @@ export function resolveAppSessionConfig(
   ephemeralSecret: string,
 ): AppSessionConfig {
   const { gcLottery: configuredGcLottery, secret, ...rest } = configured;
+  // Before the fallback below, because a placeholder is a value that was configured rather than one that was left
+  // unset, and silently replacing it with an ephemeral secret would hide the mistake rather than report it.
+  assertSecretIsNotPlaceholder(secret, 'session.secret');
   const gcLottery = configuredGcLottery ?? { hits: 2, total: 100 };
   if (gcLottery.hits > gcLottery.total) {
     throw new Error(

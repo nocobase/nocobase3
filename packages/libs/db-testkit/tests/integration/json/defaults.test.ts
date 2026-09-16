@@ -40,6 +40,19 @@ describeIntegrationDatabases('JSON field defaults', (context) => {
       expect(await repository.findOne({ filter: { id: 'a' } })).toEqual(
         expected,
       );
+
+      // The resolved definition reports the same documents the Builder was
+      // given, not the SQL literal text the catalog stores them as.
+      const resolved = await context.database
+        .connection()
+        .collections.get('jsonDefaults');
+      const defaults = Object.fromEntries(
+        (resolved?.fields ?? [])
+          .filter((field) => field.name !== 'id')
+          .map((field) => [field.name, field.defaultValue]),
+      );
+      const { id: _id, ...expectedDefaults } = expected;
+      expect(defaults).toEqual(expectedDefaults);
     },
   );
 
@@ -133,16 +146,17 @@ describeIntegrationDatabases('JSON field defaults', (context) => {
 
       // Redefining a JSON column is where a type whose definition carries a
       // constraint can ask the engine for that constraint a second time.
-      await context.builder.alterField(
-        'jsonAlteredDefault',
-        'payload',
-        {
-          type: 'json',
-          nullable: false,
-          defaultValue: { mode: 'provider', models: [] },
-        },
-        { syncMetadata: false },
-      );
+      await context.builder.alterField('jsonAlteredDefault', 'payload', {
+        type: 'json',
+        nullable: false,
+        defaultValue: { mode: 'provider', models: [] },
+      });
+
+      await expect(
+        context.metadataStore.get('jsonAlteredDefault'),
+      ).resolves.toMatchObject({
+        document: { fields: { payload: { type: 'json' } } },
+      });
 
       const repository = context.database.repository('jsonAlteredDefault');
       await repository.createOne({ values: { id: 'a' } });

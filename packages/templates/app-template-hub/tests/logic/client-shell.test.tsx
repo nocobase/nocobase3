@@ -1,23 +1,40 @@
 import {
   ClientApplicationContext,
+  createAppI18nRuntime,
   type ClientApplication,
 } from '@nocobase/app-client';
-import type { AppClientRegisteredRoute } from '@nocobase/app-client/plugins';
+import {
+  resolveAppClientContributions,
+  type AppClientRegisteredRoute,
+} from '@nocobase/app-client/plugins';
+import { I18nProvider } from '@nocobase/i18n/client';
+import type { I18nRuntime } from '@nocobase/i18n';
 import {
   AuthenticationProvider,
   authenticationClientToken,
 } from '@nocobase/app-plugin-authentication/client';
 import {
+  AuthorizationClient,
+  authorizationClientToken,
+} from '@nocobase/app-plugin-authorization/client';
+import {
   Refine,
   type AccessControlProvider,
   type AuthProvider,
 } from '@refinedev/core';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import type { ComponentType, ReactElement } from 'react';
 import { Outlet, MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import applicationRoutes from '../../client/routes.ts';
+import clientPlugins from '../../client/plugins.ts';
 import { AppRouter } from '../../client/routing/app-router.tsx';
 import { AppThemeProvider } from '../../client/theme/index.ts';
 
@@ -66,6 +83,47 @@ describe('application shell', () => {
       await screen.findByRole('heading', { name: 'App client is ready' }),
     ).toBeVisible();
   });
+
+  it.each([true, false])(
+    'shows the Settings entry only when a page is accessible (%s)',
+    async (allowed) => {
+      const can = vi.fn(async ({ resource }: { resource?: string }) => ({
+        can: resource !== 'preferences' || allowed,
+      }));
+      renderApplication('/', createAuthProvider(true), [], {
+        accessControlProvider: { can },
+        settingsRouteTree: [
+          createRoute(
+            'preferences',
+            '/settings/preferences',
+            'required',
+            () => <h2>Preferences</h2>,
+            'plugin',
+            'Preferences',
+            true,
+          ),
+        ],
+      });
+      await screen.findByRole('heading', { name: 'App client is ready' });
+      await waitFor(() =>
+        expect(can).toHaveBeenCalledWith(
+          expect.objectContaining({
+            resource: 'preferences',
+            action: 'access',
+          }),
+        ),
+      );
+      if (allowed) {
+        expect(
+          await screen.findByRole('link', { name: 'Settings' }),
+        ).toBeVisible();
+      } else {
+        expect(
+          screen.queryByRole('link', { name: 'Settings' }),
+        ).not.toBeInTheDocument();
+      }
+    },
+  );
 
   it('renders nested pages through manual outlets and selects the nearest menu ancestor', async () => {
     const child = createRoute('detail', '/orders/42', 'required', () => (
@@ -175,15 +233,84 @@ describe('application shell', () => {
     expect(screen.getByRole('button', { name: 'Appearance' })).toBeVisible();
   });
 
-  it('redirects ordinary App settings paths into the Hub console', async () => {
-    renderApplication('/settings/users', createAuthProvider(true), [
-      createRoute('apps', '/apps', 'required', ApplicationsPage),
-    ]);
-
-    expect(
-      await screen.findByRole('heading', { name: 'Applications page' }),
-    ).toBeVisible();
-  });
+  it.each([true, false])(
+    'checks the real API Keys settings contribution before loading it (%s)',
+    async (allowed) => {
+      const contributions = clientPlugins.plugins.map((plugin) => ({
+        ...plugin,
+        source: 'plugin' as const,
+      }));
+      const { settingsRouteTree: registeredSettingsRouteTree } =
+        resolveAppClientContributions(contributions);
+      const apiKeysRoute = registeredSettingsRouteTree.find(
+        ({ packageName, path }) =>
+          packageName === '@nocobase/app-plugin-api-keys' &&
+          path === '/settings/api-keys',
+      );
+      if (!apiKeysRoute?.componentLoader) {
+        throw new Error('Hub must register the API Keys settings page');
+      }
+      const loadApiKeys = vi.fn(apiKeysRoute.componentLoader);
+      const settingsRouteTree = registeredSettingsRouteTree.map((route) =>
+        route === apiKeysRoute
+          ? { ...route, componentLoader: loadApiKeys }
+          : route,
+      );
+      expect(settingsRouteTree).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            packageName: '@nocobase/app-plugin-api-keys',
+            path: '/settings/api-keys',
+            access: { resource: 'api-keys', action: 'access' },
+          }),
+        ]),
+      );
+      const i18n = await createAppI18nRuntime({
+        locales: ['en-US'],
+        contributions: contributions.flatMap(
+          ({ packageName, source, locales }) =>
+            locales ? [{ packageName, source, locales }] : [],
+        ),
+      });
+      const authClient = createTestAuthClient(true);
+      const can = vi.fn(async () => ({ can: allowed }));
+      renderApplication('/settings/api-keys', createAuthProvider(true), [], {
+        accessControlProvider: { can },
+        settingsRouteTree,
+        authClient,
+        i18n,
+      });
+      if (allowed) {
+        await waitFor(() => expect(loadApiKeys).toHaveBeenCalled(), {
+          timeout: 10_000,
+        });
+        // Cold plugin transforms can outlast Testing Library's one-second DOM wait
+        // on CI. Await the real route load under Vitest's test timeout, then render it.
+        await act(async () => {
+          await loadApiKeys.mock.results[0]?.value;
+        });
+        expect(
+          await screen.findByRole('heading', { name: 'API keys' }),
+        ).toBeVisible();
+        expect(
+          await screen.findByRole('link', { name: 'Settings' }),
+        ).toBeVisible();
+        await waitFor(() => expect(authClient.apiKey.list).toHaveBeenCalled());
+      } else {
+        expect(
+          await screen.findByRole('heading', { name: 'No settings available' }),
+        ).toBeVisible();
+        expect(loadApiKeys).not.toHaveBeenCalled();
+        expect(authClient.apiKey.list).not.toHaveBeenCalled();
+        expect(
+          screen.queryByRole('heading', { name: 'API keys' }),
+        ).not.toBeInTheDocument();
+      }
+      expect(can).toHaveBeenCalledWith(
+        expect.objectContaining({ resource: 'api-keys', action: 'access' }),
+      );
+    },
+  );
 
   it('redirects the authorized Hub root through the Hub access rule', async () => {
     const can = vi.fn().mockResolvedValue({ can: true });
@@ -243,7 +370,7 @@ describe('application shell', () => {
     expect(
       await screen.findByRole('link', { name: 'User management' }),
     ).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByText('Users page')).toBeVisible();
+    expect(await screen.findByText('Users page')).toBeVisible();
   });
 
   it('never discloses a protected navigation entry when access is denied', async () => {
@@ -337,6 +464,9 @@ function renderApplication(
   routes: readonly AppClientRegisteredRoute[] = [],
   options: {
     readonly accessControlProvider?: AccessControlProvider;
+    readonly authClient?: ReturnType<typeof createTestAuthClient>;
+    readonly i18n?: I18nRuntime;
+    readonly settingsRouteTree?: readonly AppClientRegisteredRoute[];
   } = {},
 ): void {
   const clientRoutes = routes.some(({ path }) => path === '/')
@@ -347,16 +477,21 @@ function renderApplication(
       ];
   const authenticated =
     (authProvider as TestAuthProvider).authenticated ?? true;
-  const authClient = createTestAuthClient(authenticated);
+  const authClient = options.authClient ?? createTestAuthClient(authenticated);
+  const authorizationClient = new AuthorizationClient({
+    request: vi.fn(),
+  } as never);
   const app = {
+    runtime: { settingsRouteTree: options.settingsRouteTree ?? [] },
     services: {
       resolve: (token: unknown) => {
         if (token === authenticationClientToken) return authClient;
+        if (token === authorizationClientToken) return authorizationClient;
         throw new Error(`Unexpected service token: ${String(token)}`);
       },
     },
   } as unknown as ClientApplication;
-  render(
+  const content = (
     <ClientApplicationContext.Provider value={app}>
       <AuthenticationProvider>
         <MemoryRouter initialEntries={[initialEntry]}>
@@ -382,13 +517,20 @@ function renderApplication(
               <AppRouter
                 devRouteTree={[]}
                 clientRoutes={clientRoutes}
-                settingsRouteTree={[]}
+                settingsRouteTree={options.settingsRouteTree ?? []}
               />
             </Refine>
           </AppThemeProvider>
         </MemoryRouter>
       </AuthenticationProvider>
-    </ClientApplicationContext.Provider>,
+    </ClientApplicationContext.Provider>
+  );
+  render(
+    options.i18n ? (
+      <I18nProvider runtime={options.i18n}>{content}</I18nProvider>
+    ) : (
+      content
+    ),
   );
 }
 
@@ -416,6 +558,7 @@ function createAuthProvider(authenticated: boolean): TestAuthProvider {
 
 function createTestAuthClient(authenticated: boolean) {
   return {
+    apiKey: { list: vi.fn().mockResolvedValue({ data: { apiKeys: [] } }) },
     getSession: vi.fn().mockResolvedValue({
       data: authenticated
         ? {

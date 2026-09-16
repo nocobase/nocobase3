@@ -1,6 +1,6 @@
 {
   "name": "@nocobase/authorization",
-  "version": "0.1.0-beta.5",
+  "version": "0.1.0-beta.6",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -133,7 +133,6 @@
     "@nocobase/db-sqlite": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@types/node": "catalog:",
-    "better-sqlite3": "catalog:",
     "eslint": "catalog:",
     "prettier": "catalog:",
     "typescript": "catalog:",

@@ -29,6 +29,6 @@ export function createAIConversationCollection(
         onDelete: 'cascade',
       });
     },
-    { ifNotExists: true, syncMetadata: false },
+    { ifNotExists: true },
   );
 }

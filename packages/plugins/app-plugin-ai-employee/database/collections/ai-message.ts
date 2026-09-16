@@ -19,6 +19,6 @@ export function createAIMessageCollection(
       c.primary('messageId', { name: 'pk_ai_messages' });
       c.index('sessionId', { name: 'idx_ai_messages_session' });
     },
-    { ifNotExists: true, syncMetadata: false },
+    { ifNotExists: true },
   );
 }

@@ -19,5 +19,3 @@ pnpm nocobase demo greet world --loud
 pnpm nocobase demo greet world --json
 pnpm nocobase demo artifact build --source-root server/artifacts
 ```
-
-See [internal-docs/cli/plugin-cli.md](../../../internal-docs/cli/plugin-cli.md) for the full contract.

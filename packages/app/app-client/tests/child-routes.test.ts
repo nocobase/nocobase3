@@ -267,3 +267,99 @@ it('allows existing top-level settings page names at distinct paths', () => {
     '/dev/two',
   ]);
 });
+
+it('names a child page through breadcrumb without putting it in a menu', () => {
+  const result = resolveAppClientContributions([
+    {
+      packageName: 'example',
+      routes: defineAppRoutes([
+        {
+          name: 'orders',
+          path: '/orders',
+          navigation: { title: 'Orders' },
+          componentLoader,
+          children: [
+            // A menu entry needs a static path, so a detail page can only name itself through `breadcrumb`.
+            {
+              name: 'detail',
+              path: ':orderId',
+              breadcrumb: { title: 'Order detail' },
+              componentLoader,
+            },
+            { name: 'preview', path: 'preview', componentLoader },
+          ],
+        },
+      ]),
+    },
+  ]);
+  const orders = result.routes[0];
+
+  // A menu entry is not a trail entry: declaring only `navigation` keeps the route out of the breadcrumb.
+  expect(orders?.breadcrumb).toBeUndefined();
+  expect(orders?.children?.[0]).toMatchObject({
+    path: '/orders/:orderId',
+    breadcrumb: { title: 'Order detail' },
+  });
+  expect(orders?.children?.[0]?.navigation).toBeUndefined();
+  // Structure that names no destination carries no breadcrumb, which is how a consumer tells the two apart.
+  expect(orders?.children?.[1]?.breadcrumb).toBeUndefined();
+});
+
+it('keeps the menu title and the breadcrumb title independent', () => {
+  const result = resolveAppClientContributions([
+    {
+      packageName: 'example',
+      routes: defineAppRoutes([
+        {
+          name: 'orders',
+          path: '/orders',
+          breadcrumb: { title: 'All orders' },
+          navigation: { title: 'Orders' },
+          componentLoader,
+        },
+      ]),
+    },
+  ]);
+
+  expect(result.routes[0]).toMatchObject({
+    breadcrumb: { title: 'All orders' },
+    navigation: { title: 'Orders' },
+  });
+});
+
+it('rejects a blank title', () => {
+  expect(() =>
+    resolveAppClientContributions([
+      {
+        packageName: 'example',
+        routes: defineAppRoutes([
+          {
+            name: 'orders',
+            path: '/orders',
+            breadcrumb: { title: '  ' },
+            componentLoader,
+          },
+        ]),
+      },
+    ]),
+  ).toThrow(/must define a non-empty title/);
+});
+
+it('rejects an empty breadcrumb title', () => {
+  expect(() =>
+    resolveAppClientContributions([
+      {
+        packageName: 'example',
+        routes: defineAppRoutes([
+          {
+            name: 'orders',
+            path: '/orders',
+            breadcrumb: { title: '' },
+            navigation: { title: 'Orders' },
+            componentLoader,
+          },
+        ]),
+      },
+    ]),
+  ).toThrow(/must define a non-empty title/);
+});

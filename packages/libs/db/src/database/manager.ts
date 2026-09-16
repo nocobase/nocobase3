@@ -7,10 +7,13 @@ import type { Repository, RepositoryRecord } from '../repository/types.js';
 import { createSeeder, type Seeder } from '../seed/seeder.js';
 import type { DatabaseSeederOptions } from '../seed/types.js';
 import type {
-  BaseConnectionConfig,
+  AnyConnectionConfig,
+  CollectionMetadataStoreConfig,
   DatabaseConfig,
   ExtensibleDatabaseConfig,
 } from './config.js';
+import type { CollectionMetadataStore } from '../metadata/document-store.js';
+import { DirectoryCollectionMetadataStore } from '../metadata/directory-document-store.js';
 import type {
   ConnectionConfig,
   DatabaseDriverDefinition,
@@ -77,15 +80,11 @@ export class CollectionMetadataStoreRequiredError extends Error {
   }
 }
 
-export function createDatabaseManager(config: DatabaseConfig): DatabaseManager;
 export function createDatabaseManager<
-  TConnection extends BaseConnectionConfig & { dialect: string },
->(config: ExtensibleDatabaseConfig<TConnection>): DatabaseManager;
-export function createDatabaseManager(
-  config: DatabaseConfig | ExtensibleDatabaseConfig<any>,
-): DatabaseManager {
+  TConnection extends AnyConnectionConfig = ConnectionConfig,
+>(config: ExtensibleDatabaseConfig<TConnection>): DatabaseManager {
   return new DefaultDatabaseManager(
-    config as DatabaseConfig,
+    config,
     new DefaultConnectionFactory({
       knex: new KnexConnectionAdapter(),
     }),
@@ -118,8 +117,9 @@ export class DefaultDatabaseManager implements DatabaseManager {
       this.config.drivers,
       name,
     );
-    const metadataStore =
-      resolvedConnectionConfig.metadataStore ?? this.config.metadataStore;
+    const metadataStore = resolveMetadataStore(
+      resolvedConnectionConfig.metadataStore ?? this.config.metadataStore,
+    );
     if (
       resolvedConnectionConfig.schemaManagement === 'external' &&
       !metadataStore
@@ -211,6 +211,32 @@ export class DefaultDatabaseManager implements DatabaseManager {
       throw new Error('No database connections configured.');
     }
     return name;
+  }
+}
+
+/**
+ * A store is either an instance or its declarative form. Telling them apart by
+ * the presence of `initialize` rather than by a `type` field keeps a custom
+ * store that happens to carry a `type` property from being mistaken for
+ * configuration.
+ */
+function resolveMetadataStore(
+  value: CollectionMetadataStore | CollectionMetadataStoreConfig | undefined,
+): CollectionMetadataStore | undefined {
+  if (value === undefined) return undefined;
+  if (typeof (value as CollectionMetadataStore).initialize === 'function') {
+    return value as CollectionMetadataStore;
+  }
+  const config = value as CollectionMetadataStoreConfig;
+  switch (config.type) {
+    case 'directory':
+      return new DirectoryCollectionMetadataStore({
+        directory: config.directory,
+      });
+    default:
+      throw new Error(
+        `Unknown Collection metadata store type "${String((config as { type?: unknown }).type)}".`,
+      );
   }
 }
 

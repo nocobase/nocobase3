@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import type { ResolvedAppServerPlugins } from './types.js';
 
 export interface AppServerInspectionIssue {
@@ -53,6 +55,8 @@ export interface AppServerPluginSnapshot {
   readonly order: number;
   readonly packageName: string;
   readonly version: string;
+  readonly rootDir: string;
+  readonly baseDir: string;
   readonly contributions: {
     readonly serviceProviders: number;
     readonly routes: number;
@@ -154,7 +158,7 @@ export function inspectResolvedAppServerPlugins(
         code: 'SERVER_MIGRATIONS_DIRECTORY_MISSING',
         severity: 'error',
         packageName: plugin.metadata.packageName,
-        message: `${plugin.metadata.packageName} declares migrations at ${configuredMigrations}, but the directory could not be resolved.`,
+        message: `${plugin.metadata.packageName} declares migrations at ${path.resolve(plugin.metadata.baseDir, configuredMigrations)}, but the directory could not be resolved.`,
       });
     }
     if (configuredSeeds && !plugin.metadata.seedsDirectory) {
@@ -162,7 +166,7 @@ export function inspectResolvedAppServerPlugins(
         code: 'SERVER_SEEDS_DIRECTORY_MISSING',
         severity: 'error',
         packageName: plugin.metadata.packageName,
-        message: `${plugin.metadata.packageName} declares seeds at ${configuredSeeds}, but the directory could not be resolved.`,
+        message: `${plugin.metadata.packageName} declares seeds at ${path.resolve(plugin.metadata.baseDir, configuredSeeds)}, but the directory could not be resolved.`,
       });
     }
 
@@ -178,7 +182,7 @@ export function inspectResolvedAppServerPlugins(
           code: 'SERVER_JOB_LOCATION_MISSING',
           severity: 'error',
           packageName: plugin.metadata.packageName,
-          message: `${plugin.metadata.packageName} declares ${configuredJobs.length} Job location(s), but only ${plugin.metadata.jobLocations.length} could be resolved.`,
+          message: `${plugin.metadata.packageName} declares ${configuredJobs.length} Job location(s) relative to ${plugin.metadata.baseDir}, but only ${plugin.metadata.jobLocations.length} could be resolved.`,
         });
       }
     }
@@ -186,6 +190,8 @@ export function inspectResolvedAppServerPlugins(
       order: pluginOrder,
       packageName: plugin.metadata.packageName,
       version: plugin.metadata.version,
+      rootDir: plugin.metadata.rootDir,
+      baseDir: plugin.metadata.baseDir,
       contributions: {
         serviceProviders: plugin.definition.serviceProviders.length,
         routes: plugin.definition.routes.length,

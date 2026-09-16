@@ -242,9 +242,9 @@ if (!(await builder.hasCollection('orders'))) {
 
 ## Schema 与 Metadata
 
-Builder 修改物理 Schema，并默认同步能从定义中提取的补充 Metadata，例如 Collection/Field 的 `title`、`description`、naming 和 Relation 信息。物理类型、nullable、default、Index 和 Constraint 仍以数据库为准。
+Builder 修改物理 Schema，并同步能从定义中提取的补充 Metadata，包括数据读写依赖的逻辑字段类型、Relation 和乐观锁配置，以及 Collection/Field 的 `title`、`description` 和 naming。物理类型、nullable、default、Index 和 Constraint 仍以数据库为准。
 
-只更新补充 Metadata 时，使用 `connection.collectionMetadata`。如果一次 Schema 操作不应同步 Metadata，可以传入 `syncMetadata: false`。
+Metadata 同步不可关闭，避免 Schema 变更后仍使用旧的逻辑类型处理输入和输出。只更新补充 Metadata 时，使用 `connection.collectionMetadata`；只预览变更时，使用 `dryRun`。
 
 ## 重命名和删除
 

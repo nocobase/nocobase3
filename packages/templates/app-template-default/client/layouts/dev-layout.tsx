@@ -1,6 +1,8 @@
 import type { AppClientRegisteredRoute } from '@nocobase/app-client/plugins';
 import type { ReactElement } from 'react';
 
+import { EMPTY_ARRAY } from '@/lib/constants';
+
 import { SurfaceLayout, type SurfaceCopy } from './surface-layout.js';
 
 const DEV_COPY: SurfaceCopy = {
@@ -25,7 +27,7 @@ export interface DevLayoutProps {
  */
 export function DevLayout({
   routeTree,
-  routes = [],
+  routes = EMPTY_ARRAY,
 }: DevLayoutProps): ReactElement {
   return (
     <SurfaceLayout copy={DEV_COPY} routes={routes} routeTree={routeTree} />

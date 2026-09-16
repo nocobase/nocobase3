@@ -33,12 +33,15 @@ const routes: readonly AppClientRouteContribution[] = [
 export default routes;
 ```
 
-The page module must default-export its component:
+The page module must default-export its component and wrap its content in `PageContainer` to use the shared page padding and spacing:
 
 ```tsx
 // client/pages/orders.tsx
+import type { ReactElement } from 'react';
+import { PageContainer } from '@/components/page-container';
+
 export default function OrdersPage(): ReactElement {
-  return <section className='p-6'>...</section>;
+  return <PageContainer>...</PageContainer>;
 }
 ```
 
@@ -86,7 +89,7 @@ defineSettingsRoutes([
 ]);
 ```
 
-`navigation` puts the page in the settings navigation. `access` is checked before the page loads; when it is denied the page disappears from navigation and a direct URL will not load the component.
+`navigation` puts the page in the settings navigation. The header shows the Settings entry only when at least one such page is accessible. `access` is checked before the page loads; when it is denied the page disappears from navigation and a direct URL will not load the component.
 
 A settings page without `access` is open to every signed-in user who can reach the settings area. Declare `access` explicitly on anything sensitive, and enforce the same rule on the server.
 
@@ -109,6 +112,41 @@ All three route functions support recursive `children`. A group has `name`, `nav
 Groups do not render business components. Pages must place `<Outlet />` explicitly where child content belongs. See [child routes](client-child-routes.md) for complete examples and verification.
 
 A navigable page normally changes `client/routes.ts`, its page component, and `client/locales/`. Do not edit the shell or a ServiceProvider merely to add a menu.
+
+## Putting the page in a breadcrumb trail
+
+The owning layout supplies the route tree: `AppShell` for business pages, and `SurfaceLayout` for Settings and Dev pages. `StandalonePageLayout` does not currently supply one, so breadcrumbs there render nothing.
+
+`navigation` controls menu entries; `breadcrumb` independently supplies a trail title. Declare both when a route belongs in both. Breadcrumb titles are static translation keys resolved in the owning package's namespace and are allowed on parameterized paths.
+
+```ts
+{
+  name: 'orders',
+  path: '/orders',
+  navigation: { title: 'navigation.orders', icon: ShoppingCart },
+  breadcrumb: { title: 'navigation.orders' },
+  componentLoader: () => import('./pages/orders/index.js'),
+}
+```
+
+The page places `<Breadcrumbs />` itself, above its heading, inside `PageContainer`, which supplies the shared page spacing:
+
+```tsx
+<PageContainer className='mx-auto max-w-6xl'>
+  <Breadcrumbs />
+  <PageHeader
+    title={t('orders.title')}
+    actions={<Button>{t('orders.create')}</Button>}
+  />
+</PageContainer>
+```
+
+The trail follows the matched route hierarchy:
+
+- Only routes declaring `breadcrumb` appear; Tab, dialog, and drawer routes leave it unset.
+- It renders only when at least two matched routes declare `breadcrumb`. Having a parent route alone is not enough.
+- Earlier page entries link to their resolved paths; groups without a component render as plain text. The last entry is the current page and is not a link.
+- Titles describe the page type, such as “Order detail”. Record-specific titles, such as “Order #42”, belong in the page heading.
 
 ## Customizing a plugin's page
 
@@ -137,3 +175,7 @@ Do not declare product routes in any of them. They render routes; `client/routes
 - A signed-out visit to a `required` page redirects to sign-in.
 - A settings page with `access` disappears from navigation when denied, and its direct URL does not load the component.
 - The page's chunk loads on navigation rather than in the initial bundle.
+
+Account-menu sign-out checks the Better Auth result for an error before refreshing the session. Keep failures visible through the localized error toast; do not simulate sign-out by redirecting while the server session remains valid.
+
+The authorization provider clears the permission snapshot before rendering a new session. Route navigation and page guards subscribe to the authorization revision; preserve these checks when customizing the shell so account changes and permission updates take effect without a reload. Pending checks hide protected content, and failed checks deny access.

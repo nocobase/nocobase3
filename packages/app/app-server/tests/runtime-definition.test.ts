@@ -1,13 +1,7 @@
 import { Application } from '../src/application/index.js';
 import type { AppRuntimeContext } from '../src/runtime/definition.js';
 import { defaultAppConfigs } from '../src/config/index.js';
-import {
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  symlinkSync,
-  writeFileSync,
-} from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -130,28 +124,12 @@ function createScope(rootDir: string): AppScope {
   };
 }
 
-const PLUGIN_PACKAGE = '@nocobase/app-plugin-service-provider-example';
-
 function createAppRoot(): string {
   const rootDir = mkdtempSync(path.join(tmpdir(), 'nocobase-app-runtime-'));
   tempDirs.push(rootDir);
   writeFileSync(
     path.join(rootDir, 'package.json'),
     JSON.stringify({ name: '@example/customer-app' }),
-  );
-
-  // The plugin has to be resolvable from the application root, which is what `resolveAppServerPlugins` looks up. A
-  // temporary directory has no `node_modules` of its own and inherits none, so the one plugin these tests configure
-  // is linked in explicitly.
-  const scopeDir = path.join(rootDir, 'node_modules', '@nocobase');
-  mkdirSync(scopeDir, { recursive: true });
-  symlinkSync(
-    path.resolve(
-      import.meta.dirname,
-      '../../../examples/app-plugin-service-provider-example',
-    ),
-    path.join(scopeDir, PLUGIN_PACKAGE.replace('@nocobase/', '')),
-    'dir',
   );
 
   return rootDir;

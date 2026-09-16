@@ -1,7 +1,5 @@
 import { createRequire } from 'node:module';
 import type {
-  BaseConnectionConfig,
-  ConnectionConfig,
   DatabaseCapabilities,
   DatabaseDriverDefinition,
   DatabaseDriverRuntimeContext,
@@ -12,25 +10,12 @@ import { rawRows } from '@nocobase/db';
 import type { Knex } from 'knex';
 import { DamengSchemaInspector } from './inspectors/dameng.js';
 
+import type { DamengConnectionConfig } from './config.js';
+export type { DamengConnectionConfig } from './config.js';
+
 const require = createRequire(import.meta.url);
 const DamengClient = require('knex-dm') as typeof Knex.Client;
 const dmdb = require('dmdb') as { OUT_FORMAT_OBJECT: number };
-
-export interface DamengConnectionConfig extends BaseConnectionConfig {
-  dialect: 'dameng';
-  connectString?: string;
-  host?: string;
-  port?: number;
-  database?: string;
-  schema?: string;
-  username?: string;
-  password?: string;
-  fetchAsString?: string[];
-  fetchAsBuffer?: string[];
-  compatible?: 'oracle' | 'mysql';
-  parseJson?: boolean;
-  sqlTransformer?: (sql: string) => string;
-}
 
 export type DamengOptions = Omit<
   DamengConnectionConfig,
@@ -71,7 +56,10 @@ async function decodeDamengLobRow(
 const ISO_INSTANT_PATTERN =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/;
 
-export const damengDriver: DatabaseDriverDefinition<'dameng'> = {
+export const damengDriver: DatabaseDriverDefinition<
+  'dameng',
+  DamengConnectionConfig
+> = {
   dialect: 'dameng',
   packageName: '@nocobase/db-dameng',
   nativeDriver: 'dmdb',
@@ -413,8 +401,7 @@ export const damengDriver: DatabaseDriverDefinition<'dameng'> = {
       },
     },
   }),
-  resolveConnection: (source: ConnectionConfig) => {
-    const config = source as unknown as DamengConnectionConfig;
+  resolveConnection: (config) => {
     assertDriverOptions(config.driverOptions, [
       'connectString',
       'connectionString',

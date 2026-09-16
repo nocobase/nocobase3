@@ -7,6 +7,59 @@ const zhCN: AppResource = {
       '打开弹窗或抽屉，再打开下一层。关闭子层后可以继续编辑草稿。每一层都有独立的网址。',
     openDialog: '打开弹窗',
     openDrawer: '打开抽屉',
+    dialogCardTitle: '弹窗路由',
+    dialogCardDescription: '通过居中且可分享的网址，让用户专注完成当前任务。',
+    dialogPattern: '居中弹层',
+    dialogFeatureFocus: '聚焦单一任务流程',
+    dialogFeatureNested: '可以打开子抽屉',
+    dialogFeatureConfirm: '支持关闭前确认',
+    drawerCardTitle: '抽屉路由',
+    drawerCardDescription: '保留底层页面上下文，同时在侧边面板中处理次要任务。',
+    drawerPattern: '侧边面板',
+    drawerFeatureContext: '保留页面上下文',
+    drawerFeatureNested: '可以打开子弹窗',
+    drawerFeatureHistory: '支持浏览器历史记录',
+    guideTitle: '尝试嵌套流程',
+    guideDescription:
+      '在不同层级之间切换，观察地址栏和浏览器历史如何反映当前路由。',
+    stepOneTitle: '打开一层',
+    stepOneDescription: '从上面的卡片开始打开弹窗或抽屉。',
+    stepTwoTitle: '继续打开下一层',
+    stepTwoDescription: '使用弹层内的操作继续深入下一层。',
+    stepThreeTitle: '返回草稿',
+    stepThreeDescription: '关闭子层后，父层会保留自己的本地状态。',
+    deepLinks: '直接打开：',
+    openDialogDrawer: '弹窗 → 抽屉',
+    openDrawerDialog: '抽屉 → 弹窗',
+    currentRoute: '当前路由',
+    stateDescription:
+      '每一层都是真实路由。使用浏览器前进和后退可以沿着同一流程移动。',
+    preview: '预览',
+    newExample: '新建示例',
+    childPagesCardTitle: '多级子页面',
+    childPagesCardDescription:
+      '打开子页面而不是弹层，观察面包屑如何逐级增加一层。',
+    openChildPages: '打开子页面',
+    childPagesTitle: '多级子页面',
+    childPagesDescription:
+      '这里的每一项都是独立的页面而不是弹层，打开后会替换当前内容，并为面包屑增加一层。',
+    openTopic: '打开页面',
+    openTopicDialog: '打开弹窗',
+    topicQuotation: '报价单流转',
+    topicQuotationSummary: '把报价单流转给负责该客户的审核人。',
+    topicOnboarding: '入职清单',
+    topicOnboardingSummary: '跟踪新同事第一周需要完成的步骤。',
+    topicRenewal: '续费提醒',
+    topicRenewalSummary: '在订阅到期之前通知负责人。',
+    topicHint:
+      '打开这个页面后，上方的面包屑增加了一层，因为它是一个可以返回的位置。',
+    topicOverlayHint:
+      '打开上方的弹窗后面包屑不会变化：地址栏变了，但弹层并不是另一个目的地。',
+    topicDialogTitle: '页面之上的弹层',
+    topicDialogDescription:
+      '这个弹窗是它背后页面的子路由，它没有命名任何目的地。',
+    topicDialogHint:
+      '地址栏变了，但面包屑没有变：你仍然停留在弹层背后的页面上。',
     dialogTitle: '弹窗示例',
     drawerTitle: '抽屉示例',
     hint: '输入草稿后打开子层，关闭子层即可继续编辑。',
@@ -67,6 +120,11 @@ const zhCN: AppResource = {
       title: '数字类型',
       description:
         '对比 INTEGER、BIGINT、DECIMAL、FLOAT、DOUBLE 的读取值、返回类型及聚合结果。',
+    },
+    externalCrm: {
+      title: '外部数据库',
+      description:
+        '通过 external 连接和元数据文件，读取另一个系统拥有的数据库中的订单和客户。',
     },
     eyebrow: 'NocoBase 示例中心',
     title: '从可运行的示例开始',
@@ -158,7 +216,42 @@ const zhCN: AppResource = {
     confirm: '确认',
     language: '语言',
   },
+  notices: {
+    serverLocaleFallback: '服务端不支持该语言，服务端内容已回落为英文。',
+    languageChangeFailed: '未能完成语言切换，请重试。',
+  },
+  externalCrm: {
+    eyebrow: '外部数据库示例',
+    title: 'CRM 订单',
+    description:
+      '这些数据存放在一个不属于本应用的数据库里。externalCrm 连接只读取它的结构、从不修改，并从 database/externalCrm/collections/*/metadata.json 叠加标题和客户关系。页面全部按逻辑名访问，crm_ 表前缀不会出现在这里。',
+    readOnly: '只读',
+    customers: '{{count}} 位客户',
+    filter: '按状态筛选',
+    status: {
+      all: '全部订单',
+      paid: '已支付',
+      shipped: '已发货',
+      draft: '草稿',
+    },
+    refresh: '刷新',
+    loading: '正在加载订单…',
+    loadError: '无法加载订单。请确认已登录，且外部 CRM 数据库可以访问。',
+    retry: '重试',
+    empty: '没有符合条件的订单',
+    emptyHint:
+      'SQLite 替身库会在启动时写入样例订单；接到真实 CRM 后显示的是它的数据。',
+    columns: {
+      orderNo: '订单号',
+      customer: '客户',
+      status: '状态',
+      totalAmount: '金额',
+      placedAt: '下单时间',
+    },
+    note: '不开放写入：这份数据归 CRM 所有，路由只注册查询动作，Policy 也只授予读取。',
+  },
   account: {
+    signOutFailed: '退出登录失败，请重试。',
     openMenu: '打开账户菜单',
     fallback: '账户',
     signOut: '退出登录',
@@ -166,6 +259,7 @@ const zhCN: AppResource = {
   },
   navigation: {
     numbers: '数字类型',
+    externalCrm: '外部 CRM',
     routeOverlays: '路由弹窗与抽屉',
     articles: '文章',
     home: '首页',
@@ -174,6 +268,7 @@ const zhCN: AppResource = {
     expand: '展开导航',
     collapse: '收起导航',
     label: '应用导航',
+    breadcrumb: '面包屑',
   },
 };
 

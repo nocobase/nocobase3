@@ -4,11 +4,16 @@ import {
   appActionState,
   appManagementStatus,
   appStatusLabel,
+  applicationUrl,
   formatDate,
   formatDateTime,
   readError,
 } from '../client/pages/hub/utils.js';
-import type { AppOverview, AppSummary } from '../client/pages/hub/types.js';
+import type {
+  AppDetail,
+  AppOverview,
+  AppSummary,
+} from '../client/pages/hub/types.js';
 
 const summary = (overrides: Partial<AppSummary> = {}): AppSummary => ({
   app: {
@@ -27,6 +32,16 @@ const summary = (overrides: Partial<AppSummary> = {}): AppSummary => ({
 });
 
 describe('Hub App status and action mapping', () => {
+  it('opens hosted apps through the public entry instead of the private Host port', () => {
+    const app = {
+      hostUrl: '/',
+      deployment: { basePath: '/customer', desiredReleaseId: 'release-1' },
+    } as AppDetail;
+    expect(applicationUrl(app)).toBe('/customer/');
+    expect(
+      applicationUrl({ ...app, hostUrl: 'https://apps.example.com' }),
+    ).toBe('https://apps.example.com/customer');
+  });
   it('prioritizes Host and deployment state over runtime state', () => {
     expect(
       appManagementStatus(

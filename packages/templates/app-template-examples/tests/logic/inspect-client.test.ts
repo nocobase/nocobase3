@@ -108,6 +108,31 @@ describe('client inspection', () => {
         id: '@nocobase/app-template-examples:routeDrawerDialogExample',
         path: '/route-overlays/drawer/dialog',
       },
+      {
+        auth: 'required',
+        id: '@nocobase/app-template-examples:routeChildPages',
+        path: '/route-overlays/pages',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-template-examples:routeChildPageQuotation',
+        path: '/route-overlays/pages/quotation',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-template-examples:routeChildPageDialog',
+        path: '/route-overlays/pages/quotation/dialog',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-template-examples:routeChildPageOnboarding',
+        path: '/route-overlays/pages/onboarding',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-template-examples:routeChildPageRenewal',
+        path: '/route-overlays/pages/renewal',
+      },
 
       {
         auth: 'required',
@@ -118,6 +143,11 @@ describe('client inspection', () => {
         auth: 'required',
         id: '@nocobase/app-template-examples:numeric-examples',
         path: '/numeric-examples',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-template-examples:external-crm',
+        path: '/external-crm',
       },
       {
         auth: 'guest',
@@ -293,13 +323,14 @@ describe('client inspection', () => {
         id: '@nocobase/app-plugin-authentication:authentication',
         order: 2,
       },
+      { id: '@nocobase/app-plugin-authorization:authorization', order: 3 },
       {
         id: '@nocobase/app-plugin-notification-provider:notification-host',
-        order: 3,
+        order: 4,
       },
       {
         id: '@nocobase/app-plugin-routes-example:routes-example',
-        order: 4,
+        order: 5,
       },
     ]);
     expect(

@@ -1,6 +1,6 @@
 // @vitest-environment node
 
-// internal-docs/cli/README.md tells users to install and remove plugins by running these scripts inside their app. Nothing at
+// Users install and remove plugins by running these scripts inside their app. Nothing at
 // runtime depends on them, so dropping one — a bad merge resolution did exactly that once — breaks the documented
 // workflow silently: the app still builds, starts, and passes every other test. These assertions are the alarm.
 import { existsSync, readFileSync } from 'node:fs';
@@ -23,11 +23,7 @@ const appPackage = JSON.parse(
 
 const scripts = appPackage.scripts ?? {};
 
-function normalizeScript(command: string | undefined): string | undefined {
-  return command?.replace(/^NODE_OPTIONS=--openssl-legacy-provider\s+/, '');
-}
-
-/** The command surface documented in internal-docs/cli/README.md, mapped to what it must run. */
+/** The application's plugin command surface, mapped to what it must run. */
 const DOCUMENTED_SCRIPTS: Readonly<Record<string, string>> = {
   'plugin:register': 'nocobase plugin register',
   'plugin:inspect': 'nocobase plugin inspect',
@@ -43,7 +39,7 @@ const DOCUMENTED_SCRIPTS: Readonly<Record<string, string>> = {
 
 describe('documented plugin commands', () => {
   it.each(Object.entries(DOCUMENTED_SCRIPTS))('exposes %s', (name, command) => {
-    expect(normalizeScript(scripts[name])).toBe(command);
+    expect(scripts[name]).toBe(command);
   });
 
   it('declares the CLI that the plugin scripts invoke', () => {

@@ -1,9 +1,48 @@
-import spawn from 'cross-spawn';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { readCliHooks, runHookStage } from './utils/cli-hooks.mjs';
+// Help must work before dependencies are loaded, hooks run, or an existing dist is cleared.
+if (
+  process.argv
+    .slice(2)
+    .some((argument) => argument === '--help' || argument === '-h')
+) {
+  console.log(`Usage: pnpm build [options]
+
+Build the client, server, CLI, and production dependencies into dist/.
+
+Options:
+  -h, --help               Show this help and exit without building.
+  --target <target>        Deployment platform (default: current).
+                          Common targets: linux-x64, linux-arm64,
+                          linux-x64-musl, linux-arm64-musl,
+                          darwin-x64, darwin-arm64, win32-x64, win32-arm64.
+                          Linux without a suffix uses glibc; Alpine uses musl.
+  --node-version <major>   Target Node major for an explicit platform target.
+                          Known ABI mappings: 20, 22, 24, 26 (default: 24).
+                          current uses the running Node version and ABI.
+                          The application requires Node >=24.
+  --tar                   Also create storage/dist.tar.gz containing dist/
+                          and config.example.yml after a successful build.
+
+Examples:
+  pnpm build
+  pnpm build --target linux-x64 --node-version 24
+  pnpm build --target=linux-arm64-musl --node-version=24 --tar
+
+Deployment metadata:
+  dist/package.json -> nocobase.buildTarget
+  Fields: platform, arch, libc (Linux only), nodeMajor, nodeAbi.
+  Use these with engines.node to check the deployment runtime.
+`);
+  process.exit(0);
+}
+
+const { generateDatabaseManifests } =
+  await import('@nocobase/dev-config/build/database-manifests');
+const { default: spawn } = await import('cross-spawn');
+const { readCliHooks, runHookStage } = await import('./utils/cli-hooks.mjs');
 
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -14,6 +53,50 @@ const distDir = path.join(rootDir, 'dist');
 const appPackageName = JSON.parse(
   fs.readFileSync(path.join(rootDir, 'package.json'), 'utf8'),
 ).name;
+
+function copyCollectionMetadata() {
+  const databaseDir = path.join(rootDir, 'database');
+  if (!fs.existsSync(databaseDir)) return;
+  let copied = 0;
+  for (const connection of fs.readdirSync(databaseDir, {
+    withFileTypes: true,
+  })) {
+    if (!connection.isDirectory()) continue;
+    const collectionsDir = path.join(
+      databaseDir,
+      connection.name,
+      'collections',
+    );
+    if (!fs.existsSync(collectionsDir)) continue;
+    for (const entry of fs.readdirSync(collectionsDir, {
+      withFileTypes: true,
+    })) {
+      if (
+        !entry.isDirectory() ||
+        entry.name.startsWith('.') ||
+        entry.name.startsWith('_')
+      )
+        continue;
+      const source = path.join(collectionsDir, entry.name, 'metadata.json');
+      if (!fs.existsSync(source)) continue;
+      const target = path.join(
+        distDir,
+        'database',
+        connection.name,
+        'collections',
+        entry.name,
+        'metadata.json',
+      );
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.copyFileSync(source, target);
+      copied += 1;
+    }
+  }
+  console.log(
+    `Copied ${copied} Collection metadata file${copied === 1 ? '' : 's'} into dist/database`,
+  );
+}
+
 const envOutputPath = path.join(distDir, '.env');
 const serverEnvKeys = new Set([
   'NODE_ENV',
@@ -241,7 +324,17 @@ run('Rewrite server path aliases', 'pnpm', [
   '-p',
   'tsconfig.server.json',
 ]);
+// tsc emits only TypeScript. An external connection reads its supplemental metadata from
+// `database/<connection>/collections/*/metadata.json` at runtime, so those files have to travel with the server or a
+// deployment resolves every external Collection without titles or relations and reports nothing wrong. Only
+// `metadata.json` is copied: `collection.json` and `schema.json` are derived output nothing reads back.
+copyCollectionMetadata();
 runHookStage(buildHooks, 'afterServerBuild', run);
+await generateDatabaseManifests({
+  sourceDir: path.join(rootDir, 'database'),
+  outputDir: path.join(distDir, 'database'),
+});
+
 writeDistEnv();
 run('Generate server package', 'node', [
   './scripts/utils/build-server-dist-package.mjs',

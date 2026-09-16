@@ -8,6 +8,7 @@ import {
 } from 'better-auth';
 import { username } from 'better-auth/plugins';
 import type { Context, MiddlewareHandler } from 'hono';
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { databaseAdapter } from './better-auth/database-adapter.js';
 
 export interface AuthOptions extends Omit<BetterAuthOptions, 'database'> {
@@ -151,7 +152,17 @@ export class Auth {
         await next();
         return;
       }
-      context.set('auth', await this.getSession(context.req.raw.headers));
+      try {
+        context.set('auth', await this.getSession(context.req.raw.headers));
+      } catch (error) {
+        if (error instanceof APIError) {
+          return context.json(
+            error.body ?? { code: error.status, message: error.message },
+            error.statusCode as ContentfulStatusCode,
+          );
+        }
+        throw error;
+      }
       await next();
     };
   }
@@ -162,7 +173,19 @@ export class Auth {
         await next();
         return;
       }
-      const auth = await this.getSession(context.req.raw.headers);
+      let auth: AuthSession;
+      try {
+        auth = await this.getSession(context.req.raw.headers);
+        // A refused credential is Better Auth's APIError; answer with its own status and body.
+      } catch (error) {
+        if (error instanceof APIError) {
+          return context.json(
+            error.body ?? { code: error.status, message: error.message },
+            error.statusCode as ContentfulStatusCode,
+          );
+        }
+        throw error;
+      }
       if (!auth) {
         return context.json(
           {

@@ -1,3 +1,5 @@
+import { PageContainer } from '../components/page-container.js';
+import { PageHeader } from '../components/page-header.js';
 import { apiClientToken, useService } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { useId, useState, type ReactElement } from 'react';
@@ -211,22 +213,24 @@ function OperationCard({
       role='region'
       aria-label={operation}
       id={`relation-${operation}`}
-      className='min-w-0'
+      className='min-w-0 rounded-xl shadow-2xs'
     >
       <CardHeader>
         <div className='flex flex-wrap items-center gap-3'>
-          <CardTitle>
+          <CardTitle className='text-base font-semibold'>
             <code>{operation}</code> · {t(`lab_${operation}_title`)}
           </CardTitle>
           <Badge variant='outline'>
             {t(operation === 'set' ? 'labManyOnly' : 'labBoth')}
           </Badge>
         </div>
-        <CardDescription>{t(`lab_${operation}_description`)}</CardDescription>
+        <CardDescription className='text-xs leading-relaxed'>
+          {t(`lab_${operation}_description`)}
+        </CardDescription>
       </CardHeader>
       <CardContent className='space-y-5'>
         <div className='flex flex-wrap items-end gap-3'>
-          <div className='w-64 space-y-2'>
+          <div className='w-full space-y-2 sm:w-64'>
             <label htmlFor={`${formId}-relation`}>{t('labRelation')}</label>
             <Select
               value={relation}
@@ -284,20 +288,39 @@ function OperationCard({
           )}
         </div>
         {!lab && (
-          <p className='text-sm text-muted-foreground'>{t('labPrepareHint')}</p>
+          <p className='text-xs leading-relaxed text-muted-foreground'>
+            {t('labPrepareHint')}
+          </p>
         )}
         {lab && (
           <p className='break-all text-xs text-muted-foreground'>
             {t('labProject')}: <code>{lab.projectId}</code>
           </p>
         )}
-        {busy && <p role='status'>{t('loading')}</p>}
+        {busy && (
+          <p
+            role='status'
+            className='text-xs leading-relaxed text-muted-foreground'
+          >
+            {t('loading')}
+          </p>
+        )}
         {error && (
-          <p role='alert' className='text-destructive'>
+          <p
+            role='alert'
+            className='rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs font-medium text-destructive'
+          >
             {error}
           </p>
         )}
-        {saved && <p role='status'>{t('labSaved', { operation })}</p>}
+        {saved && (
+          <p
+            role='status'
+            className='text-xs leading-relaxed text-muted-foreground'
+          >
+            {t('labSaved', { operation })}
+          </p>
+        )}
         {lab && (
           <form
             className='space-y-4 rounded-lg border bg-muted/20 p-4'
@@ -341,7 +364,7 @@ function OperationCard({
                     </SelectContent>
                   </Select>
                   {!options.length && (
-                    <p className='text-sm text-muted-foreground'>
+                    <p className='text-xs leading-relaxed text-muted-foreground'>
                       {t('labNoEligible')}
                     </p>
                   )}
@@ -368,7 +391,7 @@ function OperationCard({
                       )}
                     </label>
                   ))}
-                  <p className='text-sm text-muted-foreground'>
+                  <p className='text-xs leading-relaxed text-muted-foreground'>
                     {t('labSetEmpty')}
                   </p>
                 </fieldset>
@@ -443,16 +466,18 @@ function OperationCard({
                 )}
             </fieldset>
             {relation === 'profile' && (
-              <p className='text-sm text-muted-foreground'>
+              <p className='text-xs leading-relaxed text-muted-foreground'>
                 {t(currentProfile ? 'labCurrentProfile' : 'labNoProfile')}
                 {currentProfile ? `: ${currentProfile.summary}` : ''}
               </p>
             )}
             {operation === 'delete' && (
-              <p className='text-destructive'>{t('labDeleteHint')}</p>
+              <p className='rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs font-medium text-destructive'>
+                {t('labDeleteHint')}
+              </p>
             )}
             {operation === 'upsert' && (
-              <p className='text-sm text-muted-foreground'>
+              <p className='text-xs leading-relaxed text-muted-foreground'>
                 {t('labUpsertHint')}
               </p>
             )}
@@ -464,10 +489,10 @@ function OperationCard({
               {t('labExecute', { operation })}
             </Button>
             <details>
-              <summary className='cursor-pointer text-sm'>
+              <summary className='cursor-pointer text-xs font-medium text-foreground'>
                 {t('labRequest')}
               </summary>
-              <pre className='mt-2 max-h-80 overflow-auto rounded-md bg-muted p-3 text-xs'>
+              <pre className='mt-2 max-h-80 overflow-auto rounded-lg border bg-muted/40 p-3 font-mono text-xs text-foreground'>
                 {JSON.stringify(relationLabRequest(lab, input), null, 2)}
               </pre>
             </details>
@@ -476,9 +501,11 @@ function OperationCard({
         {state && (
           <div className='space-y-2'>
             <h3 className='font-medium'>{t('labTargets')}</h3>
-            <p className='text-sm text-muted-foreground'>{t('labTableHint')}</p>
+            <p className='text-xs leading-relaxed text-muted-foreground'>
+              {t('labTableHint')}
+            </p>
             <Table aria-label={`${operation} — ${t('labTargets')}`}>
-              <TableHeader>
+              <TableHeader className='bg-muted/30'>
                 <TableRow>
                   <TableHead>{t('labRecord')}</TableHead>
                   <TableHead>{t('labLinked')}</TableHead>
@@ -537,11 +564,11 @@ function OperationCard({
           </div>
         )}
         {call && (
-          <details className='rounded-lg border p-3'>
-            <summary className='cursor-pointer font-medium'>
+          <details className='rounded-lg border bg-muted/15 p-3 text-xs'>
+            <summary className='cursor-pointer text-xs font-medium text-foreground'>
               {t('labLastCall')}
             </summary>
-            <pre className='mt-3 max-h-96 overflow-auto text-xs'>
+            <pre className='mt-3 max-h-96 overflow-auto rounded-lg border bg-muted/40 p-3 font-mono text-xs text-foreground'>
               {JSON.stringify(call, null, 2)}
             </pre>
           </details>
@@ -553,27 +580,25 @@ function OperationCard({
 export default function RelationMutationsPage(): ReactElement {
   const { t } = useTranslation(NS);
   return (
-    <main className='mx-auto max-w-7xl space-y-6 p-6'>
-      <header className='space-y-3'>
-        <h1 className='text-3xl font-semibold'>
-          {t('relationMutationsTitle')}
-        </h1>
-        <p className='max-w-4xl text-muted-foreground'>{t('labIntro')}</p>
-        <nav aria-label={t('labOperations')} className='flex flex-wrap gap-2'>
-          {relationOperations.map((operation) => (
-            <a
-              key={operation}
-              href={`#relation-${operation}`}
-              className='rounded-md border px-3 py-1 text-sm font-medium'
-            >
-              {operation}
-            </a>
-          ))}
-        </nav>
-      </header>
+    <PageContainer>
+      <PageHeader
+        description={t('labIntro')}
+        title={t('relationMutationsTitle')}
+      />
+      <nav aria-label={t('labOperations')} className='flex flex-wrap gap-2'>
+        {relationOperations.map((operation) => (
+          <a
+            key={operation}
+            href={`#relation-${operation}`}
+            className='rounded-lg border bg-card px-3 py-1.5 text-xs font-medium shadow-2xs transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+          >
+            {operation}
+          </a>
+        ))}
+      </nav>
       {relationOperations.map((operation) => (
         <OperationCard key={operation} operation={operation} />
       ))}
-    </main>
+    </PageContainer>
   );
 }

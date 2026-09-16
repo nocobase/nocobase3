@@ -1,3 +1,4 @@
+import type { ConnectionConfigFromDrivers } from '@nocobase/db';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -33,10 +34,13 @@ import {
   createAppSeeder,
   createConfigPaths,
   prepareAppDatabaseStorage,
-  type AppDatabaseConfig,
+  type AppDatabaseConfig as GenericAppDatabaseConfig,
 } from '../src/index.js';
 
 const drivers = { postgres, mysql, sqlite, oracle, mssql };
+type AppDatabaseConfig = GenericAppDatabaseConfig<
+  ConnectionConfigFromDrivers<typeof drivers>
+>;
 
 beforeEach(() => {
   createDatabaseMigratorMock.mockReset();

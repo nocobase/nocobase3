@@ -19,6 +19,8 @@ Do not use it to upgrade the template this application was generated from. That 
 
 For pages with Tabs, nested pages, or navigation groups, read [child routes](references/client-child-routes.md). Page-level Tabs use child routes by default, even when the user does not mention routing. Declare their content under the parent route and derive the selected Tab from the URL. Opening the parent URL redirects to the default accessible Tab with replace and preserves query parameters; explicit Tab URLs retain their selection. Follow an explicit user request for a different interaction.
 
+Examples retains Default’s Users and API Keys integration alongside its demonstrations. Users lists direct Authorization Permission Sets as application roles; authenticated default access remains separate. API Keys is configured in both authentication factories and mounted under Settings. Keep these product integrations aligned with Default.
+
 ## Before you start
 
 Read the application's `AGENTS.md` first for the rules that apply everywhere. This Skill's references are the detail behind it.
@@ -41,14 +43,15 @@ Build the feature in the application. Do not run a plugin generator, create a `p
 
 This application ships with plugins that already implement whole categories of requirement, each publishing its own Skill under `.agents/skills/` (run `pnpm plugin:skills:sync` if that directory is missing or stale):
 
-| The requirement sounds like                              | Read the Skill for                    |
-| -------------------------------------------------------- | ------------------------------------- |
-| Approvals, multi-step processes, "when X happens then Y" | `@nocobase/app-plugin-workflow`       |
-| Email, IM, or in-app messages                            | `@nocobase/app-plugin-notification`   |
-| Roles, permissions, per-user or per-record access        | `@nocobase/app-plugin-authorization`  |
-| Sign-in, registration, sessions                          | `@nocobase/app-plugin-authentication` |
-| File upload and metadata through Repository              | `@nocobase/app-plugin-file`           |
-| Translated text and language switching                   | `@nocobase/app-plugin-i18n`           |
+| The requirement sounds like                               | Read the Skill for                    |
+| --------------------------------------------------------- | ------------------------------------- |
+| Approvals, multi-step processes, "when X happens then Y"  | `@nocobase/app-plugin-workflow`       |
+| Email, IM, or in-app messages                             | `@nocobase/app-plugin-notification`   |
+| Roles, permissions, per-user or per-record access         | `@nocobase/app-plugin-authorization`  |
+| Sign-in, registration, sessions                           | `@nocobase/app-plugin-authentication` |
+| User administration and application-owned role assignment | `@nocobase/app-plugin-users`          |
+| File upload and metadata through Repository               | `@nocobase/app-plugin-file`           |
+| Translated text and language switching                    | `@nocobase/app-plugin-i18n`           |
 
 Read the relevant Skill before writing the feature. Implementing a permission system, a notification sender, or a scheduler by hand when a registered plugin provides one is the most expensive mistake available here.
 
@@ -68,6 +71,7 @@ Read the page for the task in front of you. Do not read all of them.
 | Add an API endpoint, a webhook, or a callback; authenticate and authorize it     | [server routes](references/server-routes.md)                     |
 | Query or write data, resolve the database, work with transactions                | [database and data access](references/database-and-data.md)      |
 | Create a table, alter a column, add an index, write required initial data        | [migrations and seeds](references/migrations.md)                 |
+| Switch the database, register a dialect, add a second connection                 | [database connections](references/database-connections.md)       |
 | Make text translatable, add a locale, reword a plugin's string                   | [internationalization](references/i18n.md)                       |
 | Add a reusable service, share it across routes, run background or scheduled work | [services and jobs](references/services-and-jobs.md)             |
 | Write tests, choose a test layer, verify before finishing                        | [testing and verification](references/testing.md)                |
@@ -76,9 +80,15 @@ A feature with a page and an API usually needs four: migrations, server routes, 
 
 For creating, editing or removing theme presets, read [themes](references/themes.md). For any UI styling, read [the shared token reference](references/theme-tokens.md); prefer these tokens so AI-authored components respond to theme changes.
 
+## Database configuration factories
+
+Keep `@nocobase/db` in `dependencies` alongside the database driver. It supplies the driver's runtime peer and lets TypeScript resolve the inferred database configuration declaration through the public package name. Moving it to `devDependencies` can cause TS2883 in an installed application even while the source workspace builds successfully.
+
+Declare database defaults with `defineAppDatabaseConfig` from `@nocobase/app-server/database`. When switching or adding connections, read [database connections](references/database-connections.md) for complete examples, YAML overrides, schema ownership and verification.
+
 ## Where to work
 
-The Settings and Dev tools header entries stay visible on their destination pages. The Dev tools entry is development-only and must remain absent from production builds.
+The Settings header entry appears only when the user has an accessible page in the settings navigation, and stays visible on that page. The header reads the registered settings tree through `useClientApplication().runtime.settingsRouteTree`, reusing the application context. The Dev tools entry stays visible on its destination pages, is development-only, and must remain absent from production builds.
 
 Business code belongs in a small, stable set of places:
 
@@ -119,11 +129,18 @@ These cause real damage and appear in every reference:
 - **Every server route owns its own authentication and authorization.** Mounting under `/api` authenticates nothing.
 - **A migration is immutable history and self-contained.** Never import an evolving definition into one. Never edit one whose branch is merged.
 - **Every user-visible string goes through a translation key.**
+- **Wrap page content in `PageContainer`.** When creating a page or writing a page component, use `PageContainer` from `@/components/page-container` as its outer content container so page padding and spacing stay consistent. See [components and styling](references/components-and-styling.md#page-container).
 - **Visual consistency is application-wide.** Restyling only your part is a defect. Change the design tokens if a change is needed.
 - **Route paths never include the deployment base path.** The runtime restores it.
 - **Route navigation creates sidebar entries.** Declare `navigation` in `client/routes.ts`; Refine resources are for CRUD, not menus.
 - **Reach for the built-in mechanism first.** Changing framework structure is allowed when nothing else fits — comment it and update the docs.
 - **Tests live in `tests/` or `e2e/`,** never beside the source.
+
+## Development file watching
+
+`pnpm dev` checks native file watching before starting its children. If watcher resources are exhausted or native events are unavailable, it uses polling for client and server hot updates and disables agent annotations for that run, with a warning. An explicit `CHOKIDAR_USEPOLLING=true` selects the same mode. Configuration files use stat polling so atomic saves and newly created files restart the server without native directory watchers.
+
+Vite must exclude the application's entire `dist/` tree from development file watching. Its default exclusion covers only `dist/client`; watching the compiled server and vendored packages can cause `EMFILE` after a build. Keep the exclusion scoped to this application so linked workspace dependencies, including their `dist/` files, still receive hot updates.
 
 ## Remote backend development
 
@@ -137,6 +154,10 @@ Use `APP_SERVER_PORT` for the local entry port in both development modes. With `
 
 ## Finishing
 
+`pnpm build --help` (or `-h`) lists build options and exits without loading build dependencies, running hooks, or modifying `dist/`. Every successful build records `nocobase.buildTarget` in `dist/package.json`, including builds with no native modules: `platform`, `arch`, `libc`, `nodeMajor`, and `nodeAbi`. Use `libc` only for Linux; its value on other platforms is a compatibility placeholder. Deployment checks should compare these fields with the host runtime and also respect `engines.node`. With `--target current` (the default), the Node version and ABI come from the running process; an explicit platform target defaults to Node 24 unless `--node-version` is supplied.
+
+When building for another platform, pass `--target` and verify the native binaries retained in `dist/node_modules`. `better-sqlite3` 13 bundles N-API binaries for multiple platforms; Alpine targets need the `linuxmusl` binary, while other Linux targets use the `linux` binary.
+
 ```bash
 pnpm typecheck
 pnpm test
@@ -146,6 +167,6 @@ pnpm build
 
 Verify observable behavior, not just that the commands passed. [Testing and verification](references/testing.md) lists what to check for each kind of change.
 
-After touching `client/locales/` or `server/locales/`, run `pnpm nocobase app i18n:check`. It reports a language declared on one side alone, which the interface offers and the server then rejects.
+After touching `client/locales/` or `server/locales/`, run `pnpm nocobase app i18n:check`. It reports a language declared on one side alone and exits nonzero until the lists align. A client-only language is still supported at runtime and the server falls back to English; add matching server translations when server-produced text should use that language.
 
-Application startup defaults belong in `config.yml`: `i18n.defaultLocale` for the language, and `client.app.defaultColorScheme` and `client.app.defaultTheme` for appearance. Valid browser-local choices take precedence. Which languages the application offers is not configured — its own `client/locales/` and `server/locales/` are that list. See the i18n and themes references.
+Application startup defaults belong in `config.yml`: `i18n.defaultLocale` for the language, and `client.app.defaultColorScheme` and `client.app.defaultTheme` for appearance. Valid browser-local choices take precedence. Which languages the interface offers is not configured — `client/locales/` is that list, while `server/locales/` independently defines the server's translated languages. See the i18n and themes references.

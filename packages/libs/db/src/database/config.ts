@@ -1,41 +1,104 @@
+import type { Knex } from 'knex';
+
 import type { NamingOptions } from '../collection/types.js';
 import type { CollectionMetadataStore } from '../metadata/document-store.js';
 import type { DatabaseCapabilities } from '../schema/adapter.js';
-import type { Knex } from 'knex';
 import type { SchemaInspector } from '../schema/inspector/types.js';
 import type { DatabaseDriverRuntimeFactory } from './runtime.js';
 
-export interface DatabaseConfig {
+/**
+ * Declarative form of a Collection metadata store, for configuration that
+ * cannot carry an instance — a YAML file, or a literal in a test. The Manager
+ * resolves it once when the connection is first created.
+ */
+export interface DirectoryCollectionMetadataStoreConfig {
+  readonly type: 'directory';
+  /** Absolute path; a relative path resolves against the process working directory, so resolve it first. */
+  readonly directory: string;
+}
+
+export type CollectionMetadataStoreConfig =
+  DirectoryCollectionMetadataStoreConfig;
+
+/**
+ * Any connection, whichever dialect declares it. The constraint every
+ * connection-shaped type parameter in this package is written against.
+ */
+export interface ConnectionConfig extends BaseConnectionConfig {
+  dialect: string;
+}
+
+/** Alias for the dialect-independent connection constraint. */
+export type AnyConnectionConfig = ConnectionConfig;
+
+/** Configuration over connection shapes supplied by dialect packages. */
+export interface ExtensibleDatabaseConfig<
+  TConnection extends AnyConnectionConfig = AnyConnectionConfig,
+> {
   default?: string;
   /** Database drivers available to connections that use declarative configs. */
   drivers?: Record<string, DatabaseDriverRegistration>;
-  connections: Record<string, ConnectionConfig>;
-  metadataStore?: CollectionMetadataStore;
+  connections: Record<string, TConnection>;
+  metadataStore?: CollectionMetadataStore | CollectionMetadataStoreConfig;
 }
 
-/**
- * Configuration shape for a database that contributes a dialect unknown to
- * this package. The connection type is inferred from the caller, so a new
- * dialect package can add its own options without extending this union.
- */
-export interface ExtensibleDatabaseConfig<
-  TConnection extends BaseConnectionConfig & { dialect: string } =
-    BaseConnectionConfig & {
-      dialect: string;
-    },
-> {
-  default?: string;
-  drivers?: Record<string, DatabaseDriverRegistration>;
-  connections: Record<string, TConnection>;
-  metadataStore?: CollectionMetadataStore;
+/** Core configuration; use a connection type or drivers for dialect-specific checking. */
+export type DatabaseConfig<
+  TConnection extends ConnectionConfig = ConnectionConfig,
+> = ExtensibleDatabaseConfig<TConnection>;
+
+/** Extract the connection shape carried by a driver factory or descriptor. */
+export type DriverConnectionConfig<TDriver> = TDriver extends {
+  readonly driver: infer TDefinition;
 }
+  ? DriverConnectionConfig<TDefinition>
+  : TDriver extends DatabaseDriverDefinition<string, infer TConnection>
+    ? TConnection
+    : never;
+
+/** Every registration uses the driver's declared dialect, including unused entries. */
+type ValidatedDriverRegistrations<
+  TDrivers extends Record<string, DatabaseDriverRegistration>,
+> = {
+  [K in keyof TDrivers]: TDrivers[K] & { readonly dialect: K };
+};
+
+/** Connection shapes accepted by the registered driver factories or descriptors. */
+export type ConnectionConfigFromDrivers<
+  TDrivers extends Record<string, DatabaseDriverRegistration>,
+> = DriverConnectionConfig<
+  ValidatedDriverRegistrations<TDrivers>[keyof TDrivers]
+>;
+
+/** Declarative configuration checked against the application's registered drivers. */
+export type DatabaseConfigFromDrivers<
+  TDrivers extends Record<string, DatabaseDriverRegistration>,
+> = Omit<DatabaseConfig<ConnectionConfigFromDrivers<TDrivers>>, 'drivers'> & {
+  drivers: ValidatedDriverRegistrations<TDrivers>;
+};
 
 /**
  * A Dialect package's public driver descriptor. Core owns orchestration while
  * the descriptor owns native-driver, Knex, SQL, value, Inspector, and
  * application-composition behavior for one Dialect.
+ *
+ * The hooks are methods rather than function properties on purpose: TypeScript
+ * checks method parameters bivariantly, which is what lets a driver narrowed to
+ * its own connection type sit in the heterogeneous `drivers` map. What that
+ * gives up is a pairing the runtime enforces anyway — `resolveConnectionDriver`
+ * finds a driver by the connection's own dialect, so a driver is only ever
+ * handed a config of the dialect it declares.
+ *
+ * `TConfig` is the connection shape this driver reads. A dialect package names
+ * its own, and its hooks then receive that shape instead of one it has to
+ * assert its way out of — which is what every contributed dialect had to do,
+ * `dameng` through `source as unknown as DamengConnectionConfig`. The default
+ * is any connection, which is what the core call sites hold.
  */
-export interface DatabaseDriverDefinition<TDialect extends string = string> {
+export interface DatabaseDriverDefinition<
+  TDialect extends string = string,
+  TConfig extends AnyConnectionConfig = AnyConnectionConfig,
+> {
   readonly dialect: TDialect;
   readonly packageName?: string;
   /** Native driver package name owned by the dialect package. */
@@ -47,64 +110,59 @@ export interface DatabaseDriverDefinition<TDialect extends string = string> {
   readonly capabilities?: Partial<DatabaseCapabilities>;
   /** Creates the runtime strategy object used by the core adapters. */
   readonly createRuntime?: DatabaseDriverRuntimeFactory;
-  readonly createKnexClient?: (
-    config: unknown,
+  createKnexClient?(
+    config: TConfig,
     baseClient?: typeof Knex.Client,
-  ) => string | typeof Knex.Client;
-  readonly resolveConnection?: (config: ConnectionConfig) => {
+  ): string | typeof Knex.Client;
+  resolveConnection?(config: TConfig): {
     connection: unknown;
     searchPath?: string[];
     useNullAsDefault?: boolean;
   };
-  readonly createSchemaInspector?: (context: {
+  createSchemaInspector?(context: {
     connectionName: string;
-    config: unknown;
+    config: TConfig;
     resolveClient: () => Promise<Knex>;
-  }) => SchemaInspector;
+  }): SchemaInspector;
   /**
    * Applies application-level defaults and path normalization owned by the
    * dialect package. The core database manager only consumes the resulting
    * connection and never needs to know dialect-specific defaults.
    */
-  readonly normalizeConnection?: (
-    config: unknown,
+  normalizeConnection?(
+    config: TConfig,
     context: {
       resolveStoragePath?: (filename: string) => string;
     },
-  ) => unknown;
+  ): TConfig;
   /**
    * Returns a stable identity for managed-database ownership checks. Drivers
    * may return `undefined` for connections that do not have a local target
    * (for example an in-memory database).
    */
-  readonly resolveOwnershipTarget?: (
-    config: unknown,
-  ) => readonly unknown[] | undefined;
+  resolveOwnershipTarget?(config: TConfig): readonly unknown[] | undefined;
   /**
    * Clears the objects owned by a managed connection while preserving the
    * database and its target schema. Used by the explicit destructive
    * migration reset command.
    */
-  readonly resetManagedSchema?: (context: {
+  resetManagedSchema?(context: {
     connectionName: string;
-    config: unknown;
+    config: TConfig;
     resolveClient: () => Promise<Knex>;
-  }) => void | Promise<void>;
+  }): void | Promise<void>;
   /**
    * Prepares any local storage required before a connection is opened.
    * Application hosts provide the filesystem operation; drivers own the
    * decision about whether it is needed.
    */
-  readonly prepareStorage?: (
-    config: unknown,
+  prepareStorage?(
+    config: TConfig,
     context: {
       ensureDirectory: (directory: string) => Promise<void>;
     },
-  ) => void | Promise<void>;
-  readonly configurePool?: (
-    config: unknown,
-    pool: Knex.PoolConfig,
-  ) => Knex.PoolConfig;
+  ): void | Promise<void>;
+  configurePool?(config: TConfig, pool: Knex.PoolConfig): Knex.PoolConfig;
 }
 
 /**
@@ -114,116 +172,57 @@ export interface DatabaseDriverDefinition<TDialect extends string = string> {
  */
 export interface DatabaseDriverFactory<
   TDialect extends string = string,
-  TOptions extends object = any,
+  TOptions extends object = object,
+  TConfig extends AnyConnectionConfig = AnyConnectionConfig,
 > {
-  (options?: TOptions): BaseConnectionConfig & {
+  (options?: TOptions): TConfig & {
     dialect: TDialect;
-    databaseDriver: DatabaseDriverDefinition<TDialect>;
+    databaseDriver: DatabaseDriverDefinition<TDialect, TConfig>;
   };
   readonly dialect: TDialect;
-  readonly driver: DatabaseDriverDefinition<TDialect>;
+  readonly driver: DatabaseDriverDefinition<TDialect, TConfig>;
 }
 
-export type DatabaseDriverRegistration<TDialect extends string = string> =
-  DatabaseDriverDefinition<TDialect> | DatabaseDriverFactory<TDialect>;
+export type DatabaseDriverRegistration<
+  TDialect extends string = string,
+  TConfig extends AnyConnectionConfig = AnyConnectionConfig,
+> =
+  | DatabaseDriverDefinition<TDialect, TConfig>
+  | DatabaseDriverFactory<TDialect, object, TConfig>;
 
-/**
- * Dialect identifiers are open ended. Built-in connection config aliases below
- * provide strict fields for the shipped drivers, while new driver packages can
- * contribute their own dialect literal without changing this package.
- */
+/** Dialect identifiers are supplied by driver packages. */
 export type DatabaseDialect = string;
 
 export type SchemaManagementMode = 'managed' | 'external';
 
 export interface BaseConnectionConfig {
+  /** Optional native driver name, checked against the registered descriptor. */
+  driver?: string;
   naming?: NamingOptions;
   capabilities?: Partial<DatabaseCapabilities>;
-  metadataStore?: CollectionMetadataStore;
+  metadataStore?: CollectionMetadataStore | CollectionMetadataStoreConfig;
   onCollectionMetadataInvalidationError?: (error: unknown) => void;
   schemaManagement?: SchemaManagementMode;
+  /**
+   * Physical tables on this connection that are NocoBase bookkeeping rather
+   * than Collections — a migration or seed history or lock table given a
+   * custom name. Tables under the `__nocobase_` prefix are recognised without
+   * being listed; anything else the application names has to be declared here
+   * or `collections.list()` and `scan()` report it as a Collection.
+   */
+  internalTables?: readonly string[];
   debug?: boolean;
-  pool?: unknown;
+  pool?: Knex.PoolConfig;
   driverOptions?: Record<string, unknown>;
   /** Driver supplied by a dialect factory (for example postgres({...})). */
   databaseDriver?: DatabaseDriverDefinition;
 }
 
-export interface SqliteConnectionConfig extends BaseConnectionConfig {
-  dialect: 'sqlite';
-  driver?: string;
-  filename: string;
-}
-
-export type PostgresConnectionConfig = BaseConnectionConfig & {
-  dialect: 'postgres';
-  driver?: string;
-  schema?: string | readonly string[];
-  ssl?: boolean | Record<string, unknown>;
-} & HostConnectionConfig;
-
-export type MysqlConnectionConfig = BaseConnectionConfig & {
-  dialect: 'mysql';
-  driver?: string;
-  charset?: string;
-  timezone?: string;
-  ssl?: boolean | Record<string, unknown>;
-} & MysqlConnectionTargetConfig;
-
-export type OracleConnectionConfig = BaseConnectionConfig & {
-  dialect: 'oracle';
-  driver?: string;
-  serviceName: string;
-  host?: string;
-  port?: number;
-  username?: string;
-  password?: string;
-};
-
-export type MssqlConnectionConfig = BaseConnectionConfig & {
-  dialect: 'mssql';
-  driver?: string;
-  host?: string;
-  port?: number;
-  database?: string;
-  username?: string;
-  password?: string;
-  encrypt?: boolean;
-  trustServerCertificate?: boolean;
-};
-
-export type ConnectionConfig =
-  | SqliteConnectionConfig
-  | PostgresConnectionConfig
-  | MysqlConnectionConfig
-  | OracleConnectionConfig
-  | MssqlConnectionConfig;
-
 /** Native driver identifier supplied by a dialect package. */
 export type DatabaseDriver = string;
 
-type MysqlConnectionTargetConfig =
-  (HostConnectionConfig & { socketPath?: never }) | SocketConnectionConfig;
-
-interface HostConnectionConfig {
-  host?: string;
-  port?: number;
-  database?: string;
-  username?: string;
-  password?: string;
-}
-
-interface SocketConnectionConfig {
-  host?: never;
-  port?: never;
-  socketPath: string;
-  database?: string;
-  username?: string;
-  password?: string;
-}
-
 export function defineDatabase<
-  T extends DatabaseConfig | ExtensibleDatabaseConfig<any>,
+  T extends ExtensibleDatabaseConfig<AnyConnectionConfig>,
 >(config: T): T {
   return config;
 }

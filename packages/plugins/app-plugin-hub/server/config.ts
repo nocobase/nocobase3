@@ -1,10 +1,12 @@
 import type { AppDriveDiskConfig } from '@nocobase/drive';
 
 export interface HubPluginConfig {
+  /** Public App Host origin, or `/` when the Hub listener proxies the same origin. */
+  readonly publicHostUrl?: string;
   readonly artifact: AppDriveDiskConfig;
   readonly host: {
     readonly enabled: boolean;
-    readonly driver: 'node' | 'tsx';
+    readonly driver: 'auto' | 'node' | 'tsx';
     readonly appDeploymentsDir: string;
     readonly appVolumesDir: string;
     readonly configPath: string;

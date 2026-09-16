@@ -11,6 +11,7 @@ verifyDepsBeforeRun: false
 catalog:
   '@arethetypeswrong/cli': ^0.18.5
   '@base-ui/react': ^1.6.0
+  '@better-auth/api-key': ^1.7.1
   '@boringnode/queue': ^0.7.1
   '@cacheable/memory': ^2.2.0
   '@clack/prompts': ^1.7.0
@@ -46,7 +47,7 @@ catalog:
   '@vitest/eslint-plugin': ^1.6.27
   ajv: ^8.20.0
   better-auth: ^1.7.1
-  better-sqlite3: ^12.11.1
+  better-sqlite3: ^13.0.3
   bloom-filters: ^3.0.4
   class-variance-authority: ^0.7.1
   clsx: ^2.1.1
@@ -91,6 +92,7 @@ catalog:
   vitest: ^4.1.10
   ws: ^8.21.3
   yaml: ^2.9.0
+  zod: ^4.6.5
 
 # Which dependencies may run install scripts: true compiles a native addon, false skips a script
 # nothing here needs. tesseract.js arrives through officeparser and its postinstall only prints a

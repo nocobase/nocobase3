@@ -110,7 +110,7 @@ Manual execution ignores `autoRun`. `--connection` and `--all` are mutually excl
 
 `pnpm migrate --fresh` is a destructive reset for managed connections. It removes the managed schema objects, clears migration history as part of that reset, and reruns all currently visible migrations; it never calls migration `down()` and never runs seeds. In an interactive terminal it asks for confirmation. CI and non-interactive terminals require `--force`, so use `pnpm migrate --fresh --force` only when the target is intentionally disposable. `--fresh` is rejected for an explicitly selected external connection; `--all` processes managed connections and reports external connections as skipped. It is limited to connections with a registered driver reset capability.
 
-`schemaManagement: external` describes ownership, not read-only credentials. Startup and `--all` skip external connections; explicitly targeting one for migrations or seeds is an error. Runtime access still requires an explicit metadata store. Seeds also use history and lock tables, so they are not a workaround for external schema ownership.
+`schemaManagement: external` describes ownership, not read-only credentials. Startup and `--all` skip external connections; explicitly targeting one for migrations or seeds is an error. The application resolves a metadata store for runtime access, using `database/<connectionName>/collections/` when neither a connection-level nor shared store is configured; see [database connections](database-connections.md#add-managed-or-external-connections). Seeds also use history and lock tables, so they are not a workaround for external schema ownership.
 
 Use one managed connection per physical database/schema. Identical configured targets are rejected before execution, even when only one is selected. Hostname aliases, symlinks and driver-specific routing can hide a shared target; do not configure these as independent managed databases. Distinct history or lock table names alone do not isolate collection metadata and schema ownership.
 
@@ -165,3 +165,9 @@ Check that `up` produces the expected tables, columns, types, indexes, and const
 - `down` reverses `up` in a safe order.
 - `pnpm migrate` applies cleanly on an empty database and on an already-migrated one.
 - The physical schema matches what the migration declared.
+
+## Compiled migration and seed manifests
+
+The application build generates `.manifest.json` in each compiled migrations and seeds directory after server compilation, path rewriting, and `afterServerBuild` hooks. Keep the manifest generator in the build when customizing it. Plugins generate their own manifests when built; an application must not regenerate manifests for installed dependencies.
+
+TypeScript and compiled JavaScript use the same source checksum for migration history, while the loader separately verifies emitted JavaScript. Marked JavaScript requires its manifest. For a database with old raw JavaScript checksums, first run the compiled representation with matching original output; verified legacy hashes are converted under the task lock. Unreproducible old output remains an error. Never edit historical migrations or replace checksums by hand to resolve an upgrade failure.

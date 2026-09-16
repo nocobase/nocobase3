@@ -1,7 +1,5 @@
 import { createRequire } from 'node:module';
 import type {
-  BaseConnectionConfig,
-  ConnectionConfig,
   DatabaseCapabilities,
   DatabaseDriverDefinition,
 } from '@nocobase/db';
@@ -9,29 +7,23 @@ import { rawRows } from '@nocobase/db';
 import { KingbaseSchemaInspector } from './inspectors/kingbase.js';
 import { compileKingbaseJsonCondition } from './json.js';
 
+import type { KingbaseConnectionConfig } from './config.js';
+export type { KingbaseConnectionConfig } from './config.js';
+
 const require = createRequire(import.meta.url);
 const Pg: unknown = require('pg') as unknown;
 const PgQueryStream =
   require('pg-query-stream') as typeof import('pg-query-stream');
-
-export interface KingbaseConnectionConfig extends BaseConnectionConfig {
-  dialect: 'kingbase';
-  driver?: string;
-  schema?: string | readonly string[];
-  ssl?: boolean | Record<string, unknown>;
-  host?: string;
-  port?: number;
-  database?: string;
-  username?: string;
-  password?: string;
-}
 
 export type KingbaseOptions = Omit<
   KingbaseConnectionConfig,
   'dialect' | 'driver' | 'databaseDriver'
 >;
 
-export const kingbaseDriver: DatabaseDriverDefinition<'kingbase'> = {
+export const kingbaseDriver: DatabaseDriverDefinition<
+  'kingbase',
+  KingbaseConnectionConfig
+> = {
   dialect: 'kingbase',
   packageName: '@nocobase/db-kingbase',
   nativeDriver: 'pg',
@@ -162,14 +154,7 @@ export const kingbaseDriver: DatabaseDriverDefinition<'kingbase'> = {
     }
     return KingbaseClientWithQueryStream;
   },
-  resolveConnection: (
-    source: ConnectionConfig,
-  ): {
-    connection: unknown;
-    searchPath?: string[];
-    useNullAsDefault?: boolean;
-  } => {
-    const config = source as unknown as KingbaseConnectionConfig;
+  resolveConnection: (config) => {
     assertDriverOptions(config.driverOptions, [
       'host',
       'port',
@@ -202,7 +187,7 @@ export const kingbaseDriver: DatabaseDriverDefinition<'kingbase'> = {
     };
   },
   createSchemaInspector: (context) => {
-    const schema = (context.config as KingbaseConnectionConfig).schema;
+    const schema = context.config.schema;
     return new KingbaseSchemaInspector({
       connectionName: context.connectionName,
       searchPath:
@@ -224,8 +209,7 @@ export const kingbaseDriver: DatabaseDriverDefinition<'kingbase'> = {
     schema: ['public'],
     ...asKingbaseConnectionConfig(source),
   }),
-  resolveOwnershipTarget: (source) => {
-    const config = asKingbaseConnectionConfig(source);
+  resolveOwnershipTarget: (config) => {
     const schema =
       typeof config.schema === 'string'
         ? config.schema
@@ -240,7 +224,7 @@ export const kingbaseDriver: DatabaseDriverDefinition<'kingbase'> = {
     ];
   },
   resetManagedSchema: async (context) => {
-    const config = context.config as KingbaseConnectionConfig;
+    const config = context.config;
     const schema =
       typeof config.schema === 'string'
         ? config.schema
@@ -272,7 +256,7 @@ export const kingbaseDriver: DatabaseDriverDefinition<'kingbase'> = {
       );
     }
   },
-} satisfies DatabaseDriverDefinition<'kingbase'>;
+} satisfies DatabaseDriverDefinition<'kingbase', KingbaseConnectionConfig>;
 
 export type KingbaseConnection = KingbaseOptions & {
   dialect: 'kingbase';

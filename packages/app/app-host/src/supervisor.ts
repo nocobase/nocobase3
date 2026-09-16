@@ -44,7 +44,8 @@ export interface AppHostSupervisorOptions {
   configPath?: string;
   host?: string;
   port?: number;
-  driver?: AppHostDriver;
+  /** Match the loaded package's source or compiled entrypoint with `auto`. */
+  driver?: AppHostDriver | 'auto';
   prestart?: boolean;
   startTimeoutMs?: number;
   ipcTimeoutMs?: number;
@@ -519,6 +520,11 @@ export class AppHostSupervisor {
     }
 
     const driver = options.driver ?? 'node';
+    if (driver === 'auto') {
+      return path.extname(fileURLToPath(import.meta.url)) === '.ts'
+        ? 'tsx'
+        : 'node';
+    }
     return driver === 'tsx' ? 'tsx' : 'node';
   }
 

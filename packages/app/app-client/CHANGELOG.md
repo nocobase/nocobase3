@@ -1,5 +1,23 @@
 # @nocobase/app-client
 
+## 1.0.0-beta.16
+
+### Minor Changes
+
+- 1a85a86: Add route breadcrumbs, nested child pages, and reusable page headers to the client and application templates.
+
+### Patch Changes
+
+- @nocobase/i18n@1.0.0-beta.4
+
+## 1.0.0-beta.15
+
+### Patch Changes
+
+- c01baf6: Resolve application namespace aliases in React translations, synchronize the document language at startup and on changes, and inject the configured default language into served HTML. Allow client-only language selections with an English server fallback and an informational toast, and standardize documented locale checks on `pnpm nocobase app i18n:check`.
+- Updated dependencies [c01baf6]
+  - @nocobase/i18n@1.0.0-beta.4
+
 ## 1.0.0-beta.14
 
 ### Minor Changes

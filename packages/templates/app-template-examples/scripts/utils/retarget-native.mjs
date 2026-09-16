@@ -80,6 +80,7 @@ console.log(
 
 const natives = findNativeModules(nodeModulesDir);
 if (natives.length === 0) {
+  recordBuildTarget();
   console.log('No native modules found. This build is portable as it stands.');
   process.exit(0);
 }
@@ -210,7 +211,12 @@ function retargetPlatformPackage(native) {
  * deleting one that turns out to be the only usable build is far worse than shipping a few extra megabytes.
  */
 function trimBundled(native) {
-  const wanted = `${target.platform}-${target.arch}`;
+  // Bundled N-API addons such as better-sqlite3 13 name their Alpine builds linuxmusl, not linux.
+  const platform =
+    target.platform === 'linux' && target.libc === 'musl'
+      ? 'linuxmusl'
+      : target.platform;
+  const wanted = `${platform}-${target.arch}`;
   let removed = 0;
   let removedBytes = 0;
   let keptAny = false;

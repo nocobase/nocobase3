@@ -8,6 +8,7 @@ import path from 'node:path';
 import { type AppIdentityConfig } from '@nocobase/app-server/config';
 import {
   planAppDatabaseTasks,
+  resolveAppMetadataStore,
   type AppDatabaseConfig,
 } from '@nocobase/app-server/database';
 import { createAppDatabaseTaskContributions } from '@nocobase/app-server/plugins';
@@ -49,6 +50,28 @@ describe('application config', () => {
         schemaManagement: 'managed',
         migrations: { autoRun: true },
         seeds: { autoRun: true },
+      });
+      expect(database.connections.externalCrm).toMatchObject({
+        dialect: 'sqlite',
+        filename: path.join(templateRootDir, 'storage/external-crm.sqlite'),
+        schemaManagement: 'external',
+        naming: { underscored: true, tablePrefix: 'crm_' },
+      });
+      // No store is configured: an external connection reads
+      // database/externalCrm/collections/*/metadata.json by default.
+      expect(database.connections.externalCrm.metadataStore).toBeUndefined();
+      expect(
+        resolveAppMetadataStore(undefined, {
+          name: 'externalCrm',
+          external: true,
+          paths: runtime.configPaths,
+        }),
+      ).toEqual({
+        type: 'directory',
+        directory: path.join(
+          templateRootDir,
+          'database/externalCrm/collections',
+        ),
       });
       const analytics = planAppDatabaseTasks(
         database,

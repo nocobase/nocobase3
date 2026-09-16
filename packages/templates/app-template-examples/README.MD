@@ -8,6 +8,8 @@ This is the examples template, based on `@nocobase/app-template-default`. It is 
 
 The homepage links to article management, repository queries, CRM, orders, file management, and routes. Additional registered plugins demonstrate services, queues, realtime, CLI commands, and Skills. Plugin demonstrations remain in their own packages under `packages/examples/`; the article page demonstrates application-owned development.
 
+Examples retains Default’s Users and API Keys integration alongside its demonstrations. Users lists direct Authorization Permission Sets as application roles; authenticated default access remains separate. API Keys is configured in both authentication factories and mounted under Settings. Keep these product integrations aligned with Default.
+
 ## Create an examples application
 
 After this template and the updated scaffolder have been published:
@@ -20,7 +22,7 @@ Before publication, from the source repository root:
 
 ```bash
 pnpm --filter @nocobase/create-app build
-node packages/tools/create-app/bin/run.js my-examples --template ./packages/templates/app-template-examples --db-dialect sqlite
+node packages/tools/create-app/bin/run.js my-examples --template ./packages/templates/app-template-examples
 ```
 
 The scaffolder creates an independent configuration and database. Never copy another application's `config.yml`, `.env`, `storage/`, or generated `dist/` into this template.
@@ -29,7 +31,7 @@ Article migration and seed sources create six articles on a fresh managed defaul
 
 ## Maintain this template
 
-Keep framework files aligned with Default and Hub: startup/build scripts, runtime composition mechanisms, shell, theme, CLI infrastructure and development guidance. Keep the examples homepage, article module, example plugin choices and sample data here. Existing Default installations retain their historical data; see Default’s `MIGRATION.md` when upgrading to its clean composition.
+Keep framework files aligned with Default and Hub: startup/build scripts, runtime composition mechanisms, shell, theme, CLI infrastructure and development guidance. Keep the examples homepage, article module, example plugin choices and sample data here. Existing Default installations retain their historical data; follow the [upgrade migration rules](skills/nocobase-app-upgrade/references/edge-cases.md#migrations) when removing example registrations.
 
 ## Getting started
 
@@ -78,11 +80,11 @@ APP_SERVER_PORT=13399 PROXY_TARGET_URL=http://127.0.0.1:13000/main pnpm dev
 
 ### Review your configuration
 
-`config.yml` was written when the project was created, carrying the database you chose and a generated `auth.secret`. It gets you running; adjust it for your situation:
+`config.yml` was generated from `config.example.yml` when the project was created, with `auth.secret` and `session.secret` filled in. It gets you running on SQLite; adjust it for your situation:
 
-- **Database.** Point the connection at the database you actually intend to use — dialect, host, port, and credentials.
+- **Database.** SQLite needs no server and works as it is. To use another one, register its dialect in `server/config/database.ts`, add the matching `@nocobase/db-*` package, and point the connection here at it — host, port, and credentials. Drivers are code rather than settings, so a dialect the application does not register cannot be introduced from this file.
 - **Where the application is served.** `APP_BASE_PATH` is the public mount path, `/main` by default, so the development URL looks like `http://127.0.0.1:13000/main/`. `APP_SERVER_PORT` and `APP_SERVER_HOST` change what the server binds to.
-- **Anything a feature you enable requires** — mail delivery, IM webhooks, storage. `config.example.yml` documents common deployment options, including sections your `config.yml` does not yet have.
+- **Anything a feature you enable requires** — mail delivery, IM webhooks, storage. Every section is already here, commented out where it is optional.
 
 `config.yml` is gitignored because it holds your `auth.secret`. Deploy it through your secret management rather than committing it.
 
@@ -126,9 +128,11 @@ database/
 ├── main/
 │   ├── migrations/      Schema history for the main connection
 │   └── seeds/           Initial example data
-└── analytics/
-    ├── migrations/      Independent analytics schema
-    └── seeds/           Channel, campaign and daily metric examples
+├── analytics/
+│   ├── migrations/      Independent analytics schema
+│   └── seeds/           Channel, campaign and daily metric examples
+└── externalCrm/
+    └── collections/     metadata.json per Collection: the external CRM's metadata source
 
 tests/                   Unit and integration tests
 e2e/                     Browser tests needing a real server
@@ -152,10 +156,11 @@ The three files named `runtime.ts`, `plugins.ts`, and `routes.ts` are compositio
 
 ### Database
 
-| Script         | What it does                                                                                                                                                                                    |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm migrate` | Apply pending migrations from your `database/main/migrations/` and from every registered plugin; `pnpm migrate --fresh --force` clears managed schema objects and rebuilds them from migrations |
-| `pnpm seed`    | Run seeds from `database/main/seeds/` and from registered plugins                                                                                                                               |
+| Script                      | What it does                                                                                                                                                                                        |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm migrate`              | Apply pending migrations from your `database/main/migrations/` and from every registered plugin; `pnpm migrate --fresh --force` clears managed schema objects and rebuilds them from migrations     |
+| `pnpm seed`                 | Run seeds from `database/main/seeds/` and from registered plugins                                                                                                                                   |
+| `pnpm collections:generate` | Write `collection.json`, `metadata.json` and `schema.json` for every Collection under `database/<connection>/collections/`, plus a `_manifest.json`; `--check` fails when the files are out of date |
 
 Migrations also run automatically on startup while `database.connections.main.migrations.autoRun` is `true` in `config.yml`. Run `pnpm migrate` explicitly when you want to apply a schema change without restarting.
 
@@ -226,6 +231,86 @@ Requests use `POST <app-base>/api/<repository>:<action>`, for example
 The response is wrapped in `{ "data": ... }`. Use the application's authenticated
 API client, for example `api.repository('analyticsChannels').findMany({ limit: 10 })`.
 
+### External database example
+
+Not every database an application reads is one it owns. The `externalCrm`
+connection in `server/config/database.ts` shows the shape of one that is not:
+`schemaManagement: 'external'` tells NocoBase to read the schema and never
+change it, and `naming` strips the CRM's `crm_` table prefix when mapping
+tables to logical Collection names. No migrations or seeds run against it, and
+the Builder refuses DDL on it.
+
+What the schema cannot say — titles, descriptions, and which column is a
+relation — comes from `database/externalCrm/collections/<name>/metadata.json`.
+That is the default metadata source for an external connection, so nothing has
+to be configured; `metadataStore` can point at another collections directory
+when metadata is kept elsewhere. The files are the source, not generated
+output: the workflow is `pnpm collections:generate --connection externalCrm`
+to scaffold one `metadata.json` per table with an empty document, fill in the
+documents by hand, and generate again so `collection.json` reflects them.
+Dropping a table removes its generated files but keeps its `metadata.json`,
+which the command reports as an orphan.
+
+The connection points at `storage/external-crm.sqlite` so the example runs
+without a real CRM. `server/providers/external-crm.ts` plays the part of the
+foreign system: when the connection is the SQLite stand-in and the tables are
+missing, it creates `crm_customers` and `crm_orders` with the raw client and
+inserts three customers and four orders. Point the connection at an actual
+database in `config.yml` and the provider does nothing.
+
+Open **External CRM** from the homepage or navigation (`/external-crm`). The
+page in `client/pages/external-crm.tsx` lists the CRM's orders with their
+customers, filtered by status, entirely through the read-only routes below; it
+addresses everything by logical name and never sees the `crm_` table prefix.
+
+`server/routes/external-crm.ts` exposes the two Collections read-only through
+`defineRepositoryApiRoutes`, bound to `externalCrm`:
+
+| Repository API name | Collection  |
+| ------------------- | ----------- |
+| `crmCustomers`      | `customers` |
+| `crmOrders`         | `orders`    |
+
+Each supports `findMany` (maximum 100), `findOne`, `count`, `exists`,
+`aggregate` and `groupBy` for signed-in users; write actions are not exposed.
+Logical names work as they do for managed tables — filter on `status`, sort by
+`id`, select `orderNo` and include the `customer` relation — because the
+Repository resolves them through the connection's naming and metadata. For
+example, `POST /main/api/crmOrders:findMany` with:
+
+```json
+{
+  "filter": { "status": "paid" },
+  "sort": {
+    "kind": "sort",
+    "version": 1,
+    "items": [{ "kind": "field", "path": ["id"], "direction": "asc" }]
+  },
+  "select": {
+    "kind": "select",
+    "version": 1,
+    "root": {
+      "kind": "selection",
+      "fields": ["id", "orderNo", "totalAmount"],
+      "includes": [
+        {
+          "kind": "include",
+          "relation": "customer",
+          "select": { "kind": "selection", "fields": ["id", "displayName"] }
+        }
+      ]
+    }
+  }
+}
+```
+
+`pnpm collections:generate --connection externalCrm` writes `collection.json`
+and `schema.json` next to each `metadata.json` under
+`database/externalCrm/collections/`; the manifest records
+`schemaManagement: external` and no migration head, since the CRM has no
+migration history this application knows about. Only the `metadata.json` files
+are committed here.
+
 ### Checks
 
 | Script               | What it does                                                 |
@@ -238,7 +323,7 @@ API client, for example `api.repository('analyticsChannels').findMany({ limit: 1
 | `pnpm fix`           | Fix lint problems, then format                               |
 | `pnpm check`         | Everything above plus a build; what to run before committing |
 
-`pnpm nocobase app i18n:check` reports a language declared in `client/locales/` but not `server/locales/`, or the reverse. The browser builds its language picker from one and the server decides what it answers in from the other, so a language on only one side is one the interface offers and the server then rejects.
+`pnpm nocobase app i18n:check` reports a language declared in `client/locales/` but not `server/locales/`, or the reverse, and exits nonzero until the lists align. The browser builds its language picker from the client list, so a client-only language still works in the interface; server messages fall back to English and the language control explains that fallback. Add the matching server locale when server-produced text should use the same language.
 
 ### Plugins
 
@@ -285,20 +370,39 @@ Client packages are not among them. Plugins declare what their browser code need
 **The build targets the machine you run it on**, so `pnpm build && pnpm start` works. Deploying elsewhere means saying where:
 
 ```bash
+pnpm build --help                                 # all build options
 pnpm build                                        # this machine
 pnpm build --target linux-x64                     # most Linux servers
 pnpm build --target linux-arm64                   # ARM servers, Graviton
 pnpm build --target linux-x64-musl                # Alpine, and most slim container images
-pnpm build --target linux-x64 --node-version 22   # when the server runs Node 22
+pnpm build --target linux-x64 --node-version 24   # explicitly target Node 24
 ```
 
 A `.node` binary is compiled for one platform, architecture, C library, and Node version at once, so a build made on a Mac installs binaries a Linux server cannot load. `--target` sets platform, architecture, and C library together, because they are chosen together: `linux-x64` and `linux-x64-musl` are different binaries, and Alpine needs the musl one. If you are unsure, `ldd --version` on the server prints `musl` for musl and `GNU libc` otherwise.
 
-`--node-version` takes the major version your server runs, separately, because the same Linux host may run any of several. Supported: 20, 22, 24, 26.
+`--node-version` takes the major version your server runs, separately, because the same Linux host may run any of several. The binary retargeter knows ABI mappings for 20, 22, 24, and 26; the application itself requires Node >=24.
 
-Every build prints the platform it produced and records it in `dist/package.json` under `nocobase.buildTarget`, so a `dist/` built for the wrong machine can be identified rather than guessed at.
+`pnpm build --help` (or `-h`) lists build options and exits without loading build dependencies, running hooks, or modifying `dist/`. Every successful build records `nocobase.buildTarget` in `dist/package.json`, including builds with no native modules: `platform`, `arch`, `libc`, `nodeMajor`, and `nodeAbi`. Use `libc` only for Linux; its value on other platforms is a compatibility placeholder. Deployment checks should compare these fields with the host runtime and also respect `engines.node`. With `--target current` (the default), the Node version and ABI come from the running process; an explicit platform target defaults to Node 24 unless `--node-version` is supplied.
 
-If your application has no native modules — `pg`, `mysql2`, and `tedious` are all plain JavaScript — none of this applies and `dist/` is portable as built.
+For example, `pnpm build --target linux-x64 --node-version 24` produces:
+
+```json
+{
+  "nocobase": {
+    "buildTarget": {
+      "platform": "linux",
+      "arch": "x64",
+      "libc": "glibc",
+      "nodeMajor": 24,
+      "nodeAbi": 137
+    }
+  }
+}
+```
+
+`nodeMajor` describes the target runtime, not the Node version used to run the build. No target patch version is implied. These fields provide platform and Node ABI checks for Hub deployment; they do not describe system libraries, CPU instruction requirements, or other runtime prerequisites.
+
+If your application has no native modules — `pg`, `mysql2`, and `tedious` are all plain JavaScript — no platform-specific binaries need retargeting. The build still records the selected target, and the deployment runtime must satisfy `engines.node`.
 
 #### Packing the build
 
@@ -365,7 +469,7 @@ Rebuild with a matching `--target` and `--node-version`. ABI 115 is Node 20, 127
 
 ## Configuration
 
-`server/config/` and `client/config/` contain editable TypeScript defaults. `config.yml` holds environment-specific overrides, written for you at generation time and yours to edit from there. It is gitignored because it carries your `auth.secret`; deploy it through your secret management rather than committing it. `config.example.yml` documents common deployment options, including sections the generated file leaves out.
+`server/config/` and `client/config/` contain editable TypeScript defaults. `config.yml` holds environment-specific overrides, written for you at generation time and yours to edit from there. It is gitignored because it carries your `auth.secret`; deploy it through your secret management rather than committing it. It is generated from `config.example.yml`, which is kept beside it as the reference for every option.
 
 Two settings decide where the application is reachable:
 
@@ -377,6 +481,10 @@ Configuration is resolved from the file, environment variables, and defaults in 
 ## Testing
 
 Tests live in `tests/`, never beside the source they cover. Put logic and integration tests under `tests/logic/` and component tests under `tests/components/`. Tests needing a real server, real authentication, or a real database belong in `e2e/`.
+
+### AI server end-to-end testing
+
+`pnpm test:e2e` discovers the source workspace’s optional AI server test and skips it unless `AI_LOCAL_E2E=1`. Build first and use a dedicated, installed test application database with a configured LLM service and an API key belonging to a test user. Set `AI_E2E_LLM_SERVICE`, `AI_E2E_MODEL`, and `AI_E2E_API_KEY`; `AI_E2E_EMPLOYEE` defaults to `viz`. The test starts the compiled local server, makes a real model request, and removes its conversation afterward. Never point it at production data. Generated applications ship the Playwright configuration but no template tests, so an empty run succeeds.
 
 ### Notification testing
 

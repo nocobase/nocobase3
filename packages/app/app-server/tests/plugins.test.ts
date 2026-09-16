@@ -1,12 +1,6 @@
 // @vitest-environment node
 
-import {
-  mkdirSync,
-  mkdtempSync,
-  realpathSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -31,10 +25,12 @@ afterEach(() => {
 describe('server plugin definitions', () => {
   it('normalizes optional contributions and freezes the result', () => {
     const plugin = defineServerPlugin({
+      baseDir: import.meta.dirname,
       packageName: '@nocobase/app-plugin-example',
     });
 
     expect(plugin).toEqual({
+      baseDir: import.meta.dirname,
       packageName: '@nocobase/app-plugin-example',
       serviceProviders: [],
       routes: [],
@@ -47,9 +43,11 @@ describe('server plugin definitions', () => {
 
   it('preserves order and rejects duplicate packages', () => {
     const first = defineServerPlugin({
+      baseDir: import.meta.dirname,
       packageName: '@nocobase/app-plugin-first',
     });
     const second = defineServerPlugin({
+      baseDir: import.meta.dirname,
       packageName: '@nocobase/app-plugin-second',
     });
 
@@ -81,6 +79,7 @@ describe('server plugin definitions', () => {
     const route = defineApiRoutes(() => new Hono());
     const routes = [route];
     const plugin = defineServerPlugin({
+      baseDir: import.meta.dirname,
       packageName: '@nocobase/app-plugin-example',
       routes,
     });
@@ -96,6 +95,10 @@ describe('server plugin definitions', () => {
   // which reads like a defect in resolution rather than a stale path.
   it('ignores configured contribution paths that do not exist', () => {
     const plugin = defineServerPlugin({
+      baseDir: path.resolve(
+        import.meta.dirname,
+        '../../../examples/app-plugin-service-provider-example',
+      ),
       packageName: '@nocobase/app-plugin-service-provider-example',
       database: {
         migrations: './missing/migrations',
@@ -116,83 +119,114 @@ describe('server plugin definitions', () => {
     expect(resolved?.jobLocations).toEqual([]);
   });
 
-  it('still rejects unsafe optional contribution paths', () => {
-    const plugin = defineServerPlugin({
-      packageName: '@nocobase/app-plugin-service-provider-example',
-      database: {
-        migrations: '../outside',
-      },
-    });
+  it.each(['../outside', './a/../outside', './/outside', './a\\outside'])(
+    'rejects unsafe optional contribution path %s',
+    (configuredPath) => {
+      const plugin = defineServerPlugin({
+        baseDir: path.resolve(
+          import.meta.dirname,
+          '../../../examples/app-plugin-service-provider-example',
+        ),
+        packageName: '@nocobase/app-plugin-service-provider-example',
+        database: {
+          migrations: configuredPath,
+        },
+      });
 
+      expect(() =>
+        resolveAppServerPlugins(
+          path.resolve(process.cwd(), '../../templates/app-template-examples'),
+          defineServerPlugins([plugin]),
+        ),
+      ).toThrow(
+        `Server plugin path "${configuredPath}" must be a safe baseDir-relative path beginning with "./".`,
+      );
+    },
+  );
+
+  it.each([false, true])(
+    'resolves resources and metadata from the declared copy (compiled=%s)',
+    (compiled) => {
+      const rootDir = mkdtempSync(
+        path.join(tmpdir(), 'nocobase-plugin-resolution-'),
+      );
+      tempDirs.push(rootDir);
+      const packageName = '@example/runtime-plugin';
+      writePackage(rootDir, packageName, 'source');
+      writePackage(path.join(rootDir, 'dist'), packageName, 'compiled');
+      const packageRoot = path.join(
+        rootDir,
+        compiled ? 'dist/node_modules' : 'node_modules',
+        packageName,
+      );
+      const baseDir = compiled ? path.join(packageRoot, 'dist') : packageRoot;
+      for (const directory of [
+        'database/migrations',
+        'database/seeds',
+        'server/jobs',
+      ]) {
+        mkdirSync(path.join(packageRoot, directory), { recursive: true });
+        mkdirSync(path.join(packageRoot, 'dist', directory), {
+          recursive: true,
+        });
+      }
+      const plugin = defineServerPlugin({
+        packageName,
+        baseDir,
+        database: {
+          migrations: './database/migrations',
+          seeds: './database/seeds',
+        },
+        queue: { jobs: ['./server/jobs'] },
+      });
+      const resolved = resolveAppServerPlugins(
+        rootDir,
+        defineServerPlugins([plugin]),
+      ).plugins[0]?.metadata;
+      expect(resolved).toMatchObject({
+        version: compiled ? 'compiled' : 'source',
+        rootDir: packageRoot,
+        baseDir,
+        migrationsDirectory: path.join(baseDir, 'database/migrations'),
+        seedsDirectory: path.join(baseDir, 'database/seeds'),
+        jobLocations: [path.join(baseDir, 'server/jobs/**/*.{ts,js,mts,mjs}')],
+      });
+      rmSync(path.join(baseDir, 'database/migrations'), { recursive: true });
+      expect(
+        resolveAppServerPlugins(rootDir, defineServerPlugins([plugin]))
+          .plugins[0]?.metadata.migrationsDirectory,
+      ).toBeUndefined();
+    },
+  );
+
+  it('requires an absolute baseDir even for plugins without filesystem contributions', () => {
+    expect(() =>
+      defineServerPlugin({ packageName: '@example/plugin', baseDir: '.' }),
+    ).toThrow('requires an absolute baseDir');
+    expect(() =>
+      Reflect.apply(defineServerPlugin, undefined, [
+        { packageName: '@example/plugin' },
+      ]),
+    ).toThrow('requires an absolute baseDir');
+  });
+
+  it('does not use another installed copy when baseDir has no matching package manifest', () => {
+    const rootDir = mkdtempSync(
+      path.join(tmpdir(), 'nocobase-plugin-resolution-'),
+    );
+    tempDirs.push(rootDir);
+    writePackage(rootDir, '@example/plugin', 'fixture');
     expect(() =>
       resolveAppServerPlugins(
-        path.resolve(process.cwd(), '../../templates/app-template-examples'),
-        defineServerPlugins([plugin]),
+        rootDir,
+        defineServerPlugins([
+          defineServerPlugin({
+            packageName: '@example/plugin',
+            baseDir: rootDir,
+          }),
+        ]),
       ),
-    ).toThrow(
-      'Server plugin path "../outside" must be a safe package-relative path beginning with "./".',
-    );
-  });
-
-  it('keeps source packages first by default when a built tree is present', () => {
-    const rootDir = mkdtempSync(
-      path.join(tmpdir(), 'nocobase-plugin-resolution-'),
-    );
-    tempDirs.push(rootDir);
-    const packageName = '@example/runtime-plugin';
-
-    writeFileSync(
-      path.join(rootDir, 'package.json'),
-      JSON.stringify({ name: '@example/application' }),
-    );
-    writePackage(rootDir, packageName, 'source');
-    writePackage(path.join(rootDir, 'dist'), packageName, 'compiled');
-
-    const resolved = resolveAppServerPlugins(
-      rootDir,
-      defineServerPlugins([
-        defineServerPlugin({
-          packageName,
-        }),
-      ]),
-    ).plugins[0]?.metadata;
-
-    expect(resolved?.version).toBe('source');
-    expect(resolved?.rootDir).toBe(
-      realpathSync(path.join(rootDir, 'node_modules/@example/runtime-plugin')),
-    );
-  });
-
-  it('prefers compiled packages when the runtime opts into the built tree', () => {
-    const rootDir = mkdtempSync(
-      path.join(tmpdir(), 'nocobase-plugin-resolution-'),
-    );
-    tempDirs.push(rootDir);
-    const packageName = '@example/runtime-plugin';
-
-    writeFileSync(
-      path.join(rootDir, 'package.json'),
-      JSON.stringify({ name: '@example/application' }),
-    );
-    writePackage(rootDir, packageName, 'source');
-    writePackage(path.join(rootDir, 'dist'), packageName, 'compiled');
-
-    const resolved = resolveAppServerPlugins(
-      rootDir,
-      defineServerPlugins([
-        defineServerPlugin({
-          packageName,
-        }),
-      ]),
-      { preferBuiltPackages: true },
-    ).plugins[0]?.metadata;
-
-    expect(resolved?.version).toBe('compiled');
-    expect(resolved?.rootDir).toBe(
-      realpathSync(
-        path.join(rootDir, 'dist/node_modules/@example/runtime-plugin'),
-      ),
-    );
+    ).toThrow('no matching package.json');
   });
 });
 

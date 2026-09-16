@@ -113,16 +113,23 @@ describe('recommended LLM models migration', () => {
       type: 'json',
       nullable: false,
     });
-    expect(JSON.parse(String(field?.defaultValue))).toEqual({
-      mode: 'provider',
-      models: [],
+    // The physical default is the literal text; the resolved Field carries the
+    // document it encodes.
+    expect(field?.defaultValue).toEqual({ mode: 'provider', models: [] });
+    await expect(metadataStore.get('llmServices')).resolves.toMatchObject({
+      document: {
+        fields: {
+          enabled: { type: 'boolean' },
+          enabledModels: { type: 'json' },
+          sort: { type: 'integer' },
+        },
+      },
     });
-    await expect(metadataStore.get('llmServices')).resolves.toBeUndefined();
   });
 });
 
 function row(name: string, enabledModels: unknown): Record<string, unknown> {
-  return { name, enabledModels: JSON.stringify(enabledModels) };
+  return { name, enabledModels };
 }
 
 async function readEnabledModels(

@@ -8,12 +8,6 @@ export default createReactVitestConfig({
   resolve: {
     alias: [
       {
-        find: /^@nocobase\/app-client$/,
-        replacement: fileURLToPath(
-          new URL('../../app/app-client/src/index.ts', import.meta.url),
-        ),
-      },
-      {
         find: '@/jobs',
         replacement: fileURLToPath(new URL('./server/jobs', import.meta.url)),
       },
@@ -26,7 +20,7 @@ export default createReactVitestConfig({
   test: {
     root,
     // A glob rather than a list of filenames. The list had to be edited by hand for every test added or removed and
-    // silently drifted: it named a file that no longer existed while seven real test files were absent from it, so
+    // silently drifted: it named a file that no longer existed while several real test files were absent from it, so
     // those tests were never run at all.
     include: ['tests/**/*.test.{ts,tsx}'],
     // A generated application ships no `tests/` — the template's `files` field does not include it — so an empty run

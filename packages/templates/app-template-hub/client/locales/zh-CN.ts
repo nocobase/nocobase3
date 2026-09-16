@@ -19,7 +19,12 @@ const zhCN: AppResource = {
     confirm: '确认',
     language: '语言',
   },
+  notices: {
+    serverLocaleFallback: '服务端不支持该语言，服务端内容已回落为英文。',
+    languageChangeFailed: '未能完成语言切换，请重试。',
+  },
   account: {
+    signOutFailed: '退出登录失败，请重试。',
     openMenu: '打开账户菜单',
     fallback: '账户',
     signOut: '退出登录',
@@ -31,6 +36,7 @@ const zhCN: AppResource = {
     expand: '展开导航',
     collapse: '收起导航',
     label: '应用导航',
+    breadcrumb: '面包屑',
     console: 'Hub 控制台',
   },
 };

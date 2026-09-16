@@ -324,13 +324,6 @@
 .workflow-canvas .react-flow__attribution {
   display: none;
 }
-.workflow-page {
-  display: grid;
-  gap: 20px;
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 24px;
-}
 .workflow-page h1 {
   margin: 0;
 }
@@ -338,7 +331,6 @@
 .workflow-tabs {
   display: flex;
   gap: 0.25rem;
-  margin: 0;
   overflow-x: auto;
   border-bottom: 1px solid var(--border);
 }
@@ -753,6 +745,7 @@
 }
 .workflow-list-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
@@ -761,10 +754,15 @@
 }
 .workflow-filter-bar {
   display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
   gap: 10px;
 }
 .workflow-filter-bar input {
   width: min(420px, 52vw);
+  min-width: 0;
+  max-width: 100%;
 }
 .workflow-filter-bar input,
 .workflow-filter-bar select {

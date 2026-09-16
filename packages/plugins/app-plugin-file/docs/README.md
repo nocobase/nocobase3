@@ -83,10 +83,12 @@ export default routes;
 将返回的路由贡献数组接入已有的 Server 声明。业务插件可这样组合，已有其他贡献时合并到原来的列表：
 
 ```ts
+import path from 'node:path';
 import { defineServerPlugin } from '@nocobase/app-server/plugins';
 import routes from './routes/index.js';
 
 export default defineServerPlugin({
+  baseDir: path.resolve(import.meta.dirname, '..'),
   packageName: '@nocobase/app-plugin-business-attachments',
   routes,
 });

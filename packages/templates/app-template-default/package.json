@@ -1,7 +1,7 @@
 {
   "name": "@nocobase/app-template-default",
   "displayName": "Default Template",
-  "version": "1.0.0-beta.23",
+  "version": "1.0.0-beta.31",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -10,7 +10,7 @@
   "packageManager": "pnpm@11.7.0",
   "nocobase": {
     "templateKind": "app",
-    "defaultTemplateVersion": "1.0.0-beta.23"
+    "defaultTemplateVersion": "1.0.0-beta.31"
   },
   "devDependencies": {
     "@ai-sdk/react": "2.0.0",
@@ -22,7 +22,6 @@
     "@nocobase/ai-employee-avatars": "^1.0.2",
     "@nocobase/app-client": "workspace:^",
     "@nocobase/app-plugin-notification-provider": "workspace:^",
-    "@nocobase/app-plugin-users": "workspace:^",
     "@nocobase/app-portal-sdk": "workspace:^",
     "@nocobase/app-websocket": "workspace:^",
     "@nocobase/caching": "workspace:^",
@@ -33,6 +32,7 @@
     "@nocobase/logging": "workspace:^",
     "@nocobase/queue": "workspace:^",
     "@nocobase/session": "workspace:^",
+    "@playwright/test": "catalog:",
     "@refinedev/cli": "^2.16.48",
     "@refinedev/core": "catalog:",
     "@refinedev/react-hook-form": "^5.0.0",
@@ -101,7 +101,7 @@
     "typescript": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:",
-    "zod": "^3.25.76"
+    "zod": "catalog:"
   },
   "files": [
     ".prettierignore",
@@ -123,17 +123,18 @@
     "ecosystem.config.js",
     "config.example.yml",
     "README.MD",
-    "MIGRATION.md",
     "AGENTS.md",
     "CLAUDE.md",
-    "skills"
+    "skills",
+    "playwright.config.ts"
   ],
   "publishConfig": {
     "access": "public"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/nocobase/app-template-default.git"
+    "url": "git+https://github.com/nocobase/nocobase3.git",
+    "directory": "packages/templates/app-template-default"
   },
   "scripts": {
     "dev": "tsx ./scripts/dev/index.mjs",
@@ -144,6 +145,7 @@
     "format:check": "prettier . --check",
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
     "fix": "pnpm lint:fix && pnpm format",
+    "collections:generate": "pnpm nocobase app collections generate",
     "migrate": "pnpm nocobase app migrate",
     "seed": "pnpm nocobase app seed",
     "nocobase": "tsx ./cli/index.ts",
@@ -163,7 +165,8 @@
     "test:all": "pnpm typecheck && pnpm test && pnpm build",
     "start": "node ./scripts/start.mjs",
     "refine": "refine",
-    "pack:check": "pnpm pack --out \"$PACK_DIR/nocobase-app-template-default.tgz\" && pnpm exec publint ."
+    "pack:check": "pnpm pack --out \"$PACK_DIR/nocobase-app-template-default.tgz\" && pnpm exec publint .",
+    "test:e2e": "playwright test --pass-with-no-tests"
   },
   "browserslist": {
     "production": [
@@ -179,8 +182,10 @@
   },
   "dependencies": {
     "@nocobase/app-plugin-ai-employee": "workspace:^",
+    "@nocobase/app-plugin-api-keys": "workspace:^",
     "@nocobase/app-plugin-authentication": "workspace:^",
     "@nocobase/app-plugin-authorization": "workspace:^",
+    "@nocobase/app-plugin-database-explorer": "workspace:^",
     "@nocobase/app-plugin-file": "workspace:^",
     "@nocobase/app-plugin-i18n": "workspace:^",
     "@nocobase/app-plugin-install": "workspace:^",
@@ -199,5 +204,6 @@
     "@nocobase/snowflake": "workspace:^",
     "@oclif/core": "catalog:",
     "better-auth": "catalog:"
-  }
+  },
+  "description": "NocoBase 3 application template with the standard product capabilities."
 }

@@ -1,4 +1,9 @@
-import type { ConnectionConfig, DatabaseDialect } from '../../src/index.js';
+import type { SqliteConnectionConfig } from '@nocobase/db-sqlite';
+import type { PostgresConnectionConfig } from '@nocobase/db-postgres';
+import type { MysqlConnectionConfig } from '@nocobase/db-mysql';
+import type { OracleConnectionConfig } from '@nocobase/db-oracle';
+import type { MssqlConnectionConfig } from '@nocobase/db-mssql';
+import type { DatabaseDialect } from '../../src/index.js';
 
 export const dialects: DatabaseDialect[] = [
   'sqlite',
@@ -9,7 +14,14 @@ export const dialects: DatabaseDialect[] = [
 ];
 
 /** Defaults match the package's dedicated integration Docker services. */
-export function connectionConfig(dialect: DatabaseDialect): ConnectionConfig {
+export function connectionConfig(
+  dialect: DatabaseDialect,
+):
+  | SqliteConnectionConfig
+  | PostgresConnectionConfig
+  | MysqlConnectionConfig
+  | OracleConnectionConfig
+  | MssqlConnectionConfig {
   const env = process.env;
   const host = (prefix: string) => env[`${prefix}_HOST`] ?? '127.0.0.1';
   const port = (prefix: string, fallback: number) =>
@@ -59,5 +71,7 @@ export function connectionConfig(dialect: DatabaseDialect): ConnectionConfig {
         encrypt: false,
         trustServerCertificate: true,
       };
+    default:
+      throw new Error(`Unsupported benchmark dialect "${dialect}".`);
   }
 }

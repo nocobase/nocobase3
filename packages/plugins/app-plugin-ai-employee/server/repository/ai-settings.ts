@@ -2,7 +2,7 @@ import type { CollectionRepository } from '@nocobase/ai-employee';
 
 export type AISettingsEntity = {
   options?: Record<string, unknown>;
-  defaultLLMService?: string;
+  defaultLlmService?: string;
   defaultModel?: string;
 };
 

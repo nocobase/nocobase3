@@ -40,7 +40,6 @@
     "dist",
     "README.md",
     "CHANGELOG.md",
-    "database",
     "skills"
   ],
   "publishConfig": {
@@ -75,7 +74,7 @@
   },
   "scripts": {
     "clean": "node ./scripts/clean-dist.mjs",
-    "build": "pnpm clean && tsc -p tsconfig.json",
+    "build": "pnpm clean && tsc -p tsconfig.json && nocobase-db-manifests",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run --passWithNoTests",
     "lint": "eslint . --max-warnings 0",

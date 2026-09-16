@@ -1,6 +1,8 @@
 import type { AppClientRegisteredRoute } from '@nocobase/app-client/plugins';
 import type { ReactElement } from 'react';
 
+import { EMPTY_ARRAY } from '@/lib/constants';
+
 import { SurfaceLayout, type SurfaceCopy } from './surface-layout.js';
 
 const SETTINGS_COPY: SurfaceCopy = {
@@ -21,7 +23,7 @@ export interface SettingsLayoutProps {
  * The settings centre. It is the shared surface layout with settings copy; the dev tools reuse the same layout.
  */
 export function SettingsLayout({
-  routes = [],
+  routes = EMPTY_ARRAY,
   routeTree,
 }: SettingsLayoutProps): ReactElement {
   return (

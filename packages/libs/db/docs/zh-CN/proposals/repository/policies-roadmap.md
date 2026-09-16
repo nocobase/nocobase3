@@ -150,10 +150,7 @@ description: 按阶段拆分的实施任务，含前置决策、技术验证、�
 
 ### 阶段 1 验收
 
-下列前五条都是关于**真实 SQL** 的断言，单元测试的假适配器在结构上证明不了，必须落在
-`db-testkit/tests/integration/repository/policy/`，跟随八个 dialect 包执行。方言排期见
-[数据库集成测试](../../../../../../../internal-docs/development/database-integration-testing.md)：
-SQLite、PostgreSQL、MySQL、Kingbase 可并发；OceanBase、Oracle、MSSQL、Dameng 必须串行。
+下列前五条都是关于**真实 SQL** 的断言，单元测试的假适配器在结构上证明不了，必须落在 `db-testkit/tests/integration/repository/policy/`，跟随八个 dialect 包执行。各方言集成测试必须依次串行执行，不要并发。
 
 - [ ] 生成的 SQL 含 scope 条件，且不存在「先查全量再内存过滤」的路径
 - [ ] 调用方 `or` 分组与 scope 合并为 `(A OR B) AND scope`

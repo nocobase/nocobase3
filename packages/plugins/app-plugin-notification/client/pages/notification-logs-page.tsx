@@ -1,3 +1,5 @@
+import { PageContainer } from '../components/page-container.js';
+import { PageHeader } from '../components/page-header.js';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
 import { useTranslation } from '@nocobase/i18n/client';
@@ -96,24 +98,15 @@ export default function NotificationLogsPage(): ReactElement {
   );
 
   return (
-    <main className='min-h-[calc(100svh-4rem)] bg-muted/20'>
-      <header className='border-b bg-background px-6 py-7'>
-        <div className='mx-auto flex w-full max-w-7xl flex-col gap-4 sm:flex-row sm:items-end sm:justify-between'>
-          <div>
-            <p className='text-xs font-medium tracking-wide text-muted-foreground uppercase'>
-              {t('logs.eyebrow', { defaultValue: 'Notifications' })}
-            </p>
-            <h1 className='mt-1 text-2xl font-semibold tracking-tight'>
-              {t('logs.title', { defaultValue: 'Notification logs' })}
-            </h1>
-            <p className='mt-1 max-w-3xl text-sm text-muted-foreground'>
-              {t('logs.description', {
-                defaultValue:
-                  'Trace notification delivery and every provider attempt. Message bodies, recipients, and lease tokens are redacted.',
-              })}
-            </p>
-          </div>
-          <div className='flex flex-wrap gap-2'>
+    <PageContainer>
+      <PageHeader
+        title={t('logs.title', { defaultValue: 'Notification logs' })}
+        description={t('logs.description', {
+          defaultValue:
+            'Trace notification delivery and every provider attempt. Message bodies, recipients, and lease tokens are redacted.',
+        })}
+        actions={
+          <>
             <button
               className='inline-flex h-9 items-center justify-center rounded-md border bg-background px-4 text-sm font-medium shadow-xs hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50'
               disabled={loading}
@@ -133,11 +126,11 @@ export default function NotificationLogsPage(): ReactElement {
                 defaultValue: 'Send test notification',
               })}
             </button>
-          </div>
-        </div>
-      </header>
+          </>
+        }
+      />
 
-      <div className='mx-auto w-full max-w-7xl space-y-5 px-6 py-6'>
+      <div className='space-y-5'>
         <div className='grid max-w-md grid-cols-2 gap-3'>
           <Metric
             label={t('logs.deliveriesShown', {
@@ -198,7 +191,7 @@ export default function NotificationLogsPage(): ReactElement {
           onSent={refresh}
         />
       ) : null}
-    </main>
+    </PageContainer>
   );
 }
 

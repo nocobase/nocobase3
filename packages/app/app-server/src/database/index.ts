@@ -1,3 +1,4 @@
+export { defineAppDatabaseConfig } from './define-app-database-config.js';
 export {
   createAppDatabaseManager,
   resolveAppDatabaseDriver,
@@ -22,6 +23,21 @@ export {
 } from './seeder.js';
 export { prepareAppDatabaseStorage } from './storage.js';
 export {
+  isCollectionMetadataStoreInstance,
+  resolveAppCollectionsDirectory,
+  resolveAppMetadataStore,
+  type ResolveAppMetadataStoreOptions,
+} from './collections-directory.js';
+export {
+  generateAppCollectionsArtifact,
+  type AppCollectionsArtifactConnectionResult,
+  type AppCollectionsArtifactDifference,
+  type AppCollectionsArtifactDifferenceKind,
+  type AppCollectionsArtifactManifestSummary,
+  type AppCollectionsArtifactOptions,
+  type AppCollectionsArtifactResult,
+} from './collections-artifact.js';
+export {
   runAppMigrations,
   runAppSeeds,
   runAppDatabaseTasks,
@@ -39,7 +55,9 @@ export {
 } from './plan.js';
 export type {
   AppDatabaseConfig,
+  AppDatabaseConfigFromDrivers,
   AppDatabaseConnectionConfig,
+  AppMetadataStoreConfig,
   AppDatabaseMigrationConfig,
   AppDatabaseSeedConfig,
   AppDatabaseTaskContributions,

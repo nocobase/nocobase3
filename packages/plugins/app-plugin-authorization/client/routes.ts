@@ -17,11 +17,13 @@ const settings: AppClientRouteContribution = defineSettingsRoutes([
     name: 'authorization',
     path: '/authorization',
     navigation: { title: 'Authorization', icon: ShieldCheck },
+    breadcrumb: { title: 'Authorization' },
     children: [
       {
         name: 'permission-sets',
         path: '/permission-sets',
         navigation: { title: 'Permission Sets', icon: KeyRound },
+        breadcrumb: { title: 'Permission Sets' },
         access: {
           resource: 'authorization.settings.permission-sets',
           action: 'read',
@@ -32,6 +34,7 @@ const settings: AppClientRouteContribution = defineSettingsRoutes([
         name: 'default-access',
         path: '/default-access',
         navigation: { title: 'Default Access', icon: LockKeyhole },
+        breadcrumb: { title: 'Default Access' },
         access: {
           resource: 'authorization.settings.default-access',
           action: 'read',
@@ -42,6 +45,7 @@ const settings: AppClientRouteContribution = defineSettingsRoutes([
         name: 'sharing-rules',
         path: '/sharing-rules',
         navigation: { title: 'Sharing Rules', icon: Share2 },
+        breadcrumb: { title: 'Sharing Rules' },
         access: {
           resource: 'authorization.settings.sharing-rules',
           action: 'read',
@@ -52,6 +56,7 @@ const settings: AppClientRouteContribution = defineSettingsRoutes([
         name: 'restriction-rules',
         path: '/restriction-rules',
         navigation: { title: 'Restriction Rules', icon: ShieldBan },
+        breadcrumb: { title: 'Restriction Rules' },
         access: {
           resource: 'authorization.settings.restriction-rules',
           action: 'read',

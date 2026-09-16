@@ -224,8 +224,6 @@ export interface BuilderExecOptions {
   dryRun?: boolean;
   /** Return adapter SQL when supported. Best used together with dryRun. */
   previewSql?: boolean;
-  /** Defaults to true. Set false to skip Collection metadata writes. */
-  syncMetadata?: boolean;
   /** Skip supported create operations when the backing database object already exists. */
   ifNotExists?: boolean;
   /** Skip supported drop operations when the backing database object does not exist. */

@@ -22,6 +22,8 @@ import { finished, pipeline } from 'node:stream/promises';
 
 import type { NocoBaseDriveDisk } from '@nocobase/drive';
 import { x as extractTar } from 'tar';
+
+import { DeploymentPhases } from './deployment-phases.js';
 import type { Logger } from '@nocobase/logging';
 
 import type { DeploymentCatalog } from './deployment/catalog.ts';
@@ -275,6 +277,9 @@ export class DriveArtifactResolver implements ArtifactResolver {
     let hasBackup = false;
     let installed = false;
     const startedAt = Date.now();
+    // Records each phase as it finishes so a later failure can say what had already worked.
+    const phases = new DeploymentPhases();
+    let currentPhase = 'artifact download';
 
     try {
       const installedArtifact = await this.resolveInstalledArtifact(
@@ -304,12 +309,15 @@ export class DriveArtifactResolver implements ArtifactResolver {
         ? await hashLocalArtifact(localPath)
         : await downloadArtifact(this.disk, reference.key, archivePath);
       const checksumDurationMs = Date.now() - checksumStartedAt;
+      phases.complete('artifact download', checksumDurationMs);
+      currentPhase = 'checksum verification';
       if (actualChecksum !== reference.checksum) {
         throw new Error(
           `Artifact checksum mismatch for app "${reference.appId}": expected "${reference.checksum}", received "${actualChecksum}"`,
         );
       }
 
+      currentPhase = 'extract';
       await mkdir(stagingDir, { recursive: true, mode: 0o700 });
       const extractStartedAt = Date.now();
       await extractTar({
@@ -321,6 +329,8 @@ export class DriveArtifactResolver implements ArtifactResolver {
         filter: assertSafeArchiveEntry,
       });
       const extractDurationMs = Date.now() - extractStartedAt;
+      phases.complete('extract', extractDurationMs);
+      currentPhase = 'discovery';
       const discoveryStartedAt = Date.now();
       const stagedDefinition = await this.catalog.discoverAt(
         reference.appId,
@@ -329,6 +339,8 @@ export class DriveArtifactResolver implements ArtifactResolver {
       assertArtifactIdentity(stagedDefinition, reference);
       await writeInstalledArtifactMetadata(stagingDir, reference);
       const discoveryDurationMs = Date.now() - discoveryStartedAt;
+      phases.complete('discovery', discoveryDurationMs);
+      currentPhase = 'revision swap';
 
       const swapStartedAt = Date.now();
       try {
@@ -391,7 +403,7 @@ export class DriveArtifactResolver implements ArtifactResolver {
       if (hasBackup) {
         await rename(backupDir, targetDir);
       }
-      throw error;
+      throw phases.failure(currentPhase, error);
     } finally {
       await rm(archivePath, { force: true });
       await rm(stagingDir, { recursive: true, force: true });

@@ -2,7 +2,11 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { syncPluginSkills } from '../src/lib/install.ts';
+import {
+  DEFAULT_NATIVE_DRIVER,
+  syncPluginSkills,
+  verifyDriver,
+} from '../src/lib/install.ts';
 
 const created: string[] = [];
 
@@ -78,5 +82,22 @@ describe('syncPluginSkills', () => {
     expect(result.reason).toContain(
       'Could not synchronize plugin skills into .agents/skills.',
     );
+  });
+});
+
+describe('verifyDriver', () => {
+  /**
+   * The driver is no longer named in any manifest this command writes — it reaches the tree through the template's own
+   * dialect package — so its absence means the template does not use SQLite, not that the install went wrong. An
+   * install that genuinely failed has already been reported by then.
+   */
+  it('passes when the driver is not part of the project', async () => {
+    const directory = await createProject('true');
+
+    await expect(verifyDriver(directory)).resolves.toEqual({ ok: true });
+  });
+
+  it('defaults to the driver every template pulls in through @nocobase/db-sqlite', () => {
+    expect(DEFAULT_NATIVE_DRIVER).toBe('better-sqlite3');
   });
 });

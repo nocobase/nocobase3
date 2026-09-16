@@ -30,6 +30,8 @@ unless the route declares an explicit authorization resource. Removing the
 corresponding page grant therefore blocks direct navigation as well as hiding
 the navigation entry.
 
+Explicit domain checks use `access: { resource: 'type:id', action: 'action' }`, for example `hub.app:*` with `upload-release`. These checks preserve the resource type, identifier, and action. Plain resource names continue to check `page:<name>/access`; `authorization.settings.<id>` retains its administration action mapping. The permission snapshot only controls client visibility; the server must still enforce record ownership and operation permissions.
+
 The plugin provider resolves the shared database capability and registers the
 authorization instance in the service container:
 
