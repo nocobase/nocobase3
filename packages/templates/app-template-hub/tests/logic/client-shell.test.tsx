@@ -18,7 +18,13 @@ import {
   type AccessControlProvider,
   type AuthProvider,
 } from '@refinedev/core';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import type { ComponentType, ReactElement } from 'react';
 import { Outlet, MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -230,8 +236,22 @@ describe('application shell', () => {
         ...plugin,
         source: 'plugin' as const,
       }));
-      const { settingsRouteTree } =
+      const { settingsRouteTree: registeredSettingsRouteTree } =
         resolveAppClientContributions(contributions);
+      const apiKeysRoute = registeredSettingsRouteTree.find(
+        ({ packageName, path }) =>
+          packageName === '@nocobase/app-plugin-api-keys' &&
+          path === '/settings/api-keys',
+      );
+      if (!apiKeysRoute?.componentLoader) {
+        throw new Error('Hub must register the API Keys settings page');
+      }
+      const loadApiKeys = vi.fn(apiKeysRoute.componentLoader);
+      const settingsRouteTree = registeredSettingsRouteTree.map((route) =>
+        route === apiKeysRoute
+          ? { ...route, componentLoader: loadApiKeys }
+          : route,
+      );
       expect(settingsRouteTree).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -257,6 +277,14 @@ describe('application shell', () => {
         i18n,
       });
       if (allowed) {
+        await waitFor(() => expect(loadApiKeys).toHaveBeenCalled(), {
+          timeout: 10_000,
+        });
+        // Cold plugin transforms can outlast Testing Library's one-second DOM wait
+        // on CI. Await the real route load under Vitest's test timeout, then render it.
+        await act(async () => {
+          await loadApiKeys.mock.results[0]?.value;
+        });
         expect(
           await screen.findByRole('heading', { name: 'API keys' }),
         ).toBeVisible();
@@ -268,6 +296,7 @@ describe('application shell', () => {
         expect(
           await screen.findByRole('heading', { name: 'No settings available' }),
         ).toBeVisible();
+        expect(loadApiKeys).not.toHaveBeenCalled();
         expect(authClient.apiKey.list).not.toHaveBeenCalled();
         expect(
           screen.queryByRole('heading', { name: 'API keys' }),
