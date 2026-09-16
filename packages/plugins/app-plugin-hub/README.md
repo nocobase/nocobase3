@@ -117,7 +117,7 @@ Recoverable Hub keys use AES-256-GCM with a purpose-specific key derived from th
 
 ## CLI release publishing
 
-Default and Examples applications provide `pnpm nocobase app upload` and `app deploy`. Set `HUB_URL` to the Hub application URL including its mount path, for example `https://hub.example/main`, `HUB_APP_ID` to the target App, and `HUB_API_KEY` to a Hub publishing credential. Explicit `--hub`, `--app-id`, and `--api-key` flags override these variables; prefer the environment for credentials.
+Default applications provide `pnpm nocobase app upload` and `app deploy`. Set `HUB_URL` to the Hub application URL including its mount path, for example `https://hub.example/main`, `HUB_APP_ID` to the target App, and `HUB_API_KEY` to a Hub publishing credential. Explicit `--hub`, `--app-id`, and `--api-key` flags override these variables; prefer the environment for credentials.
 
 ```bash
 pnpm build --target linux-x64 --tar
