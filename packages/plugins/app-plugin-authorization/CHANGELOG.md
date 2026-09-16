@@ -1,5 +1,14 @@
 # @nocobase/app-plugin-authorization
 
+## 0.2.0-beta.11
+
+### Patch Changes
+
+- 1fea79a: Refresh permission snapshots, navigation, and route guards when sessions or permissions change, and discard obsolete permission responses without requiring a browser reload. Support explicit type:id domain resources in client access checks without rewriting their actions.
+- Updated dependencies [415d763]
+  - @nocobase/app-server@1.0.0-beta.16
+  - @nocobase/app-plugin-authentication@0.1.0-beta.15
+
 ## 0.2.0-beta.10
 
 ### Patch Changes

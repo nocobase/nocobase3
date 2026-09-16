@@ -1,5 +1,16 @@
 # @nocobase/app-template-examples
 
+## 0.1.0-beta.13
+
+### Patch Changes
+
+- 1fea79a: Refresh permission snapshots, navigation, and route guards when sessions or permissions change, and discard obsolete permission responses without requiring a browser reload. Support explicit type:id domain resources in client access checks without rewriting their actions.
+- 1fea79a: Show localized sign-out errors instead of silently refreshing an active session after an API or network failure.
+- Updated dependencies [415d763]
+- Updated dependencies [1fea79a]
+  - @nocobase/app-server@1.0.0-beta.16
+  - @nocobase/app-plugin-authorization@0.2.0-beta.11
+
 ## 0.1.0-beta.12
 
 ### Patch Changes
