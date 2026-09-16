@@ -1,5 +1,11 @@
 # @nocobase/dev-config
 
+## 0.1.0-beta.7
+
+### Minor Changes
+
+- a60decd: Require an explicit absolute baseDir for Server plugins and resolve migrations, seeds, jobs, and package metadata from the loaded plugin copy. Generate and validate database task manifests during builds so TypeScript and JavaScript share source checksums, with verified legacy JavaScript history conversion and synchronized plugin scaffolding and application templates.
+
 ## 0.1.0-beta.6
 
 ### Patch Changes
