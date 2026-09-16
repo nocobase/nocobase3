@@ -87,11 +87,13 @@ diff -rq "$WORK/$BASE" "$WORK/$TARGET" \
     done
 ```
 
-Show the user this listing, the version range, any manual actions identified from the changed contracts and project state, the removals from step 5, and the rollback. Get agreement before editing.
+Show the user this listing, the version range, any manual actions identified from the changed contracts and project state, the removals from step 5, and the rollback. Include removed plugin registrations and capabilities, their application usage, and the proposed retention, migration, or removal. Get agreement on that plan before editing.
 
 ## 5. Check what the diff cannot show
 
 Do this before editing, so its findings are in the plan. The template's files are consistent with each other after a change; the user's are not, and no diff points at them.
+
+Check plugins dropped from the manifest or any composition root even when the application never changed those files. A template-provided plugin can be in use without a custom import or registration; apply the [plugin usage review](references/edge-cases.md#review-a-removed-plugins-usage) before deciding to remove its dependency or registration.
 
 ```bash
 # For each `Only in BASE` file, and each export that vanished from a surviving file:
@@ -108,7 +110,7 @@ A hit outside the template's own files is a decision: migrate to the replacement
 
 For each file read three versions — `$WORK/$BASE/<file>`, `$WORK/$TARGET/<file>`, and the project's — then write the result with Edit.
 
-- **Untouched by the user** — take the template's version. Most of the list; fast, but still a decision, and `client/components/ui/` shadcn primitives belong here.
+- **Untouched by the user** — take the template's version for ordinary source. Manifests and plugin composition roots follow the edge-case rules, including the usage review from step 5, even when unchanged. Most ordinary files, including `client/components/ui/` shadcn primitives, belong here.
 - **Both changed it** — express what the template was trying to achieve inside the user's version. Their code exists for a reason, so this is a merge of two intents, not a choice between them. If the template's change makes their customization unnecessary, say so rather than deleting it.
 - **Template added a file** — copy it in; if something already exists at that path, reconcile rather than overwrite.
 - **Template removed a file** — only after step 5.
