@@ -12,7 +12,6 @@ import AppSeed from './seed.js';
 // `app` topic, so `info` becomes `pnpm nocobase app info`.
 const appCommands: AppCliCommands = {
   upload: AppUpload,
-  publish: AppUpload,
   deploy: AppDeploy,
   'collections:generate': AppCollectionsGenerate,
   'i18n:check': AppI18nCheck,

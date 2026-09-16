@@ -310,7 +310,7 @@ MIT
 
 ## Publish to an application Hub
 
-Build with `pnpm build --tar`, then run `pnpm nocobase app upload`. Set `HUB_URL` (including the Hub mount path, such as `https://hub.example/main`), `HUB_APP_ID`, and `HUB_API_KEY`, or supply the corresponding `--hub`, `--app-id`, and `--api-key` flags. Prefer environment variables for secrets. `app publish` is an alias for `app upload`.
+Build with `pnpm build --tar`, then run `pnpm nocobase app upload`. Set `HUB_URL` (including the Hub mount path, such as `https://hub.example/main`), `HUB_APP_ID`, and `HUB_API_KEY`, or supply the corresponding `--hub`, `--app-id`, and `--api-key` flags. Prefer environment variables for secrets.
 
 Use `app upload --deploy --wait --json` to upload and deploy, or omit `--deploy --wait` to upload only. Hub has no automatic/manual deployment setting; scripts decide which commands to run. `--file` defaults to `storage/dist.tar.gz`; `--timeout` defaults to 600 seconds. `app deploy --release-id <id> --wait --json` deploys an existing Release. Uploads default to checksum-based retry identity; deploys default to an App/Release digest. Use the same `--idempotency-key` after a failed connection and a fresh key when intentionally redeploying the same Release. Exit codes are 0 for success/acceptance, 1 for a Hub rejection or failed deployment, 2 for invalid local input, and 3 for an unconfirmed network or timeout outcome.
 

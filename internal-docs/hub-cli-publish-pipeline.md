@@ -14,7 +14,7 @@ description: 第三阶段实施方案。打通本地终端与 CI 通过命令把
 ```text
 本地终端 / CI
   -> pnpm build --target <platform> --tar
-  -> pnpm nocobase app publish
+  -> pnpm nocobase app upload
   -> Hub Release API（API Key 鉴权、流式接收）
   -> 保存不可变 Release
   -> 手动或自动 Deployment
@@ -177,7 +177,7 @@ auto 模式下 `publish --deploy` 直接拒绝，因为发布本身已含部署�
 
 行为矩阵：
 
-| deploymentMode | `app publish`                      | `app publish --deploy`              | `app deploy --release-id` |
+| deploymentMode | `app upload`                       | `app upload --deploy`               | `app deploy --release-id` |
 | -------------- | ---------------------------------- | ----------------------------------- | ------------------------- |
 | manual         | 只创建 Release                     | 创建 Release，再创建一个 Deployment | 创建一个 Deployment       |
 | auto           | 创建 Release 并自动创建 Deployment | 409，提示去掉 `--deploy`            | 创建一个新 Deployment     |
@@ -226,7 +226,7 @@ X-Hub-Deployment-Intent: explicit   # 仅 publish --deploy 发送
 ```bash
 pnpm build --target linux-x64 --tar
 
-pnpm nocobase app publish \
+pnpm nocobase app upload \
   --hub https://hub.example.com \
   --app-id crm \
   --api-key "$HUB_API_KEY" \
@@ -275,7 +275,7 @@ pnpm nocobase app publish \
 | --- | --------------------------------------------------------------------------------------- | ------ |
 | 3A  | 流式上传、checksum 校验、制品去重与上传幂等、`(appId, checksum)` 唯一约束及其 migration | 无     |
 | 3B  | API Key 表、管理接口与页面、Bearer 凭证层、路由拆组                                     | 无     |
-| 3C  | `app publish` / `app deploy` 命令，两个模板同步                                         | 3A、3B |
+| 3C  | `app upload` / `app deploy` 命令，两个模板同步                                          | 3A、3B |
 | 3D  | `deploymentMode`、auto 触发、`X-Hub-Deployment-Intent`、部署幂等、`--wait`              | 3C     |
 
 3A 和 3B 可以并行，且各自都能单独合入而不改变对外行为：3A 完成后现有 Session 上传就不再把制品读进内存，3B 完成后 API Key 可用但还没有命令调用它。
@@ -284,7 +284,7 @@ pnpm nocobase app publish \
 
 ## 8. 验收
 
-- `pnpm build --tar` 的产物能被 `app publish` 上传，参数与环境变量都生效，`--json` 输出稳定。
+- `pnpm build --tar` 的产物能被 `app upload` 上传，参数与环境变量都生效，`--json` 输出稳定。
 - API Key 只能访问绑定的 App，缺 scope 返回 403，明文只返回一次，不出现在任何日志或持久化数据里。
 - 大制品流式接收，超限和各类失败都清理临时文件，不留孤儿 artifact。
 - 相同 checksum 或相同幂等键不会重复创建 Release；同版本不同 checksum 可以共存。
@@ -305,7 +305,7 @@ pnpm nocobase app publish \
 
 上文保留为原始方案，当前实现以用户后续确认和代码为准：复用独立 API Key 插件；Hub 全局管理 Key，可绑定多个 App 或所有当前及未来 App；只使用现有 `upload-release`、`deploy` 权限点；Hub 自己处理 App 绑定、当前拥有者权限与密钥加密恢复。原方案的单 App Key、额外 read-operation scope 和自建凭证哈希表均不采用。
 
-CLI 主命令采用 `app upload`，兼容 `app publish` 别名；Default、Examples 模板提供相同命令。`upload --deploy` 改为一次 HTTP 请求，在同一数据库事务保存 Release 和部署记录，不再依赖两次请求和两份幂等键。`app deploy` 仍支持独立部署及独立幂等。部署结果通过专门的精简状态接口读取，复用 deploy 权限，不返回配置与诊断信息。上传 --wait 必须同时传 --deploy，否则 CLI 在本地直接拒绝。
+CLI 上传命令采用 `app upload`，不提供发布别名；Default、Examples 模板提供相同命令。`upload --deploy` 改为一次 HTTP 请求，在同一数据库事务保存 Release 和部署记录，不再依赖两次请求和两份幂等键。`app deploy` 仍支持独立部署及独立幂等。部署结果通过专门的精简状态接口读取，复用 deploy 权限，不返回配置与诊断信息。上传 --wait 必须同时传 --deploy，否则 CLI 在本地直接拒绝。
 
 存量重复 Release 不删除、不修改既有部署引用；新增唯一的 App/checksum 映射，保留最早 Release 作为后续上传的复用对象。用户明确取消自动/手动部署配置及默认值：上传只创建 Release，是否部署由 --deploy 或独立 app deploy 命令决定；CI 自动化由调用方脚本控制。Hub 重启后的协调恢复不在本阶段重做；相关限制保留在包 README 中。
 
