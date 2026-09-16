@@ -3,7 +3,7 @@ import {
   type AppClientAppRoutesContribution,
   type AppClientRouteDefinition,
 } from '@nocobase/app-client/plugins';
-import { Boxes, ShieldCheck } from 'lucide-react';
+import { Boxes, ShieldCheck, KeyRound } from 'lucide-react';
 
 import type { HubClientOptions } from './plugin.js';
 
@@ -69,13 +69,6 @@ export function createHubRoutes(
                 import('./pages/hub/tabs/configuration-page.js'),
             },
             {
-              name: 'hub-app-api-keys',
-              path: 'api-keys',
-              access: { resource: 'hub.app:*', action: 'manage-api-keys' },
-              componentLoader: () =>
-                import('./pages/hub/tabs/api-keys-page.js'),
-            },
-            {
               name: 'hub-app-settings',
               path: 'settings',
               componentLoader: () =>
@@ -96,6 +89,14 @@ export function createHubRoutes(
       componentLoader: () => import('./pages/roles-page.js'),
     });
   }
+  routes.push({
+    name: 'hub-api-keys',
+    path: normalizeHubRoutePath(options.apiKeysPath ?? '/api-keys'),
+    auth: 'required',
+    access: { resource: 'hub.app:*', action: 'manage-api-keys' },
+    navigation: { title: 'navigation.apiKeys', icon: KeyRound },
+    componentLoader: () => import('./pages/api-keys-page.js'),
+  });
   return defineAppRoutes(routes);
 }
 

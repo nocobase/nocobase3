@@ -1,3 +1,4 @@
+import { encryptKey, decryptKey } from './key-secret.js';
 import type {
   ApiKeyService,
   ServerApiKeySummary,
@@ -8,10 +9,12 @@ import {
   createServiceToken,
   type ServiceToken,
 } from '@nocobase/service-provider';
+import { AuthorizationDeniedError } from '@nocobase/authorization/core';
 import { HubError } from './hub.js';
 import {
   HUB_API_KEY_SCOPES,
-  HUB_API_KEY_ACTIONS,
+  type HubApiKeyApp,
+  type HubApiKeyAppOption,
   type HubApiKeyScope,
   type HubApiKeySummary,
   type CreatedHubApiKey,
@@ -26,6 +29,7 @@ export class HubApiKeyService {
     private readonly database: DatabaseManager,
     private readonly authorization: AppAuthorization,
     private readonly apiKeys: ApiKeyService,
+    private readonly encryptionSecret?: string,
   ) {}
 
   private query() {
@@ -70,16 +74,11 @@ export class HubApiKeyService {
       .require({ resource: { type: 'hub.app', id: appId }, action });
   }
 
-  async list(
-    appId: string,
-    userId: string,
-  ): Promise<readonly HubApiKeySummary[]> {
-    await this.requirePermission(userId, appId, 'manage-api-keys');
-    await this.requireApp(appId);
+  async list(userId: string): Promise<readonly HubApiKeySummary[]> {
+    await this.requirePermission(userId, '*', 'manage-api-keys');
     const rows = await this.query()
-      .selectFrom('hubAppApiKeys')
+      .selectFrom('hubApiKeys')
       .selectAll()
-      .where('appId', '=', appId)
       .orderBy('createdAt', 'desc')
       .orderBy('id', 'desc')
       .execute<Row>();
@@ -94,8 +93,10 @@ export class HubApiKeyService {
           .executeTakeFirst();
         return summary(
           row,
+          await this.keyApps(String(row.id)),
           key,
           typeof user?.name === 'string' ? user.name : key.referenceId,
+          userId,
         );
       }),
     );
@@ -103,14 +104,20 @@ export class HubApiKeyService {
   }
 
   async create(
-    appId: string,
     userId: string,
     input: CreateHubApiKeyInput,
   ): Promise<CreatedHubApiKey> {
-    await this.requirePermission(userId, appId, 'manage-api-keys');
-    await this.requireApp(appId);
+    await this.requirePermission(userId, '*', 'manage-api-keys');
     if (
       !input ||
+      !Array.isArray(input.appIds) ||
+      (input.allApps !== undefined && typeof input.allApps !== 'boolean') ||
+      (input.allApps === true
+        ? input.appIds.length > 0
+        : !input.appIds.length) ||
+      input.appIds.some(
+        (id: unknown) => typeof id !== 'string' || !id.trim(),
+      ) ||
       typeof input.name !== 'string' ||
       !input.name.trim() ||
       input.name.trim().length > 100 ||
@@ -143,8 +150,17 @@ export class HubApiKeyService {
         'INVALID_API_KEY_INPUT',
         400,
       );
-    for (const scope of scopes)
-      await this.requirePermission(userId, appId, HUB_API_KEY_ACTIONS[scope]);
+    const allApps = input.allApps === true;
+    const appIds: string[] = [...new Set<string>(input.appIds)];
+    if (allApps) {
+      for (const scope of scopes)
+        await this.requirePermission(userId, '*', scope);
+    }
+    for (const appId of appIds) {
+      await this.requireApp(appId);
+      for (const scope of scopes)
+        await this.requirePermission(userId, appId, scope);
+    }
     return this.database.transaction(async (connection) => {
       const { key, secret } = await this.apiKeys
         .withConnection(connection)
@@ -157,13 +173,31 @@ export class HubApiKeyService {
         });
       const row = {
         id: key.id,
-        appId,
+        allApps,
+        encryptedSecret: encryptKey(
+          secret,
+          key.id,
+          userId,
+          this.encryptionSecret,
+        ),
         scopes: JSON.stringify(scopes),
         createdAt: new Date(),
         disabledAt: null,
         lastUsedAt: null,
       };
-      await connection.query.insertInto('hubAppApiKeys').values(row).execute();
+      await connection.query.insertInto('hubApiKeys').values(row).execute();
+      if (appIds.length)
+        await connection.query
+          .insertInto('hubApiKeyApps')
+          .values(appIds.map((appId) => ({ keyId: key.id, appId })))
+          .execute();
+      const apps = appIds.length
+        ? await connection.query
+            .selectFrom('hubApps')
+            .select(['id', 'name'])
+            .where('id', 'in', appIds)
+            .execute<HubApiKeyApp>()
+        : [];
       const user = await connection.query
         .selectFrom('user')
         .select('name')
@@ -172,67 +206,153 @@ export class HubApiKeyService {
       return {
         key: summary(
           row,
+          apps,
           key,
           typeof user?.name === 'string' ? user.name : userId,
+          userId,
         ),
         secret,
       };
     });
   }
 
-  async disable(appId: string, keyId: string, userId: string): Promise<void> {
-    await this.requirePermission(userId, appId, 'manage-api-keys');
-    await this.requireKey(appId, keyId);
+  async appOptions(userId: string): Promise<readonly HubApiKeyAppOption[]> {
+    await this.requirePermission(userId, '*', 'manage-api-keys');
+    const apps = await this.query()
+      .selectFrom('hubApps')
+      .select(['id', 'name'])
+      .orderBy('name')
+      .execute<HubApiKeyApp>();
+    const options: HubApiKeyAppOption[] = [];
+    for (const app of apps) {
+      const permissions: HubApiKeyScope[] = [];
+      for (const action of HUB_API_KEY_SCOPES) {
+        try {
+          await this.requirePermission(userId, app.id, action);
+          permissions.push(action);
+        } catch (error) {
+          if (!(error instanceof AuthorizationDeniedError)) throw error;
+        }
+      }
+      if (permissions.length) options.push({ ...app, permissions });
+    }
+    return options;
+  }
+
+  private async keyApps(keyId: string): Promise<HubApiKeyApp[]> {
+    return this.query()
+      .selectFrom('hubApiKeyApps')
+      .innerJoin('hubApps', 'hubApps.id', 'hubApiKeyApps.appId')
+      .select(['hubApps.id', 'hubApps.name'])
+      .where('keyId', '=', keyId)
+      .orderBy('hubApps.id')
+      .execute<HubApiKeyApp>();
+  }
+
+  async reveal(keyId: string, userId: string): Promise<string> {
+    await this.requirePermission(userId, '*', 'manage-api-keys');
+    const key = await this.apiKeys.get(keyId);
+    const row = await this.query()
+      .selectFrom('hubApiKeys')
+      .selectAll()
+      .where('id', '=', keyId)
+      .executeTakeFirst<Row>();
+    if (!key || !row)
+      throw new HubError('API key not found.', 'API_KEY_NOT_FOUND', 404);
+    if (key.referenceId !== userId)
+      throw new HubError(
+        'Only the creator can copy this key.',
+        'API_KEY_OWNER_REQUIRED',
+        403,
+      );
+    if (
+      !key.enabled ||
+      row.disabledAt != null ||
+      (key.expiresAt && new Date(key.expiresAt).getTime() <= Date.now())
+    )
+      throw new HubError(
+        'This key is no longer active.',
+        'API_KEY_INACTIVE',
+        409,
+      );
+    if (typeof row.encryptedSecret !== 'string')
+      throw new HubError(
+        'This legacy key cannot be recovered. Create a replacement key.',
+        'API_KEY_NOT_RECOVERABLE',
+        409,
+      );
+    try {
+      return decryptKey(
+        row.encryptedSecret,
+        key.id,
+        userId,
+        this.encryptionSecret,
+      );
+    } catch {
+      throw new HubError(
+        'The saved key could not be decrypted. Create a replacement key.',
+        'API_KEY_NOT_RECOVERABLE',
+        409,
+      );
+    }
+  }
+
+  async disable(keyId: string, userId: string): Promise<void> {
+    await this.requirePermission(userId, '*', 'manage-api-keys');
     await this.database.transaction(async (connection) => {
+      const row = await connection.query
+        .selectFrom('hubApiKeys')
+        .select('id')
+        .where('id', '=', keyId)
+        .executeTakeFirst();
+      if (!row)
+        throw new HubError('API key not found.', 'API_KEY_NOT_FOUND', 404);
       await this.apiKeys.withConnection(connection).disable(keyId);
       await connection.query
-        .updateTable('hubAppApiKeys')
-        .set({ disabledAt: new Date() })
+        .updateTable('hubApiKeys')
+        .set({ disabledAt: new Date(), encryptedSecret: null })
         .where('id', '=', keyId)
-        .where('appId', '=', appId)
         .where('disabledAt', 'is', null)
         .execute();
     });
   }
 
-  async remove(appId: string, keyId: string, userId: string): Promise<void> {
-    await this.requirePermission(userId, appId, 'manage-api-keys');
-    await this.requireApp(appId);
-    const row = await this.query()
-      .selectFrom('hubAppApiKeys')
-      .select('id')
-      .where('appId', '=', appId)
-      .where('id', '=', keyId)
-      .executeTakeFirst();
-    if (!row) return;
-    await this.apiKeys.remove(keyId);
-    await this.query()
-      .deleteFrom('hubAppApiKeys')
-      .where('id', '=', keyId)
-      .where('appId', '=', appId)
-      .execute();
+  async remove(keyId: string, userId: string): Promise<void> {
+    await this.requirePermission(userId, '*', 'manage-api-keys');
+    await this.database.transaction(async (connection) => {
+      const row = await connection.query
+        .selectFrom('hubApiKeys')
+        .select('id')
+        .where('id', '=', keyId)
+        .executeTakeFirst();
+      if (row) await this.apiKeys.withConnection(connection).remove(keyId);
+    });
   }
 
-  /** Called by App removal after its own remove permission check. */
+  /** Removing one App must preserve a shared key's other App bindings. */
   async removeAppKeys(appId: string): Promise<void> {
-    const rows = await this.query()
-      .selectFrom('hubAppApiKeys')
-      .select('id')
-      .where('appId', '=', appId)
-      .execute();
-    for (const row of rows) await this.apiKeys.remove(String(row.id));
-  }
-
-  private async requireKey(appId: string, keyId: string): Promise<void> {
-    await this.requireApp(appId);
-    const key = await this.query()
-      .selectFrom('hubAppApiKeys')
-      .select('id')
-      .where('id', '=', keyId)
-      .where('appId', '=', appId)
-      .executeTakeFirst();
-    if (!key)
-      throw new HubError('API key not found.', 'API_KEY_NOT_FOUND', 404);
+    await this.database.transaction(async (connection) => {
+      const rows = await connection.query
+        .selectFrom('hubApiKeyApps')
+        .select('keyId')
+        .where('appId', '=', appId)
+        .execute();
+      await connection.query
+        .deleteFrom('hubApiKeyApps')
+        .where('appId', '=', appId)
+        .execute();
+      for (const row of rows) {
+        const remaining = await connection.query
+          .selectFrom('hubApiKeyApps')
+          .select('appId')
+          .where('keyId', '=', row.keyId)
+          .executeTakeFirst();
+        if (!remaining)
+          await this.apiKeys
+            .withConnection(connection)
+            .remove(String(row.keyId));
+      }
+    });
   }
 
   async verify(
@@ -248,26 +368,28 @@ export class HubApiKeyService {
         401,
       );
     const row = await this.query()
-      .selectFrom('hubAppApiKeys')
+      .selectFrom('hubApiKeys')
       .selectAll()
       .where('id', '=', key.id)
       .executeTakeFirst<Row>();
     if (!row || row.disabledAt != null)
       throw new HubError('Invalid publishing key.', 'INVALID_API_KEY', 401);
-    if (row.appId !== appId || !parseScopes(row.scopes).includes(scope))
+    const binding = await this.query()
+      .selectFrom('hubApiKeyApps')
+      .select('appId')
+      .where('keyId', '=', key.id)
+      .where('appId', '=', appId)
+      .executeTakeFirst();
+    if ((!row.allApps && !binding) || !parseScopes(row.scopes).includes(scope))
       throw new HubError(
         'API key does not allow this application or operation.',
         'API_KEY_FORBIDDEN',
         403,
       );
     await this.requireApp(appId);
-    await this.requirePermission(
-      key.referenceId,
-      appId,
-      HUB_API_KEY_ACTIONS[scope],
-    );
+    await this.requirePermission(key.referenceId, appId, scope);
     await this.query()
-      .updateTable('hubAppApiKeys')
+      .updateTable('hubApiKeys')
       .set({ lastUsedAt: new Date() })
       .where('id', '=', row.id)
       .execute();
@@ -292,13 +414,22 @@ function parseScopes(value: unknown): HubApiKeyScope[] {
 }
 function summary(
   row: Row,
+  apps: readonly HubApiKeyApp[],
   key: ServerApiKeySummary,
   creatorName: string,
+  userId: string,
 ): HubApiKeySummary {
   const expiresAt = date(key.expiresAt);
   return {
     id: String(row.id),
-    appId: String(row.appId),
+    canCopy:
+      key.referenceId === userId &&
+      typeof row.encryptedSecret === 'string' &&
+      key.enabled &&
+      row.disabledAt == null &&
+      (!expiresAt || expiresAt.getTime() > Date.now()),
+    apps,
+    allApps: Boolean(row.allApps),
     name: key.name ?? '',
     prefix: key.start ?? key.prefix ?? '',
     scopes: parseScopes(row.scopes),

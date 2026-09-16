@@ -1,9 +1,12 @@
-import ownershipMigration from '../database/migrations/202609160004_hub_app_ownership.js';
+import configFingerprintMigration from '../database/migrations/202609160007_release_config_fingerprint.js';
+import removeDeploymentMode from '../database/migrations/202609160006_remove_deployment_mode.js';
+import publishingMigration from '../database/migrations/202609160005_release_publishing.js';
 import sqlite from '@nocobase/db-sqlite';
 import {
   mkdtemp,
   mkdir,
   readFile,
+  readdir,
   rm,
   stat,
   writeFile,
@@ -25,6 +28,7 @@ import { c as createTar } from 'tar';
 import { parse as parseYaml } from 'yaml';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import ownershipMigration from '../database/migrations/202609160004_hub_app_ownership.js';
 import migration from '../database/migrations/202609010001_create_hub_app_tables.js';
 import {
   DefaultHubService,
@@ -54,6 +58,21 @@ describe('@nocobase/app-plugin-hub service', () => {
       connection,
     });
     await ownershipMigration.up({
+      builder: connection.builder,
+      query: connection.query,
+      connection,
+    });
+    await publishingMigration.up({
+      builder: connection.builder,
+      query: connection.query,
+      connection,
+    });
+    await removeDeploymentMode.up({
+      builder: connection.builder,
+      query: connection.query,
+      connection,
+    });
+    await configFingerprintMigration.up({
       builder: connection.builder,
       query: connection.query,
       connection,
@@ -150,6 +169,258 @@ describe('@nocobase/app-plugin-hub service', () => {
         .where('id', '=', 'alice-a')
         .executeTakeFirst(),
     ).toEqual({ createdBy: 'alice' });
+  });
+
+  it('cleans candidate artifacts and configuration when atomic publishing persistence fails', async () => {
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    const bytes = await createArtifact(rootDir, '1.0.0');
+    const failure = vi
+      .spyOn(database, 'transaction')
+      .mockRejectedValueOnce(new Error('Database unavailable'));
+    await expect(
+      service.createRelease('customer', {
+        bytes,
+        deploymentIntent: 'explicit',
+      }),
+    ).rejects.toThrow('Database unavailable');
+    failure.mockRestore();
+    expect(await service.listReleases('customer')).toHaveLength(0);
+    expect((await service.listDeployments('customer')).total).toBe(0);
+    expect(
+      (await readdir(path.join(rootDir, 'app-artifacts/customer'))).filter(
+        (name) => name.endsWith('.tar.gz'),
+      ),
+    ).toEqual([]);
+    expect(
+      await readdir(path.join(rootDir, 'hub/app-configs/customer/configs')),
+    ).toEqual([]);
+  });
+
+  it('deduplicates concurrent uploads and binds multiple retry keys without rewriting releases', async () => {
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    await service.createApp({ id: 'other', name: 'Other' });
+    const bytes = await createArtifact(rootDir, '1.2.3');
+    const [first, second] = await Promise.all([
+      service.createRelease('customer', { bytes, idempotencyKey: 'ci-1' }),
+      service.createRelease('customer', { bytes, idempotencyKey: 'ci-2' }),
+    ]);
+    expect(first.id).toBe(second.id);
+    expect((await service.listReleases('customer')).length).toBe(1);
+    expect((await service.createRelease('other', { bytes })).id).not.toBe(
+      first.id,
+    );
+    const changed = await createArtifact(rootDir, '1.2.3', {
+      configTemplate: 'name: changed',
+    });
+    await expect(
+      service.createRelease('customer', {
+        bytes: changed,
+        idempotencyKey: 'ci-1',
+      }),
+    ).rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' });
+    expect(
+      (await service.createRelease('customer', { bytes: changed })).id,
+    ).not.toBe(first.id);
+    expect(
+      await database
+        .query()
+        .selectFrom('hubReleaseRequests')
+        .selectAll()
+        .execute(),
+    ).toHaveLength(2);
+  });
+
+  it('atomically accepts explicit publishing deployments and reuses their results', async () => {
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    const bytes = await createArtifact(rootDir, '1.2.3');
+    const authorizeDeployment = vi.fn().mockResolvedValue(undefined);
+    const uploaded = await service.createRelease('customer', {
+      bytes,
+      deploymentIntent: 'explicit',
+      authorizeDeployment,
+    });
+    expect(uploaded.operationId).toEqual(expect.any(String));
+    expect(authorizeDeployment).toHaveBeenCalledOnce();
+    const repeated = await service.createRelease('customer', {
+      bytes,
+      deploymentIntent: 'explicit',
+      authorizeDeployment,
+    });
+    expect(repeated).toMatchObject({
+      id: uploaded.id,
+      operationId: uploaded.operationId,
+      reused: true,
+    });
+    await waitForDeployment(service, 'customer', uploaded.operationId!);
+    expect((await service.listDeployments('customer')).total).toBe(1);
+    const uploadOnly = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '2.0.0'),
+    });
+    expect(uploadOnly.operationId).toBeNull();
+    expect((await service.listDeployments('customer')).total).toBe(1);
+  });
+
+  it('rejects uploading an existing Release with deployment intent instead of silently succeeding', async () => {
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    const bytes = await createArtifact(rootDir, '1.0.0');
+    const release = await service.createRelease('customer', { bytes });
+    for (const waitForDeployment of [false, true]) {
+      await expect(
+        service.createRelease('customer', {
+          bytes,
+          deploymentIntent: 'explicit',
+          waitForDeployment,
+        }),
+      ).rejects.toMatchObject({ code: 'NO_DEPLOYMENT', status: 409 });
+    }
+    expect(await service.listReleases('customer')).toHaveLength(1);
+    expect((await service.listDeployments('customer')).total).toBe(0);
+    const deployment = await service.deploy('customer', {
+      releaseId: release.id,
+      idempotencyKey: 'explicit-deployment',
+    });
+    await waitForDeployment(service, 'customer', deployment.id);
+    expect((await service.listDeployments('customer')).total).toBe(1);
+  });
+
+  it('does not read or save deploying uploads without deploy permission', async () => {
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    const read = vi.fn();
+    async function* stream() {
+      read();
+      yield new Uint8Array([1]);
+    }
+    await expect(
+      service.createRelease('customer', {
+        stream: stream(),
+        deploymentIntent: 'explicit',
+        authorizeDeployment: () => Promise.reject(new Error('Forbidden')),
+      }),
+    ).rejects.toThrow('Forbidden');
+    expect(read).not.toHaveBeenCalled();
+    expect(await service.listReleases('customer')).toHaveLength(0);
+  });
+
+  it('rejects upload wait without explicit deployment before consuming the artifact', async () => {
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    const read = vi.fn();
+    async function* stream() {
+      read();
+      yield new Uint8Array([1]);
+    }
+    await expect(
+      service.createRelease('customer', {
+        stream: stream(),
+        waitForDeployment: true,
+      }),
+    ).rejects.toMatchObject({ code: 'WAIT_REQUIRES_DEPLOY', status: 400 });
+    expect(read).not.toHaveBeenCalled();
+    expect(await service.listReleases('customer')).toHaveLength(0);
+  });
+
+  it('uses supplied publishing configuration, retains it by default and supports explicit replacement', async () => {
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    const bytes = await createArtifact(rootDir, '1.0.0', {
+      configTemplate: 'feature: template\n',
+    });
+    const input = {
+      bytes,
+      deploymentIntent: 'explicit' as const,
+      config: { mode: 'file' as const, content: 'feature: supplied\n' },
+      idempotencyKey: 'configured-upload',
+    };
+    const first = await service.createRelease('customer', input);
+    await waitForDeployment(service, 'customer', first.operationId!);
+    expect((await service.readConfig('customer')).content).toContain(
+      'feature: supplied',
+    );
+    expect(
+      (await service.getRelease('customer', first.id)).configTemplate,
+    ).toBe('feature: template\n');
+    expect(await service.createRelease('customer', input)).toMatchObject({
+      id: first.id,
+      operationId: first.operationId,
+      reused: true,
+    });
+    await expect(
+      service.createRelease('customer', {
+        ...input,
+        config: { mode: 'file', content: 'feature: changed\n' },
+      }),
+    ).rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' });
+    const second = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '2.0.0', {
+        configTemplate: 'feature: new-template\n',
+      }),
+      deploymentIntent: 'explicit',
+    });
+    await waitForDeployment(service, 'customer', second.operationId!);
+    expect((await service.readConfig('customer')).content).toContain(
+      'feature: supplied',
+    );
+    const third = await service.deploy('customer', {
+      releaseId: second.id,
+      config: { mode: 'file', content: 'feature: replaced\n' },
+    });
+    await waitForDeployment(service, 'customer', third.id);
+    expect((await service.readConfig('customer')).content).toContain(
+      'feature: replaced',
+    );
+    expect((await service.readConfig('customer')).content).not.toContain(
+      'feature: supplied',
+    );
+  });
+
+  it('rejects configuration without deployment and invalid YAML without creating a Release', async () => {
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    const bytes = await createArtifact(rootDir, '1.0.0');
+    await expect(
+      service.createRelease('customer', {
+        bytes,
+        config: { mode: 'file', content: 'feature: true' },
+      }),
+    ).rejects.toMatchObject({ code: 'CONFIG_REQUIRES_DEPLOY' });
+    await expect(
+      service.createRelease('customer', {
+        bytes,
+        deploymentIntent: 'explicit',
+        config: { mode: 'file', content: 'invalid: [' },
+      }),
+    ).rejects.toThrow();
+    expect(await service.listReleases('customer')).toHaveLength(0);
+    expect((await service.listDeployments('customer')).total).toBe(0);
+  });
+
+  it('rejects invalid deployment requests before querying or writing a deployment', async () => {
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    await expect(
+      service.deploy('customer', { releaseId: '' }),
+    ).rejects.toMatchObject({ status: 400, code: 'INVALID_DEPLOYMENT_INPUT' });
+    expect((await service.listDeployments('customer')).total).toBe(0);
+  });
+
+  it('keeps standalone deployment retries stable and rejects a changed target', async () => {
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    const release = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '1.0.0'),
+    });
+    const first = await service.deploy('customer', {
+      releaseId: release.id,
+      idempotencyKey: 'deploy-1',
+    });
+    const again = await service.deploy('customer', {
+      releaseId: release.id,
+      idempotencyKey: 'deploy-1',
+    });
+    expect(again.id).toBe(first.id);
+    await expect(
+      service.deploy('customer', {
+        releaseId: 'changed',
+        idempotencyKey: 'deploy-1',
+      }),
+    ).rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' });
+    await waitForDeployment(service, 'customer', first.id);
+    expect((await service.listDeployments('customer')).total).toBe(1);
   });
 
   it('paginates deployments with stable ordering and app isolation', async () => {
@@ -695,6 +966,48 @@ describe('@nocobase/app-plugin-hub service', () => {
       revision: deployment.id,
       content,
     });
+  });
+
+  it('replaces example secrets and preserves them across deployments and publication', async () => {
+    const template =
+      '# Preserve this comment\nauth:\n  secret: replace-with-a-unique-secret\nsession:\n  secret: replace-with-a-unique-secret\n';
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    const release = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '1.2.3', {
+        configTemplate: template,
+      }),
+    });
+    const first = await service.deploy('customer', { releaseId: release.id });
+    await waitForDeployment(service, 'customer', first.id);
+    const initial = await service.readConfig('customer');
+    const secrets = parseYaml(initial.content!) as {
+      auth: { secret: string };
+      session: { secret: string };
+    };
+    expect(secrets.auth.secret).toHaveLength(43);
+    expect(secrets.session.secret).toHaveLength(43);
+    expect(secrets.auth.secret).not.toBe(secrets.session.secret);
+    expect(initial.content).toContain('# Preserve this comment');
+    const second = await service.deploy('customer', {
+      releaseId: release.id,
+      config: { mode: 'file', content: template },
+    });
+    await waitForDeployment(service, 'customer', second.id);
+    expect(parseYaml((await service.readConfig('customer')).content!)).toEqual(
+      secrets,
+    );
+    const updated = await service.updateConfig('customer', {
+      content: template,
+    });
+    expect(parseYaml(updated.content!)).toEqual(secrets);
+    expect(
+      await service.updateConfig('customer', { content: updated.content! }),
+    ).toEqual(updated);
+    const custom =
+      'auth:\n  secret: supplied-auth-secret-at-least-32-characters\nsession:\n  secret: supplied-session-secret-at-least-32-characters\n';
+    expect(
+      (await service.updateConfig('customer', { content: custom })).content,
+    ).toBe(custom);
   });
 
   it('reuses an existing auth secret and keeps a user-provided secret', async () => {

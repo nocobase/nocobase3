@@ -38,6 +38,7 @@ export class HubProvider extends ServiceProvider<HubProviderApplication> {
             resolver.resolve(authenticationToken),
             HUB_API_KEY_CONFIG_ID,
           ),
+          this.app.config.get<{ secret?: string }>('auth')?.secret,
         ),
     );
     this.app.container.singleton(hubServiceToken, (resolver) => {

@@ -1,19 +1,22 @@
-export const HUB_API_KEY_SCOPES = [
-  'upload-release',
-  'read-release',
-  'deploy',
-  'read-operation',
-] as const;
+import { HUB_RELEASE_ACTIONS } from './permissions.js';
+// These are the existing hub.app actions used by Administrator and Operator grants.
+export const HUB_API_KEY_SCOPES: readonly [
+  typeof HUB_RELEASE_ACTIONS.upload,
+  typeof HUB_RELEASE_ACTIONS.deploy,
+] = [HUB_RELEASE_ACTIONS.upload, HUB_RELEASE_ACTIONS.deploy] as const;
 export type HubApiKeyScope = (typeof HUB_API_KEY_SCOPES)[number];
-export const HUB_API_KEY_ACTIONS: Readonly<Record<HubApiKeyScope, string>> = {
-  'upload-release': 'upload-release',
-  'read-release': 'read-release',
-  deploy: 'deploy',
-  'read-operation': 'read-deployment',
-};
-export interface HubApiKeySummary {
+export interface HubApiKeyApp {
   readonly id: string;
-  readonly appId: string;
+  readonly name: string;
+}
+export interface HubApiKeyAppOption extends HubApiKeyApp {
+  readonly permissions: readonly HubApiKeyScope[];
+}
+export interface HubApiKeySummary {
+  readonly canCopy: boolean;
+  readonly id: string;
+  readonly apps: readonly HubApiKeyApp[];
+  readonly allApps: boolean;
   readonly name: string;
   readonly prefix: string;
   readonly scopes: readonly HubApiKeyScope[];
@@ -25,6 +28,8 @@ export interface HubApiKeySummary {
   readonly lastUsedAt: string | null;
 }
 export interface CreateHubApiKeyInput {
+  readonly appIds: readonly string[];
+  readonly allApps?: boolean;
   readonly name: string;
   readonly scopes: readonly HubApiKeyScope[];
   readonly expiresAt?: string | null;

@@ -89,7 +89,13 @@ function createApiKeysPlugin(
           });
           if (!row) return null;
           const { key: _hash, ...key } = row;
-          return key;
+          return {
+            ...key,
+            permissions:
+              typeof key.permissions === 'string'
+                ? (JSON.parse(key.permissions) as ApiKey['permissions'])
+                : (key.permissions ?? null),
+          };
         },
       ),
       deleteServerApiKey: createAuthEndpoint.serverOnly(

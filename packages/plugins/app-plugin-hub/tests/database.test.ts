@@ -1,4 +1,6 @@
-import ownershipMigration from '../database/migrations/202609160004_hub_app_ownership.js';
+import removeDeploymentMode from '../database/migrations/202609160006_remove_deployment_mode.js';
+import configFingerprintMigration from '../database/migrations/202609160007_release_config_fingerprint.js';
+import publishingMigration from '../database/migrations/202609160005_release_publishing.js';
 import sqlite from '@nocobase/db-sqlite';
 import {
   createDatabaseManager,
@@ -7,6 +9,7 @@ import {
 } from '@nocobase/db';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import ownershipMigration from '../database/migrations/202609160004_hub_app_ownership.js';
 import appTablesMigration from '../database/migrations/202609010001_create_hub_app_tables.js';
 import permissionSetsMigration from '../database/migrations/202609080001_create_hub_permission_sets.js';
 import administratorSeed from '../database/seeds/202609080001_assign_hub_administrator.js';
@@ -40,6 +43,104 @@ describe('@nocobase/app-plugin-hub database migration', () => {
 
   afterEach(async () => {
     await database.destroy();
+  });
+
+  it('adds and reverses the publishing configuration fingerprint while preserving existing rows', async () => {
+    await migrate(appTablesMigration, 'up', database);
+    await migrate(publishingMigration, 'up', database);
+    await database
+      .query()
+      .insertInto('hubReleaseChecksums')
+      .values({ appId: 'crm', checksum: 'a'.repeat(64), releaseId: 'old' })
+      .execute();
+    await migrate(configFingerprintMigration, 'up', database);
+    const client = await database.connection().client<SqliteClient>();
+    expect(
+      await client.schema.hasColumn(
+        'hub_release_checksums',
+        'config_fingerprint',
+      ),
+    ).toBe(true);
+    expect(
+      await database
+        .query()
+        .selectFrom('hubReleaseChecksums')
+        .selectAll()
+        .execute(),
+    ).toMatchObject([{ releaseId: 'old', configFingerprint: null }]);
+    await migrate(configFingerprintMigration, 'down', database);
+    expect(
+      await client.schema.hasColumn(
+        'hub_release_checksums',
+        'config_fingerprint',
+      ),
+    ).toBe(false);
+    await migrate(configFingerprintMigration, 'up', database);
+    expect(
+      await database
+        .query()
+        .selectFrom('hubReleaseChecksums')
+        .selectAll()
+        .execute(),
+    ).toHaveLength(1);
+  });
+
+  it('preserves duplicate release history while selecting a canonical checksum and reverses publishing tables', async () => {
+    await migrate(appTablesMigration, 'up', database);
+    for (const id of ['old', 'new'])
+      await database
+        .query()
+        .insertInto('hubAppReleases')
+        .values({
+          id,
+          appId: 'crm',
+          version: '1.0.0',
+          artifactKey: id,
+          checksum: 'a'.repeat(64),
+          size: 1,
+          configTemplate: null,
+          manifest: null,
+          createdAt: new Date(id === 'old' ? '2026-01-01' : '2026-02-01'),
+        })
+        .execute();
+    await migrate(publishingMigration, 'up', database);
+    expect(
+      await database.query().selectFrom('hubAppReleases').selectAll().execute(),
+    ).toHaveLength(2);
+    expect(
+      await database
+        .query()
+        .selectFrom('hubReleaseChecksums')
+        .selectAll()
+        .execute(),
+    ).toMatchObject([{ releaseId: 'old' }]);
+    await expect(
+      database
+        .query()
+        .insertInto('hubReleaseChecksums')
+        .values({ appId: 'crm', checksum: 'a'.repeat(64), releaseId: 'new' })
+        .execute(),
+    ).rejects.toThrow();
+    await migrate(removeDeploymentMode, 'up', database);
+    const schema = await database.connection().client<SqliteClient>();
+    expect(await schema.schema.hasColumn('hub_apps', 'deployment_mode')).toBe(
+      false,
+    );
+    await migrate(removeDeploymentMode, 'down', database);
+    await migrate(publishingMigration, 'down', database);
+    const client = await database.connection().client<SqliteClient>();
+    expect(await client.schema.hasColumn('hub_apps', 'deployment_mode')).toBe(
+      false,
+    );
+    expect(await client.schema.hasTable('hub_release_checksums')).toBe(false);
+    await migrate(publishingMigration, 'up', database);
+    expect(
+      await database
+        .query()
+        .selectFrom('hubReleaseChecksums')
+        .selectAll()
+        .execute(),
+    ).toHaveLength(1);
   });
 
   it('creates the App, Release, and Deployment schema', async () => {

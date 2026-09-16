@@ -339,14 +339,15 @@ describe('Hub role API permissions', () => {
       for (const tab of tabs) {
         if (!tab.access) continue;
         const allowed =
-          tab.path === 'api-keys'
-            ? role === 'hub-administrator'
-            : role !== 'hub-viewer' ||
-              ['deployments', 'releases'].includes(tab.path!);
+          role !== 'hub-viewer' ||
+          ['deployments', 'releases'].includes(tab.path!);
         expect(await can(tab.access), `${role}: ${tab.name}`).toEqual({
           can: allowed,
         });
       }
+      expect(await can(routes[1]!.access!)).toEqual({
+        can: role === 'hub-administrator',
+      });
       await provider.shutdown();
     },
   );
@@ -680,7 +681,7 @@ function request(
           body: scenario.body,
           ...(hasJsonBody
             ? { headers: { 'content-type': 'application/json' } }
-            : {}),
+            : { headers: { 'content-type': 'application/gzip' } }),
         }),
   });
 }

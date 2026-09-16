@@ -596,3 +596,13 @@ writes or arbitrary collection/query parameters. Row previews are capped at 100;
 aggregates cover the entire selected sample set.
 
 This is Examples-only teaching content, so it does not change Default or Hub.
+
+## Publish to an application Hub
+
+Build with `pnpm build --tar`, then run `pnpm nocobase app upload`. Set `HUB_URL` (including the Hub mount path, such as `https://hub.example/main`), `HUB_APP_ID`, and `HUB_API_KEY`, or supply the corresponding `--hub`, `--app-id`, and `--api-key` flags. Prefer environment variables for secrets. `app publish` is an alias for `app upload`.
+
+Use `app upload --deploy --wait --json` to upload and deploy, or omit `--deploy --wait` to upload only. Hub has no automatic/manual deployment setting; scripts decide which commands to run. `--file` defaults to `storage/dist.tar.gz`; `--timeout` defaults to 600 seconds. `app deploy --release-id <id> --wait --json` deploys an existing Release. Uploads default to checksum-based retry identity; deploys default to an App/Release digest. Use the same `--idempotency-key` after a failed connection and a fresh key when intentionally redeploying the same Release. Exit codes are 0 for success/acceptance, 1 for a Hub rejection or failed deployment, 2 for invalid local input, and 3 for an unconfirmed network or timeout outcome.
+
+Publishing keys reuse Hub's `upload-release` and `deploy` actions and remain restricted to their selected Apps and their owner's current permissions. Uploading with deployment needs both permissions; waiting uses a minimal deployment status endpoint under `deploy`. These commands call Hub over HTTP and never load this application's server or connect directly to Host.
+
+Both `app deploy --release-id <id> --config ./runtime.yml` and `app upload --deploy --config ./runtime.yml` accept an optional runtime YAML file (non-empty UTF-8, at most 1 MiB). Paths resolve from the App root. Omitting `--config` reuses the current Hub configuration; on first deployment, the existing Release-template initialization still applies. Supplied configuration replaces the configuration document through the existing Hub secret handling and YAML validation; it is not merged with arbitrary existing fields and never changes the Release template or archive. `app upload --config` without `--deploy` is rejected. Use `app deploy` to apply a different configuration to an already uploaded Release; configured upload retries reuse only the originally supplied configuration. Default deployment retry identity includes supplied configuration content. Configuration content is never printed in CLI results.

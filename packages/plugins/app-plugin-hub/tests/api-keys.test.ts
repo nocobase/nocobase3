@@ -1,3 +1,12 @@
+import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { c as createTar } from 'tar';
+import {
+  DefaultHubService,
+  type HubHostController,
+} from '../server/services/hub.js';
+import { publishToHub } from '../../../templates/app-template-default/cli/hub-publishing.js';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import type { Knex } from 'knex';
@@ -29,8 +38,12 @@ import {
   hubApiKeyServiceToken,
 } from '../server/services/api-keys.js';
 import { hubServiceToken, type HubService } from '../server/tokens.js';
+import { HubError } from '../server/services/hub.js';
 import { apiRoutes } from '../server/routes/index.js';
-import migration from '../database/migrations/202609150002_create_hub_app_api_keys.js';
+import legacyMigration from '../database/migrations/202609150002_create_hub_app_api_keys.js';
+import migration from '../database/migrations/202609160001_global_hub_api_keys.js';
+import recoveryMigration from '../database/migrations/202609160003_recoverable_api_keys.js';
+import allAppsMigration from '../database/migrations/202609160002_all_apps_api_keys.js';
 
 let db: DatabaseManager;
 let authz: ReturnType<typeof createAppAuthorization>;
@@ -108,22 +121,111 @@ beforeEach(async () => {
     plugins: hubApiKeyAuthentication(),
   });
   keyService = new ApiKeyService(authentication, HUB_API_KEY_CONFIG_ID);
-  service = new HubApiKeyService(db, authz, keyService);
+  service = new HubApiKeyService(
+    db,
+    authz,
+    keyService,
+    'test-only-auth-secret-at-least-32-characters',
+  );
 });
 afterEach(async () => {
   await db.destroy();
 });
 const create = () =>
-  service.create('crm', 'admin', {
+  service.create('admin', {
     name: 'CI',
-    scopes: ['upload-release', 'read-release'],
+    appIds: ['crm'],
+    scopes: ['upload-release'],
   });
 
 describe('Hub publishing key lifecycle and permissions', () => {
+  it('stores an authenticated encrypted copy and reveals it only to its active owner', async () => {
+    const { key, secret } = await create();
+    const row = await db
+      .connection()
+      .query.selectFrom('hubApiKeys')
+      .selectAll()
+      .where('id', '=', key.id)
+      .executeTakeFirstOrThrow();
+    expect(row.encryptedSecret).toEqual(expect.stringMatching(/^v1\./));
+    expect(JSON.stringify(row)).not.toContain(secret);
+    expect(JSON.stringify(await service.list('admin'))).not.toContain(secret);
+    expect((await service.list('admin'))[0].canCopy).toBe(true);
+    const restarted = new HubApiKeyService(
+      db,
+      authz,
+      keyService,
+      'test-only-auth-secret-at-least-32-characters',
+    );
+    await expect(restarted.reveal(key.id, 'admin')).resolves.toBe(secret);
+    await expect(service.reveal(key.id, 'operator')).rejects.toThrow();
+    await authz.permissionSets.assign({
+      subject: { type: 'user', id: 'operator' },
+      permissionSet: 'hub-administrator',
+    });
+    await expect(service.reveal(key.id, 'operator')).rejects.toMatchObject({
+      status: 403,
+    });
+    expect((await service.list('operator'))[0].canCopy).toBe(false);
+    const wrongSecret = new HubApiKeyService(
+      db,
+      authz,
+      keyService,
+      'different-auth-secret-at-least-32-characters',
+    );
+    await expect(wrongSecret.reveal(key.id, 'admin')).rejects.toMatchObject({
+      code: 'API_KEY_NOT_RECOVERABLE',
+    });
+    const other = await create();
+    await db
+      .connection()
+      .query.updateTable('hubApiKeys')
+      .set({ encryptedSecret: row.encryptedSecret })
+      .where('id', '=', other.key.id)
+      .execute();
+    await expect(service.reveal(other.key.id, 'admin')).rejects.toMatchObject({
+      code: 'API_KEY_NOT_RECOVERABLE',
+    });
+    await service.disable(key.id, 'admin');
+    await expect(service.reveal(key.id, 'admin')).rejects.toMatchObject({
+      code: 'API_KEY_INACTIVE',
+    });
+    expect(
+      (
+        await db
+          .connection()
+          .query.selectFrom('hubApiKeys')
+          .select('encryptedSecret')
+          .where('id', '=', key.id)
+          .executeTakeFirstOrThrow()
+      ).encryptedSecret,
+    ).toBeNull();
+    await service.remove(key.id, 'admin');
+    await expect(service.reveal(key.id, 'admin')).rejects.toMatchObject({
+      status: 404,
+    });
+  });
+
+  it('rolls back creation if encrypted storage is not configured', async () => {
+    const unconfigured = new HubApiKeyService(db, authz, keyService);
+    await expect(
+      unconfigured.create('admin', {
+        name: 'CI',
+        appIds: ['crm'],
+        scopes: ['deploy'],
+      }),
+    ).rejects.toThrow('auth.secret');
+    expect(await keyService.get('missing')).toBeNull();
+    expect(
+      await db.connection().query.selectFrom('apikey').select('id').execute(),
+    ).toEqual([]);
+    expect(await service.list('admin')).toEqual([]);
+  });
+
   it('rolls back the plugin credential when the Hub binding insert fails', async () => {
     const client = await db.connection().client<Knex>();
     await client.raw(
-      "CREATE TRIGGER fail_hub_key_binding BEFORE INSERT ON hub_app_api_keys BEGIN SELECT RAISE(ABORT, 'Binding rejected'); END",
+      "CREATE TRIGGER fail_hub_key_binding BEFORE INSERT ON hub_api_key_apps BEGIN SELECT RAISE(ABORT, 'Binding rejected'); END",
     );
     await expect(create()).rejects.toThrow('Binding rejected');
     expect(
@@ -132,28 +234,28 @@ describe('Hub publishing key lifecycle and permissions', () => {
     expect(
       await db
         .connection()
-        .query.selectFrom('hubAppApiKeys')
+        .query.selectFrom('hubApiKeys')
         .select('id')
         .execute(),
     ).toEqual([]);
     await client.raw('DROP TRIGGER fail_hub_key_binding');
     await create();
-    expect(await service.list('crm', 'admin')).toHaveLength(1);
+    expect(await service.list('admin')).toHaveLength(1);
   });
 
   it('rolls back credential disable when updating the Hub binding fails', async () => {
     const { key, secret } = await create();
     const client = await db.connection().client<Knex>();
     await client.raw(
-      "CREATE TRIGGER fail_hub_key_disable BEFORE UPDATE OF disabled_at ON hub_app_api_keys BEGIN SELECT RAISE(ABORT, 'Disable rejected'); END",
+      "CREATE TRIGGER fail_hub_key_disable BEFORE UPDATE OF disabled_at ON hub_api_keys BEGIN SELECT RAISE(ABORT, 'Disable rejected'); END",
     );
-    await expect(service.disable('crm', key.id, 'admin')).rejects.toThrow(
+    await expect(service.disable(key.id, 'admin')).rejects.toThrow(
       'Disable rejected',
     );
     expect((await keyService.get(key.id))?.enabled).toBe(true);
-    expect((await service.list('crm', 'admin'))[0]?.status).toBe('active');
+    expect((await service.list('admin'))[0]?.status).toBe('active');
     await client.raw('DROP TRIGGER fail_hub_key_disable');
-    await service.disable('crm', key.id, 'admin');
+    await service.disable(key.id, 'admin');
     expect(await keyService.verify(secret)).toBeNull();
   });
 
@@ -171,71 +273,76 @@ describe('Hub publishing key lifecycle and permissions', () => {
     expect(JSON.stringify(row)).not.toContain(secret);
     const binding = await db
       .connection()
-      .query.selectFrom('hubAppApiKeys')
+      .query.selectFrom('hubApiKeys')
       .selectAll()
       .where('id', '=', key.id)
       .executeTakeFirst();
     expect(binding).not.toHaveProperty('secretHash');
     expect(binding).not.toHaveProperty('key');
     expect(key.status).toBe('active');
-    expect(await service.verify(secret, 'crm', 'read-release')).toMatchObject({
-      id: key.id,
-      createdBy: 'admin',
-    });
-    const list = await service.list('crm', 'admin');
+    expect(await service.verify(secret, 'crm', 'upload-release')).toMatchObject(
+      {
+        id: key.id,
+        createdBy: 'admin',
+      },
+    );
+    const list = await service.list('admin');
     expect(list[0]?.lastUsedAt).not.toBeNull();
     expect(list[0]?.creatorName).toBe('admin');
     expect(JSON.stringify(list)).not.toContain(secret);
     expect(list[0]).not.toHaveProperty('secretHash');
   });
-  it('denies cross-app usage, missing scopes, invalid keys and cross-app mutation', async () => {
+  it('denies unselected apps, missing scopes, invalid keys and unauthorized mutation', async () => {
     const { key, secret } = await create();
     await expect(
-      service.verify(secret, 'erp', 'read-release'),
+      service.verify(secret, 'erp', 'upload-release'),
     ).rejects.toMatchObject({ status: 403 });
     await expect(service.verify(secret, 'crm', 'deploy')).rejects.toMatchObject(
       { status: 403 },
     );
     await expect(
-      service.verify(`${secret}x`, 'crm', 'read-release'),
+      service.verify(`${secret}x`, 'crm', 'upload-release'),
     ).rejects.toMatchObject({ status: 401 });
-    await expect(service.disable('erp', key.id, 'admin')).rejects.toMatchObject(
-      { status: 404 },
-    );
-    await service.remove('erp', key.id, 'admin');
+    await expect(service.disable(key.id, 'viewer')).rejects.toMatchObject({
+      name: 'AuthorizationDeniedError',
+    });
+    await expect(service.remove(key.id, 'viewer')).rejects.toThrow();
     await expect(
-      service.verify(secret, 'crm', 'read-release'),
+      service.verify(secret, 'crm', 'upload-release'),
     ).resolves.toMatchObject({ id: key.id });
   });
   it('makes disable and deletion repeatable and immediately effective', async () => {
     const { key, secret } = await create();
-    await service.disable('crm', key.id, 'admin');
-    await service.disable('crm', key.id, 'admin');
+    await service.disable(key.id, 'admin');
+    await service.disable(key.id, 'admin');
     await expect(
-      service.verify(secret, 'crm', 'read-release'),
+      service.verify(secret, 'crm', 'upload-release'),
     ).rejects.toMatchObject({ status: 401 });
-    expect((await service.list('crm', 'admin'))[0]?.status).toBe('disabled');
-    await service.remove('crm', key.id, 'admin');
-    await service.remove('crm', key.id, 'admin');
-    expect(await service.list('crm', 'admin')).toEqual([]);
+    expect((await service.list('admin'))[0]?.status).toBe('disabled');
+    await service.remove(key.id, 'admin');
+    await service.remove(key.id, 'admin');
+    expect(await service.list('admin')).toEqual([]);
     await expect(
-      service.verify(secret, 'crm', 'read-release'),
+      service.verify(secret, 'crm', 'upload-release'),
     ).rejects.toMatchObject({ status: 401 });
   });
   it('rejects expired keys and malformed creation requests', async () => {
     for (const input of [
       { name: '', scopes: ['deploy'] },
-      { name: 'CI', scopes: [] },
-      { name: 'CI', scopes: ['remove'] },
-      { name: 'CI', scopes: ['deploy'], expiresAt: 'bad' },
-      { name: 'CI', scopes: ['deploy'], expiresAt: '2000-01-01' },
+      { name: 'CI', appIds: ['crm'], scopes: [] },
+      { name: 'CI', appIds: ['crm'], scopes: ['remove'] },
+      { name: 'CI', appIds: ['crm'], scopes: ['deploy'], expiresAt: 'bad' },
+      {
+        name: 'CI',
+        appIds: ['crm'],
+        scopes: ['deploy'],
+        expiresAt: '2000-01-01',
+      },
     ]) {
       await expect(
-        service.create(
-          'crm',
-          'admin',
-          input as Parameters<HubApiKeyService['create']>[2],
-        ),
+        service.create('admin', { appIds: ['crm'], ...input } as Parameters<
+          HubApiKeyService['create']
+        >[1]),
       ).rejects.toMatchObject({ status: 400 });
     }
     const { key, secret } = await create();
@@ -245,23 +352,27 @@ describe('Hub publishing key lifecycle and permissions', () => {
       .set({ expiresAt: new Date(0) })
       .where('id', '=', key.id)
       .execute();
-    expect((await service.list('crm', 'admin'))[0]?.status).toBe('expired');
+    expect((await service.list('admin'))[0]?.status).toBe('expired');
     await expect(
-      service.verify(secret, 'crm', 'read-release'),
+      service.verify(secret, 'crm', 'upload-release'),
     ).rejects.toMatchObject({ status: 401 });
   });
   it('allows only administrators to manage keys and cannot grant missing owner permissions', async () => {
     for (const user of ['operator', 'viewer']) {
       await expect(
-        service.create('crm', user, { name: 'CI', scopes: ['deploy'] }),
+        service.create(user, {
+          name: 'CI',
+          appIds: ['crm'],
+          scopes: ['deploy'],
+        }),
       ).rejects.toThrow();
-      await expect(service.list('crm', user)).rejects.toThrow();
+      await expect(service.list(user)).rejects.toThrow();
     }
     await authz.permissionSets.create({
       key: 'key-manager',
       grants: [
         {
-          resource: { type: 'hub.app', id: 'crm' },
+          resource: { type: 'hub.app', id: '*' },
           actions: [{ action: 'manage-api-keys' }],
         },
       ],
@@ -271,20 +382,13 @@ describe('Hub publishing key lifecycle and permissions', () => {
       permissionSet: 'key-manager',
     });
     await expect(
-      service.create('crm', 'viewer', { name: 'CI', scopes: ['deploy'] }),
+      service.create('viewer', {
+        name: 'CI',
+        appIds: ['crm'],
+        scopes: ['deploy'],
+      }),
     ).rejects.toThrow();
-    await expect(
-      service.create('crm', 'viewer', { name: 'CI', scopes: ['read-release'] }),
-    ).rejects.toThrow();
-    await db
-      .connection()
-      .query.updateTable('hubApps')
-      .set({ createdBy: 'viewer' })
-      .where('id', '=', 'crm')
-      .execute();
-    await expect(
-      service.create('crm', 'viewer', { name: 'CI', scopes: ['read-release'] }),
-    ).resolves.toHaveProperty('secret');
+    expect(await service.appOptions('viewer')).toEqual([]);
   });
   it('rechecks the owner and removes keys when an App is deleted', async () => {
     const { secret } = await create();
@@ -295,7 +399,7 @@ describe('Hub publishing key lifecycle and permissions', () => {
       .where('id', '=', 'admin')
       .execute();
     await expect(
-      service.verify(secret, 'crm', 'read-release'),
+      service.verify(secret, 'crm', 'upload-release'),
     ).rejects.toMatchObject({ status: 401 });
     await db
       .connection()
@@ -322,44 +426,244 @@ describe('Hub publishing key lifecycle and permissions', () => {
     expect(
       await db
         .connection()
-        .query.selectFrom('hubAppApiKeys')
+        .query.selectFrom('hubApiKeys')
         .select('id')
         .execute(),
     ).toEqual([]);
   });
-  it('migrates through the ledger twice and reverses only its own permission', async () => {
+  it('migrates legacy single-App keys without granting new write permissions', async () => {
     await migrate('@nocobase/app-plugin-hub', '../database/migrations');
-    const admin = await authz.permissionSets.list();
-    expect(
-      admin
-        .find((r) => r.key === 'hub-administrator')
-        ?.grants.flatMap((g) => g.actions.map((a) => a.action))
-        .filter((a) => a === 'manage-api-keys'),
-    ).toHaveLength(1);
     const connection = db.connection();
-    await migration.down?.({
+    await connection.builder.dropCollection('hubApiKeyApps');
+    await connection.builder.dropCollection('hubApiKeys');
+    const context = {
       connection,
       query: connection.query,
       builder: connection.builder,
+    };
+    await legacyMigration.up(context);
+    const legacy = await keyService.create({ userId: 'admin', name: 'Legacy' });
+    await connection.query
+      .insertInto('hubAppApiKeys')
+      .values({
+        id: legacy.key.id,
+        appId: 'crm',
+        scopes: JSON.stringify([
+          'read-release',
+          'upload-release',
+          'read-operation',
+        ]),
+        createdAt: new Date(),
+        disabledAt: null,
+        lastUsedAt: null,
+      })
+      .execute();
+    await migration.up(context);
+    await allAppsMigration.up(context);
+    await recoveryMigration.up(context);
+    await expect(service.reveal(legacy.key.id, 'admin')).rejects.toMatchObject({
+      code: 'API_KEY_NOT_RECOVERABLE',
     });
-    const row = await connection.query
-      .selectFrom('authorizationPermissionSets')
-      .select('grants')
-      .where('key', '=', 'hub-administrator')
-      .executeTakeFirst();
-    expect(JSON.stringify(row)).not.toContain('manage-api-keys');
-    expect(JSON.stringify(row)).toContain('upload-release');
-    await migration.up({
-      connection,
-      query: connection.query,
-      builder: connection.builder,
+    const keys = await service.list('admin');
+    expect(keys[0].canCopy).toBe(false);
+    expect(keys[0]).toMatchObject({
+      id: legacy.key.id,
+      scopes: ['upload-release'],
+      apps: [{ id: 'crm', name: 'crm' }],
     });
-    expect(await service.list('crm', 'admin')).toEqual([]);
+    await expect(
+      service.verify(legacy.secret, 'crm', 'deploy'),
+    ).rejects.toMatchObject({ status: 403 });
+  });
+
+  it('binds one credential to multiple Apps and removes only the deleted App', async () => {
+    const { key, secret } = await service.create('admin', {
+      name: 'Shared',
+      appIds: ['crm', 'erp', 'crm'],
+      scopes: ['upload-release', 'deploy'],
+    });
+    expect(key.apps).toHaveLength(2);
+    for (const appId of ['crm', 'erp'])
+      await expect(
+        service.verify(secret, appId, 'deploy'),
+      ).resolves.toMatchObject({ id: key.id });
+    await service.removeAppKeys('crm');
+    await db
+      .connection()
+      .query.deleteFrom('hubApps')
+      .where('id', '=', 'crm')
+      .execute();
+    await expect(service.verify(secret, 'crm', 'deploy')).rejects.toMatchObject(
+      { status: 403 },
+    );
+    await expect(
+      service.verify(secret, 'erp', 'deploy'),
+    ).resolves.toMatchObject({ id: key.id });
+    expect((await service.list('admin'))[0]?.apps).toEqual([
+      { id: 'erp', name: 'erp' },
+    ]);
+    await service.removeAppKeys('erp');
+    expect(await keyService.verify(secret)).toBeNull();
+  });
+
+  it('automatically covers future Apps only for all-App keys and rechecks the owner', async () => {
+    const global = await service.create('admin', {
+      name: 'All Apps',
+      allApps: true,
+      appIds: [],
+      scopes: ['deploy'],
+    });
+    const selected = await service.create('admin', {
+      name: 'Selected',
+      appIds: ['crm', 'erp'],
+      scopes: ['deploy'],
+    });
+    expect(global.key).toMatchObject({ allApps: true, apps: [] });
+    const now = new Date();
+    await db
+      .connection()
+      .query.insertInto('hubApps')
+      .values({
+        id: 'future',
+        name: 'Future',
+        enabled: false,
+        basePath: '/future',
+        backend: 'in-process',
+        startupMode: 'lazy',
+        createdAt: now,
+        updatedAt: now,
+      })
+      .execute();
+    await expect(
+      service.verify(global.secret, 'future', 'deploy'),
+    ).resolves.toHaveProperty('id');
+    await expect(
+      service.verify(selected.secret, 'future', 'deploy'),
+    ).rejects.toMatchObject({ status: 403 });
+    await expect(
+      service.verify(global.secret, 'future', 'upload-release'),
+    ).rejects.toMatchObject({ status: 403 });
+    await service.removeAppKeys('crm');
+    await expect(
+      service.verify(global.secret, 'future', 'deploy'),
+    ).resolves.toHaveProperty('id');
+    await authz.permissionSets.replaceSubjectAssignments({
+      subject: { type: 'user', id: 'admin' },
+      managedPermissionSets: ['hub-administrator', 'hub-viewer'],
+      permissionSets: ['hub-viewer'],
+    });
+    await expect(
+      service.verify(global.secret, 'future', 'deploy'),
+    ).rejects.toThrow();
+  });
+
+  it('rechecks App ownership for all-app keys after administrator demotion', async () => {
+    const { secret } = await service.create('admin', {
+      name: 'All Apps',
+      allApps: true,
+      appIds: [],
+      scopes: ['upload-release', 'deploy'],
+    });
+    await db
+      .query()
+      .updateTable('hubApps')
+      .set({ createdBy: 'admin' })
+      .where('id', '=', 'crm')
+      .execute();
+    await db
+      .query()
+      .updateTable('hubApps')
+      .set({ createdBy: 'operator' })
+      .where('id', '=', 'erp')
+      .execute();
+    await authz.permissionSets.replaceSubjectAssignments({
+      subject: { type: 'user', id: 'admin' },
+      managedPermissionSets: ['hub-administrator', 'hub-operator'],
+      permissionSets: ['hub-operator'],
+    });
+    await expect(
+      service.verify(secret, 'crm', 'upload-release'),
+    ).resolves.toHaveProperty('createdBy', 'admin');
+    await expect(
+      service.verify(secret, 'erp', 'upload-release'),
+    ).rejects.toThrow();
+    await expect(service.verify(secret, 'erp', 'deploy')).rejects.toThrow();
+  });
+
+  it('checks every selected App, rejects old permission names and leaves no partial credential', async () => {
+    for (const input of [
+      { appIds: [], scopes: ['deploy'] },
+      { appIds: ['crm'], scopes: ['read-release'] },
+      { appIds: ['crm'], scopes: ['read-operation'] },
+      { appIds: ['crm'], scopes: ['deploy-release'] },
+    ])
+      await expect(
+        service.create('admin', { name: 'Invalid', ...input } as Parameters<
+          HubApiKeyService['create']
+        >[1]),
+      ).rejects.toMatchObject({ status: 400 });
+    await expect(
+      service.create('admin', {
+        name: 'Missing',
+        appIds: ['crm', 'missing'],
+        scopes: ['deploy'],
+      }),
+    ).rejects.toMatchObject({ status: 404 });
+    await authz.permissionSets.create({
+      key: 'limited-manager',
+      grants: [
+        {
+          resource: { type: 'hub.app', id: '*' },
+          actions: [{ action: 'manage-api-keys' }],
+        },
+        {
+          resource: { type: 'hub.app', id: 'crm' },
+          actions: [{ action: 'upload-release' }],
+        },
+      ],
+    });
+    await authz.permissionSets.assign({
+      subject: { type: 'user', id: 'viewer' },
+      permissionSet: 'limited-manager',
+    });
+    await db
+      .query()
+      .updateTable('hubApps')
+      .set({ createdBy: 'viewer' })
+      .where('id', '=', 'crm')
+      .execute();
+    expect(await service.appOptions('viewer')).toEqual([
+      { id: 'crm', name: 'crm', permissions: ['upload-release'] },
+    ]);
+    await expect(
+      service.create('viewer', {
+        name: 'Escalation',
+        appIds: ['crm', 'erp'],
+        scopes: ['upload-release'],
+      }),
+    ).rejects.toThrow();
+    expect(await service.list('admin')).toEqual([]);
+    await expect(
+      service.create('viewer', {
+        name: 'All apps escalation',
+        allApps: true,
+        appIds: [],
+        scopes: ['upload-release'],
+      }),
+    ).rejects.toThrow();
+    const created = await service.create('viewer', {
+      name: 'Allowed',
+      appIds: ['crm'],
+      scopes: ['upload-release'],
+    });
+    await expect(
+      service.verify(created.secret, 'crm', 'upload-release'),
+    ).resolves.toHaveProperty('id');
   });
 });
 
 describe('Hub API Key HTTP boundary', () => {
-  async function router(userId?: string) {
+  async function router(userId?: string, realHub?: HubService) {
     const container = new ServiceContainer();
     container.instance(
       authenticationToken,
@@ -398,9 +702,37 @@ describe('Hub API Key HTTP boundary', () => {
     const listReleases = vi
       .fn<HubService['listReleases']>()
       .mockResolvedValue([]);
-    container.instance(hubServiceToken, {
-      listReleases,
-    } as unknown as HubService);
+    const deploy = vi
+      .fn<HubService['deploy']>()
+      .mockRejectedValue(new HubError('Deploy reached', 'DEPLOY_REACHED', 409));
+    container.instance(
+      hubServiceToken,
+      realHub ??
+        ({
+          listReleases,
+          getDeployment: vi.fn().mockResolvedValue({
+            id: 'op-1',
+            releaseId: 'r1',
+            status: 'succeeded',
+            phase: 'completed',
+            config: { path: '/private/config' },
+            error: 'sensitive diagnostic',
+          }),
+          createRelease: vi.fn(async (_appId, input) => {
+            await input.authorizeDeployment?.();
+            return {
+              id: 'r1',
+              version: '1.0.0',
+              checksum: 'a'.repeat(64),
+              size: 1,
+              configTemplate: null,
+              createdAt: new Date(),
+              operationId: 'op-1',
+            };
+          }),
+          deploy,
+        } as unknown as HubService),
+    );
     return {
       router: await apiRoutes.createRouter({
         container,
@@ -408,87 +740,317 @@ describe('Hub API Key HTTP boundary', () => {
       listReleases,
     };
   }
-  it('enforces management ACL and returns one-time credentials with no-store', async () => {
+  it('publishes through the real CLI, Bearer boundary, artifact storage and deployment service', async () => {
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), 'hub-publishing-acceptance-'),
+    );
+    const hub = new DefaultHubService({
+      database: db,
+      hostController: {
+        applyDeployment: vi
+          .fn()
+          .mockRejectedValue(new Error('Simulated Host failure')),
+      } as unknown as HubHostController,
+      config: {
+        artifact: {
+          driver: 'fs',
+          location: path.join(root, 'artifacts'),
+          visibility: 'private',
+        },
+        host: {
+          enabled: true,
+          driver: 'tsx',
+          appDeploymentsDir: path.join(root, 'deployments'),
+          appVolumesDir: path.join(root, 'volumes'),
+          configPath: path.join(root, 'host.yml'),
+        },
+      },
+    });
+    try {
+      await mkdir(path.join(root, 'dist/server'), { recursive: true });
+      await mkdir(path.join(root, 'storage'));
+      await writeFile(
+        path.join(root, 'dist/package.json'),
+        JSON.stringify({ version: '1.0.0' }),
+      );
+      await writeFile(path.join(root, 'dist/server/embedded.js'), '');
+      await createTar(
+        { cwd: root, file: path.join(root, 'storage/dist.tar.gz'), gzip: true },
+        ['dist'],
+      );
+      const publishing = await service.create('admin', {
+        name: 'Acceptance',
+        appIds: ['crm'],
+        scopes: ['upload-release', 'deploy'],
+      });
+      const { router: api } = await router(undefined, hub);
+      vi.stubGlobal('fetch', (url: URL, init: RequestInit) => {
+        const target = new URL(url);
+        target.pathname = target.pathname.replace('/main/api', '');
+        return api.request(new Request(target, init));
+      });
+      await writeFile(path.join(root, 'runtime.yml'), 'feature: cli-config\n');
+      const options = {
+        config: 'runtime.yml',
+        hub: 'http://localhost/main',
+        'app-id': 'crm',
+        'api-key': publishing.secret,
+        deploy: true,
+      };
+      const first = await publishToHub('upload', options, root, {});
+      const again = await publishToHub('upload', options, root, {});
+      const stored = await hub.getDeployment('crm', String(first.operationId));
+      expect(await readFile(stored.config.path!, 'utf8')).toContain(
+        'feature: cli-config',
+      );
+      expect(
+        (await hub.getRelease('crm', String(first.releaseId))).configTemplate,
+      ).toBeNull();
+      expect(first.operationId).toEqual(expect.any(String));
+      expect(again).toMatchObject({
+        releaseId: first.releaseId,
+        operationId: first.operationId,
+        reused: true,
+      });
+      await vi.waitFor(async () => {
+        expect(
+          (await hub.getDeployment('crm', String(first.operationId))).status,
+        ).toBe('failed');
+      });
+      await expect(
+        publishToHub('upload', { ...options, wait: true }, root, {}),
+      ).rejects.toMatchObject({ exitCode: 1, code: 'DEPLOYMENT_FAILED' });
+      expect(await hub.listReleases('crm')).toHaveLength(1);
+      expect((await hub.listDeployments('crm')).total).toBe(1);
+    } finally {
+      vi.unstubAllGlobals();
+      await hub.shutdown();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('uses deploy permission for minimal results without exposing configuration or granting read access', async () => {
+    const publishing = await service.create('admin', {
+      name: 'Deploy',
+      appIds: ['crm'],
+      scopes: ['deploy'],
+    });
+    const uploadOnly = await service.create('admin', {
+      name: 'Upload',
+      appIds: ['crm'],
+      scopes: ['upload-release'],
+    });
+    const { router: api } = await router();
+    const headers = { authorization: `Bearer ${publishing.secret}` };
+    const result = await api.request('/hub/apps/crm/deployments/op-1/status', {
+      headers,
+    });
+    expect(result.status).toBe(200);
+    expect(await result.json()).toEqual({
+      data: {
+        operationId: 'op-1',
+        releaseId: 'r1',
+        status: 'succeeded',
+        phase: 'completed',
+      },
+    });
+    expect(
+      (await api.request('/hub/apps/crm/deployments/op-1', { headers })).status,
+    ).toBe(403);
+    expect(
+      (await api.request('/hub/apps/erp/deployments/op-1/status', { headers }))
+        .status,
+    ).toBe(403);
+    expect(
+      (
+        await api.request('/hub/apps/crm/deployments/op-1/status', {
+          headers: { authorization: `Bearer ${uploadOnly.secret}` },
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (await api.request('/hub/apps/crm/deployments/op-1/status')).status,
+    ).toBe(401);
+  });
+
+  it('requires both selected permissions for an upload that also deploys', async () => {
+    const uploadOnly = await service.create('admin', {
+      name: 'Upload',
+      appIds: ['crm'],
+      scopes: ['upload-release'],
+    });
+    const publishing = await service.create('admin', {
+      name: 'Both',
+      appIds: ['crm'],
+      scopes: ['upload-release', 'deploy'],
+    });
+    const { router: api } = await router();
+    const send = (secret: string) =>
+      api.request('/hub/apps/crm/releases', {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${secret}`,
+          'content-type': 'application/gzip',
+          'x-hub-deployment-intent': 'explicit',
+        },
+        body: new Uint8Array([1]),
+      });
+    expect((await send(uploadOnly.secret)).status).toBe(403);
+    const accepted = await send(publishing.secret);
+    expect(accepted.status).toBe(202);
+    expect(await accepted.json()).toMatchObject({
+      data: { releaseId: 'r1', operationId: 'op-1' },
+    });
+  });
+
+  it('validates configured upload framing and requires deploy permission before reading configuration', async () => {
+    const uploadOnly = await service.create('admin', {
+      name: 'Upload',
+      appIds: ['crm'],
+      scopes: ['upload-release'],
+    });
+    const publishing = await service.create('admin', {
+      name: 'Both',
+      appIds: ['crm'],
+      scopes: ['upload-release', 'deploy'],
+    });
+    const { router: api } = await router();
+    const send = (
+      secret: string,
+      length: string,
+      intent: string | undefined = 'explicit',
+      body = 'feature: true\narchive',
+    ) =>
+      api.request('/hub/apps/crm/releases', {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${secret}`,
+          'content-type': 'application/vnd.nocobase.release-upload.v1',
+          'x-hub-config-length': length,
+          ...(intent ? { 'x-hub-deployment-intent': intent } : {}),
+        },
+        body,
+      });
+    expect((await send(uploadOnly.secret, '14')).status).toBe(403);
+    expect((await send(publishing.secret, '14')).status).toBe(202);
+    for (const length of ['0', '-1', '1048577', 'invalid'])
+      expect((await send(publishing.secret, length)).status).toBe(400);
+    expect((await send(publishing.secret, '14', '')).status).toBe(400);
+    expect(
+      (await send(publishing.secret, '14', 'explicit', 'short')).status,
+    ).toBe(400);
+  });
+
+  it('enforces management and owner ACL for credential recovery with no-store', async () => {
     const { router: viewer } = await router('viewer');
-    expect((await viewer.request('/hub/apps/crm/api-keys')).status).toBe(403);
+    expect((await viewer.request('/hub/api-keys')).status).toBe(403);
     const { router: admin } = await router('admin');
-    const response = await admin.request('/hub/apps/crm/api-keys', {
+    const response = await admin.request('/hub/api-keys', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name: 'CI', scopes: ['read-release'] }),
+      body: JSON.stringify({
+        name: 'CI',
+        appIds: ['crm'],
+        scopes: ['upload-release'],
+      }),
     });
     expect(response.status).toBe(200);
     expect(response.headers.get('cache-control')).toBe('no-store');
     const created = (await response.json()) as {
       data: { key: { id: string }; secret: string };
     };
-    const list = await admin.request('/hub/apps/crm/api-keys');
+    const list = await admin.request('/hub/api-keys');
     expect(list.headers.get('cache-control')).toBe('no-store');
     expect(await list.text()).not.toContain(created.data.secret);
+    const revealPath = `/hub/api-keys/${created.data.key.id}/reveal`;
+    const recovered = await admin.request(revealPath, { method: 'POST' });
+    expect(recovered.status).toBe(200);
+    expect(recovered.headers.get('cache-control')).toBe('no-store');
+    expect(await recovered.json()).toEqual({
+      data: { secret: created.data.secret },
+    });
+    expect((await viewer.request(revealPath, { method: 'POST' })).status).toBe(
+      403,
+    );
+    const { router: anonymous } = await router();
+    expect(
+      (await anonymous.request(revealPath, { method: 'POST' })).status,
+    ).toBe(401);
     expect(
       (
-        await admin.request(
-          `/hub/apps/crm/api-keys/${created.data.key.id}/disable`,
-          { method: 'POST' },
-        )
+        await admin.request(revealPath, {
+          method: 'POST',
+          headers: { authorization: `Bearer ${created.data.secret}` },
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await admin.request(revealPath, {
+          method: 'POST',
+          headers: { 'x-api-key': created.data.secret },
+        })
+      ).status,
+    ).toBe(401);
+
+    expect(
+      (
+        await admin.request(`/hub/api-keys/${created.data.key.id}/disable`, {
+          method: 'POST',
+        })
       ).status,
     ).toBe(200);
     expect(
       (
-        await admin.request(`/hub/apps/crm/api-keys/${created.data.key.id}`, {
+        await admin.request(`/hub/api-keys/${created.data.key.id}`, {
           method: 'DELETE',
         })
       ).status,
     ).toBe(200);
-    expect(await service.list('crm', 'admin')).toEqual([]);
+    expect(await service.list('admin')).toEqual([]);
   });
-  it('accepts a scoped key without a Session, rejects non-publishing endpoints and ignores cookie fallback', async () => {
-    const { secret } = await create();
+  it('accepts existing deploy permission and rejects reads, unselected Apps and cookie fallback', async () => {
+    const { key, secret } = await service.create('admin', {
+      name: 'Deploy',
+      appIds: ['crm'],
+      scopes: ['deploy'],
+    });
     const { router: api, listReleases } = await router();
-    expect((await api.request('/hub/apps/crm/releases')).status).toBe(401);
-    const headers = { authorization: `Bearer ${secret}` };
-    expect(
-      (await api.request('/hub/apps/crm/releases', { headers })).status,
-    ).toBe(200);
-    expect(listReleases).toHaveBeenCalledWith('crm');
-    expect(
-      (await api.request('/hub/apps/erp/releases', { headers })).status,
-    ).toBe(403);
+    const headers = {
+      authorization: `Bearer ${secret}`,
+      'content-type': 'application/json',
+    };
+    const deploy = (appId: string) =>
+      api.request(`/hub/apps/${appId}/deploy`, {
+        headers,
+        method: 'POST',
+        body: JSON.stringify({ releaseId: 'release' }),
+      });
+    expect((await deploy('crm')).status).toBe(409);
+    expect((await deploy('erp')).status).toBe(403);
     for (const path of [
       '/hub/apps',
       '/hub/apps/crm/config',
-      '/hub/apps/crm/api-keys',
-      '/hub/apps/crm/releases/id/config-template',
+      '/hub/api-keys',
+      '/hub/apps/crm/releases',
+      '/hub/apps/crm/deployments',
     ])
       expect((await api.request(path, { headers })).status).toBe(403);
+    expect(listReleases).not.toHaveBeenCalled();
     expect(
-      (
-        await api.request('/hub/apps/crm/deploy', {
-          headers,
-          method: 'POST',
-          body: '{}',
-        })
-      ).status,
-    ).toBe(403);
-    expect(
-      (
-        await api.request('/hub/apps/crm/api-keys', {
-          headers: { 'x-api-key': secret },
-        })
-      ).status,
+      (await api.request('/hub/api-keys', { headers: { 'x-api-key': secret } }))
+        .status,
     ).toBe(401);
     expect(
       (
-        await api.request('/hub/apps/crm/releases', {
+        await api.request('/hub/apps/crm/deploy', {
+          method: 'POST',
           headers: { authorization: 'Bearer bad', cookie: 'fake=session' },
         })
       ).status,
     ).toBe(401);
-    const key = (await service.list('crm', 'admin'))[0]!;
-    await service.disable('crm', key.id, 'admin');
-    expect(
-      (await api.request('/hub/apps/crm/releases', { headers })).status,
-    ).toBe(401);
+    await service.disable(key.id, 'admin');
+    expect((await deploy('crm')).status).toBe(401);
   });
 });
 
@@ -515,7 +1077,7 @@ describe('Hub publishing configuration isolation', () => {
       )?.user.id,
     ).toBe('admin');
     await expect(
-      service.verify(normal.secret, 'crm', 'read-release'),
+      service.verify(normal.secret, 'crm', 'upload-release'),
     ).rejects.toMatchObject({ status: 401 });
     await keyService.remove(normal.key.id);
     expect(

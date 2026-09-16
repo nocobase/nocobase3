@@ -1,3 +1,4 @@
+import { HUB_RELEASE_ACTIONS } from '../shared/permissions.js';
 import type { DatabaseConnection } from '@nocobase/db';
 import type { AppAuthorization } from '@nocobase/app-plugin-authorization';
 import {
@@ -25,10 +26,10 @@ const HUB_APP_ACTIONS = new Set([
   'remove',
   'manage-api-keys',
   'read-release',
-  'upload-release',
+  HUB_RELEASE_ACTIONS.upload,
   'read-config-template',
   'read-deployment',
-  'deploy',
+  HUB_RELEASE_ACTIONS.deploy,
   'rollback',
   'read-config',
   'update-config',

@@ -441,7 +441,7 @@ export function DeploymentDialog({
                   : t('deployments.deploying', { defaultValue: 'Deploying…' })
                 : rollback
                   ? t('deployments.rollback', { defaultValue: 'Roll back' })
-                  : t('deployments.deploy', { defaultValue: 'Deploy' })}
+                  : t('deployments.deploy', { defaultValue: 'Deploy release' })}
             </Button>
           )}
         </>

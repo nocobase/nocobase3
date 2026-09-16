@@ -2,11 +2,51 @@ import type { LocaleResource } from '@nocobase/i18n';
 
 const enUS = {
   apiKeys: {
+    expiration: 'Expiration',
+    customExpiry: 'Set expiration date',
+    localTime: 'Uses your local time.',
+    futureAppsNote: '(including future apps)',
+    viewAndCopy: 'View and copy API Key',
+    copyNamed: 'Copy API Key {{name}}',
+    copyUnavailable:
+      'Only active keys created by you with encrypted storage can be copied. Older keys must be replaced.',
+    revealFailed:
+      'Could not retrieve this key. It may be unavailable or you may no longer have access.',
+    storageHint:
+      'Keep this key secure. You can copy it again from this list while it is active.',
+    activity: 'Created / Last used',
+    createdByName: 'By {{name}}',
+    createdOn: 'Created {{date}}',
+    lastUsedOn: 'Last used {{date}}',
+    expiresOn: 'Expires {{date}}',
+    neverUsed: 'Not used yet',
+    allAppsShort: 'All applications',
+    includesFutureApps: 'Includes future applications',
+    moreApps: '+{{count}} more',
+    keyActions: 'Actions for {{name}}',
+    createDescription:
+      'Set an application scope and release permissions for your key.',
+    searchApps: 'Search applications…',
+    selectedCount: '{{count}} selected',
+    noMatchingApps: 'No matching applications.',
+    uploadHint: 'Upload new release artifacts.',
+    deployHint: 'Deploy a release to an application.',
+    selectAppsFirst: 'Select applications to choose permissions.',
+    unavailablePermissions:
+      'Unavailable permissions are not allowed across the entire application scope.',
+    selectedApps: 'Selected applications',
+    allApps: 'All applications (including future apps)',
+    allAppsHint:
+      'New applications are included automatically. Access remains limited to the selected permissions and the creator’s current permissions.',
+    apps: 'Applications',
+    appsHint:
+      'Choose specific applications or all current and future applications.',
+    noApps: 'No applications are available to authorize.',
     invalidExpiry: 'Choose a future expiration time.',
-    title: 'API keys',
+    title: 'API Keys',
     description:
-      'Publishing credentials for {{name}}. Each key can access only this application.',
-    create: 'Create API key',
+      'Choose which applications and release actions each API Key can access.',
+    create: 'Create API Key',
     name: 'Name',
     scopes: 'Permissions',
     status: 'Status',
@@ -22,18 +62,16 @@ const enUS = {
     never: 'No expiration',
     expiryHint:
       'Optional. Leave empty for no expiration. Uses your local time.',
-    loading: 'Loading API keys…',
-    empty: 'No API keys yet',
+    loading: 'Loading API Keys…',
+    empty: 'No API Keys yet',
     emptyDescription:
       'Create a publishing key for a CI pipeline or local script. Choose only the permissions it needs.',
-    noAccess:
-      'You do not have permission to manage this application’s API keys.',
-    created: 'API key created',
-    oneTime: 'Copy and store this key securely. It will not be shown again.',
+    noAccess: 'You do not have permission to manage Hub API Keys.',
+    created: 'API Key created',
     copy: 'Copy key',
     copied: 'Copied',
     copyFailed: 'Copy failed. Select the key and copy it manually.',
-    loadFailed: 'Could not load API keys. Reload the page to try again.',
+    loadFailed: 'Could not load API Keys. Reload the page to try again.',
     operationFailed:
       'The action could not be completed. Check your permissions and try again.',
     disableTitle: 'Disable {{name}}?',
@@ -42,15 +80,10 @@ const enUS = {
     deleteTitle: 'Delete {{name}}?',
     deleteDescription:
       'This key will stop working and be permanently removed from the list. This cannot be undone.',
-    scope: {
-      'upload-release': 'Upload releases',
-      'read-release': 'Read releases',
-      deploy: 'Deploy',
-      'read-operation': 'Read deployment results',
-    },
     state: { active: 'Active', disabled: 'Disabled', expired: 'Expired' },
   },
   navigation: {
+    apiKeys: 'API Keys',
     applications: 'Applications',
     userAccess: 'Users & permissions',
     roles: 'Roles & permissions',
@@ -131,7 +164,6 @@ const enUS = {
     onFirstVisit: 'On first visit',
     updated: 'Updated {{date}}',
     tabs: {
-      apiKeys: 'API keys',
       deployments: 'Deployments',
       releases: 'Releases',
       development: 'Development',
@@ -187,7 +219,7 @@ const enUS = {
     title: 'Deployments',
     description:
       'Each row is a deployment operation. Rolling back creates a new deployment using the selected release and configuration.',
-    deploy: 'Deploy',
+    deploy: 'Deploy release',
     noDeployments: 'No deployments yet',
     noDeploymentsDescription:
       'Deploy a release to create the first deployment.',
@@ -430,7 +462,7 @@ const enUS = {
       'user-management': 'User management',
     },
     capabilities: {
-      'manage-api-keys': 'Manage publishing API keys',
+      'manage-api-keys': 'Manage publishing API Keys',
       'view-status': 'View application, release, deployment, and host status',
       'view-resources': 'View Resources and raw configuration',
       'create-release': 'Create applications and upload releases',

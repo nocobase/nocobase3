@@ -68,7 +68,6 @@ describe('app client routes', () => {
             { path: 'development' },
             { path: 'resources' },
             { path: 'configuration' },
-            { path: 'api-keys' },
             { path: 'settings' },
           ],
         },

@@ -33,15 +33,31 @@ import { ApiKeys } from '../client/pages/hub/api-keys.js';
 const capabilities = {
   ...emptyHubCapabilities(),
   'manage-api-keys': true,
-  'read-release': true,
+  'upload-release': true,
   deploy: true,
 };
+const apps = [
+  {
+    id: 'crm',
+    name: 'CRM',
+    permissions: ['upload-release', 'deploy'] as const,
+  },
+  {
+    id: 'erp',
+    name: 'ERP',
+    permissions: ['upload-release', 'deploy'] as const,
+  },
+];
 const key = {
   id: 'key-id',
-  appId: 'crm',
+  canCopy: true,
+  apps: [
+    { id: 'crm', name: 'CRM' },
+    { id: 'erp', name: 'ERP' },
+  ],
   name: 'CI',
   prefix: 'hub_app_abcd',
-  scopes: ['read-release'],
+  scopes: ['upload-release'],
   status: 'active',
   createdBy: 'admin',
   creatorName: 'Administrator',
@@ -65,44 +81,134 @@ describe('App API Keys management', () => {
       }
       return { data: hasKey ? [key] : [] };
     });
-    const view = render(
-      <ApiKeys appId='crm' appName='CRM' capabilities={capabilities} />,
-    );
-    await screen.findByText('No API keys yet');
-    fireEvent.click(screen.getByRole('button', { name: 'Create API key' }));
+    const view = render(<ApiKeys apps={apps} capabilities={capabilities} />);
+    await screen.findByText('No API Keys yet');
+    fireEvent.click(screen.getByRole('button', { name: 'Create API Key' }));
     const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByLabelText('Upload release')).toBeDisabled();
     expect(
-      within(dialog).queryByLabelText('Upload releases'),
+      within(dialog).queryByLabelText('Read releases'),
     ).not.toBeInTheDocument();
+    expect(within(dialog).getByLabelText('Deploy release')).toBeInTheDocument();
     const submit = within(dialog).getByRole('button', {
-      name: 'Create API key',
+      name: 'Create API Key',
     });
     expect(submit).toBeDisabled();
     fireEvent.change(within(dialog).getByLabelText('Name'), {
       target: { value: 'CI' },
     });
-    fireEvent.click(within(dialog).getByLabelText('Read releases'));
+    fireEvent.click(within(dialog).getByLabelText('CRM (crm)'));
+    const search = within(dialog).getByRole('searchbox', {
+      name: 'Search applications…',
+    });
+    fireEvent.change(search, { target: { value: 'ERP' } });
+    expect(
+      within(dialog).queryByLabelText('CRM (crm)'),
+    ).not.toBeInTheDocument();
+    fireEvent.click(within(dialog).getByLabelText('ERP (erp)'));
+    expect(within(dialog).getByRole('status')).toHaveTextContent('2 selected');
+    fireEvent.change(search, { target: { value: 'no-such-app' } });
+    expect(
+      within(dialog).getByText('No matching applications.'),
+    ).toBeInTheDocument();
+    fireEvent.change(search, { target: { value: '' } });
+    expect(within(dialog).getByLabelText('CRM (crm)')).toBeChecked();
+    fireEvent.click(within(dialog).getByLabelText('Upload release'));
     fireEvent.click(submit);
     await screen.findByText('hub_app_test_secret');
     expect(mocks.request).toHaveBeenCalledWith({
-      path: 'hub/apps/crm/api-keys',
+      path: 'hub/api-keys',
       method: 'POST',
-      json: { name: 'CI', scopes: ['read-release'], expiresAt: null },
+      json: {
+        name: 'CI',
+        appIds: ['crm', 'erp'],
+        allApps: false,
+        scopes: ['upload-release'],
+        expiresAt: null,
+      },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     expect(screen.queryByText('hub_app_test_secret')).not.toBeInTheDocument();
     await screen.findByText('hub_app_abcd…');
     view.unmount();
-    render(<ApiKeys appId='crm' appName='CRM' capabilities={capabilities} />);
+    render(<ApiKeys apps={apps} capabilities={capabilities} />);
     await screen.findByText('hub_app_abcd…');
     expect(screen.queryByText('hub_app_test_secret')).not.toBeInTheDocument();
   });
+  it('requires a custom expiration and clears it when switching to no expiration', async () => {
+    mocks.request.mockResolvedValue({ data: [] });
+    render(<ApiKeys apps={apps} capabilities={capabilities} />);
+    await screen.findByText('No API Keys yet');
+    fireEvent.click(screen.getByRole('button', { name: 'Create API Key' }));
+    const dialog = within(screen.getByRole('dialog'));
+    fireEvent.change(dialog.getByLabelText('Name'), {
+      target: { value: 'CI' },
+    });
+    fireEvent.click(dialog.getByLabelText('CRM (crm)'));
+    fireEvent.click(dialog.getByLabelText('Upload release'));
+    const submit = dialog.getByRole('button', { name: 'Create API Key' });
+    expect(submit).toBeEnabled();
+    const expiration = dialog.getByRole('combobox', { name: 'Expiration' });
+    fireEvent.change(expiration, { target: { value: 'custom' } });
+    expect(submit).toBeDisabled();
+    fireEvent.change(dialog.getByLabelText('Expires'), {
+      target: { value: '2099-01-01T12:00' },
+    });
+    expect(submit).toBeEnabled();
+    fireEvent.change(expiration, { target: { value: 'never' } });
+    expect(dialog.queryByLabelText('Expires')).not.toBeInTheDocument();
+    fireEvent.change(expiration, { target: { value: 'custom' } });
+    expect(dialog.getByLabelText('Expires')).toHaveValue('');
+    expect(submit).toBeDisabled();
+  });
+  it('submits a dynamic all-App grant without copying the current App list', async () => {
+    mocks.request.mockImplementation(async (input: { method?: string }) =>
+      input.method === 'POST'
+        ? {
+            data: {
+              key: { ...key, allApps: true, apps: [] },
+              secret: 'test-only-secret',
+            },
+          }
+        : { data: [] },
+    );
+    render(<ApiKeys apps={apps} capabilities={capabilities} />);
+    await screen.findByText('No API Keys yet');
+    fireEvent.click(screen.getByRole('button', { name: 'Create API Key' }));
+    const dialog = screen.getByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('Name'), {
+      target: { value: 'Global CI' },
+    });
+    fireEvent.click(
+      within(dialog).getByLabelText('All applications (including future apps)'),
+    );
+    expect(
+      within(dialog).queryByLabelText('CRM (crm)'),
+    ).not.toBeInTheDocument();
+    fireEvent.click(within(dialog).getByLabelText('Deploy release'));
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Create API Key' }),
+    );
+    await screen.findByText('test-only-secret');
+    expect(mocks.request).toHaveBeenCalledWith({
+      path: 'hub/api-keys',
+      method: 'POST',
+      json: {
+        name: 'Global CI',
+        allApps: true,
+        appIds: [],
+        scopes: ['deploy'],
+        expiresAt: null,
+      },
+    });
+  });
   it('requires confirmation before disabling or deleting and handles failure', async () => {
     mocks.request.mockResolvedValue({ data: [key] });
-    render(<ApiKeys appId='crm' appName='CRM' capabilities={capabilities} />);
+    render(<ApiKeys apps={apps} capabilities={capabilities} />);
     await screen.findByText('CI');
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for CI' }));
     fireEvent.click(
-      screen.getByRole('button', { name: 'Disable', exact: true }),
+      await screen.findByRole('menuitem', { name: 'Disable', exact: true }),
     );
     expect(mocks.request).toHaveBeenCalledTimes(1);
     fireEvent.click(
@@ -111,8 +217,9 @@ describe('App API Keys management', () => {
       }),
     );
     expect(mocks.request).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for CI' }));
     fireEvent.click(
-      screen.getByRole('button', { name: 'Disable', exact: true }),
+      await screen.findByRole('menuitem', { name: 'Disable', exact: true }),
     );
     mocks.request
       .mockResolvedValueOnce({ data: { success: true } })
@@ -125,11 +232,12 @@ describe('App API Keys management', () => {
     );
     await screen.findByText('Disabled');
     expect(mocks.request).toHaveBeenCalledWith({
-      path: 'hub/apps/crm/api-keys/key-id/disable',
+      path: 'hub/api-keys/key-id/disable',
       method: 'POST',
     });
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for CI' }));
     fireEvent.click(
-      screen.getByRole('button', { name: 'Delete', exact: true }),
+      await screen.findByRole('menuitem', { name: 'Delete', exact: true }),
     );
     mocks.request.mockRejectedValueOnce(new Error('failed'));
     fireEvent.click(
@@ -147,17 +255,49 @@ describe('App API Keys management', () => {
     );
     expect(screen.getByText('CI')).toBeInTheDocument();
   });
-  it('does not fetch keys for users without management access', async () => {
-    render(
-      <ApiKeys
-        appId='crm'
-        appName='CRM'
-        capabilities={emptyHubCapabilities()}
-      />,
+  it('retrieves a saved key only on request and clears it when the dialog closes', async () => {
+    mocks.request.mockImplementation(async (input: { path: string }) =>
+      input.path.endsWith('/reveal')
+        ? { data: { secret: 'saved-test-secret' } }
+        : { data: [key] },
     );
+    render(<ApiKeys apps={apps} capabilities={capabilities} />);
+    await screen.findByText('CI');
+    expect(screen.queryByText('saved-test-secret')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Copy API Key CI' }));
+    await screen.findByText('saved-test-secret');
+    expect(mocks.request).toHaveBeenCalledWith({
+      path: 'hub/api-keys/key-id/reveal',
+      method: 'POST',
+    });
+    expect(screen.getByRole('button', { name: 'Copy key' })).toBeEnabled();
+    const clipboardDescriptor = Object.getOwnPropertyDescriptor(
+      navigator,
+      'clipboard',
+    );
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    try {
+      fireEvent.click(screen.getByRole('button', { name: 'Copy key' }));
+      await screen.findByRole('button', { name: 'Copied' });
+      expect(writeText).toHaveBeenCalledWith('saved-test-secret');
+    } finally {
+      if (clipboardDescriptor)
+        Object.defineProperty(navigator, 'clipboard', clipboardDescriptor);
+      else Reflect.deleteProperty(navigator, 'clipboard');
+    }
+
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(screen.queryByText('saved-test-secret')).not.toBeInTheDocument();
+  });
+  it('does not fetch keys for users without management access', async () => {
+    render(<ApiKeys apps={apps} capabilities={emptyHubCapabilities()} />);
     expect(
       await screen.findByText(
-        'You do not have permission to manage this application’s API keys.',
+        'You do not have permission to manage Hub API Keys.',
       ),
     ).toBeInTheDocument();
     expect(mocks.request).not.toHaveBeenCalled();

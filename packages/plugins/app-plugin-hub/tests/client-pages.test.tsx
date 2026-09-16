@@ -548,7 +548,9 @@ describe('Hub client pages', () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Deploy' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Deploy release' }),
+    );
 
     const rows = await screen.findAllByRole('button', {
       name: /v1\.0\.0-beta\.22/,

@@ -253,6 +253,7 @@ describe('@nocobase/app-plugin-hub API routes', () => {
     const response = await router.request('/hub/apps/customer/releases', {
       method: 'POST',
       headers: {
+        'content-type': 'application/gzip',
         'content-length': String(256 * 1024 * 1024 + 1),
       },
       body: 'not-read',

@@ -1,3 +1,9 @@
+import {
+  CONFIG_UPLOAD_TYPE,
+  MAX_CONFIG_SIZE,
+  readUploadConfig,
+} from './release-upload.js';
+import { HUB_RELEASE_ACTIONS } from '../../shared/permissions.js';
 import { authenticationToken } from '@nocobase/app-plugin-authentication';
 import {
   authorizationToken,
@@ -71,7 +77,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
         return next();
       }
       const match =
-        /\/apps\/([^/]+)\/(releases(?:\/[^/]+)?|deploy|deployments(?:\/[^/]+)?)$/.exec(
+        /\/apps\/([^/]+)\/(releases(?:\/[^/]+)?|deploy|deployments(?:\/[^/]+(?:\/status)?)?)$/.exec(
           context.req.path,
         );
       const token = /^Bearer (hub_app_[A-Za-z0-9_-]+)$/i.exec(credential)?.[1];
@@ -87,15 +93,14 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
         );
       const endpoint = match?.[2];
       const scope: HubApiKeyScope | undefined =
-        context.req.method === 'GET' && endpoint?.startsWith('releases')
-          ? 'read-release'
-          : context.req.method === 'GET' && endpoint?.startsWith('deployments')
-            ? 'read-operation'
-            : context.req.method === 'POST' && endpoint === 'releases'
-              ? 'upload-release'
-              : context.req.method === 'POST' && endpoint === 'deploy'
-                ? 'deploy'
-                : undefined;
+        context.req.method === 'POST' && endpoint === 'releases'
+          ? HUB_RELEASE_ACTIONS.upload
+          : context.req.method === 'POST' && endpoint === 'deploy'
+            ? HUB_RELEASE_ACTIONS.deploy
+            : context.req.method === 'GET' &&
+                /^deployments\/[^/]+\/status$/.test(endpoint ?? '')
+              ? HUB_RELEASE_ACTIONS.deploy
+              : undefined;
       if (!scope || !match)
         return context.json(
           {
@@ -161,40 +166,62 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       throw error;
     });
 
-    routes.get('/apps/:appId/api-keys', async (context) => {
+    routes.get('/api-keys/apps', async (context) => {
       preventSensitiveResponseCaching(context);
-      const appId = context.req.param('appId');
+      return respond(context, () =>
+        container
+          .resolve(hubApiKeyServiceToken)
+          .appOptions(context.get('authz').identity.principal.id),
+      );
+    });
+    routes.get('/api-keys', async (context) => {
+      preventSensitiveResponseCaching(context);
+      const appId = '*';
       await requireHubAction(context, appId, 'manage-api-keys');
       return respond(context, () =>
         container
           .resolve(hubApiKeyServiceToken)
-          .list(appId, context.get('authz').identity.principal.id),
+          .list(context.get('authz').identity.principal.id),
       );
     });
-    routes.post('/apps/:appId/api-keys', async (context) => {
+    routes.post('/api-keys', async (context) => {
       preventSensitiveResponseCaching(context);
-      const appId = context.req.param('appId');
+      const appId = '*';
       await requireHubAction(context, appId, 'manage-api-keys');
       const input = await context.req.json<CreateHubApiKeyInput>();
       return respond(context, async () => {
         const result = await container
           .resolve(hubApiKeyServiceToken)
-          .create(appId, context.get('authz').identity.principal.id, input);
+          .create(context.get('authz').identity.principal.id, input);
         logSecurityEvent(securityLogger, context, 'hub.api-key.create', appId, {
           keyId: result.key.id,
         });
         return result;
       });
     });
-    routes.post('/apps/:appId/api-keys/:keyId/disable', async (context) => {
+    routes.post('/api-keys/:keyId/reveal', async (context) => {
       preventSensitiveResponseCaching(context);
-      const appId = context.req.param('appId');
+      await requireHubAction(context, '*', 'manage-api-keys');
+      return respond(context, async () => {
+        const keyId = context.req.param('keyId');
+        const secret = await container
+          .resolve(hubApiKeyServiceToken)
+          .reveal(keyId, context.get('authz').identity.principal.id);
+        logSecurityEvent(securityLogger, context, 'hub.api-key.reveal', '*', {
+          keyId,
+        });
+        return { secret };
+      });
+    });
+    routes.post('/api-keys/:keyId/disable', async (context) => {
+      preventSensitiveResponseCaching(context);
+      const appId = '*';
       const keyId = context.req.param('keyId');
       await requireHubAction(context, appId, 'manage-api-keys');
       return respond(context, async () => {
         await container
           .resolve(hubApiKeyServiceToken)
-          .disable(appId, keyId, context.get('authz').identity.principal.id);
+          .disable(keyId, context.get('authz').identity.principal.id);
         logSecurityEvent(
           securityLogger,
           context,
@@ -205,15 +232,15 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
         return { success: true };
       });
     });
-    routes.delete('/apps/:appId/api-keys/:keyId', async (context) => {
+    routes.delete('/api-keys/:keyId', async (context) => {
       preventSensitiveResponseCaching(context);
-      const appId = context.req.param('appId');
+      const appId = '*';
       const keyId = context.req.param('keyId');
       await requireHubAction(context, appId, 'manage-api-keys');
       return respond(context, async () => {
         await container
           .resolve(hubApiKeyServiceToken)
-          .remove(appId, keyId, context.get('authz').identity.principal.id);
+          .remove(keyId, context.get('authz').identity.principal.id);
         logSecurityEvent(securityLogger, context, 'hub.api-key.delete', appId, {
           keyId,
         });
@@ -340,16 +367,124 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
     );
     routes.post('/apps/:appId/releases', async (context) => {
       const appId = context.req.param('appId');
-      await requireHubAction(context, appId, 'upload-release');
-      return respond(context, async () => {
-        const release = await hub.createRelease(appId, {
-          bytes: await readBody(context.req.raw, MAX_ARTIFACT_SIZE),
-        });
-        logSecurityEvent(securityLogger, context, 'hub.release.upload', appId, {
-          releaseId: release.id,
-        });
-        return releaseResponse(release);
-      });
+      await requireHubAction(context, appId, HUB_RELEASE_ACTIONS.upload);
+      return respond(
+        context,
+        async () => {
+          const contentType = context.req
+            .header('content-type')
+            ?.split(';')[0]
+            ?.trim();
+          if (
+            contentType !== 'application/gzip' &&
+            contentType !== 'application/octet-stream' &&
+            contentType !== CONFIG_UPLOAD_TYPE
+          )
+            throw new HubError(
+              'Use application/gzip for release uploads.',
+              'INVALID_CONTENT_TYPE',
+              400,
+            );
+          const framed = contentType === CONFIG_UPLOAD_TYPE;
+          const configLengthHeader = context.req.header('x-hub-config-length');
+          const configLength = Number(configLengthHeader);
+          if (
+            framed &&
+            (!configLengthHeader ||
+              !/^[1-9]\d*$/.test(configLengthHeader) ||
+              configLength > MAX_CONFIG_SIZE)
+          )
+            throw new HubError(
+              'Invalid configuration length (maximum 1 MiB).',
+              'INVALID_CONFIG_UPLOAD',
+              400,
+            );
+          if (!framed && configLengthHeader !== undefined)
+            throw new HubError(
+              'Configuration requires the versioned release upload content type.',
+              'INVALID_CONFIG_UPLOAD',
+              400,
+            );
+          const length = context.req.header('content-length');
+          if (length !== undefined && !/^\d+$/.test(length))
+            throw new HubError(
+              'Invalid Content-Length.',
+              'INVALID_CONTENT_LENGTH',
+              400,
+            );
+          if (
+            length !== undefined &&
+            Number(length) > MAX_ARTIFACT_SIZE + (framed ? configLength : 0)
+          )
+            throw new HubError(
+              'Invalid or excessive artifact length.',
+              'ARTIFACT_TOO_LARGE',
+              413,
+            );
+          const intent = context.req.header('x-hub-deployment-intent');
+          if (intent !== undefined && intent !== 'explicit')
+            throw new HubError(
+              'Invalid deployment intent.',
+              'INVALID_DEPLOYMENT_INTENT',
+              400,
+            );
+          const authorizeDeployment = async () => {
+            await requireHubAction(context, appId, HUB_RELEASE_ACTIONS.deploy);
+            const credential = context.req.header('authorization');
+            if (credential)
+              await container
+                .resolve(hubApiKeyServiceToken)
+                .verify(credential.slice(7), appId, HUB_RELEASE_ACTIONS.deploy);
+          };
+          if (framed && intent !== 'explicit')
+            throw new HubError(
+              'Configuration requires deployment.',
+              'CONFIG_REQUIRES_DEPLOY',
+              400,
+            );
+          if (intent === 'explicit') await authorizeDeployment();
+          const chunks = requestChunks(context.req.raw);
+          let release;
+          try {
+            const prefix = framed
+              ? await readUploadConfig(chunks, configLength)
+              : undefined;
+            async function* artifact() {
+              if (prefix?.remainder.byteLength) yield prefix.remainder;
+              yield* chunks;
+            }
+            release = await hub.createRelease(appId, {
+              stream: artifact(),
+              ...(prefix
+                ? { config: { mode: 'file', content: prefix.content } }
+                : {}),
+              checksum: context.req.header('x-artifact-sha256'),
+              idempotencyKey: context.req.header('idempotency-key'),
+              deploymentIntent: intent,
+              waitForDeployment: context.req.header('x-hub-wait') === 'true',
+              authorizeDeployment,
+            });
+          } finally {
+            await chunks.return(undefined);
+          }
+          logSecurityEvent(
+            securityLogger,
+            context,
+            'hub.release.upload',
+            appId,
+            {
+              releaseId: release.id,
+            },
+          );
+          return {
+            ...releaseResponse(release),
+            releaseId: release.id,
+            operationId: release.operationId ?? null,
+            reused: release.reused ?? false,
+          };
+        },
+        (value) => (value.operationId && !value.reused ? 202 : 200),
+      );
     });
     routes.get('/apps/:appId/config', async (context) => {
       await requireHubAction(
@@ -385,20 +520,48 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
     });
     routes.post('/apps/:appId/deploy', async (context) => {
       const appId = context.req.param('appId');
-      await requireHubAction(context, appId, 'deploy');
+      await requireHubAction(context, appId, HUB_RELEASE_ACTIONS.deploy);
       const input = await context.req.json<DeployHubAppInput>();
       return await respond(
         context,
         async () => {
-          const deployment = await hub.deploy(appId, input);
+          const deployment = await hub.deploy(appId, {
+            ...input,
+            idempotencyKey: context.req.header('idempotency-key'),
+          });
           logSecurityEvent(securityLogger, context, 'hub.app.deploy', appId, {
             deploymentId: deployment.id,
           });
-          return { id: deployment.id, status: deployment.status };
+          return {
+            id: deployment.id,
+            operationId: deployment.id,
+            status: deployment.status,
+          };
         },
         202,
       );
     });
+    // Deploy credentials may observe a minimal result, never configuration or logs.
+    routes.get(
+      '/apps/:appId/deployments/:deploymentId/status',
+      async (context) => {
+        const appId = context.req.param('appId');
+        await requireHubAction(context, appId, HUB_RELEASE_ACTIONS.deploy);
+        preventSensitiveResponseCaching(context);
+        return respond(context, async () => {
+          const deployment = await hub.getDeployment(
+            appId,
+            context.req.param('deploymentId'),
+          );
+          return {
+            operationId: deployment.id,
+            releaseId: deployment.releaseId,
+            status: deployment.status,
+            phase: deployment.phase,
+          };
+        });
+      },
+    );
     routes.get('/apps/:appId/deployments', async (context) => {
       await requireHubAction(
         context,
@@ -439,7 +602,11 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
           logSecurityEvent(securityLogger, context, 'hub.app.rollback', appId, {
             deploymentId: deployment.id,
           });
-          return { id: deployment.id, status: deployment.status };
+          return {
+            id: deployment.id,
+            operationId: deployment.id,
+            status: deployment.status,
+          };
         },
         202,
       );
@@ -549,10 +716,14 @@ function logSecurityEvent(
 async function respond<T>(
   context: Context,
   work: () => Promise<T>,
-  status: 200 | 202 = 200,
+  status: 200 | 202 | ((data: T) => 200 | 202) = 200,
 ): Promise<Response> {
   try {
-    return context.json({ data: await work() }, status);
+    const data = await work();
+    return context.json(
+      { data },
+      typeof status === 'function' ? status(data) : status,
+    );
   } catch (error) {
     if (error instanceof HubError) {
       return context.json(
@@ -569,46 +740,19 @@ function preventSensitiveResponseCaching(context: Context): void {
   context.header('Pragma', 'no-cache');
 }
 
-async function readBody(request: Request, limit: number): Promise<Uint8Array> {
-  const declaredLength = Number(request.headers.get('content-length'));
-  if (Number.isFinite(declaredLength) && declaredLength > limit) {
-    throw new HubError(
-      `Artifact exceeds the ${limit} byte upload limit.`,
-      'ARTIFACT_TOO_LARGE',
-      413,
-    );
-  }
-  if (!request.body) return new Uint8Array();
-
+async function* requestChunks(request: Request): AsyncGenerator<Uint8Array> {
+  if (!request.body) return;
   const reader = request.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
   try {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      total += value.byteLength;
-      if (total > limit) {
-        await reader.cancel();
-        throw new HubError(
-          `Artifact exceeds the ${limit} byte upload limit.`,
-          'ARTIFACT_TOO_LARGE',
-          413,
-        );
-      }
-      chunks.push(value);
+      yield value;
     }
   } finally {
+    await reader.cancel();
     reader.releaseLock();
   }
-
-  const bytes = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return bytes;
 }
 
 const routes: readonly AppApiRouteContribution<AppPluginApplication>[] = [

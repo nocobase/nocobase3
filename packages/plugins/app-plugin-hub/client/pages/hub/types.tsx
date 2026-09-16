@@ -10,8 +10,7 @@ export type DetailTab =
   | 'development'
   | 'resources'
   | 'configuration'
-  | 'settings'
-  | 'api-keys';
+  | 'settings';
 
 export const DETAIL_TABS: readonly DetailTab[] = [
   'deployments',
@@ -20,7 +19,6 @@ export const DETAIL_TABS: readonly DetailTab[] = [
   'resources',
   'configuration',
   'settings',
-  'api-keys',
 ];
 
 export interface ReleaseRecord {

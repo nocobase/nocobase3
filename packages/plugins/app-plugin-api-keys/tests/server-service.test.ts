@@ -35,7 +35,11 @@ beforeEach(async () => {
     plugins: [
       apiKey([
         { configId: 'default' },
-        { configId: 'integration', enableSessionForAPIKeys: false },
+        {
+          configId: 'integration',
+          enableSessionForAPIKeys: false,
+          permissions: { defaultPermissions: { release: ['read'] } },
+        },
       ]),
     ],
   });
@@ -84,6 +88,12 @@ describe('configuration-bound server API key management', () => {
     expect((await service.get(created.key.id))?.enabled).toBe(true);
     expect(JSON.stringify(created.key)).not.toContain(created.secret);
     expect(created.key).not.toHaveProperty('key');
+    expect((await service.get(created.key.id))?.permissions).toEqual(
+      created.key.permissions,
+    );
+    expect((await service.verify(created.secret))?.permissions).toEqual(
+      created.key.permissions,
+    );
     await service.disable(created.key.id);
     await service.disable(created.key.id);
     expect(await service.verify(created.secret)).toBeNull();

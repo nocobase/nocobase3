@@ -1,16 +1,34 @@
+import { HUB_RELEASE_ACTIONS } from '../shared/permissions.js';
 import type { AuthorizationClient } from '@nocobase/app-plugin-authorization/client';
 import type { DetailTab } from './pages/hub/types.js';
 
-export const HUB_APP_ACTIONS = [
+export const HUB_APP_ACTIONS: readonly [
   'manage-api-keys',
   'create',
   'update-settings',
   'remove',
   'read-release',
-  'upload-release',
+  typeof HUB_RELEASE_ACTIONS.upload,
   'read-config-template',
   'read-deployment',
-  'deploy',
+  typeof HUB_RELEASE_ACTIONS.deploy,
+  'rollback',
+  'read-config',
+  'update-config',
+  'refresh',
+  'start',
+  'stop',
+  'restart',
+] = [
+  'manage-api-keys',
+  'create',
+  'update-settings',
+  'remove',
+  'read-release',
+  HUB_RELEASE_ACTIONS.upload,
+  'read-config-template',
+  'read-deployment',
+  HUB_RELEASE_ACTIONS.deploy,
   'rollback',
   'read-config',
   'update-config',
@@ -43,7 +61,6 @@ export function visibleHubDetailTabs(
     ...(state.deployed && capabilities['read-config']
       ? (['configuration'] as const)
       : []),
-    ...(capabilities['manage-api-keys'] ? (['api-keys'] as const) : []),
     ...(capabilities['update-settings'] || capabilities.remove
       ? (['settings'] as const)
       : []),

@@ -37,6 +37,7 @@ export function AppDialog({
   children,
   footer,
   footerClassName,
+  contentClassName,
   wide = false,
 }: {
   readonly title: string;
@@ -54,15 +55,16 @@ export function AppDialog({
   /** Actions for this dialog. Passing them here pins them below the scrolling body rather than at the end of it. */
   readonly footer?: ReactNode;
   readonly footerClassName?: string;
+  readonly contentClassName?: string;
   readonly wide?: boolean;
 }): ReactElement {
   return (
     <UiDialog open onOpenChange={(open) => (!open ? onClose() : undefined)}>
       <DialogContent
-        className={wide ? 'max-w-none p-8' : 'max-w-xl p-8'}
+        className={`${wide ? 'max-w-none p-8' : 'max-w-xl p-8'} ${contentClassName ?? ''}`}
         style={wide ? { width: 'min(72rem, calc(100vw - 2rem))' } : undefined}
       >
-        <DialogHeader>
+        <DialogHeader className='pr-6'>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>

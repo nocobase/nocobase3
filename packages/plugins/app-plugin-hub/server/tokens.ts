@@ -37,6 +37,8 @@ export interface HubAppRecord {
 }
 
 export interface HubReleaseRecord {
+  readonly reused?: boolean;
+  readonly operationId?: string | null;
   readonly id: string;
   readonly appId: string;
   readonly version: string;
@@ -128,7 +130,15 @@ export interface CreateHubAppInput {
 }
 
 export interface CreateHubReleaseInput {
-  readonly bytes: Uint8Array;
+  readonly bytes?: Uint8Array;
+  readonly stream?: AsyncIterable<Uint8Array>;
+  readonly checksum?: string;
+  readonly idempotencyKey?: string;
+  readonly deploymentIntent?: 'explicit';
+  readonly config?: SaveHubConfigInput;
+  readonly waitForDeployment?: boolean;
+  /** Authorization supplied by the HTTP boundary when publishing also deploys. */
+  readonly authorizeDeployment?: () => Promise<void>;
 }
 
 export interface HubConfigDocument {
@@ -146,6 +156,7 @@ export interface UpdateHubConfigInput {
 }
 
 export interface DeployHubAppInput {
+  readonly idempotencyKey?: string;
   readonly releaseId: string;
   readonly config?: SaveHubConfigInput;
 }

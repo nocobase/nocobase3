@@ -300,3 +300,15 @@ pnpm nocobase app publish \
 - `(appId, checksum)` 唯一约束对存量重复数据的处理策略：保留最早、保留最新，还是要求人工处理。
 - auto 模式下 Hub 重启导致自动部署被判失败（见 3.3），第三阶段是否要在页面上给出显式提示，还是完全留给第二阶段。
 - `app-template-hub` 是否要支持「Hub 自身作为被发布 App」，这决定它是否接入发布命令。
+
+## 2026-09-16 实现校准
+
+上文保留为原始方案，当前实现以用户后续确认和代码为准：复用独立 API Key 插件；Hub 全局管理 Key，可绑定多个 App 或所有当前及未来 App；只使用现有 `upload-release`、`deploy` 权限点；Hub 自己处理 App 绑定、当前拥有者权限与密钥加密恢复。原方案的单 App Key、额外 read-operation scope 和自建凭证哈希表均不采用。
+
+CLI 主命令采用 `app upload`，兼容 `app publish` 别名；Default、Examples 模板提供相同命令。`upload --deploy` 改为一次 HTTP 请求，在同一数据库事务保存 Release 和部署记录，不再依赖两次请求和两份幂等键。`app deploy` 仍支持独立部署及独立幂等。部署结果通过专门的精简状态接口读取，复用 deploy 权限，不返回配置与诊断信息。上传 --wait 必须同时传 --deploy，否则 CLI 在本地直接拒绝。
+
+存量重复 Release 不删除、不修改既有部署引用；新增唯一的 App/checksum 映射，保留最早 Release 作为后续上传的复用对象。用户明确取消自动/手动部署配置及默认值：上传只创建 Release，是否部署由 --deploy 或独立 app deploy 命令决定；CI 自动化由调用方脚本控制。Hub 重启后的协调恢复不在本阶段重做；相关限制保留在包 README 中。
+
+已应用到本地数据库的早期 publishing migration 曾添加 deploymentMode；新增后续 migration 删除该字段，不在运行时代码保留模式分支。
+
+用户进一步确认 `upload`、`deploy` 均支持可选 `--config`，用于首次部署或显式更换运行配置；不传时沿用现有配置。仅 upload 不带 --deploy 时拒绝 --config。配置通过请求正文传输，复用 Hub 现有整份配置与 secret 处理，不写入 Release 制品或模板。已上传制品换配置走独立 deploy；上传重试若显式配置不同则报冲突。

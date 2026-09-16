@@ -1,28 +1,41 @@
 import { apiClientToken, useService } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { useCallback, useEffect, useState, type ReactElement } from 'react';
-import { Copy, KeyRound, LoaderCircle, Plus } from 'lucide-react';
+import {
+  Copy,
+  KeyRound,
+  LoaderCircle,
+  Plus,
+  Search,
+  MoreHorizontal,
+  Ban,
+  Trash2,
+  Check,
+} from 'lucide-react';
 import { Button } from '../../components/ui/button.js';
 import { Input } from '../../components/ui/input.js';
-import { Badge } from '../../components/ui/badge.js';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from '../../components/ui/dropdown-menu.js';
 import { AppDialog, ErrorNotification } from './shared.js';
 import { formatDateTime } from './utils.js';
 import type { HubCapabilities } from '../../permissions.js';
 import {
   HUB_API_KEY_SCOPES,
-  HUB_API_KEY_ACTIONS,
+  type HubApiKeyAppOption,
   type HubApiKeyScope,
   type HubApiKeySummary,
   type CreatedHubApiKey,
 } from '../../../shared/api-keys.js';
 
 export function ApiKeys({
-  appId,
-  appName,
+  apps,
   capabilities,
 }: {
-  readonly appId: string;
-  readonly appName: string;
+  readonly apps: readonly HubApiKeyAppOption[];
   readonly capabilities: HubCapabilities;
 }): ReactElement {
   const client = useService(apiClientToken);
@@ -32,21 +45,36 @@ export function ApiKeys({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [createOpen, setCreateOpen] = useState(false);
+  const [allApps, setAllApps] = useState(false);
+  const [appSearch, setAppSearch] = useState('');
+  const [appIds, setAppIds] = useState<readonly string[]>([]);
   const [name, setName] = useState('');
   const [expiresAt, setExpiresAt] = useState('');
+  const [customExpiry, setCustomExpiry] = useState(false);
   const [scopes, setScopes] = useState<readonly HubApiKeyScope[]>([]);
   const [created, setCreated] = useState<CreatedHubApiKey>();
   const [copied, setCopied] = useState(false);
+  const [revealed, setRevealed] = useState(false);
   const [confirmation, setConfirmation] = useState<{
     key: HubApiKeySummary;
     action: 'disable' | 'delete';
   }>();
   const canManage = capabilities['manage-api-keys'];
-  const scopeOptions = HUB_API_KEY_SCOPES.filter(
-    (scope) =>
-      capabilities[HUB_API_KEY_ACTIONS[scope] as keyof HubCapabilities],
+  const scopeOptions = HUB_API_KEY_SCOPES;
+  const allowedScopes = scopeOptions.filter((scope) =>
+    allApps
+      ? capabilities[scope]
+      : appIds.length > 0 &&
+        appIds.every((id) =>
+          apps.find((app) => app.id === id)?.permissions.includes(scope),
+        ),
   );
-  const path = `hub/apps/${encodeURIComponent(appId)}/api-keys`;
+  const visibleApps = apps.filter((app) =>
+    `${app.name} ${app.id}`
+      .toLocaleLowerCase()
+      .includes(appSearch.trim().toLocaleLowerCase()),
+  );
+  const path = 'hub/api-keys';
   const load = useCallback(async () => {
     const response = await client.request<{
       data: readonly HubApiKeySummary[];
@@ -85,6 +113,12 @@ export function ApiKeys({
   };
   const date = (value: string | null): string =>
     value ? formatDateTime(value, i18n.language) : '—';
+  const shortDate = (value: string): string =>
+    new Intl.DateTimeFormat(i18n.language, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    }).format(new Date(value));
   if (!canManage) return <ErrorNotification message={t('apiKeys.noAccess')} />;
 
   return (
@@ -93,15 +127,22 @@ export function ApiKeys({
         <div>
           <h2 className='font-semibold'>{t('apiKeys.title')}</h2>
           <p className='mt-1 text-sm text-muted-foreground'>
-            {t('apiKeys.description', { name: appName })}
+            {t('apiKeys.description')}
           </p>
         </div>
         <Button
           variant='outline'
-          disabled={busy || !scopeOptions.length}
+          disabled={
+            busy ||
+            (!apps.length && !scopeOptions.some((scope) => capabilities[scope]))
+          }
           onClick={() => {
             setName('');
+            setAppIds([]);
+            setAppSearch('');
+            setAllApps(false);
             setExpiresAt('');
+            setCustomExpiry(false);
             setScopes([]);
             setError(undefined);
             setCreateOpen(true);
@@ -111,6 +152,9 @@ export function ApiKeys({
           {t('apiKeys.create')}
         </Button>
       </div>
+      {!apps.length ? (
+        <p className='text-sm text-muted-foreground'>{t('apiKeys.noApps')}</p>
+      ) : null}
       {error ? (
         <ErrorNotification
           message={error}
@@ -134,97 +178,247 @@ export function ApiKeys({
           </p>
         </div>
       ) : (
-        <div className='overflow-x-auto rounded-xl border'>
-          <table className='w-full text-left text-sm'>
-            <thead className='border-b bg-muted/40 text-muted-foreground'>
+        <div className='overflow-x-auto rounded-lg border bg-background'>
+          <table className='w-full min-w-[960px] table-fixed text-left text-sm'>
+            <colgroup>
+              <col className='w-[23%]' />
+              <col className='w-[22%]' />
+              <col className='w-[16%]' />
+              <col className='w-[14%]' />
+              <col className='w-[20%]' />
+              <col className='w-[5%]' />
+            </colgroup>
+            <thead className='border-b bg-muted/30 text-xs text-muted-foreground'>
               <tr>
-                {[
-                  'name',
-                  'scopes',
-                  'status',
-                  'creator',
-                  'createdAt',
-                  'expiresAt',
-                  'lastUsedAt',
-                  'actions',
-                ].map((column) => (
-                  <th
-                    key={column}
-                    className='whitespace-nowrap px-4 py-3 font-medium'
-                  >
-                    {t(`apiKeys.${column}`)}
-                  </th>
-                ))}
+                {['name', 'apps', 'scopes', 'status', 'activity'].map(
+                  (column) => (
+                    <th
+                      scope='col'
+                      key={column}
+                      className='whitespace-nowrap px-4 py-3 font-medium'
+                    >
+                      {t(`apiKeys.${column}`)}
+                    </th>
+                  ),
+                )}
+                <th scope='col'>
+                  <span className='sr-only'>{t('apiKeys.actions')}</span>
+                </th>
               </tr>
             </thead>
             <tbody>
               {keys.map((key) => (
-                <tr key={key.id} className='border-b last:border-0'>
-                  <td className='px-4 py-4'>
-                    <div className='font-medium'>{key.name}</div>
-                    <code className='text-xs text-muted-foreground'>
-                      {key.prefix}…
-                    </code>
-                  </td>
-                  <td className='px-4 py-4'>
-                    <div className='flex max-w-64 flex-wrap gap-1'>
-                      {key.scopes.map((scope) => (
-                        <Badge
-                          key={scope}
-                          className='bg-muted text-muted-foreground'
+                <tr
+                  key={key.id}
+                  className='border-b align-middle transition-colors last:border-0 hover:bg-muted/20'
+                >
+                  <td className='px-4 py-3'>
+                    <div className='truncate font-medium' title={key.name}>
+                      {key.name}
+                    </div>
+                    <div className='mt-0.5 flex min-w-0 items-center gap-1'>
+                      <code
+                        className='min-w-0 truncate text-xs text-muted-foreground'
+                        title={`${key.prefix}…`}
+                      >
+                        {key.prefix}…
+                      </code>
+                      <span
+                        title={
+                          key.canCopy
+                            ? t('apiKeys.viewAndCopy')
+                            : t('apiKeys.copyUnavailable')
+                        }
+                      >
+                        <Button
+                          size='icon'
+                          variant='ghost'
+                          className='size-6 shrink-0 text-muted-foreground'
+                          disabled={busy || !key.canCopy}
+                          aria-label={t('apiKeys.copyNamed', {
+                            name: key.name,
+                          })}
+                          onClick={() => {
+                            setBusy(true);
+                            setError(undefined);
+                            void client
+                              .request<{ data: { secret: string } }>({
+                                path: `${path}/${key.id}/reveal`,
+                                method: 'POST',
+                              })
+                              .then((response) => {
+                                setCreated({
+                                  key,
+                                  secret: response.data.secret,
+                                });
+                                setRevealed(true);
+                                setCopied(false);
+                              })
+                              .catch(() => setError(t('apiKeys.revealFailed')))
+                              .finally(() => setBusy(false));
+                          }}
                         >
-                          {t(`apiKeys.scope.${scope}`)}
-                        </Badge>
+                          <Copy className='size-3.5' />
+                        </Button>
+                      </span>
+                    </div>
+                  </td>
+                  <td className='px-4 py-3'>
+                    {key.allApps ? (
+                      <div>
+                        <span className='text-sm font-medium'>
+                          {t('apiKeys.allAppsShort')}
+                        </span>
+                        <p className='mt-1 text-xs text-muted-foreground'>
+                          {t('apiKeys.includesFutureApps')}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className='flex flex-wrap items-center gap-1.5'>
+                        {key.apps.slice(0, 2).map((app) => (
+                          <span
+                            key={app.id}
+                            title={`${app.name} (${app.id})`}
+                            className='block max-w-full truncate rounded bg-muted/60 px-2 py-1 text-xs leading-4'
+                          >
+                            {app.name}
+                          </span>
+                        ))}
+                        {key.apps.length > 2 ? (
+                          <details className='w-full text-xs'>
+                            <summary className='cursor-pointer text-muted-foreground hover:text-foreground'>
+                              {t('apiKeys.moreApps', {
+                                count: key.apps.length - 2,
+                              })}
+                            </summary>
+                            <div className='mt-2 flex flex-wrap gap-1.5'>
+                              {key.apps.slice(2).map((app) => (
+                                <span
+                                  key={app.id}
+                                  title={`${app.name} (${app.id})`}
+                                  className='block max-w-full truncate rounded bg-muted/60 px-2 py-1 leading-4'
+                                >
+                                  {app.name}
+                                </span>
+                              ))}
+                            </div>
+                          </details>
+                        ) : null}
+                      </div>
+                    )}
+                  </td>
+                  <td className='px-4 py-3'>
+                    <div className='space-y-1'>
+                      {key.scopes.map((scope) => (
+                        <div
+                          key={scope}
+                          className='flex items-center gap-1.5 whitespace-nowrap text-xs leading-5'
+                        >
+                          <Check
+                            aria-hidden='true'
+                            className='size-3.5 shrink-0 text-muted-foreground'
+                          />
+                          {t(
+                            scope === 'upload-release'
+                              ? 'releases.upload'
+                              : 'deployments.deploy',
+                          )}
+                        </div>
                       ))}
                     </div>
                   </td>
-                  <td className='px-4 py-4'>
-                    <Badge
-                      className={
-                        key.status === 'active'
-                          ? 'bg-primary/10 text-primary'
-                          : 'border text-muted-foreground'
-                      }
+                  <td className='px-4 py-3'>
+                    <span
+                      className={`inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium ${key.status === 'active' ? 'text-emerald-700 dark:text-emerald-400' : 'text-muted-foreground'}`}
                     >
+                      <span
+                        aria-hidden='true'
+                        className={`size-1.5 rounded-full ${key.status === 'active' ? 'bg-emerald-500' : 'bg-muted-foreground/60'}`}
+                      />
                       {t(`apiKeys.state.${key.status}`)}
-                    </Badge>
+                    </span>
+                    <div
+                      className='mt-1 text-xs leading-5 text-muted-foreground'
+                      title={key.expiresAt ? date(key.expiresAt) : undefined}
+                    >
+                      {key.expiresAt
+                        ? t('apiKeys.expiresOn', {
+                            date: shortDate(key.expiresAt),
+                          })
+                        : t('apiKeys.never')}
+                    </div>
                   </td>
-                  <td className='px-4 py-4'>{key.creatorName}</td>
-                  <td className='whitespace-nowrap px-4 py-4'>
-                    {date(key.createdAt)}
+                  <td className='px-4 py-3 text-xs leading-5'>
+                    <div
+                      className='truncate'
+                      title={`${t('apiKeys.createdByName', { name: key.creatorName })} · ${date(key.createdAt)}`}
+                    >
+                      {key.creatorName}
+                      <span
+                        className='mx-1.5 text-muted-foreground'
+                        aria-hidden='true'
+                      >
+                        ·
+                      </span>
+                      <time
+                        dateTime={key.createdAt}
+                        className='text-muted-foreground'
+                      >
+                        {shortDate(key.createdAt)}
+                      </time>
+                    </div>
+                    <div
+                      className='mt-1 text-muted-foreground'
+                      title={key.lastUsedAt ? date(key.lastUsedAt) : undefined}
+                    >
+                      {key.lastUsedAt
+                        ? t('apiKeys.lastUsedOn', {
+                            date: shortDate(key.lastUsedAt),
+                          })
+                        : t('apiKeys.neverUsed')}
+                    </div>
                   </td>
-                  <td className='whitespace-nowrap px-4 py-4'>
-                    {key.expiresAt ? date(key.expiresAt) : t('apiKeys.never')}
-                  </td>
-                  <td className='whitespace-nowrap px-4 py-4'>
-                    {date(key.lastUsedAt)}
-                  </td>
-                  <td className='px-4 py-4'>
-                    <div className='flex gap-1'>
-                      {key.status === 'active' ? (
-                        <Button
-                          size='sm'
-                          variant='ghost'
+                  <td className='py-3 pr-2 text-right'>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        render={
+                          <Button
+                            size='icon'
+                            variant='ghost'
+                            className='size-8 text-muted-foreground'
+                            disabled={busy}
+                            aria-label={t('apiKeys.keyActions', {
+                              name: key.name,
+                            })}
+                          >
+                            <MoreHorizontal className='size-4' />
+                          </Button>
+                        }
+                      />
+                      <DropdownMenuContent align='end' className='w-40'>
+                        {key.status === 'active' ? (
+                          <DropdownMenuItem
+                            disabled={busy}
+                            onClick={() =>
+                              setConfirmation({ key, action: 'disable' })
+                            }
+                          >
+                            <Ban className='size-4' />
+                            {t('apiKeys.disable')}
+                          </DropdownMenuItem>
+                        ) : null}
+                        <DropdownMenuItem
+                          className='text-destructive focus:text-destructive'
                           disabled={busy}
                           onClick={() =>
-                            setConfirmation({ key, action: 'disable' })
+                            setConfirmation({ key, action: 'delete' })
                           }
                         >
-                          {t('apiKeys.disable')}
-                        </Button>
-                      ) : null}
-                      <Button
-                        size='sm'
-                        variant='ghost'
-                        className='text-destructive'
-                        disabled={busy}
-                        onClick={() =>
-                          setConfirmation({ key, action: 'delete' })
-                        }
-                      >
-                        {t('apiKeys.delete')}
-                      </Button>
-                    </div>
+                          <Trash2 className='size-4' />
+                          {t('apiKeys.delete')}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </td>
                 </tr>
               ))}
@@ -235,7 +429,9 @@ export function ApiKeys({
       {createOpen ? (
         <AppDialog
           title={t('apiKeys.create')}
-          description={t('apiKeys.description', { name: appName })}
+          description={t('apiKeys.createDescription')}
+          contentClassName='p-6 sm:max-w-2xl'
+          footerClassName='mt-4 pt-4'
           onClose={() => {
             if (!busy) setCreateOpen(false);
           }}
@@ -249,7 +445,14 @@ export function ApiKeys({
                 {t('apiKeys.cancel')}
               </Button>
               <Button
-                disabled={busy || !name.trim() || !scopes.length}
+                disabled={
+                  busy ||
+                  !name.trim() ||
+                  (customExpiry && !expiresAt) ||
+                  (!allApps && !appIds.length) ||
+                  !scopes.length ||
+                  scopes.some((scope) => !allowedScopes.includes(scope))
+                }
                 onClick={() =>
                   void perform(async () => {
                     if (
@@ -268,6 +471,8 @@ export function ApiKeys({
                       json: {
                         name,
                         scopes,
+                        appIds: allApps ? [] : appIds,
+                        allApps,
                         expiresAt: expiresAt
                           ? new Date(expiresAt).toISOString()
                           : null,
@@ -275,6 +480,7 @@ export function ApiKeys({
                     });
                     setCreateOpen(false);
                     setCreated(response.data);
+                    setRevealed(false);
                     setCopied(false);
                   })
                 }
@@ -285,62 +491,255 @@ export function ApiKeys({
             </>
           }
         >
-          <div className='space-y-5'>
-            <label className='block space-y-2'>
-              <span className='text-sm font-medium'>{t('apiKeys.name')}</span>
-              <Input
-                autoFocus
-                value={name}
-                maxLength={100}
-                disabled={busy}
-                placeholder='GitHub Actions'
-                onChange={(event) => setName(event.target.value)}
-              />
-            </label>
-            <label className='block space-y-2'>
-              <span className='text-sm font-medium'>
-                {t('apiKeys.expiresAt')}
-              </span>
-              <Input
-                type='datetime-local'
-                value={expiresAt}
-                disabled={busy}
-                onChange={(event) => setExpiresAt(event.target.value)}
-              />
-              <span className='text-xs text-muted-foreground'>
-                {t('apiKeys.expiryHint')}
-              </span>
-            </label>
-            <fieldset className='space-y-3'>
-              <legend className='mb-3 text-sm font-medium'>
-                {t('apiKeys.scopes')}
-              </legend>
-              {scopeOptions.map((scope) => (
-                <label key={scope} className='flex items-center gap-3 text-sm'>
-                  <input
-                    type='checkbox'
-                    className='size-4 accent-primary'
-                    checked={scopes.includes(scope)}
+          <div className='space-y-4'>
+            <div className='grid gap-4 sm:grid-cols-2'>
+              <label className='block space-y-2'>
+                <span className='text-sm font-medium'>{t('apiKeys.name')}</span>
+                <Input
+                  autoFocus
+                  value={name}
+                  maxLength={100}
+                  disabled={busy}
+                  placeholder='GitHub Actions'
+                  onChange={(event) => setName(event.target.value)}
+                />
+              </label>
+              <div className='space-y-2'>
+                <label className='block space-y-2'>
+                  <span className='text-sm font-medium'>
+                    {t('apiKeys.expiration')}
+                  </span>
+                  <select
+                    className='h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30'
+                    value={customExpiry ? 'custom' : 'never'}
                     disabled={busy}
-                    onChange={(event) =>
-                      setScopes(
-                        event.target.checked
-                          ? [...scopes, scope]
-                          : scopes.filter((item) => item !== scope),
-                      )
-                    }
-                  />
-                  {t(`apiKeys.scope.${scope}`)}
+                    onChange={(event) => {
+                      setCustomExpiry(event.target.value === 'custom');
+                      setExpiresAt('');
+                    }}
+                  >
+                    <option value='never'>{t('apiKeys.never')}</option>
+                    <option value='custom'>{t('apiKeys.customExpiry')}</option>
+                  </select>
                 </label>
-              ))}
+                {customExpiry ? (
+                  <label className='block space-y-1'>
+                    <span className='sr-only'>{t('apiKeys.expiresAt')}</span>
+                    <Input
+                      type='datetime-local'
+                      aria-label={t('apiKeys.expiresAt')}
+                      value={expiresAt}
+                      disabled={busy}
+                      onChange={(event) => setExpiresAt(event.target.value)}
+                    />
+                    <span className='block text-xs text-muted-foreground'>
+                      {t('apiKeys.localTime')}
+                    </span>
+                  </label>
+                ) : null}
+              </div>
+            </div>
+            <fieldset className='space-y-2'>
+              <legend className='mb-2 text-sm font-medium'>
+                {t('apiKeys.apps')}
+              </legend>
+              <div className='grid gap-1 rounded-lg bg-muted/60 p-1 sm:grid-cols-2'>
+                <label
+                  className={`flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors has-focus-visible:ring-2 has-focus-visible:ring-ring has-disabled:cursor-not-allowed has-disabled:opacity-60 ${!allApps ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                >
+                  <input
+                    type='radio'
+                    className='size-4 shrink-0 accent-primary'
+                    name='app-scope'
+                    checked={!allApps}
+                    disabled={busy}
+                    onChange={() => {
+                      setAllApps(false);
+                      setScopes([]);
+                    }}
+                  />
+                  {t('apiKeys.selectedApps')}
+                </label>
+                <label
+                  className={`flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors has-focus-visible:ring-2 has-focus-visible:ring-ring has-disabled:cursor-not-allowed has-disabled:opacity-60 ${allApps ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                >
+                  <input
+                    type='radio'
+                    className='size-4 shrink-0 accent-primary'
+                    name='app-scope'
+                    aria-label={t('apiKeys.allApps')}
+                    checked={allApps}
+                    disabled={
+                      busy || !scopeOptions.some((scope) => capabilities[scope])
+                    }
+                    onChange={() => {
+                      setAllApps(true);
+                      setScopes((current) =>
+                        current.filter((scope) => capabilities[scope]),
+                      );
+                    }}
+                  />
+                  <span>
+                    {t('apiKeys.allAppsShort')}
+                    <span className='ml-1 text-xs text-muted-foreground'>
+                      {t('apiKeys.futureAppsNote')}
+                    </span>
+                  </span>
+                </label>
+              </div>
+              {allApps ? (
+                <p className='px-1 pt-1 text-xs leading-relaxed text-muted-foreground'>
+                  {t('apiKeys.allAppsHint')}
+                </p>
+              ) : null}
             </fieldset>
+            <div className='space-y-4'>
+              {!allApps ? (
+                <div className='min-w-0 overflow-hidden rounded-lg border'>
+                  <div className='flex items-center gap-3 border-b px-2 py-1.5'>
+                    <div className='relative min-w-0 flex-1'>
+                      <Search
+                        aria-hidden='true'
+                        className='pointer-events-none absolute top-2 left-2.5 size-4 text-muted-foreground'
+                      />
+                      <Input
+                        type='search'
+                        className='h-8 border-0 bg-transparent pl-9 shadow-none focus-visible:ring-1'
+                        aria-label={t('apiKeys.searchApps')}
+                        placeholder={t('apiKeys.searchApps')}
+                        value={appSearch}
+                        disabled={busy}
+                        onChange={(event) => setAppSearch(event.target.value)}
+                      />
+                    </div>
+                    <span
+                      role='status'
+                      className='shrink-0 text-xs text-muted-foreground'
+                    >
+                      {t('apiKeys.selectedCount', { count: appIds.length })}
+                    </span>
+                  </div>
+                  <div
+                    role='region'
+                    aria-label={t('apiKeys.apps')}
+                    tabIndex={0}
+                    className='grid h-40 max-h-[30svh] min-h-0 auto-rows-max gap-x-2 overflow-x-hidden overflow-y-auto overscroll-contain p-2 [scrollbar-gutter:stable] focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-[-2px] sm:grid-cols-2'
+                  >
+                    {visibleApps.length ? (
+                      visibleApps.map((app) => (
+                        <label
+                          key={app.id}
+                          title={`${app.name} (${app.id})`}
+                          className='flex min-w-0 cursor-pointer items-center gap-3 rounded-md px-2 py-2 text-sm hover:bg-muted/50 has-checked:bg-muted/50'
+                        >
+                          <input
+                            type='checkbox'
+                            className='size-4 shrink-0 accent-primary'
+                            disabled={busy}
+                            checked={appIds.includes(app.id)}
+                            onChange={(event) => {
+                              const selected = event.target.checked
+                                ? [...appIds, app.id]
+                                : appIds.filter((id) => id !== app.id);
+                              setAppIds(selected);
+                              setScopes((current) =>
+                                current.filter((scope) =>
+                                  selected.every((id) =>
+                                    apps
+                                      .find((item) => item.id === id)
+                                      ?.permissions.includes(scope),
+                                  ),
+                                ),
+                              );
+                            }}
+                          />
+                          <span className='min-w-0 flex-1 truncate'>
+                            {app.name}
+                          </span>{' '}
+                          {app.name !== app.id ? (
+                            <span className='ml-auto max-w-[40%] min-w-0 truncate text-xs text-muted-foreground'>
+                              ({app.id})
+                            </span>
+                          ) : null}
+                        </label>
+                      ))
+                    ) : (
+                      <p className='px-3 py-5 text-center text-sm text-muted-foreground sm:col-span-2'>
+                        {t(
+                          apps.length
+                            ? 'apiKeys.noMatchingApps'
+                            : 'apiKeys.noApps',
+                        )}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+              <fieldset className='min-w-0 space-y-2 border-t pt-3'>
+                <legend className='pr-3 text-sm font-medium'>
+                  {t('apiKeys.scopes')}
+                </legend>
+                <div className='grid gap-3 sm:grid-cols-2'>
+                  {scopeOptions.map((scope) => (
+                    <label
+                      key={scope}
+                      className='flex cursor-pointer items-start gap-2.5 rounded-md py-1 text-sm has-disabled:cursor-not-allowed has-disabled:text-muted-foreground'
+                    >
+                      <input
+                        type='checkbox'
+                        className='mt-0.5 size-4 shrink-0 accent-primary'
+                        aria-label={t(
+                          scope === 'upload-release'
+                            ? 'releases.upload'
+                            : 'deployments.deploy',
+                        )}
+                        checked={scopes.includes(scope)}
+                        disabled={busy || !allowedScopes.includes(scope)}
+                        onChange={(event) =>
+                          setScopes(
+                            event.target.checked
+                              ? [...scopes, scope]
+                              : scopes.filter((item) => item !== scope),
+                          )
+                        }
+                      />
+                      <span>
+                        <span className='block font-medium'>
+                          {t(
+                            scope === 'upload-release'
+                              ? 'releases.upload'
+                              : 'deployments.deploy',
+                          )}
+                        </span>
+                        <span className='mt-1 block text-xs leading-relaxed text-muted-foreground'>
+                          {t(
+                            scope === 'upload-release'
+                              ? 'apiKeys.uploadHint'
+                              : 'apiKeys.deployHint',
+                          )}
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                {!allApps && !appIds.length ? (
+                  <p className='text-xs text-muted-foreground'>
+                    {t('apiKeys.selectAppsFirst')}
+                  </p>
+                ) : allowedScopes.length < scopeOptions.length ? (
+                  <p className='text-xs text-muted-foreground'>
+                    {t('apiKeys.unavailablePermissions')}
+                  </p>
+                ) : null}
+              </fieldset>
+            </div>
           </div>
         </AppDialog>
       ) : null}
       {created ? (
         <AppDialog
-          title={t('apiKeys.created')}
-          description={t('apiKeys.oneTime')}
+          title={t(revealed ? 'apiKeys.viewAndCopy' : 'apiKeys.created')}
+          description={t('apiKeys.storageHint')}
           onClose={() => setCreated(undefined)}
           footer={
             <Button onClick={() => setCreated(undefined)}>
